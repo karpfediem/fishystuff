@@ -40,6 +40,7 @@
 		}
 
 		.tagline {
+            font-family: 'Itim', sans-serif;
 			font-size: 1rem;
 			font-style: italic;
 			border-top: 1px solid #ccc;
@@ -49,7 +50,7 @@
 		}
 
 		.get-started {
-			font-family: 'Bebas Neue', sans-serif;
+			font-family: 'Itim', sans-serif;
 			font-weight: normal;
 			font-size: 2rem;
 			text-align: center;
@@ -71,8 +72,8 @@
   </style>
 </head>
 <div id="content">
-  <h1 class="centered title">Zine</h1>
-  <h2 class="centered subtitle">Fast, Scalable, and Flexible Static Site Generator</h2>
+  <h1 class="centered title">Fishy Stuff</h1>
+  <h2 class="centered subtitle">Everything you need to get fishing</h2>
   <p class="centered tagline">
     Make art with your words.
   </p>
