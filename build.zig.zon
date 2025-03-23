@@ -1,7 +1,7 @@
 .{
-    .name = .official_zine_website,
+    .name = .fishystuff,
     .version = "0.1.0",
-    .fingerprint = 0xf1eeb1bd9a701c7f,
+    .fingerprint = 0xe67bec6562d02984,
     .dependencies = .{
         .zine = .{
             .url = "git+https://github.com/kristoff-it/zine?ref=v0.9.0#e918b49937c071187a26b19132f707a5b53e381e",

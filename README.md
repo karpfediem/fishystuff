@@ -1,2 +1,2 @@
-# zine-ssg.io
-The official website for https://github.com/kristoff-it/zine
+# fishystuff
+A very fishy website
