@@ -5,5 +5,17 @@
 .layout = "guides.shtml",
 .draft = false,
 ---
+# By objective
+- [Fishing Objectives](/quickstart/)
 
-Hi
+# Index
+- [Basics](/quickstart/)
+- [Experience](./experience)
+- [Money](./money)
+- [Mystical Fish](./mystical)
+- [Active Fishing](./active)
+  - [Hotspot Fishing](./active/hotspots)
+  - [Harpoon Fishing](./active/harpooning)
+- [Fish Groups Explained](./fish-groups)
+- [Where am I fishing?](./where-am-i-fishing)
+- [Mastery Guide](./mastery)
