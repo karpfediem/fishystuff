@@ -32,13 +32,11 @@
       •
       <a href="$site.page('guides').link()">Guides</a>
       •
+      <a href="$site.page('map').link()">Map</a>
+      •
       <a href="$site.page('community').link()">Community</a>
       •
       <a href="$site.page('log').link()">Log</a>
-      •
-      <a href="https://github.com/karpfediem/fishystuff" target="_blank">
-        Code
-      </a>
     </nav>
     <div id="content">
       <super>

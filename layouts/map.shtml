@@ -1,0 +1,17 @@
+<extend template="base.shtml">
+<title id="title" :text="$page.title"></title>
+<head id="head">
+  <style>
+    #content {
+      width: 100%;
+      iframe {
+        width: 100%;
+        min-height: 30rem;
+      }
+    }
+  </style>
+</head>
+<div id="content">
+  <div id="page" :html="$page.content()"></div>
+  <iframe src="https://karpfen-fish.b-cdn.net"></iframe>
+</div>
