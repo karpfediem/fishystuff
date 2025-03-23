@@ -30,13 +30,13 @@
       •
       <a href="$site.page('quickstart').link()">Get Started</a>
       •
-      <a href="$site.page('docs').link()">Documentation</a>
+      <a href="$site.page('guides').link()">Guides</a>
       •
       <a href="$site.page('community').link()">Community</a>
       •
-      <a href="$site.page('log').link()">Devlog</a>
+      <a href="$site.page('log').link()">Log</a>
       •
-      <a href="https://github.com/kristoff-it/zine" target="_blank">
+      <a href="https://github.com/karpfediem/fishystuff" target="_blank">
         Code
       </a>
     </nav>

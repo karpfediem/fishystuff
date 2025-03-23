@@ -3,8 +3,8 @@ const zine = @import("zine");
 
 pub fn build(b: *std.Build) !void {
     zine.website(b, .{
-        .title = "Zine - Static Site Generator",
-        .host_url = "https://zine-ssg.io",
+        .title = "Fishy Stuff - BDO Fishing Tools",
+        .host_url = "https://karpfen.fish",
         .layouts_dir_path = "layouts",
         .content_dir_path = "content",
         .assets_dir_path = "assets",

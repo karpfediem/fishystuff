@@ -159,7 +159,7 @@ To discover other localized variants for the same page, you can use
 `$page.locales()`.
 
 Refer to the 
-[SuperHTML Scripty reference]($link.page('docs/superhtml/scripty')) 
+[SuperHTML Scripty reference]($link.page('docs/superhtml/scripty'))
 to see how to use the resulting value.
 
 Consider the following directory structure:

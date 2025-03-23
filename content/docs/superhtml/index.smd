@@ -92,7 +92,7 @@ SuperHTML defines a list of special attributes that drive templating logic.
 The `:text` attribute sets the content of an element to the result of its Scripty expression. The value is HTML-escaped before printing.
 
 The expression must evaluate to either 
-[`String`]($link.page('docs/superhtml/scripty').ref('String')) 
+[`String`]($link.page('docs/superhtml/scripty').ref('String'))
 or
 [`Int`]($link.page('docs/superhtml/scripty').ref('Int')).
 
@@ -130,7 +130,7 @@ Same as `:text`, but it doesn't escape HTML. Avoid using it with untrusted data.
 Toggles the body of an element based on the value of its Scripty expression. 
 
 The expression must evaluate to either 
-[`Bool`]($link.page('docs/superhtml/scripty').ref('Bool')) 
+[`Bool`]($link.page('docs/superhtml/scripty').ref('Bool'))
 or
 [`?any`]($link.page('docs/superhtml/scripty').ref('any')).
 
@@ -141,7 +141,7 @@ Optional values can either be present or missing.
 When the value is missing, the `:if` attribute evaluates to `false` and the body of the element is elided.
 
 When the value is present, it becomes available as the 
-[`$if`]($link.page('docs/superhtml/scripty')) 
+[`$if`]($link.page('docs/superhtml/scripty'))
 Scripty global variable.
 
 ***template.shtml***
@@ -168,7 +168,7 @@ Evaluates the body of an element once for every element in the value of its Scri
 The expression must evaluate to `[any]`.
 
 The iterator becomes available as the 
-[`$loop`]($link.page('docs/superhtml/scripty')) 
+[`$loop`]($link.page('docs/superhtml/scripty'))
 Scripty global variable.
 
 ***template.shtml***

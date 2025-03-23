@@ -157,7 +157,7 @@ In normal Markdown this example would result in a (invalid) link element.
 In SuperMD the resulting type of that construct depends on the  value that the embedded Scripty expression evaluates to. 
 
 In the previous example the expression evaluates to an 
-[`Image`]($link.page('docs/supermd/scripty').ref('Image')), 
+[`Image`]($link.page('docs/supermd/scripty').ref('Image')),
 making it equivalent to the vanilla `![](cat.jpg)`.
 
 This might not seem particularly exciting, but things become more interesting
@@ -340,7 +340,7 @@ A leading `#` means
 A leading `/` means 
 [`$link.page()`]($link.page('docs/supermd/scripty').ref('Link.page')):
 ```markdown
-[Docs](/docs/) 
+[Docs](/docs/)
 └─➤ [Docs]($link.page('docs'))
 ```
 

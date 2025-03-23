@@ -152,7 +152,7 @@ Your **SuperMD** content goes here.
 ```
 
 Some fields, like `title`, and `layout` are mandatory, while others have default values. You can find a complete list of  
-[frontmatter fields]($link.page('docs/supermd/').ref('frontmatter')) 
+[frontmatter fields]($link.page('docs/supermd/').ref('frontmatter'))
 in the SuperMD documentation page.
 
 A very important required field is `layout`. This field must point at the layout
@@ -249,7 +249,7 @@ Hello World!
 In this example we just saw:
 - `index.smd` defines that its layout is `home.shtml`
 - `home.shtml` defines some HTML and uses 
-   [special attributes]($link.page('docs/superhtml').ref('attributes')) 
+   [special attributes]($link.page('docs/superhtml').ref('attributes'))
    to pull in the contents of `index.smd` 
 - the final output is going to be the homepage of our website 
 

@@ -26,7 +26,7 @@ excellent at all scales.
 *Zine is pronounced like in [fan**zine**](https://en.wikipedia.org/wiki/Zine)*.
     
 ## A handcrafted authoring experience
-Zine uses [SuperMD]($link.page('docs/supermd')) for content and 
+Zine uses [SuperMD]($link.page('docs/supermd')) for content and
 [SuperHTML]($link.page('docs/superhtml')) for defining layouts.
 
 SuperMD is an extension of Markdown that allows you to **define embedded assets 
