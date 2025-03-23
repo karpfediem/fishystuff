@@ -19,7 +19,9 @@ You can [subscribe to this page via RSS]($link.alternative("rss")).
 ## Changes
 
 []($section.id('v0.1.0').data('date','2025-03-23'))
-># Beta Release
+># Beta Pre-Release
 >hello world :)
+
+>Things will definitely still change
 
 []($section.id('v0.0.0').data('date','2025-03-23'))
