@@ -74,14 +74,4 @@ pub fn build(b: *std.Build) !void {
         },
         .debug = true,
     });
-
-    // This line creates a build step that generates an updated
-    // Scripty reference file. Other sites will not need this
-    // most probably, but at least it's an example of how Zine
-    // can integrate neatly with other Zig build steps.
-    zine.scriptyReferenceDocs(
-        b,
-        "content/docs/superhtml/scripty.smd",
-        "content/docs/supermd/scripty.smd",
-    );
 }

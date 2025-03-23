@@ -1,0 +1,8 @@
+---
+.title = "Frequently Asked Questions",
+.date = @date("2025-03-23T00:00:00"),
+.author = "Karpfen",
+.layout = "frequent.shtml",
+.draft = false,
+---
+

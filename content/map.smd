@@ -1,0 +1,15 @@
+---
+.title = "Map",
+.date = @date("2025-03-23T00:00:00"),
+.author = "Karpfen",
+.layout = "map.shtml",
+.draft = false,
+.tags = ["map", "waypoints"],
+---
+
+## Usage
+
+Click anywhere on the map to copy coordinates
+
+
+
