@@ -1,4 +1,21 @@
 @font-face {
+  font-family: 'Comfortaa';
+  src: url('fonts/Comfortaa/Comfortaa-VariableFont_wght.ttf') format('truetype-variations');
+}
+
+@font-face {
+  font-family: 'Flavors';
+  src: url('fonts/Flavors/Flavors-Regular.ttf') format('truetype');
+  font-weight: normal;
+}
+
+@font-face {
+  font-family: 'Modak';
+  src: url('fonts/Modak/Modak-Regular.ttf') format('truetype');
+  font-weight: normal;
+}
+
+@font-face {
   font-family: 'Merriweather';
   src: url('fonts/Merriweather-Regular.ttf') format('truetype');
   font-weight: normal;
@@ -60,7 +77,7 @@
 h1,
 h2,
 h3 {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: 'Modak', sans-serif;
   font-weight: normal;
   color: #eee;
   align-self: center;
@@ -91,7 +108,7 @@ a {
 
 
 body {
-  font-family: 'Merriweather', serif;
+  font-family: 'Comfortaa', serif;
   background-color: #111;
   color: #ccc;
   display: flex;
