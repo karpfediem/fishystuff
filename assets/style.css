@@ -215,6 +215,20 @@ li {
   padding: 1px 0;
 }
 
+.subtitle,
+.tagline {
+  margin-top: 0;
+}
+
+.tagline {
+  font-family: 'Itim', sans-serif;
+  font-size: 1rem;
+  border-top: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+  padding: 2px 5px;
+  text-align: center;
+}
+
 :root {
   /* guess which browser needed this */
   font-size: 1rem;

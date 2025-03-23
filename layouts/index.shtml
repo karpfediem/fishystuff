@@ -26,27 +26,12 @@
 			margin-bottom: 0;
 		}
 
-		.subtitle,
-		.tagline {
-			margin-top: 0;
-		}
-
 		.title {
 			font-size: 3rem;
 		}
 
 		.subtitle {
 			font-size: 2rem;
-		}
-
-		.tagline {
-            font-family: 'Itim', sans-serif;
-			font-size: 1rem;
-			font-style: italic;
-			border-top: 1px solid #ccc;
-			border-bottom: 1px solid #ccc;
-			padding: 2px 5px;
-			text-align: center;
 		}
 
 		.get-started {
@@ -75,7 +60,7 @@
   <h1 class="centered title">Fishy Stuff</h1>
   <h2 class="centered subtitle">Everything you need to get fishing</h2>
   <p class="centered tagline">
-    Make art with your words.
+    Fishing Guides and Tools for Black Desert
   </p>
   <div class="get-started"><a href="/quickstart/">Get Started</a></div>
   <div id="page" :html="$page.content()"></div>
