@@ -34,6 +34,8 @@
       •
       <a href="$site.page('map').link()">Map</a>
       •
+      <a href="$site.page('calculator').link()">Calculator</a>
+      •
       <a href="$site.page('community').link()">Community</a>
       •
       <a href="$site.page('log').link()">Log</a>
