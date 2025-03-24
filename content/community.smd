@@ -8,7 +8,8 @@
 ## About
 Hi, I'm Karpfen, someone a bit too obsessed with fish (jokingly, but they really are fun).
 
-This site is hosted by me, but a lot of the content behind it is a huge community effort :P
+This site is built with love using [Zine](https://zine-ssg.io/) and is [hosted by me](https://github.com/karpfediem/fishystuff).
+However, much of the content behind it is a huge community effort :P
 
 All the Guides were contributed by community members and the contained information was often gathered collaboratively.
 
@@ -28,9 +29,10 @@ We welcome you to contribute!
 Contributions can be as simple as comments/bug reports, feedback of any kind, ideas or even full new guides.
 
 If you want to contribute, you may want to
-1. Submit a Merge-Request to the [repository on GitHub](https://github.com/karpfediem/fishystuff)
-2. Join the communities on discord and **let us know!**
-3. Shoot me a direct message on discord (`karpfen`) or even ingame (`Carp`, EU server)
+- Join the communities on discord and **let us know!**
+- Shoot me a direct message on discord (`karpfen`) or even ingame (`Carp`, EU server)
+- Submit a Merge-Request to the [repository on GitHub](https://github.com/karpfediem/fishystuff).
+> Don't worry, no coding skills are needed! Knowing Markdown is enough.
 
 
 ## External Resources
