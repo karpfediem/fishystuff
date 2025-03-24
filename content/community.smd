@@ -1,16 +1,16 @@
 ---
 .title = "Community",
-.date = @date("2020-07-06T00:00:00"),
-.author = "Sample Author",
+.date = @date("2025-03-24T00:00:00"),
+.author = "Karpfen",
 .layout = "page.shtml",
 .draft = false,
 --- 
 ## About
-Hi, I'm Karpfen, someone a bit too obsessed with fish.
+Hi, I'm Karpfen, someone a bit too obsessed with fish (jokingly, but they really are fun).
 
 This site is hosted by me, but a lot of the content behind it is a huge community effort :P
 
-All the Guides were contributed by community members and often worked on collaboratively.
+All the Guides were contributed by community members and the contained information was often gathered collaboratively.
 
 ## Community
 
@@ -20,3 +20,14 @@ I was told MaoMaoPrince offers free fish upon entering (while stocks last).
 
 ### Lifeskill Discord
 [Discord server](https://discord.gg/8GHmNeZ6)
+
+
+## Contribute
+
+We welcome you to contribute!
+Contributions can be as simple as comments/bug reports, feedback of any kind, ideas or even full new guides.
+
+If you want to contribute, you may want to
+1. Submit a Merge-Request to the [repository on GitHub](https://github.com/karpfediem/fishystuff)
+2. Join the communities on discord and **let us know!**
+3. Shoot me a direct message on discord (`karpfen`) or even ingame (`Carp`, EU server)
