@@ -1,0 +1,210 @@
+:root {
+  --light-yellow: #e5c07b;
+  --dark-yellow: #d19a66;
+  --blue: #61afef;
+  --cyan: #56b6c2;
+  --light-red: #e06c75;
+  --dark-red: #be5046;
+  --comment-gray: #5c6370;
+  --magenta: #c678dd;
+}
+
+code .comment {
+  color: var(--comment-gray);
+}
+
+
+code.html {}
+
+code.html .string {
+  color: var(--dark-yellow);
+}
+
+code.html .tag {
+  color: var(--blue);
+}
+
+code.html .constant {
+  color: var(--light-red);
+}
+
+code.html .attribute {
+  color: var(--light-yellow);
+}
+
+code.html .punctuation {
+  color: var(--cyan);
+}
+
+code.superhtml {}
+
+code.superhtml .string {
+  color: var(--dark-yellow);
+}
+
+code.superhtml .tag {
+  color: var(--blue);
+}
+
+code.superhtml .special {
+  color: var(--blue);
+}
+
+code.superhtml .constant {
+  color: var(--light-red);
+}
+
+code.superhtml .attribute {
+  color: var(--light-yellow);
+}
+
+code.superhtml .punctuation {
+  color: var(--cyan);
+}
+
+
+code.zig {}
+
+code.zig .string {
+  color: var(--dark-yellow);
+}
+
+code.zig .variable,
+code.zig .field {
+  color: var(--light-yellow);
+}
+
+code.zig .keyword.function {
+  color: var(--light-red);
+}
+
+code.zig .bracket {
+  color: var(--cyan);
+}
+
+code.zig .function {
+  color: var(--blue);
+}
+
+code.zig .builtin {
+  color: var(--magenta);
+}
+
+code.zig .operator,
+code.zig .qualifier,
+code.zig .attribute {
+  color: var(--light-red);
+}
+
+
+code.ziggy {
+  color: var(--cyan);
+}
+
+code.ziggy .keyword,
+code.ziggy .type {
+  color: var(--light-yellow);
+}
+
+code.ziggy .string {
+  color: var(--dark-yellow);
+}
+
+code.ziggy .numeric.constant {
+  color: var(--magenta);
+}
+
+code.ziggy .function {
+  color: var(--blue);
+}
+
+
+code.ziggy-schema {
+  color: var(--cyan);
+}
+
+code.ziggy-schema .keyword,
+code.ziggy-schema .type {
+  color: var(--light-yellow);
+}
+
+code.ziggy-schema .string {
+  color: var(--dark-yellow);
+}
+
+code.ziggy-schema .numeric.constant {
+  color: var(--magenta);
+}
+
+code.ziggy-schema .function {
+  color: var(--blue);
+}
+
+
+code.markdown {
+  color: #ccc;
+}
+
+
+code.markdown .text.title {
+  color: var(--light-red);
+}
+
+code.markdown .punctuation {
+  color: var(--light-red);
+}
+
+
+code.toml {
+  color: var(--cyan);
+}
+
+code.toml .property {
+  color: var(--light-yellow);
+}
+
+code.toml .string {
+  color: var(--dark-yellow);
+}
+
+code.toml .numeric.constant {
+  color: var(--magenta);
+}
+
+code.toml .punctuation {
+  color: var(--blue);
+}
+
+
+code.lua {}
+
+code.lua .string {
+  color: var(--dark-yellow);
+}
+
+code.lua .variable,
+code.lua .field {
+  color: var(--light-yellow);
+}
+
+code.lua .keyword.function {
+  color: var(--light-red);
+}
+
+code.lua .bracket {
+  color: var(--cyan);
+}
+
+code.lua .function {
+  color: var(--blue);
+}
+
+code.lua .builtin {
+  color: var(--magenta);
+}
+
+code.lua .operator,
+code.lua .qualifier,
+code.lua .attribute {
+  color: var(--light-red);
+}

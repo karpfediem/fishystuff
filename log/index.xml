@@ -1,0 +1,25 @@
+<rss version="2.0">
+ <channel>
+  <title>Zine Changelog</title>
+  <link>https://zine-ssg.io/</link>
+  <description>Curated list of changes to Zine</description>
+  <generator>Zine -- https://zine-ssg.io</generator>
+  <language>en-us</language>
+  <lastBuildDate>Sun, 23 Mar 2025 22:43:48 +0000</lastBuildDate>
+  
+   
+  
+   
+    <item>
+     <pubDate>Sun, 23 Mar 2025 00:00:00 +0000</pubDate>
+     <link>https://karpfen.fish/log/#v0.1.0</link>
+     <guid>https://karpfen.fish/log/#v0.1.0</guid>
+     <title>v0.1.0</title>
+     <description>&lt;div id=&quot;v0.1.0&quot;&gt;&lt;blockquote&gt;&lt;h1&gt;Beta Pre-Release&lt;/h1&gt;&lt;p&gt;hello world :)&lt;/p&gt;&lt;/blockquote&gt;&lt;blockquote&gt;&lt;p&gt;Things will definitely still change&lt;/p&gt;&lt;/blockquote&gt;&lt;/div&gt;</description>
+    </item>
+   
+  
+   
+  
+ </channel>
+</rss>

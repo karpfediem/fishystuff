@@ -1,0 +1,68 @@
+@font-face {
+  font-family: 'Comfortaa';
+  src: url('fonts/Comfortaa/Comfortaa-VariableFont_wght.ttf') format('truetype-variations');
+}
+
+@font-face {
+  font-family: 'Flavors';
+  src: url('fonts/Flavors/Flavors-Regular.ttf') format('truetype');
+  font-weight: normal;
+}
+
+@font-face {
+  font-family: 'Modak';
+  src: url('fonts/Modak/Modak-Regular.ttf') format('truetype');
+  font-weight: normal;
+}
+
+@font-face {
+  font-family: 'Itim';
+  src: url('fonts/Itim/Itim-Regular.ttf') format('truetype');
+  font-weight: normal;
+}
+
+@font-face {
+  font-family: 'Pacifico';
+  src: url('fonts/Pacifico/Pacifico-Regular.ttf') format('truetype');
+  font-weight: normal;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('fonts/jbm/JetBrainsMono-Light.woff2') format('woff2'),
+    url("fonts/jbm/JetBrainsMono-Light.woff") format("woff");
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('fonts/jbm/JetBrainsMono-Regular.woff2') format('woff2'),
+    url("fonts/jbm/JetBrainsMono-Regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('fonts/jbm/JetBrainsMono-Medium.woff2') format('woff2'),
+    url("fonts/jbm/JetBrainsMono-Medium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('fonts/jbm/JetBrainsMono-SemiBold.woff2') format('woff2'),
+    url("fonts/jbm/JetBrainsMono-SemiBold.woff") format("woff");
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('fonts/jbm/JetBrainsMono-Bold.woff2') format('woff2'),
+    url("fonts/jbm/JetBrainsMono-Bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+}
