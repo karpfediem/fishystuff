@@ -13,6 +13,10 @@ pub fn build(b: *std.Build) !void {
             // This asset is referenced in some inlined HTML in markdown
             // which Zine is not yet able to analyze so as a temporary
             // hack we mark it as a static asset.
+            "static/guides/fish_group_rates.png",
+            "static/guides/fish_group_rates_kr_support_response.webp",
+            "static/guides/fishing_level.png",
+            "static/guides/lifeskill_level.png",
             "favicon.ico",
             "favicon-16x16.png",
             "favicon-32x32.png",
