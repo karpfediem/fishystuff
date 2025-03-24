@@ -2,7 +2,7 @@
 .title = "Fishing for Experience",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Paghur",
-.layout = "guides.shtml",
+.layout = "guide.shtml",
 .draft = false,
 ---
 
