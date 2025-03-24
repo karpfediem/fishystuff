@@ -82,7 +82,94 @@
   </style>
   <h3 class="centered">Fishy Stuff</h3>
   <h1>Fish Groups Explained</h1>
-  <div id="guides"><p>broken</p></div>
+  <h3>by <span>Karpfen</span></h3>
+  <div id="guides"><div id="overview"><h1><a class="" href="#overview">Overview</a></h1><p>There are several possible groups to obtain fish from when you catch a fish</p><table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Typically contains (with exceptions)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>General</td>
+<td>Green grade fish / certain event items / Plump Coelacanth</td>
+</tr>
+<tr>
+<td>Big</td>
+<td>Blue grade fish</td>
+</tr>
+<tr>
+<td>Rare</td>
+<td>Yellow grade fish</td>
+</tr>
+<tr>
+<td>Prize</td>
+<td>Red grade fish / Ancient Relic Crystal Shards / Troll 1% Mudskipper</td>
+</tr>
+<tr>
+<td>Treasure</td>
+<td>Discarded Glass Bottle / Silver &amp; Gold Keys / Relics / Laila’s Petal</td>
+</tr>
+</tbody>
+</table>
+</div><div id="big"><h2><a class="" href="#big">Big Fish</a></h2><p>Big fish are typically blue grade fish.</p><p>You can affect their rate with the following methods:</p><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Group Bonus</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://bdolytics.com/en/NA/db/item/16167">Ash Tree Float</a></td>
+<td>+11%</td>
+</tr>
+<tr>
+<td><a href="https://bdolytics.com/en/NA/db/lightstoneset/161">Whaling Lightstone Set</a></td>
+<td>+6%</td>
+</tr>
+<tr>
+<td><a href="https://bdolytics.com/en/NA/db/item/16164">Calpheon Fishing Rod</a></td>
+<td>+11%</td>
+</tr>
+</tbody>
+</table>
+</div><div id="big"><h2><a class="" href="#big">Rare Fish</a></h2><p>Rare fish are typically yellow grade fish.</p><p>You can affect their rate with the following methods:</p><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Group Bonus</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://bdolytics.com/en/NA/db/item/16168">Maple Float</a></td>
+<td>+5%</td>
+</tr>
+<tr>
+<td><a href="https://bdolytics.com/en/NA/db/lightstoneset/162">Sharp-Eyed Seagull Lightstone Set</a></td>
+<td>+5%</td>
+</tr>
+<tr>
+<td><a href="https://bdolytics.com/en/NA/db/item/16164">Mediah Fishing Rod</a></td>
+<td>+5%</td>
+</tr>
+<tr>
+<td><a href="https://bdolytics.com/en/NA/db/item/16170">Palm Tree Float 🌴</a></td>
+<td>+5%</td>
+</tr>
+<tr>
+<td><a href="https://bdolytics.com/en/NA/db/item/760966">[Event] Wise Housekeeper</a></td>
+<td>+5%</td>
+</tr>
+<tr>
+<td>[Event] Crispy Goldfish Delight</td>
+<td>+5%</td>
+</tr>
+</tbody>
+</table>
+</div><div id="prize"><h2><a class="" href="#prize">Prize Fish</a></h2><p>Prize fish are typically red grade fish, but unfortunately often also Ancient Relic Shards.</p><p>Prize fish can only be obtained via Lifeskill Mastery.</p></div><div id="group-rates"><h1><a class="" href="#group-rates">How does the game determine which fish is caught?</a></h1></div><div id="theory"><h2><a class="" href="#theory">Theory</a></h2><p>Personally I believe there are essentially two rolls:</p><ol><li>First it rolls for the fish group (% determined as seen in the image always normalized to 100% )</li><li>Then it rolls within that group for the actual fish itself</li></ol><p><img src="/static/guides/fish_group_rates.png" alt=""></p><p>I believe the game does NOT roll prize fish first, or use a “Roll-Down” Method from all we can tell.</p></div><div id="data"><h2><a class="" href="#data">Data</a></h2><p>Empirical data for this was collected by</p><ul><li><a href="https://discord.com/channels/371035077037129729/371698180405985301/1229359808780566571" target="_blank">shrddr</a> <a href="https://docs.google.com/spreadsheets/d/14Q3nAzy-hYxVIkrEYoWe_wwO1pPMZ3gIVwa43_ONHJY/edit?usp=sharing" target="_blank">Sheet</a></li><li>myself <a href="https://docs.google.com/spreadsheets/d/1RXWi6l2-7I0AVz42udP_OzjTvGqHF-leODWfnN9Jkwk/edit?gid=147899036#gid=147899036" target="_blank">Sheet</a></li><li><a href="https://discord.com/channels/371035077037129729/371698180405985301/1229382865201004595" target="_blank">Mikatto</a> (confirming, not published)</li></ul><p>For my own testing i used a consistent setup of 1600 mastery = <strong>4% expected</strong> prize rate with +10% chance to catch rare fish. The actual observed prize rate was only <strong>3.55%</strong> in 33.6k samples. At 99.9% confidence this means the actual rate lies in between +- 0.33% of the observed 3.55%. (So at best 3.88% which is below 4%).</p><p>Another ~9.4k samples were collected by shrddr with +11% big float at 1900 mastery which resulted in <strong>4.07% vs. 4.75% expected.</strong></p><p><strong>Negative</strong> samples (no fish modifiers) were collected by shrddr which resulted in</p><ul><li><strong>4.55% vs. 4.75% expected</strong> at 1900 mastery (17576 samples)</li><li><strong>4.72% vs. 4.625% expected</strong> at 1850 mastery (10901 samples)</li></ul></div><div id="confirmation"><h2><a class="" href="#confirmation">Confirmation</a></h2><p>According to one Korean player who presented this theory and asked for clarification, they received a response from Korean customer support confirming that increasing one group’s rate means decreasing the rate of another group.</p><p><img src="/static/guides/fish_group_rates_kr_support_response.webp" alt=""></p><p>Arguably the translation and or response aren’t 100% clear but it at the very least confirms that prize fish rate is impacted by increases in other group rates.</p></div></div>
 
     </div>
   </body>
