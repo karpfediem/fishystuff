@@ -89,7 +89,7 @@
 	  }
 	}
   </style>
-  <h3 class="centered">Zine</h3>
+  <h3 class="centered">Fishy Stuff</h3>
   <h1 :text="$page.title"></h1>
   <div id="reference" :html="$page.content()"></div>
 </div>
