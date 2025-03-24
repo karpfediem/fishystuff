@@ -6,4 +6,41 @@
 .draft = false,
 ---
 
-# $$$
+# Stand around AFK guide
+> Good Money, Bad EXP Edition
+## [Prerequisites]($section.id('prerequisites'))
+
+### Fishing level 5
+[Character profile -> Ability -> Fishing](https://imgur.com/dWzYHGt)
+- Guild Skill [Art of Fishing](https://bdocodex.com/us/guildskill/65026/)
+- Fishing Clothes (Silver Embroidered/Manos Fisher's Clothes)
+- Food like [Marvelous Balacs Lunchbox](https://bdocodex.com/us/item/9643/)
+### Max Auto-fishing reduction (67%)
+See my [Fishing Time Calculator](https://docs.google.com/spreadsheets/d/1s5eyc9tm5jLNXzPa1VMu0HSOzjDB4Ggcdk7g3iobsI8/edit#gid=0)
+Different combinations possible, but easy mode TL;DR is
+- [Balenos Fishing Rod +10](https://bdocodex.com/us/item/16162/#10)
+- T4/T5 Pet with Special: Auto-Fishing Time Reduction ([Otter](https://bdocodex.com/us/pet/56504/), Penguin, ...)
+- Lighstone Set: [Nibbles](https://bdolytics.com/en/NA/db/lightstoneset/160)
+
+## [More Equipment]($section.id('gear'))
+- [Shim Cheong's Miraculous Fish Tank](https://bdocodex.com/us/item/760687/)
+- [Maple Float](https://bdocodex.com/us/item/16168/#10) (+rare %)
+- Lightstone Set: [Sharp-eyed Seagull](https://bdolytics.com/en/NA/db/lightstoneset/162) (+rare %)
+- [Archaeologist's Map](https://bdocodex.com/us/item/16019/) (saves you 5mil each time you use Magnus to sell)
+### Mastery
+Aim for decent mastery (>1200-1500)
+- High fishing lifeskill level
+- Manos accessories/Clothes
+### Other stuff
+- High fishing lifeskill level for max Durability Reduction Resistance (DRR caps out at Guru 20)
+- [Professional Trader's Clothes](https://bdocodex.com/us/item/14018/)  (or costume version) let's you haggle more times, saving some energy and your patience
+
+
+## [How to stand around AFK]($section.id('how-to'))
+- Fish in Velia/Coastal Cliff -> see [Location](https://imgur.com/dGj9gzH). Make sure fish origin is Coastal Cliff!
+- Archmap to Velia
+- Go to Magnus at Bartali Farm and teleport to Nampo Moodle Village
+- Optionally: Bukpo for extra distance
+- Channel hop until you get decent prices on prizefish (120-130%) or you get bored
+- Sell fish
+- Teleport back using Archmap
