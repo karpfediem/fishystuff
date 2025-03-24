@@ -1,9 +1,59 @@
 ---
-.title = "Fishing for Mystical Fish",
+.title = "Mystical Fish",
 .date = @date("2025-03-23T00:00:00"),
-.author = "Karpfen",
+.author = "Paghur",
 .layout = "guide.shtml",
 .draft = false,
 ---
 
 # So you want to become a God of Fishing...?
+
+## [Goal]($section.id('goal'))
+
+Collect 5 of the rarest fish in the game to combine them into the Stinky Fish to claim the red colored God of Fishing
+title given by this quest: https://bdocodex.com/seaen/quest/1110/1/?sl=1
+
+In this guide I will talk about the best ways to catch the 5 __different__ Mystical Fish you will have to catch.
+
+## [Locations]($section.id('locations'))
+
+Below is a quick rundown on where to catch the Mystical Fish:
+
+1. Margoria South
+2. Margoria Central
+3. Margoria North
+4. Velia Beach/Termian Event spot
+5. Hotspot fishing
+
+### [Fish Groups]($section.id('fish-groups'))
+
+The Mystical fish are in a different fishing table depending on the fishing location.
+
+All **Margoria** spots have the Mystical Fish in the Big Fish table.
+
+Using the Ash Tree float in Margoria waters will slightly increase your chance for the Mystical Fish.
+
+The **Velia Beach/Termian Event** spot has the Mystical Fish in the Rare Fish Table. Using the Maple Tree Float will
+increase your chance for the Mystical Fish.
+
+This means that for all 4 of those spots mastery will not increase your catchrate, mastery will even slightly decrease
+your chance of catching a Mystical Fish.
+
+The **Hotspot** Mystical Fish is the only fish you will have to catch actively and its catchrate is not affected by
+mastery or any buffs.
+If want to take a look at the fishing tables, take a look at Warflash's https://bdolytics.com/en/EU/map
+
+## [Tips]($section.id('tips'))
+
+Some people have issues with boatclipping while fishing Margoria, if you are having the same issues I
+recommend fishing on NPC boats like the ones here: https://imgur.com/RtWhuZn
+
+## [Stinky Fish]($section.id('stinky-fish'))
+
+You caught all 5 Mystical Fish? Good job!
+
+Now it is time to bring the fish to Crio in Velia and combine them to obtain the Stinky Fish!
+The Stinky Fish has a 24h timer and let's you summon Vell.
+
+After summoning and killing Vell (Vell spawns on all servers), return to land to complete the quest with the Black
+Spirit.
