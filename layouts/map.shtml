@@ -13,5 +13,5 @@
 </head>
 <div id="content">
   <div id="page" :html="$page.content()"></div>
-  <iframe src="https://karpfen-fish.b-cdn.net"></iframe>
+  <iframe src="https://karpfen-fish.b-cdn.net" allow="clipboard-write"></iframe>
 </div>
