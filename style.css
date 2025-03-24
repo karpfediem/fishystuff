@@ -27,17 +27,14 @@
   font-weight: normal;
 }
 
-h1 {
-  font-family: 'Itim', sans-serif;
-  font-weight: normal;
-  color: #eee;
-  align-self: center;
-  text-align: center;
+h1.centered.title, h3.centered {
+  font-family: 'Pacifico', sans-serif;
 }
 
+h1,
 h2,
 h3 {
-  font-family: 'Pacifico', sans-serif;
+  font-family: 'Itim', sans-serif;
   font-weight: normal;
   color: #eee;
   align-self: center;
