@@ -44,6 +44,5 @@
   </style>
   <h3 class="centered">Fishy Stuff</h3>
   <h1 :text="$page.title"></h1>
-  <h3>by <span :text="$page.author"></span></h3>
   <div id="guides" :html="$page.content()"></div>
 </div>

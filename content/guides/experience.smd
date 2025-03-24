@@ -1,9 +1,36 @@
 ---
 .title = "Fishing for Experience",
 .date = @date("2025-03-23T00:00:00"),
-.author = "Karpfen",
+.author = "Paghur",
 .layout = "guides.shtml",
 .draft = false,
 ---
 
-# [EXP]($section.id('exp'))
+This is a guide on how to get the most XP in the shortest amount of time
+# [Discarded Glass Bottles]($section.id('glass-bottles'))
+Handing in bottles for XP will get you ~30k XP per turnin. These turnins are not affected by XP Buffs.
+
+Bottles drop most in inland spots, Banto/Zenato Sea (spots I talk about later in this guide) barely drop any bottles.
+
+# [Fishing for XP]($section.id('xp'))
+Auto-fishing Time reduction is capped at 66.6%, so going over that number won't do anything.
+
+## [Artifact sets]($section.id('artifacts'))
+
+There's three viable Artifact sets for XP fishing, ranking from good to better to best XP:
+> #### Nibbles (Good)
+> Combine with T4 pet, +10 Balenos Rod for 66.6% reduction
+> #### Choice and Focus (Better)
+> Combine with T4 pet, +10 Balenos Rod, Manos Fishing Chair and Balacs Lunchbox for max reduction
+> ### Blacksmith's Blessing (Best)
+> Combine to get 91% Durability Resistance Reduction and use T4 Auto-fishing Time reduction pet, Triple Float fishing rod, Marvelous Balacs Lunchbox, Manos Fishing Chair
+
+## [Other Gear]($section.id('gear'))
+Adding Life Crystals or other life buffs to your loadout will also greatly increase your XP.
+Fishing Mastery isn't useful for XP fishing, use SE-Clothes.
+Ash Tree Floats are considered your best choice at Banto/Zenato Sea.
+
+## [Location]($section.id('location'))
+Basically all of Banto/Zenato Sea is best for xp but if you want to really minmax you should visit these green areas in Zenato Sea.  These green areas are called Zenato Sea Depth 5.
+Below you will also find an example of a good fishing XP setup. It might be a bit overkill for the more casuals fisher's though.
+And yes, actively fishing Banto/Zenato Sea is better xp than hotspot fishing, due to way faster bite times and no travel time. :ClarityFish:
