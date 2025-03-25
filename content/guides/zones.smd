@@ -1,0 +1,47 @@
+---
+.title = "Fishing Zones Explained",
+.date = @date("2025-03-25T00:00:00"),
+.author = "Karpfen and Paghur",
+.layout = "guide.shtml",
+.draft = false,
+---
+
+# [What Are Fishing Zones?]($section.id('zones'))
+
+A **Fishing Zone** is an area where the same types of fish can be caught, meaning it shares the same **loot table**.
+
+The **loot table** determines which fish species are available and the chances of catching each of them.
+
+Interestingly, many **Fishing Zones** consist of multiple separate **areas** that are not physically connected but still
+share the same loot table.
+
+### Example: Valencia Sea - Depth 5
+
+The **Valencia Sea - Depth 5** Fishing Zone includes areas that are quite far apart.
+One part is located near **Valencia**, while another is all the way west, near **Tigris Island**.
+
+![](/static/guides/valencia_sea_d5.png)
+
+Even though these locations are distant, the **fish available** and their **catch rates** remain exactly the same.
+
+---
+
+# [What Are Depths?]($section.id('depths'))
+
+Many Fishing Zones have similar names but are distinguished by a **Depth number**.
+
+Each **Depth** represents a separate Fishing Zone with its own loot table.
+
+The **Depth number** increases as you move further from the shore.
+
+- **Higher Depths** generally offer better chances to catch [Rare Fish]($link.page('guides/groups').ref('rare')).
+- Depth numbers are mainly used to help us identify and refer to Fishing Zones more easily.
+
+## Example: Zenato Sea Depths
+
+Let's take a look at **Zenato Sea** as an example:
+
+*When you hover over a fishing area (like the green areas in the screenshot), all locations that share the same loot
+table will light up on the map.*
+
+![](/static/guides/zenato_sea_depths.webp)
