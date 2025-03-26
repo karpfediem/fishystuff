@@ -9,4 +9,5 @@
 </head>
 <div id="content">
   <div id="page" :html="$page.content()"></div>
+  <script type="module" src="$site.asset('datastar.js').link()"></script>
 </div>
