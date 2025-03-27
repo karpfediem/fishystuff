@@ -187,18 +187,22 @@
 
 <div id="calculator"
      data-signals="{
-       rod: 'Balenos Fishing Rod',
-       float: '',
-       chair: '',
-       backpack: '',
-       buff: [],
-       food: [],
-       outfit: [],
-       lightstone_set: '',
        level: 5,
        lifeskill_level: 'Guru 20',
        zone: 'Velia Beach (Balenos Event Spot)',
        resources: 0,
+       rod: 'Balenos Fishing Rod',
+       float: '',
+       chair: 'Manos Fishing Chair',
+       lightstone_set: '',
+       backpack: '',
+       outfit: [
+         '8-Piece Outfit Set Effect',
+         'Awakening Weapon Outfit',
+         'Mainhand Weapon Outfit'
+       ],
+       food: ['Balacs Lunchbox'],
+       buff: [],
      }">
 
     <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set]).toFixed(2)"></div>
