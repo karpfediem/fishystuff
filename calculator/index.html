@@ -47,516 +47,37 @@
     <div id="content">
       
   <div id="page"><h2>Coming soon (WIP)</h2><script>
-    const items = [
-        {
-            "name": "8-Piece Outfit Set Effect",
-            "type": "outfit",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": 0.1,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": null,
-            "icon_id": null,
-            "icon": null
-        },
-        {
-            "name": "Ash Tree Float",
-            "type": "float",
-            "afr": null,
-            "bonus_rare": 0,
-            "bonus_big": 0.11,
-            "durability": 100,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 16167,
-            "icon_id": 16167,
-            "icon": "/static/icons/items/00016167.webp"
-        },
-        {
-            "name": "Awakening Weapon Outfit",
-            "type": "outfit",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": 0.1,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": null,
-            "icon_id": null,
-            "icon": null
-        },
-        {
-            "name": "Balacs Lunchbox",
-            "type": "food",
-            "afr": 0.07,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": 0.1,
-            "exp_life": null,
-            "id": 9359,
-            "icon_id": 9359,
-            "icon": "/static/icons/items/00009359.webp"
-        },
-        {
-            "name": "Balenos Fishing Rod",
-            "type": "rod",
-            "afr": 0.25,
-            "bonus_rare": 0,
-            "bonus_big": 0,
-            "durability": 100,
-            "drr": null,
-            "fish_multiplier": 1,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 16162,
-            "icon_id": 16162,
-            "icon": "/static/icons/items/00016162.webp"
-        },
-        {
-            "name": "Blacksmith's Blessing",
-            "type": "lightstone_set",
-            "afr": 0,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": 0.3,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": null,
-            "icon_id": null,
-            "icon": null
-        },
-        {
-            "name": "Calpheon Fishing Rod",
-            "type": "rod",
-            "afr": 0,
-            "bonus_rare": 0,
-            "bonus_big": 0.11,
-            "durability": 50,
-            "drr": null,
-            "fish_multiplier": 1,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 16164,
-            "icon_id": 16164,
-            "icon": "/static/icons/items/00016164.webp"
-        },
-        {
-            "name": "Choice & Focus: Fishing",
-            "type": "lightstone_set",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": 0.41,
-            "exp_life": null,
-            "id": null,
-            "icon_id": null,
-            "icon": null
-        },
-        {
-            "name": "Coconut Cocktail",
-            "type": "food",
-            "afr": 0.05,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 9307,
-            "icon_id": 9307,
-            "icon": "/static/icons/items/00009307.webp"
-        },
-        {
-            "name": "Cool Wind Fishing Rod",
-            "type": "rod",
-            "afr": 1,
-            "bonus_rare": 0,
-            "bonus_big": 0,
-            "durability": 1000,
-            "drr": null,
-            "fish_multiplier": 1.6,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 767187,
-            "icon_id": 767187,
-            "icon": "/static/icons/items/00767187.webp"
-        },
-        {
-            "name": "Crio Fisher's Chair",
-            "type": "chair",
-            "afr": 0.07,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": 200,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": 0.2,
-            "exp_life": null,
-            "id": 705538,
-            "icon_id": 705538,
-            "icon": "/static/icons/items/00705538.webp"
-        },
-        {
-            "name": "Crio's Fishing Chair",
-            "type": "chair",
-            "afr": 0,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": 100,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 12831,
-            "icon_id": 12831,
-            "icon": "/static/icons/items/00012831.webp"
-        },
-        {
-            "name": "Crio's Sturdy Fishing Chair",
-            "type": "chair",
-            "afr": 0.05,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": 200,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 12930,
-            "icon_id": 12831,
-            "icon": "/static/icons/items/00012831.webp"
-        },
-        {
-            "name": "Grandpa Cron's Fishing Rod",
-            "type": "rod",
-            "afr": 1,
-            "bonus_rare": 0,
-            "bonus_big": 0,
-            "durability": 2000,
-            "drr": null,
-            "fish_multiplier": 1.6,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 767158,
-            "icon_id": 760976,
-            "icon": "/static/icons/items/00760976.webp"
-        },
-        {
-            "name": "Lil' Otter Fishing Carrier \uD83E\uDDA6",
-            "type": "backpack",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": 0.1,
-            "fish_multiplier": null,
-            "exp_fish": 0.2,
-            "exp_life": null,
-            "id": 830150,
-            "icon_id": 830150,
-            "icon": "/static/icons/items/00830150.webp"
-        },
-        {
-            "name": "Loggia Fishing Chair",
-            "type": "chair",
-            "afr": 0.05,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": 200,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": 0.1,
-            "exp_life": null,
-            "id": 705537,
-            "icon_id": 705537,
-            "icon": "/static/icons/items/00705537.webp"
-        },
-        {
-            "name": "Mainhand Weapon Outfit",
-            "type": "outfit",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": 0.1,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": null,
-            "icon_id": null,
-            "icon": null
-        },
-        {
-            "name": "Manos Fishing Chair",
-            "type": "chair",
-            "afr": 0.1,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": 200,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": 0.3,
-            "exp_life": null,
-            "id": 705539,
-            "icon_id": 705539,
-            "icon": "/static/icons/items/00705539.webp"
-        },
-        {
-            "name": "Maple Float",
-            "type": "float",
-            "afr": null,
-            "bonus_rare": 0.05,
-            "bonus_big": 0,
-            "durability": 100,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 16168,
-            "icon_id": 16168,
-            "icon": "/static/icons/items/00016168.webp"
-        },
-        {
-            "name": "Marvelous Balacs Lunchbox",
-            "type": "food",
-            "afr": 0.1,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": 0.25,
-            "exp_life": null,
-            "id": 9643,
-            "icon_id": 9643,
-            "icon": "/static/icons/items/00009643.webp"
-        },
-        {
-            "name": "Mediah Fishing Rod",
-            "type": "rod",
-            "afr": 0,
-            "bonus_rare": 0.05,
-            "bonus_big": 0,
-            "durability": 50,
-            "drr": null,
-            "fish_multiplier": 1,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 16165,
-            "icon_id": 16165,
-            "icon": "/static/icons/items/00016165.webp"
-        },
-        {
-            "name": "Nibbles",
-            "type": "lightstone_set",
-            "afr": 0.15,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": 0,
-            "fish_multiplier": null,
-            "exp_fish": 0.13,
-            "exp_life": null,
-            "id": null,
-            "icon_id": null,
-            "icon": null
-        },
-        {
-            "name": "Palm Tree Float \uD83C\uDF34",
-            "type": "float",
-            "afr": null,
-            "bonus_rare": 0.05,
-            "bonus_big": 0,
-            "durability": 70,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 16170,
-            "icon_id": 16170,
-            "icon": "/static/icons/items/00016170.webp"
-        },
-        {
-            "name": "Perfume of Swiftness",
-            "type": "buff",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": 0.2,
-            "id": 735,
-            "icon_id": 735,
-            "icon": "/static/icons/items/00000735.webp"
-        },
-        {
-            "name": "Professional Fisher's Uniform (Costume)",
-            "type": "outfit",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": 0.1,
-            "id": 14330,
-            "icon_id": 14071,
-            "icon": "/static/icons/items/00014071.webp"
-        },
-        {
-            "name": "Seafood Cron Meal",
-            "type": "food",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": 0.1,
-            "id": 9691,
-            "icon_id": 9691,
-            "icon": "/static/icons/items/00009691.webp"
-        },
-        {
-            "name": "Sharp-Eyed Seagull",
-            "type": "lightstone_set",
-            "afr": null,
-            "bonus_rare": 0.05,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": 0.13,
-            "exp_life": null,
-            "id": null,
-            "icon_id": null,
-            "icon": null
-        },
-        {
-            "name": "Treant's Tear",
-            "type": "buff",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": 0.3,
-            "id": 721092,
-            "icon_id": 721092,
-            "icon": "/static/icons/items/00721092.webp"
-        },
-        {
-            "name": "Triple-Float Fishing Rod",
-            "type": "rod",
-            "afr": 0,
-            "bonus_rare": 0,
-            "bonus_big": 0,
-            "durability": 30,
-            "drr": null,
-            "fish_multiplier": 1.6,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 16153,
-            "icon_id": 16152,
-            "icon": "/static/icons/items/00016152.webp"
-        },
-        {
-            "name": "Verdure Draught",
-            "type": "buff",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": 0.2,
-            "id": 791,
-            "icon_id": 791,
-            "icon": "/static/icons/items/00000791.webp"
-        },
-        {
-            "name": "Whaling",
-            "type": "lightstone_set",
-            "afr": null,
-            "bonus_rare": null,
-            "bonus_big": 0.06,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": 0.13,
-            "exp_life": null,
-            "id": null,
-            "icon_id": null,
-            "icon": null
-        },
-        {
-            "name": "[Event] Crispy Goldfish Delight",
-            "type": "buff",
-            "afr": 0.1,
-            "bonus_rare": 0.05,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": 0.5,
-            "id": 767163,
-            "icon_id": 767163,
-            "icon": "/static/icons/items/00767163.webp"
-        },
-        {
-            "name": "[Event] Wise Housekeeper",
-            "type": "buff",
-            "afr": 0.1,
-            "bonus_rare": 0.05,
-            "bonus_big": null,
-            "durability": null,
-            "drr": null,
-            "fish_multiplier": null,
-            "exp_fish": null,
-            "exp_life": null,
-            "id": 768437,
-            "icon_id": 768437,
-            "icon": "/static/icons/items/00768437.webp"
-        }
-    ]
+    function loadJSONSync(url) {
+        const request = new XMLHttpRequest();
+        request.open('GET', url, false); // false makes it synchronous
+        request.send(null);
 
-    const searchItem = (items, search, type) => items.filter(item =>
-        item.name.toLowerCase().includes(search.toLowerCase()) && item.type.includes(type)
+        if (request.status === 200) {
+            return JSON.parse(request.responseText);
+        } else {
+            throw new Error(`HTTP error! Status: ${request.status}`);
+        }
+    }
+    const items = loadJSONSync('/static/items.json');
+    const zones = loadJSONSync('/static/zones.json');
+    const lifeskill_levels = loadJSONSync('/static/lifeskill_levels.json');
+
+    lifeskill_levels.sort((a, b) => (a.order > b.order) ? 1 : ((b.order > a.order) ? -1 : 0))
+    zones.sort((a, b) => (a.name > b.name) ? 1 : ((b.name > a.name) ? -1 : 0))
+    const zonesWithBiteTimes = zones.filter(z => z.bite_time_min && z.bite_time_max)
+
+    const searchList = (list, search, type) => list.filter(item =>
+        item.name.toLowerCase().includes(search.toLowerCase()) && (item.type && item.type.includes(type) || !item.type)
     );
 
-    const rods = searchItem(items, '', 'rod')
-    const floats = searchItem(items, '', 'float')
-    const chairs = searchItem(items, '', 'chair')
-    const backpacks = searchItem(items, '', 'backpack')
-    const buffs = searchItem(items, '', 'buff')
-    const foods = searchItem(items, '', 'food')
-    const outfits = searchItem(items, '', 'outfit')
-    const lightstone_sets = searchItem(items, '', 'lightstone_set')
+    const rods = searchList(items, '', 'rod')
+    const floats = searchList(items, '', 'float')
+    const chairs = searchList(items, '', 'chair')
+    const backpacks = searchList(items, '', 'backpack')
+    const buffs = searchList(items, '', 'buff')
+    const foods = searchList(items, '', 'food')
+    const outfits = searchList(items, '', 'outfit')
+    const lightstone_sets = searchList(items, '', 'lightstone_set')
 
 
     const selectedOption = `<button><div><selectedcontent></selectedcontent></div></button>`
@@ -587,6 +108,9 @@
         }
     ).join('\n')
 
+    const zones_html = selectedOption + mapOption(zonesWithBiteTimes)
+    const level_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`)
+    const lifeskill_level_html = selectedOption + mapOption(lifeskill_levels)
     const rods_html = selectedOption + mapOption(rods)
     const chairs_html = selectedOption + noneOption + mapOption(chairs)
     const lightstone_sets_html = selectedOption + noneOption + mapOption(lightstone_sets)
@@ -601,7 +125,7 @@
         return gear.reduce((acc, name) => {
             if (Array.isArray(name)) {
                 acc += name.reduce((inner_acc, inner_name) => {
-                    let obj = searchItem(items, inner_name, '')
+                    let obj = searchList(items, inner_name, '')
                     console.log(obj)
                     if (obj.length === 1 && obj[0].afr) {
                         inner_acc += Number.parseFloat(obj[0].afr)
@@ -610,7 +134,7 @@
                     return inner_acc
                 }, 0.0)
             } else {
-                let obj = searchItem(items, name, '')
+                let obj = searchList(items, name, '')
                 console.log(obj)
                 if (obj.length === 1 && obj[0].afr) {
                     acc += Number.parseFloat(obj[0].afr)
@@ -619,14 +143,14 @@
 
             console.log(acc)
             return acc;
-        }, 0.0).toFixed(2)
+        }, 0.0)
     }
     const calcDRR = (gear) => {
         console.log(JSON.stringify(gear))
         return gear.reduce((acc, name) => {
             if (Array.isArray(name)) {
                 acc += name.reduce((inner_acc, inner_name) => {
-                    let obj = searchItem(items, inner_name, '')
+                    let obj = searchList(items, inner_name, '')
                     console.log(obj)
                     if (obj.length === 1 && obj[0].drr) {
                         inner_acc += Number.parseFloat(obj[0].drr)
@@ -634,7 +158,7 @@
                     return inner_acc
                 }, 0.0)
             } else {
-                let obj = searchItem(items, name, '')
+                let obj = searchList(items, name, '')
                 if (obj.length === 1 && obj[0].drr) {
                     acc += Number.parseFloat(obj[0].drr)
                 }
@@ -646,19 +170,23 @@
     const MIN_AUTOFISHING_TIME = 60
 
 
-    const getBiteTime = (zone) => {
-        return {bite_time_min: 40, bite_time_avg: 60, bite_time_max: 80}
+    const getBiteTimes = (zone) => {
+        const zoneData = searchList(zonesWithBiteTimes, zone, '')[0]
+        return {
+            min: zoneData.bite_time_min,
+            avg: (zoneData.bite_time_min + zoneData.bite_time_max) / 2,
+            max: zoneData.bite_time_max
+        }
     }
-    const getAverageBiteTime = (zone) => getBiteTime(zone).bite_time_avg
-    const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr)).toFixed(2)
+    const getAverageBiteTime = (zone) => getBiteTimes(zone).avg
+    const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr))
     const calcBiteTime = (zone, level, resources) => {
-        const {bite_time_min, bite_time_avg, bite_time_max} = getBiteTime(zone)
-        //if (zone.bite_time_min && zone.bite_time_max) {
-        //    avgBitetime = (zone.bite_time_min + zone.bite_time_max)/2
-        //}
-
+        const {min, avg, max} = getBiteTimes(zone)
         let factor_level = 1 - 0.15 // level 0 gives 15% reduction
         switch (level) {
+            case 0: // level 0 gives 15% reduction (ask PA...)
+                factor_level = 1 - 0.15
+                break
             case 1: // level 1 gives 30% reduction
                 factor_level = 1 - 0.3
                 break
@@ -667,11 +195,16 @@
                 break
         }
         let factor_resources = 2 - resources / 100
-        console.log(`avgBiteTime: ${bite_time_avg}, factor_level: ${factor_level}, factor_resources = ${factor_resources}`)
-        return (bite_time_avg * factor_level * factor_resources).toFixed(2)
+        console.log(JSON.stringify({
+            avg: avg,
+            level: factor_level,
+            factor_resources: factor_resources,
+            final: avg * factor_level * factor_resources
+        }))
+        return (avg * factor_level * factor_resources)
     }
 
-    const calcPercentageOfAverageTime = (time, zone) => (time / (getAverageBiteTime(zone) + MAX_AUTOFISHING_TIME) * 100).toFixed(2)
+    const calcPercentageOfAverageTime = (time, zone) => (time / (calcBiteTime(zone, 1, 0) + MAX_AUTOFISHING_TIME) * 100)
 
     const calcAbundancyLabel = (percentage) => {
         if (percentage <= 14) {
@@ -698,23 +231,23 @@
        food: [],
        outfit: [],
        lightstone_set: '',
-       player_stats_fishing_level: 5,
-       player_stats_fishing_lifeskill_level: 100,
-       zone: '',
+       level: 5,
+       lifeskill_level: 'Guru 20',
+       zone: 'Velia Beach (Balenos Event Spot)',
        resources: 0,
      }">
 
-    <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set])"></div>
+    <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set]).toFixed(2)"></div>
     <div data-computed-afr="Math.min(2/3, $afr_uncapped).toFixed(2)"></div>
-    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set])"></div>
-    <div data-computed-aftime="calcAfTime($afr)"></div>
-    <div data-computed-bitetime="calcBiteTime($zone, $player_stats_fishing_level, $resources)"></div>
+    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set]).toFixed(2)"></div>
+    <div data-computed-aftime="calcAfTime($afr).toFixed(2)"></div>
+    <div data-computed-bitetime="calcBiteTime($zone, $level, $resources).toFixed(2)"></div>
 
     <div>
         <div id="fishing-timeline">
-            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($bitetime, $zone) + '%;'}"
+            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($bitetime, $zone).toFixed(2) + '%;'}"
                  class="slider slider-bitetime"></div>
-            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($aftime, $zone) + '%;'}"
+            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($aftime, $zone).toFixed(2) + '%;'}"
                  class="slider slider-aftime"></div>
             <div class="slider slider-empty"></div>
         </div>
@@ -746,6 +279,9 @@
     </div>
 
     <div id="items" class="w-full flex flex-column">
+        <label>Zone<select id="zone" data-bind-zone></select></label>
+        <label>Fishing Level<select id="level" data-bind-level></select></label>
+        <label>Lifeskill Level<select id="lifeskill_level" data-bind-lifeskill_level></select></label>
         <label>Fishing Rod<select id="rods" data-bind-rod></select></label>
         <label>Float<select id="floats" data-bind-float></select></label>
         <label>Chair<select id="chairs" data-bind-chair></select></label>
@@ -764,6 +300,9 @@
 </div>
 
 <script>
+    document.getElementById('zone').innerHTML = zones_html
+    document.getElementById('level').innerHTML = level_html
+    document.getElementById('lifeskill_level').innerHTML = lifeskill_level_html
     document.getElementById('rods').innerHTML = rods_html
     document.getElementById('chairs').innerHTML = chairs_html
     document.getElementById('buffs').innerHTML = buffs_html
