@@ -11,6 +11,1847 @@
 
 ```=html
 <script>
+    const zones = [
+        {
+            "r": 255,
+            "g": 130,
+            "b": 203,
+            "name": "Drieghan - Middle River",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 212,
+            "g": 132,
+            "b": 132,
+            "name": "Arsha Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 66,
+            "g": 255,
+            "b": 255,
+            "name": "Mountain of Eternal Winter - Upstream Source",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 165,
+            "g": 117,
+            "b": 117,
+            "name": "Altinova Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 0,
+            "g": 255,
+            "b": 126,
+            "name": "Valencia Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 85
+        },
+        {
+            "r": 193,
+            "g": 109,
+            "b": 109,
+            "name": "Cron Islands - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 108,
+            "g": 178,
+            "b": 237,
+            "name": "Port Epheria - Docks",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 250,
+            "g": 250,
+            "b": 100,
+            "name": "Kamasylvia - Kamasylvia Terrain",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 234,
+            "name": "Grándiha - Docks",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 188,
+            "g": 198,
+            "b": 203,
+            "name": "Banto Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 180,
+            "g": 255,
+            "b": 250,
+            "name": "Elsana Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 212,
+            "g": 106,
+            "b": 106,
+            "name": "Arsha Sea - Coast (Iliya Island)",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 250,
+            "g": 255,
+            "b": 12,
+            "name": "Serni Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 66,
+            "g": 89,
+            "b": 153,
+            "name": "Mountain of Eternal Winter - Upstream",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 216,
+            "g": 137,
+            "b": 116,
+            "name": "Velia Warehouse",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 120
+        },
+        {
+            "r": 138,
+            "g": 139,
+            "b": 252,
+            "name": "Kamasylvia - Grana (Event Spot)",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 100
+        },
+        {
+            "r": 240,
+            "g": 74,
+            "b": 74,
+            "name": "Velia Beach (Balenos Event Spot)",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 148,
+            "g": 220,
+            "b": 255,
+            "name": "Epheria Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 242,
+            "g": 18,
+            "b": 181,
+            "name": "O'dyllita Waters",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 49,
+            "g": 15,
+            "b": 146,
+            "name": "Dalbeol River",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 133,
+            "g": 198,
+            "b": 230,
+            "name": "Peyon Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 250,
+            "g": 250,
+            "b": 200,
+            "name": "Serni Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 133,
+            "g": 176,
+            "b": 218,
+            "name": "Mountain of Eternal Winter - Tori Woods Lake",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 150,
+            "g": 60,
+            "b": 60,
+            "name": "Balenos - Biraghi Den: Sandeel Default",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 90
+        },
+        {
+            "r": 230,
+            "g": 115,
+            "b": 115,
+            "name": "Nox Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 255,
+            "g": 159,
+            "b": 159,
+            "name": "Balenos Islands - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 115,
+            "g": 209,
+            "b": 255,
+            "name": "Epheria Sea - Depth 5",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 196,
+            "g": 234,
+            "b": 255,
+            "name": "Epheria Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 179,
+            "g": 188,
+            "b": 193,
+            "name": "Zenato Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 87,
+            "g": 158,
+            "b": 193,
+            "name": "Zenato Sea - Depth 5",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 250,
+            "g": 255,
+            "b": 158,
+            "name": "Serni Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 230,
+            "g": 143,
+            "b": 143,
+            "name": "Nox Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 48,
+            "g": 0,
+            "b": 0,
+            "name": "Balenos River",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 166,
+            "g": 75,
+            "b": 14,
+            "name": "Chowon Gardens",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 163,
+            "g": 195,
+            "b": 212,
+            "name": "Ahrmo Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 112,
+            "g": 167,
+            "b": 193,
+            "name": "Zenato Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 71,
+            "g": 160,
+            "b": 212,
+            "name": "Ahrmo Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 0,
+            "g": 250,
+            "b": 0,
+            "name": "Balenos River - Demi River Crossing",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 66,
+            "g": 182,
+            "b": 20,
+            "name": "Land of the Morning Light - Terrain",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 128,
+            "g": 129,
+            "b": 0,
+            "name": "Kamasylvia - Tooth Fairy Cabin",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 150,
+            "g": 75,
+            "b": 75,
+            "name": "Mediah Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 236,
+            "g": 110,
+            "b": 26,
+            "name": "Mount Ahshi Lake",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 90,
+            "name": "Calpheon River - South",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 172,
+            "g": 228,
+            "b": 255,
+            "name": "Epheria Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 255,
+            "g": 100,
+            "b": 255,
+            "name": "Margoria Central",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 197,
+            "g": 149,
+            "b": 149,
+            "name": "Eltro Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 193,
+            "g": 137,
+            "b": 137,
+            "name": "Cron Islands - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 193,
+            "g": 127,
+            "b": 127,
+            "name": "Cron Islands - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 193,
+            "g": 99,
+            "b": 36,
+            "name": "Godu River",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 57,
+            "g": 229,
+            "b": 141,
+            "name": "Valencia Sea - Depth 5",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 80
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 150,
+            "name": "Shakatu / Valencia Farmland (Valencia Inland)",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 203,
+            "g": 115,
+            "b": 115,
+            "name": "Sausan Islands - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 177,
+            "g": 117,
+            "b": 117,
+            "name": "Olvia Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 130,
+            "g": 173,
+            "b": 193,
+            "name": "Zenato Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 165,
+            "g": 103,
+            "b": 103,
+            "name": "Altinova Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 193,
+            "g": 96,
+            "b": 96,
+            "name": "Cron Islands - Coast",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 30,
+            "g": 30,
+            "b": 30,
+            "name": "Out-Of-Bounds",
+            "confirmed": 1,
+            "bite_time_min": 120,
+            "bite_time_max": 360
+        },
+        {
+            "r": 255,
+            "g": 239,
+            "b": 239,
+            "name": "Balenos - Cron Castle Offshore",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 120
+        },
+        {
+            "r": 138,
+            "g": 139,
+            "b": 0,
+            "name": "Kamasylvia - Grana",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 100
+        },
+        {
+            "r": 203,
+            "g": 127,
+            "b": 127,
+            "name": "Sausan Islands - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 0,
+            "g": 117,
+            "b": 0,
+            "name": "Bloody Monastery",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 0,
+            "g": 165,
+            "b": 0,
+            "name": "Demi River",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 85,
+            "g": 193,
+            "b": 255,
+            "name": "Epheria Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 197,
+            "g": 125,
+            "b": 125,
+            "name": "Eltro Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 236,
+            "g": 249,
+            "b": 255,
+            "name": "Epheria Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 143,
+            "g": 190,
+            "b": 212,
+            "name": "Ahrmo Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 54,
+            "g": 171,
+            "b": 54,
+            "name": "Balenos - Biraghi Den (Bandit Zone)",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 250,
+            "g": 235,
+            "b": 0,
+            "name": "Papua Crinea",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 175,
+            "b": 255,
+            "name": "Vadabin Sea",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 178,
+            "g": 175,
+            "b": 0,
+            "name": "Starry Midnight Port - Dock",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 213,
+            "g": 225,
+            "b": 230,
+            "name": "Peyon Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 255,
+            "g": 125,
+            "b": 255,
+            "name": "Juur Sea",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 250,
+            "g": 235,
+            "b": 100,
+            "name": "Papua Crinea - Waterfalls",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 234,
+            "g": 98,
+            "b": 197,
+            "name": "O'draxxia (Leaf Spot)",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 203,
+            "g": 144,
+            "b": 144,
+            "name": "Sausan Islands - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 177,
+            "g": 211,
+            "b": 230,
+            "name": "Peyon Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 80,
+            "g": 80,
+            "b": 80,
+            "name": "Other Regions - Coast: Surfperch Default",
+            "confirmed": 1,
+            "bite_time_min": 120,
+            "bite_time_max": 360
+        },
+        {
+            "r": 197,
+            "g": 135,
+            "b": 135,
+            "name": "Eltro Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 255,
+            "g": 0,
+            "b": 255,
+            "name": "Margoria Archipelago",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 0,
+            "g": 170,
+            "b": 0,
+            "name": "Serendia - Southern Mountains Valley",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 203,
+            "g": 134,
+            "b": 134,
+            "name": "Sausan Islands - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 7,
+            "g": 79,
+            "b": 177,
+            "name": "Mountain of Eternal Winter - Terrain",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 150,
+            "g": 99,
+            "b": 99,
+            "name": "Mediah Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 180,
+            "g": 82,
+            "b": 237,
+            "name": "O'dyllita - Terrain",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 148,
+            "g": 149,
+            "b": 0,
+            "name": "Kamasylvia - Lake Flondor",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 100
+        },
+        {
+            "r": 203,
+            "g": 101,
+            "b": 101,
+            "name": "Sausan Islands - Coast",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 96,
+            "g": 174,
+            "b": 155,
+            "name": "Margoria North (Ghost Whale Spot)",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 212,
+            "g": 140,
+            "b": 140,
+            "name": "Arsha Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 144,
+            "g": 9,
+            "b": 136,
+            "name": "Zulatia Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 2,
+            "g": 136,
+            "b": 68,
+            "name": "Valencia Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 90
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 95,
+            "name": "Lake Kaia (Catfishman Swamp)",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 154,
+            "g": 76,
+            "b": 76,
+            "name": "Mediah Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 60
+        },
+        {
+            "r": 118,
+            "g": 175,
+            "b": 203,
+            "name": "Banto Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 91,
+            "g": 49,
+            "b": 21,
+            "name": "Wonjin Falls",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 0,
+            "g": 230,
+            "b": 113,
+            "name": "Valencia Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 85
+        },
+        {
+            "r": 182,
+            "g": 0,
+            "b": 0,
+            "name": "Surfperch Dominion (Archipelago)",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 150,
+            "g": 106,
+            "b": 106,
+            "name": "Mediah Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 255,
+            "g": 110,
+            "b": 203,
+            "name": "Drieghan - Upstream (Calpheon)",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 100,
+            "g": 0,
+            "b": 100,
+            "name": "Junaid River",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 200,
+            "g": 200,
+            "b": 250,
+            "name": "Elsana Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 75,
+            "name": "Calpheon River - Northern Wheat Plantation",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 255,
+            "g": 204,
+            "b": 204,
+            "name": "Balenos - Coastal Cave (East)",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 120
+        },
+        {
+            "r": 255,
+            "g": 144,
+            "b": 144,
+            "name": "Balenos Islands - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 197,
+            "g": 140,
+            "b": 140,
+            "name": "Eltro Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 255,
+            "g": 170,
+            "b": 203,
+            "name": "Drieghan - Duvencrune Hot Spring",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 120
+        },
+        {
+            "r": 89,
+            "g": 38,
+            "b": 236,
+            "name": "Hanji Falls",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 140,
+            "b": 203,
+            "name": "Drieghan - Downstream",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 240,
+            "g": 255,
+            "b": 250,
+            "name": "Elsana Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 0,
+            "g": 109,
+            "b": 0,
+            "name": "Demi River (Neutral Zone)",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 148,
+            "g": 177,
+            "b": 193,
+            "name": "Zenato Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 165,
+            "g": 93,
+            "b": 93,
+            "name": "Altinova Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 0,
+            "g": 65,
+            "b": 0,
+            "name": "Glish Swamp",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 136,
+            "g": 38,
+            "b": 236,
+            "name": "Cheongsan Institute Waterfall",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 72,
+            "g": 61,
+            "b": 104,
+            "name": "Beombawi Gate",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 216,
+            "g": 137,
+            "b": 115,
+            "name": "Valencia City (Event Spot)",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 135,
+            "name": "Epheria Sea Archipelago - Inland & Coast",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 60
+        },
+        {
+            "r": 169,
+            "g": 138,
+            "b": 118,
+            "name": "Godu Distillery",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 168,
+            "b": 168,
+            "name": "Balenos Islands - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 47,
+            "g": 47,
+            "b": 106,
+            "name": "Marni Ponds",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 60,
+            "g": 60,
+            "b": 150,
+            "name": "Calpheon - Terrain",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 90
+        },
+        {
+            "r": 255,
+            "g": 205,
+            "b": 255,
+            "name": "Vadabin Coast",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 73,
+            "g": 207,
+            "b": 73,
+            "name": "Balenos - Altar Imp",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 177,
+            "g": 88,
+            "b": 88,
+            "name": "Olvia Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 255,
+            "g": 140,
+            "b": 140,
+            "name": "Terrmian Water Festival - Offshore",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 120
+        },
+        {
+            "r": 198,
+            "g": 199,
+            "b": 0,
+            "name": "Kamasylvia - Upstream",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 177,
+            "g": 100,
+            "b": 100,
+            "name": "Olvia Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 212,
+            "g": 120,
+            "b": 120,
+            "name": "Arsha Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 206,
+            "g": 143,
+            "b": 115,
+            "name": "Iliya Island - Docks (Black Eye Crab Spot)",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 123,
+            "g": 183,
+            "b": 212,
+            "name": "Ahrmo Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 150,
+            "g": 94,
+            "b": 94,
+            "name": "Mediah Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 150,
+            "g": 85,
+            "b": 85,
+            "name": "Mediah Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 92,
+            "g": 166,
+            "b": 203,
+            "name": "Banto Sea - Depth 5",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 177,
+            "g": 126,
+            "b": 126,
+            "name": "Olvia Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 68,
+            "g": 154,
+            "b": 203,
+            "name": "Banto Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 213,
+            "g": 162,
+            "b": 242,
+            "name": "Zulatia Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 248,
+            "g": 152,
+            "b": 89,
+            "name": "Geogugwi Cave - Underground",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 66,
+            "g": 176,
+            "b": 218,
+            "name": "Mountain of Eternal Winter - Wind Nol Swamp",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 155,
+            "g": 206,
+            "b": 230,
+            "name": "Peyon Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 0,
+            "g": 194,
+            "b": 96,
+            "name": "Valencia Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 85
+        },
+        {
+            "r": 77,
+            "g": 174,
+            "b": 230,
+            "name": "Peyon Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 178,
+            "g": 112,
+            "b": 68,
+            "name": "Seoul - Yuunru",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 200,
+            "b": 255,
+            "name": "Ross Sea",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 66,
+            "g": 89,
+            "b": 218,
+            "name": "Mountain of Eternal Winter - Jade River",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 209,
+            "b": 42,
+            "name": "Slippery Scallywags Wharf (Black Eye Crab Spot)",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 120,
+            "b": 255,
+            "name": "Margoria South",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 255,
+            "g": 120,
+            "b": 203,
+            "name": "Drieghan - Upstream (Drieghan)",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 243,
+            "g": 106,
+            "b": 14,
+            "name": "Seoul - Gyeonghoeru Pavilion",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 100,
+            "b": 203,
+            "name": "Drieghan - Highlands",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 64,
+            "g": 146,
+            "b": 193,
+            "name": "Zenato Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 134,
+            "g": 64,
+            "b": 17,
+            "name": "Seoul - Downstream",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 60,
+            "g": 150,
+            "b": 60,
+            "name": "Serendia - Terrain",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 90
+        },
+        {
+            "r": 165,
+            "g": 82,
+            "b": 82,
+            "name": "Altinova Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 240,
+            "g": 180,
+            "b": 140,
+            "name": "Seoul",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 127,
+            "b": 127,
+            "name": "Balenos Islands - Coast",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 197,
+            "g": 114,
+            "b": 114,
+            "name": "Eltro Sea - Coast",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 158,
+            "g": 159,
+            "b": 0,
+            "name": "Kamasylvia - Downstream",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 230,
+            "g": 130,
+            "b": 130,
+            "name": "Nox Sea - Depth 4",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 230,
+            "g": 163,
+            "b": 163,
+            "name": "Nox Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 104,
+            "g": 189,
+            "b": 230,
+            "name": "Peyon Sea - Depth 5",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 196,
+            "g": 207,
+            "b": 212,
+            "name": "Ahrmo Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 216,
+            "g": 137,
+            "b": 118,
+            "name": "Altinova (Event Spot)",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 177,
+            "g": 87,
+            "b": 27,
+            "name": "Myeonggyung Falls",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 165,
+            "g": 109,
+            "b": 109,
+            "name": "Altinova Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 90
+        },
+        {
+            "r": 255,
+            "g": 115,
+            "b": 255,
+            "name": "Margoria North",
+            "confirmed": 1,
+            "bite_time_min": 25,
+            "bite_time_max": 50
+        },
+        {
+            "r": 177,
+            "g": 110,
+            "b": 110,
+            "name": "Olvia Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 216,
+            "g": 137,
+            "b": 88,
+            "name": "Drieghan - Duvencrune (Event Spot)",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 100
+        },
+        {
+            "r": 255,
+            "g": 150,
+            "b": 203,
+            "name": "Drieghan - Duvencrune",
+            "confirmed": 1,
+            "bite_time_min": 40,
+            "bite_time_max": 100
+        },
+        {
+            "r": 212,
+            "g": 150,
+            "b": 150,
+            "name": "Arsha Sea - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 243,
+            "g": 220,
+            "b": 205,
+            "name": "Holbon Hotsprings",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 137,
+            "g": 182,
+            "b": 203,
+            "name": "Banto Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 117,
+            "g": 54,
+            "b": 12,
+            "name": "Dang Forest - Samsin Tree Cave",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 96,
+            "g": 174,
+            "b": 212,
+            "name": "Ahrmo Sea - Depth 5",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 70
+        },
+        {
+            "r": 255,
+            "g": 181,
+            "b": 181,
+            "name": "Balenos Islands - Depth 1",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 255,
+            "g": 160,
+            "b": 203,
+            "name": "Drieghan - Tshira Ruins",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 129,
+            "g": 0,
+            "b": 0,
+            "name": "Balenos - Terrain",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 90
+        },
+        {
+            "r": 179,
+            "g": 77,
+            "b": 8,
+            "name": "Geogugwi Cave",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 250,
+            "g": 255,
+            "b": 109,
+            "name": "Serni Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 80,
+            "g": 58,
+            "b": 144,
+            "name": "Beombawi Valley",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 234,
+            "g": 153,
+            "b": 99,
+            "name": "Mount Ahshi Falls",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 216,
+            "g": 137,
+            "b": 117,
+            "name": "Heidel - Demi River (Event Spot)",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 255,
+            "g": 221,
+            "b": 221,
+            "name": "Balenos - Coast",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 120
+        },
+        {
+            "r": 122,
+            "g": 99,
+            "b": 186,
+            "name": "Bari Forest",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 130,
+            "name": "North Kaia Lake / Kaia River",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 234,
+            "g": 213,
+            "b": 246,
+            "name": "Zulatia Sea - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 61,
+            "g": 17,
+            "b": 188,
+            "name": "Dokkebi Valley",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 41,
+            "g": 41,
+            "b": 158,
+            "name": "Keplan Ponds",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 193,
+            "g": 120,
+            "b": 120,
+            "name": "Cron Islands - Depth 3",
+            "confirmed": 1,
+            "bite_time_min": 45,
+            "bite_time_max": 100
+        },
+        {
+            "r": 240,
+            "g": 240,
+            "b": 240,
+            "name": "Other Regions - Terrain: Sandeel Default",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 90
+        },
+        {
+            "r": 226,
+            "g": 138,
+            "b": 79,
+            "name": "Hwasun Valley",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 87,
+            "g": 64,
+            "b": 48,
+            "name": "Dang Forest (Geogugwi)",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 161,
+            "g": 134,
+            "b": 236,
+            "name": "Beombawi Lake/Shrine",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 230,
+            "g": 152,
+            "b": 152,
+            "name": "Nox Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 35,
+            "bite_time_max": 75
+        },
+        {
+            "r": 216,
+            "g": 137,
+            "b": 128,
+            "name": "Terrmian Water Festival - Beach",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 120
+        },
+        {
+            "r": 0,
+            "g": 85,
+            "b": 0,
+            "name": "Glish Swamp - Extraction Plant",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 50,
+            "name": "Calpheon River - Central",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 100
+        },
+        {
+            "r": 220,
+            "g": 255,
+            "b": 250,
+            "name": "Elsana Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 250,
+            "g": 250,
+            "b": 0,
+            "name": "Kamasylvia Islands (Grándiha / Papua Crinea)",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 255,
+            "g": 194,
+            "b": 194,
+            "name": "Balenos - Coastal Cliff",
+            "confirmed": 1,
+            "bite_time_min": 60,
+            "bite_time_max": 120
+        },
+        {
+            "r": 255,
+            "g": 192,
+            "b": 203,
+            "name": "Drieghan - Terrain",
+            "confirmed": 1,
+            "bite_time_min": 50,
+            "bite_time_max": 90
+        },
+        {
+            "r": 66,
+            "g": 89,
+            "b": 101,
+            "name": "Mountain of Eternal Winter - Downstream",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 156,
+            "g": 186,
+            "b": 203,
+            "name": "Banto Sea - Depth 2",
+            "confirmed": 1,
+            "bite_time_min": 30,
+            "bite_time_max": 65
+        },
+        {
+            "r": 115,
+            "g": 96,
+            "b": 84,
+            "name": "Godu Pond",
+            "confirmed": 0,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 10,
+            "g": 70,
+            "b": 0,
+            "name": "Lake Kaia - South Kaia Pier",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        },
+        {
+            "r": 0,
+            "g": 0,
+            "b": 193,
+            "name": "Ibellab Oasis",
+            "confirmed": 1,
+            "bite_time_min": null,
+            "bite_time_max": null
+        }
+    ]
+
+    const zonesWithBiteTimes = zones.filter(z => z.bite_time_min && z.bite_time_max).sort((a, b) => (a.name > b.name) ? 1 : ((b.name > a.name) ? -1 : 0))
+
     const items = [
         {
             "name": "8-Piece Outfit Set Effect",
@@ -509,18 +2350,18 @@
         }
     ]
 
-    const searchItem = (items, search, type) => items.filter(item =>
-        item.name.toLowerCase().includes(search.toLowerCase()) && item.type.includes(type)
+    const searchList = (list, search, type) => list.filter(item =>
+        item.name.toLowerCase().includes(search.toLowerCase()) && (item.type && item.type.includes(type) || !item.type)
     );
 
-    const rods = searchItem(items, '', 'rod')
-    const floats = searchItem(items, '', 'float')
-    const chairs = searchItem(items, '', 'chair')
-    const backpacks = searchItem(items, '', 'backpack')
-    const buffs = searchItem(items, '', 'buff')
-    const foods = searchItem(items, '', 'food')
-    const outfits = searchItem(items, '', 'outfit')
-    const lightstone_sets = searchItem(items, '', 'lightstone_set')
+    const rods = searchList(items, '', 'rod')
+    const floats = searchList(items, '', 'float')
+    const chairs = searchList(items, '', 'chair')
+    const backpacks = searchList(items, '', 'backpack')
+    const buffs = searchList(items, '', 'buff')
+    const foods = searchList(items, '', 'food')
+    const outfits = searchList(items, '', 'outfit')
+    const lightstone_sets = searchList(items, '', 'lightstone_set')
 
 
     const selectedOption = `<button><div><selectedcontent></selectedcontent></div></button>`
@@ -551,6 +2392,14 @@
         }
     ).join('\n')
 
+    const lifeskillLevels = [
+        {name: "Beginner 1", index: 1},
+        {name: "Guru 20", index: 100},
+    ];
+
+    const zones_html = selectedOption + mapOption(zonesWithBiteTimes)
+    const level_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`)
+    const lifeskill_level_html = selectedOption + mapOption(lifeskillLevels)
     const rods_html = selectedOption + mapOption(rods)
     const chairs_html = selectedOption + noneOption + mapOption(chairs)
     const lightstone_sets_html = selectedOption + noneOption + mapOption(lightstone_sets)
@@ -565,7 +2414,7 @@
         return gear.reduce((acc, name) => {
             if (Array.isArray(name)) {
                 acc += name.reduce((inner_acc, inner_name) => {
-                    let obj = searchItem(items, inner_name, '')
+                    let obj = searchList(items, inner_name, '')
                     console.log(obj)
                     if (obj.length === 1 && obj[0].afr) {
                         inner_acc += Number.parseFloat(obj[0].afr)
@@ -574,7 +2423,7 @@
                     return inner_acc
                 }, 0.0)
             } else {
-                let obj = searchItem(items, name, '')
+                let obj = searchList(items, name, '')
                 console.log(obj)
                 if (obj.length === 1 && obj[0].afr) {
                     acc += Number.parseFloat(obj[0].afr)
@@ -583,14 +2432,14 @@
 
             console.log(acc)
             return acc;
-        }, 0.0).toFixed(2)
+        }, 0.0)
     }
     const calcDRR = (gear) => {
         console.log(JSON.stringify(gear))
         return gear.reduce((acc, name) => {
             if (Array.isArray(name)) {
                 acc += name.reduce((inner_acc, inner_name) => {
-                    let obj = searchItem(items, inner_name, '')
+                    let obj = searchList(items, inner_name, '')
                     console.log(obj)
                     if (obj.length === 1 && obj[0].drr) {
                         inner_acc += Number.parseFloat(obj[0].drr)
@@ -598,7 +2447,7 @@
                     return inner_acc
                 }, 0.0)
             } else {
-                let obj = searchItem(items, name, '')
+                let obj = searchList(items, name, '')
                 if (obj.length === 1 && obj[0].drr) {
                     acc += Number.parseFloat(obj[0].drr)
                 }
@@ -610,19 +2459,23 @@
     const MIN_AUTOFISHING_TIME = 60
 
 
-    const getBiteTime = (zone) => {
-        return {bite_time_min: 40, bite_time_avg: 60, bite_time_max: 80}
+    const getBiteTimes = (zone) => {
+        const zoneData = searchList(zonesWithBiteTimes, zone, '')[0]
+        return {
+            min: zoneData.bite_time_min,
+            avg: (zoneData.bite_time_min + zoneData.bite_time_max) / 2,
+            max: zoneData.bite_time_max
+        }
     }
-    const getAverageBiteTime = (zone) => getBiteTime(zone).bite_time_avg
-    const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr)).toFixed(2)
+    const getAverageBiteTime = (zone) => getBiteTimes(zone).avg
+    const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr))
     const calcBiteTime = (zone, level, resources) => {
-        const {bite_time_min, bite_time_avg, bite_time_max} = getBiteTime(zone)
-        //if (zone.bite_time_min && zone.bite_time_max) {
-        //    avgBitetime = (zone.bite_time_min + zone.bite_time_max)/2
-        //}
-
+        const {min, avg, max} = getBiteTimes(zone)
         let factor_level = 1 - 0.15 // level 0 gives 15% reduction
         switch (level) {
+            case 0: // level 0 gives 15% reduction (ask PA...)
+                factor_level = 1 - 0.15
+                break
             case 1: // level 1 gives 30% reduction
                 factor_level = 1 - 0.3
                 break
@@ -631,11 +2484,16 @@
                 break
         }
         let factor_resources = 2 - resources / 100
-        console.log(`avgBiteTime: ${bite_time_avg}, factor_level: ${factor_level}, factor_resources = ${factor_resources}`)
-        return (bite_time_avg * factor_level * factor_resources).toFixed(2)
+        console.log(JSON.stringify({
+            avg: avg,
+            level: factor_level,
+            factor_resources: factor_resources,
+            final: avg * factor_level * factor_resources
+        }))
+        return (avg * factor_level * factor_resources)
     }
 
-    const calcPercentageOfAverageTime = (time, zone) => (time / (getAverageBiteTime(zone) + MAX_AUTOFISHING_TIME) * 100).toFixed(2)
+    const calcPercentageOfAverageTime = (time, zone) => (time / (calcBiteTime(zone, 1, 0) + MAX_AUTOFISHING_TIME) * 100)
 
     const calcAbundancyLabel = (percentage) => {
         if (percentage <= 14) {
@@ -662,23 +2520,23 @@
        food: [],
        outfit: [],
        lightstone_set: '',
-       player_stats_fishing_level: 5,
-       player_stats_fishing_lifeskill_level: 100,
-       zone: '',
+       level: 5,
+       lifeskill_level: 'Guru 20',
+       zone: 'Velia Beach (Balenos Event Spot)',
        resources: 0,
      }">
 
-    <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set])"></div>
+    <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set]).toFixed(2)"></div>
     <div data-computed-afr="Math.min(2/3, $afr_uncapped).toFixed(2)"></div>
-    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set])"></div>
-    <div data-computed-aftime="calcAfTime($afr)"></div>
-    <div data-computed-bitetime="calcBiteTime($zone, $player_stats_fishing_level, $resources)"></div>
+    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set]).toFixed(2)"></div>
+    <div data-computed-aftime="calcAfTime($afr).toFixed(2)"></div>
+    <div data-computed-bitetime="calcBiteTime($zone, $level, $resources).toFixed(2)"></div>
 
     <div>
         <div id="fishing-timeline">
-            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($bitetime, $zone) + '%;'}"
+            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($bitetime, $zone).toFixed(2) + '%;'}"
                  class="slider slider-bitetime"></div>
-            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($aftime, $zone) + '%;'}"
+            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($aftime, $zone).toFixed(2) + '%;'}"
                  class="slider slider-aftime"></div>
             <div class="slider slider-empty"></div>
         </div>
@@ -710,6 +2568,9 @@
     </div>
 
     <div id="items" class="w-full flex flex-column">
+        <label>Zone<select id="zone" data-bind-zone></select></label>
+        <label>Fishing Level<select id="level" data-bind-level></select></label>
+        <label>Lifeskill Level<select id="lifeskill_level" data-bind-lifeskill_level></select></label>
         <label>Fishing Rod<select id="rods" data-bind-rod></select></label>
         <label>Float<select id="floats" data-bind-float></select></label>
         <label>Chair<select id="chairs" data-bind-chair></select></label>
@@ -728,6 +2589,9 @@
 </div>
 
 <script>
+    document.getElementById('zone').innerHTML = zones_html
+    document.getElementById('level').innerHTML = level_html
+    document.getElementById('lifeskill_level').innerHTML = lifeskill_level_html
     document.getElementById('rods').innerHTML = rods_html
     document.getElementById('chairs').innerHTML = chairs_html
     document.getElementById('buffs').innerHTML = buffs_html
