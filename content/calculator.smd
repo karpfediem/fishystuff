@@ -696,11 +696,11 @@
         </span>
         <span data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
     </label>
-    <div class="info-field flex w-full">Auto-Fishing Time (AFT):
-        <div data-text="$aftime + ' seconds'"></div>
-    </div>
     <div class="info-field flex w-full">Average Bite Time:
         <div data-text="$bitetime + ' seconds'"></div>
+    </div>
+    <div class="info-field flex w-full">Auto-Fishing Time (AFT):
+        <div data-text="$aftime + ' seconds'"></div>
     </div>
     <div class="info-field flex w-full">Auto-Fishing Time Reduction (AFR):
         <div data-text="($afr_uncapped * 100).toFixed(2) + '%'"></div>
@@ -718,11 +718,11 @@
         <div>Outfit
             <div id="outfits" class="flex flex-column"></div>
         </div>
-        <div>Buffs
-            <div id="buffs" class="flex flex-column"></div>
-        </div>
         <div>Food
             <div id="foods" class="flex flex-column"></div>
+        </div>
+        <div>Buffs
+            <div id="buffs" class="flex flex-column"></div>
         </div>
     </div>
 </div>
