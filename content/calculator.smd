@@ -606,7 +606,7 @@
             return acc;
         }, 0.0)
     }
-    const MAX_AUTOFISHING_TIME = 300
+    const MAX_AUTOFISHING_TIME = 180
     const MIN_AUTOFISHING_TIME = 60
 
 
