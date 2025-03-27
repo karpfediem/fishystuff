@@ -557,8 +557,8 @@
     const floats_html = selectedOption + noneOption + mapOption(floats)
     const backpacks_html = selectedOption + noneOption + mapOption(backpacks)
     const buffs_html = mapCheckbox(buffs)
-    const foods_html = noneOption + mapCheckbox(foods)
-    const outfits_html =noneOption + mapCheckbox(outfits)
+    const foods_html = mapCheckbox(foods)
+    const outfits_html = mapCheckbox(outfits)
 
     const calcAFR = (gear) => {
         console.log(JSON.stringify(gear))
@@ -609,9 +609,14 @@
     const MAX_AUTOFISHING_TIME = 300
     const MIN_AUTOFISHING_TIME = 60
 
+
+    const getBiteTime = (zone) => {
+        return {bite_time_min: 40, bite_time_avg: 60, bite_time_max: 80}
+    }
+    const getAverageBiteTime = (zone) => getBiteTime(zone).bite_time_avg
     const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr))
     const calcBiteTime = (zone, level, resources) => {
-        let avgBiteTime = 60.0
+        const {bite_time_min, bite_time_avg, bite_time_max} = getBiteTime(zone)
         //if (zone.bite_time_min && zone.bite_time_max) {
         //    avgBitetime = (zone.bite_time_min + zone.bite_time_max)/2
         //}
@@ -626,10 +631,25 @@
                 break
         }
         let factor_resources = 2 - resources / 100
-        console.log(`avgBiteTime: ${avgBiteTime}, factor_level: ${factor_level}, factor_resources = ${factor_resources}`)
-        return (avgBiteTime * factor_level * factor_resources).toFixed(2)
+        console.log(`avgBiteTime: ${bite_time_avg}, factor_level: ${factor_level}, factor_resources = ${factor_resources}`)
+        return (bite_time_avg * factor_level * factor_resources).toFixed(2)
     }
 
+    const calcPercentageOfAverageTime = (time, zone) => (time / (getAverageBiteTime(zone) + MAX_AUTOFISHING_TIME) * 100).toFixed(2)
+
+    const calcAbundancyLabel = (percentage) => {
+        if (percentage <= 14) {
+            return "Exhausted"
+        } else if (percentage <= 45) {
+            return "Low"
+        } else if (percentage <= 70) {
+            return "Average"
+        } else if (percentage > 70) {
+            return "Abundant"
+        } else {
+            return "invalid"
+        }
+    }
 </script>
 
 <div id="calculator"
@@ -645,44 +665,64 @@
        player_stats_fishing_level: 5,
        player_stats_fishing_lifeskill_level: 100,
        zone: '',
+       resources: 0,
      }">
-    <p><label><input data-bind-debug type="checkbox" checked=1>Debug</label></p>
+
+    <div data-computed-afr="calcAFR([$rod, $chair, $buff, $food, $lightstone_set])"></div>
+    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set])"></div>
+    <div data-computed-aftime="calcAfTime($afr)"></div>
+    <div data-computed-bitetime="calcBiteTime($zone, $player_stats_fishing_level, $resources)"></div>
+
+    <div>
+        <div id="fishing-timeline">
+            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($bitetime, $zone) + '%;'}"
+                 class="slider slider-bitetime"></div>
+            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($aftime, $zone) + '%;'}"
+                 class="slider slider-aftime"></div>
+            <div class="slider slider-empty"></div>
+        </div>
+    </div>
+
+    <p><label><input data-bind-debug type="checkbox">Debug</label></p>
     <code data-show=$debug>
         <pre data-text="ctx.signals.JSON()"></pre>
     </code>
 
 
-    <label>Fishing Resources:
-        <input data-bind-resources type="range" min="0" max="100">
+    <label class="info-field flex w-full">
+        <span class="flex">Fishing Resources:
+            <input data-bind-resources type="range" min="0" max="100">
+        </span>
+        <span data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
     </label>
-    <span data-text="$resources"></span>%
-
-    <div data-computed-afr="calcAFR([$rod, $chair, $buff, $lightstone_set])"></div>
-    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set])"></div>
-    <div data-computed-aftime="calcAfTime($afr)"></div>
-    <div data-computed-bitetime="calcBiteTime($zone, $player_stats_fishing_level, $resources)"></div>
-    <div>Auto-Fishing Time (AFT):
+    <div class="info-field flex w-full">Auto-Fishing Time (AFT):
         <div data-text="$aftime + ' seconds'"></div>
     </div>
-    <div>Average Bite Time:
+    <div class="info-field flex w-full">Average Bite Time:
         <div data-text="$bitetime + ' seconds'"></div>
     </div>
-    <div>Auto-Fishing Time Reduction (AFR):
+    <div class="info-field flex w-full">Auto-Fishing Time Reduction (AFR):
         <div data-text="$afr * 100 + '%'"></div>
     </div>
-    <div>Durability Reduction Resistance (DRR):
+    <div class="info-field flex w-full">Durability Reduction Resistance (DRR):
         <div data-text="$drr * 100 + '%'"></div>
     </div>
 
-    <div class="w-full flex flex-column">
+    <div id="items" class="w-full flex flex-column">
         <label>Fishing Rod<select id="rods" data-bind-rod></select></label>
         <label>Float<select id="floats" data-bind-float></select></label>
         <label>Chair<select id="chairs" data-bind-chair></select></label>
-        <div>Buffs<div id="buffs"></div></div>
-        <div>Food<div id="foods"></div></div>
-        <div>Outfit<div id="outfits"></div></div>
         <label>Lightstone Set<select id="lightstone_sets" data-bind-lightstone_set></select></label>
         <label>Backpack<select id="backpacks" data-bind-backpack></select></label>
+        <div>Outfit
+            <div id="outfits" class="flex flex-column"></div>
+        </div>
+        <div>Buffs
+            <div id="buffs" class="flex flex-column"></div>
+        </div>
+        <div>Food
+            <div id="foods" class="flex flex-column"></div>
+        </div>
     </div>
 </div>
 
@@ -764,6 +804,55 @@
         flex-direction: column;
     }
 
+    #fishing-timeline {
+        width: 100%;
+        display: inline-flex;
+        position: relative;
+        margin: 0 auto;
+        height: 11px;
+        overflow: hidden;
+        background-color: #0e0e0e;
+        outline: 2px solid #4e4e4e;
+        border-radius: 8px;
+
+        .slider {
+            border-radius: 8px;
+            height: 100%;
+        }
+
+        .slider-bitetime {
+            background-color: #46d2a7;
+        }
+
+        .slider-aftime {
+            background-color: #4e7296;
+        }
+
+        .slider-empty {
+            flex-grow: 1;
+        }
+    }
+
+    #items {
+        label {
+            margin: 0.35em 0;
+        }
+
+        & > div > div {
+            margin: 1em 0;
+
+            & > label {
+                display: flex;
+                align-items: center;
+            }
+        }
+    }
+
+    .info-field {
+        justify-content: space-between;
+        align-items: center;
+        margin: 0.35em 0;
+    }
 </style>
 ```
 ...
