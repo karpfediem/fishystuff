@@ -583,7 +583,7 @@
 
             console.log(acc)
             return acc;
-        }, 0.0)
+        }, 0.0).toFixed(2)
     }
     const calcDRR = (gear) => {
         console.log(JSON.stringify(gear))
@@ -614,7 +614,7 @@
         return {bite_time_min: 40, bite_time_avg: 60, bite_time_max: 80}
     }
     const getAverageBiteTime = (zone) => getBiteTime(zone).bite_time_avg
-    const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr))
+    const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr)).toFixed(2)
     const calcBiteTime = (zone, level, resources) => {
         const {bite_time_min, bite_time_avg, bite_time_max} = getBiteTime(zone)
         //if (zone.bite_time_min && zone.bite_time_max) {
@@ -668,7 +668,8 @@
        resources: 0,
      }">
 
-    <div data-computed-afr="calcAFR([$rod, $chair, $buff, $food, $lightstone_set])"></div>
+    <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set])"></div>
+    <div data-computed-afr="Math.min(2/3, $afr_uncapped).toFixed(2)"></div>
     <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set])"></div>
     <div data-computed-aftime="calcAfTime($afr)"></div>
     <div data-computed-bitetime="calcBiteTime($zone, $player_stats_fishing_level, $resources)"></div>
@@ -702,10 +703,10 @@
         <div data-text="$bitetime + ' seconds'"></div>
     </div>
     <div class="info-field flex w-full">Auto-Fishing Time Reduction (AFR):
-        <div data-text="$afr * 100 + '%'"></div>
+        <div data-text="($afr_uncapped * 100).toFixed(2) + '%'"></div>
     </div>
     <div class="info-field flex w-full">Durability Reduction Resistance (DRR):
-        <div data-text="$drr * 100 + '%'"></div>
+        <div data-text="($drr * 100).toFixed(2) + '%'"></div>
     </div>
 
     <div id="items" class="w-full flex flex-column">
