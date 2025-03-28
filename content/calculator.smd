@@ -204,6 +204,9 @@
 
     const calcChanceToReduce = (drr, lifeskill_level) => (1 - drr) *
         (Math.max(0.9 - 0.005 * searchListBy(lifeskill_levels, 'name', lifeskill_level)[0]["index"], 0.4))
+
+    const HOUR_S = 3600
+    const calcCastsPerTime = (bitetime, aftime, time) => time / (parseFloat(bitetime) + parseFloat(aftime))
 </script>
 
 <div id="calculator"
@@ -310,8 +313,14 @@
     <div class="info-field flex w-full">Durability Reduction Resistance (DRR):
         <div data-text="($drr * 100).toFixed(0) + '%'"></div>
     </div>
-    <div class="info-field flex w-full">Chance to consume Durability (no brand):
+    <div class="info-field flex w-full">Chance to consume Durability (no Brand):
         <div data-text="(calcChanceToReduce($drr, $lifeskill_level) * 100).toFixed(2) + '%'"></div>
+    </div>
+    <div class="info-field flex w-full">Average Casts per Hour:
+        <div data-text="calcCastsPerTime($bitetime, $aftime, HOUR_S).toFixed(2)"></div>
+    </div>
+    <div class="info-field flex w-full">Average Durability Loss per Hour:
+        <div data-text="(calcCastsPerTime($bitetime, $aftime, HOUR_S) * calcChanceToReduce($drr, $lifeskill_level)).toFixed(2)"></div>
     </div>
 
     <div id="items" class="w-full flex flex-column">
