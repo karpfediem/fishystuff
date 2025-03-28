@@ -46,7 +46,7 @@
     </nav>
     <div id="content">
       
-  <div id="page"><h2>Coming soon (WIP)</h2><script>
+  <div id="page"><h2>Fishing Time/Durability Calculator (WIP)</h2><script>
     function loadJSONSync(url) {
         const request = new XMLHttpRequest();
         request.open('GET', url, false); // false makes it synchronous
@@ -58,6 +58,7 @@
             throw new Error(`HTTP error! Status: ${request.status}`);
         }
     }
+
     const items = loadJSONSync('/static/items.json');
     const zones = loadJSONSync('/static/zones.json');
     const lifeskill_levels = loadJSONSync('/static/lifeskill_levels.json');
@@ -69,6 +70,7 @@
     const searchList = (list, search, type) => list.filter(item =>
         item.name.toLowerCase().includes(search.toLowerCase()) && (item.type && item.type.includes(type) || !item.type)
     );
+    const searchListBy = (list, key, search) => list.filter(item => item[key].toLowerCase() === search.toLowerCase());
 
     const rods = searchList(items, '', 'rod')
     const floats = searchList(items, '', 'float')
@@ -108,6 +110,41 @@
         }
     ).join('\n')
 
+    const pet_stats = {
+        //tier: [afr, drr/exp/exp]
+        1: [0.2, 0.01],
+        2: [0.2, 0.02],
+        3: [0.25, 0.03],
+        4: [0.3, 0.04],
+        5: [0.3, 0.05],
+    }
+    const tAFR = "Auto-Fishing Time Reduction"
+    const tDRR = "Durability Reduction Resistance"
+    const tLEXP = "Life EXP"
+    const tFEXP = "Fishing EXP"
+    const calcPetStats = (tier, special, talent, skills) => {
+        // special
+        const afr = (special === tAFR) ? pet_stats[tier][0] : 0
+        // talent (singular)
+        let drr = (talent === tDRR) ? pet_stats[tier][1] : 0
+        let fishing_exp = (talent === tFEXP) ? pet_stats[tier][1] : 0
+        let life_exp = (talent === tLEXP) ? pet_stats[tier][1] : 0
+        // skills (plural)
+        if (Array.isArray(skills)) {
+            skills.map(s => {
+                if (s === tFEXP) {
+                    fishing_exp += pet_stats[tier][1]
+                }
+            })
+        }
+        return {afr: afr, drr: drr, fishing_exp: fishing_exp, life_exp: life_exp,}
+    }
+
+    const pet_tier_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">Tier ${i}</option>`)
+    const pet_special_html = selectedOption + noneOption + [tAFR].map(i => `<option value="${i}">${i}</option>`)
+    const pet_talents_html = selectedOption + noneOption + [tDRR, tLEXP].map(i => `<option value="${i}">${i}</option>`)
+    const pet_skills_html_list = [1, 2, 3, 4, 5].map(i => [tFEXP].map(skill => `<label><input data-bind-pet${i}.skills type="checkbox" value="${skill}">${skill}</label>`))
+
     const zones_html = selectedOption + mapOption(zonesWithBiteTimes)
     const level_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`)
     const lifeskill_level_html = selectedOption + mapOption(lifeskill_levels)
@@ -120,47 +157,28 @@
     const foods_html = mapCheckbox(foods)
     const outfits_html = mapCheckbox(outfits)
 
-    const calcAFR = (gear) => {
-        console.log(JSON.stringify(gear))
-        return gear.reduce((acc, name) => {
-            if (Array.isArray(name)) {
-                acc += name.reduce((inner_acc, inner_name) => {
-                    let obj = searchList(items, inner_name, '')
-                    console.log(obj)
-                    if (obj.length === 1 && obj[0].afr) {
-                        inner_acc += Number.parseFloat(obj[0].afr)
-                    }
-                    console.log(inner_acc)
-                    return inner_acc
-                }, 0.0)
-            } else {
-                let obj = searchList(items, name, '')
-                console.log(obj)
-                if (obj.length === 1 && obj[0].afr) {
-                    acc += Number.parseFloat(obj[0].afr)
-                }
-            }
-
-            console.log(acc)
-            return acc;
-        }, 0.0)
+    const calcAFR = (gear, petAFRs) => {
+        const petAFR = Math.max(...petAFRs)
+        return petAFR + calcItemProperty(gear, 'afr')
     }
-    const calcDRR = (gear) => {
-        console.log(JSON.stringify(gear))
-        return gear.reduce((acc, name) => {
+    const calcDRR = (gear, petsDRR) => {
+        const petDRRSum = petsDRR.reduce((acc, d) => acc + d, 0)
+        return petDRRSum + calcItemProperty(gear, 'drr')
+    }
+    const calcItemProperty = (list, key) => {
+        return list.reduce((acc, name) => {
             if (Array.isArray(name)) {
                 acc += name.reduce((inner_acc, inner_name) => {
-                    let obj = searchList(items, inner_name, '')
-                    console.log(obj)
-                    if (obj.length === 1 && obj[0].drr) {
-                        inner_acc += Number.parseFloat(obj[0].drr)
+                    let obj = searchListBy(items, 'name', inner_name)
+                    if (obj.length === 1 && obj[0][key]) {
+                        inner_acc += Number.parseFloat(obj[0][key])
                     }
                     return inner_acc
                 }, 0.0)
-            } else {
-                let obj = searchList(items, name, '')
-                if (obj.length === 1 && obj[0].drr) {
-                    acc += Number.parseFloat(obj[0].drr)
+            } else if (name.length) {
+                let obj = searchListBy(items, 'name', name)
+                if (obj.length === 1 && obj[0][key]) {
+                    acc += Number.parseFloat(obj[0][key])
                 }
             }
             return acc;
@@ -171,7 +189,7 @@
 
 
     const getBiteTimes = (zone) => {
-        const zoneData = searchList(zonesWithBiteTimes, zone, '')[0]
+        const zoneData = searchListBy(zonesWithBiteTimes, 'name', zone)[0]
         return {
             min: zoneData.bite_time_min,
             avg: (zoneData.bite_time_min + zoneData.bite_time_max) / 2,
@@ -230,20 +248,64 @@
        rod: 'Balenos Fishing Rod',
        float: '',
        chair: 'Manos Fishing Chair',
-       lightstone_set: '',
-       backpack: '',
+       lightstone_set: 'Blacksmith\'s Blessing',
+       backpack: 'Lil\' Otter Fishing Carrier 🦦',
        outfit: [
          '8-Piece Outfit Set Effect',
          'Awakening Weapon Outfit',
          'Mainhand Weapon Outfit'
        ],
        food: ['Balacs Lunchbox'],
-       buff: [],
+       buff: ['','Treant\'s Tear'],
+       fishing_exp: 0,
+       life_exp: 0,
+       pet1: {
+         tier: '5',
+         special: 'Auto-Fishing Time Reduction',
+         talent: 'Durability Reduction Resistance',
+         skills: ['Fishing EXP'],
+       },
+       pet2: {
+         tier: '4',
+         special: '',
+         talent: 'Durability Reduction Resistance',
+         skills: ['Fishing EXP'],
+       },
+       pet3: {
+         tier: '4',
+         special: '',
+         talent: 'Durability Reduction Resistance',
+         skills: ['Fishing EXP'],
+       },
+       pet4: {
+         tier: '4',
+         special: '',
+         talent: 'Durability Reduction Resistance',
+         skills: ['Fishing EXP'],
+       },
+       pet5: {
+         tier: '4',
+         special: '',
+         talent: 'Durability Reduction Resistance',
+         skills: ['Fishing EXP'],
+       },
      }">
 
-    <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set]).toFixed(2)"></div>
+    <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set], [
+          calcPetStats($pet1.tier, $pet1.special,'',[]).afr,
+          calcPetStats($pet2.tier, $pet2.special,'',[]).afr,
+          calcPetStats($pet3.tier, $pet3.special,'',[]).afr,
+          calcPetStats($pet4.tier, $pet4.special,'',[]).afr,
+          calcPetStats($pet5.tier, $pet5.special,'',[]).afr,
+        ]).toFixed(2)"></div>
     <div data-computed-afr="Math.min(2/3, $afr_uncapped).toFixed(2)"></div>
-    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set]).toFixed(2)"></div>
+    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set], [
+          calcPetStats($pet1.tier, '',$pet1.talent,[]).drr,
+          calcPetStats($pet2.tier, '',$pet2.talent,[]).drr,
+          calcPetStats($pet3.tier, '',$pet3.talent,[]).drr,
+          calcPetStats($pet4.tier, '',$pet4.talent,[]).drr,
+          calcPetStats($pet5.tier, '',$pet5.talent,[]).drr,
+        ]).toFixed(2)"></div>
     <div data-computed-aftime="calcAfTime($afr).toFixed(2)"></div>
     <div data-computed-bitetime="calcBiteTime($zone, $level, $resources).toFixed(2)"></div>
 
@@ -301,9 +363,61 @@
             <div id="buffs" class="flex flex-column"></div>
         </div>
     </div>
+    <div id="pets" class="w-full flex flex-column">
+        <div class="pet">
+            <label>Tier<select class="pet_tier" id="pet1.tier" data-bind-pet1.tier></select></label>
+            <label>Special<select class="pet_special" id="pet1.special" data-bind-pet1.special></select></label>
+            <label>Talent<select class="pet_talent" id="pet1.talent" data-bind-pet1.talent></select></label>
+            <div>Skills<div id="pet1.skills" class="flex flex-column"></div></div>
+        </div>
+        <div class="pet">
+            <label>Tier<select class="pet_tier" id="pet2.tier" data-bind-pet2.tier></select></label>
+            <label>Special<select class="pet_special" id="pet2.special" data-bind-pet2.special></select></label>
+            <label>Talent<select class="pet_talent" id="pet2.talent" data-bind-pet2.talent></select></label>
+            <div>Skills<div id="pet2.skills" class="flex flex-column"></div></div>
+        </div>
+        <div class="pet">
+            <label>Tier<select class="pet_tier" id="pet3.tier" data-bind-pet3.tier></select></label>
+            <label>Special<select class="pet_special" id="pet3.special" data-bind-pet3.special></select></label>
+            <label>Talent<select class="pet_talent" id="pet3.talent" data-bind-pet3.talent></select></label>
+            <div>Skills<div id="pet3.skills" class="flex flex-column"></div></div>
+        </div>
+        <div class="pet">
+            <label>Tier<select class="pet_tier" id="pet4.tier" data-bind-pet4.tier></select></label>
+            <label>Special<select class="pet_special" id="pet4.special" data-bind-pet4.special></select></label>
+            <label>Talent<select class="pet_talent" id="pet4.talent" data-bind-pet4.talent></select></label>
+            <div>Skills<div id="pet4.skills" class="flex flex-column"></div></div>
+        </div>
+        <div class="pet">
+            <label>Tier<select class="pet_tier" id="pet5.tier" data-bind-pet5.tier></select></label>
+            <label>Special<select class="pet_special" id="pet5.special" data-bind-pet5.special></select></label>
+            <label>Talent<select class="pet_talent" id="pet5.talent" data-bind-pet5.talent></select></label>
+            <div>Skills<div id="pet5.skills" class="flex flex-column"></div></div>
+        </div>
+        <div data-computed-fishing_exp="(
+          calcPetStats($pet1.tier, '','',$pet1.skills).fishing_exp +
+          calcPetStats($pet2.tier, '','',$pet2.skills).fishing_exp +
+          calcPetStats($pet3.tier, '','',$pet3.skills).fishing_exp +
+          calcPetStats($pet4.tier, '','',$pet4.skills).fishing_exp +
+          calcPetStats($pet5.tier, '','',$pet5.skills).fishing_exp
+        ).toFixed(2)"></div>
+        <div data-computed-life_exp="(
+          calcPetStats($pet1.tier, '','',$pet1.skills).life_exp +
+          calcPetStats($pet2.tier, '','',$pet2.skills).life_exp +
+          calcPetStats($pet3.tier, '','',$pet3.skills).life_exp +
+          calcPetStats($pet4.tier, '','',$pet4.skills).life_exp +
+          calcPetStats($pet5.tier, '','',$pet5.skills).life_exp
+        ).toFixed(2)"></div>
+    </div>
 </div>
 
 <script>
+    [1, 2, 3, 4, 5].forEach(i => {
+        document.getElementById(`pet${i}.tier`).innerHTML = pet_tier_html
+        document.getElementById(`pet${i}.special`).innerHTML = pet_special_html
+        document.getElementById(`pet${i}.talent`).innerHTML = pet_talents_html
+        document.getElementById(`pet${i}.skills`).innerHTML = pet_skills_html_list[i-1]
+    })
     document.getElementById('zone').innerHTML = zones_html
     document.getElementById('level').innerHTML = level_html
     document.getElementById('lifeskill_level').innerHTML = lifeskill_level_html
@@ -432,6 +546,10 @@
         justify-content: space-between;
         align-items: center;
         margin: 0.35em 0;
+    }
+
+    .pet {
+        display: inline-flex;
     }
 </style>
 <p>…</p></div>
