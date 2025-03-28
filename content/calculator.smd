@@ -75,7 +75,7 @@
     ).join('\n')
 
     const pet_stats = {
-        //tier: [afr, drr/exp/exp]
+        //tier: [special, talent]
         1: [0.2, 0.01],
         2: [0.2, 0.02],
         3: [0.25, 0.03],
@@ -97,7 +97,7 @@
         if (Array.isArray(skills)) {
             skills.map(s => {
                 if (s === tFEXP) {
-                    fishing_exp += pet_stats[tier][1]
+                    fishing_exp += 0.05 // fixed value, regardless of tier
                 }
             })
         }
@@ -359,18 +359,18 @@
             <div>Skills<div id="pet5.skills" class="flex flex-column"></div></div>
         </div>
         <div data-computed-fishing_exp="(
-          calcPetStats($pet1.tier, '','',$pet1.skills).fishing_exp +
-          calcPetStats($pet2.tier, '','',$pet2.skills).fishing_exp +
-          calcPetStats($pet3.tier, '','',$pet3.skills).fishing_exp +
-          calcPetStats($pet4.tier, '','',$pet4.skills).fishing_exp +
-          calcPetStats($pet5.tier, '','',$pet5.skills).fishing_exp
+          calcPetStats($pet1.tier, '','', $pet1.skills).fishing_exp +
+          calcPetStats($pet2.tier, '','', $pet2.skills).fishing_exp +
+          calcPetStats($pet3.tier, '','', $pet3.skills).fishing_exp +
+          calcPetStats($pet4.tier, '','', $pet4.skills).fishing_exp +
+          calcPetStats($pet5.tier, '','', $pet5.skills).fishing_exp
         ).toFixed(2)"></div>
         <div data-computed-life_exp="(
-          calcPetStats($pet1.tier, '','',$pet1.skills).life_exp +
-          calcPetStats($pet2.tier, '','',$pet2.skills).life_exp +
-          calcPetStats($pet3.tier, '','',$pet3.skills).life_exp +
-          calcPetStats($pet4.tier, '','',$pet4.skills).life_exp +
-          calcPetStats($pet5.tier, '','',$pet5.skills).life_exp
+          calcPetStats($pet1.tier, '', $pet1.talent, []).life_exp +
+          calcPetStats($pet2.tier, '', $pet2.talent, []).life_exp +
+          calcPetStats($pet3.tier, '', $pet3.talent, []).life_exp +
+          calcPetStats($pet4.tier, '', $pet4.talent, []).life_exp +
+          calcPetStats($pet5.tier, '', $pet5.talent, []).life_exp
         ).toFixed(2)"></div>
     </div>
 </div>
