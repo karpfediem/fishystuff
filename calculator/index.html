@@ -237,6 +237,9 @@
             return "invalid"
         }
     }
+
+    const calcChanceToReduce = (drr, lifeskill_level) => (1 - drr) *
+        (Math.max(0.9 - 0.005 * searchListBy(lifeskill_levels, 'name', lifeskill_level)[0]["index"], 0.4))
 </script>
 
 <div id="calculator"
@@ -343,6 +346,9 @@
     <div class="info-field flex w-full">Durability Reduction Resistance (DRR):
         <div data-text="($drr * 100).toFixed(2) + '%'"></div>
     </div>
+    <div class="info-field flex w-full">Chance to consume Durability (no brand):
+        <div data-text="(calcChanceToReduce($drr, $lifeskill_level) * 100).toFixed(2) + '%'"></div>
+    </div>
 
     <div id="items" class="w-full flex flex-column">
         <label>Zone<select id="zone" data-bind-zone></select></label>
@@ -368,31 +374,41 @@
             <label>Tier<select class="pet_tier" id="pet1.tier" data-bind-pet1.tier></select></label>
             <label>Special<select class="pet_special" id="pet1.special" data-bind-pet1.special></select></label>
             <label>Talent<select class="pet_talent" id="pet1.talent" data-bind-pet1.talent></select></label>
-            <div>Skills<div id="pet1.skills" class="flex flex-column"></div></div>
+            <div>Skills
+                <div id="pet1.skills" class="flex flex-column"></div>
+            </div>
         </div>
         <div class="pet">
             <label>Tier<select class="pet_tier" id="pet2.tier" data-bind-pet2.tier></select></label>
             <label>Special<select class="pet_special" id="pet2.special" data-bind-pet2.special></select></label>
             <label>Talent<select class="pet_talent" id="pet2.talent" data-bind-pet2.talent></select></label>
-            <div>Skills<div id="pet2.skills" class="flex flex-column"></div></div>
+            <div>Skills
+                <div id="pet2.skills" class="flex flex-column"></div>
+            </div>
         </div>
         <div class="pet">
             <label>Tier<select class="pet_tier" id="pet3.tier" data-bind-pet3.tier></select></label>
             <label>Special<select class="pet_special" id="pet3.special" data-bind-pet3.special></select></label>
             <label>Talent<select class="pet_talent" id="pet3.talent" data-bind-pet3.talent></select></label>
-            <div>Skills<div id="pet3.skills" class="flex flex-column"></div></div>
+            <div>Skills
+                <div id="pet3.skills" class="flex flex-column"></div>
+            </div>
         </div>
         <div class="pet">
             <label>Tier<select class="pet_tier" id="pet4.tier" data-bind-pet4.tier></select></label>
             <label>Special<select class="pet_special" id="pet4.special" data-bind-pet4.special></select></label>
             <label>Talent<select class="pet_talent" id="pet4.talent" data-bind-pet4.talent></select></label>
-            <div>Skills<div id="pet4.skills" class="flex flex-column"></div></div>
+            <div>Skills
+                <div id="pet4.skills" class="flex flex-column"></div>
+            </div>
         </div>
         <div class="pet">
             <label>Tier<select class="pet_tier" id="pet5.tier" data-bind-pet5.tier></select></label>
             <label>Special<select class="pet_special" id="pet5.special" data-bind-pet5.special></select></label>
             <label>Talent<select class="pet_talent" id="pet5.talent" data-bind-pet5.talent></select></label>
-            <div>Skills<div id="pet5.skills" class="flex flex-column"></div></div>
+            <div>Skills
+                <div id="pet5.skills" class="flex flex-column"></div>
+            </div>
         </div>
         <div data-computed-fishing_exp="(
           calcPetStats($pet1.tier, '','', $pet1.skills).fishing_exp +
@@ -416,7 +432,7 @@
         document.getElementById(`pet${i}.tier`).innerHTML = pet_tier_html
         document.getElementById(`pet${i}.special`).innerHTML = pet_special_html
         document.getElementById(`pet${i}.talent`).innerHTML = pet_talents_html
-        document.getElementById(`pet${i}.skills`).innerHTML = pet_skills_html_list[i-1]
+        document.getElementById(`pet${i}.skills`).innerHTML = pet_skills_html_list[i - 1]
     })
     document.getElementById('zone').innerHTML = zones_html
     document.getElementById('level').innerHTML = level_html
