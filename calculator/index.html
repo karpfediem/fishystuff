@@ -245,6 +245,36 @@
     const locale = 'en-US'
     const durationFormatter = createDurationFormatter(locale)
     const calcCastsPerTime = (bitetime, aftime, time) => time / (parseFloat(bitetime) + parseFloat(aftime))
+
+    const exportSignals = (json) => {
+        const currentDate = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD format
+        const filename = `preset-${currentDate}.json`;
+
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a); // Required for Firefox
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    const importSignals = (base64String) => {
+        try {
+            // Decode the Base64 string
+            const jsonString = atob(base64String);
+            // Store in localStorage
+            localStorage.setItem('calculator', jsonString);
+
+            console.log('JSON data successfully stored in localStorage. Reloading.');
+            location.reload(); // Force page refresh
+        } catch (error) {
+            console.error('Invalid Base64 JSON string:', error);
+        }
+    }
 </script>
 
 <div id="calculator"
@@ -303,7 +333,7 @@
        timespan_text: '',
        brand: true,
      }"
-     data-persist>
+     data-persist-calculator>
 
     <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set], [
           calcPetStats($pet1.tier, $pet1.special,'',[]).afr,
@@ -337,6 +367,9 @@
     <code data-show=$debug>
         <pre data-text="ctx.signals.JSON()"></pre>
     </code>
+    <button data-on-click="exportSignals(ctx.signals.JSON())">Export</button>
+    <input data-bind-import_file type="file" id="fileInput" accept=".json">
+    <button data-on-click="importSignals($import_file)">Import</button>
 
 
     <label class="info-field flex w-full">
