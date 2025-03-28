@@ -305,10 +305,10 @@
         <div data-text="$aftime + ' seconds'"></div>
     </div>
     <div class="info-field flex w-full">Auto-Fishing Time Reduction (AFR):
-        <div data-text="($afr_uncapped * 100).toFixed(2) + '%'"></div>
+        <div data-text="($afr_uncapped * 100).toFixed(0) + '%'"></div>
     </div>
     <div class="info-field flex w-full">Durability Reduction Resistance (DRR):
-        <div data-text="($drr * 100).toFixed(2) + '%'"></div>
+        <div data-text="($drr * 100).toFixed(0) + '%'"></div>
     </div>
     <div class="info-field flex w-full">Chance to consume Durability (no brand):
         <div data-text="(calcChanceToReduce($drr, $lifeskill_level) * 100).toFixed(2) + '%'"></div>
