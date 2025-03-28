@@ -239,7 +239,7 @@
         }
     }
 
-    const calcChanceToReduce = (drr, lifeskill_level) => (1 - drr) *
+    const calcChanceToReduce = (drr, lifeskill_level, brand) => (brand ? 0.5 : 1) * (1 - drr) *
         (Math.max(0.9 - 0.005 * searchListBy(lifeskill_levels, 'name', lifeskill_level)[0]["index"], 0.4))
 
     const locale = 'en-US'
@@ -301,6 +301,7 @@
        timespan_minutes: 0,
        timespan: 3600,
        timespan_text: '',
+       brand: true,
      }">
 
     <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set], [
@@ -355,8 +356,8 @@
     <div class="info-field flex w-full">Durability Reduction Resistance (DRR):
         <div data-text="($drr * 100).toFixed(0) + '%'"></div>
     </div>
-    <div class="info-field flex w-full">Chance to consume Durability (no Brand):
-        <div data-text="(calcChanceToReduce($drr, $lifeskill_level) * 100).toFixed(2) + '%'"></div>
+    <div class="info-field flex w-full">Chance to consume Durability:
+        <div data-text="(calcChanceToReduce($drr, $lifeskill_level, $brand) * 100).toFixed(2) + '%'"></div>
     </div>
     <div class="info-field flex w-full">Timespan
         <span class="flex" id="timespan">
@@ -373,7 +374,7 @@
     </div>
     <div class="info-field flex w-full">
         <span class="flex" data-text="'Average Durability (' + $timespan_text + ')'"></span>
-        <div data-text="(calcCastsPerTime($bitetime, $aftime, $timespan) * calcChanceToReduce($drr, $lifeskill_level)).toFixed(2)"></div>
+        <div data-text="(calcCastsPerTime($bitetime, $aftime, $timespan) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
     </div>
 
     <div id="items" class="w-full flex flex-column">
@@ -381,6 +382,9 @@
         <label>Fishing Level<select id="level" data-bind-level></select></label>
         <label>Lifeskill Level<select id="lifeskill_level" data-bind-lifeskill_level></select></label>
         <label>Fishing Rod<select id="rods" data-bind-rod></select></label>
+        <label>Brand
+            <input data-bind-brand type="checkbox">
+        </label>
         <label>Float<select id="floats" data-bind-float></select></label>
         <label>Chair<select id="chairs" data-bind-chair></select></label>
         <label>Lightstone Set<select id="lightstone_sets" data-bind-lightstone_set></select></label>
