@@ -8,6 +8,7 @@
   </style>
 </head>
 <div id="content">
+  <script src="$site.asset('durationFormatter.js').link()"></script>
   <div id="page" :html="$page.content()"></div>
   <script type="module" src="$site.asset('datastar.js').link()"></script>
 </div>

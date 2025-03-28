@@ -205,7 +205,8 @@
     const calcChanceToReduce = (drr, lifeskill_level) => (1 - drr) *
         (Math.max(0.9 - 0.005 * searchListBy(lifeskill_levels, 'name', lifeskill_level)[0]["index"], 0.4))
 
-    const HOUR_S = 3600
+    const locale = 'en-US'
+    const durationFormatter = createDurationFormatter(locale)
     const calcCastsPerTime = (bitetime, aftime, time) => time / (parseFloat(bitetime) + parseFloat(aftime))
 </script>
 
@@ -259,6 +260,10 @@
          talent: 'Durability Reduction Resistance',
          skills: ['Fishing EXP'],
        },
+       timespan_hours: 8,
+       timespan_minutes: 0,
+       timespan: 3600,
+       timespan_text: '',
      }">
 
     <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set], [
@@ -316,11 +321,22 @@
     <div class="info-field flex w-full">Chance to consume Durability (no Brand):
         <div data-text="(calcChanceToReduce($drr, $lifeskill_level) * 100).toFixed(2) + '%'"></div>
     </div>
-    <div class="info-field flex w-full">Average Casts per Hour:
-        <div data-text="calcCastsPerTime($bitetime, $aftime, HOUR_S).toFixed(2)"></div>
+    <div class="info-field flex w-full">Timespan
+        <span class="flex" id="timespan">
+              <label><input type="number" id="hours" data-bind-timespan_hours name="hours"
+                            min="0"></label>:<label><input type="number" id="minutes" data-bind-timespan_minutes
+                                                           name="minutes" min="0" max="59"></label>
+          </span>
     </div>
-    <div class="info-field flex w-full">Average Durability Loss per Hour:
-        <div data-text="(calcCastsPerTime($bitetime, $aftime, HOUR_S) * calcChanceToReduce($drr, $lifeskill_level)).toFixed(2)"></div>
+    <div data-computed-timespan="$timespan_hours * 3600 + $timespan_minutes * 60"></div>
+    <div data-computed-timespan_text="durationFormatter($timespan_hours * 60 + $timespan_minutes)"></div>
+    <div class="info-field flex w-full">
+        <span class="flex" data-text="'Average Casts (' + $timespan_text + ')'"></span>
+        <div data-text="calcCastsPerTime($bitetime, $aftime, $timespan).toFixed(2)"></div>
+    </div>
+    <div class="info-field flex w-full">
+        <span class="flex" data-text="'Average Durability (' + $timespan_text + ')'"></span>
+        <div data-text="(calcCastsPerTime($bitetime, $aftime, $timespan) * calcChanceToReduce($drr, $lifeskill_level)).toFixed(2)"></div>
     </div>
 
     <div id="items" class="w-full flex flex-column">
