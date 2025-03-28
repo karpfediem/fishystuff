@@ -48,6 +48,32 @@
       
   <script src="/durationFormatter.js"></script>
   <div id="page"><h2>Fishing Time/Durability Calculator (WIP)</h2><script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const base64Preset = urlParams.get('preset');
+
+    const presetURL = (json) => {
+        return window.location.origin + window.location.pathname + "?preset=" + btoa(json)
+    }
+
+    if (base64Preset) {
+        try {
+            const jsonString = atob(base64Preset);
+            parsed = JSON.parse(jsonString) // see if it is at least valid JSON...
+            localStorage.setItem('calculator', jsonString);
+
+            // Remove the query parameter from the URL
+            urlParams.delete('preset');
+            const newQueryString = urlParams.toString();
+            const newUrl = window.location.origin + window.location.pathname +
+                (newQueryString ? '?' + newQueryString : '');
+
+            // Replace the current URL with the new one, effectively reloading the page without the parameter
+            window.location.replace(newUrl);
+        } catch (error) {
+            console.error('Error importing preset:', error);
+        }
+    }
+
     function loadJSONSync(url) {
         const request = new XMLHttpRequest();
         request.open('GET', url, false); // false makes it synchronous
@@ -246,35 +272,6 @@
     const durationFormatter = createDurationFormatter(locale)
     const calcCastsPerTime = (bitetime, aftime, time) => time / (parseFloat(bitetime) + parseFloat(aftime))
 
-    const exportSignals = (json) => {
-        const currentDate = new Date().toISOString().split('T')[0]; // Get YYYY-MM-DD format
-        const filename = `preset-${currentDate}.json`;
-
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a); // Required for Firefox
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
-    const importSignals = (base64String) => {
-        try {
-            // Decode the Base64 string
-            const jsonString = atob(base64String);
-            // Store in localStorage
-            localStorage.setItem('calculator', jsonString);
-
-            console.log('JSON data successfully stored in localStorage. Reloading.');
-            location.reload(); // Force page refresh
-        } catch (error) {
-            console.error('Invalid Base64 JSON string:', error);
-        }
-    }
 </script>
 
 <div id="calculator"
@@ -363,14 +360,17 @@
         </div>
     </div>
 
-    <p><label><input data-bind-debug type="checkbox">Debug</label></p>
+    <p><label><input data-bind-debug type="checkbox">Debug</label>
+        <button data-on-click="@clipboard(presetURL(ctx.signals.JSON()))">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+            </svg>
+        </button>
+    </p>
+
     <code data-show=$debug>
         <pre data-text="ctx.signals.JSON()"></pre>
     </code>
-    <button data-on-click="exportSignals(ctx.signals.JSON())">Export</button>
-    <input data-bind-import_file type="file" id="fileInput" accept=".json">
-    <button data-on-click="importSignals($import_file)">Import</button>
-
 
     <label class="info-field flex w-full">
         <span class="flex">Fishing Resources:
@@ -630,6 +630,11 @@
 
     .pet {
         display: inline-flex;
+    }
+
+    .size-6 {
+        width: 1.5rem;
+        height: 1.5rem;
     }
 </style>
 <p>…</p></div>
