@@ -218,6 +218,10 @@
     }
     const MAX_AUTOFISHING_TIME = 180
     const MIN_AUTOFISHING_TIME = 60
+    const ROD_CAST_DELAY = 1.5
+    const AVERAGE_MINIGAME_TIME = 16
+    const CATCH_TIME_ACTIVE = ROD_CAST_DELAY + AVERAGE_MINIGAME_TIME
+    const CATCH_TIME_AFK = ROD_CAST_DELAY + 6.5
 
 
     const getBiteTimes = (zone) => {
@@ -254,7 +258,8 @@
         return (avg * factor_level * factor_resources)
     }
 
-    const calcPercentageOfAverageTime = (time, zone) => (time / (calcBiteTime(zone, 1, 0) + MAX_AUTOFISHING_TIME) * 100)
+    const calcUnoptimizedTime = (zone, active) => calcBiteTime(zone, 1, 0) + (active ? CATCH_TIME_ACTIVE : CATCH_TIME_AFK + MAX_AUTOFISHING_TIME)
+    const calcPercentageOfAverageTime = (time, zone, active) => (time / calcUnoptimizedTime(zone, active)) * 100
 
     const calcAbundancyLabel = (percentage) => {
         if (percentage <= 14) {
@@ -334,6 +339,7 @@
        timespan: 3600,
        timespan_text: '',
        brand: true,
+       active: false,
      }"
      data-persist-calculator>
 
@@ -352,16 +358,27 @@
           calcPetStats($pet4.tier, '',$pet4.talent,[]).drr,
           calcPetStats($pet5.tier, '',$pet5.talent,[]).drr,
         ]).toFixed(2)"></div>
-    <div data-computed-aftime="calcAfTime($afr).toFixed(2)"></div>
+    <div data-computed-aftime="$active ? 0 : calcAfTime($afr).toFixed(2)"></div>
     <div data-computed-bitetime="calcBiteTime($zone, $level, $resources).toFixed(2)"></div>
+    <div data-computed-catchtime="($active ? CATCH_TIME_ACTIVE : CATCH_TIME_AFK).toFixed(2)"></div>
+    <div data-computed-total_time="(calcBiteTime($zone, $level, $resources) + ($active ? CATCH_TIME_ACTIVE : calcAfTime($afr) + CATCH_TIME_AFK)).toFixed(2)"></div>
+    <div data-computed-percent_bite="calcPercentageOfAverageTime($bitetime, $zone, $active)"></div>
+    <div data-computed-percent_catch="calcPercentageOfAverageTime($catchtime, $zone, $active)"></div>
+    <div data-computed-percent_af="calcPercentageOfAverageTime($aftime, $zone, $active)"></div>
+    <div data-computed-percent_improvement="1 - calcPercentageOfAverageTime($total_time, $zone, $active)"></div>
 
     <div>
         <div id="fishing-timeline">
-            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($bitetime, $zone).toFixed(2) + '%;'}"
+            <div data-attr-title="'Bitetime: ' + $bitetime + 's (' + $percent_bite.toFixed(2) + '%)'"
+                 data-attr="{style: 'flex-basis:' + $percent_bite.toFixed(2) + '%;'}"
                  class="slider slider-bitetime"></div>
-            <div data-attr="{style: 'flex-basis:' + calcPercentageOfAverageTime($aftime, $zone).toFixed(2) + '%;'}"
+            <div data-attr-title="'Catch Time: ' + $catchtime + 's (' + $percent_catch.toFixed(2) + '%)'"
+                 data-attr="{style: 'flex-basis:' + $percent_catch.toFixed(2) + '%;'}"
+                 class="slider slider-catchtime"></div>
+            <div data-attr-title="'Auto-Fishing Time: ' + $aftime + 's (' + $percent_af.toFixed(2) + '%)'"
+                 data-attr="{style: 'flex-basis:' + $percent_af.toFixed(2) + '%;'}"
                  class="slider slider-aftime"></div>
-            <div class="slider slider-empty"></div>
+            <div data-attr-title="'Average Unoptimized Time: '+ calcUnoptimizedTime($zone, $active).toFixed(2) + 's (' + $percent_improvement.toFixed(2) + '%)'" class="slider slider-empty"></div>
         </div>
     </div>
 
@@ -372,7 +389,7 @@
             </svg>
             Copy URL
         </button>
-        <button data-on-click="@clipboard('[FishyStuff Calculator Preset | '+ $afr * 100 +'% AFR | '+ $drr * 100 +'% DRR | '+ $zone +'](' + presetURL(ctx.signals.JSON())+ ')')">
+        <button data-on-click="@clipboard('[FishyStuff Calculator Preset | ' + ($active ? 'Active | ' : $afr * 100 +'% AFR | ') + $drr * 100 +'% DRR | '+ $zone +'](' + presetURL(ctx.signals.JSON())+ ')')">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
             <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
             </svg>
@@ -387,6 +404,7 @@
         </button>
     </p>
 
+    <label><input data-bind-active type="checkbox">Active Fishing</label>
     <code data-show=$debug>
         <pre data-text="ctx.signals.JSON()"></pre>
     </code>
@@ -397,13 +415,16 @@
         </span>
         <span data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
     </label>
+    <div class="info-field flex w-full">Average Total Fishing Time:
+        <div data-text="$total_time + ' seconds'"></div>
+    </div>
     <div class="info-field flex w-full">Average Bite Time:
         <div data-text="$bitetime + ' seconds'"></div>
     </div>
-    <div class="info-field flex w-full">Auto-Fishing Time (AFT):
+    <div data-show="!$active" class="info-field flex w-full">Auto-Fishing Time (AFT):
         <div data-text="$aftime + ' seconds'"></div>
     </div>
-    <div class="info-field flex w-full">Auto-Fishing Time Reduction (AFR):
+    <div data-show="!$active" class="info-field flex w-full">Auto-Fishing Time Reduction (AFR):
         <div data-text="($afr_uncapped * 100).toFixed(0) + '%'"></div>
     </div>
     <div class="info-field flex w-full">Durability Reduction Resistance (DRR):
@@ -423,11 +444,11 @@
     <div data-computed-timespan_text="durationFormatter($timespan_hours * 60 + $timespan_minutes)"></div>
     <div class="info-field flex w-full">
         <span class="flex" data-text="'Average Casts (' + $timespan_text + ')'"></span>
-        <div data-text="calcCastsPerTime($bitetime, $aftime, $timespan).toFixed(2)"></div>
+        <div data-text="($timespan/$total_time).toFixed(2)"></div>
     </div>
     <div class="info-field flex w-full">
         <span class="flex" data-text="'Average Durability Loss (' + $timespan_text + ')'"></span>
-        <div data-text="(calcCastsPerTime($bitetime, $aftime, $timespan) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
+        <div data-text="(($timespan/$total_time) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
     </div>
 
     <div id="items" class="w-full flex flex-column">
@@ -615,6 +636,11 @@
 
         .slider-bitetime {
             background-color: #46d2a7;
+        }
+
+
+        .slider-catchtime {
+            background-color: #d27746;
         }
 
         .slider-aftime {
