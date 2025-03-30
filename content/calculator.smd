@@ -183,7 +183,7 @@
     const ROD_CAST_DELAY = 1.5
     const AVERAGE_MINIGAME_TIME = 16
     const CATCH_TIME_ACTIVE = ROD_CAST_DELAY + AVERAGE_MINIGAME_TIME
-    const CATCH_TIME_AFK = ROD_CAST_DELAY + 6.5
+    const CATCH_TIME_AFK = ROD_CAST_DELAY + 5
 
 
     const getBiteTimes = (zone) => {
