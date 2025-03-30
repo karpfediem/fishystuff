@@ -18,15 +18,6 @@
     "bite_time_max": 75
   },
   {
-    "r": 66,
-    "g": 255,
-    "b": 255,
-    "name": "Mountain of Eternal Winter - Upstream Source",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
     "r": 165,
     "g": 117,
     "b": 117,
@@ -54,15 +45,6 @@
     "bite_time_max": 100
   },
   {
-    "r": 108,
-    "g": 178,
-    "b": 237,
-    "name": "Port Epheria - Docks",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
     "r": 250,
     "g": 250,
     "b": 100,
@@ -70,15 +52,6 @@
     "confirmed": 1,
     "bite_time_min": 50,
     "bite_time_max": 90
-  },
-  {
-    "r": 0,
-    "g": 0,
-    "b": 234,
-    "name": "Grándiha - Docks",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 188,
@@ -90,15 +63,6 @@
     "bite_time_max": 65
   },
   {
-    "r": 180,
-    "g": 255,
-    "b": 250,
-    "name": "Elsana Sea - Depth 3",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
     "r": 212,
     "g": 106,
     "b": 106,
@@ -108,24 +72,6 @@
     "bite_time_max": 75
   },
   {
-    "r": 250,
-    "g": 255,
-    "b": 12,
-    "name": "Serni Sea - Depth 3",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
-    "r": 66,
-    "g": 89,
-    "b": 153,
-    "name": "Mountain of Eternal Winter - Upstream",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
     "r": 216,
     "g": 137,
     "b": 116,
@@ -133,6 +79,15 @@
     "confirmed": 1,
     "bite_time_min": 60,
     "bite_time_max": 120
+  },
+  {
+    "r": 213,
+    "g": 162,
+    "b": 242,
+    "name": "Zulatia Sea - Depth 2",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
   },
   {
     "r": 138,
@@ -162,15 +117,6 @@
     "bite_time_max": 90
   },
   {
-    "r": 242,
-    "g": 18,
-    "b": 181,
-    "name": "O'dyllita Waters",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
     "r": 49,
     "g": 15,
     "b": 146,
@@ -187,24 +133,6 @@
     "confirmed": 1,
     "bite_time_min": 35,
     "bite_time_max": 70
-  },
-  {
-    "r": 250,
-    "g": 250,
-    "b": 200,
-    "name": "Serni Sea - Depth 4",
-    "confirmed": 1,
-    "bite_time_min": 50,
-    "bite_time_max": 90
-  },
-  {
-    "r": 133,
-    "g": 176,
-    "b": 218,
-    "name": "Mountain of Eternal Winter - Tori Woods Lake",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 150,
@@ -270,13 +198,13 @@
     "bite_time_max": 65
   },
   {
-    "r": 250,
-    "g": 255,
-    "b": 158,
-    "name": "Serni Sea - Depth 1",
+    "r": 200,
+    "g": 200,
+    "b": 250,
+    "name": "Elsana Sea - Depth 4",
     "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
+    "bite_time_min": 35,
+    "bite_time_max": 60
   },
   {
     "r": 230,
@@ -294,6 +222,24 @@
     "name": "Balenos River",
     "confirmed": 1,
     "bite_time_min": 60,
+    "bite_time_max": 100
+  },
+  {
+    "r": 10,
+    "g": 70,
+    "b": 0,
+    "name": "Lake Kaia - South Kaia Pier",
+    "confirmed": 1,
+    "bite_time_min": 60,
+    "bite_time_max": 100
+  },
+  {
+    "r": 250,
+    "g": 235,
+    "b": 0,
+    "name": "Papua Crinea",
+    "confirmed": 1,
+    "bite_time_min": 50,
     "bite_time_max": 100
   },
   {
@@ -378,6 +324,15 @@
     "bite_time_max": null
   },
   {
+    "r": 250,
+    "g": 255,
+    "b": 158,
+    "name": "Serni Sea - Depth 1",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
+  },
+  {
     "r": 0,
     "g": 0,
     "b": 90,
@@ -423,6 +378,15 @@
     "bite_time_max": 100
   },
   {
+    "r": 178,
+    "g": 175,
+    "b": 0,
+    "name": "Starry Midnight Port - Dock",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
+  },
+  {
     "r": 193,
     "g": 127,
     "b": 127,
@@ -465,6 +429,15 @@
     "name": "Sausan Islands - Depth 4",
     "confirmed": 1,
     "bite_time_min": 40,
+    "bite_time_max": 90
+  },
+  {
+    "r": 234,
+    "g": 98,
+    "b": 197,
+    "name": "O'draxxia (Leaf Spot)",
+    "confirmed": 1,
+    "bite_time_min": 50,
     "bite_time_max": 90
   },
   {
@@ -522,6 +495,24 @@
     "bite_time_max": 120
   },
   {
+    "r": 250,
+    "g": 235,
+    "b": 100,
+    "name": "Papua Crinea - Waterfalls",
+    "confirmed": 1,
+    "bite_time_min": 50,
+    "bite_time_max": 100
+  },
+  {
+    "r": 250,
+    "g": 250,
+    "b": 0,
+    "name": "Kamasylvia Islands (Grándiha / Papua Crinea)",
+    "confirmed": 1,
+    "bite_time_min": 60,
+    "bite_time_max": 90
+  },
+  {
     "r": 138,
     "g": 139,
     "b": 0,
@@ -529,6 +520,15 @@
     "confirmed": 1,
     "bite_time_min": 40,
     "bite_time_max": 100
+  },
+  {
+    "r": 250,
+    "g": 255,
+    "b": 109,
+    "name": "Serni Sea - Depth 2",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
   },
   {
     "r": 203,
@@ -556,6 +556,15 @@
     "confirmed": 1,
     "bite_time_min": 60,
     "bite_time_max": 100
+  },
+  {
+    "r": 180,
+    "g": 255,
+    "b": 250,
+    "name": "Elsana Sea - Depth 3",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
   },
   {
     "r": 85,
@@ -603,13 +612,22 @@
     "bite_time_max": 100
   },
   {
-    "r": 250,
-    "g": 235,
-    "b": 0,
-    "name": "Papua Crinea",
+    "r": 0,
+    "g": 0,
+    "b": 193,
+    "name": "Ibellab Oasis",
     "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
+    "bite_time_min": 60,
+    "bite_time_max": 90
+  },
+  {
+    "r": 66,
+    "g": 89,
+    "b": 101,
+    "name": "Mountain of Eternal Winter - Downstream",
+    "confirmed": 1,
+    "bite_time_min": 60,
+    "bite_time_max": 90
   },
   {
     "r": 255,
@@ -619,15 +637,6 @@
     "confirmed": 1,
     "bite_time_min": 25,
     "bite_time_max": 50
-  },
-  {
-    "r": 178,
-    "g": 175,
-    "b": 0,
-    "name": "Starry Midnight Port - Dock",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 213,
@@ -646,24 +655,6 @@
     "confirmed": 1,
     "bite_time_min": 25,
     "bite_time_max": 50
-  },
-  {
-    "r": 250,
-    "g": 235,
-    "b": 100,
-    "name": "Papua Crinea - Waterfalls",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
-    "r": 234,
-    "g": 98,
-    "b": 197,
-    "name": "O'draxxia (Leaf Spot)",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 203,
@@ -702,6 +693,24 @@
     "bite_time_max": 75
   },
   {
+    "r": 108,
+    "g": 178,
+    "b": 237,
+    "name": "Port Epheria - Docks",
+    "confirmed": 1,
+    "bite_time_min": 30,
+    "bite_time_max": 60
+  },
+  {
+    "r": 240,
+    "g": 255,
+    "b": 250,
+    "name": "Elsana Sea - Depth 1",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
+  },
+  {
     "r": 255,
     "g": 0,
     "b": 255,
@@ -727,15 +736,6 @@
     "confirmed": 1,
     "bite_time_min": 40,
     "bite_time_max": 90
-  },
-  {
-    "r": 7,
-    "g": 79,
-    "b": 177,
-    "name": "Mountain of Eternal Winter - Terrain",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 150,
@@ -792,21 +792,21 @@
     "bite_time_max": 75
   },
   {
-    "r": 144,
-    "g": 9,
-    "b": 136,
-    "name": "Zulatia Sea - Depth 1",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
     "r": 2,
     "g": 136,
     "b": 68,
     "name": "Valencia Sea - Depth 1",
     "confirmed": 1,
     "bite_time_min": 45,
+    "bite_time_max": 90
+  },
+  {
+    "r": 242,
+    "g": 18,
+    "b": 181,
+    "name": "O'dyllita Waters",
+    "confirmed": 1,
+    "bite_time_min": 50,
     "bite_time_max": 90
   },
   {
@@ -864,6 +864,15 @@
     "bite_time_max": 100
   },
   {
+    "r": 234,
+    "g": 213,
+    "b": 246,
+    "name": "Zulatia Sea - Depth 3",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
+  },
+  {
     "r": 150,
     "g": 106,
     "b": 106,
@@ -889,15 +898,6 @@
     "confirmed": 1,
     "bite_time_min": 60,
     "bite_time_max": 100
-  },
-  {
-    "r": 200,
-    "g": 200,
-    "b": 250,
-    "name": "Elsana Sea - Depth 4",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 0,
@@ -954,6 +954,15 @@
     "bite_time_max": null
   },
   {
+    "r": 66,
+    "g": 255,
+    "b": 255,
+    "name": "Mountain of Eternal Winter - Upstream Source",
+    "confirmed": 1,
+    "bite_time_min": 60,
+    "bite_time_max": 90
+  },
+  {
     "r": 255,
     "g": 140,
     "b": 203,
@@ -961,15 +970,6 @@
     "confirmed": 1,
     "bite_time_min": 50,
     "bite_time_max": 90
-  },
-  {
-    "r": 240,
-    "g": 255,
-    "b": 250,
-    "name": "Elsana Sea - Depth 1",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 0,
@@ -1107,6 +1107,15 @@
     "bite_time_max": 100
   },
   {
+    "r": 0,
+    "g": 0,
+    "b": 234,
+    "name": "Grándiha - Docks",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
+  },
+  {
     "r": 255,
     "g": 140,
     "b": 140,
@@ -1197,6 +1206,24 @@
     "bite_time_max": 100
   },
   {
+    "r": 66,
+    "g": 89,
+    "b": 218,
+    "name": "Mountain of Eternal Winter - Jade River",
+    "confirmed": 1,
+    "bite_time_min": 60,
+    "bite_time_max": 90
+  },
+  {
+    "r": 133,
+    "g": 176,
+    "b": 218,
+    "name": "Mountain of Eternal Winter - Tori Woods Lake",
+    "confirmed": 1,
+    "bite_time_min": 60,
+    "bite_time_max": 90
+  },
+  {
     "r": 68,
     "g": 154,
     "b": 203,
@@ -1204,15 +1231,6 @@
     "confirmed": 1,
     "bite_time_min": 30,
     "bite_time_max": 65
-  },
-  {
-    "r": 213,
-    "g": 162,
-    "b": 242,
-    "name": "Zulatia Sea - Depth 2",
-    "confirmed": 1,
-    "bite_time_min": 50,
-    "bite_time_max": 90
   },
   {
     "r": 248,
@@ -1224,13 +1242,13 @@
     "bite_time_max": null
   },
   {
-    "r": 66,
-    "g": 176,
-    "b": 218,
-    "name": "Mountain of Eternal Winter - Wind Nol Swamp",
+    "r": 220,
+    "g": 255,
+    "b": 250,
+    "name": "Elsana Sea - Depth 2",
     "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
+    "bite_time_min": 35,
+    "bite_time_max": 60
   },
   {
     "r": 155,
@@ -1278,22 +1296,13 @@
     "bite_time_max": 50
   },
   {
-    "r": 66,
-    "g": 89,
-    "b": 218,
-    "name": "Mountain of Eternal Winter - Jade River",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
     "r": 255,
     "g": 209,
     "b": 42,
     "name": "Slippery Scallywags Wharf (Black Eye Crab Spot)",
     "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
+    "bite_time_min": 25,
+    "bite_time_max": 50
   },
   {
     "r": 255,
@@ -1330,6 +1339,15 @@
     "confirmed": 1,
     "bite_time_min": 50,
     "bite_time_max": 90
+  },
+  {
+    "r": 250,
+    "g": 255,
+    "b": 12,
+    "name": "Serni Sea - Depth 3",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
   },
   {
     "r": 64,
@@ -1485,6 +1503,15 @@
     "bite_time_max": 100
   },
   {
+    "r": 250,
+    "g": 250,
+    "b": 200,
+    "name": "Serni Sea - Depth 4",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
+  },
+  {
     "r": 216,
     "g": 137,
     "b": 88,
@@ -1503,6 +1530,15 @@
     "bite_time_max": 100
   },
   {
+    "r": 144,
+    "g": 9,
+    "b": 136,
+    "name": "Zulatia Sea - Depth 1",
+    "confirmed": 1,
+    "bite_time_min": 35,
+    "bite_time_max": 60
+  },
+  {
     "r": 212,
     "g": 150,
     "b": 150,
@@ -1519,6 +1555,15 @@
     "confirmed": 0,
     "bite_time_min": null,
     "bite_time_max": null
+  },
+  {
+    "r": 7,
+    "g": 79,
+    "b": 177,
+    "name": "Mountain of Eternal Winter - Terrain",
+    "confirmed": 1,
+    "bite_time_min": 60,
+    "bite_time_max": 90
   },
   {
     "r": 137,
@@ -1584,13 +1629,13 @@
     "bite_time_max": null
   },
   {
-    "r": 250,
-    "g": 255,
-    "b": 109,
-    "name": "Serni Sea - Depth 2",
+    "r": 66,
+    "g": 176,
+    "b": 218,
+    "name": "Mountain of Eternal Winter - Wind Nol Swamp",
     "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
+    "bite_time_min": 60,
+    "bite_time_max": 90
   },
   {
     "r": 80,
@@ -1645,15 +1690,6 @@
     "confirmed": 1,
     "bite_time_min": 60,
     "bite_time_max": 100
-  },
-  {
-    "r": 234,
-    "g": 213,
-    "b": 246,
-    "name": "Zulatia Sea - Depth 3",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 61,
@@ -1755,24 +1791,6 @@
     "bite_time_max": 100
   },
   {
-    "r": 220,
-    "g": 255,
-    "b": 250,
-    "name": "Elsana Sea - Depth 2",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
-    "r": 250,
-    "g": 250,
-    "b": 0,
-    "name": "Kamasylvia Islands (Grándiha / Papua Crinea)",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
     "r": 255,
     "g": 194,
     "b": 194,
@@ -1782,6 +1800,15 @@
     "bite_time_max": 120
   },
   {
+    "r": 66,
+    "g": 89,
+    "b": 153,
+    "name": "Mountain of Eternal Winter - Upstream",
+    "confirmed": 1,
+    "bite_time_min": 60,
+    "bite_time_max": 90
+  },
+  {
     "r": 255,
     "g": 192,
     "b": 203,
@@ -1789,15 +1816,6 @@
     "confirmed": 1,
     "bite_time_min": 50,
     "bite_time_max": 90
-  },
-  {
-    "r": 66,
-    "g": 89,
-    "b": 101,
-    "name": "Mountain of Eternal Winter - Downstream",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
   },
   {
     "r": 156,
@@ -1814,24 +1832,6 @@
     "b": 84,
     "name": "Godu Pond",
     "confirmed": 0,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
-    "r": 10,
-    "g": 70,
-    "b": 0,
-    "name": "Lake Kaia - South Kaia Pier",
-    "confirmed": 1,
-    "bite_time_min": null,
-    "bite_time_max": null
-  },
-  {
-    "r": 0,
-    "g": 0,
-    "b": 193,
-    "name": "Ibellab Oasis",
-    "confirmed": 1,
     "bite_time_min": null,
     "bite_time_max": null
   }
