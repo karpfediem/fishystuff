@@ -1,0 +1,100 @@
+---
+.title = "Optimizing Durability Reduction Resistance",
+.date = @date("2025-04-05T00:00:00"),
+.author = "Karpfen",
+.layout = "guide.shtml",
+.draft = false,
+---
+
+## How does DRR work?
+
+Each time you cast your fishing rod there is a chance to consume durability on your gear (rod, chair, float).
+
+There are three separate parts that can affect this chance.
+
+1. Brand Stone
+2. DRR from items
+3. DRR from fishing lifeskill level
+
+These three factors are **multiplied** together to form one final chance to consume durability.
+
+## [Brand Stone]($section.id('brand'))
+
+An Item Brand Stone will reduce your chance to consume durability on the branded item by 50%.
+
+## [DRR from items]($section.id('items'))
+
+The current maximum obtainable DRR from items is **91%**.
+
+For Shai characters this maximum is 81%, since she is missing an awakening weapon outfit skin, which would provide 10%
+DRR as **Equip Effect**.
+
+| Item                                                                     | 	Durability reduction resistance (DRR) |
+|--------------------------------------------------------------------------|----------------------------------------|
+| Pets (4x T4, 1x T5)	                                                     | 21.00%                                 |
+| 8-Piece Outfit Set Effect	                                               | 10.00%                                 |
+| Mainhand Weapon Outfit	                                                  | 10.00%                                 |
+| Awakening Weapon Outfit	                                                 | 10.00%                                 |
+| [Blacksmith's Blessing](https://bdolytics.com/en/NA/db/lightstoneset/30)	 | 30.00%                                 |
+| Lil' Otter Fishing Carrier 🦦	                                           | 10.00%                                 |
+
+### [Pets]($section.id('pets'))
+
+When getting pets for a DRR setup, you need to look out for their **Talent**.
+> ![](/static/guides/drr_pets_talents.png)
+> ![](/static/guides/drr_pets.png)
+
+There are a few pets which can have this DRR talent combined with the **Special: Auto-Fishing Time Reduction**.
+> ![](/static/guides/drr_pet_afr.png)
+
+#### Young Azure Dragon
+  > ![](/static/guides/pet_young_azure_dragon.png)
+#### Newborn Crimson Dragon
+  > ![](/static/guides/pet_newborn_crimson_dragon.png)
+#### Newborn Golden Dragon
+  > ![](/static/guides/pet_newborn_golden_dragon.png)
+#### Lahtron
+  > ![](/static/guides/pet_lahtron.png)
+
+## [DRR from lifeskill level]($section.id('lifeskill-level'))
+
+Each lifeskill level will provide 0.5% DRR until the **cap of 60%** DRR at **Guru 20**
+
+## [Putting it together]($section.id('examples'))
+
+### [Calculating Chance to consume Durability]($section.id('calc-chance'))
+
+Let's say you have the following setup:
+
+- Unbranded Rod
+- Guru 20
+- 91% DRR
+
+This will put your chance to consume durability at 3.6%:
+
+```
+(1 − 0.6) × (1 − 0.91) = 0.036
+```
+
+Adding a Brand Stone to this puts our chance to consume durability at 1.8% (exactly half):
+
+```
+0.5 × (1 − 0.6) × (1 − 0.91) = 0.018
+```
+
+### [Calculating Average Casts]($section.id('calc-casts'))
+
+How does this look like for the Grandpa Cron Rod?
+
+It has a maximum durability of **2000**.
+So with a chance of **1.8%** this will give us **on average ~111111 casts**:
+
+```
+2000 / 0.018 ≈ 111111.1111
+```
+
+Without a Brand Stone it will be only 55555 casts, so make sure to brand it!
+
+```
+2000 / 0.036 ≈ 55555.5556
+```
