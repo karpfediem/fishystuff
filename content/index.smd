@@ -7,11 +7,11 @@
 .tags = ["fishy", "stuff", "fish"],
 ---
 
-## About
+## [About]($section.id('about'))
 
 [soon tm](./community)
 
-## Watch the video
+## [Watch the video]($section.id('video'))
 
 `//TODO: record the video :^)`
 

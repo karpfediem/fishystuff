@@ -5,7 +5,7 @@
 .layout = "page.shtml",
 .draft = false,
 --- 
-## About
+## [About]($section.id('about'))
 Hi, I'm Karpfen, someone a bit too obsessed with fish (jokingly, but they really are fun).
 
 This site is built with love using [Zine](https://zine-ssg.io/) and is [hosted by me](https://github.com/karpfediem/fishystuff).
@@ -13,7 +13,7 @@ However, much of the content behind it is a huge community effort :P
 
 All the Guides were contributed by community members and the contained information was often gathered collaboratively.
 
-## Community
+## [Community]($section.id('community'))
 
 ### MaoMaoPrince Fishing Community
 [Join our Discord server](https://discord.gg/xRBqjyQ) to theory-craft, talk about anything fishy or even sharing your recent fishing hauls!
@@ -23,7 +23,7 @@ I was told MaoMaoPrince offers free fish upon entering (while stocks last).
 [Discord server](https://discord.gg/8GHmNeZ6)
 
 
-## Contribute
+## [Contribute]($section.id('contribute'))
 
 We welcome you to contribute!
 Contributions can be as simple as comments/bug reports, feedback of any kind, ideas or even full new guides.
@@ -35,7 +35,7 @@ If you want to contribute, you may want to
 > Don't worry, no coding skills are needed! Knowing Markdown is enough.
 
 
-## External Resources
+## [External Resources]($section.id('resources'))
 
 Here is a list of helpful resources you might find useful:
 

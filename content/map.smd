@@ -7,7 +7,7 @@
 .tags = ["map", "waypoints"],
 ---
 
-## Usage
+## [Usage]($section.id('usage'))
 
 Click anywhere on the map to copy coordinates
 

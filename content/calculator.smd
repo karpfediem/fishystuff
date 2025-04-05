@@ -7,7 +7,7 @@
 .tags = ["calculator", "AFR", "DRR"],
 ---
 
-## Fishing Time/Durability Calculator (WIP)
+## Fishing Calculator (WIP)
 
 ```=html
 <script>
