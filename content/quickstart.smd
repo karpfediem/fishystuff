@@ -2,12 +2,9 @@
 .title = "Quickstart",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
-.layout = "page.shtml",
+.layout = "quickstart.shtml",
 .draft = false,
---- 
-
-## [Objectives]($section.id('objectives'))
-
+---
 
 ## [Next Steps]($section.id('next'))
 To learn more about fishing, [see the guides section]($link.page('guides')).

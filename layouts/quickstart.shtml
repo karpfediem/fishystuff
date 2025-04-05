@@ -1,0 +1,115 @@
+<extend template="base.shtml">
+    <title id="title" :text="$page.title"></title>
+    <head id="head"></head>
+    <div id="content">
+        <style>
+            h3.overtitle {
+                margin-bottom: 0;
+            }
+
+            h1.title {
+                margin-top: 0;
+            }
+
+            #page h2, #page h3 {
+                text-align: left;
+            }
+
+            #page h2 {
+                font-size: 1.7rem;
+                border-bottom: 1px dashed #aaa;
+                margin-top: 2em;
+            }
+
+            #page h3 {
+                font-size: 1.5rem;
+            }
+
+            #page h4 {
+                font-size: 1rem;
+            }
+
+            @media (max-width: 992px) {
+                #objectives {
+                    grid-template-columns: auto;
+                }
+            }
+
+            #objectives {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                grid-gap: 10px;
+                padding: 10px;
+
+                & > a {
+                    text-align: center;
+                    padding: 1rem;
+                    text-decoration: none;
+
+                    span {
+                        display: flex;
+                        flex-direction: column;
+                        gap: 0.25em;
+                        align-items: center;
+
+                    }
+                }
+            }
+        </style>
+        <h3 class="overtitle centered">Fishy Stuff</h3>
+        <h1 class="title" :text="$page.title"></h1>
+
+        <div id="objectives">
+            <a class="block padded" href="/guides/money/">
+          <span>Money
+              <svg width="30px" height="30px" viewBox="0 0 24 24" stroke-width="1.5" fill="none"
+                   xmlns="http://www.w3.org/2000/svg" color="currentColor"><path
+                      d="M16 13C13.2386 13 11 11.8807 11 10.5C11 9.11929 13.2386 8 16 8C18.7614 8 21 9.11929 21 10.5C21 11.8807 18.7614 13 16 13Z"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M11 14.5C11 15.8807 13.2386 17 16 17C18.7614 17 21 15.8807 21 14.5" stroke="currentColor"
+                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M3 9.5C3 10.8807 5.23858 12 8 12C9.12583 12 10.1647 11.814 11.0005 11.5" stroke="currentColor"
+                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M3 13C3 14.3807 5.23858 15.5 8 15.5C9.12561 15.5 10.1643 15.314 11 15.0002"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M3 5.5V16.5C3 17.8807 5.23858 19 8 19C9.12563 19 10.1643 18.8139 11 18.5" stroke="currentColor"
+                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M13 8.5V5.5"
+                                                                                                     stroke="currentColor"
+                                                                                                     stroke-width="1.5"
+                                                                                                     stroke-linecap="round"
+                                                                                                     stroke-linejoin="round"></path><path
+                      d="M11 10.5V18.5C11 19.8807 13.2386 21 16 21C18.7614 21 21 19.8807 21 18.5V10.5"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M8 8C5.23858 8 3 6.88071 3 5.5C3 4.11929 5.23858 3 8 3C10.7614 3 13 4.11929 13 5.5C13 6.88071 10.7614 8 8 8Z"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                      stroke-linejoin="round"></path></svg>
+          </span>
+            </a>
+            <a class="block padded" href="/guides/experience/">
+          <span>Experience
+              <svg width="30px" height="30px" viewBox="0 0 24 24" stroke-width="1.5" fill="none"
+                   xmlns="http://www.w3.org/2000/svg" color="currentColor"><path
+                      d="M6.81818 22L6.81822 19.143C6.51904 16.1656 3.00001 14.5717 3.00001 10.0004C3 5.42914 5.72738 1.94374 11.1819 2.00069C15.1094 2.04169 18.8182 4.28632 18.8182 8.8576L21 12.286C21 14.5717 18.8182 14.5717 18.8182 14.5717C18.8182 14.5717 19.3636 20.2858 14.4545 20.2858L14.4545 22"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M11 12C12.1046 12 13 11.1046 13 10C13 8.89543 12.1046 8 11 8C10.6357 8 10.2942 8.09739 10 8.26756C9.4022 8.61337 9 9.25972 9 10C9 10.7403 9.4022 11.3866 10 11.7324C10.2942 11.9026 10.6357 12 11 12Z"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M11 13C12.6569 13 14 11.6569 14 10C14 8.34315 12.6569 7 11 7C9.34315 7 8 8.34315 8 10C8 11.6569 9.34315 13 11 13Z"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+                      stroke-dasharray="0.3 2"></path></svg>
+          </span>
+            </a>
+            <a class="block padded" href="/guides/mystical/">
+          <span>Mystical Fish
+              <svg width="30px" height="30px" viewBox="0 0 24 24" stroke-width="1.5" fill="none"
+                   xmlns="http://www.w3.org/2000/svg" color="currentColor"><path
+                      d="M10.5 9C10.5 9 10.5 7 9.5 5C13.5 5 16 7.49997 16 7.49997C16 7.49997 19.5 7 22 12C21 17.5 16 18 16 18L12 20.5C12 20.5 12 19.5 12 17.5C9.5 16.5 6.99998 14 7 12.5C7.00001 11 10.5 9 10.5 9ZM10.5 9C10.5 9 11.5 8.5 12.5 8.5"
+                      stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M2 9.5L3 12.5L2 15.5C2 15.5 7 15.5 7 12.5C7 9.5 2 9.5 2 9.5Z" stroke="currentColor"
+                      stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path
+                      d="M17 12.01L17.01 11.9989" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                      stroke-linejoin="round"></path></svg>
+          </span>
+            </a>
+        </div>
+        <div id="page" :html="$page.content()"></div>
+    </div>
