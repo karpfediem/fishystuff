@@ -1,46 +1,149 @@
 ---
 .title = "Fishing for Money",
-.date = @date("2025-03-23T00:00:00"),
+.date = @date("2025-04-05T00:00:00"),
 .author = "Karpfen",
 .layout = "guide.shtml",
 .draft = false,
 ---
 
 # Stand around AFK guide
-> Good Money, Bad EXP Edition
+
+```=html
+  <p class="centered tagline">Good Money, Bad EXP Edition</p>
+```
+
 ## [Prerequisites]($section.id('prerequisites'))
 
+There are some prerequisites you will want to fullfill before fishing.
+
+Ensure you have:
+
+- ✅ [Fishing level 5](#level)
+- ✅ [Maximum Auto-Fishing Reduction](#afr)
+
+If you are fishing with **Rods that cannot be repaired** like the Triple-Float/Grandpa Cron's/Cool Wind Fishing Rod, try
+to get the **maximum Durability reduction resistance (DRR)** which currently is 91%.
+
+There is a special guide for [optimizing your DRR](/guides/drr).
+
 ### [Fishing level 5]($section.id('level'))
-[Character profile -> Ability -> Fishing](https://imgur.com/dWzYHGt)
-- Guild Skill [Art of Fishing](https://bdocodex.com/us/guildskill/65026/)
-- Fishing Clothes (Silver Embroidered/Manos Fisher's Clothes)
-- Food like [Marvelous Balacs Lunchbox](https://bdocodex.com/us/item/9643/)
+
+Your Fishing level stat will reduce your bite time by up to 50%.
+> []($block.attrs('padded'))
+> Character profile -> Ability -> Fishing
+> ![](/static/guides/profile_fishing_level.png)
+
+
+You will **ALWAYS** want fishing level 5.
+Fortunately this is very easy to achieve nowadays.
+(Often without even having to pay attention to it.)
+
+| Source                                                                  | Fishing level |
+|-------------------------------------------------------------------------|---------------|
+| Guild Skill [Art of Fishing](https://bdocodex.com/us/guildskill/65026/) | +3            |
+| Silver Embroidered/Manos Fisher's Clothes                               | +2 to +3      |
+| [Balacs Lunchbox                                                        | +2            |
+| [Marvelous Balacs Lunchbox](https://bdocodex.com/us/item/9643/)         | +3            |
+| Seafood Cron Meal                                                       | +2            |
+| Professional Fisher's Uniform (Outfit) / Splat Fisher                   | +1            |
+| Verdure Draught                                                         | +3            |
+| Alchemy Stone/Life Spirit Stone                                         | +2            |
+| Pet Skill                                                               | +1 per pet    |
+
 ### [Max Auto-fishing reduction (67%)]($section.id('afr'))
-See my [Fishing Time Calculator](https://docs.google.com/spreadsheets/d/1s5eyc9tm5jLNXzPa1VMu0HSOzjDB4Ggcdk7g3iobsI8/edit#gid=0)
+
+See the [Fishing Calculator](/calculator) or
+my [Fishing Time Calculator Sheet](https://docs.google.com/spreadsheets/d/1s5eyc9tm5jLNXzPa1VMu0HSOzjDB4Ggcdk7g3iobsI8/edit#gid=0)
 Different combinations possible, but easy mode TL;DR is
+
 - [Balenos Fishing Rod +10](https://bdocodex.com/us/item/16162/#10)
 - T4/T5 Pet with Special: Auto-Fishing Time Reduction ([Otter](https://bdocodex.com/us/pet/56504/), Penguin, ...)
 - Lighstone Set: [Nibbles](https://bdolytics.com/en/NA/db/lightstoneset/160)
 
+| Item                                                                    | 	Fishing time reduction |
+|-------------------------------------------------------------------------|-------------------------|
+| Pet T1/T2	                                                              | 20.00%                  |
+| Pet T3	                                                                 | 25.00%                  |
+| Pet T4/5	                                                               | 30.00%                  |
+| Balenos Rod	                                                            | 25.00%                  |
+| [Nibbles](https://bdolytics.com/en/NA/db/lightstoneset/160)	            | 15.00%                  |
+| Coconut Cocktail	                                                       | 5.00%                   |
+| Balacs Lunchbox	                                                        | 7.00%                   |
+| Marvelous Balacs Lunchbox	                                              | 10.00%                  |
+| Crio's Sturdy Fishing Chair (200 dura)	                                 | 5.00%                   |
+| Manos Fishing Chair	                                                    | 10.00%                  |
+| [[Event] Wise Housekeeper](https://bdolytics.com/en/NA/db/item/760966)	 | 10.00%                  |
+
 ## [More Equipment]($section.id('gear'))
+
 - [Shim Cheong's Miraculous Fish Tank](https://bdocodex.com/us/item/760687/)
-- [Maple Float](https://bdocodex.com/us/item/16168/#10) (+rare %)
-- Lightstone Set: [Sharp-eyed Seagull](https://bdolytics.com/en/NA/db/lightstoneset/162) (+rare %)
 - [Archaeologist's Map](https://bdocodex.com/us/item/16019/) (saves you 5mil each time you use Magnus to sell)
+
 ### [Mastery]($section.id('mastery'))
-Aim for decent mastery (>1500)
+
+As Mastery increases, your chance to catch [prize fish]($link.page('guides/groups').ref('prize')) will increase.
+The more mastery you have, the better your income will be.
+
+At 2000 Mastery you have a 5% chance to catch something from the [prize fish]($link.page('guides/groups').ref('prize'))
+table.
+
+You should aim for decent mastery (>1500-2000).
+
+The current **softcap** is considered **2000 Mastery**, and your chance at prize fish does not increase as much anymore
+after this cap.
+
+#### Quick Recommendations:
+
 - High fishing lifeskill level
-- Manos accessories/Clothes
-### [Other stuff]($section.id('other'))
-- High fishing lifeskill level for max Durability Reduction Resistance (DRR caps out at Guru 20)
-- [Professional Trader's Clothes](https://bdocodex.com/us/item/14018/)  (or costume version) let's you haggle more times, saving some energy and your patience
+- 3x "free" Floramos accessories
+- Manos/Preonne accessories
+- Manos Chair & Clothes
 
+There is a special [guide to cost-effectively obtain mastery]($link.page('guides/mastery'))
 
-## [How to stand around AFK]($section.id('how-to'))
-- Fish in Velia/Coastal Cliff -> see [Location](https://imgur.com/dGj9gzH). Make sure fish origin is Coastal Cliff!
-- Archmap to Velia
-- Go to Magnus at Bartali Farm and teleport to Nampo Moodle Village
-- Optionally: Bukpo for extra distance
-- Channel hop until you get decent prices on prizefish (120-130%) or you get bored
-- Sell fish
-- Teleport back using Archmap
+### [Additional Tips]($section.id('tips'))
+
+- [Professional Trader's Clothes](https://bdocodex.com/us/item/14018/)  (or costume version) lets you haggle more
+  times, saving some energy and your patience
+
+## [How to find a good Location]($section.id('location'))
+
+Since the new prize fish update there are finally some more alternatives to the tried and tested Velia Event Zone.
+
+I will still recommend Velia but if you want to try something fresh, here are some guidelines to look out for in a new
+spot:
+
+### ["30/10 Spots"]($section.id('30-10'))
+
+This refers to spots that have a ratio of 30:10 of Yellow Corvina to Blue Bat Stars.
+
+Effectively this means that roughly ~30/41 (~73%) of your prize catches will be Yellow Corvina and ~10/41 (~24%) Blue
+Bat Stars.
+
+Compared to other spots - with often >90% Ancient Relic Shards - these have an incredibly high ratio of actual prize
+fish in their prize table, which makes fishing here so valuable.
+
+There are only very few other viable spots that are not a "30/10" spot.
+
+### [Trade Distance]($section.id('distance'))
+
+Wherever you are fishing should have traders that are far enough for reaching the Trade Distance Bonus cap of 150%.
+
+For most spots this will mean trading either in the Land of the Morning Light (LoML) or Valencia/Arehaza.
+
+Velia/Coastal Cliff does not meet this criterium, but is otherwise making up for this loss in profit with Silver
+Beltfish and Plump Coelacanth.
+
+## [How to stand around AFK (Velia Example)]($section.id('how-to'))
+
+1. Fish in Velia/Coastal Cliff
+   > ![](/static/guides/velia_cc.png)
+   >
+   > Make sure your fish origin is Coastal Cliff!
+
+2. Archmap to Velia
+3. Go to Magnus at Bartali Farm and teleport to Seoul (Yukjo Street)
+   > Optionally: Bukpo for extra distance
+4. Channel hop until you get decent prices on prizefish (120-130%) or you get bored
+5. Sell fish
+6. Teleport back using Archmap
