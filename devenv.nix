@@ -5,7 +5,11 @@ in
 {
   name = "fishystuff";
   packages = with pkgs; [
+    dolt
     flyctl
+    gawk
+    just
+    xlsx2csv
   ];
   languages = {
     zig = {

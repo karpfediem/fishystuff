@@ -1,0 +1,1 @@
+UPDATE zones LEFT JOIN indexed ON zones.R = indexed.R AND zones.G = indexed.G AND zones.B = indexed.B SET zones.`index` = indexed.`index`
