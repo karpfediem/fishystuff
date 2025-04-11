@@ -2,6 +2,14 @@
 serve:
     zig build serve
 
+# Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
+clone-db:
+    dolt clone fishystuff/fishystuff .
+
+# Starts a local MySQL server using Dolt
+serve-db:
+    dolt sql-server
+
 # Replaces the current Fishing_Table with the one obtained from a (new) Fishing_Table.xlsx file in the current directory
 update_fishing_table:
     xlsx2csv Fishing_Table.xlsx table.csv
