@@ -236,58 +236,6 @@ li {
   font-size: 1rem;
 }
 
-@media screen and (min-width: 800px) and (max-width: 1000px) {
-  :root {
-    zoom: 1.2;
-  }
-}
-
-@media screen and (min-width: 1000px) and (max-width: 1200px) {
-  :root {
-    zoom: 1.3;
-  }
-}
-
-@media screen and (min-width: 1200px) and (max-width: 1400px) {
-  :root {
-    zoom: 1.4;
-  }
-}
-
-@media screen and (min-width: 1400px) and (max-width: 1600px) {
-  :root {
-    zoom: 1.5;
-  }
-}
-
-@media screen and (min-width: 1400px) and (max-width: 1600px) {
-  :root {
-    zoom: 1.55;
-  }
-}
-
-
-@media screen and (min-width: 1400px) and (max-width: 1600px) {
-  :root {
-    zoom: 1.6;
-  }
-}
-
-@media screen and (min-width: 1600px) and (max-width: 1800px) {
-  :root {
-    zoom: 1.65;
-  }
-}
-
-@media screen and (min-width: 1800px) {
-  :root {
-    zoom: 1.7;
-  }
-}
-
-
-
-
 .size-6 {
   width: 1.5rem;
   height: 1.5rem;
