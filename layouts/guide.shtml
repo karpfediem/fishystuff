@@ -1,6 +1,8 @@
 <extend template="base.shtml">
 <title id="title" :text="$page.title"></title>
-<head id="head"></head>
+<head id="head">
+  <script async src="https://bdolytics.com/tooltip/script.js"></script>
+</head>
 <div id="content">
   <style>
     h1 {
