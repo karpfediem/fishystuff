@@ -334,12 +334,12 @@
             <div data-attr-title="'Bitetime: ' + $bitetime + 's (' + $percent_bite.toFixed(2) + '%)'"
                  data-attr="{style: 'flex-basis:' + $percent_bite.toFixed(2) + '%;'}"
                  class="slider slider-bitetime"></div>
-            <div data-attr-title="'Catch Time: ' + $catchtime + 's (' + $percent_catch.toFixed(2) + '%)'"
-                 data-attr="{style: 'flex-basis:' + $percent_catch.toFixed(2) + '%;'}"
-                 class="slider slider-catchtime"></div>
             <div data-attr-title="'Auto-Fishing Time: ' + $aftime + 's (' + $percent_af.toFixed(2) + '%)'"
                  data-attr="{style: 'flex-basis:' + $percent_af.toFixed(2) + '%;'}"
                  class="slider slider-aftime"></div>
+            <div data-attr-title="'Catch Time: ' + $catchtime + 's (' + $percent_catch.toFixed(2) + '%)'"
+                 data-attr="{style: 'flex-basis:' + $percent_catch.toFixed(2) + '%;'}"
+                 class="slider slider-catchtime"></div>
             <div data-attr-title="'Average Unoptimized Time: '+ calcUnoptimizedTime($zone, $active).toFixed(2) + 's (' + $percent_improvement.toFixed(2) + '%)'" class="slider slider-empty"></div>
         </div>
     </div>
