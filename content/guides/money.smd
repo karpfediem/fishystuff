@@ -38,17 +38,17 @@ You will **ALWAYS** want fishing level 5.
 Fortunately this is very easy to achieve nowadays.
 (Often without even having to pay attention to it.)
 
-| Source                                                                  | Fishing level |
-|-------------------------------------------------------------------------|---------------|
-| Guild Skill [Art of Fishing](https://bdocodex.com/us/guildskill/65026/) | +3            |
-| Silver Embroidered/Manos Fisher's Clothes                               | +2 to +3      |
-| [Balacs Lunchbox                                                        | +2            |
-| [Marvelous Balacs Lunchbox](https://bdocodex.com/us/item/9643/)         | +3            |
-| Seafood Cron Meal                                                       | +2            |
-| Professional Fisher's Uniform (Outfit) / Splat Fisher                   | +1            |
-| Verdure Draught                                                         | +3            |
-| Alchemy Stone/Life Spirit Stone                                         | +2            |
-| Pet Skill                                                               | +1 per pet    |
+| Source                                                                                                                                                | Fishing level |
+|-------------------------------------------------------------------------------------------------------------------------------------------------------|---------------|
+| Guild Skill [Art of Fishing](https://bdolytics.com/en/NA/db/guildskill/65026/)                                                                        | +3            |
+| [Silver Embroidered](https://bdolytics.com/en/NA/db/item/14020?level=5)/[Manos Fisher's Clothes](https://bdolytics.com/en/NA/db/item/705052?level=20) | +2 to +3      |
+| [Balacs Lunchbox](https://bdolytics.com/en/NA/db/item/9359)                                                                                           | +2            |
+| [Marvelous Balacs Lunchbox](https://bdolytics.com/en/NA/db/item/9643/)                                                                                | +3            |
+| [Seafood Cron Meal](https://bdolytics.com/en/NA/db/item/9691)                                                                                         | +2            |
+| [Professional Fisher's Uniform](https://bdolytics.com/en/NA/db/item/14330) / [Splat Fisher](https://bdolytics.com/en/NA/db/pearl-offer/51506)         | +1            |
+| [Verdure Draught](https://bdolytics.com/en/NA/db/item/791)                                                                                            | +3            |
+| [Alchemy Stone](https://bdolytics.com/en/NA/db/item/45514)/[Life Spirit Stone](https://bdolytics.com/en/NA/db/item/45302)                             | +2            |
+| [Pet Skill](https://bdolytics.com/en/NA/db/skill/49002)                                                                                               | +1 per pet    |
 
 ### [Max Auto-fishing reduction (67%)]($section.id('afr'))
 
@@ -56,31 +56,31 @@ See the [Fishing Calculator](/calculator) or
 my [Fishing Time Calculator Sheet](https://docs.google.com/spreadsheets/d/1s5eyc9tm5jLNXzPa1VMu0HSOzjDB4Ggcdk7g3iobsI8/edit#gid=0)
 Different combinations are possible, but the easy mode TL;DR is
 
-- [Balenos Fishing Rod +10](https://bdocodex.com/us/item/16162/#10) (25%)
-- T3 or T4/T5 Pet with Special: Auto-Fishing Time Reduction ([Otter](https://bdocodex.com/us/pet/56504/), Penguin, ...) (25% or 30%)
+- [Balenos Fishing Rod](https://bdolytics.com/en/NA/db/item/16162?level=10) (25%)
+- T3 or T4/T5 Pet with Special: Auto-Fishing Time Reduction ([Otter](https://bdolytics.com/en/NA/db/pet/56504), [Penguin](https://bdolytics.com/en/NA/db/pet/56401), ...) (25% or 30%)
 - Manos Fishing Chair (10%)
 - Balacs Lunchbox (7%)
 
 This should bring you to 67% (or 72% with T4/5 pet) Auto-Fishing Time Reduction (AFR) which meets the cap of 67%.
 
-| Item                                                                    | 	Fishing time reduction |
-|-------------------------------------------------------------------------|-------------------------|
-| Pet T1/T2	                                                              | 20%                     |
-| Pet T3	                                                                 | 25%                     |
-| Pet T4/5	                                                               | 30%                     |
-| Balenos Rod	                                                            | 25%                     |
-| [Nibbles](https://bdolytics.com/en/NA/db/lightstoneset/160)	            | 15%                     |
-| Coconut Cocktail	                                                       | 5%                      |
-| Balacs Lunchbox	                                                        | 7%                      |
-| Marvelous Balacs Lunchbox	                                              | 10%                     |
-| Crio's Sturdy Fishing Chair (200 dura)	                                 | 5%                      |
-| Manos Fishing Chair	                                                    | 10%                     |
-| [[Event] Wise Housekeeper](https://bdolytics.com/en/NA/db/item/760966)	 | 10%                     |
+| Item                                                                       | 	Fishing time reduction |
+|----------------------------------------------------------------------------|-------------------------|
+| Pet T1/T2	                                                                 | 20%                     |
+| Pet T3	                                                                    | 25%                     |
+| Pet T4/5	                                                                  | 30%                     |
+| [Balenos Fishing Rod](https://bdolytics.com/en/NA/db/item/16162?level=10)	 | 25%                     |
+| [Nibbles](https://bdolytics.com/en/NA/db/lightstoneset/160)	               | 15%                     |
+| [Coconut Cocktail](https://bdolytics.com/en/NA/db/item/9307)	              | 5%                      |
+| [Balacs Lunchbox](https://bdolytics.com/en/NA/db/item/9359)	               | 7%                      |
+| [Marvelous Balacs Lunchbox](https://bdolytics.com/en/NA/db/item/9643/)	    | 10%                     |
+| [Crio's Sturdy Fishing Chair](https://bdolytics.com/en/NA/db/item/12930)	  | 5%                      |
+| [Manos Fishing Chair](https://bdolytics.com/en/NA/db/item/705539)	         | 10%                     |
+| [[Event] Wise Housekeeper](https://bdolytics.com/en/NA/db/item/760966)	    | 10%                     |
 
 ## [More Equipment]($section.id('gear'))
 
-- [Shim Cheong's Miraculous Fish Tank](https://bdocodex.com/us/item/760687/)
-- [Archaeologist's Map](https://bdocodex.com/us/item/16019/) (saves you 5mil each time you use Magnus to sell)
+- [Shim Cheong's Miraculous Fish Tank](https://bdolytics.com/en/NA/db/item/760687/)
+- [Archaeologist's Map](https://bdolytics.com/en/NA/db/item/16019/) (saves you 5mil each time you use Magnus to sell)
 
 ### [Mastery]($section.id('mastery'))
 
@@ -98,15 +98,15 @@ after this cap.
 #### Quick Recommendations:
 
 - High fishing lifeskill level
-- 3x "free" Floramos accessories
-- Manos/Preonne accessories
-- Manos Chair & Clothes
+- 3x "free" [Floramos accessories](https://bdolytics.com/en/NA/db/item/697205)
+- [Manos](https://bdolytics.com/en/NA/db/item/705511?level=3)/[Preonne](https://bdolytics.com/en/NA/db/item/705535?level=2) accessories
+- [Manos Fishing Chair](https://bdolytics.com/en/NA/db/item/705539) & [Clothes](https://bdolytics.com/en/NA/db/item/705052?level=19)
 
 There is a special [guide to cost-effectively obtain mastery]($link.page('guides/mastery'))
 
 ### [Additional Tips]($section.id('tips'))
 
-- [Professional Trader's Clothes](https://bdocodex.com/us/item/14018/)  (or costume version) lets you haggle more
+- [Professional Trader's Clothes](https://bdolytics.com/en/NA/db/item/14018/) (or [costume](https://bdolytics.com/en/NA/db/item/14324) version) lets you haggle more
   times, saving some energy and your patience
 
 ## [How to find a good Location]($section.id('location'))

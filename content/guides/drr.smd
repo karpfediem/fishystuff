@@ -12,7 +12,7 @@ Each time you cast your fishing rod there is a chance to consume durability on y
 
 There are three separate parts that can affect this chance.
 
-1. Brand Stone
+1. [Brand Stone](https://bdolytics.com/en/NA/db/item/8930)
 2. DRR from items
 3. DRR from fishing lifeskill level
 
@@ -20,7 +20,7 @@ These three factors are **multiplied** together to form one final chance to cons
 
 ## [Brand Stone]($section.id('brand'))
 
-An Item Brand Stone will reduce your chance to consume durability on the branded item by 50%.
+An [Item Brand Stone](https://bdolytics.com/en/NA/db/item/8930) will reduce your chance to consume durability on the branded item by 50%.
 
 ## [DRR from items]($section.id('items'))
 
@@ -29,14 +29,14 @@ The current maximum obtainable DRR from items is **91%**.
 For Shai characters this maximum is 81%, since she is missing an awakening weapon outfit skin, which would provide 10%
 DRR as **Equip Effect**.
 
-| Item                                                                     | 	Durability reduction resistance (DRR) |
-|--------------------------------------------------------------------------|----------------------------------------|
-| Pets (4x T4, 1x T5)	                                                     | 21.00%                                 |
-| 8-Piece Outfit Set Effect	                                               | 10.00%                                 |
-| Mainhand Weapon Outfit	                                                  | 10.00%                                 |
-| Awakening Weapon Outfit	                                                 | 10.00%                                 |
-| [Blacksmith's Blessing](https://bdolytics.com/en/NA/db/lightstoneset/30)	 | 30.00%                                 |
-| Lil' Otter Fishing Carrier 🦦	                                           | 10.00%                                 |
+| Item                                                                         | 	Durability reduction resistance (DRR) |
+|------------------------------------------------------------------------------|----------------------------------------|
+| Pets (4x T4, 1x T5)	                                                         | 21.00%                                 |
+| 8-Piece Outfit Set Effect	                                                   | 10.00%                                 |
+| Mainhand Weapon Outfit	                                                      | 10.00%                                 |
+| Awakening Weapon Outfit	                                                     | 10.00%                                 |
+| [Blacksmith's Blessing](https://bdolytics.com/en/NA/db/lightstoneset/30)	    | 30.00%                                 |
+| [Lil' Otter Fishing Carrier 🦦](https://bdolytics.com/en/NA/db/item/830150)	 | 10.00%                                 |
 
 ### [Pets]($section.id('pets'))
 
@@ -47,14 +47,10 @@ When getting pets for a DRR setup, you need to look out for their **Talent**.
 There are a few pets which can have this DRR talent combined with the **Special: Auto-Fishing Time Reduction**.
 > ![](/static/guides/drr_pet_afr.png)
 
-#### Young Azure Dragon
-  > ![](/static/guides/pet_young_azure_dragon.png)
-#### Newborn Crimson Dragon
-  > ![](/static/guides/pet_newborn_crimson_dragon.png)
-#### Newborn Golden Dragon
-  > ![](/static/guides/pet_newborn_golden_dragon.png)
-#### Lahtron
-  > ![](/static/guides/pet_lahtron.png)
+[![Young Azure Dragon](/static/guides/pet_young_azure_dragon.png)](https://bdolytics.com/en/NA/db/pearl-offer/104598)
+[![Newborn Crimson Dragon](/static/guides/pet_newborn_crimson_dragon.png)](https://bdolytics.com/en/NA/db/pearl-offer/1152)
+[![Newborn Golden Dragon](/static/guides/pet_newborn_golden_dragon.png)](https://bdolytics.com/en/NA/db/item/615909)
+[![Lahtron](/static/guides/pet_lahtron.png)](https://bdolytics.com/en/NA/db/item/48880)
 
 ## [DRR from lifeskill level]($section.id('lifeskill-level'))
 
@@ -76,7 +72,7 @@ This will put your chance to consume durability at 3.6%:
 (1 − 0.6) × (1 − 0.91) = 0.036
 ```
 
-Adding a Brand Stone to this puts our chance to consume durability at 1.8% (exactly half):
+Adding a [Brand Stone](https://bdolytics.com/en/NA/db/item/8930) to this puts our chance to consume durability at 1.8% (exactly half):
 
 ```
 0.5 × (1 − 0.6) × (1 − 0.91) = 0.018
