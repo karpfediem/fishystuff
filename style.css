@@ -99,6 +99,9 @@ nav a:hover {
   box-sizing: border-box;
   padding: 0 30px;
   max-width: min(600px, 100vw);
+  background: #19191f;
+  border-radius: 1em;
+  margin-top: 1em;
 }
 
 .centered {
