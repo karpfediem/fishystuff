@@ -1,8 +1,13 @@
-{ pkgs, lib, config, inputs, ... }:
-let
-  pkgs-unstable = import inputs.nixpkgs-unstable { system = pkgs.stdenv.system; };
-in
-{
+{ lib, config, inputs, ... }: let
+  pkgs = import inputs.nixpkgs {
+    system = "x86_64-linux";
+    overlays = [
+      (final: prev: {
+        zigpkgs = inputs.zig.packages.${prev.system};
+      })
+    ];
+  };
+in {
   name = "fishystuff";
   packages = with pkgs; [
     dolt
@@ -14,7 +19,7 @@ in
   languages = {
     zig = {
       enable = true;
-      package = pkgs-unstable.zig;
+      package = pkgs.zigpkgs.master;
     };
   };
 }

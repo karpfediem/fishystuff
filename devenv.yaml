@@ -3,3 +3,5 @@ inputs:
     url: github:nixos/nixpkgs/nixpkgs-unstable
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
+  zig:
+    url: github:bandithedoge/zig-overlay

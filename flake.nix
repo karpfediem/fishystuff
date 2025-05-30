@@ -13,7 +13,9 @@
     nix2container.url = "github:nlewo/nix2container";
     nix2container.inputs.nixpkgs.follows = "nixpkgs";
     mk-shell-bin.url = "github:rrbutani/nix-mk-shell-bin";
-    zig.url = "github:mitchellh/zig-overlay";
+    # zig.url = "github:mitchellh/zig-overlay";
+    zig.url = "github:bandithedoge/zig-overlay"; # provides download mirrors - nightly builds were purged from official zig github
+
     zig2nix.url = "github:Cloudef/zig2nix";
   };
 
@@ -22,12 +24,22 @@
     extra-substituters = "https://devenv.cachix.org";
   };
 
-  outputs = inputs@{ self, flake-parts, devenv-root, zig, zig2nix, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+  outputs = inputs@{ self, flake-parts, devenv-root, zig, zig2nix, ... }: let
+    overlays = [
+      # Other overlays
+      (final: prev: {
+        zigpkgs = inputs.zig.packages.${prev.system};
+        zig = inputs.zig.packages.${prev.system}."2024-12-30";
+      })
+    ];
+
+    # Our supported systems are the same supported systems as the Zig binaries
+    systems = builtins.attrNames inputs.zig.packages;
+    in flake-parts.lib.mkFlake { inherit inputs; } {
       imports = [
         inputs.devenv.flakeModule
       ];
-      systems = [ "x86_64-linux" "i686-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ];
+      inherit systems;
 
       perSystem = { config, self', inputs', pkgs, system, ... }: {
         packages.default = let env = zig2nix.outputs.zig-env.${system} { zig = zig2nix.outputs.packages.${system}.zig-master; }; in env.package {
@@ -37,17 +49,19 @@
             zigPreferMusl = true;
         };
 
-        devenv.shells.default = {
-          devenv.root =
-            let
-              devenvRootFileContent = builtins.readFile devenv-root.outPath;
-            in
-            pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
+        devenv.shells = {
+          default = {
+            devenv.root =
+              let
+                devenvRootFileContent = builtins.readFile devenv-root.outPath;
+              in
+              pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
 
-          name = "fishystuff";
-          imports = [
-            ./devenv.nix
-          ];
+            name = "fishystuff";
+            imports = [
+              ./devenv.nix
+            ];
+          };
         };
 
       };
