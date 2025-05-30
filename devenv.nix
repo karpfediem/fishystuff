@@ -1,13 +1,4 @@
-{ lib, config, inputs, ... }: let
-  pkgs = import inputs.nixpkgs {
-    system = "x86_64-linux";
-    overlays = [
-      (final: prev: {
-        zigpkgs = inputs.zig.packages.${prev.system};
-      })
-    ];
-  };
-in {
+{ lib, config, pkgs, ... }: {
   name = "fishystuff";
   packages = with pkgs; [
     dolt

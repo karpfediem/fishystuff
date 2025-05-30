@@ -24,48 +24,36 @@
     extra-substituters = "https://devenv.cachix.org";
   };
 
-  outputs = inputs@{ self, flake-parts, devenv-root, zig, zig2nix, ... }: let
-    overlays = [
-      # Other overlays
-      (final: prev: {
-        zigpkgs = inputs.zig.packages.${prev.system};
-        zig = inputs.zig.packages.${prev.system}."2024-12-30";
-      })
-    ];
-
-    # Our supported systems are the same supported systems as the Zig binaries
-    systems = builtins.attrNames inputs.zig.packages;
-    in flake-parts.lib.mkFlake { inherit inputs; } {
+  outputs = inputs@{ self, flake-parts, devenv-root, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, flake-parts-lib, ... }:
+      let
+        systems = builtins.attrNames inputs.zig.packages;
+        inherit (flake-parts-lib) importApply;
+        flakeModules.default = importApply ./nix/nixpkgs { inherit withSystem; };
+      in {
       imports = [
+        flakeModules.default
         inputs.devenv.flakeModule
       ];
       inherit systems;
 
       perSystem = { config, self', inputs', pkgs, system, ... }: {
-        packages.default = let env = zig2nix.outputs.zig-env.${system} { zig = zig2nix.outputs.packages.${system}.zig-master; }; in env.package {
+        packages.default = let env = inputs.zig2nix.outputs.zig-env.${system} { zig = inputs.zig2nix.outputs.packages.${system}.zig-master; }; in env.package {
             src = env.pkgs.lib.cleanSource ./.;
             nativeBuildInputs = with env.pkgs; [];
             buildInputs = with env.pkgs; [];
             zigPreferMusl = true;
         };
 
-        devenv.shells = {
-          default = {
-            devenv.root =
-              let
-                devenvRootFileContent = builtins.readFile devenv-root.outPath;
-              in
-              pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
-
-            name = "fishystuff";
-            imports = [
-              ./devenv.nix
-            ];
-          };
+        devenv.shells = let
+          devenvRootFileContent = builtins.readFile devenv-root.outPath;
+          root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
+        in {
+          default = { devenv = { inherit root; }; imports = [ ./devenv.nix ]; };
+          map = { devenv = { inherit root; }; imports = [ ./map/devenv.nix ]; };
         };
-
       };
       flake = {
       };
-    };
+    });
 }
