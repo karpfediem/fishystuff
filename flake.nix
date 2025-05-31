@@ -13,6 +13,9 @@
     nix2container.url = "github:nlewo/nix2container";
     nix2container.inputs.nixpkgs.follows = "nixpkgs";
     mk-shell-bin.url = "github:rrbutani/nix-mk-shell-bin";
+
+    fenix.url = "github:nix-community/fenix";
+    fenix.inputs.nixpkgs.follows = "nixpkgs";
     # zig.url = "github:mitchellh/zig-overlay";
     zig.url = "github:bandithedoge/zig-overlay"; # provides download mirrors - nightly builds were purged from official zig github
 
@@ -48,9 +51,12 @@
         devenv.shells = let
           devenvRootFileContent = builtins.readFile devenv-root.outPath;
           root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
-        in {
-          default = { devenv = { inherit root; }; imports = [ ./devenv.nix ]; };
-          map = { devenv = { inherit root; }; imports = [ ./map/devenv.nix ]; };
+          packages = with pkgs; [ flyctl ];
+        in rec {
+          default = site;
+          site = { devenv = { inherit root; }; imports = [ ({inherit packages;}) ./site/devenv.nix ]; };
+          map = { devenv = { inherit root; }; imports = [ ({inherit packages;}) ./map/devenv.nix ]; };
+          bot = { devenv = { inherit root; }; imports = [ ({inherit packages;}) ./bot/devenv.nix ]; };
         };
       };
       flake = {
