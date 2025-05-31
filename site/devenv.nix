@@ -1,8 +1,7 @@
 { lib, config, pkgs, ... }: {
-  name = "fishystuff";
+  name = "site";
   packages = with pkgs; [
     dolt
-    flyctl
     gawk
     just
     xlsx2csv

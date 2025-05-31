@@ -41,16 +41,23 @@ DRR as **Equip Effect**.
 ### [Pets]($section.id('pets'))
 
 When getting pets for a DRR setup, you need to look out for their **Talent**.
-> ![](/static/guides/drr_pets_talents.png)
-> ![](/static/guides/drr_pets.png)
+> []($image.asset('drr_pets_talents.png'))
+> []($image.asset('drr_pets.png'))
 
 There are a few pets which can have this DRR talent combined with the **Special: Auto-Fishing Time Reduction**.
-> ![](/static/guides/drr_pet_afr.png)
+> []($image.asset('drr_pet_afr.png'))
 
-[![Young Azure Dragon](/static/guides/pet_young_azure_dragon.png)](https://bdolytics.com/en/NA/db/pearl-offer/104598)
-[![Newborn Crimson Dragon](/static/guides/pet_newborn_crimson_dragon.png)](https://bdolytics.com/en/NA/db/pearl-offer/1152)
-[![Newborn Golden Dragon](/static/guides/pet_newborn_golden_dragon.png)](https://bdolytics.com/en/NA/db/item/615909)
-[![Lahtron](/static/guides/pet_lahtron.png)](https://bdolytics.com/en/NA/db/item/48880)
+[]($image.asset('pet_young_azure_dragon.png'))
+[Young Azure Dragon](https://bdolytics.com/en/NA/db/pearl-offer/104598)
+
+[]($image.asset('pet_newborn_crimson_dragon.png'))
+[Newborn Crimson Dragon](https://bdolytics.com/en/NA/db/pearl-offer/1152)
+
+[]($image.asset('pet_newborn_golden_dragon.png'))
+[Newborn Golden Dragon](https://bdolytics.com/en/NA/db/item/615909)
+
+[]($image.asset('pet_lahtron.png'))
+[Lahtron](https://bdolytics.com/en/NA/db/item/48880)
 
 ## [DRR from lifeskill level]($section.id('lifeskill-level'))
 

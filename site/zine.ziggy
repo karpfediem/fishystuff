@@ -1,22 +1,10 @@
-const std = @import("std");
-const zine = @import("zine");
-
-pub fn build(b: *std.Build) !void {
-    zine.website(b, .{
-        .title = "Fishy Stuff - BDO Fishing Tools",
-        .host_url = "https://karpfen.fish",
-        .layouts_dir_path = "layouts",
-        .content_dir_path = "content",
-        .assets_dir_path = "assets",
-        .static_assets = &.{
-            "CNAME",
-            // This asset is referenced in some inlined HTML in markdown
-            // which Zine is not yet able to analyze so as a temporary
-            // hack we mark it as a static asset.
-            "static/guides/fish_group_rates.png",
-            "static/guides/fish_group_rates_kr_support_response.webp",
-            "static/guides/fishing_level.png",
-            "static/guides/lifeskill_level.png",
+Site {
+    .title = "Fishy Stuff - Black Desert Fishing",
+    .host_url = "https://fishystuff.fish",
+    .content_dir_path = "content",
+    .layouts_dir_path = "layouts",
+    .assets_dir_path = "assets",
+    .static_assets = [
             "static/lifeskill_levels.json",
             "static/items.json",
             "static/zones.json",
@@ -91,19 +79,5 @@ pub fn build(b: *std.Build) !void {
             "fonts/jbm/JetBrainsMono-SemiBoldItalic.woff2",
             "fonts/jbm/JetBrainsMono-Thin.woff2",
             "fonts/jbm/JetBrainsMono-ThinItalic.woff2",
-        },
-        .build_assets = &.{
-            .{
-                .name = "zon",
-                .lp = b.path("build.zig.zon"),
-            },
-            .{
-                .name = "frontmatter",
-                .lp = b.dependency("zine", .{}).path(
-                    "frontmatter.ziggy-schema",
-                ),
-            },
-        },
-        .debug = true,
-    });
+    ],
 }

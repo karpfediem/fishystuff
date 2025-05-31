@@ -12,18 +12,23 @@ jobs:
         with:
           fetch-depth: 0  # Change if you need git info
 
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v1
+      - name: Setup Zine
+        uses: kristoff-it/setup-zine@v1
         with:
-          version: 0.14.0
-          
-      - name: Build
-        run: zig build --summary new
-          
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        if: github.ref == 'refs/heads/main'
+          version: v0.10.0
+
+      - name: Release
+        run: zine release
+        working-directory: site
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./zig-out
-          
+          path: 'site/public'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

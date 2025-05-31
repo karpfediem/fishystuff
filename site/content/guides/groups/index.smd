@@ -60,7 +60,7 @@ Personally I believe there are essentially two rolls:
 1. First it rolls for the fish group (% determined as seen in the image always normalized to 100% )
 2. Then it rolls within that group for the actual fish itself
 
-![](/static/guides/fish_group_rates.png)
+[]($image.asset('fish_group_rates.png'))
 
 I believe the game does NOT roll prize fish first, or use a "Roll-Down" Method from all we can tell.
 
@@ -92,7 +92,7 @@ expected.**
 According to one Korean player who presented this theory and asked for clarification, they received a response from
 Korean customer support confirming that increasing one group's rate means decreasing the rate of another group.
 
-![](/static/guides/fish_group_rates_kr_support_response.webp)
+[]($image.asset('fish_group_rates_kr_support_response.webp'))
 
 Arguably the translation and or response aren't 100% clear but it at the very least confirms that prize fish rate is
 impacted by increases in other group rates.

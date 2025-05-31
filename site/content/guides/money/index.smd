@@ -31,7 +31,7 @@ There is a special guide for [optimizing your DRR](/guides/drr).
 Your Fishing level stat will reduce your bite time by up to 50%.
 > []($block.attrs('padded'))
 > Character profile -> Ability -> Fishing
-> ![](/static/guides/profile_fishing_level.png)
+> []($image.asset('profile_fishing_level.png'))
 
 
 You will **ALWAYS** want fishing level 5.
@@ -140,7 +140,7 @@ Beltfish and Plump Coelacanth.
 ## [How to stand around AFK (Velia Example)]($section.id('how-to'))
 
 1. Fish in Velia/Coastal Cliff
-   > ![](/static/guides/velia_cc.png)
+   > []($image.asset('velia_cc.png'))
    >
    > Make sure your fish origin is Coastal Cliff!
 

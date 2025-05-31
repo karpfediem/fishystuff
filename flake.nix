@@ -20,6 +20,7 @@
     zig.url = "github:bandithedoge/zig-overlay"; # provides download mirrors - nightly builds were purged from official zig github
 
     zig2nix.url = "github:Cloudef/zig2nix";
+    zine.url = "github:kristoff-it/zine";
   };
 
   nixConfig = {
@@ -32,7 +33,7 @@
       let
         systems = builtins.attrNames inputs.zig.packages;
         inherit (flake-parts-lib) importApply;
-        flakeModules.default = importApply ./nix/nixpkgs { inherit withSystem; };
+        flakeModules.default = importApply ./nixpkgs { inherit withSystem; };
       in {
       imports = [
         flakeModules.default
@@ -41,13 +42,6 @@
       inherit systems;
 
       perSystem = { config, self', inputs', pkgs, system, ... }: {
-        packages.default = let env = inputs.zig2nix.outputs.zig-env.${system} { zig = inputs.zig2nix.outputs.packages.${system}.zig-master; }; in env.package {
-            src = env.pkgs.lib.cleanSource ./.;
-            nativeBuildInputs = with env.pkgs; [];
-            buildInputs = with env.pkgs; [];
-            zigPreferMusl = true;
-        };
-
         devenv.shells = let
           devenvRootFileContent = builtins.readFile devenv-root.outPath;
           root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;

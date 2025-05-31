@@ -20,7 +20,7 @@ share the same loot table.
 The **Valencia Sea - Depth 5** Fishing Zone includes areas that are quite far apart.
 One part is located near **Valencia**, while another is all the way west, near **Tigris Island**.
 
-![](/static/guides/valencia_sea_d5.png)
+[]($image.asset('valencia_sea_d5.png'))
 
 Even though these locations are distant, the **fish available** and their **catch rates** remain exactly the same.
 
@@ -44,4 +44,4 @@ Let's take a look at **Zenato Sea** as an example:
 *When you hover over a fishing area (like the green areas in the screenshot), all locations that share the same loot
 table will light up on the map.*
 
-![](/static/guides/zenato_sea_depths.webp)
+[]($image.asset('zenato_sea_depths.webp'))
