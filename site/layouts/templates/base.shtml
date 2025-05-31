@@ -6,10 +6,10 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
     <meta name="twitter:title" content="$page.title.suffix(' | Fishy Stuff')">
-    <meta name="twitter:image" content="$site.host_url.addPath($site.asset('preview.png').link())">
+    <meta name="twitter:image" content="$site.host_url.addPath($site.asset('default_preview.png').link())">
     <meta property="og:type" content="website">
     <meta property="og:title" content="$page.title.suffix(' | Fishy Stuff')">
-    <meta property="og:image" content="$site.host_url.addPath($site.asset('preview.png').link())">
+    <meta property="og:image" content="$site.host_url.addPath($site.asset('default_preview.png').link())">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title id="title">
