@@ -9,6 +9,8 @@ on:
       - 'site/**'
 jobs:
   deploy:
+    environment:
+      name: github-pages
     permissions:
       id-token: write
       pages: write
