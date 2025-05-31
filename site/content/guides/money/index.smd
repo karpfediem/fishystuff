@@ -52,7 +52,7 @@ Fortunately this is very easy to achieve nowadays.
 
 ### [Max Auto-fishing reduction (67%)]($section.id('afr'))
 
-See the [Fishing Calculator](/calculator) or
+See the interactive [Fishing Calculator](/calculator) or
 my [Fishing Time Calculator Sheet](https://docs.google.com/spreadsheets/d/1s5eyc9tm5jLNXzPa1VMu0HSOzjDB4Ggcdk7g3iobsI8/edit#gid=0)
 Different combinations are possible, but the easy mode TL;DR is
 
@@ -108,6 +108,21 @@ There is a special [guide to cost-effectively obtain mastery]($link.page('guides
 
 - [Professional Trader's Clothes](https://bdolytics.com/en/NA/db/item/14018/) (or [costume](https://bdolytics.com/en/NA/db/item/14324) version) lets you haggle more
   times, saving some energy and your patience
+
+## [Triple-Float Rods (TFR)]($section.id('tfr'))
+
+To boost your income even further, you can equip a rod with the Triple-Float Rod.
+These rods are able to catch **1-4 fish** and have an average of **1.6 fish/cast**.
+
+This means for rods like the [Grandpa Cron](https://bdolytics.com/en/NA/db/item/767158) & [Cool Wind Fishing Rod](https://bdolytics.com/en/NA/db/item/767187) that they will effectively **increase your total income by 60%!**
+
+It is also possible to fish for long periods of time with a regular TFR ([optimizing your DRR](/guides/drr), [Calculator](/calculator)).
+However the regular Triple-Float Rod, has a limited AFR.
+Currently - when using the [Blacksmith's Blessing](https://bdolytics.com/en/NA/db/lightstoneset/30) Lightstone Set - the maximum achievable AFR is 50%.
+
+Theoretically you could achieve 65% when using [Nibbles](https://bdolytics.com/en/NA/db/lightstoneset/160).
+But this will burn through your durability extremely quickly and is an expensive trade-off which is not recommended.
+
 
 ## [How to find a good Location]($section.id('location'))
 
