@@ -1,5 +1,5 @@
 use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{thread_rng, Rng};
 
 const PHRASES: &[&str] = &[
     "Eep! Don’t poke the Crio, silly land-walker!",
@@ -52,6 +52,9 @@ const PHRASES: &[&str] = &[
 
 pub fn respond() -> String {
     let mut rng = thread_rng();
-    let x = PHRASES.choose(&mut rng).unwrap_or(&"Qweek!");
-    x.to_string()
+
+    match rng.gen::<f64>() < 0.35 {
+        true => String::from("Qweek!"),
+        false => PHRASES.choose(&mut rng).unwrap_or(&"Qweek!").to_string(),
+    }
 }
