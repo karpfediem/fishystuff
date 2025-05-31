@@ -6,6 +6,8 @@ on:
       - main  # Set a branch to deploy
 jobs:
   deploy:
+    permissions:
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
