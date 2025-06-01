@@ -1,8 +1,11 @@
 mod poke;
 mod waypoints;
 mod paginate;
+mod help;
+mod utils;
 
 use poise::serenity_prelude as serenity;
+use crate::help::help;
 use crate::poke::poke;
 use crate::waypoints::list::waypoints_list;
 use crate::waypoints::waypoints;
@@ -11,34 +14,6 @@ struct Data {} // User data, which is stored and accessible in all command invoc
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-
-/// A command with two subcommands: `child1` and `child2`
-///
-/// Running this function directly, without any subcommand, is only supported in prefix commands.
-/// Discord doesn't permit invoking the root command of a slash command if it has subcommands.
-#[poise::command(
-    prefix_command,
-    slash_command,
-    subcommands("help_drr", "help_mystical")
-)]
-pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.say("What can I help you with? *qweek*").await?;
-    Ok(())
-}
-
-/// A subcommand of `help`
-#[poise::command(rename = "drr", prefix_command, slash_command)]
-pub async fn help_drr(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.say("DRR").await?;
-    Ok(())
-}
-
-/// Another subcommand of `help`
-#[poise::command(rename = "mystical", prefix_command, slash_command)]
-pub async fn help_mystical(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.say("Stinky Fish").await?;
-    Ok(())
-}
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -49,10 +24,10 @@ async fn main() {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
-                poke(),
-                waypoints_list(),
+                help(),
                 waypoints(),
-                help()
+                waypoints_list(),
+                poke(),
             ],
             ..Default::default()
         })

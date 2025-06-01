@@ -1,8 +1,7 @@
-use std::cmp::Reverse;
+use crate::utils::fuzzy::gen_autocomplete;
 use crate::waypoints::zone_names::ZONE_NAMES;
 use crate::{Context, Error};
 use futures::{stream, StreamExt};
-use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use poise::futures_util::Stream;
 use poise::serenity_prelude::{CreateActionRow, CreateButton, CreateEmbed};
@@ -12,59 +11,11 @@ use std::path::{Path, PathBuf};
 pub mod list;
 mod zone_names;
 
-/// Normalize a string for comparison (lowercase, trimmed)
-fn normalize(s: &str) -> String {
-    s.trim().to_lowercase()
-}
-
-/// Find the closest matching zone name from input
-fn find_closest_zone(input: &str) -> Option<String> {
-    let matcher = SkimMatcherV2::default();
-    let input_normalized = normalize(input);
-
-    ZONE_NAMES
-        .iter()
-        .filter_map(|&zone| {
-            matcher
-                .fuzzy_match(&normalize(zone), &input_normalized)
-                .map(|score| (zone, score))
-        })
-        .max_by_key(|&(_, score)| score)
-        .map(|(zone, _)| zone.to_string())
-}
-
 async fn autocomplete_fuzzy_zone<'a>(
     _ctx: Context<'_>,
     input: &'a str,
 ) -> impl Stream<Item = String> + 'a {
-    let matcher = SkimMatcherV2::default();
-    let input_normalized = normalize(input);
-
-    // Collect all zone names with their scores
-    let mut scored_zones: Vec<(String, i64)> = ZONE_NAMES
-        .iter()
-        .filter_map(|&zone| {
-            matcher
-                .fuzzy_match(&normalize(zone), &input_normalized)
-                .map(|score| (zone.to_string(), score))
-        })
-        .collect();
-
-    // Sort by descending score and take top 10
-    scored_zones.sort_by_key(|&(_, score)| Reverse(score));
-    let top_matches = scored_zones.into_iter().take(10).map(|(zone, _)| zone);
-
-    // Return a stream over the top matches
-    stream::iter(top_matches)
-}
-
-async fn autocomplete_zone<'a>(
-    _ctx: Context<'_>,
-    partial: &'a str,
-) -> impl Stream<Item = String> + 'a {
-    futures::stream::iter(ZONE_NAMES)
-        .filter(move |name| futures::future::ready(name.starts_with(partial)))
-        .map(|name| name.to_string())
+    stream::iter(gen_autocomplete(input, ZONE_NAMES))
 }
 
 const BASE_URL: &str =
