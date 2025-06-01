@@ -34,10 +34,10 @@ fn find_closest_zone(input: &str) -> Option<String> {
 #[poise::command(prefix_command, slash_command)]
 pub async fn waypoints(
     ctx: Context<'_>,
-    #[description = "Zone name (partial, case-insensitive)"] input: String,
+    #[description = "Zone name (partial, case-insensitive)"] search: String,
 ) -> Result<(), Error> {
-    let Some(matched_zone) = find_closest_zone(&input) else {
-        ctx.say(format!("No such zone matching `{}`", input))
+    let Some(matched_zone) = find_closest_zone(&search) else {
+        ctx.say(format!("No such zone matching `{}`", search))
             .await?;
         return Ok(());
     };
