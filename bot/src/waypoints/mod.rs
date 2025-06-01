@@ -1,15 +1,11 @@
 use crate::utils::fuzzy::gen_autocomplete;
-use crate::waypoints::zone_names::ZONE_NAMES;
+use crate::zones::zone_names::ZONE_NAMES;
 use crate::{Context, Error};
 use futures::{stream, StreamExt};
-use fuzzy_matcher::FuzzyMatcher;
 use poise::futures_util::Stream;
 use poise::serenity_prelude::{CreateActionRow, CreateButton, CreateEmbed};
 use std::fs;
 use std::path::{Path, PathBuf};
-
-pub mod list;
-mod zone_names;
 
 async fn autocomplete_fuzzy_zone<'a>(
     _ctx: Context<'_>,

@@ -3,12 +3,13 @@ mod waypoints;
 mod paginate;
 mod help;
 mod utils;
+mod zones;
 
 use poise::serenity_prelude as serenity;
 use crate::help::help;
 use crate::poke::poke;
-use crate::waypoints::list::waypoints_list;
 use crate::waypoints::waypoints;
+use crate::zones::list::zones;
 
 struct Data {} // User data, which is stored and accessible in all command invocations
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -26,7 +27,7 @@ async fn main() {
             commands: vec![
                 help(),
                 waypoints(),
-                waypoints_list(),
+                zones(),
                 poke(),
             ],
             ..Default::default()

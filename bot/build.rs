@@ -1,7 +1,7 @@
 use std::{fs, io::Write, path::Path};
 
 fn main() {
-    let output_path = Path::new("src/waypoints/zone_names.rs");
+    let output_path = Path::new("src/zones/zone_names.rs");
 
     let bookmark_dir = Path::new("bdo-fish-waypoints/Bookmark");
     let mut zone_names = Vec::new();
