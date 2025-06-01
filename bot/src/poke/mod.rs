@@ -49,6 +49,14 @@ const PHRASES: &[&str] = &[
     "Poking NPCs: the *true* Black Desert experience.",
     "You better not be streaming this!",
     "Crio will remember this.",
+    "All your bass are belong to us.",
+    "FISH RO DAH!",
+    "It's a me, Crio!",
+    "Stay a while and fishin'",
+    "All we had to do was follow the damn carrack, MaoMao! (Big Smokey Chromis)",
+    "Mao?  MAo?! MAAAAAOOOOO",
+    "Haddocken!",
+    "I used to be an adventurer like you, then I took a maomao in the knee.",
 ];
 
 fn respond() -> String {
