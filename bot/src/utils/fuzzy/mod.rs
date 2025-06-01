@@ -1,6 +1,5 @@
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
-use poise::futures_util::Stream;
 use std::cmp::Reverse;
 
 /// Normalize a string for comparison (lowercase, trimmed)

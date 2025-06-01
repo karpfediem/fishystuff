@@ -1,7 +1,6 @@
 use crate::utils::fuzzy::gen_autocomplete;
 use crate::{Context, Error};
 use futures::{stream, Stream};
-use poise::serenity_prelude::Builder;
 use std::str::FromStr;
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
 
