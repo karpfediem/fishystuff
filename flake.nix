@@ -16,6 +16,9 @@
 
     fenix.url = "github:nix-community/fenix";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
+    crane.url = "github:ipetkov/crane";
+    crane.inputs.nixpkgs.follows = "nixpkgs";
+
     # zig.url = "github:mitchellh/zig-overlay";
     zig.url = "github:bandithedoge/zig-overlay"; # provides download mirrors - nightly builds were purged from official zig github
 
@@ -28,7 +31,7 @@
     extra-substituters = "https://devenv.cachix.org";
   };
 
-  outputs = inputs@{ self, flake-parts, devenv-root, ... }:
+  outputs = inputs@{ self, flake-parts, devenv-root, crane, fenix, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, flake-parts-lib, ... }:
       let
         systems = builtins.attrNames inputs.zig.packages;
@@ -43,6 +46,12 @@
         inherit systems;
 
         perSystem = { config, self', inputs', pkgs, system, ... }: {
+          packages.bot =
+            let
+              craneLib =  (crane.mkLib pkgs).overrideToolchain fenix.packages.${system}.minimal.toolchain;
+            in
+            craneLib.buildPackage { src = ./bot; };
+
           devenv.shells =
             let
               devenvRootFileContent = builtins.readFile devenv-root.outPath;
