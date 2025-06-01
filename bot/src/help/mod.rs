@@ -20,6 +20,8 @@ enum HelpTopic {
     Money,
     #[strum(serialize = "Waypoints")]
     Waypoints,
+    #[strum(serialize = "Fishing Zones")]
+    Zones,
 }
 
 async fn autocomplete_fuzzy_help<'a>(
@@ -47,6 +49,7 @@ pub async fn help(
             HelpTopic::Map => help_map(ctx).await,
             HelpTopic::Waypoints => help_waypoints(ctx).await,
             HelpTopic::Money => help_money(ctx).await,
+            HelpTopic::Zones => help_zones(ctx).await,
         },
         Err(_e) => help_reject(ctx).await,
     }?;
@@ -110,6 +113,14 @@ async fn help_waypoints(ctx: Context<'_>) -> Result<(), Error> {
 async fn help_money(ctx: Context<'_>) -> Result<(), Error> {
     ctx.send(poise::CreateReply::default().content(
         "https://discord.com/channels/161861855332139008/1378361389030178836/1378361389030178836",
+    ))
+    .await?;
+    Ok(())
+}
+
+async fn help_zones(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.send(poise::CreateReply::default().content(
+        "https://discord.com/channels/161861855332139008/1378819661763711136/1378819661763711136",
     ))
     .await?;
     Ok(())
