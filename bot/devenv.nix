@@ -1,6 +1,9 @@
 { lib, config, pkgs, ... }: {
   name = "bot";
-  packages = with pkgs; [ clang ];
+  packages = with pkgs; [
+    flyctl
+    clang
+  ];
   languages = {
     rust = {
       enable = true;
