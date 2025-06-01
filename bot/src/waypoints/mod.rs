@@ -4,9 +4,9 @@ use futures::StreamExt;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use poise::futures_util::Stream;
-use poise::serenity_prelude::{CreateActionRow, CreateAttachment, CreateButton, CreateEmbed};
+use poise::serenity_prelude::{CreateActionRow, CreateButton, CreateEmbed};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub mod list;
 mod zone_names;
@@ -44,6 +44,25 @@ async fn autocomplete_zone<'a>(
 const BASE_URL: &str =
     "https://github.com/Flockenberger/bdo-fish-waypoints/raw/refs/heads/main/Bookmark/";
 
+fn validate_path(user_path: &Path, base_path: &Path) -> Result<PathBuf, Error> {
+    let base = base_path
+        .canonicalize()
+        .map_err(|e| format!("Base path error: {}", e))?;
+    let user = user_path
+        .canonicalize()
+        .map_err(|e| format!("User path error: {}", e))?;
+    if !base.exists() || !user.exists() {
+        return Err("Directories don't exist!".into());
+    }
+
+    // Check that the full path starts with the base path
+    if user.starts_with(&base) {
+        Ok(user)
+    } else {
+        Err("Access denied: path traversal attempt detected.".into())
+    }
+}
+
 /// Show waypoint preview and XML data for a given zone (fuzzy-matched)
 #[poise::command(prefix_command, slash_command)]
 pub async fn waypoints(
@@ -52,25 +71,19 @@ pub async fn waypoints(
     #[autocomplete = "autocomplete_zone"]
     zone: String,
 ) -> Result<(), Error> {
+    if !ZONE_NAMES.contains(&&*zone) {
+        return Err(format!("{}? Never heard of it. Qweek!", zone).into());
+    }
+
     let base_path = Path::new("./bdo-fish-waypoints/Bookmark");
     let zone_dir = base_path.join(&zone);
-    let xml_path = zone_dir.join(format!("{zone}.xml"));
-    let image_path = zone_dir.join("Preview.webp");
-
-    if !xml_path.exists() || !image_path.exists() {
-        ctx.say(format!(
-            "Zone `{}` found, but required files are missing.",
-            zone
-        ))
-        .await?;
-        return Ok(());
-    }
+    let mut xml_path = zone_dir.join(format!("{zone}.xml"));
+    xml_path = validate_path(&xml_path, base_path).map_err(|_| "Could not load XML data!")?;
 
     // Load XML
     let xml_content =
         fs::read_to_string(&xml_path).unwrap_or_else(|_| "<Failed to read XML>".to_string());
 
-    let attachment = CreateAttachment::path(image_path).await?;
     let zone_encoded = urlencoding::encode(zone.as_str());
     let thumb_url = format!("{}{}/Preview.webp", BASE_URL.to_string(), zone_encoded);
 
