@@ -4,7 +4,7 @@ use futures::StreamExt;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
 use poise::futures_util::Stream;
-use poise::serenity_prelude::CreateAttachment;
+use poise::serenity_prelude::{CreateActionRow, CreateAttachment, CreateButton, CreateEmbed};
 use std::fs;
 use std::path::Path;
 
@@ -41,6 +41,9 @@ async fn autocomplete_zone<'a>(
         .map(|name| name.to_string())
 }
 
+const BASE_URL: &str =
+    "https://github.com/Flockenberger/bdo-fish-waypoints/raw/refs/heads/main/Bookmark/";
+
 /// Show waypoint preview and XML data for a given zone (fuzzy-matched)
 #[poise::command(prefix_command, slash_command)]
 pub async fn waypoints(
@@ -68,11 +71,26 @@ pub async fn waypoints(
         fs::read_to_string(&xml_path).unwrap_or_else(|_| "<Failed to read XML>".to_string());
 
     let attachment = CreateAttachment::path(image_path).await?;
-    // Send both as one message
+    let zone_encoded = urlencoding::encode(zone.as_str());
+    let thumb_url = format!("{}{}/Preview.webp", BASE_URL.to_string(), zone_encoded);
+
     ctx.send(
         poise::CreateReply::default()
-            .content(format!("**Zone: `{}`**\n```xml\n{}```", zone, xml_content))
-            .attachment(attachment),
+            .embed(
+                CreateEmbed::new()
+                    .thumbnail(thumb_url)
+                    .title(zone.clone()).description("### Usage\n\
+                     - If you are unfamiliar with how to use waypoints please check out the [**Tutorial**](https://youtu.be/W-bWmKdv8K8)\n\
+                     - Click the **Thumbnail Image** to see a detailed preview of this Zone 🔍 \n\
+                     - Your local bookmark file is located under `Documents\\Black Desert\\UserCache\\<Your User ID>\\gamevariable.xml`\n\
+                     ")
+                    .field("Waypoints XML", format!("```xml\n{}```", xml_content), false),
+            )
+            .components(vec![CreateActionRow::Buttons(vec![
+                CreateButton::new_link("https://youtu.be/W-bWmKdv8K8".to_string())
+                    .emoji('❔')
+                    .label("Tutorial"),
+            ])]),
     )
     .await?;
 
