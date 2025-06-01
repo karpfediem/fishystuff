@@ -1,0 +1,3 @@
+[submodule "bot/bdo-fish-waypoints"]
+	path = bot/bdo-fish-waypoints
+	url = https://github.com/Flockenberger/bdo-fish-waypoints/
