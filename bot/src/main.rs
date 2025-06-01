@@ -1,8 +1,10 @@
 mod poke;
 mod waypoints;
+mod paginate;
 
 use poise::serenity_prelude as serenity;
 use crate::poke::poke;
+use crate::waypoints::list::waypoints_list;
 use crate::waypoints::waypoints;
 
 struct Data {} // User data, which is stored and accessible in all command invocations
@@ -46,7 +48,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![poke(), waypoints(), help()],
+            commands: vec![poke(), waypoints_list(), waypoints(), help()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

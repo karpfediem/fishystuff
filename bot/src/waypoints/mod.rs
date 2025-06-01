@@ -6,6 +6,7 @@ use poise::serenity_prelude::CreateAttachment;
 use std::fs;
 use std::path::Path;
 
+pub mod list;
 mod zone_names;
 
 /// Normalize a string for comparison (lowercase, trimmed)
