@@ -47,10 +47,7 @@ const PHRASES: &[&str] = &[
 fn respond() -> String {
     let mut rng = rand::rng();
 
-    match rng.random::<f64>() < 0.35 {
-        true => String::from("Qweek!"),
-        false => PHRASES.choose(&mut rng).unwrap_or(&"Qweek!").to_string(),
-    }
+    PHRASES.choose(&mut rng).unwrap_or(&"Qweek!").to_string()
 }
 
 /// Poke Crio, see what happens
