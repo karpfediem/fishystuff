@@ -1,3 +1,4 @@
+use crate::{Context, Error};
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 
@@ -50,11 +51,18 @@ const PHRASES: &[&str] = &[
     "Crio will remember this.",
 ];
 
-pub fn respond() -> String {
+fn respond() -> String {
     let mut rng = thread_rng();
 
     match rng.gen::<f64>() < 0.35 {
         true => String::from("Qweek!"),
         false => PHRASES.choose(&mut rng).unwrap_or(&"Qweek!").to_string(),
     }
+}
+
+/// Poke Crio, see what happens
+#[poise::command(slash_command, prefix_command)]
+pub async fn poke(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.say(respond()).await?;
+    Ok(())
 }

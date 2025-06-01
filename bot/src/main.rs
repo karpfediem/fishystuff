@@ -1,17 +1,12 @@
 mod poke;
 
 use poise::serenity_prelude as serenity;
+use crate::poke::poke;
 
 struct Data {} // User data, which is stored and accessible in all command invocations
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-/// Poke Crio, see what happens
-#[poise::command(slash_command, prefix_command)]
-async fn poke(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.say(poke::respond()).await?;
-    Ok(())
-}
 
 /// A command with two subcommands: `child1` and `child2`
 ///
@@ -49,7 +44,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![poke(), help()],
+            commands: vec![poke(), waypoints(), help()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
