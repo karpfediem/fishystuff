@@ -3,11 +3,11 @@ use rand::prelude::IndexedRandom;
 use rand::Rng;
 
 const PHRASES: &[&str] = &[
-    "Eep! Don’t poke the Crio, silly land-walker!",
+    "Qweek! Don’t poke the Crio, silly land-walker!",
     "Poke me again and I’ll splash ya, qweek!",
     "You got some nerve, aye? I *like* it!",
     "Is this how you greet fine otters? Rude!",
-    "Oof! That tickled my whiskers, qweek!",
+    "Eep! That tickled my whiskers, qweek!",
     "Hands off the fur, it's maintenance day!",
     "Oi! I'm workin' here, or at least pretendin'!",
     "That’s Crio harassment, that is!",
