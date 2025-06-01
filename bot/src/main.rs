@@ -1,7 +1,9 @@
 mod poke;
+mod waypoints;
 
 use poise::serenity_prelude as serenity;
 use crate::poke::poke;
+use crate::waypoints::waypoints;
 
 struct Data {} // User data, which is stored and accessible in all command invocations
 type Error = Box<dyn std::error::Error + Send + Sync>;

@@ -2,9 +2,12 @@
 name = "bot"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 poise = "0.6.1"
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.19"
 rand = "0.8.5"
+fuzzy-matcher = "0.3.7"
+strsim = "0.11.1"
