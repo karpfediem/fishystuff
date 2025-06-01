@@ -3,7 +3,6 @@
 // Changed to work with Vec<String> and newer poise function signatures
 
 use poise::serenity_prelude as serenity;
-use tracing_subscriber::fmt::format;
 
 /// This is an example implementation of pagination. To tweak the behavior, copy the source code and
 /// adjust to your needs:

@@ -1,7 +1,7 @@
 use crate::utils::fuzzy::gen_autocomplete;
 use crate::zones::zone_names::ZONE_NAMES;
 use crate::{Context, Error};
-use futures::{stream, StreamExt};
+use futures::stream;
 use poise::futures_util::Stream;
 use poise::serenity_prelude::{CreateActionRow, CreateButton, CreateEmbed};
 use std::fs;
