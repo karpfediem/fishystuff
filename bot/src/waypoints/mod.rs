@@ -1,7 +1,9 @@
 use crate::waypoints::zone_names::ZONE_NAMES;
 use crate::{Context, Error};
+use futures::StreamExt;
 use fuzzy_matcher::skim::SkimMatcherV2;
 use fuzzy_matcher::FuzzyMatcher;
+use poise::futures_util::Stream;
 use poise::serenity_prelude::CreateAttachment;
 use std::fs;
 use std::path::Path;
@@ -30,27 +32,32 @@ fn find_closest_zone(input: &str) -> Option<String> {
         .map(|(zone, _)| zone.to_string())
 }
 
+async fn autocomplete_zone<'a>(
+    _ctx: Context<'_>,
+    partial: &'a str,
+) -> impl Stream<Item = String> + 'a {
+    futures::stream::iter(ZONE_NAMES)
+        .filter(move |name| futures::future::ready(name.starts_with(partial)))
+        .map(|name| name.to_string())
+}
+
 /// Show waypoint preview and XML data for a given zone (fuzzy-matched)
 #[poise::command(prefix_command, slash_command)]
 pub async fn waypoints(
     ctx: Context<'_>,
-    #[description = "Zone name (partial, case-insensitive)"] search: String,
+    #[description = "Zone Name"]
+    #[autocomplete = "autocomplete_zone"]
+    zone: String,
 ) -> Result<(), Error> {
-    let Some(matched_zone) = find_closest_zone(&search) else {
-        ctx.say(format!("No such zone matching `{}`", search))
-            .await?;
-        return Ok(());
-    };
-
     let base_path = Path::new("./bdo-fish-waypoints/Bookmark");
-    let zone_dir = base_path.join(&matched_zone);
-    let xml_path = zone_dir.join(format!("{matched_zone}.xml"));
+    let zone_dir = base_path.join(&zone);
+    let xml_path = zone_dir.join(format!("{zone}.xml"));
     let image_path = zone_dir.join("Preview.webp");
 
     if !xml_path.exists() || !image_path.exists() {
         ctx.say(format!(
             "Zone `{}` found, but required files are missing.",
-            matched_zone
+            zone
         ))
         .await?;
         return Ok(());
@@ -64,10 +71,7 @@ pub async fn waypoints(
     // Send both as one message
     ctx.send(
         poise::CreateReply::default()
-            .content(format!(
-                "**Matched Zone: `{}`**\n```xml\n{}```",
-                matched_zone, xml_content
-            ))
+            .content(format!("**Zone: `{}`**\n```xml\n{}```", zone, xml_content))
             .attachment(attachment),
     )
     .await?;
