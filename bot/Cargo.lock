@@ -119,12 +119,10 @@ dependencies = [
 name = "bot"
 version = "0.1.0"
 dependencies = [
- "form_urlencoded",
  "futures",
  "fuzzy-matcher",
  "poise",
  "rand",
- "strsim",
  "strum",
  "tokio",
  "tracing-subscriber",
