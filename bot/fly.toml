@@ -1,0 +1,8 @@
+app = "criobot"
+primary_region = "fra"
+
+[build]
+image = "registry.fly.io/criobot:latest"
+
+[env]
+RUST_LOG = "info"

@@ -2,6 +2,7 @@
   name = "bot";
   packages = with pkgs; [
     flyctl
+    skopeo
     clang
   ];
   languages = {

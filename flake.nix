@@ -17,7 +17,6 @@
     fenix.url = "github:nix-community/fenix";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
     crane.url = "github:ipetkov/crane";
-    crane.inputs.nixpkgs.follows = "nixpkgs";
 
     # zig.url = "github:mitchellh/zig-overlay";
     zig.url = "github:bandithedoge/zig-overlay"; # provides download mirrors - nightly builds were purged from official zig github
@@ -45,26 +44,38 @@
         ];
         inherit systems;
 
-        perSystem = { config, self', inputs', pkgs, system, ... }: {
-          packages.bot =
-            let
-              craneLib =  (crane.mkLib pkgs).overrideToolchain fenix.packages.${system}.minimal.toolchain;
-            in
-            craneLib.buildPackage { src = ./bot; };
-
-          devenv.shells =
-            let
-              devenvRootFileContent = builtins.readFile devenv-root.outPath;
-              root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
-              packages = with pkgs; [ flyctl ];
-            in
-            rec {
-              default = site;
-              site = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./site/devenv.nix ]; };
-              map = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./map/devenv.nix ]; };
-              bot = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./bot/devenv.nix ]; };
+        perSystem = { config, self', inputs', pkgs, system, ... }:
+          let
+            craneLib = (crane.mkLib pkgs).overrideToolchain fenix.packages.${system}.minimal.toolchain;
+            bot = craneLib.buildPackage { src = ./bot; };
+            bot-container = pkgs.dockerTools.buildLayeredImage {
+              name = "crio";
+              tag = "latest";
+              contents = [ bot ./bot/bdo-fish-waypoints ];
+              config = {
+                Entrypoint = [ "bot" ];
+                WorkingDir = "${bot}/bin";
+              };
             };
-        };
+
+
+          in
+          {
+            packages = { inherit bot bot-container; };
+
+            devenv.shells =
+              let
+                devenvRootFileContent = builtins.readFile devenv-root.outPath;
+                root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
+                packages = with pkgs; [ flyctl ];
+              in
+              rec {
+                default = site;
+                site = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./site/devenv.nix ]; };
+                map = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./map/devenv.nix ]; };
+                bot = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./bot/devenv.nix ]; };
+              };
+          };
         flake = { };
       });
 }
