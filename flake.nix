@@ -34,26 +34,28 @@
         systems = builtins.attrNames inputs.zig.packages;
         inherit (flake-parts-lib) importApply;
         flakeModules.default = importApply ./nixpkgs { inherit withSystem; };
-      in {
-      imports = [
-        flakeModules.default
-        inputs.devenv.flakeModule
-      ];
-      inherit systems;
+      in
+      {
+        imports = [
+          flakeModules.default
+          inputs.devenv.flakeModule
+        ];
+        inherit systems;
 
-      perSystem = { config, self', inputs', pkgs, system, ... }: {
-        devenv.shells = let
-          devenvRootFileContent = builtins.readFile devenv-root.outPath;
-          root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
-          packages = with pkgs; [ flyctl ];
-        in rec {
-          default = site;
-          site = { devenv = { inherit root; }; imports = [ ({inherit packages;}) ./site/devenv.nix ]; };
-          map = { devenv = { inherit root; }; imports = [ ({inherit packages;}) ./map/devenv.nix ]; };
-          bot = { devenv = { inherit root; }; imports = [ ({inherit packages;}) ./bot/devenv.nix ]; };
+        perSystem = { config, self', inputs', pkgs, system, ... }: {
+          devenv.shells =
+            let
+              devenvRootFileContent = builtins.readFile devenv-root.outPath;
+              root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
+              packages = with pkgs; [ flyctl ];
+            in
+            rec {
+              default = site;
+              site = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./site/devenv.nix ]; };
+              map = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./map/devenv.nix ]; };
+              bot = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./bot/devenv.nix ]; };
+            };
         };
-      };
-      flake = {
-      };
-    });
+        flake = { };
+      });
 }
