@@ -10,17 +10,20 @@
 
 There are several possible groups to obtain fish from when you catch a fish
 
-| Name     | Typically contains (with exceptions)                |
-|----------|-----------------------------------------------------|
-| General  | Green grade fish / Plump Coelacanth / Glass Bottles |
-| Big      | Blue grade fish                                     |
-| Rare     | Yellow grade fish                                   |
-| Prize    | Red grade fish / Relic Shards / Troll 1% Mudskipper |
-| Treasure | Silver & Gold Keys / Relics / Laila's Petal         |
+| Name         | Typically contains (with exceptions)                |
+|--------------|-----------------------------------------------------|
+| General      | Green grade fish / Plump Coelacanth / Glass Bottles |
+| High-Quality | Blue grade fish                                     |
+| Rare         | Yellow grade fish                                   |
+| Prize        | Red grade fish / Relic Shards / Troll 1% Mudskipper |
+| Treasure     | Silver & Gold Keys / Relics / Laila's Petal         |
 
-## [Big Fish]($section.id('big'))
+## [High-Quality]($section.id('hq'))
 
-Big fish are typically blue grade fish.
+High-Quality fish are typically blue grade fish.
+
+With the fishing size tournament, this fish group was renamed from "Big Fish" to avoid confusion.
+The group has no influence over the actual size of fish.
 
 You can affect their rate with the following methods:
 
@@ -79,7 +82,7 @@ The actual observed prize rate was only **3.55%** in 33.6k samples.
 At 99.9% confidence this means the actual rate lies in between +- 0.33% of the observed 3.55%. (So at best 3.88% which
 is below 4%).
 
-Another ~9.4k samples were collected by shrddr with +11% big float at 1900 mastery which resulted in **4.07% vs. 4.75%
+Another ~9.4k samples were collected by shrddr with +11% High-Quality float at 1900 mastery which resulted in **4.07% vs. 4.75%
 expected.**
 
 **Negative** samples (no fish modifiers) were collected by shrddr which resulted in
