@@ -48,7 +48,12 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![poke(), waypoints_list(), waypoints(), help()],
+            commands: vec![
+                poke(),
+                waypoints_list(),
+                waypoints(),
+                help()
+            ],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
