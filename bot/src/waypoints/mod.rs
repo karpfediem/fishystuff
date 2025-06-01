@@ -36,7 +36,7 @@ fn validate_path(user_path: &Path, base_path: &Path) -> Result<PathBuf, Error> {
     }
 }
 
-/// Show waypoint preview and XML data for a given zone (fuzzy-matched)
+/// Show waypoint preview and XML data for a given zone
 #[poise::command(prefix_command, slash_command)]
 pub async fn waypoints(
     ctx: Context<'_>,
