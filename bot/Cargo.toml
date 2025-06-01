@@ -8,7 +8,7 @@ build = "build.rs"
 poise = "0.6.1"
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.19"
-rand = "0.8.5"
+rand = "0.9.1"
 fuzzy-matcher = "0.3.7"
 futures = "0.3.31"
 urlencoding = "2.1.3"

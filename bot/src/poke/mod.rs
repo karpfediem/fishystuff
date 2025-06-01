@@ -1,6 +1,6 @@
 use crate::{Context, Error};
-use rand::seq::SliceRandom;
-use rand::{thread_rng, Rng};
+use rand::prelude::IndexedRandom;
+use rand::Rng;
 
 const PHRASES: &[&str] = &[
     "Eep! Don’t poke the Crio, silly land-walker!",
@@ -52,9 +52,9 @@ const PHRASES: &[&str] = &[
 ];
 
 fn respond() -> String {
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
 
-    match rng.gen::<f64>() < 0.35 {
+    match rng.random::<f64>() < 0.35 {
         true => String::from("Qweek!"),
         false => PHRASES.choose(&mut rng).unwrap_or(&"Qweek!").to_string(),
     }
