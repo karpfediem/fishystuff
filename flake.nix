@@ -49,7 +49,7 @@
             craneLib = (crane.mkLib pkgs).overrideToolchain fenix.packages.${system}.minimal.toolchain;
             bot = craneLib.buildPackage { src = ./bot; };
             waypoints = ./bot/bdo-fish-waypoints;
-            containerfs = pkgs.runCommand "waypoints-in-bin" { } ''
+            containerfs = pkgs.runCommand "containerfs" { } ''
               mkdir -p $out
               cp ${bot}/bin/bot $out/
               cp -r ${waypoints} $out/bdo-fish-waypoints
