@@ -48,20 +48,23 @@
           let
             craneLib = (crane.mkLib pkgs).overrideToolchain fenix.packages.${system}.minimal.toolchain;
             bot = craneLib.buildPackage { src = ./bot; };
+            waypoints = ./bot/bdo-fish-waypoints;
+            containerfs = pkgs.runCommand "waypoints-in-bin" { } ''
+                mkdir -p $out
+                cp ${bot}/bin/bot $out/
+                cp -r ${waypoints} $out/bdo-fish-waypoints
+              '';
             bot-container = pkgs.dockerTools.buildLayeredImage {
               name = "crio";
               tag = "latest";
-              contents = [ bot ./bot/bdo-fish-waypoints ];
+              contents = [ containerfs ];
               config = {
-                Entrypoint = [ "bot" ];
-                WorkingDir = "${bot}/bin";
+                Entrypoint = [ "${containerfs}/bot" ];
               };
             };
-
-
           in
           {
-            packages = { inherit bot bot-container; };
+            packages = { inherit bot bot-container containerfs; };
 
             devenv.shells =
               let
