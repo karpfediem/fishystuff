@@ -64,12 +64,12 @@ pub async fn waypoints(
         poise::CreateReply::default()
             .embed(
                 CreateEmbed::new()
-                    .thumbnail(thumb_url)
-                    .title(zone.clone()).description("### Usage\n\
+                    .thumbnail(thumb_url.clone())
+                    .title(zone.clone()).description(format!("### Usage\n\
                      - If you are unfamiliar with how to use waypoints please check out the [**Tutorial**](https://youtu.be/W-bWmKdv8K8)\n\
-                     - Click the **Thumbnail Image** to see a detailed preview of this Zone 🔍 \n\
+                     - Click the [**Thumbnail Image**]({}) to see a detailed preview of this Zone 🔍 \n\
                      - Your local bookmark file is located under `Documents\\Black Desert\\UserCache\\<Your User ID>\\gamevariable.xml`\n\
-                     ")
+                     ", thumb_url))
                     .field("Waypoints XML", format!("```xml\n{}```", xml_content), false),
             )
             .components(vec![CreateActionRow::Buttons(vec![
