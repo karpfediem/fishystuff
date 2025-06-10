@@ -73,8 +73,8 @@
                 root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
                 packages = with pkgs; [ flyctl ];
               in
-              rec {
-                default = site;
+              {
+                default = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./devenv.nix ]; };
                 site = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./site/devenv.nix ]; };
                 map = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./map/devenv.nix ]; };
                 bot = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./bot/devenv.nix ]; };

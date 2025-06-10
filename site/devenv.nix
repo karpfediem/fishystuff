@@ -1,10 +1,7 @@
-{ lib, config, pkgs, ... }: {
+{ pkgs, ... }: {
   name = "site";
   packages = with pkgs; [
-    dolt
-    gawk
     just
-    xlsx2csv
   ];
   languages = {
     zig = {
