@@ -140,7 +140,7 @@
     const pet_skills_html_list = [1, 2, 3, 4, 5].map(i => [tFEXP].map(skill => `<label><input data-bind-pet${i}.skills type="checkbox" value="${skill}">${skill}</label>`))
 
     const zones_html = selectedOption + mapOption(zonesWithBiteTimes)
-    const level_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`)
+    const level_html = selectedOption + [0, 1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`)
     const lifeskill_level_html = selectedOption + mapOption(lifeskill_levels)
     const rods_html = selectedOption + mapOption(rods)
     const chairs_html = selectedOption + noneOption + mapOption(chairs)
@@ -198,18 +198,8 @@
     const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr))
     const calcBiteTime = (zone, level, resources) => {
         const {min, avg, max} = getBiteTimes(zone)
-        let factor_level = 1 - 0.15 // level 0 gives 15% reduction
-        switch (level) {
-            case 0: // level 0 gives 15% reduction (ask PA...)
-                factor_level = 1 - 0.15
-                break
-            case 1: // level 1 gives 30% reduction
-                factor_level = 1 - 0.3
-                break
-            default: // level 2-5 gives 30% + 5% reduction per level
-                factor_level = 1 - (0.3 + 0.05 * (level - 1))
-                break
-        }
+        let reductions = [ 0.15, 0.3, 0.35, 0.4, 0.45, 0.5 ]
+        let factor_level = 1 - (reductions[level] ?? 0)
         let factor_resources = 2 - resources / 100
         console.log(JSON.stringify({
             avg: avg,
@@ -217,10 +207,16 @@
             factor_resources: factor_resources,
             final: avg * factor_level * factor_resources
         }))
-        return (avg * factor_level * factor_resources)
+        const combinedBiteTimeFactor = factor_level * factor_resources
+        const minMod = min * combinedBiteTimeFactor
+        const maxMod = max * combinedBiteTimeFactor
+        const correctedAvg = (minMod + maxMod) / 2
+        return correctedAvg
     }
 
-    const calcUnoptimizedTime = (zone, active) => calcBiteTime(zone, 1, 0) + (active ? CATCH_TIME_ACTIVE : CATCH_TIME_AFK + MAX_AUTOFISHING_TIME)
+    const calcUnoptimizedTime = (zone, active) => {
+      return calcBiteTime(zone, 0, 0) + (active ? CATCH_TIME_ACTIVE : CATCH_TIME_AFK + MAX_AUTOFISHING_TIME)
+    }
     const calcPercentageOfAverageTime = (time, zone, active) => (time / calcUnoptimizedTime(zone, active)) * 100
 
     const calcAbundancyLabel = (percentage) => {
