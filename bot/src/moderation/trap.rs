@@ -1,18 +1,18 @@
 //! Trap channel enforcement:
 //! - Kick the member (fallback to timeout if hierarchy/perms block)
 //! - Reply to the offending message
+//! - Notify #mod-info (forward)
 //! - Purge their recent messages via UserRecentIndex (default 60s)
-//! - Notify #mod-info
 //!
 //! Env:
 //! - TRAP_CHANNEL_ID        : u64 (required)
-//! 
+//!
 //! Permissions needed: Manage Messages, Kick Members, Moderate Members, Send Messages (#mod-info)
 
 use std::env;
 use std::str::FromStr;
 
-use crate::moderation::notify_moderators;
+use crate::moderation::forward_to_mod_info;
 use crate::moderation::purge::UserRecentIndex;
 use crate::poke::pick_phrase;
 use poise::serenity_prelude as serenity;
@@ -116,7 +116,7 @@ pub async fn trap_event_handler(
                     cfg.fallback_timeout_min,
                     "Trap channel violation",
                 )
-                    .await
+                .await
                 {
                     tracing::warn!(
                         "Timeout fallback failed for {}: {:?}",
@@ -139,28 +139,31 @@ pub async fn trap_event_handler(
                 tracing::warn!("Failed to reply: {e:?}");
             }
 
-            // 3) Purge recent messages (guild-wide) using the index
+            // 3) Notify moderators
+            let action_notice = format!(
+                "[TRAP] Action: **{}** | User: <@{}> | Channel: <#{}> | Purge window: {}s",
+                action, new_message.author.id, new_message.channel_id, cfg.purge_window_secs
+            );
+            if let Err(e) = forward_to_mod_info(&ctx.http, new_message, &action_notice).await {
+                tracing::warn!(
+                    "Failed to notify mods: {:?} | Original notice: {}",
+                    e,
+                    action_notice
+                );
+            };
+
+            // 4) Purge recent messages (guild-wide) using the index
             if let Err(e) = index
                 .purge_recent(
                     &ctx.http,
                     new_message.author.id,
                     cfg.purge_window_secs,
-                    None
+                    None,
                 )
                 .await
             {
                 tracing::warn!("Purge after trap failed: {:?}", e);
             }
-
-            // 4) Notify moderators
-            let _ = notify_moderators(
-                &ctx.http,
-                format!(
-                    "[TRAP] Action: **{}** | User: <@{}> | Channel: <#{}> | Purge window: {}s",
-                    action, new_message.author.id, new_message.channel_id, cfg.purge_window_secs
-                ),
-            )
-            .await;
         }
         _ => {}
     }

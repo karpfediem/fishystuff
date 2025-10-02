@@ -3,11 +3,11 @@
 //! Triggers on either:
 //!   A) Cross-channel burst: user posts in >= MIN_CHANNELS distinct channels within WINDOW_SECS,
 //!      and >= MIN_MESSAGES total within that window.
-//!      -> Kick (fallback to timeout) -> Reply (sticker message text) -> Purge via index -> Notify mods
+//!      -> Kick (fallback to timeout) -> Reply (sticker message text) -> Notify mods (forward) -> Purge via index
 //!
 //!   B) Single-channel spam: user posts >= CHAN_SPAM_MIN_MESSAGES in the same channel within
 //!      CHAN_SPAM_WINDOW_SECS.
-//!      -> Timeout X minutes -> Reply (sticker message text) -> Purge via index -> Notify mods
+//!      -> Timeout X minutes -> Reply (sticker message text) -> Notify mods (forward) -> Purge via index
 //!
 //! Permissions: Manage Messages, Kick Members, Moderate Members, Send Messages (#mod-info)
 
@@ -20,7 +20,7 @@ use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Builder, CreateMessage};
 use serenity::FullEvent;
 use tokio::sync::RwLock;
-use crate::moderation::{notify_moderators, timeout_member, Error};
+use crate::moderation::{forward_to_mod_info, timeout_member, Error};
 use crate::poke::pick_phrase;
 
 const PHRASES: &[&str] = &[
@@ -162,16 +162,20 @@ pub async fn burst_event_handler(
             tracing::warn!("Failed to reply: {e:?}");
         }
 
-        // 3) Purge via index (include triggering message)
+        // 3) Notify moderators
+        let action_notice =format!(
+            "[BURST] Action: **{}** | User: <@{}> | Distinct channels: {} | Total msgs: {} | Window: {}s | Trigger in <#{}> | Purge Window: {}s ",
+            action, new_message.author.id, distinct_channels, total_msgs, state.cfg.window_secs, new_message.channel_id, state.cfg.purge_window_secs
+        );
+        if let Err(e) = forward_to_mod_info(&ctx.http, new_message, &action_notice).await {
+            tracing::warn!("Failed to notify mods: {:?} | Original notice: {}", e, action_notice);
+        };
+
+
+        // 4) Purge via index (include triggering message)
         if let Err(e) = index.purge_recent(&ctx.http, new_message.author.id, state.cfg.purge_window_secs, None).await {
             tracing::warn!("Purge after cross-channel burst failed: {:?}", e);
         }
-
-        // 4) Notify moderators
-        let _ = notify_moderators(&ctx.http, format!(
-            "[BURST] Action: **{}** | User: <@{}> | Distinct channels: {} | Total msgs: {} | Window: {}s | Trigger in <#{}> | Purge Window: {}s ",
-            action, new_message.author.id, distinct_channels, total_msgs, state.cfg.window_secs, new_message.channel_id, state.cfg.purge_window_secs
-        )).await;
 
         return Ok(());
     }
@@ -206,22 +210,24 @@ pub async fn burst_event_handler(
                 tracing::warn!("Timeout failed for {}: {:?}", new_message.author.id, e);
             }
 
-            // 3) Purge (use the broader purge window)
+            // 3) Notify moderators
+            let action_notice = format!(
+                "[SPAM] Muted <@{}> for {}m | {} msgs in <#{}> within {}s | Purge window: {}s",
+                new_message.author.id,
+                state.cfg.chan_timeout_minutes,
+                top_count,
+                top_chan,
+                state.cfg.chan_window_secs,
+                state.cfg.purge_window_secs
+            );
+            if let Err(e) = forward_to_mod_info(&ctx.http, new_message, &action_notice).await {
+                tracing::warn!("Failed to notify mods: {:?} | Original notice: {}", e, action_notice);
+            };
+
+            // 4) Purge (use the broader purge window)
             if let Err(e) = index.purge_recent(&ctx.http, new_message.author.id, state.cfg.purge_window_secs, None).await {
                 tracing::warn!("Purge after single-channel spam failed: {:?}", e);
             }
-
-            // 4) Notify moderators
-            let _ = notify_moderators(&ctx.http, format!(
-                    "[SPAM] Muted <@{}> for {}m | {} msgs in <#{}> within {}s | Purge window: {}s",
-                    new_message.author.id,
-                    state.cfg.chan_timeout_minutes,
-                    top_count,
-                    top_chan,
-                    state.cfg.chan_window_secs,
-                    state.cfg.purge_window_secs
-                )
-            ).await;
         }
     }
 
