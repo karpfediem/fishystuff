@@ -44,15 +44,15 @@ const PHRASES: &[&str] = &[
     "I'm going to *Qweek* your ass!"
 ];
 
-fn respond() -> String {
+pub fn pick_phrase(phrases: &[&str]) -> String {
     let mut rng = rand::rng();
 
-    PHRASES.choose(&mut rng).unwrap_or(&"Qweek!").to_string()
+    phrases.choose(&mut rng).unwrap_or(&"Qweek!").to_string()
 }
 
 /// Poke Crio, see what happens
 #[poise::command(slash_command, prefix_command)]
 pub async fn poke(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.say(respond()).await?;
+    ctx.say(pick_phrase(PHRASES)).await?;
     Ok(())
 }
