@@ -2,7 +2,6 @@ use crate::utils::fuzzy::gen_autocomplete;
 use crate::{Context, Error};
 use futures::{stream, Stream};
 use std::str::FromStr;
-use poise::serenity_prelude::{Builder, CreateInteractionResponseFollowup, CreateMessage};
 use strum::{Display, EnumIter, EnumString, IntoEnumIterator};
 
 #[derive(EnumIter, EnumString, Display, Debug, Eq, PartialEq, Hash)]

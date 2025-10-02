@@ -1,18 +1,18 @@
 //! Sample pagination implementation
 // MIT License
-// 
+//
 // Copyright (c) 2021 kangalioo
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -20,7 +20,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-// 
+//
 // Adopted from https://github.com/serenity-rs/poise/blob/518ff0564865bca2abf01ae8995b77340f439ef9/src/builtins/paginate.rs#L35
 // Changed to work with Vec<String> and newer poise function signatures
 
@@ -56,10 +56,7 @@ use poise::serenity_prelude as serenity;
 /// ```
 ///
 /// ![Screenshot of output](https://i.imgur.com/JGFDveA.png)
-pub async fn paginate(
-    ctx: crate::Context<'_>,
-    pages: Vec<String>,
-) -> Result<(), serenity::Error> {
+pub async fn paginate(ctx: crate::Context<'_>, pages: Vec<String>) -> Result<(), serenity::Error> {
     // Define some unique identifiers for the navigation buttons
     let ctx_id = ctx.id();
     let prev_button_id = format!("{}prev", ctx_id);
@@ -105,9 +102,9 @@ pub async fn paginate(
             continue;
         }
 
-        let page = pages
-            .get(current_page)
-            .ok_or(serenity::Error::Other(format!("Can't show page {}", current_page).leak()))?;
+        let page = pages.get(current_page).ok_or(serenity::Error::Other(
+            format!("Can't show page {}", current_page).leak(),
+        ))?;
         // Update the message with the new page contents
         press
             .create_response(

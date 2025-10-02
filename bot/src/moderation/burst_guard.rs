@@ -16,12 +16,12 @@ use std::env;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::moderation::{forward_to_mod_info, timeout_member, Error};
+use crate::poke::pick_phrase;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Builder, CreateMessage};
 use serenity::FullEvent;
 use tokio::sync::RwLock;
-use crate::moderation::{forward_to_mod_info, timeout_member, Error};
-use crate::poke::pick_phrase;
 
 const PHRASES: &[&str] = &[
     "Crio pokes you",
@@ -43,7 +43,6 @@ const PHRASES: &[&str] = &[
     "I have come here to chew chum and fish bass, and I'm all out of chum",
     "I'm going to *Qweek* your ass!",
 ];
-
 
 #[derive(Clone)]
 pub struct BurstState {
@@ -72,21 +71,51 @@ struct BurstConfig {
 
 impl Default for BurstConfig {
     fn default() -> Self {
-        let burst_timeout_min = env::var("BURST_TIMEOUT_MINUTES").ok().and_then(|s| s.parse().ok()).unwrap_or(60);
+        let burst_timeout_min = env::var("BURST_TIMEOUT_MINUTES")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(60);
         Self {
             // Cross-channel
-            window_secs: env::var("BURST_WINDOW_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(5),
-            min_channels: env::var("BURST_MIN_CHANNELS").ok().and_then(|s| s.parse().ok()).unwrap_or(3),
-            min_messages: env::var("BURST_MIN_MESSAGES").ok().and_then(|s| s.parse().ok()).unwrap_or(3),
-            cooldown_secs: env::var("BURST_COOLDOWN_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(30),
-            purge_window_secs: env::var("BURST_PURGE_WINDOW_S").ok().and_then(|s| s.parse().ok()).unwrap_or(60),
+            window_secs: env::var("BURST_WINDOW_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(5),
+            min_channels: env::var("BURST_MIN_CHANNELS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(3),
+            min_messages: env::var("BURST_MIN_MESSAGES")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(3),
+            cooldown_secs: env::var("BURST_COOLDOWN_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+            purge_window_secs: env::var("BURST_PURGE_WINDOW_S")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(60),
             timeout_minutes: burst_timeout_min,
 
             // Single-channel
-            chan_window_secs: env::var("CHAN_SPAM_WINDOW_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(4),
-            chan_min_messages: env::var("CHAN_SPAM_MIN_MESSAGES").ok().and_then(|s| s.parse().ok()).unwrap_or(8),
-            chan_cooldown_secs: env::var("CHAN_SPAM_COOLDOWN_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(30),
-            chan_timeout_minutes: env::var("CHAN_SPAM_TIMEOUT_MINUTES").ok().and_then(|s| s.parse().ok()).unwrap_or(5),
+            chan_window_secs: env::var("CHAN_SPAM_WINDOW_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(4),
+            chan_min_messages: env::var("CHAN_SPAM_MIN_MESSAGES")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(8),
+            chan_cooldown_secs: env::var("CHAN_SPAM_COOLDOWN_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(30),
+            chan_timeout_minutes: env::var("CHAN_SPAM_TIMEOUT_MINUTES")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(5),
         }
     }
 }
@@ -115,14 +144,24 @@ pub async fn burst_event_handler(
     state: &BurstState,
     index: &crate::moderation::purge::UserRecentIndex,
 ) -> Result<(), Error> {
-    let FullEvent::Message { new_message } = event else { return Ok(()); };
-    if new_message.author.bot { return Ok(()); }
-    let Some(guild_id) = new_message.guild_id else { return Ok(()); };
+    let FullEvent::Message { new_message } = event else {
+        return Ok(());
+    };
+    if new_message.author.bot {
+        return Ok(());
+    }
+    let Some(guild_id) = new_message.guild_id else {
+        return Ok(());
+    };
 
     // Gather recent activity for this author (use max of the two windows so we don't double-fetch)
     let window_for_fetch = state.cfg.window_secs.max(state.cfg.chan_window_secs);
-    let per_channel = index.collect_since(new_message.author.id, window_for_fetch).await;
-    if per_channel.is_empty() { return Ok(()); }
+    let per_channel = index
+        .collect_since(new_message.author.id, window_for_fetch)
+        .await;
+    if per_channel.is_empty() {
+        return Ok(());
+    }
 
     // ----- A) Cross-channel burst -----
     let distinct_channels = per_channel.len() as u64;
@@ -134,18 +173,41 @@ pub async fn burst_event_handler(
         {
             let map = state.last_cross_trigger.read().await;
             if let Some(&last) = map.get(&new_message.author.id) {
-                if now - last < state.cfg.cooldown_secs as i64 { return Ok(()); }
+                if now - last < state.cfg.cooldown_secs as i64 {
+                    return Ok(());
+                }
             }
         }
-        { state.last_cross_trigger.write().await.insert(new_message.author.id, now); }
+        {
+            state
+                .last_cross_trigger
+                .write()
+                .await
+                .insert(new_message.author.id, now);
+        }
 
         // 1) Kick (fallback to timeout)
         let mut action = "kick";
-        if let Err(e) = guild_id.kick_with_reason(&ctx.http, new_message.author.id, "Spam").await {
+        if let Err(e) = guild_id
+            .kick_with_reason(&ctx.http, new_message.author.id, "Spam")
+            .await
+        {
             tracing::warn!("Kick failed for {}: {:?}", new_message.author.id, e);
             action = "timeout";
-            if let Err(e2) = timeout_member(ctx, guild_id, new_message.author.id, state.cfg.timeout_minutes, "Spam: Burst across multiple channels").await {
-                tracing::warn!("Timeout fallback failed for {}: {:?}", new_message.author.id, e2);
+            if let Err(e2) = timeout_member(
+                ctx,
+                guild_id,
+                new_message.author.id,
+                state.cfg.timeout_minutes,
+                "Spam: Burst across multiple channels",
+            )
+            .await
+            {
+                tracing::warn!(
+                    "Timeout fallback failed for {}: {:?}",
+                    new_message.author.id,
+                    e2
+                );
                 action = "none";
             }
         }
@@ -163,17 +225,28 @@ pub async fn burst_event_handler(
         }
 
         // 3) Notify moderators
-        let action_notice =format!(
+        let action_notice = format!(
             "[BURST] Action: **{}** | User: <@{}> | Distinct channels: {} | Total msgs: {} | Window: {}s | Trigger in <#{}> | Purge Window: {}s ",
             action, new_message.author.id, distinct_channels, total_msgs, state.cfg.window_secs, new_message.channel_id, state.cfg.purge_window_secs
         );
         if let Err(e) = forward_to_mod_info(&ctx.http, new_message, &action_notice).await {
-            tracing::warn!("Failed to notify mods: {:?} | Original notice: {}", e, action_notice);
+            tracing::warn!(
+                "Failed to notify mods: {:?} | Original notice: {}",
+                e,
+                action_notice
+            );
         };
 
-
         // 4) Purge via index (include triggering message)
-        if let Err(e) = index.purge_recent(&ctx.http, new_message.author.id, state.cfg.purge_window_secs, None).await {
+        if let Err(e) = index
+            .purge_recent(
+                &ctx.http,
+                new_message.author.id,
+                state.cfg.purge_window_secs,
+                None,
+            )
+            .await
+        {
             tracing::warn!("Purge after cross-channel burst failed: {:?}", e);
         }
 
@@ -181,7 +254,9 @@ pub async fn burst_event_handler(
     }
 
     // ----- B) Single-channel spam -----
-    let per_channel_single = index.collect_since(new_message.author.id, state.cfg.chan_window_secs).await;
+    let per_channel_single = index
+        .collect_since(new_message.author.id, state.cfg.chan_window_secs)
+        .await;
     if !per_channel_single.is_empty() {
         let (top_chan, top_count) = per_channel_single
             .iter()
@@ -195,18 +270,32 @@ pub async fn burst_event_handler(
             {
                 let map = state.last_chan_trigger.read().await;
                 if let Some(&last) = map.get(&new_message.author.id) {
-                    if now - last < state.cfg.chan_cooldown_secs as i64 { return Ok(()); }
+                    if now - last < state.cfg.chan_cooldown_secs as i64 {
+                        return Ok(());
+                    }
                 }
             }
-            { state.last_chan_trigger.write().await.insert(new_message.author.id, now); }
+            {
+                state
+                    .last_chan_trigger
+                    .write()
+                    .await
+                    .insert(new_message.author.id, now);
+            }
 
             // 1) Reply to the triggering message
             let _ = new_message.reply_ping(ctx, "**Please slow down**").await;
 
             // 2) Timeout (mute) for configured minutes
             if let Err(e) = timeout_member(
-                ctx, guild_id, new_message.author.id, state.cfg.chan_timeout_minutes, "Spam: Rapid spam in a single channel"
-            ).await {
+                ctx,
+                guild_id,
+                new_message.author.id,
+                state.cfg.chan_timeout_minutes,
+                "Spam: Rapid spam in a single channel",
+            )
+            .await
+            {
                 tracing::warn!("Timeout failed for {}: {:?}", new_message.author.id, e);
             }
 
@@ -221,11 +310,23 @@ pub async fn burst_event_handler(
                 state.cfg.purge_window_secs
             );
             if let Err(e) = forward_to_mod_info(&ctx.http, new_message, &action_notice).await {
-                tracing::warn!("Failed to notify mods: {:?} | Original notice: {}", e, action_notice);
+                tracing::warn!(
+                    "Failed to notify mods: {:?} | Original notice: {}",
+                    e,
+                    action_notice
+                );
             };
 
             // 4) Purge (use the broader purge window)
-            if let Err(e) = index.purge_recent(&ctx.http, new_message.author.id, state.cfg.purge_window_secs, None).await {
+            if let Err(e) = index
+                .purge_recent(
+                    &ctx.http,
+                    new_message.author.id,
+                    state.cfg.purge_window_secs,
+                    None,
+                )
+                .await
+            {
                 tracing::warn!("Purge after single-channel spam failed: {:?}", e);
             }
         }
@@ -233,4 +334,3 @@ pub async fn burst_event_handler(
 
     Ok(())
 }
-

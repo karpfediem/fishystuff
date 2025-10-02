@@ -1,6 +1,8 @@
-
 use poise::serenity_prelude as serenity;
-use serenity::{model::guild::{Member, Role}, model::permissions::Permissions};
+use serenity::{
+    model::guild::{Member, Role},
+    model::permissions::Permissions,
+};
 use std::collections::HashMap;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -44,7 +46,9 @@ pub async fn debug_kickability(
         tracing::warn!("Missing Kick Members (or Administrator) on the bot’s roles.");
     }
     if !hierarchy_ok {
-        tracing::warn!("Role hierarchy blocks action: raise the bot’s top role above the target’s.");
+        tracing::warn!(
+            "Role hierarchy blocks action: raise the bot’s top role above the target’s."
+        );
     }
     if is_owner {
         tracing::warn!("Cannot kick the guild owner.");

@@ -1,6 +1,5 @@
 use crate::{Context, Error};
 use rand::prelude::IndexedRandom;
-use rand::Rng;
 const PHRASES: &[&str] = &[
     "you tickled my whiskers!",
     "don't touch what you can't afford",

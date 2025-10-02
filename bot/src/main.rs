@@ -40,13 +40,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![
-                help(),
-                waypoints(),
-                zones(),
-                poke(),
-                talk(),
-            ],
+            commands: vec![help(), waypoints(), zones(), poke(), talk()],
             event_handler: |ctx, event, _framework, data| {
                 Box::pin(async move {
                     // 1) Record all messages into the rolling index once

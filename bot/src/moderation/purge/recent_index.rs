@@ -82,7 +82,10 @@ impl UserRecentIndex {
             if e.ts_secs < cutoff {
                 break;
             }
-            per_channel.entry(e.channel_id).or_default().push(e.message_id);
+            per_channel
+                .entry(e.channel_id)
+                .or_default()
+                .push(e.message_id);
         }
 
         per_channel

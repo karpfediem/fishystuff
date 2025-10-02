@@ -4,9 +4,10 @@ pub(crate) mod purge;
 mod trap;
 
 pub use burst_guard::*;
-use poise::serenity_prelude::Error::Url;
-use poise::serenity_prelude::{Builder, CacheHttp, ChannelId, Context, CreateMessage, EditMember, GuildId, Message, MessageId, MessageReference, MessageReferenceKind, Timestamp, UserId};
-use poise::CreateReply;
+use poise::serenity_prelude::{
+    Builder, CacheHttp, ChannelId, Context, CreateMessage, EditMember, GuildId, Message,
+    MessageReference, MessageReferenceKind, Timestamp, UserId,
+};
 pub use trap::*;
 
 const MOD_INFO_CHANNEL_ID: u64 = 211092999835222017;
@@ -17,10 +18,16 @@ pub async fn forward_to_mod_info(
     content: impl Into<String>,
 ) -> poise::serenity_prelude::Result<Message> {
     let mod_channel_id = ChannelId::new(MOD_INFO_CHANNEL_ID);
-    let forward = MessageReference::new(MessageReferenceKind::Forward, offending_message.channel_id).message_id(offending_message.id);
+    let forward =
+        MessageReference::new(MessageReferenceKind::Forward, offending_message.channel_id)
+            .message_id(offending_message.id);
 
-    mod_channel_id.send_message(&http, CreateMessage::new().reference_message(forward)).await;
-    mod_channel_id.send_message(&http, CreateMessage::new().content(content)).await
+    mod_channel_id
+        .send_message(&http, CreateMessage::new().reference_message(forward))
+        .await;
+    mod_channel_id
+        .send_message(&http, CreateMessage::new().content(content))
+        .await
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
