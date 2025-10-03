@@ -5,16 +5,37 @@
     <div id="content">
         <div class="guide-layout">
             <aside class="guide-sidebar">
-                <ul :if="$page.isSection()">
-                    <li :loop="$page.subpagesAlphabetic()">
-                        <a href="$loop.it.link()" :text="$loop.it.title" class="$loop.it.isCurrent().then('active')"></a>
-                    </li>
-                </ul>
-                <ul :if="$page.isSection().not()">
-                    <li :loop="$page.parentSection().subpagesAlphabetic()">
-                        <a href="$loop.it.link()" :text="$loop.it.title" class="$loop.it.isCurrent().then('active')"></a>
-                    </li>
-                </ul>
+
+                <!-- TOC: show for both sections and leaves, if enabled and non-empty -->
+                <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
+                    <nav class="toc">
+                        <h3>On this page</h3>
+                        <div :html="$page.toc()"></div>
+                    </nav>
+                </ctx>
+
+                <!-- Section index: list its subpages -->
+                <ctx :if="$page.isSection()">
+                    <ul :loop="$page.subpagesAlphabetic()">
+                        <li>
+                            <a href="$loop.it.link()"
+                               :text="$loop.it.title"
+                               class="$loop.it.isCurrent().then('active')"></a>
+                        </li>
+                    </ul>
+                </ctx>
+
+                <!-- Leaf page: list siblings from parent section -->
+                <ctx :if="$page.isSection().not()">
+                    <ul :loop="$page.parentSection().subpagesAlphabetic()">
+                        <li>
+                            <a href="$loop.it.link()"
+                               :text="$loop.it.title"
+                               class="$loop.it.isCurrent().then('active')"></a>
+                        </li>
+                    </ul>
+                </ctx>
+
             </aside>
 
             <main class="guide-content" id="guide-content">
