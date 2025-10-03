@@ -2,7 +2,7 @@
 .title = "Fishing Zones Explained",
 .date = @date("2025-03-25T00:00:00"),
 .author = "Karpfen and Paghur",
-.layout = "guide.shtml",
+.layout = "guide_page.shtml",
 .draft = false,
 ---
 

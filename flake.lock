@@ -676,11 +676,11 @@
         "zig2nix": "zig2nix_2"
       },
       "locked": {
-        "lastModified": 1745344130,
-        "narHash": "sha256-j25o7kW+HpRp2Xf3jwTQ2Yhm9nDL0qQpGSV+GauvgYM=",
+        "lastModified": 1755795264,
+        "narHash": "sha256-G6gdaVQWyX+0H3wRhCt3vgMA8IXJRjkjbZcPzlou+Ek=",
         "owner": "kristoff-it",
         "repo": "zine",
-        "rev": "aa43d44c2d271cb309549e8d7eab0a7fe6bb06f2",
+        "rev": "b96e930630f8237aa4927fe14b9cb227061155d3",
         "type": "github"
       },
       "original": {

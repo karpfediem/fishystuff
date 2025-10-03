@@ -2,7 +2,7 @@
 .title = "Hotspot Fishing",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
-.layout = "guide.shtml",
+.layout = "guide_page.shtml",
 .draft = false,
 ---
 

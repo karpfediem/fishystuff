@@ -2,7 +2,7 @@
 .title = "Guides",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
-.layout = "guides.shtml",
+.layout = "guide_index.shtml",
 .draft = false,
 ---
 # By objective

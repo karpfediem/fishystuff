@@ -2,7 +2,7 @@
 .title = "Optimizing Durability Reduction Resistance",
 .date = @date("2025-04-05T00:00:00"),
 .author = "Karpfen",
-.layout = "guide.shtml",
+.layout = "guide_page.shtml",
 .draft = false,
 ---
 

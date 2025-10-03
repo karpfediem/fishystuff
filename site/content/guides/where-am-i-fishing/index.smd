@@ -2,7 +2,7 @@
 .title = "Where am I fishing?",
 .date = @date("2025-03-23T00:00:00"),
 .author = "flock",
-.layout = "guide.shtml",
+.layout = "guide_page.shtml",
 .draft = false,
 ---
 
