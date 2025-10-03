@@ -1,12 +1,9 @@
 <extend template="base.shtml">
 
-    <!-- Title block: leaf layouts will set the actual text -->
     <title id="title"><super></title>
 
     <head id="head">
-        <!-- ===== Basic SEO ===== -->
-
-        <!-- Description: prefer page.description else fallback -->
+        <!-- ===== Description (safe fallback via ctx guards) ===== -->
         <ctx :if="$page.description.len().gt(0)">
             <meta name="description" content="$page.description">
         </ctx>
@@ -14,10 +11,10 @@
             <meta name="description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
         </ctx>
 
-        <!-- Canonical (derived from current page URL only, robust) -->
+        <!-- Canonical -->
         <link rel="canonical" href="$site.host_url.addPath($page.link())">
 
-        <!-- Minimal hreflang (no locales loop) -->
+        <!-- Minimal hreflang -->
         <link rel="alternate" hreflang="$site.localeCode()" href="$page.link()">
         <link rel="alternate" hreflang="x-default" href="$site.link()">
 
@@ -26,7 +23,7 @@
         <link rel="icon" type="image/png" sizes="16x16" href="$site.asset('img/favicon-16x16.png').link()">
         <link rel="shortcut icon" href="$site.asset('img/favicon.ico').link()">
 
-        <!-- ===== Open Graph ===== -->
+        <!-- Open Graph -->
         <meta property="og:type" content="website">
         <meta property="og:title" content="$page.title">
         <ctx :if="$page.description.len().gt(0)">
@@ -36,7 +33,6 @@
             <meta property="og:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
         </ctx>
         <meta property="og:url" content="$site.host_url.addPath($page.link())">
-        <!-- OG image: use per-page override when present, else default -->
         <ctx :if="$page.custom.has('og_image')">
             <meta property="og:image" content="$site.host_url.addPath($page.custom.get('og_image'))">
         </ctx>
@@ -44,7 +40,7 @@
             <meta property="og:image" content="$site.host_url.addPath($site.asset('img/default_preview.png').link())">
         </ctx>
 
-        <!-- ===== Twitter ===== -->
+        <!-- Twitter -->
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:title" content="$page.title">
         <ctx :if="$page.description.len().gt(0)">
@@ -60,67 +56,96 @@
             <meta name="twitter:image" content="$site.host_url.addPath($site.asset('img/default_preview.png').link())">
         </ctx>
 
-        <!-- ===== Robots (optional) ===== -->
+        <!-- Robots (optional) -->
         <ctx :if="$page.custom.getOr('noindex', false)">
             <meta name="robots" content="noindex,follow">
         </ctx>
 
-        <!-- ===== Article dates ===== -->
+        <!-- Article dates -->
         <meta property="article:published_time" content="$page.date.format('2006-01-02T15:04:05Z07:00')">
         <ctx :if="$page.custom.has('updated')">
             <meta property="article:modified_time" content="$page.custom.get('updated').format('2006-01-02T15:04:05Z07:00')">
         </ctx>
-
-        <!-- Site CSS -->
-        <link rel="stylesheet" href="$site.asset('css/fonts.css').link()">
-        <link rel="stylesheet" href="$site.asset('css/fira_code.css').link()">
-        <link rel="stylesheet" href="$site.asset('css/style.css').link()">
-        <link rel="stylesheet" href="$site.asset('css/highlight.css').link()">
     </head>
 
+    <body id="body" class="bg-base-100">
+    <!-- Minimal, balanced nav -->
+    <nav id="menu">
+        <div class="mx-auto max-w-5xl px-4 py-3">
+            <!-- Responsive frame:
+                 - mobile: flex (title left, controls right)
+                 - md+:    grid with 3 columns -->
+            <div class="flex items-center justify-between md:grid md:grid-cols-3 md:gap-4">
+                <!-- Brand (left on desktop) -->
+                <div class="md:col-start-1 md:col-end-2">
+                    <a id="home-link"
+                       href="$site.link()"
+                       class="no-underline hover:underline focus:underline font-bold"
+                       :text="$site.title"></a>
+                </div>
 
-    <body id="body">
-    <nav id="menu" class="centered">
-        <a href="$site.link()" :text="$site.title"></a>
-        •
-        <a href="$site.page('quickstart').link()">Get Started</a>
-        •
-        <a href="$site.page('guides').link()">Guides</a>
-        •
-        <a href="$site.page('map').link()">Map</a>
-        •
-        <a href="$site.page('calculator').link()">Calculator</a>
-        •
-        <a href="$site.page('community').link()">Community</a>
-        •
-        <a href="$site.page('log').link()">Log</a>
+                <!-- Nav links (center on desktop; second row on mobile) -->
+                <div class="mt-2 w-max flex flex-wrap justify-center gap-x-3 gap-y-1 text-sm md:mt-0
+                  md:col-start-2 md:col-end-3 md:justify-self-center">
+                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('quickstart').link()">Get Started</a>
+                    <span class="select-none text-white">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('guides').link()">Guides</a>
+                    <span class="select-none text-white">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('map').link()">Map</a>
+                    <span class="select-none text-white">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('calculator').link()">Calculator</a>
+                    <span class="select-none text-white">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('community').link()">Community</a>
+                    <span class="select-none text-white">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('log').link()">Log</a>
+                </div>
 
-        <span class="lang-switch">
-        <strong>Language:</strong>
-        <a data-locale="en-US" href="/">en-US</a> /
-        <a data-locale="de-DE" href="/de-DE/">de-DE</a>
-      </span>
+                <!-- Controls (language / theme) (right on desktop; in top row on mobile) -->
+                <div class="flex items-center gap-3 text-xs md:col-start-3 md:col-end-4 md:justify-self-end">
+                    <!-- Language -->
+                    <nav aria-label="Language" class="flex items-center gap-1">
+                        <a data-locale="en-US" href="/"
+                           class="no-underline hover:underline focus:underline font-bold text-white">en-US</a>
+                        <span class="opacity-50 text-white select-none">/</span>
+                        <a data-locale="de-DE" href="/de-DE/"
+                           class="no-underline hover:underline focus:underline font-bold text-white">de-DE</a>
+                    </nav>
+
+                    <!-- Divider -->
+                    <span class="opacity-50 text-white select-none hidden sm:inline">|</span>
+
+                    <!-- Theme toggle (simple text button) -->
+                    <button type="button"
+                            class="no-underline hover:underline focus:underline font-bold text-white"
+                            onclick="toggleTheme()"
+                            aria-label="Toggle theme">
+                        Theme
+                    </button>
+                </div>
+            </div>
+        </div>
     </nav>
 
-    <div id="content">
+
+
+    <!-- Page container -->
+    <div id="content"
+         class="mx-auto w-full max-w-[80%] p-[3rem] mt-4 rounded-xl bg-base-300">
         <super>
     </div>
 
-    <!-- JS (one place) -->
-    <script src="$site.asset('js/lz-string.min.js').link()"></script>
-    <script src="$site.asset('js/datastar.js').link()"></script>
-    <script src="$site.asset('js/durationFormatter.js').link()"></script>
+    <!-- JS -->
     <script src="$site.asset('js/script.js').link()"></script>
 
-    <!-- Same-page language switcher (safe; no Scripty) -->
+    <!-- Same-page language switcher (static two-locale helper) -->
     <script>
         (function () {
             try {
                 var dePrefix = "/de-DE/";
                 var path = location.pathname;
                 if (!path.startsWith("/")) path = "/" + path;
-                var toEn = document.querySelector('.lang-switch a[data-locale="en-US"]');
-                var toDe = document.querySelector('.lang-switch a[data-locale="de-DE"]');
+                var toEn = document.querySelector('a[data-locale="en-US"]');
+                var toDe = document.querySelector('a[data-locale="de-DE"]');
                 if (!toEn || !toDe) return;
                 var isDe = path === dePrefix || path.startsWith(dePrefix);
                 var enPath = isDe ? path.slice(dePrefix.length - 1) : path;
@@ -134,7 +159,7 @@
         })();
     </script>
 
-    <!-- JSON-LD: generic WebPage on every page -->
+    <!-- JSON-LD: generic WebPage -->
     <script type="application/ld+json"
             :html="$site.asset('jsonld/webpage.json').bytes().fmt($site.host_url.addPath($page.custom.getOr('canonical', $page.link())),$page.title,$page.description)"></script>
     </body>

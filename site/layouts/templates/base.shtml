@@ -3,9 +3,50 @@
 <head id="head">
   <meta charset="UTF-8">
   <title id="title"><super></title>
+
+  <!-- Early load to prevent flashbang / layout shift due to scrollbar gutter -->
+  <style>
+    html, body { background: #111; }
+    /* Helps browsers choose the correct default palette for form controls, etc. */
+    :root { color-scheme: dark light; }
+
+    /* Prevent layout shift when the vertical scrollbar toggles */
+    html {
+      /* Always allocate space for the scrollbar */
+      overflow-y: scroll;
+
+      /* Reserve the gutter so the content width is stable */
+      scrollbar-gutter: stable;
+    }
+
+    /* If supported, reserve on both edges to keep centering perfectly stable */
+    @supports (scrollbar-gutter: stable both-edges) {
+      html { scrollbar-gutter: stable both-edges; }
+    }
+  </style>
+  <script>
+    (function () {
+      try {
+        var key = 'theme';
+        var stored = localStorage.getItem(key);
+        var useDark = stored ? (stored === 'dark')
+                : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = useDark ? 'dark' : 'light';
+        // Put data-theme on <html> so the whole tree can react immediately
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) { /* no-op */ }
+    })();
+  </script>
+  <!-- CSS -->
+  <link rel="stylesheet" href="$site.asset('css/fonts.css').link()">
+  <link rel="stylesheet" href="$site.asset('css/fira_code.css').link()">
+  <link rel="stylesheet" href="$site.asset('css/style.css').link()">
+  <link rel="stylesheet" href="$site.asset('css/highlight.css').link()">
+  <!-- Tailwind + daisyUI (compiled) -->
+  <link rel="stylesheet" href="$site.asset('css/site.css').link()">
   <super>
 </head>
-<body id="body">
+<body id="body" data-theme="dark" class="min-h-dvh bg-base-100 text-base-content">
 <super>
 </body>
 </html>

@@ -1,3 +1,21 @@
-# Runs the build and starts local http-server for you to preview the site under http://127.0.0.1:1990/
-serve:
-    zig build serve
+
+# one-off release
+release:
+    ~/code/clones/zine/result/bin/zine release --install .out
+
+# rebuild site whenever sources change (ignore .out)
+watch-release:
+    watchexec -r \
+      -w content -w layouts -w assets -w zine.ziggy \
+      --exts smd,shtml,ziggy,css,js \
+      -- ~/code/clones/zine/result/bin/zine release --install .out
+
+# tailwind watch (builds to site/assets/css/site.css)
+tw-watch:
+    tailwindcss -i tailwind.input.css -o assets/css/site.css -c tailwind.config.cjs --watch
+
+# dev: run both watchers concurrently
+dev:
+    just watch-release & \
+    just tw-watch & \
+    wait

@@ -53,9 +53,9 @@
         }
     }
 
-    const items = loadJSONSync('/static/items.json');
-    const zones = loadJSONSync('/static/zones.json');
-    const lifeskill_levels = loadJSONSync('/static/lifeskill_levels.json');
+    const items = loadJSONSync('/data/items.json');
+    const zones = loadJSONSync('/data/zones.json');
+    const lifeskill_levels = loadJSONSync('/data/lifeskill_levels.json');
 
     lifeskill_levels.sort((a, b) => (a.order > b.order) ? 1 : ((b.order > a.order) ? -1 : 0))
     zones.sort((a, b) => (a.name > b.name) ? 1 : ((b.name > a.name) ? -1 : 0))

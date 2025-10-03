@@ -1,61 +1,6 @@
 <extend template="with-nav.shtml">
   <title id="title" :text="$page.title"></title>
   <div id="content">
-    <style>
-      #page h2,
-      #page h3 {
-        text-align: left;
-      }
-
-      #page h2 {
-        font-size: 1.7rem;
-        border-bottom: 1px dashed #aaa;
-        margin-top: 2em;
-      }
-
-      #page h3 {
-        font-size: 1.5rem;
-      }
-
-      #page h4 {
-        font-size: 1rem;
-      }
-
-      .title,
-      .subtitle {
-        margin-bottom: 0;
-      }
-
-      .title {
-        font-size: 3rem;
-      }
-
-      .subtitle {
-        font-size: 2rem;
-      }
-
-      .get-started {
-        font-family: 'Itim', sans-serif;
-        font-weight: normal;
-        font-size: 2rem;
-        text-align: center;
-        margin: 1em;
-      }
-
-      .get-started a {
-        color: black;
-        font-weight: normal;
-        background-color: #ccc;
-        border: 1px solid #ccc;
-        border-radius: 0.25em;
-        padding: 3px 10px;
-        text-decoration: none;
-      }
-
-      .get-started a:hover {
-        background-color: white;
-      }
-    </style>
 
     <h1 class="centered title">Fishy Stuff</h1>
     <h2 class="centered subtitle">Everything you need to get fishing</h2>

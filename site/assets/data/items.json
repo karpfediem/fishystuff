@@ -27,7 +27,7 @@
     "exp_life": null,
     "id": 16167,
     "icon_id": 16167,
-    "icon": "/static/icons/items/00016167.webp"
+    "icon": "/img/items/00016167.webp"
   },
   {
     "name": "Awakening Weapon Outfit",
@@ -57,7 +57,7 @@
     "exp_life": null,
     "id": 9359,
     "icon_id": 9359,
-    "icon": "/static/icons/items/00009359.webp"
+    "icon": "/img/items/00009359.webp"
   },
   {
     "name": "Balenos Fishing Rod",
@@ -72,7 +72,7 @@
     "exp_life": null,
     "id": 16162,
     "icon_id": 16162,
-    "icon": "/static/icons/items/00016162.webp"
+    "icon": "/img/items/00016162.webp"
   },
   {
     "name": "Blacksmith's Blessing",
@@ -102,7 +102,7 @@
     "exp_life": null,
     "id": 16164,
     "icon_id": 16164,
-    "icon": "/static/icons/items/00016164.webp"
+    "icon": "/img/items/00016164.webp"
   },
   {
     "name": "Choice & Focus: Fishing",
@@ -132,7 +132,7 @@
     "exp_life": null,
     "id": 9307,
     "icon_id": 9307,
-    "icon": "/static/icons/items/00009307.webp"
+    "icon": "/img/items/00009307.webp"
   },
   {
     "name": "Cool Wind Fishing Rod",
@@ -147,7 +147,7 @@
     "exp_life": null,
     "id": 767187,
     "icon_id": 767187,
-    "icon": "/static/icons/items/00767187.webp"
+    "icon": "/img/items/00767187.webp"
   },
   {
     "name": "Crio Fisher's Chair",
@@ -162,7 +162,7 @@
     "exp_life": null,
     "id": 705538,
     "icon_id": 705538,
-    "icon": "/static/icons/items/00705538.webp"
+    "icon": "/img/items/00705538.webp"
   },
   {
     "name": "Crio's Fishing Chair",
@@ -177,7 +177,7 @@
     "exp_life": null,
     "id": 12831,
     "icon_id": 12831,
-    "icon": "/static/icons/items/00012831.webp"
+    "icon": "/img/items/00012831.webp"
   },
   {
     "name": "Crio's Sturdy Fishing Chair",
@@ -192,7 +192,7 @@
     "exp_life": null,
     "id": 12930,
     "icon_id": 12831,
-    "icon": "/static/icons/items/00012831.webp"
+    "icon": "/img/items/00012831.webp"
   },
   {
     "name": "Grandpa Cron's Fishing Rod",
@@ -207,7 +207,7 @@
     "exp_life": null,
     "id": 767158,
     "icon_id": 760976,
-    "icon": "/static/icons/items/00760976.webp"
+    "icon": "/img/items/00760976.webp"
   },
   {
     "name": "Lil' Otter Fishing Carrier \uD83E\uDDA6",
@@ -222,7 +222,7 @@
     "exp_life": null,
     "id": 830150,
     "icon_id": 830150,
-    "icon": "/static/icons/items/00830150.webp"
+    "icon": "/img/items/00830150.webp"
   },
   {
     "name": "Loggia Fishing Chair",
@@ -237,7 +237,7 @@
     "exp_life": null,
     "id": 705537,
     "icon_id": 705537,
-    "icon": "/static/icons/items/00705537.webp"
+    "icon": "/img/items/00705537.webp"
   },
   {
     "name": "Mainhand Weapon Outfit",
@@ -267,7 +267,7 @@
     "exp_life": null,
     "id": 705539,
     "icon_id": 705539,
-    "icon": "/static/icons/items/00705539.webp"
+    "icon": "/img/items/00705539.webp"
   },
   {
     "name": "Maple Float",
@@ -282,7 +282,7 @@
     "exp_life": null,
     "id": 16168,
     "icon_id": 16168,
-    "icon": "/static/icons/items/00016168.webp"
+    "icon": "/img/items/00016168.webp"
   },
   {
     "name": "Marvelous Balacs Lunchbox",
@@ -297,7 +297,7 @@
     "exp_life": null,
     "id": 9643,
     "icon_id": 9643,
-    "icon": "/static/icons/items/00009643.webp"
+    "icon": "/img/items/00009643.webp"
   },
   {
     "name": "Mediah Fishing Rod",
@@ -312,7 +312,7 @@
     "exp_life": null,
     "id": 16165,
     "icon_id": 16165,
-    "icon": "/static/icons/items/00016165.webp"
+    "icon": "/img/items/00016165.webp"
   },
   {
     "name": "Nibbles",
@@ -342,7 +342,7 @@
     "exp_life": null,
     "id": 16170,
     "icon_id": 16170,
-    "icon": "/static/icons/items/00016170.webp"
+    "icon": "/img/items/00016170.webp"
   },
   {
     "name": "Perfume of Swiftness",
@@ -357,7 +357,7 @@
     "exp_life": 0.2,
     "id": 735,
     "icon_id": 735,
-    "icon": "/static/icons/items/00000735.webp"
+    "icon": "/img/items/00000735.webp"
   },
   {
     "name": "Professional Fisher's Uniform (Costume)",
@@ -372,7 +372,7 @@
     "exp_life": 0.1,
     "id": 14330,
     "icon_id": 14071,
-    "icon": "/static/icons/items/00014071.webp"
+    "icon": "/img/items/00014071.webp"
   },
   {
     "name": "Seafood Cron Meal",
@@ -387,7 +387,7 @@
     "exp_life": 0.1,
     "id": 9691,
     "icon_id": 9691,
-    "icon": "/static/icons/items/00009691.webp"
+    "icon": "/img/items/00009691.webp"
   },
   {
     "name": "Sharp-Eyed Seagull",
@@ -417,7 +417,7 @@
     "exp_life": 0.3,
     "id": 721092,
     "icon_id": 721092,
-    "icon": "/static/icons/items/00721092.webp"
+    "icon": "/img/items/00721092.webp"
   },
   {
     "name": "Triple-Float Fishing Rod",
@@ -432,7 +432,7 @@
     "exp_life": null,
     "id": 16153,
     "icon_id": 16152,
-    "icon": "/static/icons/items/00016152.webp"
+    "icon": "/img/items/00016152.webp"
   },
   {
     "name": "Verdure Draught",
@@ -447,7 +447,7 @@
     "exp_life": 0.2,
     "id": 791,
     "icon_id": 791,
-    "icon": "/static/icons/items/00000791.webp"
+    "icon": "/img/items/00000791.webp"
   },
   {
     "name": "Whaling",
@@ -477,7 +477,7 @@
     "exp_life": 0.5,
     "id": 767163,
     "icon_id": 767163,
-    "icon": "/static/icons/items/00767163.webp"
+    "icon": "/img/items/00767163.webp"
   },
   {
     "name": "[Event] Wise Housekeeper",
@@ -492,6 +492,6 @@
     "exp_life": null,
     "id": 768437,
     "icon_id": 768437,
-    "icon": "/static/icons/items/00768437.webp"
+    "icon": "/img/items/00768437.webp"
   }
 ]
