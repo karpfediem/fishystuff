@@ -1,51 +1,51 @@
-<extend template="base.shtml">
-<title id="title" :text="$page.title"></title>
-<head id="head">
-  <script async src="https://bdolytics.com/tooltip/script.js"></script>
-</head>
-<div id="content">
-  <style>
-    h1 {
-		margin-top: 0;
-	}
+<extend template="with-guide-nav.shtml">
 
-	#guides h1 {
-       margin-top: 1.5em;
-     }
-     h3 {
-       margin-bottom: 0;
-     }
+  <title id="title" :text="$page.title"></title>
 
-		#guides h2, #guides h3 {
-			text-align: left;
-		}
+  <main id="guide-content">
+    <article class="doc">
+      <header class="page-header">
+        <h1 :text="$page.title"></h1>
 
-		#guides h3 {
-			font-size: 1.5rem;
-		}
+        <p class="meta">
+          <span :if="$page.author.len().gt(0)">By <span :text="$page.author"></span></span>
+          <span>
+          · ~<span :text="$page.wordCount().div(200).plus(1)"></span>
+          <span :text="$i18n.getOr('minutes_read_suffix',' min read')"></span>
+        </span>
+        </p>
 
-		#guides h2 {
-			font-size: 1.5rem;
-			border-bottom: 1px dashed #aaa;
-			margin-top: 2em;
-		}
+        <p class="meta meta-dates">
+          <!-- Show updated first when present -->
+          <span :if="$page.custom.get?('updated')">
+          <strong :text="$i18n.getOr('last_updated','Last updated')"></strong>:
+          <time :text="$if.format('January 02, 2006')"></time>
+        </span>
 
-		#guides h4 {
-			font-size: 1rem;
-		}
+          <!-- Always show original posting date -->
+          <span>
+          <strong :text="$i18n.getOr('originally_posted','Originally posted')"></strong>:
+          <time :text="$page.date.format('January 02, 2006')"></time>
+        </span>
+        </p>
+      </header>
 
-  table {
-    font-size: 0.9em;
-  }
-  table th {
-    font-size: 1em;
-  }
-  table td {
-    white-space: nowrap;
-  }
-  </style>
-  <h3 class="centered">Fishy Stuff</h3>
-  <h1 :text="$page.title"></h1>
-  <h3>by <span :text="$page.author"></span></h3>
-  <div id="guides" :html="$page.content()"></div>
-</div>
+      <!-- Main content -->
+      <div class="doc-body" :html="$page.content()"></div>
+
+      <!-- Footnotes (if any) -->
+      <section class="footnotes" :if="$page.footnotes?()">
+        <div :html="$if.html()"></div>
+      </section>
+
+      <!-- Prev / Next within section -->
+      <nav class="pager">
+      <span class="prev" :if="$page.prevPage?()">
+        ← <a href="$if.link()" :text="$if.title"></a>
+      </span>
+        <span class="next" :if="$page.nextPage?()">
+        <a href="$if.link()" :text="$if.title"></a> →
+      </span>
+      </nav>
+    </article>
+  </main>

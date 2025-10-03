@@ -1,0 +1,13 @@
+{
+  "nav.get_started": "Get Started",
+  "nav.guides": "Guides",
+  "nav.map": "Map",
+  "nav.calculator": "Calculator",
+  "nav.community": "Community",
+  "nav.log": "Log",
+
+  "last_updated": "Last updated",
+  "originally_posted": "Originally posted",
+  "updated": "Updated",
+  "minutes_read_suffix": " min read"
+}

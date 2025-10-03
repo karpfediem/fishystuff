@@ -1,0 +1,24 @@
+<extend template="with-nav.shtml">
+
+    <title id="title"><super></title>
+
+    <div id="content">
+        <div class="guide-layout">
+            <aside class="guide-sidebar">
+                <ul :if="$page.isSection()">
+                    <li :loop="$page.subpagesAlphabetic()">
+                        <a href="$loop.it.link()" :text="$loop.it.title" class="$loop.it.isCurrent().then('active')"></a>
+                    </li>
+                </ul>
+                <ul :if="$page.isSection().not()">
+                    <li :loop="$page.parentSection().subpagesAlphabetic()">
+                        <a href="$loop.it.link()" :text="$loop.it.title" class="$loop.it.isCurrent().then('active')"></a>
+                    </li>
+                </ul>
+            </aside>
+
+            <main class="guide-content" id="guide-content">
+                <super>
+            </main>
+        </div>
+    </div>

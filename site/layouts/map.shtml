@@ -1,17 +1,12 @@
-<extend template="base.shtml">
-<title id="title" :text="$page.title"></title>
-<head id="head">
+<extend template="with-nav.shtml">
+  <title id="title" :text="$page.title"></title>
+<div id="content">
   <style>
-    #content {
+    iframe {
       width: 100%;
-      iframe {
-        width: 100%;
-        min-height: 30rem;
-      }
+      min-height: 30rem;
     }
   </style>
-</head>
-<div id="content">
   <div id="page" :html="$page.content()"></div>
   <iframe src="https://karpfen-fish.b-cdn.net" allow="clipboard-write"></iframe>
 </div>

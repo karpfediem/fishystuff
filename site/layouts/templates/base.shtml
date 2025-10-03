@@ -1,45 +1,11 @@
 <!DOCTYPE html>
 <html>
-  <head id="head">
-    <meta charset="UTF-8">
-    <meta name="description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
-    <meta name="twitter:title" content="$page.title.suffix(' | Fishy Stuff')">
-    <meta name="twitter:image" content="$site.host_url.addPath($site.asset('default_preview.png').link())">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="$page.title.suffix(' | Fishy Stuff')">
-    <meta property="og:image" content="$site.host_url.addPath($site.asset('default_preview.png').link())">
-    <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title id="title">
-      <super>
-      - Fishy Stuff
-    </title>
-    <link rel="stylesheet" type="text/css" href="$site.asset('fonts.css').link()">
-    <link rel="stylesheet" type="text/css" href="$site.asset('fira_code.css').link()">
-    <link rel="stylesheet" type="text/css" href="$site.asset('style.css').link()">
-    <link rel="stylesheet" type="text/css" href="$site.asset('highlight.css').link()">
-    <super>
-  </head>
-  <body>
-    <nav id="menu" class="centered">
-      <a href="/">Home</a>
-      •
-      <a href="$site.page('quickstart').link()">Get Started</a>
-      •
-      <a href="$site.page('guides').link()">Guides</a>
-      •
-      <a href="$site.page('map').link()">Map</a>
-      •
-      <a href="$site.page('calculator').link()">Calculator</a>
-      •
-      <a href="$site.page('community').link()">Community</a>
-      •
-      <a href="$site.page('log').link()">Log</a>
-    </nav>
-    <div id="content">
-      <super>
-    </div>
-  </body>
+<head id="head">
+  <meta charset="UTF-8">
+  <title id="title"><super></title>
+  <super>
+</head>
+<body id="body">
+<super>
+</body>
 </html>

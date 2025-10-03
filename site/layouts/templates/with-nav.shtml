@@ -1,0 +1,136 @@
+<extend template="base.shtml">
+
+    <!-- Title block: leaf layouts will set the actual text -->
+    <title id="title"><super></title>
+
+    <head id="head">
+        <!-- ===== Basic SEO ===== -->
+
+        <!-- Description: prefer page.description else fallback -->
+        <ctx :if="$page.description.len().gt(0)">
+            <meta name="description" content="$page.description">
+        </ctx>
+        <ctx :if="$page.description.len().gt(0).not()">
+            <meta name="description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
+        </ctx>
+
+        <!-- Canonical (derived from current page URL only, robust) -->
+        <link rel="canonical" href="$site.host_url.addPath($page.link())">
+
+        <!-- Minimal hreflang (no locales loop) -->
+        <link rel="alternate" hreflang="$site.localeCode()" href="$page.link()">
+        <link rel="alternate" hreflang="x-default" href="$site.link()">
+
+        <!-- Favicons -->
+        <link rel="icon" type="image/png" sizes="32x32" href="$site.asset('img/favicon-32x32.png').link()">
+        <link rel="icon" type="image/png" sizes="16x16" href="$site.asset('img/favicon-16x16.png').link()">
+        <link rel="shortcut icon" href="$site.asset('img/favicon.ico').link()">
+
+        <!-- ===== Open Graph ===== -->
+        <meta property="og:type" content="website">
+        <meta property="og:title" content="$page.title">
+        <ctx :if="$page.description.len().gt(0)">
+            <meta property="og:description" content="$page.description">
+        </ctx>
+        <ctx :if="$page.description.len().gt(0).not()">
+            <meta property="og:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
+        </ctx>
+        <meta property="og:url" content="$site.host_url.addPath($page.link())">
+        <!-- OG image: use per-page override when present, else default -->
+        <ctx :if="$page.custom.has('og_image')">
+            <meta property="og:image" content="$site.host_url.addPath($page.custom.get('og_image'))">
+        </ctx>
+        <ctx :if="$page.custom.has('og_image').not()">
+            <meta property="og:image" content="$site.host_url.addPath($site.asset('img/default_preview.png').link())">
+        </ctx>
+
+        <!-- ===== Twitter ===== -->
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:title" content="$page.title">
+        <ctx :if="$page.description.len().gt(0)">
+            <meta name="twitter:description" content="$page.description">
+        </ctx>
+        <ctx :if="$page.description.len().gt(0).not()">
+            <meta name="twitter:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
+        </ctx>
+        <ctx :if="$page.custom.has('og_image')">
+            <meta name="twitter:image" content="$site.host_url.addPath($page.custom.get('og_image'))">
+        </ctx>
+        <ctx :if="$page.custom.has('og_image').not()">
+            <meta name="twitter:image" content="$site.host_url.addPath($site.asset('img/default_preview.png').link())">
+        </ctx>
+
+        <!-- ===== Robots (optional) ===== -->
+        <ctx :if="$page.custom.getOr('noindex', false)">
+            <meta name="robots" content="noindex,follow">
+        </ctx>
+
+        <!-- ===== Article dates ===== -->
+        <meta property="article:published_time" content="$page.date.format('2006-01-02T15:04:05Z07:00')">
+        <ctx :if="$page.custom.has('updated')">
+            <meta property="article:modified_time" content="$page.custom.get('updated').format('2006-01-02T15:04:05Z07:00')">
+        </ctx>
+
+        <!-- Site CSS -->
+        <link rel="stylesheet" href="$site.asset('css/fonts.css').link()">
+        <link rel="stylesheet" href="$site.asset('css/fira_code.css').link()">
+        <link rel="stylesheet" href="$site.asset('css/style.css').link()">
+        <link rel="stylesheet" href="$site.asset('css/highlight.css').link()">
+    </head>
+
+
+    <body id="body">
+    <nav id="menu" class="centered">
+        <a href="$site.link()" :text="$site.title"></a>
+        •
+        <a href="$site.page('quickstart').link()">Get Started</a>
+        •
+        <a href="$site.page('guides').link()">Guides</a>
+        •
+        <a href="$site.page('map').link()">Map</a>
+        •
+        <a href="$site.page('calculator').link()">Calculator</a>
+        •
+        <a href="$site.page('community').link()">Community</a>
+        •
+        <a href="$site.page('log').link()">Log</a>
+
+        <span class="lang-switch">
+        <strong>Language:</strong>
+        <a data-locale="en-US" href="/">en-US</a> /
+        <a data-locale="de-DE" href="/de-DE/">de-DE</a>
+      </span>
+    </nav>
+
+    <div id="content">
+        <super>
+    </div>
+
+    <!-- JS (one place) -->
+    <script src="$site.asset('js/lz-string.min.js').link()"></script>
+    <script src="$site.asset('js/datastar.js').link()"></script>
+    <script src="$site.asset('js/durationFormatter.js').link()"></script>
+    <script src="$site.asset('js/script.js').link()"></script>
+
+    <!-- Same-page language switcher (safe; no Scripty) -->
+    <script>
+        (function () {
+            try {
+                var dePrefix = "/de-DE/";
+                var path = location.pathname;
+                if (!path.startsWith("/")) path = "/" + path;
+                var toEn = document.querySelector('.lang-switch a[data-locale="en-US"]');
+                var toDe = document.querySelector('.lang-switch a[data-locale="de-DE"]');
+                if (!toEn || !toDe) return;
+                var isDe = path === dePrefix || path.startsWith(dePrefix);
+                var enPath = isDe ? path.slice(dePrefix.length - 1) : path;
+                if (enPath.length === 0) enPath = "/";
+                var dePath = isDe ? path : (dePrefix + (path.startsWith("/") ? path.slice(1) : path));
+                enPath = enPath.replace(/\/{2,}/g, "/");
+                dePath = dePath.replace(/\/{2,}/g, "/");
+                toEn.setAttribute("href", enPath);
+                toDe.setAttribute("href", dePath);
+            } catch (_) {}
+        })();
+    </script>
+    </body>

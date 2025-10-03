@@ -1,0 +1,15 @@
+---
+.title = "Home",
+.date = @date("2025-03-23T00:00:00"),
+.author = "Karpfen",
+.layout = "empty.shtml",
+.draft = false,
+.tags = ["fishy", "stuff", "fish"],
+.custom = { .updated = @date("2025-10-01T12:34:56") },
+---
+
+## [About]($section.id('about'))
+
+
+
+

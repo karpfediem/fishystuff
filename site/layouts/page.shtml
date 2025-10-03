@@ -1,34 +1,36 @@
-<extend template="base.shtml">
-<title id="title" :text="$page.title"></title>
-<head id="head"></head>
-<div id="content">
-  <style>
-    h3.overtitle {
-       margin-bottom: 0;
-     }
-     h1.title {
-       margin-top: 0;
-     }
+<extend template="with-nav.shtml">
 
-		#page h2, #page h3 {
-			text-align: left;
-		}
+    <title id="title" :text="$page.title"></title>
 
-		#page h2 {
-			font-size: 1.7rem;
-			border-bottom: 1px dashed #aaa;
-			margin-top: 2em;
-		}
+    <div id="content">
+        <header class="page-header">
+            <h1 :text="$page.title"></h1>
 
-		#page h3 {
-			font-size: 1.5rem;
-		}
-    
-		#page h4 {
-			font-size: 1rem;
-		}
-  </style>
-  <h3 class="overtitle centered">Fishy Stuff</h3>
-  <h1 class="title" :text="$page.title"></h1>
-  <div id="page" :html="$page.content()"></div>
-</div>
+            <p class="meta">
+                <span :if="$page.author.len().gt(0)">By <span :text="$page.author"></span></span>
+                <span>
+          · ~<span :text="$page.wordCount().div(200).plus(1)"></span>
+          <span :text="$i18n.getOr('minutes_read_suffix',' min read')"></span>
+        </span>
+            </p>
+
+            <p class="meta meta-dates">
+                <!-- Updated (if present) -->
+                <span :if="$page.custom.get?('updated')">
+          <strong :text="$i18n.getOr('last_updated','Last updated')"></strong>:
+          <time :text="$if.format('January 02, 2006')"></time>
+        </span>
+                <!-- Always show original date ($page.date is Date) -->
+                <span>
+          <strong :text="$i18n.getOr('originally_posted','Originally posted')"></strong>:
+          <time :text="$page.date.format('January 02, 2006')"></time>
+        </span>
+            </p>
+        </header>
+
+        <div class="doc-body" :html="$page.content()"></div>
+
+        <section class="footnotes" :if="$page.footnotes?()">
+            <div :html="$if.html()"></div>
+        </section>
+    </div>

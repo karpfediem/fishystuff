@@ -1,15 +1,16 @@
-<extend template="base.shtml">
-<title id="title" :text="$page.title"></title>
-<head id="head">
-  <style>
-    #content {
-      width: 100%;
-    }
-  </style>
-</head>
-<div id="content">
-  <script src="$site.asset('durationFormatter.js').link()"></script>
-  <script src="$site.asset('lz-string.min.js').link()"></script>
+<extend template="with-nav.shtml">
+
+  <title id="title" :text="$page.title"></title>
+
+
+  <div id="content">
+  <!-- These must exist in assets/js/ and be listed in .static_assets -->
+  <script src="$site.asset('js/durationFormatter.js').link()"></script>
+  <script src="$site.asset('js/lz-string.min.js').link()"></script>
+
+  <!-- Page content (SuperMD can include the form / markup you need) -->
   <div id="page" :html="$page.content()"></div>
-  <script type="module" src="$site.asset('datastar.js').link()"></script>
-</div>
+
+  <!-- Your main module -->
+  <script type="module" src="$site.asset('js/datastar.js').link()"></script>
+  </div>

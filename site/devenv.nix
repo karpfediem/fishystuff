@@ -1,12 +1,7 @@
-{ pkgs, ... }: {
+{ inputs, pkgs, ... }: {
   name = "site";
   packages = with pkgs; [
     just
+    inputs.zine.packages.${system}.default
   ];
-  languages = {
-    zig = {
-      enable = true;
-      package = pkgs.zigpkgs.master;
-    };
-  };
 }

@@ -2,7 +2,7 @@
 .title = "Devlog",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
-.layout = "log.shtml",
+.layout = "index.shtml",
 .alternatives = [{
   .name = "rss",
   .layout = "log.xml",

@@ -1,68 +1,12 @@
-<extend template="base.shtml">
-<title id="title" :text="$page.title"></title>
-<head id="head">
-  <style>
-    #page h2,
-		#page h3 {
-			text-align: left;
-		}
+<extend template="with-nav.shtml">
 
-		#page h2 {
-			font-size: 1.7rem;
-			border-bottom: 1px dashed #aaa;
-			margin-top: 2em;
-		}
+    <title id="title" :text="$page.title"></title>
 
-		#page h3 {
-			font-size: 1.5rem;
-		}
+    <div id="content">
+        <header class="page-header">
+            <h1 :text="$page.title"></h1>
+            <p :if="$page.description.len().gt(0)" :text="$page.description"></p>
+        </header>
 
-		#page h4 {
-			font-size: 1rem;
-		}
-
-		.title,
-		.subtitle {
-			margin-bottom: 0;
-		}
-
-		.title {
-			font-size: 3rem;
-		}
-
-		.subtitle {
-			font-size: 2rem;
-		}
-
-		.get-started {
-			font-family: 'Itim', sans-serif;
-			font-weight: normal;
-			font-size: 2rem;
-			text-align: center;
-			margin: 1em;
-		}
-
-		.get-started a {
-			color: black;
-			font-weight: normal;
-			background-color: #ccc;
-			border: 1px solid #ccc;
-            border-radius: 0.25em;
-			padding: 3px 10px;
-			text-decoration: none;
-		}
-
-		.get-started a:hover {
-			background-color: white;
-		}
-  </style>
-</head>
-<div id="content">
-  <h1 class="centered title">Fishy Stuff</h1>
-  <h2 class="centered subtitle">Everything you need to get fishing</h2>
-  <p class="centered tagline">
-    Fishing Guides and Tools for Black Desert
-  </p>
-  <div class="get-started"><a href="/quickstart/">Get Started</a></div>
-  <div id="page" :html="$page.content()"></div>
-</div>
+        <div :html="$page.content()"></div>
+    </div>

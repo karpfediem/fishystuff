@@ -1,0 +1,13 @@
+{
+  "nav.get_started": "Erste Schritte",
+  "nav.guides": "Anleitungen",
+  "nav.map": "Karte",
+  "nav.calculator": "Rechner",
+  "nav.community": "Community",
+  "nav.log": "Änderungsprotokoll",
+
+  "last_updated": "Zuletzt aktualisiert",
+  "originally_posted": "Ursprünglich veröffentlicht",
+  "updated": "Aktualisiert",
+  "minutes_read_suffix": " Min. Lesezeit"
+}

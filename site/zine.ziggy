@@ -1,9 +1,25 @@
-Site {
-  .title = "Fishy Stuff - Black Desert Fishing",
+Multilingual {
   .host_url = "https://fishystuff.fish",
-  .content_dir_path = "content",
+  .i18n_dir_path = "i18n",
   .layouts_dir_path = "layouts",
   .assets_dir_path = "assets",
+
+  .locales = [
+    {
+      .code = "en-US",
+      .name = "English",
+      .site_title = "Fishy Stuff - Black Desert Fishing",
+      .content_dir_path = "content/en-US",
+      .output_prefix_override = "", // default variant at site root
+    },
+    {
+      .code = "de-DE",
+      .name = "Deutsch",
+      .site_title = "Fishy Stuff - Angeln in Black Desert",
+      .content_dir_path = "content/de-DE",
+      // prefix defaults to "de-DE/"
+    },
+  ],
 
   .static_assets = [
     "css/fonts.css",

@@ -1,8 +1,7 @@
-
 <extend template="base.shtml">
 <title id="title" :text="$page.title"></title>
 <head id="head"></head>
-<div id="content">
+<body id="body">
   <style>
     h3.overtitle {
        margin-bottom: 0;
@@ -89,4 +88,4 @@
       <div id="old" :html="$loop.it.html()"></div>
     </ctx>
   </div>
-</div>
+</body>
