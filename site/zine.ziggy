@@ -38,6 +38,14 @@ Multilingual {
     "img/default_preview.png",
     "img/superhtml.png",
 
+    // data files that need to be fetchable or linked
+    "data/items.json",
+    "data/lifeskill_levels.json",
+    "data/zones.json",
+
+    "jsonld/webpage.json",
+    "jsonld/article.json",
+
     // Fonts referenced in CSS
     "fonts/FiraCode/FiraCode-Bold.woff",
     "fonts/FiraCode/FiraCode-Bold.woff2",
@@ -79,11 +87,5 @@ Multilingual {
     "fonts/jbm/JetBrainsMono-SemiBoldItalic.woff2",
     "fonts/jbm/JetBrainsMono-Thin.woff2",
     "fonts/jbm/JetBrainsMono-ThinItalic.woff2",
-
-
-    // data files that need to be fetchable or linked
-    "data/items.json",
-    "data/lifeskill_levels.json",
-    "data/zones.json",
   ],
 }

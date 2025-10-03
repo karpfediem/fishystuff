@@ -47,5 +47,9 @@
         <a href="$if.link()" :text="$if.title"></a> →
       </span>
       </nav>
+
+      <!-- JSON-LD: Article for guide pages -->
+      <script type="application/ld+json"
+              :html="$site.asset('jsonld/article.json').bytes().fmt($site.host_url.addPath($page.custom.getOr('canonical', $page.link())),$page.title,$page.description,$site.host_url.addPath($page.custom.getOr('og_image',$site.asset('img/default_preview.png').link())),$page.author,$site.title,$site.host_url.addPath($site.asset('img/default_preview.png').link()),$page.date.format('2006-01-02T15:04:05Z07:00'),$page.custom.getOr('updated',$page.date).format('2006-01-02T15:04:05Z07:00'))"></script>
     </article>
   </main>

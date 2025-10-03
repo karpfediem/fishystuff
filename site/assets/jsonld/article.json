@@ -1,0 +1,25 @@
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "{}"
+  },
+  "headline": "{}",
+  "description": "{}",
+  "image": ["{}"],
+  "author": {
+    "@type": "Person",
+    "name": "{}"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "{}",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "{}"
+    }
+  },
+  "datePublished": "{}",
+  "dateModified": "{}"
+}

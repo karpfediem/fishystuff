@@ -133,4 +133,8 @@
             } catch (_) {}
         })();
     </script>
+
+    <!-- JSON-LD: generic WebPage on every page -->
+    <script type="application/ld+json"
+            :html="$site.asset('jsonld/webpage.json').bytes().fmt($site.host_url.addPath($page.custom.getOr('canonical', $page.link())),$page.title,$page.description)"></script>
     </body>
