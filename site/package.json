@@ -5,5 +5,9 @@
     "@tailwindcss/typography": "^0.5.19",
     "daisyui": "^5.1.27",
     "tailwindcss": "^4.1.14"
+  },
+  "scripts": {
+    "pre-build": "bunx @tailwindcss/cli -i tailwind.input.css -o assets/css/site.css",
+    "build": "bunx @tailwindcss/cli -i tailwind.input.css -o public/css/site.css --minify"
   }
 }
