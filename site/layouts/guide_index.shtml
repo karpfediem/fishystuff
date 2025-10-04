@@ -3,33 +3,73 @@
   <title id="title" :text="$page.title"></title>
 
   <main id="guide-content">
-    <header class="page-header">
+    <header class="page-header mb-6">
       <h1 :text="$page.title"></h1>
       <p :if="$page.description.len().gt(0)" :text="$page.description"></p>
     </header>
-
+    <style>
+      .line-clamp-3 {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+    </style>
     <section class="guide-list">
-      <ul :loop="$page.subpagesAlphabetic()">
-        <li class="guide-card">
-          <h2>
-            <a href="$loop.it.link()" :text="$loop.it.title"></a>
-          </h2>
-          <p class="desc" :if="$loop.it.description.len().gt(0)" :text="$loop.it.description"></p>
+      <div
+              class="w-full grid gap-4 items-stretch"
+              style="grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));"
+              :loop="$page.subpagesAlphabetic()">
 
-          <p class="meta meta-dates">
-            <!-- Updated shown when present -->
-            <span :if="$loop.it.custom.get?('updated')">
-            <strong :text="$i18n.getOr('updated','Updated')"></strong>:
-            <time :text="$if.format('January 02, 2006')"></time>
-          </span>
+        <a href="$loop.it.link()"
+           class="card h-[22rem] md:h-[24rem] lg:h-[26rem] flex flex-col p-4
+              bg-base-200/40 border border-base-300 shadow-md hover:shadow-lg transition-shadow overflow-hidden">
 
-            <!-- Always show original date (loop.it.date is Date) -->
-            <span>
-            <strong :text="$i18n.getOr('originally_posted','Originally posted')"></strong>:
-            <time :text="$loop.it.date.format('January 02, 2006')"></time>
+          <ctx :if="$loop.it.custom.has('og_image')">
+            <figure class="aspect-[16/9] overflow-hidden bg-base-200/40">
+              <img src="$loop.it.custom.get('og_image')" alt="" class="h-full w-full object-cover">
+            </figure>
+          </ctx>
+
+          <div class="card-body flex-1 flex flex-col gap-2">
+            <h2 class="card-title text-lg leading-snug">
+              <span :text="$loop.it.title"></span>
+            </h2>
+
+            <!-- clamp to 3 lines -->
+            <p :if="$loop.it.description.len().gt(0)"
+               class="text-sm opacity-90 line-clamp-3"
+               :text="$loop.it.description"></p>
+
+            <div class="mt-auto flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-[11px] opacity-80">
+
+          <span class="whitespace-nowrap">
+            ~<span :text="$loop.it.wordCount().div(200).plus(1)"></span>
+            <span :text="$i18n.getOr('minutes_read_suffix','min')"></span>
           </span>
-          </p>
-        </li>
-      </ul>
+          <span :if="$loop.it.author.len().gt(0)">
+            <strong>by</strong> <span :text="$loop.it.author"></span>
+          </span>
+              <ctx :if="$loop.it.custom.get?('updated')">
+                <span class="whitespace-nowrap">
+                  <strong :text="$i18n.getOr('updated','Updated')"></strong>:
+                  <time :text="$if.format('January 02, 2006')"></time>
+                </span>
+              </ctx>
+            </div>
+
+            <ctx :if="$loop.it.custom.has('tags')">
+              <div class="mt-2 flex flex-wrap gap-1">
+                <span :loop="$loop.it.custom.get('tags')" class="badge badge-ghost badge-sm">
+                  <span :text="$loop.it"></span>
+                </span>
+              </div>
+            </ctx>
+          </div>
+        </a>
+
+      </div>
     </section>
+
+
   </main>

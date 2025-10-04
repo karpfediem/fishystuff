@@ -22,6 +22,7 @@ Multilingual {
   ],
 
   .static_assets = [
+    "config.ziggy",
     "css/fonts.css",
     "css/fira_code.css",
     "css/highlight.css",

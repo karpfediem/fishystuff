@@ -4,6 +4,9 @@
 .author = "Karpfen",
 .layout = "guide_page.shtml",
 .draft = false,
+.custom = {
+  .updated = @date("2025-10-03T00:00:00"),
+},
 ---
 
 ## How does DRR work?
@@ -25,9 +28,6 @@ An [Item Brand Stone](https://bdolytics.com/en/NA/db/item/8930) will reduce your
 ## [DRR from items]($section.id('items'))
 
 The current maximum obtainable DRR from items is **91%**.
-
-For Shai characters this maximum is 81%, since she is missing an awakening weapon outfit skin, which would provide 10%
-DRR as **Equip Effect**.
 
 | Item                                                                         | 	Durability reduction resistance (DRR) |
 |------------------------------------------------------------------------------|----------------------------------------|

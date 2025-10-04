@@ -15,18 +15,18 @@
         </span>
         </p>
 
-        <p class="meta meta-dates">
+        <p class="meta meta-dates flex flex-col">
           <!-- Show updated first when present -->
           <span :if="$page.custom.get?('updated')">
           <strong :text="$i18n.getOr('last_updated','Last updated')"></strong>:
           <time :text="$if.format('January 02, 2006')"></time>
-        </span>
+          </span>
 
           <!-- Always show original posting date -->
           <span>
           <strong :text="$i18n.getOr('originally_posted','Originally posted')"></strong>:
           <time :text="$page.date.format('January 02, 2006')"></time>
-        </span>
+          </span>
         </p>
       </header>
 
@@ -39,14 +39,39 @@
       </section>
 
       <!-- Prev / Next within section -->
-      <nav class="pager">
-      <span class="prev" :if="$page.prevPage?()">
-        ← <a href="$if.link()" :text="$if.title"></a>
-      </span>
-        <span class="next" :if="$page.nextPage?()">
-        <a href="$if.link()" :text="$if.title"></a> →
-      </span>
+      <nav
+              class="pager relative grid grid-cols-2 grid-rows-1 items-center text-sm text-base-content/70
+         after:content-['•'] after:absolute after:left-1/2 after:top-1/2
+         after:-translate-x-1/2 after:-translate-y-1/2 after:text-xs after:opacity-60">
+        <!-- LEFT half, aligned right -->
+        <span class="col-start-1 row-start-1 min-w-0 text-right pr-2">
+          <ctx :if="$page.prevPage?()">
+            ← <a class="no-underline hover:underline focus:underline font-bold truncate"
+                 href="$if.link()" :text="$if.title"></a>
+          </ctx>
+        </span>
+
+        <!-- Conditional center dot (keeps exact center) -->
+        <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs opacity-60 select-none">
+          <ctx :if="$page.prevPage?()"><ctx :if="$page.nextPage?()">•</ctx></ctx>
+        </span>
+
+        <!-- RIGHT half, aligned left -->
+        <span class="col-start-2 row-start-1 min-w-0 text-left pl-2">
+    <ctx :if="$page.nextPage?()">
+      <a class="no-underline hover:underline focus:underline font-bold truncate"
+         href="$if.link()" :text="$if.title"></a> →
+    </ctx>
+  </span>
       </nav>
+
+
+
+
+
+
+
+
 
       <!-- JSON-LD: Article for guide pages -->
       <script type="application/ld+json"

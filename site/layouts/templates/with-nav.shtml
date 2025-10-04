@@ -87,17 +87,17 @@
                 <!-- Nav links (center on desktop; second row on mobile) -->
                 <div class="mt-2 w-max flex flex-wrap justify-center gap-x-3 gap-y-1 text-sm md:mt-0
                   md:col-start-2 md:col-end-3 md:justify-self-center">
-                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('quickstart').link()">Get Started</a>
-                    <span class="select-none text-white">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('guides').link()">Guides</a>
-                    <span class="select-none text-white">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('map').link()">Map</a>
-                    <span class="select-none text-white">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('calculator').link()">Calculator</a>
-                    <span class="select-none text-white">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('community').link()">Community</a>
-                    <span class="select-none text-white">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold text-white" href="$site.page('log').link()">Log</a>
+                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('quickstart').link()">Get Started</a>
+                    <span class="select-none">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('guides').link()">Guides</a>
+                    <span class="select-none">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('map').link()">Map</a>
+                    <span class="select-none">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('calculator').link()">Calculator</a>
+                    <span class="select-none">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('community').link()">Community</a>
+                    <span class="select-none">•</span>
+                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('log').link()">Log</a>
                 </div>
 
                 <!-- Controls (language / theme) (right on desktop; in top row on mobile) -->
@@ -105,22 +105,109 @@
                     <!-- Language -->
                     <nav aria-label="Language" class="flex items-center gap-1">
                         <a data-locale="en-US" href="/"
-                           class="no-underline hover:underline focus:underline font-bold text-white">en-US</a>
-                        <span class="opacity-50 text-white select-none">/</span>
+                           class="no-underline hover:underline focus:underline font-bold">en-US</a>
+                        <span class="opacity-50 select-none">/</span>
                         <a data-locale="de-DE" href="/de-DE/"
-                           class="no-underline hover:underline focus:underline font-bold text-white">de-DE</a>
+                           class="no-underline hover:underline focus:underline font-bold">de-DE</a>
                     </nav>
 
                     <!-- Divider -->
-                    <span class="opacity-50 text-white select-none hidden sm:inline">|</span>
+                    <span class="opacity-50 select-none hidden sm:inline">|</span>
 
-                    <!-- Theme toggle (simple text button) -->
-                    <button type="button"
-                            class="no-underline hover:underline focus:underline font-bold text-white"
-                            onclick="toggleTheme()"
-                            aria-label="Toggle theme">
-                        Theme
-                    </button>
+                    <!-- Theme switcher -->
+                    <div id="theme-switcher" class="dropdown">
+                        <!-- Trigger -->
+                        <button type="button" tabindex="0" class="btn m-1" aria-haspopup="menu" aria-expanded="false">
+                            Theme
+                            <svg width="12" height="12" class="inline-block h-2 w-2 fill-current opacity-60" viewBox="0 0 2048 2048" aria-hidden="true">
+                                <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
+                            </svg>
+                        </button>
+
+                        <!-- Menu -->
+                        <ul tabindex="0"
+                            role="menu"
+                            class="dropdown-content bg-base-300 rounded-box z-10 w-60 p-2 shadow-2xl list-none">
+
+                            <!-- Loop your themes list -->
+                            <ctx :loop="$site.asset('config.ziggy').ziggy().get('themes')">
+                            <li role="menuitemradio"
+                                aria-checked="false"
+                                class="theme-item overflow-hidden rounded-lg border border-base-content/20 hover:border-base-content/40 cursor-pointer"
+                                data-theme-name="$loop.it"
+                                style="padding: 0;">
+                                <!-- Local preview; see CSS shim in section C -->
+                                <div class="w-full font-sans" data-theme="$loop.it">
+                                    <div class="grid grid-cols-5 grid-rows-3">
+                                        <div class="bg-base-200 col-start-1 row-span-2 row-start-1"></div>
+                                        <div class="bg-base-300 col-start-1 row-start-3"></div>
+                                        <div class="bg-base-100 col-span-4 col-start-2 row-span-3 row-start-1 flex flex-col gap-1 p-2">
+                                            <span class="text-base-content" :text="$loop.it"></span>
+                                            <div class="flex flex-wrap gap-1">
+                                                <div class="bg-primary flex aspect-square w-5 items-center justify-center rounded lg:w-6">
+                                                    <div class="text-primary-content text-xs font-bold">A</div>
+                                                </div>
+                                                <div class="bg-secondary flex aspect-square w-5 items-center justify-center rounded lg:w-6">
+                                                    <div class="text-secondary-content text-xs font-bold">A</div>
+                                                </div>
+                                                <div class="bg-accent flex aspect-square w-5 items-center justify-center rounded lg:w-6">
+                                                    <div class="text-accent-content text-xs font-bold">A</div>
+                                                </div>
+                                                <div class="bg-neutral flex aspect-square w-5 items-center justify-center rounded lg:w-6">
+                                                    <div class="text-neutral-content text-xs font-bold">A</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                            </ctx>
+                        </ul>
+                    </div>
+                    <script>
+                        (function () {
+                            var KEY = 'theme';
+                            var root = document.documentElement;
+                            var dropdown = document.getElementById('theme-switcher');
+                            if (!dropdown) return;
+
+                            function resolve(t) {
+                                if (t === 'system') {
+                                    return matchMedia('(prefers-color-scheme: dark)').matches ? 'fishy' : 'light';
+                                }
+                                return t;
+                            }
+                            function setTheme(name) {
+                                root.setAttribute('data-theme', resolve(name));
+                                console.log(name)
+                                localStorage.setItem(KEY, name);
+                                // update active state
+                                dropdown.querySelectorAll('.theme-item').forEach(function (el) {
+                                    var is = el.getAttribute('data-theme-name') === name;
+                                    el.setAttribute('aria-checked', String(is));
+                                    el.classList.toggle('outline', is);
+                                    el.classList.toggle('outline-base-content', is);
+                                });
+                            }
+                            // init
+                            var saved = localStorage.getItem(KEY) || 'system';
+                            setTheme(saved);
+
+                            // click handlers
+                            dropdown.addEventListener('click', function (e) {
+                                var item = e.target.closest('.theme-item');
+                                if (!item) return;
+                                var name = item.getAttribute('data-theme-name');
+                                if (!name) return;
+                                setTheme(name);
+                            });
+
+                            // keep “system” in sync while menu is open (optional)
+                            matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+                                if ((localStorage.getItem(KEY) || 'system') === 'system') setTheme('system');
+                            });
+                        })();
+                    </script>
                 </div>
             </div>
         </div>
@@ -130,7 +217,7 @@
 
     <!-- Page container -->
     <div id="content"
-         class="mx-auto w-full max-w-[80%] p-[3rem] mt-4 rounded-xl bg-base-300">
+         class="mx-auto p-[3rem] mt-4 rounded-xl bg-base-300">
         <super>
     </div>
 

@@ -10,12 +10,12 @@ watch-release:
       --exts smd,shtml,ziggy,css,js \
       -- ~/code/clones/zine/result/bin/zine release --install .out
 
-# tailwind watch (builds to site/assets/css/site.css)
-tw-watch:
-    tailwindcss -i tailwind.input.css -o assets/css/site.css -c tailwind.config.cjs --watch
+# tailwind watch (builds to assets/css/site.css)
+watch-tailwind:
+    bunx @tailwindcss/cli -i tailwind.input.css -o assets/css/site.css --watch
 
 # dev: run both watchers concurrently
-dev:
+watch:
     just watch-release & \
-    just tw-watch & \
+    just watch-tailwind & \
     wait

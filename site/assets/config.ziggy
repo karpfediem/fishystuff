@@ -1,0 +1,11 @@
+{
+  .themes = [
+    "fishy",
+    "dark",
+    "abyss",
+    "light",
+    "silk",
+    "cupcake",
+    "caramellatte",
+  ],
+}

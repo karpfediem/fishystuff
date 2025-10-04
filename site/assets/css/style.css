@@ -6,24 +6,20 @@ body {
         width: 100%;
         white-space: nowrap;
     }
+    h1.title {
+        font-family: 'Pacifico', sans-serif;
+    }
     font-family: 'Comfortaa', serif;
+    #content {
+        max-width: 130ch;
+    }
+    * {
+        border-radius: 0.75rem;
+    }
+
+    a.card:hover {
+        text-decoration: none;
+    }
 }
 
 html { font-size: 18px; }
-
-.guide-layout {
-    display: flex;
-    gap: 1.5rem;
-}
-
-.guide-sidebar {
-    flex: 0 0 260px;
-}
-
-.guide-content {
-    flex: 1 1 auto;
-}
-
-.guide-sidebar .active {
-    font-weight: 600;
-}

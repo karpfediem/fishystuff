@@ -1,12 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html data-theme="fishy">
 <head id="head">
   <meta charset="UTF-8">
   <title id="title"><super></title>
 
   <!-- Early load to prevent flashbang / layout shift due to scrollbar gutter -->
   <style>
-    html, body { background: #111; }
     /* Helps browsers choose the correct default palette for form controls, etc. */
     :root { color-scheme: dark light; }
 
@@ -26,27 +25,34 @@
   </style>
   <script>
     (function () {
-      try {
-        var key = 'theme';
-        var stored = localStorage.getItem(key);
-        var useDark = stored ? (stored === 'dark')
-                : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        var theme = useDark ? 'dark' : 'light';
-        // Put data-theme on <html> so the whole tree can react immediately
-        document.documentElement.setAttribute('data-theme', theme);
-      } catch (_) { /* no-op */ }
+      var KEY = 'theme'; // 'system' | 'fishy' | 'dark' | 'light'
+      var saved = localStorage.getItem(KEY) || 'system';
+
+      function resolve(theme) {
+        if (theme === 'system') {
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          return prefersDark ? 'fishy' : 'light'; // map system→fishy or light
+        }
+        return theme;
+      }
+
+      var active = resolve(saved);
+      document.documentElement.setAttribute('data-theme', active);
     })();
   </script>
+
+  <script src="$site.asset('js/theme.js').link()"></script>
+
+  <!-- Tailwind + daisyUI (compiled) -->
+  <link rel="stylesheet" href="$site.asset('css/site.css').link()">
   <!-- CSS -->
   <link rel="stylesheet" href="$site.asset('css/fonts.css').link()">
   <link rel="stylesheet" href="$site.asset('css/fira_code.css').link()">
   <link rel="stylesheet" href="$site.asset('css/style.css').link()">
   <link rel="stylesheet" href="$site.asset('css/highlight.css').link()">
-  <!-- Tailwind + daisyUI (compiled) -->
-  <link rel="stylesheet" href="$site.asset('css/site.css').link()">
   <super>
 </head>
-<body id="body" data-theme="dark" class="min-h-dvh bg-base-100 text-base-content">
+<body id="body" class="prose prose-lg lg:prose-xl max-w-none min-h-dvh bg-base-100 text-base-content">
 <super>
 </body>
 </html>

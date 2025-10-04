@@ -1,3 +1,129 @@
+@import "tailwindcss";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
+@source "./layouts/**/*.{shtml,html}";
+@source "./content/**/*.{smd,md}";
+@source "./assets/**/*.{js,ts}";
+
+@plugin "@tailwindcss/typography" {
+
+}
+@plugin "daisyui" {
+    themes: fishy --default --prefersdark,
+    fishy,
+    dark,
+    light,
+    cupcake,
+    abyss,
+    silk,
+    caramellatte;
+}
+@theme {
+    --font-sans: "Comfortaa", ui-sans-serif, system-ui, sans-serif;
+    --font-display: "Itim", ui-sans-serif, system-ui, sans-serif;
+    --font-brand: "Pacifico", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+@plugin "daisyui/theme" {
+    name: "fishy";
+    default: true;
+    prefersdark: true;
+    color-scheme: "dark";
+    --color-base-100: oklch(0.253 0.021 274.4);
+    --color-base-200: oklch(0% 0 0);
+    --color-base-300: oklch(0.347 0.024 270.1);
+    --color-base-content: oklch(97% 0 0);
+    --color-primary: oklch(70% 0.191 22.216);
+    --color-primary-content: oklch(100% 0 0);
+    --color-secondary: oklch(62% 0.214 259.815);
+    --color-secondary-content: oklch(97% 0.014 254.604);
+    --color-accent: oklch(20% 0.042 265.755);
+    --color-accent-content: oklch(100% 0 0);
+    --color-neutral: oklch(44% 0.063 256.8);
+    --color-neutral-content: oklch(98% 0 0);
+    --color-info: oklch(62% 0.214 259.815);
+    --color-info-content: oklch(97% 0.014 254.604);
+    --color-success: oklch(69% 0.17 162.48);
+    --color-success-content: oklch(97% 0.021 166.113);
+    --color-warning: oklch(76% 0.188 70.08);
+    --color-warning-content: oklch(98% 0.026 102.212);
+    --color-error: oklch(58% 0.253 17.585);
+    --color-error-content: oklch(96% 0.015 12.422);
+    --radius-selector: 0.25rem;
+    --radius-field: 0.5rem;
+    --radius-box: 1rem;
+    --size-selector: 0.25rem;
+    --size-field: 0.21875rem;
+    --border: 2px;
+    --depth: 1;
+    --noise: 1;
+}
+
+@layer components {
+    /* Base prose styling */
+    .prose {
+        @apply font-sans leading-[1.6];
+    }
+
+    /* Headings */
+    .prose :where(h1,h2,h3):not(:where(.not-prose *)) {
+        @apply font-display font-normal text-center mt-5 mb-2.5;
+    }
+    .prose :where(h1):not(:where(.not-prose *)) {
+        @apply text-3xl leading-tight;
+    }
+    .prose :where(h2):not(:where(.not-prose *)) {
+        @apply text-2xl leading-snug;
+    }
+    .prose :where(h3):not(:where(.not-prose *)) {
+        @apply text-xl leading-snug;
+    }
+    .prose :where(h4):not(:where(.not-prose *)) {
+        @apply font-normal;
+    }
+
+    /* Links: bold, underline on hover/focus */
+    .prose :where(a):not(:where(.not-prose *)) {
+        @apply font-bold no-underline;
+    }
+    .prose :where(a:hover, a:focus):not(:where(.not-prose *)) {
+        @apply underline;
+    }
+
+    /* Paragraphs & lists */
+    .prose :where(p):not(:where(.not-prose *)) {
+        @apply my-4;
+    }
+    .prose :where(li):not(:where(.not-prose *)) {
+        @apply py-[1px];
+    }
+
+    /* Inline code & preformatted blocks */
+    .prose :where(code):not(:where(.not-prose *)) {
+        @apply font-mono font-bold;
+        font-variant-ligatures: none;
+        font-feature-settings: "liga" 0;
+    }
+    .prose :where(pre):not(:where(.not-prose *)) {
+        @apply overflow-auto py-1;
+    }
+    .prose :where(pre code):not(:where(.not-prose *)) {
+        background-color: transparent;
+    }
+
+    /* Tables */
+    .prose :where(th):not(:where(.not-prose *)) {
+        border-bottom: 1px solid #ccc;
+    }
+
+    /* Media */
+    .prose :where(img, video):not(:where(.not-prose *)) {
+        border-radius: 0.25em;
+        margin: 0;
+    }
+}
