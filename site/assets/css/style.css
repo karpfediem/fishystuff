@@ -17,9 +17,11 @@ body {
         border-radius: 0.75rem;
     }
 
-    a.card:hover {
+    a.card {
         text-decoration: none;
+    }
+    a.card:hover {
+        text-decoration: underline;
     }
 }
 
-html { font-size: 18px; }
