@@ -2,7 +2,7 @@
 .title = "Devlog",
 .date = @date("2025-03-23T00:00:00"),
 .author = "Karpfen",
-.layout = "index.shtml",
+.layout = "log.shtml",
 .alternatives = [{
   .name = "rss",
   .layout = "log.xml",
@@ -18,10 +18,23 @@ You can [subscribe to this page via RSS]($link.alternative("rss")).
 
 ## Changes
 
-[]($section.id('v0.1.0').data('date','2025-03-23'))
-># Beta Pre-Release
->hello world :)
+[]($section.id('v0.2.0').data('date','2025-10-04'))
+# Website touch up
+- General Layout improvements to display more adequate data
+- Groundwork done for a Multilingual Website
+- DaisyUI + tailwindcss with theme selector
 
->Things will definitely still change
+I've finally found some time to do a much needed overhaul.
+I do hope the new page layout system will be useful to you.
+
+We also now have the ability to mirror pages to their translated counter-parts. 
+So if there is strong demand for a specific language we can hopefully make it happen.
+
+Volunteer work very welcome :)
+
+[]($section.id('v0.1.0').data('date','2025-03-23'))
+# Beta Pre-Release
+- hello world :)
+- Things will definitely still change
 
 []($section.id('v0.0.0').data('date','2025-03-23'))

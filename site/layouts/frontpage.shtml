@@ -2,11 +2,10 @@
   <title id="title" :text="$page.title"></title>
   <div id="content">
 
-    <h1 class="centered title">Fishy Stuff</h1>
+    <h1 class="font-brand centered title">Fishy Stuff</h1>
     <h2 class="centered subtitle">Everything you need to get fishing</h2>
-    <p class="centered tagline">
+    <p class="centered tagline w-[60ch] border-base-100">
       Fishing Guides and Tools for Black Desert
     </p>
-    <div class="get-started"><a href="/quickstart/">Get Started</a></div>
     <div id="page" :html="$page.content()"></div>
   </div>

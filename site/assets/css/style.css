@@ -23,5 +23,22 @@ body {
     a.card:hover {
         text-decoration: underline;
     }
+
+    .subtitle,
+    .tagline {
+        margin-top: 0;
+    }
+
+    .tagline {
+        font-family: 'Itim', sans-serif;
+        font-size: 1rem;
+        padding: 2px 5px;
+        justify-self: center;
+        border-radius: 0;
+        border-top: 1px solid var(--color-base-content);
+        border-bottom: 1px solid var(--color-base-content);
+        text-align: center;
+    }
+
 }
 
