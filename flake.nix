@@ -1,5 +1,5 @@
 {
-  description = "Fishy Stuff - built with zine-ssg";
+  description = "Fishy Stuff - Fishing Guides and Tools for Black Desert";
 
   inputs = {
     devenv-root = {
