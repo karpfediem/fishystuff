@@ -35,7 +35,7 @@ jobs:
       - name: Release
         run: zine release
 
-      - run: bun run pre-build
+      - run: bun run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
