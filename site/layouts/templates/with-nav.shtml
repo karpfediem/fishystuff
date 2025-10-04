@@ -129,7 +129,7 @@
                             role="menu"
                             class="dropdown-content bg-base-300 rounded-box z-10 w-60 p-2 shadow-2xl list-none">
 
-                            <!-- Loop your themes list -->
+                            <!-- Loop themes list -->
                             <ctx :loop="$site.asset('config.ziggy').ziggy().get('themes')">
                             <li role="menuitemradio"
                                 aria-checked="false"
