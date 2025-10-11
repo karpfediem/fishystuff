@@ -1,27 +1,30 @@
-//! Burst + Single-Channel Spam enforcement.
+//! Burst + Single-Channel Spam enforcement (with separated actions).
 //!
-//! Triggers on either:
-//!   A) Cross-channel burst: user posts in >= MIN_CHANNELS distinct channels within WINDOW_SECS,
-//!      and >= MIN_MESSAGES total within that window.
-//!      -> Kick (fallback to timeout) -> Reply (sticker message text) -> Notify mods (forward) -> Purge via index
+//! A) Cross-channel burst → enforce then actions.forward_then_purge
+//! B) Single-channel spam  → enforce then actions.forward_then_purge
 //!
-//!   B) Single-channel spam: user posts >= CHAN_SPAM_MIN_MESSAGES in the same channel within
-//!      CHAN_SPAM_WINDOW_SECS.
-//!      -> Timeout X minutes -> Reply (sticker message text) -> Notify mods (forward) -> Purge via index
-//!
-//! Permissions: Manage Messages, Kick Members, Moderate Members, Send Messages (#mod-info)
-
+//! In the single-channel path we:
+///  - pass a channel allowlist containing *only* the triggering channel,
+///  - cap evidence to exactly `top_count` via `.max_total(top_count as usize)`,
+///  - forwarding now renders oldest→newest in the evidence thread.
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::moderation::{forward_to_mod_info, timeout_member, Error};
-use crate::poke::pick_phrase;
+
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Builder, CreateMessage};
 use serenity::FullEvent;
 use tokio::sync::RwLock;
+
+use crate::moderation::actions::timeout::timeout_member;
+use crate::moderation::actions::ModeratorActions;
+use crate::moderation::index::RecentIndex;
+use crate::moderation::types::PurgeParams;
+use crate::poke::pick_phrase;
+
+type Error = Box<dyn std::error::Error + Send + Sync>;
 
 const PHRASES: &[&str] = &[
     "Crio pokes you",
@@ -75,6 +78,7 @@ impl Default for BurstConfig {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(60);
+
         Self {
             // Cross-channel
             window_secs: env::var("BURST_WINDOW_SECS")
@@ -137,13 +141,17 @@ fn now_unix() -> i64 {
         .as_secs() as i64
 }
 
-/// Call from the global event handler AFTER recording the message into UserRecentIndex.
-pub async fn burst_event_handler(
+/// Call from the global event handler AFTER recording the message into the index.
+pub async fn burst_event_handler<I>(
     ctx: &serenity::Context,
     event: &FullEvent,
     state: &BurstState,
-    index: &crate::moderation::purge::UserRecentIndex,
-) -> Result<(), Error> {
+    index: &I,
+    actions: &ModeratorActions,
+) -> Result<(), Error>
+where
+    I: RecentIndex,
+{
     let FullEvent::Message { new_message } = event else {
         return Ok(());
     };
@@ -154,10 +162,12 @@ pub async fn burst_event_handler(
         return Ok(());
     };
 
+    let now = now_unix();
+
     // Gather recent activity for this author (use max of the two windows so we don't double-fetch)
     let window_for_fetch = state.cfg.window_secs.max(state.cfg.chan_window_secs);
     let per_channel = index
-        .collect_since(new_message.author.id, window_for_fetch)
+        .collect_since_at(new_message.author.id, window_for_fetch, now)
         .await;
     if per_channel.is_empty() {
         return Ok(());
@@ -169,7 +179,6 @@ pub async fn burst_event_handler(
 
     if distinct_channels >= state.cfg.min_channels && total_msgs >= state.cfg.min_messages {
         // cooldown
-        let now = now_unix();
         {
             let map = state.last_cross_trigger.read().await;
             if let Some(&last) = map.get(&new_message.author.id) {
@@ -224,30 +233,22 @@ pub async fn burst_event_handler(
             tracing::warn!("Failed to reply: {e:?}");
         }
 
-        // 3) Notify moderators
-        let action_notice = format!(
-            "[BURST] Action: **{}** | User: <@{}> | Distinct channels: {} | Total msgs: {} | Window: {}s | Trigger in <#{}> | Purge Window: {}s ",
-            action, new_message.author.id, distinct_channels, total_msgs, state.cfg.window_secs, new_message.channel_id, state.cfg.purge_window_secs
-        );
-        if let Err(e) = forward_to_mod_info(&ctx.http, new_message, &action_notice).await {
-            tracing::warn!(
-                "Failed to notify mods: {:?} | Original notice: {}",
-                e,
-                action_notice
-            );
+        // 3) Summary → thread → evidence → purge (cross-channel: no allowlist, no cap)
+        let label = match action {
+            "kick" => "[BURST] kick".to_string(),
+            "timeout" => format!("[BURST] timeout {}m", state.cfg.timeout_minutes),
+            _ => "[BURST] no-action".to_string(),
         };
+        let extra = format!(
+            "Distinct channels: {} | Total msgs: {} | Purge window: {}s",
+            distinct_channels, total_msgs, state.cfg.purge_window_secs
+        );
 
-        // 4) Purge via index (include triggering message)
-        if let Err(e) = index
-            .purge_recent(
-                &ctx.http,
-                new_message.author.id,
-                state.cfg.purge_window_secs,
-                None,
-            )
-            .await
-        {
-            tracing::warn!("Purge after cross-channel burst failed: {:?}", e);
+        let params = PurgeParams::new(new_message, state.cfg.purge_window_secs, now, label)
+            .extra_note(extra);
+
+        if let Err(e) = actions.forward_then_purge(&ctx.http, params).await {
+            tracing::warn!("Forward+purge after cross-channel burst failed: {:?}", e);
         }
 
         return Ok(());
@@ -255,7 +256,7 @@ pub async fn burst_event_handler(
 
     // ----- B) Single-channel spam -----
     let per_channel_single = index
-        .collect_since(new_message.author.id, state.cfg.chan_window_secs)
+        .collect_since_at(new_message.author.id, state.cfg.chan_window_secs, now)
         .await;
     if !per_channel_single.is_empty() {
         let (top_chan, top_count) = per_channel_single
@@ -266,7 +267,6 @@ pub async fn burst_event_handler(
 
         if top_count >= state.cfg.chan_min_messages {
             // cooldown
-            let now = now_unix();
             {
                 let map = state.last_chan_trigger.read().await;
                 if let Some(&last) = map.get(&new_message.author.id) {
@@ -299,35 +299,22 @@ pub async fn burst_event_handler(
                 tracing::warn!("Timeout failed for {}: {:?}", new_message.author.id, e);
             }
 
-            // 3) Notify moderators
-            let action_notice = format!(
-                "[SPAM] Muted <@{}> for {}m | {} msgs in <#{}> within {}s | Purge window: {}s",
-                new_message.author.id,
-                state.cfg.chan_timeout_minutes,
-                top_count,
-                top_chan,
-                state.cfg.chan_window_secs,
-                state.cfg.purge_window_secs
+            // 3) Summary → thread → evidence → purge
+            //    SINGLE-CHANNEL: restrict to top channel and cap to exactly the messages that hit the threshold.
+            let label = format!("[SPAM] mute {}m", state.cfg.chan_timeout_minutes);
+            let extra = format!(
+                "{} msgs in <#{}> within {}s | Purge window: {}s",
+                top_count, top_chan, state.cfg.chan_window_secs, state.cfg.purge_window_secs
             );
-            if let Err(e) = forward_to_mod_info(&ctx.http, new_message, &action_notice).await {
-                tracing::warn!(
-                    "Failed to notify mods: {:?} | Original notice: {}",
-                    e,
-                    action_notice
-                );
-            };
 
-            // 4) Purge (use the broader purge window)
-            if let Err(e) = index
-                .purge_recent(
-                    &ctx.http,
-                    new_message.author.id,
-                    state.cfg.purge_window_secs,
-                    None,
-                )
-                .await
-            {
-                tracing::warn!("Purge after single-channel spam failed: {:?}", e);
+            let params = PurgeParams::new(new_message, state.cfg.purge_window_secs, now, label)
+                .extra_note(extra)
+                .channel_allowlist(&[top_chan]) // only this channel
+                //.max_total(top_count as usize);              // exactly the N that tripped the rule
+                .max_total(1); // Only purge single sample message since discord API is too heavily rate limited
+
+            if let Err(e) = actions.forward_then_purge(&ctx.http, params).await {
+                tracing::warn!("Forward+purge after single-channel spam failed: {:?}", e);
             }
         }
     }
