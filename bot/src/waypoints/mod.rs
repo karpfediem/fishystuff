@@ -124,8 +124,10 @@ pub async fn fish(
         "{}FishBookmark/{}/{}_0_Preview.webp",
         BASE_URL.to_string(),
         name_encoded,
-        name
+        name_encoded
     );
+    println!("{}", name_encoded);
+    println!("{}", thumb_url);
     let waypoint_readme_url = format!("{}FishBookmark/{}/", BASE_URL.to_string(), name_encoded);
 
     ctx.send(create_waypoint_reply(
