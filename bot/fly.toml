@@ -7,3 +7,6 @@ image = "registry.fly.io/criobot:latest"
 [env]
 RUST_LOG = "info"
 TRAP_CHANNEL_ID="1422988986892156938"
+
+[deploy]
+strategy = "canary"
