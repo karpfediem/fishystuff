@@ -78,7 +78,7 @@ pub async fn waypoints(
         BASE_URL.to_string(),
         name_encoded
     );
-    let waypoint_readme_url = format!("{}Bookmark/{}/", BASE_URL.to_string(), name_encoded);
+    let waypoint_readme_url = format!("{}Bookmark/{}#readme", BASE_URL.to_string(), name_encoded);
 
     ctx.send(create_waypoint_reply(
         name,
@@ -126,9 +126,7 @@ pub async fn fish(
         name_encoded,
         name_encoded
     );
-    println!("{}", name_encoded);
-    println!("{}", thumb_url);
-    let waypoint_readme_url = format!("{}FishBookmark/{}/", BASE_URL.to_string(), name_encoded);
+    let waypoint_readme_url = format!("{}FishBookmark/{}#readme", BASE_URL.to_string(), name_encoded);
 
     ctx.send(create_waypoint_reply(
         name,
@@ -147,7 +145,7 @@ fn create_waypoint_reply(
     thumb_url: String,
     waypoint_readme_url: String,
 ) -> CreateReply {
-    poise::CreateReply::default()
+    CreateReply::default()
         .embed(
             CreateEmbed::new()
                 .thumbnail(thumb_url.clone())
