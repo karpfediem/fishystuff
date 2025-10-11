@@ -48,24 +48,18 @@
           let
             craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default);
             bot = craneLib.buildPackage { src = ./bot; };
-            waypoints = ./bot/bdo-fish-waypoints;
-            containerfs = pkgs.runCommand "containerfs" { } ''
-              mkdir -p $out
-              cp ${bot}/bin/bot $out/
-              cp -r ${waypoints} $out/bdo-fish-waypoints
-            '';
+            waypoints = pkgs.linkFarm "waypoints" [
+              { name = "bdo-fish-waypoints"; path = ./bot/bdo-fish-waypoints; }
+            ];
             bot-container = pkgs.dockerTools.buildLayeredImage {
               name = "crio";
               tag = "latest";
-              contents = [ containerfs ];
-              config = {
-                Entrypoint = [ "${containerfs}/bot" ];
-                WorkingDir = containerfs;
-              };
+              contents = [ waypoints "${bot}/bin" ];
+              config.Entrypoint = [ "bot" ];
             };
           in
           {
-            packages = { inherit bot bot-container containerfs; };
+            packages = { inherit bot bot-container; };
 
             devenv.shells =
               let
