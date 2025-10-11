@@ -15,7 +15,7 @@ mod moderation;
 use crate::help::help;
 use crate::poke::poke;
 use crate::talk::talk;
-use crate::waypoints::waypoints;
+use crate::waypoints::{fish, waypoints};
 use crate::zones::list::zones;
 
 use poise::serenity_prelude as serenity;
@@ -53,7 +53,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![help(), waypoints(), zones(), poke(), talk()],
+            commands: vec![help(), waypoints(), fish(), zones(), poke(), talk()],
             event_handler: |ctx, event, _framework, data| {
                 Box::pin(async move {
                     // 1) Record all incoming messages once into the rolling index.
