@@ -56,6 +56,7 @@
               tag = "latest";
               contents = [ waypoints "${bot}/bin" ];
               config.Entrypoint = [ "bot" ];
+              config.Env = ["PATH=${bot}/bin"];
             };
           in
           {
