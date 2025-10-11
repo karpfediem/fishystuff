@@ -14,9 +14,9 @@
     nix2container.inputs.nixpkgs.follows = "nixpkgs";
     mk-shell-bin.url = "github:rrbutani/nix-mk-shell-bin";
 
-    fenix.url = "github:nix-community/fenix";
-    fenix.inputs.nixpkgs.follows = "nixpkgs";
     crane.url = "github:ipetkov/crane";
+    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay.inputs = { nixpkgs.follows = "nixpkgs"; };
 
     # zig.url = "github:mitchellh/zig-overlay";
     zig.url = "github:bandithedoge/zig-overlay"; # provides download mirrors - nightly builds were purged from official zig github
@@ -30,7 +30,7 @@
     extra-substituters = "https://devenv.cachix.org";
   };
 
-  outputs = inputs@{ self, flake-parts, devenv-root, crane, fenix, ... }:
+  outputs = inputs@{ self, flake-parts, devenv-root, crane, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, flake-parts-lib, ... }:
       let
         systems = builtins.attrNames inputs.zig.packages;
@@ -46,7 +46,7 @@
 
         perSystem = { config, self', inputs', pkgs, system, ... }:
           let
-            craneLib = (crane.mkLib pkgs).overrideToolchain fenix.packages.${system}.minimal.toolchain;
+            craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default);
             bot = craneLib.buildPackage { src = ./bot; };
             waypoints = ./bot/bdo-fish-waypoints;
             containerfs = pkgs.runCommand "containerfs" { } ''
