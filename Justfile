@@ -17,5 +17,5 @@ update_fishing_table:
 
 # Build and deploy the discord bot
 deploy-bot:
-  skopeo --insecure-policy --debug copy docker-archive:"$(nix build .?submodules=1#bot-container --no-link --print-out-paths)" docker://registry.fly.io/criobot:latest --dest-creds x:"$(flyctl auth token)" --format v2s2
+  skopeo --insecure-policy --debug copy docker-archive:"$(nix build .#bot-container --no-link --print-out-paths)" docker://registry.fly.io/criobot:latest --dest-creds x:"$(fly -a criobot tokens create deploy --expiry 10m)" --format v2s2
   flyctl deploy --remote-only -c bot/fly.toml

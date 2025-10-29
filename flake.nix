@@ -18,6 +18,9 @@
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs = { nixpkgs.follows = "nixpkgs"; };
 
+    waypoints.url = "github:flockenberger/bdo-fish-waypoints";
+    waypoints.flake = false;
+
     # zig.url = "github:mitchellh/zig-overlay";
     zig.url = "github:bandithedoge/zig-overlay"; # provides download mirrors - nightly builds were purged from official zig github
 
@@ -44,19 +47,34 @@
         ];
         inherit systems;
 
-        perSystem = { config, self', inputs', pkgs, system, ... }:
+        perSystem = { config, self', inputs', pkgs, system, waypoints, ... }:
           let
+            filteredWaypointsSrc = pkgs.lib.cleanSourceWith {
+              name = "waypoints-no-webp";
+              src = inputs.waypoints;
+              filter = path: type:
+                let lower = pkgs.lib.toLower path; in
+                  !(pkgs.lib.hasSuffix ".webp" lower);
+            };
+            waypoints = pkgs.runCommandLocal "filtered-waypoints" { } ''
+              mkdir -p $out/bdo-fish-waypoints
+              cd ${filteredWaypointsSrc}
+              cp -r . $out/bdo-fish-waypoints/
+            '';
+
+            botSrc = pkgs.runCommandLocal "bot-combined-src" { } ''
+              mkdir -p $out
+              cp -r ${./bot}/* ${waypoints}/* $out
+            '';
+
             craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default);
-            bot = craneLib.buildPackage { src = ./bot; };
-            waypoints = pkgs.linkFarm "waypoints" [
-              { name = "bdo-fish-waypoints"; path = ./bot/bdo-fish-waypoints; }
-            ];
+            bot = craneLib.buildPackage { src = botSrc; };
             bot-container = pkgs.dockerTools.buildLayeredImage {
               name = "crio";
               tag = "latest";
               contents = [ waypoints "${bot}/bin" ];
               config.Entrypoint = [ "bot" ];
-              config.Env = ["PATH=${bot}/bin"];
+              config.Env = [ "PATH=${bot}/bin" ];
             };
           in
           {
@@ -66,7 +84,7 @@
               let
                 devenvRootFileContent = builtins.readFile devenv-root.outPath;
                 root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
-                packages = with pkgs; [ flyctl ];
+                packages = with pkgs; [ flyctl skopeo ];
               in
               {
                 default = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./devenv.nix ]; };
