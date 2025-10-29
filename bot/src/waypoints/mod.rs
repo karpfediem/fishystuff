@@ -36,8 +36,9 @@ fn validate_path(user_path: &Path, base_path: &Path) -> Result<PathBuf, Error> {
         return Err("Directories don't exist!".into());
     }
 
-    // Check that the full path starts with the base path
     if user.starts_with(&base) {
+        Ok(user)
+    } else if user.canonicalize().is_ok_and(|abs| abs.starts_with("/nix/store/")) {
         Ok(user)
     } else {
         Err("Access denied: path traversal attempt detected.".into())
