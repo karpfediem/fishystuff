@@ -4,6 +4,9 @@
 .author = "Paghur",
 .layout = "guide_page.shtml",
 .draft = false,
+.custom = {
+  .updated = @date("2025-12-23:00:00"),
+}.
 ---
 
 This is a guide on how to get the most XP in the shortest amount of time
