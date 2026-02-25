@@ -5,5 +5,6 @@
     dolt
     gawk
     xlsx2csv
+    codex
   ];
 }
