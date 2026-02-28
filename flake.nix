@@ -89,7 +89,6 @@
               {
                 bot = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./bot/devenv.nix ]; };
                 default = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./devenv.nix ]; };
-                map = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./map/devenv.nix ]; };
                 site = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./site/devenv.nix ]; };
                 zonegen = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./zonegen/devenv.nix ]; };
               };
