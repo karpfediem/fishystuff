@@ -822,6 +822,20 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       return element;
     }
 
+    function fishRenderSignature(fish) {
+      let hash = 2166136261;
+      for (const entry of fish) {
+        const raw = entry
+          ? `${entry.fish_id || 0}|${entry.grade || ""}|${entry.is_prize === true ? 1 : 0}|${entry.name || ""}`
+          : "null";
+        for (let index = 0; index < raw.length; index += 1) {
+          hash ^= raw.charCodeAt(index);
+          hash = Math.imul(hash, 16777619);
+        }
+      }
+      return `${fish.length}:${(hash >>> 0).toString(16)}`;
+    }
+
     function renderEmptyState(searchQuery, prizeOnly) {
       const empty = createElement("div", "pokedex-empty");
       const title = createElement("h3", "pokedex-group-title", "No fish match this filter.");
@@ -928,9 +942,11 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
       const caughtIds = normalizeCaughtIds(snapshot.caught_ids);
       state.currentCaughtIds = caughtIds;
+      const fishSignature = fishRenderSignature(fish);
 
       const renderKey = [
         snapshot.revision || "",
+        fishSignature,
         (snapshot.search_query || "").trim().toLowerCase(),
         snapshot.prize_only ? "1" : "0",
         caughtIds.join(","),
