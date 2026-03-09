@@ -9,8 +9,6 @@
 
 ## Fishdex
 
-Track your caught fish locally in the browser. The page fetches the fish catalog from `/api/v1/fish` at runtime, then uses Datastar signals for filtering, prize toggles, and local-only progress.
-
 ```=html
 <style>
   #pokedex-app {
@@ -2143,7 +2141,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     <div class="pokedex-top">
       <div class="pokedex-screen">
         <div class="pokedex-heading">
-          <h3>Catalog Feed</h3>
+          <h3>Filter</h3>
           <span class="pokedex-subtle">Revision <span data-text="$revision || 'pending'"></span></span>
         </div>
 
