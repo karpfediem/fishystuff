@@ -393,11 +393,13 @@
 
   .pokedex-grid-shell {
     padding: 0 1.5rem 1.5rem;
+    overflow-anchor: none;
   }
 
   .pokedex-groups {
     display: grid;
     gap: 1rem;
+    overflow-anchor: none;
   }
 
   .pokedex-group {
@@ -438,13 +440,12 @@
     overflow: hidden;
     padding: 0.95rem;
     position: relative;
-    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
+    transition: border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
   }
 
   .pokedex-card:hover {
     border-color: color-mix(in oklab, var(--dex-highlight) 62%, var(--color-base-content, #1f2937) 38%);
     background: var(--dex-surface);
-    transform: translateY(-2px);
   }
 
   .pokedex-card:focus-within {
@@ -452,7 +453,6 @@
     background: var(--dex-surface);
     outline: 3px solid var(--dex-focus);
     outline-offset: 2px;
-    transform: translateY(-2px);
   }
 
   .pokedex-card.is-caught {
@@ -1160,7 +1160,7 @@
       mergeSignals({ caught_ids: caughtIds, status_message: "" });
     }
 
-    function rememberViewport(card) {
+    function rememberViewport(card, anchor) {
       if (!(card instanceof HTMLElement)) {
         state.pendingViewportRestore = null;
         return;
@@ -1170,18 +1170,15 @@
         state.pendingViewportRestore = null;
         return;
       }
-      const activeElement = document.activeElement;
-      let restoreFocusSelector = "";
-      if (activeElement instanceof Element && card.contains(activeElement)) {
-        restoreFocusSelector = activeElement.closest("[data-action='toggle-caught']")
-          ? "[data-action='toggle-caught']"
-          : "[data-action='open-details']";
-      }
+      const anchorElement = anchor instanceof HTMLElement ? anchor : card;
+      const restoreFocusSelector = anchorElement.closest("[data-action='toggle-caught']")
+        ? "[data-action='toggle-caught']"
+        : anchorElement.closest("[data-action='open-details']")
+          ? "[data-action='open-details']"
+          : "";
       state.pendingViewportRestore = {
         fishId,
-        layoutTop: card.offsetTop + (card.offsetParent instanceof HTMLElement
-          ? card.offsetParent.getBoundingClientRect().top
-          : 0),
+        anchorTop: anchorElement.getBoundingClientRect().top,
         scrollX: window.scrollX,
         scrollY: window.scrollY,
         restoreFocusSelector,
@@ -1209,21 +1206,20 @@
           return;
         }
 
-        const nextLayoutTop = nextCard.offsetTop + (nextCard.offsetParent instanceof HTMLElement
-          ? nextCard.offsetParent.getBoundingClientRect().top
-          : 0);
-        const delta = nextLayoutTop - pending.layoutTop;
-        if (Math.abs(delta) > 0.5) {
-          window.scrollBy(0, delta);
-        }
-        if (pending.restoreFocusSelector) {
-          const nextFocus = nextCard.matches(pending.restoreFocusSelector)
+        const nextAnchor = pending.restoreFocusSelector
+          ? nextCard.matches(pending.restoreFocusSelector)
             ? nextCard
-            : nextCard.querySelector(pending.restoreFocusSelector);
-          if (nextFocus instanceof HTMLElement) {
-            nextFocus.focus({ preventScroll: true });
+            : nextCard.querySelector(pending.restoreFocusSelector)
+          : nextCard;
+        if (nextAnchor instanceof HTMLElement) {
+          nextAnchor.focus({ preventScroll: true });
+          const delta = nextAnchor.getBoundingClientRect().top - pending.anchorTop;
+          if (Math.abs(delta) > 1.5 || Math.abs(pending.scrollX - window.scrollX) > 0.5) {
+            window.scrollTo(pending.scrollX, window.scrollY + delta);
           }
+          return;
         }
+        window.scrollTo(pending.scrollX, pending.scrollY);
       });
     }
 
@@ -1699,8 +1695,9 @@
         if (!Number.isInteger(fishId)) {
           return;
         }
-        if (target.closest("[data-action='toggle-caught']")) {
-          rememberViewport(card);
+        const toggleButton = target.closest("[data-action='toggle-caught']");
+        if (toggleButton) {
+          rememberViewport(card, toggleButton);
           toggleCaught(fishId);
           return;
         }
