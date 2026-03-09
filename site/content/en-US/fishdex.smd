@@ -1,39 +1,57 @@
 ---
-.title = "Fish Pokedex",
+.title = "Fishdex",
 .date = @date("2026-03-09T00:00:00"),
 .author = "Karpfen",
 .layout = "calculator.shtml",
 .draft = false,
-.tags = ["fish", "pokedex", "tracker", "prizefish"],
+.tags = ["fish", "fishdex", "tracker", "prizefish"],
 ---
 
-## Fish Pokedex
+## Fishdex
 
 Track your caught fish locally in the browser. The page fetches the fish catalog from `/api/v1/fish` at runtime, then uses Datastar signals for filtering, prize toggles, and local-only progress.
 
 ```=html
 <style>
   #pokedex-app {
-    --dex-shell: color-mix(in srgb, var(--color-error, #d64545) 84%, black 16%);
-    --dex-screen: color-mix(in srgb, var(--color-base-100, #fffdf4) 88%, #ffe9b5 12%);
-    --dex-line: color-mix(in srgb, var(--color-base-content, #1f2937) 28%, transparent);
-    --dex-highlight: color-mix(in srgb, var(--color-warning, #f4b942) 65%, white 35%);
-    --dex-prize: color-mix(in srgb, var(--color-warning, #f59e0b) 78%, white 22%);
-    --dex-caught: color-mix(in srgb, var(--color-success, #2f855a) 72%, black 12%);
+    --dex-shell: color-mix(in oklab, var(--color-error, #d64545) 72%, var(--color-primary, #e07a5f) 28%);
+    --dex-shell-border: color-mix(in oklab, var(--dex-shell) 74%, var(--color-neutral, #1f2937) 26%);
+    --dex-screen: color-mix(in oklab, var(--color-base-100, #fffdf4) 82%, var(--color-base-200, #efe7d6) 18%);
+    --dex-screen-border: color-mix(in oklab, var(--color-base-content, #1f2937) 18%, transparent);
+    --dex-line: color-mix(in oklab, var(--color-base-content, #1f2937) 24%, transparent);
+    --dex-highlight: color-mix(in oklab, var(--color-warning, #f4b942) 58%, var(--color-base-100, #fffdf4) 42%);
+    --dex-prize: color-mix(in oklab, var(--color-error, #d64545) 74%, var(--color-base-100, #fffdf4) 26%);
+    --dex-prize-surface: color-mix(in oklab, var(--color-error, #d64545) 18%, var(--color-base-200, #efe7d6) 82%);
+    --dex-grade-rare: color-mix(in oklab, var(--color-warning, #f59e0b) 72%, var(--color-base-100, #fffdf4) 28%);
+    --dex-grade-rare-surface: color-mix(in oklab, var(--color-warning, #f59e0b) 22%, var(--dex-surface-strong) 78%);
+    --dex-grade-highquality: color-mix(in oklab, var(--color-info, #6b8afd) 76%, var(--color-base-100, #fffdf4) 24%);
+    --dex-grade-highquality-surface: color-mix(in oklab, var(--color-info, #6b8afd) 22%, var(--dex-surface-strong) 78%);
+    --dex-grade-general: color-mix(in oklab, var(--color-success, #2f855a) 72%, var(--color-base-100, #fffdf4) 28%);
+    --dex-grade-general-surface: color-mix(in oklab, var(--color-success, #2f855a) 22%, var(--dex-surface-strong) 78%);
+    --dex-grade-trash: color-mix(in oklab, var(--color-base-content, #1f2937) 18%, var(--color-base-100, #fffdf4) 82%);
+    --dex-grade-trash-surface: color-mix(in oklab, var(--color-base-300, #d8d0c0) 54%, var(--color-base-100, #fffdf4) 46%);
+    --dex-grade-unknown: color-mix(in oklab, var(--color-neutral, #1f2937) 46%, var(--color-base-100, #fffdf4) 54%);
+    --dex-grade-unknown-surface: color-mix(in oklab, var(--color-neutral, #1f2937) 18%, var(--dex-surface-strong) 82%);
+    --dex-caught: color-mix(in oklab, var(--color-success, #2f855a) 72%, var(--color-base-200, #111827) 28%);
+    --dex-surface: color-mix(in oklab, var(--color-base-200, #efe7d6) 62%, var(--color-base-100, #fffdf4) 38%);
+    --dex-surface-strong: color-mix(in oklab, var(--color-base-100, #fffdf4) 78%, var(--color-base-200, #efe7d6) 22%);
+    --dex-surface-soft: color-mix(in oklab, var(--color-base-200, #efe7d6) 76%, var(--color-base-300, #d8d0c0) 24%);
+    --dex-field: color-mix(in oklab, var(--color-base-100, #fffdf4) 60%, var(--color-base-200, #efe7d6) 40%);
+    --dex-focus: color-mix(in oklab, var(--color-primary, #e07a5f) 60%, var(--color-base-100, #fffdf4) 40%);
+    --dex-button: color-mix(in oklab, var(--color-primary, #e07a5f) 76%, var(--color-secondary, #6b8afd) 24%);
+    --dex-button-secondary: color-mix(in oklab, var(--color-secondary, #6b8afd) 72%, var(--color-accent, #1f2937) 28%);
+    --dex-button-line: color-mix(in oklab, var(--color-base-content, #1f2937) 18%, transparent);
+    --dex-text-muted: color-mix(in oklab, var(--color-base-content, #1f2937) 68%, transparent);
+    color-scheme: light dark;
     display: grid;
     gap: 1.5rem;
     color: var(--color-base-content, #1f2937);
   }
 
   .pokedex-shell {
-    border: 4px solid color-mix(in srgb, var(--dex-shell) 84%, black 16%);
+    border: 4px solid var(--dex-shell-border);
     border-radius: 2rem;
-    background:
-      radial-gradient(circle at top right, rgba(255, 255, 255, 0.26), transparent 28%),
-      linear-gradient(155deg, color-mix(in srgb, var(--dex-shell) 92%, white 8%), color-mix(in srgb, var(--dex-shell) 74%, black 26%));
-    box-shadow:
-      0 24px 60px rgba(0, 0, 0, 0.18),
-      inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    background: var(--dex-shell);
     overflow: hidden;
   }
 
@@ -47,9 +65,8 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   .pokedex-screen,
   .pokedex-stats {
     border-radius: 1.35rem;
-    border: 3px solid rgba(255, 255, 255, 0.18);
+    border: 3px solid var(--dex-screen-border);
     background: var(--dex-screen);
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.28);
   }
 
   .pokedex-screen {
@@ -80,7 +97,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-subtle {
-    color: color-mix(in srgb, var(--color-base-content, #1f2937) 62%, white 38%);
+    color: var(--dex-text-muted);
     font-size: 0.95rem;
   }
 
@@ -90,12 +107,36 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-search {
+    appearance: none;
     width: 100%;
     border-radius: 999px;
     border: 2px solid var(--dex-line);
-    background: rgba(255, 255, 255, 0.88);
+    background: var(--dex-field);
+    color: var(--color-base-content, #1f2937);
+    font: inherit;
     padding: 0.9rem 1rem;
     font-size: 1rem;
+    transition: border-color 120ms ease, outline-color 120ms ease;
+  }
+
+  .pokedex-search::placeholder {
+    color: var(--dex-text-muted);
+    opacity: 1;
+  }
+
+  .pokedex-search:hover {
+    border-color: color-mix(in oklab, var(--color-base-content, #1f2937) 34%, transparent);
+  }
+
+  .pokedex-search:focus,
+  .pokedex-search:focus-visible {
+    border-color: color-mix(in oklab, var(--color-primary, #e07a5f) 56%, var(--color-base-content, #1f2937) 44%);
+    outline: 3px solid var(--dex-focus);
+    outline-offset: 2px;
+  }
+
+  .pokedex-search:focus:not(:focus-visible) {
+    outline: none;
   }
 
   .pokedex-toolbar {
@@ -112,9 +153,29 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     gap: 0.55rem;
     border-radius: 999px;
     border: 2px solid var(--dex-line);
-    background: rgba(255, 255, 255, 0.78);
+    background: var(--dex-field);
+    color: var(--color-base-content, #1f2937);
     padding: 0.5rem 0.85rem;
     font-weight: 700;
+    transition: border-color 120ms ease, outline-color 120ms ease;
+  }
+
+  .pokedex-toggle:hover {
+    border-color: color-mix(in oklab, var(--color-base-content, #1f2937) 34%, transparent);
+  }
+
+  .pokedex-toggle:focus-within {
+    border-color: color-mix(in oklab, var(--color-primary, #e07a5f) 56%, var(--color-base-content, #1f2937) 44%);
+    outline: 3px solid var(--dex-focus);
+    outline-offset: 2px;
+  }
+
+  .pokedex-toggle input {
+    margin: 0;
+    inline-size: 1rem;
+    block-size: 1rem;
+    flex: none;
+    accent-color: var(--color-primary, #e07a5f);
   }
 
   .pokedex-actions {
@@ -124,20 +185,37 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-button {
+    --dex-button-tone: var(--dex-button);
+    --dex-button-content: var(--color-primary-content, white);
     appearance: none;
-    border: 0;
+    border: 1px solid var(--dex-button-line);
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-base-content, #1f2937) 82%, white 18%);
-    color: var(--color-base-100, white);
+    background: var(--dex-button-tone);
+    color: var(--dex-button-content);
     cursor: pointer;
+    font: inherit;
     font-weight: 700;
     padding: 0.65rem 1rem;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
   }
 
-  .pokedex-button:hover,
+  .pokedex-button-secondary {
+    --dex-button-tone: var(--dex-button-secondary);
+    --dex-button-content: var(--color-secondary-content, white);
+  }
+
+  .pokedex-button:hover {
+    background: color-mix(in oklab, var(--dex-button-tone) 72%, var(--dex-highlight) 28%);
+    border-color: color-mix(in oklab, var(--dex-button-tone) 56%, var(--color-base-content, #1f2937) 44%);
+    transform: translateY(-1px);
+  }
+
   .pokedex-button:focus-visible {
-    background: color-mix(in srgb, var(--color-base-content, #1f2937) 66%, var(--dex-highlight) 34%);
-    outline: none;
+    background: color-mix(in oklab, var(--dex-button-tone) 72%, var(--dex-highlight) 28%);
+    border-color: color-mix(in oklab, var(--dex-button-tone) 56%, var(--color-base-content, #1f2937) 44%);
+    outline: 3px solid var(--dex-focus);
+    outline-offset: 2px;
+    transform: translateY(-1px);
   }
 
   .pokedex-stats {
@@ -156,7 +234,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   .pokedex-stat {
     border-radius: 1rem;
     border: 1px solid var(--dex-line);
-    background: rgba(255, 255, 255, 0.7);
+    background: var(--dex-surface-soft);
     padding: 0.9rem;
   }
 
@@ -182,13 +260,21 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-status {
-    background: rgba(255, 255, 255, 0.68);
-    border: 1px solid var(--dex-line);
+    background: color-mix(in oklab, var(--color-info, #6b8afd) 12%, var(--dex-surface-strong) 88%);
+    border: 1px solid color-mix(in oklab, var(--color-info, #6b8afd) 30%, var(--dex-line) 70%);
   }
 
   .pokedex-error {
-    background: color-mix(in srgb, var(--color-error, #d64545) 18%, white 82%);
-    border: 1px solid color-mix(in srgb, var(--color-error, #d64545) 48%, transparent);
+    background: color-mix(in oklab, var(--color-error, #d64545) 14%, var(--dex-surface-strong) 86%);
+    border: 1px solid color-mix(in oklab, var(--color-error, #d64545) 34%, var(--dex-line) 66%);
+  }
+
+  .pokedex-status strong {
+    color: color-mix(in oklab, var(--color-info, #6b8afd) 54%, var(--color-base-content, #1f2937) 46%);
+  }
+
+  .pokedex-error strong {
+    color: color-mix(in oklab, var(--color-error, #d64545) 60%, var(--color-base-content, #1f2937) 40%);
   }
 
   .pokedex-grid-shell {
@@ -203,7 +289,8 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   .pokedex-group {
     border-radius: 1.4rem;
     border: 2px solid var(--dex-line);
-    background: rgba(255, 255, 255, 0.75);
+    background: var(--dex-surface);
+    color: var(--color-base-content, #1f2937);
     padding: 1rem;
   }
 
@@ -216,9 +303,9 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-group-count {
+    color: var(--dex-text-muted);
     font-size: 0.9rem;
     font-weight: 700;
-    opacity: 0.7;
   }
 
   .pokedex-card-grid {
@@ -234,32 +321,37 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     min-height: 12.5rem;
     border: 2px solid var(--dex-line);
     border-radius: 1.25rem;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 249, 231, 0.92));
+    background: var(--dex-surface-strong);
+    color: var(--color-base-content, #1f2937);
     cursor: pointer;
+    font: inherit;
     padding: 0.95rem;
     position: relative;
     text-align: left;
-    transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
   }
 
-  .pokedex-card:hover,
+  .pokedex-card:hover {
+    border-color: color-mix(in oklab, var(--dex-highlight) 62%, var(--color-base-content, #1f2937) 38%);
+    background: var(--dex-surface);
+    transform: translateY(-2px);
+  }
+
   .pokedex-card:focus-visible {
-    border-color: color-mix(in srgb, var(--dex-highlight) 68%, black 32%);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
-    outline: none;
+    border-color: color-mix(in oklab, var(--dex-highlight) 62%, var(--color-base-content, #1f2937) 38%);
+    background: var(--dex-surface);
+    outline: 3px solid var(--dex-focus);
+    outline-offset: 2px;
     transform: translateY(-2px);
   }
 
   .pokedex-card.is-caught {
-    border-color: color-mix(in srgb, var(--dex-caught) 72%, black 28%);
-    box-shadow: 0 12px 24px rgba(26, 77, 54, 0.16);
+    border-color: color-mix(in oklab, var(--dex-caught) 70%, var(--color-base-content, #1f2937) 30%);
   }
 
   .pokedex-card.is-prize {
-    background:
-      radial-gradient(circle at top right, rgba(245, 158, 11, 0.28), transparent 32%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 244, 214, 0.96));
+    background: var(--dex-prize-surface);
+    border-color: color-mix(in oklab, var(--dex-prize) 44%, var(--dex-line) 56%);
   }
 
   .pokedex-card-top {
@@ -270,10 +362,10 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-fish-id {
+    color: var(--dex-text-muted);
     font-size: 0.78rem;
     font-weight: 800;
     letter-spacing: 0.05em;
-    opacity: 0.72;
     text-transform: uppercase;
   }
 
@@ -290,15 +382,43 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-grade {
-    background: rgba(0, 0, 0, 0.08);
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 10%, var(--dex-surface-soft) 90%);
+    color: var(--color-base-content, #1f2937);
   }
 
   .pokedex-grade.grade-prize {
-    background: color-mix(in srgb, var(--dex-prize) 38%, white 62%);
+    background: color-mix(in oklab, var(--dex-prize) 38%, var(--dex-surface-strong) 62%);
+    color: color-mix(in oklab, var(--color-error, #d64545) 62%, var(--color-base-content, #1f2937) 38%);
+  }
+
+  .pokedex-grade.grade-rare {
+    background: var(--dex-grade-rare-surface);
+    color: color-mix(in oklab, var(--dex-grade-rare) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .pokedex-grade.grade-highquality {
+    background: var(--dex-grade-highquality-surface);
+    color: color-mix(in oklab, var(--dex-grade-highquality) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .pokedex-grade.grade-general {
+    background: var(--dex-grade-general-surface);
+    color: color-mix(in oklab, var(--dex-grade-general) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .pokedex-grade.grade-trash {
+    background: var(--dex-grade-trash-surface);
+    color: color-mix(in oklab, var(--dex-grade-trash) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .pokedex-grade.grade-unknown {
+    background: var(--dex-grade-unknown-surface);
+    color: color-mix(in oklab, var(--dex-grade-unknown) 68%, var(--color-base-content, #1f2937) 32%);
   }
 
   .pokedex-caught {
-    background: color-mix(in srgb, var(--dex-caught) 22%, white 78%);
+    background: color-mix(in oklab, var(--dex-caught) 24%, var(--dex-surface-strong) 76%);
+    color: color-mix(in oklab, var(--color-success, #2f855a) 62%, var(--color-base-content, #1f2937) 38%);
   }
 
   .pokedex-card-main {
@@ -314,9 +434,8 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     width: 4.75rem;
     height: 4.75rem;
     border-radius: 1.2rem;
-    background:
-      radial-gradient(circle at top, rgba(255, 255, 255, 0.88), rgba(245, 221, 148, 0.55));
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--dex-line);
+    background: var(--dex-surface-soft);
   }
 
   .pokedex-icon {
@@ -331,6 +450,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-placeholder {
+    color: var(--dex-text-muted);
     font-size: 2rem;
   }
 
@@ -343,7 +463,8 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   .pokedex-empty {
     border: 2px dashed var(--dex-line);
     border-radius: 1.4rem;
-    background: rgba(255, 255, 255, 0.72);
+    background: var(--dex-surface);
+    color: var(--color-base-content, #1f2937);
     padding: 1.25rem;
     text-align: center;
   }
@@ -376,7 +497,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
 
 <script>
   (() => {
-    const STORAGE_KEY = "fishystuff.pokedex.caught.v1";
+    const STORAGE_KEY = "fishystuff.fishdex.caught.v1";
     const DATASTAR_EVENT = "datastar-sse";
     const DATASTAR_MERGE_SIGNALS = "datastar-merge-signals";
     const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
@@ -552,7 +673,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
             caughtIds = parseCaughtJson(raw);
           } catch (_error) {
             localStorage.removeItem(STORAGE_KEY);
-            mergeSignals({ status_message: "Reset corrupted local pokedex progress." });
+            mergeSignals({ status_message: "Reset corrupted local fishdex progress." });
           }
         }
       } catch (_error) {
@@ -598,7 +719,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         }
       } catch (_error) {
       }
-      downloadJson("fishystuff-pokedex-caught.json", text);
+      downloadJson("fishystuff-fishdex-caught.json", text);
       mergeSignals({ status_message: `Downloaded ${normalized.length} caught fish IDs.` });
     }
 
@@ -858,7 +979,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   })();
 </script>
 
-<div id="pokedex-app"
+<div id="pokedex-app" class="not-prose"
      data-signals="{
        fish: [],
        revision: '',
@@ -915,7 +1036,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
 
             <div class="pokedex-actions">
               <button type="button" class="pokedex-button" data-on-click="window.Pokedex.exportCaught($caught_ids || [])">Export</button>
-              <button type="button" class="pokedex-button" data-on-click="window.Pokedex.importCaught()">Import</button>
+              <button type="button" class="pokedex-button pokedex-button-secondary" data-on-click="window.Pokedex.importCaught()">Import</button>
             </div>
           </div>
 
