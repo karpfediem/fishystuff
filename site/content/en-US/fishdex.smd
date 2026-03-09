@@ -376,6 +376,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     font-size: 0.72rem;
     font-weight: 800;
     letter-spacing: 0.04em;
+    line-height: 1;
     padding: 0.3rem 0.6rem;
     text-transform: uppercase;
     white-space: nowrap;
@@ -419,6 +420,16 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   .pokedex-caught {
     background: color-mix(in oklab, var(--dex-caught) 24%, var(--dex-surface-strong) 76%);
     color: color-mix(in oklab, var(--color-success, #2f855a) 62%, var(--color-base-content, #1f2937) 38%);
+  }
+
+  .pokedex-caught-placeholder {
+    visibility: hidden;
+  }
+
+  .pokedex-card-footer {
+    display: flex;
+    align-items: flex-start;
+    min-height: 1.32rem;
   }
 
   .pokedex-card-main {
@@ -505,6 +516,8 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       currentCaughtIds: [],
       renderKey: "",
       gridBound: false,
+      pendingViewportRestore: null,
+      pendingViewportFrame: 0,
     };
 
     function mergeSignals(patch) {
@@ -696,6 +709,61 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       mergeSignals({ caught_ids: caughtIds, status_message: "" });
     }
 
+    function rememberViewport(card) {
+      if (!(card instanceof HTMLElement)) {
+        state.pendingViewportRestore = null;
+        return;
+      }
+      const fishId = Number.parseInt(card.dataset.fishId || "", 10);
+      if (!Number.isInteger(fishId)) {
+        state.pendingViewportRestore = null;
+        return;
+      }
+      state.pendingViewportRestore = {
+        fishId,
+        layoutTop: card.offsetTop + (card.offsetParent instanceof HTMLElement
+          ? card.offsetParent.getBoundingClientRect().top
+          : 0),
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
+        restoreFocus: document.activeElement === card,
+      };
+    }
+
+    function scheduleViewportRestore() {
+      if (!state.pendingViewportRestore) {
+        return;
+      }
+      if (state.pendingViewportFrame) {
+        window.cancelAnimationFrame(state.pendingViewportFrame);
+      }
+      state.pendingViewportFrame = window.requestAnimationFrame(() => {
+        state.pendingViewportFrame = 0;
+        const pending = state.pendingViewportRestore;
+        state.pendingViewportRestore = null;
+        if (!pending) {
+          return;
+        }
+
+        const nextCard = document.querySelector(`[data-fish-id="${pending.fishId}"]`);
+        if (!(nextCard instanceof HTMLElement)) {
+          window.scrollTo(pending.scrollX, pending.scrollY);
+          return;
+        }
+
+        const nextLayoutTop = nextCard.offsetTop + (nextCard.offsetParent instanceof HTMLElement
+          ? nextCard.offsetParent.getBoundingClientRect().top
+          : 0);
+        const delta = nextLayoutTop - pending.layoutTop;
+        if (Math.abs(delta) > 0.5) {
+          window.scrollBy(0, delta);
+        }
+        if (pending.restoreFocus) {
+          nextCard.focus({ preventScroll: true });
+        }
+      });
+    }
+
     function downloadJson(filename, text) {
       const blob = new Blob([text], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -802,10 +870,14 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       main.appendChild(iconWrap);
       main.appendChild(createElement("div", "pokedex-name", fish.name || `Fish ${fish.fish_id}`));
 
-      button.append(top, main);
-      if (caughtSet.has(fish.fish_id)) {
-        button.appendChild(createElement("span", "pokedex-caught", "Caught"));
-      }
+      const footer = createElement("div", "pokedex-card-footer");
+      footer.appendChild(createElement(
+        "span",
+        caughtSet.has(fish.fish_id) ? "pokedex-caught" : "pokedex-caught pokedex-caught-placeholder",
+        "Caught"
+      ));
+
+      button.append(top, main, footer);
       return button;
     }
 
@@ -843,6 +915,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         }
         const fishId = Number.parseInt(card.dataset.fishId || "", 10);
         if (Number.isInteger(fishId)) {
+          rememberViewport(card);
           toggleCaught(fishId);
         }
       });
@@ -924,6 +997,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         patch.api_error_hint = "";
       }
       mergeSignals(patch);
+      scheduleViewportRestore();
     }
 
     function handleDatastarEvent(event) {
