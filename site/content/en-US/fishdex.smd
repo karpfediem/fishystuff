@@ -357,7 +357,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     gap: 0.65rem;
   }
 
-  .pokedex-card-toggle {
+  .pokedex-card-open {
     appearance: none;
     position: absolute;
     inset: 0;
@@ -369,7 +369,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     padding: 0;
   }
 
-  .pokedex-card-toggle:focus-visible {
+  .pokedex-card-open:focus-visible {
     outline: none;
   }
 
@@ -388,35 +388,47 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     gap: 0.45rem;
   }
 
-  .pokedex-inspect-button {
+  .pokedex-caught-button {
     appearance: none;
     pointer-events: auto;
-    border: 1px solid var(--dex-line);
+    border: 0;
     border-radius: 999px;
-    background: var(--dex-field);
-    color: var(--color-base-content, #1f2937);
+    background: transparent;
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 60%, transparent);
     cursor: pointer;
-    font: inherit;
-    font-size: 0.72rem;
-    font-weight: 800;
-    letter-spacing: 0.04em;
-    line-height: 1;
-    padding: 0.3rem 0.6rem;
-    text-transform: uppercase;
-    transition: border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
-    white-space: nowrap;
+    display: grid;
+    place-items: center;
+    inline-size: 2.2rem;
+    block-size: 2.2rem;
+    padding: 0;
+    transition: color 120ms ease, background 120ms ease, outline-color 120ms ease;
   }
 
-  .pokedex-inspect-button:hover {
-    border-color: color-mix(in oklab, var(--dex-highlight) 56%, var(--color-base-content, #1f2937) 44%);
-    background: var(--dex-surface);
+  .pokedex-caught-button:hover {
+    background: color-mix(in oklab, var(--dex-highlight) 18%, var(--dex-surface-soft) 82%);
+    color: var(--color-base-content, #1f2937);
   }
 
-  .pokedex-inspect-button:focus-visible {
-    border-color: color-mix(in oklab, var(--dex-highlight) 56%, var(--color-base-content, #1f2937) 44%);
-    background: var(--dex-surface);
+  .pokedex-caught-button:focus-visible {
+    background: color-mix(in oklab, var(--dex-highlight) 18%, var(--dex-surface-soft) 82%);
     outline: 3px solid var(--dex-focus);
     outline-offset: 2px;
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .pokedex-caught-button.is-caught {
+    color: color-mix(in oklab, var(--color-success, #2f855a) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .pokedex-caught-button.is-caught:hover,
+  .pokedex-caught-button.is-caught:focus-visible {
+    background: color-mix(in oklab, var(--dex-caught) 16%, var(--dex-surface-soft) 84%);
+  }
+
+  .pokedex-caught-button svg {
+    inline-size: 2rem;
+    block-size: 2rem;
+    flex: none;
   }
 
   .pokedex-grade,
@@ -583,6 +595,13 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     font-size: clamp(1.25rem, 2.2vw, 1.85rem);
     font-weight: 400;
     letter-spacing: 0.03em;
+  }
+
+  .pokedex-details-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
   }
 
   .pokedex-details-close {
@@ -763,6 +782,16 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     const DATASTAR_EVENT = "datastar-sse";
     const DATASTAR_MERGE_SIGNALS = "datastar-merge-signals";
     const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
+    const HEROICON_CHECK_BADGE_OUTLINE = `
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+      </svg>
+    `;
+    const HEROICON_CHECK_BADGE_SOLID = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6" aria-hidden="true">
+        <path fill-rule="evenodd" d="M8.603 3.799A4.49 4.49 0 0 1 12 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 0 1 3.498 1.307 4.491 4.491 0 0 1 1.307 3.497A4.49 4.49 0 0 1 21.75 12a4.49 4.49 0 0 1-1.549 3.397 4.491 4.491 0 0 1-1.307 3.497 4.491 4.491 0 0 1-3.497 1.307A4.49 4.49 0 0 1 12 21.75a4.49 4.49 0 0 1-3.397-1.549 4.49 4.49 0 0 1-3.498-1.306 4.491 4.491 0 0 1-1.307-3.498A4.49 4.49 0 0 1 2.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 0 1 1.307-3.497 4.49 4.49 0 0 1 3.497-1.307Zm7.007 6.387a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" />
+      </svg>
+    `;
     const state = {
       currentCaughtIds: [],
       fishById: new Map(),
@@ -977,9 +1006,9 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       const activeElement = document.activeElement;
       let restoreFocusSelector = "";
       if (activeElement instanceof Element && card.contains(activeElement)) {
-        restoreFocusSelector = activeElement.closest("[data-action='inspect']")
-          ? "[data-action='inspect']"
-          : ".pokedex-card-toggle";
+        restoreFocusSelector = activeElement.closest("[data-action='toggle-caught']")
+          ? "[data-action='toggle-caught']"
+          : "[data-action='open-details']";
       }
       state.pendingViewportRestore = {
         fishId,
@@ -1122,38 +1151,36 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     }
 
     function renderFishCard(fish, caughtSet) {
+      const isCaught = caughtSet.has(fish.fish_id);
       const card = createElement("article", "pokedex-card");
       card.dataset.fishId = String(fish.fish_id);
-      if (caughtSet.has(fish.fish_id)) {
+      if (isCaught) {
         card.classList.add("is-caught");
       }
       if (fish.is_prize || fish.grade === "Prize") {
         card.classList.add("is-prize");
       }
 
-      const toggle = createElement("button", "pokedex-card-toggle");
-      toggle.type = "button";
-      toggle.setAttribute("aria-pressed", caughtSet.has(fish.fish_id) ? "true" : "false");
-      toggle.setAttribute(
-        "aria-label",
-        `Mark ${fish.name || `Fish ${fish.fish_id}`} as ${caughtSet.has(fish.fish_id) ? "not caught" : "caught"}`
-      );
+      const openButton = createElement("button", "pokedex-card-open");
+      openButton.type = "button";
+      openButton.dataset.action = "open-details";
+      openButton.setAttribute("aria-haspopup", "dialog");
+      openButton.setAttribute("aria-label", `Open details for ${fish.name || `Fish ${fish.fish_id}`}`);
 
       const content = createElement("div", "pokedex-card-content");
       const top = createElement("div", "pokedex-card-top");
       const actions = createElement("div", "pokedex-card-actions");
-      const inspectButton = createElement("button", "pokedex-inspect-button", "Info");
-      inspectButton.type = "button";
-      inspectButton.dataset.action = "inspect";
-      inspectButton.dataset.fishId = String(fish.fish_id);
-      inspectButton.setAttribute("aria-haspopup", "dialog");
-      inspectButton.setAttribute("aria-label", `Inspect ${fish.name || `Fish ${fish.fish_id}`}`);
-      actions.appendChild(inspectButton);
-      actions.appendChild(createElement(
-        "span",
-        caughtSet.has(fish.fish_id) ? "pokedex-caught" : "pokedex-caught pokedex-caught-placeholder",
-        "Caught"
-      ));
+      const caughtButton = createElement("button", `pokedex-caught-button${isCaught ? " is-caught" : ""}`);
+      caughtButton.type = "button";
+      caughtButton.dataset.action = "toggle-caught";
+      caughtButton.dataset.fishId = String(fish.fish_id);
+      caughtButton.setAttribute("aria-pressed", isCaught ? "true" : "false");
+      caughtButton.setAttribute(
+        "aria-label",
+        `Mark ${fish.name || `Fish ${fish.fish_id}`} as ${isCaught ? "not caught" : "caught"}`
+      );
+      caughtButton.innerHTML = isCaught ? HEROICON_CHECK_BADGE_SOLID : HEROICON_CHECK_BADGE_OUTLINE;
+      actions.appendChild(caughtButton);
       top.appendChild(actions);
 
       if (fish.grade) {
@@ -1176,7 +1203,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       main.appendChild(createElement("div", "pokedex-name", fish.name || `Fish ${fish.fish_id}`));
 
       content.append(top, main);
-      card.append(toggle, content);
+      card.append(openButton, content);
       return card;
     }
 
@@ -1220,12 +1247,12 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         if (!Number.isInteger(fishId)) {
           return;
         }
-        if (target.closest("[data-action='inspect']")) {
-          openDetails(fishId);
+        if (target.closest("[data-action='toggle-caught']")) {
+          rememberViewport(card);
+          toggleCaught(fishId);
           return;
         }
-        rememberViewport(card);
-        toggleCaught(fishId);
+        openDetails(fishId);
       });
       state.gridBound = true;
     }
@@ -1298,6 +1325,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       modal.hidden = false;
       const cached = state.detailCache.get(meta.fishId) || { loading: false, error: "", mapping: null };
       const title = document.getElementById("pokedex-details-title");
+      const titleToggle = document.getElementById("pokedex-details-caught-toggle");
       const itemKey = document.getElementById("pokedex-details-item-key");
       const encyclopediaKey = document.getElementById("pokedex-details-encyclopedia-key");
       const caught = document.getElementById("pokedex-details-caught");
@@ -1317,6 +1345,15 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       const guideIconUrl = normalizeFishIconUrl(cached.mapping && cached.mapping.encyclopedia_icon);
 
       setElementText(title, meta.name);
+      if (titleToggle instanceof HTMLButtonElement) {
+        titleToggle.className = `pokedex-caught-button${meta.caught ? " is-caught" : ""}`;
+        titleToggle.setAttribute("aria-pressed", meta.caught ? "true" : "false");
+        titleToggle.setAttribute(
+          "aria-label",
+          `Mark ${meta.name} as ${meta.caught ? "not caught" : "caught"}`
+        );
+        titleToggle.innerHTML = meta.caught ? HEROICON_CHECK_BADGE_SOLID : HEROICON_CHECK_BADGE_OUTLINE;
+      }
       setElementText(itemKey, String(meta.fishId));
       setElementText(
         encyclopediaKey,
@@ -1385,7 +1422,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       if (!restoreFocus || !Number.isInteger(fishId)) {
         return;
       }
-      const nextFocus = document.querySelector(`[data-fish-id="${fishId}"] [data-action="inspect"]`);
+      const nextFocus = document.querySelector(`[data-fish-id="${fishId}"] [data-action="open-details"]`);
       if (nextFocus instanceof HTMLElement) {
         nextFocus.focus({ preventScroll: true });
       }
@@ -1464,6 +1501,13 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       modal.addEventListener("click", (event) => {
         const target = event.target;
         if (!(target instanceof Element)) {
+          return;
+        }
+        if (target.closest("[data-action='toggle-caught-details']")) {
+          if (Number.isInteger(state.detailsFishId)) {
+            toggleCaught(state.detailsFishId);
+            renderDetails();
+          }
           return;
         }
         if (target.closest("[data-action='close-details']")) {
@@ -1748,8 +1792,14 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
           </div>
 
           <div class="pokedex-details-copy">
-            <div>
+            <div class="pokedex-details-title-row">
               <h3 id="pokedex-details-title" class="pokedex-details-title">Fish</h3>
+              <button type="button"
+                      id="pokedex-details-caught-toggle"
+                      class="pokedex-caught-button"
+                      data-action="toggle-caught-details"
+                      aria-pressed="false"
+                      aria-label="Mark fish as caught"></button>
             </div>
 
             <div class="pokedex-details-badges">
