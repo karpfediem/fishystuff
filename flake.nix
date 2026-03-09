@@ -21,11 +21,8 @@
     waypoints.url = "github:flockenberger/bdo-fish-waypoints";
     waypoints.flake = false;
 
-    # zig.url = "github:mitchellh/zig-overlay";
-    zig.url = "github:bandithedoge/zig-overlay"; # provides download mirrors - nightly builds were purged from official zig github
-
-    zig2nix.url = "github:Cloudef/zig2nix";
-    zine.url = "github:kristoff-it/zine";
+    # zine.url = "github:kristoff-it/zine";
+    zine.url = "github:trevorriles/zine/fix-nix-flake";
   };
 
   nixConfig = {
@@ -36,7 +33,6 @@
   outputs = inputs@{ self, flake-parts, devenv-root, crane, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, flake-parts-lib, ... }:
       let
-        systems = builtins.attrNames inputs.zig.packages;
         inherit (flake-parts-lib) importApply;
         flakeModules.default = importApply ./nixpkgs { inherit withSystem; };
       in
@@ -45,7 +41,8 @@
           flakeModules.default
           inputs.devenv.flakeModule
         ];
-        inherit systems;
+
+	systems = ["x86_64-linux"];
 
         perSystem = { config, self', inputs', pkgs, system, waypoints, ... }:
           let

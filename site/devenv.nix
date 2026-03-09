@@ -2,7 +2,9 @@
   name = "site";
   packages = with pkgs; [
     just
-    inputs.zine.packages.${system}.default
+    (inputs.zine.packages.${system}.default.override { 
+          zigPreferMusl = true;
+    })
     tailwindcss
     watchexec
   ];
