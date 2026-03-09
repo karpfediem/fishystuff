@@ -315,19 +315,15 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-card {
-    appearance: none;
     display: grid;
-    gap: 0.75rem;
     min-height: 12.5rem;
     border: 2px solid var(--dex-line);
     border-radius: 1.25rem;
     background: var(--dex-surface-strong);
     color: var(--color-base-content, #1f2937);
-    cursor: pointer;
-    font: inherit;
+    overflow: hidden;
     padding: 0.95rem;
     position: relative;
-    text-align: left;
     transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
   }
 
@@ -337,7 +333,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     transform: translateY(-2px);
   }
 
-  .pokedex-card:focus-visible {
+  .pokedex-card:focus-within {
     border-color: color-mix(in oklab, var(--dex-highlight) 62%, var(--color-base-content, #1f2937) 38%);
     background: var(--dex-surface);
     outline: 3px solid var(--dex-focus);
@@ -361,12 +357,66 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     gap: 0.65rem;
   }
 
-  .pokedex-fish-id {
-    color: var(--dex-text-muted);
-    font-size: 0.78rem;
+  .pokedex-card-toggle {
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: transparent;
+    border-radius: inherit;
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+  }
+
+  .pokedex-card-toggle:focus-visible {
+    outline: none;
+  }
+
+  .pokedex-card-content {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 0.75rem;
+    pointer-events: none;
+  }
+
+  .pokedex-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    gap: 0.45rem;
+  }
+
+  .pokedex-inspect-button {
+    appearance: none;
+    pointer-events: auto;
+    border: 1px solid var(--dex-line);
+    border-radius: 999px;
+    background: var(--dex-field);
+    color: var(--color-base-content, #1f2937);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.72rem;
     font-weight: 800;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    padding: 0.3rem 0.6rem;
     text-transform: uppercase;
+    transition: border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
+    white-space: nowrap;
+  }
+
+  .pokedex-inspect-button:hover {
+    border-color: color-mix(in oklab, var(--dex-highlight) 56%, var(--color-base-content, #1f2937) 44%);
+    background: var(--dex-surface);
+  }
+
+  .pokedex-inspect-button:focus-visible {
+    border-color: color-mix(in oklab, var(--dex-highlight) 56%, var(--color-base-content, #1f2937) 44%);
+    background: var(--dex-surface);
+    outline: 3px solid var(--dex-focus);
+    outline-offset: 2px;
   }
 
   .pokedex-grade,
@@ -426,12 +476,6 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     visibility: hidden;
   }
 
-  .pokedex-card-footer {
-    display: flex;
-    align-items: flex-start;
-    min-height: 1.32rem;
-  }
-
   .pokedex-card-main {
     display: grid;
     justify-items: center;
@@ -480,8 +524,215 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     text-align: center;
   }
 
+  .pokedex-details-modal[hidden] {
+    display: none;
+  }
+
+  .pokedex-details-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+  }
+
+  .pokedex-details-backdrop {
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 36%, transparent);
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+  }
+
+  .pokedex-details-panel {
+    position: relative;
+    z-index: 1;
+    width: min(42rem, 100%);
+    max-height: min(90vh, 46rem);
+    overflow: auto;
+    border-radius: 1.5rem;
+    border: 3px solid var(--dex-screen-border);
+    background: var(--dex-screen);
+    color: var(--color-base-content, #1f2937);
+    padding: 1.2rem;
+  }
+
+  .pokedex-details-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .pokedex-details-header-main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+    min-width: 0;
+  }
+
+  .pokedex-details-title {
+    margin: 0;
+    font-family: "Modak", "Trebuchet MS", sans-serif;
+    font-size: clamp(1.25rem, 2.2vw, 1.85rem);
+    font-weight: 400;
+    letter-spacing: 0.03em;
+  }
+
+  .pokedex-details-close {
+    flex: none;
+  }
+
+  .pokedex-details-icon-wrap {
+    display: grid;
+    place-items: center;
+    width: 5.5rem;
+    height: 5.5rem;
+    border-radius: 1.4rem;
+    border: 2px solid var(--dex-line);
+    background: var(--dex-surface-soft);
+  }
+
+  .pokedex-details-icon-wrap.grade-prize {
+    border-color: color-mix(in oklab, var(--dex-prize) 64%, var(--dex-line) 36%);
+    background: var(--dex-prize-surface);
+  }
+
+  .pokedex-details-icon-wrap.grade-rare {
+    border-color: color-mix(in oklab, var(--dex-grade-rare) 64%, var(--dex-line) 36%);
+    background: var(--dex-grade-rare-surface);
+  }
+
+  .pokedex-details-icon-wrap.grade-highquality {
+    border-color: color-mix(in oklab, var(--dex-grade-highquality) 64%, var(--dex-line) 36%);
+    background: var(--dex-grade-highquality-surface);
+  }
+
+  .pokedex-details-icon-wrap.grade-general {
+    border-color: color-mix(in oklab, var(--dex-grade-general) 64%, var(--dex-line) 36%);
+    background: var(--dex-grade-general-surface);
+  }
+
+  .pokedex-details-icon-wrap.grade-trash {
+    border-color: color-mix(in oklab, var(--dex-grade-trash) 64%, var(--dex-line) 36%);
+    background: var(--dex-grade-trash-surface);
+  }
+
+  .pokedex-details-icon-wrap.grade-unknown {
+    border-color: color-mix(in oklab, var(--dex-grade-unknown) 64%, var(--dex-line) 36%);
+    background: var(--dex-grade-unknown-surface);
+  }
+
+  .pokedex-details-icon {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .pokedex-details-copy {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .pokedex-details-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .pokedex-details-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.75rem;
+  }
+
+  .pokedex-details-guide {
+    margin-bottom: 1rem;
+  }
+
+  .pokedex-details-guide-frame {
+    display: grid;
+    place-items: center;
+    min-height: 14rem;
+    border-radius: 1.35rem;
+    border: 1px solid var(--dex-line);
+    background: var(--dex-surface);
+    padding: 1rem;
+  }
+
+  .pokedex-details-guide-image {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 16rem;
+    object-fit: contain;
+  }
+
+  .pokedex-details-meta-card,
+  .pokedex-details-section {
+    border-radius: 1rem;
+    border: 1px solid var(--dex-line);
+    background: var(--dex-surface);
+    padding: 0.85rem 0.95rem;
+  }
+
+  .pokedex-details-meta-card dt {
+    margin: 0 0 0.35rem;
+    color: var(--dex-text-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .pokedex-details-meta-card dd {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .pokedex-details-stack {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  .pokedex-details-section h4 {
+    margin: 0 0 0.45rem;
+    font-size: 1rem;
+  }
+
+  .pokedex-details-note {
+    margin: 0.6rem 0 0;
+    color: var(--dex-text-muted);
+    font-size: 0.92rem;
+  }
+
+  .pokedex-details-note.is-error {
+    color: color-mix(in oklab, var(--color-error, #d64545) 62%, var(--color-base-content, #1f2937) 38%);
+  }
+
   @media (max-width: 900px) {
     .pokedex-top {
+      grid-template-columns: 1fr;
+    }
+
+    .pokedex-details-header {
+      grid-template-columns: 1fr;
+    }
+
+    .pokedex-details-header-main {
       grid-template-columns: 1fr;
     }
   }
@@ -514,6 +765,10 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
     const state = {
       currentCaughtIds: [],
+      fishById: new Map(),
+      detailCache: new Map(),
+      detailsFishId: null,
+      detailsBound: false,
       renderKey: "",
       gridBound: false,
       pendingViewportRestore: null,
@@ -719,6 +974,13 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         state.pendingViewportRestore = null;
         return;
       }
+      const activeElement = document.activeElement;
+      let restoreFocusSelector = "";
+      if (activeElement instanceof Element && card.contains(activeElement)) {
+        restoreFocusSelector = activeElement.closest("[data-action='inspect']")
+          ? "[data-action='inspect']"
+          : ".pokedex-card-toggle";
+      }
       state.pendingViewportRestore = {
         fishId,
         layoutTop: card.offsetTop + (card.offsetParent instanceof HTMLElement
@@ -726,7 +988,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
           : 0),
         scrollX: window.scrollX,
         scrollY: window.scrollY,
-        restoreFocus: document.activeElement === card,
+        restoreFocusSelector,
       };
     }
 
@@ -758,8 +1020,13 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         if (Math.abs(delta) > 0.5) {
           window.scrollBy(0, delta);
         }
-        if (pending.restoreFocus) {
-          nextCard.focus({ preventScroll: true });
+        if (pending.restoreFocusSelector) {
+          const nextFocus = nextCard.matches(pending.restoreFocusSelector)
+            ? nextCard
+            : nextCard.querySelector(pending.restoreFocusSelector);
+          if (nextFocus instanceof HTMLElement) {
+            nextFocus.focus({ preventScroll: true });
+          }
         }
       });
     }
@@ -811,6 +1078,10 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       }
     }
 
+    function slugifyGrade(value) {
+      return String(value || "unknown").toLowerCase();
+    }
+
     function createElement(tagName, className, textContent) {
       const element = document.createElement(tagName);
       if (className) {
@@ -851,22 +1122,42 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     }
 
     function renderFishCard(fish, caughtSet) {
-      const button = createElement("button", "pokedex-card");
-      button.type = "button";
-      button.dataset.fishId = String(fish.fish_id);
+      const card = createElement("article", "pokedex-card");
+      card.dataset.fishId = String(fish.fish_id);
       if (caughtSet.has(fish.fish_id)) {
-        button.classList.add("is-caught");
+        card.classList.add("is-caught");
       }
       if (fish.is_prize || fish.grade === "Prize") {
-        button.classList.add("is-prize");
+        card.classList.add("is-prize");
       }
 
+      const toggle = createElement("button", "pokedex-card-toggle");
+      toggle.type = "button";
+      toggle.setAttribute("aria-pressed", caughtSet.has(fish.fish_id) ? "true" : "false");
+      toggle.setAttribute(
+        "aria-label",
+        `Mark ${fish.name || `Fish ${fish.fish_id}`} as ${caughtSet.has(fish.fish_id) ? "not caught" : "caught"}`
+      );
+
+      const content = createElement("div", "pokedex-card-content");
       const top = createElement("div", "pokedex-card-top");
-      const idWrap = createElement("div", "pokedex-fish-id", `#${fish.fish_id}`);
-      top.appendChild(idWrap);
+      const actions = createElement("div", "pokedex-card-actions");
+      const inspectButton = createElement("button", "pokedex-inspect-button", "Info");
+      inspectButton.type = "button";
+      inspectButton.dataset.action = "inspect";
+      inspectButton.dataset.fishId = String(fish.fish_id);
+      inspectButton.setAttribute("aria-haspopup", "dialog");
+      inspectButton.setAttribute("aria-label", `Inspect ${fish.name || `Fish ${fish.fish_id}`}`);
+      actions.appendChild(inspectButton);
+      actions.appendChild(createElement(
+        "span",
+        caughtSet.has(fish.fish_id) ? "pokedex-caught" : "pokedex-caught pokedex-caught-placeholder",
+        "Caught"
+      ));
+      top.appendChild(actions);
 
       if (fish.grade) {
-        const grade = createElement("span", `pokedex-grade grade-${String(fish.grade).toLowerCase()}`, fish.grade);
+        const grade = createElement("span", `pokedex-grade grade-${slugifyGrade(fish.grade)}`, fish.grade);
         top.appendChild(grade);
       }
 
@@ -884,15 +1175,9 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       main.appendChild(iconWrap);
       main.appendChild(createElement("div", "pokedex-name", fish.name || `Fish ${fish.fish_id}`));
 
-      const footer = createElement("div", "pokedex-card-footer");
-      footer.appendChild(createElement(
-        "span",
-        caughtSet.has(fish.fish_id) ? "pokedex-caught" : "pokedex-caught pokedex-caught-placeholder",
-        "Caught"
-      ));
-
-      button.append(top, main, footer);
-      return button;
+      content.append(top, main);
+      card.append(toggle, content);
+      return card;
     }
 
     function renderGroup(title, fish, caughtSet) {
@@ -923,25 +1208,288 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         return;
       }
       grid.addEventListener("click", (event) => {
-        const card = event.target.closest("[data-fish-id]");
+        const target = event.target;
+        if (!(target instanceof Element)) {
+          return;
+        }
+        const card = target.closest("[data-fish-id]");
         if (!card) {
           return;
         }
         const fishId = Number.parseInt(card.dataset.fishId || "", 10);
-        if (Number.isInteger(fishId)) {
-          rememberViewport(card);
-          toggleCaught(fishId);
+        if (!Number.isInteger(fishId)) {
+          return;
         }
+        if (target.closest("[data-action='inspect']")) {
+          openDetails(fishId);
+          return;
+        }
+        rememberViewport(card);
+        toggleCaught(fishId);
       });
       state.gridBound = true;
     }
 
+    function fishMetaById(fishId) {
+      if (!Number.isInteger(fishId)) {
+        return null;
+      }
+      const fish = state.fishById.get(fishId);
+      if (!fish) {
+        return null;
+      }
+      return {
+        fishId,
+        name: fish.name || `Fish ${fishId}`,
+        grade: fish.grade || "Unknown",
+        isPrize: fish.is_prize === true || fish.grade === "Prize",
+        iconUrl: fish.icon_url || "",
+        caught: state.currentCaughtIds.includes(fishId),
+      };
+    }
+
+    function fishMapApiUrl(fishId) {
+      const url = new URL(apiUrl("/api/v1/fish_map"));
+      url.searchParams.set("item_key", String(fishId));
+      return url.toString();
+    }
+
+    function normalizeFishIconUrl(value) {
+      const raw = String(value || "").trim();
+      if (!raw || raw.toLowerCase() === "null") {
+        return "";
+      }
+      if (
+        raw.startsWith("http://")
+        || raw.startsWith("https://")
+        || raw.startsWith("data:")
+      ) {
+        return raw;
+      }
+      if (raw.startsWith("/")) {
+        return apiUrl(raw);
+      }
+
+      let file = raw.split("/").pop() || raw;
+      if (!file.toLowerCase().endsWith(".png")) {
+        file += ".png";
+      }
+      return apiUrl(`/images/FishIcons/${file}`);
+    }
+
+    function setElementText(element, text) {
+      if (element) {
+        element.textContent = text;
+      }
+    }
+
+    function renderDetails() {
+      const modal = document.getElementById("pokedex-details");
+      if (!(modal instanceof HTMLElement)) {
+        return;
+      }
+
+      const meta = fishMetaById(state.detailsFishId);
+      if (!meta) {
+        modal.hidden = true;
+        return;
+      }
+
+      modal.hidden = false;
+      const cached = state.detailCache.get(meta.fishId) || { loading: false, error: "", mapping: null };
+      const title = document.getElementById("pokedex-details-title");
+      const itemKey = document.getElementById("pokedex-details-item-key");
+      const encyclopediaKey = document.getElementById("pokedex-details-encyclopedia-key");
+      const caught = document.getElementById("pokedex-details-caught");
+      const grade = document.getElementById("pokedex-details-grade");
+      const prize = document.getElementById("pokedex-details-prize");
+      const spotsNote = document.getElementById("pokedex-details-spots-note");
+      const icon = document.getElementById("pokedex-details-icon");
+      const iconFrame = document.getElementById("pokedex-details-icon-frame");
+      const placeholder = document.getElementById("pokedex-details-placeholder");
+      const guideImage = document.getElementById("pokedex-details-guide-image");
+      const guidePlaceholder = document.getElementById("pokedex-details-guide-placeholder");
+      const iconFrameGrade = meta.isPrize ? "prize" : slugifyGrade(meta.grade);
+      const itemIconUrl = normalizeFishIconUrl(
+        (cached.mapping && cached.mapping.icon)
+          || meta.iconUrl
+      );
+      const guideIconUrl = normalizeFishIconUrl(cached.mapping && cached.mapping.encyclopedia_icon);
+
+      setElementText(title, meta.name);
+      setElementText(itemKey, String(meta.fishId));
+      setElementText(
+        encyclopediaKey,
+        cached.mapping && Number.isInteger(cached.mapping.encyclopedia_key)
+          ? String(cached.mapping.encyclopedia_key)
+          : cached.loading
+            ? "Loading..."
+            : "Unavailable"
+      );
+      setElementText(
+        spotsNote,
+        "Planned input: evidence locations mapped back to fishing zones, then ranked by rarity and bite-time behavior in each zone."
+      );
+
+      if (caught instanceof HTMLElement) {
+        caught.className = meta.caught ? "pokedex-caught" : "pokedex-grade grade-unknown";
+        caught.textContent = meta.caught ? "Caught" : "Not Caught";
+      }
+      if (grade instanceof HTMLElement) {
+        grade.className = `pokedex-grade grade-${slugifyGrade(meta.grade)}`;
+        grade.textContent = meta.grade;
+      }
+      if (prize instanceof HTMLElement) {
+        prize.hidden = !meta.isPrize;
+        if (meta.isPrize) {
+          prize.className = "pokedex-grade grade-prize";
+          prize.textContent = "Prize Fish";
+        }
+      }
+      if (icon instanceof HTMLImageElement && placeholder instanceof HTMLElement) {
+        if (iconFrame instanceof HTMLElement) {
+          iconFrame.className = `pokedex-details-icon-wrap grade-${iconFrameGrade}`;
+        }
+        if (itemIconUrl) {
+          icon.hidden = false;
+          icon.src = itemIconUrl;
+          icon.alt = `${meta.name} icon`;
+          placeholder.hidden = true;
+        } else {
+          icon.hidden = true;
+          icon.removeAttribute("src");
+          icon.alt = "";
+          placeholder.hidden = false;
+        }
+      }
+      if (guideImage instanceof HTMLImageElement && guidePlaceholder instanceof HTMLElement) {
+        if (guideIconUrl) {
+          guideImage.hidden = false;
+          guideImage.src = guideIconUrl;
+          guideImage.alt = `${meta.name} guide image`;
+          guidePlaceholder.hidden = true;
+        } else {
+          guideImage.hidden = true;
+          guideImage.removeAttribute("src");
+          guideImage.alt = "";
+          guidePlaceholder.hidden = false;
+        }
+      }
+    }
+
+    function closeDetails(options = {}) {
+      const restoreFocus = options.restoreFocus !== false;
+      const fishId = state.detailsFishId;
+      state.detailsFishId = null;
+      renderDetails();
+      if (!restoreFocus || !Number.isInteger(fishId)) {
+        return;
+      }
+      const nextFocus = document.querySelector(`[data-fish-id="${fishId}"] [data-action="inspect"]`);
+      if (nextFocus instanceof HTMLElement) {
+        nextFocus.focus({ preventScroll: true });
+      }
+    }
+
+    async function loadDetailsMapping(fishId) {
+      const cached = state.detailCache.get(fishId);
+      if (cached && (cached.loading || cached.mapping)) {
+        return;
+      }
+      state.detailCache.set(fishId, { loading: true, error: "", mapping: null });
+      if (state.detailsFishId === fishId) {
+        renderDetails();
+      }
+
+      let response;
+      try {
+        response = await fetch(fishMapApiUrl(fishId), {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        });
+      } catch (_error) {
+        state.detailCache.set(fishId, { loading: false, error: "Fish mapping request failed.", mapping: null });
+        if (state.detailsFishId === fishId) {
+          renderDetails();
+        }
+        return;
+      }
+
+      if (!response.ok) {
+        state.detailCache.set(
+          fishId,
+          {
+            loading: false,
+            error: response.status === 404
+              ? "Fish mapping not found."
+              : `Fish mapping request failed (HTTP ${response.status}).`,
+            mapping: null,
+          }
+        );
+        if (state.detailsFishId === fishId) {
+          renderDetails();
+        }
+        return;
+      }
+
+      try {
+        const mapping = await response.json();
+        state.detailCache.set(fishId, { loading: false, error: "", mapping });
+      } catch (_error) {
+        state.detailCache.set(fishId, { loading: false, error: "Fish mapping response could not be parsed.", mapping: null });
+      }
+
+      if (state.detailsFishId === fishId) {
+        renderDetails();
+      }
+    }
+
+    function openDetails(fishId) {
+      if (!fishMetaById(fishId)) {
+        return;
+      }
+      state.detailsFishId = fishId;
+      renderDetails();
+      loadDetailsMapping(fishId);
+    }
+
+    function bindDetailsControls() {
+      if (state.detailsBound) {
+        return;
+      }
+      const modal = document.getElementById("pokedex-details");
+      if (!(modal instanceof HTMLElement)) {
+        return;
+      }
+      modal.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) {
+          return;
+        }
+        if (target.closest("[data-action='close-details']")) {
+          closeDetails();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && state.detailsFishId !== null) {
+          closeDetails();
+        }
+      });
+      state.detailsBound = true;
+    }
+
     function sync(snapshot) {
       bindGridClicks();
+      bindDetailsControls();
 
       const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
       const caughtIds = normalizeCaughtIds(snapshot.caught_ids);
       state.currentCaughtIds = caughtIds;
+      state.fishById = new Map(
+        fish
+          .filter((entry) => entry && Number.isInteger(entry.fish_id))
+          .map((entry) => [entry.fish_id, entry])
+      );
       const fishSignature = fishRenderSignature(fish);
 
       const renderKey = [
@@ -952,6 +1500,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         caughtIds.join(","),
       ].join("|");
       if (renderKey === state.renderKey) {
+        renderDetails();
         return;
       }
       state.renderKey = renderKey;
@@ -1013,6 +1562,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         patch.api_error_hint = "";
       }
       mergeSignals(patch);
+      renderDetails();
       scheduleViewportRestore();
     }
 
@@ -1041,18 +1591,22 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       }
     }
 
-    function fishApiUrl() {
+    function apiUrl(pathname) {
       const params = new URLSearchParams(window.location.search);
       const explicitBase = params.get("api_base");
       if (explicitBase) {
-        return new URL("/api/v1/fish", explicitBase).toString();
+        return new URL(pathname, explicitBase).toString();
       }
       const isLocalSite = ["localhost", "127.0.0.1"].includes(window.location.hostname)
         && window.location.port === "1990";
       if (isLocalSite) {
-        return "http://127.0.0.1:8080/api/v1/fish";
+        return new URL(pathname, "http://127.0.0.1:8080").toString();
       }
-      return "/api/v1/fish";
+      return new URL(pathname, window.location.origin).toString();
+    }
+
+    function fishApiUrl() {
+      return apiUrl("/api/v1/fish");
     }
 
     document.addEventListener(DATASTAR_EVENT, handleDatastarEvent);
@@ -1065,6 +1619,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       exportCaught,
       importCaught,
       fishApiUrl,
+      closeDetails,
     };
   })();
 </script>
@@ -1177,5 +1732,63 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       <div id="pokedex-grid" class="pokedex-groups"></div>
     </div>
   </section>
+
+  <div id="pokedex-details" class="pokedex-details-modal" hidden>
+    <button type="button"
+            class="pokedex-details-backdrop"
+            data-action="close-details"
+            aria-label="Close fish details"></button>
+
+    <section class="pokedex-details-panel" role="dialog" aria-modal="true" aria-labelledby="pokedex-details-title">
+      <div class="pokedex-details-header">
+        <div class="pokedex-details-header-main">
+          <div id="pokedex-details-icon-frame" class="pokedex-details-icon-wrap grade-unknown">
+            <img id="pokedex-details-icon" class="pokedex-details-icon" hidden>
+            <div id="pokedex-details-placeholder" class="pokedex-placeholder">?</div>
+          </div>
+
+          <div class="pokedex-details-copy">
+            <div>
+              <h3 id="pokedex-details-title" class="pokedex-details-title">Fish</h3>
+            </div>
+
+            <div class="pokedex-details-badges">
+              <span id="pokedex-details-caught" class="pokedex-caught">Caught</span>
+              <span id="pokedex-details-grade" class="pokedex-grade grade-unknown">Unknown</span>
+              <span id="pokedex-details-prize" class="pokedex-grade grade-prize" hidden>Prize Fish</span>
+            </div>
+          </div>
+        </div>
+        <button type="button"
+                class="pokedex-button pokedex-button-secondary pokedex-details-close"
+                data-action="close-details">Close</button>
+      </div>
+
+      <div class="pokedex-details-guide">
+        <div class="pokedex-details-guide-frame">
+          <img id="pokedex-details-guide-image" class="pokedex-details-guide-image" hidden>
+          <div id="pokedex-details-guide-placeholder" class="pokedex-placeholder">?</div>
+        </div>
+      </div>
+
+      <dl class="pokedex-details-meta">
+        <div class="pokedex-details-meta-card">
+          <dt>Item Key</dt>
+          <dd id="pokedex-details-item-key"></dd>
+        </div>
+        <div class="pokedex-details-meta-card">
+          <dt>Encyclopedia Key</dt>
+          <dd id="pokedex-details-encyclopedia-key"></dd>
+        </div>
+      </dl>
+
+      <div class="pokedex-details-stack">
+        <section class="pokedex-details-section">
+          <h4>Best Spots</h4>
+          <p id="pokedex-details-spots-note" class="pokedex-details-note"></p>
+        </section>
+      </div>
+    </section>
+  </div>
 </div>
 ```
