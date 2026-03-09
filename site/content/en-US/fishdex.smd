@@ -139,14 +139,6 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     outline: none;
   }
 
-  .pokedex-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    align-items: center;
-    justify-content: space-between;
-  }
-
   .pokedex-actions {
     display: flex;
     flex-wrap: wrap;
@@ -1928,13 +1920,6 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
                    data-on-input__debounce.125ms="$search_query = ($search_draft || '').trim()">
           </label>
 
-          <div class="pokedex-toolbar">
-            <div class="pokedex-actions">
-              <button type="button" class="pokedex-button" data-on-click="window.Pokedex.exportCaught($caught_ids || [])">Export</button>
-              <button type="button" class="pokedex-button pokedex-button-secondary" data-on-click="window.Pokedex.importCaught()">Import</button>
-            </div>
-          </div>
-
           <div class="pokedex-filter-stack">
             <div class="pokedex-filter-group">
               <span class="pokedex-filter-label">Caught Status</span>
@@ -2035,9 +2020,9 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
           <strong>Loading...</strong>
           <div class="pokedex-subtle">Fetching the fish catalog from the Axum API.</div>
         </div>
-        <div class="pokedex-status" data-show="!$loading">
-          <strong>Interactive locally.</strong>
-          <div class="pokedex-subtle">Caught state stays in this browser until you export it.</div>
+        <div class="pokedex-actions" data-show="!$loading">
+          <button type="button" class="pokedex-button" data-on-click="window.Pokedex.exportCaught($caught_ids || [])">Export</button>
+          <button type="button" class="pokedex-button pokedex-button-secondary" data-on-click="window.Pokedex.importCaught()">Import</button>
         </div>
       </aside>
     </div>
