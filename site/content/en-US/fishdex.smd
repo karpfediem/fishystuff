@@ -938,6 +938,8 @@
     `;
     const CAUGHT_FILTER_ORDER = ["all", "caught", "missing"];
     const METHOD_ORDER = ["rod", "harpoon"];
+    const SORT_FIELD_ORDER = ["name", "price"];
+    const SORT_DIRECTION_ORDER = ["asc", "desc"];
     const METHOD_LABELS = {
       rod: "Rod",
       harpoon: "Harpoon",
@@ -950,6 +952,8 @@
       currentGradeFilters: [],
       currentMethodFilters: [],
       currentShowDried: false,
+      currentSortField: "name",
+      currentSortDirection: "asc",
       fishById: new Map(),
       detailCache: new Map(),
       detailsFishId: null,
@@ -1330,6 +1334,16 @@
       return value === true || value === "true" || value === 1 || value === "1";
     }
 
+    function normalizeSortField(value) {
+      const normalized = String(value || "name").trim().toLowerCase();
+      return SORT_FIELD_ORDER.includes(normalized) ? normalized : "name";
+    }
+
+    function normalizeSortDirection(value) {
+      const normalized = String(value || "asc").trim().toLowerCase();
+      return SORT_DIRECTION_ORDER.includes(normalized) ? normalized : "asc";
+    }
+
     function normalizeCaughtFilter(value) {
       const normalized = String(value || "all").trim().toLowerCase();
       return CAUGHT_FILTER_ORDER.includes(normalized) ? normalized : "all";
@@ -1381,7 +1395,7 @@
       return normalizeBooleanFlag(entry && entry.is_dried);
     }
 
-    function syncFilterUi(caughtFilter, gradeFilters, methodFilters, showDried) {
+    function syncFilterUi(caughtFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection) {
       for (const button of document.querySelectorAll("[data-caught-filter-value]")) {
         if (!(button instanceof HTMLButtonElement)) {
           continue;
@@ -1421,6 +1435,25 @@
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       }
+
+      for (const button of document.querySelectorAll("[data-sort-field-value]")) {
+        if (!(button instanceof HTMLButtonElement)) {
+          continue;
+        }
+        const active = button.dataset.sortFieldValue === sortField;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      }
+
+      for (const button of document.querySelectorAll("[data-sort-direction-toggle]")) {
+        if (!(button instanceof HTMLButtonElement)) {
+          continue;
+        }
+        button.classList.add("is-active");
+        button.setAttribute("aria-pressed", sortDirection === "desc" ? "true" : "false");
+        button.textContent = sortDirection === "desc" ? "Descending" : "Ascending";
+        button.setAttribute("aria-label", `Toggle sort direction. Current: ${sortDirection === "desc" ? "descending" : "ascending"}.`);
+      }
     }
 
     function setCaughtFilter(value) {
@@ -1458,6 +1491,22 @@
 
     function toggleShowDried() {
       setShowDried(!state.currentShowDried);
+    }
+
+    function setSortField(value) {
+      const next = normalizeSortField(value);
+      state.currentSortField = next;
+      mergeSignals({ sort_field: next });
+    }
+
+    function setSortDirection(value) {
+      const next = normalizeSortDirection(value);
+      state.currentSortDirection = next;
+      mergeSignals({ sort_direction: next });
+    }
+
+    function toggleSortDirection() {
+      setSortDirection(state.currentSortDirection === "desc" ? "asc" : "desc");
     }
 
     function toggleGradeFilter(value) {
@@ -1499,6 +1548,40 @@
         }
       }
       return `${fish.length}:${(hash >>> 0).toString(16)}`;
+    }
+
+    function compareFishNames(left, right) {
+      return String(left?.name || "").localeCompare(String(right?.name || ""), undefined, {
+        sensitivity: "base",
+        numeric: true,
+      });
+    }
+
+    function entryVendorPrice(entry) {
+      const amount = Number(entry && entry.vendor_price);
+      return Number.isFinite(amount) && amount > 0 ? amount : null;
+    }
+
+    function compareFishEntries(left, right, sortField, sortDirection) {
+      if (sortField === "price") {
+        const leftPrice = entryVendorPrice(left);
+        const rightPrice = entryVendorPrice(right);
+        if (leftPrice === null && rightPrice !== null) {
+          return 1;
+        }
+        if (leftPrice !== null && rightPrice === null) {
+          return -1;
+        }
+        if (leftPrice !== null && rightPrice !== null && leftPrice !== rightPrice) {
+          return sortDirection === "desc" ? rightPrice - leftPrice : leftPrice - rightPrice;
+        }
+      }
+
+      const nameOrder = compareFishNames(left, right);
+      if (nameOrder !== 0) {
+        return sortDirection === "desc" && sortField === "name" ? -nameOrder : nameOrder;
+      }
+      return (left?.fish_id || 0) - (right?.fish_id || 0);
     }
 
     function renderEmptyState(hasActiveFilters) {
@@ -1915,17 +1998,21 @@
         snapshot.method_filters !== undefined ? snapshot.method_filters : snapshot.method_filter
       );
       const showDried = normalizeBooleanFlag(snapshot.show_dried);
+      const sortField = normalizeSortField(snapshot.sort_field);
+      const sortDirection = normalizeSortDirection(snapshot.sort_direction);
       state.currentCaughtFilter = caughtFilter;
       state.currentGradeFilters = gradeFilters;
       state.currentMethodFilters = methodFilters;
       state.currentShowDried = showDried;
+      state.currentSortField = sortField;
+      state.currentSortDirection = sortDirection;
       state.fishById = new Map(
         fish
           .filter((entry) => entry && Number.isInteger(entry.fish_id))
           .map((entry) => [entry.fish_id, entry])
       );
       const fishSignature = fishRenderSignature(fish);
-      syncFilterUi(caughtFilter, gradeFilters, methodFilters, showDried);
+      syncFilterUi(caughtFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection);
 
       const renderKey = [
         snapshot.revision || "",
@@ -1935,6 +2022,8 @@
         gradeFilters.join(","),
         methodFilters.join(","),
         showDried ? "1" : "0",
+        sortField,
+        sortDirection,
         caughtIds.join(","),
       ].join("|");
       if (renderKey === state.renderKey) {
@@ -1977,11 +2066,15 @@
         return true;
       });
 
+      const sorted = filtered.slice().sort((left, right) => {
+        return compareFishEntries(left, right, sortField, sortDirection);
+      });
+
       const groups = new Map();
       for (const grade of GRADE_ORDER) {
         groups.set(grade, []);
       }
-      for (const entry of filtered) {
+      for (const entry of sorted) {
         const grade = filterGradeForEntry(entry);
         groups.get(grade).push(entry);
       }
@@ -2089,6 +2182,9 @@
       toggleMethodFilter,
       setShowDried,
       toggleShowDried,
+      setSortField,
+      setSortDirection,
+      toggleSortDirection,
       toggleGradeFilter,
       exportCaught,
       importCaught,
@@ -2109,6 +2205,8 @@
        grade_filters: [],
        method_filters: [],
        show_dried: false,
+       sort_field: 'name',
+       sort_direction: 'asc',
        caught_ids: [],
        total_count: 0,
        visible_count: 0,
@@ -2134,6 +2232,8 @@
          grade_filters: $grade_filters || [],
          method_filters: $method_filters || [],
          show_dried: $show_dried === true,
+         sort_field: $sort_field || 'name',
+         sort_direction: $sort_direction || 'asc',
          caught_ids: $caught_ids || [],
        })"></div>
 
@@ -2236,6 +2336,27 @@
                         data-dried-toggle
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleShowDried()">Show Dried</button>
+              </div>
+            </div>
+
+            <div class="pokedex-filter-group">
+              <span class="pokedex-filter-label">Sort</span>
+              <div class="pokedex-filter-chips" role="group" aria-label="Sort controls">
+                <button type="button"
+                        class="pokedex-filter-chip"
+                        data-sort-field-value="name"
+                        aria-pressed="true"
+                        data-on-click="window.Pokedex.setSortField('name')">Name</button>
+                <button type="button"
+                        class="pokedex-filter-chip"
+                        data-sort-field-value="price"
+                        aria-pressed="false"
+                        data-on-click="window.Pokedex.setSortField('price')">Price</button>
+                <button type="button"
+                        class="pokedex-filter-chip"
+                        data-sort-direction-toggle
+                        aria-pressed="true"
+                        data-on-click="window.Pokedex.toggleSortDirection()">Ascending</button>
               </div>
             </div>
 
