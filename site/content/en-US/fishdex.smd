@@ -213,6 +213,18 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     background: color-mix(in oklab, var(--color-base-content, #1f2937) 10%, var(--dex-surface-strong) 90%);
   }
 
+  .pokedex-filter-chip.filter-rod.is-active {
+    border-color: color-mix(in oklab, var(--color-info, #6b8afd) 56%, var(--dex-line) 44%);
+    background: color-mix(in oklab, var(--color-info, #6b8afd) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-info, #6b8afd) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .pokedex-filter-chip.filter-harpoon.is-active {
+    border-color: color-mix(in oklab, var(--color-secondary, #e07a5f) 56%, var(--dex-line) 44%);
+    background: color-mix(in oklab, var(--color-secondary, #e07a5f) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-secondary, #e07a5f) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
   .pokedex-filter-chip.grade-prize.is-active {
     border-color: color-mix(in oklab, var(--dex-prize) 56%, var(--dex-line) 44%);
     background: var(--dex-prize-surface);
@@ -880,6 +892,15 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
     const DATASTAR_EVENT = "datastar-sse";
     const DATASTAR_MERGE_SIGNALS = "datastar-merge-signals";
     const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
+    const GRADE_FILTER_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash"];
+    const GRADE_LABELS = {
+      Prize: "Red",
+      Rare: "Yellow",
+      HighQuality: "Blue",
+      General: "Green",
+      Trash: "White",
+      Unknown: "Unknown",
+    };
     const HEROICON_CHECK_BADGE_OUTLINE = `
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
@@ -891,10 +912,18 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       </svg>
     `;
     const CAUGHT_FILTER_ORDER = ["all", "caught", "missing"];
+    const METHOD_FILTER_ORDER = ["all", "rod", "harpoon"];
+    const METHOD_LABELS = {
+      rod: "Rod",
+      harpoon: "Harpoon",
+      unknown: "Unknown",
+    };
+    const SILVER_FORMATTER = new Intl.NumberFormat();
     const state = {
       currentCaughtIds: [],
       currentCaughtFilter: "all",
       currentGradeFilters: [],
+      currentMethodFilter: "all",
       fishById: new Map(),
       detailCache: new Map(),
       detailsFishId: null,
@@ -1064,6 +1093,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         search_query: "",
         caught_filter: "all",
         grade_filters: [],
+        method_filter: "all",
       });
     }
 
@@ -1217,16 +1247,43 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       return String(value || "unknown").toLowerCase();
     }
 
+    function gradeLabel(value) {
+      const grade = GRADE_ORDER.find((candidate) => candidate === String(value));
+      return grade ? GRADE_LABELS[grade] : GRADE_LABELS.Unknown;
+    }
+
+    function normalizeMethod(value) {
+      const normalized = String(value || "").trim().toLowerCase();
+      return normalized === "harpoon" ? "harpoon" : normalized === "rod" ? "rod" : "unknown";
+    }
+
+    function methodLabel(value) {
+      return METHOD_LABELS[normalizeMethod(value)] || METHOD_LABELS.unknown;
+    }
+
+    function formatSilver(value) {
+      const amount = Number(value);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return "Unavailable";
+      }
+      return `${SILVER_FORMATTER.format(amount)} silver`;
+    }
+
     function normalizeCaughtFilter(value) {
       const normalized = String(value || "all").trim().toLowerCase();
       return CAUGHT_FILTER_ORDER.includes(normalized) ? normalized : "all";
+    }
+
+    function normalizeMethodFilter(value) {
+      const normalized = String(value || "all").trim().toLowerCase();
+      return METHOD_FILTER_ORDER.includes(normalized) ? normalized : "all";
     }
 
     function normalizeGradeFilters(value) {
       const rawValues = Array.isArray(value) ? value : [];
       const selected = [];
       for (const raw of rawValues) {
-        const grade = GRADE_ORDER.find((candidate) => candidate === String(raw));
+        const grade = GRADE_FILTER_ORDER.find((candidate) => candidate === String(raw));
         if (grade && !selected.includes(grade)) {
           selected.push(grade);
         }
@@ -1244,7 +1301,11 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       return GRADE_ORDER.includes(entry.grade) ? entry.grade : "Unknown";
     }
 
-    function syncFilterUi(caughtFilter, gradeFilters) {
+    function filterMethodForEntry(entry) {
+      return normalizeMethod(entry && entry.catch_method);
+    }
+
+    function syncFilterUi(caughtFilter, gradeFilters, methodFilter) {
       for (const button of document.querySelectorAll("[data-caught-filter-value]")) {
         if (!(button instanceof HTMLButtonElement)) {
           continue;
@@ -1264,6 +1325,15 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         button.classList.toggle("is-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       }
+
+      for (const button of document.querySelectorAll("[data-method-filter-value]")) {
+        if (!(button instanceof HTMLButtonElement)) {
+          continue;
+        }
+        const active = button.dataset.methodFilterValue === methodFilter;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      }
     }
 
     function setCaughtFilter(value) {
@@ -1272,8 +1342,14 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       mergeSignals({ caught_filter: next });
     }
 
+    function setMethodFilter(value) {
+      const next = normalizeMethodFilter(value);
+      state.currentMethodFilter = next;
+      mergeSignals({ method_filter: next });
+    }
+
     function toggleGradeFilter(value) {
-      const grade = GRADE_ORDER.find((candidate) => candidate === value);
+      const grade = GRADE_FILTER_ORDER.find((candidate) => candidate === value);
       if (!grade) {
         return;
       }
@@ -1283,7 +1359,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       } else {
         next.add(grade);
       }
-      const selected = GRADE_ORDER.filter((candidate) => next.has(candidate));
+      const selected = GRADE_FILTER_ORDER.filter((candidate) => next.has(candidate));
       state.currentGradeFilters = selected;
       mergeSignals({ grade_filters: selected });
     }
@@ -1303,7 +1379,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       let hash = 2166136261;
       for (const entry of fish) {
         const raw = entry
-          ? `${entry.fish_id || 0}|${entry.grade || ""}|${entry.is_prize === true ? 1 : 0}|${entry.name || ""}`
+          ? `${entry.fish_id || 0}|${entry.grade || ""}|${entry.is_prize === true ? 1 : 0}|${entry.name || ""}|${entry.catch_method || ""}|${entry.vendor_price || 0}`
           : "null";
         for (let index = 0; index < raw.length; index += 1) {
           hash ^= raw.charCodeAt(index);
@@ -1361,7 +1437,11 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       top.appendChild(actions);
 
       if (fish.grade) {
-        const grade = createElement("span", `pokedex-grade grade-${slugifyGrade(fish.grade)}`, fish.grade);
+        const grade = createElement(
+          "span",
+          `pokedex-grade grade-${slugifyGrade(fish.grade)}`,
+          gradeLabel(filterGradeForEntry(fish))
+        );
         top.appendChild(grade);
       }
 
@@ -1391,7 +1471,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
 
       const section = createElement("section", "pokedex-group");
       const header = createElement("div", "pokedex-group-header");
-      header.appendChild(createElement("h3", "pokedex-group-title", title));
+      header.appendChild(createElement("h3", "pokedex-group-title", gradeLabel(title)));
       header.appendChild(createElement("span", "pokedex-group-count", `${fish.length} fish`));
 
       const grid = createElement("div", "pokedex-card-grid");
@@ -1448,6 +1528,10 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         grade: fish.grade || "Unknown",
         isPrize: fish.is_prize === true || fish.grade === "Prize",
         iconUrl: fish.icon_url || "",
+        catchMethod: filterMethodForEntry(fish),
+        vendorPrice: Number.isFinite(Number(fish.vendor_price)) && Number(fish.vendor_price) > 0
+          ? Number(fish.vendor_price)
+          : null,
         caught: state.currentCaughtIds.includes(fishId),
       };
     }
@@ -1505,9 +1589,10 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       const titleToggle = document.getElementById("pokedex-details-caught-toggle");
       const itemKey = document.getElementById("pokedex-details-item-key");
       const encyclopediaKey = document.getElementById("pokedex-details-encyclopedia-key");
+      const catchMethod = document.getElementById("pokedex-details-catch-method");
+      const vendorPrice = document.getElementById("pokedex-details-vendor-price");
       const caught = document.getElementById("pokedex-details-caught");
       const grade = document.getElementById("pokedex-details-grade");
-      const prize = document.getElementById("pokedex-details-prize");
       const spotsNote = document.getElementById("pokedex-details-spots-note");
       const icon = document.getElementById("pokedex-details-icon");
       const iconFrame = document.getElementById("pokedex-details-icon-frame");
@@ -1540,6 +1625,8 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
             ? "Loading..."
             : "Unavailable"
       );
+      setElementText(catchMethod, methodLabel(meta.catchMethod));
+      setElementText(vendorPrice, formatSilver(meta.vendorPrice));
       setElementText(
         spotsNote,
         "Planned input: evidence locations mapped back to fishing zones, then ranked by rarity and bite-time behavior in each zone."
@@ -1551,14 +1638,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       }
       if (grade instanceof HTMLElement) {
         grade.className = `pokedex-grade grade-${slugifyGrade(meta.grade)}`;
-        grade.textContent = meta.grade;
-      }
-      if (prize instanceof HTMLElement) {
-        prize.hidden = !meta.isPrize;
-        if (meta.isPrize) {
-          prize.className = "pokedex-grade grade-prize";
-          prize.textContent = "Prize Fish";
-        }
+        grade.textContent = gradeLabel(meta.grade);
       }
       if (icon instanceof HTMLImageElement && placeholder instanceof HTMLElement) {
         if (iconFrame instanceof HTMLElement) {
@@ -1708,15 +1788,17 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       state.currentCaughtIds = caughtIds;
       const caughtFilter = normalizeCaughtFilter(snapshot.caught_filter);
       const gradeFilters = normalizeGradeFilters(snapshot.grade_filters);
+      const methodFilter = normalizeMethodFilter(snapshot.method_filter);
       state.currentCaughtFilter = caughtFilter;
       state.currentGradeFilters = gradeFilters;
+      state.currentMethodFilter = methodFilter;
       state.fishById = new Map(
         fish
           .filter((entry) => entry && Number.isInteger(entry.fish_id))
           .map((entry) => [entry.fish_id, entry])
       );
       const fishSignature = fishRenderSignature(fish);
-      syncFilterUi(caughtFilter, gradeFilters);
+      syncFilterUi(caughtFilter, gradeFilters, methodFilter);
 
       const renderKey = [
         snapshot.revision || "",
@@ -1724,6 +1806,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         (snapshot.search_query || "").trim().toLowerCase(),
         caughtFilter,
         gradeFilters.join(","),
+        methodFilter,
         caughtIds.join(","),
       ].join("|");
       if (renderKey === state.renderKey) {
@@ -1733,6 +1816,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       state.renderKey = renderKey;
 
       const supportsGradeFilter = fish.some((entry) => entry && (entry.is_prize !== null || entry.grade));
+      const supportsMethodFilter = fish.some((entry) => entry && filterMethodForEntry(entry) !== "unknown");
       const searchQuery = (snapshot.search_query || "").trim().toLowerCase();
       const caughtSet = new Set(caughtIds);
       const filtered = fish.filter((entry) => {
@@ -1752,6 +1836,9 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         if (gradeFilters.length > 0 && !gradeFilters.includes(filterGradeForEntry(entry))) {
           return false;
         }
+        if (methodFilter !== "all" && filterMethodForEntry(entry) !== methodFilter) {
+          return false;
+        }
         return true;
       });
 
@@ -1768,6 +1855,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         searchQuery ? 1 : 0,
         caughtFilter !== "all" ? 1 : 0,
         gradeFilters.length,
+        methodFilter !== "all" ? 1 : 0,
       ].reduce((sum, count) => sum + count, 0);
 
       const prizeCaughtCount = fish.filter((entry) => {
@@ -1795,6 +1883,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         caught_count: caughtIds.length,
         prize_caught_count: prizeCaughtCount,
         supports_grade_filter: supportsGradeFilter,
+        supports_method_filter: supportsMethodFilter,
         active_filter_message: activeFilterCount > 0
           ? `${activeFilterCount} active filter${activeFilterCount === 1 ? "" : "s"}.`
           : "No extra filters.",
@@ -1859,6 +1948,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
       loadFish,
       sync,
       setCaughtFilter,
+      setMethodFilter,
       toggleGradeFilter,
       exportCaught,
       importCaught,
@@ -1877,12 +1967,14 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
        search_query: '',
        caught_filter: 'all',
        grade_filters: [],
+       method_filter: 'all',
        caught_ids: [],
        total_count: 0,
        visible_count: 0,
        caught_count: 0,
        prize_caught_count: 0,
        supports_grade_filter: false,
+       supports_method_filter: false,
        active_filter_message: 'No extra filters.',
        loading: true,
        status_message: '',
@@ -1898,6 +1990,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
          search_query: $search_query || '',
          caught_filter: $caught_filter || 'all',
          grade_filters: $grade_filters || [],
+         method_filter: $method_filter || 'all',
          caught_ids: $caught_ids || [],
        })"></div>
 
@@ -1943,38 +2036,54 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
             </div>
 
             <div class="pokedex-filter-group" data-show="$supports_grade_filter">
-              <span class="pokedex-filter-label">Grade</span>
-              <div class="pokedex-filter-chips" role="group" aria-label="Grade filters">
+              <span class="pokedex-filter-label">Rarity</span>
+              <div class="pokedex-filter-chips" role="group" aria-label="Rarity color filters">
                 <button type="button"
                         class="pokedex-filter-chip grade-prize"
                         data-grade-filter-value="Prize"
                         aria-pressed="false"
-                        data-on-click="window.Pokedex.toggleGradeFilter('Prize')">Prize</button>
+                        data-on-click="window.Pokedex.toggleGradeFilter('Prize')">Red</button>
                 <button type="button"
                         class="pokedex-filter-chip grade-rare"
                         data-grade-filter-value="Rare"
                         aria-pressed="false"
-                        data-on-click="window.Pokedex.toggleGradeFilter('Rare')">Rare</button>
+                        data-on-click="window.Pokedex.toggleGradeFilter('Rare')">Yellow</button>
                 <button type="button"
                         class="pokedex-filter-chip grade-highquality"
                         data-grade-filter-value="HighQuality"
                         aria-pressed="false"
-                        data-on-click="window.Pokedex.toggleGradeFilter('HighQuality')">High Quality</button>
+                        data-on-click="window.Pokedex.toggleGradeFilter('HighQuality')">Blue</button>
                 <button type="button"
                         class="pokedex-filter-chip grade-general"
                         data-grade-filter-value="General"
                         aria-pressed="false"
-                        data-on-click="window.Pokedex.toggleGradeFilter('General')">General</button>
+                        data-on-click="window.Pokedex.toggleGradeFilter('General')">Green</button>
                 <button type="button"
                         class="pokedex-filter-chip grade-trash"
                         data-grade-filter-value="Trash"
                         aria-pressed="false"
-                        data-on-click="window.Pokedex.toggleGradeFilter('Trash')">Trash</button>
+                        data-on-click="window.Pokedex.toggleGradeFilter('Trash')">White</button>
+              </div>
+            </div>
+
+            <div class="pokedex-filter-group" data-show="$supports_method_filter">
+              <span class="pokedex-filter-label">Method</span>
+              <div class="pokedex-filter-chips" role="group" aria-label="Catch method filters">
                 <button type="button"
-                        class="pokedex-filter-chip grade-unknown"
-                        data-grade-filter-value="Unknown"
+                        class="pokedex-filter-chip"
+                        data-method-filter-value="all"
+                        aria-pressed="true"
+                        data-on-click="window.Pokedex.setMethodFilter('all')">All</button>
+                <button type="button"
+                        class="pokedex-filter-chip filter-rod"
+                        data-method-filter-value="rod"
                         aria-pressed="false"
-                        data-on-click="window.Pokedex.toggleGradeFilter('Unknown')">Unknown</button>
+                        data-on-click="window.Pokedex.setMethodFilter('rod')">Rod</button>
+                <button type="button"
+                        class="pokedex-filter-chip filter-harpoon"
+                        data-method-filter-value="harpoon"
+                        aria-pressed="false"
+                        data-on-click="window.Pokedex.setMethodFilter('harpoon')">Harpoon</button>
               </div>
             </div>
 
@@ -2004,7 +2113,7 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
             <span class="pokedex-stat-value" data-text="$caught_count || 0"></span>
           </div>
           <div class="pokedex-stat">
-            <span class="pokedex-stat-label">Prize Caught</span>
+            <span class="pokedex-stat-label">Red Caught</span>
             <span class="pokedex-stat-value" data-text="$prize_caught_count || 0"></span>
           </div>
           <div class="pokedex-stat">
@@ -2060,7 +2169,6 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
             <div class="pokedex-details-badges">
               <span id="pokedex-details-caught" class="pokedex-caught">Caught</span>
               <span id="pokedex-details-grade" class="pokedex-grade grade-unknown">Unknown</span>
-              <span id="pokedex-details-prize" class="pokedex-grade grade-prize" hidden>Prize Fish</span>
             </div>
           </div>
         </div>
@@ -2084,6 +2192,14 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
         <div class="pokedex-details-meta-card">
           <dt>Encyclopedia Key</dt>
           <dd id="pokedex-details-encyclopedia-key"></dd>
+        </div>
+        <div class="pokedex-details-meta-card">
+          <dt>Catch Method</dt>
+          <dd id="pokedex-details-catch-method"></dd>
+        </div>
+        <div class="pokedex-details-meta-card">
+          <dt>Vendor Price</dt>
+          <dd id="pokedex-details-vendor-price"></dd>
         </div>
       </dl>
 
