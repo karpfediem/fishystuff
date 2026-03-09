@@ -320,8 +320,12 @@ Track your caught fish locally in the browser. The page fetches the fish catalog
   }
 
   .pokedex-icon {
-    width: 3.25rem;
-    height: 3.25rem;
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 100%;
+    margin: 0;
     object-fit: contain;
     image-rendering: auto;
   }
