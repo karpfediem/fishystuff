@@ -628,6 +628,12 @@
     justify-items: center;
     gap: 0.65rem;
     min-height: 7.8rem;
+    transition: transform 120ms ease;
+  }
+
+  .pokedex-card:hover .pokedex-card-main,
+  .pokedex-card:focus-within .pokedex-card-main {
+    transform: translateY(-2px);
   }
 
   .pokedex-icon-wrap {
