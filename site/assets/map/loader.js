@@ -530,10 +530,22 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
   if (!selectedFishIds.length) {
     elements.searchSelection.innerHTML = "";
     elements.searchSelection.hidden = true;
+    if (elements.searchSelectionShell) {
+      elements.searchSelectionShell.hidden = true;
+    }
+    if (elements.searchDock) {
+      elements.searchDock.dataset.hasSelection = "false";
+    }
     return;
   }
 
   elements.searchSelection.hidden = false;
+  if (elements.searchSelectionShell) {
+    elements.searchSelectionShell.hidden = false;
+  }
+  if (elements.searchDock) {
+    elements.searchDock.dataset.hasSelection = "true";
+  }
 
   elements.searchSelection.innerHTML = selectedFishIds
     .map((fishId) => {
@@ -588,7 +600,9 @@ function renderSearchResults(elements, matches, stateBundle) {
   if (elements.searchResultsShell) {
     elements.searchResultsShell.hidden = !showResults;
   }
-  elements.searchCount.textContent = `${matches.length} fish`;
+  if (elements.searchCount) {
+    elements.searchCount.textContent = `${matches.length} fish`;
+  }
   if (elements.searchResults.dataset.renderKey === renderKey) {
     return;
   }
@@ -602,20 +616,14 @@ function renderSearchResults(elements, matches, stateBundle) {
   elements.searchResults.innerHTML = activeMatches
     .map(
       (fish) => {
-        const active = fish.fishId === currentFishId;
         return `
         <button
-          class="btn btn-sm w-full justify-start rounded-xl px-3 ${
-            active ? "btn-primary text-primary-content" : "btn-ghost"
-          }"
+          class="btn btn-sm w-full justify-start rounded-xl px-3 btn-ghost"
           data-fish-id="${fish.fishId}"
           type="button"
         >
           ${renderFishAvatar(fish)}
           <span class="truncate">${escapeHtml(fish.name)}</span>
-          <span class="ml-auto text-[11px] ${
-            active ? "text-primary-content/75" : "text-base-content/45"
-          }">#${fish.fishId}</span>
         </button>
       `;
       },
@@ -1136,12 +1144,14 @@ async function main() {
 
   const elements = {
     shell,
+    searchDock: document.getElementById("fishymap-search-dock"),
     panel: document.getElementById("fishymap-panel"),
     panelBody: document.getElementById("fishymap-panel-body"),
     panelOpen: document.getElementById("fishymap-panel-open"),
     panelClose: document.getElementById("fishymap-panel-close"),
     readyPill: document.getElementById("fishymap-ready-pill"),
     search: document.getElementById("fishymap-search"),
+    searchSelectionShell: document.getElementById("fishymap-search-selection-shell"),
     searchSelection: document.getElementById("fishymap-search-selection"),
     searchResultsShell: document.getElementById("fishymap-search-results-shell"),
     searchResults: document.getElementById("fishymap-search-results"),

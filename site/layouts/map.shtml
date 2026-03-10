@@ -48,6 +48,7 @@
       }
 
       #map-page-shell {
+        --fishymap-search-top: 1rem;
         position: relative;
         width: 100%;
         height: 100%;
@@ -102,13 +103,12 @@
 
       #fishymap-search-dock {
         position: absolute;
-        top: 1rem;
+        top: var(--fishymap-search-top);
         left: 50%;
         z-index: 24;
         display: flex;
         width: min(34rem, calc(100vw - 2rem));
         flex-direction: column;
-        gap: 0.65rem;
         transform: translateX(-50%);
         pointer-events: none;
       }
@@ -127,7 +127,22 @@
       }
 
       #fishymap-search-shell {
-        padding: 0.9rem 1rem 0.85rem;
+        padding: 0.8rem 0.9rem;
+      }
+
+      #fishymap-search-dock[data-has-selection="true"] #fishymap-search-results-shell {
+        margin-top: 3.15rem;
+      }
+
+      #fishymap-search-selection-shell {
+        position: absolute;
+        top: calc(var(--fishymap-search-top) + 4.3rem);
+        left: 50%;
+        z-index: 25;
+        align-self: center;
+        width: min(50vw, 42rem);
+        transform: translateX(-50%);
+        pointer-events: none;
       }
 
       #fishymap-search-results button {
@@ -135,7 +150,24 @@
         justify-content: flex-start;
       }
 
+      #fishymap-search-selection {
+        display: flex;
+        min-height: 0;
+        flex-wrap: nowrap;
+        gap: 0.5rem;
+        justify-content: center;
+        overflow-x: auto;
+        padding: 0 0.25rem;
+        pointer-events: auto;
+        scrollbar-width: none;
+      }
+
+      #fishymap-search-selection::-webkit-scrollbar {
+        display: none;
+      }
+
       #fishymap-search-selection[hidden],
+      #fishymap-search-selection-shell[hidden],
       #fishymap-search-results-shell[hidden],
       #fishymap-search-selection:empty {
         display: none;
@@ -188,8 +220,15 @@
 
       @media (max-width: 960px) {
         #fishymap-search-dock {
-          top: 0.75rem;
           width: min(100vw - 1.5rem, 34rem);
+        }
+
+        #map-page-shell {
+          --fishymap-search-top: 0.75rem;
+        }
+
+        #fishymap-search-selection-shell {
+          width: min(100vw - 1.5rem, 42rem);
         }
 
         #fishymap-panel {
@@ -220,22 +259,16 @@
     <div id="map-page-shell">
       <canvas id="bevy"></canvas>
       <div id="fishymap-search-dock" class="not-prose">
-        <div id="fishymap-search-shell" class="space-y-3">
-          <label class="form-control gap-2">
-            <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/55">Fish search</span>
-            <input id="fishymap-search" class="input input-bordered input-md w-full rounded-full" type="search" placeholder="Name or encyclopedia ID" autocomplete="off">
-          </label>
-
-          <div id="fishymap-search-selection" class="flex min-h-0 flex-wrap gap-2" hidden></div>
+        <div id="fishymap-search-shell">
+          <input id="fishymap-search" class="input input-bordered input-md w-full rounded-full" type="search" placeholder="Search fish" autocomplete="off">
         </div>
 
         <div id="fishymap-search-results-shell" class="overflow-hidden" hidden>
-          <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
-            <span class="text-sm font-semibold">Matches</span>
-            <span id="fishymap-search-count" class="text-xs text-base-content/60">0 fish</span>
-          </div>
           <div id="fishymap-search-results" class="menu menu-sm max-h-56 overflow-auto p-2"></div>
         </div>
+      </div>
+      <div id="fishymap-search-selection-shell" class="not-prose" hidden>
+        <div id="fishymap-search-selection" hidden></div>
       </div>
       <button
         id="fishymap-panel-open"
