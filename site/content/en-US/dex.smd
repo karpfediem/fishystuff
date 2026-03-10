@@ -20,6 +20,7 @@
     --dex-highlight: color-mix(in oklab, var(--color-warning, #f4b942) 58%, var(--color-base-100, #fffdf4) 42%);
     --dex-prize: color-mix(in oklab, var(--color-error, #d64545) 74%, var(--color-base-100, #fffdf4) 26%);
     --dex-prize-surface: color-mix(in oklab, var(--color-error, #d64545) 18%, var(--color-base-200, #efe7d6) 82%);
+    --dex-prize-surface-hover: color-mix(in oklab, var(--color-error, #d64545) 24%, var(--dex-surface) 76%);
     --dex-grade-rare: color-mix(in oklab, var(--color-warning, #f59e0b) 72%, var(--color-base-100, #fffdf4) 28%);
     --dex-grade-rare-surface: color-mix(in oklab, var(--color-warning, #f59e0b) 22%, var(--dex-surface-strong) 78%);
     --dex-grade-highquality: color-mix(in oklab, var(--color-info, #6b8afd) 76%, var(--color-base-100, #fffdf4) 24%);
@@ -392,6 +393,11 @@
   .fishydex-card.is-prize {
     background: var(--dex-prize-surface);
     border-color: color-mix(in oklab, var(--dex-prize) 44%, var(--dex-line) 56%);
+  }
+
+  .fishydex-card.is-prize:hover,
+  .fishydex-card.is-prize:focus-within {
+    background: var(--dex-prize-surface-hover);
   }
 
   .fishydex-card-top {
