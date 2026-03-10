@@ -18,6 +18,10 @@
                 width: min(20rem, 82vw);
             }
 
+            .guide-drawer-shell {
+                padding-top: calc(var(--site-nav-offset, 0px) + 1rem);
+            }
+
             .guide-rail-toc :where(ul) {
                 list-style: none;
                 margin: 0;
@@ -115,7 +119,7 @@
                 <div class="drawer-side z-30">
                     <label for="guide-nav-drawer" aria-label="Close guide navigation" class="drawer-overlay"></label>
 
-                    <aside class="guide-rail-shell not-prose min-h-full border-e border-base-300 bg-base-100 p-4">
+                    <aside class="guide-drawer-shell guide-rail-shell not-prose min-h-full border-e border-base-300 bg-base-100 p-4">
                         <div class="mb-3 flex items-center justify-between gap-3">
                             <div class="text-sm font-bold text-base-content">On this page</div>
                             <label for="guide-nav-drawer" class="btn btn-sm btn-ghost">Close</label>
