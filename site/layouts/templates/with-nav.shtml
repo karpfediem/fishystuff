@@ -66,18 +66,89 @@
         <ctx :if="$page.custom.has('updated')">
             <meta property="article:modified_time" content="$page.custom.get('updated').format('2006-01-02T15:04:05Z07:00')">
         </ctx>
+
+        <style>
+            #menu {
+                --site-frame-gutter: clamp(1rem, 2.5vw, 2rem);
+                --site-frame-width: 130ch;
+                display: grid;
+                grid-template-columns:
+                    [full-start] minmax(var(--site-frame-gutter), 1fr)
+                    [content-start] minmax(0, var(--site-frame-width))
+                    [content-end] minmax(var(--site-frame-gutter), 1fr)
+                    [full-end];
+            }
+
+            #menu > .site-nav-frame {
+                grid-column: content-start / content-end;
+                display: grid;
+                grid-template-columns: subgrid;
+                padding-block: 0.75rem;
+            }
+
+            .site-nav-row {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.75rem 1rem;
+            }
+
+            .site-nav-brand {
+                order: 1;
+            }
+
+            .site-nav-controls {
+                order: 2;
+            }
+
+            .site-nav-links {
+                order: 3;
+                width: 100%;
+            }
+
+            @media (min-width: 768px) {
+                .site-nav-row {
+                    grid-template-columns: max-content minmax(0, 1fr) max-content;
+                    display: grid;
+                }
+
+                .site-nav-brand {
+                    min-width: 0;
+                    order: 0;
+                }
+
+                .site-nav-links {
+                    min-width: 0;
+                    order: 0;
+                    width: auto;
+                    justify-self: center;
+                }
+
+                .site-nav-controls {
+                    order: 0;
+                    justify-self: end;
+                }
+            }
+
+            @supports not (grid-template-columns: subgrid) {
+                #menu > .site-nav-frame {
+                    display: block;
+                }
+            }
+        </style>
     </head>
 
     <body id="body" class="bg-base-100">
     <!-- Minimal, balanced nav -->
     <nav id="menu">
-        <div class="mx-auto max-w-5xl px-4 py-3">
+        <div class="site-nav-frame px-4">
             <!-- Responsive frame:
-                 - mobile: flex (title left, controls right)
-                 - md+:    grid with 3 columns -->
-            <div class="flex items-center justify-between md:grid md:grid-cols-3 md:gap-4">
+                 - mobile: brand left, controls right, links below
+                 - md+:    content-aware 3-column grid -->
+            <div class="site-nav-row">
                 <!-- Brand (left on desktop) -->
-                <div class="md:col-start-1 md:col-end-2">
+                <div class="site-nav-brand">
                     <a id="home-link"
                        href="$site.link()"
                        class="no-underline hover:underline focus:underline font-bold"
@@ -85,8 +156,7 @@
                 </div>
 
                 <!-- Nav links (center on desktop; second row on mobile) -->
-                <div class="mt-2 w-max flex flex-wrap justify-center gap-x-3 gap-y-1 text-sm md:mt-0
-                  md:col-start-2 md:col-end-3 md:justify-self-center">
+                <div class="site-nav-links mt-1 flex flex-wrap justify-center gap-x-3 gap-y-1 text-sm md:mt-0">
                     <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('quickstart').link()">Get Started</a>
                     <span class="select-none">•</span>
                     <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('guides').link()">Guides</a>
@@ -103,7 +173,7 @@
                 </div>
 
                 <!-- Controls (language / theme) (right on desktop; in top row on mobile) -->
-                <div class="flex items-center gap-3 text-xs md:col-start-3 md:col-end-4 md:justify-self-end">
+                <div class="site-nav-controls flex items-center gap-3 text-xs">
                     <!-- Language -->
                     <nav aria-label="Language" class="flex items-center gap-1">
                         <a data-locale="en-US" href="/"
