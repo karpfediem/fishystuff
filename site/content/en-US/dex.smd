@@ -852,6 +852,19 @@
     font-weight: 700;
   }
 
+  .fishydex-details-link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--dex-highlight) 52%, transparent);
+    text-underline-offset: 0.14em;
+  }
+
+  .fishydex-details-link:hover,
+  .fishydex-details-link:focus-visible {
+    color: color-mix(in oklab, var(--dex-highlight) 72%, var(--color-base-content, #1f2937) 28%);
+    text-decoration-color: currentColor;
+  }
+
   .fishydex-details-stack {
     display: grid;
     gap: 0.75rem;
@@ -1805,6 +1818,30 @@
       }
     }
 
+    function setElementLink(element, text, href) {
+      if (!element) {
+        return;
+      }
+      if (!href) {
+        element.textContent = text;
+        return;
+      }
+      const link = document.createElement("a");
+      link.className = "fishydex-details-link";
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noreferrer noopener";
+      link.textContent = text;
+      element.replaceChildren(link);
+    }
+
+    function bdolyticsItemUrl(itemKey) {
+      if (!Number.isInteger(itemKey)) {
+        return "";
+      }
+      return `https://bdolytics.com/en/NA/db/item/${itemKey}`;
+    }
+
     function renderDetails() {
       const modal = document.getElementById("fishydex-details");
       if (!(modal instanceof HTMLElement)) {
@@ -1822,7 +1859,6 @@
       const title = document.getElementById("fishydex-details-title");
       const titleToggle = document.getElementById("fishydex-details-caught-toggle");
       const itemKey = document.getElementById("fishydex-details-item-key");
-      const encyclopediaKey = document.getElementById("fishydex-details-encyclopedia-key");
       const vendorPrice = document.getElementById("fishydex-details-vendor-price");
       const caught = document.getElementById("fishydex-details-caught");
       const grade = document.getElementById("fishydex-details-grade");
@@ -1852,15 +1888,7 @@
         );
         titleToggle.innerHTML = meta.caught ? HEROICON_CHECK_BADGE_SOLID : HEROICON_CHECK_BADGE_OUTLINE;
       }
-      setElementText(itemKey, String(meta.fishId));
-      setElementText(
-        encyclopediaKey,
-        cached.mapping && Number.isInteger(cached.mapping.encyclopedia_key)
-          ? String(cached.mapping.encyclopedia_key)
-          : cached.loading
-            ? "Loading..."
-            : "Unavailable"
-      );
+      setElementLink(itemKey, String(meta.fishId), bdolyticsItemUrl(meta.fishId));
       setElementText(vendorPrice, formatSilver(meta.vendorPrice));
       setElementText(
         spotsNote,
@@ -2506,10 +2534,6 @@
         <div class="fishydex-details-meta-card">
           <dt>Item Key</dt>
           <dd id="fishydex-details-item-key"></dd>
-        </div>
-        <div class="fishydex-details-meta-card">
-          <dt>Encyclopedia Key</dt>
-          <dd id="fishydex-details-encyclopedia-key"></dd>
         </div>
         <div class="fishydex-details-meta-card">
           <dt>Vendor Price</dt>
