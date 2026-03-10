@@ -35,6 +35,7 @@ Multilingual {
     "js/script.js",
 
     "map/loader.js",
+    "map/map-host.js",
     "map/fishystuff_ui_bevy.js",
     "map/fishystuff_ui_bevy_bg.wasm",
     "map/ui/fishystuff.css",
