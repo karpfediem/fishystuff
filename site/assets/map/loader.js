@@ -1,4 +1,4 @@
-import FishyMapBridge, { FISHYMAP_EVENTS } from "./map-host.js";
+import FishyMapBridge, { FISHYMAP_EVENTS, resolveApiBaseUrl } from "./map-host.js";
 
 function dispatchMapEvent(target, type, detail) {
   target.dispatchEvent(new CustomEvent(type, { detail }));
@@ -146,7 +146,17 @@ function escapeHtml(value) {
 
 function fishIconUrl(fish) {
   const value = fish?.iconUrl;
-  return typeof value === "string" && value.trim() ? value.trim() : "";
+  if (typeof value !== "string" || !value.trim()) {
+    return "";
+  }
+  const raw = value.trim();
+  if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("data:")) {
+    return raw;
+  }
+  if (raw.startsWith("/")) {
+    return `${resolveApiBaseUrl(window.location)}${raw}`;
+  }
+  return raw;
 }
 
 function renderFishAvatar(fish, sizeClass = "size-6") {
@@ -609,7 +619,7 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
       return [
         entry.fishId,
         entry.fishName || "",
-        fishIconUrl(fish),
+        fishIconUrl({ iconUrl: entry.iconUrl || fish?.iconUrl || "" }),
         entry.evidenceWeight,
         entry.pMean,
         entry.ciLow,
@@ -635,12 +645,13 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
 
   elements.zoneEvidenceList.innerHTML = distribution
     .map((entry) => {
-      const fish = fishLookup.get(entry.fishId) || {
+      const fish = fishLookup.get(entry.fishId);
+      const evidenceFish = {
         fishId: entry.fishId,
-        name: entry.fishName || `Fish ${entry.fishId}`,
-        iconUrl: "",
+        name: fish?.name || entry.fishName || `Fish ${entry.fishId}`,
+        iconUrl: entry.iconUrl || fish?.iconUrl || "",
       };
-      const active = entry.fishId === currentFishId;
+      const active = evidenceFish.fishId === currentFishId;
       const ci =
         Number.isFinite(entry.ciLow) && Number.isFinite(entry.ciHigh)
           ? `${formatDecimal(entry.ciLow)}-${formatDecimal(entry.ciHigh)}`
@@ -650,12 +661,12 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
           class="btn btn-sm h-auto min-h-0 w-full justify-start rounded-xl px-3 py-2 ${
             active ? "btn-primary text-primary-content" : "btn-ghost"
           }"
-          data-zone-evidence-fish-id="${entry.fishId}"
+          data-zone-evidence-fish-id="${evidenceFish.fishId}"
           type="button"
         >
-          ${renderFishAvatar(fish)}
+          ${renderFishAvatar(evidenceFish)}
           <span class="min-w-0 flex-1 text-left">
-            <span class="block truncate">${escapeHtml(fish.name)}</span>
+            <span class="block truncate">${escapeHtml(evidenceFish.name)}</span>
             <span class="block text-[11px] ${
               active ? "text-primary-content/80" : "text-base-content/55"
             }">
