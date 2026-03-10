@@ -67,192 +67,106 @@
             <meta property="article:modified_time" content="$page.custom.get('updated').format('2006-01-02T15:04:05Z07:00')">
         </ctx>
 
-        <style>
-            #menu {
-                --site-frame-gutter: clamp(1rem, 2.5vw, 2rem);
-                --site-frame-width: 130ch;
-                display: grid;
-                grid-template-columns:
-                    [full-start] minmax(var(--site-frame-gutter), 1fr)
-                    [content-start] minmax(0, var(--site-frame-width))
-                    [content-end] minmax(var(--site-frame-gutter), 1fr)
-                    [full-end];
-            }
-
-            #menu > .site-nav-frame {
-                grid-column: content-start / content-end;
-                display: grid;
-                grid-template-columns: subgrid;
-                padding-block: 0.75rem;
-            }
-
-            .site-nav-row {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: center;
-                justify-content: space-between;
-                gap: 0.75rem 1rem;
-            }
-
-            .site-nav-brand {
-                order: 1;
-            }
-
-            .site-nav-controls {
-                order: 2;
-            }
-
-            .site-nav-links {
-                order: 3;
-                width: 100%;
-            }
-
-            @media (min-width: 768px) {
-                .site-nav-row {
-                    grid-template-columns: max-content minmax(0, 1fr) max-content;
-                    display: grid;
-                }
-
-                .site-nav-brand {
-                    min-width: 0;
-                    order: 0;
-                }
-
-                .site-nav-links {
-                    min-width: 0;
-                    order: 0;
-                    width: auto;
-                    justify-self: center;
-                }
-
-                .site-nav-controls {
-                    order: 0;
-                    justify-self: end;
-                }
-            }
-
-            @supports not (grid-template-columns: subgrid) {
-                #menu > .site-nav-frame {
-                    display: block;
-                }
-            }
-        </style>
     </head>
 
     <body id="body" class="bg-base-100">
-    <!-- Minimal, balanced nav -->
-    <nav id="menu">
-        <div class="site-nav-frame px-4">
-            <!-- Responsive frame:
-                 - mobile: brand left, controls right, links below
-                 - md+:    content-aware 3-column grid -->
-            <div class="site-nav-row">
-                <!-- Brand (left on desktop) -->
-                <div class="site-nav-brand">
-                    <a id="home-link"
-                       href="$site.link()"
-                       class="no-underline hover:underline focus:underline font-bold"
-                       :text="$site.title"></a>
-                </div>
-
-                <!-- Nav links (center on desktop; second row on mobile) -->
-                <div class="site-nav-links mt-1 flex flex-wrap justify-center gap-x-3 gap-y-1 text-sm md:mt-0">
-                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('quickstart').link()">Get Started</a>
-                    <span class="select-none">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('guides').link()">Guides</a>
-                    <span class="select-none">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('map').link()">Map</a>
-                    <span class="select-none">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('calculator').link()">Calculator</a>
-                    <span class="select-none">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('dex').link()">Dex</a>
-                    <span class="select-none">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('community').link()">Community</a>
-                    <span class="select-none">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('log').link()">Log</a>
-                </div>
-
-                <!-- Controls (language / theme) (right on desktop; in top row on mobile) -->
-                <div class="site-nav-controls flex items-center gap-3 text-xs">
-                    <!-- Language -->
-                    <div id="language-switcher" class="dropdown dropdown-end">
-                        <button type="button" tabindex="0" class="btn m-1" aria-haspopup="menu" aria-expanded="false">
-                            <span id="language-switcher-label">Language</span>
-                            <svg width="12" height="12" class="inline-block h-2 w-2 fill-current opacity-60" viewBox="0 0 2048 2048" aria-hidden="true">
-                                <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
-                            </svg>
-                        </button>
-
-                        <ul tabindex="0"
-                            role="menu"
-                            class="menu menu-sm dropdown-content bg-base-300 rounded-box z-10 w-48 p-2 shadow-2xl">
-                            <li>
-                                <a data-locale="en-US" href="/" class="locale-item font-bold no-underline hover:no-underline focus:no-underline">
-                                    English (US)
-                                </a>
-                            </li>
-                            <li>
-                                <a data-locale="de-DE" href="/de-DE/" class="locale-item font-bold no-underline hover:no-underline focus:no-underline">
-                                    Deutsch
-                                </a>
-                            </li>
-                        </ul>
+    <nav id="menu" class="not-prose mb-4 grid grid-cols-[minmax(clamp(1rem,2.5vw,2rem),1fr)_minmax(0,130ch)_minmax(clamp(1rem,2.5vw,2rem),1fr)]">
+        <div class="col-start-2 px-4 py-3">
+            <div class="rounded-box border border-base-300 bg-base-200/80 p-2 shadow-sm">
+                <div class="navbar min-h-0 justify-between gap-2 px-2">
+                    <div class="navbar-start w-auto flex-none min-w-0">
+                        <a id="home-link"
+                           href="$site.link()"
+                           class="px-2 text-base no-underline hover:underline focus:underline"
+                           :text="$site.title"></a>
                     </div>
 
-                    <!-- Divider -->
-                    <span class="opacity-50 select-none hidden sm:inline">|</span>
+                    <div class="navbar-end w-auto flex-none gap-1">
+                        <div id="language-switcher" class="dropdown dropdown-end">
+                            <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
+                                <span id="language-switcher-label">Language</span>
+                                <svg width="12" height="12" class="inline-block h-2 w-2 fill-current opacity-60" viewBox="0 0 2048 2048" aria-hidden="true">
+                                    <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
+                                </svg>
+                            </button>
 
-                    <!-- Theme switcher -->
-                    <div id="theme-switcher" class="dropdown">
-                        <!-- Trigger -->
-                        <button type="button" tabindex="0" class="btn m-1" aria-haspopup="menu" aria-expanded="false">
-                            Theme
-                            <svg width="12" height="12" class="inline-block h-2 w-2 fill-current opacity-60" viewBox="0 0 2048 2048" aria-hidden="true">
-                                <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
-                            </svg>
-                        </button>
+                            <ul tabindex="0"
+                                role="menu"
+                                class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-48">
+                                <li>
+                                    <a data-locale="en-US" href="/" class="locale-item font-bold no-underline hover:no-underline focus:no-underline">
+                                        English (US)
+                                    </a>
+                                </li>
+                                <li>
+                                    <a data-locale="de-DE" href="/de-DE/" class="locale-item font-bold no-underline hover:no-underline focus:no-underline">
+                                        Deutsch
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
 
-                        <!-- Menu -->
-                        <ul tabindex="0"
-                            role="menu"
-                            class="dropdown-content bg-base-300 rounded-box z-10 w-60 p-2 shadow-2xl list-none">
+                        <div id="theme-switcher" class="dropdown dropdown-end">
+                            <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
+                                Theme
+                                <svg width="12" height="12" class="inline-block h-2 w-2 fill-current opacity-60" viewBox="0 0 2048 2048" aria-hidden="true">
+                                    <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
+                                </svg>
+                            </button>
 
-                            <!-- Loop themes list -->
-                            <ctx :loop="$site.asset('config.ziggy').ziggy().get('themes')">
-                            <li role="menuitemradio"
-                                aria-checked="false"
-                                class="theme-item overflow-hidden rounded-lg border border-base-content/20 hover:border-base-content/40 cursor-pointer"
-                                data-theme-name="$loop.it"
-                                style="padding: 0;">
-                                <!-- Local preview; see CSS shim in section C -->
-                                <div class="w-full font-sans" data-theme="$loop.it">
-                                    <div class="grid grid-cols-5 grid-rows-3">
-                                        <div class="bg-base-200 col-start-1 row-span-2 row-start-1"></div>
-                                        <div class="bg-base-300 col-start-1 row-start-3"></div>
-                                        <div class="bg-base-100 col-span-4 col-start-2 row-span-3 row-start-1 flex flex-col gap-1 p-2">
-                                            <span class="text-base-content" :text="$loop.it"></span>
-                                            <div class="flex flex-wrap gap-1">
-                                                <div class="bg-primary flex aspect-square w-5 items-center justify-center rounded lg:w-6">
-                                                    <div class="text-primary-content text-xs font-bold">A</div>
-                                                </div>
-                                                <div class="bg-secondary flex aspect-square w-5 items-center justify-center rounded lg:w-6">
-                                                    <div class="text-secondary-content text-xs font-bold">A</div>
-                                                </div>
-                                                <div class="bg-accent flex aspect-square w-5 items-center justify-center rounded lg:w-6">
-                                                    <div class="text-accent-content text-xs font-bold">A</div>
-                                                </div>
-                                                <div class="bg-neutral flex aspect-square w-5 items-center justify-center rounded lg:w-6">
-                                                    <div class="text-neutral-content text-xs font-bold">A</div>
+                            <ul tabindex="0"
+                                role="menu"
+                                class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-60">
+
+                                <ctx :loop="$site.asset('config.ziggy').ziggy().get('themes')">
+                                <li role="menuitemradio"
+                                    aria-checked="false"
+                                    class="theme-item overflow-hidden rounded-lg border border-base-content/20 hover:border-base-content/40 cursor-pointer"
+                                    data-theme-name="$loop.it"
+                                    style="padding: 0;">
+                                    <div class="w-full font-sans" data-theme="$loop.it">
+                                        <div class="grid grid-cols-5 grid-rows-3">
+                                            <div class="bg-base-200 col-start-1 row-span-2 row-start-1"></div>
+                                            <div class="bg-base-300 col-start-1 row-start-3"></div>
+                                            <div class="bg-base-100 col-span-4 col-start-2 row-span-3 row-start-1 flex flex-col gap-1 p-2">
+                                                <span class="text-base-content" :text="$loop.it"></span>
+                                                <div class="flex flex-wrap gap-1">
+                                                    <div class="bg-primary flex aspect-square w-5 items-center justify-center rounded lg:w-6">
+                                                        <div class="text-primary-content text-xs font-bold">A</div>
+                                                    </div>
+                                                    <div class="bg-secondary flex aspect-square w-5 items-center justify-center rounded lg:w-6">
+                                                        <div class="text-secondary-content text-xs font-bold">A</div>
+                                                    </div>
+                                                    <div class="bg-accent flex aspect-square w-5 items-center justify-center rounded lg:w-6">
+                                                        <div class="text-accent-content text-xs font-bold">A</div>
+                                                    </div>
+                                                    <div class="bg-neutral flex aspect-square w-5 items-center justify-center rounded lg:w-6">
+                                                        <div class="text-neutral-content text-xs font-bold">A</div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </li>
-                            </ctx>
-                        </ul>
+                                </li>
+                                </ctx>
+                            </ul>
+                        </div>
                     </div>
-                    <script>
+                </div>
+
+                <div class="px-2 pt-2">
+                    <div class="flex flex-wrap justify-center gap-1 rounded-box bg-base-100/50 p-1">
+                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('quickstart').link()">Get Started</a>
+                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()">Guides</a>
+                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()">Map</a>
+                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()">Calculator</a>
+                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()">Dex</a>
+                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()">Community</a>
+                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()">Log</a>
+                    </div>
+                </div>
+            </div>
+            <script>
                         (function () {
                             var KEY = 'theme';
                             var root = document.documentElement;
@@ -267,7 +181,6 @@
                             }
                             function setTheme(name) {
                                 root.setAttribute('data-theme', resolve(name));
-                                console.log(name)
                                 localStorage.setItem(KEY, name);
                                 // update active state
                                 dropdown.querySelectorAll('.theme-item').forEach(function (el) {
@@ -296,8 +209,6 @@
                             });
                         })();
                     </script>
-                </div>
-            </div>
         </div>
     </nav>
 
@@ -305,7 +216,7 @@
 
     <!-- Page container -->
     <div id="content"
-         class="mx-auto p-[3rem] mt-4 rounded-xl bg-base-300">
+         class="mx-auto mt-4 rounded-box border border-base-300 bg-base-200/70 p-6 shadow-sm md:p-10">
         <super>
     </div>
 

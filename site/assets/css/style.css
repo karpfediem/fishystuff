@@ -3,7 +3,8 @@ body {
         font-size: 1.2rem;
         font-family: 'Pacifico', sans-serif;
         min-width: max-content;
-        width: 100%;
+        width: auto;
+        display: inline-block;
         white-space: nowrap;
     }
     h1.title {
@@ -41,4 +42,3 @@ body {
     }
 
 }
-
