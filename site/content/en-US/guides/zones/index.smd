@@ -4,6 +4,9 @@
 .author = "Karpfen and Paghur",
 .layout = "guide_page.shtml",
 .draft = false,
+.custom = {
+  .og_image_asset = "zones.png",
+},
 ---
 
 # [What Are Fishing Zones?]($section.id('zones'))

@@ -32,11 +32,16 @@
             <meta property="og:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
         </ctx>
         <meta property="og:url" content="$site.host_url.addPath($page.link())">
+        <ctx :if="$page.custom.has('og_image_asset')">
+            <meta property="og:image" content="$site.host_url.addPath($page.asset($page.custom.get('og_image_asset')).link())">
+        </ctx>
+        <ctx :if="$page.custom.has('og_image_asset').not()">
         <ctx :if="$page.custom.has('og_image')">
             <meta property="og:image" content="$site.host_url.addPath($page.custom.get('og_image'))">
         </ctx>
         <ctx :if="$page.custom.has('og_image').not()">
             <meta property="og:image" content="$site.host_url.addPath($site.asset('img/default_preview.png').link())">
+        </ctx>
         </ctx>
 
         <!-- Twitter -->
@@ -48,11 +53,16 @@
         <ctx :if="$page.description.len().gt(0).not()">
             <meta name="twitter:description" content="Fishy Stuff: Fishing Guides and Tools for Black Desert">
         </ctx>
+        <ctx :if="$page.custom.has('og_image_asset')">
+            <meta name="twitter:image" content="$site.host_url.addPath($page.asset($page.custom.get('og_image_asset')).link())">
+        </ctx>
+        <ctx :if="$page.custom.has('og_image_asset').not()">
         <ctx :if="$page.custom.has('og_image')">
             <meta name="twitter:image" content="$site.host_url.addPath($page.custom.get('og_image'))">
         </ctx>
         <ctx :if="$page.custom.has('og_image').not()">
             <meta name="twitter:image" content="$site.host_url.addPath($site.asset('img/default_preview.png').link())">
+        </ctx>
         </ctx>
 
         <!-- Robots (optional) -->
