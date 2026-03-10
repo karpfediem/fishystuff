@@ -168,31 +168,7 @@
   }
 
   .pokedex-filter-chip {
-    appearance: none;
-    border: 1px solid var(--dex-line);
-    border-radius: 999px;
-    background: var(--dex-field);
-    color: var(--color-base-content, #1f2937);
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.9rem;
-    font-weight: 700;
-    line-height: 1.2;
-    padding: 0.55rem 0.85rem;
-    transition: border-color 120ms ease, background 120ms ease, color 120ms ease, outline-color 120ms ease;
     white-space: nowrap;
-  }
-
-  .pokedex-filter-chip:hover {
-    border-color: color-mix(in oklab, var(--color-base-content, #1f2937) 34%, transparent);
-    background: var(--dex-surface);
-  }
-
-  .pokedex-filter-chip:focus-visible {
-    border-color: color-mix(in oklab, var(--color-primary, #e07a5f) 56%, var(--color-base-content, #1f2937) 44%);
-    background: var(--dex-surface);
-    outline: 3px solid var(--dex-focus);
-    outline-offset: 2px;
   }
 
   .pokedex-filter-chip.is-active {
@@ -274,62 +250,11 @@
   }
 
   .pokedex-filter-clear {
-    appearance: none;
-    border: 1px solid var(--dex-line);
-    border-radius: 999px;
-    background: transparent;
-    color: var(--color-base-content, #1f2937);
-    cursor: pointer;
-    font: inherit;
-    font-weight: 700;
-    padding: 0.45rem 0.85rem;
-    transition: border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
-  }
-
-  .pokedex-filter-clear:hover {
-    border-color: color-mix(in oklab, var(--color-base-content, #1f2937) 34%, transparent);
-    background: var(--dex-surface);
-  }
-
-  .pokedex-filter-clear:focus-visible {
-    border-color: color-mix(in oklab, var(--color-primary, #e07a5f) 56%, var(--color-base-content, #1f2937) 44%);
-    background: var(--dex-surface);
-    outline: 3px solid var(--dex-focus);
-    outline-offset: 2px;
+    white-space: nowrap;
   }
 
   .pokedex-button {
-    --dex-button-tone: var(--dex-button);
-    --dex-button-content: var(--color-primary-content, white);
-    appearance: none;
-    border: 1px solid var(--dex-button-line);
-    border-radius: 999px;
-    background: var(--dex-button-tone);
-    color: var(--dex-button-content);
-    cursor: pointer;
-    font: inherit;
-    font-weight: 700;
-    padding: 0.65rem 1rem;
-    transition: transform 120ms ease, border-color 120ms ease, background 120ms ease, outline-color 120ms ease;
-  }
-
-  .pokedex-button-secondary {
-    --dex-button-tone: var(--dex-button-secondary);
-    --dex-button-content: var(--color-secondary-content, white);
-  }
-
-  .pokedex-button:hover {
-    background: color-mix(in oklab, var(--dex-button-tone) 72%, var(--dex-highlight) 28%);
-    border-color: color-mix(in oklab, var(--dex-button-tone) 56%, var(--color-base-content, #1f2937) 44%);
-    transform: translateY(-1px);
-  }
-
-  .pokedex-button:focus-visible {
-    background: color-mix(in oklab, var(--dex-button-tone) 72%, var(--dex-highlight) 28%);
-    border-color: color-mix(in oklab, var(--dex-button-tone) 56%, var(--color-base-content, #1f2937) 44%);
-    outline: 3px solid var(--dex-focus);
-    outline-offset: 2px;
-    transform: translateY(-1px);
+    white-space: nowrap;
   }
 
   .pokedex-stats {
@@ -1404,6 +1329,7 @@
         }
         const active = button.dataset.caughtFilterValue === caughtFilter;
         button.classList.toggle("is-active", active);
+        button.classList.toggle("btn-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       }
 
@@ -1415,6 +1341,7 @@
         const grade = button.dataset.gradeFilterValue || "";
         const active = selectedGrades.has(grade);
         button.classList.toggle("is-active", active);
+        button.classList.toggle("btn-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       }
 
@@ -1426,6 +1353,7 @@
         const method = button.dataset.methodFilterValue || "";
         const active = method === "all" ? selectedMethods.size === 0 : selectedMethods.has(method);
         button.classList.toggle("is-active", active);
+        button.classList.toggle("btn-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       }
 
@@ -1435,6 +1363,7 @@
         }
         const active = showDried;
         button.classList.toggle("is-active", active);
+        button.classList.toggle("btn-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       }
 
@@ -1444,6 +1373,7 @@
         }
         const active = button.dataset.sortFieldValue === sortField;
         button.classList.toggle("is-active", active);
+        button.classList.toggle("btn-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       }
 
@@ -2264,17 +2194,17 @@
               <span class="pokedex-filter-label">Caught Status</span>
               <div class="pokedex-filter-chips" role="group" aria-label="Caught status filters">
                 <button type="button"
-                        class="pokedex-filter-chip"
+                        class="btn btn-sm btn-soft pokedex-filter-chip"
                         data-caught-filter-value="all"
                         aria-pressed="true"
                         data-on-click="window.Pokedex.setCaughtFilter('all')">All</button>
                 <button type="button"
-                        class="pokedex-filter-chip filter-caught"
+                        class="btn btn-sm btn-soft pokedex-filter-chip filter-caught"
                         data-caught-filter-value="caught"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.setCaughtFilter('caught')">Caught</button>
                 <button type="button"
-                        class="pokedex-filter-chip filter-missing"
+                        class="btn btn-sm btn-soft pokedex-filter-chip filter-missing"
                         data-caught-filter-value="missing"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.setCaughtFilter('missing')">Missing</button>
@@ -2285,27 +2215,27 @@
               <span class="pokedex-filter-label">Rarity</span>
               <div class="pokedex-filter-chips" role="group" aria-label="Rarity color filters">
                 <button type="button"
-                        class="pokedex-filter-chip grade-prize"
+                        class="btn btn-sm btn-soft pokedex-filter-chip grade-prize"
                         data-grade-filter-value="Prize"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleGradeFilter('Prize')">Red</button>
                 <button type="button"
-                        class="pokedex-filter-chip grade-rare"
+                        class="btn btn-sm btn-soft pokedex-filter-chip grade-rare"
                         data-grade-filter-value="Rare"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleGradeFilter('Rare')">Yellow</button>
                 <button type="button"
-                        class="pokedex-filter-chip grade-highquality"
+                        class="btn btn-sm btn-soft pokedex-filter-chip grade-highquality"
                         data-grade-filter-value="HighQuality"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleGradeFilter('HighQuality')">Blue</button>
                 <button type="button"
-                        class="pokedex-filter-chip grade-general"
+                        class="btn btn-sm btn-soft pokedex-filter-chip grade-general"
                         data-grade-filter-value="General"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleGradeFilter('General')">Green</button>
                 <button type="button"
-                        class="pokedex-filter-chip grade-trash"
+                        class="btn btn-sm btn-soft pokedex-filter-chip grade-trash"
                         data-grade-filter-value="Trash"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleGradeFilter('Trash')">White</button>
@@ -2316,26 +2246,26 @@
               <span class="pokedex-filter-label">Method</span>
               <div class="pokedex-filter-chips" role="group" aria-label="Catch method and dried filters">
                 <button type="button"
-                        class="pokedex-filter-chip"
+                        class="btn btn-sm btn-soft pokedex-filter-chip"
                         data-show="$supports_method_filter"
                         data-method-filter-value="all"
                         aria-pressed="true"
                         data-on-click="window.Pokedex.clearMethodFilters()">All</button>
                 <button type="button"
-                        class="pokedex-filter-chip filter-rod"
+                        class="btn btn-sm btn-soft pokedex-filter-chip filter-rod"
                         data-show="$supports_method_filter"
                         data-method-filter-value="rod"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleMethodFilter('rod')">Rod</button>
                 <button type="button"
-                        class="pokedex-filter-chip filter-harpoon"
+                        class="btn btn-sm btn-soft pokedex-filter-chip filter-harpoon"
                         data-show="$supports_method_filter"
                         data-method-filter-value="harpoon"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleMethodFilter('harpoon')">Harpoon</button>
                 <button type="button"
                         data-show="$supports_dried_filter"
-                        class="pokedex-filter-chip filter-show-dried"
+                        class="btn btn-sm btn-soft pokedex-filter-chip filter-show-dried"
                         data-dried-toggle
                         aria-pressed="false"
                         data-on-click="window.Pokedex.toggleShowDried()">Show Dried</button>
@@ -2346,17 +2276,17 @@
               <span class="pokedex-filter-label">Sort</span>
               <div class="pokedex-filter-chips" role="group" aria-label="Sort controls">
                 <button type="button"
-                        class="pokedex-filter-chip"
+                        class="btn btn-sm btn-soft pokedex-filter-chip"
                         data-sort-field-value="name"
                         aria-pressed="true"
                         data-on-click="window.Pokedex.setSortField('name')">Name</button>
                 <button type="button"
-                        class="pokedex-filter-chip"
+                        class="btn btn-sm btn-soft pokedex-filter-chip"
                         data-sort-field-value="price"
                         aria-pressed="false"
                         data-on-click="window.Pokedex.setSortField('price')">Price</button>
                 <button type="button"
-                        class="pokedex-filter-chip"
+                        class="btn btn-sm btn-soft pokedex-filter-chip"
                         data-sort-direction-toggle
                         aria-pressed="true"
                         data-on-click="window.Pokedex.toggleSortDirection()">Ascending</button>
@@ -2365,7 +2295,7 @@
 
             <div class="pokedex-filter-meta">
               <span class="pokedex-subtle" data-text="$active_filter_message || 'No extra filters.'"></span>
-              <button type="button" class="pokedex-filter-clear" data-on-click="window.Pokedex.resetFilters()">Clear filters</button>
+              <button type="button" class="btn btn-sm btn-ghost pokedex-filter-clear" data-on-click="window.Pokedex.resetFilters()">Clear filters</button>
             </div>
           </div>
 
@@ -2406,8 +2336,8 @@
           <div class="pokedex-subtle">Fetching the fish catalog from the Axum API.</div>
         </div>
         <div class="pokedex-actions" data-show="!$loading">
-          <button type="button" class="pokedex-button" data-on-click="window.Pokedex.exportCaught($caught_ids || [])">Export</button>
-          <button type="button" class="pokedex-button pokedex-button-secondary" data-on-click="window.Pokedex.importCaught()">Import</button>
+          <button type="button" class="btn btn-sm btn-primary pokedex-button" data-on-click="window.Pokedex.exportCaught($caught_ids || [])">Export</button>
+          <button type="button" class="btn btn-sm btn-secondary pokedex-button" data-on-click="window.Pokedex.importCaught()">Import</button>
         </div>
       </aside>
     </div>
@@ -2452,7 +2382,7 @@
           </div>
         </div>
         <button type="button"
-                class="pokedex-button pokedex-button-secondary pokedex-details-close"
+                class="btn btn-sm btn-secondary pokedex-button pokedex-details-close"
                 data-action="close-details">Close</button>
       </div>
 
