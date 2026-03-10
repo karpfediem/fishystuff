@@ -14,6 +14,23 @@
         -webkit-box-orient: vertical;
         overflow: hidden;
       }
+
+      .guide-card-inner {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 1rem;
+        transition: transform 120ms ease;
+      }
+
+      .guide-list a.card:hover .guide-card-inner,
+      .guide-list a.card:focus-visible .guide-card-inner {
+        transform: translateY(-2px);
+      }
+
+      .guide-list a.card:active .guide-card-inner {
+        transform: translateY(1px);
+      }
     </style>
     <section class="guide-list not-prose">
       <div
@@ -25,47 +42,49 @@
            class="card h-[22rem] md:h-[24rem] lg:h-[26rem] flex flex-col p-4
               bg-base-200/30 hover:bg-base-200/40
               border border-base-300 shadow-md hover:shadow-lg transition-shadow overflow-hidden">
+          <div class="guide-card-inner">
 
-          <ctx :if="$loop.it.custom.has('og_image')">
-            <figure class="aspect-[16/9] overflow-hidden bg-base-200/40">
-              <img src="$loop.it.custom.get('og_image')" alt="" class="h-full w-full object-cover">
-            </figure>
-          </ctx>
+            <ctx :if="$loop.it.custom.has('og_image')">
+              <figure class="aspect-[16/9] overflow-hidden bg-base-200/40">
+                <img src="$loop.it.custom.get('og_image')" alt="" class="h-full w-full object-cover">
+              </figure>
+            </ctx>
 
-          <div class="card-body flex-1 flex flex-col gap-2">
-            <h2 class="card-title text-lg leading-snug">
-              <span :text="$loop.it.title"></span>
-            </h2>
+            <div class="card-body flex-1 flex flex-col gap-2">
+              <h2 class="card-title text-lg leading-snug">
+                <span :text="$loop.it.title"></span>
+              </h2>
 
-            <!-- clamp to 3 lines -->
-            <p :if="$loop.it.description.len().gt(0)"
-               class="text-sm opacity-90 line-clamp-3"
-               :text="$loop.it.description"></p>
+              <!-- clamp to 3 lines -->
+              <p :if="$loop.it.description.len().gt(0)"
+                 class="text-sm opacity-90 line-clamp-3"
+                 :text="$loop.it.description"></p>
 
-            <div class="mt-auto flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-[11px] opacity-80">
+              <div class="mt-auto flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-[11px] opacity-80">
 
-          <span class="whitespace-nowrap">
-            ~<span :text="$loop.it.wordCount().div(200).plus(1)"></span>
-            <span :text="$i18n.getOr('minutes_read_suffix','min')"></span>
-          </span>
-          <span :if="$loop.it.author.len().gt(0)">
-            <strong>by</strong> <span :text="$loop.it.author"></span>
-          </span>
-              <ctx :if="$loop.it.custom.get?('updated')">
                 <span class="whitespace-nowrap">
-                  <strong :text="$i18n.getOr('updated','Updated')"></strong>:
-                  <time :text="$if.format('January 02, 2006')"></time>
+                  ~<span :text="$loop.it.wordCount().div(200).plus(1)"></span>
+                  <span :text="$i18n.getOr('minutes_read_suffix','min')"></span>
                 </span>
+                <span :if="$loop.it.author.len().gt(0)">
+                  <strong>by</strong> <span :text="$loop.it.author"></span>
+                </span>
+                <ctx :if="$loop.it.custom.get?('updated')">
+                  <span class="whitespace-nowrap">
+                    <strong :text="$i18n.getOr('updated','Updated')"></strong>:
+                    <time :text="$if.format('January 02, 2006')"></time>
+                  </span>
+                </ctx>
+              </div>
+
+              <ctx :if="$loop.it.custom.has('tags')">
+                <div class="mt-2 flex flex-wrap gap-1">
+                  <span :loop="$loop.it.custom.get('tags')" class="badge badge-ghost badge-sm">
+                    <span :text="$loop.it"></span>
+                  </span>
+                </div>
               </ctx>
             </div>
-
-            <ctx :if="$loop.it.custom.has('tags')">
-              <div class="mt-2 flex flex-wrap gap-1">
-                <span :loop="$loop.it.custom.get('tags')" class="badge badge-ghost badge-sm">
-                  <span :text="$loop.it"></span>
-                </span>
-              </div>
-            </ctx>
           </div>
         </a>
 
