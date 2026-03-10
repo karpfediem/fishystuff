@@ -1,12 +1,60 @@
 <extend template="with-nav.shtml">
   <title id="title" :text="$page.title"></title>
-<div id="content">
-  <style>
-    iframe {
-      width: 100%;
-      min-height: 30rem;
-    }
-  </style>
-  <div id="page" :html="$page.content()"></div>
-  <iframe src="https://karpfen-fish.b-cdn.net" allow="clipboard-write"></iframe>
-</div>
+
+  <div id="content" class="fishystuff-map-content not-prose">
+    <style>
+      html:has(#map-page-shell) {
+        overflow: hidden;
+        scrollbar-gutter: auto;
+      }
+
+      body:has(#map-page-shell) {
+        min-height: 100dvh;
+        overflow: hidden;
+        overscroll-behavior: none;
+      }
+
+      body:has(#map-page-shell) #menu {
+        margin-bottom: 0;
+      }
+
+      #content.fishystuff-map-content {
+        position: fixed;
+        inset: var(--site-nav-offset, 0px) 0 0;
+        z-index: 0;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        overflow: hidden;
+      }
+
+      #map-page-shell {
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+        border-radius: 0;
+      }
+
+      #bevy {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border: 0;
+        border-radius: 0;
+        outline: none;
+        touch-action: none;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+    </style>
+    <div id="map-page-shell">
+      <canvas id="bevy"></canvas>
+    </div>
+    <script type="module" src="$site.asset('map/loader.js').link()"></script>
+  </div>

@@ -6,10 +6,3 @@
 .draft = false,
 .tags = ["map", "waypoints"],
 ---
-
-## [Usage]($section.id('usage'))
-
-Click anywhere on the map to copy coordinates
-
-
-
