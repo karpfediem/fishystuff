@@ -3,6 +3,7 @@
     <title id="title" :text="$page.title"></title>
 
     <div id="content">
+        <div class="site-content-clip bg-base-200/70 p-6 md:p-10">
         <header class="page-header">
             <h1 :text="$page.title"></h1>
 
@@ -33,4 +34,5 @@
         <section class="footnotes" :if="$page.footnotes?()">
             <div :html="$if.html()"></div>
         </section>
+        </div>
     </div>

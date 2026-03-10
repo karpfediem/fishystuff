@@ -4,6 +4,7 @@
 
 
   <div id="content">
+  <div class="site-content-clip bg-base-200/70 p-6 md:p-10">
   <!-- These must exist in assets/js/ and be listed in .static_assets -->
   <script src="$site.asset('js/durationFormatter.js').link()"></script>
   <script src="$site.asset('js/lz-string.min.js').link()"></script>
@@ -13,4 +14,5 @@
 
   <!-- Your main module -->
   <script type="module" src="$site.asset('js/datastar.js').link()"></script>
+  </div>
   </div>
