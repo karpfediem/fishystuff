@@ -15,7 +15,7 @@
         overflow: hidden;
       }
     </style>
-    <section class="guide-list">
+    <section class="guide-list not-prose">
       <div
               class="w-full grid gap-4 items-stretch"
               style="grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));"
@@ -23,7 +23,8 @@
 
         <a href="$loop.it.link()"
            class="card h-[22rem] md:h-[24rem] lg:h-[26rem] flex flex-col p-4
-              bg-base-200/40 border border-base-300 shadow-md hover:shadow-lg transition-shadow overflow-hidden">
+              bg-base-200/30 hover:bg-base-200/40
+              border border-base-300 shadow-md hover:shadow-lg transition-shadow overflow-hidden">
 
           <ctx :if="$loop.it.custom.has('og_image')">
             <figure class="aspect-[16/9] overflow-hidden bg-base-200/40">

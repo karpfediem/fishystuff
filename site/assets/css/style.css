@@ -21,9 +21,6 @@ body {
     a.card {
         text-decoration: none;
     }
-    a.card:hover {
-        text-decoration: underline;
-    }
 
     .subtitle,
     .tagline {
