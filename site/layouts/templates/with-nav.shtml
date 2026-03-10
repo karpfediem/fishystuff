@@ -85,11 +85,10 @@
                             <ul tabindex="0"
                                 role="menu"
                                 class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-56">
-                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('quickstart').link()">Get Started</a></li>
                                 <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()">Guides</a></li>
                                 <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()">Map</a></li>
-                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()">Calculator</a></li>
                                 <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()">Dex</a></li>
+                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()">Calculator</a></li>
                                 <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()">Community</a></li>
                                 <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()">Log</a></li>
                             </ul>
@@ -105,11 +104,10 @@
                         </div>
 
                         <div class="hidden min-w-0 flex-1 flex-wrap justify-center gap-1 lg:flex">
-                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('quickstart').link()">Get Started</a>
                             <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()">Guides</a>
                             <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()">Map</a>
-                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()">Calculator</a>
                             <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()">Dex</a>
+                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()">Calculator</a>
                             <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()">Community</a>
                             <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()">Log</a>
                         </div>
