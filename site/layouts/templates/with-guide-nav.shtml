@@ -53,17 +53,30 @@
             }
 
             @media (min-width: 96rem) {
+                .guide-layout {
+                    display: grid;
+                    grid-template-columns: minmax(0, 1fr);
+                }
+
                 .guide-desktop-rail {
                     display: block;
-                    position: absolute;
-                    top: 0;
-                    right: calc(100% + 1.5rem);
+                    grid-column: 1;
+                    grid-row: 1;
+                    justify-self: start;
+                    align-self: start;
+                    margin-left: calc(-18rem - 1.5rem);
+                    position: sticky;
+                    top: calc(var(--site-nav-offset, 0px) + 1rem);
                     width: 18rem;
                 }
 
+                .drawer {
+                    grid-column: 1;
+                    grid-row: 1;
+                    min-width: 0;
+                }
+
                 .guide-rail-shell {
-                    position: sticky;
-                    top: calc(var(--site-nav-offset, 0px) + 1rem);
                     max-height: calc(100dvh - var(--site-nav-offset, 0px) - 2rem);
                     overflow: auto;
                     width: 18rem;
