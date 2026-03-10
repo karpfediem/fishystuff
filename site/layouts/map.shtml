@@ -100,9 +100,45 @@
         overflow-y: auto;
       }
 
+      #fishymap-search-dock {
+        position: absolute;
+        top: 1rem;
+        left: 50%;
+        z-index: 24;
+        display: flex;
+        width: min(34rem, calc(100vw - 2rem));
+        flex-direction: column;
+        gap: 0.65rem;
+        transform: translateX(-50%);
+        pointer-events: none;
+      }
+
+      #fishymap-search-dock > * {
+        pointer-events: auto;
+      }
+
+      #fishymap-search-shell,
+      #fishymap-search-results-shell {
+        border-radius: 1.25rem;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+        background: color-mix(in srgb, var(--color-base-100) 88%, transparent);
+        box-shadow: 0 1.25rem 3rem color-mix(in srgb, var(--color-base-content) 18%, transparent);
+        backdrop-filter: blur(18px);
+      }
+
+      #fishymap-search-shell {
+        padding: 0.9rem 1rem 0.85rem;
+      }
+
       #fishymap-search-results button {
         text-align: left;
         justify-content: flex-start;
+      }
+
+      #fishymap-search-selection[hidden],
+      #fishymap-search-results-shell[hidden],
+      #fishymap-search-selection:empty {
+        display: none;
       }
 
       #fishymap-diagnostic-json {
@@ -151,6 +187,11 @@
       }
 
       @media (max-width: 960px) {
+        #fishymap-search-dock {
+          top: 0.75rem;
+          width: min(100vw - 1.5rem, 34rem);
+        }
+
         #fishymap-panel {
           top: auto;
           right: 0.75rem;
@@ -178,6 +219,24 @@
     </style>
     <div id="map-page-shell">
       <canvas id="bevy"></canvas>
+      <div id="fishymap-search-dock" class="not-prose">
+        <div id="fishymap-search-shell" class="space-y-3">
+          <label class="form-control gap-2">
+            <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/55">Fish search</span>
+            <input id="fishymap-search" class="input input-bordered input-md w-full rounded-full" type="search" placeholder="Name or encyclopedia ID" autocomplete="off">
+          </label>
+
+          <div id="fishymap-search-selection" class="flex min-h-0 flex-wrap gap-2" hidden></div>
+        </div>
+
+        <div id="fishymap-search-results-shell" class="overflow-hidden" hidden>
+          <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
+            <span class="text-sm font-semibold">Matches</span>
+            <span id="fishymap-search-count" class="text-xs text-base-content/60">0 fish</span>
+          </div>
+          <div id="fishymap-search-results" class="menu menu-sm max-h-56 overflow-auto p-2"></div>
+        </div>
+      </div>
       <button
         id="fishymap-panel-open"
         class="btn btn-primary btn-sm absolute left-4 top-4 z-20 rounded-full shadow-lg"
@@ -198,31 +257,10 @@
         </div>
 
         <div id="fishymap-panel-body" class="flex flex-col gap-4 px-4 py-4">
-          <label class="form-control gap-2">
-            <span class="label-text font-semibold">Search fish</span>
-            <input id="fishymap-search" class="input input-bordered input-sm w-full" type="search" placeholder="Name or encyclopedia ID" autocomplete="off">
-          </label>
-
-          <div class="space-y-2">
-            <div class="flex items-center justify-between gap-3">
-              <span class="text-sm font-semibold">Selection</span>
-              <span class="text-xs text-base-content/60">Last item is current</span>
-            </div>
-            <div id="fishymap-search-selection" class="flex min-h-10 flex-wrap gap-2 rounded-box border border-base-300/70 bg-base-200/60 p-2"></div>
-          </div>
-
           <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300/70 px-3 py-2">
             <input id="fishymap-prize-only" class="checkbox checkbox-sm checkbox-primary" type="checkbox">
             <span class="label-text">Prize fish only</span>
           </label>
-
-          <div class="space-y-2">
-            <div class="flex items-center justify-between gap-3">
-              <span class="text-sm font-semibold">Matches</span>
-              <span id="fishymap-search-count" class="text-xs text-base-content/60">0 fish</span>
-            </div>
-            <div id="fishymap-search-results" class="menu menu-sm max-h-44 overflow-auto rounded-box border border-base-300/70 bg-base-200/60 p-2"></div>
-          </div>
 
           <div class="space-y-3">
             <div class="rounded-box border border-base-300/70 bg-base-200/60 p-3">

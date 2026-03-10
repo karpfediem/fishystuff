@@ -528,10 +528,12 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
   elements.searchSelection.dataset.renderKey = renderKey;
 
   if (!selectedFishIds.length) {
-    elements.searchSelection.innerHTML =
-      '<div class="px-2 py-1 text-xs text-base-content/60">Add fish from the search results.</div>';
+    elements.searchSelection.innerHTML = "";
+    elements.searchSelection.hidden = true;
     return;
   }
+
+  elements.searchSelection.hidden = false;
 
   elements.searchSelection.innerHTML = selectedFishIds
     .map((fishId) => {
@@ -573,6 +575,7 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
 function renderSearchResults(elements, matches, stateBundle) {
   const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
   const prizeOnly = Boolean(stateBundle.inputState?.filters?.prizeOnly);
+  const showResults = Boolean(query || prizeOnly);
   const activeMatches = matches.slice(0, 12);
   const currentFishId = resolveCurrentFishId(stateBundle);
   const renderKey = JSON.stringify({
@@ -582,6 +585,9 @@ function renderSearchResults(elements, matches, stateBundle) {
     resultIds: activeMatches.map((fish) => fish.fishId),
     total: matches.length,
   });
+  if (elements.searchResultsShell) {
+    elements.searchResultsShell.hidden = !showResults;
+  }
   elements.searchCount.textContent = `${matches.length} fish`;
   if (elements.searchResults.dataset.renderKey === renderKey) {
     return;
@@ -1137,6 +1143,7 @@ async function main() {
     readyPill: document.getElementById("fishymap-ready-pill"),
     search: document.getElementById("fishymap-search"),
     searchSelection: document.getElementById("fishymap-search-selection"),
+    searchResultsShell: document.getElementById("fishymap-search-results-shell"),
     searchResults: document.getElementById("fishymap-search-results"),
     searchCount: document.getElementById("fishymap-search-count"),
     prizeOnly: document.getElementById("fishymap-prize-only"),
