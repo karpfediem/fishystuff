@@ -70,10 +70,10 @@
     </head>
 
     <body id="body" class="bg-base-100">
-    <nav id="menu" class="not-prose sticky top-0 z-40 mb-4 border-b border-base-300/60 bg-base-100/85 backdrop-blur">
+    <nav id="menu" class="not-prose sticky top-0 z-40 mb-4 bg-base-100">
         <div class="grid grid-cols-[minmax(clamp(1rem,2.5vw,2rem),1fr)_minmax(0,130ch)_minmax(clamp(1rem,2.5vw,2rem),1fr)]">
         <div class="col-start-2 px-4 py-3">
-            <div class="rounded-box border border-base-300 bg-base-200/80 p-2 shadow-sm">
+            <div class="p-2">
                 <div class="navbar min-h-0 flex-wrap justify-between gap-2 px-2 lg:flex-nowrap">
                     <div class="flex min-w-0 flex-1 items-center gap-2">
                         <div class="dropdown lg:hidden">
