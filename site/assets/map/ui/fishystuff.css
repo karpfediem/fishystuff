@@ -320,10 +320,11 @@
 }
 
 .diagnostics {
-  border-radius: 8px;
+  border-radius: 16px;
   border-width: 1px;
   border-color: var(--border);
-  background-color: rgba(18, 22, 28, 0.75);
+  background-color: rgba(18, 22, 28, 0.78);
+  box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.28);
 }
 
 .diagnostics-text {
