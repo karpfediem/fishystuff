@@ -175,13 +175,29 @@
                 <!-- Controls (language / theme) (right on desktop; in top row on mobile) -->
                 <div class="site-nav-controls flex items-center gap-3 text-xs">
                     <!-- Language -->
-                    <nav aria-label="Language" class="flex items-center gap-1">
-                        <a data-locale="en-US" href="/"
-                           class="no-underline hover:underline focus:underline font-bold">en-US</a>
-                        <span class="opacity-50 select-none">/</span>
-                        <a data-locale="de-DE" href="/de-DE/"
-                           class="no-underline hover:underline focus:underline font-bold">de-DE</a>
-                    </nav>
+                    <div id="language-switcher" class="dropdown dropdown-end">
+                        <button type="button" tabindex="0" class="btn m-1" aria-haspopup="menu" aria-expanded="false">
+                            <span id="language-switcher-label">Language</span>
+                            <svg width="12" height="12" class="inline-block h-2 w-2 fill-current opacity-60" viewBox="0 0 2048 2048" aria-hidden="true">
+                                <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
+                            </svg>
+                        </button>
+
+                        <ul tabindex="0"
+                            role="menu"
+                            class="menu menu-sm dropdown-content bg-base-300 rounded-box z-10 w-48 p-2 shadow-2xl">
+                            <li>
+                                <a data-locale="en-US" href="/" class="locale-item font-bold no-underline hover:no-underline focus:no-underline">
+                                    English (US)
+                                </a>
+                            </li>
+                            <li>
+                                <a data-locale="de-DE" href="/de-DE/" class="locale-item font-bold no-underline hover:no-underline focus:no-underline">
+                                    Deutsch
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
 
                     <!-- Divider -->
                     <span class="opacity-50 select-none hidden sm:inline">|</span>
@@ -303,9 +319,11 @@
                 var dePrefix = "/de-DE/";
                 var path = location.pathname;
                 if (!path.startsWith("/")) path = "/" + path;
-                var toEn = document.querySelector('a[data-locale="en-US"]');
-                var toDe = document.querySelector('a[data-locale="de-DE"]');
-                if (!toEn || !toDe) return;
+                var dropdown = document.getElementById("language-switcher");
+                var label = document.getElementById("language-switcher-label");
+                var toEn = document.querySelector('#language-switcher a[data-locale="en-US"]');
+                var toDe = document.querySelector('#language-switcher a[data-locale="de-DE"]');
+                if (!dropdown || !toEn || !toDe) return;
                 var isDe = path === dePrefix || path.startsWith(dePrefix);
                 var enPath = isDe ? path.slice(dePrefix.length - 1) : path;
                 if (enPath.length === 0) enPath = "/";
@@ -314,6 +332,18 @@
                 dePath = dePath.replace(/\/{2,}/g, "/");
                 toEn.setAttribute("href", enPath);
                 toDe.setAttribute("href", dePath);
+                toEn.classList.toggle("active", !isDe);
+                toDe.classList.toggle("active", isDe);
+                if (!isDe) {
+                    toEn.setAttribute("aria-current", "page");
+                    toDe.removeAttribute("aria-current");
+                } else {
+                    toDe.setAttribute("aria-current", "page");
+                    toEn.removeAttribute("aria-current");
+                }
+                if (label) {
+                    label.textContent = isDe ? "DE-DE" : "EN-US";
+                }
             } catch (_) {}
         })();
     </script>
