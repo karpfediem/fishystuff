@@ -19,9 +19,8 @@
         <link rel="alternate" hreflang="x-default" href="$site.link()">
 
         <!-- Favicons -->
-        <link rel="icon" type="image/png" sizes="32x32" href="$site.asset('img/favicon-32x32.png').link()">
-        <link rel="icon" type="image/png" sizes="16x16" href="$site.asset('img/favicon-16x16.png').link()">
-        <link rel="shortcut icon" href="$site.asset('img/favicon.ico').link()">
+        <link rel="icon" type="image/png" href="$site.asset('img/logo.png').link()">
+        <link rel="shortcut icon" href="$site.asset('img/logo.png').link()">
 
         <!-- Open Graph -->
         <meta property="og:type" content="website">
@@ -99,8 +98,10 @@
                         <div class="navbar-start w-auto flex-none min-w-0">
                         <a id="home-link"
                            href="$site.link()"
-                           class="px-2 text-base no-underline hover:underline focus:underline"
-                           :text="$site.title"></a>
+                           class="px-2 text-base no-underline hover:underline focus:underline">
+                            <span :text="$site.title"></span>
+                            <img src="$site.asset('img/logo.png').link()" alt="" decoding="async">
+                        </a>
                         </div>
 
                         <div class="hidden min-w-0 flex-1 flex-wrap justify-center gap-1 lg:flex">

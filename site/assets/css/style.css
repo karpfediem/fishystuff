@@ -4,8 +4,21 @@ body {
         font-family: 'Pacifico', sans-serif;
         min-width: max-content;
         width: auto;
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.55rem;
         white-space: nowrap;
+        overflow: visible;
+        position: relative;
+    }
+    .navbar-start {
+        overflow: visible;
+    }
+    #home-link img {
+        height: 2rem;
+        width: auto;
+        flex: none;
+        overflow: visible;
     }
     h1.title {
         font-family: 'Pacifico', sans-serif;
