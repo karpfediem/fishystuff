@@ -83,16 +83,6 @@
           <h1 class="m-0 text-4xl font-black leading-tight sm:text-5xl lg:text-6xl">
             Everything you need to get fishing
           </h1>
-
-          <p class="mx-auto max-w-2xl py-6 text-base text-base-content/80 md:text-lg">
-            Fishing guides, an interactive zone map, and a searchable dex for planning routes, zones, and species in Black Desert.
-          </p>
-
-          <div class="flex flex-wrap justify-center gap-3">
-            <a class="btn btn-primary" href="$site.page('guides').link()">Explore Guides</a>
-            <a class="btn btn-outline" href="$site.page('map').link()">Open Map</a>
-            <a class="btn btn-ghost" href="$site.page('dex').link()">Browse Dex</a>
-          </div>
         </div>
       </div>
     </section>
