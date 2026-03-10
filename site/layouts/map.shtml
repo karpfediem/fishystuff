@@ -110,6 +110,10 @@
         overflow: auto;
       }
 
+      #fishymap-zone-evidence-list img {
+        display: block;
+      }
+
       #fishymap-floating-status {
         position: absolute;
         left: 1rem;
@@ -259,6 +263,15 @@
               <button id="fishymap-reset-view" class="btn btn-secondary btn-xs" type="button">Reset view</button>
             </div>
             <div id="fishymap-layers" class="space-y-2 rounded-box border border-base-300/70 bg-base-200/60 p-3 text-sm"></div>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm font-semibold">Zone evidence</span>
+              <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
+            </div>
+            <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
+            <div id="fishymap-zone-evidence-list" class="menu menu-sm max-h-72 overflow-auto rounded-box border border-base-300/70 bg-base-200/60 p-2"></div>
           </div>
 
           <details id="fishymap-legend" class="collapse collapse-arrow border border-base-300/70 bg-base-200/60">

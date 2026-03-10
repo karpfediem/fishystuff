@@ -128,6 +128,51 @@ function buildFishLookup(catalogFish) {
   return map;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    (char) =>
+      (
+        {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        }[char] || char
+      ),
+  );
+}
+
+function fishIconUrl(fish) {
+  const value = fish?.iconUrl;
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function renderFishAvatar(fish, sizeClass = "size-6") {
+  const name = fish?.name || `Fish ${fish?.fishId ?? "?"}`;
+  const iconUrl = fishIconUrl(fish);
+  if (iconUrl) {
+    return `
+      <span class="${sizeClass} shrink-0 overflow-hidden rounded-full bg-base-200 ring-1 ring-base-300/80">
+        <img
+          class="h-full w-full object-cover"
+          src="${escapeHtml(iconUrl)}"
+          alt="${escapeHtml(name)}"
+          loading="lazy"
+          decoding="async"
+        />
+      </span>
+    `;
+  }
+  const fallback = escapeHtml(String(name).trim().charAt(0).toUpperCase() || "?");
+  return `
+    <span class="${sizeClass} inline-flex shrink-0 items-center justify-center rounded-full bg-base-300 text-[11px] font-semibold text-base-content/70">
+      ${fallback}
+    </span>
+  `;
+}
+
 function resolveSelectedFishIds(stateBundle) {
   const inputFishIds = stateBundle.inputState?.filters?.fishIds;
   if (Array.isArray(inputFishIds)) {
@@ -212,6 +257,104 @@ function formatPatchDate(startTsUtc) {
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
   const day = String(date.getUTCDate()).padStart(2, "0");
   return `${year}/${month}/${day}`;
+}
+
+function formatTimestampUtc(tsUtc) {
+  const tsMs = Number(tsUtc) * 1000;
+  if (!Number.isFinite(tsMs) || tsMs <= 0) {
+    return "";
+  }
+  const date = new Date(tsMs);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatDecimal(value, digits = 3) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : "n/a";
+}
+
+function formatPercent(value, digits = 1) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${(number * 100).toFixed(digits)}%` : "n/a";
+}
+
+function formatZoneStatus(status) {
+  const raw = String(status || "").trim();
+  if (!raw) {
+    return "Unknown";
+  }
+  return raw
+    .toLowerCase()
+    .split(/[_\s-]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function buildZoneEvidenceSummary(zoneStats) {
+  if (!zoneStats) {
+    return "Click a zone on the map to load evidence.";
+  }
+  const parts = [];
+  const confidence = zoneStats.confidence || {};
+  const status = formatZoneStatus(confidence.status);
+  if (status) {
+    parts.push(status);
+  }
+  if (Number.isFinite(confidence.ess)) {
+    parts.push(`ESS ${formatDecimal(confidence.ess, 1)}`);
+  }
+  if (Number.isFinite(confidence.totalWeight)) {
+    parts.push(`weight ${formatDecimal(confidence.totalWeight, 2)}`);
+  }
+  const lastSeen = formatTimestampUtc(confidence.lastSeenTsUtc);
+  if (lastSeen) {
+    parts.push(`last seen ${lastSeen}`);
+  } else if (Number.isFinite(confidence.ageDaysLast)) {
+    parts.push(`last seen ${formatDecimal(confidence.ageDaysLast, 1)}d ago`);
+  }
+  const drift = confidence.drift;
+  if (drift && Number.isFinite(drift.pDrift)) {
+    parts.push(`drift ${formatPercent(drift.pDrift, 1)}`);
+  }
+  if (Array.isArray(confidence.notes) && confidence.notes.length) {
+    parts.push(confidence.notes.join(" · "));
+  }
+  return parts.join(" · ") || "No confidence data.";
+}
+
+function ensureZoneEvidenceElements(elements) {
+  if (elements.zoneEvidenceStatus && elements.zoneEvidenceSummary && elements.zoneEvidenceList) {
+    return elements;
+  }
+  if (!elements.panelBody) {
+    return elements;
+  }
+
+  const section = document.createElement("div");
+  section.className = "space-y-2";
+  section.innerHTML = `
+    <div class="flex items-center justify-between gap-3">
+      <span class="text-sm font-semibold">Zone evidence</span>
+      <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
+    </div>
+    <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
+    <div id="fishymap-zone-evidence-list" class="menu menu-sm max-h-72 overflow-auto rounded-box border border-base-300/70 bg-base-200/60 p-2"></div>
+  `;
+
+  if (elements.legend?.parentNode === elements.panelBody) {
+    elements.panelBody.insertBefore(section, elements.legend);
+  } else {
+    elements.panelBody.appendChild(section);
+  }
+
+  elements.zoneEvidenceStatus = section.querySelector("#fishymap-zone-evidence-status");
+  elements.zoneEvidenceSummary = section.querySelector("#fishymap-zone-evidence-summary");
+  elements.zoneEvidenceList = section.querySelector("#fishymap-zone-evidence-list");
+  return elements;
 }
 
 function orderPatchesByStart(patches) {
@@ -371,13 +514,14 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
             : "border-base-300 bg-base-100 text-base-content"
         }">
           <button
-            class="fishymap-selection-focus btn btn-ghost btn-xs h-auto min-h-0 rounded-full border-0 px-2 ${
+            class="fishymap-selection-focus btn btn-ghost btn-xs h-auto min-h-0 gap-2 rounded-full border-0 px-2 ${
               active ? "text-primary-content hover:bg-primary-content/10" : "text-inherit"
             }"
             data-fish-id="${fishId}"
             type="button"
           >
-            <span class="truncate max-w-36">${name}</span>
+            ${renderFishAvatar(fish, "size-5")}
+            <span class="truncate max-w-36">${escapeHtml(name)}</span>
           </button>
           <button
             class="fishymap-selection-remove btn btn-ghost btn-xs h-auto min-h-0 rounded-full border-0 px-2 ${
@@ -385,7 +529,7 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
             }"
             data-fish-id="${fishId}"
             type="button"
-            aria-label="Remove ${name}"
+            aria-label="Remove ${escapeHtml(name)}"
           >
             ×
           </button>
@@ -430,7 +574,8 @@ function renderSearchResults(elements, matches, stateBundle) {
           data-fish-id="${fish.fishId}"
           type="button"
         >
-          <span class="truncate">${fish.name}</span>
+          ${renderFishAvatar(fish)}
+          <span class="truncate">${escapeHtml(fish.name)}</span>
           <span class="ml-auto text-[11px] ${
             active ? "text-primary-content/75" : "text-base-content/45"
           }">#${fish.fishId}</span>
@@ -438,6 +583,91 @@ function renderSearchResults(elements, matches, stateBundle) {
       `;
       },
     )
+    .join("");
+}
+
+function renderZoneEvidence(elements, stateBundle, fishLookup) {
+  if (!elements.zoneEvidenceStatus || !elements.zoneEvidenceSummary || !elements.zoneEvidenceList) {
+    return;
+  }
+  const zoneStats = stateBundle.state?.selection?.zoneStats || null;
+  const currentFishId = resolveCurrentFishId(stateBundle);
+  const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone stats: idle";
+  const summary = buildZoneEvidenceSummary(zoneStats);
+
+  elements.zoneEvidenceStatus.textContent = zoneStatsStatus;
+  elements.zoneEvidenceSummary.textContent = summary;
+
+  const distribution = Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : [];
+  const renderKey = JSON.stringify({
+    zoneRgb: zoneStats?.zoneRgb ?? null,
+    status: zoneStatsStatus,
+    summary,
+    currentFishId,
+    distribution: distribution.map((entry) => {
+      const fish = fishLookup.get(entry.fishId);
+      return [
+        entry.fishId,
+        entry.fishName || "",
+        fishIconUrl(fish),
+        entry.evidenceWeight,
+        entry.pMean,
+        entry.ciLow,
+        entry.ciHigh,
+      ];
+    }),
+  });
+  if (elements.zoneEvidenceList.dataset.renderKey === renderKey) {
+    return;
+  }
+  elements.zoneEvidenceList.dataset.renderKey = renderKey;
+
+  if (!zoneStats) {
+    elements.zoneEvidenceList.innerHTML =
+      '<div class="px-2 py-3 text-xs text-base-content/60">Click a zone on the map to load evidence.</div>';
+    return;
+  }
+  if (!distribution.length) {
+    elements.zoneEvidenceList.innerHTML =
+      '<div class="px-2 py-3 text-xs text-base-content/60">No fish evidence in this window.</div>';
+    return;
+  }
+
+  elements.zoneEvidenceList.innerHTML = distribution
+    .map((entry) => {
+      const fish = fishLookup.get(entry.fishId) || {
+        fishId: entry.fishId,
+        name: entry.fishName || `Fish ${entry.fishId}`,
+        iconUrl: "",
+      };
+      const active = entry.fishId === currentFishId;
+      const ci =
+        Number.isFinite(entry.ciLow) && Number.isFinite(entry.ciHigh)
+          ? `${formatDecimal(entry.ciLow)}-${formatDecimal(entry.ciHigh)}`
+          : "n/a";
+      return `
+        <button
+          class="btn btn-sm h-auto min-h-0 w-full justify-start rounded-xl px-3 py-2 ${
+            active ? "btn-primary text-primary-content" : "btn-ghost"
+          }"
+          data-zone-evidence-fish-id="${entry.fishId}"
+          type="button"
+        >
+          ${renderFishAvatar(fish)}
+          <span class="min-w-0 flex-1 text-left">
+            <span class="block truncate">${escapeHtml(fish.name)}</span>
+            <span class="block text-[11px] ${
+              active ? "text-primary-content/80" : "text-base-content/55"
+            }">
+              p ${formatDecimal(entry.pMean)} · weight ${formatDecimal(entry.evidenceWeight)} · ci ${ci}
+            </span>
+          </span>
+          <span class="text-[11px] ${
+            active ? "text-primary-content/80" : "text-base-content/45"
+          }">${formatPercent(entry.pMean)}</span>
+        </button>
+      `;
+    })
     .join("");
 }
 
@@ -508,6 +738,7 @@ function renderPanel(elements, stateBundle) {
   const matches = buildSearchMatches(stateBundle, searchText, prizeOnly);
   renderSearchSelection(elements, stateBundle, fishLookup);
   renderSearchResults(elements, matches, stateBundle);
+  renderZoneEvidence(elements, stateBundle, fishLookup);
 
   elements.legend.open = Boolean(inputState.ui?.legendOpen);
   elements.diagnostics.open = Boolean(inputState.ui?.diagnosticsOpen);
@@ -699,6 +930,27 @@ function bindUi(shell, elements) {
     renderCurrentState(requestBridgeState(shell));
   });
 
+  if (elements.zoneEvidenceList) {
+    elements.zoneEvidenceList.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-zone-evidence-fish-id]");
+      if (!button) {
+        return;
+      }
+      const fishId = Number.parseInt(button.getAttribute("data-zone-evidence-fish-id"), 10);
+      if (!Number.isFinite(fishId)) {
+        return;
+      }
+      const current = requestBridgeState(shell);
+      dispatchMapState(shell, {
+        version: 1,
+        filters: {
+          fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
+        },
+      });
+      renderCurrentState(requestBridgeState(shell));
+    });
+  }
+
   elements.patchFrom.addEventListener("change", () => {
     if (isRendering) {
       return;
@@ -816,6 +1068,7 @@ async function main() {
   const elements = {
     shell,
     panel: document.getElementById("fishymap-panel"),
+    panelBody: document.getElementById("fishymap-panel-body"),
     panelOpen: document.getElementById("fishymap-panel-open"),
     panelClose: document.getElementById("fishymap-panel-close"),
     readyPill: document.getElementById("fishymap-ready-pill"),
@@ -834,12 +1087,17 @@ async function main() {
     statusLines: document.getElementById("fishymap-status-lines"),
     diagnosticJson: document.getElementById("fishymap-diagnostic-json"),
     selectionSummary: document.getElementById("fishymap-selection-summary"),
+    zoneEvidenceStatus: document.getElementById("fishymap-zone-evidence-status"),
+    zoneEvidenceSummary: document.getElementById("fishymap-zone-evidence-summary"),
+    zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
     hoverSummary: document.getElementById("fishymap-hover-summary"),
     viewReadout: document.getElementById("fishymap-view-readout"),
     errorOverlay: document.getElementById("fishymap-error-overlay"),
     errorMessage: document.getElementById("fishymap-error-message"),
     canvas,
   };
+
+  ensureZoneEvidenceElements(elements);
 
   bindUi(shell, elements);
   applyThemeToShell(shell);
