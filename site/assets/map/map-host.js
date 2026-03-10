@@ -55,6 +55,8 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     searchText?: string,
  *     prizeOnly?: boolean,
  *     patchId?: string | null,
+ *     fromPatchId?: string | null,
+ *     toPatchId?: string | null,
  *     layerIdsVisible?: string[]
  *   },
  *   ui?: {
@@ -97,6 +99,8 @@ export function createEmptyInputState() {
       searchText: "",
       prizeOnly: false,
       patchId: null,
+      fromPatchId: null,
+      toPatchId: null,
       layerIdsVisible: undefined,
     },
     ui: {
@@ -120,6 +124,8 @@ export function createEmptySnapshot() {
       searchText: "",
       prizeOnly: false,
       patchId: null,
+      fromPatchId: null,
+      toPatchId: null,
       layerIdsVisible: [],
     },
     ui: {
@@ -198,6 +204,14 @@ function normalizeFishIds(values) {
     out.push(number);
   }
   return out;
+}
+
+function normalizeNullableString(value) {
+  if (value == null) {
+    return null;
+  }
+  const normalized = String(value).trim();
+  return normalized || null;
 }
 
 function normalizeThemeColors(colors) {
@@ -283,9 +297,28 @@ export function normalizeStatePatch(patch = {}) {
     if (typeof patch.filters.prizeOnly === "boolean") {
       normalized.filters.prizeOnly = patch.filters.prizeOnly;
     }
-    if (hasOwn(patch.filters, "patchId")) {
+    const hasPatchId = hasOwn(patch.filters, "patchId");
+    const hasFromPatchId = hasOwn(patch.filters, "fromPatchId");
+    const hasToPatchId = hasOwn(patch.filters, "toPatchId");
+    if (hasPatchId && !hasFromPatchId && !hasToPatchId) {
+      const patchId = normalizeNullableString(patch.filters.patchId);
+      normalized.filters.patchId = patchId;
+      normalized.filters.fromPatchId = patchId;
+      normalized.filters.toPatchId = patchId;
+    } else if (hasPatchId || hasFromPatchId || hasToPatchId) {
+      if (hasFromPatchId) {
+        normalized.filters.fromPatchId = normalizeNullableString(patch.filters.fromPatchId);
+      }
+      if (hasToPatchId) {
+        normalized.filters.toPatchId = normalizeNullableString(patch.filters.toPatchId);
+      }
       normalized.filters.patchId =
-        patch.filters.patchId == null ? null : String(patch.filters.patchId).trim() || null;
+        hasFromPatchId &&
+        hasToPatchId &&
+        normalized.filters.fromPatchId != null &&
+        normalized.filters.fromPatchId === normalized.filters.toPatchId
+          ? normalized.filters.fromPatchId
+          : null;
     }
     if (hasOwn(patch.filters, "layerIdsVisible")) {
       normalized.filters.layerIdsVisible = normalizeStringList(patch.filters.layerIdsVisible);
@@ -403,6 +436,8 @@ export function applyStatePatch(inputState, patch) {
     searchText: String(current.filters?.searchText || ""),
     prizeOnly: Boolean(current.filters?.prizeOnly),
     patchId: current.filters?.patchId ?? null,
+    fromPatchId: current.filters?.fromPatchId ?? null,
+    toPatchId: current.filters?.toPatchId ?? null,
     layerIdsVisible: Array.isArray(current.filters?.layerIdsVisible)
       ? normalizeStringList(current.filters.layerIdsVisible)
       : undefined,
@@ -438,8 +473,26 @@ export function applyStatePatch(inputState, patch) {
     if (hasOwn(normalized.filters, "patchId")) {
       next.filters.patchId = normalized.filters.patchId ?? null;
     }
+    if (hasOwn(normalized.filters, "fromPatchId")) {
+      next.filters.fromPatchId = normalized.filters.fromPatchId ?? null;
+    }
+    if (hasOwn(normalized.filters, "toPatchId")) {
+      next.filters.toPatchId = normalized.filters.toPatchId ?? null;
+    }
     if (hasOwn(normalized.filters, "layerIdsVisible")) {
       next.filters.layerIdsVisible = normalizeStringList(normalized.filters.layerIdsVisible);
+    }
+    if (
+      hasOwn(normalized.filters, "patchId") ||
+      hasOwn(normalized.filters, "fromPatchId") ||
+      hasOwn(normalized.filters, "toPatchId")
+    ) {
+      next.filters.patchId =
+        next.filters.fromPatchId &&
+        next.filters.toPatchId &&
+        next.filters.fromPatchId === next.filters.toPatchId
+          ? next.filters.fromPatchId
+          : null;
     }
   }
 
@@ -679,6 +732,9 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   const fishId =
     parseIntegerParam(params.get("focusFish")) ?? parseIntegerParam(params.get("fish"));
   const patchId = params.get("patch");
+  const fromPatchId = params.get("fromPatch") ?? params.get("patchFrom");
+  const toPatchId =
+    params.get("toPatch") ?? params.get("untilPatch") ?? params.get("patchTo");
   const searchText = params.get("search");
   const prizeOnly = parseBooleanParam(params.get("prizeOnly"));
   const diagnosticsOpen = parseBooleanParam(params.get("diagnostics"));
@@ -691,6 +747,8 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   if (
     fishId != null ||
     patchId != null ||
+    fromPatchId != null ||
+    toPatchId != null ||
     searchText != null ||
     prizeOnly != null ||
     layers != null
@@ -701,7 +759,14 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     patch.filters.fishIds = [fishId];
     patch.commands = { ...(patch.commands || {}), focusFishId: fishId };
   }
-  if (patchId != null) {
+  if (fromPatchId != null || toPatchId != null) {
+    if (fromPatchId != null) {
+      patch.filters.fromPatchId = fromPatchId || null;
+    }
+    if (toPatchId != null) {
+      patch.filters.toPatchId = toPatchId || null;
+    }
+  } else if (patchId != null) {
     patch.filters.patchId = patchId || null;
   }
   if (searchText != null) {
@@ -776,6 +841,12 @@ export function snapshotToRestorePatch(snapshot) {
     }
     if (hasOwn(snapshot.filters, "patchId")) {
       patch.filters.patchId = snapshot.filters.patchId ?? null;
+    }
+    if (hasOwn(snapshot.filters, "fromPatchId")) {
+      patch.filters.fromPatchId = snapshot.filters.fromPatchId ?? null;
+    }
+    if (hasOwn(snapshot.filters, "toPatchId")) {
+      patch.filters.toPatchId = snapshot.filters.toPatchId ?? null;
     }
     if (hasOwn(snapshot.filters, "layerIdsVisible")) {
       patch.filters.layerIdsVisible = normalizeStringList(snapshot.filters.layerIdsVisible);
@@ -1355,6 +1426,10 @@ class FishyMapBridgeImpl {
 
   createSessionSnapshot() {
     const state = this.currentState || createEmptySnapshot();
+    const fromPatchId =
+      this.inputState.filters.fromPatchId ?? state.filters?.fromPatchId ?? null;
+    const toPatchId =
+      this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       savedAt: new Date().toISOString(),
@@ -1367,20 +1442,33 @@ class FishyMapBridgeImpl {
         fishIds: this.inputState.filters.fishIds,
         searchText: this.inputState.filters.searchText,
         prizeOnly: this.inputState.filters.prizeOnly,
-        patchId: this.inputState.filters.patchId,
-        layerIdsVisible: this.inputState.filters.layerIdsVisible,
+        patchId:
+          fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
+        fromPatchId,
+        toPatchId,
+        layerIdsVisible:
+          this.inputState.filters.layerIdsVisible ?? state.filters?.layerIdsVisible ?? null,
       },
       ui: this.inputState.ui,
     };
   }
 
   createPrefsSnapshot() {
+    const state = this.currentState || createEmptySnapshot();
+    const fromPatchId =
+      this.inputState.filters.fromPatchId ?? state.filters?.fromPatchId ?? null;
+    const toPatchId =
+      this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
         prizeOnly: this.inputState.filters.prizeOnly,
-        patchId: this.inputState.filters.patchId,
-        layerIdsVisible: this.inputState.filters.layerIdsVisible,
+        patchId:
+          fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
+        fromPatchId,
+        toPatchId,
+        layerIdsVisible:
+          this.inputState.filters.layerIdsVisible ?? state.filters?.layerIdsVisible ?? null,
       },
       ui: {
         legendOpen: this.inputState.ui.legendOpen,

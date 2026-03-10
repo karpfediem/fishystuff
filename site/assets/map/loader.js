@@ -190,16 +190,74 @@ function formatZone(zoneRgb) {
   return `0x${Number(zoneRgb).toString(16).padStart(6, "0")}`;
 }
 
-function renderPatchOptions(select, patches, selectedPatch) {
-  const options = ['<option value="">Latest patch</option>'];
-  for (const patch of patches || []) {
-    const label = patch.patchName || patch.patchId;
-    options.push(
-      `<option value="${patch.patchId.replace(/"/g, "&quot;")}">${label}</option>`,
-    );
+function formatPatchDate(startTsUtc) {
+  const tsMs = Number(startTsUtc) * 1000;
+  if (!Number.isFinite(tsMs)) {
+    return "";
   }
+  const date = new Date(tsMs);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}/${month}/${day}`;
+}
+
+function orderPatchesByStart(patches) {
+  return [...(patches || [])].sort(
+    (left, right) => Number(left?.startTsUtc || 0) - Number(right?.startTsUtc || 0),
+  );
+}
+
+function normalizePatchRangeSelection(patches, fromPatchId, toPatchId) {
+  const ordered = orderPatchesByStart(patches);
+  if (!ordered.length) {
+    return {
+      ordered,
+      fromPatchId: "",
+      toPatchId: "",
+    };
+  }
+
+  const indexById = new Map(ordered.map((patch, index) => [patch.patchId, index]));
+  let fromIndex = indexById.get(String(fromPatchId || ""));
+  let toIndex = indexById.get(String(toPatchId || ""));
+
+  if (!Number.isInteger(fromIndex)) {
+    fromIndex = 0;
+  }
+  if (!Number.isInteger(toIndex)) {
+    toIndex = ordered.length - 1;
+  }
+  if (toIndex < fromIndex) {
+    [fromIndex, toIndex] = [toIndex, fromIndex];
+  }
+
+  return {
+    ordered,
+    fromPatchId: ordered[fromIndex]?.patchId || "",
+    toPatchId: ordered[toIndex]?.patchId || "",
+  };
+}
+
+function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel) {
+  if (!select) {
+    return;
+  }
+  if (!orderedPatches.length) {
+    select.innerHTML = `<option value="">${emptyLabel}</option>`;
+    select.value = "";
+    return;
+  }
+
+  const options = orderedPatches.map((patch) => {
+    const name = patch.patchName || patch.patchId;
+    const date = formatPatchDate(patch.startTsUtc);
+    const label = date ? `${name} (${date})` : name;
+    return `<option value="${patch.patchId.replace(/"/g, "&quot;")}">${label}</option>`;
+  });
+
   select.innerHTML = options.join("");
-  select.value = selectedPatch || "";
+  select.value = selectedPatchId || orderedPatches[0].patchId;
 }
 
 function renderLayerToggles(container, layers, visibleLayerIds) {
@@ -272,11 +330,23 @@ function renderPanel(elements, stateBundle) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
   const catalogFish = state.catalog?.fish || [];
+  const patchRange = normalizePatchRangeSelection(
+    state.catalog?.patches || [],
+    inputState.filters?.fromPatchId ??
+      state.filters?.fromPatchId ??
+      inputState.filters?.patchId ??
+      state.filters?.patchId ??
+      null,
+    inputState.filters?.toPatchId ??
+      state.filters?.toPatchId ??
+      inputState.filters?.patchId ??
+      state.filters?.patchId ??
+      null,
+  );
   const visibleLayers =
     inputState.filters?.layerIdsVisible || state.filters?.layerIdsVisible || [];
   const searchText = inputState.filters?.searchText || "";
   const prizeOnly = Boolean(inputState.filters?.prizeOnly);
-  const selectedPatch = inputState.filters?.patchId ?? state.filters?.patchId ?? "";
   const fishLookup = buildFishLookup(catalogFish);
 
   applyThemeToShell(elements.shell);
@@ -293,7 +363,18 @@ function renderPanel(elements, stateBundle) {
   }
   elements.prizeOnly.checked = prizeOnly;
 
-  renderPatchOptions(elements.patch, state.catalog?.patches || [], selectedPatch);
+  renderPatchOptions(
+    elements.patchFrom,
+    patchRange.ordered,
+    patchRange.fromPatchId,
+    "Loading patches…",
+  );
+  renderPatchOptions(
+    elements.patchTo,
+    patchRange.ordered,
+    patchRange.toPatchId,
+    "Loading patches…",
+  );
   renderLayerToggles(elements.layers, state.catalog?.layers || [], visibleLayers);
 
   const matches = findFishMatches(catalogFish, searchText, prizeOnly);
@@ -382,6 +463,29 @@ function bindUi(shell, elements) {
     renderCurrentState(requestBridgeState(shell));
   }
 
+  function pushPatchRangePatch() {
+    const current = requestBridgeState(shell);
+    const patchRange = normalizePatchRangeSelection(
+      current.state.catalog?.patches || [],
+      elements.patchFrom.value || null,
+      elements.patchTo.value || null,
+    );
+    if (!patchRange.ordered.length) {
+      return;
+    }
+
+    elements.patchFrom.value = patchRange.fromPatchId;
+    elements.patchTo.value = patchRange.toPatchId;
+    dispatchMapState(shell, {
+      version: 1,
+      filters: {
+        fromPatchId: patchRange.fromPatchId,
+        toPatchId: patchRange.toPatchId,
+      },
+    });
+    renderCurrentState(requestBridgeState(shell));
+  }
+
   elements.search.addEventListener("input", () => {
     if (isRendering) {
       return;
@@ -448,17 +552,18 @@ function bindUi(shell, elements) {
     renderCurrentState(requestBridgeState(shell));
   });
 
-  elements.patch.addEventListener("change", () => {
+  elements.patchFrom.addEventListener("change", () => {
     if (isRendering) {
       return;
     }
-    dispatchMapState(shell, {
-      version: 1,
-      filters: {
-        patchId: elements.patch.value || null,
-      },
-    });
-    renderCurrentState(requestBridgeState(shell));
+    pushPatchRangePatch();
+  });
+
+  elements.patchTo.addEventListener("change", () => {
+    if (isRendering) {
+      return;
+    }
+    pushPatchRangePatch();
   });
 
   elements.viewMode.addEventListener("change", () => {
@@ -571,7 +676,8 @@ async function main() {
     searchResults: document.getElementById("fishymap-search-results"),
     searchCount: document.getElementById("fishymap-search-count"),
     prizeOnly: document.getElementById("fishymap-prize-only"),
-    patch: document.getElementById("fishymap-patch"),
+    patchFrom: document.getElementById("fishymap-patch-from"),
+    patchTo: document.getElementById("fishymap-patch-to"),
     viewMode: document.getElementById("fishymap-view-mode"),
     layers: document.getElementById("fishymap-layers"),
     resetView: document.getElementById("fishymap-reset-view"),
