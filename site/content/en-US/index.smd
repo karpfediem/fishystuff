@@ -8,6 +8,4 @@
 .custom = { .updated = @date("2025-10-01T12:34:56") },
 ---
 
-## [About]($section.id('about'))
-
-[Community](/community)
+Looking for updates, feedback, or help? Visit the [Community](/community).
