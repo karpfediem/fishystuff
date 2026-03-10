@@ -1,4 +1,36 @@
 body {
+    .site-nav-frame {
+        position: relative;
+        overflow: visible;
+    }
+    &:has(#content.site-content-card) #menu {
+        margin-bottom: 0;
+    }
+    &:has(#content.site-content-card) #menu .site-nav-frame::before,
+    &:has(#content.site-content-card) #menu .site-nav-frame::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        width: var(--radius-box);
+        height: var(--radius-box);
+        pointer-events: none;
+        z-index: 1;
+        background-repeat: no-repeat;
+        background-size: 100% 100%;
+    }
+    &:has(#content.site-content-card) #menu .site-nav-frame::before {
+        left: 0;
+        background-image: radial-gradient(circle at 100% 100%, transparent calc(var(--radius-box) - 0.5px), var(--color-base-100) var(--radius-box));
+    }
+    &:has(#content.site-content-card) #menu .site-nav-frame::after {
+        right: 0;
+        background-image: radial-gradient(circle at 0 100%, transparent calc(var(--radius-box) - 0.5px), var(--color-base-100) var(--radius-box));
+    }
+    &:has(#content.site-content-card) #content.site-content-card {
+        margin-top: 0;
+        position: relative;
+        z-index: 0;
+    }
     #home-link {
         font-size: 1.2rem;
         font-family: 'Pacifico', sans-serif;

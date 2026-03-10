@@ -2,7 +2,7 @@
 
   <title id="title" :text="$page.title"></title>
 
-  <div id="content" class="mx-auto mt-4 rounded-box border border-base-300 bg-base-200/70 p-6 shadow-sm md:p-10">
+  <div id="content" class="site-content-card mx-auto mt-4 rounded-box border border-base-300 bg-base-200/70 p-6 shadow-sm md:p-10">
     <main class="min-w-0">
     <header class="page-header mb-6">
       <h1 :text="$page.title"></h1>

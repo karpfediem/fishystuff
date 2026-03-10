@@ -71,7 +71,7 @@
     <body id="body" class="bg-base-100">
     <nav id="menu" class="not-prose sticky top-0 z-40 mb-4 bg-base-100">
         <div class="grid grid-cols-[minmax(clamp(1rem,2.5vw,2rem),1fr)_minmax(0,130ch)_minmax(clamp(1rem,2.5vw,2rem),1fr)]">
-        <div class="col-start-2 px-4 py-3">
+        <div class="site-nav-frame col-start-2 px-4 py-3">
             <div class="p-2">
                 <div class="navbar min-h-0 flex-wrap justify-between gap-2 px-2 lg:flex-nowrap">
                     <div class="flex min-w-0 flex-1 items-center gap-2">
@@ -270,7 +270,7 @@
 
     <!-- Page container -->
     <div id="content"
-         class="mx-auto mt-4 rounded-box border border-base-300 bg-base-200/70 p-6 shadow-sm md:p-10">
+         class="site-content-card mx-auto mt-4 rounded-box border border-base-300 bg-base-200/70 p-6 shadow-sm md:p-10">
         <super>
     </div>
 
