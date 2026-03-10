@@ -1,7 +1,7 @@
 <extend template="with-nav.shtml">
   <title id="title" :text="$page.title"></title>
 
-  <div id="content" class="fishystuff-map-content not-prose">
+  <div id="content">
     <style>
       html:has(#map-page-shell) {
         overflow: hidden;
@@ -18,7 +18,7 @@
         margin-bottom: 0;
       }
 
-      #content.fishystuff-map-content {
+      body:has(#map-page-shell) #content {
         position: fixed;
         inset: var(--site-nav-offset, 0px) 0 0;
         z-index: 0;
