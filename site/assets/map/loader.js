@@ -1,4 +1,9 @@
-import FishyMapBridge, { FISHYMAP_EVENTS, resolveApiBaseUrl } from "./map-host.js";
+import FishyMapBridge, {
+  FISHYMAP_EVENTS,
+  FISHYMAP_POINT_ICON_SCALE_MAX,
+  FISHYMAP_POINT_ICON_SCALE_MIN,
+  resolveApiBaseUrl,
+} from "./map-host.js";
 
 function dispatchMapEvent(target, type, detail) {
   target.dispatchEvent(new CustomEvent(type, { detail }));
@@ -157,6 +162,22 @@ function fishIconUrl(fish) {
     return `${resolveApiBaseUrl(window.location)}${raw}`;
   }
   return raw;
+}
+
+function clampPointIconScale(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return FISHYMAP_POINT_ICON_SCALE_MIN;
+  }
+  return Math.min(FISHYMAP_POINT_ICON_SCALE_MAX, Math.max(FISHYMAP_POINT_ICON_SCALE_MIN, number));
+}
+
+function pointIconScaleValue(scale) {
+  return String(Math.round(clampPointIconScale(scale) * 100) / 100);
+}
+
+function pointIconScaleLabel(scale) {
+  return `${Math.round(clampPointIconScale(scale) * 100)}%`;
 }
 
 function renderFishAvatar(fish, sizeClass = "size-6") {
@@ -716,6 +737,9 @@ function renderPanel(elements, stateBundle) {
     inputState.filters?.layerIdsVisible ?? state.filters?.layerIdsVisible ?? undefined;
   const searchText = inputState.filters?.searchText || "";
   const prizeOnly = Boolean(inputState.filters?.prizeOnly);
+  const pointIconScale = clampPointIconScale(
+    inputState.ui?.pointIconScale ?? state.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN,
+  );
   const fishLookup = buildFishLookup(catalogFish);
 
   applyThemeToShell(elements.shell);
@@ -726,6 +750,15 @@ function renderPanel(elements, stateBundle) {
   }`;
   elements.viewReadout.textContent = state.view?.viewMode === "3d" ? "3D" : "2D";
   elements.viewMode.value = state.view?.viewMode === "3d" ? "3d" : "2d";
+  if (elements.pointIconScale) {
+    const sliderValue = pointIconScaleValue(pointIconScale);
+    if (elements.pointIconScale.value !== sliderValue) {
+      elements.pointIconScale.value = sliderValue;
+    }
+  }
+  if (elements.pointIconScaleValue) {
+    elements.pointIconScaleValue.textContent = pointIconScaleLabel(pointIconScale);
+  }
 
   if (elements.search.value !== searchText) {
     elements.search.value = searchText;
@@ -982,6 +1015,25 @@ function bindUi(shell, elements) {
     });
   });
 
+  if (elements.pointIconScale) {
+    elements.pointIconScale.addEventListener("input", () => {
+      if (isRendering) {
+        return;
+      }
+      const pointIconScale = clampPointIconScale(elements.pointIconScale.value);
+      if (elements.pointIconScaleValue) {
+        elements.pointIconScaleValue.textContent = pointIconScaleLabel(pointIconScale);
+      }
+      dispatchMapState(shell, {
+        version: 1,
+        ui: {
+          pointIconScale,
+        },
+      });
+      renderCurrentState(requestBridgeState(shell));
+    });
+  }
+
   elements.layers.addEventListener("change", (event) => {
     if (isRendering || !event.target.classList.contains("fishymap-layer-toggle")) {
       return;
@@ -1091,6 +1143,8 @@ async function main() {
     patchFrom: document.getElementById("fishymap-patch-from"),
     patchTo: document.getElementById("fishymap-patch-to"),
     viewMode: document.getElementById("fishymap-view-mode"),
+    pointIconScale: document.getElementById("fishymap-point-icon-scale"),
+    pointIconScaleValue: document.getElementById("fishymap-point-icon-scale-value"),
     layers: document.getElementById("fishymap-layers"),
     resetView: document.getElementById("fishymap-reset-view"),
     legend: document.getElementById("fishymap-legend"),

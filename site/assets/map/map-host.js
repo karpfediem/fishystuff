@@ -7,6 +7,8 @@ const MIN_BOOTSTRAP_SYNC_PASSES = 4;
 const MAX_BOOTSTRAP_SYNC_PASSES = 120;
 
 export const FISHYMAP_CONTRACT_VERSION = 1;
+export const FISHYMAP_POINT_ICON_SCALE_MIN = 1;
+export const FISHYMAP_POINT_ICON_SCALE_MAX = 3;
 
 export const FISHYMAP_EVENTS = Object.freeze({
   setState: "fishymap:set-state",
@@ -62,7 +64,8 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *   ui?: {
  *     diagnosticsOpen?: boolean,
  *     legendOpen?: boolean,
- *     leftPanelOpen?: boolean
+ *     leftPanelOpen?: boolean,
+ *     pointIconScale?: number
  *   },
  *   commands?: {
  *     resetView?: boolean,
@@ -107,6 +110,7 @@ export function createEmptyInputState() {
       diagnosticsOpen: false,
       legendOpen: false,
       leftPanelOpen: true,
+      pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
     },
   };
 }
@@ -132,6 +136,7 @@ export function createEmptySnapshot() {
       diagnosticsOpen: false,
       legendOpen: false,
       leftPanelOpen: true,
+      pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
     },
     view: {
       viewMode: "2d",
@@ -277,6 +282,17 @@ function normalizeRestoreView(value) {
   };
 }
 
+function normalizePointIconScale(value) {
+  if (value == null || value === "") {
+    return undefined;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return undefined;
+  }
+  return Math.min(FISHYMAP_POINT_ICON_SCALE_MAX, Math.max(FISHYMAP_POINT_ICON_SCALE_MIN, number));
+}
+
 export function normalizeStatePatch(patch = {}) {
   /** @type {FishyMapStatePatch} */
   const normalized = {
@@ -344,6 +360,12 @@ export function normalizeStatePatch(patch = {}) {
     for (const key of ["diagnosticsOpen", "legendOpen", "leftPanelOpen"]) {
       if (typeof patch.ui[key] === "boolean") {
         normalized.ui[key] = patch.ui[key];
+      }
+    }
+    if (hasOwn(patch.ui, "pointIconScale")) {
+      const pointIconScale = normalizePointIconScale(patch.ui.pointIconScale);
+      if (pointIconScale !== undefined) {
+        normalized.ui.pointIconScale = pointIconScale;
       }
     }
     if (!Object.keys(normalized.ui).length) {
@@ -457,6 +479,8 @@ export function applyStatePatch(inputState, patch) {
     diagnosticsOpen: Boolean(current.ui?.diagnosticsOpen),
     legendOpen: Boolean(current.ui?.legendOpen),
     leftPanelOpen: current.ui?.leftPanelOpen !== false,
+    pointIconScale:
+      normalizePointIconScale(current.ui?.pointIconScale) ?? FISHYMAP_POINT_ICON_SCALE_MIN,
   };
 
   if (normalized.theme) {
@@ -516,6 +540,10 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.ui, "leftPanelOpen")) {
       next.ui.leftPanelOpen = Boolean(normalized.ui.leftPanelOpen);
+    }
+    if (hasOwn(normalized.ui, "pointIconScale")) {
+      next.ui.pointIconScale =
+        normalizePointIconScale(normalized.ui.pointIconScale) ?? next.ui.pointIconScale;
     }
   }
 
@@ -873,6 +901,12 @@ export function snapshotToRestorePatch(snapshot) {
     }
     if (hasOwn(snapshot.ui, "leftPanelOpen")) {
       patch.ui.leftPanelOpen = Boolean(snapshot.ui.leftPanelOpen);
+    }
+    if (hasOwn(snapshot.ui, "pointIconScale")) {
+      const pointIconScale = normalizePointIconScale(snapshot.ui.pointIconScale);
+      if (pointIconScale !== undefined) {
+        patch.ui.pointIconScale = pointIconScale;
+      }
     }
   }
 
@@ -1491,6 +1525,7 @@ class FishyMapBridgeImpl {
       ui: {
         legendOpen: this.inputState.ui.legendOpen,
         leftPanelOpen: this.inputState.ui.leftPanelOpen,
+        pointIconScale: this.inputState.ui.pointIconScale,
       },
     };
   }
