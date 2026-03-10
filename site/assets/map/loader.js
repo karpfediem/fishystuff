@@ -1,5 +1,7 @@
 import init from "./fishystuff_ui_bevy.js";
 
+const THEME_EVENT = "fishystuff:themechange";
+
 function resolveApiBaseUrl() {
   const hostname = window.location.hostname.toLowerCase();
   if (
@@ -55,6 +57,26 @@ function installApiFetchShim() {
   };
 }
 
+function applyThemeToMap(detail) {
+  const shell = document.getElementById("map-page-shell");
+  if (!shell || !detail || !detail.colors) {
+    return;
+  }
+  if (detail.colors.base100) {
+    shell.style.backgroundColor = detail.colors.base100;
+  }
+}
+
+function installThemeBridge() {
+  if (window.__fishystuffTheme) {
+    applyThemeToMap(window.__fishystuffTheme);
+  }
+
+  window.addEventListener(THEME_EVENT, function (event) {
+    applyThemeToMap(event.detail);
+  });
+}
+
 function syncCanvasSize() {
   const canvas = document.getElementById("bevy");
   if (!canvas) {
@@ -88,6 +110,7 @@ function syncCanvasSize() {
 async function main() {
   const canvas = document.getElementById("bevy");
   installApiFetchShim();
+  installThemeBridge();
   syncCanvasSize();
   window.addEventListener("resize", syncCanvasSize, { passive: true });
   if (canvas && canvas.parentElement && "ResizeObserver" in window) {
