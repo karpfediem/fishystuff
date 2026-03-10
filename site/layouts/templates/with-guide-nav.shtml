@@ -71,60 +71,23 @@
             }
         </style>
 
-        <label id="guide-nav-top-button" for="guide-nav-drawer" class="hidden btn btn-sm btn-outline 2xl:hidden drawer-button">
-            Guide Nav
-        </label>
+        <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
+            <label id="guide-nav-top-button" for="guide-nav-drawer" class="hidden btn btn-sm btn-outline 2xl:hidden drawer-button">
+                On This Page
+            </label>
+        </ctx>
 
         <div class="guide-layout">
-            <div class="guide-desktop-rail">
-                <aside class="guide-rail-shell not-prose">
-                    <div class="grid gap-4">
-                        <section class="rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
-                            <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">
-                                <ctx :if="$page.isSection()">Guides in this section</ctx>
-                                <ctx :if="$page.isSection().not()">In this section</ctx>
-                            </h2>
-
-                            <ctx :if="$page.isSection()">
-                                <ul class="menu menu-sm w-full gap-1">
-                                    <li :loop="$page.subpagesAlphabetic()">
-                                        <a href="$loop.it.link()"
-                                           :text="$loop.it.title"
-                                           class="no-underline hover:no-underline focus:no-underline
-                        $loop.it.isCurrent().then('menu-active font-semibold')"></a>
-                                    </li>
-                                </ul>
-                            </ctx>
-
-                            <ctx :if="$page.isSection().not()">
-                                <ul class="menu menu-sm w-full gap-1">
-                                    <li>
-                                        <a href="$page.parentSection().link()"
-                                           class="no-underline hover:no-underline focus:no-underline">
-                                            Overview
-                                        </a>
-                                    </li>
-                                </ul>
-                                <ul class="menu menu-sm mt-2 w-full gap-1">
-                                    <li :loop="$page.parentSection().subpagesAlphabetic()">
-                                        <a href="$loop.it.link()"
-                                           :text="$loop.it.title"
-                                           class="no-underline hover:no-underline focus:no-underline
-                        $loop.it.isCurrent().then('menu-active font-semibold')"></a>
-                                    </li>
-                                </ul>
-                            </ctx>
+            <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
+                <div class="guide-desktop-rail">
+                    <aside class="guide-rail-shell not-prose">
+                        <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
+                            <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">On this page</h2>
+                            <div :html="$page.toc()"></div>
                         </section>
-
-                        <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
-                            <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
-                                <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">On this page</h2>
-                                <div :html="$page.toc()"></div>
-                            </section>
-                        </ctx>
-                    </div>
-                </aside>
-            </div>
+                    </aside>
+                </div>
+            </ctx>
 
             <div class="drawer">
             <input id="guide-nav-drawer" type="checkbox" class="drawer-toggle">
@@ -135,62 +98,22 @@
                 </main>
             </div>
 
-            <div class="drawer-side z-30">
-                <label for="guide-nav-drawer" aria-label="Close guide navigation" class="drawer-overlay"></label>
+            <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
+                <div class="drawer-side z-30">
+                    <label for="guide-nav-drawer" aria-label="Close guide navigation" class="drawer-overlay"></label>
 
-                <aside class="guide-rail-shell not-prose min-h-full border-e border-base-300 bg-base-100 p-4">
-                    <div class="mb-3 flex items-center justify-between gap-3">
-                        <div class="text-sm font-bold text-base-content">Guide Navigation</div>
-                        <label for="guide-nav-drawer" class="btn btn-sm btn-ghost">Close</label>
-                    </div>
+                    <aside class="guide-rail-shell not-prose min-h-full border-e border-base-300 bg-base-100 p-4">
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                            <div class="text-sm font-bold text-base-content">On this page</div>
+                            <label for="guide-nav-drawer" class="btn btn-sm btn-ghost">Close</label>
+                        </div>
 
-                    <div class="grid gap-4">
-                        <section class="rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
-                            <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">
-                                <ctx :if="$page.isSection()">Guides in this section</ctx>
-                                <ctx :if="$page.isSection().not()">In this section</ctx>
-                            </h2>
-
-                            <ctx :if="$page.isSection()">
-                                <ul class="menu menu-sm w-full gap-1">
-                                    <li :loop="$page.subpagesAlphabetic()">
-                                        <a href="$loop.it.link()"
-                                           :text="$loop.it.title"
-                                           class="no-underline hover:no-underline focus:no-underline
-                        $loop.it.isCurrent().then('menu-active font-semibold')"></a>
-                                    </li>
-                                </ul>
-                            </ctx>
-
-                            <ctx :if="$page.isSection().not()">
-                                <ul class="menu menu-sm w-full gap-1">
-                                    <li>
-                                        <a href="$page.parentSection().link()"
-                                           class="no-underline hover:no-underline focus:no-underline">
-                                            Overview
-                                        </a>
-                                    </li>
-                                </ul>
-                                <ul class="menu menu-sm mt-2 w-full gap-1">
-                                    <li :loop="$page.parentSection().subpagesAlphabetic()">
-                                        <a href="$loop.it.link()"
-                                           :text="$loop.it.title"
-                                           class="no-underline hover:no-underline focus:no-underline
-                        $loop.it.isCurrent().then('menu-active font-semibold')"></a>
-                                    </li>
-                                </ul>
-                            </ctx>
+                        <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
+                            <div :html="$page.toc()"></div>
                         </section>
-
-                        <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
-                            <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
-                                <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">On this page</h2>
-                                <div :html="$page.toc()"></div>
-                            </section>
-                        </ctx>
-                    </div>
-                </aside>
-            </div>
+                    </aside>
+                </div>
+            </ctx>
             </div>
         </div>
 
