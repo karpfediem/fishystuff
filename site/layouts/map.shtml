@@ -182,6 +182,52 @@
         display: block;
       }
 
+      #fishymap-zone-evidence-window {
+        position: absolute;
+        top: 6rem;
+        left: 1rem;
+        z-index: 18;
+        display: flex;
+        flex-direction: column;
+        width: min(24rem, calc(100vw - 2rem));
+        height: min(30rem, calc(100% - 12rem));
+        max-height: calc(100% - 12rem);
+        overflow: hidden;
+        border-radius: 1rem;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
+        background: color-mix(in srgb, var(--color-base-100) 85%, transparent);
+        box-shadow: 0 1rem 2.5rem color-mix(in srgb, var(--color-base-content) 14%, transparent);
+        backdrop-filter: blur(14px);
+      }
+
+      #fishymap-zone-evidence-body {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+      }
+
+      #fishymap-zone-evidence-list {
+        display: grid;
+        min-height: 0;
+        flex: 1 1 auto;
+        grid-auto-flow: row;
+        grid-auto-rows: max-content;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border-radius: 1rem;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 8%, transparent);
+        background: color-mix(in srgb, var(--color-base-200) 72%, transparent);
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      #fishymap-zone-evidence-list > * {
+        width: 100%;
+      }
+
       #fishymap-floating-status {
         position: absolute;
         left: 1rem;
@@ -248,6 +294,16 @@
           width: auto;
         }
 
+        #fishymap-zone-evidence-window {
+          top: auto;
+          right: 0.75rem;
+          bottom: 8.5rem;
+          left: 0.75rem;
+          width: auto;
+          height: min(28dvh, 20rem);
+          max-height: min(28dvh, 20rem);
+        }
+
         #fishymap-error-overlay {
           right: 0.75rem;
           bottom: 0.75rem;
@@ -270,6 +326,16 @@
       <div id="fishymap-search-selection-shell" class="not-prose" hidden>
         <div id="fishymap-search-selection" hidden></div>
       </div>
+      <aside id="fishymap-zone-evidence-window" class="not-prose">
+        <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
+          <span class="text-sm font-semibold">Zone evidence</span>
+          <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
+        </div>
+        <div id="fishymap-zone-evidence-body">
+          <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
+          <div id="fishymap-zone-evidence-list"></div>
+        </div>
+      </aside>
       <button
         id="fishymap-panel-open"
         class="btn btn-primary btn-sm absolute left-4 top-4 z-20 rounded-full shadow-lg"
@@ -349,15 +415,6 @@
               <button id="fishymap-reset-view" class="btn btn-secondary btn-xs" type="button">Reset view</button>
             </div>
             <div id="fishymap-layers" class="space-y-2 rounded-box border border-base-300/70 bg-base-200/60 p-3 text-sm"></div>
-          </div>
-
-          <div class="space-y-2">
-            <div class="flex items-center justify-between gap-3">
-              <span class="text-sm font-semibold">Zone evidence</span>
-              <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
-            </div>
-            <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
-            <div id="fishymap-zone-evidence-list" class="menu menu-sm max-h-72 overflow-auto rounded-box border border-base-300/70 bg-base-200/60 p-2"></div>
           </div>
 
           <details id="fishymap-legend" class="collapse collapse-arrow border border-base-300/70 bg-base-200/60">

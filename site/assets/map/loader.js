@@ -373,7 +373,7 @@ function ensureZoneEvidenceElements(elements) {
       <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
     </div>
     <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
-    <div id="fishymap-zone-evidence-list" class="menu menu-sm max-h-72 overflow-auto rounded-box border border-base-300/70 bg-base-200/60 p-2"></div>
+    <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300/70 bg-base-200/60 p-2"></div>
   `;
 
   if (elements.legend?.parentNode === elements.panelBody) {
