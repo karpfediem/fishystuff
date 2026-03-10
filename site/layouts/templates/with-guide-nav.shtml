@@ -10,10 +10,6 @@
                 margin-inline: auto;
             }
 
-            .guide-compact-nav {
-                margin-bottom: 1rem;
-            }
-
             .guide-desktop-rail {
                 display: none;
             }
@@ -57,10 +53,6 @@
             }
 
             @media (min-width: 96rem) {
-                .guide-compact-nav {
-                    display: none;
-                }
-
                 .guide-desktop-rail {
                     display: block;
                     position: absolute;
@@ -71,13 +63,17 @@
 
                 .guide-rail-shell {
                     position: sticky;
-                    top: 1rem;
-                    max-height: calc(100dvh - 2rem);
+                    top: calc(var(--site-nav-offset, 0px) + 1rem);
+                    max-height: calc(100dvh - var(--site-nav-offset, 0px) - 2rem);
                     overflow: auto;
                     width: 18rem;
                 }
             }
         </style>
+
+        <label id="guide-nav-top-button" for="guide-nav-drawer" class="hidden btn btn-sm btn-outline 2xl:hidden drawer-button">
+            Guide Nav
+        </label>
 
         <div class="guide-layout">
             <div class="guide-desktop-rail">
@@ -128,14 +124,6 @@
                         </ctx>
                     </div>
                 </aside>
-            </div>
-
-            <div class="guide-compact-nav not-prose flex items-center justify-between gap-3 rounded-box border border-base-300 bg-base-200/70 px-4 py-3 shadow-sm">
-                <div>
-                    <div class="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">Guide Navigation</div>
-                    <div class="text-sm font-bold text-base-content">Browse this guide section</div>
-                </div>
-                <label for="guide-nav-drawer" class="btn btn-sm btn-outline drawer-button">Open</label>
             </div>
 
             <div class="drawer">
@@ -205,4 +193,16 @@
             </div>
             </div>
         </div>
+
+        <script>
+            (function () {
+                var slot = document.getElementById("nav-page-controls");
+                var button = document.getElementById("guide-nav-top-button");
+                if (!slot || !button) return;
+                slot.classList.remove("hidden");
+                slot.classList.add("flex");
+                button.classList.remove("hidden");
+                slot.appendChild(button);
+            })();
+        </script>
     </div>

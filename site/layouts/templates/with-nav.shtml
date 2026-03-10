@@ -70,18 +70,53 @@
     </head>
 
     <body id="body" class="bg-base-100">
-    <nav id="menu" class="not-prose mb-4 grid grid-cols-[minmax(clamp(1rem,2.5vw,2rem),1fr)_minmax(0,130ch)_minmax(clamp(1rem,2.5vw,2rem),1fr)]">
+    <nav id="menu" class="not-prose sticky top-0 z-40 mb-4 border-b border-base-300/60 bg-base-100/85 backdrop-blur">
+        <div class="grid grid-cols-[minmax(clamp(1rem,2.5vw,2rem),1fr)_minmax(0,130ch)_minmax(clamp(1rem,2.5vw,2rem),1fr)]">
         <div class="col-start-2 px-4 py-3">
             <div class="rounded-box border border-base-300 bg-base-200/80 p-2 shadow-sm">
-                <div class="navbar min-h-0 justify-between gap-2 px-2">
-                    <div class="navbar-start w-auto flex-none min-w-0">
+                <div class="navbar min-h-0 flex-wrap justify-between gap-2 px-2 lg:flex-nowrap">
+                    <div class="flex min-w-0 flex-1 items-center gap-2">
+                        <div class="dropdown lg:hidden">
+                            <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false" aria-label="Open navigation menu">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5m-16.5 6.75h16.5m-16.5 6.75h16.5" />
+                                </svg>
+                            </button>
+
+                            <ul tabindex="0"
+                                role="menu"
+                                class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-56">
+                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('quickstart').link()">Get Started</a></li>
+                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()">Guides</a></li>
+                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()">Map</a></li>
+                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()">Calculator</a></li>
+                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()">Dex</a></li>
+                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()">Community</a></li>
+                                <li><a class="font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()">Log</a></li>
+                            </ul>
+                        </div>
+
+                        <div class="navbar-start w-auto flex-none min-w-0">
                         <a id="home-link"
                            href="$site.link()"
                            class="px-2 text-base no-underline hover:underline focus:underline"
                            :text="$site.title"></a>
+                        </div>
+
+                        <div class="hidden min-w-0 flex-1 flex-wrap justify-center gap-1 lg:flex">
+                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('quickstart').link()">Get Started</a>
+                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()">Guides</a>
+                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()">Map</a>
+                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()">Calculator</a>
+                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()">Dex</a>
+                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()">Community</a>
+                            <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()">Log</a>
+                        </div>
                     </div>
 
                     <div class="navbar-end w-auto flex-none gap-1">
+                        <div id="nav-page-controls" class="hidden items-center gap-1"></div>
+
                         <div id="language-switcher" class="dropdown dropdown-end">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
                                 <span id="language-switcher-label">Language</span>
@@ -153,18 +188,6 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="px-2 pt-2">
-                    <div class="flex flex-wrap justify-center gap-1 rounded-box bg-base-100/50 p-1">
-                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('quickstart').link()">Get Started</a>
-                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()">Guides</a>
-                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()">Map</a>
-                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()">Calculator</a>
-                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()">Dex</a>
-                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()">Community</a>
-                        <a class="btn btn-sm btn-ghost font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()">Log</a>
-                    </div>
-                </div>
             </div>
             <script>
                         (function () {
@@ -210,7 +233,37 @@
                         })();
                     </script>
         </div>
+        </div>
     </nav>
+
+    <script>
+        (function () {
+            var nav = document.getElementById("menu");
+            if (!nav) return;
+
+            var root = document.documentElement;
+            var raf = 0;
+
+            function syncNavOffset() {
+                raf = 0;
+                root.style.setProperty("--site-nav-offset", nav.offsetHeight + "px");
+            }
+
+            function queueSync() {
+                if (raf) return;
+                raf = requestAnimationFrame(syncNavOffset);
+            }
+
+            queueSync();
+            window.addEventListener("load", queueSync, { passive: true });
+            window.addEventListener("resize", queueSync, { passive: true });
+
+            if ("ResizeObserver" in window) {
+                var observer = new ResizeObserver(queueSync);
+                observer.observe(nav);
+            }
+        })();
+    </script>
 
 
 
