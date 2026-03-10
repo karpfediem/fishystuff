@@ -2,8 +2,22 @@
 
     <title id="title"><super></title>
 
-    <div id="content" class="mx-auto mt-4 max-w-[calc(130ch+22rem)] px-4 md:px-6">
+    <div id="content" class="mx-auto mt-4 px-4 md:px-6">
         <style>
+            .guide-layout {
+                position: relative;
+                max-width: 130ch;
+                margin-inline: auto;
+            }
+
+            .guide-compact-nav {
+                margin-bottom: 1rem;
+            }
+
+            .guide-desktop-rail {
+                display: none;
+            }
+
             .guide-rail-shell {
                 width: min(20rem, 82vw);
             }
@@ -42,7 +56,19 @@
                 text-decoration: none;
             }
 
-            @media (min-width: 1024px) {
+            @media (min-width: 96rem) {
+                .guide-compact-nav {
+                    display: none;
+                }
+
+                .guide-desktop-rail {
+                    display: block;
+                    position: absolute;
+                    top: 0;
+                    right: calc(100% + 1.5rem);
+                    width: 18rem;
+                }
+
                 .guide-rail-shell {
                     position: sticky;
                     top: 1rem;
@@ -53,18 +79,69 @@
             }
         </style>
 
-        <div class="drawer lg:drawer-open">
+        <div class="guide-layout">
+            <div class="guide-desktop-rail">
+                <aside class="guide-rail-shell not-prose">
+                    <div class="grid gap-4">
+                        <section class="rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
+                            <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">
+                                <ctx :if="$page.isSection()">Guides in this section</ctx>
+                                <ctx :if="$page.isSection().not()">In this section</ctx>
+                            </h2>
+
+                            <ctx :if="$page.isSection()">
+                                <ul class="menu menu-sm w-full gap-1">
+                                    <li :loop="$page.subpagesAlphabetic()">
+                                        <a href="$loop.it.link()"
+                                           :text="$loop.it.title"
+                                           class="no-underline hover:no-underline focus:no-underline
+                        $loop.it.isCurrent().then('menu-active font-semibold')"></a>
+                                    </li>
+                                </ul>
+                            </ctx>
+
+                            <ctx :if="$page.isSection().not()">
+                                <ul class="menu menu-sm w-full gap-1">
+                                    <li>
+                                        <a href="$page.parentSection().link()"
+                                           class="no-underline hover:no-underline focus:no-underline">
+                                            Overview
+                                        </a>
+                                    </li>
+                                </ul>
+                                <ul class="menu menu-sm mt-2 w-full gap-1">
+                                    <li :loop="$page.parentSection().subpagesAlphabetic()">
+                                        <a href="$loop.it.link()"
+                                           :text="$loop.it.title"
+                                           class="no-underline hover:no-underline focus:no-underline
+                        $loop.it.isCurrent().then('menu-active font-semibold')"></a>
+                                    </li>
+                                </ul>
+                            </ctx>
+                        </section>
+
+                        <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
+                            <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3 shadow-sm">
+                                <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">On this page</h2>
+                                <div :html="$page.toc()"></div>
+                            </section>
+                        </ctx>
+                    </div>
+                </aside>
+            </div>
+
+            <div class="guide-compact-nav not-prose flex items-center justify-between gap-3 rounded-box border border-base-300 bg-base-200/70 px-4 py-3 shadow-sm">
+                <div>
+                    <div class="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">Guide Navigation</div>
+                    <div class="text-sm font-bold text-base-content">Browse this guide section</div>
+                </div>
+                <label for="guide-nav-drawer" class="btn btn-sm btn-outline drawer-button">Open</label>
+            </div>
+
+            <div class="drawer">
             <input id="guide-nav-drawer" type="checkbox" class="drawer-toggle">
 
             <div class="drawer-content min-w-0">
-                <div class="not-prose mb-4 flex items-center justify-between gap-3 rounded-box border border-base-300 bg-base-200/70 px-4 py-3 shadow-sm lg:hidden">
-                    <div>
-                        <div class="text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">Guide Navigation</div>
-                        <div class="text-sm font-bold text-base-content">Browse this guide section</div>
-                    </div>
-                    <label for="guide-nav-drawer" class="btn btn-sm btn-outline drawer-button">Open</label>
-                </div>
-
                 <main id="guide-content" class="rounded-box border border-base-300 bg-base-200/70 p-6 shadow-sm md:p-10">
                     <super>
                 </main>
@@ -73,8 +150,8 @@
             <div class="drawer-side z-30">
                 <label for="guide-nav-drawer" aria-label="Close guide navigation" class="drawer-overlay"></label>
 
-                <aside class="guide-rail-shell not-prose min-h-full border-e border-base-300 bg-base-100 p-4 lg:min-h-0 lg:border-e-0 lg:bg-transparent lg:p-0">
-                    <div class="mb-3 flex items-center justify-between gap-3 lg:hidden">
+                <aside class="guide-rail-shell not-prose min-h-full border-e border-base-300 bg-base-100 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
                         <div class="text-sm font-bold text-base-content">Guide Navigation</div>
                         <label for="guide-nav-drawer" class="btn btn-sm btn-ghost">Close</label>
                     </div>
@@ -125,6 +202,7 @@
                         </ctx>
                     </div>
                 </aside>
+            </div>
             </div>
         </div>
     </div>
