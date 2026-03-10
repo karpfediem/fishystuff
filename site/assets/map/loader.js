@@ -273,15 +273,28 @@ function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel)
 }
 
 function renderLayerToggles(container, layers, visibleLayerIds) {
-  const visible = new Set(visibleLayerIds || []);
   if (!layers || !layers.length) {
     container.innerHTML =
       '<p class="text-xs text-base-content/60">Layer registry is loading…</p>';
+    delete container.dataset.renderKey;
     return;
   }
+  const hasOverride = Array.isArray(visibleLayerIds);
+  const visible = hasOverride ? new Set(visibleLayerIds) : null;
+  const renderKey = JSON.stringify(
+    layers.map((layer) => ({
+      layerId: layer.layerId,
+      visible: visible ? visible.has(layer.layerId) : Boolean(layer.visible),
+      opacity: Math.round((layer.opacity ?? 1) * 100),
+    })),
+  );
+  if (container.dataset.renderKey === renderKey) {
+    return;
+  }
+  container.dataset.renderKey = renderKey;
   container.innerHTML = layers
     .map((layer) => {
-      const checked = visible.has(layer.layerId);
+      const checked = visible ? visible.has(layer.layerId) : Boolean(layer.visible);
       const opacity = Math.round((layer.opacity ?? 1) * 100);
       return `
         <label class="label cursor-pointer justify-start gap-3 rounded-box px-0 py-1.5">
@@ -459,7 +472,7 @@ function renderPanel(elements, stateBundle) {
       null,
   );
   const visibleLayers =
-    inputState.filters?.layerIdsVisible || state.filters?.layerIdsVisible || [];
+    inputState.filters?.layerIdsVisible ?? state.filters?.layerIdsVisible ?? undefined;
   const searchText = inputState.filters?.searchText || "";
   const prizeOnly = Boolean(inputState.filters?.prizeOnly);
   const fishLookup = buildFishLookup(catalogFish);

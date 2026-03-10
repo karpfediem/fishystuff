@@ -126,7 +126,7 @@ export function createEmptySnapshot() {
       patchId: null,
       fromPatchId: null,
       toPatchId: null,
-      layerIdsVisible: [],
+      layerIdsVisible: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -187,6 +187,17 @@ function normalizeStringList(values) {
     out.push(normalized);
   }
   return out;
+}
+
+function readPersistedLayerVisibility(filters) {
+  if (!isPlainObject(filters) || !hasOwn(filters, "layerIdsVisible")) {
+    return undefined;
+  }
+  const layerIdsVisible = normalizeStringList(filters.layerIdsVisible);
+  if (filters.layerVisibilityExplicit === true || layerIdsVisible.length > 0) {
+    return layerIdsVisible;
+  }
+  return undefined;
 }
 
 function normalizeFishIds(values) {
@@ -848,8 +859,9 @@ export function snapshotToRestorePatch(snapshot) {
     if (hasOwn(snapshot.filters, "toPatchId")) {
       patch.filters.toPatchId = snapshot.filters.toPatchId ?? null;
     }
-    if (hasOwn(snapshot.filters, "layerIdsVisible")) {
-      patch.filters.layerIdsVisible = normalizeStringList(snapshot.filters.layerIdsVisible);
+    const layerIdsVisible = readPersistedLayerVisibility(snapshot.filters);
+    if (layerIdsVisible !== undefined) {
+      patch.filters.layerIdsVisible = layerIdsVisible;
     }
   }
   if (isPlainObject(snapshot.ui)) {
@@ -898,11 +910,7 @@ export function loadSessionRestorePatch(storage = globalThis.sessionStorage) {
 }
 
 export function loadLocalPrefsPatch(storage = globalThis.localStorage) {
-  return normalizeStatePatch(
-    readJsonStorage(storage, FISHYMAP_STORAGE_KEYS.prefs) || {
-      version: FISHYMAP_CONTRACT_VERSION,
-    },
-  );
+  return snapshotToRestorePatch(readJsonStorage(storage, FISHYMAP_STORAGE_KEYS.prefs));
 }
 
 export function buildInitialRestorePatch({
@@ -1430,6 +1438,7 @@ class FishyMapBridgeImpl {
       this.inputState.filters.fromPatchId ?? state.filters?.fromPatchId ?? null;
     const toPatchId =
       this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
+    const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       savedAt: new Date().toISOString(),
@@ -1446,8 +1455,12 @@ class FishyMapBridgeImpl {
           fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
         fromPatchId,
         toPatchId,
-        layerIdsVisible:
-          this.inputState.filters.layerIdsVisible ?? state.filters?.layerIdsVisible ?? null,
+        ...(hasExplicitLayerVisibility
+          ? {
+              layerIdsVisible: normalizeStringList(this.inputState.filters.layerIdsVisible),
+              layerVisibilityExplicit: true,
+            }
+          : {}),
       },
       ui: this.inputState.ui,
     };
@@ -1459,6 +1472,7 @@ class FishyMapBridgeImpl {
       this.inputState.filters.fromPatchId ?? state.filters?.fromPatchId ?? null;
     const toPatchId =
       this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
+    const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
@@ -1467,8 +1481,12 @@ class FishyMapBridgeImpl {
           fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
         fromPatchId,
         toPatchId,
-        layerIdsVisible:
-          this.inputState.filters.layerIdsVisible ?? state.filters?.layerIdsVisible ?? null,
+        ...(hasExplicitLayerVisibility
+          ? {
+              layerIdsVisible: normalizeStringList(this.inputState.filters.layerIdsVisible),
+              layerVisibilityExplicit: true,
+            }
+          : {}),
       },
       ui: {
         legendOpen: this.inputState.ui.legendOpen,
