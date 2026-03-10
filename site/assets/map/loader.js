@@ -12,6 +12,89 @@ function dispatchMapCommand(target, command) {
   dispatchMapEvent(target, FISHYMAP_EVENTS.command, command);
 }
 
+function supportsWebgl2(doc = document) {
+  const probe = doc?.createElement?.("canvas");
+  if (!probe?.getContext) {
+    return false;
+  }
+  try {
+    return !!probe.getContext("webgl2");
+  } catch (_) {
+    return false;
+  }
+}
+
+function formatLoaderError(error) {
+  if (!error) {
+    return "Unknown renderer error.";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (typeof error === "object") {
+    if (typeof error.stack === "string" && error.stack.trim()) {
+      return error.stack;
+    }
+    if (typeof error.message === "string" && error.message.trim()) {
+      return error.message;
+    }
+    if (typeof error.reason === "object" || typeof error.reason === "string") {
+      return formatLoaderError(error.reason);
+    }
+  }
+  return String(error);
+}
+
+function shouldHandleRendererError(error, fallbackMessage = "") {
+  const text = `${formatLoaderError(error)} ${fallbackMessage}`.toLowerCase();
+  return (
+    text.includes("fishystuff_ui_bevy") ||
+    text.includes("wgpu surface") ||
+    text.includes("webgl2") ||
+    text.includes("renderer/mod.rs") ||
+    text.includes("canvas.getcontext")
+  );
+}
+
+function setMapError(elements, error) {
+  const message = formatLoaderError(error);
+  elements.readyPill.textContent = "Error";
+  elements.readyPill.className = "badge badge-error badge-sm";
+  elements.statusLines.innerHTML = "";
+  const status = document.createElement("p");
+  status.textContent = "The map renderer failed to start.";
+  elements.statusLines.appendChild(status);
+  elements.diagnosticJson.textContent = message;
+  if (elements.errorMessage) {
+    elements.errorMessage.textContent = message;
+  }
+  if (elements.errorOverlay) {
+    elements.errorOverlay.hidden = false;
+  }
+  if (elements.canvas) {
+    elements.canvas.hidden = true;
+  }
+}
+
+function installRendererErrorHandlers(elements) {
+  const onError = (event) => {
+    if (!shouldHandleRendererError(event?.error, event?.message || event?.filename || "")) {
+      return;
+    }
+    FishyMapBridge.destroy?.();
+    setMapError(elements, event?.error || event?.message || event);
+  };
+  const onRejection = (event) => {
+    if (!shouldHandleRendererError(event?.reason)) {
+      return;
+    }
+    FishyMapBridge.destroy?.();
+    setMapError(elements, event?.reason || event);
+  };
+  window.addEventListener("error", onError);
+  window.addEventListener("unhandledrejection", onRejection);
+}
+
 function requestBridgeState(target) {
   const detail = {};
   dispatchMapEvent(target, FISHYMAP_EVENTS.requestState, detail);
@@ -499,18 +582,28 @@ async function main() {
     selectionSummary: document.getElementById("fishymap-selection-summary"),
     hoverSummary: document.getElementById("fishymap-hover-summary"),
     viewReadout: document.getElementById("fishymap-view-readout"),
+    errorOverlay: document.getElementById("fishymap-error-overlay"),
+    errorMessage: document.getElementById("fishymap-error-message"),
+    canvas,
   };
 
   bindUi(shell, elements);
   applyThemeToShell(shell);
+  installRendererErrorHandlers(elements);
+
+  if (!supportsWebgl2(document)) {
+    setMapError(
+      elements,
+      "WebGL2 is required to render the map, but this browser/runtime did not provide a WebGL2 context.",
+    );
+    return;
+  }
 
   try {
     await FishyMapBridge.mount(shell, { canvas });
   } catch (error) {
     console.error("Failed to mount FishyMap bridge", error);
-    elements.readyPill.textContent = "Error";
-    elements.readyPill.className = "badge badge-error badge-sm";
-    elements.diagnosticJson.textContent = String(error);
+    setMapError(elements, error);
   }
 }
 

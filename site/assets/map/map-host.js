@@ -2,6 +2,9 @@ const THEME_EVENT = "fishystuff:themechange";
 const THEME_PROBE_ID = "fishystuff-theme-probe";
 const DEFAULT_PATCH_DEBOUNCE_MS = 48;
 const DEFAULT_SESSION_SAVE_MS = 180;
+const DEFAULT_BOOTSTRAP_SYNC_MS = 96;
+const MIN_BOOTSTRAP_SYNC_PASSES = 4;
+const MAX_BOOTSTRAP_SYNC_PASSES = 120;
 
 export const FISHYMAP_CONTRACT_VERSION = 1;
 
@@ -478,7 +481,7 @@ export function resolveApiBaseUrl(locationLike = globalThis.location) {
     hostname === "::1" ||
     hostname.endsWith(".localhost")
   ) {
-    return "http://localhost:8080";
+    return "http://127.0.0.1:8080";
   }
   return "https://api.fishystuff.fish";
 }
@@ -889,6 +892,8 @@ class FishyMapBridgeImpl {
     this.sessionSaveDebounceMs = DEFAULT_SESSION_SAVE_MS;
     this.flushPatchTimer = 0;
     this.flushSessionTimer = 0;
+    this.bootstrapSyncTimer = 0;
+    this.bootstrapSyncPasses = 0;
     this.resizeObserver = null;
     this.themeObserver = null;
     this.boundEventSink = (json) => this.handleWasmEvent(json);
@@ -982,14 +987,18 @@ class FishyMapBridgeImpl {
     this.syncTheme();
     this.flushPendingPatchNow();
     this.flushQueuedCommands();
+    this.scheduleBootstrapStateSync();
     return this.getCurrentState();
   }
 
   destroy() {
     globalThis.clearTimeout(this.flushPatchTimer);
     globalThis.clearTimeout(this.flushSessionTimer);
+    globalThis.clearTimeout(this.bootstrapSyncTimer);
     this.flushPatchTimer = 0;
     this.flushSessionTimer = 0;
+    this.bootstrapSyncTimer = 0;
+    this.bootstrapSyncPasses = 0;
     this.detachDomListeners();
     this.teardownCanvasSizeSync();
     this.teardownThemeSync();
@@ -1094,9 +1103,10 @@ class FishyMapBridgeImpl {
     if (globalThis.window?.addEventListener) {
       globalThis.window.addEventListener("resize", this.boundResize, { passive: true });
     }
-    if (this.canvas?.parentElement && typeof ResizeObserver !== "undefined") {
+    const resizeTarget = this.container || this.canvas?.parentElement || null;
+    if (resizeTarget && typeof ResizeObserver !== "undefined") {
       this.resizeObserver = new ResizeObserver(() => this.syncCanvasSize());
-      this.resizeObserver.observe(this.canvas.parentElement);
+      this.resizeObserver.observe(resizeTarget);
     }
   }
 
@@ -1112,9 +1122,29 @@ class FishyMapBridgeImpl {
     if (!this.canvas) {
       return;
     }
-    const rect = this.canvas.getBoundingClientRect();
-    const logicalWidth = Math.max(1, Math.round(rect.width || this.canvas.clientWidth || 0));
-    const logicalHeight = Math.max(1, Math.round(rect.height || this.canvas.clientHeight || 0));
+    const measurementTarget = this.container || this.canvas.parentElement || this.canvas;
+    const targetRect = measurementTarget?.getBoundingClientRect?.() || {};
+    const canvasRect = this.canvas.getBoundingClientRect?.() || {};
+    const logicalWidth = Math.max(
+      1,
+      Math.round(
+        targetRect.width ||
+          canvasRect.width ||
+          measurementTarget?.clientWidth ||
+          this.canvas.clientWidth ||
+          0,
+      ),
+    );
+    const logicalHeight = Math.max(
+      1,
+      Math.round(
+        targetRect.height ||
+          canvasRect.height ||
+          measurementTarget?.clientHeight ||
+          this.canvas.clientHeight ||
+          0,
+      ),
+    );
     const dpr = Math.max(1, globalThis.window?.devicePixelRatio || 1);
     const physicalWidth = Math.max(1, Math.round(logicalWidth * dpr));
     const physicalHeight = Math.max(1, Math.round(logicalHeight * dpr));
@@ -1201,6 +1231,60 @@ class FishyMapBridgeImpl {
     for (const command of commands) {
       this.wasmModule.fishymap_send_command_json(JSON.stringify(command));
     }
+  }
+
+  scheduleBootstrapStateSync() {
+    if (!this.wasmReady || this.bootstrapSyncTimer) {
+      return;
+    }
+    this.bootstrapSyncTimer = globalThis.setTimeout(() => {
+      this.bootstrapSyncTimer = 0;
+      this.runBootstrapStateSync();
+    }, DEFAULT_BOOTSTRAP_SYNC_MS);
+  }
+
+  runBootstrapStateSync() {
+    if (!this.wasmReady) {
+      return;
+    }
+    this.bootstrapSyncPasses += 1;
+    const previousState = this.getCurrentState();
+    const previousSerialized = stableStringify(previousState);
+
+    this.syncCanvasSize();
+    this.refreshCurrentStateFromWasm();
+
+    if (stableStringify(this.currentState) !== previousSerialized) {
+      if (!previousState.ready && this.currentState.ready) {
+        this.scheduleSessionStateSave();
+        this.emit(FISHYMAP_EVENTS.ready, {
+          type: "ready",
+          version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
+          capabilities: cloneJson(this.currentState.catalog?.capabilities || []),
+          state: this.getCurrentState(),
+          inputState: this.getCurrentInputState(),
+        });
+      } else {
+        this.emit(FISHYMAP_EVENTS.diagnostic, {
+          type: "diagnostic",
+          version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
+          payload: {
+            bridgeStatus: "bootstrap-sync",
+          },
+          state: this.getCurrentState(),
+          inputState: this.getCurrentInputState(),
+        });
+      }
+    }
+
+    const shouldContinue =
+      this.bootstrapSyncPasses < MIN_BOOTSTRAP_SYNC_PASSES ||
+      (!this.currentState.ready && this.bootstrapSyncPasses < MAX_BOOTSTRAP_SYNC_PASSES);
+    if (shouldContinue) {
+      this.scheduleBootstrapStateSync();
+      return;
+    }
+    this.bootstrapSyncPasses = 0;
   }
 
   refreshCurrentStateFromWasm() {
