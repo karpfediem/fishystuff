@@ -1,8 +1,9 @@
-<extend template="with-guide-nav.shtml">
+<extend template="with-nav.shtml">
 
   <title id="title" :text="$page.title"></title>
 
-  <main id="guide-content">
+  <div id="content" class="mx-auto mt-4 rounded-box border border-base-300 bg-base-200/70 p-6 shadow-sm md:p-10">
+    <main class="min-w-0">
     <header class="page-header mb-6">
       <h1 :text="$page.title"></h1>
       <p :if="$page.description.len().gt(0)" :text="$page.description"></p>
@@ -92,4 +93,5 @@
     </section>
 
 
-  </main>
+    </main>
+  </div>
