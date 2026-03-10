@@ -95,7 +95,7 @@
                     <span class="select-none">•</span>
                     <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('calculator').link()">Calculator</a>
                     <span class="select-none">•</span>
-                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('fishdex').link()">Fishdex</a>
+                    <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('dex').link()">Dex</a>
                     <span class="select-none">•</span>
                     <a class="no-underline hover:underline focus:underline font-bold" href="$site.page('community').link()">Community</a>
                     <span class="select-none">•</span>
