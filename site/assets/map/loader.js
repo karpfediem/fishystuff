@@ -128,6 +128,18 @@ function buildFishLookup(catalogFish) {
   return map;
 }
 
+function resolveSelectedFishIds(stateBundle) {
+  const inputFishIds = stateBundle.inputState?.filters?.fishIds;
+  if (Array.isArray(inputFishIds)) {
+    return inputFishIds;
+  }
+  const stateFishIds = stateBundle.state?.filters?.fishIds;
+  if (Array.isArray(stateFishIds)) {
+    return stateFishIds;
+  }
+  return [];
+}
+
 function scoreFishMatch(fish, queryTerms) {
   if (!queryTerms.length) {
     return 0;
@@ -287,11 +299,106 @@ function renderLayerToggles(container, layers, visibleLayerIds) {
     .join("");
 }
 
+function resolveCurrentFishId(stateBundle) {
+  const stateSelectionFishId = stateBundle.state?.selection?.fishId;
+  if (Number.isFinite(stateSelectionFishId)) {
+    return stateSelectionFishId;
+  }
+
+  const selectedFishIds = resolveSelectedFishIds(stateBundle);
+  if (selectedFishIds.length) {
+    return selectedFishIds[selectedFishIds.length - 1];
+  }
+
+  return null;
+}
+
+function moveFishIdToCurrent(selectedFishIds, fishId) {
+  return selectedFishIds.filter((id) => id !== fishId).concat(fishId);
+}
+
+function removeSelectedFishId(selectedFishIds, fishId) {
+  return selectedFishIds.filter((id) => id !== fishId);
+}
+
+function buildSearchMatches(stateBundle, searchText, prizeOnly) {
+  const catalogFish = stateBundle.state?.catalog?.fish || [];
+  const matches = findFishMatches(catalogFish, searchText, prizeOnly);
+  const selectedFishIds = new Set(resolveSelectedFishIds(stateBundle));
+  return matches.filter((fish) => !selectedFishIds.has(fish.fishId));
+}
+
+function renderSearchSelection(elements, stateBundle, fishLookup) {
+  const selectedFishIds = resolveSelectedFishIds(stateBundle);
+  const currentFishId = resolveCurrentFishId(stateBundle);
+  const renderKey = JSON.stringify({
+    selectedFishIds,
+    currentFishId,
+  });
+  if (elements.searchSelection.dataset.renderKey === renderKey) {
+    return;
+  }
+  elements.searchSelection.dataset.renderKey = renderKey;
+
+  if (!selectedFishIds.length) {
+    elements.searchSelection.innerHTML =
+      '<div class="px-2 py-1 text-xs text-base-content/60">Add fish from the search results.</div>';
+    return;
+  }
+
+  elements.searchSelection.innerHTML = selectedFishIds
+    .map((fishId) => {
+      const fish = fishLookup.get(fishId);
+      const active = fishId === currentFishId;
+      const name = fish?.name || `Fish ${fishId}`;
+      return `
+        <div class="inline-flex items-center gap-1 rounded-full border px-2 py-1 ${
+          active
+            ? "border-primary bg-primary text-primary-content"
+            : "border-base-300 bg-base-100 text-base-content"
+        }">
+          <button
+            class="fishymap-selection-focus btn btn-ghost btn-xs h-auto min-h-0 rounded-full border-0 px-2 ${
+              active ? "text-primary-content hover:bg-primary-content/10" : "text-inherit"
+            }"
+            data-fish-id="${fishId}"
+            type="button"
+          >
+            <span class="truncate max-w-36">${name}</span>
+          </button>
+          <button
+            class="fishymap-selection-remove btn btn-ghost btn-xs h-auto min-h-0 rounded-full border-0 px-2 ${
+              active ? "text-primary-content hover:bg-primary-content/10" : "text-inherit"
+            }"
+            data-fish-id="${fishId}"
+            type="button"
+            aria-label="Remove ${name}"
+          >
+            ×
+          </button>
+        </div>
+      `;
+    })
+    .join("");
+}
+
 function renderSearchResults(elements, matches, stateBundle) {
   const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
   const prizeOnly = Boolean(stateBundle.inputState?.filters?.prizeOnly);
   const activeMatches = matches.slice(0, 12);
+  const currentFishId = resolveCurrentFishId(stateBundle);
+  const renderKey = JSON.stringify({
+    query,
+    prizeOnly,
+    currentFishId,
+    resultIds: activeMatches.map((fish) => fish.fishId),
+    total: matches.length,
+  });
   elements.searchCount.textContent = `${matches.length} fish`;
+  if (elements.searchResults.dataset.renderKey === renderKey) {
+    return;
+  }
+  elements.searchResults.dataset.renderKey = renderKey;
   if (!matches.length) {
     elements.searchResults.innerHTML = `<div class="px-2 py-3 text-xs text-base-content/60">${
       query || prizeOnly ? "No fish match the current filter." : "Start typing to filter fish."
@@ -300,16 +407,23 @@ function renderSearchResults(elements, matches, stateBundle) {
   }
   elements.searchResults.innerHTML = activeMatches
     .map(
-      (fish) => `
+      (fish) => {
+        const active = fish.fishId === currentFishId;
+        return `
         <button
-          class="btn btn-ghost btn-sm w-full justify-start rounded-xl px-3"
+          class="btn btn-sm w-full justify-start rounded-xl px-3 ${
+            active ? "btn-primary text-primary-content" : "btn-ghost"
+          }"
           data-fish-id="${fish.fishId}"
           type="button"
         >
           <span class="truncate">${fish.name}</span>
-          <span class="ml-auto text-[11px] text-base-content/45">#${fish.fishId}</span>
+          <span class="ml-auto text-[11px] ${
+            active ? "text-primary-content/75" : "text-base-content/45"
+          }">#${fish.fishId}</span>
         </button>
-      `,
+      `;
+      },
     )
     .join("");
 }
@@ -330,6 +444,7 @@ function renderPanel(elements, stateBundle) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
   const catalogFish = state.catalog?.fish || [];
+  const currentFishId = resolveCurrentFishId(stateBundle);
   const patchRange = normalizePatchRangeSelection(
     state.catalog?.patches || [],
     inputState.filters?.fromPatchId ??
@@ -377,7 +492,8 @@ function renderPanel(elements, stateBundle) {
   );
   renderLayerToggles(elements.layers, state.catalog?.layers || [], visibleLayers);
 
-  const matches = findFishMatches(catalogFish, searchText, prizeOnly);
+  const matches = buildSearchMatches(stateBundle, searchText, prizeOnly);
+  renderSearchSelection(elements, stateBundle, fishLookup);
   renderSearchResults(elements, matches, stateBundle);
 
   elements.legend.open = Boolean(inputState.ui?.legendOpen);
@@ -387,9 +503,7 @@ function renderPanel(elements, stateBundle) {
   elements.panel.hidden = !panelOpen;
   elements.panelOpen.hidden = panelOpen;
 
-  const selectedFish =
-    fishLookup.get(state.selection?.fishId) ||
-    fishLookup.get(state.filters?.fishIds?.[state.filters?.fishIds?.length - 1]);
+  const selectedFish = fishLookup.get(currentFishId);
   const zoneName =
     state.selection?.zoneName ||
     (state.selection?.zoneRgb != null ? `Zone ${formatZone(state.selection.zoneRgb)}` : null);
@@ -446,18 +560,13 @@ function bindUi(shell, elements) {
   }
 
   function pushSearchPatch() {
-    const current = requestBridgeState(shell);
-    const catalogFish = current.state.catalog?.fish || [];
     const searchText = elements.search.value;
     const prizeOnly = elements.prizeOnly.checked;
-    const matches = findFishMatches(catalogFish, searchText, prizeOnly);
-    const fishIds = matches.slice(0, 128).map((fish) => fish.fishId);
     dispatchMapState(shell, {
       version: 1,
       filters: {
         searchText,
         prizeOnly,
-        fishIds,
       },
     });
     renderCurrentState(requestBridgeState(shell));
@@ -503,21 +612,19 @@ function bindUi(shell, elements) {
       elements.search.value,
       elements.prizeOnly.checked,
     );
-    const top = matches[0];
+    const selectedFishIds = new Set(resolveSelectedFishIds(current));
+    const top = matches.find((fish) => !selectedFishIds.has(fish.fishId));
     if (!top) {
       return;
     }
     event.preventDefault();
-    elements.search.value = top.name;
+    elements.search.value = "";
     dispatchMapState(shell, {
       version: 1,
       filters: {
-        searchText: top.name,
+        searchText: "",
         prizeOnly: elements.prizeOnly.checked,
-        fishIds: [top.fishId],
-      },
-      commands: {
-        focusFishId: top.fishId,
+        fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), top.fishId),
       },
     });
     renderCurrentState(requestBridgeState(shell));
@@ -536,17 +643,44 @@ function bindUi(shell, elements) {
       return;
     }
     const fishId = Number.parseInt(button.getAttribute("data-fish-id"), 10);
-    const label = button.querySelector("span")?.textContent?.trim() || String(fishId);
-    elements.search.value = label;
+    const current = requestBridgeState(shell);
+    elements.search.value = "";
     dispatchMapState(shell, {
       version: 1,
       filters: {
-        searchText: label,
+        searchText: "",
         prizeOnly: elements.prizeOnly.checked,
-        fishIds: [fishId],
+        fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
       },
-      commands: {
-        focusFishId: fishId,
+    });
+    renderCurrentState(requestBridgeState(shell));
+  });
+
+  elements.searchSelection.addEventListener("click", (event) => {
+    const focusButton = event.target.closest("button.fishymap-selection-focus[data-fish-id]");
+    if (focusButton) {
+      const fishId = Number.parseInt(focusButton.getAttribute("data-fish-id"), 10);
+      const current = requestBridgeState(shell);
+      dispatchMapState(shell, {
+        version: 1,
+        filters: {
+          fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
+        },
+      });
+      renderCurrentState(requestBridgeState(shell));
+      return;
+    }
+
+    const removeButton = event.target.closest("button.fishymap-selection-remove[data-fish-id]");
+    if (!removeButton) {
+      return;
+    }
+    const fishId = Number.parseInt(removeButton.getAttribute("data-fish-id"), 10);
+    const current = requestBridgeState(shell);
+    dispatchMapState(shell, {
+      version: 1,
+      filters: {
+        fishIds: removeSelectedFishId(resolveSelectedFishIds(current), fishId),
       },
     });
     renderCurrentState(requestBridgeState(shell));
@@ -673,6 +807,7 @@ async function main() {
     panelClose: document.getElementById("fishymap-panel-close"),
     readyPill: document.getElementById("fishymap-ready-pill"),
     search: document.getElementById("fishymap-search"),
+    searchSelection: document.getElementById("fishymap-search-selection"),
     searchResults: document.getElementById("fishymap-search-results"),
     searchCount: document.getElementById("fishymap-search-count"),
     prizeOnly: document.getElementById("fishymap-prize-only"),
