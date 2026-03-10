@@ -180,6 +180,49 @@ function pointIconScaleLabel(scale) {
   return `${Math.round(clampPointIconScale(scale) * 100)}%`;
 }
 
+function renderViewState(elements, state) {
+  const viewMode = state?.view?.viewMode === "3d" ? "3d" : "2d";
+  if (elements.viewReadout) {
+    elements.viewReadout.textContent = viewMode === "3d" ? "3D" : "2D";
+  }
+  if (elements.viewMode) {
+    elements.viewMode.value = viewMode;
+  }
+}
+
+function setHoverTooltipPosition(elements, clientX, clientY) {
+  if (!elements.hoverTooltip) {
+    return;
+  }
+  elements.hoverTooltip.style.setProperty("--fishymap-hover-x", `${clientX}px`);
+  elements.hoverTooltip.style.setProperty("--fishymap-hover-y", `${clientY}px`);
+}
+
+function renderHoverTooltip(elements, hover) {
+  if (!elements.hoverTooltip || !elements.hoverSummary) {
+    return;
+  }
+  const label = hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : null);
+  if (!label || !elements.hoverPointerActive) {
+    elements.hoverTooltip.hidden = true;
+    return;
+  }
+  elements.hoverSummary.textContent = label;
+  elements.hoverTooltip.hidden = false;
+}
+
+function hoverFromEventDetail(detail) {
+  if (detail?.hover && typeof detail.hover === "object") {
+    return detail.hover;
+  }
+  return {
+    worldX: detail?.worldX ?? null,
+    worldZ: detail?.worldZ ?? null,
+    zoneRgb: detail?.zoneRgb ?? null,
+    zoneName: detail?.zoneName ?? null,
+  };
+}
+
 function renderFishAvatar(fish, sizeClass = "size-6") {
   const name = fish?.name || `Fish ${fish?.fishId ?? "?"}`;
   const iconUrl = fishIconUrl(fish);
@@ -762,8 +805,7 @@ function renderPanel(elements, stateBundle) {
   elements.readyPill.className = `badge badge-sm ${
     state.ready ? "badge-success" : "badge-outline"
   }`;
-  elements.viewReadout.textContent = state.view?.viewMode === "3d" ? "3D" : "2D";
-  elements.viewMode.value = state.view?.viewMode === "3d" ? "3d" : "2d";
+  renderViewState(elements, state);
   if (elements.pointIconScale) {
     const sliderValue = pointIconScaleValue(pointIconScale);
     if (elements.pointIconScale.value !== sliderValue) {
@@ -805,34 +847,18 @@ function renderPanel(elements, stateBundle) {
   elements.panel.hidden = !panelOpen;
   elements.panelOpen.hidden = panelOpen;
 
-  const selectedFish = fishLookup.get(currentFishId);
   const zoneName =
     state.selection?.zoneName ||
     (state.selection?.zoneRgb != null ? `Zone ${formatZone(state.selection.zoneRgb)}` : null);
-  const fishName = selectedFish?.name || null;
-  if (zoneName && fishName) {
-    elements.selectionSummary.textContent = `${zoneName} with ${fishName}.`;
-  } else if (zoneName) {
-    elements.selectionSummary.textContent = zoneName;
-  } else if (fishName) {
-    elements.selectionSummary.textContent = `Fish filter focused on ${fishName}.`;
-  } else {
-    elements.selectionSummary.textContent = "No zone selected.";
+  if (elements.selectionSummary) {
+    if (zoneName) {
+      elements.selectionSummary.textContent = zoneName;
+    } else {
+      elements.selectionSummary.textContent = "No zone selected.";
+    }
   }
 
-  if (state.hover?.zoneRgb != null) {
-    const worldX = Number.isFinite(state.hover.worldX)
-      ? Math.round(state.hover.worldX)
-      : "n/a";
-    const worldZ = Number.isFinite(state.hover.worldZ)
-      ? Math.round(state.hover.worldZ)
-      : "n/a";
-    elements.hoverSummary.textContent = `${
-      state.hover.zoneName || formatZone(state.hover.zoneRgb)
-    } at world ${worldX}, ${worldZ}.`;
-  } else {
-    elements.hoverSummary.textContent = "Hover a zone to inspect it.";
-  }
+  renderHoverTooltip(elements, state.hover || null);
 
   renderStatusLines(elements.statusLines, state.statuses || {});
   elements.diagnosticJson.textContent = JSON.stringify(
@@ -851,8 +877,21 @@ function collectVisibleLayerIds(layersRoot) {
 
 function bindUi(shell, elements) {
   let isRendering = false;
+  let latestStateBundle = requestBridgeState(shell);
+
+  function stateBundleFromEvent(event) {
+    return {
+      state: event.detail?.state || FishyMapBridge.getCurrentState(),
+      inputState:
+        event.detail?.inputState ||
+        (typeof FishyMapBridge.getCurrentInputState === "function"
+          ? FishyMapBridge.getCurrentInputState()
+          : {}),
+    };
+  }
 
   function renderCurrentState(stateBundle = requestBridgeState(shell)) {
+    latestStateBundle = stateBundle;
     isRendering = true;
     try {
       renderPanel(elements, stateBundle);
@@ -860,6 +899,16 @@ function bindUi(shell, elements) {
       isRendering = false;
     }
   }
+
+  elements.canvas.addEventListener("pointermove", (event) => {
+    elements.hoverPointerActive = true;
+    setHoverTooltipPosition(elements, event.clientX, event.clientY);
+  });
+
+  elements.canvas.addEventListener("pointerleave", () => {
+    elements.hoverPointerActive = false;
+    renderHoverTooltip(elements, null);
+  });
 
   function pushSearchPatch() {
     const searchText = elements.search.value;
@@ -1111,24 +1160,33 @@ function bindUi(shell, elements) {
     renderCurrentState(requestBridgeState(shell));
   });
 
-  for (const type of [
-    FISHYMAP_EVENTS.ready,
-    FISHYMAP_EVENTS.viewChanged,
-    FISHYMAP_EVENTS.selectionChanged,
-    FISHYMAP_EVENTS.hoverChanged,
-    FISHYMAP_EVENTS.diagnostic,
-  ]) {
-    shell.addEventListener(type, (event) => {
-      renderCurrentState({
-        state: event.detail?.state || FishyMapBridge.getCurrentState(),
-        inputState:
-          event.detail?.inputState ||
-          (typeof FishyMapBridge.getCurrentInputState === "function"
-            ? FishyMapBridge.getCurrentInputState()
-            : {}),
-      });
-    });
-  }
+  shell.addEventListener(FISHYMAP_EVENTS.ready, (event) => {
+    renderCurrentState(stateBundleFromEvent(event));
+  });
+
+  shell.addEventListener(FISHYMAP_EVENTS.selectionChanged, (event) => {
+    renderCurrentState(stateBundleFromEvent(event));
+  });
+
+  shell.addEventListener(FISHYMAP_EVENTS.diagnostic, (event) => {
+    renderCurrentState(stateBundleFromEvent(event));
+  });
+
+  shell.addEventListener(FISHYMAP_EVENTS.viewChanged, (event) => {
+    latestStateBundle = stateBundleFromEvent(event);
+    renderViewState(elements, latestStateBundle.state);
+  });
+
+  shell.addEventListener(FISHYMAP_EVENTS.hoverChanged, (event) => {
+    const hover = hoverFromEventDetail(event.detail || {});
+    if (latestStateBundle?.state) {
+      latestStateBundle.state = {
+        ...latestStateBundle.state,
+        hover,
+      };
+    }
+    renderHoverTooltip(elements, hover);
+  });
 
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));
 
@@ -1172,6 +1230,7 @@ async function main() {
     zoneEvidenceStatus: document.getElementById("fishymap-zone-evidence-status"),
     zoneEvidenceSummary: document.getElementById("fishymap-zone-evidence-summary"),
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
+    hoverTooltip: document.getElementById("fishymap-hover-tooltip"),
     hoverSummary: document.getElementById("fishymap-hover-summary"),
     viewReadout: document.getElementById("fishymap-view-readout"),
     errorOverlay: document.getElementById("fishymap-error-overlay"),

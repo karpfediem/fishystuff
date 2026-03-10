@@ -1433,9 +1433,26 @@ class FishyMapBridgeImpl {
       return;
     }
 
+    const type = String(payload.type || "");
+    if (type === "hover-changed") {
+      this.currentState = {
+        ...this.currentState,
+        hover: {
+          worldX: payload.worldX ?? null,
+          worldZ: payload.worldZ ?? null,
+          zoneRgb: payload.zoneRgb ?? null,
+          zoneName: payload.zoneName ?? null,
+        },
+      };
+      this.emit(FISHYMAP_EVENTS.hoverChanged, {
+        ...payload,
+        hover: cloneJson(this.currentState.hover),
+      });
+      return;
+    }
+
     this.refreshCurrentStateFromWasm();
 
-    const type = String(payload.type || "");
     const detail = {
       ...payload,
       state: this.getCurrentState(),
@@ -1450,10 +1467,6 @@ class FishyMapBridgeImpl {
     if (type === "selection-changed") {
       this.scheduleSessionStateSave();
       this.emit(FISHYMAP_EVENTS.selectionChanged, detail);
-      return;
-    }
-    if (type === "hover-changed") {
-      this.emit(FISHYMAP_EVENTS.hoverChanged, detail);
       return;
     }
     if (type === "ready") {

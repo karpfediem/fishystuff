@@ -228,18 +228,28 @@
         width: 100%;
       }
 
-      #fishymap-floating-status {
-        position: absolute;
-        left: 1rem;
-        bottom: 1rem;
-        z-index: 15;
-        width: min(24rem, calc(100vw - 2rem));
+      #fishymap-hover-tooltip {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 26;
+        max-width: min(22rem, calc(100vw - 2rem));
         border-radius: 1rem;
         border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
-        background: color-mix(in srgb, var(--color-base-100) 85%, transparent);
-        padding: 0.875rem 1rem;
-        box-shadow: 0 1rem 2.5rem color-mix(in srgb, var(--color-base-content) 14%, transparent);
-        backdrop-filter: blur(14px);
+        background: color-mix(in srgb, var(--color-base-100) 94%, transparent);
+        padding: 0.5rem 0.7rem;
+        box-shadow: 0 0.4rem 1rem color-mix(in srgb, var(--color-base-content) 10%, transparent);
+        pointer-events: none;
+        transform: translate3d(
+          calc(var(--fishymap-hover-x, 0px) + 18px),
+          calc(var(--fishymap-hover-y, 0px) + 22px),
+          0
+        );
+        will-change: transform;
+      }
+
+      #fishymap-hover-tooltip[hidden] {
+        display: none !important;
       }
 
       #fishymap-error-overlay {
@@ -286,14 +296,6 @@
           max-height: min(55dvh, 34rem);
         }
 
-        #fishymap-floating-status {
-          top: 0.75rem;
-          right: 0.75rem;
-          bottom: auto;
-          left: 0.75rem;
-          width: auto;
-        }
-
         #fishymap-zone-evidence-window {
           top: auto;
           right: 0.75rem;
@@ -328,10 +330,14 @@
       </div>
       <aside id="fishymap-zone-evidence-window" class="not-prose">
         <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
-          <span class="text-sm font-semibold">Zone evidence</span>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold">Zone evidence</span>
+            <span id="fishymap-view-readout" class="badge badge-outline badge-sm">2D</span>
+          </div>
           <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
         </div>
         <div id="fishymap-zone-evidence-body">
+          <p id="fishymap-selection-summary" class="text-sm text-base-content/80">No zone selected.</p>
           <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
           <div id="fishymap-zone-evidence-list"></div>
         </div>
@@ -435,13 +441,8 @@
         </div>
       </aside>
 
-      <div id="fishymap-floating-status" class="space-y-2 text-sm">
-        <div class="flex items-center justify-between gap-3">
-          <span class="font-semibold">Selection</span>
-          <span id="fishymap-view-readout" class="badge badge-outline badge-sm">2D</span>
-        </div>
-        <p id="fishymap-selection-summary" class="text-base-content/80">No zone selected.</p>
-        <p id="fishymap-hover-summary" class="text-xs text-base-content/60">Hover a zone to inspect it.</p>
+      <div id="fishymap-hover-tooltip" class="not-prose" hidden>
+        <p id="fishymap-hover-summary" class="text-sm text-base-content/85">Hover a zone to inspect it.</p>
       </div>
 
       <div id="fishymap-error-overlay" class="not-prose" hidden>
