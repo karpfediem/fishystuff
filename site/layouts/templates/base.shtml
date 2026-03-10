@@ -2,7 +2,7 @@
 <html data-theme="fishy">
 <head id="head">
   <meta charset="UTF-8">
-  <title id="title"><super></title>
+  <title id="title"><super> | FishyStuff</title>
 
   <!-- Early load to prevent flashbang / layout shift due to scrollbar gutter -->
   <style>
