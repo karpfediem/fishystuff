@@ -332,19 +332,6 @@
   color: rgba(240, 245, 255, 0.75);
 }
 
-.hover-tooltip {
-  background-color: var(--panel);
-  border-radius: var(--radius);
-  border-width: 1px;
-  border-color: var(--border);
-  box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.35);
-}
-
-.hover-tooltip-text {
-  font-size: 12px;
-  color: rgba(240, 245, 255, 0.9);
-}
-
 .layers-panel {
   width: 280px;
   padding: 10px;
