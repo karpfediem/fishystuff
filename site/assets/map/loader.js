@@ -5,6 +5,8 @@ import FishyMapBridge, {
   resolveApiBaseUrl,
 } from "./map-host.js";
 
+const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
+
 function dispatchMapEvent(target, type, detail) {
   target.dispatchEvent(new CustomEvent(type, { detail }));
 }
@@ -200,6 +202,117 @@ function pointIconScaleValue(scale) {
 
 function pointIconScaleLabel(scale) {
   return `${Math.round(clampPointIconScale(scale) * 100)}%`;
+}
+
+function isFixedGroundLayer(layerId) {
+  return FIXED_GROUND_LAYER_IDS.has(String(layerId || "").trim());
+}
+
+function layerKindLabel(kind) {
+  if (kind === "vector-geojson") {
+    return "Vector";
+  }
+  if (kind === "tiled-raster") {
+    return "Raster";
+  }
+  return "Layer";
+}
+
+function dragHandleIcon() {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M9 5.25a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM9 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM9 18.75a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM18 5.25a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM18 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM18 18.75a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+    </svg>
+  `;
+}
+
+function eyeIcon(visible) {
+  if (visible) {
+    return `
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+      </svg>
+    `;
+  }
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z" />
+      <path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0 1 15.75 12ZM12.53 15.713l-4.243-4.244a3.75 3.75 0 0 0 4.244 4.243Z" />
+      <path d="M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 0 0-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 0 1 6.75 12Z" />
+    </svg>
+  `;
+}
+
+function resolveLayerEntries(stateBundle) {
+  const layers = Array.isArray(stateBundle.state?.catalog?.layers)
+    ? stateBundle.state.catalog.layers.slice()
+    : [];
+  const orderedIds = Array.isArray(stateBundle.inputState?.filters?.layerIdsOrdered)
+    ? stateBundle.inputState.filters.layerIdsOrdered
+    : Array.isArray(stateBundle.state?.filters?.layerIdsOrdered)
+      ? stateBundle.state.filters.layerIdsOrdered
+      : [];
+  const visibleOverride = Array.isArray(stateBundle.inputState?.filters?.layerIdsVisible)
+    ? new Set(stateBundle.inputState.filters.layerIdsVisible)
+    : null;
+  const byId = new Map(layers.map((layer) => [layer.layerId, layer]));
+  const seen = new Set();
+  const movable = [];
+  const pinned = [];
+
+  const pushLayer = (layer) => {
+    if (!layer || seen.has(layer.layerId)) {
+      return;
+    }
+    seen.add(layer.layerId);
+    const visible = visibleOverride ? visibleOverride.has(layer.layerId) : Boolean(layer.visible);
+    const entry = {
+      ...layer,
+      visible,
+      locked: isFixedGroundLayer(layer.layerId),
+    };
+    if (entry.locked) {
+      pinned.push(entry);
+    } else {
+      movable.push(entry);
+    }
+  };
+
+  for (const layerId of orderedIds) {
+    pushLayer(byId.get(layerId));
+  }
+
+  const fallback = layers.slice().sort((left, right) => {
+    const leftOrder = Number.isFinite(left?.displayOrder) ? left.displayOrder : 0;
+    const rightOrder = Number.isFinite(right?.displayOrder) ? right.displayOrder : 0;
+    return rightOrder - leftOrder || String(left?.layerId || "").localeCompare(String(right?.layerId || ""));
+  });
+  for (const layer of fallback) {
+    pushLayer(layer);
+  }
+
+  return movable.concat(pinned);
+}
+
+function resolveVisibleLayerIds(stateBundle) {
+  return resolveLayerEntries(stateBundle)
+    .filter((layer) => layer.visible)
+    .map((layer) => layer.layerId);
+}
+
+function moveLayerIdBefore(entries, draggedLayerId, targetLayerId, position) {
+  const movableIds = entries.filter((layer) => !layer.locked).map((layer) => layer.layerId);
+  const fromIndex = movableIds.indexOf(draggedLayerId);
+  const targetIndex = movableIds.indexOf(targetLayerId);
+  if (fromIndex < 0 || targetIndex < 0) {
+    return movableIds;
+  }
+  const [dragged] = movableIds.splice(fromIndex, 1);
+  const insertIndex = position === "after" ? targetIndex + (fromIndex < targetIndex ? 0 : 1) : targetIndex + (fromIndex < targetIndex ? -1 : 0);
+  movableIds.splice(Math.max(0, insertIndex), 0, dragged);
+  const pinnedIds = entries.filter((layer) => layer.locked).map((layer) => layer.layerId);
+  return movableIds.concat(pinnedIds);
 }
 
 function renderViewState(elements, state) {
@@ -508,21 +621,23 @@ function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel)
   select.value = selectedPatchId || orderedPatches[0].patchId;
 }
 
-function renderLayerToggles(container, layers, visibleLayerIds) {
-  if (!layers || !layers.length) {
+function renderLayerStack(container, stateBundle) {
+  const layers = resolveLayerEntries(stateBundle);
+  if (!layers.length) {
     container.innerHTML =
-      '<p class="text-xs text-base-content/60">Layer registry is loading…</p>';
+      '<p class="rounded-box border border-base-300/70 bg-base-200/60 px-3 py-3 text-xs text-base-content/60">Layer registry is loading…</p>';
     delete container.dataset.renderKey;
     return;
   }
-  const hasOverride = Array.isArray(visibleLayerIds);
-  const visible = hasOverride ? new Set(visibleLayerIds) : null;
   const renderKey = JSON.stringify(
-    layers.map((layer) => ({
-      layerId: layer.layerId,
-      visible: visible ? visible.has(layer.layerId) : Boolean(layer.visible),
-      opacity: Math.round((layer.opacity ?? 1) * 100),
-    })),
+    layers.map((layer) => [
+      layer.layerId,
+      layer.name,
+      layer.kind,
+      Boolean(layer.visible),
+      Number.isFinite(layer.displayOrder) ? layer.displayOrder : 0,
+      layer.locked ? 1 : 0,
+    ]),
   );
   if (container.dataset.renderKey === renderKey) {
     return;
@@ -530,19 +645,48 @@ function renderLayerToggles(container, layers, visibleLayerIds) {
   container.dataset.renderKey = renderKey;
   container.innerHTML = layers
     .map((layer) => {
-      const checked = visible ? visible.has(layer.layerId) : Boolean(layer.visible);
-      const opacity = Math.round((layer.opacity ?? 1) * 100);
+      const visible = Boolean(layer.visible);
+      const locked = Boolean(layer.locked);
+      const kind = layerKindLabel(layer.kind);
+      const visibilityLabel = visible ? "Hide" : "Show";
       return `
-        <label class="label cursor-pointer justify-start gap-3 rounded-box px-0 py-1.5">
-          <input
-            class="fishymap-layer-toggle checkbox checkbox-sm checkbox-primary"
-            data-layer-id="${layer.layerId.replace(/"/g, "&quot;")}"
-            type="checkbox"
-            ${checked ? "checked" : ""}
-          />
-          <span class="label-text flex-1">${layer.name}</span>
-          <span class="text-[11px] uppercase tracking-[0.18em] text-base-content/45">${opacity}%</span>
-        </label>
+        <article
+          class="fishymap-layer-card"
+          data-layer-id="${layer.layerId.replace(/"/g, "&quot;")}"
+          data-locked="${locked ? "true" : "false"}"
+          draggable="${locked ? "false" : "true"}"
+        >
+          <button
+            class="fishymap-layer-drag"
+            data-layer-drag="${layer.layerId.replace(/"/g, "&quot;")}"
+            type="button"
+            aria-label="${locked ? `${layer.name} is pinned to the ground layer` : `Drag ${layer.name}`}"
+            ${locked ? "disabled" : ""}
+            tabindex="-1"
+          >
+            ${dragHandleIcon()}
+          </button>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="truncate text-sm font-semibold">${escapeHtml(layer.name)}</span>
+              <span class="badge badge-ghost badge-xs">${kind}</span>
+              ${locked ? '<span class="badge badge-outline badge-xs">Ground</span>' : ""}
+            </div>
+            <p class="truncate text-[11px] text-base-content/55">${
+              locked ? "Pinned as the base layer." : "Drag to reorder the stack."
+            }</p>
+          </div>
+          <button
+            class="fishymap-layer-visibility"
+            data-layer-visibility="${layer.layerId.replace(/"/g, "&quot;")}"
+            data-layer-visible="${visible ? "true" : "false"}"
+            type="button"
+            aria-label="${visibilityLabel} ${escapeHtml(layer.name)}"
+            title="${visibilityLabel} ${escapeHtml(layer.name)}"
+          >
+            ${eyeIcon(visible)}
+          </button>
+        </article>
       `;
     })
     .join("");
@@ -811,8 +955,6 @@ function renderPanel(elements, stateBundle) {
       state.filters?.patchId ??
       null,
   );
-  const visibleLayers =
-    inputState.filters?.layerIdsVisible ?? state.filters?.layerIdsVisible ?? undefined;
   const searchText = inputState.filters?.searchText || "";
   const showPoints = (inputState.ui?.showPoints ?? state.ui?.showPoints) !== false;
   const showPointIcons =
@@ -865,7 +1007,10 @@ function renderPanel(elements, stateBundle) {
     patchRange.toPatchId,
     "Loading patches…",
   );
-  renderLayerToggles(elements.layers, state.catalog?.layers || [], visibleLayers);
+  renderLayerStack(elements.layers, stateBundle);
+  if (elements.layersCount) {
+    elements.layersCount.textContent = String((state.catalog?.layers || []).length);
+  }
 
   const matches = buildSearchMatches(stateBundle, searchText);
   renderSearchSelection(elements, stateBundle, fishLookup);
@@ -904,16 +1049,14 @@ function renderPanel(elements, stateBundle) {
   );
 }
 
-function collectVisibleLayerIds(layersRoot) {
-  return Array.from(
-    layersRoot.querySelectorAll(".fishymap-layer-toggle:checked"),
-    (input) => input.getAttribute("data-layer-id"),
-  ).filter(Boolean);
-}
-
 function bindUi(shell, elements) {
   let isRendering = false;
   let latestStateBundle = requestBridgeState(shell);
+  const layerDragState = {
+    draggingLayerId: null,
+    overLayerId: null,
+    position: null,
+  };
 
   function stateBundleFromEvent(event) {
     return {
@@ -933,6 +1076,28 @@ function bindUi(shell, elements) {
       renderPanel(elements, stateBundle);
     } finally {
       isRendering = false;
+    }
+  }
+
+  function clearLayerDropState() {
+    layerDragState.overLayerId = null;
+    layerDragState.position = null;
+    elements.layers
+      ?.querySelectorAll?.(".fishymap-layer-card[data-drop-position]")
+      ?.forEach?.((card) => {
+        delete card.dataset.dropPosition;
+      });
+  }
+
+  function applyLayerDropState(targetLayerId, position) {
+    clearLayerDropState();
+    layerDragState.overLayerId = targetLayerId;
+    layerDragState.position = position;
+    const card = Array.from(
+      elements.layers?.querySelectorAll?.(".fishymap-layer-card") || [],
+    ).find((candidate) => candidate.getAttribute("data-layer-id") === targetLayerId);
+    if (card) {
+      card.dataset.dropPosition = position;
     }
   }
 
@@ -1151,17 +1316,114 @@ function bindUi(shell, elements) {
     });
   }
 
-  elements.layers.addEventListener("change", (event) => {
-    if (isRendering || !event.target.classList.contains("fishymap-layer-toggle")) {
+  elements.layers.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-layer-visibility]");
+    if (isRendering || !button) {
       return;
+    }
+    const layerId = button.getAttribute("data-layer-visibility");
+    if (!layerId) {
+      return;
+    }
+    const current = requestBridgeState(shell);
+    const visibleIds = new Set(resolveVisibleLayerIds(current));
+    if (visibleIds.has(layerId)) {
+      visibleIds.delete(layerId);
+    } else {
+      visibleIds.add(layerId);
     }
     dispatchMapState(shell, {
       version: 1,
       filters: {
-        layerIdsVisible: collectVisibleLayerIds(elements.layers),
+        layerIdsVisible: resolveLayerEntries(current)
+          .map((layer) => layer.layerId)
+          .filter((candidateId) => visibleIds.has(candidateId)),
       },
     });
     renderCurrentState(requestBridgeState(shell));
+  });
+
+  elements.layers.addEventListener("dragstart", (event) => {
+    const card = event.target.closest(".fishymap-layer-card[draggable='true']");
+    if (!card || isRendering) {
+      return;
+    }
+    const layerId = card.getAttribute("data-layer-id");
+    if (!layerId) {
+      return;
+    }
+    layerDragState.draggingLayerId = layerId;
+    card.dataset.dragging = "true";
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", layerId);
+    }
+  });
+
+  elements.layers.addEventListener("dragover", (event) => {
+    if (!layerDragState.draggingLayerId) {
+      return;
+    }
+    const card = event.target.closest(".fishymap-layer-card");
+    if (!card || card.getAttribute("data-locked") === "true") {
+      clearLayerDropState();
+      return;
+    }
+    const targetLayerId = card.getAttribute("data-layer-id");
+    if (!targetLayerId || targetLayerId === layerDragState.draggingLayerId) {
+      clearLayerDropState();
+      return;
+    }
+    event.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const position = event.clientY >= rect.top + rect.height / 2 ? "after" : "before";
+    applyLayerDropState(targetLayerId, position);
+  });
+
+  elements.layers.addEventListener("drop", (event) => {
+    if (
+      !layerDragState.draggingLayerId ||
+      !layerDragState.overLayerId ||
+      !layerDragState.position
+    ) {
+      clearLayerDropState();
+      return;
+    }
+    event.preventDefault();
+    const current = requestBridgeState(shell);
+    const nextOrder = moveLayerIdBefore(
+      resolveLayerEntries(current),
+      layerDragState.draggingLayerId,
+      layerDragState.overLayerId,
+      layerDragState.position,
+    );
+    clearLayerDropState();
+    layerDragState.draggingLayerId = null;
+    dispatchMapState(shell, {
+      version: 1,
+      filters: {
+        layerIdsOrdered: nextOrder,
+      },
+    });
+    renderCurrentState(requestBridgeState(shell));
+  });
+
+  elements.layers.addEventListener("dragend", () => {
+    elements.layers
+      ?.querySelectorAll?.(".fishymap-layer-card[data-dragging]")
+      ?.forEach?.((card) => {
+        delete card.dataset.dragging;
+      });
+    layerDragState.draggingLayerId = null;
+    clearLayerDropState();
+  });
+
+  elements.layers.addEventListener("dragleave", (event) => {
+    const related = event.relatedTarget;
+    if (related && elements.layers.contains(related)) {
+      return;
+    }
+    clearLayerDropState();
   });
 
   elements.resetView.addEventListener("click", () => {
@@ -1280,6 +1542,7 @@ async function main() {
     pointIconScale: document.getElementById("fishymap-point-icon-scale"),
     pointIconScaleValue: document.getElementById("fishymap-point-icon-scale-value"),
     layers: document.getElementById("fishymap-layers"),
+    layersCount: document.getElementById("fishymap-layers-count"),
     resetView: document.getElementById("fishymap-reset-view"),
     legend: document.getElementById("fishymap-legend"),
     diagnostics: document.getElementById("fishymap-diagnostics"),

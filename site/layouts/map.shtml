@@ -231,6 +231,116 @@
         width: 100%;
       }
 
+      #fishymap-layers-window {
+        position: absolute;
+        right: 1rem;
+        bottom: 1rem;
+        z-index: 19;
+        display: flex;
+        width: min(25rem, calc(100vw - 2rem));
+        height: min(28rem, calc(100% - 22rem));
+        max-height: calc(100% - 22rem);
+        min-height: 16rem;
+        flex-direction: column;
+        overflow: hidden;
+        border-radius: 1rem;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
+        background: color-mix(in srgb, var(--color-base-100) 85%, transparent);
+        box-shadow: 0 1rem 2.5rem color-mix(in srgb, var(--color-base-content) 14%, transparent);
+        backdrop-filter: blur(14px);
+      }
+
+      #fishymap-layers-body {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem 1rem;
+      }
+
+      #fishymap-layers {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 0.55rem;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      .fishymap-layer-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.8rem 0.9rem;
+        border-radius: 1rem;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
+        background: color-mix(in srgb, var(--color-base-200) 72%, transparent);
+        transition:
+          border-color 140ms ease,
+          background-color 140ms ease,
+          opacity 140ms ease,
+          transform 140ms ease;
+      }
+
+      .fishymap-layer-card[data-locked="true"] {
+        background: color-mix(in srgb, var(--color-base-200) 60%, transparent);
+      }
+
+      .fishymap-layer-card[data-dragging="true"] {
+        opacity: 0.45;
+        transform: scale(0.985);
+      }
+
+      .fishymap-layer-card[data-drop-position="before"] {
+        box-shadow: inset 0 2px 0 color-mix(in srgb, var(--color-primary) 85%, transparent);
+        border-top-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
+      }
+
+      .fishymap-layer-card[data-drop-position="after"] {
+        box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--color-primary) 85%, transparent);
+        border-bottom-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
+      }
+
+      .fishymap-layer-visibility,
+      .fishymap-layer-drag {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
+        background: color-mix(in srgb, var(--color-base-100) 82%, transparent);
+        color: inherit;
+      }
+
+      .fishymap-layer-visibility:hover,
+      .fishymap-layer-drag:hover {
+        background: color-mix(in srgb, var(--color-base-100) 94%, transparent);
+      }
+
+      .fishymap-layer-drag {
+        cursor: grab;
+      }
+
+      .fishymap-layer-drag:active {
+        cursor: grabbing;
+      }
+
+      .fishymap-layer-drag:disabled {
+        cursor: default;
+        opacity: 0.45;
+      }
+
+      .fishymap-layer-visibility svg,
+      .fishymap-layer-drag svg {
+        width: 1.2rem;
+        height: 1.2rem;
+      }
+
       #fishymap-hover-tooltip {
         position: fixed;
         top: 0;
@@ -307,6 +417,17 @@
           max-height: min(28dvh, 20rem);
         }
 
+        #fishymap-layers-window {
+          top: 5.25rem;
+          right: 0.75rem;
+          bottom: auto;
+          left: 0.75rem;
+          width: auto;
+          height: min(22dvh, 14rem);
+          max-height: min(22dvh, 14rem);
+          min-height: 10rem;
+        }
+
         #fishymap-error-overlay {
           right: 0.75rem;
           bottom: 0.75rem;
@@ -341,6 +462,23 @@
           <p id="fishymap-selection-summary" class="text-sm text-base-content/80">No zone selected.</p>
           <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
           <div id="fishymap-zone-evidence-list"></div>
+        </div>
+      </aside>
+      <aside id="fishymap-layers-window" class="not-prose">
+        <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
+          <div>
+            <p class="text-sm font-semibold">Layers</p>
+            <p class="text-xs text-base-content/60">Top to bottom. Drag to change draw order.</p>
+          </div>
+          <span id="fishymap-layers-count" class="badge badge-outline badge-sm">0</span>
+        </div>
+        <div id="fishymap-layers-body">
+          <div class="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-base-content/45">
+            <span>Top of stack</span>
+            <span>Visible</span>
+          </div>
+          <div id="fishymap-layers"></div>
+          <p class="text-xs text-base-content/55">Minimap stays pinned as the ground layer.</p>
         </div>
       </aside>
       <button
@@ -394,6 +532,8 @@
               </select>
             </label>
 
+            <button id="fishymap-reset-view" class="btn btn-secondary btn-sm w-full" type="button">Reset view</button>
+
             <div class="rounded-box border border-base-300/70 bg-base-200/60 p-3">
               <div class="space-y-3">
                 <label class="flex items-center justify-between gap-3 text-sm">
@@ -421,14 +561,6 @@
                 </div>
               </div>
             </div>
-          </div>
-
-          <div class="space-y-2">
-            <div class="flex items-center justify-between gap-3">
-              <span class="text-sm font-semibold">Layers</span>
-              <button id="fishymap-reset-view" class="btn btn-secondary btn-xs" type="button">Reset view</button>
-            </div>
-            <div id="fishymap-layers" class="space-y-2 rounded-box border border-base-300/70 bg-base-200/60 p-3 text-sm"></div>
           </div>
 
           <details id="fishymap-diagnostics" class="collapse collapse-arrow border border-base-300/70 bg-base-200/60">

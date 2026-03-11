@@ -58,7 +58,8 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     patchId?: string | null,
  *     fromPatchId?: string | null,
  *     toPatchId?: string | null,
- *     layerIdsVisible?: string[]
+ *     layerIdsVisible?: string[],
+ *     layerIdsOrdered?: string[]
  *   },
  *   ui?: {
  *     diagnosticsOpen?: boolean,
@@ -105,6 +106,7 @@ export function createEmptyInputState() {
       fromPatchId: null,
       toPatchId: null,
       layerIdsVisible: undefined,
+      layerIdsOrdered: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -132,6 +134,7 @@ export function createEmptySnapshot() {
       fromPatchId: null,
       toPatchId: null,
       layerIdsVisible: undefined,
+      layerIdsOrdered: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -206,6 +209,14 @@ function readPersistedLayerVisibility(filters) {
     return layerIdsVisible;
   }
   return undefined;
+}
+
+function readPersistedLayerOrder(filters) {
+  if (!isPlainObject(filters) || !hasOwn(filters, "layerIdsOrdered")) {
+    return undefined;
+  }
+  const layerIdsOrdered = normalizeStringList(filters.layerIdsOrdered);
+  return layerIdsOrdered.length ? layerIdsOrdered : undefined;
 }
 
 function normalizeFishIds(values) {
@@ -350,6 +361,9 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "layerIdsVisible")) {
       normalized.filters.layerIdsVisible = normalizeStringList(patch.filters.layerIdsVisible);
     }
+    if (hasOwn(patch.filters, "layerIdsOrdered")) {
+      normalized.filters.layerIdsOrdered = normalizeStringList(patch.filters.layerIdsOrdered);
+    }
     if (!Object.keys(normalized.filters).length) {
       delete normalized.filters;
     }
@@ -479,6 +493,9 @@ export function applyStatePatch(inputState, patch) {
     layerIdsVisible: Array.isArray(current.filters?.layerIdsVisible)
       ? normalizeStringList(current.filters.layerIdsVisible)
       : undefined,
+    layerIdsOrdered: Array.isArray(current.filters?.layerIdsOrdered)
+      ? normalizeStringList(current.filters.layerIdsOrdered)
+      : undefined,
   };
   next.ui = {
     diagnosticsOpen: Boolean(current.ui?.diagnosticsOpen),
@@ -520,6 +537,9 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.filters, "layerIdsVisible")) {
       next.filters.layerIdsVisible = normalizeStringList(normalized.filters.layerIdsVisible);
+    }
+    if (hasOwn(normalized.filters, "layerIdsOrdered")) {
+      next.filters.layerIdsOrdered = normalizeStringList(normalized.filters.layerIdsOrdered);
     }
     if (
       hasOwn(normalized.filters, "patchId") ||
@@ -892,6 +912,10 @@ export function snapshotToRestorePatch(snapshot) {
     const layerIdsVisible = readPersistedLayerVisibility(snapshot.filters);
     if (layerIdsVisible !== undefined) {
       patch.filters.layerIdsVisible = layerIdsVisible;
+    }
+    const layerIdsOrdered = readPersistedLayerOrder(snapshot.filters);
+    if (layerIdsOrdered !== undefined) {
+      patch.filters.layerIdsOrdered = layerIdsOrdered;
     }
   }
   if (isPlainObject(snapshot.ui)) {
@@ -1499,6 +1523,7 @@ class FishyMapBridgeImpl {
     const toPatchId =
       this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
     const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
+    const hasExplicitLayerOrder = Array.isArray(this.inputState.filters.layerIdsOrdered);
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       savedAt: new Date().toISOString(),
@@ -1520,6 +1545,11 @@ class FishyMapBridgeImpl {
               layerVisibilityExplicit: true,
             }
           : {}),
+        ...(hasExplicitLayerOrder
+          ? {
+              layerIdsOrdered: normalizeStringList(this.inputState.filters.layerIdsOrdered),
+            }
+          : {}),
       },
       ui: this.inputState.ui,
     };
@@ -1532,6 +1562,7 @@ class FishyMapBridgeImpl {
     const toPatchId =
       this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
     const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
+    const hasExplicitLayerOrder = Array.isArray(this.inputState.filters.layerIdsOrdered);
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
@@ -1543,6 +1574,11 @@ class FishyMapBridgeImpl {
           ? {
               layerIdsVisible: normalizeStringList(this.inputState.filters.layerIdsVisible),
               layerVisibilityExplicit: true,
+            }
+          : {}),
+        ...(hasExplicitLayerOrder
+          ? {
+              layerIdsOrdered: normalizeStringList(this.inputState.filters.layerIdsOrdered),
             }
           : {}),
       },
