@@ -814,6 +814,9 @@ function renderPanel(elements, stateBundle) {
   const visibleLayers =
     inputState.filters?.layerIdsVisible ?? state.filters?.layerIdsVisible ?? undefined;
   const searchText = inputState.filters?.searchText || "";
+  const showPoints = (inputState.ui?.showPoints ?? state.ui?.showPoints) !== false;
+  const showPointIcons =
+    (inputState.ui?.showPointIcons ?? state.ui?.showPointIcons) !== false;
   const pointIconScale = clampPointIconScale(
     inputState.ui?.pointIconScale ?? state.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN,
   );
@@ -834,9 +837,16 @@ function renderPanel(elements, stateBundle) {
     if (elements.pointIconScale.value !== sliderValue) {
       elements.pointIconScale.value = sliderValue;
     }
+    elements.pointIconScale.disabled = !showPoints || !showPointIcons;
   }
   if (elements.pointIconScaleValue) {
     elements.pointIconScaleValue.textContent = pointIconScaleLabel(pointIconScale);
+  }
+  if (elements.showPoints) {
+    elements.showPoints.checked = showPoints;
+  }
+  if (elements.showPointIcons) {
+    elements.showPointIcons.checked = showPointIcons;
   }
 
   if (elements.search.value !== searchText) {
@@ -1107,6 +1117,36 @@ function bindUi(shell, elements) {
     });
   }
 
+  if (elements.showPoints) {
+    elements.showPoints.addEventListener("change", () => {
+      if (isRendering) {
+        return;
+      }
+      dispatchMapState(shell, {
+        version: 1,
+        ui: {
+          showPoints: elements.showPoints.checked,
+        },
+      });
+      renderCurrentState(requestBridgeState(shell));
+    });
+  }
+
+  if (elements.showPointIcons) {
+    elements.showPointIcons.addEventListener("change", () => {
+      if (isRendering) {
+        return;
+      }
+      dispatchMapState(shell, {
+        version: 1,
+        ui: {
+          showPointIcons: elements.showPointIcons.checked,
+        },
+      });
+      renderCurrentState(requestBridgeState(shell));
+    });
+  }
+
   elements.layers.addEventListener("change", (event) => {
     if (isRendering || !event.target.classList.contains("fishymap-layer-toggle")) {
       return;
@@ -1227,6 +1267,8 @@ async function main() {
     patchFrom: document.getElementById("fishymap-patch-from"),
     patchTo: document.getElementById("fishymap-patch-to"),
     viewMode: document.getElementById("fishymap-view-mode"),
+    showPoints: document.getElementById("fishymap-show-points"),
+    showPointIcons: document.getElementById("fishymap-show-point-icons"),
     pointIconScale: document.getElementById("fishymap-point-icon-scale"),
     pointIconScaleValue: document.getElementById("fishymap-point-icon-scale-value"),
     layers: document.getElementById("fishymap-layers"),

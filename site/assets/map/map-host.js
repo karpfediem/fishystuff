@@ -64,6 +64,8 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     diagnosticsOpen?: boolean,
  *     legendOpen?: boolean,
  *     leftPanelOpen?: boolean,
+ *     showPoints?: boolean,
+ *     showPointIcons?: boolean,
  *     pointIconScale?: number
  *   },
  *   commands?: {
@@ -108,6 +110,8 @@ export function createEmptyInputState() {
       diagnosticsOpen: false,
       legendOpen: false,
       leftPanelOpen: true,
+      showPoints: true,
+      showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
     },
   };
@@ -133,6 +137,8 @@ export function createEmptySnapshot() {
       diagnosticsOpen: false,
       legendOpen: false,
       leftPanelOpen: true,
+      showPoints: true,
+      showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
     },
     view: {
@@ -351,7 +357,13 @@ export function normalizeStatePatch(patch = {}) {
 
   if (isPlainObject(patch.ui)) {
     normalized.ui = {};
-    for (const key of ["diagnosticsOpen", "legendOpen", "leftPanelOpen"]) {
+    for (const key of [
+      "diagnosticsOpen",
+      "legendOpen",
+      "leftPanelOpen",
+      "showPoints",
+      "showPointIcons",
+    ]) {
       if (typeof patch.ui[key] === "boolean") {
         normalized.ui[key] = patch.ui[key];
       }
@@ -472,6 +484,8 @@ export function applyStatePatch(inputState, patch) {
     diagnosticsOpen: Boolean(current.ui?.diagnosticsOpen),
     legendOpen: Boolean(current.ui?.legendOpen),
     leftPanelOpen: current.ui?.leftPanelOpen !== false,
+    showPoints: current.ui?.showPoints !== false,
+    showPointIcons: current.ui?.showPointIcons !== false,
     pointIconScale:
       normalizePointIconScale(current.ui?.pointIconScale) ?? FISHYMAP_POINT_ICON_SCALE_MIN,
   };
@@ -530,6 +544,12 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.ui, "leftPanelOpen")) {
       next.ui.leftPanelOpen = Boolean(normalized.ui.leftPanelOpen);
+    }
+    if (hasOwn(normalized.ui, "showPoints")) {
+      next.ui.showPoints = Boolean(normalized.ui.showPoints);
+    }
+    if (hasOwn(normalized.ui, "showPointIcons")) {
+      next.ui.showPointIcons = Boolean(normalized.ui.showPointIcons);
     }
     if (hasOwn(normalized.ui, "pointIconScale")) {
       next.ui.pointIconScale =
@@ -883,6 +903,12 @@ export function snapshotToRestorePatch(snapshot) {
     }
     if (hasOwn(snapshot.ui, "leftPanelOpen")) {
       patch.ui.leftPanelOpen = Boolean(snapshot.ui.leftPanelOpen);
+    }
+    if (hasOwn(snapshot.ui, "showPoints")) {
+      patch.ui.showPoints = Boolean(snapshot.ui.showPoints);
+    }
+    if (hasOwn(snapshot.ui, "showPointIcons")) {
+      patch.ui.showPointIcons = Boolean(snapshot.ui.showPointIcons);
     }
     if (hasOwn(snapshot.ui, "pointIconScale")) {
       const pointIconScale = normalizePointIconScale(snapshot.ui.pointIconScale);
@@ -1523,6 +1549,8 @@ class FishyMapBridgeImpl {
       ui: {
         legendOpen: this.inputState.ui.legendOpen,
         leftPanelOpen: this.inputState.ui.leftPanelOpen,
+        showPoints: this.inputState.ui.showPoints,
+        showPointIcons: this.inputState.ui.showPointIcons,
         pointIconScale: this.inputState.ui.pointIconScale,
       },
     };
