@@ -49,6 +49,8 @@
 
       #map-page-shell {
         --fishymap-search-top: 1rem;
+        --fishymap-search-width: min(52rem, calc(100vw - 2rem));
+        --fishymap-search-selection-width: min(78rem, calc(100vw - 2rem));
         position: relative;
         width: 100%;
         height: 100%;
@@ -107,7 +109,7 @@
         left: 50%;
         z-index: 24;
         display: flex;
-        width: min(34rem, calc(100vw - 2rem));
+        width: var(--fishymap-search-width);
         flex-direction: column;
         transform: translateX(-50%);
         pointer-events: none;
@@ -130,17 +132,12 @@
         padding: 0.8rem 0.9rem;
       }
 
-      #fishymap-search-dock[data-has-selection="true"] #fishymap-search-results-shell {
-        margin-top: 3.15rem;
-      }
-
       #fishymap-search-selection-shell {
         position: absolute;
         top: calc(var(--fishymap-search-top) + 4.3rem);
         left: 50%;
-        z-index: 25;
-        align-self: center;
-        width: min(50vw, 42rem);
+        z-index: 23;
+        width: var(--fishymap-search-selection-width);
         transform: translateX(-50%);
         pointer-events: none;
       }
@@ -150,20 +147,26 @@
         justify-content: flex-start;
       }
 
+      #fishymap-search-results-shell {
+        position: relative;
+        z-index: 24;
+        margin-top: 0.65rem;
+      }
+
       #fishymap-search-selection {
         display: flex;
         min-height: 0;
-        flex-wrap: nowrap;
+        width: 100%;
+        flex-wrap: wrap;
         gap: 0.5rem;
-        justify-content: center;
-        overflow-x: auto;
-        padding: 0 0.25rem;
+        justify-content: flex-start;
+        align-content: flex-start;
+        overflow-x: hidden;
+        overflow-y: auto;
+        max-height: min(11rem, 26dvh);
+        padding: 0.65rem 0.8rem 0.8rem;
         pointer-events: auto;
-        scrollbar-width: none;
-      }
-
-      #fishymap-search-selection::-webkit-scrollbar {
-        display: none;
+        scrollbar-width: thin;
       }
 
       #fishymap-search-selection[hidden],
@@ -276,15 +279,13 @@
 
       @media (max-width: 960px) {
         #fishymap-search-dock {
-          width: min(100vw - 1.5rem, 34rem);
+          width: min(100vw - 1.5rem, 52rem);
         }
 
         #map-page-shell {
           --fishymap-search-top: 0.75rem;
-        }
-
-        #fishymap-search-selection-shell {
-          width: min(100vw - 1.5rem, 42rem);
+          --fishymap-search-width: min(100vw - 1.5rem, 52rem);
+          --fishymap-search-selection-width: min(100vw - 1.5rem, 78rem);
         }
 
         #fishymap-panel {
