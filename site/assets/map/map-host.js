@@ -925,8 +925,13 @@ export function snapshotToRestorePatch(snapshot) {
   }
   if (selectionFishId != null) {
     patch.commands.focusFishId = selectionFishId;
+    const restoredFishIds = normalizeFishIds(patch.filters?.fishIds);
     patch.filters = patch.filters || {};
-    patch.filters.fishIds = [selectionFishId];
+    patch.filters.fishIds = restoredFishIds.length
+      ? restoredFishIds.includes(selectionFishId)
+        ? restoredFishIds
+        : restoredFishIds.concat(selectionFishId)
+      : [selectionFishId];
   }
   if (selectionZoneRgb != null) {
     patch.commands.selectZoneRgb = selectionZoneRgb;
