@@ -122,8 +122,10 @@ function applyThemeToShell(shell) {
   const background =
     window.__fishystuffTheme?.colors?.base100 ||
     window.getComputedStyle(document.documentElement).getPropertyValue("--color-base-100");
-  if (background) {
-    shell.style.backgroundColor = background.trim();
+  const nextBackground = String(background || "").trim();
+  if (nextBackground && shell.dataset.themeBackground !== nextBackground) {
+    shell.dataset.themeBackground = nextBackground;
+    shell.style.backgroundColor = nextBackground;
   }
 }
 
@@ -771,9 +773,12 @@ function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel)
 function renderLayerStack(container, stateBundle) {
   const layers = resolveLayerEntries(stateBundle);
   if (!layers.length) {
-    container.innerHTML =
-      '<p class="rounded-box border border-base-300/70 bg-base-200/60 px-3 py-3 text-xs text-base-content/60">Layer registry is loading…</p>';
-    delete container.dataset.renderKey;
+    const loadingKey = "__loading__";
+    if (container.dataset.renderKey !== loadingKey) {
+      container.dataset.renderKey = loadingKey;
+      container.innerHTML =
+        '<p class="rounded-box border border-base-300/70 bg-base-200/60 px-3 py-3 text-xs text-base-content/60">Layer registry is loading…</p>';
+    }
     return;
   }
   const renderKey = JSON.stringify(
@@ -977,7 +982,7 @@ function renderSearchResults(elements, matches, stateBundle) {
     total: matches.length,
   });
   if (elements.searchResultsShell) {
-    elements.searchResultsShell.hidden = !showResults;
+    setBooleanProperty(elements.searchResultsShell, "hidden", !showResults);
   }
   if (elements.searchCount) {
     setTextContent(elements.searchCount, `${matches.length} fish`);
