@@ -872,8 +872,12 @@ function renderPanel(elements, stateBundle) {
   renderSearchResults(elements, matches, stateBundle);
   renderZoneEvidence(elements, stateBundle, fishLookup);
 
-  elements.legend.open = Boolean(inputState.ui?.legendOpen);
-  elements.diagnostics.open = Boolean(inputState.ui?.diagnosticsOpen);
+  if (elements.legend) {
+    elements.legend.open = Boolean(inputState.ui?.legendOpen);
+  }
+  if (elements.diagnostics) {
+    elements.diagnostics.open = Boolean(inputState.ui?.diagnosticsOpen);
+  }
 
   const panelOpen = inputState.ui?.leftPanelOpen !== false;
   elements.panel.hidden = !panelOpen;
@@ -1164,31 +1168,35 @@ function bindUi(shell, elements) {
     dispatchMapCommand(shell, { resetView: true });
   });
 
-  elements.legend.addEventListener("toggle", () => {
-    if (isRendering) {
-      return;
-    }
-    dispatchMapState(shell, {
-      version: 1,
-      ui: {
-        legendOpen: elements.legend.open,
-      },
+  if (elements.legend) {
+    elements.legend.addEventListener("toggle", () => {
+      if (isRendering) {
+        return;
+      }
+      dispatchMapState(shell, {
+        version: 1,
+        ui: {
+          legendOpen: elements.legend.open,
+        },
+      });
+      renderCurrentState(requestBridgeState(shell));
     });
-    renderCurrentState(requestBridgeState(shell));
-  });
+  }
 
-  elements.diagnostics.addEventListener("toggle", () => {
-    if (isRendering) {
-      return;
-    }
-    dispatchMapState(shell, {
-      version: 1,
-      ui: {
-        diagnosticsOpen: elements.diagnostics.open,
-      },
+  if (elements.diagnostics) {
+    elements.diagnostics.addEventListener("toggle", () => {
+      if (isRendering) {
+        return;
+      }
+      dispatchMapState(shell, {
+        version: 1,
+        ui: {
+          diagnosticsOpen: elements.diagnostics.open,
+        },
+      });
+      renderCurrentState(requestBridgeState(shell));
     });
-    renderCurrentState(requestBridgeState(shell));
-  });
+  }
 
   elements.panelClose.addEventListener("click", () => {
     dispatchMapState(shell, {

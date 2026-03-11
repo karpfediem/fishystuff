@@ -431,14 +431,6 @@
             <div id="fishymap-layers" class="space-y-2 rounded-box border border-base-300/70 bg-base-200/60 p-3 text-sm"></div>
           </div>
 
-          <details id="fishymap-legend" class="collapse collapse-arrow border border-base-300/70 bg-base-200/60">
-            <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Legend</summary>
-            <div class="collapse-content space-y-2 text-sm text-base-content/80">
-              <p>Drag to pan. Scroll to zoom. Click a zone to inspect it. Switch to 3D when you need terrain context.</p>
-              <p>The HTML panel owns layout, theme, filters, and restore state. The canvas owns rendering, hover, selection, and camera movement.</p>
-            </div>
-          </details>
-
           <details id="fishymap-diagnostics" class="collapse collapse-arrow border border-base-300/70 bg-base-200/60">
             <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Diagnostics</summary>
             <div class="collapse-content space-y-3">
