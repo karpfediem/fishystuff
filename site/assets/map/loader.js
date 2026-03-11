@@ -268,6 +268,22 @@ function eyeIcon(visible) {
   `;
 }
 
+function mapViewIcon() {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
+    </svg>
+  `;
+}
+
+function cubeViewIcon() {
+  return `
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+    </svg>
+  `;
+}
+
 function resolveLayerEntries(stateBundle) {
   const layers = Array.isArray(stateBundle.state?.catalog?.layers)
     ? stateBundle.state.catalog.layers.slice()
@@ -377,8 +393,15 @@ function renderViewState(elements, state) {
   if (elements.viewReadout) {
     elements.viewReadout.textContent = viewMode === "3d" ? "3D" : "2D";
   }
-  if (elements.viewMode) {
-    elements.viewMode.value = viewMode;
+  if (elements.viewToggle) {
+    const nextMode = viewMode === "3d" ? "2D" : "3D";
+    const currentMode = viewMode === "3d" ? "3D" : "2D";
+    const label = `View mode: ${currentMode}. Click to switch to ${nextMode}.`;
+    elements.viewToggle.setAttribute("aria-label", label);
+    elements.viewToggle.setAttribute("title", label);
+  }
+  if (elements.viewToggleIcon) {
+    elements.viewToggleIcon.innerHTML = viewMode === "3d" ? cubeViewIcon() : mapViewIcon();
   }
 }
 
@@ -1406,11 +1429,15 @@ function bindUi(shell, elements) {
     pushPatchRangePatch();
   });
 
-  elements.viewMode.addEventListener("change", () => {
-    dispatchMapCommand(shell, {
-      setViewMode: elements.viewMode.value === "3d" ? "3d" : "2d",
+  if (elements.viewToggle) {
+    elements.viewToggle.addEventListener("click", () => {
+      const current = latestStateBundle?.state || requestBridgeState(shell).state;
+      const nextViewMode = current?.view?.viewMode === "3d" ? "2d" : "3d";
+      dispatchMapCommand(shell, {
+        setViewMode: nextViewMode,
+      });
     });
-  });
+  }
 
   if (elements.pointIconScale) {
     elements.pointIconScale.addEventListener("input", () => {
@@ -1737,7 +1764,8 @@ async function main() {
     searchCount: document.getElementById("fishymap-search-count"),
     patchFrom: document.getElementById("fishymap-patch-from"),
     patchTo: document.getElementById("fishymap-patch-to"),
-    viewMode: document.getElementById("fishymap-view-mode"),
+    viewToggle: document.getElementById("fishymap-view-toggle"),
+    viewToggleIcon: document.getElementById("fishymap-view-toggle-icon"),
     showPoints: document.getElementById("fishymap-show-points"),
     showPointIcons: document.getElementById("fishymap-show-point-icons"),
     pointIconScale: document.getElementById("fishymap-point-icon-scale"),
@@ -1755,7 +1783,6 @@ async function main() {
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
     hoverTooltip: document.getElementById("fishymap-hover-tooltip"),
     hoverSummary: document.getElementById("fishymap-hover-summary"),
-    viewReadout: document.getElementById("fishymap-view-readout"),
     errorOverlay: document.getElementById("fishymap-error-overlay"),
     errorMessage: document.getElementById("fishymap-error-message"),
     canvas,
