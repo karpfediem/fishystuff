@@ -741,7 +741,7 @@ function renderLayerStack(container, stateBundle) {
                   <label class="fishymap-layer-opacity-control">
                     <div class="flex items-center justify-between gap-3">
                       <span class="text-[11px] uppercase tracking-[0.18em] text-base-content/45">Opacity</span>
-                      <span class="text-xs font-semibold text-base-content/60">${layerOpacityLabel(layer.opacity)}</span>
+                      <span class="text-xs font-semibold text-base-content/60" data-layer-opacity-value>${layerOpacityLabel(layer.opacity)}</span>
                     </div>
                     <input
                       class="fishymap-layer-opacity-range range range-primary range-xs"
@@ -1018,6 +1018,30 @@ function renderStatusLines(container, statuses) {
   container.innerHTML = lines.map((line) => `<p>${line}</p>`).join("");
 }
 
+function syncLayerOpacityControl(container, layerId, opacity) {
+  if (!container || !layerId) {
+    return false;
+  }
+  const slider = Array.from(container.querySelectorAll("input[data-layer-opacity]")).find(
+    (candidate) => candidate.getAttribute("data-layer-opacity") === layerId,
+  );
+  if (!slider) {
+    return false;
+  }
+  const normalized = clampLayerOpacity(opacity);
+  const value = layerOpacityValue(normalized);
+  if (slider.value !== value) {
+    slider.value = value;
+  }
+  const label = slider
+    .closest(".fishymap-layer-opacity-control")
+    ?.querySelector?.("[data-layer-opacity-value]");
+  if (label) {
+    label.textContent = layerOpacityLabel(normalized);
+  }
+  return true;
+}
+
 function renderPanel(elements, stateBundle) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
@@ -1088,7 +1112,19 @@ function renderPanel(elements, stateBundle) {
     patchRange.toPatchId,
     "Loading patches…",
   );
-  renderLayerStack(elements.layers, stateBundle);
+  if (
+    elements.layerOpacityInteraction?.activeLayerId &&
+    Number.isFinite(elements.layerOpacityInteraction?.activeValue) &&
+    syncLayerOpacityControl(
+      elements.layers,
+      elements.layerOpacityInteraction.activeLayerId,
+      elements.layerOpacityInteraction.activeValue,
+    )
+  ) {
+    // Keep the active slider mounted while the user is dragging it.
+  } else {
+    renderLayerStack(elements.layers, stateBundle);
+  }
   if (elements.layersCount) {
     elements.layersCount.textContent = String((state.catalog?.layers || []).length);
   }
@@ -1138,6 +1174,11 @@ function bindUi(shell, elements) {
     overLayerId: null,
     position: null,
   };
+  const layerOpacityInteraction = {
+    activeLayerId: null,
+    activeValue: null,
+  };
+  elements.layerOpacityInteraction = layerOpacityInteraction;
 
   function stateBundleFromEvent(event) {
     return {
@@ -1180,6 +1221,29 @@ function bindUi(shell, elements) {
     if (card) {
       card.dataset.dropPosition = position;
     }
+  }
+
+  function setActiveLayerOpacity(slider) {
+    if (!slider) {
+      return;
+    }
+    const layerId = slider.getAttribute("data-layer-opacity");
+    if (!layerId) {
+      return;
+    }
+    layerOpacityInteraction.activeLayerId = layerId;
+    layerOpacityInteraction.activeValue = clampLayerOpacity(slider.value);
+    syncLayerOpacityControl(elements.layers, layerId, layerOpacityInteraction.activeValue);
+  }
+
+  function clearActiveLayerOpacity() {
+    if (!layerOpacityInteraction.activeLayerId) {
+      return;
+    }
+    latestStateBundle = requestBridgeState(shell);
+    layerOpacityInteraction.activeLayerId = null;
+    layerOpacityInteraction.activeValue = null;
+    renderCurrentState(latestStateBundle);
   }
 
   elements.canvas.addEventListener("pointermove", (event) => {
@@ -1429,18 +1493,54 @@ function bindUi(shell, elements) {
     if (isRendering || !slider) {
       return;
     }
+    setActiveLayerOpacity(slider);
     const layerId = slider.getAttribute("data-layer-opacity");
     if (!layerId) {
       return;
     }
-    const current = requestBridgeState(shell);
+    const current = latestStateBundle || requestBridgeState(shell);
     dispatchMapState(shell, {
       version: 1,
       filters: {
         layerOpacities: buildLayerOpacityPatch(current, layerId, slider.value),
       },
     });
-    renderCurrentState(requestBridgeState(shell));
+    latestStateBundle = requestBridgeState(shell);
+  });
+
+  elements.layers.addEventListener("pointerdown", (event) => {
+    const slider = event.target.closest("input[data-layer-opacity]");
+    if (!slider) {
+      return;
+    }
+    setActiveLayerOpacity(slider);
+  });
+
+  elements.layers.addEventListener("focusin", (event) => {
+    const slider = event.target.closest("input[data-layer-opacity]");
+    if (!slider) {
+      return;
+    }
+    setActiveLayerOpacity(slider);
+  });
+
+  elements.layers.addEventListener("change", (event) => {
+    const slider = event.target.closest("input[data-layer-opacity]");
+    if (!slider) {
+      return;
+    }
+    setActiveLayerOpacity(slider);
+    clearActiveLayerOpacity();
+  });
+
+  elements.layers.addEventListener("focusout", (event) => {
+    const slider = event.target.closest("input[data-layer-opacity]");
+    if (!slider) {
+      return;
+    }
+    queueMicrotask(() => {
+      clearActiveLayerOpacity();
+    });
   });
 
   elements.layers.addEventListener("dragstart", (event) => {
