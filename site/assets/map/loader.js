@@ -127,6 +127,58 @@ function applyThemeToShell(shell) {
   }
 }
 
+function setTextContent(element, text) {
+  if (!element) {
+    return;
+  }
+  const nextText = String(text ?? "");
+  if (element.textContent !== nextText) {
+    element.textContent = nextText;
+  }
+}
+
+function setClassName(element, className) {
+  if (!element) {
+    return;
+  }
+  if (element.className !== className) {
+    element.className = className;
+  }
+}
+
+function setAttributeValue(element, name, value) {
+  if (!element) {
+    return;
+  }
+  const nextValue = String(value ?? "");
+  if (element.getAttribute(name) !== nextValue) {
+    element.setAttribute(name, nextValue);
+  }
+}
+
+function setBooleanProperty(element, propertyName, value) {
+  if (!element) {
+    return;
+  }
+  const nextValue = Boolean(value);
+  if (element[propertyName] !== nextValue) {
+    element[propertyName] = nextValue;
+  }
+}
+
+function setMarkup(element, renderKey, html) {
+  if (!element) {
+    return false;
+  }
+  const nextKey = String(renderKey ?? "");
+  if (element.dataset.markupKey === nextKey) {
+    return false;
+  }
+  element.dataset.markupKey = nextKey;
+  element.innerHTML = html;
+  return true;
+}
+
 function buildFishLookup(catalogFish) {
   const map = new Map();
   for (const fish of catalogFish || []) {
@@ -391,17 +443,21 @@ function buildLayerOpacityPatch(stateBundle, targetLayerId, opacity) {
 function renderViewState(elements, state) {
   const viewMode = state?.view?.viewMode === "3d" ? "3d" : "2d";
   if (elements.viewReadout) {
-    elements.viewReadout.textContent = viewMode === "3d" ? "3D" : "2D";
+    setTextContent(elements.viewReadout, viewMode === "3d" ? "3D" : "2D");
   }
   if (elements.viewToggle) {
     const nextMode = viewMode === "3d" ? "2D" : "3D";
     const currentMode = viewMode === "3d" ? "3D" : "2D";
     const label = `View mode: ${currentMode}. Click to switch to ${nextMode}.`;
-    elements.viewToggle.setAttribute("aria-label", label);
-    elements.viewToggle.setAttribute("title", label);
+    setAttributeValue(elements.viewToggle, "aria-label", label);
+    setAttributeValue(elements.viewToggle, "title", label);
   }
   if (elements.viewToggleIcon) {
-    elements.viewToggleIcon.innerHTML = viewMode === "3d" ? cubeViewIcon() : mapViewIcon();
+    setMarkup(
+      elements.viewToggleIcon,
+      viewMode,
+      viewMode === "3d" ? cubeViewIcon() : mapViewIcon(),
+    );
   }
 }
 
@@ -419,11 +475,11 @@ function renderHoverTooltip(elements, hover) {
   }
   const label = hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : null);
   if (!label || !elements.hoverPointerActive) {
-    elements.hoverTooltip.hidden = true;
+    setBooleanProperty(elements.hoverTooltip, "hidden", true);
     return;
   }
-  elements.hoverSummary.textContent = label;
-  elements.hoverTooltip.hidden = false;
+  setTextContent(elements.hoverSummary, label);
+  setBooleanProperty(elements.hoverTooltip, "hidden", false);
 }
 
 function hoverFromEventDetail(detail) {
@@ -685,7 +741,7 @@ function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel)
     return;
   }
   if (!orderedPatches.length) {
-    select.innerHTML = `<option value="">${emptyLabel}</option>`;
+    setMarkup(select, `empty:${emptyLabel}`, `<option value="">${emptyLabel}</option>`);
     select.value = "";
     return;
   }
@@ -694,11 +750,22 @@ function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel)
     const name = patch.patchName || patch.patchId;
     const date = formatPatchDate(patch.startTsUtc);
     const label = date ? `${name} (${date})` : name;
-    return `<option value="${patch.patchId.replace(/"/g, "&quot;")}">${label}</option>`;
+    return {
+      patchId: patch.patchId,
+      label,
+      html: `<option value="${patch.patchId.replace(/"/g, "&quot;")}">${label}</option>`,
+    };
   });
 
-  select.innerHTML = options.join("");
-  select.value = selectedPatchId || orderedPatches[0].patchId;
+  setMarkup(
+    select,
+    JSON.stringify(options.map((option) => [option.patchId, option.label])),
+    options.map((option) => option.html).join(""),
+  );
+  const nextValue = selectedPatchId || orderedPatches[0].patchId;
+  if (select.value !== nextValue) {
+    select.value = nextValue;
+  }
 }
 
 function renderLayerStack(container, stateBundle) {
@@ -913,7 +980,7 @@ function renderSearchResults(elements, matches, stateBundle) {
     elements.searchResultsShell.hidden = !showResults;
   }
   if (elements.searchCount) {
-    elements.searchCount.textContent = `${matches.length} fish`;
+    setTextContent(elements.searchCount, `${matches.length} fish`);
   }
   if (elements.searchResults.dataset.renderKey === renderKey) {
     return;
@@ -952,8 +1019,8 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
   const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone stats: idle";
   const summary = buildZoneEvidenceSummary(zoneStats);
 
-  elements.zoneEvidenceStatus.textContent = zoneStatsStatus;
-  elements.zoneEvidenceSummary.textContent = summary;
+  setTextContent(elements.zoneEvidenceStatus, zoneStatsStatus);
+  setTextContent(elements.zoneEvidenceSummary, summary);
 
   const distribution = Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : [];
   const renderKey = JSON.stringify({
@@ -1038,7 +1105,11 @@ function renderStatusLines(container, statuses) {
     statuses?.fishStatus,
     statuses?.zoneStatsStatus,
   ].filter(Boolean);
-  container.innerHTML = lines.map((line) => `<p>${line}</p>`).join("");
+  setMarkup(
+    container,
+    JSON.stringify(lines),
+    lines.map((line) => `<p>${line}</p>`).join(""),
+  );
 }
 
 function syncLayerOpacityControl(container, layerId, opacity) {
@@ -1060,7 +1131,7 @@ function syncLayerOpacityControl(container, layerId, opacity) {
     .closest(".fishymap-layer-opacity-control")
     ?.querySelector?.("[data-layer-opacity-value]");
   if (label) {
-    label.textContent = layerOpacityLabel(normalized);
+    setTextContent(label, layerOpacityLabel(normalized));
   }
   return true;
 }
@@ -1097,26 +1168,27 @@ function renderPanel(elements, stateBundle) {
 
   applyThemeToShell(elements.shell);
 
-  elements.readyPill.textContent = state.ready ? "Ready" : "Loading";
-  elements.readyPill.className = `badge badge-sm ${
-    state.ready ? "badge-success" : "badge-outline"
-  }`;
+  setTextContent(elements.readyPill, state.ready ? "Ready" : "Loading");
+  setClassName(
+    elements.readyPill,
+    `badge badge-sm ${state.ready ? "badge-success" : "badge-outline"}`,
+  );
   renderViewState(elements, state);
   if (elements.pointIconScale) {
     const sliderValue = pointIconScaleValue(pointIconScale);
     if (elements.pointIconScale.value !== sliderValue) {
       elements.pointIconScale.value = sliderValue;
     }
-    elements.pointIconScale.disabled = !showPoints || !showPointIcons;
+    setBooleanProperty(elements.pointIconScale, "disabled", !showPoints || !showPointIcons);
   }
   if (elements.pointIconScaleValue) {
-    elements.pointIconScaleValue.textContent = pointIconScaleLabel(pointIconScale);
+    setTextContent(elements.pointIconScaleValue, pointIconScaleLabel(pointIconScale));
   }
   if (elements.showPoints) {
-    elements.showPoints.checked = showPoints;
+    setBooleanProperty(elements.showPoints, "checked", showPoints);
   }
   if (elements.showPointIcons) {
-    elements.showPointIcons.checked = showPointIcons;
+    setBooleanProperty(elements.showPointIcons, "checked", showPointIcons);
   }
 
   if (elements.search.value !== searchText) {
@@ -1149,7 +1221,7 @@ function renderPanel(elements, stateBundle) {
     renderLayerStack(elements.layers, stateBundle);
   }
   if (elements.layersCount) {
-    elements.layersCount.textContent = String((state.catalog?.layers || []).length);
+    setTextContent(elements.layersCount, String((state.catalog?.layers || []).length));
   }
 
   const matches = buildSearchMatches(stateBundle, searchText);
@@ -1158,34 +1230,33 @@ function renderPanel(elements, stateBundle) {
   renderZoneEvidence(elements, stateBundle, fishLookup);
 
   if (elements.legend) {
-    elements.legend.open = Boolean(inputState.ui?.legendOpen);
+    setBooleanProperty(elements.legend, "open", Boolean(inputState.ui?.legendOpen));
   }
   if (elements.diagnostics) {
-    elements.diagnostics.open = Boolean(inputState.ui?.diagnosticsOpen);
+    setBooleanProperty(elements.diagnostics, "open", Boolean(inputState.ui?.diagnosticsOpen));
   }
 
   const panelOpen = inputState.ui?.leftPanelOpen !== false;
-  elements.panel.hidden = !panelOpen;
-  elements.panelOpen.hidden = panelOpen;
+  setBooleanProperty(elements.panel, "hidden", !panelOpen);
+  setBooleanProperty(elements.panelOpen, "hidden", panelOpen);
 
   const zoneName =
     state.selection?.zoneName ||
     (state.selection?.zoneRgb != null ? `Zone ${formatZone(state.selection.zoneRgb)}` : null);
   if (elements.selectionSummary) {
     if (zoneName) {
-      elements.selectionSummary.textContent = zoneName;
+      setTextContent(elements.selectionSummary, zoneName);
     } else {
-      elements.selectionSummary.textContent = "No zone selected.";
+      setTextContent(elements.selectionSummary, "No zone selected.");
     }
   }
 
   renderHoverTooltip(elements, state.hover || null);
 
   renderStatusLines(elements.statusLines, state.statuses || {});
-  elements.diagnosticJson.textContent = JSON.stringify(
-    state.lastDiagnostic || state.statuses || {},
-    null,
-    2,
+  setTextContent(
+    elements.diagnosticJson,
+    JSON.stringify(state.lastDiagnostic || state.statuses || {}, null, 2),
   );
 }
 
@@ -1783,6 +1854,7 @@ async function main() {
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
     hoverTooltip: document.getElementById("fishymap-hover-tooltip"),
     hoverSummary: document.getElementById("fishymap-hover-summary"),
+    viewReadout: document.getElementById("fishymap-view-readout"),
     errorOverlay: document.getElementById("fishymap-error-overlay"),
     errorMessage: document.getElementById("fishymap-error-message"),
     canvas,
