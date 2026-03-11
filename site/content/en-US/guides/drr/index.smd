@@ -5,6 +5,7 @@
 .layout = "guide_page.shtml",
 .draft = false,
 .custom = {
+  .og_image_asset = "dura.png",
   .updated = @date("2025-10-03T00:00:00"),
 },
 ---
