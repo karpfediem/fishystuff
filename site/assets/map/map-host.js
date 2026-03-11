@@ -282,7 +282,40 @@ function normalizeNullableString(value) {
   return normalized || null;
 }
 
-function normalizeThemeColors(colors) {
+function normalizeCssColor(value, doc = globalThis.document) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const probe = doc?.createElement?.("span") || null;
+  if (!probe?.style) {
+    return trimmed;
+  }
+
+  try {
+    probe.style.color = "";
+    probe.style.color = trimmed;
+    const parsed = String(probe.style.color || "").trim();
+    if (!parsed) {
+      return trimmed;
+    }
+
+    const context = doc?.createElement?.("canvas")?.getContext?.("2d") || null;
+    if (!context) {
+      return parsed;
+    }
+    context.fillStyle = parsed;
+    return String(context.fillStyle || "").trim() || parsed;
+  } catch (_) {
+    return trimmed;
+  }
+}
+
+function normalizeThemeColors(colors, doc = globalThis.document) {
   if (!isPlainObject(colors)) {
     return undefined;
   }
@@ -291,11 +324,11 @@ function normalizeThemeColors(colors) {
     if (typeof value !== "string") {
       continue;
     }
-    const trimmed = value.trim();
-    if (!trimmed) {
+    const normalized = normalizeCssColor(value, doc);
+    if (!normalized) {
       continue;
     }
-    out[key] = trimmed;
+    out[key] = normalized;
   }
   return Object.keys(out).length ? out : undefined;
 }
@@ -759,7 +792,7 @@ export function extractThemeSnapshot({
             externalTheme.theme ||
             "",
         ).trim() || undefined,
-      colors: normalizeThemeColors(externalTheme.colors) || {},
+      colors: normalizeThemeColors(externalTheme.colors, doc) || {},
     };
   }
 
@@ -794,7 +827,7 @@ export function extractThemeSnapshot({
       success: readComputedColor(win, success, "background-color"),
       warning: readComputedColor(win, warning, "background-color"),
       error: readComputedColor(win, error, "background-color"),
-    }) || {},
+    }, doc) || {},
   };
 }
 
