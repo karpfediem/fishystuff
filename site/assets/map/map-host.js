@@ -59,7 +59,8 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     fromPatchId?: string | null,
  *     toPatchId?: string | null,
  *     layerIdsVisible?: string[],
- *     layerIdsOrdered?: string[]
+ *     layerIdsOrdered?: string[],
+ *     layerOpacities?: Record<string, number>
  *   },
  *   ui?: {
  *     diagnosticsOpen?: boolean,
@@ -107,6 +108,7 @@ export function createEmptyInputState() {
       toPatchId: null,
       layerIdsVisible: undefined,
       layerIdsOrdered: undefined,
+      layerOpacities: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -135,6 +137,7 @@ export function createEmptySnapshot() {
       toPatchId: null,
       layerIdsVisible: undefined,
       layerIdsOrdered: undefined,
+      layerOpacities: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -217,6 +220,41 @@ function readPersistedLayerOrder(filters) {
   }
   const layerIdsOrdered = normalizeStringList(filters.layerIdsOrdered);
   return layerIdsOrdered.length ? layerIdsOrdered : undefined;
+}
+
+function normalizeLayerOpacity(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return undefined;
+  }
+  return Math.min(1, Math.max(0, number));
+}
+
+function normalizeLayerOpacityMap(values) {
+  if (!isPlainObject(values)) {
+    return {};
+  }
+  const out = {};
+  for (const [key, value] of Object.entries(values)) {
+    const layerId = String(key ?? "").trim();
+    if (!layerId) {
+      continue;
+    }
+    const opacity = normalizeLayerOpacity(value);
+    if (opacity === undefined) {
+      continue;
+    }
+    out[layerId] = opacity;
+  }
+  return out;
+}
+
+function readPersistedLayerOpacities(filters) {
+  if (!isPlainObject(filters) || !hasOwn(filters, "layerOpacities")) {
+    return undefined;
+  }
+  const layerOpacities = normalizeLayerOpacityMap(filters.layerOpacities);
+  return Object.keys(layerOpacities).length ? layerOpacities : undefined;
 }
 
 function normalizeFishIds(values) {
@@ -364,6 +402,9 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "layerIdsOrdered")) {
       normalized.filters.layerIdsOrdered = normalizeStringList(patch.filters.layerIdsOrdered);
     }
+    if (hasOwn(patch.filters, "layerOpacities")) {
+      normalized.filters.layerOpacities = normalizeLayerOpacityMap(patch.filters.layerOpacities);
+    }
     if (!Object.keys(normalized.filters).length) {
       delete normalized.filters;
     }
@@ -466,6 +507,11 @@ export function mergeStatePatch(left, right) {
   }
   if (base.filters || patch.filters) {
     out.filters = mergePatchBranch(base.filters, patch.filters);
+    if (patch.filters && hasOwn(patch.filters, "layerOpacities")) {
+      out.filters.layerOpacities = normalizeLayerOpacityMap(patch.filters.layerOpacities);
+    } else if (base.filters && hasOwn(base.filters, "layerOpacities")) {
+      out.filters.layerOpacities = normalizeLayerOpacityMap(base.filters.layerOpacities);
+    }
   }
   if (base.ui || patch.ui) {
     out.ui = mergePatchBranch(base.ui, patch.ui);
@@ -495,6 +541,9 @@ export function applyStatePatch(inputState, patch) {
       : undefined,
     layerIdsOrdered: Array.isArray(current.filters?.layerIdsOrdered)
       ? normalizeStringList(current.filters.layerIdsOrdered)
+      : undefined,
+    layerOpacities: isPlainObject(current.filters?.layerOpacities)
+      ? normalizeLayerOpacityMap(current.filters.layerOpacities)
       : undefined,
   };
   next.ui = {
@@ -540,6 +589,9 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.filters, "layerIdsOrdered")) {
       next.filters.layerIdsOrdered = normalizeStringList(normalized.filters.layerIdsOrdered);
+    }
+    if (hasOwn(normalized.filters, "layerOpacities")) {
+      next.filters.layerOpacities = normalizeLayerOpacityMap(normalized.filters.layerOpacities);
     }
     if (
       hasOwn(normalized.filters, "patchId") ||
@@ -916,6 +968,10 @@ export function snapshotToRestorePatch(snapshot) {
     const layerIdsOrdered = readPersistedLayerOrder(snapshot.filters);
     if (layerIdsOrdered !== undefined) {
       patch.filters.layerIdsOrdered = layerIdsOrdered;
+    }
+    const layerOpacities = readPersistedLayerOpacities(snapshot.filters);
+    if (layerOpacities !== undefined) {
+      patch.filters.layerOpacities = layerOpacities;
     }
   }
   if (isPlainObject(snapshot.ui)) {
@@ -1524,6 +1580,9 @@ class FishyMapBridgeImpl {
       this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
     const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
     const hasExplicitLayerOrder = Array.isArray(this.inputState.filters.layerIdsOrdered);
+    const hasExplicitLayerOpacities =
+      isPlainObject(this.inputState.filters.layerOpacities) &&
+      Object.keys(this.inputState.filters.layerOpacities).length > 0;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       savedAt: new Date().toISOString(),
@@ -1550,6 +1609,11 @@ class FishyMapBridgeImpl {
               layerIdsOrdered: normalizeStringList(this.inputState.filters.layerIdsOrdered),
             }
           : {}),
+        ...(hasExplicitLayerOpacities
+          ? {
+              layerOpacities: normalizeLayerOpacityMap(this.inputState.filters.layerOpacities),
+            }
+          : {}),
       },
       ui: this.inputState.ui,
     };
@@ -1563,6 +1627,9 @@ class FishyMapBridgeImpl {
       this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
     const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
     const hasExplicitLayerOrder = Array.isArray(this.inputState.filters.layerIdsOrdered);
+    const hasExplicitLayerOpacities =
+      isPlainObject(this.inputState.filters.layerOpacities) &&
+      Object.keys(this.inputState.filters.layerOpacities).length > 0;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
@@ -1579,6 +1646,11 @@ class FishyMapBridgeImpl {
         ...(hasExplicitLayerOrder
           ? {
               layerIdsOrdered: normalizeStringList(this.inputState.filters.layerIdsOrdered),
+            }
+          : {}),
+        ...(hasExplicitLayerOpacities
+          ? {
+              layerOpacities: normalizeLayerOpacityMap(this.inputState.filters.layerOpacities),
             }
           : {}),
       },

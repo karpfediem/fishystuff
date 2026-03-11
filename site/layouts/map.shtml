@@ -272,7 +272,7 @@
       .fishymap-layer-card {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
-        align-items: center;
+        align-items: start;
         gap: 0.75rem;
         padding: 0.8rem 0.9rem;
         border-radius: 1rem;
@@ -339,6 +339,22 @@
       .fishymap-layer-drag svg {
         width: 1.2rem;
         height: 1.2rem;
+      }
+
+      .fishymap-layer-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+
+      .fishymap-layer-opacity-control {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .fishymap-layer-opacity-range {
+        width: 100%;
       }
 
       #fishymap-hover-tooltip {

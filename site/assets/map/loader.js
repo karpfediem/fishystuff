@@ -138,6 +138,14 @@ function buildFishLookup(catalogFish) {
   return map;
 }
 
+function isPlainObject(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasOwnKey(object, key) {
+  return !!object && Object.prototype.hasOwnProperty.call(object, key);
+}
+
 function mergeZoneEvidenceIntoFishLookup(fishLookup, zoneStats) {
   const distribution = Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : [];
   for (const entry of distribution) {
@@ -204,6 +212,22 @@ function pointIconScaleLabel(scale) {
   return `${Math.round(clampPointIconScale(scale) * 100)}%`;
 }
 
+function clampLayerOpacity(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return 1;
+  }
+  return Math.min(1, Math.max(0, number));
+}
+
+function layerOpacityValue(opacity) {
+  return String(Math.round(clampLayerOpacity(opacity) * 100) / 100);
+}
+
+function layerOpacityLabel(opacity) {
+  return `${Math.round(clampLayerOpacity(opacity) * 100)}%`;
+}
+
 function isFixedGroundLayer(layerId) {
   return FIXED_GROUND_LAYER_IDS.has(String(layerId || "").trim());
 }
@@ -256,6 +280,12 @@ function resolveLayerEntries(stateBundle) {
   const visibleOverride = Array.isArray(stateBundle.inputState?.filters?.layerIdsVisible)
     ? new Set(stateBundle.inputState.filters.layerIdsVisible)
     : null;
+  const inputOpacityOverride = isPlainObject(stateBundle.inputState?.filters?.layerOpacities)
+    ? stateBundle.inputState.filters.layerOpacities
+    : null;
+  const stateOpacityOverride = isPlainObject(stateBundle.state?.filters?.layerOpacities)
+    ? stateBundle.state.filters.layerOpacities
+    : null;
   const byId = new Map(layers.map((layer) => [layer.layerId, layer]));
   const seen = new Set();
   const movable = [];
@@ -267,9 +297,20 @@ function resolveLayerEntries(stateBundle) {
     }
     seen.add(layer.layerId);
     const visible = visibleOverride ? visibleOverride.has(layer.layerId) : Boolean(layer.visible);
+    const opacityDefault = clampLayerOpacity(layer.opacityDefault ?? 1);
+    let opacity = clampLayerOpacity(layer.opacity);
+    if (inputOpacityOverride) {
+      opacity = hasOwnKey(inputOpacityOverride, layer.layerId)
+        ? clampLayerOpacity(inputOpacityOverride[layer.layerId])
+        : opacityDefault;
+    } else if (stateOpacityOverride && hasOwnKey(stateOpacityOverride, layer.layerId)) {
+      opacity = clampLayerOpacity(stateOpacityOverride[layer.layerId]);
+    }
     const entry = {
       ...layer,
       visible,
+      opacity,
+      opacityDefault,
       locked: isFixedGroundLayer(layer.layerId),
     };
     if (entry.locked) {
@@ -313,6 +354,22 @@ function moveLayerIdBefore(entries, draggedLayerId, targetLayerId, position) {
   movableIds.splice(Math.max(0, insertIndex), 0, dragged);
   const pinnedIds = entries.filter((layer) => layer.locked).map((layer) => layer.layerId);
   return movableIds.concat(pinnedIds);
+}
+
+function buildLayerOpacityPatch(stateBundle, targetLayerId, opacity) {
+  const nextOpacities = {};
+  for (const layer of resolveLayerEntries(stateBundle)) {
+    if (layer.locked) {
+      continue;
+    }
+    const effectiveOpacity =
+      layer.layerId === targetLayerId ? clampLayerOpacity(opacity) : clampLayerOpacity(layer.opacity);
+    if (Math.abs(effectiveOpacity - clampLayerOpacity(layer.opacityDefault)) <= 0.0001) {
+      continue;
+    }
+    nextOpacities[layer.layerId] = effectiveOpacity;
+  }
+  return nextOpacities;
 }
 
 function renderViewState(elements, state) {
@@ -635,6 +692,8 @@ function renderLayerStack(container, stateBundle) {
       layer.name,
       layer.kind,
       Boolean(layer.visible),
+      Math.round(clampLayerOpacity(layer.opacity) * 1000),
+      Math.round(clampLayerOpacity(layer.opacityDefault) * 1000),
       Number.isFinite(layer.displayOrder) ? layer.displayOrder : 0,
       layer.locked ? 1 : 0,
     ]),
@@ -654,19 +713,19 @@ function renderLayerStack(container, stateBundle) {
           class="fishymap-layer-card"
           data-layer-id="${layer.layerId.replace(/"/g, "&quot;")}"
           data-locked="${locked ? "true" : "false"}"
-          draggable="${locked ? "false" : "true"}"
         >
           <button
             class="fishymap-layer-drag"
             data-layer-drag="${layer.layerId.replace(/"/g, "&quot;")}"
             type="button"
             aria-label="${locked ? `${layer.name} is pinned to the ground layer` : `Drag ${layer.name}`}"
+            draggable="${locked ? "false" : "true"}"
             ${locked ? "disabled" : ""}
             tabindex="-1"
           >
             ${dragHandleIcon()}
           </button>
-          <div class="min-w-0">
+          <div class="fishymap-layer-body min-w-0">
             <div class="flex items-center gap-2">
               <span class="truncate text-sm font-semibold">${escapeHtml(layer.name)}</span>
               <span class="badge badge-ghost badge-xs">${kind}</span>
@@ -675,6 +734,28 @@ function renderLayerStack(container, stateBundle) {
             <p class="truncate text-[11px] text-base-content/55">${
               locked ? "Pinned as the base layer." : "Drag to reorder the stack."
             }</p>
+            ${
+              locked
+                ? ""
+                : `
+                  <label class="fishymap-layer-opacity-control">
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="text-[11px] uppercase tracking-[0.18em] text-base-content/45">Opacity</span>
+                      <span class="text-xs font-semibold text-base-content/60">${layerOpacityLabel(layer.opacity)}</span>
+                    </div>
+                    <input
+                      class="fishymap-layer-opacity-range range range-primary range-xs"
+                      data-layer-opacity="${layer.layerId.replace(/"/g, "&quot;")}"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value="${layerOpacityValue(layer.opacity)}"
+                      aria-label="Opacity for ${escapeHtml(layer.name)}"
+                    >
+                  </label>
+                `
+            }
           </div>
           <button
             class="fishymap-layer-visibility"
@@ -1343,9 +1424,29 @@ function bindUi(shell, elements) {
     renderCurrentState(requestBridgeState(shell));
   });
 
+  elements.layers.addEventListener("input", (event) => {
+    const slider = event.target.closest("input[data-layer-opacity]");
+    if (isRendering || !slider) {
+      return;
+    }
+    const layerId = slider.getAttribute("data-layer-opacity");
+    if (!layerId) {
+      return;
+    }
+    const current = requestBridgeState(shell);
+    dispatchMapState(shell, {
+      version: 1,
+      filters: {
+        layerOpacities: buildLayerOpacityPatch(current, layerId, slider.value),
+      },
+    });
+    renderCurrentState(requestBridgeState(shell));
+  });
+
   elements.layers.addEventListener("dragstart", (event) => {
-    const card = event.target.closest(".fishymap-layer-card[draggable='true']");
-    if (!card || isRendering) {
+    const handle = event.target.closest("button[data-layer-drag][draggable='true']");
+    const card = handle?.closest(".fishymap-layer-card");
+    if (!card || !handle || isRendering) {
       return;
     }
     const layerId = card.getAttribute("data-layer-id");
