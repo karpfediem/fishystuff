@@ -165,10 +165,11 @@
                                 <ctx :loop="$site.asset('config.ziggy').ziggy().get('themes')">
                                 <li role="menuitemradio"
                                     aria-checked="false"
-                                    class="theme-item overflow-hidden rounded-lg border border-base-content/20 hover:border-base-content/40 cursor-pointer"
+                                    class="theme-item overflow-hidden rounded-lg border border-base-content/20 bg-base-100 hover:bg-base-200 hover:border-base-content/40 cursor-pointer"
                                     data-theme-name="$loop.it"
+                                    data-theme="$loop.it"
                                     style="padding: 0;">
-                                    <div class="w-full font-sans" data-theme="$loop.it">
+                                    <div class="w-full font-sans">
                                         <div class="grid grid-cols-5 grid-rows-3">
                                             <div class="bg-base-200 col-start-1 row-span-2 row-start-1"></div>
                                             <div class="bg-base-300 col-start-1 row-start-3"></div>
