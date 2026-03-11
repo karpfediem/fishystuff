@@ -758,6 +758,8 @@ function ensureThemeProbe(doc) {
   probe.style.pointerEvents = "none";
   probe.innerHTML = [
     '<div data-role="base" class="bg-base-100 text-base-content border border-base-300"></div>',
+    '<div data-role="base-200" class="bg-base-200"></div>',
+    '<div data-role="base-300" class="bg-base-300"></div>',
     '<div data-role="primary" class="bg-primary text-primary-content"></div>',
     '<div data-role="secondary" class="bg-secondary text-secondary-content"></div>',
     '<div data-role="accent" class="bg-accent text-accent-content"></div>',
@@ -798,6 +800,8 @@ export function extractThemeSnapshot({
 
   const probe = ensureThemeProbe(doc);
   const base = probe?.querySelector?.('[data-role="base"]') || null;
+  const base200 = probe?.querySelector?.('[data-role="base-200"]') || null;
+  const base300 = probe?.querySelector?.('[data-role="base-300"]') || null;
   const primary = probe?.querySelector?.('[data-role="primary"]') || null;
   const secondary = probe?.querySelector?.('[data-role="secondary"]') || null;
   const accent = probe?.querySelector?.('[data-role="accent"]') || null;
@@ -812,8 +816,8 @@ export function extractThemeSnapshot({
       String(doc?.documentElement?.getAttribute?.("data-theme") || "").trim() || undefined,
     colors: normalizeThemeColors({
       base100: readComputedColor(win, base, "background-color"),
-      base200: readComputedColor(win, base, "background-color"),
-      base300: readComputedColor(win, base, "border-top-color"),
+      base200: readComputedColor(win, base200, "background-color"),
+      base300: readComputedColor(win, base300, "background-color"),
       baseContent: readComputedColor(win, base, "color"),
       primary: readComputedColor(win, primary, "background-color"),
       primaryContent: readComputedColor(win, primary, "color"),

@@ -120,7 +120,9 @@ function applyThemeToShell(shell) {
     return;
   }
   const background =
+    window.__fishystuffTheme?.colors?.base200 ||
     window.__fishystuffTheme?.colors?.base100 ||
+    window.getComputedStyle(document.documentElement).getPropertyValue("--color-base-200") ||
     window.getComputedStyle(document.documentElement).getPropertyValue("--color-base-100");
   const nextBackground = String(background || "").trim();
   if (nextBackground && shell.dataset.themeBackground !== nextBackground) {
