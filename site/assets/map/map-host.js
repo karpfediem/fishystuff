@@ -55,7 +55,6 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *   filters?: {
  *     fishIds?: number[],
  *     searchText?: string,
- *     prizeOnly?: boolean,
  *     patchId?: string | null,
  *     fromPatchId?: string | null,
  *     toPatchId?: string | null,
@@ -100,7 +99,6 @@ export function createEmptyInputState() {
     filters: {
       fishIds: [],
       searchText: "",
-      prizeOnly: false,
       patchId: null,
       fromPatchId: null,
       toPatchId: null,
@@ -126,7 +124,6 @@ export function createEmptySnapshot() {
     filters: {
       fishIds: [],
       searchText: "",
-      prizeOnly: false,
       patchId: null,
       fromPatchId: null,
       toPatchId: null,
@@ -321,9 +318,6 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "searchText")) {
       normalized.filters.searchText = String(patch.filters.searchText ?? "").trim();
     }
-    if (typeof patch.filters.prizeOnly === "boolean") {
-      normalized.filters.prizeOnly = patch.filters.prizeOnly;
-    }
     const hasPatchId = hasOwn(patch.filters, "patchId");
     const hasFromPatchId = hasOwn(patch.filters, "fromPatchId");
     const hasToPatchId = hasOwn(patch.filters, "toPatchId");
@@ -467,7 +461,6 @@ export function applyStatePatch(inputState, patch) {
   next.filters = {
     fishIds: normalizeFishIds(current.filters?.fishIds),
     searchText: String(current.filters?.searchText || ""),
-    prizeOnly: Boolean(current.filters?.prizeOnly),
     patchId: current.filters?.patchId ?? null,
     fromPatchId: current.filters?.fromPatchId ?? null,
     toPatchId: current.filters?.toPatchId ?? null,
@@ -501,9 +494,6 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.filters, "searchText")) {
       next.filters.searchText = normalized.filters.searchText || "";
-    }
-    if (hasOwn(normalized.filters, "prizeOnly")) {
-      next.filters.prizeOnly = Boolean(normalized.filters.prizeOnly);
     }
     if (hasOwn(normalized.filters, "patchId")) {
       next.filters.patchId = normalized.filters.patchId ?? null;
@@ -775,7 +765,6 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   const toPatchId =
     params.get("toPatch") ?? params.get("untilPatch") ?? params.get("patchTo");
   const searchText = params.get("search");
-  const prizeOnly = parseBooleanParam(params.get("prizeOnly"));
   const diagnosticsOpen = parseBooleanParam(params.get("diagnostics"));
   const legendOpen = parseBooleanParam(params.get("legend"));
   const layers =
@@ -789,7 +778,6 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     fromPatchId != null ||
     toPatchId != null ||
     searchText != null ||
-    prizeOnly != null ||
     layers != null
   ) {
     patch.filters = {};
@@ -810,9 +798,6 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   }
   if (searchText != null) {
     patch.filters.searchText = searchText;
-  }
-  if (prizeOnly != null) {
-    patch.filters.prizeOnly = prizeOnly;
   }
   if (layers != null) {
     patch.filters.layerIdsVisible = layers;
@@ -874,9 +859,6 @@ export function snapshotToRestorePatch(snapshot) {
     }
     if (hasOwn(snapshot.filters, "searchText")) {
       patch.filters.searchText = String(snapshot.filters.searchText || "");
-    }
-    if (hasOwn(snapshot.filters, "prizeOnly")) {
-      patch.filters.prizeOnly = Boolean(snapshot.filters.prizeOnly);
     }
     if (hasOwn(snapshot.filters, "patchId")) {
       patch.filters.patchId = snapshot.filters.patchId ?? null;
@@ -1502,7 +1484,6 @@ class FishyMapBridgeImpl {
       filters: {
         fishIds: this.inputState.filters.fishIds,
         searchText: this.inputState.filters.searchText,
-        prizeOnly: this.inputState.filters.prizeOnly,
         patchId:
           fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
         fromPatchId,
@@ -1528,7 +1509,6 @@ class FishyMapBridgeImpl {
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
-        prizeOnly: this.inputState.filters.prizeOnly,
         patchId:
           fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
         fromPatchId,

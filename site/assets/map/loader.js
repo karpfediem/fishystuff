@@ -129,8 +129,30 @@ function buildFishLookup(catalogFish) {
   const map = new Map();
   for (const fish of catalogFish || []) {
     map.set(fish.fishId, fish);
+    if (Number.isFinite(fish.itemId)) {
+      map.set(fish.itemId, fish);
+    }
   }
   return map;
+}
+
+function mergeZoneEvidenceIntoFishLookup(fishLookup, zoneStats) {
+  const distribution = Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : [];
+  for (const entry of distribution) {
+    const fishId = Number.parseInt(entry?.fishId, 10);
+    if (!Number.isFinite(fishId)) {
+      continue;
+    }
+    const existing = fishLookup.get(fishId) || {};
+    fishLookup.set(fishId, {
+      fishId,
+      itemId: existing.itemId,
+      name: entry.fishName || existing.name || `Fish ${fishId}`,
+      iconUrl: entry.iconUrl || existing.iconUrl || "",
+      isPrize: existing.isPrize || false,
+    });
+  }
+  return fishLookup;
 }
 
 function escapeHtml(value) {
@@ -286,17 +308,14 @@ function scoreFishMatch(fish, queryTerms) {
   return score;
 }
 
-function findFishMatches(catalogFish, searchText, prizeOnly) {
+function findFishMatches(catalogFish, searchText) {
   const query = String(searchText || "").trim().toLowerCase();
   const terms = query ? query.split(/\s+/g).filter(Boolean) : [];
-  if (!terms.length && !prizeOnly) {
+  if (!terms.length) {
     return [];
   }
   const filtered = [];
   for (const fish of catalogFish || []) {
-    if (prizeOnly && !fish.isPrize) {
-      continue;
-    }
     const score = scoreFishMatch(fish, terms);
     if (!terms.length || Number.isFinite(score)) {
       filtered.push({
@@ -551,9 +570,9 @@ function removeSelectedFishId(selectedFishIds, fishId) {
   return selectedFishIds.filter((id) => id !== fishId);
 }
 
-function buildSearchMatches(stateBundle, searchText, prizeOnly) {
+function buildSearchMatches(stateBundle, searchText) {
   const catalogFish = stateBundle.state?.catalog?.fish || [];
-  const matches = findFishMatches(catalogFish, searchText, prizeOnly);
+  const matches = findFishMatches(catalogFish, searchText);
   const selectedFishIds = new Set(resolveSelectedFishIds(stateBundle));
   return matches.filter((fish) => !selectedFishIds.has(fish.fishId));
 }
@@ -564,6 +583,10 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
   const renderKey = JSON.stringify({
     selectedFishIds,
     currentFishId,
+    selectedFish: selectedFishIds.map((fishId) => {
+      const fish = fishLookup.get(fishId);
+      return [fishId, fish?.name || "", fish?.iconUrl || ""];
+    }),
   });
   if (elements.searchSelection.dataset.renderKey === renderKey) {
     return;
@@ -629,13 +652,11 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
 
 function renderSearchResults(elements, matches, stateBundle) {
   const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
-  const prizeOnly = Boolean(stateBundle.inputState?.filters?.prizeOnly);
-  const showResults = Boolean(query || prizeOnly);
+  const showResults = Boolean(query);
   const activeMatches = matches.slice(0, 12);
   const currentFishId = resolveCurrentFishId(stateBundle);
   const renderKey = JSON.stringify({
     query,
-    prizeOnly,
     currentFishId,
     resultIds: activeMatches.map((fish) => fish.fishId),
     total: matches.length,
@@ -652,7 +673,7 @@ function renderSearchResults(elements, matches, stateBundle) {
   elements.searchResults.dataset.renderKey = renderKey;
   if (!matches.length) {
     elements.searchResults.innerHTML = `<div class="px-2 py-3 text-xs text-base-content/60">${
-      query || prizeOnly ? "No fish match the current filter." : "Start typing to filter fish."
+      query ? "No fish match the current filter." : "Start typing to filter fish."
     }</div>`;
     return;
   }
@@ -793,11 +814,13 @@ function renderPanel(elements, stateBundle) {
   const visibleLayers =
     inputState.filters?.layerIdsVisible ?? state.filters?.layerIdsVisible ?? undefined;
   const searchText = inputState.filters?.searchText || "";
-  const prizeOnly = Boolean(inputState.filters?.prizeOnly);
   const pointIconScale = clampPointIconScale(
     inputState.ui?.pointIconScale ?? state.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN,
   );
-  const fishLookup = buildFishLookup(catalogFish);
+  const fishLookup = mergeZoneEvidenceIntoFishLookup(
+    buildFishLookup(catalogFish),
+    state.selection?.zoneStats || null,
+  );
 
   applyThemeToShell(elements.shell);
 
@@ -819,7 +842,6 @@ function renderPanel(elements, stateBundle) {
   if (elements.search.value !== searchText) {
     elements.search.value = searchText;
   }
-  elements.prizeOnly.checked = prizeOnly;
 
   renderPatchOptions(
     elements.patchFrom,
@@ -835,7 +857,7 @@ function renderPanel(elements, stateBundle) {
   );
   renderLayerToggles(elements.layers, state.catalog?.layers || [], visibleLayers);
 
-  const matches = buildSearchMatches(stateBundle, searchText, prizeOnly);
+  const matches = buildSearchMatches(stateBundle, searchText);
   renderSearchSelection(elements, stateBundle, fishLookup);
   renderSearchResults(elements, matches, stateBundle);
   renderZoneEvidence(elements, stateBundle, fishLookup);
@@ -912,12 +934,10 @@ function bindUi(shell, elements) {
 
   function pushSearchPatch() {
     const searchText = elements.search.value;
-    const prizeOnly = elements.prizeOnly.checked;
     dispatchMapState(shell, {
       version: 1,
       filters: {
         searchText,
-        prizeOnly,
       },
     });
     renderCurrentState(requestBridgeState(shell));
@@ -961,7 +981,6 @@ function bindUi(shell, elements) {
     const matches = findFishMatches(
       current.state.catalog?.fish || [],
       elements.search.value,
-      elements.prizeOnly.checked,
     );
     const selectedFishIds = new Set(resolveSelectedFishIds(current));
     const top = matches.find((fish) => !selectedFishIds.has(fish.fishId));
@@ -974,18 +993,10 @@ function bindUi(shell, elements) {
       version: 1,
       filters: {
         searchText: "",
-        prizeOnly: elements.prizeOnly.checked,
         fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), top.fishId),
       },
     });
     renderCurrentState(requestBridgeState(shell));
-  });
-
-  elements.prizeOnly.addEventListener("change", () => {
-    if (isRendering) {
-      return;
-    }
-    pushSearchPatch();
   });
 
   elements.searchResults.addEventListener("click", (event) => {
@@ -1000,7 +1011,6 @@ function bindUi(shell, elements) {
       version: 1,
       filters: {
         searchText: "",
-        prizeOnly: elements.prizeOnly.checked,
         fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
       },
     });
@@ -1214,7 +1224,6 @@ async function main() {
     searchResultsShell: document.getElementById("fishymap-search-results-shell"),
     searchResults: document.getElementById("fishymap-search-results"),
     searchCount: document.getElementById("fishymap-search-count"),
-    prizeOnly: document.getElementById("fishymap-prize-only"),
     patchFrom: document.getElementById("fishymap-patch-from"),
     patchTo: document.getElementById("fishymap-patch-to"),
     viewMode: document.getElementById("fishymap-view-mode"),
