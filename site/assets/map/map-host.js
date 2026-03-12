@@ -60,7 +60,8 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     toPatchId?: string | null,
  *     layerIdsVisible?: string[],
  *     layerIdsOrdered?: string[],
- *     layerOpacities?: Record<string, number>
+ *     layerOpacities?: Record<string, number>,
+ *     layerClipMasks?: Record<string, string>
  *   },
  *   ui?: {
  *     diagnosticsOpen?: boolean,
@@ -109,6 +110,7 @@ export function createEmptyInputState() {
       layerIdsVisible: undefined,
       layerIdsOrdered: undefined,
       layerOpacities: undefined,
+      layerClipMasks: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -138,6 +140,7 @@ export function createEmptySnapshot() {
       layerIdsVisible: undefined,
       layerIdsOrdered: undefined,
       layerOpacities: undefined,
+      layerClipMasks: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -255,6 +258,59 @@ function readPersistedLayerOpacities(filters) {
   }
   const layerOpacities = normalizeLayerOpacityMap(filters.layerOpacities);
   return Object.keys(layerOpacities).length ? layerOpacities : undefined;
+}
+
+function normalizeLayerClipMaskMap(values) {
+  if (!isPlainObject(values)) {
+    return {};
+  }
+  const out = {};
+  for (const [key, value] of Object.entries(values)) {
+    const layerId = String(key ?? "").trim();
+    const maskLayerId = String(value ?? "").trim();
+    if (
+      !layerId ||
+      !maskLayerId ||
+      layerId === maskLayerId ||
+      layerId === "minimap" ||
+      maskLayerId === "minimap"
+    ) {
+      continue;
+    }
+    out[layerId] = maskLayerId;
+  }
+  const flattened = {};
+  for (const layerId of Object.keys(out)) {
+    const seen = new Set([layerId]);
+    let cursor = out[layerId];
+    let topMaskLayerId = "";
+    while (cursor) {
+      if (seen.has(cursor) || cursor === "minimap") {
+        topMaskLayerId = "";
+        break;
+      }
+      seen.add(cursor);
+      const nextMaskLayerId = out[cursor];
+      if (!nextMaskLayerId || nextMaskLayerId === cursor || nextMaskLayerId === "minimap") {
+        topMaskLayerId = cursor;
+        break;
+      }
+      cursor = nextMaskLayerId;
+    }
+    if (!topMaskLayerId || topMaskLayerId === layerId) {
+      continue;
+    }
+    flattened[layerId] = topMaskLayerId;
+  }
+  return flattened;
+}
+
+function readPersistedLayerClipMasks(filters) {
+  if (!isPlainObject(filters) || !hasOwn(filters, "layerClipMasks")) {
+    return undefined;
+  }
+  const layerClipMasks = normalizeLayerClipMaskMap(filters.layerClipMasks);
+  return Object.keys(layerClipMasks).length ? layerClipMasks : undefined;
 }
 
 function normalizeFishIds(values) {
@@ -438,6 +494,9 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "layerOpacities")) {
       normalized.filters.layerOpacities = normalizeLayerOpacityMap(patch.filters.layerOpacities);
     }
+    if (hasOwn(patch.filters, "layerClipMasks")) {
+      normalized.filters.layerClipMasks = normalizeLayerClipMaskMap(patch.filters.layerClipMasks);
+    }
     if (!Object.keys(normalized.filters).length) {
       delete normalized.filters;
     }
@@ -545,6 +604,11 @@ export function mergeStatePatch(left, right) {
     } else if (base.filters && hasOwn(base.filters, "layerOpacities")) {
       out.filters.layerOpacities = normalizeLayerOpacityMap(base.filters.layerOpacities);
     }
+    if (patch.filters && hasOwn(patch.filters, "layerClipMasks")) {
+      out.filters.layerClipMasks = normalizeLayerClipMaskMap(patch.filters.layerClipMasks);
+    } else if (base.filters && hasOwn(base.filters, "layerClipMasks")) {
+      out.filters.layerClipMasks = normalizeLayerClipMaskMap(base.filters.layerClipMasks);
+    }
   }
   if (base.ui || patch.ui) {
     out.ui = mergePatchBranch(base.ui, patch.ui);
@@ -577,6 +641,9 @@ export function applyStatePatch(inputState, patch) {
       : undefined,
     layerOpacities: isPlainObject(current.filters?.layerOpacities)
       ? normalizeLayerOpacityMap(current.filters.layerOpacities)
+      : undefined,
+    layerClipMasks: isPlainObject(current.filters?.layerClipMasks)
+      ? normalizeLayerClipMaskMap(current.filters.layerClipMasks)
       : undefined,
   };
   next.ui = {
@@ -625,6 +692,9 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.filters, "layerOpacities")) {
       next.filters.layerOpacities = normalizeLayerOpacityMap(normalized.filters.layerOpacities);
+    }
+    if (hasOwn(normalized.filters, "layerClipMasks")) {
+      next.filters.layerClipMasks = normalizeLayerClipMaskMap(normalized.filters.layerClipMasks);
     }
     if (
       hasOwn(normalized.filters, "patchId") ||
@@ -1009,6 +1079,10 @@ export function snapshotToRestorePatch(snapshot) {
     const layerOpacities = readPersistedLayerOpacities(snapshot.filters);
     if (layerOpacities !== undefined) {
       patch.filters.layerOpacities = layerOpacities;
+    }
+    const layerClipMasks = readPersistedLayerClipMasks(snapshot.filters);
+    if (layerClipMasks !== undefined) {
+      patch.filters.layerClipMasks = layerClipMasks;
     }
   }
   if (isPlainObject(snapshot.ui)) {
@@ -1621,6 +1695,9 @@ class FishyMapBridgeImpl {
     const hasExplicitLayerOpacities =
       isPlainObject(this.inputState.filters.layerOpacities) &&
       Object.keys(this.inputState.filters.layerOpacities).length > 0;
+    const hasExplicitLayerClipMasks =
+      isPlainObject(this.inputState.filters.layerClipMasks) &&
+      Object.keys(this.inputState.filters.layerClipMasks).length > 0;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       savedAt: new Date().toISOString(),
@@ -1652,6 +1729,11 @@ class FishyMapBridgeImpl {
               layerOpacities: normalizeLayerOpacityMap(this.inputState.filters.layerOpacities),
             }
           : {}),
+        ...(hasExplicitLayerClipMasks
+          ? {
+              layerClipMasks: normalizeLayerClipMaskMap(this.inputState.filters.layerClipMasks),
+            }
+          : {}),
       },
       ui: this.inputState.ui,
     };
@@ -1668,6 +1750,9 @@ class FishyMapBridgeImpl {
     const hasExplicitLayerOpacities =
       isPlainObject(this.inputState.filters.layerOpacities) &&
       Object.keys(this.inputState.filters.layerOpacities).length > 0;
+    const hasExplicitLayerClipMasks =
+      isPlainObject(this.inputState.filters.layerClipMasks) &&
+      Object.keys(this.inputState.filters.layerClipMasks).length > 0;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
@@ -1689,6 +1774,11 @@ class FishyMapBridgeImpl {
         ...(hasExplicitLayerOpacities
           ? {
               layerOpacities: normalizeLayerOpacityMap(this.inputState.filters.layerOpacities),
+            }
+          : {}),
+        ...(hasExplicitLayerClipMasks
+          ? {
+              layerClipMasks: normalizeLayerClipMaskMap(this.inputState.filters.layerClipMasks),
             }
           : {}),
       },

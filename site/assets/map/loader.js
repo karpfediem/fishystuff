@@ -358,6 +358,12 @@ function resolveLayerEntries(stateBundle) {
   const stateOpacityOverride = isPlainObject(stateBundle.state?.filters?.layerOpacities)
     ? stateBundle.state.filters.layerOpacities
     : null;
+  const inputClipMaskOverride = isPlainObject(stateBundle.inputState?.filters?.layerClipMasks)
+    ? stateBundle.inputState.filters.layerClipMasks
+    : null;
+  const stateClipMaskOverride = isPlainObject(stateBundle.state?.filters?.layerClipMasks)
+    ? stateBundle.state.filters.layerClipMasks
+    : null;
   const byId = new Map(layers.map((layer) => [layer.layerId, layer]));
   const seen = new Set();
   const movable = [];
@@ -378,11 +384,20 @@ function resolveLayerEntries(stateBundle) {
     } else if (stateOpacityOverride && hasOwnKey(stateOpacityOverride, layer.layerId)) {
       opacity = clampLayerOpacity(stateOpacityOverride[layer.layerId]);
     }
+    let clipMaskLayerId = null;
+    if (inputClipMaskOverride) {
+      clipMaskLayerId = hasOwnKey(inputClipMaskOverride, layer.layerId)
+        ? String(inputClipMaskOverride[layer.layerId] || "").trim() || null
+        : null;
+    } else if (stateClipMaskOverride && hasOwnKey(stateClipMaskOverride, layer.layerId)) {
+      clipMaskLayerId = String(stateClipMaskOverride[layer.layerId] || "").trim() || null;
+    }
     const entry = {
       ...layer,
       visible,
       opacity,
       opacityDefault,
+      clipMaskLayerId,
       locked: isFixedGroundLayer(layer.layerId),
     };
     if (entry.locked) {
@@ -428,6 +443,80 @@ function moveLayerIdBefore(entries, draggedLayerId, targetLayerId, position) {
   return movableIds.concat(pinnedIds);
 }
 
+function resolveTopClipMaskLayerId(clipMasks, layerId) {
+  const normalizedLayerId = String(layerId || "").trim();
+  if (!normalizedLayerId) {
+    return "";
+  }
+  const seen = new Set([normalizedLayerId]);
+  let cursor = String(clipMasks[normalizedLayerId] || "").trim();
+  while (cursor) {
+    if (seen.has(cursor) || cursor === normalizedLayerId || isFixedGroundLayer(cursor)) {
+      return "";
+    }
+    seen.add(cursor);
+    const nextMaskLayerId = String(clipMasks[cursor] || "").trim();
+    if (!nextMaskLayerId || nextMaskLayerId === cursor || isFixedGroundLayer(nextMaskLayerId)) {
+      return cursor;
+    }
+    cursor = nextMaskLayerId;
+  }
+  return "";
+}
+
+function flattenLayerClipMasks(clipMasks) {
+  const flattened = {};
+  for (const [layerId, maskLayerId] of Object.entries(clipMasks || {})) {
+    const normalizedLayerId = String(layerId || "").trim();
+    const normalizedMaskLayerId = String(maskLayerId || "").trim();
+    if (
+      !normalizedLayerId ||
+      !normalizedMaskLayerId ||
+      normalizedLayerId === normalizedMaskLayerId ||
+      isFixedGroundLayer(normalizedLayerId) ||
+      isFixedGroundLayer(normalizedMaskLayerId)
+    ) {
+      continue;
+    }
+    const topMaskLayerId = resolveTopClipMaskLayerId(
+      { ...clipMasks, [normalizedLayerId]: normalizedMaskLayerId },
+      normalizedLayerId,
+    );
+    if (!topMaskLayerId || topMaskLayerId === normalizedLayerId) {
+      continue;
+    }
+    flattened[normalizedLayerId] = topMaskLayerId;
+  }
+  return flattened;
+}
+
+function collectAttachedLayerIds(clipMasks, rootLayerId) {
+  const normalizedRootLayerId = String(rootLayerId || "").trim();
+  if (!normalizedRootLayerId) {
+    return new Set();
+  }
+  const attachedLayerIds = new Set([normalizedRootLayerId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [layerId, maskLayerId] of Object.entries(clipMasks || {})) {
+      const normalizedLayerId = String(layerId || "").trim();
+      const normalizedMaskLayerId = String(maskLayerId || "").trim();
+      if (
+        !normalizedLayerId ||
+        !normalizedMaskLayerId ||
+        attachedLayerIds.has(normalizedLayerId) ||
+        !attachedLayerIds.has(normalizedMaskLayerId)
+      ) {
+        continue;
+      }
+      attachedLayerIds.add(normalizedLayerId);
+      changed = true;
+    }
+  }
+  return attachedLayerIds;
+}
+
 function buildLayerOpacityPatch(stateBundle, targetLayerId, opacity) {
   const nextOpacities = {};
   for (const layer of resolveLayerEntries(stateBundle)) {
@@ -442,6 +531,51 @@ function buildLayerOpacityPatch(stateBundle, targetLayerId, opacity) {
     nextOpacities[layer.layerId] = effectiveOpacity;
   }
   return nextOpacities;
+}
+
+function buildLayerClipMaskPatch(stateBundle, targetLayerId, maskLayerId) {
+  const nextClipMasks = {};
+  for (const layer of resolveLayerEntries(stateBundle)) {
+    if (layer.locked) {
+      continue;
+    }
+    const currentMaskLayerId = String(layer.clipMaskLayerId || "").trim();
+    if (
+      !currentMaskLayerId ||
+      currentMaskLayerId === layer.layerId ||
+      isFixedGroundLayer(currentMaskLayerId)
+    ) {
+      continue;
+    }
+    nextClipMasks[layer.layerId] = currentMaskLayerId;
+  }
+  const normalizedTargetLayerId = String(targetLayerId || "").trim();
+  const normalizedMaskLayerId = String(maskLayerId || "").trim();
+  if (!normalizedTargetLayerId || isFixedGroundLayer(normalizedTargetLayerId)) {
+    return flattenLayerClipMasks(nextClipMasks);
+  }
+  if (!normalizedMaskLayerId || isFixedGroundLayer(normalizedMaskLayerId)) {
+    delete nextClipMasks[normalizedTargetLayerId];
+    return flattenLayerClipMasks(nextClipMasks);
+  }
+
+  const draggedSubtree = collectAttachedLayerIds(nextClipMasks, normalizedTargetLayerId);
+  const targetSubtree = collectAttachedLayerIds(nextClipMasks, normalizedMaskLayerId);
+
+  delete nextClipMasks[normalizedMaskLayerId];
+  for (const layerId of targetSubtree) {
+    if (layerId === normalizedMaskLayerId) {
+      continue;
+    }
+    nextClipMasks[layerId] = normalizedMaskLayerId;
+  }
+  for (const layerId of draggedSubtree) {
+    if (layerId === normalizedMaskLayerId) {
+      continue;
+    }
+    nextClipMasks[layerId] = normalizedMaskLayerId;
+  }
+  return flattenLayerClipMasks(nextClipMasks);
 }
 
 function renderViewState(elements, state) {
@@ -828,6 +962,7 @@ function renderLayerStack(container, stateBundle) {
       Boolean(layer.visible),
       Math.round(clampLayerOpacity(layer.opacity) * 1000),
       Math.round(clampLayerOpacity(layer.opacityDefault) * 1000),
+      layer.clipMaskLayerId || "",
       Number.isFinite(layer.displayOrder) ? layer.displayOrder : 0,
       layer.locked ? 1 : 0,
     ]),
@@ -836,17 +971,90 @@ function renderLayerStack(container, stateBundle) {
     return;
   }
   container.dataset.renderKey = renderKey;
-  container.innerHTML = layers
-    .map((layer) => {
+  const layerNameById = new Map(layers.map((layer) => [layer.layerId, layer.name]));
+  const clipMasks = {};
+  for (const layer of layers) {
+    const clipMaskLayerId = String(layer.clipMaskLayerId || "").trim();
+    if (
+      !clipMaskLayerId ||
+      clipMaskLayerId === layer.layerId ||
+      !layerNameById.has(clipMaskLayerId) ||
+      isFixedGroundLayer(clipMaskLayerId)
+    ) {
+      continue;
+    }
+    clipMasks[layer.layerId] = clipMaskLayerId;
+  }
+  const flatClipMasks = flattenLayerClipMasks(clipMasks);
+  const clippedLayersByMask = new Map();
+  for (const layer of layers) {
+    const clipMaskLayerId = String(flatClipMasks[layer.layerId] || "").trim();
+    if (!clipMaskLayerId) {
+      continue;
+    }
+    const clippedLayers = clippedLayersByMask.get(clipMaskLayerId) || [];
+    clippedLayers.push({
+      layer,
+      indentLevel: 1,
+    });
+    clippedLayersByMask.set(clipMaskLayerId, clippedLayers);
+  }
+  const displayedLayers = [];
+  const displayedLayerIds = new Set();
+  for (const layer of layers) {
+    if (flatClipMasks[layer.layerId]) {
+      continue;
+    }
+    displayedLayers.push({ layer, indentLevel: 0 });
+    displayedLayerIds.add(layer.layerId);
+    for (const child of clippedLayersByMask.get(layer.layerId) || []) {
+      displayedLayers.push(child);
+      displayedLayerIds.add(child.layer.layerId);
+    }
+  }
+  for (const layer of layers) {
+    if (displayedLayerIds.has(layer.layerId)) {
+      continue;
+    }
+    displayedLayers.push({ layer, indentLevel: 0 });
+  }
+  container.innerHTML = displayedLayers
+    .map(({ layer, indentLevel }) => {
       const visible = Boolean(layer.visible);
       const locked = Boolean(layer.locked);
       const kind = layerKindLabel(layer.kind);
       const visibilityLabel = visible ? "Hide" : "Show";
+      const clipMaskValue = String(flatClipMasks[layer.layerId] || "").trim();
+      const clipMaskName = clipMaskValue ? layerNameById.get(clipMaskValue) || clipMaskValue : "";
+      const clippedLayers = clippedLayersByMask.get(layer.layerId) || [];
+      const clippedLayerNames = clippedLayers.map((candidate) => candidate.layer.name);
+      const relationBadges = [];
+      if (clipMaskName) {
+        relationBadges.push(
+          `<span class="badge badge-outline badge-xs">Clipped by ${escapeHtml(clipMaskName)}</span>`,
+        );
+      }
+      if (clippedLayers.length) {
+        relationBadges.push(
+          `<span class="badge badge-outline badge-xs">Masks ${clippedLayers.length}</span>`,
+        );
+      }
+      let helperText = "Drop onto a layer to attach. Drop between layers to reorder.";
+      if (locked) {
+        helperText = "Pinned as the base layer.";
+      } else if (clipMaskName) {
+        helperText = "Attached. Drop between layers to detach, or onto another layer to retarget.";
+      } else if (clippedLayers.length) {
+        helperText = "Drop another layer onto this card to use it as a clip mask.";
+      }
       return `
         <article
           class="fishymap-layer-card"
           data-layer-id="${layer.layerId.replace(/"/g, "&quot;")}"
+          data-indent-level="${indentLevel > 0 ? "1" : "0"}"
           data-locked="${locked ? "true" : "false"}"
+          data-clip-mask-source="${locked ? "false" : "true"}"
+          style="--fishymap-layer-indent:${indentLevel};"
         >
           <button
             class="fishymap-layer-drag"
@@ -865,9 +1073,17 @@ function renderLayerStack(container, stateBundle) {
               <span class="badge badge-ghost badge-xs">${kind}</span>
               ${locked ? '<span class="badge badge-outline badge-xs">Ground</span>' : ""}
             </div>
-            <p class="truncate text-[11px] text-base-content/55">${
-              locked ? "Pinned as the base layer." : "Drag to reorder the stack."
-            }</p>
+            ${relationBadges.length ? `<div class="fishymap-layer-relations">${relationBadges.join("")}</div>` : ""}
+            <p class="text-[11px] text-base-content/55">${helperText}</p>
+            ${
+              clippedLayerNames.length
+                ? `
+                  <p class="text-[11px] text-base-content/45">
+                    Masking ${escapeHtml(clippedLayerNames.join(", "))}
+                  </p>
+                `
+                : ""
+            }
             ${
               locked
                 ? ""
@@ -1310,7 +1526,7 @@ function bindUi(shell, elements) {
   const layerDragState = {
     draggingLayerId: null,
     overLayerId: null,
-    position: null,
+    mode: null,
   };
   const layerOpacityInteraction = {
     activeLayerId: null,
@@ -1341,7 +1557,7 @@ function bindUi(shell, elements) {
 
   function clearLayerDropState() {
     layerDragState.overLayerId = null;
-    layerDragState.position = null;
+    layerDragState.mode = null;
     elements.layers
       ?.querySelectorAll?.(".fishymap-layer-card[data-drop-position]")
       ?.forEach?.((card) => {
@@ -1349,15 +1565,15 @@ function bindUi(shell, elements) {
       });
   }
 
-  function applyLayerDropState(targetLayerId, position) {
+  function applyLayerDropState(targetLayerId, mode) {
     clearLayerDropState();
     layerDragState.overLayerId = targetLayerId;
-    layerDragState.position = position;
+    layerDragState.mode = mode;
     const card = Array.from(
       elements.layers?.querySelectorAll?.(".fishymap-layer-card") || [],
     ).find((candidate) => candidate.getAttribute("data-layer-id") === targetLayerId);
     if (card) {
-      card.dataset.dropPosition = position;
+      card.dataset.dropPosition = mode;
     }
   }
 
@@ -1668,11 +1884,11 @@ function bindUi(shell, elements) {
 
   elements.layers.addEventListener("change", (event) => {
     const slider = event.target.closest("input[data-layer-opacity]");
-    if (!slider) {
+    if (slider) {
+      setActiveLayerOpacity(slider);
+      clearActiveLayerOpacity();
       return;
     }
-    setActiveLayerOpacity(slider);
-    clearActiveLayerOpacity();
   });
 
   elements.layers.addEventListener("focusout", (event) => {
@@ -1708,7 +1924,7 @@ function bindUi(shell, elements) {
       return;
     }
     const card = event.target.closest(".fishymap-layer-card");
-    if (!card || card.getAttribute("data-locked") === "true") {
+    if (!card) {
       clearLayerDropState();
       return;
     }
@@ -1719,26 +1935,49 @@ function bindUi(shell, elements) {
     }
     event.preventDefault();
     const rect = card.getBoundingClientRect();
-    const position = event.clientY >= rect.top + rect.height / 2 ? "after" : "before";
-    applyLayerDropState(targetLayerId, position);
+    const offsetY = event.clientY - rect.top;
+    const locked = card.getAttribute("data-locked") === "true";
+    const canAttach = card.getAttribute("data-clip-mask-source") === "true";
+    let mode = "before";
+    if (locked) {
+      mode = "before";
+    } else if (!canAttach) {
+      mode = offsetY >= rect.height / 2 ? "after" : "before";
+    } else {
+      const edgeThreshold = Math.max(14, Math.min(rect.height * 0.24, 22));
+      if (offsetY <= edgeThreshold) {
+        mode = "before";
+      } else if (offsetY >= rect.height - edgeThreshold) {
+        mode = "after";
+      } else {
+        mode = "attach";
+      }
+    }
+    applyLayerDropState(targetLayerId, mode);
   });
 
   elements.layers.addEventListener("drop", (event) => {
     if (
       !layerDragState.draggingLayerId ||
       !layerDragState.overLayerId ||
-      !layerDragState.position
+      !layerDragState.mode
     ) {
       clearLayerDropState();
       return;
     }
     event.preventDefault();
     const current = requestBridgeState(shell);
+    const dropMode = layerDragState.mode;
     const nextOrder = moveLayerIdBefore(
       resolveLayerEntries(current),
       layerDragState.draggingLayerId,
       layerDragState.overLayerId,
-      layerDragState.position,
+      dropMode === "after" ? "after" : "before",
+    );
+    const nextClipMasks = buildLayerClipMaskPatch(
+      current,
+      layerDragState.draggingLayerId,
+      dropMode === "attach" ? layerDragState.overLayerId : "",
     );
     clearLayerDropState();
     layerDragState.draggingLayerId = null;
@@ -1746,6 +1985,7 @@ function bindUi(shell, elements) {
       version: 1,
       filters: {
         layerIdsOrdered: nextOrder,
+        layerClipMasks: nextClipMasks,
       },
     });
     renderCurrentState(requestBridgeState(shell));

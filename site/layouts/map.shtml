@@ -292,10 +292,12 @@
       }
 
       .fishymap-layer-card {
+        position: relative;
         display: grid;
         grid-template-columns: auto minmax(0, 1fr) auto;
         align-items: start;
         gap: 0.75rem;
+        margin-left: calc(var(--fishymap-layer-indent, 0) * 1.4rem);
         padding: 0.8rem 0.9rem;
         border-radius: 1rem;
         border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
@@ -305,6 +307,17 @@
           background-color 140ms ease,
           opacity 140ms ease,
           transform 140ms ease;
+      }
+
+      .fishymap-layer-card[data-indent-level="1"]::before {
+        content: "";
+        position: absolute;
+        left: -0.8rem;
+        top: 0.9rem;
+        bottom: 0.9rem;
+        width: 2px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--color-base-content) 14%, transparent);
       }
 
       .fishymap-layer-card[data-locked="true"] {
@@ -324,6 +337,12 @@
       .fishymap-layer-card[data-drop-position="after"] {
         box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--color-primary) 85%, transparent);
         border-bottom-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
+      }
+
+      .fishymap-layer-card[data-drop-position="attach"] {
+        border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+        background: color-mix(in srgb, var(--color-primary) 12%, var(--color-base-200) 78%);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 45%, transparent);
       }
 
       .fishymap-layer-visibility,
@@ -367,6 +386,12 @@
         display: flex;
         flex-direction: column;
         gap: 0.55rem;
+      }
+
+      .fishymap-layer-relations {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
       }
 
       .fishymap-layer-opacity-control {
