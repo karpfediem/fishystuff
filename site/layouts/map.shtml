@@ -384,6 +384,9 @@
         top: 0;
         left: 0;
         z-index: 26;
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
         max-width: min(22rem, calc(100vw - 2rem));
         border-radius: 1rem;
         border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
@@ -401,6 +404,47 @@
 
       #fishymap-hover-tooltip[hidden] {
         display: none !important;
+      }
+
+      #fishymap-hover-summary[hidden],
+      #fishymap-hover-layers[hidden] {
+        display: none !important;
+      }
+
+      #fishymap-hover-layers {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+      }
+
+      .fishymap-hover-layer-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.8rem;
+        font-size: 0.78rem;
+        line-height: 1.3;
+      }
+
+      .fishymap-hover-layer-name {
+        color: color-mix(in srgb, var(--color-base-content) 82%, transparent);
+        font-weight: 600;
+      }
+
+      .fishymap-hover-layer-value {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: color-mix(in srgb, var(--color-base-content) 76%, transparent);
+        font-family: var(--font-mono, monospace);
+      }
+
+      .fishymap-hover-layer-swatch {
+        width: 0.8rem;
+        height: 0.8rem;
+        flex: none;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
       }
 
       #fishymap-error-overlay {
@@ -616,6 +660,7 @@
 
       <div id="fishymap-hover-tooltip" class="not-prose" hidden>
         <p id="fishymap-hover-summary" class="text-sm text-base-content/85">Hover a zone to inspect it.</p>
+        <div id="fishymap-hover-layers" hidden></div>
       </div>
 
       <div id="fishymap-error-overlay" class="not-prose" hidden>

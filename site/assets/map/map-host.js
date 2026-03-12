@@ -1572,6 +1572,7 @@ class FishyMapBridgeImpl {
           worldZ: payload.worldZ ?? null,
           zoneRgb: payload.zoneRgb ?? null,
           zoneName: payload.zoneName ?? null,
+          layerSamples: Array.isArray(payload.layerSamples) ? cloneJson(payload.layerSamples) : [],
         },
       };
       this.emit(FISHYMAP_EVENTS.hoverChanged, {

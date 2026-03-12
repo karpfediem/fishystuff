@@ -474,27 +474,64 @@ function setHoverTooltipPosition(elements, clientX, clientY) {
 }
 
 function renderHoverTooltip(elements, hover) {
-  if (!elements.hoverTooltip || !elements.hoverSummary) {
+  if (!elements.hoverTooltip || !elements.hoverSummary || !elements.hoverLayers) {
     return;
   }
   const label = hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : null);
-  if (!label || !elements.hoverPointerActive) {
+  const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
+  if ((!label && layerSamples.length === 0) || !elements.hoverPointerActive) {
     setBooleanProperty(elements.hoverTooltip, "hidden", true);
     return;
   }
-  setTextContent(elements.hoverSummary, label);
+  if (label) {
+    setTextContent(elements.hoverSummary, label);
+  }
+  setBooleanProperty(elements.hoverSummary, "hidden", !label);
+  setMarkup(
+    elements.hoverLayers,
+    layerSamples
+      .map((sample) => {
+        const rgb = Array.isArray(sample?.rgb) ? sample.rgb : [];
+        return `${sample?.layerId ?? ""}:${rgb.join(",")}`;
+      })
+      .join("|"),
+    layerSamples
+      .map((sample) => {
+        const rgb = Array.isArray(sample?.rgb) ? sample.rgb : [0, 0, 0];
+        const red = Number.parseInt(rgb[0], 10) || 0;
+        const green = Number.parseInt(rgb[1], 10) || 0;
+        const blue = Number.parseInt(rgb[2], 10) || 0;
+        const layerName = String(sample?.layerName || sample?.layerId || "Layer").trim() || "Layer";
+        const rgbLabel = `rgb(${red}, ${green}, ${blue})`;
+        return `
+          <div class="fishymap-hover-layer-row">
+            <span class="fishymap-hover-layer-name">${escapeHtml(layerName)}</span>
+            <span class="fishymap-hover-layer-value">
+              <span class="fishymap-hover-layer-swatch" style="background-color: ${escapeHtml(rgbLabel)};"></span>
+              <code>${escapeHtml(rgbLabel)}</code>
+            </span>
+          </div>
+        `;
+      })
+      .join(""),
+  );
+  setBooleanProperty(elements.hoverLayers, "hidden", layerSamples.length === 0);
   setBooleanProperty(elements.hoverTooltip, "hidden", false);
 }
 
 function hoverFromEventDetail(detail) {
   if (detail?.hover && typeof detail.hover === "object") {
-    return detail.hover;
+    return {
+      ...detail.hover,
+      layerSamples: Array.isArray(detail.hover.layerSamples) ? detail.hover.layerSamples : [],
+    };
   }
   return {
     worldX: detail?.worldX ?? null,
     worldZ: detail?.worldZ ?? null,
     zoneRgb: detail?.zoneRgb ?? null,
     zoneName: detail?.zoneName ?? null,
+    layerSamples: Array.isArray(detail?.layerSamples) ? detail.layerSamples : [],
   };
 }
 
@@ -1861,6 +1898,7 @@ async function main() {
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
     hoverTooltip: document.getElementById("fishymap-hover-tooltip"),
     hoverSummary: document.getElementById("fishymap-hover-summary"),
+    hoverLayers: document.getElementById("fishymap-hover-layers"),
     viewReadout: document.getElementById("fishymap-view-readout"),
     errorOverlay: document.getElementById("fishymap-error-overlay"),
     errorMessage: document.getElementById("fishymap-error-message"),
