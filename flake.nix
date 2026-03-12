@@ -81,7 +81,7 @@
               let
                 devenvRootFileContent = builtins.readFile devenv-root.outPath;
                 root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
-                packages = with pkgs; [ flyctl skopeo codex ];
+                packages = with pkgs; [ flyctl skopeo ];
               in
               {
                 bot = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./bot/devenv.nix ]; };
