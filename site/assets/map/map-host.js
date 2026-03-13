@@ -764,13 +764,7 @@ export function resolveApiBaseUrl(locationLike = globalThis.location) {
 }
 
 function shouldRewriteToApi(url) {
-  return (
-    url.pathname.startsWith("/api/") ||
-    url.pathname.startsWith("/images/") ||
-    url.pathname.startsWith("/terrain/") ||
-    url.pathname.startsWith("/terrain_drape/") ||
-    url.pathname.startsWith("/tiles/")
-  );
+  return url.pathname.startsWith("/api/");
 }
 
 export function rewriteApiUrl(input, apiBaseUrl, locationHref = globalThis.location?.href) {

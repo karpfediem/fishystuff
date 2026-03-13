@@ -10,6 +10,7 @@ import {
   mergeStatePatch,
   parseQueryState,
   resolveApiBaseUrl,
+  rewriteApiUrl,
 } from "./map-host.js";
 
 class MemoryStorage {
@@ -952,5 +953,27 @@ test("local dev API base resolves to loopback", () => {
   assert.equal(
     resolveApiBaseUrl({ hostname: "fishystuff.fish" }),
     "https://api.fishystuff.fish",
+  );
+});
+
+test("only API requests are rewritten to the API origin", () => {
+  const locationHref = "http://127.0.0.1:1990/map/";
+  const apiBaseUrl = "http://127.0.0.1:8080";
+
+  assert.equal(
+    rewriteApiUrl("/api/v1/meta", apiBaseUrl, locationHref),
+    "http://127.0.0.1:8080/api/v1/meta",
+  );
+  assert.equal(
+    rewriteApiUrl("/images/tiles/minimap/v1/tileset.json", apiBaseUrl, locationHref),
+    "/images/tiles/minimap/v1/tileset.json",
+  );
+  assert.equal(
+    rewriteApiUrl("/images/tiles/mask/v1/tileset.json", apiBaseUrl, locationHref),
+    "/images/tiles/mask/v1/tileset.json",
+  );
+  assert.equal(
+    rewriteApiUrl("/images/terrain/v1/manifest.json", apiBaseUrl, locationHref),
+    "/images/terrain/v1/manifest.json",
   );
 });
