@@ -27,6 +27,10 @@ To run the local development stack managed by `devenv` processes:
 devenv up
 ```
 
+The managed stack now starts the API directly and reclaims stale local API/CDN
+listeners before rebinding, so repeated `devenv up` runs are less likely to get
+stuck on old background processes.
+
 Initialize your local SecretSpec provider and check the repo profiles you need:
 
 ```bash

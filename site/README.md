@@ -21,6 +21,8 @@ For local map development, either run the pieces manually:
 `serve_cdn.py` listener on `127.0.0.1:4040` instead of failing immediately on an
 address-in-use error. The root `devenv up` stack also runs the same cleanup
 before starting the CDN server and again when the managed CDN process exits.
+The same guarded pattern now applies to the local API server on
+`127.0.0.1:8080`.
 
 Or start the full local stack from the repo root:
 

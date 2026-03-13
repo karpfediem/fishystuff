@@ -11,3 +11,6 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
+secretspec:
+  enable: true
+  profile: api

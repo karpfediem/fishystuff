@@ -48,6 +48,8 @@ Repository-level notes for working in this monorepo.
   - Zine rebuild watcher
   - Tailwind watcher
   - local site server
+- The managed stack uses SecretSpec's `api` profile by default and reclaims stale
+  local API/CDN listeners before rebinding those ports.
 
 ## Practical environment usage
 - The top-level `devenv` environment is the supported development entrypoint.
