@@ -2,7 +2,7 @@
 # one-off release
 build-release:
     rm -rf .out
-    zine release --install .out
+    zine release --output .out
 
 release: build-release
 
