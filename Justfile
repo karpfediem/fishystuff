@@ -26,7 +26,7 @@ cdn-stage:
 
 # Serve the staged CDN tree locally with cache headers
 cdn-serve:
-  python ./tools/scripts/serve_cdn.py --root data/cdn/public --port 4040
+  ./tools/scripts/run_cdn_server.sh
 
 # Push the staged CDN tree to Bunny Storage via FTP
 # Override BUNNY_FTP_PARALLEL / BUNNY_FTP_CONNECTION_LIMIT in .env if needed.

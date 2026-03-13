@@ -17,6 +17,11 @@ For local map development, either run the pieces manually:
 - repo root: `just cdn-serve`
 - `site/`: `just watch`
 
+`just cdn-serve` now uses a guarded launcher that reclaims a stale local
+`serve_cdn.py` listener on `127.0.0.1:4040` instead of failing immediately on an
+address-in-use error. The root `devenv up` stack also runs the same cleanup
+before starting the CDN server and again when the managed CDN process exits.
+
 Or start the full local stack from the repo root:
 
 - `devenv up`

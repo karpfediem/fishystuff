@@ -13,6 +13,11 @@ IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
 NO_STORE_CACHE_CONTROL = "no-store"
 
 
+class ReusableThreadingTCPServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 class CdnHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, directory: str, cache_control: str, **kwargs):
         self._cache_control = cache_control
@@ -75,7 +80,7 @@ def main() -> None:
         cache_control=args.cache_control,
     )
 
-    with socketserver.ThreadingTCPServer((args.host, args.port), handler) as httpd:
+    with ReusableThreadingTCPServer((args.host, args.port), handler) as httpd:
         print(f"Serving {root} at http://{args.host}:{args.port}/")
         httpd.serve_forever()
 
