@@ -4,6 +4,7 @@
   packages = with pkgs;
     [
       just
+      secretspec
       curl
       dolt
       flyctl
