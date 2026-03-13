@@ -43,5 +43,8 @@ These values should come from the local `.env`, which is loaded into the `devenv
 `cdn-push` intentionally excludes local placeholder and metadata files such as
 `.gitkeep` and `.cdn-metadata.json` from the Bunny upload. It also keeps a local
 sync manifest so later pushes only re-scan and upload changed roots instead of
-walking the whole CDN tree every time. The `map/` subtree still syncs with
-delete semantics so old hashed runtime bundles are cleaned up.
+walking the whole CDN tree every time. Large image/tile trees are mirrored at
+version-scoped roots such as `images/tiles/minimap/v1` instead of rescanning
+all of `images/tiles/`. The `map/` subtree still syncs with delete semantics so
+old hashed runtime bundles are cleaned up, while the other roots use
+`mirror --continue --only-newer` so interrupted uploads can resume cleanly.

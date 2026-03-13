@@ -115,12 +115,12 @@ sync_root_for_path() {
     map/*) printf '%s\n' "map" ;;
     region_groups/*) printf '%s\n' "region_groups" ;;
     images/FishIcons/*) printf '%s\n' "images/FishIcons" ;;
-    images/terrain_fullres/*) printf '%s\n' "images/terrain_fullres" ;;
-    images/terrain_height/*) printf '%s\n' "images/terrain_height" ;;
-    images/terrain/*) printf '%s\n' "images/terrain" ;;
-    images/tiles/mask/*) printf '%s\n' "images/tiles/mask" ;;
-    images/tiles/minimap/*) printf '%s\n' "images/tiles/minimap" ;;
-    images/tiles/region_groups/*) printf '%s\n' "images/tiles/region_groups" ;;
+    images/terrain_fullres/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;
+    images/terrain_height/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;
+    images/terrain/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;
+    images/tiles/mask/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-4)" ;;
+    images/tiles/minimap/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-4)" ;;
+    images/tiles/region_groups/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-4)" ;;
     images/*) printf '%s\n' "images" ;;
     *) dirname "$path" ;;
   esac
@@ -140,9 +140,10 @@ done < "$changed_paths_file" | LC_ALL=C sort -u > "$sync_roots_file"
   echo "set mirror:parallel-transfer-count $PARALLEL_TRANSFERS"
   echo "set mirror:parallel-directories yes"
   echo "set mirror:set-permissions off"
+  echo "set mirror:use-cache yes"
 
   if [ "$REMOTE_ROOT" != "." ]; then
-    echo "mkdir -p $(lftp_quote "$REMOTE_ROOT")"
+    echo "mkdir -pf $(lftp_quote "$REMOTE_ROOT")"
   fi
 
   while IFS= read -r sync_root; do
@@ -154,19 +155,19 @@ done < "$changed_paths_file" | LC_ALL=C sort -u > "$sync_roots_file"
       continue
     fi
 
-    echo "mkdir -p $(lftp_quote "$remote_dir")"
+    echo "mkdir -pf $(lftp_quote "$remote_dir")"
 
     case "$sync_root" in
       map)
         echo "glob --exist rm -f $(lftp_quote "$(join_remote_path "$REMOTE_ROOT" "map/fishystuff_ui_bevy.js")")"
         echo "glob --exist rm -f $(lftp_quote "$(join_remote_path "$REMOTE_ROOT" "map/fishystuff_ui_bevy_bg.wasm")")"
-        echo "mirror --reverse --delete --verbose --parallel=$PARALLEL_TRANSFERS $MIRROR_EXCLUDE_FLAGS $(lftp_quote "$local_dir") $(lftp_quote "$remote_dir")"
+        echo "mirror --reverse --continue --use-cache --delete --verbose --parallel=$PARALLEL_TRANSFERS $MIRROR_EXCLUDE_FLAGS $(lftp_quote "$local_dir") $(lftp_quote "$remote_dir")"
         ;;
       region_groups)
-        echo "mirror --reverse --delete --verbose --parallel=$PARALLEL_TRANSFERS $MIRROR_EXCLUDE_FLAGS $(lftp_quote "$local_dir") $(lftp_quote "$remote_dir")"
+        echo "mirror --reverse --continue --use-cache --delete --verbose --parallel=$PARALLEL_TRANSFERS $MIRROR_EXCLUDE_FLAGS $(lftp_quote "$local_dir") $(lftp_quote "$remote_dir")"
         ;;
       *)
-        echo "mirror --reverse --only-newer --verbose --parallel=$PARALLEL_TRANSFERS $MIRROR_EXCLUDE_FLAGS $(lftp_quote "$local_dir") $(lftp_quote "$remote_dir")"
+        echo "mirror --reverse --continue --use-cache --only-newer --verbose --parallel=$PARALLEL_TRANSFERS $MIRROR_EXCLUDE_FLAGS $(lftp_quote "$local_dir") $(lftp_quote "$remote_dir")"
         ;;
     esac
   done < "$sync_roots_file"
