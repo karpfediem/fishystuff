@@ -34,8 +34,14 @@ Optional:
   Number of parallel file uploads to run during `cdn-push`. Defaults to `8`.
 - `BUNNY_FTP_CONNECTION_LIMIT`
   Overall lftp connection cap. Defaults to `12`.
+- `BUNNY_SYNC_STATE_FILE`
+  Optional local manifest cache used to upload only changed CDN roots on later syncs.
+  Defaults to `data/cdn/.last-push-manifest.tsv`.
 
 These values should come from the local `.env`, which is loaded into the `devenv` shells via `dotenv.enable = true`.
 
 `cdn-push` intentionally excludes local placeholder and metadata files such as
-`.gitkeep` and `.cdn-metadata.json` from the Bunny upload.
+`.gitkeep` and `.cdn-metadata.json` from the Bunny upload. It also keeps a local
+sync manifest so later pushes only re-scan and upload changed roots instead of
+walking the whole CDN tree every time. The `map/` subtree still syncs with
+delete semantics so old hashed runtime bundles are cleaned up.
