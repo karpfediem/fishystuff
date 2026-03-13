@@ -211,12 +211,7 @@ fn icon_handle_for_fish(
         return None;
     }
 
-    let Some(url) = fish.icon_by_id.get(&fish_id).cloned().or_else(|| {
-        fish.entries
-            .iter()
-            .find(|entry| entry.id == fish_id)
-            .and_then(|entry| entry.icon_url.clone())
-    }) else {
+    let Some(url) = fish.icon_url_for_fish(fish_id) else {
         cache.missing.insert(fish_id);
         return None;
     };

@@ -82,10 +82,9 @@ pub(super) fn sync_zone_evidence_list(
                         _ => "n/a".to_string(),
                     };
                     let selected = fish_filter.selected_fish == Some(entry.fish_id);
-                    let icon_path = entry
-                        .icon_url
-                        .clone()
-                        .or_else(|| fish.icon_by_id.get(&entry.fish_id).cloned());
+                    let icon_path = fish
+                        .icon_url_for_fish(entry.fish_id)
+                        .or_else(|| entry.icon_url.clone());
                     (
                         selected,
                         icon_path,
