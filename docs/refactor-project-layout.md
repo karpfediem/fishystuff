@@ -69,6 +69,25 @@ This note defines the staged split of the current `zonegen/` workspace into expl
 6. Reassess the existing top-level `bot/` crate, keep it runtime-only, and align it to the shared-client boundary.
 7. Reduce `zonegen/` to migration shims, docs noting moved destinations, and any still-unmoved legacy content.
 
+## Status After This Sweep
+
+Completed in the current migration pass:
+
+- root Cargo workspace added and now owns the active Rust crates
+- shared crates moved to `lib/`
+- API server plus SQL/config/deploy files moved to `api/`
+- Bevy WASM runtime moved to `map/`
+- offline tooling crates moved to `tools/`
+- map build script moved to `tools/scripts/build_map.sh`
+- `zonegen/` no longer contains the active Cargo workspace
+
+Remaining `zonegen/` contents are now primarily:
+
+- legacy local data under `zonegen/data/`
+- legacy images and baked outputs under `zonegen/images/`
+- older docs under `zonegen/docs/`
+- `devenv` and other migration-era workspace residue
+
 ## Guardrails During Migration
 
 - Do not create a second long-lived architecture split between root and `zonegen/`.

@@ -9,3 +9,13 @@ This component should contain:
 - documentation for local bake, import, and maintenance workflows
 
 Scripts should stay thin. If a script accumulates business logic, move that logic into a Rust crate and keep the script as a small wrapper.
+
+Current migration contents:
+
+- `tools/fishystuff_ingest`
+- `tools/fishystuff_tilegen`
+- `tools/fishystuff_dolt_import`
+- `tools/scripts/build_map.sh`
+- `tools/scripts/rebuild_region_groups_overlay.sh`
+- `tools/scripts/rebuild_water_overlay.sh`
+- `tools/scripts/xlsx-*`
