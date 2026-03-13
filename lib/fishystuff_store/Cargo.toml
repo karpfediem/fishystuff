@@ -1,0 +1,11 @@
+[package]
+name = "fishystuff_store"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+rusqlite = { workspace = true }
+fishystuff_core = { path = "../fishystuff_core" }
+
+[dev-dependencies]

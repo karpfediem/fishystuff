@@ -1,0 +1,12 @@
+[package]
+name = "fishystuff_analytics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+fishystuff_core = { path = "../fishystuff_core" }
+fishystuff_store = { path = "../fishystuff_store" }
+fishystuff_zones_meta = { path = "../fishystuff_zones_meta" }

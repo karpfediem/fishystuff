@@ -2,6 +2,13 @@
 resolver = "2"
 members = [
   "bot",
+  "lib/fishystuff_analytics",
+  "lib/fishystuff_api",
+  "lib/fishystuff_client",
+  "lib/fishystuff_config",
+  "lib/fishystuff_core",
+  "lib/fishystuff_store",
+  "lib/fishystuff_zones_meta",
 ]
 exclude = [
   "zonegen",
