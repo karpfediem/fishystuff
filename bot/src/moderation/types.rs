@@ -1,7 +1,7 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{ChannelId, Message};
+use std::borrow::Cow;
+use std::collections::HashMap;
 
 /// What the action is operating on and how.
 pub struct PurgeParams<'a> {
@@ -56,7 +56,13 @@ pub struct PurgeStats {
     pub channels_touched: usize,
 }
 impl PurgeStats {
-    pub fn add_channel(&mut self) { self.channels_touched += 1; }
-    pub fn add_targeted(&mut self, n: usize) { self.targeted += n; }
-    pub fn add_deleted(&mut self, n: usize) { self.deleted += n; }
+    pub fn add_channel(&mut self) {
+        self.channels_touched += 1;
+    }
+    pub fn add_targeted(&mut self, n: usize) {
+        self.targeted += n;
+    }
+    pub fn add_deleted(&mut self, n: usize) {
+        self.deleted += n;
+    }
 }

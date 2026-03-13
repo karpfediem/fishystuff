@@ -12,7 +12,6 @@ use std::env;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{Builder, CreateMessage};
 use serenity::FullEvent;

@@ -34,7 +34,13 @@ fn dir_names<P: AsRef<Path>>(path: P) -> Vec<String> {
         .filter(|x| x.as_ref().is_ok_and(|entry| entry.path().is_dir()))
         .map(|y| {
             let entry = y.unwrap();
-            entry.path().file_name().unwrap().to_str().unwrap().to_string()
+            entry
+                .path()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string()
         })
         .collect();
 

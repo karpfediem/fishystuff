@@ -61,9 +61,8 @@ struct TrapConfig {
 
 impl TrapConfig {
     fn from_env() -> Option<Self> {
-        let channel_id = serenity::ChannelId::new(
-            u64::from_str(&env::var("TRAP_CHANNEL_ID").ok()?).ok()?,
-        );
+        let channel_id =
+            serenity::ChannelId::new(u64::from_str(&env::var("TRAP_CHANNEL_ID").ok()?).ok()?);
         let purge_window_secs = env::var("TRAP_PURGE_WINDOW_S")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
@@ -136,7 +135,7 @@ pub async fn trap_event_handler(
                     cfg.fallback_timeout_min,
                     "Trap channel violation",
                 )
-                    .await
+                .await
                 {
                     tracing::warn!(
                         target: "bot::moderation::handler::trap",
@@ -170,10 +169,10 @@ pub async fn trap_event_handler(
             let params = PurgeParams {
                 offending_message: new_message,
                 window_secs: cfg.purge_window_secs,
-                channel_allowlist: None,                      // purge across the guild
-                reference_now_secs: now_unix(),               // arrival-based window
-                max_total: None,                              // no cap
-                action_label: action_label.into(),            // e.g., "[TRAP] kick" or "[TRAP] timeout 9999m"
+                channel_allowlist: None,           // purge across the guild
+                reference_now_secs: now_unix(),    // arrival-based window
+                max_total: None,                   // no cap
+                action_label: action_label.into(), // e.g., "[TRAP] kick" or "[TRAP] timeout 9999m"
                 extra_note: Some(Cow::from(extra)),
             };
 

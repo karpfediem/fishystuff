@@ -38,7 +38,10 @@ fn validate_path(user_path: &Path, base_path: &Path) -> Result<PathBuf, Error> {
 
     if user.starts_with(&base) {
         Ok(user)
-    } else if user.canonicalize().is_ok_and(|abs| abs.starts_with("/nix/store/")) {
+    } else if user
+        .canonicalize()
+        .is_ok_and(|abs| abs.starts_with("/nix/store/"))
+    {
         Ok(user)
     } else {
         Err("Access denied: path traversal attempt detected.".into())
@@ -127,7 +130,11 @@ pub async fn fish(
         name_encoded,
         name_encoded
     );
-    let waypoint_readme_url = format!("{}FishBookmark/{}#readme", BASE_URL.to_string(), name_encoded);
+    let waypoint_readme_url = format!(
+        "{}FishBookmark/{}#readme",
+        BASE_URL.to_string(),
+        name_encoded
+    );
 
     ctx.send(create_waypoint_reply(
         name,

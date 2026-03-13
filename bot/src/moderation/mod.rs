@@ -1,8 +1,8 @@
-mod debug_perms;
-pub(crate) mod index;
-pub(crate) mod handler;
-mod types;
 pub(crate) mod actions;
+mod debug_perms;
+pub(crate) mod handler;
+pub(crate) mod index;
+mod types;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 

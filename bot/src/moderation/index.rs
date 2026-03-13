@@ -4,9 +4,9 @@
 use std::collections::{HashMap, VecDeque};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::moderation::now_unix;
 use dashmap::DashMap;
 use poise::serenity_prelude as serenity;
-use crate::moderation::now_unix;
 
 const PER_USER_HARD_CAP: usize = 20_000;
 
@@ -55,7 +55,9 @@ impl DashRecentIndex {
 #[async_trait::async_trait]
 impl RecentIndex for DashRecentIndex {
     async fn record(&self, msg: &serenity::Message) {
-        if msg.author.bot { return; }
+        if msg.author.bot {
+            return;
+        }
         let arrival_secs = now_unix();
         let msg_ts_secs = msg.timestamp.unix_timestamp();
         let cutoff = arrival_secs - self.retention_secs;
@@ -65,7 +67,9 @@ impl RecentIndex for DashRecentIndex {
             E::Occupied(mut occ) => {
                 let dq = occ.get_mut();
                 while let Some(front) = dq.front() {
-                    if front.arrival_secs >= cutoff { break; }
+                    if front.arrival_secs >= cutoff {
+                        break;
+                    }
                     dq.pop_front();
                 }
                 dq.push_back(Entry {
@@ -76,7 +80,9 @@ impl RecentIndex for DashRecentIndex {
                 });
                 if dq.len() > PER_USER_HARD_CAP {
                     let drop_n = dq.len() - PER_USER_HARD_CAP;
-                    for _ in 0..drop_n { dq.pop_front(); }
+                    for _ in 0..drop_n {
+                        dq.pop_front();
+                    }
                 }
             }
             E::Vacant(vac) => {
@@ -99,12 +105,20 @@ impl RecentIndex for DashRecentIndex {
         reference_now_secs: i64,
     ) -> HashMap<serenity::ChannelId, Vec<serenity::MessageId>> {
         let cutoff = reference_now_secs - seconds as i64;
-        let Some(dq) = self.inner.get(&user_id) else { return HashMap::new(); };
+        let Some(dq) = self.inner.get(&user_id) else {
+            return HashMap::new();
+        };
 
-        let mut per_channel: HashMap<serenity::ChannelId, Vec<serenity::MessageId>> = HashMap::new();
+        let mut per_channel: HashMap<serenity::ChannelId, Vec<serenity::MessageId>> =
+            HashMap::new();
         for e in dq.iter().rev() {
-            if e.arrival_secs < cutoff { break; }
-            per_channel.entry(e.channel_id).or_default().push(e.message_id);
+            if e.arrival_secs < cutoff {
+                break;
+            }
+            per_channel
+                .entry(e.channel_id)
+                .or_default()
+                .push(e.message_id);
         }
         per_channel
     }
@@ -116,11 +130,15 @@ impl RecentIndex for DashRecentIndex {
         reference_now_secs: i64,
     ) -> HashMap<serenity::ChannelId, u64> {
         let cutoff = reference_now_secs - seconds as i64;
-        let Some(dq) = self.inner.get(&user_id) else { return HashMap::new(); };
+        let Some(dq) = self.inner.get(&user_id) else {
+            return HashMap::new();
+        };
 
         let mut per_channel: HashMap<serenity::ChannelId, u64> = HashMap::new();
         for e in dq.iter().rev() {
-            if e.arrival_secs < cutoff { break; }
+            if e.arrival_secs < cutoff {
+                break;
+            }
             *per_channel.entry(e.channel_id).or_default() += 1;
         }
         per_channel
@@ -138,7 +156,9 @@ impl RecentIndex for std::sync::Arc<DashRecentIndex> {
         seconds: u64,
         reference_now_secs: i64,
     ) -> std::collections::HashMap<serenity::ChannelId, Vec<serenity::MessageId>> {
-        (**self).collect_since_at(user_id, seconds, reference_now_secs).await
+        (**self)
+            .collect_since_at(user_id, seconds, reference_now_secs)
+            .await
     }
     async fn counts_since_at(
         &self,
@@ -146,6 +166,8 @@ impl RecentIndex for std::sync::Arc<DashRecentIndex> {
         seconds: u64,
         reference_now_secs: i64,
     ) -> std::collections::HashMap<serenity::ChannelId, u64> {
-        (**self).counts_since_at(user_id, seconds, reference_now_secs).await
+        (**self)
+            .counts_since_at(user_id, seconds, reference_now_secs)
+            .await
     }
 }

@@ -92,7 +92,6 @@ impl ModeratorActions {
         );
         let summary_msg = self.poster.post_to_mod_info(http, summary).await?;
 
-
         // 3) Forward evidence to #mod-info thread (oldest → newest for readability).
         //    NOTE: We forward right after the summary. Moderators can click through even if deletes
         //    complete before all forwards land.
@@ -107,7 +106,7 @@ impl ModeratorActions {
             summary_msg.channel_id,
             Some(summary_msg.id),
         )
-            .await?;
+        .await?;
 
         let mut forwarded = 0usize;
         tracing::debug!(target:"mod.actions","forwarding start total={}", total_targets);

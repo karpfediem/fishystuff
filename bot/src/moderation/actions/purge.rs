@@ -8,8 +8,8 @@ use tokio::time::sleep;
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{ChannelId, Http};
 
-use crate::moderation::index::{DashRecentIndex, RecentIndex};
 use crate::moderation::actions::{notify, ModeratorActions};
+use crate::moderation::index::{DashRecentIndex, RecentIndex};
 use crate::moderation::types::{PerChannelTargets, PurgeParams, PurgeStats};
 
 #[async_trait::async_trait]
@@ -29,12 +29,11 @@ pub trait Purger: Send + Sync {
     ) -> serenity::Result<()>;
 }
 
-
 /// Default purger backed by Serenity HTTP.
 pub struct SerenityPurger;
 
-impl SerenityPurger{
-    pub fn new() ->Self {
+impl SerenityPurger {
+    pub fn new() -> Self {
         Self {}
     }
 }

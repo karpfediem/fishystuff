@@ -78,7 +78,7 @@ async fn main() {
             Box::pin(async move {
                 // Register current slash commands
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                
+
                 let index = Arc::new(DashRecentIndex::new(180)); // shared
                 let burst = BurstState::new();
 
@@ -90,7 +90,6 @@ async fn main() {
                 let purger = SerenityPurger::new();
 
                 let actions = ModeratorActions::new(Arc::clone(&index), poster, purger);
-
 
                 Ok(Data {
                     index,
