@@ -52,7 +52,8 @@ Repository-level notes for working in this monorepo.
 - The native `devenv` process graph is readiness-driven:
   - `db -> api`
   - `map-build -> cdn-stage -> cdn`
-  - `site-tailwind -> site-build -> site`
+  - `site-tailwind -> site-build`
+  - `site` waits for `site-build`, `cdn`, and `api`
 - The managed stack uses SecretSpec's `api` profile by default and reclaims stale
   local API/CDN listeners before rebinding those ports.
 - Shared process readiness helpers live under `tools/scripts/devenv_process_lib.sh`.

@@ -33,5 +33,13 @@ Or start the full local stack from the repo root:
 - `devenv up`
 
 The repo-level `devenv` stack now uses the native process graph with explicit
-readiness ordering, so the local site server waits for the initial site build,
-but it no longer blocks on unrelated API/CDN startup before it can serve `.out`.
+readiness ordering:
+
+- `site-tailwind -> site-build`
+- `map-build -> cdn-stage -> cdn`
+- `db -> api`
+- `site` waits for `site-build`, `cdn`, and `api`
+
+That means the local site server only starts once the generated site output
+exists and the local API/CDN endpoints referenced by `.out/runtime-config.js`
+are already reachable.

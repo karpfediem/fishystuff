@@ -58,10 +58,8 @@ in {
   processes.db = {
     exec = "./tools/scripts/run_db_server.sh";
     ports.sql.allocate = 3306;
-    ready = {
-      notify = true;
-      timeout = 30;
-    };
+    ready.notify = true;
+    ready.timeout = 30;
     env = {
       DB_HOST = dbHost;
       DB_PORT = dbPort;
@@ -70,28 +68,26 @@ in {
 
   processes.map-build = {
     exec = "./tools/scripts/watch_map_runtime.sh";
-    ready = {
-      notify = true;
-      timeout = 300;
-    };
+    ready.notify = true;
+    ready.timeout = 300;
   };
 
   processes.cdn-stage = {
     exec = "./tools/scripts/watch_cdn_stage.sh";
-    ready = {
-      notify = true;
-      timeout = 120;
-    };
+    ready.notify = true;
+    ready.timeout = 120;
     after = [ "devenv:processes:map-build" ];
   };
 
   processes.cdn = {
     exec = "./tools/scripts/run_cdn_server.sh";
     ports.http.allocate = 4040;
-    ready = {
-      notify = true;
-      timeout = 30;
+    ready.http.get = {
+      host = cdnHost;
+      port = config.processes.cdn.ports.http.value;
+      path = "/map/runtime-manifest.json";
     };
+    ready.timeout = 30;
     after = [ "devenv:processes:cdn-stage" ];
     env = {
       CDN_HOST = cdnHost;
@@ -102,10 +98,12 @@ in {
   processes.api = {
     exec = "./tools/scripts/run_api_server.sh";
     ports.http.allocate = 8080;
-    ready = {
-      notify = true;
-      timeout = 120;
+    ready.http.get = {
+      host = apiHost;
+      port = config.processes.api.ports.http.value;
+      path = "/api/v1/meta";
     };
+    ready.timeout = 120;
     after = [ "devenv:processes:db" ];
     env = {
       DB_HOST = dbHost;
@@ -118,29 +116,31 @@ in {
 
   processes.site-tailwind = {
     exec = "./tools/scripts/watch_site_tailwind.sh";
-    ready = {
-      notify = true;
-      timeout = 120;
-    };
+    ready.notify = true;
+    ready.timeout = 120;
   };
 
   processes.site-build = {
     exec = "./tools/scripts/watch_site_release.sh";
-    ready = {
-      notify = true;
-      timeout = 300;
-    };
+    ready.notify = true;
+    ready.timeout = 300;
     after = [ "devenv:processes:site-tailwind" ];
   };
 
   processes.site = {
     exec = "./tools/scripts/run_site_server.sh";
     ports.http.allocate = 1990;
-    ready = {
-      notify = true;
-      timeout = 30;
+    ready.http.get = {
+      host = siteHost;
+      port = config.processes.site.ports.http.value;
+      path = "/runtime-config.js";
     };
-    after = [ "devenv:processes:site-build" ];
+    ready.timeout = 30;
+    after = [
+      "devenv:processes:site-build"
+      "devenv:processes:cdn"
+      "devenv:processes:api"
+    ];
     env = {
       SITE_HOST = siteHost;
       SITE_PORT = sitePort;

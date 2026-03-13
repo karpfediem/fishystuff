@@ -35,11 +35,8 @@ graph with explicit readiness checks:
 - `db` must become ready before `api`
 - `map-build` must become ready before `cdn-stage`, which must become ready
   before `cdn`
-- `site-tailwind` must become ready before `site-build`, which must become
-  ready before `site`
-
-The long-running server wrappers share one readiness helper instead of each
-implementing their own ad hoc startup polling.
+- `site-tailwind` must become ready before `site-build`
+- `site` now waits for `site-build`, `cdn`, and `api`
 
 The site build now emits `.out/runtime-config.js` from the current environment.
 That file is the single local-development source of truth for the site/API/CDN
