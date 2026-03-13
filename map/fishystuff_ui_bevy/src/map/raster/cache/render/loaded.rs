@@ -1,0 +1,171 @@
+use bevy::asset::{AssetServer, LoadState};
+use bevy::image::ImageSampler;
+
+use crate::map::camera::mode::ViewMode;
+use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
+use crate::map::render::tile_z;
+use crate::map::spaces::layer_transform::TileSpace;
+use crate::map::spaces::world::MapToWorld;
+use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
+use crate::prelude::*;
+
+use super::super::super::policy::{tile_should_render, TileResidencyState};
+use super::super::{RasterTileCache, RasterTileEntity, TilePixelData, TileState, TileStats};
+use super::geometry::{collect_tile_zone_rgbs, needs_affine_quad, tile_quad_mesh, tile_world_rect};
+
+impl RasterTileCache {
+    pub(crate) fn update_loaded(
+        &mut self,
+        commands: &mut Commands,
+        images: &mut Assets<Image>,
+        meshes: &mut Assets<Mesh>,
+        materials: &mut Assets<ColorMaterial>,
+        asset_server: &AssetServer,
+        layer_registry: &LayerRegistry,
+        layer_runtime: &LayerRuntime,
+        map_to_world: MapToWorld,
+        view_mode: ViewMode,
+        residency: &TileResidencyState,
+        stats: &mut TileStats,
+    ) {
+        for (key, entry) in self.entries.iter_mut() {
+            if entry.state != TileState::Loading {
+                continue;
+            }
+            match asset_server.get_load_state(&entry.handle) {
+                Some(LoadState::Failed(_)) => {
+                    entry.state = TileState::Failed;
+                    if stats.inflight > 0 {
+                        stats.inflight -= 1;
+                    }
+                }
+                Some(LoadState::Loaded) => {
+                    let Some(spec) = layer_registry.get(key.layer) else {
+                        entry.state = TileState::Failed;
+                        if stats.inflight > 0 {
+                            stats.inflight -= 1;
+                        }
+                        continue;
+                    };
+                    let Some(world_transform) = spec.world_transform(map_to_world) else {
+                        entry.state = TileState::Failed;
+                        if stats.inflight > 0 {
+                            stats.inflight -= 1;
+                        }
+                        continue;
+                    };
+
+                    if let Some(image) = images.get_mut(&entry.handle) {
+                        image.sampler = ImageSampler::nearest();
+                        if spec.pick_mode == PickMode::ExactTilePixel
+                            && view_mode == ViewMode::Map2D
+                        {
+                            if let Some(data) = image.data.clone() {
+                                let size = image.texture_descriptor.size;
+                                entry.zone_rgbs = collect_tile_zone_rgbs(&data);
+                                entry.pixel_data = Some(TilePixelData {
+                                    width: size.width,
+                                    height: size.height,
+                                    data,
+                                });
+                            }
+                        } else {
+                            entry.zone_rgbs.clear();
+                            entry.pixel_data = None;
+                        }
+                    }
+
+                    if entry.entity.is_none() {
+                        let tile_space = TileSpace::new(spec.tile_px, spec.y_flip);
+                        let depth = tile_z(layer_runtime.z_base(spec.id), spec.max_level, key.z);
+                        if needs_affine_quad(spec, world_transform) {
+                            let Some(mesh) = tile_quad_mesh(key, tile_space, world_transform)
+                            else {
+                                entry.state = TileState::Failed;
+                                if stats.inflight > 0 {
+                                    stats.inflight -= 1;
+                                }
+                                continue;
+                            };
+                            let mesh_handle = meshes.add(mesh);
+                            let material_handle = materials.add(ColorMaterial {
+                                texture: Some(entry.handle.clone()),
+                                color: Color::srgba(1.0, 1.0, 1.0, entry.alpha),
+                                ..default()
+                            });
+                            let entity = commands
+                                .spawn((
+                                    RasterTileEntity,
+                                    World2dRenderEntity,
+                                    world_2d_layers(),
+                                    Mesh2d(mesh_handle),
+                                    MeshMaterial2d(material_handle.clone()),
+                                    Transform::from_translation(Vec3::new(0.0, 0.0, depth)),
+                                ))
+                                .id();
+                            entry.entity = Some(entity);
+                            entry.material = Some(material_handle);
+                            entry.exact_quad = true;
+                            entry.sprite_size = None;
+                            entry.depth = depth;
+                        } else {
+                            let Some((x0, y0, w, h)) =
+                                tile_world_rect(key, tile_space, world_transform)
+                            else {
+                                entry.state = TileState::Failed;
+                                if stats.inflight > 0 {
+                                    stats.inflight -= 1;
+                                }
+                                continue;
+                            };
+                            let entity = commands
+                                .spawn((
+                                    RasterTileEntity,
+                                    World2dRenderEntity,
+                                    world_2d_layers(),
+                                    Sprite {
+                                        image: entry.handle.clone(),
+                                        custom_size: Some(Vec2::new(w, h)),
+                                        color: Color::srgba(1.0, 1.0, 1.0, entry.alpha),
+                                        ..default()
+                                    },
+                                    Transform::from_translation(Vec3::new(
+                                        x0 + w * 0.5,
+                                        y0 + h * 0.5,
+                                        depth,
+                                    )),
+                                ))
+                                .id();
+                            entry.entity = Some(entity);
+                            entry.material = None;
+                            entry.exact_quad = false;
+                            entry.sprite_size = Some(Vec2::new(w, h));
+                            entry.depth = depth;
+                        }
+                    }
+
+                    entry.state = TileState::Ready;
+                    let visible = tile_should_render(key, layer_runtime, residency);
+                    entry.visible = visible;
+                    if let Some(entity) = entry.entity {
+                        commands.entity(entity).insert(
+                            if visible && view_mode == ViewMode::Map2D {
+                                Visibility::Visible
+                            } else {
+                                Visibility::Hidden
+                            },
+                        );
+                    }
+                    if visible {
+                        self.use_counter = self.use_counter.wrapping_add(1);
+                        entry.last_used = self.use_counter;
+                    }
+                    if stats.inflight > 0 {
+                        stats.inflight -= 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}

@@ -1,0 +1,230 @@
+mod registry;
+mod runtime;
+
+use crate::map::spaces::layer_transform::{LayerTransform, WorldTransform};
+use crate::map::spaces::world::MapToWorld;
+
+pub use registry::LayerRegistry;
+pub use runtime::{LayerManifestStatus, LayerRuntime, LayerRuntimeState, LayerSettings};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct LayerId(u16);
+
+impl LayerId {
+    pub const fn from_raw(raw: u16) -> Self {
+        Self(raw)
+    }
+
+    pub const fn as_u16(self) -> u16 {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LodPolicy {
+    pub target_tiles: usize,
+    pub hysteresis_hi: f32,
+    pub hysteresis_lo: f32,
+    pub margin_tiles: i32,
+    pub enable_refine: bool,
+    pub refine_debounce_ms: u32,
+    pub max_detail_tiles: usize,
+    pub max_resident_tiles: usize,
+    pub pinned_coarse_levels: u8,
+    pub coarse_pin_min_level: Option<i32>,
+    pub warm_margin_tiles: i32,
+    pub protected_margin_tiles: i32,
+    pub detail_eviction_weight: f32,
+    pub max_detail_requests_while_camera_moving: usize,
+    pub motion_suppresses_refine: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PickMode {
+    None,
+    ExactTilePixel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayerRenderKind {
+    IdentitySprite,
+    AffineQuad,
+    VectorGeoJson,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayerKind {
+    TiledRaster,
+    VectorGeoJson,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GeometrySpace {
+    MapPixels,
+    World,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StyleMode {
+    FeaturePropertyPalette,
+}
+
+#[derive(Debug, Clone)]
+pub struct VectorSourceSpec {
+    pub url: String,
+    pub revision: String,
+    pub geometry_space: GeometrySpace,
+    pub style_mode: StyleMode,
+    pub feature_id_property: Option<String>,
+    pub color_property: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayerVectorStatus {
+    #[default]
+    Inactive,
+    NotRequested,
+    Fetching,
+    Parsing,
+    Building,
+    Ready,
+    Failed,
+}
+
+#[derive(Debug, Clone)]
+pub struct LayerSpec {
+    pub id: LayerId,
+    pub key: String,
+    pub name: String,
+    pub visible_default: bool,
+    pub opacity_default: f32,
+    pub z_base: f32,
+    pub kind: LayerKind,
+    pub tileset_url: String,
+    pub tile_url_template: String,
+    pub tileset_version: String,
+    pub vector_source: Option<VectorSourceSpec>,
+    pub transform: LayerTransform,
+    pub tile_px: u32,
+    pub max_level: u8,
+    pub y_flip: bool,
+    pub lod_policy: LodPolicy,
+    pub request_weight: f32,
+    pub pick_mode: PickMode,
+    pub display_order: i32,
+}
+
+impl LayerSpec {
+    pub fn world_transform(&self, map_to_world: MapToWorld) -> Option<WorldTransform> {
+        WorldTransform::new(self.transform, map_to_world)
+    }
+
+    pub fn render_kind(&self) -> LayerRenderKind {
+        if self.kind == LayerKind::VectorGeoJson {
+            return LayerRenderKind::VectorGeoJson;
+        }
+        match self.transform {
+            LayerTransform::IdentityMapSpace => LayerRenderKind::IdentitySprite,
+            LayerTransform::AffineToMap(_) | LayerTransform::AffineToWorld(_) => {
+                LayerRenderKind::AffineQuad
+            }
+        }
+    }
+
+    pub fn is_raster(&self) -> bool {
+        self.kind == LayerKind::TiledRaster
+    }
+
+    pub fn is_vector(&self) -> bool {
+        self.kind == LayerKind::VectorGeoJson
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LayerKind, LayerRegistry, LayerRuntime, LayerVectorStatus, PickMode};
+    use crate::map::spaces::layer_transform::LayerTransform;
+    use fishystuff_api::models::layers::{
+        GeometrySpace, LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo,
+        LayersResponse, LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
+    };
+
+    fn vector_descriptor(with_source: bool) -> LayerDescriptor {
+        LayerDescriptor {
+            layer_id: "region_groups".to_string(),
+            name: "Region Groups".to_string(),
+            enabled: true,
+            kind: LayerKindDto::VectorGeoJson,
+            transform: LayerTransformDto::IdentityMapSpace,
+            tileset: TilesetRef::default(),
+            tile_px: 512,
+            max_level: 0,
+            y_flip: false,
+            vector_source: with_source.then_some(VectorSourceRef {
+                url: "/region_groups/v1.geojson".to_string(),
+                revision: "rg-v1".to_string(),
+                geometry_space: GeometrySpace::MapPixels,
+                style_mode: StyleMode::FeaturePropertyPalette,
+                feature_id_property: Some("id".to_string()),
+                color_property: Some("c".to_string()),
+            }),
+            lod_policy: LodPolicyDto::default(),
+            ui: LayerUiInfo {
+                visible_default: true,
+                opacity_default: 0.75,
+                z_base: 30.0,
+                display_order: 3,
+            },
+            request_weight: 1.0,
+            pick_mode: "none".to_string(),
+        }
+    }
+
+    #[test]
+    fn vector_layer_without_source_is_dropped() {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![vector_descriptor(false)],
+        });
+        assert!(registry.ordered().is_empty());
+    }
+
+    #[test]
+    fn opacity_and_visibility_updates_do_not_reset_vector_status() {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![vector_descriptor(true)],
+        });
+        let layer = registry.ordered().first().expect("vector layer").id;
+
+        let mut runtime = LayerRuntime::default();
+        runtime.sync_to_registry(&registry);
+        runtime.get_mut(layer).expect("layer state").vector_status = LayerVectorStatus::Ready;
+
+        runtime.set_opacity(layer, 0.42);
+        runtime.set_visible(layer, false);
+
+        let state = runtime.get(layer).expect("layer state");
+        assert_eq!(state.vector_status, LayerVectorStatus::Ready);
+        assert!(!state.visible);
+        assert!((state.opacity - 0.42).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn vector_layer_uses_vector_render_kind() {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![vector_descriptor(true)],
+        });
+        let layer = registry.ordered().first().expect("layer");
+        assert_eq!(layer.kind, LayerKind::VectorGeoJson);
+        assert_eq!(layer.pick_mode, PickMode::None);
+        assert!(matches!(layer.transform, LayerTransform::IdentityMapSpace));
+    }
+}

@@ -1,0 +1,47 @@
+[package]
+name = "fishystuff_ui_bevy"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+bevy = { version = "0.18", default-features = false, features = [
+  "bevy_asset",
+  "bevy_core_pipeline",
+  "bevy_image",
+  "bevy_log",
+  "bevy_picking",
+  "bevy_pbr",
+  "bevy_render",
+  "bevy_sprite",
+  "bevy_sprite_render",
+  "bevy_text",
+  "bevy_ui",
+  "bevy_ui_render",
+  "bevy_window",
+  "bevy_winit",
+  "debug",
+  "png",
+  "ui_picking",
+  "webgl2",
+  "webp",
+] }
+bevy_flair = "0.7"
+async-channel = "2"
+gloo-net = { version = "0.5", features = ["http"] }
+js-sys = "0.3"
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Window"] }
+base64 = "0.22"
+earcutr = "0.4"
+fishystuff_api = { path = "../../lib/fishystuff_api" }
+fishystuff_client = { path = "../../lib/fishystuff_client" }
+fishystuff_core = { path = "../../lib/fishystuff_core" }
+image = { workspace = true }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+uuid = { version = "1", features = ["js"] }
+bevy_ecs = { version = "0.18", default-features = false }

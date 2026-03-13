@@ -1,0 +1,110 @@
+use bevy::asset::RenderAssetUsages;
+use bevy::mesh::Indices;
+use bevy::render::render_resource::PrimitiveTopology;
+
+use crate::map::layers::{LayerRenderKind, LayerSpec};
+use crate::map::raster::TileKey;
+use crate::map::spaces::layer_transform::{LayerTransform, TileSpace, WorldTransform};
+use crate::map::spaces::LayerPoint;
+use crate::prelude::*;
+
+const AFFINE_QUAD_EPS: f64 = 1e-9;
+
+pub(super) fn needs_affine_quad(layer: &LayerSpec, world_transform: WorldTransform) -> bool {
+    if layer.render_kind() == LayerRenderKind::IdentitySprite {
+        return false;
+    }
+    let affine = world_transform.layer_to_world;
+    affine.b.abs() > AFFINE_QUAD_EPS
+        || affine.c.abs() > AFFINE_QUAD_EPS
+        || affine.a < 0.0
+        || affine.d < 0.0
+        || matches!(layer.transform, LayerTransform::AffineToMap(_))
+}
+
+pub(super) fn tile_quad_mesh(
+    key: &TileKey,
+    tile_space: TileSpace,
+    world_transform: WorldTransform,
+) -> Option<Mesh> {
+    let corners = tile_layer_corners(key.tx, key.ty, key.z, tile_space)?;
+    let world = corners.map(|corner| world_transform.layer_to_world(corner));
+
+    let positions = vec![
+        [world[0].x as f32, world[0].z as f32, 0.0],
+        [world[1].x as f32, world[1].z as f32, 0.0],
+        [world[2].x as f32, world[2].z as f32, 0.0],
+        [world[3].x as f32, world[3].z as f32, 0.0],
+    ];
+    let uvs = vec![[0.0_f32, 0.0_f32], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.insert_indices(Indices::U32(vec![0, 1, 2, 0, 2, 3]));
+    Some(mesh)
+}
+
+pub(super) fn tile_world_rect(
+    key: &TileKey,
+    tile_space: TileSpace,
+    world_transform: WorldTransform,
+) -> Option<(f32, f32, f32, f32)> {
+    let corners = tile_layer_corners(key.tx, key.ty, key.z, tile_space)?;
+    let world_corners = corners.map(|corner| world_transform.layer_to_world(corner));
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_z = f64::INFINITY;
+    let mut max_z = f64::NEG_INFINITY;
+    for corner in world_corners {
+        min_x = min_x.min(corner.x);
+        max_x = max_x.max(corner.x);
+        min_z = min_z.min(corner.z);
+        max_z = max_z.max(corner.z);
+    }
+    Some((
+        min_x as f32,
+        min_z as f32,
+        (max_x - min_x) as f32,
+        (max_z - min_z) as f32,
+    ))
+}
+
+fn tile_layer_corners(
+    tile_x: i32,
+    tile_y: i32,
+    z: i32,
+    tile_space: TileSpace,
+) -> Option<[LayerPoint; 4]> {
+    let tile_span = tile_space.tile_span_px(z)?;
+    let x0 = tile_x as f64 * tile_span;
+    let x1 = x0 + tile_span;
+    let y0 = tile_y as f64 * tile_span;
+    let y1 = y0 + tile_span;
+    if tile_space.y_flip {
+        Some([
+            LayerPoint::new(x0, y1),
+            LayerPoint::new(x1, y1),
+            LayerPoint::new(x1, y0),
+            LayerPoint::new(x0, y0),
+        ])
+    } else {
+        Some([
+            LayerPoint::new(x0, y0),
+            LayerPoint::new(x1, y0),
+            LayerPoint::new(x1, y1),
+            LayerPoint::new(x0, y1),
+        ])
+    }
+}
+
+pub(super) fn collect_tile_zone_rgbs(data: &[u8]) -> Vec<u32> {
+    let mut zones = std::collections::HashSet::new();
+    for px in data.chunks_exact(4) {
+        zones.insert(fishystuff_core::masks::pack_rgb_u32(px[0], px[1], px[2]));
+    }
+    zones.into_iter().collect()
+}

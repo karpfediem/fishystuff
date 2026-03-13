@@ -10,6 +10,7 @@ members = [
   "lib/fishystuff_core",
   "lib/fishystuff_store",
   "lib/fishystuff_zones_meta",
+  "map/fishystuff_ui_bevy",
 ]
 exclude = [
   "zonegen",
