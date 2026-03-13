@@ -9,6 +9,7 @@ pub use requests::{
     build_zone_stats_request, default_from_patch_id, default_from_ts, now_utc_seconds,
     pick_map_version, spawn_zone_stats_request,
 };
+pub(crate) use requests::{normalize_public_base_url, resolve_public_asset_url};
 pub use state::{
     ApiBootstrapState, FishCatalog, FishEntry, FishFilterState, HoverInfo, HoverLayerSample,
     HoverState, MapDisplayState, Patch, PatchFilterState, PendingRequests, SelectedInfo,
