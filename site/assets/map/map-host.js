@@ -850,13 +850,25 @@ function shouldRewriteToApi(url) {
   return url.pathname.startsWith("/api/");
 }
 
+function shouldRewriteToCdn(url) {
+  return url.pathname.startsWith("/images/") || url.pathname.startsWith("/region_groups/");
+}
+
 export function rewriteApiUrl(input, apiBaseUrl, locationHref = globalThis.location?.href) {
   try {
     const url = new URL(String(input), locationHref);
-    if (url.origin !== new URL(locationHref).origin || !shouldRewriteToApi(url)) {
+    const pageOrigin = new URL(locationHref).origin;
+    if (url.origin !== pageOrigin) {
       return String(input);
     }
-    return `${apiBaseUrl}${url.pathname}${url.search}`;
+    if (shouldRewriteToApi(url)) {
+      return `${apiBaseUrl}${url.pathname}${url.search}`;
+    }
+    if (shouldRewriteToCdn(url)) {
+      const cdnBaseUrl = resolveCdnBaseUrl(globalThis.location);
+      return `${cdnBaseUrl}${url.pathname}${url.search}`;
+    }
+    return String(input);
   } catch (_) {
     return String(input);
   }

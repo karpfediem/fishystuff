@@ -1012,14 +1012,18 @@ test("only API requests are rewritten to the API origin", () => {
   );
   assert.equal(
     rewriteApiUrl("/images/tiles/minimap/v1/tileset.json", apiBaseUrl, locationHref),
-    "/images/tiles/minimap/v1/tileset.json",
+    "https://cdn.fishystuff.fish/images/tiles/minimap/v1/tileset.json",
   );
   assert.equal(
     rewriteApiUrl("/images/tiles/mask/v1/tileset.json", apiBaseUrl, locationHref),
-    "/images/tiles/mask/v1/tileset.json",
+    "https://cdn.fishystuff.fish/images/tiles/mask/v1/tileset.json",
   );
   assert.equal(
     rewriteApiUrl("/images/terrain/v1/manifest.json", apiBaseUrl, locationHref),
-    "/images/terrain/v1/manifest.json",
+    "https://cdn.fishystuff.fish/images/terrain/v1/manifest.json",
+  );
+  assert.equal(
+    rewriteApiUrl("/region_groups/v1.geojson", apiBaseUrl, locationHref),
+    "https://cdn.fishystuff.fish/region_groups/v1.geojson",
   );
 });

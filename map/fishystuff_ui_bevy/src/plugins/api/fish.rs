@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 
 use fishystuff_api::models::fish::{FishListResponse, FishTableResponse};
 
-use super::requests::{normalize_public_base_url, resolve_public_asset_url};
 use super::state::{FishEntry, FishTableFallback, FishTableIndex};
 
 pub(crate) fn build_fish_table_index(
@@ -107,7 +106,7 @@ pub(crate) fn build_fish_catalog_entries(
 
 pub(crate) fn normalize_fish_icon_asset_url(
     value: Option<&str>,
-    public_base_url: Option<&str>,
+    _public_base_url: Option<&str>,
 ) -> Option<String> {
     let raw = value?.trim();
     if raw.is_empty() {
@@ -117,9 +116,8 @@ pub(crate) fn normalize_fish_icon_asset_url(
         return Some(raw.to_string());
     }
 
-    let normalized_base = normalize_public_base_url(public_base_url);
     if let Some(path) = normalize_fish_icon_asset_path(raw) {
-        return resolve_public_asset_url(Some(&path), normalized_base.as_deref()).or(Some(path));
+        return Some(path);
     }
     Some(raw.to_string())
 }
@@ -217,12 +215,12 @@ mod tests {
                 Some("https://cdn.example.com"),
             )
             .as_deref(),
-            Some("https://cdn.example.com/images/FishIcons/00008475.png")
+            Some("/images/FishIcons/00008475.png")
         );
         assert_eq!(
             normalize_fish_icon_asset_url(Some("00820994.png"), Some("https://cdn.example.com"))
                 .as_deref(),
-            Some("https://cdn.example.com/images/FishIcons/00820994.png")
+            Some("/images/FishIcons/00820994.png")
         );
         assert_eq!(
             normalize_fish_icon_asset_url(
@@ -230,7 +228,7 @@ mod tests {
                 Some("https://cdn.example.com"),
             )
             .as_deref(),
-            Some("https://cdn.example.com/images/FishIcons/00820994.png")
+            Some("/images/FishIcons/00820994.png")
         );
     }
 
@@ -273,11 +271,11 @@ mod tests {
         let index = build_fish_table_index(&response, Some("https://cdn.example.com"));
         assert_eq!(
             index.icon_by_id.get(&820998).map(String::as_str),
-            Some("https://cdn.example.com/images/FishIcons/00820998.png")
+            Some("/images/FishIcons/00820998.png")
         );
         assert_eq!(
             index.icon_by_id.get(&247).map(String::as_str),
-            Some("https://cdn.example.com/images/FishIcons/00820998.png")
+            Some("/images/FishIcons/00820998.png")
         );
     }
 
