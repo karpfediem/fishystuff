@@ -1,0 +1,6 @@
+*
+!.gitignore
+!README.md
+!spec/
+!spec/expected-inputs.md
+!spec/layout.md
