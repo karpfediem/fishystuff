@@ -159,10 +159,8 @@ mod tests {
             "/images/terrain/v1/manifest.json"
         );
         assert_eq!(
-            resolve_layer_asset_url(
-                "https://cdn.example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
-            ),
-            "https://cdn.example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
+            resolve_layer_asset_url("https://example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"),
+            "https://example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
         );
     }
 }

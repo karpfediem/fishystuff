@@ -1,5 +1,5 @@
-use bevy::asset::{AssetMetaCheck, AssetPlugin, UnapprovedPathMode};
 use bevy::asset::io::web::WebAssetPlugin;
+use bevy::asset::{AssetMetaCheck, AssetPlugin, UnapprovedPathMode};
 use bevy::prelude::*;
 use bevy::window::{Window, WindowPlugin};
 use bevy_flair::prelude::FlairPlugin;

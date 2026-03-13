@@ -10,6 +10,10 @@ This component should own:
 
 Hand-edited browser-host source stays under `site/assets/map/`. The generated wasm/js map runtime bundle is emitted into `data/cdn/public/map/` with hashed filenames and loaded from the CDN, while the copied Bevy UI stylesheet remains at `site/assets/map/ui/fishystuff.css`.
 
+Each site build also emits `.out/runtime-config.js`, which is the single browser
+runtime source of truth for the resolved site/API/CDN base URLs in local
+development.
+
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 
 For local map development, either run the pieces manually:

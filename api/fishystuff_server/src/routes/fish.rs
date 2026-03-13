@@ -1,15 +1,15 @@
-use axum::Json;
-use axum::extract::{Extension, Query, State, rejection::QueryRejection};
-use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::extract::{rejection::QueryRejection, Extension, Query, State};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
+use axum::Json;
 use serde::Deserialize;
 
 use fishystuff_api::models::fish::{FishListResponse, FishMapResponse, FishTableResponse};
 
-use crate::error::{AppError, AppResult, with_timeout};
+use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
 use crate::routes::public_assets::{
-    absolutize_fish_list_icons, absolutize_fish_map_icons, absolutize_fish_table_icons,
+    normalize_fish_list_icons, normalize_fish_map_icons, normalize_fish_table_icons,
 };
 use crate::state::{RequestId, SharedState};
 use crate::store::FishLang;
@@ -49,11 +49,7 @@ pub async fn list_fish(
     )
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
-    absolutize_fish_list_icons(
-        &headers,
-        &mut response,
-        state.config.images_public_base_url.as_deref(),
-    );
+    normalize_fish_list_icons(&mut response);
 
     let etag = format!("\"{}\"", response.revision);
     let mut response_headers = HeaderMap::new();
@@ -84,7 +80,7 @@ pub async fn list_fish(
 
 pub async fn fish_table(
     State(state): State<SharedState>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     query: Result<Query<FishTableQuery>, QueryRejection>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<Json<FishTableResponse>> {
@@ -99,17 +95,13 @@ pub async fn fish_table(
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
     let mut response = FishTableResponse { fish };
-    absolutize_fish_table_icons(
-        &headers,
-        &mut response,
-        state.config.images_public_base_url.as_deref(),
-    );
+    normalize_fish_table_icons(&mut response);
     Ok(Json(response))
 }
 
 pub async fn fish_map(
     State(state): State<SharedState>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     query: Result<Query<FishMapQuery>, QueryRejection>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<Json<FishMapResponse>> {
@@ -139,11 +131,7 @@ pub async fn fish_map(
     let mut mapping = mapping.ok_or_else(|| {
         AppError::not_found("fish mapping not found").with_request_id(request_id.0)
     })?;
-    absolutize_fish_map_icons(
-        &headers,
-        &mut mapping,
-        state.config.images_public_base_url.as_deref(),
-    );
+    normalize_fish_map_icons(&mut mapping);
     Ok(Json(mapping))
 }
 
@@ -186,7 +174,7 @@ mod tests {
 
     use async_trait::async_trait;
     use axum::extract::{Extension, Query, State};
-    use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
+    use axum::http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode};
     use axum::response::IntoResponse;
     use fishystuff_api::ids::MapVersionId;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
@@ -206,7 +194,7 @@ mod tests {
     use crate::state::{AppState, RequestId};
     use crate::store::{FishLang, Store};
 
-    use super::{FishQuery, list_fish};
+    use super::{list_fish, FishQuery};
 
     struct MockStore;
 
@@ -311,7 +299,7 @@ mod tests {
         let config = AppConfig {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
-            images_public_base_url: None,
+            site_public_base_url: None,
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,
@@ -382,10 +370,7 @@ mod tests {
         assert_eq!(fish[0]["is_dried"], false);
         assert_eq!(fish[0]["catch_methods"][0], "rod");
         assert_eq!(fish[0]["vendor_price"], 120000000);
-        assert_eq!(
-            fish[0]["icon_url"],
-            "https://api.example.test/images/FishIcons/00008474.png"
-        );
+        assert_eq!(fish[0]["icon_url"], "/images/FishIcons/00008474.png");
         assert_eq!(fish[1]["is_dried"], true);
     }
 

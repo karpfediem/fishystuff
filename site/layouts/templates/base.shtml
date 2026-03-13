@@ -41,34 +41,49 @@
       document.documentElement.setAttribute('data-theme', active);
     })();
   </script>
+  <script src="/runtime-config.js"></script>
   <script>
     (function () {
       function normalizeBaseUrl(value) {
         return String(value || '').trim().replace(/\/+$/, '');
       }
 
-      function isLocalHost(hostname) {
-        var host = String(hostname || '').trim().toLowerCase();
-        return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost');
+      function pickBaseUrl(params, runtimeConfig, queryKey, runtimeKey, fallback) {
+        return (
+          normalizeBaseUrl(params.get(queryKey))
+          || normalizeBaseUrl(runtimeConfig && runtimeConfig[runtimeKey])
+          || fallback
+        );
       }
 
-      function resolveDefaultApiBaseUrl(locationLike) {
-        return isLocalHost(locationLike && locationLike.hostname)
-          ? 'http://127.0.0.1:8080'
-          : 'https://api.fishystuff.fish';
-      }
-
-      function resolveDefaultCdnBaseUrl(locationLike) {
-        return isLocalHost(locationLike && locationLike.hostname)
-          ? 'http://127.0.0.1:4040'
-          : 'https://cdn.fishystuff.fish';
-      }
-
+      var runtimeConfig = window.__fishystuffRuntimeConfig || {};
       var params = new URLSearchParams(window.location.search || '');
-      window.__fishystuffApiBaseUrl =
-        normalizeBaseUrl(params.get('api_base')) || resolveDefaultApiBaseUrl(window.location);
-      window.__fishystuffCdnBaseUrl =
-        normalizeBaseUrl(params.get('cdn_base')) || resolveDefaultCdnBaseUrl(window.location);
+      window.__fishystuffSiteBaseUrl = pickBaseUrl(
+        params,
+        runtimeConfig,
+        'site_base',
+        'siteBaseUrl',
+        normalizeBaseUrl(window.location.origin) || 'https://fishystuff.fish',
+      );
+      window.__fishystuffApiBaseUrl = pickBaseUrl(
+        params,
+        runtimeConfig,
+        'api_base',
+        'apiBaseUrl',
+        'https://api.fishystuff.fish',
+      );
+      window.__fishystuffCdnBaseUrl = pickBaseUrl(
+        params,
+        runtimeConfig,
+        'cdn_base',
+        'cdnBaseUrl',
+        'https://cdn.fishystuff.fish',
+      );
+      window.__fishystuffRuntimeConfig = Object.freeze(Object.assign({}, runtimeConfig, {
+        siteBaseUrl: window.__fishystuffSiteBaseUrl,
+        apiBaseUrl: window.__fishystuffApiBaseUrl,
+        cdnBaseUrl: window.__fishystuffCdnBaseUrl,
+      }));
     })();
   </script>
 

@@ -85,12 +85,7 @@ pub(super) fn poll_requests(
             }
             match result {
                 Ok(mut response) => {
-                    let public_base_url = normalize_public_base_url(
-                        bootstrap
-                            .meta
-                            .as_ref()
-                            .and_then(|meta| meta.images_public_base_url.as_deref()),
-                    );
+                    let public_base_url = normalize_public_base_url(None);
                     for entry in &mut response.distribution {
                         entry.icon_url = normalize_fish_icon_asset_url(
                             entry.icon_url.as_deref(),
@@ -113,12 +108,7 @@ pub(super) fn poll_requests(
             pending.fish_catalog = None;
             match result {
                 Ok(response) => {
-                    let public_base_url = normalize_public_base_url(
-                        bootstrap
-                            .meta
-                            .as_ref()
-                            .and_then(|meta| meta.images_public_base_url.as_deref()),
-                    );
+                    let public_base_url = normalize_public_base_url(None);
                     let (entries, icon_by_id) = build_fish_catalog_entries(
                         response.fish,
                         response.fish_table,

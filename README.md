@@ -41,6 +41,10 @@ graph with explicit readiness checks:
 The long-running server wrappers share one readiness helper instead of each
 implementing their own ad hoc startup polling.
 
+The site build now emits `.out/runtime-config.js` from the current environment.
+That file is the single local-development source of truth for the site/API/CDN
+base URLs consumed by the browser host and Bevy runtime.
+
 Initialize your local SecretSpec provider and check the repo profiles you need:
 
 ```bash

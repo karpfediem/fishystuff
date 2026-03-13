@@ -95,9 +95,12 @@ Repository-level notes for working in this monorepo.
   - `data/cdn/public/map/runtime-manifest.json`
   - `data/cdn/public/map/fishystuff_ui_bevy.<hash>.js`
   - `data/cdn/public/map/fishystuff_ui_bevy_bg.<hash>.wasm`
+- Generated site runtime config lives under:
+  - `site/.out/runtime-config.js`
 - Runtime-served image, tile, terrain, GeoJSON, and icon assets live under `data/cdn/public/`.
 - Treat the contents of `data/cdn/public/` as local CDN payload state; keep only `.gitkeep` placeholders tracked there.
 - `site/` should reference CDN-served runtime assets rather than owning a second copy under `site/assets/`.
+- `api/` should return normalized relative asset paths and should not resolve CDN base URLs itself.
 - Keep raw imagery, terrain inputs, and scratch outputs under `data/`, not under `site/assets/`.
 - Do not hand-edit generated bundle outputs.
 - Do not commit unrelated generated build outputs.

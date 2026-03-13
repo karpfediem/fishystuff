@@ -6,7 +6,6 @@ use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use super::super::state::{ApiBootstrapState, PatchFilterState};
 
-const LOCAL_CDN_BASE_URL: &str = "http://127.0.0.1:4040";
 const PROD_CDN_BASE_URL: &str = "https://cdn.fishystuff.fish";
 
 pub(super) fn pick_map_version(meta: &MetaResponse) -> Option<String> {
@@ -132,8 +131,10 @@ pub(super) fn absolutize_layers_response_assets(
 fn fallback_public_base_url() -> Option<String> {
     #[cfg(target_arch = "wasm32")]
     {
-        let hostname = web_sys::window()?.location().hostname().ok()?;
-        return Some(fallback_public_base_url_for_hostname(&hostname).to_string());
+        if let Some(configured) = browser_global_base_url("__fishystuffCdnBaseUrl") {
+            return Some(configured);
+        }
+        return Some(PROD_CDN_BASE_URL.to_string());
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -142,17 +143,14 @@ fn fallback_public_base_url() -> Option<String> {
     }
 }
 
-fn fallback_public_base_url_for_hostname(hostname: &str) -> &'static str {
-    let hostname = hostname.trim().to_ascii_lowercase();
-    if hostname == "localhost"
-        || hostname == "127.0.0.1"
-        || hostname == "::1"
-        || hostname.ends_with(".localhost")
-    {
-        LOCAL_CDN_BASE_URL
-    } else {
-        PROD_CDN_BASE_URL
-    }
+#[cfg(target_arch = "wasm32")]
+fn browser_global_base_url(name: &str) -> Option<String> {
+    use wasm_bindgen::JsValue;
+
+    let window = web_sys::window()?;
+    let value = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str(name)).ok()?;
+    let value = value.as_string()?;
+    normalize_public_base_url(Some(value.as_str()))
 }
 
 #[cfg(test)]
@@ -163,7 +161,7 @@ mod tests {
 
     use super::{
         absolutize_layers_response_assets, default_from_patch_id, default_from_ts,
-        fallback_public_base_url_for_hostname, resolve_public_asset_url,
+        resolve_public_asset_url,
     };
     use fishystuff_api::ids::PatchId;
     use fishystuff_api::models::layers::{GeometrySpace, StyleMode};
@@ -206,22 +204,6 @@ mod tests {
             )
             .as_deref(),
             Some("https://cdn.example.com/images/terrain_drape/minimap/v1/manifest.json")
-        );
-    }
-
-    #[test]
-    fn fallback_public_base_url_uses_local_or_production_hosts() {
-        assert_eq!(
-            fallback_public_base_url_for_hostname("localhost"),
-            "http://127.0.0.1:4040"
-        );
-        assert_eq!(
-            fallback_public_base_url_for_hostname("map.localhost"),
-            "http://127.0.0.1:4040"
-        );
-        assert_eq!(
-            fallback_public_base_url_for_hostname("fishystuff.fish"),
-            "https://cdn.fishystuff.fish"
         );
     }
 

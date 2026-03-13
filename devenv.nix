@@ -48,6 +48,9 @@ in {
     FISHYSTUFF_DEV_API_PORT = apiPort;
     FISHYSTUFF_DEV_CDN_PORT = cdnPort;
     FISHYSTUFF_DEV_SITE_PORT = sitePort;
+    FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${apiPort}";
+    FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${cdnPort}";
+    FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${sitePort}";
   };
 
   processes.db = {

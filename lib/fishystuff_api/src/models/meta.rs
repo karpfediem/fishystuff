@@ -7,8 +7,6 @@ pub struct MetaResponse {
     #[serde(default)]
     pub api_version: String,
     #[serde(default)]
-    pub images_public_base_url: Option<String>,
-    #[serde(default)]
     pub terrain_manifest_url: Option<String>,
     #[serde(default)]
     pub terrain_drape_manifest_url: Option<String>,

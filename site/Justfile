@@ -3,13 +3,14 @@
 build-release:
     rm -rf .out
     zine release --output .out
+    bun run ./scripts/write-runtime-config.mjs --out .out/runtime-config.js
 
 release: build-release
 
 # rebuild site whenever sources change (ignore .out)
 watch-release:
     watchexec -r \
-      -w content -w layouts -w assets -w zine.ziggy \
+      -w content -w layouts -w assets -w scripts -w zine.ziggy \
       --exts smd,shtml,ziggy,css,js \
       -- bash -lc 'just build-release'
 

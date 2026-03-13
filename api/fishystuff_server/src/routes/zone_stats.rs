@@ -1,17 +1,17 @@
-use axum::Json;
-use axum::extract::{Extension, State, rejection::JsonRejection};
+use axum::extract::{rejection::JsonRejection, Extension, State};
 use axum::http::HeaderMap;
+use axum::Json;
 
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 
-use crate::error::{AppError, AppResult, with_timeout};
+use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
-use crate::routes::public_assets::absolutize_zone_stats_icons;
+use crate::routes::public_assets::normalize_zone_stats_icons;
 use crate::state::{RequestId, SharedState};
 
 pub async fn zone_stats(
     State(state): State<SharedState>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     Extension(request_id): Extension<RequestId>,
     payload: Result<Json<ZoneStatsRequest>, JsonRejection>,
 ) -> AppResult<Json<ZoneStatsResponse>> {
@@ -27,11 +27,7 @@ pub async fn zone_stats(
                 AppError::internal(format!("zone_stats cache decode failed: {err}"))
                     .with_request_id(request_id.0.clone())
             })?;
-            absolutize_zone_stats_icons(
-                &headers,
-                &mut parsed,
-                state.config.images_public_base_url.as_deref(),
-            );
+            normalize_zone_stats_icons(&mut parsed);
             return Ok(Json(parsed));
         }
     }
@@ -52,10 +48,6 @@ pub async fn zone_stats(
     }
 
     let mut response = raw_response;
-    absolutize_zone_stats_icons(
-        &headers,
-        &mut response,
-        state.config.images_public_base_url.as_deref(),
-    );
+    normalize_zone_stats_icons(&mut response);
     Ok(Json(response))
 }

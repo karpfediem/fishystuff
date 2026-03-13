@@ -18,7 +18,7 @@ pub(super) fn apply_meta_response(
     terrain_config: &mut Terrain3dConfig,
     meta: MetaResponse,
 ) {
-    let public_base_url = normalize_public_base_url(meta.images_public_base_url.as_deref());
+    let public_base_url = normalize_public_base_url(None);
     if let Some(url) = resolve_public_asset_url(
         meta.terrain_manifest_url.as_deref(),
         public_base_url.as_deref(),
@@ -76,12 +76,7 @@ pub(super) fn apply_layers_response(
     layer_runtime: &mut LayerRuntime,
     mut response: LayersResponse,
 ) {
-    let public_base_url = normalize_public_base_url(
-        bootstrap
-            .meta
-            .as_ref()
-            .and_then(|meta| meta.images_public_base_url.as_deref()),
-    );
+    let public_base_url = normalize_public_base_url(None);
     absolutize_layers_response_assets(&mut response, public_base_url.as_deref());
 
     let layer_count = response.layers.len();

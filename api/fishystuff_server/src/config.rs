@@ -5,7 +5,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use fishystuff_api::ids::MapVersionId;
 use fishystuff_api::models::meta::MetaDefaults;
 use fishystuff_config::{load_config, Config as FsConfig, DoltSqlConfig};
-use fishystuff_core::asset_urls::normalize_site_asset_path;
+use fishystuff_core::asset_urls::normalize_public_asset_reference;
 
 #[derive(Debug, Clone)]
 pub struct ZoneStatusConfig {
@@ -34,7 +34,7 @@ impl Default for ZoneStatusConfig {
 pub struct AppConfig {
     pub bind: String,
     pub database_url: String,
-    pub images_public_base_url: Option<String>,
+    pub site_public_base_url: Option<String>,
     pub terrain_manifest_url: Option<String>,
     pub terrain_drape_manifest_url: Option<String>,
     pub terrain_height_tiles_url: Option<String>,
@@ -81,6 +81,11 @@ impl AppConfig {
         let mut database_url = std::env::var("FISHYSTUFF_DATABASE_URL")
             .ok()
             .or_else(|| dolt_sql_to_database_url(&fs_config.dolt_sql));
+        let mut site_public_base_url = normalize_optional_public_base_url(
+            std::env::var("FISHYSTUFF_RUNTIME_SITE_BASE_URL")
+                .ok()
+                .as_deref(),
+        );
         let mut images_dir = resolve(&fs_config.paths.images_dir).unwrap_or_else(|| {
             resolve_default_runtime_dir(
                 config_dir.as_deref(),
@@ -91,11 +96,6 @@ impl AppConfig {
                 ],
             )
         });
-        let mut images_public_base_url = fs_config
-            .paths
-            .images_public_base_url
-            .as_ref()
-            .and_then(|value| normalize_public_base_url(value));
         let mut terrain_manifest_url =
             normalize_optional_url(fs_config.paths.terrain_manifest_url.as_deref());
         let mut terrain_drape_manifest_url =
@@ -158,18 +158,18 @@ impl AppConfig {
                     );
                     i += 2;
                 }
+                "--site-public-base-url" => {
+                    let value = args
+                        .get(i + 1)
+                        .ok_or_else(|| anyhow!("--site-public-base-url requires value"))?;
+                    site_public_base_url = normalize_optional_public_base_url(Some(value));
+                    i += 2;
+                }
                 "--images-dir" => {
                     images_dir = PathBuf::from(
                         args.get(i + 1)
                             .ok_or_else(|| anyhow!("--images-dir requires value"))?,
                     );
-                    i += 2;
-                }
-                "--images-public-base-url" => {
-                    let value = args
-                        .get(i + 1)
-                        .ok_or_else(|| anyhow!("--images-public-base-url requires value"))?;
-                    images_public_base_url = normalize_public_base_url(value);
                     i += 2;
                 }
                 "--terrain-manifest-url" => {
@@ -312,7 +312,7 @@ impl AppConfig {
         Ok(Self {
             bind,
             database_url,
-            images_public_base_url,
+            site_public_base_url,
             terrain_manifest_url,
             terrain_drape_manifest_url,
             terrain_height_tiles_url,
@@ -365,12 +365,16 @@ fn normalize_public_base_url(value: &str) -> Option<String> {
     Some(trimmed.trim_end_matches('/').to_string())
 }
 
+fn normalize_optional_public_base_url(value: Option<&str>) -> Option<String> {
+    normalize_public_base_url(value?)
+}
+
 fn normalize_optional_url(value: Option<&str>) -> Option<String> {
     let raw = value?.trim();
     if raw.is_empty() {
         return None;
     }
-    Some(normalize_site_asset_path(raw))
+    Some(normalize_public_asset_reference(raw))
 }
 
 fn detect_local_manifest_url(

@@ -35,7 +35,7 @@ use mysql::{Pool, Row};
 use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
 use crate::store::queries;
-use crate::store::{FishLang, Store, validate_dolt_ref};
+use crate::store::{validate_dolt_ref, FishLang, Store};
 use catalog::{
     fish_catch_methods_from_description, fish_grade_from_db, fish_icon_url_from_db, fish_is_dried,
     merge_fish_catalog_row, parse_positive_i64,
@@ -45,11 +45,11 @@ use layers::{
     resolve_layer_asset_url, substitute_map_version,
 };
 use stats::{
-    XorShift64, align_alpha, align_probs, beta_ci, compute_status, gaussian_blur_grid,
-    pixel_to_tile_index, sample_dirichlet, seed_from_drift, seed_from_params, time_weight,
+    align_alpha, align_probs, beta_ci, compute_status, gaussian_blur_grid, pixel_to_tile_index,
+    sample_dirichlet, seed_from_drift, seed_from_params, time_weight, XorShift64,
 };
 use util::{
-    clamp_i64_to_i32, clamp_i64_to_u8, clamp_i64_to_u32, clamp_i64_to_usize, db_unavailable,
+    clamp_i64_to_i32, clamp_i64_to_u32, clamp_i64_to_u8, clamp_i64_to_usize, db_unavailable,
     epoch_to_mysql_datetime, event_source_kind_from_db, events_schema_or_db_unavailable,
     is_layers_schema_error, is_missing_table, normalize_optional_string, row_f64, row_i64,
     row_opt_f64, row_string, row_u32_opt, synthetic_events_snapshot_revision,
@@ -1483,7 +1483,6 @@ impl Store for DoltMySqlStore {
             let canonical_map = CanonicalMapInfo::default();
             Ok(MetaResponse {
                 api_version: API_VERSION.to_string(),
-                images_public_base_url: None,
                 terrain_manifest_url: None,
                 terrain_drape_manifest_url: None,
                 terrain_height_tiles_url: None,
@@ -1786,11 +1785,11 @@ mod tests {
     use crate::config::ZoneStatusConfig;
 
     use super::{
-        DoltMySqlStore, FishCatalogRow, FishTableEntry, FishTableIndex, catalog::is_web_icon_path,
-        compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
-        fish_icon_url_from_db, fish_is_dried, merge_fish_catalog_row, parse_layer_kind,
-        parse_positive_i64, parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
-        synthetic_events_snapshot_revision,
+        catalog::is_web_icon_path, compute_status, event_source_kind_from_db,
+        fish_catch_methods_from_description, fish_icon_url_from_db, fish_is_dried,
+        merge_fish_catalog_row, parse_layer_kind, parse_positive_i64, parse_vector_source,
+        pixel_to_tile_index, resolve_layer_asset_url, synthetic_events_snapshot_revision,
+        DoltMySqlStore, FishCatalogRow, FishTableEntry, FishTableIndex,
     };
 
     #[test]

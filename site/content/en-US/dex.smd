@@ -1791,14 +1791,18 @@
     }
 
     function cdnBaseUrl() {
-      const explicitBase = String(window.__fishystuffCdnBaseUrl || "").trim();
-      if (explicitBase) {
-        return explicitBase.replace(/\/+$/, "");
+      const candidates = [
+        window.__fishystuffCdnBaseUrl,
+        window.__fishystuffRuntimeConfig && window.__fishystuffRuntimeConfig.cdnBaseUrl,
+        "https://cdn.fishystuff.fish",
+      ];
+      for (const value of candidates) {
+        const explicitBase = String(value || "").trim();
+        if (explicitBase) {
+          return explicitBase.replace(/\/+$/, "");
+        }
       }
-      const host = String(window.location?.hostname || "").trim().toLowerCase();
-      return host === "localhost" || host === "127.0.0.1"
-        ? "http://127.0.0.1:4040"
-        : "https://cdn.fishystuff.fish";
+      return "https://cdn.fishystuff.fish";
     }
 
     function cdnUrl(path) {
@@ -2294,16 +2298,18 @@
     }
 
     function apiUrl(pathname) {
-      const explicitBase = String(window.__fishystuffApiBaseUrl || "").trim();
-      if (explicitBase) {
-        return new URL(pathname, explicitBase).toString();
+      const candidates = [
+        window.__fishystuffApiBaseUrl,
+        window.__fishystuffRuntimeConfig && window.__fishystuffRuntimeConfig.apiBaseUrl,
+        "https://api.fishystuff.fish",
+      ];
+      for (const value of candidates) {
+        const explicitBase = String(value || "").trim();
+        if (explicitBase) {
+          return new URL(pathname, explicitBase).toString();
+        }
       }
-      const isLocalSite = ["localhost", "127.0.0.1"].includes(window.location.hostname)
-        && window.location.port === "1990";
-      if (isLocalSite) {
-        return new URL(pathname, "http://127.0.0.1:8080").toString();
-      }
-      return new URL(pathname, window.location.origin).toString();
+      return new URL(pathname, "https://api.fishystuff.fish").toString();
     }
 
     function fishApiUrl() {

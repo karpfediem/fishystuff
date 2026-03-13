@@ -186,20 +186,22 @@ impl FishyClient {
 
 #[cfg(target_arch = "wasm32")]
 fn default_browser_base_url() -> String {
-    let hostname = web_sys::window()
-        .and_then(|window| window.location().hostname().ok())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+    browser_global_base_url("__fishystuffApiBaseUrl")
+        .unwrap_or_else(|| "https://api.fishystuff.fish".to_string())
+}
 
-    if hostname == "localhost"
-        || hostname == "127.0.0.1"
-        || hostname == "::1"
-        || hostname.ends_with(".localhost")
-    {
-        "http://localhost:8080".to_string()
-    } else {
-        "https://api.fishystuff.fish".to_string()
+#[cfg(target_arch = "wasm32")]
+fn browser_global_base_url(name: &str) -> Option<String> {
+    use wasm_bindgen::JsValue;
+
+    let window = web_sys::window()?;
+    let value = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str(name)).ok()?;
+    let value = value.as_string()?;
+    let trimmed = value.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return None;
     }
+    Some(trimmed.to_string())
 }
 
 #[cfg(target_arch = "wasm32")]

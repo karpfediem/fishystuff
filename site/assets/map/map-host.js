@@ -750,19 +750,18 @@ function createCustomEvent(type, detail) {
   return event;
 }
 
+function runtimeConfigBaseUrl(key) {
+  return normalizeBaseUrl(globalThis.window?.__fishystuffRuntimeConfig?.[key]);
+}
+
 export function resolveApiBaseUrl(locationLike = globalThis.location) {
   const explicit = normalizeBaseUrl(globalThis.window?.__fishystuffApiBaseUrl);
   if (explicit) {
     return explicit;
   }
-  const hostname = String(locationLike?.hostname || "").toLowerCase();
-  if (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1" ||
-    hostname.endsWith(".localhost")
-  ) {
-    return "http://127.0.0.1:8080";
+  const configured = runtimeConfigBaseUrl("apiBaseUrl");
+  if (configured) {
+    return configured;
   }
   return "https://api.fishystuff.fish";
 }
@@ -783,14 +782,9 @@ export function resolveCdnBaseUrl(
   if (explicit) {
     return explicit;
   }
-  const hostname = String(locationLike?.hostname || "").toLowerCase();
-  if (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1" ||
-    hostname.endsWith(".localhost")
-  ) {
-    return "http://127.0.0.1:4040";
+  const configured = runtimeConfigBaseUrl("cdnBaseUrl");
+  if (configured) {
+    return configured;
   }
   return "https://cdn.fishystuff.fish";
 }

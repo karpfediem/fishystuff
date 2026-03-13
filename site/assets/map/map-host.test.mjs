@@ -945,17 +945,9 @@ test("theme extraction reads distinct base200 and base300 tokens from the probe"
   assert.equal(snapshot.colors.base300, "rgb(30 31 32 / 1)");
 });
 
-test("local dev API base resolves to loopback", () => {
-  assert.equal(resolveApiBaseUrl({ hostname: "localhost" }), "http://127.0.0.1:8080");
-  assert.equal(resolveApiBaseUrl({ hostname: "127.0.0.1" }), "http://127.0.0.1:8080");
-  assert.equal(
-    resolveApiBaseUrl({ hostname: "map.localhost" }),
-    "http://127.0.0.1:8080",
-  );
-  assert.equal(
-    resolveApiBaseUrl({ hostname: "fishystuff.fish" }),
-    "https://api.fishystuff.fish",
-  );
+test("API base falls back to production when no runtime config is present", () => {
+  assert.equal(resolveApiBaseUrl({ hostname: "localhost" }), "https://api.fishystuff.fish");
+  assert.equal(resolveApiBaseUrl({ hostname: "fishystuff.fish" }), "https://api.fishystuff.fish");
 });
 
 test("API base prefers an explicit window override", () => {
@@ -971,13 +963,24 @@ test("API base prefers an explicit window override", () => {
   }
 });
 
-test("CDN base resolves to local dev or production host", () => {
-  assert.equal(resolveCdnBaseUrl({ hostname: "localhost" }), "http://127.0.0.1:4040");
-  assert.equal(resolveCdnBaseUrl({ hostname: "127.0.0.1" }), "http://127.0.0.1:4040");
-  assert.equal(
-    resolveCdnBaseUrl({ hostname: "map.localhost" }),
-    "http://127.0.0.1:4040",
-  );
+test("base URLs prefer runtime config when present", () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = {
+    __fishystuffRuntimeConfig: {
+      apiBaseUrl: "http://127.0.0.1:18080/",
+      cdnBaseUrl: "http://127.0.0.1:14040/",
+    },
+  };
+  try {
+    assert.equal(resolveApiBaseUrl({ hostname: "localhost" }), "http://127.0.0.1:18080");
+    assert.equal(resolveCdnBaseUrl({ hostname: "localhost" }), "http://127.0.0.1:14040");
+  } finally {
+    globalThis.window = previousWindow;
+  }
+});
+
+test("CDN base resolves to production or an explicit override", () => {
+  assert.equal(resolveCdnBaseUrl({ hostname: "localhost" }), "https://cdn.fishystuff.fish");
   assert.equal(
     resolveCdnBaseUrl({ hostname: "fishystuff.fish" }),
     "https://cdn.fishystuff.fish",
@@ -990,7 +993,7 @@ test("CDN base resolves to local dev or production host", () => {
 
 test("runtime manifest URL is cache-busted against the CDN base", () => {
   assert.equal(
-    resolveMapRuntimeManifestUrl({ hostname: "localhost" }, 123),
+    resolveMapRuntimeManifestUrl({ hostname: "localhost" }, 123, "http://127.0.0.1:4040"),
     "http://127.0.0.1:4040/map/runtime-manifest.json?v=123",
   );
   assert.equal(

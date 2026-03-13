@@ -6,11 +6,9 @@ fish_names = "../data/fish_names.tsv" # optional if dolt_sql is configured
 zones_merged_csv = "../data/zones_merged.csv"
 patches_csv = "../data/patches.csv"
 images_dir = "../data/cdn/public/images"
-# Local dev should use the local CDN file server. Production overrides this to https://cdn.fishystuff.fish.
-images_public_base_url = "http://127.0.0.1:4040"
 # Canonical packed RGB24 height tiles derived directly from whole_fullres.png.
 terrain_height_tiles_url = "/images/terrain_height/v1"
-# terrain_drape_manifest_url = "https://cdn.example.com/images/terrain_drape/minimap/v1/manifest.json"
+# terrain_drape_manifest_url = "/images/terrain_drape/minimap/v1/manifest.json"
 
 [dolt_sql]
 # url = "mysql://root@127.0.0.1:3306/fishystuff"

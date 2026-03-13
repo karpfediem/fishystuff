@@ -4,10 +4,10 @@ use serde::Deserialize;
 
 use fishystuff_api::ids::MapVersionId;
 use fishystuff_api::models::layers::{LayerDescriptor, LayersResponse};
-use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use crate::error::{with_timeout, AppResult};
 use crate::routes::meta::map_request_id;
+use crate::routes::public_assets::normalize_public_asset_url;
 use crate::state::{RequestId, SharedState};
 
 #[derive(Debug, Deserialize)]
@@ -53,52 +53,23 @@ pub async fn get_layers(
     if response.map_version_id.is_none() {
         response.map_version_id = map_version.map(MapVersionId);
     }
-    absolutize_layer_asset_urls(
-        &mut response,
-        state.config.images_public_base_url.as_deref(),
-    );
+    normalize_layer_asset_urls(&mut response);
 
     Ok(Json(response))
 }
 
-fn absolutize_layer_asset_urls(response: &mut LayersResponse, configured_base: Option<&str>) {
+fn normalize_layer_asset_urls(response: &mut LayersResponse) {
     for layer in &mut response.layers {
-        absolutize_layer_descriptor(layer, configured_base);
+        normalize_layer_descriptor(layer);
     }
 }
 
-fn absolutize_layer_descriptor(layer: &mut LayerDescriptor, configured_base: Option<&str>) {
-    layer.tileset.manifest_url =
-        absolutize_public_asset_url(&layer.tileset.manifest_url, configured_base);
-    layer.tileset.tile_url_template =
-        absolutize_public_asset_url(&layer.tileset.tile_url_template, configured_base);
+fn normalize_layer_descriptor(layer: &mut LayerDescriptor) {
+    layer.tileset.manifest_url = normalize_public_asset_url(&layer.tileset.manifest_url);
+    layer.tileset.tile_url_template = normalize_public_asset_url(&layer.tileset.tile_url_template);
     if let Some(vector_source) = layer.vector_source.as_mut() {
-        vector_source.url = absolutize_public_asset_url(&vector_source.url, configured_base);
+        vector_source.url = normalize_public_asset_url(&vector_source.url);
     }
-}
-
-fn absolutize_public_asset_url(url: &str, configured_base: Option<&str>) -> String {
-    let normalized = normalize_site_asset_path(url);
-    let trimmed = normalized.trim();
-    if trimmed.is_empty()
-        || trimmed.starts_with("http://")
-        || trimmed.starts_with("https://")
-        || trimmed.starts_with("data:")
-    {
-        return trimmed.to_string();
-    }
-
-    let Some(base) = configured_base
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    else {
-        return trimmed.to_string();
-    };
-    let base = base.trim_end_matches('/');
-    if trimmed.starts_with('/') {
-        return format!("{base}{trimmed}");
-    }
-    format!("{base}/{}", trimmed.trim_start_matches('/'))
 }
 
 #[cfg(test)]
@@ -232,7 +203,7 @@ mod tests {
         let config = AppConfig {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
-            images_public_base_url: None,
+            site_public_base_url: None,
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,
@@ -272,11 +243,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn layers_route_applies_public_asset_base_url() {
+    async fn layers_route_normalizes_public_asset_paths() {
         let config = AppConfig {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
-            images_public_base_url: Some("https://cdn.example.com".to_string()),
+            site_public_base_url: None,
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,
@@ -310,9 +281,6 @@ mod tests {
             .vector_source
             .as_ref()
             .expect("vector_source");
-        assert_eq!(
-            vector.url,
-            "https://cdn.example.com/region_groups/v1.geojson"
-        );
+        assert_eq!(vector.url, "/region_groups/v1.geojson");
     }
 }

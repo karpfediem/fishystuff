@@ -12,6 +12,7 @@ use crate::routes;
 use crate::state::{RequestId, SharedState};
 
 pub fn build_router(state: SharedState) -> Router {
+    let cors = build_cors_layer(state.config.site_public_base_url.as_deref());
     let api = Router::new()
         .route("/meta", get(routes::meta::get_meta))
         .route("/layers", get(routes::layers::get_layers))
@@ -38,19 +39,23 @@ pub fn build_router(state: SharedState) -> Router {
         .nest("/api/v1", api)
         .with_state(state)
         .layer(middleware::from_fn(request_id_middleware))
-        .layer(build_cors_layer())
+        .layer(cors)
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
 }
 
-fn build_cors_layer() -> CorsLayer {
+fn build_cors_layer(site_public_base_url: Option<&str>) -> CorsLayer {
     let datastar_request = HeaderName::from_static("datastar-request");
-    let allowed_origins = AllowOrigin::list([
-        HeaderValue::from_static("http://localhost:1990"),
-        HeaderValue::from_static("http://127.0.0.1:1990"),
+    let mut allowed_origins = vec![
         HeaderValue::from_static("https://fishystuff.fish"),
         HeaderValue::from_static("https://www.fishystuff.fish"),
-    ]);
+    ];
+    if let Some(site_public_base_url) = site_public_base_url {
+        if let Ok(value) = HeaderValue::from_str(site_public_base_url) {
+            allowed_origins.push(value);
+        }
+    }
+    let allowed_origins = AllowOrigin::list(allowed_origins);
 
     CorsLayer::new()
         .allow_origin(allowed_origins)

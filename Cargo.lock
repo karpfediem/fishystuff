@@ -2828,8 +2828,10 @@ version = "0.1.0"
 dependencies = [
  "fishystuff_api",
  "gloo-net",
+ "js-sys",
  "serde",
  "serde_json",
+ "wasm-bindgen",
  "web-sys",
 ]
 
