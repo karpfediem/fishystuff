@@ -59,6 +59,7 @@ Repository-level notes for working in this monorepo.
 
 ## Data policy
 - Keep committed documentation under `data/spec/`.
+- Small tracked landmark/reference CSVs may live under `data/landmarks/`.
 - Treat `data/` as local developer input/output state, not a serving root.
 - Some legacy local inputs still remain under `zonegen/data/` during migration. Do not make runtime components depend on them.
 
@@ -71,6 +72,8 @@ Repository-level notes for working in this monorepo.
   - `site/assets/map/fishystuff_ui_bevy.js`
   - `site/assets/map/fishystuff_ui_bevy_bg.wasm`
   - `site/assets/map/ui/fishystuff.css`
+- Runtime-served image, tile, and terrain assets live under `site/assets/images/`.
+- Keep raw imagery, terrain inputs, and scratch outputs under `data/`, not `site/assets/images/`.
 - Do not hand-edit generated bundle outputs.
 - Do not commit unrelated generated build outputs.
 

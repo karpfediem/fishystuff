@@ -79,14 +79,16 @@ Completed in the current migration pass:
 - Bevy WASM runtime moved to `map/`
 - offline tooling crates moved to `tools/`
 - map build script moved to `tools/scripts/build_map.sh`
+- runtime-serving image, terrain, and tile assets moved under `site/assets/images/`
+- active architecture and pipeline notes promoted from `zonegen/docs/` to root `docs/`
+- tracked landmark CSVs moved to `data/landmarks/`
 - `zonegen/` no longer contains the active Cargo workspace
 
 Remaining `zonegen/` contents are now primarily:
 
 - legacy local data under `zonegen/data/`
-- legacy images and baked outputs under `zonegen/images/`
-- older docs under `zonegen/docs/`
 - `devenv` and other migration-era workspace residue
+- small compatibility/config leftovers still being phased out
 
 ## Guardrails During Migration
 
