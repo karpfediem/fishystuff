@@ -140,7 +140,6 @@ done < "$changed_paths_file" | LC_ALL=C sort -u > "$sync_roots_file"
   echo "set mirror:parallel-transfer-count $PARALLEL_TRANSFERS"
   echo "set mirror:parallel-directories yes"
   echo "set mirror:set-permissions off"
-  echo "set mirror:use-cache yes"
 
   if [ "$REMOTE_ROOT" != "." ]; then
     echo "mkdir -pf $(lftp_quote "$REMOTE_ROOT")"
