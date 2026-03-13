@@ -227,4 +227,40 @@ mod tests {
         assert_eq!(layer.pick_mode, PickMode::None);
         assert!(matches!(layer.transform, LayerTransform::IdentityMapSpace));
     }
+
+    #[test]
+    fn legacy_static_asset_paths_are_normalized_when_layers_load() {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![LayerDescriptor {
+                layer_id: "zone_mask".to_string(),
+                name: "Zone Mask".to_string(),
+                enabled: true,
+                kind: LayerKindDto::TiledRaster,
+                transform: LayerTransformDto::IdentityMapSpace,
+                tileset: TilesetRef {
+                    manifest_url: "/images/tiles/mask/v1/tileset.json".to_string(),
+                    tile_url_template: "/tiles/mask/v1/{level}/{x}_{y}.png".to_string(),
+                    version: "v1".to_string(),
+                },
+                tile_px: 512,
+                max_level: 0,
+                y_flip: false,
+                vector_source: None,
+                lod_policy: LodPolicyDto::default(),
+                ui: LayerUiInfo::default(),
+                request_weight: 1.0,
+                pick_mode: "exact_tile_pixel".to_string(),
+            }],
+        });
+
+        let layer = registry.ordered().first().expect("zone mask layer");
+        assert_eq!(layer.tileset_url, "/images/tiles/mask/v1/tileset.json");
+        assert_eq!(
+            layer.tile_url_template,
+            "/images/tiles/mask/v1/{level}/{x}_{y}.png"
+        );
+    }
 }

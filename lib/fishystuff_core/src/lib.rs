@@ -1,3 +1,4 @@
+pub mod asset_urls;
 pub mod constants;
 pub mod coord;
 pub mod gaussian;

@@ -5,6 +5,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use fishystuff_api::ids::MapVersionId;
 use fishystuff_api::models::meta::MetaDefaults;
 use fishystuff_config::{load_config, Config as FsConfig, DoltSqlConfig};
+use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 #[derive(Debug, Clone)]
 pub struct ZoneStatusConfig {
@@ -279,14 +280,14 @@ impl AppConfig {
             terrain_manifest_url = detect_local_manifest_url(
                 &images_dir,
                 "terrain/v1/manifest.json",
-                "/terrain/v1/manifest.json",
+                "/images/terrain/v1/manifest.json",
             );
         }
         if terrain_drape_manifest_url.is_none() {
             terrain_drape_manifest_url = detect_local_manifest_url(
                 &images_dir,
                 "terrain_drape/minimap/v1/manifest.json",
-                "/terrain_drape/minimap/v1/manifest.json",
+                "/images/terrain_drape/minimap/v1/manifest.json",
             );
         }
         if terrain_height_tiles_url.is_none() {
@@ -365,7 +366,7 @@ fn normalize_optional_url(value: Option<&str>) -> Option<String> {
     if raw.is_empty() {
         return None;
     }
-    Some(raw.to_string())
+    Some(normalize_site_asset_path(raw))
 }
 
 fn detect_local_manifest_url(
@@ -439,7 +440,10 @@ mod tests {
             Some(&config_dir),
             &["site/assets/images", "../site/assets/images", "images"],
         );
-        assert_eq!(resolved, nested);
+        assert_eq!(
+            resolved.canonicalize().expect("canonical resolved path"),
+            nested.canonicalize().expect("canonical nested path")
+        );
 
         fs::remove_dir_all(&root).expect("cleanup temp dir");
     }

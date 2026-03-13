@@ -42,7 +42,7 @@ struct BuildTerrainPyramidArgs {
     #[arg(long, default_value = "v1")]
     revision: String,
     /// Public root URL for runtime chunk fetches
-    #[arg(long, default_value = "/map/terrain/v1")]
+    #[arg(long, default_value = "/images/terrain/v1")]
     root_url: String,
     /// Chunk path template relative to root URL
     #[arg(long, default_value = "levels/{level}/{x}_{y}.thc")]
@@ -94,7 +94,7 @@ struct BuildTerrainDrapePyramidArgs {
     #[arg(long, default_value = "minimap")]
     layer: String,
     /// Public root URL for runtime drape chunk fetches
-    #[arg(long, default_value = "/map/terrain_drape/minimap/v1")]
+    #[arg(long, default_value = "/images/terrain_drape/minimap/v1")]
     root_url: String,
     /// Chunk path template relative to root URL
     #[arg(long, default_value = "levels/{level}/{x}_{y}.png")]

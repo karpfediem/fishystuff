@@ -6,6 +6,7 @@ use fishystuff_api::models::layers::{
     LayerTransformDto, LayersResponse, StyleMode as StyleModeDto,
     VectorSourceRef as VectorSourceRefDto,
 };
+use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use crate::map::spaces::affine::Affine2D;
 use crate::map::spaces::layer_transform::{LayerTransform, WorldTransform};
@@ -167,8 +168,8 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         opacity_default: ui.opacity_default.clamp(0.0, 1.0),
         z_base: ui.z_base,
         kind,
-        tileset_url: tileset.manifest_url,
-        tile_url_template: tileset.tile_url_template,
+        tileset_url: normalize_site_asset_path(&tileset.manifest_url),
+        tile_url_template: normalize_site_asset_path(&tileset.tile_url_template),
         tileset_version: tileset.version,
         vector_source,
         transform,
@@ -221,7 +222,7 @@ fn style_mode_from_dto(mode: StyleModeDto) -> StyleMode {
 }
 
 fn vector_source_from_dto(dto: VectorSourceRefDto) -> Option<VectorSourceSpec> {
-    let url = dto.url.trim().to_string();
+    let url = normalize_site_asset_path(&dto.url);
     if url.is_empty() {
         return None;
     }

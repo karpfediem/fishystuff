@@ -1,6 +1,7 @@
 use fishystuff_api::ids::{MapVersionId, RgbKey};
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::ZoneStatsRequest;
+use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use super::super::state::{ApiBootstrapState, PatchFilterState};
 
@@ -72,7 +73,8 @@ pub(super) fn resolve_public_asset_url(
     value: Option<&str>,
     public_base_url: Option<&str>,
 ) -> Option<String> {
-    let raw = value?.trim();
+    let normalized = normalize_site_asset_path(value?);
+    let raw = normalized.trim();
     if raw.is_empty() {
         return None;
     }
@@ -106,7 +108,7 @@ pub(super) fn normalize_public_base_url(value: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_from_patch_id, default_from_ts};
+    use super::{default_from_patch_id, default_from_ts, resolve_public_asset_url};
     use fishystuff_api::ids::PatchId;
     use fishystuff_api::models::meta::{MetaResponse, PatchInfo};
 
@@ -132,5 +134,21 @@ mod tests {
 
         assert_eq!(default_from_ts(&meta), 10);
         assert_eq!(default_from_patch_id(&meta).as_deref(), Some("2025-01-01"));
+    }
+
+    #[test]
+    fn resolve_public_asset_url_normalizes_legacy_static_paths() {
+        assert_eq!(
+            resolve_public_asset_url(Some("/terrain/v1/manifest.json"), None).as_deref(),
+            Some("/images/terrain/v1/manifest.json")
+        );
+        assert_eq!(
+            resolve_public_asset_url(
+                Some("/terrain_drape/minimap/v1/manifest.json"),
+                Some("https://cdn.example.com"),
+            )
+            .as_deref(),
+            Some("https://cdn.example.com/images/terrain_drape/minimap/v1/manifest.json")
+        );
     }
 }

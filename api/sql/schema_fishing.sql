@@ -496,7 +496,7 @@ INSERT INTO layers (
   (
     'zone_mask', 'Zone Mask', 1, 10, 1, 0.35, 10.0,
     'identity_map_space', NULL, NULL, NULL, NULL, NULL, NULL,
-    '/images/tiles/mask/{map_version}/tileset.json', '/tiles/mask/{map_version}/{level}/{x}_{y}.png', 'v1',
+    '/images/tiles/mask/{map_version}/tileset.json', '/images/tiles/mask/{map_version}/{level}/{x}_{y}.png', 'v1',
     512, 0, 0, 0.7, 'exact_tile_pixel',
     'tiled_raster', NULL, NULL, 'map_pixels', 'feature_property_palette', NULL, NULL,
     300, 360.0, 220.0, 1,
@@ -555,7 +555,7 @@ INSERT INTO layer_configs (
   vector_source_url_override, vector_source_revision_override
 ) VALUES
   ('v1', 'minimap', 0.0, '/images/tiles/minimap/v1/tileset.json', '/images/tiles/minimap/v1/{level}/rader_{x}_{y}.png', 'v1', NULL, NULL),
-  ('v1', 'zone_mask', 10.0, '/images/tiles/mask/v1/tileset.json', '/tiles/mask/v1/{level}/{x}_{y}.png', 'v1', NULL, NULL),
+  ('v1', 'zone_mask', 10.0, '/images/tiles/mask/v1/tileset.json', '/images/tiles/mask/v1/{level}/{x}_{y}.png', 'v1', NULL, NULL),
   ('v1', 'region_groups', 30.0, '', '', '', '/region_groups/v1.geojson', 'rg-v1')
 ON DUPLICATE KEY UPDATE
   z_base_override = VALUES(z_base_override),

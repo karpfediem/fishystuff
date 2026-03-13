@@ -1,6 +1,7 @@
 use fishystuff_api::models::layers::{
     GeometrySpace, LayerKind, LayerTransformDto, StyleMode, VectorSourceRef,
 };
+use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use crate::error::{AppError, AppResult};
 
@@ -140,7 +141,8 @@ pub(super) fn normalize_asset_base_url(value: Option<String>) -> Option<String> 
 }
 
 pub(super) fn resolve_layer_asset_url(url: &str, asset_base_url: Option<&str>) -> String {
-    let trimmed = url.trim();
+    let normalized = normalize_site_asset_path(url);
+    let trimmed = normalized.trim();
     if trimmed.is_empty() {
         return String::new();
     }
@@ -160,4 +162,28 @@ pub(super) fn resolve_layer_asset_url(url: &str, asset_base_url: Option<&str>) -
         return format!("{base}{trimmed}");
     }
     format!("{base}/{}", trimmed.trim_start_matches('/'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_layer_asset_url;
+
+    #[test]
+    fn resolve_layer_asset_url_normalizes_legacy_site_paths() {
+        assert_eq!(
+            resolve_layer_asset_url("/tiles/mask/v1/{level}/{x}_{y}.png", None),
+            "/images/tiles/mask/v1/{level}/{x}_{y}.png"
+        );
+        assert_eq!(
+            resolve_layer_asset_url("/terrain/v1/manifest.json", None),
+            "/images/terrain/v1/manifest.json"
+        );
+        assert_eq!(
+            resolve_layer_asset_url(
+                "/tiles/mask/v1/{level}/{x}_{y}.png",
+                Some("https://cdn.example.com")
+            ),
+            "https://cdn.example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
+        );
+    }
 }

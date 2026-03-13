@@ -95,7 +95,7 @@ if [ "${REBUILD_TERRAIN_PYRAMID:-0}" = "1" ]; then
     --source-root "$TERRAIN_PYRAMID_SOURCE_ROOT" \
     --out-dir "$TERRAIN_PYRAMID_OUT_DIR" \
     --revision v1 \
-    --root-url /terrain/v1 \
+    --root-url /images/terrain/v1 \
     --chunk-path "levels/{level}/{x}_{y}.thc" \
     --map-width 11560 \
     --map-height 10540 \
@@ -116,7 +116,7 @@ if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
     --out-dir "$TERRAIN_DRAPE_OUT_DIR" \
     --layer minimap \
     --revision v1 \
-    --root-url /terrain_drape/minimap/v1 \
+    --root-url /images/terrain_drape/minimap/v1 \
     --chunk-path "levels/{level}/{x}_{y}.png" \
     --texture-px 256 \
     --kind raster-visual
