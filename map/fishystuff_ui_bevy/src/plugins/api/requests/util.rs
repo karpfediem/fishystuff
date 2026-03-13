@@ -73,7 +73,7 @@ pub(super) fn build_zone_stats_request(
     })
 }
 
-pub(super) fn resolve_public_asset_url(
+pub(crate) fn resolve_public_asset_url(
     value: Option<&str>,
     public_base_url: Option<&str>,
 ) -> Option<String> {
@@ -102,7 +102,7 @@ pub(super) fn resolve_public_asset_url(
     Some(format!("{base}/{path}"))
 }
 
-pub(super) fn normalize_public_base_url(value: Option<&str>) -> Option<String> {
+pub(crate) fn normalize_public_base_url(value: Option<&str>) -> Option<String> {
     if let Some(raw) = value.map(str::trim) {
         if !raw.is_empty() {
             return Some(raw.trim_end_matches('/').to_string());
