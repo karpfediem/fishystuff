@@ -35,6 +35,9 @@ jobs:
       - name: Release
         run: zine release
 
+      - name: Install runtime image assets
+        run: ./scripts/install-runtime-assets.sh public
+
       - run: bun run build
 
       - name: Setup Pages

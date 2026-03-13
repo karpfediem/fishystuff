@@ -9,3 +9,5 @@ This component should own:
 - published static assets under `site/assets/`
 
 Generated map bundle outputs are served from `site/assets/map/`, while hand-edited browser-host source should also stay under `site/assets/map/`.
+
+Runtime image, terrain, and tile assets live under `site/assets/images/`. Zine does not accept directories in `.static_assets`, so site release flows must copy that tree into the final output after `zine release`.
