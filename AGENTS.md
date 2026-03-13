@@ -49,8 +49,14 @@ Repository-level notes for working in this monorepo.
   - Zine rebuild watcher
   - Tailwind watcher
   - local site server
+- The native `devenv` process graph is readiness-driven:
+  - `db -> api`
+  - `map-build -> cdn-stage -> cdn`
+  - `site-tailwind -> site-build -> site`
 - The managed stack uses SecretSpec's `api` profile by default and reclaims stale
   local API/CDN listeners before rebinding those ports.
+- Shared process readiness helpers live under `tools/scripts/devenv_process_lib.sh`.
+  Prefer that helper over duplicating per-process wait/notify logic.
 
 ## Practical environment usage
 - The top-level `devenv` environment is the supported development entrypoint.

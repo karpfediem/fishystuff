@@ -27,3 +27,7 @@ The same guarded pattern now applies to the local API server on
 Or start the full local stack from the repo root:
 
 - `devenv up`
+
+The repo-level `devenv` stack now uses the native process graph with explicit
+readiness ordering, so the local site server waits for the initial site build,
+but it no longer blocks on unrelated API/CDN startup before it can serve `.out`.

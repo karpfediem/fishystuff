@@ -1,4 +1,14 @@
-{ inputs, pkgs, ... }: {
+{ inputs, pkgs, config, ... }:
+let
+  dbHost = "127.0.0.1";
+  dbPort = toString config.processes.db.ports.sql.value;
+  apiHost = "127.0.0.1";
+  apiPort = toString config.processes.api.ports.http.value;
+  cdnHost = "127.0.0.1";
+  cdnPort = toString config.processes.cdn.ports.http.value;
+  siteHost = "127.0.0.1";
+  sitePort = toString config.processes.site.ports.http.value;
+in {
   name = "default";
 
   packages = with pkgs;
@@ -33,24 +43,102 @@
     targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
   };
 
-  tasks."cdn:cleanup-before".exec = "./tools/scripts/cleanup_cdn_server.sh";
-  tasks."cdn:cleanup-before".before = [ "devenv:processes:cdn" ];
+  env = {
+    FISHYSTUFF_DEV_DB_PORT = dbPort;
+    FISHYSTUFF_DEV_API_PORT = apiPort;
+    FISHYSTUFF_DEV_CDN_PORT = cdnPort;
+    FISHYSTUFF_DEV_SITE_PORT = sitePort;
+  };
 
-  tasks."cdn:cleanup-after".exec = "./tools/scripts/cleanup_cdn_server.sh";
-  tasks."cdn:cleanup-after".after = [ "devenv:processes:cdn@completed" ];
+  processes.db = {
+    exec = "./tools/scripts/run_db_server.sh";
+    ports.sql.allocate = 3306;
+    ready = {
+      notify = true;
+      timeout = 30;
+    };
+    env = {
+      DB_HOST = dbHost;
+      DB_PORT = dbPort;
+    };
+  };
 
-  tasks."api:cleanup-before".exec = "./tools/scripts/cleanup_api_server.sh";
-  tasks."api:cleanup-before".before = [ "devenv:processes:api" ];
+  processes.map-build = {
+    exec = "./tools/scripts/watch_map_runtime.sh";
+    ready = {
+      notify = true;
+      timeout = 300;
+    };
+  };
 
-  tasks."api:cleanup-after".exec = "./tools/scripts/cleanup_api_server.sh";
-  tasks."api:cleanup-after".after = [ "devenv:processes:api@completed" ];
+  processes.cdn-stage = {
+    exec = "./tools/scripts/watch_cdn_stage.sh";
+    ready = {
+      notify = true;
+      timeout = 120;
+    };
+    after = [ "devenv:processes:map-build" ];
+  };
 
-  processes.db.exec = "dolt sql-server --host 127.0.0.1 --port 3306";
-  processes.map-build.exec = "./tools/scripts/watch_map_runtime.sh";
-  processes.cdn-stage.exec = "./tools/scripts/watch_cdn_stage.sh";
-  processes.cdn.exec = "./tools/scripts/run_cdn_server.sh";
-  processes.api.exec = "./tools/scripts/run_api_server.sh";
-  processes.site-build.exec = "cd site && just build-release && exec just watch-release";
-  processes.site-tailwind.exec = "cd site && exec just watch-tailwind";
-  processes.site.exec = "cd site && exec just serve-release";
+  processes.cdn = {
+    exec = "./tools/scripts/run_cdn_server.sh";
+    ports.http.allocate = 4040;
+    ready = {
+      notify = true;
+      timeout = 30;
+    };
+    after = [ "devenv:processes:cdn-stage" ];
+    env = {
+      CDN_HOST = cdnHost;
+      CDN_PORT = cdnPort;
+    };
+  };
+
+  processes.api = {
+    exec = "./tools/scripts/run_api_server.sh";
+    ports.http.allocate = 8080;
+    ready = {
+      notify = true;
+      timeout = 120;
+    };
+    after = [ "devenv:processes:db" ];
+    env = {
+      DB_HOST = dbHost;
+      DB_PORT = dbPort;
+      API_BIND_HOST = apiHost;
+      API_PORT = apiPort;
+      SECRETSPEC_API_PROFILE = "api";
+    };
+  };
+
+  processes.site-tailwind = {
+    exec = "./tools/scripts/watch_site_tailwind.sh";
+    ready = {
+      notify = true;
+      timeout = 120;
+    };
+  };
+
+  processes.site-build = {
+    exec = "./tools/scripts/watch_site_release.sh";
+    ready = {
+      notify = true;
+      timeout = 300;
+    };
+    after = [ "devenv:processes:site-tailwind" ];
+  };
+
+  processes.site = {
+    exec = "./tools/scripts/run_site_server.sh";
+    ports.http.allocate = 1990;
+    ready = {
+      notify = true;
+      timeout = 30;
+    };
+    after = [ "devenv:processes:site-build" ];
+    env = {
+      SITE_HOST = siteHost;
+      SITE_PORT = sitePort;
+    };
+  };
 }
