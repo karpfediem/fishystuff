@@ -24,4 +24,10 @@ Required Bunny FTP environment variables:
 - `BUNNY_FTP_USER`
 - `BUNNY_FTP_PASSWORD`
 
+Optional:
+
+- `BUNNY_REMOTE_ROOT`
+  Defaults to the authenticated storage-zone root. Do not set this to `/`; Bunny's
+  FTP endpoint expects sync targets relative to the logged-in zone root.
+
 These values should come from the local `.env`, which is loaded into the `devenv` shells via `dotenv.enable = true`.

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
-REMOTE_ROOT="${BUNNY_REMOTE_ROOT:-/}"
+REMOTE_ROOT="${BUNNY_REMOTE_ROOT:-.}"
 
 : "${BUNNY_FTP_HOST:?set BUNNY_FTP_HOST}"
 : "${BUNNY_FTP_PORT:?set BUNNY_FTP_PORT}"
@@ -16,11 +16,29 @@ if [ ! -d "$CDN_ROOT" ]; then
   exit 1
 fi
 
+normalize_remote_root() {
+  local root="$1"
+  case "$root" in
+    ""|"/"|".")
+      printf '.'
+      ;;
+    /*)
+      printf '%s' "${root#/}"
+      ;;
+    *)
+      printf '%s' "$root"
+      ;;
+  esac
+}
+
+REMOTE_ROOT="$(normalize_remote_root "$REMOTE_ROOT")"
+
 lftp -u "$BUNNY_FTP_USER","$BUNNY_FTP_PASSWORD" -p "$BUNNY_FTP_PORT" "$BUNNY_FTP_HOST" <<EOF
 set cmd:fail-exit yes
 set xfer:clobber yes
 set net:max-retries 2
 set net:timeout 20
+mkdir -p $REMOTE_ROOT
 mirror --reverse --delete --verbose "$CDN_ROOT" "$REMOTE_ROOT"
 bye
 EOF
