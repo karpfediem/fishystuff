@@ -168,8 +168,6 @@ pub(super) fn is_layers_schema_error(err: &mysql::Error) -> bool {
         || is_unknown_column(err, "vector_color_property")
         || is_unknown_column(err, "vector_source_url_override")
         || is_unknown_column(err, "vector_source_revision_override")
-        || is_unknown_column(err, "asset_base_url")
-        || is_unknown_column(err, "asset_base_url_override")
 }
 
 fn is_events_schema_error(err: &mysql::Error) -> bool {

@@ -41,8 +41,8 @@ use catalog::{
     merge_fish_catalog_row, parse_positive_i64,
 };
 use layers::{
-    normalize_asset_base_url, normalize_pick_mode, parse_layer_kind, parse_layer_transform,
-    parse_vector_source, resolve_layer_asset_url, substitute_map_version,
+    normalize_pick_mode, parse_layer_kind, parse_layer_transform, parse_vector_source,
+    resolve_layer_asset_url, substitute_map_version,
 };
 use stats::{
     align_alpha, align_probs, beta_ci, compute_status, gaussian_blur_grid, pixel_to_tile_index,
@@ -252,7 +252,7 @@ impl DoltMySqlStore {
                 }
                 Err(err) if is_layers_schema_error(&err) => {
                     return Err(AppError::not_found(
-                        "layers schema is outdated; apply api/sql/migrations/20260301_vector_geojson_layers.sql and api/sql/migrations/20260304_layer_asset_base_url.sql",
+                        "layers schema is outdated; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
                     ))
                 }
                 Err(err) => return Err(db_unavailable(err)),
@@ -267,7 +267,7 @@ impl DoltMySqlStore {
                 }
                 Err(err) if is_layers_schema_error(&err) => {
                     return Err(AppError::not_found(
-                        "layers schema is outdated; apply api/sql/migrations/20260301_vector_geojson_layers.sql and api/sql/migrations/20260304_layer_asset_base_url.sql",
+                        "layers schema is outdated; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
                     ))
                 }
                 Err(err) => return Err(db_unavailable(err)),
@@ -316,7 +316,6 @@ impl DoltMySqlStore {
             let vector_style_mode = row_string(&row, 33);
             let vector_feature_id_property = row_string(&row, 34);
             let vector_color_property = row_string(&row, 35);
-            let asset_base_url = normalize_asset_base_url(row_string(&row, 36));
 
             let transform = parse_layer_transform(
                 &transform_kind,
@@ -327,14 +326,12 @@ impl DoltMySqlStore {
                 affine_d,
                 affine_ty,
             );
-            let manifest_url = resolve_layer_asset_url(
-                &substitute_map_version(&manifest_url, map_version_id),
-                asset_base_url.as_deref(),
-            );
-            let tile_url_template = resolve_layer_asset_url(
-                &substitute_map_version(&tile_url_template, map_version_id),
-                asset_base_url.as_deref(),
-            );
+            let manifest_url =
+                resolve_layer_asset_url(&substitute_map_version(&manifest_url, map_version_id));
+            let tile_url_template = resolve_layer_asset_url(&substitute_map_version(
+                &tile_url_template,
+                map_version_id,
+            ));
             let kind = parse_layer_kind(&layer_id, &layer_kind)?;
             let vector_source = parse_vector_source(
                 &layer_id,
@@ -346,7 +343,6 @@ impl DoltMySqlStore {
                 vector_feature_id_property,
                 vector_color_property,
                 map_version_id,
-                asset_base_url.as_deref(),
             )?;
             descriptors.push(LayerDescriptor {
                 layer_id,
@@ -1806,7 +1802,6 @@ mod tests {
             None,
             Some("c".to_string()),
             Some("v1"),
-            None,
         )
         .expect_err("expected invalid vector source");
         assert_eq!(err.0.code, ApiErrorCode::InvalidArgument);
@@ -2010,7 +2005,6 @@ mod tests {
             None,
             Some("c".to_string()),
             Some("v1"),
-            None,
         )
         .expect_err("expected geometry_space validation error");
         assert_eq!(err.0.code, ApiErrorCode::InvalidArgument);
@@ -2029,7 +2023,6 @@ mod tests {
             None,
             Some("c".to_string()),
             Some("v1"),
-            None,
         )
         .expect("valid source")
         .expect("source");
@@ -2038,7 +2031,7 @@ mod tests {
     }
 
     #[test]
-    fn vector_layer_source_url_uses_asset_base_url() {
+    fn vector_layer_source_url_uses_normalized_path() {
         let source = parse_vector_source(
             "region_groups",
             LayerKind::VectorGeoJson,
@@ -2049,38 +2042,25 @@ mod tests {
             Some("id".to_string()),
             Some("c".to_string()),
             Some("v1"),
-            Some("https://cdn.example.com"),
         )
         .expect("valid source")
         .expect("source");
 
-        assert_eq!(
-            source.url,
-            "https://cdn.example.com/region_groups/v1.geojson"
-        );
+        assert_eq!(source.url, "/region_groups/v1.geojson");
     }
 
     #[test]
     fn layer_asset_url_resolution_handles_root_and_relative_paths() {
         assert_eq!(
-            resolve_layer_asset_url(
-                "/images/tiles/minimap/v1/tileset.json",
-                Some("https://cdn.example.com")
-            ),
-            "https://cdn.example.com/images/tiles/minimap/v1/tileset.json"
+            resolve_layer_asset_url("/images/tiles/minimap/v1/tileset.json"),
+            "/images/tiles/minimap/v1/tileset.json"
         );
         assert_eq!(
-            resolve_layer_asset_url(
-                "images/tiles/minimap/v1/tileset.json",
-                Some("https://cdn.example.com")
-            ),
-            "https://cdn.example.com/images/tiles/minimap/v1/tileset.json"
+            resolve_layer_asset_url("images/tiles/minimap/v1/tileset.json"),
+            "images/tiles/minimap/v1/tileset.json"
         );
         assert_eq!(
-            resolve_layer_asset_url(
-                "https://static.example.com/a.png",
-                Some("https://cdn.example.com")
-            ),
+            resolve_layer_asset_url("https://static.example.com/a.png"),
             "https://static.example.com/a.png"
         );
     }

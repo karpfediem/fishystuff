@@ -41,8 +41,7 @@ SELECT
   l.vector_geometry_space,
   l.vector_style_mode,
   l.vector_feature_id_property,
-  l.vector_color_property,
-  l.asset_base_url
+  l.vector_color_property
 FROM layers l
 WHERE l.enabled = 1
   AND l.layer_id <> 'water'
@@ -85,8 +84,7 @@ SELECT
   l.vector_geometry_space,
   l.vector_style_mode,
   l.vector_feature_id_property,
-  l.vector_color_property,
-  COALESCE(c.asset_base_url_override, l.asset_base_url) AS asset_base_url
+  l.vector_color_property
 FROM layers l
 LEFT JOIN layer_configs c
   ON c.layer_id = l.layer_id

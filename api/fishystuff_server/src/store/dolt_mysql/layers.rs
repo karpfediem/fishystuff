@@ -94,15 +94,14 @@ pub(super) fn parse_vector_source(
     feature_id_property: Option<String>,
     color_property: Option<String>,
     map_version_id: Option<&str>,
-    asset_base_url: Option<&str>,
 ) -> AppResult<Option<VectorSourceRef>> {
     if kind != LayerKind::VectorGeoJson {
         return Ok(None);
     }
-    let source_url = resolve_layer_asset_url(
-        &substitute_map_version(source_url.as_deref().unwrap_or(""), map_version_id),
-        asset_base_url,
-    );
+    let source_url = resolve_layer_asset_url(&substitute_map_version(
+        source_url.as_deref().unwrap_or(""),
+        map_version_id,
+    ));
     if source_url.trim().is_empty() {
         return Err(AppError::invalid_argument(format!(
             "layer '{}' is vector_geojson but vector_source_url is missing",
@@ -136,32 +135,13 @@ pub(super) fn substitute_map_version(url: &str, map_version_id: Option<&str>) ->
     url.replace("{map_version}", map_version_id)
 }
 
-pub(super) fn normalize_asset_base_url(value: Option<String>) -> Option<String> {
-    normalize_optional_string(value).map(|base| base.trim_end_matches('/').to_string())
-}
-
-pub(super) fn resolve_layer_asset_url(url: &str, asset_base_url: Option<&str>) -> String {
+pub(super) fn resolve_layer_asset_url(url: &str) -> String {
     let normalized = normalize_site_asset_path(url);
     let trimmed = normalized.trim();
     if trimmed.is_empty() {
         return String::new();
     }
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        return trimmed.to_string();
-    }
-    let Some(base) = asset_base_url
-        .map(str::trim)
-        .map(|raw| raw.trim_end_matches('/'))
-    else {
-        return trimmed.to_string();
-    };
-    if base.is_empty() {
-        return trimmed.to_string();
-    }
-    if trimmed.starts_with('/') {
-        return format!("{base}{trimmed}");
-    }
-    format!("{base}/{}", trimmed.trim_start_matches('/'))
+    trimmed.to_string()
 }
 
 #[cfg(test)]
@@ -171,17 +151,16 @@ mod tests {
     #[test]
     fn resolve_layer_asset_url_normalizes_legacy_site_paths() {
         assert_eq!(
-            resolve_layer_asset_url("/tiles/mask/v1/{level}/{x}_{y}.png", None),
+            resolve_layer_asset_url("/tiles/mask/v1/{level}/{x}_{y}.png"),
             "/images/tiles/mask/v1/{level}/{x}_{y}.png"
         );
         assert_eq!(
-            resolve_layer_asset_url("/terrain/v1/manifest.json", None),
+            resolve_layer_asset_url("/terrain/v1/manifest.json"),
             "/images/terrain/v1/manifest.json"
         );
         assert_eq!(
             resolve_layer_asset_url(
-                "/tiles/mask/v1/{level}/{x}_{y}.png",
-                Some("https://cdn.example.com")
+                "https://cdn.example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
             ),
             "https://cdn.example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
         );

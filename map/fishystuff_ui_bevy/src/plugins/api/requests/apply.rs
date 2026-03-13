@@ -6,8 +6,8 @@ use crate::map::terrain::Terrain3dConfig;
 
 use super::super::state::{ApiBootstrapState, MapDisplayState, PatchFilterState};
 use super::util::{
-    default_from_patch_id, default_from_ts, normalize_public_base_url, now_utc_seconds,
-    pick_map_version, resolve_public_asset_url,
+    absolutize_layers_response_assets, default_from_patch_id, default_from_ts,
+    normalize_public_base_url, now_utc_seconds, pick_map_version, resolve_public_asset_url,
 };
 
 const LOCAL_TERRAIN_HEIGHT_TILES_FALLBACK: &str = "/images/terrain_height/v1";
@@ -42,7 +42,11 @@ pub(super) fn apply_meta_response(
         terrain_config.height_tile_root_url = url;
     }
     if terrain_config.height_tile_root_url.trim().is_empty() {
-        terrain_config.height_tile_root_url = LOCAL_TERRAIN_HEIGHT_TILES_FALLBACK.to_string();
+        terrain_config.height_tile_root_url = resolve_public_asset_url(
+            Some(LOCAL_TERRAIN_HEIGHT_TILES_FALLBACK),
+            public_base_url.as_deref(),
+        )
+        .unwrap_or_else(|| LOCAL_TERRAIN_HEIGHT_TILES_FALLBACK.to_string());
     }
     terrain_config.map_width = meta.canonical_map.image_size_x;
     terrain_config.map_height = meta.canonical_map.image_size_y;
@@ -70,8 +74,16 @@ pub(super) fn apply_layers_response(
     display_state: &mut MapDisplayState,
     layer_registry: &mut LayerRegistry,
     layer_runtime: &mut LayerRuntime,
-    response: LayersResponse,
+    mut response: LayersResponse,
 ) {
+    let public_base_url = normalize_public_base_url(
+        bootstrap
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.images_public_base_url.as_deref()),
+    );
+    absolutize_layers_response_assets(&mut response, public_base_url.as_deref());
+
     let layer_count = response.layers.len();
     let revision = response.revision.clone();
     layer_registry.apply_layers_response(response);
