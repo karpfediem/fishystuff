@@ -37,3 +37,7 @@ cdn-push:
 cdn-sync:
   just cdn-stage
   just cdn-push
+
+# Start the full local dev stack through devenv process orchestration
+dev-up:
+  devenv up

@@ -12,7 +12,11 @@ Hand-edited browser-host source stays under `site/assets/map/`. The generated wa
 
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 
-For local map development, run the site preview and the local CDN server together:
+For local map development, either run the pieces manually:
 
 - repo root: `just cdn-serve`
 - `site/`: `just watch`
+
+Or start the full local stack from the repo root:
+
+- `devenv up`

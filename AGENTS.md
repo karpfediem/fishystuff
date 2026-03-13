@@ -33,12 +33,12 @@ Repository-level notes for working in this monorepo.
 - Do not add new Rust crates back under `zonegen/`.
 
 ## Nix shells
-- This repo defines multiple `devenv` shells in `flake.nix`. Pick the shell that matches the task instead of assuming every tool is in the default shell.
+- This repo defines multiple `devenv` shells in `flake.nix`. The default shell now includes the full local development stack, while the focused shells remain available when you want a narrower environment.
 - For guided edits to `devenv.nix` files, refer to `devenv`'s LLM-oriented reference: <https://devenv.sh/llms.txt>.
 - `nix develop .#default`
-  - Lightweight repo shell.
-  - Includes basic tools such as `just`, `curl`, `dolt`, `gawk`, `lftp`, `python`, `rsync`, and `xlsx2csv`.
-  - Do not assume it has `node`, `bun`, or the Rust toolchain.
+  - Full local development shell.
+  - Includes `just`, `curl`, `dolt`, `gawk`, `lftp`, `python`, `rsync`, `xlsx2csv`, Node/Bun, `zine`, `tailwindcss`, `watchexec`, the stable Rust toolchain, `wasm-bindgen`, `clang`, `mariadb`, and `imagemagick`.
+  - `devenv up` from the repo root starts the local process stack: Dolt SQL, map bundle watcher, CDN staging watcher, CDN file server, API server, Zine rebuild watcher, Tailwind watcher, and the local site server.
 - `nix develop .#site`
   - Use for site/frontend/browser-host work.
   - Includes the JavaScript runtime/tooling (`node` is available here), Bun, `zine`, `tailwindcss`, `watchexec`, and `just`.
@@ -51,8 +51,10 @@ Repository-level notes for working in this monorepo.
   - Separate shell for bot-focused work if needed.
 
 ## Practical shell selection
-- If a JS command needs `node`, run it in `.#site`.
-- If a Rust/wasm command needs `cargo`, the wasm target, or `wasm-bindgen`, run it in `.#zonegen`.
+- The default shell is sufficient for full-stack local development and `devenv up`.
+- `nix develop .#default` needs `--impure` with this flake pattern so Nix can use the local `devenv-root`.
+- If a JS command needs `node`, `bun`, or `zine` and you want a narrower shell, use `.#site`.
+- If a Rust/wasm command needs `cargo`, the wasm target, or `wasm-bindgen` and you want a narrower shell, use `.#zonegen`.
 - For map runtime changes, the common split is:
   - JS host checks/tests in `.#site`
   - Rust/wasm checks and bundle rebuilds in `.#zonegen`
