@@ -1,15 +1,20 @@
 
 # one-off release
-release:
+build-release:
     ~/code/clones/zine/result/bin/zine release --install .out
     ./scripts/install-runtime-assets.sh .out
+
+release: build-release
 
 # rebuild site whenever sources change (ignore .out)
 watch-release:
     watchexec -r \
       -w content -w layouts -w assets -w zine.ziggy \
       --exts smd,shtml,ziggy,css,js \
-      -- bash -lc '~/code/clones/zine/result/bin/zine release --install .out && ./scripts/install-runtime-assets.sh .out'
+      -- bash -lc 'just build-release'
+
+serve-release:
+    bun run ./scripts/serve-release.mjs --root .out --port 1990
 
 # tailwind watch (builds to assets/css/site.css)
 watch-tailwind:
@@ -17,6 +22,8 @@ watch-tailwind:
 
 # dev: run both watchers concurrently
 watch:
+    just build-release
     just watch-release & \
     just watch-tailwind & \
+    just serve-release & \
     wait
