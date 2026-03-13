@@ -2,7 +2,7 @@
   name = "site";
   packages = with pkgs; [
     just
-    (inputs.zine.packages.${system}.default.override { 
+    (inputs.zine.packages.${pkgs.system}.default.override {
           zigPreferMusl = true;
     })
     tailwindcss

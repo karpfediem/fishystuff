@@ -1,4 +1,4 @@
-{ inputs, pkgs, system, ... }: {
+{ inputs, pkgs, ... }: {
   name = "default";
 
   packages = with pkgs;
@@ -16,7 +16,7 @@
       imagemagick
       tailwindcss
       watchexec
-      (inputs.zine.packages.${system}.default.override { zigPreferMusl = true; })
+      (inputs.zine.packages.${pkgs.system}.default.override { zigPreferMusl = true; })
     ];
 
   dotenv.enable = true;
