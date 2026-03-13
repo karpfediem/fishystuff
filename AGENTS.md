@@ -37,7 +37,8 @@ Repository-level notes for working in this monorepo.
   - `/home/carp/code/fishystuff/devenv.nix`
   - `/home/carp/code/fishystuff/devenv.yaml`
   - `/home/carp/code/fishystuff/devenv.lock`
-- For guided edits to the `devenv` configuration, refer to `devenv`'s LLM-oriented reference: <https://devenv.sh/llms.txt>.
+- A `devenv` MCP server is available in this environment. Use the `devenv` MCP tools/resources first when inspecting `devenv` options, packages, processes, ports, and related configuration.
+- If the `devenv` MCP server does not expose the needed information, fall back to `devenv`'s LLM-oriented reference: <https://devenv.sh/llms.txt>.
 - Use `devenv shell` for the interactive development environment.
 - Use `devenv up` from the repo root to start the local process stack:
   - Dolt SQL
