@@ -158,7 +158,7 @@ pub(super) fn sync_zone_evidence_list(
                 .with_children(|row| {
                     if let Some(icon_path) = icon_path.clone() {
                         row.spawn((
-                            ImageNode::new(asset_server.load(icon_path)),
+                            ImageNode::new(asset_server.load(bevy_public_asset_path(&icon_path))),
                             Node {
                                 width: Val::Px(18.0),
                                 height: Val::Px(18.0),

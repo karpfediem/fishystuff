@@ -237,7 +237,7 @@ pub(super) fn sync_search_tags(
             .with_children(|tag| {
                 if let Some(icon_url) = icon_url.clone() {
                     tag.spawn((
-                        ImageNode::new(asset_server.load(icon_url)),
+                        ImageNode::new(asset_server.load(bevy_public_asset_path(&icon_url))),
                         Node {
                             width: Val::Px(14.0),
                             height: Val::Px(14.0),
@@ -324,7 +324,7 @@ pub(super) fn update_autocomplete_ui(
         for child in children.iter() {
             if let Ok((mut icon, mut icon_vis)) = icon_q.get_mut(child) {
                 if let Some(icon_url) = fish_entry.and_then(|f| f.icon_url.as_ref()) {
-                    *icon = ImageNode::new(asset_server.load(icon_url.clone()));
+                    *icon = ImageNode::new(asset_server.load(bevy_public_asset_path(icon_url)));
                     *icon_vis = Visibility::Visible;
                 } else {
                     *icon_vis = Visibility::Hidden;

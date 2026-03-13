@@ -10,7 +10,8 @@ use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, WorldPoint};
 use crate::plugins::api::{
-    FishCatalog, MapDisplayState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    bevy_public_asset_path, FishCatalog, MapDisplayState, POINT_ICON_SCALE_MAX,
+    POINT_ICON_SCALE_MIN,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
@@ -216,7 +217,7 @@ fn icon_handle_for_fish(
         return None;
     };
 
-    let handle: Handle<Image> = asset_server.load(url);
+    let handle: Handle<Image> = asset_server.load(bevy_public_asset_path(&url));
     cache.handles.insert(fish_id, handle.clone());
     Some(handle)
 }

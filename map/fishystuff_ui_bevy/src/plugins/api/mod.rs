@@ -4,6 +4,7 @@ mod state;
 
 use crate::prelude::*;
 
+pub(crate) use fish::bevy_public_asset_path;
 pub use requests::{
     build_zone_stats_request, default_from_patch_id, default_from_ts, now_utc_seconds,
     pick_map_version, spawn_zone_stats_request,

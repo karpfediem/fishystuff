@@ -11,8 +11,8 @@ use bevy_flair::prelude::*;
 
 use crate::map::layers::{LayerRegistry, LayerSettings, PickMode};
 use crate::plugins::api::{
-    FishCatalog, FishFilterState, MapDisplayState, Patch, PatchFilterState, SelectionState,
-    POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    bevy_public_asset_path, FishCatalog, FishFilterState, MapDisplayState, Patch, PatchFilterState,
+    SelectionState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 use crate::plugins::camera::UiCamera;
 use crate::plugins::render_domain::{ui_layers, UiRenderEntity};

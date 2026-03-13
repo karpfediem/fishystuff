@@ -122,6 +122,16 @@ pub(crate) fn normalize_fish_icon_asset_url(
     Some(raw.to_string())
 }
 
+pub(crate) fn bevy_public_asset_path(raw: &str) -> String {
+    if raw.starts_with("../") || raw.starts_with("./") {
+        return raw.to_string();
+    }
+    if let Some(rest) = raw.strip_prefix('/') {
+        return format!("../{rest}");
+    }
+    raw.to_string()
+}
+
 fn normalize_fish_icon_asset_path(raw: &str) -> Option<String> {
     if raw.starts_with("/images/") {
         return Some(raw.to_string());
@@ -172,7 +182,8 @@ fn looks_like_icon_filename(raw: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_fish_catalog_entries, build_fish_table_index, normalize_fish_icon_asset_url,
+        bevy_public_asset_path, build_fish_catalog_entries, build_fish_table_index,
+        normalize_fish_icon_asset_url,
     };
     use fishystuff_api::models::fish::{
         FishEntry as ApiFishEntry, FishListResponse, FishTableEntry, FishTableResponse,
@@ -229,6 +240,22 @@ mod tests {
             )
             .as_deref(),
             Some("/images/FishIcons/00820994.png")
+        );
+    }
+
+    #[test]
+    fn bevy_public_asset_paths_resolve_from_map_asset_root() {
+        assert_eq!(
+            bevy_public_asset_path("/images/FishIcons/IC_08588.png"),
+            "../images/FishIcons/IC_08588.png"
+        );
+        assert_eq!(
+            bevy_public_asset_path("../images/FishIcons/IC_08588.png"),
+            "../images/FishIcons/IC_08588.png"
+        );
+        assert_eq!(
+            bevy_public_asset_path("data:image/png;base64,abcd"),
+            "data:image/png;base64,abcd"
         );
     }
 
