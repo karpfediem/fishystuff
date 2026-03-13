@@ -36,6 +36,9 @@ half_life_days = 30.0
 alpha0 = 1.0
 top_k = 30
 
+[server]
+cors_allowed_origins = "https://fishystuff.fish,https://www.fishystuff.fish"
+
 [thresholds]
 stale_days = 30.0
 ess = 10.0

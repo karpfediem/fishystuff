@@ -45,6 +45,11 @@ The site build now emits `.out/runtime-config.js` from the current environment.
 That file is the single local-development source of truth for the site/API/CDN
 base URLs consumed by the browser host and Bevy runtime.
 
+The API uses a strict explicit CORS allowlist. Production origins are declared
+in [api/config.toml](/home/carp/code/fishystuff/api/config.toml), and `devenv`
+adds the local site origins through `FISHYSTUFF_CORS_ALLOWED_ORIGINS`, so the
+same CORS model is exercised in both dev and prod.
+
 Initialize your local SecretSpec provider and check the repo profiles you need:
 
 ```bash

@@ -203,7 +203,7 @@ mod tests {
         let config = AppConfig {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
-            site_public_base_url: None,
+            cors_allowed_origins: vec!["https://fishystuff.fish".to_string()],
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,
@@ -247,7 +247,7 @@ mod tests {
         let config = AppConfig {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
-            site_public_base_url: None,
+            cors_allowed_origins: vec!["https://fishystuff.fish".to_string()],
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,

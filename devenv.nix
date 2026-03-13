@@ -51,6 +51,8 @@ in {
     FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${sitePort}";
+    FISHYSTUFF_CORS_ALLOWED_ORIGINS =
+      "https://fishystuff.fish,https://www.fishystuff.fish,http://${siteHost}:${sitePort},http://localhost:${sitePort}";
   };
 
   processes.db = {

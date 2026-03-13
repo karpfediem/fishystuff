@@ -57,6 +57,9 @@ Repository-level notes for working in this monorepo.
   local API/CDN listeners before rebinding those ports.
 - Shared process readiness helpers live under `tools/scripts/devenv_process_lib.sh`.
   Prefer that helper over duplicating per-process wait/notify logic.
+- Local API CORS origins are injected explicitly through
+  `FISHYSTUFF_CORS_ALLOWED_ORIGINS`. Do not reintroduce inferred site-origin
+  CORS logic.
 
 ## Practical environment usage
 - The top-level `devenv` environment is the supported development entrypoint.

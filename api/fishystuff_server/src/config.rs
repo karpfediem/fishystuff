@@ -34,7 +34,7 @@ impl Default for ZoneStatusConfig {
 pub struct AppConfig {
     pub bind: String,
     pub database_url: String,
-    pub site_public_base_url: Option<String>,
+    pub cors_allowed_origins: Vec<String>,
     pub terrain_manifest_url: Option<String>,
     pub terrain_drape_manifest_url: Option<String>,
     pub terrain_height_tiles_url: Option<String>,
@@ -81,11 +81,12 @@ impl AppConfig {
         let mut database_url = std::env::var("FISHYSTUFF_DATABASE_URL")
             .ok()
             .or_else(|| dolt_sql_to_database_url(&fs_config.dolt_sql));
-        let mut site_public_base_url = normalize_optional_public_base_url(
-            std::env::var("FISHYSTUFF_RUNTIME_SITE_BASE_URL")
+        let mut cors_allowed_origins = parse_cors_allowed_origins(
+            std::env::var("FISHYSTUFF_CORS_ALLOWED_ORIGINS")
                 .ok()
-                .as_deref(),
-        );
+                .as_deref()
+                .or(fs_config.server.cors_allowed_origins.as_deref()),
+        )?;
         let mut images_dir = resolve(&fs_config.paths.images_dir).unwrap_or_else(|| {
             resolve_default_runtime_dir(
                 config_dir.as_deref(),
@@ -158,11 +159,11 @@ impl AppConfig {
                     );
                     i += 2;
                 }
-                "--site-public-base-url" => {
+                "--cors-allowed-origins" => {
                     let value = args
                         .get(i + 1)
-                        .ok_or_else(|| anyhow!("--site-public-base-url requires value"))?;
-                    site_public_base_url = normalize_optional_public_base_url(Some(value));
+                        .ok_or_else(|| anyhow!("--cors-allowed-origins requires value"))?;
+                    cors_allowed_origins = parse_cors_allowed_origins(Some(value))?;
                     i += 2;
                 }
                 "--images-dir" => {
@@ -312,7 +313,7 @@ impl AppConfig {
         Ok(Self {
             bind,
             database_url,
-            site_public_base_url,
+            cors_allowed_origins,
             terrain_manifest_url,
             terrain_drape_manifest_url,
             terrain_height_tiles_url,
@@ -357,24 +358,46 @@ fn runtime_search_bases(config_dir: Option<&Path>) -> Vec<PathBuf> {
     bases
 }
 
-fn normalize_public_base_url(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    Some(trimmed.trim_end_matches('/').to_string())
-}
-
-fn normalize_optional_public_base_url(value: Option<&str>) -> Option<String> {
-    normalize_public_base_url(value?)
-}
-
 fn normalize_optional_url(value: Option<&str>) -> Option<String> {
     let raw = value?.trim();
     if raw.is_empty() {
         return None;
     }
     Some(normalize_public_asset_reference(raw))
+}
+
+fn parse_cors_allowed_origins(value: Option<&str>) -> Result<Vec<String>> {
+    let mut origins = Vec::new();
+    for raw in value
+        .unwrap_or("https://fishystuff.fish,https://www.fishystuff.fish")
+        .split(',')
+    {
+        let Some(origin) = normalize_origin(raw) else {
+            continue;
+        };
+        if !origins.iter().any(|existing| existing == &origin) {
+            origins.push(origin);
+        }
+    }
+    if origins.is_empty() {
+        bail!("at least one CORS allowed origin is required");
+    }
+    Ok(origins)
+}
+
+fn normalize_origin(value: &str) -> Option<String> {
+    let trimmed = value.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return None;
+    }
+    let (scheme, rest) = trimmed.split_once("://")?;
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    if rest.is_empty() || rest.contains('/') || rest.contains('?') || rest.contains('#') {
+        return None;
+    }
+    Some(format!("{scheme}://{rest}"))
 }
 
 fn detect_local_manifest_url(
@@ -427,7 +450,7 @@ fn dolt_sql_to_database_url(cfg: &DoltSqlConfig) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_default_runtime_dir;
+    use super::{parse_cors_allowed_origins, resolve_default_runtime_dir};
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -471,5 +494,25 @@ mod tests {
             ],
         );
         assert_eq!(resolved, PathBuf::from("../data/cdn/public/images"));
+    }
+
+    #[test]
+    fn parse_cors_allowed_origins_normalizes_and_deduplicates() {
+        let origins = parse_cors_allowed_origins(Some(
+            " https://fishystuff.fish/ , http://127.0.0.1:1990 , https://fishystuff.fish ",
+        ))
+        .expect("parse origins");
+        assert_eq!(
+            origins,
+            vec![
+                "https://fishystuff.fish".to_string(),
+                "http://127.0.0.1:1990".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_cors_allowed_origins_rejects_paths() {
+        assert!(parse_cors_allowed_origins(Some("https://fishystuff.fish/map")).is_err());
     }
 }

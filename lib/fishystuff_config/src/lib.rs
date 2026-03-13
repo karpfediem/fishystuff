@@ -11,6 +11,7 @@ pub struct Config {
     pub dolt_sql: DoltSqlConfig,
     pub defaults: Defaults,
     pub thresholds: Thresholds,
+    pub server: ServerConfig,
     pub server_cache: ServerCache,
 }
 
@@ -130,6 +131,11 @@ impl Default for ServerCache {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct ServerConfig {
+    pub cors_allowed_origins: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct DoltSqlConfig {
     pub url: Option<String>,
     pub host: Option<String>,
@@ -176,6 +182,7 @@ fn parse_config(content: &str) -> Result<Config> {
             }
             "defaults" => assign_default(&mut config.defaults, key, value)?,
             "thresholds" => assign_threshold(&mut config.thresholds, key, value)?,
+            "server" => assign_server(&mut config.server, key, value),
             "server.cache" => assign_cache(&mut config.server_cache, key, value)?,
             _ => {}
         }
@@ -288,6 +295,13 @@ fn assign_cache(cache: &mut ServerCache, key: &str, value: &str) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+
+fn assign_server(server: &mut ServerConfig, key: &str, value: &str) {
+    match key {
+        "cors_allowed_origins" => server.cors_allowed_origins = Some(value.to_string()),
+        _ => {}
+    }
 }
 
 fn assign_dolt_sql(dolt_sql: &mut DoltSqlConfig, key: &str, value: &str) -> Result<()> {

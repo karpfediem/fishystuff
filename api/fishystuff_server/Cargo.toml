@@ -24,3 +24,4 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 hyper = "0.14"
+tower = "0.4"

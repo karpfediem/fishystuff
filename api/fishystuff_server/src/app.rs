@@ -12,7 +12,7 @@ use crate::routes;
 use crate::state::{RequestId, SharedState};
 
 pub fn build_router(state: SharedState) -> Router {
-    let cors = build_cors_layer(state.config.site_public_base_url.as_deref());
+    let cors = build_cors_layer(&state.config.cors_allowed_origins);
     let api = Router::new()
         .route("/meta", get(routes::meta::get_meta))
         .route("/layers", get(routes::layers::get_layers))
@@ -44,23 +44,188 @@ pub fn build_router(state: SharedState) -> Router {
         .layer(TraceLayer::new_for_http())
 }
 
-fn build_cors_layer(site_public_base_url: Option<&str>) -> CorsLayer {
+fn build_cors_layer(cors_allowed_origins: &[String]) -> CorsLayer {
     let datastar_request = HeaderName::from_static("datastar-request");
-    let mut allowed_origins = vec![
-        HeaderValue::from_static("https://fishystuff.fish"),
-        HeaderValue::from_static("https://www.fishystuff.fish"),
-    ];
-    if let Some(site_public_base_url) = site_public_base_url {
-        if let Ok(value) = HeaderValue::from_str(site_public_base_url) {
-            allowed_origins.push(value);
-        }
-    }
+    let allowed_origins = cors_allowed_origins
+        .iter()
+        .filter_map(|origin| HeaderValue::from_str(origin).ok())
+        .collect::<Vec<_>>();
     let allowed_origins = AllowOrigin::list(allowed_origins);
 
     CorsLayer::new()
         .allow_origin(allowed_origins)
         .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
         .allow_headers([header::ACCEPT, header::CONTENT_TYPE, datastar_request])
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tower::util::ServiceExt;
+
+    use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
+    use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
+    use fishystuff_api::models::fish::{FishListResponse, FishMapResponse, FishTableEntry};
+    use fishystuff_api::models::layers::LayersResponse;
+    use fishystuff_api::models::meta::MetaResponse;
+    use fishystuff_api::models::region_groups::RegionGroupsResponse;
+    use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
+    use fishystuff_api::models::zones::ZoneEntry;
+
+    use crate::config::{AppConfig, ZoneStatusConfig};
+    use crate::state::AppState;
+    use crate::store::{FishLang, Store};
+
+    use super::build_router;
+
+    struct MockStore;
+
+    #[async_trait::async_trait]
+    impl Store for MockStore {
+        async fn get_meta(&self) -> crate::error::AppResult<MetaResponse> {
+            Ok(MetaResponse::default())
+        }
+        async fn get_layers(
+            &self,
+            _map_version_id: Option<String>,
+        ) -> crate::error::AppResult<LayersResponse> {
+            Ok(LayersResponse::default())
+        }
+        async fn get_region_groups(
+            &self,
+            _map_version_id: Option<String>,
+        ) -> crate::error::AppResult<RegionGroupsResponse> {
+            Ok(RegionGroupsResponse::default())
+        }
+        async fn list_fish(
+            &self,
+            _lang: FishLang,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<FishListResponse> {
+            Ok(FishListResponse::default())
+        }
+        async fn list_zones(
+            &self,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<Vec<ZoneEntry>> {
+            Ok(Vec::new())
+        }
+        async fn fish_table(
+            &self,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<Vec<FishTableEntry>> {
+            Ok(Vec::new())
+        }
+        async fn fish_map(
+            &self,
+            _encyclopedia_key: Option<i32>,
+            _item_key: Option<i32>,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<Option<FishMapResponse>> {
+            Ok(None)
+        }
+        async fn zone_stats(
+            &self,
+            _request: ZoneStatsRequest,
+            _status_cfg: ZoneStatusConfig,
+        ) -> crate::error::AppResult<ZoneStatsResponse> {
+            Ok(ZoneStatsResponse::default())
+        }
+        async fn effort_grid(
+            &self,
+            _request: EffortGridRequest,
+        ) -> crate::error::AppResult<EffortGridResponse> {
+            Ok(EffortGridResponse::default())
+        }
+        async fn events_snapshot_meta(
+            &self,
+        ) -> crate::error::AppResult<EventsSnapshotMetaResponse> {
+            Ok(EventsSnapshotMetaResponse::default())
+        }
+        async fn events_snapshot(
+            &self,
+            _requested_revision: Option<String>,
+        ) -> crate::error::AppResult<EventsSnapshotResponse> {
+            Ok(EventsSnapshotResponse::default())
+        }
+        async fn healthcheck(&self) -> crate::error::AppResult<()> {
+            Ok(())
+        }
+    }
+
+    fn test_config(origins: Vec<&str>) -> AppConfig {
+        AppConfig {
+            bind: "127.0.0.1:0".to_string(),
+            database_url: "mysql://unused".to_string(),
+            cors_allowed_origins: origins.into_iter().map(str::to_string).collect(),
+            terrain_manifest_url: None,
+            terrain_drape_manifest_url: None,
+            terrain_height_tiles_url: None,
+            defaults: Default::default(),
+            status_cfg: ZoneStatusConfig::default(),
+            cache_zone_stats_max: 16,
+            cache_effort_max: 4,
+            cache_log: false,
+            request_timeout_secs: 5,
+        }
+    }
+
+    #[tokio::test]
+    async fn cors_allows_configured_origin() {
+        let router = build_router(AppState::for_tests(
+            test_config(vec!["https://fishystuff.fish", "http://127.0.0.1:1990"]),
+            Arc::new(MockStore),
+        ));
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/healthz")
+                    .header("origin", "http://127.0.0.1:1990")
+                    .header("access-control-request-method", "GET")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers()["access-control-allow-origin"],
+            "http://127.0.0.1:1990"
+        );
+    }
+
+    #[tokio::test]
+    async fn cors_rejects_unconfigured_origin() {
+        let router = build_router(AppState::for_tests(
+            test_config(vec!["https://fishystuff.fish"]),
+            Arc::new(MockStore),
+        ));
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/healthz")
+                    .header("origin", "http://127.0.0.1:1990")
+                    .header("access-control-request-method", "GET")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response
+            .headers()
+            .get("access-control-allow-origin")
+            .is_none());
+    }
 }
 
 async fn request_id_middleware<B>(mut request: Request<B>, next: Next<B>) -> Response {
