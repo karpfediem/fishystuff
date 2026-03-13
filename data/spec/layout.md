@@ -2,6 +2,8 @@
 
 Suggested developer-local layout:
 
+- `data/landmarks/`
+  Small tracked landmark CSV fixtures and manually curated map-reference tables.
 - `data/ranking/`
   Ranking CSVs and related import inputs.
 - `data/xlsx/`

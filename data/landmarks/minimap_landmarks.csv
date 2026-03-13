@@ -1,0 +1,11 @@
+tilename,comment,minimap_tile_x,minimap_tile_y,full_zone_mask_x,full_zone_mask_y
+rader_-109_106.png,Seoul Pond top right,67,112,2189,2290
+rader_-109_104.png,Seoul Pond bottom right,55,18,2184,2340
+rader_-110_104.png,Seoul pond bottom left,35,4,2137,2341
+rader_-110_106.png,Seoul pond top left,46,100,2140,2286
+rader_24_-14.png,Splashing Point North-West Entryway,6,52,7818,7368
+rader_24_-14.png,Splashing Point North-East Entryway,94,54,7848,7374
+rader_24_-14.png,Splashing Point South-East Docks,118,99,7860,7386
+rader_82_16.png,Valencia City some eastern tower next to water,121,67,10329,6106
+rader_82_12.png,Valencia City lake southern spike,20,62,10290,6271
+rader_81_12.png,Valencia City lake south west tower edge,39,66,10255,6269

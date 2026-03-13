@@ -18,13 +18,28 @@ else
 fi
 
 SITE_MAP_ASSET_DIR="$ROOT_DIR/site/assets/map"
+SITE_IMAGE_ASSET_DIR="$ROOT_DIR/site/assets/images"
 mkdir -p "$SITE_MAP_ASSET_DIR/ui"
+mkdir -p "$SITE_IMAGE_ASSET_DIR"
 
 wasm-bindgen --target web --no-typescript --out-dir "$SITE_MAP_ASSET_DIR" "$WASM_INPUT"
 cp -f map/fishystuff_ui_bevy/assets/ui/fishystuff.css "$SITE_MAP_ASSET_DIR/ui/fishystuff.css"
 
+first_existing_path() {
+  local candidate
+  for candidate in "$@"; do
+    if [ -e "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  printf '%s\n' "$1"
+}
+
 prepare_terrain_source_tiles() {
-  : "${TERRAIN_SOURCE_IMAGE:=zonegen/data/Karpfen/terraintiles/whole_fullres.png}"
+  : "${TERRAIN_SOURCE_IMAGE:=$(first_existing_path \
+    data/terrain/Karpfen/terraintiles/whole_fullres.png \
+    zonegen/data/Karpfen/terraintiles/whole_fullres.png)}"
   : "${TERRAIN_SOURCE_TILE_DIR:=/tmp/fishystuff-terrain-whole_fullres-tiles}"
   : "${TERRAIN_SOURCE_TILE_SIZE:=512}"
   : "${TERRAIN_SOURCE_EXPECT_WIDTH:=32000}"
@@ -57,7 +72,7 @@ prepare_terrain_source_tiles() {
 }
 
 ensure_terrain_height_tiles() {
-  : "${TERRAIN_HEIGHT_TILE_OUT_DIR:=zonegen/images/terrain_height/v1}"
+  : "${TERRAIN_HEIGHT_TILE_OUT_DIR:=site/assets/images/terrain_height/v1}"
 
   prepare_terrain_source_tiles
   rm -rf "$TERRAIN_HEIGHT_TILE_OUT_DIR"
@@ -65,13 +80,16 @@ ensure_terrain_height_tiles() {
   cp -f "$TERRAIN_SOURCE_TILE_DIR"/*.png "$TERRAIN_HEIGHT_TILE_OUT_DIR"/
 }
 
-if [ "${REBUILD_TERRAIN_HEIGHT_TILES:-0}" = "1" ] || [ ! -f "zonegen/images/terrain_height/v1/0_0.png" ]; then
+: "${TERRAIN_HEIGHT_TILE_OUT_DIR:=site/assets/images/terrain_height/v1}"
+if [ "${REBUILD_TERRAIN_HEIGHT_TILES:-0}" = "1" ] || [ ! -f "$TERRAIN_HEIGHT_TILE_OUT_DIR/0_0.png" ]; then
   ensure_terrain_height_tiles
 fi
 
 if [ "${REBUILD_TERRAIN_PYRAMID:-0}" = "1" ]; then
-  : "${TERRAIN_PYRAMID_SOURCE_ROOT:=zonegen/data/Karpfen/terraintiles/7}"
-  : "${TERRAIN_PYRAMID_OUT_DIR:=zonegen/images/terrain/v1}"
+  : "${TERRAIN_PYRAMID_SOURCE_ROOT:=$(first_existing_path \
+    data/terrain/Karpfen/terraintiles/7 \
+    zonegen/data/Karpfen/terraintiles/7)}"
+  : "${TERRAIN_PYRAMID_OUT_DIR:=site/assets/images/terrain/v1}"
   rm -rf "$TERRAIN_PYRAMID_OUT_DIR"
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --release -p fishystuff_tilegen --bin terrain_pyramid -- build-terrain-pyramid \
     --source-root "$TERRAIN_PYRAMID_SOURCE_ROOT" \
@@ -89,8 +107,8 @@ if [ "${REBUILD_TERRAIN_PYRAMID:-0}" = "1" ]; then
 fi
 if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
   : "${TERRAIN_DRAPE_SOURCE_IMAGE:?set TERRAIN_DRAPE_SOURCE_IMAGE to the canonical minimap source image path}"
-  : "${TERRAIN_PYRAMID_OUT_DIR:=zonegen/images/terrain/v1}"
-  : "${TERRAIN_DRAPE_OUT_DIR:=zonegen/images/terrain_drape/minimap/v1}"
+  : "${TERRAIN_PYRAMID_OUT_DIR:=site/assets/images/terrain/v1}"
+  : "${TERRAIN_DRAPE_OUT_DIR:=site/assets/images/terrain_drape/minimap/v1}"
   rm -rf "$TERRAIN_DRAPE_OUT_DIR"
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --release -p fishystuff_tilegen --bin terrain_pyramid -- build-terrain-drape-pyramid \
     --terrain-manifest "$TERRAIN_PYRAMID_OUT_DIR/manifest.json" \
@@ -105,8 +123,8 @@ if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
 fi
 if [ "${REBUILD_MINIMAP_PYRAMID:-0}" = "1" ]; then
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin minimap_pyramid -- \
-    --input-dir zonegen/images/tiles/minimap \
-    --out-dir zonegen/images/tiles/minimap/v1 \
+    --input-dir site/assets/images/tiles/minimap \
+    --out-dir site/assets/images/tiles/minimap/v1 \
     --tile-px 128 \
     --max-level 8 \
     --root-url /images/tiles/minimap/v1 \

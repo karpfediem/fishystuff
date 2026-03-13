@@ -4,6 +4,7 @@ The `data/` tree is for developer-local inputs and intermediate working sets, no
 
 Expected input categories:
 
+- landmark CSVs
 - ranking CSVs
 - XLSX imports
 - imagery and tileset source files

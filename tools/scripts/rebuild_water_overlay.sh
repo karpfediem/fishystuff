@@ -5,9 +5,9 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 MAP_VERSION="${MAP_VERSION:-v1}"
-RAW_WATERMAP="${1:-zonegen/images/watermap.png}"
-TILES_OUT_DIR="${2:-zonegen/images/tiles/water/${MAP_VERSION}/0}"
-PROJECTED_WATERMAP="${3:-zonegen/images/watermap_projected_${MAP_VERSION}.png}"
+RAW_WATERMAP="${1:-data/imagery/watermap.png}"
+TILES_OUT_DIR="${2:-data/scratch/water/${MAP_VERSION}/0}"
+PROJECTED_WATERMAP="${3:-data/imagery/watermap_projected_${MAP_VERSION}.png}"
 
 MAP_EXPECTED_WIDTH=11560
 MAP_EXPECTED_HEIGHT=10540
@@ -24,6 +24,9 @@ if [[ ! -f "${RAW_WATERMAP}" ]]; then
   echo "Missing raw watermap: ${RAW_WATERMAP}" >&2
   exit 1
 fi
+
+mkdir -p "$(dirname "${PROJECTED_WATERMAP}")"
+mkdir -p "$(dirname "${TILES_OUT_DIR}")"
 
 INV_SX="$(python - <<PY
 a = float("${MAP_FROM_WATER_A}")

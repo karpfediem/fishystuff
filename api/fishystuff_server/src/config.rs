@@ -81,7 +81,10 @@ impl AppConfig {
             .ok()
             .or_else(|| dolt_sql_to_database_url(&fs_config.dolt_sql));
         let mut images_dir = resolve(&fs_config.paths.images_dir).unwrap_or_else(|| {
-            resolve_default_runtime_dir(config_dir.as_deref(), &["images", "zonegen/images"])
+            resolve_default_runtime_dir(
+                config_dir.as_deref(),
+                &["site/assets/images", "../site/assets/images", "images"],
+            )
         });
         let mut images_public_base_url = fs_config
             .paths
@@ -427,10 +430,15 @@ mod tests {
             .expect("time")
             .as_nanos();
         let root = std::env::temp_dir().join(format!("fishystuff-config-path-resolution-{stamp}"));
-        let nested = root.join("zonegen/images");
+        let config_dir = root.join("api");
+        let nested = root.join("site/assets/images");
         fs::create_dir_all(&nested).expect("create nested test dir");
+        fs::create_dir_all(&config_dir).expect("create config dir");
 
-        let resolved = resolve_default_runtime_dir(Some(&root), &["images", "zonegen/images"]);
+        let resolved = resolve_default_runtime_dir(
+            Some(&config_dir),
+            &["site/assets/images", "../site/assets/images", "images"],
+        );
         assert_eq!(resolved, nested);
 
         fs::remove_dir_all(&root).expect("cleanup temp dir");
@@ -438,7 +446,10 @@ mod tests {
 
     #[test]
     fn default_runtime_dir_falls_back_to_first_candidate_when_nothing_exists() {
-        let resolved = resolve_default_runtime_dir(None, &["images", "zonegen/images"]);
-        assert_eq!(resolved, PathBuf::from("images"));
+        let resolved = resolve_default_runtime_dir(
+            None,
+            &["site/assets/images", "../site/assets/images", "images"],
+        );
+        assert_eq!(resolved, PathBuf::from("site/assets/images"));
     }
 }
