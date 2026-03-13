@@ -8,6 +8,7 @@ resources/
 zig-cache/
 .zig-cache/
 zig-out/
+__pycache__
 
 # Devenv
 .devenv*
