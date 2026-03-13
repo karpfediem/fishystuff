@@ -30,10 +30,9 @@ pub(crate) fn build_fish_table_index(
                 });
         }
 
-        let icon_url = normalize_fish_icon_asset_url(entry.icon.as_deref(), public_base_url)
-            .or_else(|| {
-                normalize_fish_icon_asset_url(entry.encyclopedia_icon.as_deref(), public_base_url)
-            });
+        let icon_url =
+            normalize_fish_icon_asset_url(entry.encyclopedia_icon.as_deref(), public_base_url)
+                .or_else(|| normalize_fish_icon_asset_url(entry.icon.as_deref(), public_base_url));
         if let Some(icon_url) = icon_url {
             index
                 .icon_by_id
@@ -163,7 +162,9 @@ fn extract_absolute_asset_path(raw: &str) -> Option<String> {
 
 fn looks_like_icon_filename(raw: &str) -> bool {
     matches!(
-        raw.to_ascii_lowercase().rsplit_once('.').map(|(_, ext)| ext),
+        raw.to_ascii_lowercase()
+            .rsplit_once('.')
+            .map(|(_, ext)| ext),
         Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "avif" | "svg")
     )
 }
@@ -180,9 +181,10 @@ mod tests {
     #[test]
     fn fish_icon_urls_preserve_absolute_cdn_paths() {
         assert_eq!(
-            normalize_fish_icon_asset_url(Some(
-                "https://api.example.test/images/FishIcons/00008475.png"
-            ), None)
+            normalize_fish_icon_asset_url(
+                Some("https://api.example.test/images/FishIcons/00008475.png"),
+                None
+            )
             .as_deref(),
             Some("https://api.example.test/images/FishIcons/00008475.png")
         );
@@ -242,6 +244,29 @@ mod tests {
         assert_eq!(
             index.icon_by_id.get(&247).map(String::as_str),
             Some("/images/FishIcons/00820998.png")
+        );
+    }
+
+    #[test]
+    fn fish_table_index_prefers_encyclopedia_icons_when_available() {
+        let response = FishTableResponse {
+            fish: vec![FishTableEntry {
+                encyclopedia_key: 247,
+                item_key: 820998,
+                name: Some("Test".to_string()),
+                icon: Some("00008247.png".to_string()),
+                encyclopedia_icon: Some("00820998.png".to_string()),
+            }],
+        };
+
+        let index = build_fish_table_index(&response, Some("https://cdn.example.com"));
+        assert_eq!(
+            index.icon_by_id.get(&820998).map(String::as_str),
+            Some("https://cdn.example.com/images/FishIcons/00820998.png")
+        );
+        assert_eq!(
+            index.icon_by_id.get(&247).map(String::as_str),
+            Some("https://cdn.example.com/images/FishIcons/00820998.png")
         );
     }
 

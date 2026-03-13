@@ -35,7 +35,7 @@ use mysql::{Pool, Row};
 use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
 use crate::store::queries;
-use crate::store::{validate_dolt_ref, FishLang, Store};
+use crate::store::{FishLang, Store, validate_dolt_ref};
 use catalog::{
     fish_catch_methods_from_description, fish_grade_from_db, fish_icon_url_from_db, fish_is_dried,
     merge_fish_catalog_row, parse_positive_i64,
@@ -45,11 +45,11 @@ use layers::{
     resolve_layer_asset_url, substitute_map_version,
 };
 use stats::{
-    align_alpha, align_probs, beta_ci, compute_status, gaussian_blur_grid, pixel_to_tile_index,
-    sample_dirichlet, seed_from_drift, seed_from_params, time_weight, XorShift64,
+    XorShift64, align_alpha, align_probs, beta_ci, compute_status, gaussian_blur_grid,
+    pixel_to_tile_index, sample_dirichlet, seed_from_drift, seed_from_params, time_weight,
 };
 use util::{
-    clamp_i64_to_i32, clamp_i64_to_u32, clamp_i64_to_u8, clamp_i64_to_usize, db_unavailable,
+    clamp_i64_to_i32, clamp_i64_to_u8, clamp_i64_to_u32, clamp_i64_to_usize, db_unavailable,
     epoch_to_mysql_datetime, event_source_kind_from_db, events_schema_or_db_unavailable,
     is_layers_schema_error, is_missing_table, normalize_optional_string, row_f64, row_i64,
     row_opt_f64, row_string, row_u32_opt, synthetic_events_snapshot_revision,
@@ -187,16 +187,17 @@ impl DoltMySqlStore {
 
     fn query_map_versions(&self) -> AppResult<Vec<MapVersionInfo>> {
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(String, Option<String>, Option<i64>)> =
-            match conn.query(queries::MAP_VERSIONS_SQL) {
-                Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "map_versions") => {
-                    return Err(AppError::not_found(
-                        "map_versions table is missing; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
-                    ))
-                }
-                Err(err) => return Err(db_unavailable(err)),
-            };
+        let rows: Vec<(String, Option<String>, Option<i64>)> = match conn
+            .query(queries::MAP_VERSIONS_SQL)
+        {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "map_versions") => {
+                return Err(AppError::not_found(
+                    "map_versions table is missing; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
+                ));
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
 
         let mut versions = Vec::with_capacity(rows.len());
         for (map_version_id, name, is_default) in rows {
@@ -243,17 +244,17 @@ impl DoltMySqlStore {
                 Err(err) if is_missing_table(&err, "layer_configs") => {
                     return Err(AppError::not_found(
                         "layer_configs table is missing; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
-                    ))
+                    ));
                 }
                 Err(err) if is_missing_table(&err, "layers") => {
                     return Err(AppError::not_found(
                         "layers table is missing; apply api/sql/migrations/20260228_layers.sql",
-                    ))
+                    ));
                 }
                 Err(err) if is_layers_schema_error(&err) => {
                     return Err(AppError::not_found(
                         "layers schema is outdated; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
-                    ))
+                    ));
                 }
                 Err(err) => return Err(db_unavailable(err)),
             }
@@ -263,12 +264,12 @@ impl DoltMySqlStore {
                 Err(err) if is_missing_table(&err, "layers") => {
                     return Err(AppError::not_found(
                         "layers table is missing; apply api/sql/migrations/20260228_layers.sql",
-                    ))
+                    ));
                 }
                 Err(err) if is_layers_schema_error(&err) => {
                     return Err(AppError::not_found(
                         "layers schema is outdated; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
-                    ))
+                    ));
                 }
                 Err(err) => return Err(db_unavailable(err)),
             }
@@ -386,26 +387,28 @@ impl DoltMySqlStore {
     fn query_region_groups(&self, map_version_id: &str) -> AppResult<Vec<RegionGroupDescriptor>> {
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
 
-        let meta_rows: Vec<Row> = match conn.exec(queries::REGION_GROUP_META_SQL, (map_version_id,)) {
+        let meta_rows: Vec<Row> = match conn.exec(queries::REGION_GROUP_META_SQL, (map_version_id,))
+        {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "region_group_meta") => {
                 return Err(AppError::not_found(
                     "region_group_meta table is missing; apply api/sql/migrations/20260301_region_groups.sql",
-                ))
+                ));
             }
             Err(err) => return Err(db_unavailable(err)),
         };
 
-        let region_rows: Vec<(i64, i64)> =
-            match conn.exec(queries::REGION_GROUP_REGIONS_SQL, (map_version_id,)) {
-                Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "region_group_regions") => {
-                    return Err(AppError::not_found(
-                        "region_group_regions table is missing; apply api/sql/migrations/20260301_region_groups.sql",
-                    ))
-                }
-                Err(err) => return Err(db_unavailable(err)),
-            };
+        let region_rows: Vec<(i64, i64)> = match conn
+            .exec(queries::REGION_GROUP_REGIONS_SQL, (map_version_id,))
+        {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "region_group_regions") => {
+                return Err(AppError::not_found(
+                    "region_group_regions table is missing; apply api/sql/migrations/20260301_region_groups.sql",
+                ));
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
 
         let mut groups: BTreeMap<u32, RegionGroupDescriptor> = BTreeMap::new();
         for row in meta_rows {
@@ -634,7 +637,7 @@ impl DoltMySqlStore {
                 ft.encyclopedia_key, \
                 {fish_name_expr} AS fish_name, \
                 it.`GradeType` AS grade_type, \
-                COALESCE(NULLIF(ft.icon, ''), NULLIF(ft.encyclopedia_icon, ''), NULLIF(it.`IconImageFile`, '')) AS icon_file, \
+                COALESCE(NULLIF(ft.encyclopedia_icon, ''), NULLIF(ft.icon, ''), NULLIF(it.`IconImageFile`, '')) AS icon_file, \
                 it.`ItemName` AS item_name, \
                 it.`Description` AS item_description, \
                 it.`OriginalPrice` AS original_price \
@@ -823,7 +826,7 @@ impl DoltMySqlStore {
                     return Err(AppError::not_found(format!(
                         "water_tiles missing for map_version={} tile_px={tile_px}",
                         map_version
-                    )))
+                    )));
                 }
                 Err(err) => return Err(db_unavailable(err)),
             };
@@ -1783,11 +1786,11 @@ mod tests {
     use crate::config::ZoneStatusConfig;
 
     use super::{
-        catalog::is_web_icon_path, compute_status, event_source_kind_from_db,
-        fish_catch_methods_from_description, fish_icon_url_from_db, fish_is_dried,
-        merge_fish_catalog_row, parse_layer_kind, parse_positive_i64, parse_vector_source,
-        pixel_to_tile_index, resolve_layer_asset_url, synthetic_events_snapshot_revision,
-        DoltMySqlStore, FishCatalogRow, FishTableEntry, FishTableIndex,
+        DoltMySqlStore, FishCatalogRow, FishTableEntry, FishTableIndex, catalog::is_web_icon_path,
+        compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
+        fish_icon_url_from_db, fish_is_dried, merge_fish_catalog_row, parse_layer_kind,
+        parse_positive_i64, parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
+        synthetic_events_snapshot_revision,
     };
 
     #[test]

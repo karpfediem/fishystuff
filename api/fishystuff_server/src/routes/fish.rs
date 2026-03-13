@@ -1,13 +1,16 @@
-use axum::extract::{rejection::QueryRejection, Extension, Query, State};
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
-use axum::response::IntoResponse;
 use axum::Json;
+use axum::extract::{Extension, Query, State, rejection::QueryRejection};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::response::IntoResponse;
 use serde::Deserialize;
 
 use fishystuff_api::models::fish::{FishListResponse, FishMapResponse, FishTableResponse};
 
-use crate::error::{with_timeout, AppError, AppResult};
+use crate::error::{AppError, AppResult, with_timeout};
 use crate::routes::meta::map_request_id;
+use crate::routes::public_assets::{
+    absolutize_fish_list_icons, absolutize_fish_map_icons, absolutize_fish_table_icons,
+};
 use crate::state::{RequestId, SharedState};
 use crate::store::FishLang;
 
@@ -46,16 +49,11 @@ pub async fn list_fish(
     )
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
-
-    for entry in &mut response.fish {
-        if let Some(icon_url) = entry.icon_url.as_deref() {
-            entry.icon_url = Some(resolve_public_url(
-                &headers,
-                icon_url,
-                state.config.images_public_base_url.as_deref(),
-            ));
-        }
-    }
+    absolutize_fish_list_icons(
+        &headers,
+        &mut response,
+        state.config.images_public_base_url.as_deref(),
+    );
 
     let etag = format!("\"{}\"", response.revision);
     let mut response_headers = HeaderMap::new();
@@ -101,27 +99,17 @@ pub async fn fish_table(
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
     let mut response = FishTableResponse { fish };
-    for entry in &mut response.fish {
-        if let Some(icon) = entry.icon.as_deref() {
-            entry.icon = Some(resolve_public_url(
-                &headers,
-                icon,
-                state.config.images_public_base_url.as_deref(),
-            ));
-        }
-        if let Some(icon) = entry.encyclopedia_icon.as_deref() {
-            entry.encyclopedia_icon = Some(resolve_public_url(
-                &headers,
-                icon,
-                state.config.images_public_base_url.as_deref(),
-            ));
-        }
-    }
+    absolutize_fish_table_icons(
+        &headers,
+        &mut response,
+        state.config.images_public_base_url.as_deref(),
+    );
     Ok(Json(response))
 }
 
 pub async fn fish_map(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     query: Result<Query<FishMapQuery>, QueryRejection>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<Json<FishMapResponse>> {
@@ -148,9 +136,14 @@ pub async fn fish_map(
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
 
-    let mapping = mapping.ok_or_else(|| {
+    let mut mapping = mapping.ok_or_else(|| {
         AppError::not_found("fish mapping not found").with_request_id(request_id.0)
     })?;
+    absolutize_fish_map_icons(
+        &headers,
+        &mut mapping,
+        state.config.images_public_base_url.as_deref(),
+    );
     Ok(Json(mapping))
 }
 
@@ -187,56 +180,13 @@ fn datastar_fish_sse(response: FishListResponse) -> AppResult<String> {
     ))
 }
 
-fn resolve_public_url(headers: &HeaderMap, url: &str, configured_base: Option<&str>) -> String {
-    let trimmed = url.trim();
-    if trimmed.is_empty()
-        || trimmed.starts_with("http://")
-        || trimmed.starts_with("https://")
-        || trimmed.starts_with("data:")
-    {
-        return trimmed.to_string();
-    }
-
-    if let Some(base) = configured_base
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        let base = base.trim_end_matches('/');
-        if trimmed.starts_with('/') {
-            return format!("{base}{trimmed}");
-        }
-        return format!("{base}/{}", trimmed.trim_start_matches('/'));
-    }
-
-    let proto = headers
-        .get("x-forwarded-proto")
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(',').next())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .unwrap_or("http");
-    let host = headers
-        .get("x-forwarded-host")
-        .or_else(|| headers.get(header::HOST))
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.split(',').next())
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-
-    match host {
-        Some(host) if trimmed.starts_with('/') => format!("{proto}://{host}{trimmed}"),
-        Some(host) => format!("{proto}://{host}/{}", trimmed.trim_start_matches('/')),
-        None => trimmed.to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
     use axum::extract::{Extension, Query, State};
-    use axum::http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode};
+    use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, header};
     use axum::response::IntoResponse;
     use fishystuff_api::ids::MapVersionId;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
@@ -256,7 +206,7 @@ mod tests {
     use crate::state::{AppState, RequestId};
     use crate::store::{FishLang, Store};
 
-    use super::{list_fish, FishQuery};
+    use super::{FishQuery, list_fish};
 
     struct MockStore;
 

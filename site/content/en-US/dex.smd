@@ -1687,9 +1687,10 @@
 
       const main = createElement("div", "fishydex-card-main");
       const iconWrap = createElement("div", "fishydex-icon-wrap");
-      if (fish.icon_url) {
+      const iconUrl = normalizeFishIconUrl(fish.icon_url);
+      if (iconUrl) {
         const icon = createElement("img", "fishydex-icon");
-        icon.src = fish.icon_url;
+        icon.src = iconUrl;
         icon.alt = `${fish.name} icon`;
         icon.loading = "lazy";
         iconWrap.appendChild(icon);
@@ -1819,27 +1820,66 @@
       return `${base}/${raw.replace(/^\/+/, "")}`;
     }
 
+    function extractAbsoluteAssetPath(value) {
+      const raw = String(value || "").trim();
+      if (!(raw.startsWith("http://") || raw.startsWith("https://"))) {
+        return "";
+      }
+      try {
+        return new URL(raw).pathname || "";
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function normalizeFishIconPath(value) {
+      const raw = String(value || "").trim();
+      if (!raw || raw.toLowerCase() === "null") {
+        return "";
+      }
+      if (raw.startsWith("/images/")) {
+        return raw;
+      }
+      if (raw.startsWith("images/")) {
+        return `/${raw}`;
+      }
+      if (raw.startsWith("/FishIcons/")) {
+        return `/images${raw}`;
+      }
+      if (raw.startsWith("FishIcons/")) {
+        return `/images/${raw}`;
+      }
+      const absolutePath = extractAbsoluteAssetPath(raw);
+      if (absolutePath) {
+        return normalizeFishIconPath(absolutePath);
+      }
+
+      const file = raw.split(/[?#]/, 1)[0].split("/").pop() || raw;
+      if (!/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file)) {
+        return "";
+      }
+      return `/images/FishIcons/${file}`;
+    }
+
     function normalizeFishIconUrl(value) {
       const raw = String(value || "").trim();
       if (!raw || raw.toLowerCase() === "null") {
         return "";
       }
+      if (raw.startsWith("data:")) {
+        return raw;
+      }
+      const assetPath = normalizeFishIconPath(raw);
+      if (assetPath) {
+        return cdnUrl(assetPath);
+      }
       if (
         raw.startsWith("http://")
         || raw.startsWith("https://")
-        || raw.startsWith("data:")
       ) {
         return raw;
       }
-      if (raw.startsWith("/")) {
-        return cdnUrl(raw);
-      }
-
-      let file = raw.split("/").pop() || raw;
-      if (!file.toLowerCase().endsWith(".png")) {
-        file += ".png";
-      }
-      return cdnUrl(`/images/FishIcons/${file}`);
+      return "";
     }
 
     function setElementText(element, text) {
@@ -1903,8 +1943,9 @@
       const guidePlaceholder = document.getElementById("fishydex-details-guide-placeholder");
       const iconFrameGrade = meta.isPrize ? "prize" : slugifyGrade(meta.grade);
       const itemIconUrl = normalizeFishIconUrl(
-        (cached.mapping && cached.mapping.icon)
-          || meta.iconUrl
+        meta.iconUrl
+          || (cached.mapping && cached.mapping.icon)
+          || (cached.mapping && cached.mapping.encyclopedia_icon)
       );
       const guideIconUrl = normalizeFishIconUrl(cached.mapping && cached.mapping.encyclopedia_icon);
 

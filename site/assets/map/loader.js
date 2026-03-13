@@ -2,7 +2,7 @@ import FishyMapBridge, {
   FISHYMAP_EVENTS,
   FISHYMAP_POINT_ICON_SCALE_MAX,
   FISHYMAP_POINT_ICON_SCALE_MIN,
-  resolveApiBaseUrl,
+  resolveCdnBaseUrl,
 } from "./map-host.js";
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
@@ -243,13 +243,57 @@ function fishIconUrl(fish) {
     return "";
   }
   const raw = value.trim();
-  if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("data:")) {
+  if (raw.startsWith("data:")) {
     return raw;
   }
-  if (raw.startsWith("/")) {
-    return `${resolveApiBaseUrl(window.location)}${raw}`;
+  const assetPath = normalizeFishIconPath(raw);
+  if (assetPath) {
+    return `${resolveCdnBaseUrl(window.location)}${assetPath}`;
   }
-  return raw;
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+  return "";
+}
+
+function extractAbsoluteAssetPath(value) {
+  const raw = String(value || "").trim();
+  if (!(raw.startsWith("http://") || raw.startsWith("https://"))) {
+    return "";
+  }
+  try {
+    return new URL(raw).pathname || "";
+  } catch (_) {
+    return "";
+  }
+}
+
+function normalizeFishIconPath(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (raw.startsWith("/images/")) {
+    return raw;
+  }
+  if (raw.startsWith("images/")) {
+    return `/${raw}`;
+  }
+  if (raw.startsWith("/FishIcons/")) {
+    return `/images${raw}`;
+  }
+  if (raw.startsWith("FishIcons/")) {
+    return `/images/${raw}`;
+  }
+  const absolutePath = extractAbsoluteAssetPath(raw);
+  if (absolutePath) {
+    return normalizeFishIconPath(absolutePath);
+  }
+  const file = raw.split(/[?#]/, 1)[0].split("/").pop() || raw;
+  if (!/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file)) {
+    return "";
+  }
+  return `/images/FishIcons/${file}`;
 }
 
 function clampPointIconScale(value) {
