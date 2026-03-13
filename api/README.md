@@ -17,6 +17,9 @@ Current migration contents:
 - `api/fly.toml`
 
 Local development should point `images_public_base_url` at the local CDN server (default `http://127.0.0.1:4040` in `api/config.toml`). Production deploys should override that to `https://cdn.fishystuff.fish`.
+The local API process is started through the SecretSpec `api` profile so
+`FISHYSTUFF_DATABASE_URL` comes from `/home/carp/code/fishystuff/secretspec.toml`
+instead of dotenv shell loading.
 
 This component should not own:
 

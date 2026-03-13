@@ -11,6 +11,7 @@
       lftp
       lsof
       rsync
+      secretspec
       skopeo
       xlsx2csv
       clang
@@ -21,15 +22,6 @@
       watchexec
       (inputs.zine.packages.${pkgs.system}.default.override { zigPreferMusl = true; })
     ];
-
-  dotenv.enable = true;
-
-  env = {
-    FISHYSTUFF_DATABASE_URL = "mysql://root@localhost:3306/fishystuff";
-    BUNNY_FTP_HOST = "storage.bunnycdn.com";
-    BUNNY_FTP_PORT = "21";
-    BUNNY_FTP_USER = "fishystuff";
-  };
 
   languages.python.enable = true;
   languages.javascript.enable = true;

@@ -7,6 +7,8 @@ A very fishy website
 ### Prerequisites
 
 This project uses [devenv](https://devenv.sh/) for the local development environment.
+Runtime secrets are declared in [secretspec.toml](/home/carp/code/fishystuff/secretspec.toml)
+and loaded with [SecretSpec](https://secretspec.dev/).
 
 To install them you can follow this guide: https://devenv.sh/getting-started/
 
@@ -23,6 +25,14 @@ To run the local development stack managed by `devenv` processes:
 
 ```bash
 devenv up
+```
+
+Initialize your local SecretSpec provider and check the repo profiles you need:
+
+```bash
+secretspec config init
+secretspec check --profile api
+secretspec check --profile cdn
 ```
 
 To update the pinned `devenv` inputs after intentional environment changes:

@@ -56,6 +56,18 @@ Repository-level notes for working in this monorepo.
   - JS host checks/tests
   - Rust/wasm checks and bundle rebuilds
 
+## Secrets
+- Repo-level secret requirements live in `/home/carp/code/fishystuff/secretspec.toml`.
+- Use SecretSpec to load secrets at runtime:
+  - `secretspec check --profile api`
+  - `secretspec check --profile cdn`
+  - `secretspec check --profile bot`
+  - `secretspec run --profile api -- ...`
+  - `secretspec run --profile cdn -- ...`
+  - `secretspec run --profile bot -- ...`
+- Do not add new dotenv-based secret loading to the repo.
+- Prefer runtime loading with `secretspec run` over exporting secrets into the whole shell.
+
 ## Data policy
 - Keep committed documentation under `data/spec/`.
 - Small tracked landmark/reference CSVs may live under `data/landmarks/`.

@@ -38,7 +38,9 @@ Optional:
   Optional local manifest cache used to upload only changed CDN roots on later syncs.
   Defaults to `data/cdn/.last-push-manifest.tsv`.
 
-These values should come from the local `.env`, which is loaded into the `devenv` shells via `dotenv.enable = true`.
+These values are declared in `/home/carp/code/fishystuff/secretspec.toml` under the `cdn`
+profile. Populate them in your local SecretSpec provider and run Bunny syncs via
+`secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh` or `just cdn-push`.
 
 `cdn-push` intentionally excludes local placeholder and metadata files such as
 `.gitkeep` and `.cdn-metadata.json` from the Bunny upload. It also keeps a local

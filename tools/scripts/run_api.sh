@@ -9,6 +9,7 @@ until (echo > /dev/tcp/127.0.0.1/3306) >/dev/null 2>&1; do
   sleep 1
 done
 
-exec cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_server -- \
+exec secretspec run --profile "${SECRETSPEC_API_PROFILE:-api}" -- \
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_server -- \
   --config "$ROOT_DIR/api/config.toml" \
   --bind 127.0.0.1:8080

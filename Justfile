@@ -20,6 +20,10 @@ deploy-bot:
   skopeo --insecure-policy --debug copy docker-archive:"$(nix build .#bot-container --no-link --print-out-paths)" docker://registry.fly.io/criobot:latest --dest-creds x:"$(fly -a criobot tokens create deploy --expiry 10m)" --format v2s2
   flyctl deploy --remote-only -c bot/fly.toml
 
+# Run the Discord bot with the SecretSpec bot profile
+bot-run:
+  secretspec run --profile bot -- cargo run --manifest-path bot/Cargo.toml
+
 # Stage CDN-served runtime assets under data/cdn/public
 cdn-stage:
   ./tools/scripts/stage_cdn_assets.sh
@@ -29,14 +33,18 @@ cdn-serve:
   ./tools/scripts/run_cdn_server.sh
 
 # Push the staged CDN tree to Bunny Storage via FTP
-# Override BUNNY_FTP_PARALLEL / BUNNY_FTP_CONNECTION_LIMIT in .env if needed.
+# Override BUNNY_FTP_PARALLEL / BUNNY_FTP_CONNECTION_LIMIT in the shell if needed.
 cdn-push:
-  ./tools/scripts/push_bunnycdn.sh
+  secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
 
 # Refresh the staged tree and then push it to Bunny Storage
 cdn-sync:
   just cdn-stage
   just cdn-push
+
+# Validate that the local SecretSpec provider has the required values for a profile
+secrets-check profile="api":
+  secretspec check --profile {{profile}}
 
 # Start the full local dev stack through devenv process orchestration
 dev-up:
