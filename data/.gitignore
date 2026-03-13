@@ -1,6 +1,9 @@
 *
 !.gitignore
 !README.md
+!cdn/
+!cdn/.gitignore
+!cdn/README.md
 !landmarks/
 !landmarks/*.csv
 !spec/

@@ -16,6 +16,9 @@ Current migration contents:
 - `tools/fishystuff_tilegen`
 - `tools/fishystuff_dolt_import`
 - `tools/scripts/build_map.sh`
+- `tools/scripts/stage_cdn_assets.sh`
+- `tools/scripts/push_bunnycdn.sh`
+- `tools/scripts/serve_cdn.py`
 - `tools/scripts/rebuild_region_groups_overlay.sh`
 - `tools/scripts/rebuild_water_overlay.sh`
 - `tools/scripts/xlsx-*`

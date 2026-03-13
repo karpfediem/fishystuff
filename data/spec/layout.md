@@ -12,6 +12,8 @@ Suggested developer-local layout:
   Large image sources, local raster inputs, and imagery staging files.
 - `data/terrain/`
   Terrain source tiles, full-resolution terrain images, and terrain bake staging files.
+- `data/cdn/`
+  Local CDN staging tree, sync logs, and publish-ready payloads for `cdn.fishystuff.fish`.
 - `data/scratch/`
   Intermediate exports, temporary manifests, reports, and ad hoc working outputs.
 

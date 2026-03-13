@@ -19,3 +19,20 @@ update_fishing_table:
 deploy-bot:
   skopeo --insecure-policy --debug copy docker-archive:"$(nix build .#bot-container --no-link --print-out-paths)" docker://registry.fly.io/criobot:latest --dest-creds x:"$(fly -a criobot tokens create deploy --expiry 10m)" --format v2s2
   flyctl deploy --remote-only -c bot/fly.toml
+
+# Stage CDN-served runtime assets under data/cdn/public
+cdn-stage:
+  ./tools/scripts/stage_cdn_assets.sh
+
+# Serve the staged CDN tree locally with cache headers
+cdn-serve:
+  python ./tools/scripts/serve_cdn.py --root data/cdn/public --port 4040
+
+# Push the staged CDN tree to Bunny Storage via FTP
+cdn-push:
+  ./tools/scripts/push_bunnycdn.sh
+
+# Refresh the staged tree and then push it to Bunny Storage
+cdn-sync:
+  just cdn-stage
+  just cdn-push

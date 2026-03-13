@@ -37,7 +37,7 @@ Repository-level notes for working in this monorepo.
 - For guided edits to `devenv.nix` files, refer to `devenv`'s LLM-oriented reference: <https://devenv.sh/llms.txt>.
 - `nix develop .#default`
   - Lightweight repo shell.
-  - Includes basic tools such as `just`, `dolt`, `gawk`, and `xlsx2csv`.
+  - Includes basic tools such as `just`, `curl`, `dolt`, `gawk`, `lftp`, `python`, `rsync`, and `xlsx2csv`.
   - Do not assume it has `node`, `bun`, or the Rust toolchain.
 - `nix develop .#site`
   - Use for site/frontend/browser-host work.
@@ -61,6 +61,7 @@ Repository-level notes for working in this monorepo.
 - Keep committed documentation under `data/spec/`.
 - Small tracked landmark/reference CSVs may live under `data/landmarks/`.
 - Treat `data/` as local developer input/output state, not a serving root.
+- Stage CDN publish payloads under `data/cdn/`.
 - Some legacy local inputs still remain under `zonegen/data/` during migration. Do not make runtime components depend on them.
 
 ## Generated artifact policy
@@ -73,6 +74,7 @@ Repository-level notes for working in this monorepo.
   - `site/assets/map/fishystuff_ui_bevy_bg.wasm`
   - `site/assets/map/ui/fishystuff.css`
 - Runtime-served image, tile, and terrain assets live under `site/assets/images/`.
+- CDN publish-ready copies of runtime map/image assets should be staged under `data/cdn/public/`.
 - Keep raw imagery, terrain inputs, and scratch outputs under `data/`, not `site/assets/images/`.
 - Do not hand-edit generated bundle outputs.
 - Do not commit unrelated generated build outputs.
