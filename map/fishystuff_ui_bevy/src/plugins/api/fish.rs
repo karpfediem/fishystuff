@@ -140,8 +140,10 @@ fn normalize_fish_icon_asset_path(raw: &str) -> Option<String> {
     if let Some(path) = extract_absolute_asset_path(raw) {
         return normalize_fish_icon_asset_path(&path);
     }
-    if looks_like_icon_filename(raw) && !raw.contains('/') {
-        return Some(format!("/images/FishIcons/{raw}"));
+    let file = raw.split(['?', '#']).next().unwrap_or(raw);
+    let file = file.rsplit('/').next().unwrap_or(file);
+    if looks_like_icon_filename(file) {
+        return Some(format!("/images/FishIcons/{file}"));
     }
     None
 }
@@ -195,6 +197,15 @@ mod tests {
         assert_eq!(
             normalize_fish_icon_asset_url(Some("00008475.png"), None).as_deref(),
             Some("/images/FishIcons/00008475.png")
+        );
+        assert_eq!(
+            normalize_fish_icon_asset_url(Some("/00821288.png"), None).as_deref(),
+            Some("/images/FishIcons/00821288.png")
+        );
+        assert_eq!(
+            normalize_fish_icon_asset_url(Some("https://cdn.example.com/00821288.png"), None)
+                .as_deref(),
+            Some("/images/FishIcons/00821288.png")
         );
     }
 
