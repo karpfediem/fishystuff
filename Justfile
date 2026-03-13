@@ -29,6 +29,7 @@ cdn-serve:
   python ./tools/scripts/serve_cdn.py --root data/cdn/public --port 4040
 
 # Push the staged CDN tree to Bunny Storage via FTP
+# Override BUNNY_FTP_PARALLEL / BUNNY_FTP_CONNECTION_LIMIT in .env if needed.
 cdn-push:
   ./tools/scripts/push_bunnycdn.sh
 

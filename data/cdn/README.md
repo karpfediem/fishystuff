@@ -29,5 +29,9 @@ Optional:
 - `BUNNY_REMOTE_ROOT`
   Defaults to the authenticated storage-zone root. Do not set this to `/`; Bunny's
   FTP endpoint expects sync targets relative to the logged-in zone root.
+- `BUNNY_FTP_PARALLEL`
+  Number of parallel file uploads to run during `cdn-push`. Defaults to `8`.
+- `BUNNY_FTP_CONNECTION_LIMIT`
+  Overall lftp connection cap. Defaults to `12`.
 
 These values should come from the local `.env`, which is loaded into the `devenv` shells via `dotenv.enable = true`.
