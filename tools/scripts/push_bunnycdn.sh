@@ -174,6 +174,10 @@ done < "$changed_paths_file" | LC_ALL=C sort -u > "$sync_roots_file"
   echo "bye"
 } > "$lftp_script_file"
 
-lftp -f "$lftp_script_file" -u "$BUNNY_FTP_USER","$BUNNY_FTP_PASSWORD" -p "$BUNNY_FTP_PORT" "$BUNNY_FTP_HOST"
+lftp \
+  -u "$BUNNY_FTP_USER","$BUNNY_FTP_PASSWORD" \
+  -p "$BUNNY_FTP_PORT" \
+  "$BUNNY_FTP_HOST" \
+  -e "source $(lftp_quote "$lftp_script_file")"
 
 cp "$current_manifest_file" "$STATE_FILE"
