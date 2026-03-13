@@ -1,0 +1,22 @@
+[package]
+name = "fishystuff_ingest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+csv = { workspace = true }
+serde = { workspace = true }
+serde_json = "1"
+image = { workspace = true }
+mysql = { workspace = true }
+fishystuff_core = { path = "../../lib/fishystuff_core" }
+fishystuff_store = { path = "../../lib/fishystuff_store" }
+fishystuff_analytics = { path = "../../lib/fishystuff_analytics" }
+fishystuff_zones_meta = { path = "../../lib/fishystuff_zones_meta" }
+fishystuff_config = { path = "../../lib/fishystuff_config" }
+sha2 = "0.10"
+
+[dev-dependencies]

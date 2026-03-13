@@ -73,7 +73,7 @@ if [ "${REBUILD_TERRAIN_PYRAMID:-0}" = "1" ]; then
   : "${TERRAIN_PYRAMID_SOURCE_ROOT:=zonegen/data/Karpfen/terraintiles/7}"
   : "${TERRAIN_PYRAMID_OUT_DIR:=zonegen/images/terrain/v1}"
   rm -rf "$TERRAIN_PYRAMID_OUT_DIR"
-  cargo run --manifest-path "$ROOT_DIR/zonegen/Cargo.toml" --release -p fishystuff_tilegen --bin terrain_pyramid -- build-terrain-pyramid \
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --release -p fishystuff_tilegen --bin terrain_pyramid -- build-terrain-pyramid \
     --source-root "$TERRAIN_PYRAMID_SOURCE_ROOT" \
     --out-dir "$TERRAIN_PYRAMID_OUT_DIR" \
     --revision v1 \
@@ -92,7 +92,7 @@ if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
   : "${TERRAIN_PYRAMID_OUT_DIR:=zonegen/images/terrain/v1}"
   : "${TERRAIN_DRAPE_OUT_DIR:=zonegen/images/terrain_drape/minimap/v1}"
   rm -rf "$TERRAIN_DRAPE_OUT_DIR"
-  cargo run --manifest-path "$ROOT_DIR/zonegen/Cargo.toml" --release -p fishystuff_tilegen --bin terrain_pyramid -- build-terrain-drape-pyramid \
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --release -p fishystuff_tilegen --bin terrain_pyramid -- build-terrain-drape-pyramid \
     --terrain-manifest "$TERRAIN_PYRAMID_OUT_DIR/manifest.json" \
     --source-image "$TERRAIN_DRAPE_SOURCE_IMAGE" \
     --out-dir "$TERRAIN_DRAPE_OUT_DIR" \
@@ -104,7 +104,7 @@ if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
     --kind raster-visual
 fi
 if [ "${REBUILD_MINIMAP_PYRAMID:-0}" = "1" ]; then
-  cargo run --manifest-path "$ROOT_DIR/zonegen/Cargo.toml" -p fishystuff_tilegen --bin minimap_pyramid -- \
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin minimap_pyramid -- \
     --input-dir zonegen/images/tiles/minimap \
     --out-dir zonegen/images/tiles/minimap/v1 \
     --tile-px 128 \
