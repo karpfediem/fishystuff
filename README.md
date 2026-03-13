@@ -6,26 +6,29 @@ A very fishy website
 
 ### Prerequisites
 
-This project uses a nix flake and [devenv](https://devenv.sh/)
+This project uses [devenv](https://devenv.sh/) for the local development environment.
 
 To install them you can follow this guide: https://devenv.sh/getting-started/
 
-Once installed you can enter the devenv shell either by running
+Once installed, enter the development environment with:
 
 ```bash
 devenv shell
 ```
 
-or via
-
-```bash
-nix develop --impure .#default
-```
+If you use `direnv`, run `direnv allow` once at the repo root and the environment
+will activate automatically on entry.
 
 To run the local development stack managed by `devenv` processes:
 
 ```bash
 devenv up
+```
+
+To update the pinned `devenv` inputs after intentional environment changes:
+
+```bash
+devenv update
 ```
 
 ### Commands

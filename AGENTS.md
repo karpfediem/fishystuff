@@ -32,20 +32,29 @@ Repository-level notes for working in this monorepo.
 - `data/` is not a runtime dependency.
 - Do not add new Rust crates back under `zonegen/`.
 
-## Nix shell
-- This repo uses one top-level `devenv` shell in `flake.nix`.
-- For guided edits to `devenv.nix` files, refer to `devenv`'s LLM-oriented reference: <https://devenv.sh/llms.txt>.
-- `nix develop .#default`
-  - Full local development shell.
-  - Includes `just`, `curl`, `dolt`, `flyctl`, `gawk`, `lftp`, `python`, `rsync`, `skopeo`, `xlsx2csv`, Node/Bun, `zine`, `tailwindcss`, `watchexec`, the stable Rust toolchain, `wasm-bindgen`, `clang`, `mariadb`, and `imagemagick`.
-  - `devenv up` from the repo root starts the local process stack: Dolt SQL, map bundle watcher, CDN staging watcher, CDN file server, API server, Zine rebuild watcher, Tailwind watcher, and the local site server.
+## Devenv
+- This repo uses one top-level `devenv` environment rooted in:
+  - `/home/carp/code/fishystuff/devenv.nix`
+  - `/home/carp/code/fishystuff/devenv.yaml`
+  - `/home/carp/code/fishystuff/devenv.lock`
+- For guided edits to the `devenv` configuration, refer to `devenv`'s LLM-oriented reference: <https://devenv.sh/llms.txt>.
+- Use `devenv shell` for the interactive development environment.
+- Use `devenv up` from the repo root to start the local process stack:
+  - Dolt SQL
+  - map bundle watcher
+  - CDN staging watcher
+  - CDN file server
+  - API server
+  - Zine rebuild watcher
+  - Tailwind watcher
+  - local site server
 
-## Practical shell usage
-- The default shell is sufficient for full-stack local development and `devenv up`.
-- `nix develop .#default` needs `--impure` with this flake pattern so Nix can use the local `devenv-root`.
-- For map runtime changes, the common split is:
-  - JS host checks/tests in the default shell
-  - Rust/wasm checks and bundle rebuilds in the default shell
+## Practical environment usage
+- The top-level `devenv` environment is the supported development entrypoint.
+- Prefer `direnv` activation or `devenv shell` over ad hoc shell bootstrapping.
+- For map runtime changes, use the same `devenv` environment for both:
+  - JS host checks/tests
+  - Rust/wasm checks and bundle rebuilds
 
 ## Data policy
 - Keep committed documentation under `data/spec/`.
