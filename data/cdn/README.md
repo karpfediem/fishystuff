@@ -6,6 +6,7 @@ Expected working layout:
 
 - `data/cdn/public/`
   Publish-ready file tree that mirrors the Bunny storage zone layout. Its contents are local working state and should stay gitignored apart from placeholder `.gitkeep` files.
+  The map runtime bundle lives under `data/cdn/public/map/` as hashed `fishystuff_ui_bevy.<hash>.js` and `fishystuff_ui_bevy_bg.<hash>.wasm` files plus a stable `runtime-manifest.json`.
 - `data/cdn/logs/`
   Optional local sync logs or ad hoc transfer output.
 

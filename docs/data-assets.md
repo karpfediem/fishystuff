@@ -15,13 +15,14 @@ Authoritative inputs and hand-edited source:
 
 Generated outputs that should be rebuilt rather than edited by hand:
 
-- `site/assets/map/fishystuff_ui_bevy.js`
-- `site/assets/map/fishystuff_ui_bevy_bg.wasm`
 - copied Bevy UI stylesheet under `site/assets/map/ui/fishystuff.css`
+- hashed map runtime bundle files under `data/cdn/public/map/fishystuff_ui_bevy.<hash>.js`
+- hashed map runtime wasm files under `data/cdn/public/map/fishystuff_ui_bevy_bg.<hash>.wasm`
+- stable map runtime manifest under `data/cdn/public/map/runtime-manifest.json`
 - terrain pyramids, drape pyramids, fish icons, GeoJSON overlays, and regenerated tile trees under `data/cdn/public/**`
 - staged CDN metadata plus map bundle payload under `data/cdn/public/**` when it is refreshed by `tools/scripts/stage_cdn_assets.sh`
 
-`site/assets/map/` now contains both browser-host source files and generated wasm bundle artifacts, while the canonical runtime CDN payload lives under `data/cdn/public/`, so the distinction above must stay explicit.
+`site/assets/map/` now contains browser-host source files and the copied UI stylesheet, while the canonical runtime CDN payload lives under `data/cdn/public/`, so the distinction above must stay explicit.
 
 The refactor/audit note for crate boundaries and cleanup targets lives in
 `docs/refactor-sweep.md`.

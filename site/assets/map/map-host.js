@@ -763,6 +763,91 @@ export function resolveApiBaseUrl(locationLike = globalThis.location) {
   return "https://api.fishystuff.fish";
 }
 
+function normalizeBaseUrl(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized.replace(/\/+$/, "");
+}
+
+export function resolveCdnBaseUrl(
+  locationLike = globalThis.location,
+  explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
+) {
+  const explicit = normalizeBaseUrl(explicitBaseUrl);
+  if (explicit) {
+    return explicit;
+  }
+  const hostname = String(locationLike?.hostname || "").toLowerCase();
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.endsWith(".localhost")
+  ) {
+    return "http://127.0.0.1:4040";
+  }
+  return "https://cdn.fishystuff.fish";
+}
+
+export function resolveMapRuntimeBaseUrl(
+  locationLike = globalThis.location,
+  explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
+) {
+  return `${resolveCdnBaseUrl(locationLike, explicitBaseUrl)}/map/`;
+}
+
+export function resolveMapRuntimeManifestUrl(
+  locationLike = globalThis.location,
+  cacheKey = Date.now(),
+  explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
+) {
+  const manifestUrl = new URL("runtime-manifest.json", resolveMapRuntimeBaseUrl(locationLike, explicitBaseUrl));
+  if (cacheKey != null) {
+    manifestUrl.searchParams.set("v", String(cacheKey));
+  }
+  return manifestUrl.toString();
+}
+
+async function loadMapRuntimeManifest({
+  locationLike = globalThis.location,
+  cdnBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
+  cacheKey = Date.now(),
+  fetchImpl = globalThis.fetch?.bind(globalThis),
+} = {}) {
+  if (typeof fetchImpl !== "function") {
+    throw new Error("FishyMapBridge requires fetch() to load the runtime manifest");
+  }
+  const manifestUrl = resolveMapRuntimeManifestUrl(locationLike, cacheKey, cdnBaseUrl);
+  const response = await fetchImpl(manifestUrl, {
+    cache: "no-store",
+  });
+  if (!response?.ok) {
+    throw new Error(`failed to load map runtime manifest: ${manifestUrl} (${response?.status || "unknown"})`);
+  }
+  const manifest = await response.json();
+  const modulePath = String(manifest?.module || "").trim();
+  if (!modulePath) {
+    throw new Error(`invalid map runtime manifest: missing module in ${manifestUrl}`);
+  }
+  return {
+    manifestUrl,
+    moduleUrl: new URL(modulePath, manifestUrl).toString(),
+    manifest,
+  };
+}
+
+async function loadMapRuntimeModule(options = {}) {
+  const { moduleUrl } = await loadMapRuntimeManifest({
+    locationLike: options.locationLike ?? globalThis.location,
+    cdnBaseUrl: options.cdnBaseUrl,
+    cacheKey: options.runtimeManifestCacheKey ?? Date.now(),
+    fetchImpl: options.fetchImpl ?? globalThis.fetch?.bind(globalThis),
+  });
+  return import(moduleUrl);
+}
+
 function shouldRewriteToApi(url) {
   return url.pathname.startsWith("/api/");
 }
@@ -1269,7 +1354,7 @@ class FishyMapBridgeImpl {
     this.installThemeSync();
     this.installPersistenceHooks();
 
-    const wasmModule = options.wasmModule || (await import("./fishystuff_ui_bevy.js"));
+    const wasmModule = options.wasmModule || (await loadMapRuntimeModule(options));
     try {
       await wasmModule.default();
     } catch (error) {

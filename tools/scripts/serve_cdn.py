@@ -9,6 +9,8 @@ import socketserver
 from pathlib import Path
 
 DEFAULT_CACHE_CONTROL = "public, max-age=3600"
+IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+NO_STORE_CACHE_CONTROL = "no-store"
 
 
 class CdnHandler(http.server.SimpleHTTPRequestHandler):
@@ -17,9 +19,23 @@ class CdnHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=directory, **kwargs)
 
     def end_headers(self) -> None:
-        self.send_header("Cache-Control", self._cache_control)
+        self.send_header("Cache-Control", self._cache_control_for_path())
         self.send_header("Access-Control-Allow-Origin", "*")
         super().end_headers()
+
+    def _cache_control_for_path(self) -> str:
+        path = self.path.split("?", 1)[0]
+        name = Path(path).name
+        if name == "runtime-manifest.json":
+            return NO_STORE_CACHE_CONTROL
+        if (
+            name.startswith("fishystuff_ui_bevy.")
+            and name.endswith(".js")
+            or name.startswith("fishystuff_ui_bevy_bg.")
+            and name.endswith(".wasm")
+        ):
+            return IMMUTABLE_CACHE_CONTROL
+        return self._cache_control
 
     def guess_type(self, path: str) -> str:
         guessed = super().guess_type(path)

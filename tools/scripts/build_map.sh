@@ -19,12 +19,58 @@ fi
 
 SITE_MAP_ASSET_DIR="$ROOT_DIR/site/assets/map"
 CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
+CDN_MAP_ASSET_DIR="$CDN_ROOT/map"
 CDN_IMAGE_ASSET_DIR="$CDN_ROOT/images"
 mkdir -p "$SITE_MAP_ASSET_DIR/ui"
+mkdir -p "$CDN_MAP_ASSET_DIR"
 mkdir -p "$CDN_IMAGE_ASSET_DIR"
 
-wasm-bindgen --target web --no-typescript --out-dir "$SITE_MAP_ASSET_DIR" "$WASM_INPUT"
 cp -f map/fishystuff_ui_bevy/assets/ui/fishystuff.css "$SITE_MAP_ASSET_DIR/ui/fishystuff.css"
+rm -f \
+  "$SITE_MAP_ASSET_DIR/fishystuff_ui_bevy.js" \
+  "$SITE_MAP_ASSET_DIR/fishystuff_ui_bevy_bg.wasm"
+
+WASM_BINDGEN_TMP_DIR="$(mktemp -d)"
+cleanup_wasm_bindgen_tmp_dir() {
+  rm -rf "$WASM_BINDGEN_TMP_DIR"
+}
+trap cleanup_wasm_bindgen_tmp_dir EXIT
+
+wasm-bindgen --target web --no-typescript --out-dir "$WASM_BINDGEN_TMP_DIR" "$WASM_INPUT"
+
+WASM_BUNDLE_INPUT="$WASM_BINDGEN_TMP_DIR/fishystuff_ui_bevy_bg.wasm"
+JS_BUNDLE_INPUT="$WASM_BINDGEN_TMP_DIR/fishystuff_ui_bevy.js"
+WASM_BUNDLE_HASH="$(sha256sum "$WASM_BUNDLE_INPUT" | cut -c1-16)"
+WASM_BUNDLE_FILE="fishystuff_ui_bevy_bg.${WASM_BUNDLE_HASH}.wasm"
+WASM_BUNDLE_PATH="$CDN_MAP_ASSET_DIR/$WASM_BUNDLE_FILE"
+
+rm -f \
+  "$CDN_MAP_ASSET_DIR/fishystuff_ui_bevy.js" \
+  "$CDN_MAP_ASSET_DIR/fishystuff_ui_bevy_bg.wasm" \
+  "$CDN_MAP_ASSET_DIR"/fishystuff_ui_bevy.*.js \
+  "$CDN_MAP_ASSET_DIR"/fishystuff_ui_bevy_bg.*.wasm \
+  "$CDN_MAP_ASSET_DIR/runtime-manifest.json"
+
+cp -f "$WASM_BUNDLE_INPUT" "$WASM_BUNDLE_PATH"
+
+sed \
+  "s/fishystuff_ui_bevy_bg\\.wasm/${WASM_BUNDLE_FILE}/g" \
+  "$JS_BUNDLE_INPUT" > "$WASM_BINDGEN_TMP_DIR/fishystuff_ui_bevy.patched.js"
+
+JS_BUNDLE_PATCHED_INPUT="$WASM_BINDGEN_TMP_DIR/fishystuff_ui_bevy.patched.js"
+JS_BUNDLE_HASH="$(sha256sum "$JS_BUNDLE_PATCHED_INPUT" | cut -c1-16)"
+JS_BUNDLE_FILE="fishystuff_ui_bevy.${JS_BUNDLE_HASH}.js"
+JS_BUNDLE_PATH="$CDN_MAP_ASSET_DIR/$JS_BUNDLE_FILE"
+
+cp -f "$JS_BUNDLE_PATCHED_INPUT" "$JS_BUNDLE_PATH"
+
+cat > "$CDN_MAP_ASSET_DIR/runtime-manifest.json" <<EOF
+{
+  "generated_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "module": "${JS_BUNDLE_FILE}",
+  "wasm": "${WASM_BUNDLE_FILE}"
+}
+EOF
 
 first_existing_path() {
   local candidate

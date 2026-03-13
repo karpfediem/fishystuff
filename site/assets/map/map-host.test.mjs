@@ -10,6 +10,8 @@ import {
   mergeStatePatch,
   parseQueryState,
   resolveApiBaseUrl,
+  resolveCdnBaseUrl,
+  resolveMapRuntimeManifestUrl,
   rewriteApiUrl,
 } from "./map-host.js";
 
@@ -953,6 +955,34 @@ test("local dev API base resolves to loopback", () => {
   assert.equal(
     resolveApiBaseUrl({ hostname: "fishystuff.fish" }),
     "https://api.fishystuff.fish",
+  );
+});
+
+test("CDN base resolves to local dev or production host", () => {
+  assert.equal(resolveCdnBaseUrl({ hostname: "localhost" }), "http://127.0.0.1:4040");
+  assert.equal(resolveCdnBaseUrl({ hostname: "127.0.0.1" }), "http://127.0.0.1:4040");
+  assert.equal(
+    resolveCdnBaseUrl({ hostname: "map.localhost" }),
+    "http://127.0.0.1:4040",
+  );
+  assert.equal(
+    resolveCdnBaseUrl({ hostname: "fishystuff.fish" }),
+    "https://cdn.fishystuff.fish",
+  );
+  assert.equal(
+    resolveCdnBaseUrl({ hostname: "fishystuff.fish" }, "https://override.example.com/"),
+    "https://override.example.com",
+  );
+});
+
+test("runtime manifest URL is cache-busted against the CDN base", () => {
+  assert.equal(
+    resolveMapRuntimeManifestUrl({ hostname: "localhost" }, 123),
+    "http://127.0.0.1:4040/map/runtime-manifest.json?v=123",
+  );
+  assert.equal(
+    resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, "deploy-456"),
+    "https://cdn.fishystuff.fish/map/runtime-manifest.json?v=deploy-456",
   );
 });
 

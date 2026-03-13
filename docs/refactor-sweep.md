@@ -25,9 +25,10 @@ Generated-artifact-adjacent paths outside crates:
 
 - `site/assets/map/loader.js`
 - `site/assets/map/map-host.js`
-- `site/assets/map/*`
+- `site/assets/map/ui/fishystuff.css`
+- `data/cdn/public/map/*`
 
-`site/assets/map/loader.js` and `site/assets/map/map-host.js` are browser-host source files. `site/assets/map/fishystuff_ui_bevy.js`, `site/assets/map/fishystuff_ui_bevy_bg.wasm`, and `site/assets/map/ui/fishystuff.css` are generated/runtime-serving outputs.
+`site/assets/map/loader.js` and `site/assets/map/map-host.js` are browser-host source files. `site/assets/map/ui/fishystuff.css` is a copied UI stylesheet, and the hashed wasm/js runtime bundle now lives under `data/cdn/public/map/`.
 
 ## Boundary Analysis
 

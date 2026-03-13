@@ -211,6 +211,7 @@ Examples:
 
 - Canonical browser host sources now live directly in `site/assets/map/`.
 - Run `tools/scripts/build_map.sh` after changing Bevy runtime code or the copied Bevy UI stylesheet.
-- The script writes the generated wasm/js bundle directly into `site/assets/map/`.
+- The script writes the generated wasm/js bundle into `data/cdn/public/map/` with hashed filenames plus a stable `runtime-manifest.json`.
 - `site/assets/map/loader.js` and `site/assets/map/map-host.js` are hand-edited site-owned source files.
-- `site/assets/map/fishystuff_ui_bevy.js`, `site/assets/map/fishystuff_ui_bevy_bg.wasm`, and `site/assets/map/ui/fishystuff.css` are build outputs.
+- `site/assets/map/ui/fishystuff.css` is a copied build output.
+- `data/cdn/public/map/fishystuff_ui_bevy.<hash>.js` and `data/cdn/public/map/fishystuff_ui_bevy_bg.<hash>.wasm` are CDN-served build outputs.

@@ -1,6 +1,7 @@
 
 # one-off release
 build-release:
+    rm -rf .out
     ~/code/clones/zine/result/bin/zine release --install .out
 
 release: build-release

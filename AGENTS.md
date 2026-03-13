@@ -69,10 +69,12 @@ Repository-level notes for working in this monorepo.
   - `site/assets/map/loader.js`
   - `site/assets/map/map-host.js`
   - `site/assets/map/map-host.test.mjs`
-- Generated map bundle outputs live under:
-  - `site/assets/map/fishystuff_ui_bevy.js`
-  - `site/assets/map/fishystuff_ui_bevy_bg.wasm`
+- The copied Bevy UI stylesheet lives under:
   - `site/assets/map/ui/fishystuff.css`
+- Generated map runtime bundle outputs live under:
+  - `data/cdn/public/map/runtime-manifest.json`
+  - `data/cdn/public/map/fishystuff_ui_bevy.<hash>.js`
+  - `data/cdn/public/map/fishystuff_ui_bevy_bg.<hash>.wasm`
 - Runtime-served image, tile, terrain, GeoJSON, and icon assets live under `data/cdn/public/`.
 - Treat the contents of `data/cdn/public/` as local CDN payload state; keep only `.gitkeep` placeholders tracked there.
 - `site/` should reference CDN-served runtime assets rather than owning a second copy under `site/assets/`.
