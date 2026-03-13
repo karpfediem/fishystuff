@@ -6,9 +6,11 @@
       just
       curl
       dolt
+      flyctl
       gawk
       lftp
       rsync
+      skopeo
       xlsx2csv
       clang
       mariadb
@@ -20,6 +22,13 @@
     ];
 
   dotenv.enable = true;
+
+  env = {
+    FISHYSTUFF_DATABASE_URL = "mysql://root@localhost:3306/fishystuff";
+    BUNNY_FTP_HOST = "storage.bunnycdn.com";
+    BUNNY_FTP_PORT = "21";
+    BUNNY_FTP_USER = "fishystuff";
+  };
 
   languages.python.enable = true;
   languages.javascript.enable = true;

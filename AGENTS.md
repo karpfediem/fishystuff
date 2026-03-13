@@ -32,32 +32,20 @@ Repository-level notes for working in this monorepo.
 - `data/` is not a runtime dependency.
 - Do not add new Rust crates back under `zonegen/`.
 
-## Nix shells
-- This repo defines multiple `devenv` shells in `flake.nix`. The default shell now includes the full local development stack, while the focused shells remain available when you want a narrower environment.
+## Nix shell
+- This repo uses one top-level `devenv` shell in `flake.nix`.
 - For guided edits to `devenv.nix` files, refer to `devenv`'s LLM-oriented reference: <https://devenv.sh/llms.txt>.
 - `nix develop .#default`
   - Full local development shell.
-  - Includes `just`, `curl`, `dolt`, `gawk`, `lftp`, `python`, `rsync`, `xlsx2csv`, Node/Bun, `zine`, `tailwindcss`, `watchexec`, the stable Rust toolchain, `wasm-bindgen`, `clang`, `mariadb`, and `imagemagick`.
+  - Includes `just`, `curl`, `dolt`, `flyctl`, `gawk`, `lftp`, `python`, `rsync`, `skopeo`, `xlsx2csv`, Node/Bun, `zine`, `tailwindcss`, `watchexec`, the stable Rust toolchain, `wasm-bindgen`, `clang`, `mariadb`, and `imagemagick`.
   - `devenv up` from the repo root starts the local process stack: Dolt SQL, map bundle watcher, CDN staging watcher, CDN file server, API server, Zine rebuild watcher, Tailwind watcher, and the local site server.
-- `nix develop .#site`
-  - Use for site/frontend/browser-host work.
-  - Includes the JavaScript runtime/tooling (`node` is available here), Bun, `zine`, `tailwindcss`, `watchexec`, and `just`.
-  - Use this shell for commands like `node --check`, `node --test`, Bun tasks, Zine tasks, and Tailwind rebuilds.
-- `nix develop .#zonegen`
-  - Use for Rust, wasm, Bevy, and map pipeline work.
-  - Includes the stable Rust toolchain, `cargo`, `clippy`, `rustfmt`, `rust-analyzer`, the `wasm32-unknown-unknown` target, `wasm-bindgen-cli_0_2_108`, `clang`, `dolt`, `mariadb`, and `imagemagick`.
-  - Use this shell for `cargo check`, `cargo test`, wasm builds, and `tools/scripts/build_map.sh`.
-- `nix develop .#bot`
-  - Separate shell for bot-focused work if needed.
 
-## Practical shell selection
+## Practical shell usage
 - The default shell is sufficient for full-stack local development and `devenv up`.
 - `nix develop .#default` needs `--impure` with this flake pattern so Nix can use the local `devenv-root`.
-- If a JS command needs `node`, `bun`, or `zine` and you want a narrower shell, use `.#site`.
-- If a Rust/wasm command needs `cargo`, the wasm target, or `wasm-bindgen` and you want a narrower shell, use `.#zonegen`.
 - For map runtime changes, the common split is:
-  - JS host checks/tests in `.#site`
-  - Rust/wasm checks and bundle rebuilds in `.#zonegen`
+  - JS host checks/tests in the default shell
+  - Rust/wasm checks and bundle rebuilds in the default shell
 
 ## Data policy
 - Keep committed documentation under `data/spec/`.

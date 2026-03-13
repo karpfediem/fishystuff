@@ -19,7 +19,13 @@ devenv shell
 or via
 
 ```bash
-nix develop --impure
+nix develop --impure .#default
+```
+
+To run the local development stack managed by `devenv` processes:
+
+```bash
+devenv up
 ```
 
 ### Commands

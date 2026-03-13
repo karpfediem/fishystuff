@@ -77,17 +77,13 @@
           {
             packages = { inherit bot bot-container; };
 
-            devenv.shells =
+            devenv.shells.default =
               let
-                devenvRootFileContent = builtins.readFile devenv-root.outPath;
-                root = pkgs.lib.mkIf (devenvRootFileContent != "") devenvRootFileContent;
-                packages = with pkgs; [ flyctl skopeo ];
+                root = builtins.readFile devenv-root.outPath;
               in
               {
-                bot = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./bot/devenv.nix ]; };
-                default = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./devenv.nix ]; };
-                site = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./site/devenv.nix ]; };
-                zonegen = { devenv = { inherit root; }; imports = [ ({ inherit packages; }) ./zonegen/devenv.nix ]; };
+                devenv.root = pkgs.lib.mkIf (root != "") root;
+                imports = [ ./devenv.nix ];
               };
           };
         flake = { };
