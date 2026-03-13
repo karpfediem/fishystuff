@@ -27,8 +27,14 @@ Typical setup:
 ```bash
 devenv shell
 secretspec config init
-secretspec check --profile api
-secretspec check --profile cdn
+just secrets-check api
+just secrets-check cdn
+```
+
+The `just` helper also tolerates `profile=` if you type it out of habit:
+
+```bash
+just secrets-check profile=api
 ```
 
 Typical runtime usage:

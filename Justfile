@@ -44,7 +44,7 @@ cdn-sync:
 
 # Validate that the local SecretSpec provider has the required values for a profile
 secrets-check profile="api":
-  secretspec check --profile {{profile}}
+  p='{{profile}}'; p="${p#profile=}"; secretspec check --profile "$p"
 
 # Start the full local dev stack through devenv process orchestration
 dev-up:

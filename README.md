@@ -31,8 +31,8 @@ Initialize your local SecretSpec provider and check the repo profiles you need:
 
 ```bash
 secretspec config init
-secretspec check --profile api
-secretspec check --profile cdn
+just secrets-check api
+just secrets-check cdn
 ```
 
 To update the pinned `devenv` inputs after intentional environment changes:
