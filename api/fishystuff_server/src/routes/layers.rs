@@ -3,7 +3,8 @@ use axum::Json;
 use serde::Deserialize;
 
 use fishystuff_api::ids::MapVersionId;
-use fishystuff_api::models::layers::LayersResponse;
+use fishystuff_api::models::layers::{LayerDescriptor, LayersResponse};
+use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use crate::error::{with_timeout, AppResult};
 use crate::routes::meta::map_request_id;
@@ -52,8 +53,52 @@ pub async fn get_layers(
     if response.map_version_id.is_none() {
         response.map_version_id = map_version.map(MapVersionId);
     }
+    absolutize_layer_asset_urls(
+        &mut response,
+        state.config.images_public_base_url.as_deref(),
+    );
 
     Ok(Json(response))
+}
+
+fn absolutize_layer_asset_urls(response: &mut LayersResponse, configured_base: Option<&str>) {
+    for layer in &mut response.layers {
+        absolutize_layer_descriptor(layer, configured_base);
+    }
+}
+
+fn absolutize_layer_descriptor(layer: &mut LayerDescriptor, configured_base: Option<&str>) {
+    layer.tileset.manifest_url =
+        absolutize_public_asset_url(&layer.tileset.manifest_url, configured_base);
+    layer.tileset.tile_url_template =
+        absolutize_public_asset_url(&layer.tileset.tile_url_template, configured_base);
+    if let Some(vector_source) = layer.vector_source.as_mut() {
+        vector_source.url = absolutize_public_asset_url(&vector_source.url, configured_base);
+    }
+}
+
+fn absolutize_public_asset_url(url: &str, configured_base: Option<&str>) -> String {
+    let normalized = normalize_site_asset_path(url);
+    let trimmed = normalized.trim();
+    if trimmed.is_empty()
+        || trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("data:")
+    {
+        return trimmed.to_string();
+    }
+
+    let Some(base) = configured_base
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return trimmed.to_string();
+    };
+    let base = base.trim_end_matches('/');
+    if trimmed.starts_with('/') {
+        return format!("{base}{trimmed}");
+    }
+    format!("{base}/{}", trimmed.trim_start_matches('/'))
 }
 
 #[cfg(test)]
@@ -224,5 +269,50 @@ mod tests {
         assert_eq!(vector.url, "/region_groups/v1.geojson");
         assert_eq!(vector.geometry_space, GeometrySpace::MapPixels);
         assert_eq!(vector.style_mode, StyleMode::FeaturePropertyPalette);
+    }
+
+    #[tokio::test]
+    async fn layers_route_applies_public_asset_base_url() {
+        let config = AppConfig {
+            bind: "127.0.0.1:0".to_string(),
+            database_url: "mysql://unused".to_string(),
+            images_public_base_url: Some("https://cdn.example.com".to_string()),
+            terrain_manifest_url: None,
+            terrain_drape_manifest_url: None,
+            terrain_height_tiles_url: None,
+            defaults: MetaDefaults {
+                tile_px: 32,
+                sigma_tiles: 3.0,
+                half_life_days: None,
+                alpha0: 1.0,
+                top_k: 30,
+                map_version_id: Some(MapVersionId("v1".to_string())),
+            },
+            status_cfg: ZoneStatusConfig::default(),
+            cache_zone_stats_max: 4,
+            cache_effort_max: 4,
+            cache_log: false,
+            request_timeout_secs: 5,
+        };
+        let state = AppState::for_tests(config, Arc::new(MockStore));
+
+        let Json(response) = get_layers(
+            State(state),
+            Ok(Query(LayersQuery {
+                map_version: Some("v1".to_string()),
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .expect("layers response");
+
+        let vector = response.layers[0]
+            .vector_source
+            .as_ref()
+            .expect("vector_source");
+        assert_eq!(
+            vector.url,
+            "https://cdn.example.com/region_groups/v1.geojson"
+        );
     }
 }

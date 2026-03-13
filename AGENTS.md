@@ -73,9 +73,10 @@ Repository-level notes for working in this monorepo.
   - `site/assets/map/fishystuff_ui_bevy.js`
   - `site/assets/map/fishystuff_ui_bevy_bg.wasm`
   - `site/assets/map/ui/fishystuff.css`
-- Runtime-served image, tile, and terrain assets live under `site/assets/images/`.
-- CDN publish-ready copies of runtime map/image assets should be staged under `data/cdn/public/`.
-- Keep raw imagery, terrain inputs, and scratch outputs under `data/`, not `site/assets/images/`.
+- Runtime-served image, tile, terrain, GeoJSON, and icon assets live under `data/cdn/public/`.
+- Treat the contents of `data/cdn/public/` as local CDN payload state; keep only `.gitkeep` placeholders tracked there.
+- `site/` should reference CDN-served runtime assets rather than owning a second copy under `site/assets/`.
+- Keep raw imagery, terrain inputs, and scratch outputs under `data/`, not under `site/assets/`.
 - Do not hand-edit generated bundle outputs.
 - Do not commit unrelated generated build outputs.
 

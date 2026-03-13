@@ -10,7 +10,7 @@ kill_timeout = "30s"
 [processes]
   # Database URL should be injected as a Fly secret:
   # fly secrets set FISHYSTUFF_DATABASE_URL='mysql://...'
-  app = "fishystuff_server --config config.toml --bind 0.0.0.0:8080"
+  app = "fishystuff_server --config config.toml --bind 0.0.0.0:8080 --images-public-base-url https://cdn.fishystuff.fish"
 
 [http_service]
   internal_port = 8080

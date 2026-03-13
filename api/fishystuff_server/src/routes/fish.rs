@@ -86,6 +86,7 @@ pub async fn list_fish(
 
 pub async fn fish_table(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     query: Result<Query<FishTableQuery>, QueryRejection>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<Json<FishTableResponse>> {
@@ -99,7 +100,24 @@ pub async fn fish_table(
     )
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
-    Ok(Json(FishTableResponse { fish }))
+    let mut response = FishTableResponse { fish };
+    for entry in &mut response.fish {
+        if let Some(icon) = entry.icon.as_deref() {
+            entry.icon = Some(resolve_public_url(
+                &headers,
+                icon,
+                state.config.images_public_base_url.as_deref(),
+            ));
+        }
+        if let Some(icon) = entry.encyclopedia_icon.as_deref() {
+            entry.encyclopedia_icon = Some(resolve_public_url(
+                &headers,
+                icon,
+                state.config.images_public_base_url.as_deref(),
+            ));
+        }
+    }
+    Ok(Json(response))
 }
 
 pub async fn fish_map(

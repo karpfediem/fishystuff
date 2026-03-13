@@ -7,8 +7,8 @@ This pipeline depends on a small number of canonical assets.
 Authoritative inputs and hand-edited source:
 
 - `data/**` local tooling inputs and scratch working files
-- `data/cdn/**` local CDN staging and sync working tree
-- runtime-serving static assets under `site/assets/images/**`
+- `data/cdn/**` local CDN staging and sync working tree; payload contents under `data/cdn/public/**` are normally gitignored
+- runtime-serving static assets under `data/cdn/public/**`
 - Rust crates under `lib/**`, `api/**`, `map/**`, and `tools/**`
 - browser host source files under `site/assets/map/loader.js`, `site/assets/map/map-host.js`, `site/assets/map/map-host.test.mjs`, and `site/assets/map/package.json`
 - Bevy-owned UI stylesheet source under `map/fishystuff_ui_bevy/assets/ui/**`
@@ -18,10 +18,10 @@ Generated outputs that should be rebuilt rather than edited by hand:
 - `site/assets/map/fishystuff_ui_bevy.js`
 - `site/assets/map/fishystuff_ui_bevy_bg.wasm`
 - copied Bevy UI stylesheet under `site/assets/map/ui/fishystuff.css`
-- terrain pyramids, drape pyramids, and regenerated overlay tile trees under `site/assets/images/**` when they are rebuilt by `tools/scripts/*`
-- staged CDN publish tree under `data/cdn/public/**` when it is refreshed by `tools/scripts/stage_cdn_assets.sh`
+- terrain pyramids, drape pyramids, fish icons, GeoJSON overlays, and regenerated tile trees under `data/cdn/public/**`
+- staged CDN metadata plus map bundle payload under `data/cdn/public/**` when it is refreshed by `tools/scripts/stage_cdn_assets.sh`
 
-`site/assets/map/` now contains both browser-host source files and generated wasm bundle artifacts, and `site/assets/images/` mixes hand-maintained runtime assets with generated bake outputs, so the distinction above must stay explicit.
+`site/assets/map/` now contains both browser-host source files and generated wasm bundle artifacts, while the canonical runtime CDN payload lives under `data/cdn/public/`, so the distinction above must stay explicit.
 
 The refactor/audit note for crate boundaries and cleanup targets lives in
 `docs/refactor-sweep.md`.
@@ -84,7 +84,7 @@ Primary source is Dolt:
 Primary source is Dolt:
 - `fish_table` table (encyclopedia_key ↔ item_key, name, icon fields)
 
-Icon files live under `site/assets/images/FishIcons/`. The zone evidence fish ids
+Icon files live under `data/cdn/public/images/FishIcons/`. The zone evidence fish ids
 match `encyclopedia_key`, so UI lookups should resolve via this column and then
 join to the desired icon file name.
 

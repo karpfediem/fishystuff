@@ -31,7 +31,7 @@
 6) Map markers should render fish icons by joining zone evidence fish ids
    (`EncyclopediaKey`) to `/api/fish_table`. Prefer the `icon` file name
    (e.g. `00008201.png`) published under `/images/FishIcons/` from
-   `site/assets/images/FishIcons/`, and fall back to `encyclopedia_icon`
+   `data/cdn/public/images/FishIcons/`, and fall back to `encyclopedia_icon`
    if needed.
 
 ## Minimal API endpoints

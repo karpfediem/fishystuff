@@ -6,8 +6,9 @@ cd "$ROOT_DIR"
 
 MAP_VERSION="${MAP_VERSION:-v1}"
 GEOJSON="${1:-/home/carp/code/clones/shrddr.github.io/workerman/data/rg_latest_1_5.geojson}"
-TILES_OUT_DIR="${2:-site/assets/images/tiles/region_groups/${MAP_VERSION}/0}"
-TILESET_JSON="${3:-site/assets/images/tiles/region_groups/${MAP_VERSION}/tileset.json}"
+CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
+TILES_OUT_DIR="${2:-$CDN_ROOT/images/tiles/region_groups/${MAP_VERSION}/0}"
+TILESET_JSON="${3:-$CDN_ROOT/images/tiles/region_groups/${MAP_VERSION}/tileset.json}"
 TILE_SIZE="${TILE_SIZE:-512}"
 
 if [[ ! -f "${GEOJSON}" ]]; then

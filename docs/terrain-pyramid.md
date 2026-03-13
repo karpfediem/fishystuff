@@ -12,8 +12,8 @@
 
 - Offline bake command: `build-terrain-pyramid` (`fishystuff_tilegen --bin terrain_pyramid`)
 - Output:
-  - `site/assets/images/terrain/<revision>/manifest.json`
-  - `site/assets/images/terrain/<revision>/levels/<level>/<x>_<y>.thc`
+  - `data/cdn/public/images/terrain/<revision>/manifest.json`
+  - `data/cdn/public/images/terrain/<revision>/levels/<level>/<x>_<y>.thc`
 - Chunk encoding:
   - fixed grid (`grid_size`, default 65x65)
   - `u16` normalized heights (`u16_norm`)
@@ -33,8 +33,8 @@
 
 - Offline bake command: `build-terrain-drape-pyramid`
 - Output:
-  - `site/assets/images/terrain_drape/<layer>/<revision>/manifest.json`
-  - `site/assets/images/terrain_drape/<layer>/<revision>/levels/<level>/<x>_<y>.png`
+  - `data/cdn/public/images/terrain_drape/<layer>/<revision>/manifest.json`
+  - `data/cdn/public/images/terrain_drape/<layer>/<revision>/levels/<level>/<x>_<y>.png`
 - Drape chunks are chunk-aligned to terrain chunk boundaries and level hierarchy.
 
 ## Runtime behavior

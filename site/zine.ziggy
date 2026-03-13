@@ -40,8 +40,6 @@ Multilingual {
     "map/fishystuff_ui_bevy_bg.wasm",
     "map/ui/fishystuff.css",
 
-    "region_groups/v1.geojson",
-
     "img/favicon.ico",
     "img/favicon-16x16.png",
     "img/favicon-32x32.png",

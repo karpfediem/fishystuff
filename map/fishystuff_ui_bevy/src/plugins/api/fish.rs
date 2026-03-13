@@ -108,9 +108,7 @@ pub(crate) fn normalize_fish_icon_asset_url(value: Option<&str>) -> Option<Strin
         return Some(raw.to_string());
     }
     if raw.starts_with("http://") || raw.starts_with("https://") {
-        if let Some(index) = raw.find("/images/") {
-            return Some(raw[index..].to_string());
-        }
+        return Some(raw.to_string());
     }
     let lower = raw.to_ascii_lowercase();
     if matches!(
@@ -133,13 +131,13 @@ mod tests {
     };
 
     #[test]
-    fn fish_icon_urls_are_normalized_to_relative_image_paths() {
+    fn fish_icon_urls_preserve_absolute_cdn_paths() {
         assert_eq!(
             normalize_fish_icon_asset_url(Some(
                 "https://api.example.test/images/FishIcons/00008475.png"
             ))
             .as_deref(),
-            Some("/images/FishIcons/00008475.png")
+            Some("https://api.example.test/images/FishIcons/00008475.png")
         );
         assert_eq!(
             normalize_fish_icon_asset_url(Some("/images/FishIcons/00008475.png")).as_deref(),

@@ -2,7 +2,6 @@
 # one-off release
 build-release:
     ~/code/clones/zine/result/bin/zine release --install .out
-    ./scripts/install-runtime-assets.sh .out
 
 release: build-release
 

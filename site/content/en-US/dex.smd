@@ -1789,6 +1789,33 @@
       return url.toString();
     }
 
+    function cdnBaseUrl() {
+      const host = String(window.location?.hostname || "").trim().toLowerCase();
+      if (host === "localhost" || host === "127.0.0.1") {
+        return "http://127.0.0.1:4040";
+      }
+      return "https://cdn.fishystuff.fish";
+    }
+
+    function cdnUrl(path) {
+      const raw = String(path || "").trim();
+      if (!raw) {
+        return "";
+      }
+      if (
+        raw.startsWith("http://")
+        || raw.startsWith("https://")
+        || raw.startsWith("data:")
+      ) {
+        return raw;
+      }
+      const base = cdnBaseUrl().replace(/\/+$/, "");
+      if (raw.startsWith("/")) {
+        return `${base}${raw}`;
+      }
+      return `${base}/${raw.replace(/^\/+/, "")}`;
+    }
+
     function normalizeFishIconUrl(value) {
       const raw = String(value || "").trim();
       if (!raw || raw.toLowerCase() === "null") {
@@ -1802,14 +1829,14 @@
         return raw;
       }
       if (raw.startsWith("/")) {
-        return apiUrl(raw);
+        return cdnUrl(raw);
       }
 
       let file = raw.split("/").pop() || raw;
       if (!file.toLowerCase().endsWith(".png")) {
         file += ".png";
       }
-      return apiUrl(`/images/FishIcons/${file}`);
+      return cdnUrl(`/images/FishIcons/${file}`);
     }
 
     function setElementText(element, text) {

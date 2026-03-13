@@ -1,3 +1,10 @@
 *
 !.gitignore
 !README.md
+!public/
+public/*
+!public/.gitkeep
+!public/images/
+!public/images/.gitkeep
+!public/region_groups/
+!public/region_groups/.gitkeep

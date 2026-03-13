@@ -84,7 +84,11 @@ impl AppConfig {
         let mut images_dir = resolve(&fs_config.paths.images_dir).unwrap_or_else(|| {
             resolve_default_runtime_dir(
                 config_dir.as_deref(),
-                &["site/assets/images", "../site/assets/images", "images"],
+                &[
+                    "../data/cdn/public/images",
+                    "data/cdn/public/images",
+                    "images",
+                ],
             )
         });
         let mut images_public_base_url = fs_config
@@ -432,13 +436,17 @@ mod tests {
             .as_nanos();
         let root = std::env::temp_dir().join(format!("fishystuff-config-path-resolution-{stamp}"));
         let config_dir = root.join("api");
-        let nested = root.join("site/assets/images");
+        let nested = root.join("data/cdn/public/images");
         fs::create_dir_all(&nested).expect("create nested test dir");
         fs::create_dir_all(&config_dir).expect("create config dir");
 
         let resolved = resolve_default_runtime_dir(
             Some(&config_dir),
-            &["site/assets/images", "../site/assets/images", "images"],
+            &[
+                "../data/cdn/public/images",
+                "data/cdn/public/images",
+                "images",
+            ],
         );
         assert_eq!(
             resolved.canonicalize().expect("canonical resolved path"),
@@ -452,8 +460,12 @@ mod tests {
     fn default_runtime_dir_falls_back_to_first_candidate_when_nothing_exists() {
         let resolved = resolve_default_runtime_dir(
             None,
-            &["site/assets/images", "../site/assets/images", "images"],
+            &[
+                "../data/cdn/public/images",
+                "data/cdn/public/images",
+                "images",
+            ],
         );
-        assert_eq!(resolved, PathBuf::from("site/assets/images"));
+        assert_eq!(resolved, PathBuf::from("../data/cdn/public/images"));
     }
 }

@@ -44,7 +44,7 @@ This note defines the staged split of the current `zonegen/` workspace into expl
 | `zonegen/fishystuff_tilegen` | `tools/fishystuff_tilegen` | tooling | Tile and terrain pyramid generation binaries. |
 | `zonegen/fishystuff_dolt_import` | `tools/fishystuff_dolt_import` | tooling | XLSX -> Dolt import tooling. |
 | `zonegen/data/**` local source inputs | `data/**` | data | Developer-local CSV/XLSX/imagery/terrain sources and scratch outputs. |
-| `zonegen/images/**` runtime-serving checked-in assets | `site/assets/**` | generated/runtime | Static assets published by the site/CDN layer. |
+| `zonegen/images/**` runtime-serving checked-in assets | `data/cdn/public/**` | generated/runtime | Runtime CDN payload published separately from the site shell. |
 | `zonegen/images/**` raw bake inputs or oversized local working data | `data/**` | data | Inputs stay out of runtime components. |
 | `zonegen/docs/**` active architecture/build docs | `docs/**` or component README files | shared | Root docs should describe the new layout, not the legacy container. |
 | `zonegen/README.md` | `README.md` + component READMEs | shared | Repo entrypoint should stop directing users into `zonegen/`. |
@@ -79,7 +79,7 @@ Completed in the current migration pass:
 - Bevy WASM runtime moved to `map/`
 - offline tooling crates moved to `tools/`
 - map build script moved to `tools/scripts/build_map.sh`
-- runtime-serving image, terrain, and tile assets moved under `site/assets/images/`
+- runtime-serving image, terrain, and tile assets moved under `data/cdn/public/`
 - active architecture and pipeline notes promoted from `zonegen/docs/` to root `docs/`
 - tracked landmark CSVs moved to `data/landmarks/`
 - `zonegen/` no longer contains the active Cargo workspace

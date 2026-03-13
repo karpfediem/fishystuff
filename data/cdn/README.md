@@ -5,7 +5,7 @@ Local CDN staging and publish payloads live here.
 Expected working layout:
 
 - `data/cdn/public/`
-  Publish-ready file tree that mirrors the Bunny storage zone layout.
+  Publish-ready file tree that mirrors the Bunny storage zone layout. Its contents are local working state and should stay gitignored apart from placeholder `.gitkeep` files.
 - `data/cdn/logs/`
   Optional local sync logs or ad hoc transfer output.
 
