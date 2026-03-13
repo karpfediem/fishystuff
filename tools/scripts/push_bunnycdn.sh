@@ -6,6 +6,7 @@ CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 REMOTE_ROOT="${BUNNY_REMOTE_ROOT:-.}"
 PARALLEL_TRANSFERS="${BUNNY_FTP_PARALLEL:-8}"
 CONNECTION_LIMIT="${BUNNY_FTP_CONNECTION_LIMIT:-12}"
+MIRROR_EXCLUDE_FLAGS="--exclude-glob=.gitkeep --exclude-glob=*/.gitkeep --exclude-glob=.cdn-metadata.json --exclude-glob=*/.cdn-metadata.json --exclude-glob=.DS_Store --exclude-glob=*/.DS_Store --exclude-glob=Thumbs.db --exclude-glob=*/Thumbs.db"
 
 : "${BUNNY_FTP_HOST:?set BUNNY_FTP_HOST}"
 : "${BUNNY_FTP_PORT:?set BUNNY_FTP_PORT}"
@@ -46,6 +47,6 @@ set mirror:parallel-transfer-count $PARALLEL_TRANSFERS
 set mirror:parallel-directories yes
 set mirror:set-permissions off
 mkdir -p $REMOTE_ROOT
-mirror --reverse --delete --verbose --parallel=$PARALLEL_TRANSFERS "$CDN_ROOT" "$REMOTE_ROOT"
+mirror --reverse --delete --verbose --parallel=$PARALLEL_TRANSFERS $MIRROR_EXCLUDE_FLAGS "$CDN_ROOT" "$REMOTE_ROOT"
 bye
 EOF

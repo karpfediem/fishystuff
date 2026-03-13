@@ -35,3 +35,6 @@ Optional:
   Overall lftp connection cap. Defaults to `12`.
 
 These values should come from the local `.env`, which is loaded into the `devenv` shells via `dotenv.enable = true`.
+
+`cdn-push` intentionally excludes local placeholder and metadata files such as
+`.gitkeep` and `.cdn-metadata.json` from the Bunny upload.
