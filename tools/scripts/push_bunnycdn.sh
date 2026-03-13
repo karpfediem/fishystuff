@@ -36,6 +36,11 @@ normalize_remote_root() {
 
 REMOTE_ROOT="$(normalize_remote_root "$REMOTE_ROOT")"
 
+REMOTE_MKDIR_CMD=""
+if [ "$REMOTE_ROOT" != "." ]; then
+  REMOTE_MKDIR_CMD="mkdir -p $REMOTE_ROOT"
+fi
+
 lftp -u "$BUNNY_FTP_USER","$BUNNY_FTP_PASSWORD" -p "$BUNNY_FTP_PORT" "$BUNNY_FTP_HOST" <<EOF
 set cmd:fail-exit yes
 set xfer:clobber yes
@@ -46,7 +51,7 @@ set ftp:passive-mode yes
 set mirror:parallel-transfer-count $PARALLEL_TRANSFERS
 set mirror:parallel-directories yes
 set mirror:set-permissions off
-mkdir -p $REMOTE_ROOT
+$REMOTE_MKDIR_CMD
 mirror --reverse --delete --verbose --parallel=$PARALLEL_TRANSFERS $MIRROR_EXCLUDE_FLAGS "$CDN_ROOT" "$REMOTE_ROOT"
 bye
 EOF
