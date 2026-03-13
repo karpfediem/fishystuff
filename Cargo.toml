@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "api/fishystuff_server",
   "bot",
   "lib/fishystuff_analytics",
   "lib/fishystuff_api",

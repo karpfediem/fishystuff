@@ -1,0 +1,50 @@
+# fishystuff zonegen sample config
+
+[paths]
+db = "data/fishystuff.db"
+fish_names = "data/fish_names.tsv" # optional if dolt_sql is configured
+zones_merged_csv = "data/zones_merged.csv"
+patches_csv = "data/patches.csv"
+images_dir = "images"
+# Canonical packed RGB24 height tiles derived directly from whole_fullres.png.
+terrain_height_tiles_url = "/images/terrain_height/v1"
+# terrain_drape_manifest_url = "https://cdn.example.com/terrain_drape/minimap/v1/manifest.json"
+
+[dolt_sql]
+# url = "mysql://root@127.0.0.1:3306/fishystuff"
+# host = "127.0.0.1"
+# port = 3306
+# user = "root"
+# password = ""
+# database = "fishystuff"
+
+[watermap]
+path = "data/projected_watermap.png"
+
+[watermap.transform]
+# Canonical map-space projection (same map parameterization as zone mask).
+kind = "scale_to_fit"
+
+[zone_masks]
+v1 = "images/zones_mask_v1.png"
+
+[defaults]
+map_version = "v1"
+tile_px = 32
+sigma_tiles = 3.0
+half_life_days = 30.0
+alpha0 = 1.0
+top_k = 30
+
+[thresholds]
+stale_days = 30.0
+ess = 10.0
+drift_jsd = 0.1
+drift_prob = 0.95
+drift_samples = 300
+drift_min_ess = 10.0
+
+[server.cache]
+zone_stats_max_entries = 256
+effort_grid_max_entries = 16
+log = false

@@ -9,6 +9,13 @@ This component should own:
 - SQL schema and migrations used by the API deployment path
 - deployment configuration for the API process
 
+Current migration contents:
+
+- `api/fishystuff_server/`
+- `api/sql/`
+- `api/config.toml`
+- `api/fly.toml`
+
 This component should not own:
 
 - raw local developer data

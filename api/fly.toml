@@ -1,0 +1,33 @@
+# Fly app name must be globally unique and cannot contain dots.
+app = "map-fishystuff-fish"
+primary_region = "fra"
+kill_signal = "SIGINT"
+kill_timeout = "30s"
+
+[env]
+  RUST_LOG = "info"
+
+[processes]
+  # Database URL should be injected as a Fly secret:
+  # fly secrets set FISHYSTUFF_DATABASE_URL='mysql://...'
+  app = "fishystuff_server --config config.toml --bind 0.0.0.0:8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = "off"
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 1024
