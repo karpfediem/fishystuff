@@ -25,6 +25,8 @@ bevy = { version = "0.18", default-features = false, features = [
   "bevy_window",
   "bevy_winit",
   "debug",
+  "http",
+  "https",
   "png",
   "ui_picking",
   "webgl2",

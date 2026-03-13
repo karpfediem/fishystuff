@@ -2,14 +2,9 @@
   description = "Fishy Stuff - Fishing Guides and Tools for Black Desert";
 
   inputs = {
-    devenv-root = {
-      url = "file+file:///dev/null";
-      flake = false;
-    };
     flake-parts.url = "github:hercules-ci/flake-parts";
-    nixpkgs.url = "github:cachix/devenv-nixpkgs/rolling";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-    devenv.url = "github:cachix/devenv";
     nix2container.url = "github:nlewo/nix2container";
     nix2container.inputs.nixpkgs.follows = "nixpkgs";
     mk-shell-bin.url = "github:rrbutani/nix-mk-shell-bin";
@@ -20,72 +15,45 @@
 
     waypoints.url = "github:flockenberger/bdo-fish-waypoints";
     waypoints.flake = false;
-
-    # zine.url = "github:kristoff-it/zine";
-    zine.url = "github:trevorriles/zine/fix-nix-flake";
   };
 
-  nixConfig = {
-    extra-trusted-public-keys = "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=";
-    extra-substituters = "https://devenv.cachix.org";
-  };
+  outputs = inputs@{ self, flake-parts, crane, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, ... }: {
+      systems = [ "x86_64-linux" ];
 
-  outputs = inputs@{ self, flake-parts, devenv-root, crane, ... }:
-    flake-parts.lib.mkFlake { inherit inputs; } ({ withSystem, flake-parts-lib, ... }:
-      let
-        inherit (flake-parts-lib) importApply;
-        flakeModules.default = importApply ./nixpkgs { inherit withSystem; };
-      in
-      {
-        imports = [
-          flakeModules.default
-          inputs.devenv.flakeModule
-        ];
-
-	systems = ["x86_64-linux"];
-
-        perSystem = { config, self', inputs', pkgs, system, waypoints, ... }:
-          let
-            filteredWaypointsSrc = pkgs.lib.cleanSourceWith {
-              name = "waypoints-no-webp";
-              src = inputs.waypoints;
-              filter = path: type:
-                let lower = pkgs.lib.toLower path; in
-                  !(pkgs.lib.hasSuffix ".webp" lower);
-            };
-            waypoints = pkgs.runCommandLocal "filtered-waypoints" { } ''
-              mkdir -p $out/bdo-fish-waypoints
-              cd ${filteredWaypointsSrc}
-              cp -r . $out/bdo-fish-waypoints/
-            '';
-
-            botSrc = pkgs.runCommandLocal "bot-combined-src" { } ''
-              mkdir -p $out
-              cp -r ${./bot}/* ${waypoints}/* $out
-            '';
-
-            craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default);
-            bot = craneLib.buildPackage { src = botSrc; };
-            bot-container = pkgs.dockerTools.buildLayeredImage {
-              name = "crio";
-              tag = "latest";
-              contents = [ waypoints "${bot}/bin" ];
-              config.Entrypoint = [ "bot" ];
-              config.Env = [ "PATH=${bot}/bin" ];
-            };
-          in
-          {
-            packages = { inherit bot bot-container; };
-
-            devenv.shells.default =
-              let
-                root = builtins.readFile devenv-root.outPath;
-              in
-              {
-                devenv.root = pkgs.lib.mkIf (root != "") root;
-                imports = [ ./devenv.nix ];
-              };
+      perSystem = { config, self', inputs', pkgs, system, waypoints, ... }:
+        let
+          filteredWaypointsSrc = pkgs.lib.cleanSourceWith {
+            name = "waypoints-no-webp";
+            src = inputs.waypoints;
+            filter = path: type:
+              let lower = pkgs.lib.toLower path; in
+                !(pkgs.lib.hasSuffix ".webp" lower);
           };
-        flake = { };
-      });
+          waypoints = pkgs.runCommandLocal "filtered-waypoints" { } ''
+            mkdir -p $out/bdo-fish-waypoints
+            cd ${filteredWaypointsSrc}
+            cp -r . $out/bdo-fish-waypoints/
+          '';
+
+          botSrc = pkgs.runCommandLocal "bot-combined-src" { } ''
+            mkdir -p $out
+            cp -r ${./bot}/* ${waypoints}/* $out
+          '';
+
+          craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default);
+          bot = craneLib.buildPackage { src = botSrc; };
+          bot-container = pkgs.dockerTools.buildLayeredImage {
+            name = "crio";
+            tag = "latest";
+            contents = [ waypoints "${bot}/bin" ];
+            config.Entrypoint = [ "bot" ];
+            config.Env = [ "PATH=${bot}/bin" ];
+          };
+        in
+        {
+          packages = { inherit bot bot-container; };
+        };
+      flake = { };
+    });
 }

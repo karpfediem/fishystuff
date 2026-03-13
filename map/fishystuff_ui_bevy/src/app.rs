@@ -1,4 +1,5 @@
 use bevy::asset::{AssetMetaCheck, AssetPlugin, UnapprovedPathMode};
+use bevy::asset::io::web::WebAssetPlugin;
 use bevy::prelude::*;
 use bevy::window::{Window, WindowPlugin};
 use bevy_flair::prelude::FlairPlugin;
@@ -11,6 +12,9 @@ pub fn run() {
     App::new()
         .add_plugins(
             DefaultPlugins
+                .set(WebAssetPlugin {
+                    silence_startup_warning: true,
+                })
                 .set(WindowPlugin {
                     primary_window: Some(Window {
                         title: "FishyStuff Zones".to_string(),
