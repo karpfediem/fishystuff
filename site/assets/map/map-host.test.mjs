@@ -958,6 +958,19 @@ test("local dev API base resolves to loopback", () => {
   );
 });
 
+test("API base prefers an explicit window override", () => {
+  const previousWindow = globalThis.window;
+  globalThis.window = { __fishystuffApiBaseUrl: "https://override.example.com/" };
+  try {
+    assert.equal(
+      resolveApiBaseUrl({ hostname: "localhost" }),
+      "https://override.example.com",
+    );
+  } finally {
+    globalThis.window = previousWindow;
+  }
+});
+
 test("CDN base resolves to local dev or production host", () => {
   assert.equal(resolveCdnBaseUrl({ hostname: "localhost" }), "http://127.0.0.1:4040");
   assert.equal(resolveCdnBaseUrl({ hostname: "127.0.0.1" }), "http://127.0.0.1:4040");

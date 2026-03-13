@@ -751,6 +751,10 @@ function createCustomEvent(type, detail) {
 }
 
 export function resolveApiBaseUrl(locationLike = globalThis.location) {
+  const explicit = normalizeBaseUrl(globalThis.window?.__fishystuffApiBaseUrl);
+  if (explicit) {
+    return explicit;
+  }
   const hostname = String(locationLike?.hostname || "").toLowerCase();
   if (
     hostname === "localhost" ||

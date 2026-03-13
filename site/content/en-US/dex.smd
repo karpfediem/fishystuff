@@ -1790,11 +1790,14 @@
     }
 
     function cdnBaseUrl() {
-      const host = String(window.location?.hostname || "").trim().toLowerCase();
-      if (host === "localhost" || host === "127.0.0.1") {
-        return "http://127.0.0.1:4040";
+      const explicitBase = String(window.__fishystuffCdnBaseUrl || "").trim();
+      if (explicitBase) {
+        return explicitBase.replace(/\/+$/, "");
       }
-      return "https://cdn.fishystuff.fish";
+      const host = String(window.location?.hostname || "").trim().toLowerCase();
+      return host === "localhost" || host === "127.0.0.1"
+        ? "http://127.0.0.1:4040"
+        : "https://cdn.fishystuff.fish";
     }
 
     function cdnUrl(path) {
@@ -2250,8 +2253,7 @@
     }
 
     function apiUrl(pathname) {
-      const params = new URLSearchParams(window.location.search);
-      const explicitBase = params.get("api_base");
+      const explicitBase = String(window.__fishystuffApiBaseUrl || "").trim();
       if (explicitBase) {
         return new URL(pathname, explicitBase).toString();
       }

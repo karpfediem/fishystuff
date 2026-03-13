@@ -41,6 +41,36 @@
       document.documentElement.setAttribute('data-theme', active);
     })();
   </script>
+  <script>
+    (function () {
+      function normalizeBaseUrl(value) {
+        return String(value || '').trim().replace(/\/+$/, '');
+      }
+
+      function isLocalHost(hostname) {
+        var host = String(hostname || '').trim().toLowerCase();
+        return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost');
+      }
+
+      function resolveDefaultApiBaseUrl(locationLike) {
+        return isLocalHost(locationLike && locationLike.hostname)
+          ? 'http://127.0.0.1:8080'
+          : 'https://api.fishystuff.fish';
+      }
+
+      function resolveDefaultCdnBaseUrl(locationLike) {
+        return isLocalHost(locationLike && locationLike.hostname)
+          ? 'http://127.0.0.1:4040'
+          : 'https://cdn.fishystuff.fish';
+      }
+
+      var params = new URLSearchParams(window.location.search || '');
+      window.__fishystuffApiBaseUrl =
+        normalizeBaseUrl(params.get('api_base')) || resolveDefaultApiBaseUrl(window.location);
+      window.__fishystuffCdnBaseUrl =
+        normalizeBaseUrl(params.get('cdn_base')) || resolveDefaultCdnBaseUrl(window.location);
+    })();
+  </script>
 
   <script src="$site.asset('js/theme.js').link()"></script>
 
