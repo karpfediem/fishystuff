@@ -89,34 +89,10 @@ body {
             padding: 0.75rem 1.5rem 0.5rem;
         }
     }
-    #home-link {
-        font-size: 1.2rem;
-        min-width: max-content;
-        width: auto;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.55rem;
-        white-space: nowrap;
-        overflow: visible;
-        position: relative;
-    }
-    .navbar-start {
-        overflow: visible;
-    }
-    #home-link img {
-        height: 2rem;
-        width: auto;
-        flex: none;
-        overflow: visible;
-    }
-    h1.title {
-        font-family: 'Pacifico', sans-serif;
-    }
     a.card {
         text-decoration: none;
     }
 
-    .subtitle,
     .tagline {
         margin-top: 0;
     }

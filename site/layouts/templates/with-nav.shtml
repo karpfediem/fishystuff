@@ -104,12 +104,12 @@
                             </ul>
                         </div>
 
-                        <div class="navbar-start w-auto flex-none min-w-0">
+                        <div class="navbar-start w-auto flex-none min-w-0 overflow-visible">
                         <a id="home-link"
                            href="$site.link()"
-                           class="px-2 text-base font-brand font-bold no-underline hover:underline focus:underline">
+                           class="relative inline-flex w-auto min-w-max items-center gap-2 overflow-visible whitespace-nowrap px-2 text-[1.2rem] font-brand font-bold no-underline hover:underline focus:underline">
                             <span :text="$site.title"></span>
-                            <img src="$site.asset('img/logo.png').link()" alt="" decoding="async">
+                            <img src="$site.asset('img/logo.png').link()" alt="" decoding="async" class="h-8 w-auto shrink-0 overflow-visible">
                         </a>
                         </div>
 
