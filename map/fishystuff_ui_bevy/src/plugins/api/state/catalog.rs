@@ -46,6 +46,10 @@ impl FishCatalog {
         self.entry_for_fish(fish_id)
             .map(|entry| fish_item_icon_path(entry.item_id))
     }
+
+    pub fn item_id_for_fish(&self, fish_id: i32) -> Option<i32> {
+        self.entry_for_fish(fish_id).map(|entry| entry.item_id)
+    }
 }
 
 #[derive(Clone, Debug)]

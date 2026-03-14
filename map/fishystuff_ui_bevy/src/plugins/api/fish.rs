@@ -1,6 +1,9 @@
 use fishystuff_api::models::fish::FishListResponse;
+use fishystuff_core::fish_icons::fish_item_icon_path;
 
 use super::state::FishEntry;
+
+const PROD_CDN_BASE_URL: &str = "https://cdn.fishystuff.fish";
 
 pub(crate) fn build_fish_catalog_entries(fish_response: FishListResponse) -> Vec<FishEntry> {
     let mut entries = fish_response
@@ -24,13 +27,42 @@ pub(crate) fn build_fish_catalog_entries(fish_response: FishListResponse) -> Vec
     entries
 }
 
+pub(crate) fn fish_item_icon_url(item_id: i32) -> Option<String> {
+    let path = fish_item_icon_path(item_id);
+    if path.is_empty() {
+        return None;
+    }
+    let base_url = configured_cdn_base_url().unwrap_or_else(|| PROD_CDN_BASE_URL.to_string());
+    Some(format!("{}{}", base_url.trim_end_matches('/'), path))
+}
+
 pub(crate) fn bevy_public_asset_path(raw: &str) -> String {
     raw.to_string()
 }
 
+#[cfg(target_arch = "wasm32")]
+fn configured_cdn_base_url() -> Option<String> {
+    use wasm_bindgen::JsValue;
+
+    let window = web_sys::window()?;
+    let value = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("__fishystuffCdnBaseUrl"))
+        .ok()?;
+    let value = value.as_string()?;
+    let trimmed = value.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn configured_cdn_base_url() -> Option<String> {
+    Some(PROD_CDN_BASE_URL.to_string())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{bevy_public_asset_path, build_fish_catalog_entries};
+    use super::{bevy_public_asset_path, build_fish_catalog_entries, fish_item_icon_url};
     use fishystuff_api::models::fish::{FishEntry as ApiFishEntry, FishListResponse};
 
     #[test]
@@ -63,6 +95,14 @@ mod tests {
         assert_eq!(
             bevy_public_asset_path("/images/FishIcons/00008289.png"),
             "/images/FishIcons/00008289.png"
+        );
+    }
+
+    #[test]
+    fn fish_item_icon_urls_use_the_cdn_base() {
+        assert_eq!(
+            fish_item_icon_url(8289).as_deref(),
+            Some("https://cdn.fishystuff.fish/images/FishIcons/00008289.png")
         );
     }
 }
