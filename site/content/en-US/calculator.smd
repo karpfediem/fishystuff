@@ -76,7 +76,7 @@
     const lightstone_sets = searchList(items, '', 'lightstone_set')
 
 
-    const selectedOption = `<button class="btn"><div><selectedcontent></selectedcontent></div></button>`
+    const selectedOption = `<button class="btn btn-outline w-full justify-between"><div><selectedcontent></selectedcontent></div></button>`
     const noneOption = '<option value=""><span>None</span></option>\n'
     const mapOption = (list) => list.map(i => {
             let html = `<option value="${i.name}">`
@@ -91,8 +91,8 @@
         }
     ).join('\n')
     const mapCheckbox = (list) => list.map(i => {
-            let html = `<label class="label">
-<input data-bind-${i.type} type="checkbox" class="checkbox checkbox-primary" value="${i.name}">`
+            let html = `<label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium">
+<input data-bind-${i.type} type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="${i.name}">`
             if (i.icon) {
                 html += `
 <img aria-hidden="true" src="${i.icon}" class="item-icon" alt="${i.name} icon"/>
@@ -137,7 +137,7 @@
     const pet_tier_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">Tier ${i}</option>`)
     const pet_special_html = selectedOption + noneOption + [tAFR].map(i => `<option value="${i}">${i}</option>`)
     const pet_talents_html = selectedOption + noneOption + [tDRR, tLEXP].map(i => `<option value="${i}">${i}</option>`)
-    const pet_skills_html_list = [1, 2, 3, 4, 5].map(i => [tFEXP].map(skill => `<label class="label"><input data-bind-pet${i}.skills type="checkbox" class="checkbox checkbox-primary" value="${skill}">${skill}</label>`))
+    const pet_skills_html_list = [1, 2, 3, 4, 5].map(i => [tFEXP].map(skill => `<label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet${i}.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="${skill}">${skill}</label>`))
 
     const zones_html = selectedOption + mapOption(zonesWithBiteTimes)
     const level_html = selectedOption + [0, 1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`)
@@ -243,6 +243,7 @@
 </script>
 
 <div id="calculator"
+     class="not-prose grid gap-6"
      data-signals="{
        level: 5,
        lifeskill_level: 'Guru 20',
@@ -301,193 +302,341 @@
      }"
      data-persist-calculator>
 
-    <div data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set], [
+    <div class="hidden" data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set], [
           calcPetStats($pet1.tier, $pet1.special,'',[]).afr,
           calcPetStats($pet2.tier, $pet2.special,'',[]).afr,
           calcPetStats($pet3.tier, $pet3.special,'',[]).afr,
           calcPetStats($pet4.tier, $pet4.special,'',[]).afr,
           calcPetStats($pet5.tier, $pet5.special,'',[]).afr,
         ]).toFixed(2)"></div>
-    <div data-computed-afr="Math.min(2/3, $afr_uncapped).toFixed(2)"></div>
-    <div data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set], [
+    <div class="hidden" data-computed-afr="Math.min(2/3, $afr_uncapped).toFixed(2)"></div>
+    <div class="hidden" data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set], [
           calcPetStats($pet1.tier, '',$pet1.talent,[]).drr,
           calcPetStats($pet2.tier, '',$pet2.talent,[]).drr,
           calcPetStats($pet3.tier, '',$pet3.talent,[]).drr,
           calcPetStats($pet4.tier, '',$pet4.talent,[]).drr,
           calcPetStats($pet5.tier, '',$pet5.talent,[]).drr,
         ]).toFixed(2)"></div>
-    <div data-computed-aftime="$active ? 0 : calcAfTime($afr).toFixed(2)"></div>
-    <div data-computed-bitetime="calcBiteTime($zone, $level, $resources).toFixed(2)"></div>
-    <div data-computed-catchtime="($active ? CATCH_TIME_ACTIVE : CATCH_TIME_AFK).toFixed(2)"></div>
-    <div data-computed-total_time="(calcBiteTime($zone, $level, $resources) + ($active ? CATCH_TIME_ACTIVE : calcAfTime($afr) + CATCH_TIME_AFK)).toFixed(2)"></div>
-    <div data-computed-percent_bite="calcPercentageOfAverageTime($bitetime, $zone, $active)"></div>
-    <div data-computed-percent_catch="calcPercentageOfAverageTime($catchtime, $zone, $active)"></div>
-    <div data-computed-percent_af="calcPercentageOfAverageTime($aftime, $zone, $active)"></div>
-    <div data-computed-percent_improvement="1 - calcPercentageOfAverageTime($total_time, $zone, $active)"></div>
+    <div class="hidden" data-computed-aftime="$active ? 0 : calcAfTime($afr).toFixed(2)"></div>
+    <div class="hidden" data-computed-bitetime="calcBiteTime($zone, $level, $resources).toFixed(2)"></div>
+    <div class="hidden" data-computed-catchtime="($active ? CATCH_TIME_ACTIVE : CATCH_TIME_AFK).toFixed(2)"></div>
+    <div class="hidden" data-computed-total_time="(calcBiteTime($zone, $level, $resources) + ($active ? CATCH_TIME_ACTIVE : calcAfTime($afr) + CATCH_TIME_AFK)).toFixed(2)"></div>
+    <div class="hidden" data-computed-percent_bite="calcPercentageOfAverageTime($bitetime, $zone, $active)"></div>
+    <div class="hidden" data-computed-percent_catch="calcPercentageOfAverageTime($catchtime, $zone, $active)"></div>
+    <div class="hidden" data-computed-percent_af="calcPercentageOfAverageTime($aftime, $zone, $active)"></div>
+    <div class="hidden" data-computed-percent_improvement="1 - calcPercentageOfAverageTime($total_time, $zone, $active)"></div>
 
-    <div>
-        <div id="fishing-timeline">
-            <div data-attr-title="'Bitetime: ' + $bitetime + 's (' + $percent_bite.toFixed(2) + '%)'"
-                 data-attr="{style: 'flex-basis:' + $percent_bite.toFixed(2) + '%;'}"
-                 class="slider slider-bitetime"></div>
-            <div data-attr-title="'Auto-Fishing Time: ' + $aftime + 's (' + $percent_af.toFixed(2) + '%)'"
-                 data-attr="{style: 'flex-basis:' + $percent_af.toFixed(2) + '%;'}"
-                 class="slider slider-aftime"></div>
-            <div data-attr-title="'Catch Time: ' + $catchtime + 's (' + $percent_catch.toFixed(2) + '%)'"
-                 data-attr="{style: 'flex-basis:' + $percent_catch.toFixed(2) + '%;'}"
-                 class="slider slider-catchtime"></div>
-            <div data-attr-title="'Average Unoptimized Time: '+ calcUnoptimizedTime($zone, $active).toFixed(2) + 's (' + $percent_improvement.toFixed(2) + '%)'" class="slider slider-empty"></div>
-        </div>
-    </div>
+    <section class="card card-border bg-base-100">
+        <div class="card-body gap-5">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div class="flex flex-wrap gap-3">
+                    <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
+                        <input data-bind-active type="checkbox" class="checkbox checkbox-primary">
+                        <span>Active Fishing</span>
+                    </label>
+                    <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
+                        <input data-bind-debug type="checkbox" class="checkbox checkbox-primary">
+                        <span>Debug</span>
+                    </label>
+                </div>
 
-    <p><label class="label"><input data-bind-debug type="checkbox" class="checkbox checkbox-primary">Debug</label>
-        <button class="btn btn-soft btn-seconary" data-on-click="@clipboard(presetURL(ctx.signals.JSON()))">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
-            </svg>
-            Copy URL
-        </button>
-        <button class="btn btn-soft btn-seconary" data-on-click="@clipboard('[FishyStuff Calculator Preset | ' + ($active ? 'Active | ' : $afr * 100 +'% AFR | ') + $drr * 100 +'% DRR | '+ $zone +'](' + presetURL(ctx.signals.JSON())+ ')')">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
-            </svg>
-            Copy Share
-        </button>
-
-        <button class="btn btn-dash btn-error" data-on-click="clearSignals()">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-            </svg>
-            Clear
-        </button>
-    </p>
-
-    <label class="label"><input data-bind-active type="checkbox" class="checkbox checkbox-primary">Active Fishing</label>
-    <code data-show=$debug>
-        <pre data-text="ctx.signals.JSON()"></pre>
-    </code>
-
-    <label class="label info-field flex w-full">
-        <span class="flex items-center">Fishing Resources:
-            <input data-bind-resources type="range" class="ml-8 range range-secondary w-[60ch]" min="0" max="100">
-        </span>
-        <span>
-        <span class="w-full" data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
-        </span>
-    </label>
-    <div class="info-field flex w-full">Average Total Fishing Time:
-        <div data-text="$total_time + ' seconds'"></div>
-    </div>
-    <div class="info-field flex w-full">Average Bite Time:
-        <div data-text="$bitetime + ' seconds'"></div>
-    </div>
-    <div data-show="!$active" class="info-field flex w-full">Auto-Fishing Time (AFT):
-        <div data-text="$aftime + ' seconds'"></div>
-    </div>
-    <div data-show="!$active" class="info-field flex w-full">Auto-Fishing Time Reduction (AFR):
-        <div data-text="($afr_uncapped * 100).toFixed(0) + '%'"></div>
-    </div>
-    <div class="info-field flex w-full">Durability Reduction Resistance (DRR):
-        <div data-text="($drr * 100).toFixed(0) + '%'"></div>
-    </div>
-    <div class="info-field flex w-full">Chance to consume Durability:
-        <div data-text="(calcChanceToReduce($drr, $lifeskill_level, $brand) * 100).toFixed(2) + '%'"></div>
-    </div>
-    <div class="info-field flex w-full">Timespan
-        <span class="flex" id="timespan">
-              <label class="label"><input type="number" class="input validator" id="hours" data-bind-timespan_hours name="hours"
-                            min="0"></label>:<label class="label"><input type="number" class="input validator" id="minutes" data-bind-timespan_minutes
-                                                           name="minutes" min="0" max="59"></label>
-          </span>
-    </div>
-    <div data-computed-timespan="$timespan_hours * 3600 + $timespan_minutes * 60"></div>
-    <div data-computed-timespan_text="durationFormatter($timespan_hours * 60 + $timespan_minutes)"></div>
-    <div class="info-field flex w-full">
-        <span class="flex" data-text="'Average Casts (' + $timespan_text + ')'"></span>
-        <div data-text="($timespan/$total_time).toFixed(2)"></div>
-    </div>
-    <div class="info-field flex w-full">
-        <span class="flex" data-text="'Average Durability Loss (' + $timespan_text + ')'"></span>
-        <div data-text="(($timespan/$total_time) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
-    </div>
-
-    <div id="items" class="w-full flex flex-column">
-        <label class="label">Zone<select class="select" id="zone" data-bind-zone></select></label>
-        <label class="label">Fishing Level<select class="select" id="level" data-bind-level></select></label>
-        <label class="label">Lifeskill Level<select class="select" id="lifeskill_level" data-bind-lifeskill_level></select></label>
-        <label class="label">Fishing Rod<select class="select" id="rods" data-bind-rod></select></label>
-        <label class="label">Brand
-            <input data-bind-brand type="checkbox" class="checkbox checkbox-primary">
-        </label>
-        <label class="label">Float<select class="select" id="floats" data-bind-float></select></label>
-        <label class="label">Chair<select class="select" id="chairs" data-bind-chair></select></label>
-        <label class="label">Lightstone Set<select class="select" id="lightstone_sets" data-bind-lightstone_set></select></label>
-        <label class="label">Backpack<select class="select" id="backpacks" data-bind-backpack></select></label>
-        <div>Outfit
-            <div id="outfits" class="flex flex-column"></div>
-        </div>
-        <div>Food
-            <div id="foods" class="flex flex-column"></div>
-        </div>
-        <div>Buffs
-            <div id="buffs" class="flex flex-column"></div>
-        </div>
-    </div>
-    <div id="pets" class="w-full flex flex-column">
-        <div class="pet">
-            <label class="label">Tier<select class="select pet_tier" id="pet1.tier" data-bind-pet1.tier></select></label>
-            <label class="label">Special<select class="select pet_special" id="pet1.special" data-bind-pet1.special></select></label>
-            <label class="label">Talent<select class="select pet_talent" id="pet1.talent" data-bind-pet1.talent></select></label>
-            <div>Skills
-                <div id="pet1.skills" class="flex flex-column"></div>
+                <div class="flex flex-wrap gap-2">
+                    <button class="btn btn-soft btn-secondary" data-on-click="@clipboard(presetURL(ctx.signals.JSON()))">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+                        </svg>
+                        Copy URL
+                    </button>
+                    <button class="btn btn-soft btn-secondary" data-on-click="@clipboard('[FishyStuff Calculator Preset | ' + ($active ? 'Active | ' : $afr * 100 +'% AFR | ') + $drr * 100 +'% DRR | '+ $zone +'](' + presetURL(ctx.signals.JSON())+ ')')">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.217 10.907a2.25 2.25 0 1 0 0 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186 9.566-5.314m-9.566 7.5 9.566 5.314m0 0a2.25 2.25 0 1 0 3.935 2.186 2.25 2.25 0 0 0-3.935-2.186Zm0-12.814a2.25 2.25 0 1 0 3.933-2.185 2.25 2.25 0 0 0-3.933 2.185Z" />
+                        </svg>
+                        Copy Share
+                    </button>
+                    <button class="btn btn-dash btn-error" data-on-click="clearSignals()">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                        </svg>
+                        Clear
+                    </button>
+                </div>
             </div>
-        </div>
-        <div class="pet">
-            <label class="label">Tier<select class="select pet_tier" id="pet2.tier" data-bind-pet2.tier></select></label>
-            <label class="label">Special<select class="select pet_special" id="pet2.special" data-bind-pet2.special></select></label>
-            <label class="label">Talent<select class="select pet_talent" id="pet2.talent" data-bind-pet2.talent></select></label>
-            <div>Skills
-                <div id="pet2.skills" class="flex flex-column"></div>
+
+            <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+                <legend class="fieldset-legend">Fishing Resources</legend>
+                <input data-bind-resources type="range" class="range-xs range-secondary w-full" min="0" max="100">
+                <span class="label text-sm font-medium" data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
+            </fieldset>
+
+            <div class="rounded-box border border-base-300 bg-base-200 p-4">
+                <div id="fishing-timeline">
+                    <div data-attr-title="'Bitetime: ' + $bitetime + 's (' + $percent_bite.toFixed(2) + '%)'"
+                         data-attr="{style: 'flex-basis:' + $percent_bite.toFixed(2) + '%;'}"
+                         class="slider slider-bitetime"></div>
+                    <div data-show="!$active"
+                         data-attr-title="'Auto-Fishing Time: ' + $aftime + 's (' + $percent_af.toFixed(2) + '%)'"
+                         data-attr="{style: 'flex-basis:' + $percent_af.toFixed(2) + '%;'}"
+                         class="slider slider-aftime"></div>
+                    <div data-attr-title="'Catch Time: ' + $catchtime + 's (' + $percent_catch.toFixed(2) + '%)'"
+                         data-attr="{style: 'flex-basis:' + $percent_catch.toFixed(2) + '%;'}"
+                         class="slider slider-catchtime"></div>
+                    <div data-attr-title="'Average Unoptimized Time: '+ calcUnoptimizedTime($zone, $active).toFixed(2) + 's (' + $percent_improvement.toFixed(2) + '%)'"
+                         class="slider slider-empty"></div>
+                </div>
             </div>
-        </div>
-        <div class="pet">
-            <label class="label">Tier<select class="select pet_tier" id="pet3.tier" data-bind-pet3.tier></select></label>
-            <label class="label">Special<select class="select pet_special" id="pet3.special" data-bind-pet3.special></select></label>
-            <label class="label">Talent<select class="select pet_talent" id="pet3.talent" data-bind-pet3.talent></select></label>
-            <div>Skills
-                <div id="pet3.skills" class="flex flex-column"></div>
+
+            <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
+                <div class="stat">
+                    <div class="stat-title">Average Total Fishing Time</div>
+                    <div class="stat-value text-2xl" data-text="$total_time"></div>
+                    <div class="stat-desc">seconds</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Average Bite Time</div>
+                    <div class="stat-value text-2xl" data-text="$bitetime"></div>
+                    <div class="stat-desc">seconds</div>
+                </div>
+                <div data-show="!$active" class="stat">
+                    <div class="stat-title">Auto-Fishing Time (AFT)</div>
+                    <div class="stat-value text-2xl" data-text="$aftime"></div>
+                    <div class="stat-desc">seconds</div>
+                </div>
+                <div data-show="!$active" class="stat">
+                    <div class="stat-title">Auto-Fishing Time Reduction (AFR)</div>
+                    <div class="stat-value text-2xl" data-text="($afr_uncapped * 100).toFixed(0) + '%'"></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Durability Reduction Resistance (DRR)</div>
+                    <div class="stat-value text-2xl" data-text="($drr * 100).toFixed(0) + '%'"></div>
+                </div>
+                <div class="stat">
+                    <div class="stat-title">Chance to consume Durability</div>
+                    <div class="stat-value text-2xl" data-text="(calcChanceToReduce($drr, $lifeskill_level, $brand) * 100).toFixed(2) + '%'"></div>
+                </div>
             </div>
+
+            <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
+                <legend class="fieldset-legend">Timespan</legend>
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div id="timespan" class="flex items-center gap-2">
+                        <label class="sr-only" for="hours">Hours</label>
+                        <input type="number"
+                               class="input validator w-24"
+                               id="hours"
+                               data-bind-timespan_hours
+                               name="hours"
+                               min="0">
+                        <span class="text-lg font-semibold">:</span>
+                        <label class="sr-only" for="minutes">Minutes</label>
+                        <input type="number"
+                               class="input validator w-24"
+                               id="minutes"
+                               data-bind-timespan_minutes
+                               name="minutes"
+                               min="0"
+                               max="59">
+                    </div>
+
+                    <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 sm:stats-horizontal">
+                        <div class="stat">
+                            <div class="stat-title" data-text="'Average Casts (' + $timespan_text + ')'"></div>
+                            <div class="stat-value text-xl" data-text="($timespan/$total_time).toFixed(2)"></div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title" data-text="'Average Durability Loss (' + $timespan_text + ')'"></div>
+                            <div class="stat-value text-xl" data-text="(($timespan/$total_time) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+
+            <div class="hidden" data-computed-timespan="$timespan_hours * 3600 + $timespan_minutes * 60"></div>
+            <div class="hidden" data-computed-timespan_text="durationFormatter($timespan_hours * 60 + $timespan_minutes)"></div>
+
+            <code data-show=$debug class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
+                <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="ctx.signals.JSON()"></pre>
+            </code>
         </div>
-        <div class="pet">
-            <label class="label">Tier<select class="select pet_tier" id="pet4.tier" data-bind-pet4.tier></select></label>
-            <label class="label">Special<select class="select pet_special" id="pet4.special" data-bind-pet4.special></select></label>
-            <label class="label">Talent<select class="select pet_talent" id="pet4.talent" data-bind-pet4.talent></select></label>
-            <div>Skills
-                <div id="pet4.skills" class="flex flex-column"></div>
+    </section>
+
+    <div class="grid gap-6 xl:grid-cols-2">
+        <section class="card card-border bg-base-100">
+            <div class="card-body">
+                <div id="items" class="grid gap-4 md:grid-cols-2">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Zone</legend>
+                        <select class="select w-full" id="zone" data-bind-zone></select>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Fishing Level</legend>
+                        <select class="select w-full" id="level" data-bind-level></select>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Lifeskill Level</legend>
+                        <select class="select w-full" id="lifeskill_level" data-bind-lifeskill_level></select>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Fishing Rod</legend>
+                        <select class="select w-full" id="rods" data-bind-rod></select>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Brand</legend>
+                        <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-3 py-3 font-medium">
+                            <input data-bind-brand type="checkbox" class="checkbox checkbox-primary">
+                        </label>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Float</legend>
+                        <select class="select w-full" id="floats" data-bind-float></select>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Chair</legend>
+                        <select class="select w-full" id="chairs" data-bind-chair></select>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Lightstone Set</legend>
+                        <select class="select w-full" id="lightstone_sets" data-bind-lightstone_set></select>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Backpack</legend>
+                        <select class="select w-full" id="backpacks" data-bind-backpack></select>
+                    </fieldset>
+                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
+                        <legend class="fieldset-legend">Outfit</legend>
+                        <div id="outfits" class="grid gap-2 sm:grid-cols-2"></div>
+                    </fieldset>
+                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
+                        <legend class="fieldset-legend">Food</legend>
+                        <div id="foods" class="grid gap-2 sm:grid-cols-2"></div>
+                    </fieldset>
+                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
+                        <legend class="fieldset-legend">Buffs</legend>
+                        <div id="buffs" class="grid gap-2 sm:grid-cols-2"></div>
+                    </fieldset>
+                </div>
             </div>
-        </div>
-        <div class="pet">
-            <label class="label">Tier<select class="select pet_tier" id="pet5.tier" data-bind-pet5.tier></select></label>
-            <label class="label">Special<select class="select pet_special" id="pet5.special" data-bind-pet5.special></select></label>
-            <label class="label">Talent<select class="select pet_talent" id="pet5.talent" data-bind-pet5.talent></select></label>
-            <div>Skills
-                <div id="pet5.skills" class="flex flex-column"></div>
-            </div>
-        </div>
-        <div data-computed-fishing_exp="(
+        </section>
+
+        <section class="card card-border bg-base-100">
+            <div class="card-body">
+                <div id="pets" class="grid gap-4 lg:grid-cols-2">
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4 lg:col-span-2">
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Tier</legend>
+                                <select class="select pet_tier w-full" id="pet1.tier" data-bind-pet1.tier></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Special</legend>
+                                <select class="select pet_special w-full" id="pet1.special" data-bind-pet1.special></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Talent</legend>
+                                <select class="select pet_talent w-full" id="pet1.talent" data-bind-pet1.talent></select>
+                            </fieldset>
+                        </div>
+                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                            <legend class="fieldset-legend">Skills</legend>
+                            <div id="pet1.skills" class="grid gap-2"></div>
+                        </fieldset>
+                    </div>
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4">
+                        <div class="grid gap-4">
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Tier</legend>
+                                <select class="select pet_tier w-full" id="pet2.tier" data-bind-pet2.tier></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Special</legend>
+                                <select class="select pet_special w-full" id="pet2.special" data-bind-pet2.special></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Talent</legend>
+                                <select class="select pet_talent w-full" id="pet2.talent" data-bind-pet2.talent></select>
+                            </fieldset>
+                        </div>
+                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                            <legend class="fieldset-legend">Skills</legend>
+                            <div id="pet2.skills" class="grid gap-2"></div>
+                        </fieldset>
+                    </div>
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4">
+                        <div class="grid gap-4">
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Tier</legend>
+                                <select class="select pet_tier w-full" id="pet3.tier" data-bind-pet3.tier></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Special</legend>
+                                <select class="select pet_special w-full" id="pet3.special" data-bind-pet3.special></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Talent</legend>
+                                <select class="select pet_talent w-full" id="pet3.talent" data-bind-pet3.talent></select>
+                            </fieldset>
+                        </div>
+                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                            <legend class="fieldset-legend">Skills</legend>
+                            <div id="pet3.skills" class="grid gap-2"></div>
+                        </fieldset>
+                    </div>
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4">
+                        <div class="grid gap-4">
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Tier</legend>
+                                <select class="select pet_tier w-full" id="pet4.tier" data-bind-pet4.tier></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Special</legend>
+                                <select class="select pet_special w-full" id="pet4.special" data-bind-pet4.special></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Talent</legend>
+                                <select class="select pet_talent w-full" id="pet4.talent" data-bind-pet4.talent></select>
+                            </fieldset>
+                        </div>
+                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                            <legend class="fieldset-legend">Skills</legend>
+                            <div id="pet4.skills" class="grid gap-2"></div>
+                        </fieldset>
+                    </div>
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4 lg:col-span-2">
+                        <div class="grid gap-4 md:grid-cols-3">
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Tier</legend>
+                                <select class="select pet_tier w-full" id="pet5.tier" data-bind-pet5.tier></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Special</legend>
+                                <select class="select pet_special w-full" id="pet5.special" data-bind-pet5.special></select>
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Talent</legend>
+                                <select class="select pet_talent w-full" id="pet5.talent" data-bind-pet5.talent></select>
+                            </fieldset>
+                        </div>
+                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                            <legend class="fieldset-legend">Skills</legend>
+                            <div id="pet5.skills" class="grid gap-2"></div>
+                        </fieldset>
+                    </div>
+                    <div class="hidden" data-computed-fishing_exp="(
           calcPetStats($pet1.tier, '','', $pet1.skills).fishing_exp +
           calcPetStats($pet2.tier, '','', $pet2.skills).fishing_exp +
           calcPetStats($pet3.tier, '','', $pet3.skills).fishing_exp +
           calcPetStats($pet4.tier, '','', $pet4.skills).fishing_exp +
           calcPetStats($pet5.tier, '','', $pet5.skills).fishing_exp
         ).toFixed(2)"></div>
-        <div data-computed-life_exp="(
+                    <div class="hidden" data-computed-life_exp="(
           calcPetStats($pet1.tier, '', $pet1.talent, []).life_exp +
           calcPetStats($pet2.tier, '', $pet2.talent, []).life_exp +
           calcPetStats($pet3.tier, '', $pet3.talent, []).life_exp +
           calcPetStats($pet4.tier, '', $pet4.talent, []).life_exp +
           calcPetStats($pet5.tier, '', $pet5.talent, []).life_exp
         ).toFixed(2)"></div>
+                </div>
+            </div>
+        </section>
     </div>
 </div>
 
@@ -561,23 +710,15 @@
         height: 30px;
     }
 
-    .flex {
-        display: flex;
-    }
-
-    .flex-column {
-        flex-direction: column;
-    }
-
     #fishing-timeline {
         width: 100%;
-        display: inline-flex;
+        display: flex;
         position: relative;
         margin: 0 auto;
-        height: 11px;
+        height: 0.875rem;
         overflow: hidden;
-        background-color: #0e0e0e;
-        outline: 2px solid #4e4e4e;
+        background-color: var(--color-base-300);
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
         border-radius: 8px;
 
         .slider {
@@ -602,38 +743,6 @@
             flex-grow: 1;
         }
     }
-
-    #items {
-        label {
-            margin: 0.35em 0;
-        }
-
-        & > div > div {
-            margin: 1em 0;
-
-            & > label {
-                display: flex;
-                align-items: center;
-            }
-        }
-    }
-
-    .info-field {
-        justify-content: space-between;
-        align-items: center;
-        margin: 0.35em 0;
-    }
-
-    .pet {
-        display: inline-flex;
-    }
-
-    button {
-        align-items: center;
-        display: inline-flex;
-    }
 </style>
 ```
 ...
-
-

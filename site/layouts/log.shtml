@@ -4,8 +4,9 @@
   <title id="title" :text="$page.title"></title>
 
   <!-- matches <div id="content"><super></div> -->
-  <div id="content" class="mx-auto max-w-5xl">
-    <div class="site-content-clip bg-base-200/70 px-4 py-8">
+  <div id="content" class="mx-auto max-w-6xl px-4 md:px-6">
+    <div class="grid gap-5">
+    <div class="site-content-clip bg-base-200/70 px-5 py-6 md:px-8 md:py-8">
 
     <!-- Overtitle + Title -->
     <h3 class="font-brand text-center text-sm tracking-wide text-base-content mb-0">
@@ -17,14 +18,18 @@
     <div id="page" :loop="$page.contentSections()">
 
       <!-- First block (About/introduction) -->
-      <ctx :if="$loop.first" :html="$loop.it.html()"></ctx>
+      <ctx :if="$loop.first">
+        <section class="rounded-box border border-base-300 bg-base-100 p-5 md:p-6">
+          <div :html="$loop.it.html()"></div>
+        </section>
+      </ctx>
 
       <!-- Middle blocks: one card-like section per release -->
       <ctx :if="$loop.first.not()">
         <ctx :if="$loop.last.not()">
           <section id="$loop.it.id"
-                   class="anchor-target scroll-mt-24 my-6 rounded-box bg-base-200/30 hover:bg-base-200/40 transition p-4 md:p-6">
-            <header class="mb-3">
+                   class="anchor-target scroll-mt-24 my-6 rounded-box border border-base-300 bg-base-100 p-5 md:p-6">
+            <header class="mb-4 flex flex-wrap items-center gap-3">
               <h3 class="text-left text-xl md:text-2xl font-normal m-0">
                 <a class="badge badge-xl badge-primary no-underline hover:underline"
                    :text="$loop.it.id"
@@ -32,7 +37,7 @@
               </h3>
               <!-- date badge (only if present on the section) -->
               <span :if="$loop.it.data.get?('date')"
-                    class="mt-2"
+                    class="badge badge-outline badge-lg"
                     :text="$if"></span>
             </header>
 
@@ -43,9 +48,10 @@
 
       <!-- Last block (old) printed raw -->
       <ctx :if="$loop.last">
-        <div id="old" class="mt-10" :html="$loop.it.html()"></div>
+        <div id="old" class="site-content-clip mt-10 bg-base-200/70 px-5 py-6 md:px-8 md:py-8" :html="$loop.it.html()"></div>
       </ctx>
 
+    </div>
     </div>
     </div>
   </div>

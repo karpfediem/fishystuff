@@ -2,13 +2,17 @@
 
     <title id="title" :text="$page.title"></title>
 
-    <div id="content">
-        <div class="site-content-clip bg-base-200/70 p-6 md:p-10">
-        <header class="page-header">
-            <h1 :text="$page.title"></h1>
-            <p :if="$page.description.len().gt(0)" :text="$page.description"></p>
-        </header>
+    <div id="content" class="mx-auto max-w-6xl px-4 md:px-6">
+        <div class="grid gap-5">
+            <header class="not-prose rounded-box border border-base-300 bg-base-100 p-5 md:p-6">
+                <h1 class="m-0" :text="$page.title"></h1>
+                <p class="mt-3 mb-0 text-base-content/75" :if="$page.description.len().gt(0)" :text="$page.description"></p>
+            </header>
 
-        <div :html="$page.content()"></div>
+            <div class="grid gap-5 lg:grid-cols-2">
+                <section class="site-content-clip bg-base-200/70 p-6 md:p-8" :loop="$page.contentSections()">
+                    <div :html="$loop.it.html()"></div>
+                </section>
+            </div>
         </div>
     </div>

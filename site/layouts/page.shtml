@@ -2,37 +2,43 @@
 
     <title id="title" :text="$page.title"></title>
 
-    <div id="content">
-        <div class="site-content-clip bg-base-200/70 p-6 md:p-10">
-        <header class="page-header">
-            <h1 :text="$page.title"></h1>
+    <div id="content" class="mx-auto max-w-5xl px-4 md:px-6">
+        <div class="grid gap-5">
+            <header class="not-prose rounded-box border border-base-300 bg-base-100 p-5 md:p-6">
+                <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                    <div class="space-y-3">
+                        <h1 class="m-0" :text="$page.title"></h1>
+                    </div>
 
-            <p class="meta">
-                <span :if="$page.author.len().gt(0)">By <span :text="$page.author"></span></span>
-                <span>
-          · ~<span :text="$page.wordCount().div(200).plus(1)"></span>
-          <span :text="$i18n.getOr('minutes_read_suffix',' min read')"></span>
-        </span>
-            </p>
+                    <div class="grid gap-2 text-sm text-base-content/70">
+                        <p class="meta m-0">
+                            <span :if="$page.author.len().gt(0)">By <span :text="$page.author"></span></span>
+                            <span>
+                                ~<span :text="$page.wordCount().div(200).plus(1)"></span>
+                                <span :text="$i18n.getOr('minutes_read_suffix',' min read')"></span>
+                            </span>
+                        </p>
 
-            <p class="meta meta-dates">
-                <!-- Updated (if present) -->
-                <span :if="$page.custom.get?('updated')">
-          <strong :text="$i18n.getOr('last_updated','Last updated')"></strong>:
-          <time :text="$if.format('January 02, 2006')"></time>
-        </span>
-                <!-- Always show original date ($page.date is Date) -->
-                <span>
-          <strong :text="$i18n.getOr('originally_posted','Originally posted')"></strong>:
-          <time :text="$page.date.format('January 02, 2006')"></time>
-        </span>
-            </p>
-        </header>
+                        <p class="meta meta-dates m-0">
+                            <span :if="$page.custom.get?('updated')">
+                                <strong :text="$i18n.getOr('last_updated','Last updated')"></strong>:
+                                <time :text="$if.format('January 02, 2006')"></time>
+                            </span>
+                            <span>
+                                <strong :text="$i18n.getOr('originally_posted','Originally posted')"></strong>:
+                                <time :text="$page.date.format('January 02, 2006')"></time>
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </header>
 
-        <div class="doc-body" :html="$page.content()"></div>
+            <article class="site-content-clip bg-base-200/70 p-6 md:p-10">
+                <div class="doc-body" :html="$page.content()"></div>
 
-        <section class="footnotes" :if="$page.footnotes?()">
-            <div :html="$if.html()"></div>
-        </section>
+                <section class="footnotes" :if="$page.footnotes?()">
+                    <div :html="$if.html()"></div>
+                </section>
+            </article>
         </div>
     </div>

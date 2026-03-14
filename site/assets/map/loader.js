@@ -891,7 +891,7 @@ function ensureZoneEvidenceElements(elements) {
       <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
     </div>
     <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
-    <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300/70 bg-base-200/60 p-2"></div>
+    <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2"></div>
   `;
 
   if (elements.legend?.parentNode === elements.panelBody) {
@@ -982,7 +982,7 @@ function renderLayerStack(container, stateBundle) {
     if (container.dataset.renderKey !== loadingKey) {
       container.dataset.renderKey = loadingKey;
       container.innerHTML =
-        '<p class="rounded-box border border-base-300/70 bg-base-200/60 px-3 py-3 text-xs text-base-content/60">Layer registry is loading…</p>';
+        '<p class="rounded-box border border-base-300 bg-base-200 px-3 py-3 text-xs text-base-content/60">Layer registry is loading…</p>';
     }
     return;
   }
@@ -1089,7 +1089,7 @@ function renderLayerStack(container, stateBundle) {
           style="--fishymap-layer-indent:${indentLevel};"
         >
           <button
-            class="fishymap-layer-drag"
+            class="fishymap-layer-drag btn btn-sm btn-circle btn-ghost"
             data-layer-drag="${layer.layerId.replace(/"/g, "&quot;")}"
             type="button"
             aria-label="${locked ? `${layer.name} is pinned to the ground layer` : `Drag ${layer.name}`}"
@@ -1140,7 +1140,7 @@ function renderLayerStack(container, stateBundle) {
             }
           </div>
           <button
-            class="fishymap-layer-visibility"
+            class="fishymap-layer-visibility btn btn-sm btn-circle btn-ghost"
             data-layer-visibility="${layer.layerId.replace(/"/g, "&quot;")}"
             data-layer-visible="${visible ? "true" : "false"}"
             type="button"
@@ -1289,7 +1289,7 @@ function renderSearchResults(elements, matches, stateBundle) {
       (fish) => {
         return `
         <button
-          class="btn btn-sm w-full justify-start rounded-xl px-3 btn-ghost"
+          class="btn btn-sm w-full justify-start rounded-box border border-base-300 bg-base-100 px-3 hover:bg-base-200"
           data-fish-id="${fish.fishId}"
           type="button"
         >
@@ -1366,8 +1366,10 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
           : "n/a";
       return `
         <button
-          class="btn btn-sm h-auto min-h-0 w-full justify-start rounded-xl px-3 py-2 ${
-            active ? "btn-primary text-primary-content" : "btn-ghost"
+          class="btn btn-sm h-auto min-h-0 w-full justify-start rounded-box border px-3 py-2 ${
+            active
+              ? "border-primary bg-primary text-primary-content"
+              : "border-base-300 bg-base-100 hover:bg-base-200"
           }"
           data-zone-evidence-fish-id="${evidenceFish.fishId}"
           type="button"
@@ -1402,7 +1404,12 @@ function renderStatusLines(container, statuses) {
   setMarkup(
     container,
     JSON.stringify(lines),
-    lines.map((line) => `<p>${line}</p>`).join(""),
+    lines
+      .map(
+        (line) =>
+          `<div class="rounded-box border border-base-300 bg-base-100 px-3 py-2">${escapeHtml(line)}</div>`,
+      )
+      .join(""),
   );
 }
 

@@ -4,34 +4,38 @@
 
   <main id="guide-content">
     <article class="doc">
-      <header class="page-header">
-        <h1 :text="$page.title"></h1>
+      <header class="page-header not-prose rounded-box border border-base-300 bg-base-100 p-5 md:p-6">
+        <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div class="space-y-3">
+            <h1 class="m-0" :text="$page.title"></h1>
+          </div>
 
-        <p class="meta">
-          <span :if="$page.author.len().gt(0)">By <span :text="$page.author"></span></span>
-          <span>
-          · ~<span :text="$page.wordCount().div(200).plus(1)"></span>
-          <span :text="$i18n.getOr('minutes_read_suffix',' min read')"></span>
-        </span>
-        </p>
+          <div class="grid gap-2 text-sm text-base-content/70">
+            <p class="meta m-0">
+              <span :if="$page.author.len().gt(0)">By <span :text="$page.author"></span></span>
+              <span>
+                ~<span :text="$page.wordCount().div(200).plus(1)"></span>
+                <span :text="$i18n.getOr('minutes_read_suffix',' min read')"></span>
+              </span>
+            </p>
 
-        <p class="meta meta-dates flex flex-col">
-          <!-- Show updated first when present -->
-          <span :if="$page.custom.get?('updated')">
-          <strong :text="$i18n.getOr('last_updated','Last updated')"></strong>:
-          <time :text="$if.format('January 02, 2006')"></time>
-          </span>
+            <p class="meta meta-dates m-0 flex flex-col">
+              <span :if="$page.custom.get?('updated')">
+                <strong :text="$i18n.getOr('last_updated','Last updated')"></strong>:
+                <time :text="$if.format('January 02, 2006')"></time>
+              </span>
 
-          <!-- Always show original posting date -->
-          <span>
-          <strong :text="$i18n.getOr('originally_posted','Originally posted')"></strong>:
-          <time :text="$page.date.format('January 02, 2006')"></time>
-          </span>
-        </p>
+              <span>
+                <strong :text="$i18n.getOr('originally_posted','Originally posted')"></strong>:
+                <time :text="$page.date.format('January 02, 2006')"></time>
+              </span>
+            </p>
+          </div>
+        </div>
       </header>
 
       <ctx :if="$page.custom.has('og_image_asset')">
-        <figure class="mb-8 mt-6 overflow-hidden rounded-box border border-base-300 bg-base-200/70 shadow-sm">
+        <figure class="mb-8 mt-6 overflow-hidden rounded-box border border-base-300 bg-base-100">
           <img src="$page.asset($page.custom.get('og_image_asset')).link()"
                alt=""
                decoding="async"
@@ -41,7 +45,7 @@
 
       <ctx :if="$page.custom.has('og_image_asset').not()">
         <ctx :if="$page.custom.has('og_image')">
-          <figure class="mb-8 mt-6 overflow-hidden rounded-box border border-base-300 bg-base-200/70 shadow-sm">
+          <figure class="mb-8 mt-6 overflow-hidden rounded-box border border-base-300 bg-base-100">
             <img src="$page.custom.get('og_image')"
                  alt=""
                  decoding="async"

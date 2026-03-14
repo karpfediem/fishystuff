@@ -2,44 +2,19 @@
 
   <title id="title" :text="$page.title"></title>
 
-  <div id="content">
-    <div class="site-content-clip">
+  <div id="content" class="mx-auto max-w-6xl px-4 md:px-6">
+    <div class="grid gap-5">
+    <div class="site-content-clip bg-base-200/70 p-5 md:p-6">
     <main class="min-w-0">
-    <header class="page-header mb-6">
-      <h1 :text="$page.title"></h1>
-      <p :if="$page.description.len().gt(0)" :text="$page.description"></p>
+    <header class="page-header mb-0 not-prose">
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <div class="space-y-3">
+          <h1 class="m-0" :text="$page.title"></h1>
+          <p class="m-0 text-base-content/75" :if="$page.description.len().gt(0)" :text="$page.description"></p>
+        </div>
+      </div>
     </header>
     <style>
-      body:has(.guide-list) #menu {
-        margin-bottom: 1rem;
-      }
-
-      body:has(.guide-list) #menu .site-nav-frame::before,
-      body:has(.guide-list) #menu .site-nav-frame::after {
-        display: none;
-      }
-
-      #content.site-content-card {
-        border: 0;
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-      }
-
-      #content.site-content-card > .site-content-clip {
-        border-radius: 0;
-        -webkit-mask: none;
-        mask: none;
-        background: transparent;
-        padding: 1.5rem 1rem;
-      }
-
-      @media (min-width: 768px) {
-        #content.site-content-card > .site-content-clip {
-          padding: 2.5rem 1.5rem;
-        }
-      }
-
       .line-clamp-2 {
         display: -webkit-box;
         -webkit-line-clamp: 2;
@@ -48,7 +23,7 @@
       }
 
       .guide-list .guide-card {
-        transition: transform 120ms ease, box-shadow 120ms ease;
+        transition: transform 120ms ease, border-color 120ms ease, background-color 120ms ease;
       }
 
       .guide-list .guide-card > figure:first-child {
@@ -79,7 +54,7 @@
               :loop="$page.subpagesAlphabetic()">
 
         <a href="$loop.it.link()"
-           class="guide-card card card-sm card-border h-full overflow-hidden rounded-t-box rounded-b-none bg-base-200/70 shadow-sm hover:bg-base-200 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+           class="guide-card card card-sm card-border h-full overflow-hidden rounded-box bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
 
           <ctx :if="$loop.it.custom.has('og_image_asset')">
             <figure class="aspect-[16/8] overflow-hidden bg-base-200">
@@ -135,5 +110,6 @@
 
 
     </main>
+    </div>
     </div>
   </div>
