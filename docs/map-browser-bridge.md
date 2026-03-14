@@ -215,3 +215,14 @@ Examples:
 - `site/assets/map/loader.js` and `site/assets/map/map-host.js` are hand-edited site-owned source files.
 - `site/assets/map/ui/fishystuff.css` is a copied build output.
 - `data/cdn/public/map/fishystuff_ui_bevy.<hash>.js` and `data/cdn/public/map/fishystuff_ui_bevy_bg.<hash>.wasm` are CDN-served build outputs.
+
+## Future Performance Follow-up
+
+- Fish icons currently work by resolving `fish_id -> item_id -> CDN image URL` and then fetching/decoding individual PNGs inside Bevy WASM.
+- This is correct but not ideal for web performance because WASM image decode work still runs on the single browser/WASM thread.
+- If icon load cost becomes a problem again, replace the per-icon remote image pipeline with one CDN-served fish icon atlas plus a small manifest keyed by `item_id`.
+- Target shape:
+  - API still returns fish/item IDs only.
+  - CDN serves one atlas texture and one manifest.
+  - Bevy loads the atlas once and does rect lookup by `item_id`.
+  - No per-icon fetch/decode path in Bevy.
