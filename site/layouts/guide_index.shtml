@@ -54,15 +54,15 @@
            class="guide-card card card-sm card-border h-full overflow-hidden rounded-box bg-base-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
 
           <ctx :if="$loop.it.custom.has('og_image_asset')">
-            <figure class="aspect-[16/8] overflow-hidden bg-base-200">
-              <img src="$loop.it.asset($loop.it.custom.get('og_image_asset')).link()" alt="" class="h-full w-full object-cover">
+            <figure class="overflow-hidden bg-base-200">
+              <img src="$loop.it.asset($loop.it.custom.get('og_image_asset')).link()" alt="" class="block h-auto w-full">
             </figure>
           </ctx>
 
           <ctx :if="$loop.it.custom.has('og_image_asset').not()">
             <ctx :if="$loop.it.custom.has('og_image')">
-              <figure class="aspect-[16/8] overflow-hidden bg-base-200">
-                <img src="$loop.it.custom.get('og_image')" alt="" class="h-full w-full object-cover">
+              <figure class="overflow-hidden bg-base-200">
+                <img src="$loop.it.custom.get('og_image')" alt="" class="block h-auto w-full">
               </figure>
             </ctx>
           </ctx>

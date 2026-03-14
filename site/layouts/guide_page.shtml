@@ -37,7 +37,7 @@
           <img src="$page.asset($page.custom.get('og_image_asset')).link()"
                alt=""
                decoding="async"
-               class="block aspect-[3/2] w-full object-cover">
+               class="block h-auto w-full">
         </figure>
       </ctx>
 
@@ -47,7 +47,7 @@
             <img src="$page.custom.get('og_image')"
                  alt=""
                  decoding="async"
-                 class="block aspect-[3/2] w-full object-cover">
+                 class="block h-auto w-full">
           </figure>
         </ctx>
       </ctx>
