@@ -8,7 +8,6 @@
     <div class="grid gap-5">
     <header class="page-title-shell not-prose">
       <div class="page-title-stack">
-        <p class="page-title-kicker font-brand text-base-content/70">Fishy Stuff</p>
         <h2 class="page-title-heading" :text="$page.title"></h2>
       </div>
     </header>
