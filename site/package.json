@@ -7,7 +7,9 @@
     "tailwindcss": "^4.1.14"
   },
   "scripts": {
-    "pre-build": "bunx @tailwindcss/cli -i tailwind.input.css -o assets/css/site.css",
-    "build": "bunx @tailwindcss/cli -i tailwind.input.css -o public/css/site.css --minify"
+    "tailwind:scan": "bun run ./scripts/write-tailwind-scan.mjs",
+    "tailwind:build": "bun run tailwind:scan && bunx @tailwindcss/cli -i tailwind.input.css -o assets/css/site.css",
+    "pre-build": "bun run tailwind:build",
+    "build": "bun run tailwind:scan && bunx @tailwindcss/cli -i tailwind.input.css -o public/css/site.css --minify"
   }
 }

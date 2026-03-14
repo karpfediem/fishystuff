@@ -2,19 +2,8 @@
 
     <title id="title"><super></title>
 
-    <div id="content" class="mx-auto mt-4 max-w-6xl px-4 md:px-6">
+    <div id="content">
         <style>
-            .guide-layout {
-                position: relative;
-                max-width: 100%;
-            }
-
-            .guide-main-shell {
-                position: relative;
-                max-width: 64rem;
-                margin-inline: auto;
-            }
-
             .guide-desktop-rail {
                 display: none;
             }
@@ -91,8 +80,8 @@
             </label>
         </ctx>
 
-        <div class="guide-layout">
-            <div class="guide-main-shell">
+        <div class="relative">
+            <div class="relative mx-auto max-w-5xl">
                 <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
                     <div class="guide-desktop-rail">
                         <aside class="guide-rail-shell not-prose">

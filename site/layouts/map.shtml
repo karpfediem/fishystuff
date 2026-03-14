@@ -29,10 +29,7 @@
         max-width: none;
         margin: 0;
         padding: 0;
-        border: 0;
         border-radius: 0;
-        background: transparent;
-        box-shadow: none;
         overflow: hidden;
       }
 
@@ -47,8 +44,6 @@
         border-radius: 0;
         -webkit-mask: none;
         mask: none;
-        background: transparent;
-        padding: 0;
       }
 
       #map-page-shell {

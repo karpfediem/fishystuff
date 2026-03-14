@@ -1,9 +1,16 @@
 
-# one-off release
-build-release:
+build-tailwind:
+    bun run tailwind:build
+
+build-release-no-tailwind:
     rm -rf .out
     zine release --output .out
     bun run ./scripts/write-runtime-config.mjs --out .out/runtime-config.js
+
+# one-off release
+build-release:
+    just build-tailwind
+    just build-release-no-tailwind
 
 release: build-release
 
@@ -11,19 +18,25 @@ release: build-release
 watch-release:
     watchexec -r \
       -w content -w layouts -w assets -w scripts -w zine.ziggy \
-      --exts smd,shtml,ziggy,css,js \
-      -- bash -lc 'just build-release'
+      --exts smd,md,shtml,html,ziggy,css,js,mjs,ts \
+      -- bash -lc 'just build-release-no-tailwind'
 
 serve-release:
     bun run ./scripts/serve-release.mjs --root .out --port 1990
 
 # tailwind watch (builds to assets/css/site.css)
 watch-tailwind:
-    bunx @tailwindcss/cli -i tailwind.input.css -o assets/css/site.css --watch
+    bun run tailwind:build
+    watchexec -r \
+      -w content -w layouts -w assets -w scripts -w tailwind.input.css \
+      --ignore assets/css/site.css --ignore .tailwind \
+      --exts smd,md,shtml,html,css,js,mjs,ts \
+      -- bash -lc 'bun run tailwind:build'
 
 # dev: run both watchers concurrently
 watch:
-    just build-release
+    just build-tailwind
+    just build-release-no-tailwind
     just watch-release & \
     just watch-tailwind & \
     just serve-release & \

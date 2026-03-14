@@ -5,9 +5,9 @@
 @tailwind utilities;
 
 
-@source "./layouts/**/*.{shtml,html}";
-@source "./content/**/*.{smd,md}";
-@source "./assets/**/*.{js,ts}";
+@source "./.tailwind/source.html";
+@source "./assets/**/*.{js,mjs,ts}";
+@source "./scripts/**/*.{js,mjs,ts}";
 
 @plugin "@tailwindcss/typography" {
 

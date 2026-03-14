@@ -13,28 +13,11 @@
       }
 
       #content.site-content-card {
-        border: 0;
         border-radius: 0;
-        background: transparent;
-        box-shadow: none;
       }
 
       #content.site-content-card .site-content-shell {
         display: none;
-      }
-
-      #content.site-content-card.site-content-clip {
-        border-radius: 0;
-        -webkit-mask: none;
-        mask: none;
-        background: transparent;
-        padding: 1rem;
-      }
-
-      @media (min-width: 768px) {
-        #content.site-content-card.site-content-clip {
-          padding: 1.5rem;
-        }
       }
 
       .home-entry-card {
@@ -85,7 +68,7 @@
       <div class="hero-content relative w-full max-w-none px-4 py-10 text-center md:px-8 lg:px-12 lg:py-14">
         <div class="max-w-3xl">
           <div class="mb-5 px-4 py-2">
-            <a href="$site.link()" class="home-wordmark font-brand no-underline hover:no-underline focus:no-underline">
+            <a href="$site.link()" class="home-wordmark font-brand font-bold no-underline hover:no-underline focus:no-underline">
               <span :text="$site.title"></span>
               <img src="$site.asset('img/logo.png').link()" alt="" decoding="async">
             </a>

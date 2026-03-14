@@ -79,7 +79,7 @@
     </head>
 
     <body id="body" class="bg-base-100">
-    <nav id="menu" class="not-prose sticky top-0 z-40 mb-4 bg-base-100">
+    <nav id="menu" class="not-prose sticky top-0 z-40 mb-4 rounded-none bg-base-100">
         <div class="grid grid-cols-[minmax(clamp(1rem,2.5vw,2rem),1fr)_minmax(0,130ch)_minmax(clamp(1rem,2.5vw,2rem),1fr)]">
         <div class="site-nav-frame col-start-2 px-4 py-3">
             <div class="p-2">
@@ -107,7 +107,7 @@
                         <div class="navbar-start w-auto flex-none min-w-0">
                         <a id="home-link"
                            href="$site.link()"
-                           class="px-2 text-base no-underline hover:underline focus:underline">
+                           class="px-2 text-base font-brand font-bold no-underline hover:underline focus:underline">
                             <span :text="$site.title"></span>
                             <img src="$site.asset('img/logo.png').link()" alt="" decoding="async">
                         </a>
@@ -279,7 +279,7 @@
 
     <!-- Page container -->
     <div id="content"
-         class="site-content-card site-content-clip mx-auto bg-base-300 mt-4 px-4 py-4 md:px-6 md:py-6">
+         class="site-content-card mx-auto max-w-[130ch] px-4 py-4 md:px-6 md:py-6">
         <div aria-hidden="true" class="site-content-shell site-content-clip absolute inset-0 rounded-box bg-base-300/15"></div>
         <super>
     </div>
