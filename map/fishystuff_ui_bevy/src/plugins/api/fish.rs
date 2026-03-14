@@ -36,17 +36,16 @@ pub(crate) fn fish_item_icon_url(item_id: i32) -> Option<String> {
     Some(format!("{}{}", base_url.trim_end_matches('/'), path))
 }
 
-pub(crate) fn bevy_public_asset_path(raw: &str) -> String {
-    raw.to_string()
-}
-
 #[cfg(target_arch = "wasm32")]
 fn configured_cdn_base_url() -> Option<String> {
     use wasm_bindgen::JsValue;
 
     let window = web_sys::window()?;
-    let value = js_sys::Reflect::get(window.as_ref(), &JsValue::from_str("__fishystuffCdnBaseUrl"))
-        .ok()?;
+    let value = js_sys::Reflect::get(
+        window.as_ref(),
+        &JsValue::from_str("__fishystuffCdnBaseUrl"),
+    )
+    .ok()?;
     let value = value.as_string()?;
     let trimmed = value.trim().trim_end_matches('/');
     if trimmed.is_empty() {
@@ -62,7 +61,7 @@ fn configured_cdn_base_url() -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{bevy_public_asset_path, build_fish_catalog_entries, fish_item_icon_url};
+    use super::{build_fish_catalog_entries, fish_item_icon_url};
     use fishystuff_api::models::fish::{FishEntry as ApiFishEntry, FishListResponse};
 
     #[test]
@@ -88,14 +87,6 @@ mod tests {
         assert_eq!(entry.item_id, 820303);
         assert_eq!(entry.encyclopedia_key, Some(303));
         assert_eq!(entry.encyclopedia_id, Some(9434));
-    }
-
-    #[test]
-    fn bevy_public_asset_paths_are_passthrough() {
-        assert_eq!(
-            bevy_public_asset_path("/images/FishIcons/00008289.png"),
-            "/images/FishIcons/00008289.png"
-        );
     }
 
     #[test]

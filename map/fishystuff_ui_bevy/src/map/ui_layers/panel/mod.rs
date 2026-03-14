@@ -90,7 +90,7 @@ fn spawn_layer_panel(
             },
             FocusPolicy::Block,
             Visibility::Hidden,
-            NodeStyleSheet::new(asset_server.load("map/ui/fishystuff.css")),
+            NodeStyleSheet::new(asset_server.load("/map/ui/fishystuff.css")),
             GlobalZIndex(1200),
             ClassList::new("panel layers-panel"),
         ))

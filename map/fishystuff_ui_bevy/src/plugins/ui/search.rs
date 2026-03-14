@@ -1,6 +1,5 @@
 use super::setup::text_style;
 use super::*;
-use fishystuff_core::fish_icons::fish_item_icon_path;
 pub(super) fn handle_search_focus(
     mut focused: ResMut<FocusedInput>,
     mut search: ResMut<SearchState>,
@@ -167,15 +166,16 @@ pub(super) fn update_search_text(
 pub(super) fn sync_search_tags(
     search: Res<SearchState>,
     fish: Res<FishCatalog>,
+    remote_image_epoch: Res<RemoteImageEpoch>,
+    mut remote_images: ResMut<RemoteImageCache>,
     fonts: Res<UiFonts>,
-    asset_server: Res<AssetServer>,
     mut commands: Commands,
     mut tags_q: Query<
         (Entity, Option<&Children>, &mut Visibility, &mut Node),
         With<FishSearchTags>,
     >,
 ) {
-    if !search.is_changed() && !fish.is_changed() {
+    if !search.is_changed() && !fish.is_changed() && !remote_image_epoch.is_changed() {
         return;
     }
     let Ok((tags_entity, children, mut visibility, mut node)) = tags_q.single_mut() else {
@@ -208,7 +208,9 @@ pub(super) fn sync_search_tags(
                 .as_ref()
                 .map(|entry| entry.name.clone())
                 .unwrap_or_else(|| format!("Fish {fish_id}"));
-            let icon_path = entry.map(|entry| fish_item_icon_path(entry.item_id));
+            let icon_handle = entry
+                .as_ref()
+                .and_then(|entry| fish_icon_handle(entry.item_id, &mut remote_images));
             tags.spawn((
                 FishSearchTag { fish_id: *fish_id },
                 Button,
@@ -236,9 +238,9 @@ pub(super) fn sync_search_tags(
                 ClassList::new("search-tag"),
             ))
             .with_children(|tag| {
-                if let Some(icon_path) = icon_path.clone() {
+                if let Some(icon_handle) = icon_handle.clone() {
                     tag.spawn((
-                        ImageNode::new(asset_server.load(bevy_public_asset_path(&icon_path))),
+                        ImageNode::new(icon_handle),
                         Node {
                             width: Val::Px(14.0),
                             height: Val::Px(14.0),
@@ -259,7 +261,8 @@ pub(super) fn sync_search_tags(
 pub(super) fn update_autocomplete_ui(
     search: Res<SearchState>,
     fish: Res<FishCatalog>,
-    asset_server: Res<AssetServer>,
+    remote_image_epoch: Res<RemoteImageEpoch>,
+    mut remote_images: ResMut<RemoteImageCache>,
     mut frame_q: Query<
         (&mut Visibility, &mut Node),
         (
@@ -292,7 +295,7 @@ pub(super) fn update_autocomplete_ui(
         ),
     >,
 ) {
-    if !search.is_changed() && !fish.is_changed() {
+    if !search.is_changed() && !fish.is_changed() && !remote_image_epoch.is_changed() {
         return;
     }
     let open = search.open && !search.results.is_empty();
@@ -325,9 +328,12 @@ pub(super) fn update_autocomplete_ui(
         for child in children.iter() {
             if let Ok((mut icon, mut icon_vis)) = icon_q.get_mut(child) {
                 if let Some(fish_entry) = fish_entry {
-                    let icon_path = fish_item_icon_path(fish_entry.item_id);
-                    *icon = ImageNode::new(asset_server.load(bevy_public_asset_path(&icon_path)));
-                    *icon_vis = Visibility::Visible;
+                    if let Some(handle) = fish_icon_handle(fish_entry.item_id, &mut remote_images) {
+                        *icon = ImageNode::new(handle);
+                        *icon_vis = Visibility::Visible;
+                    } else {
+                        *icon_vis = Visibility::Hidden;
+                    }
                 } else {
                     *icon_vis = Visibility::Hidden;
                 }

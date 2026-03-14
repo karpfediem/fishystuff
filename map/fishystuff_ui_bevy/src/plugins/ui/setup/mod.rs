@@ -50,7 +50,7 @@ pub(super) fn setup_ui(
                 position_type: PositionType::Absolute,
                 ..default()
             },
-            NodeStyleSheet::new(asset_server.load("map/ui/fishystuff.css")),
+            NodeStyleSheet::new(asset_server.load("/map/ui/fishystuff.css")),
             ClassList::new("fs-overlay"),
         ))
         .with_children(|root| {

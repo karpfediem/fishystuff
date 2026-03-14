@@ -1,6 +1,5 @@
 use super::setup::text_style;
 use super::*;
-use fishystuff_core::fish_icons::fish_item_icon_path;
 pub(super) fn update_selected_text(
     selection: Res<SelectionState>,
     mut query: Query<&mut Text, With<SelectedZoneText>>,
@@ -43,8 +42,9 @@ pub(super) fn sync_zone_evidence_list(
     selection: Res<SelectionState>,
     fish_filter: Res<FishFilterState>,
     fish: Res<FishCatalog>,
+    remote_image_epoch: Res<RemoteImageEpoch>,
+    mut remote_images: ResMut<RemoteImageCache>,
     fonts: Res<UiFonts>,
-    asset_server: Res<AssetServer>,
     mut last_selected_fish: Local<Option<i32>>,
     mut commands: Commands,
     list_q: Query<(Entity, Option<&Children>), With<ZoneEvidenceList>>,
@@ -54,7 +54,12 @@ pub(super) fn sync_zone_evidence_list(
     };
     let list_is_empty = children.map(|c| c.is_empty()).unwrap_or(true);
     let selected_fish_changed = *last_selected_fish != fish_filter.selected_fish;
-    if !selection.is_changed() && !fish.is_changed() && !selected_fish_changed && !list_is_empty {
+    if !selection.is_changed()
+        && !fish.is_changed()
+        && !selected_fish_changed
+        && !remote_image_epoch.is_changed()
+        && !list_is_empty
+    {
         return;
     }
     *last_selected_fish = fish_filter.selected_fish;
@@ -83,10 +88,10 @@ pub(super) fn sync_zone_evidence_list(
                         _ => "n/a".to_string(),
                     };
                     let selected = fish_filter.selected_fish == Some(entry.fish_id);
-                    let icon_path = Some(fish_item_icon_path(entry.item_id));
+                    let icon_handle = fish_icon_handle(entry.item_id, &mut remote_images);
                     (
                         selected,
-                        icon_path,
+                        icon_handle,
                         format!("{name}  #{id}", id = entry.fish_id),
                         format!(
                             "p {p:.3} · weight {w:.3} · ci {ci}",
@@ -126,7 +131,7 @@ pub(super) fn sync_zone_evidence_list(
             return;
         }
 
-        for (selected, icon_path, title, meta) in rows {
+        for (selected, icon_handle, title, meta) in rows {
             let mut classes = ClassList::new("list-item zone-evidence-item");
             if selected {
                 classes.add("selected");
@@ -155,9 +160,9 @@ pub(super) fn sync_zone_evidence_list(
                     ClassList::new("row zone-evidence-row"),
                 ))
                 .with_children(|row| {
-                    if let Some(icon_path) = icon_path.clone() {
+                    if let Some(icon_handle) = icon_handle.clone() {
                         row.spawn((
-                            ImageNode::new(asset_server.load(bevy_public_asset_path(&icon_path))),
+                            ImageNode::new(icon_handle),
                             Node {
                                 width: Val::Px(18.0),
                                 height: Val::Px(18.0),

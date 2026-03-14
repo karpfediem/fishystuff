@@ -12,7 +12,6 @@ import {
   resolveApiBaseUrl,
   resolveCdnBaseUrl,
   resolveMapRuntimeManifestUrl,
-  rewriteApiUrl,
 } from "./map-host.js";
 
 class MemoryStorage {
@@ -1015,31 +1014,5 @@ test("runtime manifest URL is cache-busted against the CDN base", () => {
   assert.equal(
     resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, "deploy-456"),
     "https://cdn.fishystuff.fish/map/runtime-manifest.json?v=deploy-456",
-  );
-});
-
-test("only API requests are rewritten to the API origin", () => {
-  const locationHref = "http://127.0.0.1:1990/map/";
-  const apiBaseUrl = "http://127.0.0.1:8080";
-
-  assert.equal(
-    rewriteApiUrl("/api/v1/meta", apiBaseUrl, locationHref),
-    "http://127.0.0.1:8080/api/v1/meta",
-  );
-  assert.equal(
-    rewriteApiUrl("/images/tiles/minimap/v1/tileset.json", apiBaseUrl, locationHref),
-    "https://cdn.fishystuff.fish/images/tiles/minimap/v1/tileset.json",
-  );
-  assert.equal(
-    rewriteApiUrl("/images/tiles/mask/v1/tileset.json", apiBaseUrl, locationHref),
-    "https://cdn.fishystuff.fish/images/tiles/mask/v1/tileset.json",
-  );
-  assert.equal(
-    rewriteApiUrl("/images/terrain/v1/manifest.json", apiBaseUrl, locationHref),
-    "https://cdn.fishystuff.fish/images/terrain/v1/manifest.json",
-  );
-  assert.equal(
-    rewriteApiUrl("/region_groups/v1.geojson", apiBaseUrl, locationHref),
-    "https://cdn.fishystuff.fish/region_groups/v1.geojson",
   );
 });

@@ -1,4 +1,5 @@
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
+use bevy::image::Image;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::input::{ButtonInput, ButtonState};
@@ -11,8 +12,9 @@ use bevy_flair::prelude::*;
 
 use crate::map::layers::{LayerRegistry, LayerSettings, PickMode};
 use crate::plugins::api::{
-    bevy_public_asset_path, FishCatalog, FishFilterState, MapDisplayState, Patch, PatchFilterState,
-    SelectionState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    fish_item_icon_url, remote_image_handle, FishCatalog, FishFilterState, MapDisplayState, Patch,
+    PatchFilterState, RemoteImageCache, RemoteImageEpoch, RemoteImageStatus, SelectionState,
+    POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 use crate::plugins::camera::UiCamera;
 use crate::plugins::render_domain::{ui_layers, UiRenderEntity};
@@ -255,6 +257,14 @@ impl UiTextBundle {
             },
             color: TextColor(style.color),
         }
+    }
+}
+
+fn fish_icon_handle(item_id: i32, remote_images: &mut RemoteImageCache) -> Option<Handle<Image>> {
+    let url = fish_item_icon_url(item_id)?;
+    match remote_image_handle(&url, remote_images) {
+        RemoteImageStatus::Ready(handle) => Some(handle),
+        RemoteImageStatus::Pending | RemoteImageStatus::Failed(_) => None,
     }
 }
 

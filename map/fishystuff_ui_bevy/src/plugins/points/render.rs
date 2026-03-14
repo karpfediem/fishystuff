@@ -4,16 +4,14 @@ use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy::tasks::IoTaskPool;
-use gloo_net::http::Request;
 use fishystuff_api::models::events::MapBboxPx;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, WorldPoint};
 use crate::plugins::api::{
-    fish_item_icon_url, FishCatalog, MapDisplayState, POINT_ICON_SCALE_MAX,
-    POINT_ICON_SCALE_MIN,
+    fish_item_icon_url, remote_image_handle, FishCatalog, MapDisplayState, RemoteImageCache,
+    RemoteImageEpoch, RemoteImageStatus, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
@@ -55,9 +53,9 @@ pub(super) struct PointMarkerPool {
 
 #[derive(Resource, Default)]
 pub(crate) struct PointIconCache {
-    handles: HashMap<i32, Handle<Image>>,
     requested_urls: HashMap<i32, String>,
-    pending: HashMap<i32, async_channel::Receiver<Result<DecodedPointIcon, String>>>,
+    loading_ids: HashSet<i32>,
+    loaded_ids: HashSet<i32>,
     missing_catalog_ids: HashSet<i32>,
     failed_ids: HashMap<i32, String>,
     pub(crate) visible_icon_count: usize,
@@ -70,11 +68,11 @@ impl PointIconCache {
     }
 
     pub(crate) fn loading_count(&self) -> usize {
-        self.pending.len()
+        self.loading_ids.len()
     }
 
     pub(crate) fn loaded_count(&self) -> usize {
-        self.handles.len()
+        self.loaded_ids.len()
     }
 
     pub(crate) fn failed_count(&self) -> usize {
@@ -106,13 +104,6 @@ impl PointIconCache {
     }
 }
 
-#[derive(Debug)]
-struct DecodedPointIcon {
-    width: u32,
-    height: u32,
-    rgba: Vec<u8>,
-}
-
 fn icon_sample<T>(values: impl Iterator<Item = T>) -> Vec<T>
 where
     T: Ord,
@@ -121,54 +112,6 @@ where
     values.sort();
     values.truncate(5);
     values
-}
-
-pub(super) fn poll_point_icon_requests(
-    mut cache: ResMut<PointIconCache>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    if cache.pending.is_empty() {
-        return;
-    }
-
-    let pending = cache
-        .pending
-        .iter()
-        .map(|(&fish_id, receiver)| (fish_id, receiver.clone()))
-        .collect::<Vec<_>>();
-    for (fish_id, receiver) in pending {
-        let Ok(result) = receiver.try_recv() else {
-            continue;
-        };
-        cache.pending.remove(&fish_id);
-        match result {
-            Ok(decoded) => {
-                cache.failed_ids.remove(&fish_id);
-                let image = Image::new(
-                    Extent3d {
-                        width: decoded.width,
-                        height: decoded.height,
-                        depth_or_array_layers: 1,
-                    },
-                    TextureDimension::D2,
-                    decoded.rgba,
-                    TextureFormat::Rgba8UnormSrgb,
-                    RenderAssetUsages::RENDER_WORLD,
-                );
-                let handle = images.add(image);
-                cache.handles.insert(fish_id, handle);
-            }
-            Err(error) => {
-                let url = cache
-                    .requested_urls
-                    .get(&fish_id)
-                    .map(String::as_str)
-                    .unwrap_or("<unknown>");
-                bevy::log::warn!("point icon load failed fish_id={fish_id} url={url} err={error}");
-                cache.failed_ids.insert(fish_id, error);
-            }
-        }
-    }
 }
 
 pub(super) fn sync_point_markers(
@@ -180,6 +123,8 @@ pub(super) fn sync_point_markers(
     ring_assets: Res<PointRingAssets>,
     mut pool: ResMut<PointMarkerPool>,
     mut icon_cache: ResMut<PointIconCache>,
+    remote_image_epoch: Res<RemoteImageEpoch>,
+    mut remote_images: ResMut<RemoteImageCache>,
     camera_q: Query<&Projection, With<Map2dCamera>>,
     mut rings: Query<
         (&mut Transform, &mut Visibility, &mut Sprite),
@@ -204,9 +149,9 @@ pub(super) fn sync_point_markers(
 
     if fish.is_changed() {
         icon_cache.requested_urls.clear();
+        icon_cache.loading_ids.clear();
+        icon_cache.loaded_ids.clear();
         icon_cache.missing_catalog_ids.clear();
-        icon_cache.handles.clear();
-        icon_cache.pending.clear();
         icon_cache.failed_ids.clear();
     }
 
@@ -222,7 +167,8 @@ pub(super) fn sync_point_markers(
 
     let needs_refresh = points.dirty
         || icons_mode_changed
-        || (points.icons_enabled && (fish.is_changed() || icon_size_changed));
+        || (points.icons_enabled
+            && (fish.is_changed() || icon_size_changed || remote_image_epoch.is_changed()));
     if !needs_refresh {
         return;
     }
@@ -289,7 +235,7 @@ pub(super) fn sync_point_markers(
 
             if points.icons_enabled {
                 if let Some(handle) =
-                    icon_handle_for_fish(point.fish_id, &mut icon_cache, &fish)
+                    icon_handle_for_fish(point.fish_id, &mut icon_cache, &fish, &mut remote_images)
                 {
                     if sprite.image != handle {
                         sprite.image = handle;
@@ -319,6 +265,15 @@ pub(super) fn sync_point_markers(
         }
     }
 
+    let requested_ids = icon_cache
+        .requested_urls
+        .keys()
+        .copied()
+        .collect::<HashSet<_>>();
+    let loaded_ids = icon_cache.loaded_ids.clone();
+    icon_cache
+        .loading_ids
+        .retain(|fish_id| requested_ids.contains(fish_id) && !loaded_ids.contains(fish_id));
     visible_fish_ids.sort_unstable();
     visible_fish_ids.dedup();
     visible_fish_ids.truncate(5);
@@ -332,58 +287,50 @@ fn icon_handle_for_fish(
     fish_id: Option<i32>,
     cache: &mut PointIconCache,
     fish: &FishCatalog,
+    remote_images: &mut RemoteImageCache,
 ) -> Option<Handle<Image>> {
     let fish_id = fish_id?;
-    if let Some(handle) = cache.handles.get(&fish_id) {
-        return Some(handle.clone());
-    }
-    if cache.pending.contains_key(&fish_id) || cache.failed_ids.contains_key(&fish_id) {
-        return None;
-    }
-    if cache.missing_catalog_ids.contains(&fish_id) {
-        return None;
-    }
     let Some(item_id) = fish.item_id_for_fish(fish_id) else {
         cache.missing_catalog_ids.insert(fish_id);
+        cache.loading_ids.remove(&fish_id);
+        cache.loaded_ids.remove(&fish_id);
+        cache.failed_ids.remove(&fish_id);
         return None;
     };
     let Some(url) = fish_item_icon_url(item_id) else {
-        cache.failed_ids.insert(fish_id, "invalid item icon url".to_string());
+        cache.loading_ids.remove(&fish_id);
+        cache.loaded_ids.remove(&fish_id);
+        cache
+            .failed_ids
+            .insert(fish_id, "invalid item icon url".to_string());
         return None;
     };
-    let (sender, receiver) = async_channel::bounded(1);
-    let request_url = url.clone();
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let result = fetch_point_icon(&request_url).await;
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    cache.pending.insert(fish_id, receiver);
     cache.requested_urls.insert(fish_id, url);
-    None
-}
-
-async fn fetch_point_icon(url: &str) -> Result<DecodedPointIcon, String> {
-    let response = Request::get(url)
-        .send()
-        .await
-        .map_err(|err| format!("fetch {url}: {err}"))?;
-    if !response.ok() {
-        return Err(format!("fetch {url}: {}", response.status()));
+    let url = cache
+        .requested_urls
+        .get(&fish_id)
+        .cloned()
+        .unwrap_or_default();
+    match remote_image_handle(&url, remote_images) {
+        RemoteImageStatus::Ready(handle) => {
+            cache.loading_ids.remove(&fish_id);
+            cache.loaded_ids.insert(fish_id);
+            cache.failed_ids.remove(&fish_id);
+            Some(handle)
+        }
+        RemoteImageStatus::Pending => {
+            cache.loading_ids.insert(fish_id);
+            cache.loaded_ids.remove(&fish_id);
+            cache.failed_ids.remove(&fish_id);
+            None
+        }
+        RemoteImageStatus::Failed(error) => {
+            cache.loading_ids.remove(&fish_id);
+            cache.loaded_ids.remove(&fish_id);
+            cache.failed_ids.insert(fish_id, error);
+            None
+        }
     }
-    let bytes = response
-        .binary()
-        .await
-        .map_err(|err| format!("read bytes {url}: {err}"))?;
-    let image = image::load_from_memory(bytes.as_slice())
-        .map_err(|err| format!("decode {url}: {err}"))?
-        .to_rgba8();
-    Ok(DecodedPointIcon {
-        width: image.width(),
-        height: image.height(),
-        rgba: image.into_raw(),
-    })
 }
 
 pub(super) fn view_bbox_map_px(

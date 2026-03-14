@@ -879,58 +879,6 @@ async function loadMapRuntimeModule(options = {}) {
   return import(moduleUrl);
 }
 
-function shouldRewriteToApi(url) {
-  return url.pathname.startsWith("/api/");
-}
-
-function shouldRewriteToCdn(url) {
-  return url.pathname.startsWith("/images/") || url.pathname.startsWith("/region_groups/");
-}
-
-export function rewriteApiUrl(input, apiBaseUrl, locationHref = globalThis.location?.href) {
-  try {
-    const url = new URL(String(input), locationHref);
-    const pageOrigin = new URL(locationHref).origin;
-    if (url.origin !== pageOrigin) {
-      return String(input);
-    }
-    if (shouldRewriteToApi(url)) {
-      return `${apiBaseUrl}${url.pathname}${url.search}`;
-    }
-    if (shouldRewriteToCdn(url)) {
-      const cdnBaseUrl = resolveCdnBaseUrl(globalThis.location);
-      return `${cdnBaseUrl}${url.pathname}${url.search}`;
-    }
-    return String(input);
-  } catch (_) {
-    return String(input);
-  }
-}
-
-export function installApiFetchShim(win = globalThis.window) {
-  if (!win || win.__fishyMapApiFetchShimInstalled) {
-    return;
-  }
-  const nativeFetch = win.fetch?.bind(win);
-  if (!nativeFetch) {
-    return;
-  }
-  const apiBaseUrl = resolveApiBaseUrl(win.location);
-  win.fetch = function patchedFetch(input, init) {
-    if (typeof input === "string" || input instanceof URL) {
-      return nativeFetch(rewriteApiUrl(input, apiBaseUrl, win.location?.href), init);
-    }
-    if (typeof Request !== "undefined" && input instanceof Request) {
-      const rewrittenUrl = rewriteApiUrl(input.url, apiBaseUrl, win.location?.href);
-      if (rewrittenUrl !== input.url) {
-        return nativeFetch(new Request(rewrittenUrl, input), init);
-      }
-    }
-    return nativeFetch(input, init);
-  };
-  win.__fishyMapApiFetchShimInstalled = true;
-}
-
 function ensureThemeProbe(doc) {
   if (!doc?.body) {
     return null;
@@ -1384,7 +1332,6 @@ class FishyMapBridgeImpl {
         ? options.sessionSaveDebounceMs
         : DEFAULT_SESSION_SAVE_MS;
 
-    installApiFetchShim(globalThis.window);
     this.container = container;
     this.canvas =
       options.canvas ||

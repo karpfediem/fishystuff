@@ -1,10 +1,14 @@
 mod fish;
+mod remote_images;
 mod requests;
 mod state;
 
 use crate::prelude::*;
 
-pub(crate) use fish::{bevy_public_asset_path, fish_item_icon_url};
+pub(crate) use fish::fish_item_icon_url;
+pub(crate) use remote_images::{
+    remote_image_handle, RemoteImageCache, RemoteImageEpoch, RemoteImageStatus,
+};
 pub use requests::{
     build_zone_stats_request, default_from_patch_id, default_from_ts, now_utc_seconds,
     pick_map_version, spawn_zone_stats_request,
@@ -27,6 +31,8 @@ impl Plugin for ApiPlugin {
             .init_resource::<HoverState>()
             .init_resource::<SelectionState>()
             .init_resource::<FishCatalog>()
+            .init_resource::<RemoteImageCache>()
+            .init_resource::<RemoteImageEpoch>()
             .add_systems(
                 Update,
                 (
@@ -35,6 +41,7 @@ impl Plugin for ApiPlugin {
                     requests::ensure_zones_request,
                     requests::ensure_fish_catalog_request,
                     requests::poll_requests,
+                    remote_images::poll_remote_image_requests,
                 )
                     .chain(),
             );
