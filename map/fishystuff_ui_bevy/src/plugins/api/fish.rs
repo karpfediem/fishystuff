@@ -29,9 +29,10 @@ pub(crate) fn build_fish_table_index(
                 });
         }
 
-        let icon_url =
-            normalize_fish_icon_asset_url(entry.encyclopedia_icon.as_deref(), public_base_url)
-                .or_else(|| normalize_fish_icon_asset_url(entry.icon.as_deref(), public_base_url));
+        let icon_url = normalize_fish_icon_asset_url(entry.icon.as_deref(), public_base_url)
+            .or_else(|| {
+                normalize_fish_icon_asset_url(entry.encyclopedia_icon.as_deref(), public_base_url)
+            });
         if let Some(icon_url) = icon_url {
             index
                 .icon_by_id
@@ -64,9 +65,12 @@ pub(crate) fn build_fish_catalog_entries(
             .or_else(|| table_index.canonical_by_item_id.get(&raw_id).copied())
             .unwrap_or(raw_id);
         let name = entry.name;
-        let icon_url = normalize_fish_icon_asset_url(entry.icon_url.as_deref(), public_base_url)
+        let icon_url = table_index
+            .icon_by_id
+            .get(&raw_id)
+            .cloned()
             .or_else(|| table_index.icon_by_id.get(&canonical_id).cloned())
-            .or_else(|| table_index.icon_by_id.get(&raw_id).cloned());
+            .or_else(|| normalize_fish_icon_asset_url(entry.icon_url.as_deref(), public_base_url));
         if let Some(url) = icon_url.clone() {
             icon_by_id.insert(raw_id, url.clone());
             icon_by_id.insert(canonical_id, url);
@@ -125,11 +129,10 @@ pub(crate) fn build_fish_catalog_entries_from_table(
             .filter(|name| !name.is_empty())
             .map(ToString::to_string)
             .unwrap_or_else(|| format!("Fish {}", entry.encyclopedia_key));
-        let icon_url = normalize_fish_icon_asset_url(
-            entry.encyclopedia_icon.as_deref(),
-            public_base_url,
-        )
-        .or_else(|| normalize_fish_icon_asset_url(entry.icon.as_deref(), public_base_url))
+        let icon_url = normalize_fish_icon_asset_url(entry.icon.as_deref(), public_base_url)
+        .or_else(|| {
+            normalize_fish_icon_asset_url(entry.encyclopedia_icon.as_deref(), public_base_url)
+        })
         .or_else(|| table_index.icon_by_id.get(&canonical_id).cloned())
         .or_else(|| table_index.icon_by_id.get(&entry.item_key).cloned());
         if let Some(url) = icon_url.clone() {
@@ -325,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn fish_table_index_prefers_encyclopedia_icons_when_available() {
+    fn fish_table_index_prefers_item_icons_when_available() {
         let response = FishTableResponse {
             fish: vec![FishTableEntry {
                 encyclopedia_key: 247,
@@ -339,11 +342,11 @@ mod tests {
         let index = build_fish_table_index(&response, Some("https://cdn.example.com"));
         assert_eq!(
             index.icon_by_id.get(&820998).map(String::as_str),
-            Some("/images/FishIcons/00820998.png")
+            Some("/images/FishIcons/00008247.png")
         );
         assert_eq!(
             index.icon_by_id.get(&247).map(String::as_str),
-            Some("/images/FishIcons/00820998.png")
+            Some("/images/FishIcons/00008247.png")
         );
     }
 
@@ -428,14 +431,14 @@ mod tests {
         assert_eq!(entry.id, 88);
         assert_eq!(entry.item_id, 8289);
         assert_eq!(entry.name, "Barbel Steed");
-        assert_eq!(entry.icon_url.as_deref(), Some("/images/FishIcons/IC_08588.png"));
+        assert_eq!(entry.icon_url.as_deref(), Some("/images/FishIcons/00008289.png"));
         assert_eq!(
             icon_by_id.get(&88).map(String::as_str),
-            Some("/images/FishIcons/IC_08588.png")
+            Some("/images/FishIcons/00008289.png")
         );
         assert_eq!(
             icon_by_id.get(&8289).map(String::as_str),
-            Some("/images/FishIcons/IC_08588.png")
+            Some("/images/FishIcons/00008289.png")
         );
     }
 }
