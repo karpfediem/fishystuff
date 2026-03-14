@@ -1,54 +1,81 @@
 <extend template="with-nav.shtml">
 
-  <!-- matches <title id="title"><super></title> -->
   <title id="title" :text="$page.title"></title>
 
-  <!-- matches <div id="content"><super></div> -->
   <div id="content">
-    <div class="grid gap-5">
-    <header class="page-title-shell not-prose">
-      <div class="page-title-stack">
-        <h2 class="page-title-heading" :text="$page.title"></h2>
-      </div>
-    </header>
+    <div class="mx-auto grid max-w-5xl gap-6">
+      <style>
+        .devlog-entry-copy > :first-child {
+          margin-top: 0;
+        }
 
-    <!-- Sections rendered from SuperMD -->
-    <div id="page" :loop="$page.contentSections()">
+        .devlog-entry-copy > h1:first-child {
+          font-size: clamp(1.5rem, 2.2vw, 2rem);
+          line-height: 1.1;
+        }
+      </style>
 
-      <!-- First block (About/introduction) -->
-      <ctx :if="$loop.first">
-        <section class="rounded-box border border-base-300 bg-base-100 p-5 md:p-6">
-          <div :html="$loop.it.html()"></div>
-        </section>
-      </ctx>
+      <header class="page-title-shell not-prose">
+        <div class="page-title-stack">
+          <h2 class="page-title-heading" :text="$page.title"></h2>
+        </div>
+      </header>
 
-      <!-- Middle blocks: one card-like section per release -->
-      <ctx :if="$loop.first.not()">
-        <ctx :if="$loop.last.not()">
-          <section id="$loop.it.id"
-                   class="anchor-target scroll-mt-24 my-6 rounded-box border border-base-300 bg-base-100 p-5 md:p-6">
-            <header class="mb-4 flex flex-wrap items-center gap-3">
-              <h3 class="text-left text-xl md:text-2xl font-normal m-0">
-                <a class="badge badge-xl badge-primary no-underline hover:underline"
-                   :text="$loop.it.id"
-                   href="$loop.it.id.prefix('#')"></a>
-              </h3>
-              <!-- date badge (only if present on the section) -->
-              <span :if="$loop.it.data.get?('date')"
-                    class="badge badge-outline badge-lg"
-                    :text="$if"></span>
-            </header>
-
-            <div :html="$loop.it.html()"></div>
+      <ctx :loop="$page.contentSections()">
+        <ctx :if="$loop.first">
+          <section class="card card-border bg-base-100">
+            <div class="card-body">
+              <div class="max-w-prose" :html="$loop.it.html()"></div>
+            </div>
           </section>
         </ctx>
       </ctx>
 
-      <!-- Last block (old) printed raw -->
-      <ctx :if="$loop.last">
-        <div id="old" class="mt-10 rounded-box bg-base-200/70 px-5 py-6 md:px-8 md:py-8" :html="$loop.it.html()"></div>
-      </ctx>
+      <ul class="timeline timeline-snap-icon timeline-vertical my-0 list-none pl-0 max-md:timeline-compact">
+        <ctx :loop="$page.contentSections()">
+          <ctx :if="$loop.first.not().and($loop.last.not())">
+            <li class="my-0 pl-0">
+              <div class="timeline-middle not-prose">
+                <span class="grid h-10 w-10 place-items-center rounded-full border border-base-300 bg-base-100">
+                  <span class="h-3 w-3 rounded-full bg-primary"></span>
+                </span>
+              </div>
 
-    </div>
+              <div class="timeline-end mb-8 ml-4 w-full max-w-none pb-2">
+                <article id="$loop.it.id"
+                         class="anchor-target scroll-mt-24 card card-border bg-base-100">
+                  <div class="card-body gap-4 md:gap-5">
+                    <header class="not-prose flex flex-wrap items-center gap-2 border-b border-base-300 pb-4">
+                      <a class="badge badge-lg badge-soft badge-primary no-underline hover:underline"
+                         :text="$loop.it.id"
+                         href="$loop.it.id.prefix('#')"></a>
+
+                      <span :if="$loop.it.data.get?('date')"
+                            class="badge badge-lg badge-outline"
+                            :text="$if"></span>
+                    </header>
+
+                    <div class="devlog-entry-copy" :html="$loop.it.html()"></div>
+                  </div>
+                </article>
+              </div>
+
+              <hr class="bg-base-300">
+            </li>
+          </ctx>
+        </ctx>
+
+        <ctx :loop="$page.contentSections()">
+          <ctx :if="$loop.last">
+            <li class="my-0 pl-0">
+              <div class="timeline-middle not-prose">
+                <span class="grid h-10 w-10 place-items-center rounded-full border border-base-300 bg-base-100">
+                  <span class="h-3 w-3 rounded-full bg-primary"></span>
+                </span>
+              </div>
+            </li>
+          </ctx>
+        </ctx>
+      </ul>
     </div>
   </div>

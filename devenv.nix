@@ -1,13 +1,13 @@
 { inputs, pkgs, config, ... }:
 let
   dbHost = "127.0.0.1";
-  dbPort = toString config.processes.db.ports.sql.value;
+  dbPort = "3306";
   apiHost = "127.0.0.1";
-  apiPort = toString config.processes.api.ports.http.value;
+  apiPort = "8080";
   cdnHost = "127.0.0.1";
-  cdnPort = toString config.processes.cdn.ports.http.value;
+  cdnPort = "4040";
   siteHost = "127.0.0.1";
-  sitePort = toString config.processes.site.ports.http.value;
+  sitePort = "1990";
 in {
   name = "default";
 
@@ -82,11 +82,7 @@ in {
   processes.cdn = {
     exec = "./tools/scripts/run_cdn_server.sh";
     ports.http.allocate = 4040;
-    ready.http.get = {
-      host = cdnHost;
-      port = config.processes.cdn.ports.http.value;
-      path = "/map/runtime-manifest.json";
-    };
+    ready.notify = true;
     ready.timeout = 30;
     after = [ "devenv:processes:cdn-stage" ];
     env = {
@@ -98,11 +94,7 @@ in {
   processes.api = {
     exec = "./tools/scripts/run_api_server.sh";
     ports.http.allocate = 8080;
-    ready.http.get = {
-      host = apiHost;
-      port = config.processes.api.ports.http.value;
-      path = "/api/v1/meta";
-    };
+    ready.notify = true;
     ready.timeout = 120;
     after = [ "devenv:processes:db" ];
     env = {
@@ -130,11 +122,7 @@ in {
   processes.site = {
     exec = "./tools/scripts/run_site_server.sh";
     ports.http.allocate = 1990;
-    ready.http.get = {
-      host = siteHost;
-      port = config.processes.site.ports.http.value;
-      path = "/runtime-config.js";
-    };
+    ready.notify = true;
     ready.timeout = 30;
     after = [
       "devenv:processes:site-build"

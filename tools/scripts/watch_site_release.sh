@@ -5,6 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT_DIR/tools/scripts/devenv_process_lib.sh"
 
 cd "$ROOT_DIR/site"
+"$ROOT_DIR/tools/scripts/cleanup_managed_processes.sh" \
+  "site release watcher" \
+  "$ROOT_DIR/tools/scripts/watch_site_release.sh" \
+  "./tools/scripts/watch_site_release.sh" \
+  "watchexec -r -w content -w layouts -w assets -w scripts -w zine.ziggy"
+
 devenv_notify_status "building initial site release"
 just build-release-no-tailwind
 devenv_notify_ready "site release built; watching for changes"

@@ -5,6 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT_DIR/tools/scripts/devenv_process_lib.sh"
 
 cd "$ROOT_DIR"
+"$ROOT_DIR/tools/scripts/cleanup_managed_processes.sh" \
+  "map runtime watcher" \
+  "$ROOT_DIR/tools/scripts/watch_map_runtime.sh" \
+  "./tools/scripts/watch_map_runtime.sh" \
+  "watchexec -r -w map/fishystuff_ui_bevy"
 
 devenv_notify_status "building initial map runtime bundle"
 ./tools/scripts/build_map.sh
