@@ -58,10 +58,7 @@
         min-height: 100%;
         overflow: hidden;
         border-radius: 0;
-        background:
-          radial-gradient(circle at top left, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 34%),
-          radial-gradient(circle at bottom right, color-mix(in srgb, var(--color-secondary) 16%, transparent), transparent 28%),
-          var(--color-base-100);
+        background: var(--color-base-100);
       }
 
       #bevy {
