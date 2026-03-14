@@ -27,7 +27,6 @@ impl Plugin for PointsPlugin {
                     loading::poll_events_snapshot_requests,
                     query::refresh_points_from_local_snapshot,
                     query::sync_evidence_zone_filter,
-                    render::poll_point_icon_requests,
                     render::sync_point_markers,
                 )
                     .chain(),

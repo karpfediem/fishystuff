@@ -99,14 +99,3 @@ pub fn build_zone_stats_request(
 ) -> Option<ZoneStatsRequest> {
     util::build_zone_stats_request(bootstrap, patch_filter, rgb)
 }
-
-pub(crate) fn resolve_public_asset_url(
-    value: Option<&str>,
-    public_base_url: Option<&str>,
-) -> Option<String> {
-    util::resolve_public_asset_url(value, public_base_url)
-}
-
-pub(crate) fn normalize_public_base_url(value: Option<&str>) -> Option<String> {
-    util::normalize_public_base_url(value)
-}
