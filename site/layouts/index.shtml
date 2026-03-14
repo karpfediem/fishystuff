@@ -11,10 +11,8 @@
                 </div>
             </header>
 
-            <div class="grid gap-5 lg:grid-cols-2">
-                <section class="rounded-box bg-base-200/70 p-6 md:p-8" :loop="$page.contentSections()">
-                    <div :html="$loop.it.html()"></div>
-                </section>
-            </div>
+            <section class="rounded-box bg-base-200/70 p-6 md:p-8" :loop="$page.contentSections()">
+                <div class="mx-auto max-w-prose" :html="$loop.it.html()"></div>
+            </section>
         </div>
     </div>
