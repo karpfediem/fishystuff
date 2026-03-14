@@ -9,6 +9,7 @@ pub(super) fn sync_layer_debug(
     terrain_diag: Res<crate::map::terrain::runtime::TerrainDiagnostics>,
     snapshot: Res<EventsSnapshotState>,
     points: Res<PointsState>,
+    point_icons: Res<PointIconCache>,
     controls: Res<TileDebugControls>,
     debug: Res<LayerDebugSettings>,
     mut debug_q: Query<(&mut Text, &mut Visibility), With<LayerDebugText>>,
@@ -21,6 +22,7 @@ pub(super) fn sync_layer_debug(
         && !terrain_diag.is_changed()
         && !snapshot.is_changed()
         && !points.is_changed()
+        && !point_icons.is_changed()
         && !controls.is_changed()
         && !debug.is_changed()
     {
@@ -150,7 +152,7 @@ pub(super) fn sync_layer_debug(
         };
 
         let next = format!(
-            "{}\nmode={:?} terrain(ready={} rev={:?} manifest={} fail={} chunk={} grid={} max_l={} bbox={:.1}..{:.1} drape_show={} chunks={}/{}/{} vis{{{}}} res{{{}}} fallback={} cache(h/m/e)={}/{}/{} drape={} build={:.2}ms cam={:.1}/{:.1}/{:.1} d={:.0})\nevents_snapshot: rev={} events_loaded={} idx_bucket={} candidates={} rendered_points={} rendered_clusters={} snapshot_source={} meta_req={} snapshot_req={}\nreq/cache: req={} cov(q/s)={}/{} det(q/s)={}/{} sup={} hits={} evict={} cache={} evict_mode={}\ncoverage: fallback_visible={} blank_visible={} motion={} pan={:.3} zoom_out={:.3}\nview(world)={} cursor(world)={} cursor(map)={}\nstream: visible={} inflight={} queued={}{}",
+            "{}\nmode={:?} terrain(ready={} rev={:?} manifest={} fail={} chunk={} grid={} max_l={} bbox={:.1}..{:.1} drape_show={} chunks={}/{}/{} vis{{{}}} res{{{}}} fallback={} cache(h/m/e)={}/{}/{} drape={} build={:.2}ms cam={:.1}/{:.1}/{:.1} d={:.0})\nevents_snapshot: rev={} events_loaded={} idx_bucket={} candidates={} rendered_points={} rendered_clusters={} snapshot_source={} meta_req={} snapshot_req={}\npoint_icons: requested={} loading={} loaded={} failed={} missing_catalog={} visible={} visible_ids={:?} requested_sample={:?} failed_sample={:?}\nreq/cache: req={} cov(q/s)={}/{} det(q/s)={}/{} sup={} hits={} evict={} cache={} evict_mode={}\ncoverage: fallback_visible={} blank_visible={} motion={} pan={:.3} zoom_out={:.3}\nview(world)={} cursor(world)={} cursor(map)={}\nstream: visible={} inflight={} queued={}{}",
             points.status,
             view_mode.mode,
             if terrain_diag.terrain_ready {
@@ -191,6 +193,15 @@ pub(super) fn sync_layer_debug(
             snapshot.last_load_kind.label(),
             snapshot.meta_requests_started,
             snapshot.snapshot_requests_started,
+            point_icons.requested_count(),
+            point_icons.loading_count(),
+            point_icons.loaded_count(),
+            point_icons.failed_count(),
+            point_icons.missing_catalog_count(),
+            point_icons.visible_icon_count,
+            point_icons.visible_sample(),
+            point_icons.requested_sample(),
+            point_icons.failed_sample(),
             stats.requested_tiles,
             stats.coverage_requests_queued,
             stats.coverage_requests_started,

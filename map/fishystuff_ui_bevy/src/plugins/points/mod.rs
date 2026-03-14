@@ -8,6 +8,7 @@ use crate::map::events::EventsSnapshotState;
 
 pub use query::{EvidenceZoneFilter, PointsState, RenderPoint};
 pub use render::{EventPointIconMarker, EventPointRingMarker};
+pub(crate) use render::PointIconCache;
 
 pub struct PointsPlugin;
 
@@ -28,6 +29,7 @@ impl Plugin for PointsPlugin {
                     query::refresh_points_from_local_snapshot,
                     query::sync_evidence_zone_filter,
                     render::sync_point_markers,
+                    render::track_point_icon_load_states,
                 )
                     .chain(),
             );

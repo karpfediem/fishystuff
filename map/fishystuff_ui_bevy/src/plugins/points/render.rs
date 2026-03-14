@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use bevy::asset::LoadState;
 use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::prelude::*;
@@ -52,9 +53,114 @@ pub(super) struct PointMarkerPool {
 }
 
 #[derive(Resource, Default)]
-pub(super) struct PointIconCache {
+pub(crate) struct PointIconCache {
     handles: HashMap<i32, Handle<Image>>,
+    requested_paths: HashMap<i32, String>,
     missing_catalog_ids: HashSet<i32>,
+    loaded_ids: HashSet<i32>,
+    failed_ids: HashMap<i32, String>,
+    logged_failed_ids: HashSet<i32>,
+    pub(crate) visible_icon_count: usize,
+    visible_fish_ids_sample: Vec<i32>,
+}
+
+impl PointIconCache {
+    pub(crate) fn requested_count(&self) -> usize {
+        self.handles.len()
+    }
+
+    pub(crate) fn loading_count(&self) -> usize {
+        self.handles
+            .len()
+            .saturating_sub(self.loaded_ids.len() + self.failed_ids.len())
+    }
+
+    pub(crate) fn loaded_count(&self) -> usize {
+        self.loaded_ids.len()
+    }
+
+    pub(crate) fn failed_count(&self) -> usize {
+        self.failed_ids.len()
+    }
+
+    pub(crate) fn missing_catalog_count(&self) -> usize {
+        self.missing_catalog_ids.len()
+    }
+
+    pub(crate) fn requested_sample(&self) -> Vec<String> {
+        icon_sample(
+            self.requested_paths
+                .iter()
+                .map(|(fish_id, path)| format!("{fish_id}:{path}")),
+        )
+    }
+
+    pub(crate) fn failed_sample(&self) -> Vec<String> {
+        icon_sample(
+            self.failed_ids
+                .iter()
+                .map(|(fish_id, error)| format!("{fish_id}:{error}")),
+        )
+    }
+
+    pub(crate) fn visible_sample(&self) -> Vec<i32> {
+        self.visible_fish_ids_sample.clone()
+    }
+}
+
+fn icon_sample<T>(values: impl Iterator<Item = T>) -> Vec<T>
+where
+    T: Ord,
+{
+    let mut values = values.collect::<Vec<_>>();
+    values.sort();
+    values.truncate(5);
+    values
+}
+
+pub(super) fn track_point_icon_load_states(
+    asset_server: Res<AssetServer>,
+    mut cache: ResMut<PointIconCache>,
+) {
+    if cache.handles.is_empty() {
+        cache.loaded_ids.clear();
+        cache.failed_ids.clear();
+        return;
+    }
+
+    let handles = cache
+        .handles
+        .iter()
+        .map(|(&fish_id, handle)| (fish_id, handle.clone()))
+        .collect::<Vec<_>>();
+    let mut loaded_ids = HashSet::with_capacity(cache.handles.len());
+    let mut failed_ids = HashMap::new();
+    for (fish_id, handle) in handles {
+        match asset_server.load_state(&handle) {
+            LoadState::Loaded => {
+                loaded_ids.insert(fish_id);
+            }
+            LoadState::Failed(err) => {
+                let error = err.to_string();
+                if !cache.logged_failed_ids.contains(&fish_id) {
+                    let path = cache
+                        .requested_paths
+                        .get(&fish_id)
+                        .map(String::as_str)
+                        .unwrap_or("<unknown>");
+                    bevy::log::warn!(
+                        "point icon load failed fish_id={fish_id} path={path} err={error}"
+                    );
+                    cache.logged_failed_ids.insert(fish_id);
+                }
+                failed_ids.insert(fish_id, error);
+            }
+            LoadState::NotLoaded | LoadState::Loading => {}
+        }
+    }
+
+    cache.loaded_ids = loaded_ids;
+    cache.failed_ids = failed_ids;
 }
 
 pub(super) fn sync_point_markers(
@@ -78,6 +184,8 @@ pub(super) fn sync_point_markers(
     >,
 ) {
     if !display_state.show_points || view_mode.mode != ViewMode::Map2D {
+        icon_cache.visible_icon_count = 0;
+        icon_cache.visible_fish_ids_sample.clear();
         if !pool.markers.is_empty() {
             for pair in pool.markers.drain(..) {
                 commands.entity(pair.ring).despawn();
@@ -88,8 +196,12 @@ pub(super) fn sync_point_markers(
     }
 
     if fish.is_changed() {
+        icon_cache.requested_paths.clear();
         icon_cache.missing_catalog_ids.clear();
         icon_cache.handles.clear();
+        icon_cache.loaded_ids.clear();
+        icon_cache.failed_ids.clear();
+        icon_cache.logged_failed_ids.clear();
     }
 
     let icons_mode_changed = points.icons_enabled != display_state.show_point_icons;
@@ -147,6 +259,8 @@ pub(super) fn sync_point_markers(
         pool.markers.push(MarkerPair { ring, icon });
     }
 
+    let mut visible_icon_count = 0usize;
+    let mut visible_fish_ids = Vec::new();
     for (idx, point) in points.points.iter().enumerate() {
         let world = map_point_to_world(point);
         let pair = pool.markers[idx];
@@ -177,6 +291,10 @@ pub(super) fn sync_point_markers(
                     sprite.color = Color::WHITE;
                     sprite.custom_size = Some(Vec2::splat(icon_diameter_world));
                     *visibility = Visibility::Visible;
+                    visible_icon_count += 1;
+                    if let Some(fish_id) = point.fish_id {
+                        visible_fish_ids.push(fish_id);
+                    }
                 } else {
                     *visibility = Visibility::Hidden;
                 }
@@ -194,6 +312,12 @@ pub(super) fn sync_point_markers(
             *visibility = Visibility::Hidden;
         }
     }
+
+    visible_fish_ids.sort_unstable();
+    visible_fish_ids.dedup();
+    visible_fish_ids.truncate(5);
+    icon_cache.visible_icon_count = visible_icon_count;
+    icon_cache.visible_fish_ids_sample = visible_fish_ids;
 
     points.dirty = false;
 }
@@ -215,8 +339,10 @@ fn icon_handle_for_fish(
         cache.missing_catalog_ids.insert(fish_id);
         return None;
     };
-    let handle = asset_server.load(bevy_public_asset_path(&url));
+    let path = bevy_public_asset_path(&url);
+    let handle = asset_server.load(path.clone());
     cache.handles.insert(fish_id, handle.clone());
+    cache.requested_paths.insert(fish_id, path);
     Some(handle)
 }
 

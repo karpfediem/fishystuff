@@ -15,7 +15,7 @@ use crate::map::layers::{LayerId, LayerKind, LayerRegistry, LayerSettings, Vecto
 use crate::map::raster::{RasterTileCache, TileDebugControls, TileStats};
 use crate::map::terrain::Terrain3dConfig;
 use crate::plugins::api::MapDisplayState;
-use crate::plugins::points::PointsState;
+use crate::plugins::points::{PointIconCache, PointsState};
 use crate::plugins::ui::{UiFonts, UiPointerBlocker, UiStartupSet};
 
 pub struct LayerUiPlugin;

@@ -8,6 +8,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
     patch_filter: Res<PatchFilterState>,
     fish_filter: Res<FishFilterState>,
     points: Res<PointsState>,
+    point_icons: Res<PointIconCache>,
     selection: Res<SelectionState>,
     view_mode: Res<ViewModeState>,
     terrain_diag: Res<TerrainDiagnostics>,
@@ -22,6 +23,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         && !patch_filter.is_changed()
         && !fish_filter.is_changed()
         && !points.is_changed()
+        && !point_icons.is_changed()
         && !selection.is_changed()
         && !view_mode.is_changed()
         && !terrain_diag.is_changed()
@@ -48,6 +50,17 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         "layersStatus": bootstrap.layers_status,
         "zonesStatus": bootstrap.zones_status,
         "pointsStatus": points.status,
+        "pointIcons": {
+            "requested": point_icons.requested_count(),
+            "loading": point_icons.loading_count(),
+            "loaded": point_icons.loaded_count(),
+            "failed": point_icons.failed_count(),
+            "missingCatalog": point_icons.missing_catalog_count(),
+            "visible": point_icons.visible_icon_count,
+            "visibleSample": point_icons.visible_sample(),
+            "requestedSample": point_icons.requested_sample(),
+            "failedSample": point_icons.failed_sample(),
+        },
         "zoneStatsStatus": selection.zone_stats_status,
         "selectedPatch": patch_filter.selected_patch,
         "patchId": filters.patch_id,

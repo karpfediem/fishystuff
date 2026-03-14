@@ -30,7 +30,7 @@ use crate::plugins::api::{
     POINT_ICON_SCALE_MIN,
 };
 use crate::plugins::camera::CameraZoomBounds;
-use crate::plugins::points::PointsState;
+use crate::plugins::points::{PointIconCache, PointsState};
 
 thread_local! {
     static EVENT_SINK: RefCell<Option<js_sys::Function>> = const { RefCell::new(None) };
