@@ -37,8 +37,8 @@ use crate::error::{AppError, AppResult};
 use crate::store::queries;
 use crate::store::{validate_dolt_ref, FishLang, Store};
 use catalog::{
-    fish_catch_methods_from_description, fish_grade_from_db, fish_icon_url_from_db, fish_is_dried,
-    merge_fish_catalog_row, parse_positive_i64,
+    fish_catch_methods_from_description, fish_grade_from_db, fish_is_dried,
+    merge_fish_catalog_row, parse_positive_i64, preferred_item_icon_url,
 };
 use layers::{
     normalize_pick_mode, parse_layer_kind, parse_layer_transform, parse_vector_source,
@@ -637,7 +637,9 @@ impl DoltMySqlStore {
                 ft.encyclopedia_key, \
                 {fish_name_expr} AS fish_name, \
                 it.`GradeType` AS grade_type, \
-                COALESCE(NULLIF(ft.encyclopedia_icon, ''), NULLIF(ft.icon, ''), NULLIF(it.`IconImageFile`, '')) AS icon_file, \
+                NULLIF(ft.icon, '') AS fish_table_icon_file, \
+                NULLIF(it.`IconImageFile`, '') AS item_icon_file, \
+                NULLIF(ft.encyclopedia_icon, '') AS encyclopedia_icon_file, \
                 it.`ItemName` AS item_name, \
                 it.`Description` AS item_description, \
                 it.`OriginalPrice` AS original_price \
@@ -660,6 +662,8 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<String>,
+            Option<String>,
         )> = conn.query(query).map_err(db_unavailable)?;
 
         let mut out = BTreeMap::new();
@@ -668,7 +672,9 @@ impl DoltMySqlStore {
             encyclopedia_key,
             name,
             grade_type,
-            icon_file,
+            fish_table_icon_file,
+            item_icon_file,
+            encyclopedia_icon_file,
             item_name,
             description,
             original_price,
@@ -684,7 +690,11 @@ impl DoltMySqlStore {
             };
             let item_name = normalize_optional_string(item_name);
             let (grade, grade_rank, is_prize) = fish_grade_from_db(grade_type);
-            let icon_url = fish_icon_url_from_db(icon_file);
+            let icon_url = preferred_item_icon_url(
+                fish_table_icon_file,
+                item_icon_file,
+                encyclopedia_icon_file,
+            );
             let is_dried = fish_is_dried(Some(name.as_str()), item_name.as_deref());
             let catch_methods = fish_catch_methods_from_description(description);
             let vendor_price = parse_positive_i64(original_price);
@@ -1061,8 +1071,13 @@ impl DoltMySqlStore {
             let icon_url = item_icon_urls
                 .get(&entry.item_key)
                 .cloned()
-                .or_else(|| fish_icon_url_from_db(entry.icon.clone()))
-                .or_else(|| fish_icon_url_from_db(entry.encyclopedia_icon.clone()));
+                .or_else(|| {
+                    preferred_item_icon_url(
+                        entry.icon.clone(),
+                        None,
+                        entry.encyclopedia_icon.clone(),
+                    )
+                });
             if let Some(icon_url) = icon_url {
                 out.insert(entry.encyclopedia_key, icon_url);
             }
@@ -1785,11 +1800,12 @@ mod tests {
     use crate::config::ZoneStatusConfig;
 
     use super::{
-        catalog::is_web_icon_path, compute_status, event_source_kind_from_db,
-        fish_catch_methods_from_description, fish_icon_url_from_db, fish_is_dried,
-        merge_fish_catalog_row, parse_layer_kind, parse_positive_i64, parse_vector_source,
-        pixel_to_tile_index, resolve_layer_asset_url, synthetic_events_snapshot_revision,
-        DoltMySqlStore, FishCatalogRow, FishTableEntry, FishTableIndex,
+        catalog::{fish_icon_url_from_db, is_web_icon_path},
+        compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
+        fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
+        parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
+        synthetic_events_snapshot_revision, DoltMySqlStore, FishCatalogRow, FishTableEntry,
+        FishTableIndex,
     };
 
     #[test]

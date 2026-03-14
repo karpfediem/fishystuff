@@ -11,6 +11,16 @@ pub(super) fn fish_icon_url_from_db(value: Option<String>) -> Option<String> {
     Some(format!("/images/FishIcons/{icon_file}"))
 }
 
+pub(super) fn preferred_item_icon_url(
+    fish_table_icon: Option<String>,
+    item_table_icon: Option<String>,
+    encyclopedia_icon: Option<String>,
+) -> Option<String> {
+    fish_icon_url_from_db(fish_table_icon)
+        .or_else(|| fish_icon_url_from_db(item_table_icon))
+        .or_else(|| fish_icon_url_from_db(encyclopedia_icon))
+}
+
 pub(super) fn is_web_icon_path(path: &str) -> bool {
     let Some((_, ext)) = path.rsplit_once('.') else {
         return false;
@@ -93,6 +103,52 @@ pub(super) fn fish_grade_from_db(
         Some("1") => (Some("General".to_string()), Some(1), Some(false)),
         Some("0") => (Some("Trash".to_string()), Some(0), Some(false)),
         _ => (None, None, None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fish_icon_url_from_db, preferred_item_icon_url};
+
+    #[test]
+    fn preferred_item_icon_url_uses_item_icon_before_encyclopedia_icon() {
+        assert_eq!(
+            preferred_item_icon_url(
+                Some("00008477.png".to_string()),
+                Some("00009999.png".to_string()),
+                Some("IC_09507.png".to_string())
+            )
+            .as_deref(),
+            Some("/images/FishIcons/00008477.png")
+        );
+        assert_eq!(
+            preferred_item_icon_url(
+                None,
+                Some("00009999.png".to_string()),
+                Some("IC_09507.png".to_string())
+            )
+            .as_deref(),
+            Some("/images/FishIcons/00009999.png")
+        );
+        assert_eq!(
+            preferred_item_icon_url(None, None, Some("IC_09507.png".to_string())).as_deref(),
+            Some("/images/FishIcons/IC_09507.png")
+        );
+        assert_eq!(preferred_item_icon_url(None, None, None), None);
+    }
+
+    #[test]
+    fn fish_icon_url_from_db_filters_non_web_assets() {
+        assert_eq!(
+            fish_icon_url_from_db(Some("00008475.png".to_string())).as_deref(),
+            Some("/images/FishIcons/00008475.png")
+        );
+        assert_eq!(
+            fish_icon_url_from_db(Some(
+                "New_Icon/03_ETC/07_ProductMaterial/00008518.dds".to_string()
+            )),
+            None
+        );
     }
 }
 
