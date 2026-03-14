@@ -5,6 +5,35 @@
   <div id="content">
     <div class="mx-auto grid max-w-5xl gap-6">
       <style>
+        .devlog-intro {
+          max-width: 65ch;
+          font-size: 1rem;
+          line-height: 1.65;
+          color: color-mix(in oklab, var(--color-base-content) 76%, transparent);
+        }
+
+        .devlog-intro :where(h2) {
+          display: none;
+        }
+
+        .devlog-intro :where(p) {
+          margin: 0.45rem 0;
+        }
+
+        .devlog-intro :where(a) {
+          text-decoration: underline;
+          text-underline-offset: 0.2em;
+        }
+
+        .devlog-timeline > li {
+          --timeline-col-start: 0.5rem;
+          margin: 0;
+          padding: 0;
+        }
+        .devlog-timeline article {
+          margin: 2rem 0;
+        }
+
         .devlog-entry-copy > :first-child {
           margin-top: 0;
         }
@@ -12,6 +41,23 @@
         .devlog-entry-copy > h1:first-child {
           font-size: clamp(1.5rem, 2.2vw, 2rem);
           line-height: 1.1;
+        }
+
+        .devlog-entry-copy {
+          max-width: 65ch;
+        }
+
+        .devlog-timeline h1, .devlog-timeline h2, .devlog-timeline h3 {
+          text-align: left;
+        }
+
+        .devlog-timeline .timeline-end {
+          width: 100%;
+          padding-left: 1rem;
+        }
+
+        .devlog-timeline > li:first-child > hr:first-child {
+          display: none;
         }
       </style>
 
@@ -23,27 +69,25 @@
 
       <ctx :loop="$page.contentSections()">
         <ctx :if="$loop.first">
-          <section class="card card-border bg-base-100">
-            <div class="card-body">
-              <div class="max-w-prose" :html="$loop.it.html()"></div>
-            </div>
-          </section>
+          <div class="devlog-intro not-prose" :html="$loop.it.html()"></div>
         </ctx>
       </ctx>
 
-      <ul class="timeline timeline-snap-icon timeline-vertical my-0 list-none pl-0 max-md:timeline-compact">
+      <ul class="devlog-timeline timeline timeline-vertical my-0 list-none pl-0">
         <ctx :loop="$page.contentSections()">
           <ctx :if="$loop.first.not().and($loop.last.not())">
-            <li class="my-0 pl-0">
+            <li>
+              <hr class="bg-base-300">
+
               <div class="timeline-middle not-prose">
                 <span class="grid h-10 w-10 place-items-center rounded-full border border-base-300 bg-base-100">
                   <span class="h-3 w-3 rounded-full bg-primary"></span>
                 </span>
               </div>
 
-              <div class="timeline-end mb-8 ml-4 w-full max-w-none pb-2">
+              <div class="timeline-end">
                 <article id="$loop.it.id"
-                         class="anchor-target scroll-mt-24 card card-border bg-base-100">
+                         class="anchor-target scroll-mt-24 card card-border w-full bg-base-100">
                   <div class="card-body gap-4 md:gap-5">
                     <header class="not-prose flex flex-wrap items-center gap-2 border-b border-base-300 pb-4">
                       <a class="badge badge-lg badge-soft badge-primary no-underline hover:underline"
@@ -67,7 +111,9 @@
 
         <ctx :loop="$page.contentSections()">
           <ctx :if="$loop.last">
-            <li class="my-0 pl-0">
+            <li>
+              <hr class="bg-base-300">
+
               <div class="timeline-middle not-prose">
                 <span class="grid h-10 w-10 place-items-center rounded-full border border-base-300 bg-base-100">
                   <span class="h-3 w-3 rounded-full bg-primary"></span>
