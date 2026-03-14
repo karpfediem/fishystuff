@@ -212,9 +212,14 @@ function mergeZoneEvidenceIntoFishLookup(fishLookup, zoneStats) {
     const existing = fishLookup.get(fishId) || {};
     fishLookup.set(fishId, {
       fishId,
-      itemId: existing.itemId,
+      itemId: Number.isFinite(entry?.itemId) ? entry.itemId : existing.itemId,
+      encyclopediaKey: Number.isFinite(entry?.encyclopediaKey)
+        ? entry.encyclopediaKey
+        : existing.encyclopediaKey,
+      encyclopediaId: Number.isFinite(entry?.encyclopediaId)
+        ? entry.encyclopediaId
+        : existing.encyclopediaId,
       name: entry.fishName || existing.name || `Fish ${fishId}`,
-      iconUrl: entry.iconUrl || existing.iconUrl || "",
       isPrize: existing.isPrize || false,
     });
   }
@@ -238,62 +243,32 @@ function escapeHtml(value) {
 }
 
 function fishIconUrl(fish) {
-  const value = fish?.iconUrl;
-  if (typeof value !== "string" || !value.trim()) {
-    return "";
-  }
-  const raw = value.trim();
-  if (raw.startsWith("data:")) {
-    return raw;
-  }
-  const assetPath = normalizeFishIconPath(raw);
-  if (assetPath) {
-    return `${resolveCdnBaseUrl(window.location)}${assetPath}`;
-  }
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
-    return raw;
-  }
-  return "";
+  const assetPath = fishItemIconPath(fish?.itemId) || fishEncyclopediaIconPath(fish?.encyclopediaId);
+  return assetPath ? `${resolveCdnBaseUrl(window.location)}${assetPath}` : "";
 }
 
-function extractAbsoluteAssetPath(value) {
-  const raw = String(value || "").trim();
-  if (!(raw.startsWith("http://") || raw.startsWith("https://"))) {
+function zeroPad(value, width) {
+  const numeric = Number.parseInt(value, 10);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
     return "";
   }
-  try {
-    return new URL(raw).pathname || "";
-  } catch (_) {
-    return "";
-  }
+  return String(numeric).padStart(width, "0");
 }
 
-function normalizeFishIconPath(value) {
-  const raw = String(value || "").trim();
-  if (!raw) {
+function fishItemIconPath(itemId) {
+  const digits = zeroPad(itemId, 8);
+  if (!digits) {
     return "";
   }
-  if (raw.startsWith("/images/")) {
-    return raw;
-  }
-  if (raw.startsWith("images/")) {
-    return `/${raw}`;
-  }
-  if (raw.startsWith("/FishIcons/")) {
-    return `/images${raw}`;
-  }
-  if (raw.startsWith("FishIcons/")) {
-    return `/images/${raw}`;
-  }
-  const absolutePath = extractAbsoluteAssetPath(raw);
-  if (absolutePath) {
-    return normalizeFishIconPath(absolutePath);
-  }
-  const file = raw.split(/[?#]/, 1)[0].split("/").pop() || raw;
-  if (!/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file)) {
+  return `/images/FishIcons/${digits}.png`;
+}
+
+function fishEncyclopediaIconPath(encyclopediaId) {
+  const digits = zeroPad(encyclopediaId, 5);
+  if (!digits) {
     return "";
   }
-  return `/images/FishIcons/${file}`;
+  return `/images/FishIcons/IC_${digits}.png`;
 }
 
 function clampPointIconScale(value) {
@@ -1204,7 +1179,7 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
     currentFishId,
     selectedFish: selectedFishIds.map((fishId) => {
       const fish = fishLookup.get(fishId);
-      return [fishId, fish?.name || "", fish?.iconUrl || ""];
+      return [fishId, fish?.name || "", fish?.itemId || null, fish?.encyclopediaId || null];
     }),
   });
   if (elements.searchSelection.dataset.renderKey === renderKey) {
@@ -1337,7 +1312,8 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
       return [
         entry.fishId,
         entry.fishName || "",
-        fishIconUrl({ iconUrl: entry.iconUrl || fish?.iconUrl || "" }),
+        fish?.itemId ?? entry.itemId ?? null,
+        fish?.encyclopediaId ?? entry.encyclopediaId ?? null,
         entry.evidenceWeight,
         entry.pMean,
         entry.ciLow,
@@ -1366,8 +1342,9 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
       const fish = fishLookup.get(entry.fishId);
       const evidenceFish = {
         fishId: entry.fishId,
+        itemId: fish?.itemId ?? entry.itemId ?? null,
+        encyclopediaId: fish?.encyclopediaId ?? entry.encyclopediaId ?? null,
         name: fish?.name || entry.fishName || `Fish ${entry.fishId}`,
-        iconUrl: entry.iconUrl || fish?.iconUrl || "",
       };
       const active = evidenceFish.fishId === currentFishId;
       const ci =

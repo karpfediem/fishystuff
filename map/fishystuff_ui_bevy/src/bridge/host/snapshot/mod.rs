@@ -91,8 +91,9 @@ pub(super) fn sync_current_snapshot(
                 .map(|entry| FishyMapFishSummary {
                     fish_id: entry.id,
                     item_id: entry.item_id,
+                    encyclopedia_key: entry.encyclopedia_key,
+                    encyclopedia_id: entry.encyclopedia_id,
                     name: entry.name.clone(),
-                    icon_url: entry.icon_url.clone(),
                     is_prize: entry.is_prize,
                 })
                 .collect(),

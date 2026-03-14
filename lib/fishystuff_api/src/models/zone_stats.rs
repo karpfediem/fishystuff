@@ -104,9 +104,12 @@ pub enum ZoneStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ZoneFishEvidence {
     pub fish_id: i32,
-    pub fish_name: Option<String>,
+    pub item_id: i32,
     #[serde(default)]
-    pub icon_url: Option<String>,
+    pub encyclopedia_key: Option<i32>,
+    #[serde(default)]
+    pub encyclopedia_id: Option<i32>,
+    pub fish_name: Option<String>,
     pub evidence_weight: f64,
     pub p_mean: f64,
     pub ci_low: Option<f64>,

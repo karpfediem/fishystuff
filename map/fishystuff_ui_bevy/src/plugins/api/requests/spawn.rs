@@ -71,19 +71,11 @@ pub(super) fn spawn_fish_catalog_request() -> Receiver<Result<FishCatalogPayload
     IoTaskPool::get()
         .spawn_local(async move {
             let client = FishyClient::new("");
-            let result = async {
-                let fish_table = client.fish_table().await.map_err(client_error_to_string)?;
-                let (fish, fish_list_error) = match client.fish().await {
-                    Ok(fish) => (Some(fish), None),
-                    Err(err) => (None, Some(client_error_to_string(err))),
-                };
-                Ok(FishCatalogPayload {
-                    fish,
-                    fish_table,
-                    fish_list_error,
-                })
-            }
-            .await;
+            let result = client
+                .fish()
+                .await
+                .map(|fish| FishCatalogPayload { fish })
+                .map_err(client_error_to_string);
             let _ = sender.send(result).await;
         })
         .detach();

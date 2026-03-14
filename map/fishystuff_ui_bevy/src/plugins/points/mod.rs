@@ -7,8 +7,8 @@ use bevy::prelude::*;
 use crate::map::events::EventsSnapshotState;
 
 pub use query::{EvidenceZoneFilter, PointsState, RenderPoint};
-pub use render::{EventPointIconMarker, EventPointRingMarker};
 pub(crate) use render::PointIconCache;
+pub use render::{EventPointIconMarker, EventPointRingMarker};
 
 pub struct PointsPlugin;
 

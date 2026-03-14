@@ -964,7 +964,6 @@
       currentSortField: "name",
       currentSortDirection: "asc",
       fishById: new Map(),
-      detailCache: new Map(),
       detailsFishId: null,
       detailsBound: false,
       renderKey: "",
@@ -1573,11 +1572,21 @@
       return element;
     }
 
+    function fishItemId(entry) {
+      const value = Number(entry && entry.item_id);
+      return Number.isInteger(value) ? value : 0;
+    }
+
+    function fishEncyclopediaId(entry) {
+      const value = Number(entry && entry.encyclopedia_id);
+      return Number.isInteger(value) && value > 0 ? value : null;
+    }
+
     function fishRenderSignature(fish) {
       let hash = 2166136261;
       for (const entry of fish) {
         const raw = entry
-          ? `${entry.fish_id || 0}|${entry.grade || ""}|${entry.is_prize === true ? 1 : 0}|${entry.name || ""}|${entryIsDried(entry) ? 1 : 0}|${entryCatchMethods(entry).join(",")}|${entry.vendor_price || 0}`
+          ? `${fishItemId(entry)}|${fishEncyclopediaId(entry) || 0}|${entry.grade || ""}|${entry.is_prize === true ? 1 : 0}|${entry.name || ""}|${entryIsDried(entry) ? 1 : 0}|${entryCatchMethods(entry).join(",")}|${entry.vendor_price || 0}`
           : "null";
         for (let index = 0; index < raw.length; index += 1) {
           hash ^= raw.charCodeAt(index);
@@ -1618,7 +1627,7 @@
       if (nameOrder !== 0) {
         return sortDirection === "desc" && sortField === "name" ? -nameOrder : nameOrder;
       }
-      return (left?.fish_id || 0) - (right?.fish_id || 0);
+      return fishItemId(left) - fishItemId(right);
     }
 
     function renderEmptyState(hasActiveFilters) {
@@ -1636,10 +1645,11 @@
     }
 
     function renderFishCard(fish, caughtSet, animationIndex, animateCards) {
-      const isCaught = caughtSet.has(fish.fish_id);
-      const stampCaught = shouldStampCaughtToggle(fish.fish_id, isCaught);
+      const itemId = fishItemId(fish);
+      const isCaught = caughtSet.has(itemId);
+      const stampCaught = shouldStampCaughtToggle(itemId, isCaught);
       const card = createElement("article", "fishydex-card");
-      card.dataset.fishId = String(fish.fish_id);
+      card.dataset.fishId = String(itemId);
       if (animateCards) {
         card.classList.add("is-entering");
         card.style.setProperty("--fishydex-card-delay", `${Math.min(animationIndex, 11) * 24}ms`);
@@ -1655,7 +1665,7 @@
       openButton.type = "button";
       openButton.dataset.action = "open-details";
       openButton.setAttribute("aria-haspopup", "dialog");
-      openButton.setAttribute("aria-label", `Open details for ${fish.name || `Fish ${fish.fish_id}`}`);
+      openButton.setAttribute("aria-label", `Open details for ${fish.name || `Fish ${itemId}`}`);
 
       const content = createElement("div", "fishydex-card-content");
       const top = createElement("div", "fishydex-card-top");
@@ -1666,11 +1676,11 @@
       );
       caughtButton.type = "button";
       caughtButton.dataset.action = "toggle-caught";
-      caughtButton.dataset.fishId = String(fish.fish_id);
+      caughtButton.dataset.fishId = String(itemId);
       caughtButton.setAttribute("aria-pressed", isCaught ? "true" : "false");
       caughtButton.setAttribute(
         "aria-label",
-        `Mark ${fish.name || `Fish ${fish.fish_id}`} as ${isCaught ? "not caught" : "caught"}`
+        `Mark ${fish.name || `Fish ${itemId}`} as ${isCaught ? "not caught" : "caught"}`
       );
       caughtButton.innerHTML = isCaught ? HEROICON_CHECK_BADGE_SOLID : HEROICON_CHECK_BADGE_OUTLINE;
       actions.appendChild(caughtButton);
@@ -1687,7 +1697,7 @@
 
       const main = createElement("div", "fishydex-card-main");
       const iconWrap = createElement("div", "fishydex-icon-wrap");
-      const iconUrl = normalizeFishIconUrl(fish.icon_url);
+      const iconUrl = fishItemIconUrl(itemId);
       if (iconUrl) {
         const icon = createElement("img", "fishydex-icon");
         icon.src = iconUrl;
@@ -1698,7 +1708,7 @@
         iconWrap.appendChild(createElement("div", "fishydex-placeholder", "?"));
       }
       main.appendChild(iconWrap);
-      main.appendChild(createElement("div", "fishydex-name", fish.name || `Fish ${fish.fish_id}`));
+      main.appendChild(createElement("div", "fishydex-name", fish.name || `Fish ${itemId}`));
 
       content.append(top, main);
       card.append(openButton, content);
@@ -1771,10 +1781,11 @@
       }
       return {
         fishId,
+        itemId: fishItemId(fish),
+        encyclopediaId: fishEncyclopediaId(fish),
         name: fish.name || `Fish ${fishId}`,
         grade: fish.grade || "Unknown",
         isPrize: fish.is_prize === true || fish.grade === "Prize",
-        iconUrl: fish.icon_url || "",
         isDried: entryIsDried(fish),
         catchMethods: entryCatchMethods(fish),
         vendorPrice: Number.isFinite(Number(fish.vendor_price)) && Number(fish.vendor_price) > 0
@@ -1782,12 +1793,6 @@
           : null,
         caught: state.currentCaughtIds.includes(fishId),
       };
-    }
-
-    function fishMapApiUrl(fishId) {
-      const url = new URL(apiUrl("/api/v1/fish_map"));
-      url.searchParams.set("item_key", String(fishId));
-      return url.toString();
     }
 
     function cdnBaseUrl() {
@@ -1824,66 +1829,32 @@
       return `${base}/${raw.replace(/^\/+/, "")}`;
     }
 
-    function extractAbsoluteAssetPath(value) {
-      const raw = String(value || "").trim();
-      if (!(raw.startsWith("http://") || raw.startsWith("https://"))) {
-        return "";
-      }
-      try {
-        return new URL(raw).pathname || "";
-      } catch (_) {
-        return "";
-      }
+    function zeroPad(value, width) {
+      return String(Math.max(0, Number(value) || 0)).padStart(width, "0");
     }
 
-    function normalizeFishIconPath(value) {
-      const raw = String(value || "").trim();
-      if (!raw || raw.toLowerCase() === "null") {
+    function fishItemIconPath(itemId) {
+      if (!Number.isInteger(itemId) || itemId <= 0) {
         return "";
       }
-      if (raw.startsWith("/images/")) {
-        return raw;
-      }
-      if (raw.startsWith("images/")) {
-        return `/${raw}`;
-      }
-      if (raw.startsWith("/FishIcons/")) {
-        return `/images${raw}`;
-      }
-      if (raw.startsWith("FishIcons/")) {
-        return `/images/${raw}`;
-      }
-      const absolutePath = extractAbsoluteAssetPath(raw);
-      if (absolutePath) {
-        return normalizeFishIconPath(absolutePath);
-      }
-
-      const file = raw.split(/[?#]/, 1)[0].split("/").pop() || raw;
-      if (!/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file)) {
-        return "";
-      }
-      return `/images/FishIcons/${file}`;
+      return `/images/FishIcons/${zeroPad(itemId, 8)}.png`;
     }
 
-    function normalizeFishIconUrl(value) {
-      const raw = String(value || "").trim();
-      if (!raw || raw.toLowerCase() === "null") {
+    function fishEncyclopediaIconPath(encyclopediaId) {
+      if (!Number.isInteger(encyclopediaId) || encyclopediaId <= 0) {
         return "";
       }
-      if (raw.startsWith("data:")) {
-        return raw;
-      }
-      const assetPath = normalizeFishIconPath(raw);
-      if (assetPath) {
-        return cdnUrl(assetPath);
-      }
-      if (
-        raw.startsWith("http://")
-        || raw.startsWith("https://")
-      ) {
-        return raw;
-      }
-      return "";
+      return `/images/FishIcons/IC_${zeroPad(encyclopediaId, 5)}.png`;
+    }
+
+    function fishItemIconUrl(itemId) {
+      const path = fishItemIconPath(itemId);
+      return path ? cdnUrl(path) : "";
+    }
+
+    function fishEncyclopediaIconUrl(encyclopediaId) {
+      const path = fishEncyclopediaIconPath(encyclopediaId);
+      return path ? cdnUrl(path) : "";
     }
 
     function setElementText(element, text) {
@@ -1929,7 +1900,6 @@
       }
 
       modal.hidden = false;
-      const cached = state.detailCache.get(meta.fishId) || { loading: false, error: "", mapping: null };
       const title = document.getElementById("fishydex-details-title");
       const titleToggle = document.getElementById("fishydex-details-caught-toggle");
       const itemKey = document.getElementById("fishydex-details-item-key");
@@ -1946,12 +1916,8 @@
       const guideImage = document.getElementById("fishydex-details-guide-image");
       const guidePlaceholder = document.getElementById("fishydex-details-guide-placeholder");
       const iconFrameGrade = meta.isPrize ? "prize" : slugifyGrade(meta.grade);
-      const itemIconUrl = normalizeFishIconUrl(
-        meta.iconUrl
-          || (cached.mapping && cached.mapping.icon)
-          || (cached.mapping && cached.mapping.encyclopedia_icon)
-      );
-      const guideIconUrl = normalizeFishIconUrl(cached.mapping && cached.mapping.encyclopedia_icon);
+      const itemIconUrl = fishItemIconUrl(meta.itemId);
+      const guideIconUrl = fishEncyclopediaIconUrl(meta.encyclopediaId);
 
       setElementText(title, meta.name);
       if (titleToggle instanceof HTMLButtonElement) {
@@ -1963,7 +1929,7 @@
         );
         titleToggle.innerHTML = meta.caught ? HEROICON_CHECK_BADGE_SOLID : HEROICON_CHECK_BADGE_OUTLINE;
       }
-      setElementLink(itemKey, String(meta.fishId), bdolyticsItemUrl(meta.fishId));
+      setElementLink(itemKey, String(meta.itemId), bdolyticsItemUrl(meta.itemId));
       setElementText(vendorPrice, formatSilver(meta.vendorPrice));
       setElementText(
         spotsNote,
@@ -2032,66 +1998,12 @@
       }
     }
 
-    async function loadDetailsMapping(fishId) {
-      const cached = state.detailCache.get(fishId);
-      if (cached && (cached.loading || cached.mapping)) {
-        return;
-      }
-      state.detailCache.set(fishId, { loading: true, error: "", mapping: null });
-      if (state.detailsFishId === fishId) {
-        renderDetails();
-      }
-
-      let response;
-      try {
-        response = await fetch(fishMapApiUrl(fishId), {
-          headers: { Accept: "application/json" },
-          credentials: "same-origin",
-        });
-      } catch (_error) {
-        state.detailCache.set(fishId, { loading: false, error: "Fish mapping request failed.", mapping: null });
-        if (state.detailsFishId === fishId) {
-          renderDetails();
-        }
-        return;
-      }
-
-      if (!response.ok) {
-        state.detailCache.set(
-          fishId,
-          {
-            loading: false,
-            error: response.status === 404
-              ? "Fish mapping not found."
-              : `Fish mapping request failed (HTTP ${response.status}).`,
-            mapping: null,
-          }
-        );
-        if (state.detailsFishId === fishId) {
-          renderDetails();
-        }
-        return;
-      }
-
-      try {
-        const mapping = await response.json();
-        state.detailCache.set(fishId, { loading: false, error: "", mapping });
-      } catch (_error) {
-        state.detailCache.set(fishId, { loading: false, error: "Fish mapping response could not be parsed.", mapping: null });
-      }
-
-      if (state.detailsFishId === fishId) {
-        renderDetails();
-      }
-    }
-
     function openDetails(fishId) {
       if (!fishMetaById(fishId)) {
         return;
       }
       state.detailsFishId = fishId;
       renderDetails();
-      loadDetailsMapping(fishId);
     }
 
     function bindDetailsControls() {
@@ -2149,8 +2061,8 @@
       state.currentSortDirection = sortDirection;
       state.fishById = new Map(
         fish
-          .filter((entry) => entry && Number.isInteger(entry.fish_id))
-          .map((entry) => [entry.fish_id, entry])
+          .filter((entry) => entry && Number.isInteger(entry.item_id))
+          .map((entry) => [entry.item_id, entry])
       );
       const fishSignature = fishRenderSignature(fish);
       syncFilterUi(caughtFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection);
@@ -2182,14 +2094,14 @@
         if (!entry) {
           return false;
         }
-        const haystack = `${entry.fish_id || ""} ${entry.name || ""}`.toLowerCase();
+        const haystack = `${fishItemId(entry) || ""} ${entry.name || ""}`.toLowerCase();
         if (searchQuery && !haystack.includes(searchQuery)) {
           return false;
         }
-        if (caughtFilter === "caught" && !caughtSet.has(entry.fish_id)) {
+        if (caughtFilter === "caught" && !caughtSet.has(fishItemId(entry))) {
           return false;
         }
-        if (caughtFilter === "missing" && caughtSet.has(entry.fish_id)) {
+        if (caughtFilter === "missing" && caughtSet.has(fishItemId(entry))) {
           return false;
         }
         if (gradeFilters.length > 0 && !gradeFilters.includes(filterGradeForEntry(entry))) {
@@ -2229,7 +2141,7 @@
       ].reduce((sum, count) => sum + count, 0);
 
       const prizeCaughtCount = fish.filter((entry) => {
-        return (entry.is_prize === true || entry.grade === "Prize") && caughtSet.has(entry.fish_id);
+        return (entry.is_prize === true || entry.grade === "Prize") && caughtSet.has(fishItemId(entry));
       }).length;
 
       const grid = document.getElementById("fishydex-grid");

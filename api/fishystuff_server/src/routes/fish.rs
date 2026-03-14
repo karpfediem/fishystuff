@@ -4,31 +4,16 @@ use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 
-use fishystuff_api::models::fish::{FishListResponse, FishMapResponse, FishTableResponse};
+use fishystuff_api::models::fish::FishListResponse;
 
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
-use crate::routes::public_assets::{
-    normalize_fish_list_icons, normalize_fish_map_icons, normalize_fish_table_icons,
-};
 use crate::state::{RequestId, SharedState};
 use crate::store::FishLang;
 
 #[derive(Debug, Deserialize)]
 pub struct FishQuery {
     pub lang: Option<String>,
-    pub r#ref: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct FishMapQuery {
-    pub encyclopedia_key: Option<i32>,
-    pub item_key: Option<i32>,
-    pub r#ref: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct FishTableQuery {
     pub r#ref: Option<String>,
 }
 
@@ -43,13 +28,12 @@ pub async fn list_fish(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let mut response = with_timeout(
+    let response = with_timeout(
         state.config.request_timeout_secs,
         state.store.list_fish(lang, query.r#ref),
     )
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
-    normalize_fish_list_icons(&mut response);
 
     let etag = format!("\"{}\"", response.revision);
     let mut response_headers = HeaderMap::new();
@@ -76,63 +60,6 @@ pub async fn list_fish(
     }
 
     Ok((response_headers, Json(response)).into_response())
-}
-
-pub async fn fish_table(
-    State(state): State<SharedState>,
-    _headers: HeaderMap,
-    query: Result<Query<FishTableQuery>, QueryRejection>,
-    Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<FishTableResponse>> {
-    let Query(query) = query.map_err(|err| {
-        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
-    })?;
-
-    let fish = with_timeout(
-        state.config.request_timeout_secs,
-        state.store.fish_table(query.r#ref),
-    )
-    .await
-    .map_err(|err| map_request_id(err, &request_id))?;
-    let mut response = FishTableResponse { fish };
-    normalize_fish_table_icons(&mut response);
-    Ok(Json(response))
-}
-
-pub async fn fish_map(
-    State(state): State<SharedState>,
-    _headers: HeaderMap,
-    query: Result<Query<FishMapQuery>, QueryRejection>,
-    Extension(request_id): Extension<RequestId>,
-) -> AppResult<Json<FishMapResponse>> {
-    let Query(query) = query.map_err(|err| {
-        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
-    })?;
-
-    let encyclopedia_key = query.encyclopedia_key;
-    let item_key = query.item_key;
-
-    if encyclopedia_key.is_none() && item_key.is_none() {
-        return Err(AppError::invalid_argument(
-            "missing query param: encyclopedia_key or item_key",
-        )
-        .with_request_id(request_id.0));
-    }
-
-    let mapping = with_timeout(
-        state.config.request_timeout_secs,
-        state
-            .store
-            .fish_map(encyclopedia_key, item_key, query.r#ref),
-    )
-    .await
-    .map_err(|err| map_request_id(err, &request_id))?;
-
-    let mut mapping = mapping.ok_or_else(|| {
-        AppError::not_found("fish mapping not found").with_request_id(request_id.0)
-    })?;
-    normalize_fish_map_icons(&mut mapping);
-    Ok(Json(mapping))
 }
 
 fn request_etag_matches(headers: &HeaderMap, current_etag: &str) -> bool {
@@ -179,9 +106,7 @@ mod tests {
     use fishystuff_api::ids::MapVersionId;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
-    use fishystuff_api::models::fish::{
-        FishEntry, FishListResponse, FishMapResponse, FishTableEntry,
-    };
+    use fishystuff_api::models::fish::{FishEntry, FishListResponse};
     use fishystuff_api::models::layers::LayersResponse;
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
@@ -225,23 +150,23 @@ mod tests {
                 count: 2,
                 fish: vec![
                     FishEntry {
-                        fish_id: 8474,
+                        item_id: 8474,
                         encyclopedia_key: Some(8474),
+                        encyclopedia_id: Some(9474),
                         name: "Pirarucu".to_string(),
                         grade: Some("Prize".to_string()),
                         is_prize: Some(true),
-                        icon_url: Some("/images/FishIcons/00008474.png".to_string()),
                         is_dried: false,
                         catch_methods: vec!["rod".to_string()],
                         vendor_price: Some(120_000_000),
                     },
                     FishEntry {
-                        fish_id: 8201,
+                        item_id: 8201,
                         encyclopedia_key: Some(821001),
+                        encyclopedia_id: Some(8501),
                         name: "Mudskipper".to_string(),
                         grade: Some("General".to_string()),
                         is_prize: Some(false),
-                        icon_url: Some("/images/FishIcons/00008201.png".to_string()),
                         is_dried: true,
                         catch_methods: vec!["rod".to_string()],
                         vendor_price: Some(16_560),
@@ -251,19 +176,6 @@ mod tests {
         }
 
         async fn list_zones(&self, _ref_id: Option<String>) -> AppResult<Vec<ZoneEntry>> {
-            panic!("unused in test")
-        }
-
-        async fn fish_table(&self, _ref_id: Option<String>) -> AppResult<Vec<FishTableEntry>> {
-            panic!("unused in test")
-        }
-
-        async fn fish_map(
-            &self,
-            _encyclopedia_key: Option<i32>,
-            _item_key: Option<i32>,
-            _ref_id: Option<String>,
-        ) -> AppResult<Option<FishMapResponse>> {
             panic!("unused in test")
         }
 
@@ -364,13 +276,13 @@ mod tests {
         assert_eq!(payload["count"], 2);
         let fish = payload["fish"].as_array().expect("fish array");
         assert_eq!(fish.len(), 2);
-        assert_eq!(fish[0]["fish_id"], 8474);
+        assert_eq!(fish[0]["item_id"], 8474);
+        assert_eq!(fish[0]["encyclopedia_id"], 9474);
         assert_eq!(fish[0]["grade"], "Prize");
         assert_eq!(fish[0]["is_prize"], true);
         assert_eq!(fish[0]["is_dried"], false);
         assert_eq!(fish[0]["catch_methods"][0], "rod");
         assert_eq!(fish[0]["vendor_price"], 120000000);
-        assert_eq!(fish[0]["icon_url"], "/images/FishIcons/00008474.png");
         assert_eq!(fish[1]["is_dried"], true);
     }
 
@@ -435,6 +347,6 @@ mod tests {
         assert!(text.contains("data: signals "));
         assert!(text.contains("\"loading\":false"));
         assert!(text.contains("\"count\":2"));
-        assert!(text.contains("\"fish_id\":8474"));
+        assert!(text.contains("\"item_id\":8474"));
     }
 }

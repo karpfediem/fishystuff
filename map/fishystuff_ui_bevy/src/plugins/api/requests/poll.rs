@@ -2,16 +2,13 @@ use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::terrain::Terrain3dConfig;
 use crate::prelude::*;
 
-use super::super::fish::{
-    build_fish_catalog_entries, build_fish_catalog_entries_from_table,
-    normalize_fish_icon_asset_url,
-};
+use super::super::fish::build_fish_catalog_entries;
 use super::super::state::{
     ApiBootstrapState, FishCatalog, MapDisplayState, PatchFilterState, PendingRequests,
     SelectionState,
 };
 use super::apply::{apply_layers_response, apply_meta_response, sync_zone_mask_controls};
-use super::util::{normalize_public_base_url, now_utc_seconds};
+use super::util::now_utc_seconds;
 
 pub(super) fn poll_requests(
     mut bootstrap: ResMut<ApiBootstrapState>,
@@ -87,14 +84,7 @@ pub(super) fn poll_requests(
                 return;
             }
             match result {
-                Ok(mut response) => {
-                    let public_base_url = normalize_public_base_url(None);
-                    for entry in &mut response.distribution {
-                        entry.icon_url = normalize_fish_icon_asset_url(
-                            entry.icon_url.as_deref(),
-                            public_base_url.as_deref(),
-                        );
-                    }
+                Ok(response) => {
                     selection.zone_stats = Some(response);
                     selection.zone_stats_status = "zone stats: loaded".to_string();
                 }
@@ -111,26 +101,9 @@ pub(super) fn poll_requests(
             pending.fish_catalog = None;
             match result {
                 Ok(response) => {
-                    let public_base_url = normalize_public_base_url(None);
-                    let (entries, icon_by_id) = if let Some(fish_response) = response.fish {
-                        build_fish_catalog_entries(
-                            fish_response,
-                            response.fish_table,
-                            public_base_url.as_deref(),
-                        )
-                    } else {
-                        build_fish_catalog_entries_from_table(
-                            response.fish_table,
-                            public_base_url.as_deref(),
-                        )
-                    };
-                    fish.entries = entries;
-                    fish.icon_by_id = icon_by_id;
-                    fish.status = if let Some(err) = response.fish_list_error {
-                        format!("fish: {} (table-only; list error: {err})", fish.entries.len())
-                    } else {
-                        format!("fish: {}", fish.entries.len())
-                    };
+                    let entries = build_fish_catalog_entries(response.fish);
+                    fish.status = format!("fish: {}", entries.len());
+                    fish.replace(entries);
                 }
                 Err(err) => {
                     fish.status = format!("fish: {err}");

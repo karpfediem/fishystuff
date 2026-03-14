@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use fishystuff_api::models::fish::{FishListResponse, FishTableResponse};
+use fishystuff_api::models::fish::FishListResponse;
+use fishystuff_core::fish_icons::fish_item_icon_path;
 
 use crate::prelude::*;
 
@@ -8,7 +9,7 @@ use crate::prelude::*;
 pub struct FishCatalog {
     pub status: String,
     pub entries: Vec<FishEntry>,
-    pub icon_by_id: HashMap<i32, String>,
+    aliases: HashMap<i32, usize>,
 }
 
 impl Default for FishCatalog {
@@ -16,24 +17,34 @@ impl Default for FishCatalog {
         Self {
             status: "fish: pending".to_string(),
             entries: Vec::new(),
-            icon_by_id: HashMap::new(),
+            aliases: HashMap::new(),
         }
     }
 }
 
 impl FishCatalog {
-    pub fn icon_url_for_fish(&self, fish_id: i32) -> Option<String> {
-        self.entries
-            .iter()
-            .find(|entry| entry.id == fish_id)
-            .and_then(|entry| entry.icon_url.clone())
-            .or_else(|| self.icon_by_id.get(&fish_id).cloned())
-            .or_else(|| {
-                self.entries
-                    .iter()
-                    .find(|entry| entry.item_id == fish_id)
-                    .and_then(|entry| entry.icon_url.clone())
-            })
+    pub fn replace(&mut self, entries: Vec<FishEntry>) {
+        self.aliases.clear();
+        self.aliases.reserve(entries.len() * 2);
+        for (idx, entry) in entries.iter().enumerate() {
+            self.aliases.insert(entry.item_id, idx);
+            if let Some(encyclopedia_key) = entry.encyclopedia_key {
+                self.aliases.entry(encyclopedia_key).or_insert(idx);
+            }
+        }
+        self.entries = entries;
+    }
+
+    pub fn entry_for_fish(&self, fish_id: i32) -> Option<&FishEntry> {
+        self.aliases
+            .get(&fish_id)
+            .and_then(|idx| self.entries.get(*idx))
+            .or_else(|| self.entries.iter().find(|entry| entry.id == fish_id))
+    }
+
+    pub fn item_icon_path_for_fish(&self, fish_id: i32) -> Option<String> {
+        self.entry_for_fish(fish_id)
+            .map(|entry| fish_item_icon_path(entry.item_id))
     }
 }
 
@@ -41,80 +52,42 @@ impl FishCatalog {
 pub struct FishEntry {
     pub id: i32,
     pub item_id: i32,
+    pub encyclopedia_key: Option<i32>,
+    pub encyclopedia_id: Option<i32>,
     pub name: String,
     pub name_lower: String,
-    pub icon_url: Option<String>,
     pub is_prize: bool,
 }
 
 #[derive(Debug)]
 pub(crate) struct FishCatalogPayload {
-    pub(crate) fish: Option<FishListResponse>,
-    pub(crate) fish_table: FishTableResponse,
-    pub(crate) fish_list_error: Option<String>,
-}
-
-#[derive(Debug, Default)]
-pub(crate) struct FishTableIndex {
-    pub(crate) canonical_by_item_id: HashMap<i32, i32>,
-    pub(crate) fallback_by_canonical_id: HashMap<i32, FishTableFallback>,
-    pub(crate) icon_by_id: HashMap<i32, String>,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct FishTableFallback {
-    pub(crate) item_id: i32,
-    pub(crate) name: String,
+    pub(crate) fish: FishListResponse,
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::{FishCatalog, FishEntry};
 
     #[test]
-    fn icon_lookup_prefers_catalog_entry_icon_for_canonical_ids() {
-        let catalog = FishCatalog {
-            status: "ok".to_string(),
-            entries: vec![FishEntry {
-                id: 88,
-                item_id: 8289,
-                name: "Barbel Steed".to_string(),
-                name_lower: "barbel steed".to_string(),
-                icon_url: Some("/images/FishIcons/IC_08588.png".to_string()),
-                is_prize: false,
-            }],
-            icon_by_id: HashMap::from([
-                (88, "/images/FishIcons/00008289.png".to_string()),
-                (8289, "/images/FishIcons/IC_08588.png".to_string()),
-            ]),
-        };
+    fn icon_lookup_resolves_item_and_encyclopedia_aliases() {
+        let mut catalog = FishCatalog::default();
+        catalog.replace(vec![FishEntry {
+            id: 88,
+            item_id: 8289,
+            encyclopedia_key: Some(88),
+            encyclopedia_id: Some(8588),
+            name: "Barbel Steed".to_string(),
+            name_lower: "barbel steed".to_string(),
+            is_prize: false,
+        }]);
 
         assert_eq!(
-            catalog.icon_url_for_fish(88).as_deref(),
-            Some("/images/FishIcons/IC_08588.png")
+            catalog.item_icon_path_for_fish(88).as_deref(),
+            Some("/images/FishIcons/00008289.png")
         );
-    }
-
-    #[test]
-    fn icon_lookup_falls_back_to_item_id_mappings() {
-        let catalog = FishCatalog {
-            status: "ok".to_string(),
-            entries: vec![FishEntry {
-                id: 88,
-                item_id: 8289,
-                name: "Barbel Steed".to_string(),
-                name_lower: "barbel steed".to_string(),
-                icon_url: Some("/images/FishIcons/IC_08588.png".to_string()),
-                is_prize: false,
-            }],
-            icon_by_id: HashMap::new(),
-        };
-
         assert_eq!(
-            catalog.icon_url_for_fish(8289).as_deref(),
-            Some("/images/FishIcons/IC_08588.png")
+            catalog.item_icon_path_for_fish(8289).as_deref(),
+            Some("/images/FishIcons/00008289.png")
         );
     }
 }

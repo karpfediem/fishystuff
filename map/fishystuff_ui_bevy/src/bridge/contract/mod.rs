@@ -411,8 +411,10 @@ mod tests {
             },
             distribution: vec![FishyMapZoneEvidenceEntrySnapshot {
                 fish_id: 821015,
+                item_id: 821015,
+                encyclopedia_key: Some(1015),
+                encyclopedia_id: Some(9015),
                 fish_name: Some("Blue Bat Star".to_string()),
-                icon_url: Some("/images/FishIcons/00821015.png".to_string()),
                 evidence_weight: 1.25,
                 p_mean: 0.42,
                 ci_low: Some(0.35),
@@ -425,7 +427,6 @@ mod tests {
         assert!(json.contains(r#""zoneStats":{"#));
         assert!(json.contains(r#""zoneRgb":1193046"#));
         assert!(json.contains(r#""fishId":821015"#));
-        assert!(json.contains(r#""iconUrl":"/images/FishIcons/00821015.png""#));
         assert!(json.contains(r#""status":"FRESH""#));
     }
 }

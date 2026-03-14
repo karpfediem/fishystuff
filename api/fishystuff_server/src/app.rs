@@ -23,8 +23,6 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/zones", get(routes::zones::list_zones))
         .route("/fish", get(routes::fish::list_fish))
         .route("/fish/", get(routes::fish::list_fish))
-        .route("/fish_table", get(routes::fish::fish_table))
-        .route("/fish_map", get(routes::fish::fish_map))
         .route("/zone_stats", post(routes::zone_stats::zone_stats))
         .route("/effort_grid", post(routes::effort::effort_grid))
         .route(
@@ -68,7 +66,7 @@ mod tests {
 
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
-    use fishystuff_api::models::fish::{FishListResponse, FishMapResponse, FishTableEntry};
+    use fishystuff_api::models::fish::FishListResponse;
     use fishystuff_api::models::layers::LayersResponse;
     use fishystuff_api::models::meta::MetaResponse;
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
@@ -112,20 +110,6 @@ mod tests {
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<Vec<ZoneEntry>> {
             Ok(Vec::new())
-        }
-        async fn fish_table(
-            &self,
-            _ref_id: Option<String>,
-        ) -> crate::error::AppResult<Vec<FishTableEntry>> {
-            Ok(Vec::new())
-        }
-        async fn fish_map(
-            &self,
-            _encyclopedia_key: Option<i32>,
-            _item_key: Option<i32>,
-            _ref_id: Option<String>,
-        ) -> crate::error::AppResult<Option<FishMapResponse>> {
-            Ok(None)
         }
         async fn zone_stats(
             &self,

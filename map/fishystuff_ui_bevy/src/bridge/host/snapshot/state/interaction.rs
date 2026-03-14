@@ -87,8 +87,10 @@ fn zone_stats_snapshot(
             .iter()
             .map(|entry| FishyMapZoneEvidenceEntrySnapshot {
                 fish_id: entry.fish_id,
+                item_id: entry.item_id,
+                encyclopedia_key: entry.encyclopedia_key,
+                encyclopedia_id: entry.encyclopedia_id,
                 fish_name: entry.fish_name.clone(),
-                icon_url: entry.icon_url.clone(),
                 evidence_weight: entry.evidence_weight,
                 p_mean: entry.p_mean,
                 ci_low: entry.ci_low,

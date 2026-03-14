@@ -335,11 +335,11 @@ fn icon_handle_for_fish(
     if cache.missing_catalog_ids.contains(&fish_id) {
         return None;
     }
-    let Some(url) = fish.icon_url_for_fish(fish_id) else {
+    let Some(path) = fish.item_icon_path_for_fish(fish_id) else {
         cache.missing_catalog_ids.insert(fish_id);
         return None;
     };
-    let path = bevy_public_asset_path(&url);
+    let path = bevy_public_asset_path(&path);
     let handle = asset_server.load(path.clone());
     cache.handles.insert(fish_id, handle.clone());
     cache.requested_paths.insert(fish_id, path);

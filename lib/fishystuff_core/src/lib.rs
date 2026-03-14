@@ -1,6 +1,7 @@
 pub mod asset_urls;
 pub mod constants;
 pub mod coord;
+pub mod fish_icons;
 pub mod gaussian;
 pub mod masks;
 pub mod prob;

@@ -12,7 +12,7 @@ use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{
     EventPointCompact, EventSourceKind, EventsSnapshotMetaResponse, EventsSnapshotResponse,
 };
-use fishystuff_api::models::fish::{FishEntry, FishListResponse, FishMapResponse, FishTableEntry};
+use fishystuff_api::models::fish::{FishEntry, FishListResponse};
 use fishystuff_api::models::layers::{
     LayerDescriptor, LayerUiInfo, LayersResponse, LodPolicyDto, TilesetRef,
 };
@@ -37,8 +37,8 @@ use crate::error::{AppError, AppResult};
 use crate::store::queries;
 use crate::store::{validate_dolt_ref, FishLang, Store};
 use catalog::{
-    fish_catch_methods_from_description, fish_grade_from_db, fish_is_dried,
-    merge_fish_catalog_row, parse_positive_i64, preferred_item_icon_url,
+    encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_grade_from_db,
+    fish_is_dried, merge_fish_catalog_row, parse_positive_i64,
 };
 use layers::{
     normalize_pick_mode, parse_layer_kind, parse_layer_transform, parse_vector_source,
@@ -109,20 +109,27 @@ struct WindowSummary {
 }
 
 #[derive(Debug, Clone)]
-struct FishTableIndex {
-    by_encyclopedia: HashMap<i32, FishTableEntry>,
-    by_item: HashMap<i32, FishTableEntry>,
+struct FishIdentityEntry {
+    encyclopedia_key: i32,
+    item_id: i32,
+    encyclopedia_id: Option<i32>,
+    name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct FishIdentityIndex {
+    by_encyclopedia: HashMap<i32, FishIdentityEntry>,
 }
 
 #[derive(Debug, Clone)]
 struct FishCatalogRow {
-    fish_id: i32,
+    item_id: i32,
     encyclopedia_key: Option<i32>,
+    encyclopedia_id: Option<i32>,
     name: String,
     grade: Option<String>,
     grade_rank: Option<u8>,
     is_prize: Option<bool>,
-    icon_url: Option<String>,
     is_dried: bool,
     catch_methods: Vec<String>,
     vendor_price: Option<i64>,
@@ -672,15 +679,15 @@ impl DoltMySqlStore {
             encyclopedia_key,
             name,
             grade_type,
-            fish_table_icon_file,
-            item_icon_file,
+            _fish_table_icon_file,
+            _item_icon_file,
             encyclopedia_icon_file,
             item_name,
             description,
             original_price,
         ) in rows
         {
-            let fish_id = match i32::try_from(fish_id) {
+            let item_id = match i32::try_from(fish_id) {
                 Ok(value) => value,
                 Err(_) => continue,
             };
@@ -690,11 +697,7 @@ impl DoltMySqlStore {
             };
             let item_name = normalize_optional_string(item_name);
             let (grade, grade_rank, is_prize) = fish_grade_from_db(grade_type);
-            let icon_url = preferred_item_icon_url(
-                fish_table_icon_file,
-                item_icon_file,
-                encyclopedia_icon_file,
-            );
+            let encyclopedia_id = encyclopedia_icon_id_from_db(encyclopedia_icon_file);
             let is_dried = fish_is_dried(Some(name.as_str()), item_name.as_deref());
             let catch_methods = fish_catch_methods_from_description(description);
             let vendor_price = parse_positive_i64(original_price);
@@ -702,13 +705,13 @@ impl DoltMySqlStore {
             merge_fish_catalog_row(
                 &mut out,
                 FishCatalogRow {
-                    fish_id,
+                    item_id,
                     encyclopedia_key,
+                    encyclopedia_id,
                     name,
                     grade,
                     grade_rank,
                     is_prize,
-                    icon_url,
                     is_dried,
                     catch_methods,
                     vendor_price,
@@ -750,7 +753,7 @@ impl DoltMySqlStore {
         Ok(zones)
     }
 
-    fn query_fish_table(&self, ref_id: Option<&str>) -> AppResult<FishTableIndex> {
+    fn query_fish_identities(&self, ref_id: Option<&str>) -> AppResult<FishIdentityIndex> {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -776,9 +779,7 @@ impl DoltMySqlStore {
             conn.query(query).map_err(db_unavailable)?;
 
         let mut by_encyclopedia = HashMap::new();
-        let mut by_item = HashMap::new();
-
-        for (enc, item, name, icon, encyclopedia_icon) in rows {
+        for (enc, item, name, _icon, encyclopedia_icon) in rows {
             let enc = match i32::try_from(enc) {
                 Ok(value) => value,
                 Err(_) => continue,
@@ -788,22 +789,16 @@ impl DoltMySqlStore {
                 Err(_) => continue,
             };
 
-            let entry = FishTableEntry {
+            let entry = FishIdentityEntry {
                 encyclopedia_key: enc,
-                item_key: item,
+                item_id: item,
+                encyclopedia_id: encyclopedia_icon_id_from_db(encyclopedia_icon),
                 name: normalize_optional_string(name),
-                icon: normalize_optional_string(icon),
-                encyclopedia_icon: normalize_optional_string(encyclopedia_icon),
             };
-
-            by_encyclopedia.insert(enc, entry.clone());
-            by_item.insert(item, entry);
+            by_encyclopedia.insert(enc, entry);
         }
 
-        Ok(FishTableIndex {
-            by_encyclopedia,
-            by_item,
-        })
+        Ok(FishIdentityIndex { by_encyclopedia })
     }
 
     fn has_event_zone_assignment(&self, layer_revision_id: &str) -> AppResult<bool> {
@@ -1045,48 +1040,35 @@ impl DoltMySqlStore {
 
     fn build_event_fish_names(
         item_names: &HashMap<i32, String>,
-        fish_table: &FishTableIndex,
+        fish_table: &FishIdentityIndex,
     ) -> HashMap<i32, String> {
         let mut out = item_names.clone();
         for entry in fish_table.by_encyclopedia.values() {
             let resolved_name = item_names
-                .get(&entry.item_key)
+                .get(&entry.item_id)
                 .cloned()
                 .or_else(|| entry.name.clone());
             let Some(name) = resolved_name else {
                 continue;
             };
-            out.entry(entry.item_key).or_insert_with(|| name.clone());
+            out.entry(entry.item_id).or_insert_with(|| name.clone());
             out.insert(entry.encyclopedia_key, name);
         }
         out
     }
 
-    fn build_event_fish_icon_urls(
-        item_icon_urls: &HashMap<i32, String>,
-        fish_table: &FishTableIndex,
-    ) -> HashMap<i32, String> {
+    fn build_event_fish_identity_map(
+        fish_table: &FishIdentityIndex,
+    ) -> HashMap<i32, (i32, Option<i32>, Option<i32>)> {
         let mut out = HashMap::new();
         for entry in fish_table.by_encyclopedia.values() {
-            let icon_url = item_icon_urls
-                .get(&entry.item_key)
-                .cloned()
-                .or_else(|| {
-                    preferred_item_icon_url(
-                        entry.icon.clone(),
-                        None,
-                        entry.encyclopedia_icon.clone(),
-                    )
-                });
-            if let Some(icon_url) = icon_url {
-                out.insert(entry.encyclopedia_key, icon_url);
-            }
-        }
-        if out.is_empty() {
-            return item_icon_urls.clone();
-        }
-        for (id, icon_url) in item_icon_urls {
-            out.entry(*id).or_insert_with(|| icon_url.clone());
+            let identity = (
+                entry.item_id,
+                Some(entry.encyclopedia_key),
+                entry.encyclopedia_id,
+            );
+            out.insert(entry.encyclopedia_key, identity);
+            out.entry(entry.item_id).or_insert(identity);
         }
         out
     }
@@ -1148,7 +1130,7 @@ impl DoltMySqlStore {
         &self,
         zones_meta: &HashMap<u32, ZoneEntry>,
         fish_names: &HashMap<i32, String>,
-        fish_icon_urls: &HashMap<i32, String>,
+        fish_identities: &HashMap<i32, (i32, Option<i32>, Option<i32>)>,
         params: &QueryParams,
         zone_rgb_u32: u32,
         status_cfg: &ZoneStatusConfig,
@@ -1200,11 +1182,17 @@ impl DoltMySqlStore {
             let alpha = summary.alpha_by_fish.get(&fish_id).copied().unwrap_or(0.0);
             let p_mean = summary.p_mean_by_fish.get(&fish_id).copied().unwrap_or(0.0);
             let evidence = summary.c_zone.get(&fish_id).copied().unwrap_or(0.0);
+            let (item_id, encyclopedia_key, encyclopedia_id) = fish_identities
+                .get(&fish_id)
+                .copied()
+                .unwrap_or((fish_id, None, None));
 
             distribution.push(ZoneFishEvidence {
                 fish_id,
+                item_id,
+                encyclopedia_key,
+                encyclopedia_id,
                 fish_name: fish_names.get(&fish_id).cloned(),
-                icon_url: fish_icon_urls.get(&fish_id).cloned(),
                 evidence_weight: evidence,
                 p_mean,
                 ci_low: None,
@@ -1577,7 +1565,7 @@ impl Store for DoltMySqlStore {
                             .cmp(&left.grade_rank.unwrap_or_default())
                     })
                     .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-                    .then_with(|| left.fish_id.cmp(&right.fish_id))
+                    .then_with(|| left.item_id.cmp(&right.item_id))
             });
             let revision = this
                 .query_dolt_revision(ref_id.as_deref())
@@ -1585,12 +1573,12 @@ impl Store for DoltMySqlStore {
             let entries: Vec<FishEntry> = fish
                 .into_iter()
                 .map(|entry| FishEntry {
-                    fish_id: entry.fish_id,
+                    item_id: entry.item_id,
                     encyclopedia_key: entry.encyclopedia_key,
+                    encyclopedia_id: entry.encyclopedia_id,
                     name: entry.name,
                     grade: entry.grade,
                     is_prize: entry.is_prize,
-                    icon_url: entry.icon_url,
                     is_dried: entry.is_dried,
                     catch_methods: entry.catch_methods,
                     vendor_price: entry.vendor_price,
@@ -1611,53 +1599,6 @@ impl Store for DoltMySqlStore {
         tokio::task::spawn_blocking(move || this.query_zones(ref_id.as_deref()))
             .await
             .map_err(|err| AppError::internal(err.to_string()))?
-    }
-
-    async fn fish_table(&self, ref_id: Option<String>) -> AppResult<Vec<FishTableEntry>> {
-        let this = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let index = this.query_fish_table(ref_id.as_deref())?;
-            let mut keys: Vec<i32> = index.by_encyclopedia.keys().copied().collect();
-            keys.sort_unstable();
-            let mut out = Vec::with_capacity(keys.len());
-            for key in keys {
-                if let Some(entry) = index.by_encyclopedia.get(&key) {
-                    out.push(entry.clone());
-                }
-            }
-            Ok(out)
-        })
-        .await
-        .map_err(|err| AppError::internal(err.to_string()))?
-    }
-
-    async fn fish_map(
-        &self,
-        encyclopedia_key: Option<i32>,
-        item_key: Option<i32>,
-        ref_id: Option<String>,
-    ) -> AppResult<Option<FishMapResponse>> {
-        let this = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let index = this.query_fish_table(ref_id.as_deref())?;
-            let found = if let Some(enc) = encyclopedia_key {
-                index.by_encyclopedia.get(&enc)
-            } else if let Some(item) = item_key {
-                index.by_item.get(&item)
-            } else {
-                None
-            };
-
-            Ok(found.map(|entry| FishMapResponse {
-                encyclopedia_key: entry.encyclopedia_key,
-                item_key: entry.item_key,
-                name: entry.name.clone(),
-                icon: entry.icon.clone(),
-                encyclopedia_icon: entry.encyclopedia_icon.clone(),
-            }))
-        })
-        .await
-        .map_err(|err| AppError::internal(err.to_string()))?
     }
 
     async fn zone_stats(
@@ -1693,24 +1634,18 @@ impl Store for DoltMySqlStore {
 
             let lang = FishLang::from_param(request.lang.as_deref());
             let fish_names = this.query_fish_names(lang, request.ref_id.as_deref())?;
-            let item_icon_urls: HashMap<i32, String> = this
-                .query_fish_catalog(lang, request.ref_id.as_deref())?
-                .into_iter()
-                .filter_map(|entry| entry.icon_url.map(|icon_url| (entry.fish_id, icon_url)))
-                .collect();
-            let fish_table = this.query_fish_table(request.ref_id.as_deref())?;
+            let fish_table = this.query_fish_identities(request.ref_id.as_deref())?;
             let zones_vec = this.query_zones(request.ref_id.as_deref())?;
             let zones: HashMap<u32, ZoneEntry> = zones_vec
                 .into_iter()
                 .map(|zone| (zone.rgb_u32, zone))
                 .collect();
             let event_fish_names = DoltMySqlStore::build_event_fish_names(&fish_names, &fish_table);
-            let event_fish_icon_urls =
-                DoltMySqlStore::build_event_fish_icon_urls(&item_icon_urls, &fish_table);
+            let event_fish_identities = DoltMySqlStore::build_event_fish_identity_map(&fish_table);
             this.compute_zone_stats(
                 &zones,
                 &event_fish_names,
-                &event_fish_icon_urls,
+                &event_fish_identities,
                 &params,
                 zone_rgb_u32,
                 &status_cfg,
@@ -1800,12 +1735,12 @@ mod tests {
     use crate::config::ZoneStatusConfig;
 
     use super::{
-        catalog::{fish_icon_url_from_db, is_web_icon_path},
+        catalog::{encyclopedia_icon_id_from_db, is_web_icon_path},
         compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
         fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
         parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
-        synthetic_events_snapshot_revision, DoltMySqlStore, FishCatalogRow, FishTableEntry,
-        FishTableIndex,
+        synthetic_events_snapshot_revision, DoltMySqlStore, FishCatalogRow, FishIdentityEntry,
+        FishIdentityIndex,
     };
 
     #[test]
@@ -1832,13 +1767,13 @@ mod tests {
         merge_fish_catalog_row(
             &mut rows,
             FishCatalogRow {
-                fish_id: 8475,
+                item_id: 8475,
                 encyclopedia_key: Some(8475),
+                encyclopedia_id: Some(9475),
                 name: "Albino Coelacanth".to_string(),
                 grade: Some("Prize".to_string()),
                 grade_rank: Some(4),
                 is_prize: Some(true),
-                icon_url: Some("/images/FishIcons/00008475.png".to_string()),
                 is_dried: false,
                 catch_methods: vec!["harpoon".to_string()],
                 vendor_price: Some(120_000_000),
@@ -1847,13 +1782,13 @@ mod tests {
         merge_fish_catalog_row(
             &mut rows,
             FishCatalogRow {
-                fish_id: 8475,
+                item_id: 8475,
                 encyclopedia_key: Some(8475),
+                encyclopedia_id: None,
                 name: "Albino Coelacanth".to_string(),
                 grade: Some("General".to_string()),
                 grade_rank: Some(1),
                 is_prize: Some(false),
-                icon_url: None,
                 is_dried: false,
                 catch_methods: vec!["rod".to_string()],
                 vendor_price: Some(88_800),
@@ -1864,10 +1799,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(row.grade.as_deref(), Some("Prize"));
         assert_eq!(row.is_prize, Some(true));
-        assert_eq!(
-            row.icon_url.as_deref(),
-            Some("/images/FishIcons/00008475.png")
-        );
+        assert_eq!(row.encyclopedia_id, Some(9475));
         assert_eq!(
             row.catch_methods,
             vec!["rod".to_string(), "harpoon".to_string()]
@@ -1926,11 +1858,11 @@ mod tests {
             "New_Icon/03_ETC/07_ProductMaterial/00008518.dds"
         ));
         assert_eq!(
-            fish_icon_url_from_db(Some("00008475.png".to_string())).as_deref(),
-            Some("/images/FishIcons/00008475.png")
+            encyclopedia_icon_id_from_db(Some("00008475.png".to_string())),
+            Some(8475)
         );
         assert_eq!(
-            fish_icon_url_from_db(Some(
+            encyclopedia_icon_id_from_db(Some(
                 "New_Icon/03_ETC/07_ProductMaterial/00008518.dds".to_string()
             )),
             None
@@ -1938,62 +1870,36 @@ mod tests {
     }
 
     #[test]
-    fn event_fish_icon_urls_map_encyclopedia_keys_to_item_icons() {
-        let fish_table = FishTableIndex {
+    fn event_fish_identity_map_resolves_item_ids_for_encyclopedia_keys() {
+        let fish_table = FishIdentityIndex {
             by_encyclopedia: HashMap::from([(
                 821015,
-                FishTableEntry {
+                FishIdentityEntry {
                     encyclopedia_key: 821015,
-                    item_key: 820115,
+                    item_id: 820115,
+                    encyclopedia_id: Some(9015),
                     name: Some("Blue Bat Star".to_string()),
-                    icon: None,
-                    encyclopedia_icon: None,
-                },
-            )]),
-            by_item: HashMap::from([(
-                820115,
-                FishTableEntry {
-                    encyclopedia_key: 821015,
-                    item_key: 820115,
-                    name: Some("Blue Bat Star".to_string()),
-                    icon: None,
-                    encyclopedia_icon: None,
                 },
             )]),
         };
-        let item_icon_urls =
-            HashMap::from([(820115, "/images/FishIcons/00820115.png".to_string())]);
-
-        let event_icon_urls =
-            DoltMySqlStore::build_event_fish_icon_urls(&item_icon_urls, &fish_table);
+        let event_identities = DoltMySqlStore::build_event_fish_identity_map(&fish_table);
 
         assert_eq!(
-            event_icon_urls.get(&821015).map(String::as_str),
-            Some("/images/FishIcons/00820115.png")
+            event_identities.get(&821015).copied(),
+            Some((820115, Some(821015), Some(9015)))
         );
     }
 
     #[test]
     fn event_fish_names_fall_back_to_fish_table_name_for_encyclopedia_keys() {
-        let fish_table = FishTableIndex {
+        let fish_table = FishIdentityIndex {
             by_encyclopedia: HashMap::from([(
                 821015,
-                FishTableEntry {
+                FishIdentityEntry {
                     encyclopedia_key: 821015,
-                    item_key: 820115,
+                    item_id: 820115,
+                    encyclopedia_id: Some(9015),
                     name: Some("Blue Bat Star".to_string()),
-                    icon: None,
-                    encyclopedia_icon: None,
-                },
-            )]),
-            by_item: HashMap::from([(
-                820115,
-                FishTableEntry {
-                    encyclopedia_key: 821015,
-                    item_key: 820115,
-                    name: Some("Blue Bat Star".to_string()),
-                    icon: None,
-                    encyclopedia_icon: None,
                 },
             )]),
         };

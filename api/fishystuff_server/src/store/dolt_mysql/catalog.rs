@@ -1,24 +1,16 @@
 use std::collections::BTreeMap;
 
+use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
+
 use super::util::normalize_optional_string;
 use super::FishCatalogRow;
 
-pub(super) fn fish_icon_url_from_db(value: Option<String>) -> Option<String> {
+pub(super) fn encyclopedia_icon_id_from_db(value: Option<String>) -> Option<i32> {
     let icon_file = normalize_optional_string(value)?;
     if !is_web_icon_path(&icon_file) {
         return None;
     }
-    Some(format!("/images/FishIcons/{icon_file}"))
-}
-
-pub(super) fn preferred_item_icon_url(
-    fish_table_icon: Option<String>,
-    item_table_icon: Option<String>,
-    encyclopedia_icon: Option<String>,
-) -> Option<String> {
-    fish_icon_url_from_db(fish_table_icon)
-        .or_else(|| fish_icon_url_from_db(item_table_icon))
-        .or_else(|| fish_icon_url_from_db(encyclopedia_icon))
+    parse_fish_icon_asset_id(&icon_file)
 }
 
 pub(super) fn is_web_icon_path(path: &str) -> bool {
@@ -37,7 +29,7 @@ pub(super) fn merge_fish_catalog_row(
 ) {
     use std::collections::btree_map::Entry;
 
-    match rows.entry(candidate.fish_id) {
+    match rows.entry(candidate.item_id) {
         Entry::Vacant(entry) => {
             entry.insert(candidate);
         }
@@ -45,6 +37,9 @@ pub(super) fn merge_fish_catalog_row(
             let existing = entry.get_mut();
             if existing.encyclopedia_key.is_none() {
                 existing.encyclopedia_key = candidate.encyclopedia_key;
+            }
+            if existing.encyclopedia_id.is_none() {
+                existing.encyclopedia_id = candidate.encyclopedia_id;
             }
             if candidate.name.to_lowercase() < existing.name.to_lowercase() {
                 existing.name = candidate.name.clone();
@@ -63,13 +58,6 @@ pub(super) fn merge_fish_catalog_row(
 
             existing.is_prize = match (existing.is_prize, candidate.is_prize) {
                 (Some(left), Some(right)) => Some(left || right),
-                (Some(left), None) => Some(left),
-                (None, Some(right)) => Some(right),
-                (None, None) => None,
-            };
-
-            existing.icon_url = match (existing.icon_url.take(), candidate.icon_url) {
-                (Some(left), Some(right)) => Some(left.min(right)),
                 (Some(left), None) => Some(left),
                 (None, Some(right)) => Some(right),
                 (None, None) => None,
@@ -108,43 +96,35 @@ pub(super) fn fish_grade_from_db(
 
 #[cfg(test)]
 mod tests {
-    use super::{fish_icon_url_from_db, preferred_item_icon_url};
+    use super::encyclopedia_icon_id_from_db;
 
     #[test]
-    fn preferred_item_icon_url_uses_item_icon_before_encyclopedia_icon() {
+    fn encyclopedia_icon_ids_parse_from_known_filenames() {
         assert_eq!(
-            preferred_item_icon_url(
-                Some("00008477.png".to_string()),
-                Some("00009999.png".to_string()),
-                Some("IC_09507.png".to_string())
-            )
-            .as_deref(),
-            Some("/images/FishIcons/00008477.png")
+            encyclopedia_icon_id_from_db(Some("IC_09507.png".to_string())),
+            Some(9507)
         );
         assert_eq!(
-            preferred_item_icon_url(
-                None,
-                Some("00009999.png".to_string()),
-                Some("IC_09507.png".to_string())
-            )
-            .as_deref(),
-            Some("/images/FishIcons/00009999.png")
+            encyclopedia_icon_id_from_db(Some("00009999.png".to_string())),
+            Some(9999)
         );
         assert_eq!(
-            preferred_item_icon_url(None, None, Some("IC_09507.png".to_string())).as_deref(),
-            Some("/images/FishIcons/IC_09507.png")
+            encyclopedia_icon_id_from_db(Some(
+                "https://cdn.example.com/images/FishIcons/IC_08588.png".to_string()
+            )),
+            Some(8588)
         );
-        assert_eq!(preferred_item_icon_url(None, None, None), None);
+        assert_eq!(encyclopedia_icon_id_from_db(None), None);
     }
 
     #[test]
-    fn fish_icon_url_from_db_filters_non_web_assets() {
+    fn encyclopedia_icon_ids_filter_non_web_assets() {
         assert_eq!(
-            fish_icon_url_from_db(Some("00008475.png".to_string())).as_deref(),
-            Some("/images/FishIcons/00008475.png")
+            encyclopedia_icon_id_from_db(Some("00008475.png".to_string())),
+            Some(8475)
         );
         assert_eq!(
-            fish_icon_url_from_db(Some(
+            encyclopedia_icon_id_from_db(Some(
                 "New_Icon/03_ETC/07_ProductMaterial/00008518.dds".to_string()
             )),
             None

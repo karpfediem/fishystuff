@@ -15,4 +15,4 @@ pub use self::interaction::{
 };
 pub use self::pending::PendingRequests;
 
-pub(crate) use self::catalog::{FishCatalogPayload, FishTableFallback, FishTableIndex};
+pub(crate) use self::catalog::FishCatalogPayload;

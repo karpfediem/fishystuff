@@ -1,5 +1,6 @@
 use super::setup::text_style;
 use super::*;
+use fishystuff_core::fish_icons::fish_item_icon_path;
 pub(super) fn update_selected_text(
     selection: Res<SelectionState>,
     mut query: Query<&mut Text, With<SelectedZoneText>>,
@@ -82,10 +83,7 @@ pub(super) fn sync_zone_evidence_list(
                         _ => "n/a".to_string(),
                     };
                     let selected = fish_filter.selected_fish == Some(entry.fish_id);
-                    let icon_path = entry
-                        .icon_url
-                        .clone()
-                        .or_else(|| fish.icon_url_for_fish(entry.fish_id));
+                    let icon_path = Some(fish_item_icon_path(entry.item_id));
                     (
                         selected,
                         icon_path,

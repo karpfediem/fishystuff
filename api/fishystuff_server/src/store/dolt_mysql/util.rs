@@ -63,11 +63,12 @@ pub(super) fn synthetic_fish_revision(
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     source_revision.unwrap_or("").hash(&mut hasher);
     for entry in fish {
-        entry.fish_id.hash(&mut hasher);
+        entry.item_id.hash(&mut hasher);
+        entry.encyclopedia_key.hash(&mut hasher);
+        entry.encyclopedia_id.hash(&mut hasher);
         entry.name.hash(&mut hasher);
         entry.grade.hash(&mut hasher);
         entry.is_prize.hash(&mut hasher);
-        entry.icon_url.hash(&mut hasher);
         entry.is_dried.hash(&mut hasher);
         entry.catch_methods.hash(&mut hasher);
         entry.vendor_price.hash(&mut hasher);

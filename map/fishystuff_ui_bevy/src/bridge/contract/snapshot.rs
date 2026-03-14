@@ -108,8 +108,10 @@ pub struct FishyMapZoneDriftSnapshot {
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapZoneEvidenceEntrySnapshot {
     pub fish_id: i32,
+    pub item_id: i32,
+    pub encyclopedia_key: Option<i32>,
+    pub encyclopedia_id: Option<i32>,
     pub fish_name: Option<String>,
-    pub icon_url: Option<String>,
     pub evidence_weight: f64,
     pub p_mean: f64,
     pub ci_low: Option<f64>,
@@ -141,8 +143,9 @@ pub struct FishyMapPatchSummary {
 pub struct FishyMapFishSummary {
     pub fish_id: i32,
     pub item_id: i32,
+    pub encyclopedia_key: Option<i32>,
+    pub encyclopedia_id: Option<i32>,
     pub name: String,
-    pub icon_url: Option<String>,
     pub is_prize: bool,
 }
 

@@ -3,7 +3,7 @@ use fishystuff_api::error::ApiError;
 use fishystuff_api::error::ApiErrorEnvelope;
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
-use fishystuff_api::models::fish::{FishListResponse, FishMapResponse, FishTableResponse};
+use fishystuff_api::models::fish::FishListResponse;
 use fishystuff_api::models::layers::LayersResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::region_groups::RegionGroupsResponse;
@@ -66,14 +66,6 @@ impl FishyClient {
 
     pub async fn fish(&self) -> Result<FishListResponse, ClientError> {
         self.get_json("/api/v1/fish").await
-    }
-
-    pub async fn fish_table(&self) -> Result<FishTableResponse, ClientError> {
-        self.get_json("/api/v1/fish_table").await
-    }
-
-    pub async fn fish_map(&self, query: &str) -> Result<FishMapResponse, ClientError> {
-        self.get_json(&format!("/api/v1/fish_map?{query}")).await
     }
 
     pub async fn zone_stats(

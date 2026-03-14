@@ -83,7 +83,7 @@ mod tests {
     use fishystuff_api::ids::MapVersionId;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
-    use fishystuff_api::models::fish::{FishListResponse, FishMapResponse, FishTableEntry};
+    use fishystuff_api::models::fish::FishListResponse;
     use fishystuff_api::models::layers::{
         GeometrySpace, LayerDescriptor, LayerKind, LayerTransformDto, LayerUiInfo, LayersResponse,
         LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
@@ -154,19 +154,6 @@ mod tests {
         }
 
         async fn list_zones(&self, _ref_id: Option<String>) -> AppResult<Vec<ZoneEntry>> {
-            panic!("unused in test")
-        }
-
-        async fn fish_table(&self, _ref_id: Option<String>) -> AppResult<Vec<FishTableEntry>> {
-            panic!("unused in test")
-        }
-
-        async fn fish_map(
-            &self,
-            _encyclopedia_key: Option<i32>,
-            _item_key: Option<i32>,
-            _ref_id: Option<String>,
-        ) -> AppResult<Option<FishMapResponse>> {
             panic!("unused in test")
         }
 

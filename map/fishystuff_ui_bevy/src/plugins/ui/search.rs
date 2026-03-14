@@ -1,5 +1,6 @@
 use super::setup::text_style;
 use super::*;
+use fishystuff_core::fish_icons::fish_item_icon_path;
 pub(super) fn handle_search_focus(
     mut focused: ResMut<FocusedInput>,
     mut search: ResMut<SearchState>,
@@ -207,7 +208,7 @@ pub(super) fn sync_search_tags(
                 .as_ref()
                 .map(|entry| entry.name.clone())
                 .unwrap_or_else(|| format!("Fish {fish_id}"));
-            let icon_url = entry.and_then(|entry| entry.icon_url);
+            let icon_path = entry.map(|entry| fish_item_icon_path(entry.item_id));
             tags.spawn((
                 FishSearchTag { fish_id: *fish_id },
                 Button,
@@ -235,9 +236,9 @@ pub(super) fn sync_search_tags(
                 ClassList::new("search-tag"),
             ))
             .with_children(|tag| {
-                if let Some(icon_url) = icon_url.clone() {
+                if let Some(icon_path) = icon_path.clone() {
                     tag.spawn((
-                        ImageNode::new(asset_server.load(bevy_public_asset_path(&icon_url))),
+                        ImageNode::new(asset_server.load(bevy_public_asset_path(&icon_path))),
                         Node {
                             width: Val::Px(14.0),
                             height: Val::Px(14.0),
@@ -323,8 +324,9 @@ pub(super) fn update_autocomplete_ui(
             .unwrap_or_else(|| "(unknown)".to_string());
         for child in children.iter() {
             if let Ok((mut icon, mut icon_vis)) = icon_q.get_mut(child) {
-                if let Some(icon_url) = fish_entry.and_then(|f| f.icon_url.as_ref()) {
-                    *icon = ImageNode::new(asset_server.load(bevy_public_asset_path(icon_url)));
+                if let Some(fish_entry) = fish_entry {
+                    let icon_path = fish_item_icon_path(fish_entry.item_id);
+                    *icon = ImageNode::new(asset_server.load(bevy_public_asset_path(&icon_path)));
                     *icon_vis = Visibility::Visible;
                 } else {
                     *icon_vis = Visibility::Hidden;
