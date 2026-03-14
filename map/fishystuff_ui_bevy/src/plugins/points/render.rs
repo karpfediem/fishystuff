@@ -83,6 +83,13 @@ impl PointIconCache {
         self.missing_catalog_ids.len()
     }
 
+    pub(crate) fn missing_catalog_sample(&self) -> Vec<i32> {
+        let mut ids = self.missing_catalog_ids.iter().copied().collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids.truncate(5);
+        ids
+    }
+
     pub(crate) fn requested_sample(&self) -> Vec<String> {
         icon_sample(
             self.requested_urls
@@ -324,18 +331,21 @@ fn icon_handle_for_fish(
         RemoteImageStatus::Ready(handle) => {
             cache.loading_ids.remove(&fish_id);
             cache.loaded_ids.insert(fish_id);
+            cache.missing_catalog_ids.remove(&fish_id);
             cache.failed_ids.remove(&fish_id);
             Some(handle)
         }
         RemoteImageStatus::Pending => {
             cache.loading_ids.insert(fish_id);
             cache.loaded_ids.remove(&fish_id);
+            cache.missing_catalog_ids.remove(&fish_id);
             cache.failed_ids.remove(&fish_id);
             None
         }
         RemoteImageStatus::Failed(error) => {
             cache.loading_ids.remove(&fish_id);
             cache.loaded_ids.remove(&fish_id);
+            cache.missing_catalog_ids.remove(&fish_id);
             cache.failed_ids.insert(fish_id, error);
             None
         }

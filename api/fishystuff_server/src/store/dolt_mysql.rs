@@ -636,8 +636,9 @@ impl DoltMySqlStore {
         };
         let fish_name_expr = match lang {
             FishLang::En => "en.`text`",
-            FishLang::Ko => "f.name_ko",
+            FishLang::Ko => "COALESCE(NULLIF(TRIM(f.name_ko), ''), en.`text`)",
         };
+        // fish_names_ko can lag newer releases, so union the fish_table-only rows.
         let query = format!(
             "SELECT \
                 f.fish_id, \
@@ -656,7 +657,27 @@ impl DoltMySqlStore {
                AND COALESCE(en.`unk`, '') = '' \
                AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
              JOIN item_table{as_of} it ON it.`Index` = f.fish_id \
-             LEFT JOIN fish_table{as_of} ft ON ft.item_key = f.fish_id"
+             LEFT JOIN fish_table{as_of} ft ON ft.item_key = f.fish_id \
+             UNION ALL \
+             SELECT \
+                ft.item_key AS fish_id, \
+                ft.encyclopedia_key, \
+                {fish_name_expr} AS fish_name, \
+                it.`GradeType` AS grade_type, \
+                NULLIF(ft.icon, '') AS fish_table_icon_file, \
+                NULLIF(it.`IconImageFile`, '') AS item_icon_file, \
+                NULLIF(ft.encyclopedia_icon, '') AS encyclopedia_icon_file, \
+                it.`ItemName` AS item_name, \
+                it.`Description` AS item_description, \
+                it.`OriginalPrice` AS original_price \
+             FROM fish_table{as_of} ft \
+             JOIN languagedata_en{as_of} en ON en.`id` = ft.item_key \
+               AND en.`format` = 'A' \
+               AND COALESCE(en.`unk`, '') = '' \
+               AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
+             LEFT JOIN item_table{as_of} it ON it.`Index` = ft.item_key \
+             LEFT JOIN fish_names_ko{as_of} f ON f.fish_id = ft.item_key \
+             WHERE f.fish_id IS NULL"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;

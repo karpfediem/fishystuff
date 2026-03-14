@@ -56,6 +56,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
             "loaded": point_icons.loaded_count(),
             "failed": point_icons.failed_count(),
             "missingCatalog": point_icons.missing_catalog_count(),
+            "missingCatalogSample": point_icons.missing_catalog_sample(),
             "visible": point_icons.visible_icon_count,
             "visibleSample": point_icons.visible_sample(),
             "requestedSample": point_icons.requested_sample(),
