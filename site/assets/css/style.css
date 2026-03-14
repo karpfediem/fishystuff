@@ -40,9 +40,13 @@ body {
             radial-gradient(circle at 100% 100%, #000 calc(var(--site-content-notch-radius) - 0.5px), transparent var(--site-content-notch-radius)) left top / var(--site-content-notch-radius) var(--site-content-notch-radius) no-repeat,
             radial-gradient(circle at 0 100%, #000 calc(var(--site-content-notch-radius) - 0.5px), transparent var(--site-content-notch-radius)) right top / var(--site-content-notch-radius) var(--site-content-notch-radius) no-repeat;
     }
+    #home-link,
+    .home-wordmark {
+        font-family: 'Pacifico', sans-serif;
+        font-weight: 700;
+    }
     #home-link {
         font-size: 1.2rem;
-        font-family: 'Pacifico', sans-serif;
         min-width: max-content;
         width: auto;
         display: inline-flex;
