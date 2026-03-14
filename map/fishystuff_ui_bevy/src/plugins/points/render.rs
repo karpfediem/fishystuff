@@ -283,6 +283,15 @@ pub(super) fn sync_point_markers(
     points.dirty = false;
 }
 
+pub(super) fn mark_points_dirty_on_remote_image_update(
+    remote_image_epoch: Res<RemoteImageEpoch>,
+    mut points: ResMut<PointsState>,
+) {
+    if remote_image_epoch.is_changed() {
+        points.dirty = true;
+    }
+}
+
 fn icon_handle_for_fish(
     fish_id: Option<i32>,
     cache: &mut PointIconCache,
