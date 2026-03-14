@@ -92,7 +92,7 @@ in {
   };
 
   processes.api = {
-    exec = "./tools/scripts/run_api_server.sh";
+    exec = "./tools/scripts/watch_api.sh";
     ports.http.allocate = 8080;
     ready.notify = true;
     ready.timeout = 120;

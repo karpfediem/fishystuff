@@ -14,4 +14,13 @@ cd "$ROOT_DIR/site"
 devenv_notify_status "building initial Tailwind output"
 bun run tailwind:build
 devenv_notify_ready "Tailwind CSS built; watching for changes"
-exec just watch-tailwind
+exec watchexec -r --postpone \
+  -w content \
+  -w layouts \
+  -w assets \
+  -w scripts \
+  -w tailwind.input.css \
+  --ignore assets/css/site.css \
+  --ignore .tailwind \
+  --exts smd,md,shtml,html,css,js,mjs,ts \
+  -- bun run tailwind:build

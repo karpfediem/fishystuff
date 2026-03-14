@@ -15,7 +15,7 @@ devenv_notify_status "staging initial CDN payload"
 ./tools/scripts/run_cdn_stage.sh
 devenv_notify_ready "CDN payload staged; watching for changes"
 
-exec watchexec -r \
+exec watchexec -r --postpone \
   -w site/assets/map \
   -w tools/scripts/stage_cdn_assets.sh \
   -w tools/scripts/run_cdn_stage.sh \

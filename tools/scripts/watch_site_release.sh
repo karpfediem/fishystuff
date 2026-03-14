@@ -14,4 +14,11 @@ cd "$ROOT_DIR/site"
 devenv_notify_status "building initial site release"
 just build-release-no-tailwind
 devenv_notify_ready "site release built; watching for changes"
-exec just watch-release
+exec watchexec -r --postpone \
+  -w content \
+  -w layouts \
+  -w assets \
+  -w scripts \
+  -w zine.ziggy \
+  --exts smd,md,shtml,html,ziggy,css,js,mjs,ts \
+  -- just build-release-no-tailwind

@@ -15,7 +15,7 @@ devenv_notify_status "building initial map runtime bundle"
 ./tools/scripts/build_map.sh
 devenv_notify_ready "map runtime bundle built; watching for changes"
 
-exec watchexec -r \
+exec watchexec -r --postpone \
   -w map/fishystuff_ui_bevy \
   -w lib/fishystuff_api \
   -w lib/fishystuff_client \

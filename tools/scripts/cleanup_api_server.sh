@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 API_PORT="${API_PORT:-8080}"
+self_pid="$$"
+caller_pid="${PPID:-}"
 
 find_listener_pids() {
   if ! command -v lsof >/dev/null 2>&1; then
@@ -15,6 +17,8 @@ find_listener_pids() {
 find_managed_pids() {
   ps -eo pid=,command= 2>/dev/null | while read -r pid cmdline; do
     [ -n "$pid" ] || continue
+    [ "$pid" = "$self_pid" ] && continue
+    [ -n "$caller_pid" ] && [ "$pid" = "$caller_pid" ] && continue
     case "$cmdline" in
       *"$ROOT_DIR/tools/scripts/watch_api.sh"*|*"$ROOT_DIR/tools/scripts/run_api.sh"*|*"./tools/scripts/watch_api.sh"*|*"./tools/scripts/run_api.sh"*|*"tools/scripts/watch_api.sh"*|*"tools/scripts/run_api.sh"*|*"$ROOT_DIR/api/config.toml"*fishystuff_server*|*"fishystuff_server --config $ROOT_DIR/api/config.toml"*|*"$ROOT_DIR/target/debug/fishystuff_server"*|*"$ROOT_DIR/target/release/fishystuff_server"*|*"cargo run --manifest-path $ROOT_DIR/Cargo.toml -p fishystuff_server"*)
         printf '%s\n' "$pid"
@@ -26,6 +30,8 @@ find_managed_pids() {
 stop_pid_if_managed() {
   local pid="$1"
   [ -n "$pid" ] || return 0
+  [ "$pid" = "$self_pid" ] && return 0
+  [ -n "$caller_pid" ] && [ "$pid" = "$caller_pid" ] && return 0
   local cmdline
   cmdline="$(ps -o command= -p "$pid" 2>/dev/null || true)"
   if [ -z "$cmdline" ]; then
