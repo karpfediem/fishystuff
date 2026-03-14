@@ -4,6 +4,9 @@
 .author = "Paghur",
 .layout = "guide_page.shtml",
 .draft = false,
+.custom = {
+  .og_image_asset = "mystical.png",
+},
 ---
 
 # So you want to become a God of Fishing...?

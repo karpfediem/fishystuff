@@ -4,6 +4,9 @@
 .author = "flock",
 .layout = "guide_page.shtml",
 .draft = false,
+.custom = {
+  .og_image_asset = "where_am_i.png",
+},
 ---
 
 ## Watch the video
