@@ -95,7 +95,7 @@
                 <input id="guide-nav-drawer" type="checkbox" class="drawer-toggle">
 
                 <div class="drawer-content min-w-0">
-                    <main id="guide-content" class="min-w-0 rounded-box bg-base-200/70 p-6 md:p-8">
+                    <main id="guide-content" class="min-w-0 p-6 md:p-8">
                         <super>
                     </main>
                 </div>
