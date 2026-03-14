@@ -1,5 +1,5 @@
 use axum::extract::{rejection::QueryRejection, Extension, Query, State};
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
@@ -35,21 +35,11 @@ pub async fn list_fish(
     .await
     .map_err(|err| map_request_id(err, &request_id))?;
 
-    let etag = format!("\"{}\"", response.revision);
     let mut response_headers = HeaderMap::new();
     response_headers.insert(
         header::CACHE_CONTROL,
-        HeaderValue::from_static("public, max-age=300"),
+        HeaderValue::from_static("no-store"),
     );
-    response_headers.insert(
-        header::ETAG,
-        HeaderValue::from_str(&etag)
-            .map_err(|err| AppError::internal(format!("invalid fish etag: {err}")))?,
-    );
-
-    if request_etag_matches(&headers, &etag) {
-        return Ok((StatusCode::NOT_MODIFIED, response_headers).into_response());
-    }
 
     if is_datastar_request(&headers) {
         response_headers.insert(
@@ -60,19 +50,6 @@ pub async fn list_fish(
     }
 
     Ok((response_headers, Json(response)).into_response())
-}
-
-fn request_etag_matches(headers: &HeaderMap, current_etag: &str) -> bool {
-    let Some(value) = headers.get(header::IF_NONE_MATCH) else {
-        return false;
-    };
-    let Ok(value) = value.to_str() else {
-        return false;
-    };
-    value
-        .split(',')
-        .map(str::trim)
-        .any(|candidate| candidate == "*" || candidate == current_etag)
 }
 
 fn is_datastar_request(headers: &HeaderMap) -> bool {
@@ -233,7 +210,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn list_fish_route_returns_revisioned_json_and_cache_headers() {
+    async fn list_fish_route_returns_revisioned_json_and_no_store_headers() {
         let mut headers = HeaderMap::new();
         headers.insert(header::HOST, HeaderValue::from_static("api.example.test"));
         headers.insert(
@@ -260,14 +237,7 @@ mod tests {
                 .headers()
                 .get(header::CACHE_CONTROL)
                 .and_then(|value| value.to_str().ok()),
-            Some("public, max-age=300")
-        );
-        assert_eq!(
-            response
-                .headers()
-                .get(header::ETAG)
-                .and_then(|value| value.to_str().ok()),
-            Some("\"dolt:test-fish-rev\"")
+            Some("no-store")
         );
 
         let body = to_bytes(response.into_body()).await.expect("body bytes");
@@ -284,32 +254,6 @@ mod tests {
         assert_eq!(fish[0]["catch_methods"][0], "rod");
         assert_eq!(fish[0]["vendor_price"], 120000000);
         assert_eq!(fish[1]["is_dried"], true);
-    }
-
-    #[tokio::test]
-    async fn list_fish_route_returns_not_modified_for_matching_etag() {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            header::IF_NONE_MATCH,
-            HeaderValue::from_static("\"dolt:test-fish-rev\""),
-        );
-
-        let response = list_fish(
-            State(test_state()),
-            headers,
-            Ok(Query(FishQuery {
-                lang: None,
-                r#ref: None,
-            })),
-            Extension(RequestId("req-test".to_string())),
-        )
-        .await
-        .expect("fish response")
-        .into_response();
-
-        assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
-        let body = to_bytes(response.into_body()).await.expect("body bytes");
-        assert!(body.is_empty());
     }
 
     #[tokio::test]

@@ -1,6 +1,8 @@
 use fishystuff_api::error::ApiError;
 #[cfg(target_arch = "wasm32")]
 use fishystuff_api::error::ApiErrorEnvelope;
+#[cfg(target_arch = "wasm32")]
+use web_sys::{RequestCache, RequestMode};
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
 use fishystuff_api::models::fish::FishListResponse;
@@ -109,6 +111,8 @@ impl FishyClient {
     {
         let url = self.join_url(path);
         let response = gloo_net::http::Request::get(&url)
+            .cache(RequestCache::NoStore)
+            .mode(RequestMode::Cors)
             .send()
             .await
             .map_err(|err| ClientError::Transport(err.to_string()))?;
