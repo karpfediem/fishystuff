@@ -123,12 +123,6 @@ pub(crate) fn normalize_fish_icon_asset_url(
 }
 
 pub(crate) fn bevy_public_asset_path(raw: &str) -> String {
-    if raw.starts_with("../") || raw.starts_with("./") {
-        return raw.to_string();
-    }
-    if let Some(rest) = raw.strip_prefix('/') {
-        return format!("../{rest}");
-    }
     raw.to_string()
 }
 
@@ -247,7 +241,7 @@ mod tests {
     fn bevy_public_asset_paths_resolve_from_map_asset_root() {
         assert_eq!(
             bevy_public_asset_path("/images/FishIcons/IC_08588.png"),
-            "../images/FishIcons/IC_08588.png"
+            "/images/FishIcons/IC_08588.png"
         );
         assert_eq!(
             bevy_public_asset_path("../images/FishIcons/IC_08588.png"),
