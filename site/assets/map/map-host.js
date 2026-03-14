@@ -754,14 +754,43 @@ function runtimeConfigBaseUrl(key) {
   return normalizeBaseUrl(globalThis.window?.__fishystuffRuntimeConfig?.[key]);
 }
 
+function isLoopbackHost(hostname) {
+  return hostname === "127.0.0.1" || hostname === "localhost";
+}
+
+function harmonizeLoopbackBaseUrl(value, locationLike = globalThis.location) {
+  const normalized = normalizeBaseUrl(value);
+  if (!normalized) {
+    return "";
+  }
+  try {
+    const url = new URL(normalized, locationLike?.href);
+    if (
+      locationLike
+      && isLoopbackHost(url.hostname)
+      && isLoopbackHost(locationLike.hostname)
+      && url.hostname !== locationLike.hostname
+    ) {
+      url.hostname = locationLike.hostname;
+    }
+    return normalizeBaseUrl(url.toString());
+  } catch (_) {
+    return normalized;
+  }
+}
+
 export function resolveApiBaseUrl(locationLike = globalThis.location) {
-  const explicit = normalizeBaseUrl(globalThis.window?.__fishystuffApiBaseUrl);
+  const explicit = harmonizeLoopbackBaseUrl(globalThis.window?.__fishystuffApiBaseUrl, locationLike);
   if (explicit) {
     return explicit;
   }
-  const configured = runtimeConfigBaseUrl("apiBaseUrl");
+  const configured = harmonizeLoopbackBaseUrl(runtimeConfigBaseUrl("apiBaseUrl"), locationLike);
   if (configured) {
     return configured;
+  }
+  if (isLoopbackHost(locationLike?.hostname)) {
+    const protocol = locationLike?.protocol === "https:" ? "https:" : "http:";
+    return `${protocol}//${locationLike.hostname}:8080`;
   }
   return "https://api.fishystuff.fish";
 }
@@ -778,13 +807,17 @@ export function resolveCdnBaseUrl(
   locationLike = globalThis.location,
   explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
 ) {
-  const explicit = normalizeBaseUrl(explicitBaseUrl);
+  const explicit = harmonizeLoopbackBaseUrl(explicitBaseUrl, locationLike);
   if (explicit) {
     return explicit;
   }
-  const configured = runtimeConfigBaseUrl("cdnBaseUrl");
+  const configured = harmonizeLoopbackBaseUrl(runtimeConfigBaseUrl("cdnBaseUrl"), locationLike);
   if (configured) {
     return configured;
+  }
+  if (isLoopbackHost(locationLike?.hostname)) {
+    const protocol = locationLike?.protocol === "https:" ? "https:" : "http:";
+    return `${protocol}//${locationLike.hostname}:4040`;
   }
   return "https://cdn.fishystuff.fish";
 }

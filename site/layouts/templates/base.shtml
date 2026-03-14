@@ -48,12 +48,85 @@
         return String(value || '').trim().replace(/\/+$/, '');
       }
 
+      function isLoopbackHost(hostname) {
+        return hostname === '127.0.0.1' || hostname === 'localhost';
+      }
+
+      function harmonizeLoopbackBaseUrl(value, locationLike) {
+        var normalized = normalizeBaseUrl(value);
+        if (!normalized) {
+          return '';
+        }
+        try {
+          var url = new URL(normalized, locationLike && locationLike.href ? locationLike.href : undefined);
+          if (
+            locationLike
+            && isLoopbackHost(url.hostname)
+            && isLoopbackHost(locationLike.hostname)
+            && url.hostname !== locationLike.hostname
+          ) {
+            url.hostname = locationLike.hostname;
+          }
+          return normalizeBaseUrl(url.toString());
+        } catch (_) {
+          return normalized;
+        }
+      }
+
+      function loopbackAwareFallback(locationLike, port, productionBase) {
+        if (locationLike && isLoopbackHost(locationLike.hostname)) {
+          var protocol = locationLike.protocol === 'https:' ? 'https:' : 'http:';
+          return normalizeBaseUrl(protocol + '//' + locationLike.hostname + ':' + port);
+        }
+        return normalizeBaseUrl(productionBase);
+      }
+
       function pickBaseUrl(params, runtimeConfig, queryKey, runtimeKey, fallback) {
         return (
-          normalizeBaseUrl(params.get(queryKey))
-          || normalizeBaseUrl(runtimeConfig && runtimeConfig[runtimeKey])
+          harmonizeLoopbackBaseUrl(params.get(queryKey), window.location)
+          || harmonizeLoopbackBaseUrl(runtimeConfig && runtimeConfig[runtimeKey], window.location)
           || fallback
         );
+      }
+
+      function joinBaseUrl(baseUrl, rawPath) {
+        var path = String(rawPath || '').trim();
+        if (!path) {
+          return '';
+        }
+        if (
+          path.startsWith('http://')
+          || path.startsWith('https://')
+          || path.startsWith('data:')
+        ) {
+          return path;
+        }
+        var base = normalizeBaseUrl(baseUrl);
+        if (!base) {
+          return path;
+        }
+        if (path.startsWith('/')) {
+          return base + path;
+        }
+        return base + '/' + path.replace(/^\/+/, '');
+      }
+
+      function zeroPad(value, width) {
+        var numeric = Number.parseInt(value, 10);
+        if (!Number.isFinite(numeric) || numeric <= 0) {
+          return '';
+        }
+        return String(numeric).padStart(width, '0');
+      }
+
+      function fishItemIconPath(itemId) {
+        var digits = zeroPad(itemId, 8);
+        return digits ? '/images/FishIcons/' + digits + '.png' : '';
+      }
+
+      function fishEncyclopediaIconPath(encyclopediaId) {
+        var digits = zeroPad(encyclopediaId, 5);
+        return digits ? '/images/FishIcons/IC_' + digits + '.png' : '';
       }
 
       var runtimeConfig = window.__fishystuffRuntimeConfig || {};
@@ -63,22 +136,41 @@
         runtimeConfig,
         'site_base',
         'siteBaseUrl',
-        normalizeBaseUrl(window.location.origin) || 'https://fishystuff.fish',
+        loopbackAwareFallback(window.location, '1990', normalizeBaseUrl(window.location.origin) || 'https://fishystuff.fish'),
       );
       window.__fishystuffApiBaseUrl = pickBaseUrl(
         params,
         runtimeConfig,
         'api_base',
         'apiBaseUrl',
-        'https://api.fishystuff.fish',
+        loopbackAwareFallback(window.location, '8080', 'https://api.fishystuff.fish'),
       );
       window.__fishystuffCdnBaseUrl = pickBaseUrl(
         params,
         runtimeConfig,
         'cdn_base',
         'cdnBaseUrl',
-        'https://cdn.fishystuff.fish',
+        loopbackAwareFallback(window.location, '4040', 'https://cdn.fishystuff.fish'),
       );
+      window.__fishystuffResolveSiteUrl = function (path) {
+        return joinBaseUrl(window.__fishystuffSiteBaseUrl, path);
+      };
+      window.__fishystuffResolveApiUrl = function (path) {
+        return joinBaseUrl(window.__fishystuffApiBaseUrl, path);
+      };
+      window.__fishystuffResolveCdnUrl = function (path) {
+        return joinBaseUrl(window.__fishystuffCdnBaseUrl, path);
+      };
+      window.__fishystuffFishItemIconPath = fishItemIconPath;
+      window.__fishystuffFishEncyclopediaIconPath = fishEncyclopediaIconPath;
+      window.__fishystuffResolveFishItemIconUrl = function (itemId) {
+        var path = fishItemIconPath(itemId);
+        return path ? window.__fishystuffResolveCdnUrl(path) : '';
+      };
+      window.__fishystuffResolveFishEncyclopediaIconUrl = function (encyclopediaId) {
+        var path = fishEncyclopediaIconPath(encyclopediaId);
+        return path ? window.__fishystuffResolveCdnUrl(path) : '';
+      };
       window.__fishystuffRuntimeConfig = Object.freeze(Object.assign({}, runtimeConfig, {
         siteBaseUrl: window.__fishystuffSiteBaseUrl,
         apiBaseUrl: window.__fishystuffApiBaseUrl,

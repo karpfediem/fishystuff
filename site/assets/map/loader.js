@@ -243,6 +243,19 @@ function escapeHtml(value) {
 }
 
 function fishIconUrl(fish) {
+  if (typeof globalThis.window?.__fishystuffResolveFishItemIconUrl === "function") {
+    const itemUrl = globalThis.window.__fishystuffResolveFishItemIconUrl(fish?.itemId);
+    if (itemUrl) {
+      return itemUrl;
+    }
+  }
+  if (typeof globalThis.window?.__fishystuffResolveFishEncyclopediaIconUrl === "function") {
+    const encyclopediaUrl =
+      globalThis.window.__fishystuffResolveFishEncyclopediaIconUrl(fish?.encyclopediaId);
+    if (encyclopediaUrl) {
+      return encyclopediaUrl;
+    }
+  }
   const assetPath = fishItemIconPath(fish?.itemId) || fishEncyclopediaIconPath(fish?.encyclopediaId);
   return assetPath ? `${resolveCdnBaseUrl(window.location)}${assetPath}` : "";
 }

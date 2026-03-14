@@ -1796,8 +1796,10 @@
     }
 
     function cdnBaseUrl() {
+      if (typeof window.__fishystuffCdnBaseUrl === "string" && window.__fishystuffCdnBaseUrl.trim()) {
+        return window.__fishystuffCdnBaseUrl.trim().replace(/\/+$/, "");
+      }
       const candidates = [
-        window.__fishystuffCdnBaseUrl,
         window.__fishystuffRuntimeConfig && window.__fishystuffRuntimeConfig.cdnBaseUrl,
         "https://cdn.fishystuff.fish",
       ];
@@ -1811,6 +1813,9 @@
     }
 
     function cdnUrl(path) {
+      if (typeof window.__fishystuffResolveCdnUrl === "function") {
+        return window.__fishystuffResolveCdnUrl(path);
+      }
       const raw = String(path || "").trim();
       if (!raw) {
         return "";
@@ -1848,11 +1853,17 @@
     }
 
     function fishItemIconUrl(itemId) {
+      if (typeof window.__fishystuffResolveFishItemIconUrl === "function") {
+        return window.__fishystuffResolveFishItemIconUrl(itemId);
+      }
       const path = fishItemIconPath(itemId);
       return path ? cdnUrl(path) : "";
     }
 
     function fishEncyclopediaIconUrl(encyclopediaId) {
+      if (typeof window.__fishystuffResolveFishEncyclopediaIconUrl === "function") {
+        return window.__fishystuffResolveFishEncyclopediaIconUrl(encyclopediaId);
+      }
       const path = fishEncyclopediaIconPath(encyclopediaId);
       return path ? cdnUrl(path) : "";
     }

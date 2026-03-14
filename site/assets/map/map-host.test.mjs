@@ -945,8 +945,11 @@ test("theme extraction reads distinct base200 and base300 tokens from the probe"
   assert.equal(snapshot.colors.base300, "rgb(30 31 32 / 1)");
 });
 
-test("API base falls back to production when no runtime config is present", () => {
-  assert.equal(resolveApiBaseUrl({ hostname: "localhost" }), "https://api.fishystuff.fish");
+test("API base falls back to local loopback in dev and production otherwise", () => {
+  assert.equal(
+    resolveApiBaseUrl({ hostname: "localhost", protocol: "http:", href: "http://localhost:1990/map/" }),
+    "http://localhost:8080",
+  );
   assert.equal(resolveApiBaseUrl({ hostname: "fishystuff.fish" }), "https://api.fishystuff.fish");
 });
 
@@ -972,15 +975,24 @@ test("base URLs prefer runtime config when present", () => {
     },
   };
   try {
-    assert.equal(resolveApiBaseUrl({ hostname: "localhost" }), "http://127.0.0.1:18080");
-    assert.equal(resolveCdnBaseUrl({ hostname: "localhost" }), "http://127.0.0.1:14040");
+    assert.equal(
+      resolveApiBaseUrl({ hostname: "localhost", protocol: "http:", href: "http://localhost:1990/map/" }),
+      "http://localhost:18080",
+    );
+    assert.equal(
+      resolveCdnBaseUrl({ hostname: "localhost", protocol: "http:", href: "http://localhost:1990/map/" }),
+      "http://localhost:14040",
+    );
   } finally {
     globalThis.window = previousWindow;
   }
 });
 
 test("CDN base resolves to production or an explicit override", () => {
-  assert.equal(resolveCdnBaseUrl({ hostname: "localhost" }), "https://cdn.fishystuff.fish");
+  assert.equal(
+    resolveCdnBaseUrl({ hostname: "localhost", protocol: "http:", href: "http://localhost:1990/map/" }),
+    "http://localhost:4040",
+  );
   assert.equal(
     resolveCdnBaseUrl({ hostname: "fishystuff.fish" }),
     "https://cdn.fishystuff.fish",
@@ -993,8 +1005,12 @@ test("CDN base resolves to production or an explicit override", () => {
 
 test("runtime manifest URL is cache-busted against the CDN base", () => {
   assert.equal(
-    resolveMapRuntimeManifestUrl({ hostname: "localhost" }, 123, "http://127.0.0.1:4040"),
-    "http://127.0.0.1:4040/map/runtime-manifest.json?v=123",
+    resolveMapRuntimeManifestUrl(
+      { hostname: "localhost", protocol: "http:", href: "http://localhost:1990/map/" },
+      123,
+      "http://127.0.0.1:4040",
+    ),
+    "http://localhost:4040/map/runtime-manifest.json?v=123",
   );
   assert.equal(
     resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, "deploy-456"),
