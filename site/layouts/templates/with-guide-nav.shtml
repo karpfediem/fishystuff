@@ -62,10 +62,6 @@
                 }
 
                 .guide-rail-shell {
-                    position: sticky;
-                    top: calc(var(--site-nav-offset, 0px) + 1rem);
-                    max-height: calc(100dvh - var(--site-nav-offset, 0px) - 2rem);
-                    overflow: auto;
                     width: 18rem;
                 }
                 #guide-nav-top-button {

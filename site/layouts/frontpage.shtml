@@ -14,10 +14,12 @@
 
       #content.site-content-card {
         border-radius: 0;
+        background: transparent;
       }
 
-      #content.site-content-card .site-content-shell {
-        display: none;
+      #content.site-content-card::before,
+      #content.site-content-card::after {
+        content: none;
       }
 
       .home-entry-card {

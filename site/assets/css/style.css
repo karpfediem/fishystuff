@@ -13,21 +13,22 @@ body {
         position: relative;
         z-index: 0;
         overflow: visible;
-    }
-    &:has(#content.site-content-card) #content.site-content-card .site-content-shell.site-content-clip {
-        z-index: -1;
-        pointer-events: none;
         border-radius: var(--site-content-notch-radius);
-        -webkit-mask:
-            linear-gradient(#000 0 0) left bottom / 100% calc(100% - var(--site-content-notch-radius)) no-repeat,
-            linear-gradient(#000 0 0) center top / calc(100% - (var(--site-content-notch-radius) * 2)) var(--site-content-notch-radius) no-repeat,
-            radial-gradient(circle at 100% 100%, #000 calc(var(--site-content-notch-radius) - 0.5px), transparent var(--site-content-notch-radius)) left top / var(--site-content-notch-radius) var(--site-content-notch-radius) no-repeat,
-            radial-gradient(circle at 0 100%, #000 calc(var(--site-content-notch-radius) - 0.5px), transparent var(--site-content-notch-radius)) right top / var(--site-content-notch-radius) var(--site-content-notch-radius) no-repeat;
-        mask:
-            linear-gradient(#000 0 0) left bottom / 100% calc(100% - var(--site-content-notch-radius)) no-repeat,
-            linear-gradient(#000 0 0) center top / calc(100% - (var(--site-content-notch-radius) * 2)) var(--site-content-notch-radius) no-repeat,
-            radial-gradient(circle at 100% 100%, #000 calc(var(--site-content-notch-radius) - 0.5px), transparent var(--site-content-notch-radius)) left top / var(--site-content-notch-radius) var(--site-content-notch-radius) no-repeat,
-            radial-gradient(circle at 0 100%, #000 calc(var(--site-content-notch-radius) - 0.5px), transparent var(--site-content-notch-radius)) right top / var(--site-content-notch-radius) var(--site-content-notch-radius) no-repeat;
+        background: color-mix(in srgb, var(--color-base-300) 15%, transparent);
+    }
+    &:has(#content.site-content-card) #content.site-content-card.site-content-clip::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto;
+        height: var(--site-content-notch-radius);
+        z-index: 1;
+        pointer-events: none;
+        background:
+            radial-gradient(circle at 100% 100%, transparent calc(var(--site-content-notch-radius) - 0.5px), var(--color-base-100) var(--site-content-notch-radius)) left top / var(--site-content-notch-radius) var(--site-content-notch-radius) no-repeat,
+            radial-gradient(circle at 0 100%, transparent calc(var(--site-content-notch-radius) - 0.5px), var(--color-base-100) var(--site-content-notch-radius)) right top / var(--site-content-notch-radius) var(--site-content-notch-radius) no-repeat;
+    }
+    &:has(#content.site-content-card) #content.site-content-card.site-content-clip::after {
+        content: none;
     }
     .page-title-stack {
         display: flex;

@@ -279,8 +279,7 @@
 
     <!-- Page container -->
     <div id="content"
-         class="site-content-card mx-auto max-w-[130ch] px-4 py-4 md:px-6 md:py-6">
-        <div aria-hidden="true" class="site-content-shell site-content-clip absolute inset-0 rounded-box bg-base-300/15"></div>
+         class="site-content-card site-content-clip mx-auto max-w-[130ch] px-4 py-4 md:px-6 md:py-6">
         <super>
     </div>
 

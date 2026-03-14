@@ -30,11 +30,13 @@
         margin: 0;
         padding: 0;
         border-radius: 0;
+        background: transparent;
         overflow: hidden;
       }
 
-      body:has(#map-page-shell) #content .site-content-shell {
-        display: none;
+      body:has(#map-page-shell) #content::before,
+      body:has(#map-page-shell) #content::after {
+        content: none;
       }
 
       body:has(#map-page-shell) #content > .site-content-clip {
