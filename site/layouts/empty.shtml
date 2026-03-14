@@ -3,6 +3,13 @@
     <title id="title" :text="$page.title"></title>
 
     <body id="body">
-        <h1 :text="$page.title"></h1>
-        <div :html="$page.content()"></div>
+        <main class="mx-auto grid max-w-5xl gap-6 px-4 py-8 md:px-6 md:py-10">
+            <header class="page-title-shell not-prose">
+                <div class="page-title-stack">
+                    <h2 class="page-title-heading" :text="$page.title"></h2>
+                </div>
+            </header>
+
+            <div :html="$page.content()"></div>
+        </main>
     </body>

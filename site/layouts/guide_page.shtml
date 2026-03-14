@@ -4,14 +4,12 @@
 
   <main id="guide-content">
     <article class="doc">
-      <header class="page-header not-prose rounded-box border border-base-300 bg-base-100 p-5 md:p-6">
-        <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div class="space-y-3">
-            <h1 class="m-0" :text="$page.title"></h1>
-          </div>
+      <header class="page-header page-title-shell not-prose">
+        <div class="page-title-stack">
+          <h2 class="page-title-heading" :text="$page.title"></h2>
 
-          <div class="grid gap-2 text-sm text-base-content/70">
-            <p class="meta m-0">
+          <div class="page-title-meta text-sm text-base-content/70">
+            <p class="meta page-title-meta-line">
               <span :if="$page.author.len().gt(0)">By <span :text="$page.author"></span></span>
               <span>
                 ~<span :text="$page.wordCount().div(200).plus(1)"></span>
@@ -19,7 +17,7 @@
               </span>
             </p>
 
-            <p class="meta meta-dates m-0 flex flex-col">
+            <p class="meta meta-dates page-title-meta-line">
               <span :if="$page.custom.get?('updated')">
                 <strong :text="$i18n.getOr('last_updated','Last updated')"></strong>:
                 <time :text="$if.format('January 02, 2006')"></time>
