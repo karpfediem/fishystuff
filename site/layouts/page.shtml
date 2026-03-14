@@ -33,7 +33,7 @@
                 </div>
             </header>
 
-            <article class="site-content-clip bg-base-200/70 p-6 md:p-10">
+            <article class="rounded-box bg-base-200/70 p-6 md:p-10">
                 <div class="doc-body" :html="$page.content()"></div>
 
                 <section class="footnotes" :if="$page.footnotes?()">

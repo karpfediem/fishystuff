@@ -76,7 +76,7 @@
     const lightstone_sets = searchList(items, '', 'lightstone_set')
 
 
-    const selectedOption = `<button class="btn btn-outline w-full justify-between"><div><selectedcontent></selectedcontent></div></button>`
+    const selectedOption = `<button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>`
     const noneOption = '<option value=""><span>None</span></option>\n'
     const mapOption = (list) => list.map(i => {
             let html = `<option value="${i.name}">`
@@ -745,4 +745,3 @@
     }
 </style>
 ```
-...

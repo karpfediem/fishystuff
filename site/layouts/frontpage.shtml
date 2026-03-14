@@ -2,7 +2,6 @@
   <title id="title" :text="$page.title"></title>
 
   <div id="content">
-    <div class="site-content-clip">
     <style>
       body:has(.home-hero) #menu {
         margin-bottom: 1rem;
@@ -20,7 +19,11 @@
         box-shadow: none;
       }
 
-      #content.site-content-card > .site-content-clip {
+      #content.site-content-card .site-content-shell {
+        display: none;
+      }
+
+      #content.site-content-card.site-content-clip {
         border-radius: 0;
         -webkit-mask: none;
         mask: none;
@@ -29,7 +32,7 @@
       }
 
       @media (min-width: 768px) {
-        #content.site-content-card > .site-content-clip {
+        #content.site-content-card.site-content-clip {
           padding: 1.5rem;
         }
       }
@@ -178,5 +181,4 @@
     <section class="home-community mt-10 text-center text-sm text-base-content/70">
       <div id="page" :html="$page.content()"></div>
     </section>
-    </div>
   </div>

@@ -36,6 +36,10 @@
         overflow: hidden;
       }
 
+      body:has(#map-page-shell) #content .site-content-shell {
+        display: none;
+      }
+
       body:has(#map-page-shell) #content > .site-content-clip {
         width: 100%;
         height: 100%;

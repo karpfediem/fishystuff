@@ -4,7 +4,6 @@
 
   <div id="content" class="mx-auto max-w-6xl px-4 md:px-6">
     <div class="grid gap-5">
-    <div class="site-content-clip bg-base-200/70 p-5 md:p-6">
     <main class="min-w-0">
     <header class="page-header mb-0 not-prose">
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
@@ -110,6 +109,5 @@
 
 
     </main>
-    </div>
     </div>
   </div>

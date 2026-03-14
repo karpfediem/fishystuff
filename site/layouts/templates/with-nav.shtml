@@ -279,7 +279,8 @@
 
     <!-- Page container -->
     <div id="content"
-         class="site-content-card mx-auto mt-4 rounded-box border border-base-300 shadow-sm">
+         class="site-content-card site-content-clip mx-auto bg-base-300 mt-4 px-4 py-4 md:px-6 md:py-6">
+        <div aria-hidden="true" class="site-content-shell site-content-clip absolute inset-0 rounded-box bg-base-300/15"></div>
         <super>
     </div>
 

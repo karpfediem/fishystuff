@@ -3,6 +3,9 @@ body {
         position: relative;
         overflow: visible;
     }
+    #menu {
+        border-radius: 0;
+    }
     &:has(#content.site-content-card) {
         --site-content-notch-radius: calc(var(--radius-box) - var(--border));
     }
@@ -13,9 +16,18 @@ body {
         margin-top: 0;
         position: relative;
         z-index: 0;
+        overflow: visible;
     }
-    &:has(#content.site-content-card) #content.site-content-card > .site-content-clip {
-        /* Keep the outer border rounded and carve the inverse corners into the inner content layer. */
+    &:has(#content.site-content-card) #content.site-content-card.site-content-clip {
+        background: transparent;
+        -webkit-mask: none;
+        mask: none;
+    }
+    &:has(#content.site-content-card) #content.site-content-card .site-content-shell.site-content-clip {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
         border-radius: var(--site-content-notch-radius);
         -webkit-mask:
             linear-gradient(#000 0 0) left bottom / 100% calc(100% - var(--site-content-notch-radius)) no-repeat,

@@ -7,9 +7,12 @@
             .guide-layout {
                 position: relative;
                 max-width: 100%;
+            }
+
+            .guide-main-shell {
+                position: relative;
+                max-width: 64rem;
                 margin-inline: auto;
-                display: grid;
-                gap: 1.25rem;
             }
 
             .guide-desktop-rail {
@@ -58,81 +61,75 @@
                 text-decoration: none;
             }
 
-            @media (min-width: 96rem) {
-                .guide-layout {
-                    display: grid;
-                    grid-template-columns: minmax(0, 1fr);
-                }
-
+            @media (min-width: 104rem) {
                 .guide-desktop-rail {
                     display: block;
-                    grid-column: 1;
-                    grid-row: 1;
-                    justify-self: start;
-                    align-self: start;
-                    margin-left: calc(-18rem - 1rem);
-                    position: sticky;
-                    top: calc(var(--site-nav-offset, 0px) + 1rem);
+                    position: absolute;
+                    inset-block-start: 0;
+                    inset-inline-start: 0;
+                    transform: translateX(calc(-100% - 1rem));
                     width: 18rem;
-                }
-
-                .drawer {
-                    grid-column: 1;
-                    grid-row: 1;
-                    min-width: 0;
+                    z-index: 1;
                 }
 
                 .guide-rail-shell {
+                    position: sticky;
+                    top: calc(var(--site-nav-offset, 0px) + 1rem);
                     max-height: calc(100dvh - var(--site-nav-offset, 0px) - 2rem);
                     overflow: auto;
                     width: 18rem;
+                }
+                #guide-nav-top-button {
+                    display: none !important;
                 }
             }
         </style>
 
         <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
-            <label id="guide-nav-top-button" for="guide-nav-drawer" class="hidden btn btn-sm btn-soft 2xl:hidden drawer-button">
+            <label id="guide-nav-top-button" for="guide-nav-drawer" class="hidden btn btn-sm btn-soft drawer-button">
                 On This Page
             </label>
         </ctx>
 
         <div class="guide-layout">
-            <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
-                <div class="guide-desktop-rail">
-                    <aside class="guide-rail-shell not-prose">
-                        <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3">
-                            <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">On this page</h2>
-                            <div :html="$page.toc()"></div>
-                        </section>
-                    </aside>
+            <div class="guide-main-shell">
+                <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
+                    <div class="guide-desktop-rail">
+                        <aside class="guide-rail-shell not-prose">
+                            <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3">
+                                <h2 class="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-base-content/60">On this page</h2>
+                                <div :html="$page.toc()"></div>
+                            </section>
+                        </aside>
+                    </div>
+                </ctx>
+
+                <div class="drawer">
+                <input id="guide-nav-drawer" type="checkbox" class="drawer-toggle">
+
+                <div class="drawer-content min-w-0">
+                    <main id="guide-content" class="min-w-0 rounded-box bg-base-200/70 p-6 md:p-8">
+                        <super>
+                    </main>
                 </div>
-            </ctx>
 
-            <div class="drawer">
-            <input id="guide-nav-drawer" type="checkbox" class="drawer-toggle">
+                <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
+                    <div class="drawer-side z-30">
+                        <label for="guide-nav-drawer" aria-label="Close guide navigation" class="drawer-overlay"></label>
 
-            <div class="drawer-content min-w-0">
-                <main id="guide-content" class="site-content-clip min-w-0 bg-base-200/70 p-6 md:p-8">
-                    <super>
-                </main>
-            </div>
+                        <aside class="guide-drawer-shell guide-rail-shell not-prose min-h-full border-e border-base-300 bg-base-100 p-4">
+                            <div class="mb-3 flex items-center justify-between gap-3">
+                                <div class="text-sm font-bold text-base-content">On this page</div>
+                                <label for="guide-nav-drawer" class="btn btn-sm btn-ghost">Close</label>
+                            </div>
 
-            <ctx :if="$page.custom.getOr('toc', true).and($page.toc().len().gt(0))">
-                <div class="drawer-side z-30">
-                    <label for="guide-nav-drawer" aria-label="Close guide navigation" class="drawer-overlay"></label>
-
-                    <aside class="guide-drawer-shell guide-rail-shell not-prose min-h-full border-e border-base-300 bg-base-100 p-4">
-                        <div class="mb-3 flex items-center justify-between gap-3">
-                            <div class="text-sm font-bold text-base-content">On this page</div>
-                            <label for="guide-nav-drawer" class="btn btn-sm btn-ghost">Close</label>
-                        </div>
-
-                        <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3">
-                            <div :html="$page.toc()"></div>
-                        </section>
-                    </aside>
+                            <section class="guide-rail-toc rounded-box border border-base-300 bg-base-100 p-3">
+                                <div :html="$page.toc()"></div>
+                            </section>
+                        </aside>
+                    </div>
+                </ctx>
                 </div>
-            </ctx>
             </div>
         </div>
 

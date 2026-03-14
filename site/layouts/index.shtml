@@ -10,7 +10,7 @@
             </header>
 
             <div class="grid gap-5 lg:grid-cols-2">
-                <section class="site-content-clip bg-base-200/70 p-6 md:p-8" :loop="$page.contentSections()">
+                <section class="rounded-box bg-base-200/70 p-6 md:p-8" :loop="$page.contentSections()">
                     <div :html="$loop.it.html()"></div>
                 </section>
             </div>
