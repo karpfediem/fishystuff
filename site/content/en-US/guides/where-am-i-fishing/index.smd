@@ -11,5 +11,7 @@
 
 ## Watch the video
 ```=html
-<iframe width="100%" src="https://www.youtube.com/embed/t-VXcRoNojk" title="🎣 BDO Fishing Guide: How to Check Your Fishing Zone!" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+<div class="not-prose aspect-video w-full">
+  <iframe class="h-full w-full" src="https://www.youtube.com/embed/t-VXcRoNojk" title="🎣 BDO Fishing Guide: How to Check Your Fishing Zone!" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</div>
 ```
