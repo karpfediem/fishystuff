@@ -112,10 +112,6 @@ body {
     h1.title {
         font-family: 'Pacifico', sans-serif;
     }
-    * {
-        border-radius: 0.75rem;
-    }
-
     a.card {
         text-decoration: none;
     }
