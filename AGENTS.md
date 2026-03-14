@@ -110,4 +110,4 @@ Repository-level notes for working in this monorepo.
 - Do not commit unrelated generated build outputs.
 
 ## Frontend references
-- The site UI uses DaisyUI for frontend styling. For framework-oriented guidance and component conventions, refer to <https://daisyui.com/llms.txt>.
+- The site UI uses DaisyUI for frontend styling. For framework-oriented guidance and component conventions, use the daisyui-blueprint MCP server and optionally refer to <https://daisyui.com/llms.txt>.
