@@ -53,16 +53,18 @@
             @media (min-width: 104rem) {
                 .guide-desktop-rail {
                     display: block;
-                    position: absolute;
-                    inset-block-start: 0;
-                    inset-inline-start: 0;
-                    transform: translateX(calc(-100% - 1rem));
-                    width: 18rem;
+                    position: sticky;
+                    top: calc(var(--site-nav-offset, 0px) + 1rem);
+                    width: 0;
+                    height: 0;
                     z-index: 1;
                 }
 
                 .guide-rail-shell {
                     width: 18rem;
+                    max-height: calc(100dvh - var(--site-nav-offset, 0px) - 2rem);
+                    overflow: auto;
+                    transform: translateX(calc(-100% - 1rem));
                 }
                 #guide-nav-top-button {
                     display: none !important;

@@ -10,6 +10,8 @@ body {
         margin-bottom: 0;
     }
     &:has(#content.site-content-card) #content.site-content-card {
+        --site-content-pad-x: 1rem;
+        --site-content-pad-y: 1rem;
         position: relative;
         z-index: 0;
         overflow: visible;
@@ -18,9 +20,14 @@ body {
     }
     &:has(#content.site-content-card) #content.site-content-card.site-content-clip::before {
         content: "";
-        position: absolute;
-        inset: 0 0 auto;
+        display: block;
+        position: sticky;
+        top: var(--site-nav-offset, 0px);
         height: var(--site-content-notch-radius);
+        margin-top: calc(-1 * var(--site-content-pad-y));
+        margin-right: calc(-1 * var(--site-content-pad-x));
+        margin-bottom: calc(-1 * var(--site-content-notch-radius));
+        margin-left: calc(-1 * var(--site-content-pad-x));
         z-index: 1;
         pointer-events: none;
         background:
@@ -74,6 +81,10 @@ body {
         text-transform: uppercase;
     }
     @media (min-width: 768px) {
+        &:has(#content.site-content-card) #content.site-content-card {
+            --site-content-pad-x: 1.5rem;
+            --site-content-pad-y: 1.5rem;
+        }
         .page-title-shell {
             padding: 0.75rem 1.5rem 0.5rem;
         }
