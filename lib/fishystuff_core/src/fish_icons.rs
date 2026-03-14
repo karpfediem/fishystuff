@@ -3,7 +3,7 @@ pub fn fish_item_icon_path(item_id: i32) -> String {
 }
 
 pub fn fish_encyclopedia_icon_path(encyclopedia_id: i32) -> String {
-    format!("/images/FishIcons/IC_{encyclopedia_id:05}.png")
+    format!("/images/FishIcons/IC_0{encyclopedia_id}.png")
 }
 
 pub fn parse_fish_icon_asset_id(value: &str) -> Option<i32> {
@@ -48,6 +48,10 @@ mod tests {
         assert_eq!(
             fish_encyclopedia_icon_path(9434),
             "/images/FishIcons/IC_09434.png"
+        );
+        assert_eq!(
+            fish_encyclopedia_icon_path(11558),
+            "/images/FishIcons/IC_011558.png"
         );
     }
 

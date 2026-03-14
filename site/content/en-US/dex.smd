@@ -1817,7 +1817,7 @@
       if (!Number.isInteger(encyclopediaId) || encyclopediaId <= 0) {
         return "";
       }
-      return `/images/FishIcons/IC_${zeroPad(encyclopediaId, 5)}.png`;
+      return `/images/FishIcons/IC_0${encyclopediaId}.png`;
     }
 
     function fishItemIconUrl(itemId) {

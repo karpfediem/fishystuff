@@ -277,11 +277,11 @@ function fishItemIconPath(itemId) {
 }
 
 function fishEncyclopediaIconPath(encyclopediaId) {
-  const digits = zeroPad(encyclopediaId, 5);
-  if (!digits) {
+  const numeric = Number.parseInt(encyclopediaId, 10);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
     return "";
   }
-  return `/images/FishIcons/IC_${digits}.png`;
+  return `/images/FishIcons/IC_0${numeric}.png`;
 }
 
 function clampPointIconScale(value) {

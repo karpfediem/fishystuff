@@ -125,8 +125,11 @@
       }
 
       function fishEncyclopediaIconPath(encyclopediaId) {
-        var digits = zeroPad(encyclopediaId, 5);
-        return digits ? '/images/FishIcons/IC_' + digits + '.png' : '';
+        var numeric = Number.parseInt(encyclopediaId, 10);
+        if (!Number.isFinite(numeric) || numeric <= 0) {
+          return '';
+        }
+        return '/images/FishIcons/IC_0' + numeric + '.png';
       }
 
       var runtimeConfig = window.__fishystuffRuntimeConfig || {};
