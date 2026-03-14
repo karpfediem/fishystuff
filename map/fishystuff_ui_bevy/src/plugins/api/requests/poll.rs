@@ -2,7 +2,10 @@ use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::terrain::Terrain3dConfig;
 use crate::prelude::*;
 
-use super::super::fish::{build_fish_catalog_entries, normalize_fish_icon_asset_url};
+use super::super::fish::{
+    build_fish_catalog_entries, build_fish_catalog_entries_from_table,
+    normalize_fish_icon_asset_url,
+};
 use super::super::state::{
     ApiBootstrapState, FishCatalog, MapDisplayState, PatchFilterState, PendingRequests,
     SelectionState,
@@ -109,14 +112,25 @@ pub(super) fn poll_requests(
             match result {
                 Ok(response) => {
                     let public_base_url = normalize_public_base_url(None);
-                    let (entries, icon_by_id) = build_fish_catalog_entries(
-                        response.fish,
-                        response.fish_table,
-                        public_base_url.as_deref(),
-                    );
+                    let (entries, icon_by_id) = if let Some(fish_response) = response.fish {
+                        build_fish_catalog_entries(
+                            fish_response,
+                            response.fish_table,
+                            public_base_url.as_deref(),
+                        )
+                    } else {
+                        build_fish_catalog_entries_from_table(
+                            response.fish_table,
+                            public_base_url.as_deref(),
+                        )
+                    };
                     fish.entries = entries;
                     fish.icon_by_id = icon_by_id;
-                    fish.status = format!("fish: {}", fish.entries.len());
+                    fish.status = if let Some(err) = response.fish_list_error {
+                        format!("fish: {} (table-only; list error: {err})", fish.entries.len())
+                    } else {
+                        format!("fish: {}", fish.entries.len())
+                    };
                 }
                 Err(err) => {
                     fish.status = format!("fish: {err}");

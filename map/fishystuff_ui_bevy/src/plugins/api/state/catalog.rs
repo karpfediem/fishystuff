@@ -49,8 +49,9 @@ pub struct FishEntry {
 
 #[derive(Debug)]
 pub(crate) struct FishCatalogPayload {
-    pub(crate) fish: FishListResponse,
+    pub(crate) fish: Option<FishListResponse>,
     pub(crate) fish_table: FishTableResponse,
+    pub(crate) fish_list_error: Option<String>,
 }
 
 #[derive(Debug, Default)]

@@ -104,6 +104,52 @@ pub(crate) fn build_fish_catalog_entries(
     (entries, icon_by_id)
 }
 
+pub(crate) fn build_fish_catalog_entries_from_table(
+    fish_table_response: FishTableResponse,
+    public_base_url: Option<&str>,
+) -> (Vec<FishEntry>, HashMap<i32, String>) {
+    let table_index = build_fish_table_index(&fish_table_response, public_base_url);
+    let mut icon_by_id = table_index.icon_by_id.clone();
+    let mut entries = Vec::with_capacity(fish_table_response.fish.len());
+    let mut seen_canonical_ids = HashSet::with_capacity(fish_table_response.fish.len());
+
+    for entry in fish_table_response.fish {
+        let canonical_id = entry.encyclopedia_key;
+        if !seen_canonical_ids.insert(canonical_id) {
+            continue;
+        }
+        let name = entry
+            .name
+            .as_deref()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(ToString::to_string)
+            .unwrap_or_else(|| format!("Fish {}", entry.encyclopedia_key));
+        let icon_url = normalize_fish_icon_asset_url(
+            entry.encyclopedia_icon.as_deref(),
+            public_base_url,
+        )
+        .or_else(|| normalize_fish_icon_asset_url(entry.icon.as_deref(), public_base_url))
+        .or_else(|| table_index.icon_by_id.get(&canonical_id).cloned())
+        .or_else(|| table_index.icon_by_id.get(&entry.item_key).cloned());
+        if let Some(url) = icon_url.clone() {
+            icon_by_id.insert(entry.item_key, url.clone());
+            icon_by_id.insert(canonical_id, url);
+        }
+        entries.push(FishEntry {
+            id: canonical_id,
+            item_id: entry.item_key,
+            name_lower: name.to_lowercase(),
+            name,
+            icon_url,
+            is_prize: false,
+        });
+    }
+
+    entries.sort_by(|left, right| left.name_lower.cmp(&right.name_lower));
+    (entries, icon_by_id)
+}
+
 pub(crate) fn normalize_fish_icon_asset_url(
     value: Option<&str>,
     _public_base_url: Option<&str>,
@@ -176,7 +222,8 @@ fn looks_like_icon_filename(raw: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        bevy_public_asset_path, build_fish_catalog_entries, build_fish_table_index,
+        bevy_public_asset_path, build_fish_catalog_entries,
+        build_fish_catalog_entries_from_table, build_fish_table_index,
         normalize_fish_icon_asset_url,
     };
     use fishystuff_api::models::fish::{
@@ -360,5 +407,35 @@ mod tests {
         let (entries, _) = build_fish_catalog_entries(fish, fish_table, None);
 
         assert_eq!(entries.iter().filter(|entry| entry.id == 303).count(), 1);
+    }
+
+    #[test]
+    fn fish_catalog_can_bootstrap_from_fish_table_only() {
+        let fish_table = FishTableResponse {
+            fish: vec![FishTableEntry {
+                encyclopedia_key: 88,
+                item_key: 8289,
+                name: Some("Barbel Steed".to_string()),
+                icon: Some("00008289.png".to_string()),
+                encyclopedia_icon: Some("IC_08588.png".to_string()),
+            }],
+        };
+
+        let (entries, icon_by_id) = build_fish_catalog_entries_from_table(fish_table, None);
+        let entry = entries.first().expect("expected fish table entry");
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entry.id, 88);
+        assert_eq!(entry.item_id, 8289);
+        assert_eq!(entry.name, "Barbel Steed");
+        assert_eq!(entry.icon_url.as_deref(), Some("/images/FishIcons/IC_08588.png"));
+        assert_eq!(
+            icon_by_id.get(&88).map(String::as_str),
+            Some("/images/FishIcons/IC_08588.png")
+        );
+        assert_eq!(
+            icon_by_id.get(&8289).map(String::as_str),
+            Some("/images/FishIcons/IC_08588.png")
+        );
     }
 }
