@@ -321,13 +321,13 @@
 
   .fishydex-card {
     display: grid;
-    min-height: 12.5rem;
+    min-height: 11rem;
     border: 1px solid var(--dex-line);
     border-radius: 1rem;
     background: var(--dex-surface-strong);
     color: var(--color-base-content, #1f2937);
     overflow: hidden;
-    padding: 0.95rem;
+    padding: 0;
     position: relative;
     transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
   }
@@ -354,10 +354,10 @@
   }
 
   .fishydex-card-top {
-    display: flex;
-    align-items: start;
-    justify-content: flex-end;
-    gap: 0.65rem;
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    z-index: 2;
   }
 
   .fishydex-card-open {
@@ -380,20 +380,24 @@
     position: relative;
     z-index: 1;
     display: grid;
-    gap: 0.75rem;
+    height: 100%;
+    padding: 0.95rem;
     pointer-events: none;
     transition: transform 90ms ease;
   }
 
   .fishydex-card-actions {
     display: flex;
-    flex-wrap: wrap;
-    align-items: start;
-    gap: 0.45rem;
+    align-items: center;
+    justify-content: flex-end;
   }
 
   .fishydex-caught-button {
     pointer-events: auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0;
     color: color-mix(in oklab, var(--color-base-content, #1f2937) 60%, transparent);
     transition: color 120ms ease, background 120ms ease, outline-color 120ms ease;
   }
@@ -504,9 +508,12 @@
 
   .fishydex-card-main {
     display: grid;
+    height: 100%;
+    align-content: center;
     justify-items: center;
-    gap: 0.65rem;
-    min-height: 7.8rem;
+    gap: 0.75rem;
+    min-height: 0;
+    padding: 0.35rem 0.25rem 0.15rem;
     transition: transform 120ms ease;
   }
 
@@ -580,9 +587,11 @@
   }
 
   .fishydex-name {
+    max-width: 100%;
     font-weight: 800;
     line-height: 1.25;
     text-align: center;
+    text-wrap: balance;
   }
 
   .fishydex-empty {
