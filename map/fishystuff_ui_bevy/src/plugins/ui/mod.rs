@@ -27,6 +27,7 @@ mod search;
 mod setup;
 mod toggles;
 
+#[cfg(target_arch = "wasm32")]
 pub(crate) use patches::patch_index_for_timestamp;
 
 const AUTOCOMPLETE_MAX: usize = 8;
@@ -342,16 +343,7 @@ impl Plugin for UiPlugin {
     }
 }
 
-fn tag_new_ui_entities_with_ui_layer(
-    mut commands: Commands,
-    entities: Query<
-        Entity,
-        (
-            Or<(Added<Node>, Added<Button>, Added<Text>, Added<ImageNode>)>,
-            Without<UiRenderEntity>,
-        ),
-    >,
-) {
+fn tag_new_ui_entities_with_ui_layer(mut commands: Commands, entities: NewUiEntityQuery<'_, '_>) {
     for entity in &entities {
         commands
             .entity(entity)
@@ -387,15 +379,17 @@ fn bind_ui_roots_to_ui_camera(
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub struct UiStartupSet;
 
-#[derive(Resource, Clone)]
+type NewUiEntityQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        Or<(Added<Node>, Added<Button>, Added<Text>, Added<ImageNode>)>,
+        Without<UiRenderEntity>,
+    ),
+>;
+
+#[derive(Resource, Clone, Default)]
 pub struct UiFonts {
     pub regular: Handle<Font>,
-}
-
-impl Default for UiFonts {
-    fn default() -> Self {
-        Self {
-            regular: Handle::default(),
-        }
-    }
 }

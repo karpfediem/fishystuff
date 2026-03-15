@@ -1,15 +1,30 @@
 use super::super::*;
 
+type DebugToggleInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static Interaction,
+    (
+        Changed<Interaction>,
+        With<Button>,
+        With<LayerDebugToggleButton>,
+    ),
+>;
+
+type EvictionToggleInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static Interaction,
+    (
+        Changed<Interaction>,
+        With<Button>,
+        With<LayerEvictionToggleButton>,
+    ),
+>;
+
 pub(in crate::map::ui_layers) fn handle_debug_toggle_clicks(
     mut debug: ResMut<LayerDebugSettings>,
-    mut interaction_q: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            With<Button>,
-            With<LayerDebugToggleButton>,
-        ),
-    >,
+    mut interaction_q: DebugToggleInteractionQuery<'_, '_>,
 ) {
     for interaction in &mut interaction_q {
         if *interaction != Interaction::Pressed {
@@ -21,14 +36,7 @@ pub(in crate::map::ui_layers) fn handle_debug_toggle_clicks(
 
 pub(in crate::map::ui_layers) fn handle_eviction_toggle_clicks(
     mut controls: ResMut<TileDebugControls>,
-    mut interaction_q: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            With<Button>,
-            With<LayerEvictionToggleButton>,
-        ),
-    >,
+    mut interaction_q: EvictionToggleInteractionQuery<'_, '_>,
 ) {
     for interaction in &mut interaction_q {
         if *interaction != Interaction::Pressed {

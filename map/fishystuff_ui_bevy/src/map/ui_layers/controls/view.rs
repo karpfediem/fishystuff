@@ -1,11 +1,40 @@
 use super::super::*;
 
+type ViewToggleInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static ViewToggleButton, &'static Interaction),
+    (Changed<Interaction>, With<Button>),
+>;
+
+type ViewModeInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static ViewModeButton, &'static Interaction),
+    (Changed<Interaction>, With<Button>),
+>;
+
+type Reset3dInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static Interaction,
+    (Changed<Interaction>, With<Button>, With<Reset3dViewButton>),
+>;
+
+type ShowDrapeInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    &'static Interaction,
+    (
+        Changed<Interaction>,
+        With<Button>,
+        With<TerrainShowDrapeToggle>,
+    ),
+>;
+
 pub(in crate::map::ui_layers) fn handle_view_toggle_clicks(
     mut display_state: ResMut<MapDisplayState>,
-    mut interaction_q: Query<
-        (&ViewToggleButton, &Interaction),
-        (Changed<Interaction>, With<Button>),
-    >,
+    mut interaction_q: ViewToggleInteractionQuery<'_, '_>,
 ) {
     for (button, interaction) in &mut interaction_q {
         if *interaction != Interaction::Pressed {
@@ -25,8 +54,8 @@ pub(in crate::map::ui_layers) fn handle_view_toggle_clicks(
 pub(in crate::map::ui_layers) fn handle_view_mode_clicks(
     mut mode: ResMut<ViewModeState>,
     mut view_3d: ResMut<Terrain3dViewState>,
-    mut interaction_q: Query<(&ViewModeButton, &Interaction), (Changed<Interaction>, With<Button>)>,
-    mut reset_q: Query<&Interaction, (Changed<Interaction>, With<Button>, With<Reset3dViewButton>)>,
+    mut interaction_q: ViewModeInteractionQuery<'_, '_>,
+    mut reset_q: Reset3dInteractionQuery<'_, '_>,
 ) {
     for (button, interaction) in &mut interaction_q {
         if *interaction != Interaction::Pressed {
@@ -49,14 +78,7 @@ pub(in crate::map::ui_layers) fn handle_view_mode_clicks(
 
 pub(in crate::map::ui_layers) fn handle_terrain_tuning_clicks(
     mut cfg: ResMut<Terrain3dConfig>,
-    mut show_drape_q: Query<
-        &Interaction,
-        (
-            Changed<Interaction>,
-            With<Button>,
-            With<TerrainShowDrapeToggle>,
-        ),
-    >,
+    mut show_drape_q: ShowDrapeInteractionQuery<'_, '_>,
 ) {
     for interaction in &mut show_drape_q {
         if *interaction == Interaction::Pressed {

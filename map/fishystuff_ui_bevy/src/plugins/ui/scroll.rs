@@ -1,25 +1,65 @@
 use super::*;
+use bevy::ecs::system::SystemParam;
+
+pub(super) type UiScrollTargetQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static RelativeCursorPosition,
+        &'static Node,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+        Option<&'static InheritedVisibility>,
+        Option<&'static ZoneEvidenceScroll>,
+        Option<&'static FishAutocompleteScroll>,
+        &'static mut ScrollPosition,
+    ),
+    Or<(
+        With<ZoneEvidenceScroll>,
+        With<FishAutocompleteScroll>,
+        With<PatchDropdownList>,
+    )>,
+>;
+
+pub(super) type AutocompleteScrollPositionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut ScrollPosition,
+        &'static ComputedNode,
+        Option<&'static InheritedVisibility>,
+    ),
+    With<FishAutocompleteScroll>,
+>;
+
+pub(super) type AutocompleteTrackQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+        Option<&'static InheritedVisibility>,
+    ),
+    With<FishAutocompleteScrollbarTrack>,
+>;
+
+pub(super) type AutocompleteThumbQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Node,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+        Option<&'static InheritedVisibility>,
+    ),
+    With<FishAutocompleteScrollbarThumb>,
+>;
+
 pub(super) fn handle_ui_scroll_wheel(
     windows: Query<&Window, With<PrimaryWindow>>,
     mut mouse_wheel: MessageReader<MouseWheel>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<
-        (
-            &RelativeCursorPosition,
-            &Node,
-            &ComputedNode,
-            &UiGlobalTransform,
-            Option<&InheritedVisibility>,
-            Option<&ZoneEvidenceScroll>,
-            Option<&FishAutocompleteScroll>,
-            &mut ScrollPosition,
-        ),
-        Or<(
-            With<ZoneEvidenceScroll>,
-            With<FishAutocompleteScroll>,
-            With<PatchDropdownList>,
-        )>,
-    >,
+    mut query: UiScrollTargetQuery<'_, '_>,
 ) {
     let cursor = windows
         .single()
@@ -381,49 +421,23 @@ pub(super) fn handle_zone_evidence_scrollbar_drag(
 }
 
 pub(super) fn handle_autocomplete_scrollbar_drag(
-    windows: Query<&Window, With<PrimaryWindow>>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
-    search: Res<SearchState>,
-    mut drag_state: ResMut<FishAutocompleteScrollbarDragState>,
-    mut scroll_q: Query<
-        (
-            &mut ScrollPosition,
-            &ComputedNode,
-            Option<&InheritedVisibility>,
-        ),
-        With<FishAutocompleteScroll>,
-    >,
-    frame_q: Query<Option<&InheritedVisibility>, With<FishAutocompleteFrame>>,
-    track_q: Query<
-        (
-            &ComputedNode,
-            &UiGlobalTransform,
-            Option<&InheritedVisibility>,
-        ),
-        With<FishAutocompleteScrollbarTrack>,
-    >,
-    thumb_q: Query<
-        (
-            &Node,
-            &ComputedNode,
-            &UiGlobalTransform,
-            Option<&InheritedVisibility>,
-        ),
-        With<FishAutocompleteScrollbarThumb>,
-    >,
+    mut drag: AutocompleteScrollbarDragContext<'_, '_>,
 ) {
-    if mouse_buttons.just_released(MouseButton::Left) {
-        drag_state.active = false;
+    if drag.mouse_buttons.just_released(MouseButton::Left) {
+        drag.drag_state.active = false;
     }
-    if !search.open || search.results.is_empty() {
-        drag_state.active = false;
+    if !drag.search.open || drag.search.results.is_empty() {
+        drag.drag_state.active = false;
         return;
     }
-    if !mouse_buttons.pressed(MouseButton::Left) && !mouse_buttons.just_pressed(MouseButton::Left) {
+    if !drag.mouse_buttons.pressed(MouseButton::Left)
+        && !drag.mouse_buttons.just_pressed(MouseButton::Left)
+    {
         return;
     }
 
-    let Some(cursor) = windows
+    let Some(cursor) = drag
+        .windows
         .single()
         .ok()
         .and_then(|window| window.physical_cursor_position())
@@ -431,17 +445,17 @@ pub(super) fn handle_autocomplete_scrollbar_drag(
         return;
     };
 
-    let Ok((mut scroll_position, scroll_computed, scroll_visibility)) = scroll_q.single_mut()
+    let Ok((mut scroll_position, scroll_computed, scroll_visibility)) = drag.scroll_q.single_mut()
     else {
         return;
     };
-    let Ok(frame_visibility) = frame_q.single() else {
+    let Ok(frame_visibility) = drag.frame_q.single() else {
         return;
     };
-    let Ok((track_computed, track_transform, track_visibility)) = track_q.single() else {
+    let Ok((track_computed, track_transform, track_visibility)) = drag.track_q.single() else {
         return;
     };
-    let Ok((thumb_node, thumb_computed, thumb_transform, thumb_visibility)) = thumb_q.single()
+    let Ok((thumb_node, thumb_computed, thumb_transform, thumb_visibility)) = drag.thumb_q.single()
     else {
         return;
     };
@@ -451,7 +465,7 @@ pub(super) fn handle_autocomplete_scrollbar_drag(
         || !track_visibility.map(|v| v.get()).unwrap_or(true)
         || !thumb_visibility.map(|v| v.get()).unwrap_or(true)
     {
-        drag_state.active = false;
+        drag.drag_state.active = false;
         return;
     }
 
@@ -459,7 +473,7 @@ pub(super) fn handle_autocomplete_scrollbar_drag(
     let viewport_h = scroll_computed.size().y * inv;
     let track_h = track_computed.size().y * track_computed.inverse_scale_factor();
     if viewport_h <= f32::EPSILON || track_h <= f32::EPSILON {
-        drag_state.active = false;
+        drag.drag_state.active = false;
         return;
     }
 
@@ -467,10 +481,10 @@ pub(super) fn handle_autocomplete_scrollbar_drag(
         scroll_position.0.y,
         scroll_computed,
         viewport_h,
-        search.results.len(),
+        drag.search.results.len(),
     );
     if max_offset <= f32::EPSILON {
-        drag_state.active = false;
+        drag.drag_state.active = false;
         return;
     }
 
@@ -480,36 +494,48 @@ pub(super) fn handle_autocomplete_scrollbar_drag(
     let travel_h = (track_h - thumb_h).max(0.0);
     thumb_top = thumb_top.clamp(0.0, travel_h);
     if travel_h <= f32::EPSILON {
-        drag_state.active = false;
+        drag.drag_state.active = false;
         return;
     }
 
     let Some(cursor_track_y) = cursor_y_in_track(track_computed, track_transform, cursor, track_h)
     else {
-        drag_state.active = false;
+        drag.drag_state.active = false;
         return;
     };
 
-    if mouse_buttons.just_pressed(MouseButton::Left) {
+    if drag.mouse_buttons.just_pressed(MouseButton::Left) {
         if thumb_computed.contains_point(*thumb_transform, cursor) {
-            drag_state.active = true;
-            drag_state.grab_offset_px = (cursor_track_y - thumb_top).clamp(0.0, thumb_h);
+            drag.drag_state.active = true;
+            drag.drag_state.grab_offset_px = (cursor_track_y - thumb_top).clamp(0.0, thumb_h);
         } else if track_computed.contains_point(*track_transform, cursor) {
-            drag_state.active = true;
-            drag_state.grab_offset_px = 0.5 * thumb_h;
+            drag.drag_state.active = true;
+            drag.drag_state.grab_offset_px = 0.5 * thumb_h;
         } else {
-            drag_state.active = false;
+            drag.drag_state.active = false;
             return;
         }
     }
 
-    if !drag_state.active {
+    if !drag.drag_state.active {
         return;
     }
 
-    let desired_thumb_top = (cursor_track_y - drag_state.grab_offset_px).clamp(0.0, travel_h);
+    let desired_thumb_top = (cursor_track_y - drag.drag_state.grab_offset_px).clamp(0.0, travel_h);
     let ratio = (desired_thumb_top / travel_h).clamp(0.0, 1.0);
     scroll_position.0.y = (ratio * max_offset).clamp(0.0, max_offset);
+}
+
+#[derive(SystemParam)]
+pub(super) struct AutocompleteScrollbarDragContext<'w, 's> {
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
+    search: Res<'w, SearchState>,
+    drag_state: ResMut<'w, FishAutocompleteScrollbarDragState>,
+    scroll_q: AutocompleteScrollPositionQuery<'w, 's>,
+    frame_q: Query<'w, 's, Option<&'static InheritedVisibility>, With<FishAutocompleteFrame>>,
+    track_q: AutocompleteTrackQuery<'w, 's>,
+    thumb_q: AutocompleteThumbQuery<'w, 's>,
 }
 
 pub(super) fn sync_autocomplete_scrollbar(

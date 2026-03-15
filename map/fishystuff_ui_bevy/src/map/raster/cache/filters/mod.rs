@@ -8,22 +8,37 @@ use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
 use self::clip_mask::clip_mask_state_revision;
-use self::compose::{compose_raster_visuals_in_place, restore_rgba_in_place};
+use self::compose::{
+    compose_raster_visuals_in_place, restore_rgba_in_place, RasterVisualComposeContext,
+};
 use super::{RasterTileCache, TileState};
+
+pub(crate) struct VisualFilterContext<'a> {
+    pub(crate) filter: &'a EvidenceZoneFilter,
+    pub(crate) hover_zone_rgb: Option<u32>,
+    pub(crate) layer_registry: &'a LayerRegistry,
+    pub(crate) layer_runtime: &'a LayerRuntime,
+    pub(crate) vector_runtime: &'a VectorLayerRuntime,
+    pub(crate) map_version: Option<&'a str>,
+    pub(crate) view_mode: ViewMode,
+}
 
 impl RasterTileCache {
     pub(crate) fn sync_visual_filters(
         &mut self,
         images: &mut Assets<Image>,
         commands: &mut Commands,
-        filter: &EvidenceZoneFilter,
-        hover_zone_rgb: Option<u32>,
-        layer_registry: &LayerRegistry,
-        layer_runtime: &LayerRuntime,
-        vector_runtime: &VectorLayerRuntime,
-        map_version: Option<&str>,
-        view_mode: ViewMode,
+        context: VisualFilterContext<'_>,
     ) {
+        let VisualFilterContext {
+            filter,
+            hover_zone_rgb,
+            layer_registry,
+            layer_runtime,
+            vector_runtime,
+            map_version,
+            view_mode,
+        } = context;
         let keys = self.entries.keys().copied().collect::<Vec<_>>();
         for key in keys {
             let Some(spec) = layer_registry.get(key.layer) else {
@@ -138,16 +153,18 @@ impl RasterTileCache {
                 compose_raster_visuals_in_place(
                     &source,
                     image_data,
-                    key,
-                    spec,
-                    filter,
-                    requires_pixel_filter,
-                    target_hover_zone,
-                    clip_mask_layer,
-                    layer_registry,
-                    self,
-                    vector_runtime,
-                    map_version,
+                    &RasterVisualComposeContext {
+                        key,
+                        layer: spec,
+                        filter,
+                        requires_pixel_filter,
+                        hover_zone_rgb: target_hover_zone,
+                        clip_mask_layer,
+                        layer_registry,
+                        tile_cache: self,
+                        vector_runtime,
+                        map_version,
+                    },
                 );
             }
 

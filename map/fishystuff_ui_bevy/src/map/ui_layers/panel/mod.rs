@@ -1,70 +1,38 @@
 use super::*;
+use bevy::ecs::system::SystemParam;
 
 mod debug_row;
 mod layer_rows;
 mod view_rows;
 
-pub(super) fn setup_layer_ui(
-    mut commands: Commands,
-    registry: Res<LayerRegistry>,
-    fonts: Res<UiFonts>,
-    display_state: Res<MapDisplayState>,
-    view_mode: Res<ViewModeState>,
-    terrain_cfg: Res<Terrain3dConfig>,
-    tile_debug: Res<TileDebugControls>,
-    asset_server: Res<AssetServer>,
-) {
-    spawn_layer_panel(
-        &mut commands,
-        &registry,
-        &fonts,
-        &display_state,
-        &view_mode,
-        &terrain_cfg,
-        &tile_debug,
-        &asset_server,
-    );
+pub(super) fn setup_layer_ui(mut commands: Commands, resources: LayerPanelResources<'_, '_>) {
+    spawn_layer_panel(&mut commands, resources.context());
 }
 
 pub(super) fn rebuild_layer_ui_on_registry_change(
     mut commands: Commands,
-    registry: Res<LayerRegistry>,
-    fonts: Res<UiFonts>,
-    display_state: Res<MapDisplayState>,
-    view_mode: Res<ViewModeState>,
-    terrain_cfg: Res<Terrain3dConfig>,
-    tile_debug: Res<TileDebugControls>,
-    asset_server: Res<AssetServer>,
+    resources: LayerPanelResources<'_, '_>,
     panel_q: Query<Entity, With<LayerPanel>>,
 ) {
-    if !registry.is_changed() {
+    if !resources.registry.is_changed() {
         return;
     }
     for entity in &panel_q {
         commands.entity(entity).despawn();
     }
-    spawn_layer_panel(
-        &mut commands,
-        &registry,
-        &fonts,
-        &display_state,
-        &view_mode,
-        &terrain_cfg,
-        &tile_debug,
-        &asset_server,
-    );
+    spawn_layer_panel(&mut commands, resources.context());
 }
 
-fn spawn_layer_panel(
-    commands: &mut Commands,
-    registry: &LayerRegistry,
-    fonts: &UiFonts,
-    display_state: &MapDisplayState,
-    view_mode: &ViewModeState,
-    terrain_cfg: &Terrain3dConfig,
-    tile_debug: &TileDebugControls,
-    asset_server: &AssetServer,
-) {
+fn spawn_layer_panel(commands: &mut Commands, context: LayerPanelContext<'_>) {
+    let LayerPanelContext {
+        registry,
+        fonts,
+        display_state,
+        view_mode,
+        terrain_cfg,
+        tile_debug,
+        asset_server,
+    } = context;
     let font = fonts.regular.clone();
     commands
         .spawn((
@@ -110,4 +78,41 @@ fn spawn_layer_panel(
             layer_rows::spawn_layer_rows(panel, registry, &font);
             debug_row::spawn_debug_controls(panel, tile_debug, &font);
         });
+}
+
+#[derive(SystemParam)]
+pub(super) struct LayerPanelResources<'w, 's> {
+    registry: Res<'w, LayerRegistry>,
+    fonts: Res<'w, UiFonts>,
+    display_state: Res<'w, MapDisplayState>,
+    view_mode: Res<'w, ViewModeState>,
+    terrain_cfg: Res<'w, Terrain3dConfig>,
+    tile_debug: Res<'w, TileDebugControls>,
+    asset_server: Res<'w, AssetServer>,
+    _marker: std::marker::PhantomData<&'s ()>,
+}
+
+impl<'w, 's> LayerPanelResources<'w, 's> {
+    fn context(&self) -> LayerPanelContext<'_> {
+        LayerPanelContext {
+            registry: &self.registry,
+            fonts: &self.fonts,
+            display_state: &self.display_state,
+            view_mode: &self.view_mode,
+            terrain_cfg: &self.terrain_cfg,
+            tile_debug: &self.tile_debug,
+            asset_server: &self.asset_server,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct LayerPanelContext<'a> {
+    registry: &'a LayerRegistry,
+    fonts: &'a UiFonts,
+    display_state: &'a MapDisplayState,
+    view_mode: &'a ViewModeState,
+    terrain_cfg: &'a Terrain3dConfig,
+    tile_debug: &'a TileDebugControls,
+    asset_server: &'a AssetServer,
 }

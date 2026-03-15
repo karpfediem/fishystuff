@@ -15,8 +15,8 @@ use crate::map::raster::cache::{RasterTileCache, RasterTileEntry, TileState};
 use crate::map::raster::manifest::{LevelInfo, LoadedTileset};
 use crate::map::raster::policy::{
     apply_layer_residency_plan, build_layer_requests, build_layer_residency_plan,
-    compute_desired_layer_tiles, eviction_priority_score, DesiredLayerTiles, TileBounds,
-    TileResidencyState,
+    compute_desired_layer_tiles, eviction_priority_score, DesiredLayerTiles,
+    DesiredTileComputation, LayerRequestBuild, TileBounds, TileResidencyState,
 };
 use crate::map::raster::TileKey;
 use crate::map::spaces::layer_transform::LayerTransform;
@@ -158,31 +158,31 @@ pub fn raster_fixture() -> RasterBenchFixture {
 
 pub fn raster_visible_tile_computation(fixture: &RasterBenchFixture) -> usize {
     let mut runtime = runtime_state_for(&fixture.layer);
-    let desired = compute_desired_layer_tiles(
-        &fixture.layer,
-        &fixture.tileset,
-        fixture.world_transform,
-        fixture.view_world,
-        fixture.map_version_id,
-        fixture.frame,
-        &mut runtime,
-        fixture.previous,
-    );
+    let desired = compute_desired_layer_tiles(DesiredTileComputation {
+        layer: &fixture.layer,
+        tileset: &fixture.tileset,
+        world_transform: fixture.world_transform,
+        view_world: fixture.view_world,
+        map_version: fixture.map_version_id,
+        frame: fixture.frame,
+        runtime: &mut runtime,
+        previous: fixture.previous,
+    });
     tile_bounds_count(desired.base) + tile_bounds_count(desired.detail)
 }
 
 pub fn raster_desired_set_build(fixture: &RasterBenchFixture) -> usize {
     let mut runtime = runtime_state_for(&fixture.layer);
-    let desired = compute_desired_layer_tiles(
-        &fixture.layer,
-        &fixture.tileset,
-        fixture.world_transform,
-        fixture.view_world,
-        fixture.map_version_id,
-        fixture.frame,
-        &mut runtime,
-        fixture.previous,
-    );
+    let desired = compute_desired_layer_tiles(DesiredTileComputation {
+        layer: &fixture.layer,
+        tileset: &fixture.tileset,
+        world_transform: fixture.world_transform,
+        view_world: fixture.view_world,
+        map_version: fixture.map_version_id,
+        frame: fixture.frame,
+        runtime: &mut runtime,
+        previous: fixture.previous,
+    });
     let cache = cache_from_fixture(fixture);
     let plan = build_layer_residency_plan(
         &fixture.layer,
@@ -203,27 +203,27 @@ pub fn raster_desired_set_build(fixture: &RasterBenchFixture) -> usize {
 
 pub fn raster_request_scheduling(fixture: &RasterBenchFixture) -> usize {
     let mut runtime = runtime_state_for(&fixture.layer);
-    let desired = compute_desired_layer_tiles(
-        &fixture.layer,
-        &fixture.tileset,
-        fixture.world_transform,
-        fixture.view_world,
-        fixture.map_version_id,
-        fixture.frame,
-        &mut runtime,
-        fixture.previous,
-    );
+    let desired = compute_desired_layer_tiles(DesiredTileComputation {
+        layer: &fixture.layer,
+        tileset: &fixture.tileset,
+        world_transform: fixture.world_transform,
+        view_world: fixture.view_world,
+        map_version: fixture.map_version_id,
+        frame: fixture.frame,
+        runtime: &mut runtime,
+        previous: fixture.previous,
+    });
     let cache = cache_from_fixture(fixture);
-    let result = build_layer_requests(
-        &fixture.layer,
-        &fixture.tileset,
+    let result = build_layer_requests(LayerRequestBuild {
+        layer: &fixture.layer,
+        tileset: &fixture.tileset,
         desired,
-        Some("bench-v1"),
-        &cache,
-        fixture.map_version_id,
-        false,
-        &TileResidencyState::default(),
-    );
+        map_version: Some("bench-v1"),
+        cache: &cache,
+        map_version_id: fixture.map_version_id,
+        camera_unstable: false,
+        residency: &TileResidencyState::default(),
+    });
     result
         .requests
         .len()
@@ -233,16 +233,16 @@ pub fn raster_request_scheduling(fixture: &RasterBenchFixture) -> usize {
 pub fn raster_eviction_score_sum(fixture: &RasterBenchFixture) -> f64 {
     let cache = cache_from_fixture(fixture);
     let mut runtime = runtime_state_for(&fixture.layer);
-    let desired = compute_desired_layer_tiles(
-        &fixture.layer,
-        &fixture.tileset,
-        fixture.world_transform,
-        fixture.view_world,
-        fixture.map_version_id,
-        fixture.frame,
-        &mut runtime,
-        fixture.previous,
-    );
+    let desired = compute_desired_layer_tiles(DesiredTileComputation {
+        layer: &fixture.layer,
+        tileset: &fixture.tileset,
+        world_transform: fixture.world_transform,
+        view_world: fixture.view_world,
+        map_version: fixture.map_version_id,
+        frame: fixture.frame,
+        runtime: &mut runtime,
+        previous: fixture.previous,
+    });
     let plan = build_layer_residency_plan(
         &fixture.layer,
         &fixture.tileset,

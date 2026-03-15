@@ -9,14 +9,9 @@ use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::Rgb;
 
-use crate::map::layers::{LayerRegistry, LayerRuntime};
-use crate::map::terrain::Terrain3dConfig;
 use crate::prelude::*;
 
-use super::state::{
-    ApiBootstrapState, FishCatalog, MapDisplayState, PatchFilterState, PendingRequests,
-    SelectionState,
-};
+use super::state::{ApiBootstrapState, FishCatalog, PatchFilterState, PendingRequests};
 
 pub(super) fn ensure_meta_request(
     pending: ResMut<PendingRequests>,
@@ -47,28 +42,8 @@ pub(super) fn ensure_fish_catalog_request(
     ensure::ensure_fish_catalog_request(pending, fish, bootstrap);
 }
 
-pub(super) fn poll_requests(
-    bootstrap: ResMut<ApiBootstrapState>,
-    patch_filter: ResMut<PatchFilterState>,
-    display_state: ResMut<MapDisplayState>,
-    pending: ResMut<PendingRequests>,
-    layer_registry: ResMut<LayerRegistry>,
-    layer_runtime: ResMut<LayerRuntime>,
-    terrain_config: ResMut<Terrain3dConfig>,
-    selection: ResMut<SelectionState>,
-    fish: ResMut<FishCatalog>,
-) {
-    poll::poll_requests(
-        bootstrap,
-        patch_filter,
-        display_state,
-        pending,
-        layer_registry,
-        layer_runtime,
-        terrain_config,
-        selection,
-        fish,
-    );
+pub(super) fn poll_requests(state: poll::RequestPollState<'_, '_>) {
+    poll::poll_requests(state);
 }
 
 pub fn spawn_zone_stats_request(

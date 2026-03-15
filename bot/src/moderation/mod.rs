@@ -1,5 +1,4 @@
 pub(crate) mod actions;
-mod debug_perms;
 pub(crate) mod handler;
 pub(crate) mod index;
 mod types;

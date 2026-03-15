@@ -136,14 +136,11 @@ pub(super) fn db_unavailable(err: impl std::fmt::Display) -> AppError {
 }
 
 pub(super) fn is_missing_table(err: &mysql::Error, table: &str) -> bool {
-    match err {
+    matches!(
+        err,
         mysql::Error::MySqlError(server)
-            if server.code == 1146 && server.message.contains(table) =>
-        {
-            true
-        }
-        _ => false,
-    }
+            if server.code == 1146 && server.message.contains(table)
+    )
 }
 
 fn is_unknown_column(err: &mysql::Error, column: &str) -> bool {

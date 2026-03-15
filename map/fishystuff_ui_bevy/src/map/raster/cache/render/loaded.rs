@@ -13,22 +13,44 @@ use super::super::super::policy::{tile_should_render, TileResidencyState};
 use super::super::{RasterTileCache, RasterTileEntity, TilePixelData, TileState, TileStats};
 use super::geometry::{collect_tile_zone_rgbs, needs_affine_quad, tile_quad_mesh, tile_world_rect};
 
+pub(crate) struct RasterLoadedAssets<'a> {
+    pub(crate) images: &'a mut Assets<Image>,
+    pub(crate) meshes: &'a mut Assets<Mesh>,
+    pub(crate) materials: &'a mut Assets<ColorMaterial>,
+}
+
+pub(crate) struct RasterLoadedContext<'a> {
+    pub(crate) asset_server: &'a AssetServer,
+    pub(crate) layer_registry: &'a LayerRegistry,
+    pub(crate) layer_runtime: &'a LayerRuntime,
+    pub(crate) map_to_world: MapToWorld,
+    pub(crate) view_mode: ViewMode,
+    pub(crate) residency: &'a TileResidencyState,
+    pub(crate) stats: &'a mut TileStats,
+}
+
 impl RasterTileCache {
     pub(crate) fn update_loaded(
         &mut self,
         commands: &mut Commands,
-        images: &mut Assets<Image>,
-        meshes: &mut Assets<Mesh>,
-        materials: &mut Assets<ColorMaterial>,
-        asset_server: &AssetServer,
-        layer_registry: &LayerRegistry,
-        layer_runtime: &LayerRuntime,
-        map_to_world: MapToWorld,
-        view_mode: ViewMode,
-        residency: &TileResidencyState,
-        stats: &mut TileStats,
+        assets: RasterLoadedAssets<'_>,
+        context: RasterLoadedContext<'_>,
     ) {
         crate::perf_scope!("raster.tile_entity_update");
+        let RasterLoadedAssets {
+            images,
+            meshes,
+            materials,
+        } = assets;
+        let RasterLoadedContext {
+            asset_server,
+            layer_registry,
+            layer_runtime,
+            map_to_world,
+            view_mode,
+            residency,
+            stats,
+        } = context;
         for (key, entry) in self.entries.iter_mut() {
             if entry.state != TileState::Loading {
                 continue;

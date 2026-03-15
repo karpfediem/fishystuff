@@ -11,17 +11,31 @@ const MOTION_PAN_FRACTION_THRESHOLD: f64 = 0.08;
 const MOTION_ZOOM_OUT_THRESHOLD: f64 = 0.06;
 const MOTION_COOLDOWN_FRAMES: u32 = 16;
 
-pub(crate) fn compute_desired_layer_tiles(
-    layer: &LayerSpec,
-    tileset: &LoadedTileset,
-    world_transform: WorldTransform,
-    view_world: WorldRect,
-    map_version: u64,
-    frame: u64,
-    runtime: &mut LayerRuntimeState,
-    previous: Option<DesiredLayerTiles>,
-) -> DesiredLayerTiles {
+pub(crate) struct DesiredTileComputation<'a> {
+    pub(crate) layer: &'a LayerSpec,
+    pub(crate) tileset: &'a LoadedTileset,
+    pub(crate) world_transform: WorldTransform,
+    pub(crate) view_world: WorldRect,
+    pub(crate) map_version: u64,
+    pub(crate) frame: u64,
+    pub(crate) runtime: &'a mut LayerRuntimeState,
+    pub(crate) previous: Option<DesiredLayerTiles>,
+}
+
+pub(crate) type LodSignature = (Option<(i32, u64)>, Option<(i32, u64)>);
+
+pub(crate) fn compute_desired_layer_tiles(input: DesiredTileComputation<'_>) -> DesiredLayerTiles {
     crate::perf_scope!("raster.visible_tile_computation");
+    let DesiredTileComputation {
+        layer,
+        tileset,
+        world_transform,
+        view_world,
+        map_version,
+        frame,
+        runtime,
+        previous,
+    } = input;
     let layer_aabb = world_transform.world_rect_to_layer_aabb(view_world);
 
     let mut candidates: Vec<(TileBounds, usize)> = Vec::new();
@@ -194,9 +208,7 @@ pub(crate) fn desired_change_is_minor(
         && bounds_shift_is_minor(previous.detail, desired.detail, detail_tolerance)
 }
 
-pub(crate) fn lod_signature(
-    desired: DesiredLayerTiles,
-) -> (Option<(i32, u64)>, Option<(i32, u64)>) {
+pub(crate) fn lod_signature(desired: DesiredLayerTiles) -> LodSignature {
     (
         desired.base.map(|bounds| (bounds.z, bounds.map_version)),
         desired.detail.map(|bounds| (bounds.z, bounds.map_version)),

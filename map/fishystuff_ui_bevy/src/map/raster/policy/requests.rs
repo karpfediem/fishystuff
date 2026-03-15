@@ -20,17 +20,51 @@ pub(crate) struct BuildResult {
     pub(crate) coverage_queued: u32,
 }
 
-pub(crate) fn build_layer_requests(
-    layer: &LayerSpec,
-    tileset: &LoadedTileset,
-    desired: DesiredLayerTiles,
-    map_version: Option<&str>,
-    cache: &RasterTileCache,
+pub(crate) struct LayerRequestBuild<'a> {
+    pub(crate) layer: &'a LayerSpec,
+    pub(crate) tileset: &'a LoadedTileset,
+    pub(crate) desired: DesiredLayerTiles,
+    pub(crate) map_version: Option<&'a str>,
+    pub(crate) cache: &'a RasterTileCache,
+    pub(crate) map_version_id: u64,
+    pub(crate) camera_unstable: bool,
+    pub(crate) residency: &'a TileResidencyState,
+}
+
+struct BoundsRequestBuild<'a> {
+    layer: &'a LayerSpec,
+    tileset: &'a LoadedTileset,
+    bounds: TileBounds,
+    map_version: Option<&'a str>,
+    cache: &'a RasterTileCache,
+    kind: RequestKind,
+    request_weight: f32,
     map_version_id: u64,
-    camera_unstable: bool,
-    residency: &TileResidencyState,
-) -> BuildResult {
+}
+
+pub(crate) struct StartTileRequests<'a> {
+    pub(crate) streamer: &'a mut TileStreamer,
+    pub(crate) cache: &'a mut RasterTileCache,
+    pub(crate) asset_server: &'a AssetServer,
+    pub(crate) layer_registry: &'a LayerRegistry,
+    pub(crate) layer_runtime: &'a LayerRuntime,
+    pub(crate) residency: &'a TileResidencyState,
+    pub(crate) camera_unstable: bool,
+    pub(crate) stats: &'a mut crate::map::raster::TileStats,
+}
+
+pub(crate) fn build_layer_requests(input: LayerRequestBuild<'_>) -> BuildResult {
     crate::perf_scope!("raster.request_scheduling");
+    let LayerRequestBuild {
+        layer,
+        tileset,
+        desired,
+        map_version,
+        cache,
+        map_version_id,
+        camera_unstable,
+        residency,
+    } = input;
     let mut requests = Vec::new();
     let mut cache_hits: u32 = 0;
     let mut cache_hits_by_level = BTreeMap::new();
@@ -46,16 +80,16 @@ pub(crate) fn build_layer_requests(
             cache_misses_by_level: base_misses_by_level,
             detail_queued: _,
             coverage_queued: _,
-        } = build_requests_for_bounds(
+        } = build_requests_for_bounds(BoundsRequestBuild {
             layer,
             tileset,
-            base,
+            bounds: base,
             map_version,
             cache,
-            RequestKind::BaseCoverage,
-            layer.request_weight,
+            kind: RequestKind::BaseCoverage,
+            request_weight: layer.request_weight,
             map_version_id,
-        );
+        });
         coverage_queued = coverage_queued.saturating_add(base_requests.len() as u32);
         requests.append(&mut base_requests);
         cache_hits = cache_hits.saturating_add(base_hits);
@@ -103,16 +137,16 @@ pub(crate) fn build_layer_requests(
                 cache_misses_by_level: detail_misses_by_level,
                 detail_queued: _,
                 coverage_queued: _,
-            } = build_requests_for_bounds(
+            } = build_requests_for_bounds(BoundsRequestBuild {
                 layer,
                 tileset,
-                detail,
+                bounds: detail,
                 map_version,
                 cache,
-                RequestKind::DetailRefine,
-                layer.request_weight * 0.75,
+                kind: RequestKind::DetailRefine,
+                request_weight: layer.request_weight * 0.75,
                 map_version_id,
-            );
+            });
             if camera_unstable {
                 let max_detail = residency
                     .max_detail_requests_while_moving_by_layer
@@ -137,16 +171,16 @@ pub(crate) fn build_layer_requests(
             cache_misses_by_level: detail_misses_by_level,
             detail_queued: _,
             coverage_queued: _,
-        } = build_requests_for_bounds(
+        } = build_requests_for_bounds(BoundsRequestBuild {
             layer,
             tileset,
-            detail,
+            bounds: detail,
             map_version,
             cache,
-            RequestKind::DetailRefine,
-            layer.request_weight * 0.75,
+            kind: RequestKind::DetailRefine,
+            request_weight: layer.request_weight * 0.75,
             map_version_id,
-        );
+        });
         cache_hits = cache_hits.saturating_add(detail_hits);
         merge_level_count_maps(&mut cache_hits_by_level, &detail_hits_by_level);
         merge_level_count_maps(&mut cache_misses_by_level, &detail_misses_by_level);
@@ -168,17 +202,18 @@ pub(crate) fn build_layer_requests(
     }
 }
 
-fn build_requests_for_bounds(
-    layer: &LayerSpec,
-    tileset: &LoadedTileset,
-    bounds: TileBounds,
-    map_version: Option<&str>,
-    cache: &RasterTileCache,
-    kind: RequestKind,
-    request_weight: f32,
-    map_version_id: u64,
-) -> BuildResult {
+fn build_requests_for_bounds(input: BoundsRequestBuild<'_>) -> BuildResult {
     crate::perf_scope!("raster.cache_lookup_update");
+    let BoundsRequestBuild {
+        layer,
+        tileset,
+        bounds,
+        map_version,
+        cache,
+        kind,
+        request_weight,
+        map_version_id,
+    } = input;
     let Some(level) = tileset.level(bounds.z) else {
         return BuildResult {
             requests: Vec::new(),
@@ -257,17 +292,18 @@ fn dedupe_requests(requests: &mut Vec<TileRequest>) {
     requests.retain(|req| seen.insert(req.key));
 }
 
-pub(crate) fn start_tile_requests(
-    streamer: &mut TileStreamer,
-    cache: &mut RasterTileCache,
-    asset_server: &AssetServer,
-    layer_registry: &LayerRegistry,
-    layer_runtime: &LayerRuntime,
-    residency: &TileResidencyState,
-    camera_unstable: bool,
-    stats: &mut crate::map::raster::TileStats,
-) {
+pub(crate) fn start_tile_requests(input: StartTileRequests<'_>) {
     crate::perf_scope!("raster.request_start");
+    let StartTileRequests {
+        streamer,
+        cache,
+        asset_server,
+        layer_registry,
+        layer_runtime,
+        residency,
+        camera_unstable,
+        stats,
+    } = input;
     let mut started = 0;
     let mut detail_started_by_layer: HashMap<LayerId, usize> = HashMap::new();
     while started < streamer.max_new_requests_per_frame && streamer.inflight < streamer.max_inflight

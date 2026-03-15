@@ -1,5 +1,6 @@
 use super::setup::text_style;
 use super::*;
+use bevy::ecs::system::SystemParam;
 pub(super) fn update_selected_text(
     selection: Res<SelectionState>,
     mut query: Query<&mut Text, With<SelectedZoneText>>,
@@ -38,42 +39,40 @@ pub(super) fn update_panel_title(
     };
 }
 
-pub(super) fn sync_zone_evidence_list(
-    selection: Res<SelectionState>,
-    fish_filter: Res<FishFilterState>,
-    fish: Res<FishCatalog>,
-    remote_image_epoch: Res<RemoteImageEpoch>,
-    mut remote_images: ResMut<RemoteImageCache>,
-    fonts: Res<UiFonts>,
-    mut last_selected_fish_ids: Local<Vec<i32>>,
-    mut commands: Commands,
-    list_q: Query<(Entity, Option<&Children>), With<ZoneEvidenceList>>,
-) {
-    let Ok((list_entity, children)) = list_q.single() else {
+pub(super) fn sync_zone_evidence_list(mut sync: ZoneEvidenceListSync<'_, '_>) {
+    let Ok((list_entity, children)) = sync.list_q.single() else {
         return;
     };
     let list_is_empty = children.map(|c| c.is_empty()).unwrap_or(true);
-    let selected_fish_changed = *last_selected_fish_ids != fish_filter.selected_fish_ids;
-    if !selection.is_changed()
-        && !fish.is_changed()
+    let selected_fish_changed = *sync.last_selected_fish_ids != sync.fish_filter.selected_fish_ids;
+    if !sync.selection.is_changed()
+        && !sync.fish.is_changed()
         && !selected_fish_changed
-        && !remote_image_epoch.is_changed()
+        && !sync.remote_image_epoch.is_changed()
         && !list_is_empty
     {
         return;
     }
-    *last_selected_fish_ids = fish_filter.selected_fish_ids.clone();
+    *sync.last_selected_fish_ids = sync.fish_filter.selected_fish_ids.clone();
 
     if let Some(children) = children {
         for child in children.iter() {
-            commands.entity(child).despawn();
+            sync.commands.entity(child).despawn();
         }
     }
 
-    let title_style = text_style(12.0, Color::srgb(0.90, 0.90, 0.94), fonts.regular.clone());
-    let meta_style = text_style(11.0, Color::srgb(0.70, 0.72, 0.78), fonts.regular.clone());
+    let title_style = text_style(
+        12.0,
+        Color::srgb(0.90, 0.90, 0.94),
+        sync.fonts.regular.clone(),
+    );
+    let meta_style = text_style(
+        11.0,
+        Color::srgb(0.70, 0.72, 0.78),
+        sync.fonts.regular.clone(),
+    );
 
-    let rows = if let Some(stats) = selection.zone_stats.as_ref() {
+    let rows = if let Some(stats) = sync.selection.zone_stats.as_ref() {
         if stats.distribution.is_empty() {
             Vec::new()
         } else {
@@ -81,14 +80,17 @@ pub(super) fn sync_zone_evidence_list(
                 .distribution
                 .iter()
                 .map(|entry| {
-                    let name =
-                        resolve_zone_fish_name(entry.fish_id, entry.fish_name.as_deref(), &fish);
+                    let name = resolve_zone_fish_name(
+                        entry.fish_id,
+                        entry.fish_name.as_deref(),
+                        &sync.fish,
+                    );
                     let ci = match (entry.ci_low, entry.ci_high) {
                         (Some(low), Some(high)) => format!("{low:.3}-{high:.3}"),
                         _ => "n/a".to_string(),
                     };
-                    let selected = fish_filter.selected_fish_ids.contains(&entry.fish_id);
-                    let icon_handle = fish_icon_handle(entry.item_id, &mut remote_images);
+                    let selected = sync.fish_filter.selected_fish_ids.contains(&entry.fish_id);
+                    let icon_handle = fish_icon_handle(entry.item_id, &mut sync.remote_images);
                     (
                         selected,
                         icon_handle,
@@ -106,8 +108,8 @@ pub(super) fn sync_zone_evidence_list(
         Vec::new()
     };
 
-    let placeholder = if selection.zone_stats.is_none() {
-        if selection.info.is_some() {
+    let placeholder = if sync.selection.zone_stats.is_none() {
+        if sync.selection.info.is_some() {
             "No zone evidence loaded."
         } else {
             "Click a zone on the map to load evidence."
@@ -118,7 +120,7 @@ pub(super) fn sync_zone_evidence_list(
         ""
     };
 
-    commands.entity(list_entity).with_children(|list| {
+    sync.commands.entity(list_entity).with_children(|list| {
         if !placeholder.is_empty() {
             list.spawn((
                 UiTextBundle::new(placeholder, &meta_style),
@@ -187,6 +189,19 @@ pub(super) fn sync_zone_evidence_list(
             });
         }
     });
+}
+
+#[derive(SystemParam)]
+pub(super) struct ZoneEvidenceListSync<'w, 's> {
+    selection: Res<'w, SelectionState>,
+    fish_filter: Res<'w, FishFilterState>,
+    fish: Res<'w, FishCatalog>,
+    remote_image_epoch: Res<'w, RemoteImageEpoch>,
+    remote_images: ResMut<'w, RemoteImageCache>,
+    fonts: Res<'w, UiFonts>,
+    last_selected_fish_ids: Local<'s, Vec<i32>>,
+    commands: Commands<'w, 's>,
+    list_q: Query<'w, 's, (Entity, Option<&'static Children>), With<ZoneEvidenceList>>,
 }
 
 pub(super) fn resolve_zone_fish_name(

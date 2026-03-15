@@ -3,6 +3,57 @@ use super::super::setup::text_style;
 use super::super::*;
 use super::selection::{display_patches, normalize_patch_selection, patch_list_hash, patch_name};
 
+pub(in crate::plugins::ui) type PatchDropdownVisibilityQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Option<&'static PatchDropdownList>,
+        Option<&'static PatchDropdownScrollbarTrack>,
+        &'static mut Visibility,
+        &'static mut Node,
+    ),
+    Or<(With<PatchDropdownList>, With<PatchDropdownScrollbarTrack>)>,
+>;
+
+pub(in crate::plugins::ui) type PatchDropdownListScrollQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static PatchDropdownList,
+        &'static mut ScrollPosition,
+        &'static ComputedNode,
+        Option<&'static Children>,
+        Option<&'static InheritedVisibility>,
+    ),
+    With<PatchDropdownList>,
+>;
+
+pub(in crate::plugins::ui) type PatchDropdownThumbDragQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static PatchDropdownScrollbarThumb,
+        &'static Node,
+        &'static ComputedNode,
+        &'static UiGlobalTransform,
+        Option<&'static InheritedVisibility>,
+    ),
+    With<PatchDropdownScrollbarThumb>,
+>;
+
+pub(in crate::plugins::ui) type PatchDropdownListViewQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static PatchDropdownList,
+        &'static ScrollPosition,
+        &'static ComputedNode,
+        Option<&'static Children>,
+        Option<&'static InheritedVisibility>,
+    ),
+    With<PatchDropdownList>,
+>;
+
 pub(in crate::plugins::ui) fn handle_patch_dropdown_toggle(
     mut state: ResMut<PatchDropdownState>,
     mut query: Query<(&Interaction, &PatchRangeButton), Changed<Interaction>>,
@@ -21,15 +72,7 @@ pub(in crate::plugins::ui) fn handle_patch_dropdown_toggle(
 
 pub(in crate::plugins::ui) fn sync_patch_dropdown_visibility(
     state: Res<PatchDropdownState>,
-    mut q: Query<
-        (
-            Option<&PatchDropdownList>,
-            Option<&PatchDropdownScrollbarTrack>,
-            &mut Visibility,
-            &mut Node,
-        ),
-        Or<(With<PatchDropdownList>, With<PatchDropdownScrollbarTrack>)>,
-    >,
+    mut q: PatchDropdownVisibilityQuery<'_, '_>,
 ) {
     if !state.is_changed() {
         return;
@@ -146,16 +189,7 @@ pub(in crate::plugins::ui) fn handle_patch_dropdown_scrollbar_drag(
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     state: Res<PatchDropdownState>,
     mut drag_state: ResMut<PatchDropdownScrollbarDragState>,
-    mut list_q: Query<
-        (
-            &PatchDropdownList,
-            &mut ScrollPosition,
-            &ComputedNode,
-            Option<&Children>,
-            Option<&InheritedVisibility>,
-        ),
-        With<PatchDropdownList>,
-    >,
+    mut list_q: PatchDropdownListScrollQuery<'_, '_>,
     track_q: Query<
         (
             &PatchDropdownScrollbarTrack,
@@ -165,16 +199,7 @@ pub(in crate::plugins::ui) fn handle_patch_dropdown_scrollbar_drag(
         ),
         With<PatchDropdownScrollbarTrack>,
     >,
-    thumb_q: Query<
-        (
-            &PatchDropdownScrollbarThumb,
-            &Node,
-            &ComputedNode,
-            &UiGlobalTransform,
-            Option<&InheritedVisibility>,
-        ),
-        With<PatchDropdownScrollbarThumb>,
-    >,
+    thumb_q: PatchDropdownThumbDragQuery<'_, '_>,
 ) {
     if mouse_buttons.just_released(MouseButton::Left) {
         drag_state.active_bound = None;
@@ -296,16 +321,7 @@ pub(in crate::plugins::ui) fn handle_patch_dropdown_scrollbar_drag(
 
 pub(in crate::plugins::ui) fn sync_patch_dropdown_scrollbar(
     state: Res<PatchDropdownState>,
-    list_q: Query<
-        (
-            &PatchDropdownList,
-            &ScrollPosition,
-            &ComputedNode,
-            Option<&Children>,
-            Option<&InheritedVisibility>,
-        ),
-        With<PatchDropdownList>,
-    >,
+    list_q: PatchDropdownListViewQuery<'_, '_>,
     track_q: Query<
         (
             &PatchDropdownScrollbarTrack,

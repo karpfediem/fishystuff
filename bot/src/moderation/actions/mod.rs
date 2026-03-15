@@ -115,9 +115,8 @@ impl ModeratorActions {
                 let res = self.poster.forward_to(http, thread.id, *ch, *mid).await;
                 // discord/serenity freaks out if we spam messages so try sleeping...
                 tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
-                match res {
-                    Ok(()) => forwarded += 1,
-                    Err(_) => {}
+                if let Ok(()) = res {
+                    forwarded += 1;
                 }
             }
         }

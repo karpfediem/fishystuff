@@ -409,7 +409,7 @@ fn tile_overlaps_bounds(key: &TileKey, bounds: TileBounds) -> bool {
 }
 
 fn level0_span(tile: i32, z: i32) -> Option<(i64, i64)> {
-    if z < 0 || z > 30 {
+    if !(0..=30).contains(&z) {
         return None;
     }
     let scale = 1_i64.checked_shl(z as u32)?;

@@ -199,6 +199,38 @@ struct ImportCommand {
     commit_msg: Option<String>,
 }
 
+struct ImportDigests {
+    fishing_sha: String,
+    main_group_sha: String,
+    sub_group_sha: String,
+    item_table_sha: Option<String>,
+    fish_table_sha: Option<String>,
+    patches_sha: Option<String>,
+    languagedata_sha: Option<String>,
+}
+
+struct ImportOutputs {
+    fishing_csv: PathBuf,
+    main_group_csv: PathBuf,
+    sub_group_csv: PathBuf,
+    item_table_csv: PathBuf,
+    fish_table_csv: PathBuf,
+    patches_csv: PathBuf,
+    languagedata_csv: PathBuf,
+}
+
+struct ImportReport<'a> {
+    subset: SubsetMode,
+    fishing: &'a FishingImport,
+    main_group: &'a MainGroupImport,
+    sub_group: &'a SubGroupImport,
+    item_table: Option<&'a ItemTableImport>,
+    fish_table: Option<&'a FishTableImport>,
+    patches: Option<&'a PatchesImport>,
+    languagedata: Option<&'a LanguageDataImport>,
+    outputs: &'a ImportOutputs,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -258,119 +290,104 @@ fn run_import(command: ImportCommand) -> Result<()> {
     fs::create_dir_all(&output_dir)
         .with_context(|| format!("create output dir: {}", output_dir.display()))?;
 
-    let fishing_sha = sha256_file(&fishing_xlsx)?;
-    let main_group_sha = sha256_file(&main_group_xlsx)?;
-    let sub_group_sha = sha256_file(&sub_group_xlsx)?;
-    let item_table_sha = match item_table_xlsx.as_ref() {
-        Some(path) => Some(sha256_file(path)?),
-        None => None,
-    };
-    let fish_table_sha = match fish_table_csv.as_ref() {
-        Some(path) => Some(sha256_file(path)?),
-        None => None,
-    };
-    let patches_sha = match patches_csv.as_ref() {
-        Some(path) => Some(sha256_file(path)?),
-        None => None,
-    };
-    let languagedata_sha = match languagedata_en_csv.as_ref() {
-        Some(path) => Some(sha256_file(path)?),
-        None => None,
+    let digests = ImportDigests {
+        fishing_sha: sha256_file(&fishing_xlsx)?,
+        main_group_sha: sha256_file(&main_group_xlsx)?,
+        sub_group_sha: sha256_file(&sub_group_xlsx)?,
+        item_table_sha: match item_table_xlsx.as_ref() {
+            Some(path) => Some(sha256_file(path)?),
+            None => None,
+        },
+        fish_table_sha: match fish_table_csv.as_ref() {
+            Some(path) => Some(sha256_file(path)?),
+            None => None,
+        },
+        patches_sha: match patches_csv.as_ref() {
+            Some(path) => Some(sha256_file(path)?),
+            None => None,
+        },
+        languagedata_sha: match languagedata_en_csv.as_ref() {
+            Some(path) => Some(sha256_file(path)?),
+            None => None,
+        },
     };
 
     if let Some(schema_path) = apply_schema {
         apply_schema_sql(&dolt_repo, &schema_path)?;
     }
 
-    let fishing_csv = output_dir.join("fishing_table.csv");
-    let main_group_csv = output_dir.join("item_main_group_table.csv");
-    let sub_group_csv = output_dir.join("item_sub_group_table.csv");
-    let item_table_csv = output_dir.join("item_table.csv");
-    let fish_table_out_csv = output_dir.join("fish_table.csv");
-    let patches_out_csv = output_dir.join("patches.csv");
-    let languagedata_csv = output_dir.join("languagedata_en.csv");
+    let outputs = ImportOutputs {
+        fishing_csv: output_dir.join("fishing_table.csv"),
+        main_group_csv: output_dir.join("item_main_group_table.csv"),
+        sub_group_csv: output_dir.join("item_sub_group_table.csv"),
+        item_table_csv: output_dir.join("item_table.csv"),
+        fish_table_csv: output_dir.join("fish_table.csv"),
+        patches_csv: output_dir.join("patches.csv"),
+        languagedata_csv: output_dir.join("languagedata_en.csv"),
+    };
 
-    let fishing_stats = import_fishing_table(&fishing_xlsx, &fishing_csv)?;
+    let fishing_stats = import_fishing_table(&fishing_xlsx, &outputs.fishing_csv)?;
     let main_group_stats = import_main_group_table(
         &main_group_xlsx,
-        &main_group_csv,
+        &outputs.main_group_csv,
         subset,
         &fishing_stats.mg_keys,
     )?;
     let sub_group_stats = import_sub_group_table(
         &sub_group_xlsx,
-        &sub_group_csv,
+        &outputs.sub_group_csv,
         subset,
         &main_group_stats.sg_keys,
     )?;
     let item_table_stats = match item_table_xlsx.as_ref() {
-        Some(path) => Some(import_item_table(path, &item_table_csv)?),
+        Some(path) => Some(import_item_table(path, &outputs.item_table_csv)?),
         None => None,
     };
     let fish_table_stats = match fish_table_csv.as_ref() {
-        Some(path) => Some(import_fish_table_csv(path, &fish_table_out_csv)?),
+        Some(path) => Some(import_fish_table_csv(path, &outputs.fish_table_csv)?),
         None => None,
     };
     let patches_stats = match patches_csv.as_ref() {
-        Some(path) => Some(import_patches_csv(path, &patches_out_csv)?),
+        Some(path) => Some(import_patches_csv(path, &outputs.patches_csv)?),
         None => None,
     };
     let languagedata_stats = match languagedata_en_csv.as_ref() {
-        Some(path) => Some(import_languagedata_en_csv(path, &languagedata_csv)?),
+        Some(path) => Some(import_languagedata_en_csv(path, &outputs.languagedata_csv)?),
         None => None,
     };
 
-    run_dolt_table_import(&dolt_repo, "fishing_table", &fishing_csv)?;
-    run_dolt_table_import(&dolt_repo, "item_main_group_table", &main_group_csv)?;
-    run_dolt_table_import(&dolt_repo, "item_sub_group_table", &sub_group_csv)?;
+    run_dolt_table_import(&dolt_repo, "fishing_table", &outputs.fishing_csv)?;
+    run_dolt_table_import(&dolt_repo, "item_main_group_table", &outputs.main_group_csv)?;
+    run_dolt_table_import(&dolt_repo, "item_sub_group_table", &outputs.sub_group_csv)?;
     if item_table_stats.is_some() {
-        run_dolt_table_import(&dolt_repo, "item_table", &item_table_csv)?;
+        run_dolt_table_import(&dolt_repo, "item_table", &outputs.item_table_csv)?;
     }
     if fish_table_stats.is_some() {
-        run_dolt_table_import(&dolt_repo, "fish_table", &fish_table_out_csv)?;
+        run_dolt_table_import(&dolt_repo, "fish_table", &outputs.fish_table_csv)?;
     }
     if patches_stats.is_some() {
-        run_dolt_table_import(&dolt_repo, "patches", &patches_out_csv)?;
+        run_dolt_table_import(&dolt_repo, "patches", &outputs.patches_csv)?;
     }
     if languagedata_stats.is_some() {
-        run_dolt_table_import(&dolt_repo, "languagedata_en", &languagedata_csv)?;
+        run_dolt_table_import(&dolt_repo, "languagedata_en", &outputs.languagedata_csv)?;
     }
 
     if commit {
-        let msg = build_commit_message(
-            commit_msg,
-            &fishing_sha,
-            &main_group_sha,
-            &sub_group_sha,
-            item_table_sha.as_deref(),
-            fish_table_sha.as_deref(),
-            patches_sha.as_deref(),
-            languagedata_sha.as_deref(),
-        );
+        let msg = build_commit_message(commit_msg, &digests);
         run_dolt_commit(&dolt_repo, &msg)?;
     }
 
-    report_import(
+    report_import(ImportReport {
         subset,
-        &fishing_stats,
-        &main_group_stats,
-        &sub_group_stats,
-        item_table_stats.as_ref(),
-        fish_table_stats.as_ref(),
-        patches_stats.as_ref(),
-        languagedata_stats.as_ref(),
-        &fishing_csv,
-        &main_group_csv,
-        &sub_group_csv,
-        item_table_stats.as_ref().map(|_| item_table_csv.as_path()),
-        fish_table_stats
-            .as_ref()
-            .map(|_| fish_table_out_csv.as_path()),
-        patches_stats.as_ref().map(|_| patches_out_csv.as_path()),
-        languagedata_stats
-            .as_ref()
-            .map(|_| languagedata_csv.as_path()),
-    );
+        fishing: &fishing_stats,
+        main_group: &main_group_stats,
+        sub_group: &sub_group_stats,
+        item_table: item_table_stats.as_ref(),
+        fish_table: fish_table_stats.as_ref(),
+        patches: patches_stats.as_ref(),
+        languagedata: languagedata_stats.as_ref(),
+        outputs: &outputs,
+    });
 
     Ok(())
 }
@@ -946,31 +963,22 @@ fn run_dolt_commit(repo_path: &Path, message: &str) -> Result<()> {
     bail!("dolt commit failed: {stderr}");
 }
 
-fn build_commit_message(
-    base: Option<String>,
-    fishing_sha: &str,
-    main_group_sha: &str,
-    sub_group_sha: &str,
-    item_table_sha: Option<&str>,
-    fish_table_sha: Option<&str>,
-    patches_sha: Option<&str>,
-    languagedata_sha: Option<&str>,
-) -> String {
+fn build_commit_message(base: Option<String>, digests: &ImportDigests) -> String {
     let mut parts = vec![
-        format!("Fishing_Table={fishing_sha}"),
-        format!("ItemMainGroup={main_group_sha}"),
-        format!("ItemSubGroup={sub_group_sha}"),
+        format!("Fishing_Table={}", digests.fishing_sha),
+        format!("ItemMainGroup={}", digests.main_group_sha),
+        format!("ItemSubGroup={}", digests.sub_group_sha),
     ];
-    if let Some(item_table_sha) = item_table_sha {
+    if let Some(item_table_sha) = digests.item_table_sha.as_deref() {
         parts.push(format!("Item_Table={item_table_sha}"));
     }
-    if let Some(fish_table_sha) = fish_table_sha {
+    if let Some(fish_table_sha) = digests.fish_table_sha.as_deref() {
         parts.push(format!("Fish_Table={fish_table_sha}"));
     }
-    if let Some(patches_sha) = patches_sha {
+    if let Some(patches_sha) = digests.patches_sha.as_deref() {
         parts.push(format!("Patches={patches_sha}"));
     }
-    if let Some(languagedata_sha) = languagedata_sha {
+    if let Some(languagedata_sha) = digests.languagedata_sha.as_deref() {
         parts.push(format!("LanguageData_EN={languagedata_sha}"));
     }
     let suffix = format!("({})", parts.join(", "));
@@ -980,23 +988,18 @@ fn build_commit_message(
     }
 }
 
-fn report_import(
-    subset: SubsetMode,
-    fishing: &FishingImport,
-    main_group: &MainGroupImport,
-    sub_group: &SubGroupImport,
-    item_table: Option<&ItemTableImport>,
-    fish_table: Option<&FishTableImport>,
-    patches: Option<&PatchesImport>,
-    languagedata: Option<&LanguageDataImport>,
-    fishing_csv: &Path,
-    main_group_csv: &Path,
-    sub_group_csv: &Path,
-    item_table_csv: Option<&Path>,
-    fish_table_csv: Option<&Path>,
-    patches_csv: Option<&Path>,
-    languagedata_csv: Option<&Path>,
-) {
+fn report_import(report: ImportReport<'_>) {
+    let ImportReport {
+        subset,
+        fishing,
+        main_group,
+        sub_group,
+        item_table,
+        fish_table,
+        patches,
+        languagedata,
+        outputs,
+    } = report;
     let missing_mg: BTreeSet<i64> = fishing
         .mg_keys
         .difference(&main_group.matched_mg)
@@ -1039,20 +1042,32 @@ fn report_import(
     if let Some(languagedata) = languagedata {
         println!("languagedata_en rows emitted: {}", languagedata.row_count);
     }
-    println!("output fishing csv: {}", fishing_csv.display());
-    println!("output main group csv: {}", main_group_csv.display());
-    println!("output sub group csv: {}", sub_group_csv.display());
-    if let Some(path) = item_table_csv {
-        println!("output item table csv: {}", path.display());
+    println!("output fishing csv: {}", outputs.fishing_csv.display());
+    println!(
+        "output main group csv: {}",
+        outputs.main_group_csv.display()
+    );
+    println!("output sub group csv: {}", outputs.sub_group_csv.display());
+    if item_table.is_some() {
+        println!(
+            "output item table csv: {}",
+            outputs.item_table_csv.display()
+        );
     }
-    if let Some(path) = fish_table_csv {
-        println!("output fish table csv: {}", path.display());
+    if fish_table.is_some() {
+        println!(
+            "output fish table csv: {}",
+            outputs.fish_table_csv.display()
+        );
     }
-    if let Some(path) = patches_csv {
-        println!("output patches csv: {}", path.display());
+    if patches.is_some() {
+        println!("output patches csv: {}", outputs.patches_csv.display());
     }
-    if let Some(path) = languagedata_csv {
-        println!("output languagedata_en csv: {}", path.display());
+    if languagedata.is_some() {
+        println!(
+            "output languagedata_en csv: {}",
+            outputs.languagedata_csv.display()
+        );
     }
 }
 

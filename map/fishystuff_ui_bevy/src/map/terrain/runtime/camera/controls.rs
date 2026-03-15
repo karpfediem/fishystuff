@@ -1,4 +1,5 @@
 use super::*;
+use bevy::ecs::system::SystemParam;
 
 #[derive(Resource, Default)]
 pub(in crate::map::terrain::runtime) struct OrbitInputState {
@@ -16,45 +17,37 @@ enum OrbitDragMode {
 }
 
 pub(in crate::map::terrain::runtime) fn update_terrain3d_camera_controls(
-    mode: Res<ViewModeState>,
-    mut view: ResMut<Terrain3dViewState>,
-    mut orbit_input: ResMut<OrbitInputState>,
-    mut control_mutations: ResMut<CameraControlMutationFlags>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    cursor_state: Res<CursorState>,
-    ui_capture: Res<UiPointerCapture>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
-    key_buttons: Res<ButtonInput<KeyCode>>,
-    mut mouse_wheel: MessageReader<MouseWheel>,
-    mut camera_q: Query<(&Camera, &mut Transform, &mut Projection), With<Terrain3dCamera>>,
+    mut controls: Terrain3dCameraControls<'_, '_>,
 ) {
     crate::perf_scope!("camera.3d_update");
-    if mode.mode != ViewMode::Terrain3D {
-        orbit_input.dragging = false;
-        orbit_input.drag_mode = OrbitDragMode::Orbit;
+    if controls.mode.mode != ViewMode::Terrain3D {
+        controls.orbit_input.dragging = false;
+        controls.orbit_input.drag_mode = OrbitDragMode::Orbit;
         return;
     }
 
-    let Ok(window) = windows.single() else {
+    let Ok(window) = controls.windows.single() else {
         return;
     };
-    let Ok((camera, mut camera_transform, mut projection)) = camera_q.single_mut() else {
+    let Ok((camera, mut camera_transform, mut projection)) = controls.camera_q.single_mut() else {
         return;
     };
-    if !terrain3d_controls_should_run(mode.mode, camera.is_active) {
-        orbit_input.dragging = false;
-        orbit_input.drag_mode = OrbitDragMode::Orbit;
+    if !terrain3d_controls_should_run(controls.mode.mode, camera.is_active) {
+        controls.orbit_input.dragging = false;
+        controls.orbit_input.drag_mode = OrbitDragMode::Orbit;
         return;
     }
     ensure_terrain3d_projection(&mut projection);
 
-    let shift = key_buttons.pressed(KeyCode::ShiftLeft) || key_buttons.pressed(KeyCode::ShiftRight);
-    let ctrl =
-        key_buttons.pressed(KeyCode::ControlLeft) || key_buttons.pressed(KeyCode::ControlRight);
-    let alt = key_buttons.pressed(KeyCode::AltLeft) || key_buttons.pressed(KeyCode::AltRight);
+    let shift = controls.key_buttons.pressed(KeyCode::ShiftLeft)
+        || controls.key_buttons.pressed(KeyCode::ShiftRight);
+    let ctrl = controls.key_buttons.pressed(KeyCode::ControlLeft)
+        || controls.key_buttons.pressed(KeyCode::ControlRight);
+    let alt = controls.key_buttons.pressed(KeyCode::AltLeft)
+        || controls.key_buttons.pressed(KeyCode::AltRight);
 
-    let use_primary_fallback = alt && mouse_buttons.pressed(MouseButton::Left);
-    let use_middle = mouse_buttons.pressed(MouseButton::Middle);
+    let use_primary_fallback = alt && controls.mouse_buttons.pressed(MouseButton::Left);
+    let use_middle = controls.mouse_buttons.pressed(MouseButton::Middle);
     let drag_active = use_middle || use_primary_fallback;
     let drag_mode = if ctrl {
         OrbitDragMode::Dolly
@@ -63,47 +56,51 @@ pub(in crate::map::terrain::runtime) fn update_terrain3d_camera_controls(
     } else {
         OrbitDragMode::Orbit
     };
-    let ui_input_blocked = ui_capture.blocked || ui_capture.text_input_active;
+    let ui_input_blocked = controls.ui_capture.blocked || controls.ui_capture.text_input_active;
     let mut state_changed = false;
 
-    let cursor = window.cursor_position().or(cursor_state.last_pos);
+    let cursor = window.cursor_position().or(controls.cursor_state.last_pos);
 
     if !drag_active || ui_input_blocked {
-        orbit_input.dragging = false;
+        controls.orbit_input.dragging = false;
     } else if let Some(cursor) = cursor {
-        if !orbit_input.dragging {
-            orbit_input.dragging = true;
-            orbit_input.last_cursor = cursor;
-            orbit_input.drag_mode = drag_mode;
+        if !controls.orbit_input.dragging {
+            controls.orbit_input.dragging = true;
+            controls.orbit_input.last_cursor = cursor;
+            controls.orbit_input.drag_mode = drag_mode;
         } else {
-            let mut delta = cursor - orbit_input.last_cursor;
+            let mut delta = cursor - controls.orbit_input.last_cursor;
             if camera_controls_x_mirrored() {
                 delta.x = -delta.x;
             }
-            orbit_input.last_cursor = cursor;
+            controls.orbit_input.last_cursor = cursor;
             let fov_y = match &*projection {
                 Projection::Perspective(p) => p.fov,
                 _ => 55.0_f32.to_radians(),
             };
-            orbit_input.drag_mode = drag_mode;
-            match orbit_input.drag_mode {
+            controls.orbit_input.drag_mode = drag_mode;
+            match controls.orbit_input.drag_mode {
                 OrbitDragMode::Orbit => {
-                    view.orbit(delta, ORBIT_SENSITIVITY);
+                    controls.view.orbit(delta, ORBIT_SENSITIVITY);
                     state_changed = true;
                 }
                 OrbitDragMode::Pan => {
-                    view.pan(delta, Vec2::new(window.width(), window.height()), fov_y);
+                    controls
+                        .view
+                        .pan(delta, Vec2::new(window.width(), window.height()), fov_y);
                     state_changed = true;
                 }
                 OrbitDragMode::Dolly => {
-                    view.dolly(delta.y * DOLLY_DIRECTION, DOLLY_DRAG_SPEED);
+                    controls
+                        .view
+                        .dolly(delta.y * DOLLY_DIRECTION, DOLLY_DRAG_SPEED);
                     state_changed = true;
                 }
             }
         }
     }
 
-    for ev in mouse_wheel.read() {
+    for ev in controls.mouse_wheel.read() {
         if ui_input_blocked {
             continue;
         }
@@ -111,20 +108,46 @@ pub(in crate::map::terrain::runtime) fn update_terrain3d_camera_controls(
         if matches!(ev.unit, MouseScrollUnit::Pixel) {
             scroll /= 90.0;
         }
-        view.dolly(scroll * DOLLY_DIRECTION, DOLLY_WHEEL_SPEED);
+        controls
+            .view
+            .dolly(scroll * DOLLY_DIRECTION, DOLLY_WHEEL_SPEED);
         state_changed = true;
     }
 
-    if !ui_capture.text_input_active
-        && (key_buttons.just_pressed(KeyCode::Home)
-            || (shift && key_buttons.just_pressed(KeyCode::KeyC)))
+    if !controls.ui_capture.text_input_active
+        && (controls.key_buttons.just_pressed(KeyCode::Home)
+            || (shift && controls.key_buttons.just_pressed(KeyCode::KeyC)))
     {
-        reset_terrain3d_view(&mut view);
+        reset_terrain3d_view(&mut controls.view);
         state_changed = true;
     }
 
     if state_changed {
-        control_mutations.terrain3d_updated = true;
+        controls.control_mutations.terrain3d_updated = true;
     }
-    apply_terrain3d_camera_state(&view, &mut camera_transform);
+    apply_terrain3d_camera_state(&controls.view, &mut camera_transform);
+}
+
+#[derive(SystemParam)]
+pub(in crate::map::terrain::runtime) struct Terrain3dCameraControls<'w, 's> {
+    mode: Res<'w, ViewModeState>,
+    view: ResMut<'w, Terrain3dViewState>,
+    orbit_input: ResMut<'w, OrbitInputState>,
+    control_mutations: ResMut<'w, CameraControlMutationFlags>,
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    cursor_state: Res<'w, CursorState>,
+    ui_capture: Res<'w, UiPointerCapture>,
+    mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
+    key_buttons: Res<'w, ButtonInput<KeyCode>>,
+    mouse_wheel: MessageReader<'w, 's, MouseWheel>,
+    camera_q: Query<
+        'w,
+        's,
+        (
+            &'static Camera,
+            &'static mut Transform,
+            &'static mut Projection,
+        ),
+        With<Terrain3dCamera>,
+    >,
 }

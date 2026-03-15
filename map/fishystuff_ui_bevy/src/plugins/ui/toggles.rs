@@ -1,20 +1,38 @@
 use super::*;
+
+pub(super) type ToggleButtonInteractionQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Interaction,
+        &'static mut ClassList,
+        &'static Children,
+        Option<&'static ToggleEffort>,
+        Option<&'static TogglePoints>,
+        Option<&'static ToggleDrift>,
+        Option<&'static ToggleZoneMask>,
+    ),
+    Changed<Interaction>,
+>;
+
+pub(super) type ToggleVisualQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut ClassList,
+        &'static Children,
+        Option<&'static ToggleEffort>,
+        Option<&'static TogglePoints>,
+        Option<&'static ToggleDrift>,
+        Option<&'static ToggleZoneMask>,
+    ),
+>;
+
 pub(super) fn handle_toggle_buttons(
     mut display_state: ResMut<MapDisplayState>,
     layer_registry: Res<LayerRegistry>,
     mut layer_settings: ResMut<LayerSettings>,
-    mut query: Query<
-        (
-            &Interaction,
-            &mut ClassList,
-            &Children,
-            Option<&ToggleEffort>,
-            Option<&TogglePoints>,
-            Option<&ToggleDrift>,
-            Option<&ToggleZoneMask>,
-        ),
-        Changed<Interaction>,
-    >,
+    mut query: ToggleButtonInteractionQuery<'_, '_>,
     mut text_q: Query<&mut Text>,
 ) {
     for (interaction, mut classes, children, effort, points, drift, zone_mask) in &mut query {
@@ -68,14 +86,7 @@ pub(super) fn handle_toggle_buttons(
 
 pub(super) fn sync_toggle_visuals(
     display_state: Res<MapDisplayState>,
-    mut query: Query<(
-        &mut ClassList,
-        &Children,
-        Option<&ToggleEffort>,
-        Option<&TogglePoints>,
-        Option<&ToggleDrift>,
-        Option<&ToggleZoneMask>,
-    )>,
+    mut query: ToggleVisualQuery<'_, '_>,
     mut text_q: Query<&mut Text>,
 ) {
     if !display_state.is_changed() {

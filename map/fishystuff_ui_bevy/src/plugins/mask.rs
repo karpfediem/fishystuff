@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
@@ -27,44 +28,31 @@ impl Plugin for MaskPlugin {
     }
 }
 
-fn update_hover(
-    windows: Query<&Window, With<PrimaryWindow>>,
-    camera_q: Query<(&Camera, &Transform), With<Map2dCamera>>,
-    tile_cache: Res<RasterTileCache>,
-    mut streamer: ResMut<TileStreamer>,
-    bootstrap: Res<ApiBootstrapState>,
-    mut display_state: ResMut<MapDisplayState>,
-    ui_capture: Res<UiPointerCapture>,
-    mut hover: ResMut<HoverState>,
-    layer_registry: Res<LayerRegistry>,
-    layer_runtime: Res<LayerRuntime>,
-    vector_runtime: Res<VectorLayerRuntime>,
-    view_mode: Res<ViewModeState>,
-) {
-    display_state.hovered_zone_rgb = None;
-    if view_mode.mode != ViewMode::Map2D {
-        hover.info = None;
+fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
+    context.display_state.hovered_zone_rgb = None;
+    if context.view_mode.mode != ViewMode::Map2D {
+        context.hover.info = None;
         return;
     }
-    if ui_capture.blocked {
-        hover.info = None;
+    if context.ui_capture.blocked {
+        context.hover.info = None;
         return;
     }
-    let Ok(window) = windows.single() else {
+    let Ok(window) = context.windows.single() else {
         return;
     };
-    let Ok((camera, camera_transform)) = camera_q.single() else {
+    let Ok((camera, camera_transform)) = context.camera_q.single() else {
         return;
     };
     let Some(cursor) = window.cursor_position() else {
-        hover.info = None;
+        context.hover.info = None;
         return;
     };
     let Some(world) = camera
         .viewport_to_world_2d(&GlobalTransform::from(*camera_transform), cursor)
         .ok()
     else {
-        hover.info = None;
+        context.hover.info = None;
         return;
     };
     let map_to_world = MapToWorld::default();
@@ -77,24 +65,24 @@ fn update_hover(
         || map_x >= map_to_world.image_size_x as f32
         || map_y >= map_to_world.image_size_y as f32
     {
-        hover.info = None;
+        context.hover.info = None;
         return;
     }
 
     let map_px = map_x.floor() as i32;
     let map_py = map_y.floor() as i32;
     let world_point = WorldPoint::new(world.x as f64, world.y as f64);
-    let hover_layers = current_hover_layers(&layer_registry, &layer_runtime);
-    let layer_samples = collect_hover_layer_samples(
-        &hover_layers,
-        &tile_cache,
-        &mut streamer,
-        &vector_runtime,
-        &bootstrap,
+    let hover_layers = current_hover_layers(&context.layer_registry, &context.layer_runtime);
+    let mut sampling = HoverSamplingContext {
+        tile_cache: &context.tile_cache,
+        streamer: &mut context.streamer,
+        vector_runtime: &context.vector_runtime,
+        bootstrap: &context.bootstrap,
         world_point,
         map_to_world,
-        layer_registry.map_version_id(),
-    );
+        registry_map_version_id: context.layer_registry.map_version_id(),
+    };
+    let layer_samples = collect_hover_layer_samples(&hover_layers, &mut sampling);
     let zone_sample = hover_layers
         .iter()
         .find(|layer| layer.pick_mode == PickMode::ExactTilePixel)
@@ -106,12 +94,13 @@ fn update_hover(
         });
 
     if zone_sample.is_none() && layer_samples.is_empty() {
-        hover.info = None;
+        context.hover.info = None;
         return;
     }
 
     let zone_name = zone_sample.as_ref().and_then(|sample| {
-        bootstrap
+        context
+            .bootstrap
             .zones
             .get(&sample.rgb_u32)
             .cloned()
@@ -123,7 +112,7 @@ fn update_hover(
         map_px as f64 + 0.5,
         map_py as f64 + 0.5,
     ));
-    hover.info = Some(crate::plugins::api::HoverInfo {
+    context.hover.info = Some(crate::plugins::api::HoverInfo {
         map_px,
         map_py,
         rgb: zone_rgb,
@@ -133,39 +122,29 @@ fn update_hover(
         world_z: world_at_center.z,
         layer_samples,
     });
-    display_state.hovered_zone_rgb = zone_rgb_u32;
+    context.display_state.hovered_zone_rgb = zone_rgb_u32;
 }
 
-fn handle_click(
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
-    mut pending: ResMut<PendingRequests>,
-    mut selection: ResMut<SelectionState>,
-    hover: Res<HoverState>,
-    pan: Res<PanState>,
-    bootstrap: Res<ApiBootstrapState>,
-    patch_filter: Res<PatchFilterState>,
-    ui_capture: Res<UiPointerCapture>,
-    view_mode: Res<ViewModeState>,
-) {
-    if view_mode.mode != ViewMode::Map2D {
+fn handle_click(mut context: MaskClickContext<'_, '_>) {
+    if context.view_mode.mode != ViewMode::Map2D {
         return;
     }
-    if ui_capture.blocked {
+    if context.ui_capture.blocked {
         return;
     }
-    if !mouse_buttons.just_released(MouseButton::Left) {
+    if !context.mouse_buttons.just_released(MouseButton::Left) {
         return;
     }
-    if pan.drag_distance > DRAG_THRESHOLD {
+    if context.pan.drag_distance > DRAG_THRESHOLD {
         return;
     }
-    let Some(hover) = hover.info.clone() else {
+    let Some(hover) = context.hover.info.clone() else {
         return;
     };
     let (Some(rgb), Some(rgb_u32)) = (hover.rgb, hover.rgb_u32) else {
         return;
     };
-    selection.info = Some(crate::plugins::api::SelectedInfo {
+    context.selection.info = Some(crate::plugins::api::SelectedInfo {
         map_px: hover.map_px,
         map_py: hover.map_py,
         rgb,
@@ -174,16 +153,17 @@ fn handle_click(
         world_x: hover.world_x,
         world_z: hover.world_z,
     });
-    selection.zone_stats = None;
-    selection.zone_stats_status = "zone stats: loading".to_string();
+    context.selection.zone_stats = None;
+    context.selection.zone_stats_status = "zone stats: loading".to_string();
 
-    let Some(request) = build_zone_stats_request(&bootstrap, &patch_filter, rgb) else {
-        selection.zone_stats_status = "zone stats: missing defaults".to_string();
+    let Some(request) = build_zone_stats_request(&context.bootstrap, &context.patch_filter, rgb)
+    else {
+        context.selection.zone_stats_status = "zone stats: missing defaults".to_string();
         return;
     };
 
     let receiver = spawn_zone_stats_request(request);
-    pending.zone_stats = Some((rgb_u32, receiver));
+    context.pending.zone_stats = Some((rgb_u32, receiver));
 }
 
 fn current_hover_layers<'a>(
@@ -214,52 +194,34 @@ fn current_hover_layers<'a>(
 
 fn collect_hover_layer_samples(
     hover_layers: &[&crate::map::layers::LayerSpec],
-    tile_cache: &RasterTileCache,
-    streamer: &mut TileStreamer,
-    vector_runtime: &VectorLayerRuntime,
-    bootstrap: &ApiBootstrapState,
-    world_point: WorldPoint,
-    map_to_world: MapToWorld,
-    registry_map_version_id: Option<&str>,
+    sampling: &mut HoverSamplingContext<'_>,
 ) -> Vec<HoverLayerSample> {
     hover_layers
         .iter()
-        .filter_map(|layer| {
-            sample_hover_layer(
-                layer,
-                tile_cache,
-                streamer,
-                vector_runtime,
-                bootstrap,
-                world_point,
-                map_to_world,
-                registry_map_version_id,
-            )
-        })
+        .filter_map(|layer| sample_hover_layer(layer, sampling))
         .collect()
 }
 
 fn sample_hover_layer(
     layer: &crate::map::layers::LayerSpec,
-    tile_cache: &RasterTileCache,
-    streamer: &mut TileStreamer,
-    vector_runtime: &VectorLayerRuntime,
-    bootstrap: &ApiBootstrapState,
-    world_point: WorldPoint,
-    map_to_world: MapToWorld,
-    registry_map_version_id: Option<&str>,
+    sampling: &mut HoverSamplingContext<'_>,
 ) -> Option<HoverLayerSample> {
     let rgb = if layer.is_raster() {
         sample_raster_layer_rgb(
             layer,
-            tile_cache,
-            streamer,
-            bootstrap,
-            world_point,
-            map_to_world,
+            sampling.tile_cache,
+            sampling.streamer,
+            sampling.bootstrap,
+            sampling.world_point,
+            sampling.map_to_world,
         )?
     } else if layer.is_vector() {
-        sample_vector_layer_rgb(layer, vector_runtime, registry_map_version_id, world_point)?
+        sample_vector_layer_rgb(
+            layer,
+            sampling.vector_runtime,
+            sampling.registry_map_version_id,
+            sampling.world_point,
+        )?
     } else {
         return None;
     };
@@ -275,6 +237,46 @@ fn sample_hover_layer(
         rgb,
         rgb_u32,
     })
+}
+
+#[derive(SystemParam)]
+struct HoverUpdateContext<'w, 's> {
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
+    tile_cache: Res<'w, RasterTileCache>,
+    streamer: ResMut<'w, TileStreamer>,
+    bootstrap: Res<'w, ApiBootstrapState>,
+    display_state: ResMut<'w, MapDisplayState>,
+    ui_capture: Res<'w, UiPointerCapture>,
+    hover: ResMut<'w, HoverState>,
+    layer_registry: Res<'w, LayerRegistry>,
+    layer_runtime: Res<'w, LayerRuntime>,
+    vector_runtime: Res<'w, VectorLayerRuntime>,
+    view_mode: Res<'w, ViewModeState>,
+}
+
+#[derive(SystemParam)]
+struct MaskClickContext<'w, 's> {
+    mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
+    pending: ResMut<'w, PendingRequests>,
+    selection: ResMut<'w, SelectionState>,
+    hover: Res<'w, HoverState>,
+    pan: Res<'w, PanState>,
+    bootstrap: Res<'w, ApiBootstrapState>,
+    patch_filter: Res<'w, PatchFilterState>,
+    ui_capture: Res<'w, UiPointerCapture>,
+    view_mode: Res<'w, ViewModeState>,
+    _marker: std::marker::PhantomData<&'s ()>,
+}
+
+struct HoverSamplingContext<'a> {
+    tile_cache: &'a RasterTileCache,
+    streamer: &'a mut TileStreamer,
+    vector_runtime: &'a VectorLayerRuntime,
+    bootstrap: &'a ApiBootstrapState,
+    world_point: WorldPoint,
+    map_to_world: MapToWorld,
+    registry_map_version_id: Option<&'a str>,
 }
 
 fn sample_raster_layer_rgb(

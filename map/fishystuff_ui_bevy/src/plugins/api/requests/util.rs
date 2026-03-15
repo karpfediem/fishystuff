@@ -7,6 +7,7 @@ use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use super::super::state::{ApiBootstrapState, PatchFilterState};
 
+#[cfg(target_arch = "wasm32")]
 const PROD_CDN_BASE_URL: &str = "https://cdn.fishystuff.fish";
 
 pub(super) fn pick_map_version(meta: &MetaResponse) -> Option<String> {

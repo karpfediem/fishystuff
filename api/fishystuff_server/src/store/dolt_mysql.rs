@@ -42,7 +42,7 @@ use catalog::{
 };
 use layers::{
     normalize_pick_mode, parse_layer_kind, parse_layer_transform, parse_vector_source,
-    resolve_layer_asset_url, substitute_map_version,
+    resolve_layer_asset_url, substitute_map_version, VectorSourceFields,
 };
 use stats::{
     align_alpha, align_probs, beta_ci, compute_status, gaussian_blur_grid, pixel_to_tile_index,
@@ -120,6 +120,37 @@ struct FishIdentityEntry {
 struct FishIdentityIndex {
     by_encyclopedia: HashMap<i32, FishIdentityEntry>,
 }
+
+type FishCatalogDbRow = (
+    i64,
+    Option<i64>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
+type FishIdentityDbRow = (i64, i64, Option<String>, Option<String>, Option<String>);
+
+type EventsSnapshotMetaDbRow = (u64, Option<i64>, Option<i64>, Option<String>);
+
+type EventPointCompactDbRow = (
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    i64,
+    Option<i64>,
+    Option<i64>,
+    Option<i64>,
+    i64,
+    Option<String>,
+);
 
 #[derive(Debug, Clone)]
 struct FishCatalogRow {
@@ -344,12 +375,14 @@ impl DoltMySqlStore {
             let vector_source = parse_vector_source(
                 &layer_id,
                 kind,
-                vector_source_url,
-                vector_source_revision,
-                vector_geometry_space,
-                vector_style_mode,
-                vector_feature_id_property,
-                vector_color_property,
+                VectorSourceFields {
+                    source_url: vector_source_url,
+                    source_revision: vector_source_revision,
+                    geometry_space: vector_geometry_space,
+                    style_mode: vector_style_mode,
+                    feature_id_property: vector_feature_id_property,
+                    color_property: vector_color_property,
+                },
                 map_version_id,
             )?;
             descriptors.push(LayerDescriptor {
@@ -681,18 +714,7 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(
-            i64,
-            Option<i64>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-        )> = conn.query(query).map_err(db_unavailable)?;
+        let rows: Vec<FishCatalogDbRow> = conn.query(query).map_err(db_unavailable)?;
 
         let mut out = BTreeMap::new();
         for (
@@ -796,8 +818,7 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, i64, Option<String>, Option<String>, Option<String>)> =
-            conn.query(query).map_err(db_unavailable)?;
+        let rows: Vec<FishIdentityDbRow> = conn.query(query).map_err(db_unavailable)?;
 
         let mut by_encyclopedia = HashMap::new();
         for (enc, item, name, _icon, encyclopedia_icon) in rows {
@@ -930,7 +951,7 @@ impl DoltMySqlStore {
 
     fn query_events_snapshot_meta(&self) -> AppResult<EventsSnapshotMetaResponse> {
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let row: Option<(u64, Option<i64>, Option<i64>, Option<String>)> = conn
+        let row: Option<EventsSnapshotMetaDbRow> = conn
             .exec_first(
                 "SELECT \
                     COUNT(1) AS event_count, \
@@ -973,19 +994,7 @@ impl DoltMySqlStore {
             .map(|id| id.0.as_str())
             .unwrap_or("v1");
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            Option<i64>,
-            Option<i64>,
-            Option<i64>,
-            i64,
-            Option<String>,
-        )> = conn
+        let rows: Vec<EventPointCompactDbRow> = conn
             .exec(
                 "SELECT \
                     e.event_id, \
@@ -1761,20 +1770,40 @@ mod tests {
         fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
         parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
         synthetic_events_snapshot_revision, DoltMySqlStore, FishCatalogRow, FishIdentityEntry,
-        FishIdentityIndex,
+        FishIdentityIndex, VectorSourceFields,
     };
+
+    fn vector_source_fields(
+        source_url: Option<&str>,
+        source_revision: Option<&str>,
+        geometry_space: Option<&str>,
+        style_mode: Option<&str>,
+        feature_id_property: Option<&str>,
+        color_property: Option<&str>,
+    ) -> VectorSourceFields {
+        VectorSourceFields {
+            source_url: source_url.map(str::to_string),
+            source_revision: source_revision.map(str::to_string),
+            geometry_space: geometry_space.map(str::to_string),
+            style_mode: style_mode.map(str::to_string),
+            feature_id_property: feature_id_property.map(str::to_string),
+            color_property: color_property.map(str::to_string),
+        }
+    }
 
     #[test]
     fn vector_layer_requires_non_empty_source_url() {
         let err = parse_vector_source(
             "water",
             LayerKind::VectorGeoJson,
-            None,
-            Some("wm-v1".to_string()),
-            Some("map_pixels".to_string()),
-            Some("feature_property_palette".to_string()),
-            None,
-            Some("c".to_string()),
+            vector_source_fields(
+                None,
+                Some("wm-v1"),
+                Some("map_pixels"),
+                Some("feature_property_palette"),
+                None,
+                Some("c"),
+            ),
             Some("v1"),
         )
         .expect_err("expected invalid vector source");
@@ -1943,12 +1972,14 @@ mod tests {
         let err = parse_vector_source(
             "region_groups",
             LayerKind::VectorGeoJson,
-            Some("/region_groups/v1.geojson".to_string()),
-            Some("rg-v1".to_string()),
-            Some("screen_pixels".to_string()),
-            Some("feature_property_palette".to_string()),
-            None,
-            Some("c".to_string()),
+            vector_source_fields(
+                Some("/region_groups/v1.geojson"),
+                Some("rg-v1"),
+                Some("screen_pixels"),
+                Some("feature_property_palette"),
+                None,
+                Some("c"),
+            ),
             Some("v1"),
         )
         .expect_err("expected geometry_space validation error");
@@ -1961,12 +1992,14 @@ mod tests {
         let source = parse_vector_source(
             "water",
             LayerKind::VectorGeoJson,
-            Some("/water/v1.geojson".to_string()),
-            Some("wm-v1".to_string()),
-            Some("world".to_string()),
-            Some("feature_property_palette".to_string()),
-            None,
-            Some("c".to_string()),
+            vector_source_fields(
+                Some("/water/v1.geojson"),
+                Some("wm-v1"),
+                Some("world"),
+                Some("feature_property_palette"),
+                None,
+                Some("c"),
+            ),
             Some("v1"),
         )
         .expect("valid source")
@@ -1980,12 +2013,14 @@ mod tests {
         let source = parse_vector_source(
             "region_groups",
             LayerKind::VectorGeoJson,
-            Some("/region_groups/{map_version}.geojson".to_string()),
-            Some("rg-v1".to_string()),
-            Some("map_pixels".to_string()),
-            Some("feature_property_palette".to_string()),
-            Some("id".to_string()),
-            Some("c".to_string()),
+            vector_source_fields(
+                Some("/region_groups/{map_version}.geojson"),
+                Some("rg-v1"),
+                Some("map_pixels"),
+                Some("feature_property_palette"),
+                Some("id"),
+                Some("c"),
+            ),
             Some("v1"),
         )
         .expect("valid source")

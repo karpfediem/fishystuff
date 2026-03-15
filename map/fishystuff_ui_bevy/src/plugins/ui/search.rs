@@ -1,12 +1,56 @@
 use super::setup::text_style;
 use super::*;
+use bevy::ecs::system::SystemParam;
+
+pub(super) type SearchFocusQuery<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Interaction, &'static mut ClassList),
+    (With<FishSearchInput>, Changed<Interaction>),
+>;
+
+pub(super) type AutocompleteFrameQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut Visibility, &'static mut Node),
+    (
+        With<FishAutocompleteFrame>,
+        Without<FishAutocompleteEntry>,
+        Without<FishAutocompleteEntryIcon>,
+    ),
+>;
+
+pub(super) type AutocompleteEntryQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static FishAutocompleteEntry,
+        &'static mut Visibility,
+        &'static mut Node,
+        &'static mut ClassList,
+        &'static Children,
+    ),
+    (
+        Without<FishAutocompleteList>,
+        Without<FishAutocompleteEntryIcon>,
+    ),
+>;
+
+pub(super) type AutocompleteIconQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static mut ImageNode, &'static mut Visibility),
+    (
+        With<FishAutocompleteEntryIcon>,
+        Without<FishAutocompleteEntry>,
+        Without<FishAutocompleteFrame>,
+    ),
+>;
+
 pub(super) fn handle_search_focus(
     mut focused: ResMut<FocusedInput>,
     mut search: ResMut<SearchState>,
-    mut query: Query<
-        (Entity, &Interaction, &mut ClassList),
-        (With<FishSearchInput>, Changed<Interaction>),
-    >,
+    mut query: SearchFocusQuery<'_, '_>,
 ) {
     for (entity, interaction, mut classes) in &mut query {
         if *interaction == Interaction::Pressed {
@@ -248,48 +292,12 @@ pub(super) fn sync_search_tags(
     });
 }
 
-pub(super) fn update_autocomplete_ui(
-    search: Res<SearchState>,
-    fish: Res<FishCatalog>,
-    remote_image_epoch: Res<RemoteImageEpoch>,
-    mut remote_images: ResMut<RemoteImageCache>,
-    mut frame_q: Query<
-        (&mut Visibility, &mut Node),
-        (
-            With<FishAutocompleteFrame>,
-            Without<FishAutocompleteEntry>,
-            Without<FishAutocompleteEntryIcon>,
-        ),
-    >,
-    mut scroll_q: Query<&mut ScrollPosition, With<FishAutocompleteScroll>>,
-    mut entry_q: Query<
-        (
-            &FishAutocompleteEntry,
-            &mut Visibility,
-            &mut Node,
-            &mut ClassList,
-            &Children,
-        ),
-        (
-            Without<FishAutocompleteList>,
-            Without<FishAutocompleteEntryIcon>,
-        ),
-    >,
-    mut text_q: Query<&mut Text>,
-    mut icon_q: Query<
-        (&mut ImageNode, &mut Visibility),
-        (
-            With<FishAutocompleteEntryIcon>,
-            Without<FishAutocompleteEntry>,
-            Without<FishAutocompleteFrame>,
-        ),
-    >,
-) {
-    if !search.is_changed() && !fish.is_changed() && !remote_image_epoch.is_changed() {
+pub(super) fn update_autocomplete_ui(mut ui: AutocompleteUiContext<'_, '_>) {
+    if !ui.search.is_changed() && !ui.fish.is_changed() && !ui.remote_image_epoch.is_changed() {
         return;
     }
-    let open = search.open && !search.results.is_empty();
-    if let Ok((mut vis, mut node)) = frame_q.single_mut() {
+    let open = ui.search.open && !ui.search.results.is_empty();
+    if let Ok((mut vis, mut node)) = ui.frame_q.single_mut() {
         *vis = if open {
             Visibility::Visible
         } else {
@@ -298,27 +306,29 @@ pub(super) fn update_autocomplete_ui(
         node.display = if open { Display::Flex } else { Display::None };
     }
     if !open {
-        if let Ok(mut scroll) = scroll_q.single_mut() {
+        if let Ok(mut scroll) = ui.scroll_q.single_mut() {
             scroll.0.y = 0.0;
         }
     }
-    for (entry, mut vis, mut node, mut classes, children) in &mut entry_q {
-        if !open || entry.idx >= search.results.len() {
+    for (entry, mut vis, mut node, mut classes, children) in &mut ui.entry_q {
+        if !open || entry.idx >= ui.search.results.len() {
             *vis = Visibility::Hidden;
             node.display = Display::None;
             continue;
         }
         *vis = Visibility::Visible;
         node.display = Display::Flex;
-        let fish_idx = search.results[entry.idx];
-        let fish_entry = fish.entries.get(fish_idx);
+        let fish_idx = ui.search.results[entry.idx];
+        let fish_entry = ui.fish.entries.get(fish_idx);
         let label = fish_entry
             .map(|f| format!("{} (#{})", f.name, f.id))
             .unwrap_or_else(|| "(unknown)".to_string());
         for child in children.iter() {
-            if let Ok((mut icon, mut icon_vis)) = icon_q.get_mut(child) {
+            if let Ok((mut icon, mut icon_vis)) = ui.icon_q.get_mut(child) {
                 if let Some(fish_entry) = fish_entry {
-                    if let Some(handle) = fish_icon_handle(fish_entry.item_id, &mut remote_images) {
+                    if let Some(handle) =
+                        fish_icon_handle(fish_entry.item_id, &mut ui.remote_images)
+                    {
                         *icon = ImageNode::new(handle);
                         *icon_vis = Visibility::Visible;
                     } else {
@@ -329,17 +339,30 @@ pub(super) fn update_autocomplete_ui(
                 }
                 continue;
             }
-            if let Ok(mut text) = text_q.get_mut(child) {
+            if let Ok(mut text) = ui.text_q.get_mut(child) {
                 text.0 = label;
                 break;
             }
         }
-        if entry.idx == search.selected {
+        if entry.idx == ui.search.selected {
             classes.add("selected");
         } else {
             classes.remove("selected");
         }
     }
+}
+
+#[derive(SystemParam)]
+pub(super) struct AutocompleteUiContext<'w, 's> {
+    search: Res<'w, SearchState>,
+    fish: Res<'w, FishCatalog>,
+    remote_image_epoch: Res<'w, RemoteImageEpoch>,
+    remote_images: ResMut<'w, RemoteImageCache>,
+    frame_q: AutocompleteFrameQuery<'w, 's>,
+    scroll_q: Query<'w, 's, &'static mut ScrollPosition, With<FishAutocompleteScroll>>,
+    entry_q: AutocompleteEntryQuery<'w, 's>,
+    text_q: Query<'w, 's, &'static mut Text>,
+    icon_q: AutocompleteIconQuery<'w, 's>,
 }
 
 pub(super) fn rebuild_results(search: &mut SearchState, fish: &FishCatalog) {

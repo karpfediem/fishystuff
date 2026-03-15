@@ -16,6 +16,10 @@ use super::TileKey;
 mod filters;
 mod render;
 
+pub(crate) use filters::VisualFilterContext;
+pub(crate) use render::loaded::{RasterLoadedAssets, RasterLoadedContext};
+pub(crate) use render::visibility::VisibilityUpdateContext;
+
 #[derive(Component, Debug)]
 pub struct RasterTileEntity;
 

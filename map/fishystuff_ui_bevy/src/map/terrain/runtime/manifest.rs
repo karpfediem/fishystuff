@@ -211,30 +211,33 @@ pub(super) fn poll_terrain_manifest_ready(
         let entry = runtime.chunks.entry(key).or_default();
         entry.last_touched = frame;
         match result {
-            Ok(bytes) => match {
-                crate::perf_scope!("terrain.height_chunk_decode");
-                decode_terrain_chunk(&bytes)
-            } {
-                Ok(chunk) => {
-                    entry.chunk = Some(chunk);
-                    entry.state = TerrainChunkState::Building;
-                    runtime.cache_hits = runtime.cache_hits.saturating_add(1);
-                    crate::perf_counter_add!("terrain.cache_hits", 1);
+            Ok(bytes) => {
+                let decode_result = {
+                    crate::perf_scope!("terrain.height_chunk_decode");
+                    decode_terrain_chunk(&bytes)
+                };
+                match decode_result {
+                    Ok(chunk) => {
+                        entry.chunk = Some(chunk);
+                        entry.state = TerrainChunkState::Building;
+                        runtime.cache_hits = runtime.cache_hits.saturating_add(1);
+                        crate::perf_counter_add!("terrain.cache_hits", 1);
+                    }
+                    Err(err) => {
+                        entry.chunk = None;
+                        entry.state = TerrainChunkState::Failed;
+                        runtime.cache_misses = runtime.cache_misses.saturating_add(1);
+                        crate::perf_counter_add!("terrain.cache_misses", 1);
+                        bevy::log::warn!(
+                            "terrain chunk decode failed level={} x={} y={}: {}",
+                            key.level(),
+                            key.cx(),
+                            key.cy(),
+                            err
+                        );
+                    }
                 }
-                Err(err) => {
-                    entry.chunk = None;
-                    entry.state = TerrainChunkState::Failed;
-                    runtime.cache_misses = runtime.cache_misses.saturating_add(1);
-                    crate::perf_counter_add!("terrain.cache_misses", 1);
-                    bevy::log::warn!(
-                        "terrain chunk decode failed level={} x={} y={}: {}",
-                        key.level(),
-                        key.cx(),
-                        key.cy(),
-                        err
-                    );
-                }
-            },
+            }
             Err(err) => {
                 entry.chunk = None;
                 entry.state = TerrainChunkState::Failed;

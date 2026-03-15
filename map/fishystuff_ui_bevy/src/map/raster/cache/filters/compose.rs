@@ -12,6 +12,19 @@ use super::clip_mask::clip_mask_allows_world_point;
 
 const HOVER_HIGHLIGHT_RGB: [u8; 3] = [64, 255, 128];
 
+pub(super) struct RasterVisualComposeContext<'a> {
+    pub(super) key: TileKey,
+    pub(super) layer: &'a LayerSpec,
+    pub(super) filter: &'a EvidenceZoneFilter,
+    pub(super) requires_pixel_filter: bool,
+    pub(super) hover_zone_rgb: Option<u32>,
+    pub(super) clip_mask_layer: Option<LayerId>,
+    pub(super) layer_registry: &'a LayerRegistry,
+    pub(super) tile_cache: &'a RasterTileCache,
+    pub(super) vector_runtime: &'a VectorLayerRuntime,
+    pub(super) map_version: Option<&'a str>,
+}
+
 pub(super) fn restore_rgba_in_place(source: &TilePixelData, image_data: &mut [u8]) {
     if image_data.len() != source.data.len() {
         return;
@@ -22,17 +35,20 @@ pub(super) fn restore_rgba_in_place(source: &TilePixelData, image_data: &mut [u8
 pub(super) fn compose_raster_visuals_in_place(
     source: &TilePixelData,
     image_data: &mut [u8],
-    key: TileKey,
-    layer: &LayerSpec,
-    filter: &EvidenceZoneFilter,
-    requires_pixel_filter: bool,
-    hover_zone_rgb: Option<u32>,
-    clip_mask_layer: Option<LayerId>,
-    layer_registry: &LayerRegistry,
-    tile_cache: &RasterTileCache,
-    vector_runtime: &VectorLayerRuntime,
-    map_version: Option<&str>,
+    context: &RasterVisualComposeContext<'_>,
 ) {
+    let RasterVisualComposeContext {
+        key,
+        layer,
+        filter,
+        requires_pixel_filter,
+        hover_zone_rgb,
+        clip_mask_layer,
+        layer_registry,
+        tile_cache,
+        vector_runtime,
+        map_version,
+    } = context;
     if image_data.len() != source.data.len() {
         return;
     }
@@ -61,18 +77,18 @@ pub(super) fn compose_raster_visuals_in_place(
             dst[3] = src[3];
 
             let rgb = pack_rgb_u32(src[0], src[1], src[2]);
-            if requires_pixel_filter && !filter.zone_rgbs.contains(&rgb) {
+            if *requires_pixel_filter && !filter.zone_rgbs.contains(&rgb) {
                 dst[3] = 0;
                 continue;
             }
 
-            if hover_zone_rgb == Some(rgb) {
+            if *hover_zone_rgb == Some(rgb) {
                 dst[0] = HOVER_HIGHLIGHT_RGB[0];
                 dst[1] = HOVER_HIGHLIGHT_RGB[1];
                 dst[2] = HOVER_HIGHLIGHT_RGB[2];
             }
 
-            let Some(mask_layer_id) = clip_mask_layer else {
+            let Some(mask_layer_id) = *clip_mask_layer else {
                 continue;
             };
             let layer_point = LayerPoint::new(
@@ -87,7 +103,7 @@ pub(super) fn compose_raster_visuals_in_place(
                 tile_cache,
                 vector_runtime,
                 filter,
-                map_version,
+                *map_version,
             ) else {
                 continue;
             };

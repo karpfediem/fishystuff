@@ -1,6 +1,7 @@
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::terrain::Terrain3dConfig;
 use crate::prelude::*;
+use bevy::ecs::system::SystemParam;
 
 use super::super::fish::build_fish_catalog_entries;
 use super::super::state::{
@@ -10,107 +11,116 @@ use super::super::state::{
 use super::apply::{apply_layers_response, apply_meta_response, sync_zone_mask_controls};
 use super::util::now_utc_seconds;
 
-pub(super) fn poll_requests(
-    mut bootstrap: ResMut<ApiBootstrapState>,
-    mut patch_filter: ResMut<PatchFilterState>,
-    mut display_state: ResMut<MapDisplayState>,
-    mut pending: ResMut<PendingRequests>,
-    mut layer_registry: ResMut<LayerRegistry>,
-    mut layer_runtime: ResMut<LayerRuntime>,
-    mut terrain_config: ResMut<Terrain3dConfig>,
-    mut selection: ResMut<SelectionState>,
-    mut fish: ResMut<FishCatalog>,
-) {
-    if let Some(receiver) = pending.meta.as_ref() {
+pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
+    if let Some(receiver) = state.pending.meta.as_ref() {
         if let Ok(result) = receiver.try_recv() {
-            pending.meta = None;
+            state.pending.meta = None;
             match result {
                 Ok(meta) => apply_meta_response(
-                    &mut bootstrap,
-                    &mut patch_filter,
-                    &mut terrain_config,
+                    &mut state.bootstrap,
+                    &mut state.patch_filter,
+                    &mut state.terrain_config,
                     meta,
                 ),
                 Err(err) => {
-                    bootstrap.meta_status = format!("meta: {err}");
-                    bootstrap.layers_status = "layers: blocked".to_string();
+                    state.bootstrap.meta_status = format!("meta: {err}");
+                    state.bootstrap.layers_status = "layers: blocked".to_string();
                 }
             }
         }
     }
 
-    if let Some(receiver) = pending.layers.as_ref() {
+    if let Some(receiver) = state.pending.layers.as_ref() {
         if let Ok(result) = receiver.try_recv() {
-            pending.layers = None;
+            state.pending.layers = None;
             match result {
                 Ok(response) => apply_layers_response(
-                    &mut bootstrap,
-                    &mut display_state,
-                    &mut layer_registry,
-                    &mut layer_runtime,
+                    &mut state.bootstrap,
+                    &mut state.display_state,
+                    &mut state.layer_registry,
+                    &mut state.layer_runtime,
                     response,
                 ),
                 Err(err) => {
-                    bootstrap.layers_status = format!("layers: {err}");
-                    bootstrap.layers_next_retry_at_utc = now_utc_seconds() + 2;
+                    state.bootstrap.layers_status = format!("layers: {err}");
+                    state.bootstrap.layers_next_retry_at_utc = now_utc_seconds() + 2;
                 }
             }
         }
     }
 
-    if let Some(receiver) = pending.zones.as_ref() {
+    if let Some(receiver) = state.pending.zones.as_ref() {
         if let Ok(result) = receiver.try_recv() {
-            pending.zones = None;
+            state.pending.zones = None;
             match result {
                 Ok(zones) => {
-                    bootstrap.zones.clear();
+                    state.bootstrap.zones.clear();
                     for zone in zones.zones {
-                        bootstrap.zones.insert(zone.rgb_u32, zone.name);
+                        state.bootstrap.zones.insert(zone.rgb_u32, zone.name);
                     }
-                    bootstrap.zones_status = format!("zones: {}", bootstrap.zones.len());
+                    state.bootstrap.zones_status =
+                        format!("zones: {}", state.bootstrap.zones.len());
                 }
                 Err(err) => {
-                    bootstrap.zones_status = format!("zones: {err}");
+                    state.bootstrap.zones_status = format!("zones: {err}");
                 }
             }
         }
     }
 
-    if let Some((rgb, receiver)) = pending.zone_stats.as_ref() {
+    if let Some((rgb, receiver)) = state.pending.zone_stats.as_ref() {
         if let Ok(result) = receiver.try_recv() {
             let rgb = *rgb;
-            pending.zone_stats = None;
-            if selection.info.as_ref().map(|s| s.rgb_u32) != Some(rgb) {
+            state.pending.zone_stats = None;
+            if state.selection.info.as_ref().map(|s| s.rgb_u32) != Some(rgb) {
                 return;
             }
             match result {
                 Ok(response) => {
-                    selection.zone_stats = Some(response);
-                    selection.zone_stats_status = "zone stats: loaded".to_string();
+                    state.selection.zone_stats = Some(response);
+                    state.selection.zone_stats_status = "zone stats: loaded".to_string();
                 }
                 Err(err) => {
-                    selection.zone_stats = None;
-                    selection.zone_stats_status = format!("zone stats: {err}");
+                    state.selection.zone_stats = None;
+                    state.selection.zone_stats_status = format!("zone stats: {err}");
                 }
             }
         }
     }
 
-    if let Some(receiver) = pending.fish_catalog.as_ref() {
+    if let Some(receiver) = state.pending.fish_catalog.as_ref() {
         if let Ok(result) = receiver.try_recv() {
-            pending.fish_catalog = None;
+            state.pending.fish_catalog = None;
             match result {
                 Ok(response) => {
                     let entries = build_fish_catalog_entries(response.fish);
-                    fish.status = format!("fish: {}", entries.len());
-                    fish.replace(entries);
+                    state.fish.status = format!("fish: {}", entries.len());
+                    state.fish.replace(entries);
                 }
                 Err(err) => {
-                    fish.status = format!("fish: {err}");
+                    state.fish.status = format!("fish: {err}");
                 }
             }
         }
     }
 
-    sync_zone_mask_controls(&mut display_state, &layer_registry, &layer_runtime);
+    sync_zone_mask_controls(
+        &mut state.display_state,
+        &state.layer_registry,
+        &state.layer_runtime,
+    );
+}
+
+#[derive(SystemParam)]
+pub(crate) struct RequestPollState<'w, 's> {
+    bootstrap: ResMut<'w, ApiBootstrapState>,
+    patch_filter: ResMut<'w, PatchFilterState>,
+    display_state: ResMut<'w, MapDisplayState>,
+    pending: ResMut<'w, PendingRequests>,
+    layer_registry: ResMut<'w, LayerRegistry>,
+    layer_runtime: ResMut<'w, LayerRuntime>,
+    terrain_config: ResMut<'w, Terrain3dConfig>,
+    selection: ResMut<'w, SelectionState>,
+    fish: ResMut<'w, FishCatalog>,
+    _marker: std::marker::PhantomData<&'s ()>,
 }

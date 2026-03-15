@@ -14,7 +14,6 @@ pub struct Entry {
     pub channel_id: serenity::ChannelId,
     pub message_id: serenity::model::id::MessageId,
     pub arrival_secs: i64,
-    pub msg_ts_secs: i64,
 }
 
 /// “Read-only” trait for consumers (actions) to depend on.
@@ -27,12 +26,6 @@ pub trait RecentIndex: Send + Sync {
         seconds: u64,
         reference_now_secs: i64,
     ) -> HashMap<serenity::ChannelId, Vec<serenity::MessageId>>;
-    async fn counts_since_at(
-        &self,
-        user_id: serenity::UserId,
-        seconds: u64,
-        reference_now_secs: i64,
-    ) -> HashMap<serenity::ChannelId, u64>;
 }
 
 /// Concrete implementation (DashMap + VecDeque).
@@ -58,7 +51,6 @@ impl RecentIndex for DashRecentIndex {
             return;
         }
         let arrival_secs = now_unix();
-        let msg_ts_secs = msg.timestamp.unix_timestamp();
         let cutoff = arrival_secs - self.retention_secs;
 
         use dashmap::mapref::entry::Entry as E;
@@ -75,7 +67,6 @@ impl RecentIndex for DashRecentIndex {
                     channel_id: msg.channel_id,
                     message_id: msg.id,
                     arrival_secs,
-                    msg_ts_secs,
                 });
                 if dq.len() > PER_USER_HARD_CAP {
                     let drop_n = dq.len() - PER_USER_HARD_CAP;
@@ -90,7 +81,6 @@ impl RecentIndex for DashRecentIndex {
                     channel_id: msg.channel_id,
                     message_id: msg.id,
                     arrival_secs,
-                    msg_ts_secs,
                 });
                 vac.insert(dq);
             }
@@ -121,27 +111,6 @@ impl RecentIndex for DashRecentIndex {
         }
         per_channel
     }
-
-    async fn counts_since_at(
-        &self,
-        user_id: serenity::UserId,
-        seconds: u64,
-        reference_now_secs: i64,
-    ) -> HashMap<serenity::ChannelId, u64> {
-        let cutoff = reference_now_secs - seconds as i64;
-        let Some(dq) = self.inner.get(&user_id) else {
-            return HashMap::new();
-        };
-
-        let mut per_channel: HashMap<serenity::ChannelId, u64> = HashMap::new();
-        for e in dq.iter().rev() {
-            if e.arrival_secs < cutoff {
-                break;
-            }
-            *per_channel.entry(e.channel_id).or_default() += 1;
-        }
-        per_channel
-    }
 }
 
 #[async_trait::async_trait]
@@ -157,16 +126,6 @@ impl RecentIndex for std::sync::Arc<DashRecentIndex> {
     ) -> std::collections::HashMap<serenity::ChannelId, Vec<serenity::MessageId>> {
         (**self)
             .collect_since_at(user_id, seconds, reference_now_secs)
-            .await
-    }
-    async fn counts_since_at(
-        &self,
-        user_id: serenity::UserId,
-        seconds: u64,
-        reference_now_secs: i64,
-    ) -> std::collections::HashMap<serenity::ChannelId, u64> {
-        (**self)
-            .counts_since_at(user_id, seconds, reference_now_secs)
             .await
     }
 }

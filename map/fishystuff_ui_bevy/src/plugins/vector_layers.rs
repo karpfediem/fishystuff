@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use async_channel::TryRecvError;
+use bevy::ecs::system::SystemParam;
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
 
@@ -80,23 +81,21 @@ impl Plugin for VectorLayersPlugin {
     }
 }
 
-fn update_vector_layers(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials_2d: ResMut<Assets<ColorMaterial>>,
-    mut materials_3d: ResMut<Assets<StandardMaterial>>,
-    registry: Res<LayerRegistry>,
-    mut layer_runtime: ResMut<LayerRuntime>,
-    mut vector_runtime: ResMut<VectorLayerRuntime>,
-    build_config: Res<VectorBuildConfig>,
-    cache_config: Res<VectorCacheConfig>,
-    view_mode: Res<ViewModeState>,
-) {
+fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_, '_>) {
     crate::perf_scope!("vector.layer_update");
-    layer_runtime.sync_to_registry(&registry);
+    let meshes = &mut update.meshes;
+    let materials_2d = &mut update.materials_2d;
+    let materials_3d = &mut update.materials_3d;
+    let registry = &update.registry;
+    let layer_runtime = &mut update.layer_runtime;
+    let vector_runtime = &mut update.vector_runtime;
+    let build_config = &update.build_config;
+    let cache_config = &update.cache_config;
+    let view_mode = &update.view_mode;
+    layer_runtime.sync_to_registry(registry);
 
     if registry.is_changed() {
-        prune_stale_runtime_data(&registry, &mut vector_runtime, &mut commands);
+        prune_stale_runtime_data(registry, vector_runtime, &mut commands);
     }
 
     vector_runtime
@@ -117,8 +116,7 @@ fn update_vector_layers(
             )
         })
         .collect();
-    let visible_cache_keys =
-        collect_visible_cache_keys(&registry, &active_by_layer, map_version_id);
+    let visible_cache_keys = collect_visible_cache_keys(registry, &active_by_layer, map_version_id);
     for evicted in vector_runtime
         .finished
         .evict_lru_non_visible(|key| visible_cache_keys.contains(key))
@@ -154,18 +152,20 @@ fn update_vector_layers(
         };
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
         let revision = effective_revision(&source);
-        invalidate_non_active_revisions(&mut vector_runtime, layer.id, &revision, &mut commands);
+        invalidate_non_active_revisions(vector_runtime, layer.id, &revision, &mut commands);
 
         hide_non_active_finished(
-            &mut vector_runtime,
+            vector_runtime,
             layer.id,
             &revision,
-            &mut commands,
-            &mut materials_2d,
-            &mut materials_3d,
-            runtime_state.z_base,
-            runtime_state.opacity,
-            render_visible,
+            FinishedVisibilityContext {
+                commands: &mut commands,
+                materials_2d,
+                materials_3d,
+                z_base: runtime_state.z_base,
+                opacity: runtime_state.opacity,
+                visible: render_visible,
+            },
         );
 
         let cache_key = (layer.id, revision.clone());
@@ -175,7 +175,7 @@ fn update_vector_layers(
             crate::perf_counter_add!("vector.cache_hits", 1);
             bundle.set_depth(&mut commands, runtime_state.z_base, VECTOR_3D_BASE_Y);
             bundle.set_visibility(&mut commands, render_visible);
-            bundle.set_opacity(&mut materials_2d, &mut materials_3d, runtime_state.opacity);
+            bundle.set_opacity(materials_2d, materials_3d, runtime_state.opacity);
             apply_stats(runtime_state, bundle.stats, LayerVectorStatus::Ready);
             runtime_state.vector_cache_entries = vector_runtime.finished.layer_len(layer.id) as u32;
             vector_runtime
@@ -278,20 +278,16 @@ fn update_vector_layers(
                             let geometry = finalize_job(job, limits);
                             let bundle = spawn_vector_meshes(
                                 &mut commands,
-                                &mut meshes,
-                                &mut materials_2d,
-                                &mut materials_3d,
+                                meshes,
+                                materials_2d,
+                                materials_3d,
                                 geometry,
                                 runtime_state.z_base,
                                 runtime_state.opacity,
                             );
                             bundle.set_depth(&mut commands, runtime_state.z_base, VECTOR_3D_BASE_Y);
                             bundle.set_visibility(&mut commands, render_visible);
-                            bundle.set_opacity(
-                                &mut materials_2d,
-                                &mut materials_3d,
-                                runtime_state.opacity,
-                            );
+                            bundle.set_opacity(materials_2d, materials_3d, runtime_state.opacity);
                             apply_stats(runtime_state, bundle.stats, LayerVectorStatus::Ready);
                             if let Some(replaced) = vector_runtime
                                 .finished
@@ -448,13 +444,16 @@ fn hide_non_active_finished(
     runtime: &mut VectorLayerRuntime,
     layer_id: LayerId,
     active_revision: &str,
-    commands: &mut Commands,
-    materials_2d: &mut Assets<ColorMaterial>,
-    materials_3d: &mut Assets<StandardMaterial>,
-    z_base: f32,
-    opacity: f32,
-    visible: bool,
+    visibility: FinishedVisibilityContext<'_, '_, '_>,
 ) {
+    let FinishedVisibilityContext {
+        commands,
+        materials_2d,
+        materials_3d,
+        z_base,
+        opacity,
+        visible,
+    } = visibility;
     let keys = runtime.finished.keys_for_layer(layer_id);
 
     for key in keys {
@@ -469,6 +468,29 @@ fn hide_non_active_finished(
             bundle.set_visibility(commands, false);
         }
     }
+}
+
+#[derive(SystemParam)]
+struct VectorLayerUpdate<'w, 's> {
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials_2d: ResMut<'w, Assets<ColorMaterial>>,
+    materials_3d: ResMut<'w, Assets<StandardMaterial>>,
+    registry: Res<'w, LayerRegistry>,
+    layer_runtime: ResMut<'w, LayerRuntime>,
+    vector_runtime: ResMut<'w, VectorLayerRuntime>,
+    build_config: Res<'w, VectorBuildConfig>,
+    cache_config: Res<'w, VectorCacheConfig>,
+    view_mode: Res<'w, ViewModeState>,
+    _marker: std::marker::PhantomData<&'s ()>,
+}
+
+struct FinishedVisibilityContext<'a, 'w, 's> {
+    commands: &'a mut Commands<'w, 's>,
+    materials_2d: &'a mut Assets<ColorMaterial>,
+    materials_3d: &'a mut Assets<StandardMaterial>,
+    z_base: f32,
+    opacity: f32,
+    visible: bool,
 }
 
 fn apply_stats(

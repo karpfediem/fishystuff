@@ -43,7 +43,9 @@ pub enum AdvanceResult {
     Complete,
 }
 
+#[derive(Default)]
 pub enum VectorBuildState {
+    #[default]
     NotRequested,
     Fetching {
         source: VectorSourceSpec,
@@ -68,12 +70,6 @@ pub enum VectorBuildState {
         revision: String,
         error: String,
     },
-}
-
-impl Default for VectorBuildState {
-    fn default() -> Self {
-        Self::NotRequested
-    }
 }
 
 pub struct VectorBuildJob {

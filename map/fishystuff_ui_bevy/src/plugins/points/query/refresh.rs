@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use fishystuff_api::models::events::{EventsQueryMode, MapBboxPx};
 
@@ -16,55 +17,49 @@ use super::{
 };
 
 pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
-    mut points: ResMut<PointsState>,
-    patch_filter: Res<PatchFilterState>,
-    fish_filter: Res<FishFilterState>,
-    display_state: Res<MapDisplayState>,
-    view_mode: Res<ViewModeState>,
-    snapshot: Res<EventsSnapshotState>,
-    windows: Query<&Window>,
-    camera_q: Query<(&Camera, &Transform), With<Map2dCamera>>,
+    mut refresh: LocalSnapshotRefresh<'_, '_>,
 ) {
     crate::perf_scope!("events.snapshot_query_refresh");
-    if !display_state.show_points || view_mode.mode != ViewMode::Map2D {
-        points.status = "points: hidden".to_string();
-        points.request_sig = None;
+    if !refresh.display_state.show_points || refresh.view_mode.mode != ViewMode::Map2D {
+        refresh.points.status = "points: hidden".to_string();
+        refresh.points.request_sig = None;
         return;
     }
 
-    if snapshot.loading && !snapshot.loaded {
-        points.status = "points: snapshot loading".to_string();
-        clear_render_points(&mut points);
+    if refresh.snapshot.loading && !refresh.snapshot.loaded {
+        refresh.points.status = "points: snapshot loading".to_string();
+        clear_render_points(&mut refresh.points);
         return;
     }
-    if snapshot.failed && !snapshot.loaded {
-        points.status = format!(
+    if refresh.snapshot.failed && !refresh.snapshot.loaded {
+        refresh.points.status = format!(
             "points: snapshot failed ({})",
-            snapshot
+            refresh
+                .snapshot
                 .last_error
                 .as_deref()
                 .unwrap_or("unknown snapshot error")
         );
-        clear_render_points(&mut points);
+        clear_render_points(&mut refresh.points);
         return;
     }
-    if !snapshot.loaded {
-        points.status = "points: snapshot pending".to_string();
-        clear_render_points(&mut points);
+    if !refresh.snapshot.loaded {
+        refresh.points.status = "points: snapshot pending".to_string();
+        clear_render_points(&mut refresh.points);
         return;
     }
 
-    let Some(viewport_bbox) = view_bbox_map_px(&windows, &camera_q) else {
-        points.status = "points: missing viewport".to_string();
-        clear_render_points(&mut points);
+    let Some(viewport_bbox) = view_bbox_map_px(&refresh.windows, &refresh.camera_q) else {
+        refresh.points.status = "points: missing viewport".to_string();
+        clear_render_points(&mut refresh.points);
         return;
     };
 
     let Some((from_ts_utc, to_ts_utc, mut fish_ids)) =
-        normalized_time_and_fish_filters(&patch_filter, &fish_filter)
+        normalized_time_and_fish_filters(&refresh.patch_filter, &refresh.fish_filter)
     else {
-        points.status = "points: missing range".to_string();
-        clear_render_points(&mut points);
+        refresh.points.status = "points: missing range".to_string();
+        clear_render_points(&mut refresh.points);
         return;
     };
     fish_ids.sort_unstable();
@@ -78,7 +73,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     };
     let cluster_bucket_px = suggested_cluster_bucket_px(&viewport_bbox);
     let signature = PointsQuerySignature {
-        revision: snapshot.revision.clone(),
+        revision: refresh.snapshot.revision.clone(),
         from_ts_utc,
         to_ts_utc,
         fish_ids: fish_ids.clone(),
@@ -93,8 +88,8 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         cluster_bucket_px,
     };
 
-    if points.request_sig.as_ref() == Some(&signature) {
-        points.status = points_status_line(&points, &snapshot);
+    if refresh.points.request_sig.as_ref() == Some(&signature) {
+        refresh.points.status = points_status_line(&refresh.points, &refresh.snapshot);
         return;
     }
 
@@ -108,11 +103,11 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
             VISIBLE_TILE_SCOPE_PX,
         )),
     };
-    let selection = snapshot.select_for_view(&local_query);
+    let selection = refresh.snapshot.select_for_view(&local_query);
     let clustered = {
         crate::perf_scope!("events.clustering");
         cluster_view_events(
-            &snapshot.events,
+            &refresh.snapshot.events,
             &selection.filtered_indices,
             cluster_bucket_px,
         )
@@ -132,21 +127,39 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         })
         .collect();
 
-    points.request_sig = Some(signature);
-    points.points = rendered_points;
-    points.mode = Some(clustered.mode);
-    points.bucket_px = clustered.cluster_bucket_px;
-    points.sample_step = 1;
-    points.total = selection.filtered_indices.len();
-    points.represented_sample_count = clustered.represented_event_count;
-    points.candidate_count = selection.candidate_count;
-    points.rendered_point_count = clustered.rendered_point_count;
-    points.rendered_cluster_count = clustered.rendered_cluster_count;
-    points.spatial_bucket_px = snapshot.spatial_index.bucket_px;
-    crate::perf_gauge!("events.cluster_count", points.rendered_cluster_count);
-    crate::perf_gauge!("events.raw_point_count", points.rendered_point_count);
-    points.status = points_status_line(&points, &snapshot);
-    points.dirty = true;
+    refresh.points.request_sig = Some(signature);
+    refresh.points.points = rendered_points;
+    refresh.points.mode = Some(clustered.mode);
+    refresh.points.bucket_px = clustered.cluster_bucket_px;
+    refresh.points.sample_step = 1;
+    refresh.points.total = selection.filtered_indices.len();
+    refresh.points.represented_sample_count = clustered.represented_event_count;
+    refresh.points.candidate_count = selection.candidate_count;
+    refresh.points.rendered_point_count = clustered.rendered_point_count;
+    refresh.points.rendered_cluster_count = clustered.rendered_cluster_count;
+    refresh.points.spatial_bucket_px = refresh.snapshot.spatial_index.bucket_px;
+    crate::perf_gauge!(
+        "events.cluster_count",
+        refresh.points.rendered_cluster_count
+    );
+    crate::perf_gauge!(
+        "events.raw_point_count",
+        refresh.points.rendered_point_count
+    );
+    refresh.points.status = points_status_line(&refresh.points, &refresh.snapshot);
+    refresh.points.dirty = true;
+}
+
+#[derive(SystemParam)]
+pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
+    points: ResMut<'w, PointsState>,
+    patch_filter: Res<'w, PatchFilterState>,
+    fish_filter: Res<'w, FishFilterState>,
+    display_state: Res<'w, MapDisplayState>,
+    view_mode: Res<'w, ViewModeState>,
+    snapshot: Res<'w, EventsSnapshotState>,
+    windows: Query<'w, 's, &'static Window>,
+    camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
 }
 
 fn clear_render_points(points: &mut PointsState) {

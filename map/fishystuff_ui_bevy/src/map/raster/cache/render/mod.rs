@@ -1,3 +1,3 @@
 mod geometry;
-mod loaded;
-mod visibility;
+pub(crate) mod loaded;
+pub(crate) mod visibility;

@@ -15,10 +15,11 @@ pub use requests::queue_pick_probe_request;
 
 pub(crate) use bounds::{
     compute_cache_budget, compute_desired_layer_tiles, desired_change_is_minor, lod_signature,
-    update_camera_motion_state,
+    update_camera_motion_state, DesiredTileComputation,
 };
 pub(crate) use requests::{
     build_layer_requests, log_tile_stats, start_tile_requests, tile_should_render, BuildResult,
+    LayerRequestBuild, StartTileRequests,
 };
 pub(crate) use residency::{
     apply_layer_residency_plan, build_layer_residency_plan, eviction_priority_score,
@@ -369,16 +370,16 @@ mod tests {
         residency
             .max_detail_requests_while_moving_by_layer
             .insert(layer.id, 1);
-        let result = build_layer_requests(
-            &layer,
-            &tileset,
+        let result = build_layer_requests(LayerRequestBuild {
+            layer: &layer,
+            tileset: &tileset,
             desired,
-            Some("v1"),
-            &cache,
-            1,
-            true,
-            &residency,
-        );
+            map_version: Some("v1"),
+            cache: &cache,
+            map_version_id: 1,
+            camera_unstable: true,
+            residency: &residency,
+        });
         assert_eq!(result.detail_queued, 0);
         assert!(result
             .requests

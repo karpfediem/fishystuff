@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::window::PrimaryWindow;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
@@ -17,9 +18,11 @@ use super::{
     compute_cache_budget, compute_desired_layer_tiles, desired_change_is_minor,
     ensure_manifest_request, implicit_identity_tileset, layer_map_version, layer_tileset_url,
     log_tile_stats, merge_level_counts, start_tile_requests, sum_level_counts,
-    update_camera_motion_state, BuildResult, CameraMotionState, LayerManifestCache, LayerViewState,
-    PendingLayerManifests, RasterTileCache, TileDebugControls, TileFrameClock, TileResidencyState,
-    TileStats, REQUEST_REFRESH_INTERVAL_FRAMES,
+    update_camera_motion_state, BuildResult, CameraMotionState, DesiredTileComputation,
+    LayerManifestCache, LayerRequestBuild, LayerViewState, PendingLayerManifests,
+    RasterLoadedAssets, RasterLoadedContext, RasterTileCache, StartTileRequests, TileDebugControls,
+    TileFrameClock, TileResidencyState, TileStats, VisibilityUpdateContext, VisualFilterContext,
+    REQUEST_REFRESH_INTERVAL_FRAMES,
 };
 
 pub(crate) fn build_plugin(app: &mut App) {
@@ -38,68 +41,71 @@ pub(crate) fn build_plugin(app: &mut App) {
         .add_systems(Update, update_tiles);
 }
 
-fn update_tiles(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut asset_ctx: (
-        ResMut<Assets<Image>>,
-        ResMut<Assets<Mesh>>,
-        ResMut<Assets<ColorMaterial>>,
-    ),
-    windows: Query<&Window, With<PrimaryWindow>>,
-    camera_q: Query<(&Camera, &Transform), With<Map2dCamera>>,
-    pan_state: Res<PanState>,
-    view_mode: Res<ViewModeState>,
-    terrain_view: Res<TerrainViewEstimate>,
-    mut bootstrap: ResMut<ApiBootstrapState>,
-    mut display_state: ResMut<MapDisplayState>,
-    debug_controls: Res<TileDebugControls>,
-    mut layer_ctx: (ResMut<LayerRuntime>, Res<LayerRegistry>),
-    mut tile_ctx: (
-        ResMut<TileFrameClock>,
-        ResMut<CameraMotionState>,
-        ResMut<TileResidencyState>,
-        ResMut<LayerViewState>,
-        ResMut<LayerManifestCache>,
-        ResMut<PendingLayerManifests>,
-        ResMut<crate::map::streaming::TileStreamer>,
-        ResMut<RasterTileCache>,
-        ResMut<TileStats>,
-    ),
-    time: Res<Time>,
-    evidence_zone_filter: Res<EvidenceZoneFilter>,
-    vector_runtime: Res<VectorLayerRuntime>,
-) {
+#[derive(SystemParam)]
+struct RasterUpdateContext<'w, 's> {
+    commands: Commands<'w, 's>,
+    asset_server: Res<'w, AssetServer>,
+    images: ResMut<'w, Assets<Image>>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<ColorMaterial>>,
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
+    pan_state: Res<'w, PanState>,
+    view_mode: Res<'w, ViewModeState>,
+    terrain_view: Res<'w, TerrainViewEstimate>,
+    bootstrap: ResMut<'w, ApiBootstrapState>,
+    display_state: ResMut<'w, MapDisplayState>,
+    debug_controls: Res<'w, TileDebugControls>,
+    layer_runtime: ResMut<'w, LayerRuntime>,
+    layer_registry: Res<'w, LayerRegistry>,
+    frame_clock: ResMut<'w, TileFrameClock>,
+    motion_state: ResMut<'w, CameraMotionState>,
+    residency: ResMut<'w, TileResidencyState>,
+    view_state: ResMut<'w, LayerViewState>,
+    manifests: ResMut<'w, LayerManifestCache>,
+    pending_manifests: ResMut<'w, PendingLayerManifests>,
+    streamer: ResMut<'w, crate::map::streaming::TileStreamer>,
+    cache: ResMut<'w, RasterTileCache>,
+    stats: ResMut<'w, TileStats>,
+    time: Res<'w, Time>,
+    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
+    vector_runtime: Res<'w, VectorLayerRuntime>,
+}
+
+fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     crate::perf_scope!("raster.update_tiles");
-    let (mut images, mut meshes, mut materials) =
-        (&mut asset_ctx.0, &mut asset_ctx.1, &mut asset_ctx.2);
-    let (layer_runtime, layer_registry) = (&mut layer_ctx.0, &layer_ctx.1);
-    let (
-        frame_clock,
-        motion_state,
-        residency,
-        view_state,
-        manifests,
-        pending_manifests,
-        streamer,
-        cache,
-        stats,
-    ) = (
-        &mut tile_ctx.0,
-        &mut tile_ctx.1,
-        &mut tile_ctx.2,
-        &mut tile_ctx.3,
-        &mut tile_ctx.4,
-        &mut tile_ctx.5,
-        &mut tile_ctx.6,
-        &mut tile_ctx.7,
-        &mut tile_ctx.8,
-    );
+    let commands = &mut ctx.commands;
+    let asset_server = &ctx.asset_server;
+    let images = &mut ctx.images;
+    let meshes = &mut ctx.meshes;
+    let materials = &mut ctx.materials;
+    let windows = &ctx.windows;
+    let camera_q = &ctx.camera_q;
+    let pan_state = &ctx.pan_state;
+    let view_mode = &ctx.view_mode;
+    let terrain_view = &ctx.terrain_view;
+    let bootstrap = &mut ctx.bootstrap;
+    let display_state = &mut ctx.display_state;
+    let debug_controls = &ctx.debug_controls;
+    let layer_runtime = &mut ctx.layer_runtime;
+    let layer_registry = &ctx.layer_registry;
+    let frame_clock = &mut ctx.frame_clock;
+    let motion_state = &mut ctx.motion_state;
+    let residency = &mut ctx.residency;
+    let view_state = &mut ctx.view_state;
+    let manifests = &mut ctx.manifests;
+    let pending_manifests = &mut ctx.pending_manifests;
+    let streamer = &mut ctx.streamer;
+    let cache = &mut ctx.cache;
+    let stats = &mut ctx.stats;
+    let time = &ctx.time;
+    let evidence_zone_filter = &ctx.evidence_zone_filter;
+    let vector_runtime = &ctx.vector_runtime;
 
     layer_runtime.sync_to_registry(layer_registry);
 
     if layer_registry.is_changed() {
-        cache.clear_all(&mut commands, images);
+        cache.clear_all(commands, images);
         view_state.per_layer.clear();
         streamer.clear();
         manifests.clear();
@@ -122,7 +128,7 @@ fn update_tiles(
             if layer.tile_url_template.contains("{map_version}")
                 || layer.tileset_url.contains("{map_version}")
             {
-                cache.clear_layer(layer.id, &mut commands, images);
+                cache.clear_layer(layer.id, commands, images);
                 view_state.per_layer.remove(&layer.id);
                 streamer.clear_layer(layer.id);
                 manifests.remove_layer(layer.id);
@@ -175,7 +181,7 @@ fn update_tiles(
 
     frame_clock.frame = frame_clock.frame.wrapping_add(1);
     let frame = frame_clock.frame;
-    update_camera_motion_state(motion_state, view_world, &pan_state);
+    update_camera_motion_state(motion_state, view_world, pan_state);
     residency.begin_frame(frame);
 
     stats.camera_unstable = motion_state.unstable;
@@ -265,16 +271,16 @@ fn update_tiles(
         };
 
         let previous = view_state.per_layer.get(&layer.id).copied();
-        let desired = compute_desired_layer_tiles(
+        let desired = compute_desired_layer_tiles(DesiredTileComputation {
             layer,
             tileset,
             world_transform,
             view_world,
-            map_version_id,
+            map_version: map_version_id,
             frame,
-            runtime_state,
+            runtime: runtime_state,
             previous,
-        );
+        });
         view_state.per_layer.insert(layer.id, desired);
         if previous.map(super::policy::lod_signature) != Some(super::policy::lod_signature(desired))
         {
@@ -309,16 +315,16 @@ fn update_tiles(
                 cache_misses_by_level,
                 detail_queued,
                 coverage_queued,
-            } = build_layer_requests(
+            } = build_layer_requests(LayerRequestBuild {
                 layer,
                 tileset,
                 desired,
                 map_version,
                 cache,
                 map_version_id,
-                motion_state.unstable,
+                camera_unstable: motion_state.unstable,
                 residency,
-            );
+            });
             stats.cache_hits = stats.cache_hits.saturating_add(cache_hits);
             merge_level_counts(
                 &mut stats.cache_hits_by_level,
@@ -353,55 +359,63 @@ fn update_tiles(
     stats.inflight = cache.inflight_count_total().min(streamer.max_inflight);
     streamer.inflight = stats.inflight;
 
-    start_tile_requests(
+    start_tile_requests(StartTileRequests {
         streamer,
         cache,
-        &asset_server,
+        asset_server,
         layer_registry,
         layer_runtime,
         residency,
-        motion_state.unstable,
+        camera_unstable: motion_state.unstable,
         stats,
-    );
+    });
 
     cache.update_loaded(
-        &mut commands,
-        images,
-        meshes,
-        materials,
-        &asset_server,
-        layer_registry,
-        layer_runtime,
-        map_to_world,
-        view_mode.mode,
-        residency,
-        stats,
+        commands,
+        RasterLoadedAssets {
+            images,
+            meshes,
+            materials,
+        },
+        RasterLoadedContext {
+            asset_server,
+            layer_registry,
+            layer_runtime,
+            map_to_world,
+            view_mode: view_mode.mode,
+            residency,
+            stats,
+        },
     );
 
     let visible_by_layer = cache.update_visibility(
-        &mut commands,
-        materials,
-        layer_registry,
-        layer_runtime,
-        residency,
-        frame,
-        motion_state.unstable,
-        view_mode.mode,
+        commands,
+        VisibilityUpdateContext {
+            materials,
+            layer_registry,
+            layer_runtime,
+            residency,
+            frame,
+            camera_unstable: motion_state.unstable,
+            view_mode: view_mode.mode,
+        },
     );
 
     cache.sync_visual_filters(
         images,
-        &mut commands,
-        &evidence_zone_filter,
-        display_state.hovered_zone_rgb,
-        layer_registry,
-        layer_runtime,
-        &vector_runtime,
-        bootstrap.map_version.as_deref(),
-        view_mode.mode,
+        commands,
+        VisualFilterContext {
+            filter: evidence_zone_filter,
+            hover_zone_rgb: display_state.hovered_zone_rgb,
+            layer_registry,
+            layer_runtime,
+            vector_runtime,
+            map_version: bootstrap.map_version.as_deref(),
+            view_mode: view_mode.mode,
+        },
     );
     if any_zoom_level_changed && !debug_controls.disable_eviction {
-        cache.evict(&mut commands, images, stats, residency, layer_registry);
+        cache.evict(commands, images, stats, residency, layer_registry);
     }
 
     let mut total_visible = 0_u32;
@@ -421,7 +435,7 @@ fn update_tiles(
     stats.inflight = cache.inflight_count_total().min(streamer.max_inflight);
     streamer.inflight = stats.inflight;
     stats.queue_len = streamer.pending_len();
-    log_tile_stats(stats, &time);
+    log_tile_stats(stats, time);
 }
 
 fn view_rect(camera: &Camera, camera_transform: &Transform, window: &Window) -> Option<WorldRect> {

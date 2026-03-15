@@ -4,7 +4,7 @@ mod region_groups;
 
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 use chrono::{TimeZone, Utc};
@@ -244,6 +244,36 @@ enum Commands {
     },
 }
 
+struct IngestCommand {
+    ranking_csv: PathBuf,
+    watermap: Option<PathBuf>,
+    ignore_watermap: bool,
+    out_db: PathBuf,
+    tile_px: i32,
+    snap_radius: i32,
+    water_xform: WatermapTransformArgs,
+}
+
+struct ZoneStatsCommand {
+    db: Option<PathBuf>,
+    map_version: Option<String>,
+    rgb: String,
+    from_ts: i64,
+    to_ts: i64,
+    tile_px: Option<u32>,
+    sigma_tiles: Option<f64>,
+    fish_norm: bool,
+    alpha0: f64,
+    top_k: usize,
+    fish_names: Option<PathBuf>,
+    zones_merged_csv: Option<PathBuf>,
+    dolt_repo: Option<PathBuf>,
+    dolt_ref: Option<String>,
+    half_life_days: Option<f64>,
+    drift_boundary_ts: Option<i64>,
+    config: Option<fishystuff_config::Config>,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let config = if let Some(path) = &cli.config {
@@ -265,19 +295,21 @@ fn main() -> Result<()> {
             watermap_ox,
             watermap_oy,
         } => run_ingest(
-            ranking_csv,
-            watermap,
-            ignore_watermap,
-            out_db,
-            tile_px,
-            snap_radius,
-            WatermapTransformArgs::new(
-                watermap_transform,
-                watermap_sx,
-                watermap_sy,
-                watermap_ox,
-                watermap_oy,
-            ),
+            IngestCommand {
+                ranking_csv,
+                watermap,
+                ignore_watermap,
+                out_db,
+                tile_px,
+                snap_radius,
+                water_xform: WatermapTransformArgs::new(
+                    watermap_transform,
+                    watermap_sx,
+                    watermap_sy,
+                    watermap_ox,
+                    watermap_oy,
+                ),
+            },
             config.as_ref(),
         ),
         Commands::IngestMysql {
@@ -424,7 +456,7 @@ fn main() -> Result<()> {
             dolt_ref,
             half_life_days,
             drift_boundary_ts,
-        } => run_zone_stats(
+        } => run_zone_stats(ZoneStatsCommand {
             db,
             map_version,
             rgb,
@@ -442,20 +474,20 @@ fn main() -> Result<()> {
             half_life_days,
             drift_boundary_ts,
             config,
-        ),
+        }),
     }
 }
 
-fn run_ingest(
-    ranking_csv: PathBuf,
-    watermap: Option<PathBuf>,
-    ignore_watermap: bool,
-    out_db: PathBuf,
-    tile_px: i32,
-    snap_radius: i32,
-    water_xform: WatermapTransformArgs,
-    config: Option<&fishystuff_config::Config>,
-) -> Result<()> {
+fn run_ingest(command: IngestCommand, config: Option<&fishystuff_config::Config>) -> Result<()> {
+    let IngestCommand {
+        ranking_csv,
+        watermap,
+        ignore_watermap,
+        out_db,
+        tile_px,
+        snap_radius,
+        water_xform,
+    } = command;
     if tile_px <= 0 {
         bail!("tile_px must be > 0");
     }
@@ -902,9 +934,9 @@ fn run_build_event_zone_assignment_mysql(
     Ok(())
 }
 
-fn resolve_zone_mask_path(zone_mask_root: &PathBuf, map_version: &str) -> Result<PathBuf> {
+fn resolve_zone_mask_path(zone_mask_root: &Path, map_version: &str) -> Result<PathBuf> {
     if zone_mask_root.is_file() {
-        return Ok(zone_mask_root.clone());
+        return Ok(zone_mask_root.to_path_buf());
     }
 
     let candidates = [
@@ -1492,8 +1524,8 @@ fn solve_3x3(matrix: [[f64; 3]; 3], rhs: [f64; 3]) -> Result<(f64, f64, f64)> {
     for pivot in 0..3 {
         let mut best = pivot;
         let mut best_abs = m[pivot][pivot].abs();
-        for row in (pivot + 1)..3 {
-            let value = m[row][pivot].abs();
+        for (row, row_values) in m.iter().enumerate().skip(pivot + 1) {
+            let value = row_values[pivot].abs();
             if value > best_abs {
                 best = row;
                 best_abs = value;
@@ -1507,18 +1539,19 @@ fn solve_3x3(matrix: [[f64; 3]; 3], rhs: [f64; 3]) -> Result<(f64, f64, f64)> {
             b.swap(pivot, best);
         }
         let pivot_value = m[pivot][pivot];
-        for col in pivot..3 {
-            m[pivot][col] /= pivot_value;
+        for value in &mut m[pivot][pivot..] {
+            *value /= pivot_value;
         }
         b[pivot] /= pivot_value;
 
+        let pivot_row = m[pivot];
         for row in 0..3 {
             if row == pivot {
                 continue;
             }
             let factor = m[row][pivot];
-            for col in pivot..3 {
-                m[row][col] -= factor * m[pivot][col];
+            for (value, pivot_value) in m[row][pivot..].iter_mut().zip(pivot_row[pivot..].iter()) {
+                *value -= factor * *pivot_value;
             }
             b[row] -= factor * b[pivot];
         }
@@ -1594,25 +1627,26 @@ fn fit_linear_axis(samples: impl Iterator<Item = (f64, f64)>) -> Result<(f64, f6
     Ok((slope, offset))
 }
 
-fn run_zone_stats(
-    db: Option<PathBuf>,
-    map_version: Option<String>,
-    rgb: String,
-    from_ts: i64,
-    to_ts: i64,
-    tile_px: Option<u32>,
-    sigma_tiles: Option<f64>,
-    fish_norm: bool,
-    alpha0: f64,
-    top_k: usize,
-    fish_names: Option<PathBuf>,
-    zones_merged_csv: Option<PathBuf>,
-    dolt_repo: Option<PathBuf>,
-    dolt_ref: Option<String>,
-    half_life_days: Option<f64>,
-    drift_boundary_ts: Option<i64>,
-    config: Option<fishystuff_config::Config>,
-) -> Result<()> {
+fn run_zone_stats(command: ZoneStatsCommand) -> Result<()> {
+    let ZoneStatsCommand {
+        db,
+        map_version,
+        rgb,
+        from_ts,
+        to_ts,
+        tile_px,
+        sigma_tiles,
+        fish_norm,
+        alpha0,
+        top_k,
+        fish_names,
+        zones_merged_csv,
+        dolt_repo,
+        dolt_ref,
+        half_life_days,
+        drift_boundary_ts,
+        config,
+    } = command;
     let zone_rgb_u32 = parse_rgb_string(&rgb)?;
     let cfg_paths = config.as_ref().map(|c| &c.paths);
     let cfg_defaults = config.as_ref().map(|c| &c.defaults);

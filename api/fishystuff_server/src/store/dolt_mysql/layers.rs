@@ -7,6 +7,15 @@ use crate::error::{AppError, AppResult};
 
 use super::util::normalize_optional_string;
 
+pub(super) struct VectorSourceFields {
+    pub source_url: Option<String>,
+    pub source_revision: Option<String>,
+    pub geometry_space: Option<String>,
+    pub style_mode: Option<String>,
+    pub feature_id_property: Option<String>,
+    pub color_property: Option<String>,
+}
+
 pub(super) fn parse_layer_transform(
     kind: &str,
     a: Option<f64>,
@@ -87,17 +96,20 @@ fn parse_style_mode(layer_id: &str, value: Option<String>) -> AppResult<StyleMod
 pub(super) fn parse_vector_source(
     layer_id: &str,
     kind: LayerKind,
-    source_url: Option<String>,
-    source_revision: Option<String>,
-    geometry_space: Option<String>,
-    style_mode: Option<String>,
-    feature_id_property: Option<String>,
-    color_property: Option<String>,
+    source: VectorSourceFields,
     map_version_id: Option<&str>,
 ) -> AppResult<Option<VectorSourceRef>> {
     if kind != LayerKind::VectorGeoJson {
         return Ok(None);
     }
+    let VectorSourceFields {
+        source_url,
+        source_revision,
+        geometry_space,
+        style_mode,
+        feature_id_property,
+        color_property,
+    } = source;
     let source_url = resolve_layer_asset_url(&substitute_map_version(
         source_url.as_deref().unwrap_or(""),
         map_version_id,

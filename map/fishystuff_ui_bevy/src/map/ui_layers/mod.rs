@@ -124,13 +124,13 @@ impl Plugin for LayerUiPlugin {
                     controls::handle_debug_toggle_clicks,
                     controls::handle_eviction_toggle_clicks,
                     controls::sync_view_toggle_labels,
-                    controls::sync_view_mode_labels,
-                    controls::sync_terrain_tuning_labels,
-                    controls::sync_debug_toggle_label,
-                    controls::sync_eviction_toggle_label,
-                    controls::sync_layer_labels,
-                    diagnostics::sync_layer_debug,
                 ),
-            );
+            )
+            .add_systems(Update, controls::sync_view_mode_labels)
+            .add_systems(Update, controls::sync_terrain_tuning_labels)
+            .add_systems(Update, controls::sync_debug_toggle_label)
+            .add_systems(Update, controls::sync_eviction_toggle_label)
+            .add_systems(Update, controls::sync_layer_labels)
+            .add_systems(Update, diagnostics::sync_layer_debug);
     }
 }

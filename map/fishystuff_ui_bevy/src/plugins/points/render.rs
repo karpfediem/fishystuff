@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy::asset::RenderAssetUsages;
+use bevy::ecs::system::SystemParam;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
@@ -17,6 +18,28 @@ use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 
 use super::query::{PointsState, RenderPoint};
+
+type PointRingQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static mut Sprite,
+    ),
+    (With<EventPointRingMarker>, Without<EventPointIconMarker>),
+>;
+
+type PointIconQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static mut Sprite,
+    ),
+    (With<EventPointIconMarker>, Without<EventPointRingMarker>),
+>;
 
 pub(super) const RING_RADIUS_GAME_UNITS: f32 = 500.0;
 const RING_Z: f32 = 40.0;
@@ -83,6 +106,7 @@ impl PointIconCache {
         self.missing_catalog_ids.len()
     }
 
+    #[cfg(target_arch = "wasm32")]
     pub(crate) fn missing_catalog_sample(&self) -> Vec<i32> {
         let mut ids = self.missing_catalog_ids.iter().copied().collect::<Vec<_>>();
         ids.sort_unstable();
@@ -121,89 +145,75 @@ where
     values
 }
 
-pub(super) fn sync_point_markers(
-    mut commands: Commands,
-    display_state: Res<MapDisplayState>,
-    view_mode: Res<ViewModeState>,
-    fish: Res<FishCatalog>,
-    mut points: ResMut<PointsState>,
-    ring_assets: Res<PointRingAssets>,
-    mut pool: ResMut<PointMarkerPool>,
-    mut icon_cache: ResMut<PointIconCache>,
-    remote_image_epoch: Res<RemoteImageEpoch>,
-    mut remote_images: ResMut<RemoteImageCache>,
-    camera_q: Query<&Projection, With<Map2dCamera>>,
-    mut rings: Query<
-        (&mut Transform, &mut Visibility, &mut Sprite),
-        (With<EventPointRingMarker>, Without<EventPointIconMarker>),
-    >,
-    mut icons: Query<
-        (&mut Transform, &mut Visibility, &mut Sprite),
-        (With<EventPointIconMarker>, Without<EventPointRingMarker>),
-    >,
-) {
+pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     crate::perf_scope!("events.point_entity_update");
-    if !display_state.show_points || view_mode.mode != ViewMode::Map2D {
-        icon_cache.visible_icon_count = 0;
-        icon_cache.visible_fish_ids_sample.clear();
-        if !pool.markers.is_empty() {
-            for pair in pool.markers.drain(..) {
-                commands.entity(pair.ring).despawn();
-                commands.entity(pair.icon).despawn();
+    if !context.display_state.show_points || context.view_mode.mode != ViewMode::Map2D {
+        context.icon_cache.visible_icon_count = 0;
+        context.icon_cache.visible_fish_ids_sample.clear();
+        if !context.pool.markers.is_empty() {
+            for pair in context.pool.markers.drain(..) {
+                context.commands.entity(pair.ring).despawn();
+                context.commands.entity(pair.icon).despawn();
             }
         }
         return;
     }
 
-    if fish.is_changed() {
-        icon_cache.requested_urls.clear();
-        icon_cache.loading_ids.clear();
-        icon_cache.loaded_ids.clear();
-        icon_cache.missing_catalog_ids.clear();
-        icon_cache.failed_ids.clear();
+    if context.fish.is_changed() {
+        context.icon_cache.requested_urls.clear();
+        context.icon_cache.loading_ids.clear();
+        context.icon_cache.loaded_ids.clear();
+        context.icon_cache.missing_catalog_ids.clear();
+        context.icon_cache.failed_ids.clear();
     }
 
-    let icons_mode_changed = points.icons_enabled != display_state.show_point_icons;
-    points.icons_enabled = display_state.show_point_icons;
-    let icon_size_world_units = point_icon_world_size(&display_state, &camera_q);
-    let icon_size_changed = (points.icon_size_world_units - icon_size_world_units).abs() > 0.01;
-    points.icon_size_world_units = icon_size_world_units;
+    let icons_mode_changed = context.points.icons_enabled != context.display_state.show_point_icons;
+    context.points.icons_enabled = context.display_state.show_point_icons;
+    let icon_size_world_units = point_icon_world_size(&context.display_state, &context.camera_q);
+    let icon_size_changed =
+        (context.points.icon_size_world_units - icon_size_world_units).abs() > 0.01;
+    context.points.icon_size_world_units = icon_size_world_units;
 
-    if pool.markers.is_empty() && !points.points.is_empty() && !points.dirty {
-        points.dirty = true;
+    if context.pool.markers.is_empty() && !context.points.points.is_empty() && !context.points.dirty
+    {
+        context.points.dirty = true;
     }
 
-    let needs_refresh = points.dirty
+    let needs_refresh = context.points.dirty
         || icons_mode_changed
-        || (points.icons_enabled
-            && (fish.is_changed() || icon_size_changed || remote_image_epoch.is_changed()));
+        || (context.points.icons_enabled
+            && (context.fish.is_changed()
+                || icon_size_changed
+                || context.remote_image_epoch.is_changed()));
     if !needs_refresh {
         return;
     }
 
-    let Some(texture) = ring_assets.texture.as_ref() else {
+    let Some(texture) = context.ring_assets.texture.as_ref() else {
         return;
     };
-    if ring_assets.diameter_map_px <= 0.0 {
+    if context.ring_assets.diameter_map_px <= 0.0 {
         return;
     }
 
-    while pool.markers.len() < points.points.len() {
-        let ring = commands
+    while context.pool.markers.len() < context.points.points.len() {
+        let ring = context
+            .commands
             .spawn((
                 EventPointRingMarker,
                 World2dRenderEntity,
                 world_2d_layers(),
                 Sprite {
                     image: texture.clone(),
-                    custom_size: Some(Vec2::splat(ring_assets.diameter_map_px)),
+                    custom_size: Some(Vec2::splat(context.ring_assets.diameter_map_px)),
                     ..default()
                 },
                 Transform::from_xyz(0.0, 0.0, RING_Z),
                 Visibility::Hidden,
             ))
             .id();
-        let icon = commands
+        let icon = context
+            .commands
             .spawn((
                 EventPointIconMarker,
                 World2dRenderEntity,
@@ -216,18 +226,18 @@ pub(super) fn sync_point_markers(
                 Visibility::Hidden,
             ))
             .id();
-        pool.markers.push(MarkerPair { ring, icon });
+        context.pool.markers.push(MarkerPair { ring, icon });
     }
 
     let mut visible_icon_count = 0usize;
     let mut visible_fish_ids = Vec::new();
-    for (idx, point) in points.points.iter().enumerate() {
+    for (idx, point) in context.points.points.iter().enumerate() {
         let world = map_point_to_world(point);
-        let pair = pool.markers[idx];
+        let pair = context.pool.markers[idx];
         let (ring_scale, ring_alpha) = ring_style_for_point(point);
-        let ring_diameter_world = ring_assets.diameter_map_px * ring_scale;
+        let ring_diameter_world = context.ring_assets.diameter_map_px * ring_scale;
         let icon_diameter_world = icon_size_world_units.max(ring_diameter_world);
-        if let Ok((mut transform, mut visibility, mut sprite)) = rings.get_mut(pair.ring) {
+        if let Ok((mut transform, mut visibility, mut sprite)) = context.rings.get_mut(pair.ring) {
             transform.translation.x = world.x as f32;
             transform.translation.y = world.z as f32;
             transform.translation.z = RING_Z;
@@ -236,15 +246,18 @@ pub(super) fn sync_point_markers(
             *visibility = Visibility::Visible;
         }
 
-        if let Ok((mut transform, mut visibility, mut sprite)) = icons.get_mut(pair.icon) {
+        if let Ok((mut transform, mut visibility, mut sprite)) = context.icons.get_mut(pair.icon) {
             transform.translation.x = world.x as f32;
             transform.translation.y = world.z as f32;
             transform.translation.z = ICON_Z;
 
-            if points.icons_enabled {
-                if let Some(handle) =
-                    icon_handle_for_fish(point.fish_id, &mut icon_cache, &fish, &mut remote_images)
-                {
+            if context.points.icons_enabled {
+                if let Some(handle) = icon_handle_for_fish(
+                    point.fish_id,
+                    &mut context.icon_cache,
+                    &context.fish,
+                    &mut context.remote_images,
+                ) {
                     if sprite.image != handle {
                         sprite.image = handle;
                     }
@@ -264,31 +277,38 @@ pub(super) fn sync_point_markers(
         }
     }
 
-    for pair in pool.markers.iter().skip(points.points.len()) {
-        if let Ok((_, mut visibility, _)) = rings.get_mut(pair.ring) {
+    for pair in context
+        .pool
+        .markers
+        .iter()
+        .skip(context.points.points.len())
+    {
+        if let Ok((_, mut visibility, _)) = context.rings.get_mut(pair.ring) {
             *visibility = Visibility::Hidden;
         }
-        if let Ok((_, mut visibility, _)) = icons.get_mut(pair.icon) {
+        if let Ok((_, mut visibility, _)) = context.icons.get_mut(pair.icon) {
             *visibility = Visibility::Hidden;
         }
     }
 
-    let requested_ids = icon_cache
+    let requested_ids = context
+        .icon_cache
         .requested_urls
         .keys()
         .copied()
         .collect::<HashSet<_>>();
-    let loaded_ids = icon_cache.loaded_ids.clone();
-    icon_cache
+    let loaded_ids = context.icon_cache.loaded_ids.clone();
+    context
+        .icon_cache
         .loading_ids
         .retain(|fish_id| requested_ids.contains(fish_id) && !loaded_ids.contains(fish_id));
     visible_fish_ids.sort_unstable();
     visible_fish_ids.dedup();
     visible_fish_ids.truncate(5);
-    icon_cache.visible_icon_count = visible_icon_count;
-    icon_cache.visible_fish_ids_sample = visible_fish_ids;
+    context.icon_cache.visible_icon_count = visible_icon_count;
+    context.icon_cache.visible_fish_ids_sample = visible_fish_ids;
 
-    points.dirty = false;
+    context.points.dirty = false;
 }
 
 pub(super) fn mark_points_dirty_on_remote_image_update(
@@ -298,6 +318,23 @@ pub(super) fn mark_points_dirty_on_remote_image_update(
     if remote_image_epoch.is_changed() {
         points.dirty = true;
     }
+}
+
+#[derive(SystemParam)]
+pub(super) struct PointMarkerSync<'w, 's> {
+    commands: Commands<'w, 's>,
+    display_state: Res<'w, MapDisplayState>,
+    view_mode: Res<'w, ViewModeState>,
+    fish: Res<'w, FishCatalog>,
+    points: ResMut<'w, PointsState>,
+    ring_assets: Res<'w, PointRingAssets>,
+    pool: ResMut<'w, PointMarkerPool>,
+    icon_cache: ResMut<'w, PointIconCache>,
+    remote_image_epoch: Res<'w, RemoteImageEpoch>,
+    remote_images: ResMut<'w, RemoteImageCache>,
+    camera_q: Query<'w, 's, &'static Projection, With<Map2dCamera>>,
+    rings: PointRingQuery<'w, 's>,
+    icons: PointIconQuery<'w, 's>,
 }
 
 fn icon_handle_for_fish(

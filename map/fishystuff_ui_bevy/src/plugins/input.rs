@@ -1,4 +1,5 @@
 use bevy::camera::ScalingMode;
+use bevy::ecs::system::SystemParam;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::input::ButtonInput;
@@ -65,81 +66,81 @@ fn track_cursor(
     }
 }
 
-fn update_map2d_camera_controls(
-    windows: Query<&Window, With<PrimaryWindow>>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
-    key_buttons: Res<ButtonInput<KeyCode>>,
-    mut mouse_wheel: MessageReader<MouseWheel>,
-    mut pan: ResMut<PanState>,
-    mut control_mutations: ResMut<CameraControlMutationFlags>,
-    mut view_state: ResMut<Map2dViewState>,
-    cursor: Res<CursorState>,
-    ui_capture: Res<UiPointerCapture>,
-    view_mode: Res<ViewModeState>,
-    zoom_bounds: Res<CameraZoomBounds>,
-    mut camera_q: Query<(&Camera, &mut Projection, &mut Transform), With<Map2dCamera>>,
-) {
+fn update_map2d_camera_controls(mut controls: Map2dCameraControls<'_, '_>) {
     crate::perf_scope!("camera.2d_update");
-    if view_mode.mode != ViewMode::Map2D {
-        pan.dragging = false;
+    if controls.view_mode.mode != ViewMode::Map2D {
+        controls.pan.dragging = false;
         return;
     }
-    let Ok(window) = windows.single() else {
+    let Ok(window) = controls.windows.single() else {
         return;
     };
-    let Ok((camera, mut projection, mut transform)) = camera_q.single_mut() else {
+    let Ok((camera, mut projection, mut transform)) = controls.camera_q.single_mut() else {
         return;
     };
-    if !map2d_controls_should_run(view_mode.mode, camera.is_active) {
-        pan.dragging = false;
+    if !map2d_controls_should_run(controls.view_mode.mode, camera.is_active) {
+        controls.pan.dragging = false;
         return;
     }
     let ortho_template = match &*projection {
         Projection::Orthographic(existing) => existing.clone(),
         _ => OrthographicProjection::default_2d(),
     };
-    let mut working_center = Vec2::new(view_state.center_world_x, view_state.center_world_z);
-    let unclamped_zoom = view_state.zoom.max(1e-5);
-    let mut working_zoom = unclamped_zoom.clamp(zoom_bounds.min_scale, zoom_bounds.max_scale);
+    let mut working_center = Vec2::new(
+        controls.view_state.center_world_x,
+        controls.view_state.center_world_z,
+    );
+    let unclamped_zoom = controls.view_state.zoom.max(1e-5);
+    let mut working_zoom = unclamped_zoom.clamp(
+        controls.zoom_bounds.min_scale,
+        controls.zoom_bounds.max_scale,
+    );
     let mut working_transform =
         Transform::from_translation(Vec3::new(working_center.x, working_center.y, 1000.0));
     working_transform.rotation = Quat::IDENTITY;
     working_transform.scale = Vec3::ONE;
     let mut changed = (working_zoom - unclamped_zoom).abs() > 1e-6;
 
-    let ui_input_blocked = ui_capture.blocked || ui_capture.text_input_active;
+    let ui_input_blocked = controls.ui_capture.blocked || controls.ui_capture.text_input_active;
     if ui_input_blocked {
-        pan.dragging = false;
+        controls.pan.dragging = false;
     }
 
-    if key_buttons.just_pressed(KeyCode::Home) && !ui_capture.text_input_active {
-        reset_map2d_view(&mut view_state);
-        view_state.zoom = zoom_bounds
-            .fit_scale
-            .clamp(zoom_bounds.min_scale, zoom_bounds.max_scale);
-        working_center = Vec2::new(view_state.center_world_x, view_state.center_world_z);
-        working_zoom = view_state.zoom;
+    if controls.key_buttons.just_pressed(KeyCode::Home) && !controls.ui_capture.text_input_active {
+        reset_map2d_view(&mut controls.view_state);
+        controls.view_state.zoom = controls.zoom_bounds.fit_scale.clamp(
+            controls.zoom_bounds.min_scale,
+            controls.zoom_bounds.max_scale,
+        );
+        working_center = Vec2::new(
+            controls.view_state.center_world_x,
+            controls.view_state.center_world_z,
+        );
+        working_zoom = controls.view_state.zoom;
         working_transform.translation.x = working_center.x;
         working_transform.translation.y = working_center.y;
         changed = true;
     }
-    let cursor_pos = window.cursor_position().or(cursor.last_pos);
+    let cursor_pos = window.cursor_position().or(controls.cursor.last_pos);
 
-    if mouse_buttons.just_pressed(MouseButton::Left) && !ui_input_blocked {
+    if controls.mouse_buttons.just_pressed(MouseButton::Left) && !ui_input_blocked {
         if let Some(pos) = cursor_pos {
-            pan.dragging = true;
-            pan.last_cursor = pos;
-            pan.drag_distance = 0.0;
+            controls.pan.dragging = true;
+            controls.pan.last_cursor = pos;
+            controls.pan.drag_distance = 0.0;
         }
     }
 
-    if mouse_buttons.pressed(MouseButton::Left) && pan.dragging && !ui_input_blocked {
+    if controls.mouse_buttons.pressed(MouseButton::Left)
+        && controls.pan.dragging
+        && !ui_input_blocked
+    {
         if let (Some(prev), Some(curr)) = (
             screen_to_world_with_scale(
                 window,
                 &ortho_template,
                 &working_transform,
-                pan.last_cursor,
+                controls.pan.last_cursor,
                 working_zoom,
             ),
             cursor_pos.and_then(|pos| {
@@ -157,19 +158,19 @@ fn update_map2d_camera_controls(
             working_center.y += delta.y;
             working_transform.translation.x = working_center.x;
             working_transform.translation.y = working_center.y;
-            pan.drag_distance += delta.length();
+            controls.pan.drag_distance += delta.length();
             changed = true;
         }
         if let Some(pos) = cursor_pos {
-            pan.last_cursor = pos;
+            controls.pan.last_cursor = pos;
         }
     }
 
-    if mouse_buttons.just_released(MouseButton::Left) {
-        pan.dragging = false;
+    if controls.mouse_buttons.just_released(MouseButton::Left) {
+        controls.pan.dragging = false;
     }
 
-    for ev in mouse_wheel.read() {
+    for ev in controls.mouse_wheel.read() {
         if ui_input_blocked {
             continue;
         }
@@ -179,8 +180,10 @@ fn update_map2d_camera_controls(
         }
         scroll = scroll.clamp(-10.0, 10.0);
         let zoom_delta = 2.0_f32.powf(-scroll / ZOOM_TICKS_PER_DOUBLE);
-        let new_scale =
-            (working_zoom * zoom_delta).clamp(zoom_bounds.min_scale, zoom_bounds.max_scale);
+        let new_scale = (working_zoom * zoom_delta).clamp(
+            controls.zoom_bounds.min_scale,
+            controls.zoom_bounds.max_scale,
+        );
         if let Some(cursor) = cursor_pos {
             let before = screen_to_world_with_scale(
                 window,
@@ -209,13 +212,38 @@ fn update_map2d_camera_controls(
     }
 
     if changed {
-        view_state.center_world_x = working_center.x;
-        view_state.center_world_z = working_center.y;
-        view_state.zoom = working_zoom;
-        control_mutations.map2d_updated = true;
+        controls.view_state.center_world_x = working_center.x;
+        controls.view_state.center_world_z = working_center.y;
+        controls.view_state.zoom = working_zoom;
+        controls.control_mutations.map2d_updated = true;
     }
     // Always enforce the known 2D pose/projection to avoid transform contamination from 3D mode.
-    apply_map2d_camera_state(&view_state, &mut transform, &mut projection);
+    apply_map2d_camera_state(&controls.view_state, &mut transform, &mut projection);
+}
+
+#[derive(SystemParam)]
+struct Map2dCameraControls<'w, 's> {
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
+    key_buttons: Res<'w, ButtonInput<KeyCode>>,
+    mouse_wheel: MessageReader<'w, 's, MouseWheel>,
+    pan: ResMut<'w, PanState>,
+    control_mutations: ResMut<'w, CameraControlMutationFlags>,
+    view_state: ResMut<'w, Map2dViewState>,
+    cursor: Res<'w, CursorState>,
+    ui_capture: Res<'w, UiPointerCapture>,
+    view_mode: Res<'w, ViewModeState>,
+    zoom_bounds: Res<'w, CameraZoomBounds>,
+    camera_q: Query<
+        'w,
+        's,
+        (
+            &'static Camera,
+            &'static mut Projection,
+            &'static mut Transform,
+        ),
+        With<Map2dCamera>,
+    >,
 }
 
 fn update_ui_pointer_capture(

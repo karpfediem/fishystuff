@@ -1,4 +1,5 @@
 use bevy::camera::visibility::RenderLayers;
+use bevy::ecs::system::SystemParam;
 use bevy::ui::IsDefaultUiCamera;
 
 use crate::map::camera::map2d::{apply_map2d_camera_state, Map2dViewState};
@@ -13,6 +14,21 @@ use crate::prelude::*;
 
 #[derive(Component)]
 pub(super) struct TerrainLightTag;
+
+type ModeCameraQuery<'w, 's, Include, Exclude> = Query<
+    'w,
+    's,
+    (
+        &'static mut Camera,
+        &'static mut Transform,
+        &'static mut Projection,
+    ),
+    (With<Include>, Without<Exclude>),
+>;
+
+#[cfg(debug_assertions)]
+type ActiveCameraQuery<'w, 's, Marker> =
+    Query<'w, 's, (&'static Camera, &'static Transform), With<Marker>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::map::terrain) struct CameraActivationState {
@@ -142,58 +158,58 @@ pub(in crate::map::terrain) fn enter_terrain3d_cameras_only(
     apply_terrain3d_camera_state(terrain_view, terrain_transform);
 }
 
+#[derive(SystemParam)]
+pub(in crate::map::terrain) struct TerrainModeTransition<'w, 's> {
+    mode: Res<'w, ViewModeState>,
+    map_view: Res<'w, Map2dViewState>,
+    terrain_view: Res<'w, Terrain3dViewState>,
+    applied_mode: ResMut<'w, AppliedViewMode>,
+    ambient: ResMut<'w, GlobalAmbientLight>,
+    map_camera_q: ModeCameraQuery<'w, 's, Map2dCamera, Terrain3dCamera>,
+    terrain_camera_q: ModeCameraQuery<'w, 's, Terrain3dCamera, Map2dCamera>,
+    light_q: Query<'w, 's, &'static mut Visibility, With<TerrainLightTag>>,
+}
+
 pub(in crate::map::terrain) fn apply_mode_to_camera_and_lighting(
-    mode: Res<ViewModeState>,
-    map_view: Res<Map2dViewState>,
-    terrain_view: Res<Terrain3dViewState>,
-    mut applied_mode: ResMut<AppliedViewMode>,
-    mut ambient: ResMut<GlobalAmbientLight>,
-    mut map_camera_q: Query<
-        (&mut Camera, &mut Transform, &mut Projection),
-        (With<Map2dCamera>, Without<Terrain3dCamera>),
-    >,
-    mut terrain_camera_q: Query<
-        (&mut Camera, &mut Transform, &mut Projection),
-        (With<Terrain3dCamera>, Without<Map2dCamera>),
-    >,
-    mut light_q: Query<&mut Visibility, With<TerrainLightTag>>,
+    mut transition: TerrainModeTransition<'_, '_>,
 ) {
     crate::perf_scope!("camera.mode_transition");
-    if applied_mode.mode == Some(mode.mode) {
+    if transition.applied_mode.mode == Some(transition.mode.mode) {
         return;
     }
 
-    let Ok((mut map_camera, mut map_transform, mut map_projection)) = map_camera_q.single_mut()
+    let Ok((mut map_camera, mut map_transform, mut map_projection)) =
+        transition.map_camera_q.single_mut()
     else {
         return;
     };
     let Ok((mut terrain_camera, mut terrain_transform, mut terrain_projection)) =
-        terrain_camera_q.single_mut()
+        transition.terrain_camera_q.single_mut()
     else {
         return;
     };
 
-    match mode.mode {
+    match transition.mode.mode {
         ViewMode::Map2D => enter_map2d(
-            &map_view,
+            &transition.map_view,
             &mut map_camera,
             &mut map_transform,
             &mut map_projection,
             &mut terrain_camera,
-            &mut ambient,
-            &mut light_q,
+            &mut transition.ambient,
+            &mut transition.light_q,
         ),
         ViewMode::Terrain3D => enter_terrain3d(
-            &terrain_view,
+            &transition.terrain_view,
             &mut map_camera,
             &mut terrain_camera,
             &mut terrain_transform,
             &mut terrain_projection,
-            &mut ambient,
-            &mut light_q,
+            &mut transition.ambient,
+            &mut transition.light_q,
         ),
     }
-    applied_mode.mode = Some(mode.mode);
+    transition.applied_mode.mode = Some(transition.mode.mode);
 }
 
 pub(in crate::map::terrain) fn log_camera_activation_state(
@@ -277,23 +293,29 @@ pub(in crate::map::terrain) fn debug_assert_camera_control_mode_gating(
 pub(in crate::map::terrain) fn debug_assert_camera_control_mode_gating() {}
 
 #[cfg(debug_assertions)]
+#[derive(SystemParam)]
+pub(in crate::map::terrain) struct TerrainRenderIsolationChecks<'w, 's> {
+    mode: Res<'w, ViewModeState>,
+    terrain_view: Res<'w, Terrain3dViewState>,
+    map_q: ActiveCameraQuery<'w, 's, Map2dCamera>,
+    terrain_q: ActiveCameraQuery<'w, 's, Terrain3dCamera>,
+    ui_camera_q: Query<'w, 's, &'static Camera, With<UiCamera>>,
+    ui_default_q: Query<'w, 's, Entity, (With<Camera>, With<IsDefaultUiCamera>)>,
+    world_2d_q: Query<'w, 's, &'static RenderLayers, With<World2dRenderEntity>>,
+    world_3d_q: Query<'w, 's, &'static RenderLayers, With<World3dRenderEntity>>,
+}
+
+#[cfg(debug_assertions)]
 pub(in crate::map::terrain) fn debug_assert_render_isolation(
-    mode: Res<ViewModeState>,
-    terrain_view: Res<Terrain3dViewState>,
-    map_q: Query<(&Camera, &Transform), With<Map2dCamera>>,
-    terrain_q: Query<(&Camera, &Transform), With<Terrain3dCamera>>,
-    ui_camera_q: Query<&Camera, With<UiCamera>>,
-    ui_default_q: Query<Entity, (With<Camera>, With<IsDefaultUiCamera>)>,
-    world_2d_q: Query<&RenderLayers, With<World2dRenderEntity>>,
-    world_3d_q: Query<&RenderLayers, With<World3dRenderEntity>>,
+    checks: TerrainRenderIsolationChecks<'_, '_>,
 ) {
-    let Ok((map_camera, map_transform)) = map_q.single() else {
+    let Ok((map_camera, map_transform)) = checks.map_q.single() else {
         return;
     };
-    let Ok((terrain_camera, terrain_transform)) = terrain_q.single() else {
+    let Ok((terrain_camera, terrain_transform)) = checks.terrain_q.single() else {
         return;
     };
-    let Ok(ui_camera) = ui_camera_q.single() else {
+    let Ok(ui_camera) = checks.ui_camera_q.single() else {
         return;
     };
 
@@ -302,27 +324,27 @@ pub(in crate::map::terrain) fn debug_assert_render_isolation(
     debug_assert_eq!(
         active_world_count, 1,
         "exactly one world camera must be active (mode={:?})",
-        mode.mode
+        checks.mode.mode
     );
     debug_assert_eq!(
         map_camera.is_active,
-        mode.mode == ViewMode::Map2D,
+        checks.mode.mode == ViewMode::Map2D,
         "Map2dCamera active state diverged from ViewMode"
     );
     debug_assert_eq!(
         terrain_camera.is_active,
-        mode.mode == ViewMode::Terrain3D,
+        checks.mode.mode == ViewMode::Terrain3D,
         "Terrain3dCamera active state diverged from ViewMode"
     );
-    if mode.mode == ViewMode::Map2D {
+    if checks.mode.mode == ViewMode::Map2D {
         let top_down_dot = map_transform.rotation.dot(Quat::IDENTITY).abs();
         debug_assert!(
             top_down_dot > 0.9999,
             "Map2dCamera rotation deviated from identity (dot={top_down_dot})"
         );
     }
-    if mode.mode == ViewMode::Terrain3D {
-        let to_pivot = terrain_view.pivot_world - terrain_transform.translation;
+    if checks.mode.mode == ViewMode::Terrain3D {
+        let to_pivot = checks.terrain_view.pivot_world - terrain_transform.translation;
         if to_pivot.length_squared() > 1e-6 {
             let forward = (terrain_transform.rotation * -Vec3::Z).normalize_or_zero();
             let look_alignment = forward.dot(to_pivot.normalize_or_zero());
@@ -333,7 +355,7 @@ pub(in crate::map::terrain) fn debug_assert_render_isolation(
         }
     }
 
-    let ui_owner_count = ui_default_q.iter().count();
+    let ui_owner_count = checks.ui_default_q.iter().count();
     debug_assert_eq!(
         ui_owner_count, 1,
         "exactly one camera must own UI rendering via IsDefaultUiCamera"
@@ -342,7 +364,7 @@ pub(in crate::map::terrain) fn debug_assert_render_isolation(
 
     let world_2d = world_2d_layers();
     let world_3d = world_3d_layers();
-    for layers in &world_2d_q {
+    for layers in &checks.world_2d_q {
         debug_assert!(
             layers.intersects(&world_2d),
             "2D entity missing LAYER_WORLD_2D"
@@ -352,7 +374,7 @@ pub(in crate::map::terrain) fn debug_assert_render_isolation(
             "2D entity illegally intersects LAYER_WORLD_3D"
         );
     }
-    for layers in &world_3d_q {
+    for layers in &checks.world_3d_q {
         debug_assert!(
             layers.intersects(&world_3d),
             "3D entity missing LAYER_WORLD_3D"

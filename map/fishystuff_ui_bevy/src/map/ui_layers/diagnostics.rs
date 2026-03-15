@@ -1,82 +1,75 @@
 use super::*;
+use bevy::ecs::system::SystemParam;
 
 pub(super) fn sync_layer_debug(
-    stats: Res<TileStats>,
-    cache: Res<RasterTileCache>,
-    layer_registry: Res<LayerRegistry>,
-    layer_settings: Res<LayerSettings>,
-    view_mode: Res<ViewModeState>,
-    terrain_diag: Res<crate::map::terrain::runtime::TerrainDiagnostics>,
-    snapshot: Res<EventsSnapshotState>,
-    points: Res<PointsState>,
-    point_icons: Res<PointIconCache>,
-    controls: Res<TileDebugControls>,
-    debug: Res<LayerDebugSettings>,
+    state: LayerDiagnosticsState<'_, '_>,
     mut debug_q: Query<(&mut Text, &mut Visibility), With<LayerDebugText>>,
 ) {
-    if !stats.is_changed()
-        && !cache.is_changed()
-        && !layer_registry.is_changed()
-        && !layer_settings.is_changed()
-        && !view_mode.is_changed()
-        && !terrain_diag.is_changed()
-        && !snapshot.is_changed()
-        && !points.is_changed()
-        && !point_icons.is_changed()
-        && !controls.is_changed()
-        && !debug.is_changed()
+    if !state.stats.is_changed()
+        && !state.cache.is_changed()
+        && !state.layer_registry.is_changed()
+        && !state.layer_settings.is_changed()
+        && !state.view_mode.is_changed()
+        && !state.terrain_diag.is_changed()
+        && !state.snapshot.is_changed()
+        && !state.points.is_changed()
+        && !state.point_icons.is_changed()
+        && !state.controls.is_changed()
+        && !state.debug.is_changed()
     {
         return;
     }
     for (mut text, mut visibility) in &mut debug_q {
-        if !debug.enabled {
+        if !state.debug.enabled {
             *visibility = Visibility::Hidden;
             continue;
         }
         *visibility = Visibility::Visible;
-        let view = match (stats.view_min, stats.view_max) {
+        let view = match (state.stats.view_min, state.stats.view_max) {
             (Some((x0, y0)), Some((x1, y1))) => {
                 format!("[{x0:.0},{y0:.0}]..[{x1:.0},{y1:.0}]")
             }
             _ => "-".to_string(),
         };
-        let cursor_world = stats
+        let cursor_world = state
+            .stats
             .cursor_world
             .map(|(x, z)| format!("{x:.0},{z:.0}"))
             .unwrap_or_else(|| "-".to_string());
-        let cursor = stats
+        let cursor = state
+            .stats
             .cursor_map
             .map(|(x, y)| format!("{x:.0},{y:.0}"))
             .unwrap_or_else(|| "-".to_string());
 
         let mut layer_lines = String::new();
-        for layer in layer_registry.ordered() {
-            let Some(state) = layer_settings.get(layer.id) else {
+        for layer in state.layer_registry.ordered() {
+            let Some(layer_state) = state.layer_settings.get(layer.id) else {
                 continue;
             };
-            if !state.visible {
+            if !layer_state.visible {
                 continue;
             }
             if layer.kind == LayerKind::VectorGeoJson {
                 layer_lines.push_str(&format!(
                     "\n{}: vec={} p{:>3.0}% bytes={} f{}/{} poly{} mp{} h{} v{} t{} b{:.1}ms l{:.2}ms cache={} h{} m{} e{} rev={}",
                     layer.name.as_str(),
-                    vector_status_label(state.vector_status),
-                    state.vector_progress * 100.0,
-                    state.vector_fetched_bytes,
-                    state.vector_features_processed,
-                    state.vector_feature_count,
-                    state.vector_polygon_count,
-                    state.vector_multipolygon_count,
-                    state.vector_hole_ring_count,
-                    state.vector_vertex_count,
-                    state.vector_triangle_count,
-                    state.vector_build_ms,
-                    state.vector_last_frame_build_ms,
-                    if state.vector_cache_last_hit { "hit" } else { "miss" },
-                    state.vector_cache_hits,
-                    state.vector_cache_misses,
-                    state.vector_cache_entries,
+                    vector_status_label(layer_state.vector_status),
+                    layer_state.vector_progress * 100.0,
+                    layer_state.vector_fetched_bytes,
+                    layer_state.vector_features_processed,
+                    layer_state.vector_feature_count,
+                    layer_state.vector_polygon_count,
+                    layer_state.vector_multipolygon_count,
+                    layer_state.vector_hole_ring_count,
+                    layer_state.vector_vertex_count,
+                    layer_state.vector_triangle_count,
+                    layer_state.vector_build_ms,
+                    layer_state.vector_last_frame_build_ms,
+                    if layer_state.vector_cache_last_hit { "hit" } else { "miss" },
+                    layer_state.vector_cache_hits,
+                    layer_state.vector_cache_misses,
+                    layer_state.vector_cache_entries,
                     layer
                         .vector_source
                         .as_ref()
@@ -85,25 +78,32 @@ pub(super) fn sync_layer_debug(
                 ));
             } else {
                 let base_lod = state
-                    .current_base_lod
+                    .layer_settings
+                    .get(layer.id)
+                    .and_then(|layer_state| layer_state.current_base_lod)
                     .map(|value| value.to_string())
                     .unwrap_or_else(|| "-".to_string());
                 let detail_lod = state
-                    .current_detail_lod
+                    .layer_settings
+                    .get(layer.id)
+                    .and_then(|layer_state| layer_state.current_detail_lod)
                     .map(|value| value.to_string())
                     .unwrap_or_else(|| "-".to_string());
-                let resident_by_level = format_level_counts(stats.resident_by_level.get(&layer.id));
+                let resident_by_level =
+                    format_level_counts(state.stats.resident_by_level.get(&layer.id));
                 let protected_by_level =
-                    format_level_counts(stats.protected_by_level.get(&layer.id));
-                let warm_by_level = format_level_counts(stats.warm_by_level.get(&layer.id));
+                    format_level_counts(state.stats.protected_by_level.get(&layer.id));
+                let warm_by_level = format_level_counts(state.stats.warm_by_level.get(&layer.id));
                 let fallback_by_level =
-                    format_level_counts(stats.fallback_visible_by_level.get(&layer.id));
-                let hits_by_level = format_level_counts(stats.cache_hits_by_level.get(&layer.id));
+                    format_level_counts(state.stats.fallback_visible_by_level.get(&layer.id));
+                let hits_by_level =
+                    format_level_counts(state.stats.cache_hits_by_level.get(&layer.id));
                 let misses_by_level =
-                    format_level_counts(stats.cache_misses_by_level.get(&layer.id));
+                    format_level_counts(state.stats.cache_misses_by_level.get(&layer.id));
                 let evictions_by_level =
-                    format_level_counts(stats.cache_evictions_by_level.get(&layer.id));
-                let blank_visible = stats
+                    format_level_counts(state.stats.cache_evictions_by_level.get(&layer.id));
+                let blank_visible = state
+                    .stats
                     .blank_visible_by_layer
                     .get(&layer.id)
                     .copied()
@@ -113,10 +113,10 @@ pub(super) fn sync_layer_debug(
                     layer.name.as_str(),
                     base_lod,
                     detail_lod,
-                    state.visible_tile_count,
-                    state.resident_tile_count,
-                    state.pending_count,
-                    state.inflight_count,
+                    layer_state.visible_tile_count,
+                    layer_state.resident_tile_count,
+                    layer_state.pending_count,
+                    layer_state.inflight_count,
                     blank_visible,
                     resident_by_level,
                     protected_by_level,
@@ -125,25 +125,27 @@ pub(super) fn sync_layer_debug(
                     hits_by_level,
                     misses_by_level,
                     evictions_by_level,
-                    state.manifest_status,
+                    layer_state.manifest_status,
                 ));
             }
         }
 
-        let terrain_visible_levels = if terrain_diag.visible_chunks_by_level.is_empty() {
+        let terrain_visible_levels = if state.terrain_diag.visible_chunks_by_level.is_empty() {
             "-".to_string()
         } else {
-            terrain_diag
+            state
+                .terrain_diag
                 .visible_chunks_by_level
                 .iter()
                 .map(|(level, count)| format!("l{}:{}", level, count))
                 .collect::<Vec<_>>()
                 .join(",")
         };
-        let terrain_resident_levels = if terrain_diag.resident_chunks_by_level.is_empty() {
+        let terrain_resident_levels = if state.terrain_diag.resident_chunks_by_level.is_empty() {
             "-".to_string()
         } else {
-            terrain_diag
+            state
+                .terrain_diag
                 .resident_chunks_by_level
                 .iter()
                 .map(|(level, count)| format!("l{}:{}", level, count))
@@ -153,86 +155,110 @@ pub(super) fn sync_layer_debug(
 
         let next = format!(
             "{}\nmode={:?} terrain(ready={} rev={:?} manifest={} fail={} chunk={} grid={} max_l={} bbox={:.1}..{:.1} drape_show={} chunks={}/{}/{} vis{{{}}} res{{{}}} fallback={} cache(h/m/e)={}/{}/{} drape={} build={:.2}ms cam={:.1}/{:.1}/{:.1} d={:.0})\nevents_snapshot: rev={} events_loaded={} idx_bucket={} candidates={} rendered_points={} rendered_clusters={} snapshot_source={} meta_req={} snapshot_req={}\npoint_icons: requested={} loading={} loaded={} failed={} missing_catalog={} visible={} visible_ids={:?} requested_sample={:?} failed_sample={:?}\nreq/cache: req={} cov(q/s)={}/{} det(q/s)={}/{} sup={} hits={} evict={} cache={} evict_mode={}\ncoverage: fallback_visible={} blank_visible={} motion={} pan={:.3} zoom_out={:.3}\nview(world)={} cursor(world)={} cursor(map)={}\nstream: visible={} inflight={} queued={}{}",
-            points.status,
-            view_mode.mode,
-            if terrain_diag.terrain_ready {
+            state.points.status,
+            state.view_mode.mode,
+            if state.terrain_diag.terrain_ready {
                 "ready"
             } else {
                 "pending"
             },
-            terrain_diag.terrain_revision,
-            terrain_diag.manifest_ready,
-            terrain_diag.manifest_failed,
-            terrain_diag.chunk_map_px_runtime,
-            terrain_diag.grid_size_runtime,
-            terrain_diag.max_level_runtime,
-            terrain_diag.bbox_y_min,
-            terrain_diag.bbox_y_max,
-            if terrain_diag.show_drape { "1" } else { "0" },
-            terrain_diag.chunks_requested,
-            terrain_diag.chunks_building,
-            terrain_diag.chunks_ready,
+            state.terrain_diag.terrain_revision,
+            state.terrain_diag.manifest_ready,
+            state.terrain_diag.manifest_failed,
+            state.terrain_diag.chunk_map_px_runtime,
+            state.terrain_diag.grid_size_runtime,
+            state.terrain_diag.max_level_runtime,
+            state.terrain_diag.bbox_y_min,
+            state.terrain_diag.bbox_y_max,
+            if state.terrain_diag.show_drape {
+                "1"
+            } else {
+                "0"
+            },
+            state.terrain_diag.chunks_requested,
+            state.terrain_diag.chunks_building,
+            state.terrain_diag.chunks_ready,
             terrain_visible_levels,
             terrain_resident_levels,
-            terrain_diag.fallback_chunks,
-            terrain_diag.cache_hits,
-            terrain_diag.cache_misses,
-            terrain_diag.cache_evictions,
-            terrain_diag.drape_patch_count,
-            terrain_diag.avg_build_ms,
-            terrain_diag.camera_pivot.x,
-            terrain_diag.camera_pivot.y,
-            terrain_diag.camera_pivot.z,
-            terrain_diag.camera_distance,
-            snapshot.revision.as_deref().unwrap_or("-"),
-            snapshot.event_count,
-            points.spatial_bucket_px,
-            points.candidate_count,
-            points.rendered_point_count,
-            points.rendered_cluster_count,
-            snapshot.last_load_kind.label(),
-            snapshot.meta_requests_started,
-            snapshot.snapshot_requests_started,
-            point_icons.requested_count(),
-            point_icons.loading_count(),
-            point_icons.loaded_count(),
-            point_icons.failed_count(),
-            point_icons.missing_catalog_count(),
-            point_icons.visible_icon_count,
-            point_icons.visible_sample(),
-            point_icons.requested_sample(),
-            point_icons.failed_sample(),
-            stats.requested_tiles,
-            stats.coverage_requests_queued,
-            stats.coverage_requests_started,
-            stats.detail_requests_queued,
-            stats.detail_requests_started,
-            stats.requests_suppressed_motion,
-            stats.cache_hits,
-            stats.cache_evictions,
-            cache.len(),
-            if controls.disable_eviction {
+            state.terrain_diag.fallback_chunks,
+            state.terrain_diag.cache_hits,
+            state.terrain_diag.cache_misses,
+            state.terrain_diag.cache_evictions,
+            state.terrain_diag.drape_patch_count,
+            state.terrain_diag.avg_build_ms,
+            state.terrain_diag.camera_pivot.x,
+            state.terrain_diag.camera_pivot.y,
+            state.terrain_diag.camera_pivot.z,
+            state.terrain_diag.camera_distance,
+            state.snapshot.revision.as_deref().unwrap_or("-"),
+            state.snapshot.event_count,
+            state.points.spatial_bucket_px,
+            state.points.candidate_count,
+            state.points.rendered_point_count,
+            state.points.rendered_cluster_count,
+            state.snapshot.last_load_kind.label(),
+            state.snapshot.meta_requests_started,
+            state.snapshot.snapshot_requests_started,
+            state.point_icons.requested_count(),
+            state.point_icons.loading_count(),
+            state.point_icons.loaded_count(),
+            state.point_icons.failed_count(),
+            state.point_icons.missing_catalog_count(),
+            state.point_icons.visible_icon_count,
+            state.point_icons.visible_sample(),
+            state.point_icons.requested_sample(),
+            state.point_icons.failed_sample(),
+            state.stats.requested_tiles,
+            state.stats.coverage_requests_queued,
+            state.stats.coverage_requests_started,
+            state.stats.detail_requests_queued,
+            state.stats.detail_requests_started,
+            state.stats.requests_suppressed_motion,
+            state.stats.cache_hits,
+            state.stats.cache_evictions,
+            state.cache.len(),
+            if state.controls.disable_eviction {
                 "off"
             } else {
                 "on"
             },
-            stats.fallback_visible_tiles,
-            stats.blank_visible_tiles,
-            if stats.camera_unstable { "unstable" } else { "stable" },
-            stats.camera_pan_fraction,
-            stats.camera_zoom_out_ratio,
+            state.stats.fallback_visible_tiles,
+            state.stats.blank_visible_tiles,
+            if state.stats.camera_unstable {
+                "unstable"
+            } else {
+                "stable"
+            },
+            state.stats.camera_pan_fraction,
+            state.stats.camera_zoom_out_ratio,
             view,
             cursor_world,
             cursor,
-            stats.visible_tiles,
-            stats.inflight,
-            stats.queue_len,
+            state.stats.visible_tiles,
+            state.stats.inflight,
+            state.stats.queue_len,
             layer_lines,
         );
         if text.0 != next {
             text.0 = next;
         }
     }
+}
+
+#[derive(SystemParam)]
+pub(super) struct LayerDiagnosticsState<'w, 's> {
+    stats: Res<'w, TileStats>,
+    cache: Res<'w, RasterTileCache>,
+    layer_registry: Res<'w, LayerRegistry>,
+    layer_settings: Res<'w, LayerSettings>,
+    view_mode: Res<'w, ViewModeState>,
+    terrain_diag: Res<'w, crate::map::terrain::runtime::TerrainDiagnostics>,
+    snapshot: Res<'w, EventsSnapshotState>,
+    points: Res<'w, PointsState>,
+    point_icons: Res<'w, PointIconCache>,
+    controls: Res<'w, TileDebugControls>,
+    debug: Res<'w, LayerDebugSettings>,
+    _marker: std::marker::PhantomData<&'s ()>,
 }
 
 fn format_level_counts(levels: Option<&BTreeMap<i32, u32>>) -> String {

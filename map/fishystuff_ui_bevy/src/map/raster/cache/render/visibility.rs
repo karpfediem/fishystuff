@@ -11,19 +11,32 @@ use super::geometry::tile_world_rect;
 
 const DETAIL_LINGER_FRAMES: u64 = 24;
 
+pub(crate) struct VisibilityUpdateContext<'a> {
+    pub(crate) materials: &'a mut Assets<ColorMaterial>,
+    pub(crate) layer_registry: &'a LayerRegistry,
+    pub(crate) layer_runtime: &'a LayerRuntime,
+    pub(crate) residency: &'a TileResidencyState,
+    pub(crate) frame: u64,
+    pub(crate) camera_unstable: bool,
+    pub(crate) view_mode: ViewMode,
+}
+
 impl RasterTileCache {
     pub(crate) fn update_visibility(
         &mut self,
         commands: &mut Commands,
-        materials: &mut Assets<ColorMaterial>,
-        layer_registry: &LayerRegistry,
-        layer_runtime: &LayerRuntime,
-        residency: &TileResidencyState,
-        frame: u64,
-        camera_unstable: bool,
-        view_mode: ViewMode,
+        context: VisibilityUpdateContext<'_>,
     ) -> std::collections::HashMap<LayerId, u32> {
         crate::perf_scope!("raster.tile_render_prep");
+        let VisibilityUpdateContext {
+            materials,
+            layer_registry,
+            layer_runtime,
+            residency,
+            frame,
+            camera_unstable,
+            view_mode,
+        } = context;
         let mut visible_by_layer: std::collections::HashMap<LayerId, u32> =
             std::collections::HashMap::new();
         let map_to_world = MapToWorld::default();

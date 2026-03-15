@@ -4,16 +4,28 @@ use crate::map::spaces::layer_transform::TileSpace;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::terrain::drape::tile_map_corners_from_key;
 
-pub(super) fn update_raster_tile_drapes(
-    config: &Terrain3dConfig,
-    runtime: &mut TerrainRuntime,
-    layer_registry: &LayerRegistry,
-    layer_runtime: &LayerRuntime,
-    raster_tiles: &RasterTileCache,
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-) {
+pub(super) struct RasterTileDrapeUpdate<'a, 'w, 's> {
+    pub(super) config: &'a Terrain3dConfig,
+    pub(super) runtime: &'a mut TerrainRuntime,
+    pub(super) layer_registry: &'a LayerRegistry,
+    pub(super) layer_runtime: &'a LayerRuntime,
+    pub(super) raster_tiles: &'a RasterTileCache,
+    pub(super) commands: &'a mut Commands<'w, 's>,
+    pub(super) meshes: &'a mut Assets<Mesh>,
+    pub(super) materials: &'a mut Assets<StandardMaterial>,
+}
+
+pub(super) fn update_raster_tile_drapes(update: RasterTileDrapeUpdate<'_, '_, '_>) {
+    let RasterTileDrapeUpdate {
+        config,
+        runtime,
+        layer_registry,
+        layer_runtime,
+        raster_tiles,
+        commands,
+        meshes,
+        materials,
+    } = update;
     crate::perf_scope!("terrain.drape_mesh_build");
     let Some(loaded_manifest) = runtime.manifest.clone() else {
         for entry in runtime.drape_entries.values() {

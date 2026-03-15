@@ -1,15 +1,27 @@
 use super::*;
 
-pub(super) fn update_chunk_aligned_drapes(
-    config: &Terrain3dConfig,
-    runtime: &mut TerrainRuntime,
-    asset_server: &AssetServer,
-    layer_registry: &LayerRegistry,
-    layer_runtime: &LayerRuntime,
-    commands: &mut Commands,
-    materials: &mut Assets<StandardMaterial>,
-    images: &Assets<Image>,
-) {
+pub(super) struct ChunkAlignedDrapeUpdate<'a, 'w, 's> {
+    pub(super) config: &'a Terrain3dConfig,
+    pub(super) runtime: &'a mut TerrainRuntime,
+    pub(super) asset_server: &'a AssetServer,
+    pub(super) layer_registry: &'a LayerRegistry,
+    pub(super) layer_runtime: &'a LayerRuntime,
+    pub(super) commands: &'a mut Commands<'w, 's>,
+    pub(super) materials: &'a mut Assets<StandardMaterial>,
+    pub(super) images: &'a Assets<Image>,
+}
+
+pub(super) fn update_chunk_aligned_drapes(update: ChunkAlignedDrapeUpdate<'_, '_, '_>) {
+    let ChunkAlignedDrapeUpdate {
+        config,
+        runtime,
+        asset_server,
+        layer_registry,
+        layer_runtime,
+        commands,
+        materials,
+        images,
+    } = update;
     let Some(drape_manifest) = runtime.drape_manifest.clone() else {
         for entry in runtime.chunk_drape_entries.values() {
             commands.entity(entry.entity).insert(Visibility::Hidden);

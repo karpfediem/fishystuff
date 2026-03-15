@@ -32,12 +32,6 @@ pub trait MessagePoster: Send + Sync {
     ) -> serenity::Result<()>;
 
     async fn post_to_mod_info(&self, http: &Http, content: String) -> serenity::Result<Message>;
-    async fn forward_to_mod_info(
-        &self,
-        http: &Http,
-        src_channel: ChannelId,
-        src_message: MessageId,
-    ) -> serenity::Result<()>;
 }
 
 /// Default poster backed by Serenity HTTP.
@@ -103,16 +97,6 @@ impl MessagePoster for SerenityPoster {
 
     async fn post_to_mod_info(&self, http: &Http, content: String) -> serenity::Result<Message> {
         self.post_to(http, self.cfg.mod_info_channel_id, content)
-            .await
-    }
-
-    async fn forward_to_mod_info(
-        &self,
-        http: &Http,
-        src_channel: ChannelId,
-        src_message: MessageId,
-    ) -> serenity::Result<()> {
-        self.forward_to(http, self.cfg.mod_info_channel_id, src_channel, src_message)
             .await
     }
 }
