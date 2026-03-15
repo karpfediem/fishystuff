@@ -1,8 +1,6 @@
 use fishystuff_api::error::ApiError;
 #[cfg(target_arch = "wasm32")]
 use fishystuff_api::error::ApiErrorEnvelope;
-#[cfg(target_arch = "wasm32")]
-use web_sys::{RequestCache, RequestMode};
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
 use fishystuff_api::models::fish::FishListResponse;
@@ -11,6 +9,8 @@ use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::region_groups::RegionGroupsResponse;
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::models::zones::ZonesResponse;
+#[cfg(target_arch = "wasm32")]
+use web_sys::{RequestCache, RequestMode};
 
 #[derive(Debug, Clone)]
 pub struct FishyClient {

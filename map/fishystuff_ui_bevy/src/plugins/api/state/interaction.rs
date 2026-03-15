@@ -1,4 +1,5 @@
 use fishystuff_api::models::zone_stats::ZoneStatsResponse;
+use fishystuff_api::Rgb;
 
 use crate::prelude::*;
 
@@ -29,7 +30,7 @@ pub struct HoverLayerSample {
     pub layer_id: String,
     pub layer_name: String,
     pub kind: String,
-    pub rgb: (u8, u8, u8),
+    pub rgb: Rgb,
     pub rgb_u32: u32,
 }
 
@@ -37,7 +38,7 @@ pub struct HoverLayerSample {
 pub struct HoverInfo {
     pub map_px: i32,
     pub map_py: i32,
-    pub rgb: Option<(u8, u8, u8)>,
+    pub rgb: Option<Rgb>,
     pub rgb_u32: Option<u32>,
     pub zone_name: Option<String>,
     pub world_x: f64,
@@ -49,7 +50,7 @@ pub struct HoverInfo {
 pub struct SelectedInfo {
     pub map_px: i32,
     pub map_py: i32,
-    pub rgb: (u8, u8, u8),
+    pub rgb: Rgb,
     pub rgb_u32: u32,
     pub zone_name: Option<String>,
     pub world_x: f64,

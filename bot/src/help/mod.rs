@@ -9,9 +9,9 @@ enum HelpTopic {
     #[strum(serialize = "Mystical Fish")]
     Mystical,
     #[strum(serialize = "Durability Reduction Resistance (DRR)")]
-    DRR,
+    Drr,
     #[strum(serialize = "DRR Pets")]
-    DRRPets,
+    DrrPets,
     #[strum(serialize = "Experience")]
     Experience,
     #[strum(serialize = "Gear")]
@@ -45,8 +45,8 @@ pub async fn help(
     match HelpTopic::from_str(topic.as_str()) {
         Ok(topic) => match topic {
             HelpTopic::Mystical => help_mystical(ctx).await,
-            HelpTopic::DRR => help_drr(ctx).await,
-            HelpTopic::DRRPets => help_drr_pets(ctx).await,
+            HelpTopic::Drr => help_drr(ctx).await,
+            HelpTopic::DrrPets => help_drr_pets(ctx).await,
             HelpTopic::Experience => help_experience(ctx).await,
             HelpTopic::Gear => help_gear(ctx).await,
             HelpTopic::Map => help_map(ctx).await,

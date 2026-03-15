@@ -272,7 +272,7 @@ pub(crate) fn start_tile_requests(
     let mut detail_started_by_layer: HashMap<LayerId, usize> = HashMap::new();
     while started < streamer.max_new_requests_per_frame && streamer.inflight < streamer.max_inflight
     {
-        let Some(req) = streamer.next() else {
+        let Some(req) = streamer.next_request() else {
             break;
         };
         if cache.contains(&req.key) {

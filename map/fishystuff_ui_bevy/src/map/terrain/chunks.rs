@@ -31,18 +31,13 @@ impl TerrainChunkKey {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum TerrainChunkState {
+    #[default]
     NotRequested,
     Building,
     Ready,
     Failed,
-}
-
-impl Default for TerrainChunkState {
-    fn default() -> Self {
-        Self::NotRequested
-    }
 }
 
 pub fn chunk_span_map_px(chunk_map_px: u32, level: u8) -> u32 {

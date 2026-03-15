@@ -223,18 +223,8 @@ pub(super) fn sync_search_tags(
                     border_radius: BorderRadius::all(Val::Px(999.0)),
                     ..default()
                 },
-                BackgroundColor(Color::srgba(
-                    120.0 / 255.0,
-                    180.0 / 255.0,
-                    255.0 / 255.0,
-                    0.14,
-                )),
-                BorderColor::all(Color::srgba(
-                    120.0 / 255.0,
-                    180.0 / 255.0,
-                    255.0 / 255.0,
-                    0.42,
-                )),
+                BackgroundColor(Color::srgba(120.0 / 255.0, 180.0 / 255.0, 1.0, 0.14)),
+                BorderColor::all(Color::srgba(120.0 / 255.0, 180.0 / 255.0, 1.0, 0.42)),
                 ClassList::new("search-tag"),
             ))
             .with_children(|tag| {
@@ -399,9 +389,6 @@ pub(super) fn apply_fish_selection(
     }
 }
 
-pub(super) fn apply_search_filters_to_ui(
-    search: &SearchState,
-    fish_filter: &mut FishFilterState,
-) {
+pub(super) fn apply_search_filters_to_ui(search: &SearchState, fish_filter: &mut FishFilterState) {
     fish_filter.selected_fish_ids = search.selected_fish_ids.clone();
 }

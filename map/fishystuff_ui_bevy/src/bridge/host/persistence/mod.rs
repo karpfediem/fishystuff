@@ -10,5 +10,5 @@ pub(in crate::bridge::host) use self::patches::{
     apply_patch_range_override, current_patch_range_ids,
 };
 pub(in crate::bridge::host) use self::view::{
-    apply_restored_view, contract_view_mode, rgb_u32_to_tuple, view_mode_from_contract,
+    apply_restored_view, contract_view_mode, view_mode_from_contract,
 };

@@ -36,7 +36,7 @@ pub struct WatermapConfig {
     pub transform: WatermapTransform,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct WatermapTransform {
     pub kind: Option<String>,
     pub sx: Option<f64>,
@@ -50,24 +50,7 @@ pub struct WatermapTransform {
     pub map_pixel_center_offset: Option<f64>,
 }
 
-impl Default for WatermapTransform {
-    fn default() -> Self {
-        Self {
-            kind: None,
-            sx: None,
-            sy: None,
-            ox: None,
-            oy: None,
-            world_left: None,
-            world_right: None,
-            world_bottom: None,
-            world_top: None,
-            map_pixel_center_offset: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Defaults {
     pub tile_px: Option<u32>,
     pub sigma_tiles: Option<f64>,
@@ -77,20 +60,7 @@ pub struct Defaults {
     pub map_version: Option<String>,
 }
 
-impl Default for Defaults {
-    fn default() -> Self {
-        Self {
-            tile_px: None,
-            sigma_tiles: None,
-            half_life_days: None,
-            alpha0: None,
-            top_k: None,
-            map_version: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Thresholds {
     pub stale_days: Option<f64>,
     pub ess: Option<f64>,
@@ -100,34 +70,11 @@ pub struct Thresholds {
     pub drift_min_ess: Option<f64>,
 }
 
-impl Default for Thresholds {
-    fn default() -> Self {
-        Self {
-            stale_days: None,
-            ess: None,
-            drift_jsd: None,
-            drift_prob: None,
-            drift_samples: None,
-            drift_min_ess: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ServerCache {
     pub zone_stats_max_entries: Option<usize>,
     pub effort_grid_max_entries: Option<usize>,
     pub log: Option<bool>,
-}
-
-impl Default for ServerCache {
-    fn default() -> Self {
-        Self {
-            zone_stats_max_entries: None,
-            effort_grid_max_entries: None,
-            log: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -232,9 +179,8 @@ fn assign_path(paths: &mut Paths, key: &str, value: &str) {
 }
 
 fn assign_watermap(watermap: &mut WatermapConfig, key: &str, value: &str) {
-    match key {
-        "path" => watermap.path = Some(value.to_string()),
-        _ => {}
+    if key == "path" {
+        watermap.path = Some(value.to_string());
     }
 }
 
@@ -298,9 +244,8 @@ fn assign_cache(cache: &mut ServerCache, key: &str, value: &str) -> Result<()> {
 }
 
 fn assign_server(server: &mut ServerConfig, key: &str, value: &str) {
-    match key {
-        "cors_allowed_origins" => server.cors_allowed_origins = Some(value.to_string()),
-        _ => {}
+    if key == "cors_allowed_origins" {
+        server.cors_allowed_origins = Some(value.to_string());
     }
 }
 

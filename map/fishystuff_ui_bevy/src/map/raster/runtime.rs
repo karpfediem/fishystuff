@@ -96,10 +96,10 @@ fn update_tiles(
         &mut tile_ctx.8,
     );
 
-    layer_runtime.sync_to_registry(&layer_registry);
+    layer_runtime.sync_to_registry(layer_registry);
 
     if layer_registry.is_changed() {
-        cache.clear_all(&mut commands, &mut images);
+        cache.clear_all(&mut commands, images);
         view_state.per_layer.clear();
         streamer.clear();
         manifests.clear();
@@ -122,7 +122,7 @@ fn update_tiles(
             if layer.tile_url_template.contains("{map_version}")
                 || layer.tileset_url.contains("{map_version}")
             {
-                cache.clear_layer(layer.id, &mut commands, &mut images);
+                cache.clear_layer(layer.id, &mut commands, images);
                 view_state.per_layer.remove(&layer.id);
                 streamer.clear_layer(layer.id);
                 manifests.remove_layer(layer.id);
@@ -357,8 +357,8 @@ fn update_tiles(
         streamer,
         cache,
         &asset_server,
-        &layer_registry,
-        &layer_runtime,
+        layer_registry,
+        layer_runtime,
         residency,
         motion_state.unstable,
         stats,
@@ -366,12 +366,12 @@ fn update_tiles(
 
     cache.update_loaded(
         &mut commands,
-        &mut images,
-        &mut meshes,
-        &mut materials,
+        images,
+        meshes,
+        materials,
         &asset_server,
-        &layer_registry,
-        &layer_runtime,
+        layer_registry,
+        layer_runtime,
         map_to_world,
         view_mode.mode,
         residency,
@@ -380,9 +380,9 @@ fn update_tiles(
 
     let visible_by_layer = cache.update_visibility(
         &mut commands,
-        &mut materials,
-        &layer_registry,
-        &layer_runtime,
+        materials,
+        layer_registry,
+        layer_runtime,
         residency,
         frame,
         motion_state.unstable,
@@ -390,24 +390,18 @@ fn update_tiles(
     );
 
     cache.sync_visual_filters(
-        &mut images,
+        images,
         &mut commands,
         &evidence_zone_filter,
         display_state.hovered_zone_rgb,
-        &layer_registry,
-        &layer_runtime,
+        layer_registry,
+        layer_runtime,
         &vector_runtime,
         bootstrap.map_version.as_deref(),
         view_mode.mode,
     );
     if any_zoom_level_changed && !debug_controls.disable_eviction {
-        cache.evict(
-            &mut commands,
-            &mut images,
-            stats,
-            residency,
-            &layer_registry,
-        );
+        cache.evict(&mut commands, images, stats, residency, layer_registry);
     }
 
     let mut total_visible = 0_u32;

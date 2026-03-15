@@ -201,7 +201,7 @@ fn header_idx_opt(map: &HashMap<String, usize>, names: &[&str]) -> Option<usize>
 }
 
 fn opt_field(record: &StringRecord, idx: Option<usize>) -> Option<String> {
-    let Some(idx) = idx else { return None };
+    let idx = idx?;
     let val = record.get(idx)?.trim();
     if val.is_empty() {
         return None;

@@ -10,6 +10,8 @@ use image::imageops::{overlay, resize, FilterType};
 use image::{ImageReader, Rgba, RgbaImage};
 use serde::Serialize;
 
+type ParentChildren = Vec<(i32, i32, u32, u32)>;
+
 #[derive(Parser, Debug)]
 #[command(name = "fishystuff_minimap_pyramid")]
 #[command(about = "Build a multi-resolution minimap tile pyramid and tileset manifest")]
@@ -165,7 +167,7 @@ fn build_next_level(
 ) -> Result<HashSet<(i32, i32)>> {
     fs::create_dir_all(next_dir).with_context(|| format!("create {}", next_dir.display()))?;
 
-    let mut parents: HashMap<(i32, i32), Vec<(i32, i32, u32, u32)>> = HashMap::new();
+    let mut parents: HashMap<(i32, i32), ParentChildren> = HashMap::new();
     for &(x, y) in prev_coords {
         let (px, py, qx, qy) = tile_parent_quadrant(x, y);
         parents.entry((px, py)).or_default().push((x, y, qx, qy));

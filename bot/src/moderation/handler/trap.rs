@@ -195,8 +195,8 @@ pub async fn trap_event_handler(
 /// Pick a playful phrase for the sticker reply.
 fn pick_phrase() -> &'static str {
     use rand::Rng as _;
-    let mut rng = rand::thread_rng();
-    let i = rng.gen_range(0..PHRASES.len());
+    let mut rng = rand::rng();
+    let i = rng.random_range(0..PHRASES.len());
     PHRASES[i]
 }
 

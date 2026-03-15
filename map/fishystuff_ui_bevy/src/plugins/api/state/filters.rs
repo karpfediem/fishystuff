@@ -6,7 +6,7 @@ pub type Patch = PatchInfo;
 pub const POINT_ICON_SCALE_MIN: f32 = 1.0;
 pub const POINT_ICON_SCALE_MAX: f32 = 3.0;
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct PatchFilterState {
     pub from_ts: Option<i64>,
     pub to_ts: Option<i64>,
@@ -14,28 +14,9 @@ pub struct PatchFilterState {
     pub selected_patch: Option<String>,
 }
 
-impl Default for PatchFilterState {
-    fn default() -> Self {
-        Self {
-            from_ts: None,
-            to_ts: None,
-            patches: Vec::new(),
-            selected_patch: None,
-        }
-    }
-}
-
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct FishFilterState {
     pub selected_fish_ids: Vec<i32>,
-}
-
-impl Default for FishFilterState {
-    fn default() -> Self {
-        Self {
-            selected_fish_ids: Vec::new(),
-        }
-    }
 }
 
 #[derive(Resource)]

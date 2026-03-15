@@ -6,7 +6,6 @@ use poise::serenity_prelude::{ChannelId, Http};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing_subscriber::fmt::format;
 
 pub mod notify;
 pub mod purge;

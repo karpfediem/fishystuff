@@ -11,7 +11,7 @@ pub(super) fn update_selected_text(
         return;
     };
     if let Some(info) = &selection.info {
-        text.0 = format!("RGB: {},{}, {}", info.rgb.0, info.rgb.1, info.rgb.2);
+        text.0 = format!("RGB: {},{}, {}", info.rgb.r, info.rgb.g, info.rgb.b);
     } else {
         text.0 = "RGB: (none)".to_string();
     }

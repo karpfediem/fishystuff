@@ -29,6 +29,14 @@ pub struct Rgb {
 pub struct RgbKey(pub String);
 
 impl Rgb {
+    pub const fn new(r: u8, g: u8, b: u8) -> Self {
+        Self { r, g, b }
+    }
+
+    pub const fn as_array(self) -> [u8; 3] {
+        [self.r, self.g, self.b]
+    }
+
     pub fn to_u32(self) -> u32 {
         ((self.r as u32) << 16) | ((self.g as u32) << 8) | self.b as u32
     }
@@ -43,6 +51,18 @@ impl Rgb {
 
     pub fn key(self) -> RgbKey {
         RgbKey(format!("{},{},{}", self.r, self.g, self.b))
+    }
+}
+
+impl From<(u8, u8, u8)> for Rgb {
+    fn from((r, g, b): (u8, u8, u8)) -> Self {
+        Self::new(r, g, b)
+    }
+}
+
+impl From<[u8; 3]> for Rgb {
+    fn from([r, g, b]: [u8; 3]) -> Self {
+        Self::new(r, g, b)
     }
 }
 

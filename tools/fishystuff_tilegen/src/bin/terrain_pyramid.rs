@@ -281,7 +281,10 @@ fn build_terrain_pyramid(args: BuildTerrainPyramidArgs) -> Result<()> {
     if args.map_width < 2 || args.map_height < 2 {
         bail!("--map-width and --map-height must be >= 2");
     }
-    if !(args.bbox_y_max > args.bbox_y_min) {
+    if !matches!(
+        args.bbox_y_max.partial_cmp(&args.bbox_y_min),
+        Some(std::cmp::Ordering::Greater)
+    ) {
         bail!("bbox range must be strictly increasing");
     }
 

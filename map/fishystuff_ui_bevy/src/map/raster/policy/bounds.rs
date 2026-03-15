@@ -55,7 +55,8 @@ pub(crate) fn compute_desired_layer_tiles(
     if layer.lod_policy.enable_refine {
         if let Some(base_bounds) = base {
             if base_bounds.z > 0 {
-                let debounce_frames = (layer.lod_policy.refine_debounce_ms.max(1) as u64 + 15) / 16;
+                let debounce_frames =
+                    (layer.lod_policy.refine_debounce_ms.max(1) as u64).div_ceil(16);
                 if frame.saturating_sub(runtime.last_view_update_frame) >= debounce_frames {
                     let detail_z = base_bounds.z - 1;
                     if let Some(level) = tileset.level(detail_z) {
@@ -158,8 +159,7 @@ fn choose_bounds_with_hysteresis(
             .or_else(|| {
                 candidates
                     .iter()
-                    .filter(|(bounds, _)| bounds.z >= current.z)
-                    .next_back()
+                    .rfind(|(bounds, _)| bounds.z >= current.z)
                     .copied()
             })
             .unwrap_or(ideal);

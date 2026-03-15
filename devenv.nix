@@ -8,6 +8,13 @@ let
   cdnPort = "4040";
   siteHost = "127.0.0.1";
   sitePort = "1990";
+  rustHookToolchain = pkgs.symlinkJoin {
+    name = "fishystuff-rust-hook-toolchain";
+    paths = [
+      config.languages.rust.toolchainPackage
+      pkgs.stdenv.cc
+    ];
+  };
 in {
   name = "default";
 
@@ -66,15 +73,15 @@ in {
       rustfmt = {
         enable = true;
         packageOverrides = {
-          cargo = config.languages.rust.toolchainPackage;
-          rustfmt = config.languages.rust.toolchainPackage;
+          cargo = rustHookToolchain;
+          rustfmt = rustHookToolchain;
         };
       };
       clippy = {
         enable = true;
         packageOverrides = {
-          cargo = config.languages.rust.toolchainPackage;
-          clippy = config.languages.rust.toolchainPackage;
+          cargo = rustHookToolchain;
+          clippy = rustHookToolchain;
         };
       };
     };

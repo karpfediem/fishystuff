@@ -13,7 +13,7 @@ pub fn validate_polygon_piece(piece: &PolygonPiece) -> Result<(), String> {
     if piece.positions.len() < 3 {
         return Err("polygon piece has fewer than 3 vertices".to_string());
     }
-    if piece.indices.len() < 3 || piece.indices.len() % 3 != 0 {
+    if piece.indices.len() < 3 || !piece.indices.len().is_multiple_of(3) {
         return Err("polygon piece has invalid triangle index count".to_string());
     }
     for index in &piece.indices {

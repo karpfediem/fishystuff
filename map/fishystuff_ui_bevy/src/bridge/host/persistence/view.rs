@@ -48,11 +48,3 @@ pub(in crate::bridge::host) fn view_mode_from_contract(mode: FishyMapViewMode) -
         FishyMapViewMode::ThreeD => ViewMode::Terrain3D,
     }
 }
-
-pub(in crate::bridge::host) fn rgb_u32_to_tuple(value: u32) -> (u8, u8, u8) {
-    (
-        ((value >> 16) & 0xff) as u8,
-        ((value >> 8) & 0xff) as u8,
-        (value & 0xff) as u8,
-    )
-}

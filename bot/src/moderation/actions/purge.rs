@@ -1,16 +1,5 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
-
-use tokio::time::sleep;
-
 use poise::serenity_prelude as serenity;
 use poise::serenity_prelude::{ChannelId, Http};
-
-use crate::moderation::actions::{notify, ModeratorActions};
-use crate::moderation::index::{DashRecentIndex, RecentIndex};
-use crate::moderation::types::{PerChannelTargets, PurgeParams, PurgeStats};
 
 #[async_trait::async_trait]
 pub trait Purger: Send + Sync {

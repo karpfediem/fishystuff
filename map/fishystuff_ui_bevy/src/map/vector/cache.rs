@@ -250,6 +250,10 @@ impl VectorFinishedCache {
         self.entries.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     pub fn layer_len(&self, layer_id: LayerId) -> usize {
         self.entries
             .keys()

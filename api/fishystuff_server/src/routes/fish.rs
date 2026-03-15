@@ -36,10 +36,7 @@ pub async fn list_fish(
     .map_err(|err| map_request_id(err, &request_id))?;
 
     let mut response_headers = HeaderMap::new();
-    response_headers.insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("no-store"),
-    );
+    response_headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
 
     if is_datastar_request(&headers) {
         response_headers.insert(

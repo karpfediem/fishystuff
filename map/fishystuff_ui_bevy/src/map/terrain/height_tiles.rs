@@ -189,17 +189,14 @@ fn sample_rgb_texel(
     let local_x = src_x.rem_euclid(tile_size) as u32;
     let local_y = src_y.rem_euclid(tile_size) as u32;
 
-    if !cache.contains_key(&key) {
+    if let std::collections::hash_map::Entry::Vacant(entry) = cache.entry(key) {
         if !load_budget.try_take() {
             return Err(HeightTileSampleError::MissingTile(key));
         }
-        cache.insert(
-            key,
-            HeightTileEntry {
-                state: HeightTileState::Pending(spawn_height_tile_request(config, key)),
-                last_touched: frame,
-            },
-        );
+        entry.insert(HeightTileEntry {
+            state: HeightTileState::Pending(spawn_height_tile_request(config, key)),
+            last_touched: frame,
+        });
     }
 
     let Some(entry) = cache.get_mut(&key) else {

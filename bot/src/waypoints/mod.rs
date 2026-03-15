@@ -36,12 +36,7 @@ fn validate_path(user_path: &Path, base_path: &Path) -> Result<PathBuf, Error> {
         return Err("Directories don't exist!".into());
     }
 
-    if user.starts_with(&base) {
-        Ok(user)
-    } else if user
-        .canonicalize()
-        .is_ok_and(|abs| abs.starts_with("/nix/store/"))
-    {
+    if user.starts_with(&base) || user.starts_with("/nix/store/") {
         Ok(user)
     } else {
         Err("Access denied: path traversal attempt detected.".into())
@@ -77,12 +72,8 @@ pub async fn waypoints(
         fs::read_to_string(&xml_path).unwrap_or_else(|_| "<Failed to read XML>".to_string());
 
     let name_encoded = urlencoding::encode(name.as_str());
-    let thumb_url = format!(
-        "{}Bookmark/{}/Preview.webp",
-        BASE_URL.to_string(),
-        name_encoded
-    );
-    let waypoint_readme_url = format!("{}Bookmark/{}#readme", BASE_URL.to_string(), name_encoded);
+    let thumb_url = format!("{}Bookmark/{}/Preview.webp", BASE_URL, name_encoded);
+    let waypoint_readme_url = format!("{}Bookmark/{}#readme", BASE_URL, name_encoded);
 
     ctx.send(create_waypoint_reply(
         name,
@@ -126,15 +117,9 @@ pub async fn fish(
     let name_encoded = urlencoding::encode(name.as_str());
     let thumb_url = format!(
         "{}FishBookmark/{}/{}_0_Preview.webp",
-        BASE_URL.to_string(),
-        name_encoded,
-        name_encoded
+        BASE_URL, name_encoded, name_encoded
     );
-    let waypoint_readme_url = format!(
-        "{}FishBookmark/{}#readme",
-        BASE_URL.to_string(),
-        name_encoded
-    );
+    let waypoint_readme_url = format!("{}FishBookmark/{}#readme", BASE_URL, name_encoded);
 
     ctx.send(create_waypoint_reply(
         name,

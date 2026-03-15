@@ -157,9 +157,10 @@ fn configure_common_layers(world: &mut World, show_points: bool, allow_vector: b
 fn set_map_2d_view(world: &mut World, map_x: f32, map_y: f32, zoom: f32) {
     let map_to_world = MapToWorld::default();
     let world_point = map_to_world.map_to_world(MapPoint::new(map_x as f64, map_y as f64));
-    let mut mode = world.resource_mut::<ViewModeState>();
-    mode.mode = ViewMode::Map2D;
-    drop(mode);
+    {
+        let mut mode = world.resource_mut::<ViewModeState>();
+        mode.mode = ViewMode::Map2D;
+    }
 
     let mut view = world.resource_mut::<Map2dViewState>();
     view.center_world_x = world_point.x as f32;
@@ -177,10 +178,11 @@ fn set_terrain_view(
 ) {
     let map_to_world = MapToWorld::default();
     let world_point = map_to_world.map_to_world(MapPoint::new(map_x as f64, map_y as f64));
-    let mut mode = world.resource_mut::<ViewModeState>();
-    mode.mode = ViewMode::Terrain3D;
-    mode.terrain_initialized = true;
-    drop(mode);
+    {
+        let mut mode = world.resource_mut::<ViewModeState>();
+        mode.mode = ViewMode::Terrain3D;
+        mode.terrain_initialized = true;
+    }
 
     let mut view = world.resource_mut::<Terrain3dViewState>();
     view.pivot_world.x = world_point.x as f32;

@@ -52,17 +52,9 @@ pub struct TileStats {
     pub(crate) last_log: f64,
 }
 
-#[derive(Resource, Debug, Clone, Copy)]
+#[derive(Resource, Debug, Clone, Copy, Default)]
 pub struct TileDebugControls {
     pub disable_eviction: bool,
-}
-
-impl Default for TileDebugControls {
-    fn default() -> Self {
-        Self {
-            disable_eviction: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +122,10 @@ impl Default for RasterTileCache {
 impl RasterTileCache {
     pub fn len(&self) -> usize {
         self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
     }
 
     pub fn contains(&self, key: &TileKey) -> bool {

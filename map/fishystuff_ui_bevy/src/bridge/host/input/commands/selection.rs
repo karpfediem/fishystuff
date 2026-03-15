@@ -1,4 +1,5 @@
-use super::super::super::persistence::rgb_u32_to_tuple;
+use fishystuff_api::Rgb;
+
 use crate::plugins::api::{
     build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, PatchFilterState,
     PendingRequests, SelectionState,
@@ -11,7 +12,7 @@ pub(super) fn apply_zone_selection_command(
     pending: &mut PendingRequests,
     zone_rgb: u32,
 ) {
-    let rgb = rgb_u32_to_tuple(zone_rgb);
+    let rgb = Rgb::from_u32(zone_rgb);
     selection.info = Some(crate::plugins::api::SelectedInfo {
         map_px: 0,
         map_py: 0,

@@ -2,7 +2,6 @@
 //! Side-effect free: no forwarding, no deletion.
 
 use std::collections::{HashMap, VecDeque};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::moderation::now_unix;
 use dashmap::DashMap;

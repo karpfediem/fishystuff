@@ -72,8 +72,8 @@ fn validate_dimensions(
 
 fn write_tiles(img: &DynamicImage, out_dir: &Path, tile_size: u32) -> Result<()> {
     let (width, height) = img.dimensions();
-    let tiles_x = (width + tile_size - 1) / tile_size;
-    let tiles_y = (height + tile_size - 1) / tile_size;
+    let tiles_x = width.div_ceil(tile_size);
+    let tiles_y = height.div_ceil(tile_size);
 
     fs::create_dir_all(out_dir)
         .with_context(|| format!("create tile dir: {}", out_dir.display()))?;

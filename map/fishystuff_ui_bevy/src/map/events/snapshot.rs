@@ -11,18 +11,13 @@ use super::index::{LocalEventQuery, SpatialIndex, ViewSelection, SPATIAL_BUCKET_
 pub const META_RECHECK_INTERVAL_SECS: f64 = 20.0;
 pub const RETRY_BACKOFF_SECS: f64 = 2.0;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SnapshotLoadKind {
+    #[default]
     None,
     NetworkInitial,
     NetworkRefetch,
     CacheReuse,
-}
-
-impl Default for SnapshotLoadKind {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl SnapshotLoadKind {

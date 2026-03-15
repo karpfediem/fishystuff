@@ -74,10 +74,12 @@ fn spawn_cameras(mut commands: Commands) {
     let center_x = ((world_bounds.min.x + world_bounds.max.x) * 0.5) as f32;
     let center_z = ((world_bounds.min.z + world_bounds.max.z) * 0.5) as f32;
     let terrain_view = reset_for_world_bounds(world_bounds);
-    let mut perspective = PerspectiveProjection::default();
-    perspective.fov = 55.0_f32.to_radians();
-    perspective.near = 1.0;
-    perspective.far = 12_000_000.0;
+    let perspective = PerspectiveProjection {
+        fov: 55.0_f32.to_radians(),
+        near: 1.0,
+        far: 12_000_000.0,
+        ..default()
+    };
 
     commands.spawn((
         Map2dCamera,

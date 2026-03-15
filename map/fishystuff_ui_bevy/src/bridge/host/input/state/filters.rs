@@ -19,10 +19,7 @@ pub(super) fn apply_display_flags(
         .clamp(POINT_ICON_SCALE_MIN, POINT_ICON_SCALE_MAX);
 }
 
-pub(super) fn apply_fish_filters(
-    input: &FishyMapInputState,
-    fish_filter: &mut FishFilterState,
-) {
+pub(super) fn apply_fish_filters(input: &FishyMapInputState, fish_filter: &mut FishFilterState) {
     fish_filter.selected_fish_ids = input.filters.fish_ids.clone();
 }
 

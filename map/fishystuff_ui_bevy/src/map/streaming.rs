@@ -85,12 +85,9 @@ impl TileStreamer {
                 RequestKind::DetailRefine => self.pending_detail.push(req),
             }
         }
-        self.pending_pick
-            .sort_by(|lhs, rhs| request_order(lhs, rhs));
-        self.pending_base
-            .sort_by(|lhs, rhs| request_order(lhs, rhs));
-        self.pending_detail
-            .sort_by(|lhs, rhs| request_order(lhs, rhs));
+        self.pending_pick.sort_by(request_order);
+        self.pending_base.sort_by(request_order);
+        self.pending_detail.sort_by(request_order);
         self.cursor_pick = 0;
         self.cursor_base = 0;
         self.last_base_layer = None;
@@ -104,12 +101,9 @@ impl TileStreamer {
             RequestKind::BaseCoverage => self.pending_base.push(request),
             RequestKind::DetailRefine => self.pending_detail.push(request),
         }
-        self.pending_pick
-            .sort_by(|lhs, rhs| request_order(lhs, rhs));
-        self.pending_base
-            .sort_by(|lhs, rhs| request_order(lhs, rhs));
-        self.pending_detail
-            .sort_by(|lhs, rhs| request_order(lhs, rhs));
+        self.pending_pick.sort_by(request_order);
+        self.pending_base.sort_by(request_order);
+        self.pending_detail.sort_by(request_order);
         self.cursor_pick = self.cursor_pick.min(self.pending_pick.len());
         self.cursor_base = self.cursor_base.min(self.pending_base.len());
         self.cursor_detail = self.cursor_detail.min(self.pending_detail.len());
@@ -127,7 +121,7 @@ impl TileStreamer {
                 .any(|req| req.key == *key)
     }
 
-    pub fn next(&mut self) -> Option<TileRequest> {
+    pub fn next_request(&mut self) -> Option<TileRequest> {
         if self.inflight >= self.max_inflight {
             return None;
         }

@@ -129,7 +129,7 @@ pub struct EffortGrid {
 
 pub fn zone_stats_to_json(stats: &ZoneStats) -> String {
     let mut out = String::new();
-    out.push_str("{");
+    out.push('{');
     out.push_str(&format!("\"zone_rgb_u32\":{},", stats.zone_rgb_u32));
     out.push_str(&format!("\"zone_rgb\":\"{}\",", stats.zone_rgb));
     match &stats.zone_name {
@@ -170,10 +170,10 @@ pub fn zone_stats_to_json(stats: &ZoneStats) -> String {
         }
         out.push_str(&format!("\"{}\"", json_escape(note)));
     }
-    out.push_str("]");
+    out.push(']');
     out.push_str(",\"drift\":");
     if let Some(drift) = &stats.confidence.drift {
-        out.push_str("{");
+        out.push('{');
         out.push_str(&format!("\"boundary_ts_utc\":{},", drift.boundary_ts_utc));
         out.push_str(&format!("\"jsd_mean\":{},", drift.jsd_mean));
         out.push_str(&format!("\"p_drift\":{},", drift.p_drift));
@@ -181,7 +181,7 @@ pub fn zone_stats_to_json(stats: &ZoneStats) -> String {
         out.push_str(&format!("\"ess_new\":{},", drift.ess_new));
         out.push_str(&format!("\"samples\":{},", drift.samples));
         out.push_str(&format!("\"jsd_threshold\":{}", drift.jsd_threshold));
-        out.push_str("}");
+        out.push('}');
     } else {
         out.push_str("null");
     }
@@ -191,7 +191,7 @@ pub fn zone_stats_to_json(stats: &ZoneStats) -> String {
         if i > 0 {
             out.push(',');
         }
-        out.push_str("{");
+        out.push('{');
         out.push_str(&format!("\"fish_id\":{},", fish.fish_id));
         match &fish.fish_name {
             Some(name) => out.push_str(&format!("\"fish_name\":\"{}\",", json_escape(name))),
@@ -207,16 +207,16 @@ pub fn zone_stats_to_json(stats: &ZoneStats) -> String {
             Some(v) => out.push_str(&format!("\"ci_high\":{}", v)),
             None => out.push_str("\"ci_high\":null"),
         }
-        out.push_str("}");
+        out.push('}');
     }
-    out.push_str("]");
-    out.push_str("}");
+    out.push(']');
+    out.push('}');
     out
 }
 
 pub fn effort_grid_to_json(grid: &EffortGrid) -> String {
     let mut out = String::new();
-    out.push_str("{");
+    out.push('{');
     out.push_str(&format!("\"tile_px\":{},", grid.tile_px));
     out.push_str(&format!("\"grid_w\":{},", grid.grid_w));
     out.push_str(&format!("\"grid_h\":{},", grid.grid_h));
@@ -228,8 +228,8 @@ pub fn effort_grid_to_json(grid: &EffortGrid) -> String {
         }
         out.push_str(&format!("{v}"));
     }
-    out.push_str("]");
-    out.push_str("}");
+    out.push(']');
+    out.push('}');
     out
 }
 

@@ -48,11 +48,8 @@ fn sample_raster_clip_mask(
     let (map_version_id, _) = layer_map_version(layer, map_version)?;
     let layer_ix = layer_px.x.floor() as u32;
     let layer_iy = layer_px.y.floor() as u32;
-    let Some([r, g, b, a]) =
-        sample_ready_raster_rgba(layer, map_version_id, layer_ix, layer_iy, tile_cache)
-    else {
-        return None;
-    };
+    let [r, g, b, a] =
+        sample_ready_raster_rgba(layer, map_version_id, layer_ix, layer_iy, tile_cache)?;
     if a == 0 {
         return Some(false);
     }

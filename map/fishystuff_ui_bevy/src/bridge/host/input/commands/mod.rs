@@ -5,9 +5,7 @@ use crate::bridge::host::BrowserBridgeState;
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::ViewModeState;
 use crate::map::camera::terrain3d::Terrain3dViewState;
-use crate::plugins::api::{
-    ApiBootstrapState, PatchFilterState, PendingRequests, SelectionState,
-};
+use crate::plugins::api::{ApiBootstrapState, PatchFilterState, PendingRequests, SelectionState};
 use crate::plugins::camera::CameraZoomBounds;
 use crate::prelude::*;
 

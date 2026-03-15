@@ -1,7 +1,7 @@
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
-use fishystuff_core::masks::pack_rgb_u32;
+use fishystuff_api::Rgb;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
@@ -263,7 +263,7 @@ fn sample_hover_layer(
     } else {
         return None;
     };
-    let rgb_u32 = pack_rgb_u32(rgb.0, rgb.1, rgb.2);
+    let rgb_u32 = rgb.to_u32();
     Some(HoverLayerSample {
         layer_id: layer.key.clone(),
         layer_name: layer.name.clone(),
@@ -284,7 +284,7 @@ fn sample_raster_layer_rgb(
     bootstrap: &ApiBootstrapState,
     world_point: WorldPoint,
     map_to_world: MapToWorld,
-) -> Option<(u8, u8, u8)> {
+) -> Option<Rgb> {
     let world_transform = layer.world_transform(map_to_world)?;
     let layer_px = world_transform.world_to_layer(world_point);
     if layer_px.x < 0.0 || layer_px.y < 0.0 {
@@ -325,7 +325,11 @@ fn sample_raster_layer_rgb(
     if idx + 3 >= tile.data.len() || tile.data[idx + 3] == 0 {
         return None;
     }
-    Some((tile.data[idx], tile.data[idx + 1], tile.data[idx + 2]))
+    Some(Rgb::new(
+        tile.data[idx],
+        tile.data[idx + 1],
+        tile.data[idx + 2],
+    ))
 }
 
 fn sample_vector_layer_rgb(
@@ -333,12 +337,12 @@ fn sample_vector_layer_rgb(
     vector_runtime: &VectorLayerRuntime,
     registry_map_version_id: Option<&str>,
     world_point: WorldPoint,
-) -> Option<(u8, u8, u8)> {
+) -> Option<Rgb> {
     let source = layer.vector_source.as_ref()?;
     let revision = resolved_vector_revision(source, registry_map_version_id);
     let bundle = vector_runtime.finished.get_ref(&(layer.id, revision))?;
     let rgba = bundle.sample_rgb(world_point.x as f32, world_point.z as f32)?;
-    Some((rgba[0], rgba[1], rgba[2]))
+    Some(Rgb::new(rgba[0], rgba[1], rgba[2]))
 }
 
 fn resolved_vector_revision(

@@ -7,6 +7,7 @@ mod util;
 use async_channel::Receiver;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
+use fishystuff_api::Rgb;
 
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::terrain::Terrain3dConfig;
@@ -95,7 +96,7 @@ pub fn now_utc_seconds() -> i64 {
 pub fn build_zone_stats_request(
     bootstrap: &ApiBootstrapState,
     patch_filter: &PatchFilterState,
-    rgb: (u8, u8, u8),
+    rgb: Rgb,
 ) -> Option<ZoneStatsRequest> {
     util::build_zone_stats_request(bootstrap, patch_filter, rgb)
 }

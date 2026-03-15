@@ -410,12 +410,9 @@ pub fn vector_pipeline_build(fixture: &VectorBenchFixture) -> usize {
         max_chunk_vertices: 20_000,
         max_chunk_triangles: 24_000,
     };
-    loop {
-        match advance_job(&mut job, MapToWorld::default(), limits).expect("advance vector job") {
-            AdvanceResult::InProgress => {}
-            AdvanceResult::Complete => break,
-        }
-    }
+    while let AdvanceResult::InProgress =
+        advance_job(&mut job, MapToWorld::default(), limits).expect("advance vector job")
+    {}
     finalize_job(job, limits).stats.triangle_count as usize
 }
 
@@ -458,8 +455,10 @@ fn runtime_state_for(layer: &LayerSpec) -> LayerRuntimeState {
 }
 
 fn cache_from_fixture(fixture: &RasterBenchFixture) -> RasterTileCache {
-    let mut cache = RasterTileCache::default();
-    cache.use_counter = 50_000;
+    let mut cache = RasterTileCache {
+        use_counter: 50_000,
+        ..Default::default()
+    };
     for (key, last_used) in &fixture.cache_entries {
         cache.entries.insert(
             *key,

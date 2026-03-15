@@ -76,7 +76,6 @@ pub fn load_bytes(path: &str) -> Result<Vec<u8>, String> {
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| ".".into()))
                 .join(resolved)
         };
-        return std::fs::read(&resolved)
-            .map_err(|err| format!("read {}: {}", resolved.display(), err));
+        std::fs::read(&resolved).map_err(|err| format!("read {}: {}", resolved.display(), err))
     }
 }

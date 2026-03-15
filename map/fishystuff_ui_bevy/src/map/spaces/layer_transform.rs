@@ -76,7 +76,7 @@ impl TileSpace {
     }
 
     pub fn tile_span_px(self, level: i32) -> Option<f64> {
-        if level < 0 || level > 30 || self.tile_px == 0 {
+        if !(0..=30).contains(&level) || self.tile_px == 0 {
             return None;
         }
         let scale = 1_i64.checked_shl(level as u32)? as f64;

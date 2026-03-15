@@ -1,7 +1,8 @@
-use fishystuff_api::ids::{MapVersionId, RgbKey};
+use fishystuff_api::ids::MapVersionId;
 use fishystuff_api::models::layers::LayersResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::ZoneStatsRequest;
+use fishystuff_api::Rgb;
 use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use super::super::state::{ApiBootstrapState, PatchFilterState};
@@ -47,17 +48,17 @@ pub(super) fn now_utc_seconds() -> i64 {
     {
         use std::time::{SystemTime, UNIX_EPOCH};
 
-        return SystemTime::now()
+        SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|value| value.as_secs() as i64)
-            .unwrap_or_default();
+            .unwrap_or_default()
     }
 }
 
 pub(super) fn build_zone_stats_request(
     bootstrap: &ApiBootstrapState,
     patch_filter: &PatchFilterState,
-    rgb: (u8, u8, u8),
+    rgb: Rgb,
 ) -> Option<ZoneStatsRequest> {
     let defaults = bootstrap.defaults.as_ref()?;
     let map_version = bootstrap.map_version.as_ref()?;
@@ -70,7 +71,7 @@ pub(super) fn build_zone_stats_request(
         patch_id: None,
         at_ts_utc: None,
         map_version_id: Some(MapVersionId(map_version.clone())),
-        rgb: RgbKey(format!("{},{},{}", rgb.0, rgb.1, rgb.2)),
+        rgb: rgb.key(),
         from_ts_utc: from_ts,
         to_ts_utc: to_ts,
         tile_px: defaults.tile_px,
