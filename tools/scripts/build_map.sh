@@ -48,8 +48,6 @@ WASM_BUNDLE_PATH="$CDN_MAP_ASSET_DIR/$WASM_BUNDLE_FILE"
 rm -f \
   "$CDN_MAP_ASSET_DIR/fishystuff_ui_bevy.js" \
   "$CDN_MAP_ASSET_DIR/fishystuff_ui_bevy_bg.wasm" \
-  "$CDN_MAP_ASSET_DIR"/fishystuff_ui_bevy.*.js \
-  "$CDN_MAP_ASSET_DIR"/fishystuff_ui_bevy_bg.*.wasm \
   "$CDN_MAP_ASSET_DIR/runtime-manifest.json"
 
 cp -f "$WASM_BUNDLE_INPUT" "$WASM_BUNDLE_PATH"

@@ -11,6 +11,9 @@ Supported local profiles:
 - `api`
   - `FISHYSTUFF_DATABASE_URL`
 - `cdn`
+  - `BUNNY_STORAGE_ENDPOINT`
+  - `BUNNY_STORAGE_ZONE`
+  - `BUNNY_STORAGE_ACCESS_KEY`
   - `BUNNY_FTP_HOST`
   - `BUNNY_FTP_PORT`
   - `BUNNY_FTP_USER`

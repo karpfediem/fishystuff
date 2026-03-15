@@ -28,7 +28,6 @@ in {
       gawk
       hyperfine
       jq
-      lftp
       libX11
       libXcursor
       libXext

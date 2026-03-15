@@ -37,8 +37,8 @@ cdn-stage:
 cdn-serve:
   ./tools/scripts/run_cdn_server.sh
 
-# Push the staged CDN tree to Bunny Storage via FTP
-# Override BUNNY_FTP_PARALLEL / BUNNY_FTP_CONNECTION_LIMIT in the shell if needed.
+# Push the staged CDN tree to Bunny Storage via HTTP API.
+# Override BUNNY_STORAGE_PARALLEL (or legacy BUNNY_FTP_PARALLEL) in the shell if needed.
 cdn-push:
   secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
 
@@ -47,12 +47,11 @@ cdn-sync:
   just cdn-stage
   just cdn-push
 
-# Build the map runtime, refresh staged map assets, and push only changed CDN roots.
-# Recent hashed wasm/js bundles are retained locally so Bunny keeps them too.
+# Build the map runtime, refresh staged map assets, and push only the CDN map root.
 cdn-sync-map:
   ./tools/scripts/build_map.sh
   ./tools/scripts/stage_cdn_assets.sh
-  secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
+  BUNNY_SYNC_ROOTS=map secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
 
 # Validate that the local SecretSpec provider has the required values for a profile
 secrets-check profile="api":
