@@ -385,20 +385,10 @@
     border-color: color-mix(in oklab, var(--dex-caught) 70%, var(--color-base-content, #1f2937) 30%);
   }
 
-  .fishydex-card.is-prize {
-    background: var(--dex-prize-surface);
-    border-color: color-mix(in oklab, var(--dex-prize) 44%, var(--dex-line) 56%);
-  }
-
-  .fishydex-card.is-prize:hover,
-  .fishydex-card.is-prize:focus-within {
-    background: var(--dex-prize-surface-hover);
-  }
-
   .fishydex-card-top {
     display: flex;
     align-items: start;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 0.65rem;
   }
 
@@ -570,9 +560,39 @@
     place-items: center;
     width: 4.75rem;
     height: 4.75rem;
-    border-radius: 1.2rem;
-    border: 1px solid var(--dex-line);
-    background: var(--dex-surface-soft);
+    border-radius: 34%;
+    border: 1px solid color-mix(in oklab, var(--color-base-content, #1f2937) 18%, var(--dex-line) 82%);
+    background: var(--dex-surface-strong);
+  }
+
+  .fishydex-icon-wrap.grade-prize,
+  .fishydex-details-icon-wrap.grade-prize {
+    border-color: color-mix(in oklab, var(--dex-prize) 28%, var(--dex-line) 72%);
+  }
+
+  .fishydex-icon-wrap.grade-rare,
+  .fishydex-details-icon-wrap.grade-rare {
+    border-color: color-mix(in oklab, var(--dex-grade-rare) 28%, var(--dex-line) 72%);
+  }
+
+  .fishydex-icon-wrap.grade-highquality,
+  .fishydex-details-icon-wrap.grade-highquality {
+    border-color: color-mix(in oklab, var(--dex-grade-highquality) 28%, var(--dex-line) 72%);
+  }
+
+  .fishydex-icon-wrap.grade-general,
+  .fishydex-details-icon-wrap.grade-general {
+    border-color: color-mix(in oklab, var(--dex-grade-general) 28%, var(--dex-line) 72%);
+  }
+
+  .fishydex-icon-wrap.grade-trash,
+  .fishydex-details-icon-wrap.grade-trash {
+    border-color: color-mix(in oklab, var(--dex-grade-trash) 22%, var(--dex-line) 78%);
+  }
+
+  .fishydex-icon-wrap.grade-unknown,
+  .fishydex-details-icon-wrap.grade-unknown {
+    border-color: color-mix(in oklab, var(--dex-grade-unknown) 18%, var(--dex-line) 82%);
   }
 
   .fishydex-icon {
@@ -721,39 +741,9 @@
     place-items: center;
     width: 5.5rem;
     height: 5.5rem;
-    border-radius: 1rem;
-    border: 1px solid var(--dex-line);
-    background: var(--dex-surface-soft);
-  }
-
-  .fishydex-details-icon-wrap.grade-prize {
-    border-color: color-mix(in oklab, var(--dex-prize) 64%, var(--dex-line) 36%);
-    background: var(--dex-prize-surface);
-  }
-
-  .fishydex-details-icon-wrap.grade-rare {
-    border-color: color-mix(in oklab, var(--dex-grade-rare) 64%, var(--dex-line) 36%);
-    background: var(--dex-grade-rare-surface);
-  }
-
-  .fishydex-details-icon-wrap.grade-highquality {
-    border-color: color-mix(in oklab, var(--dex-grade-highquality) 64%, var(--dex-line) 36%);
-    background: var(--dex-grade-highquality-surface);
-  }
-
-  .fishydex-details-icon-wrap.grade-general {
-    border-color: color-mix(in oklab, var(--dex-grade-general) 64%, var(--dex-line) 36%);
-    background: var(--dex-grade-general-surface);
-  }
-
-  .fishydex-details-icon-wrap.grade-trash {
-    border-color: color-mix(in oklab, var(--dex-grade-trash) 64%, var(--dex-line) 36%);
-    background: var(--dex-grade-trash-surface);
-  }
-
-  .fishydex-details-icon-wrap.grade-unknown {
-    border-color: color-mix(in oklab, var(--dex-grade-unknown) 64%, var(--dex-line) 36%);
-    background: var(--dex-grade-unknown-surface);
+    border-radius: 34%;
+    border: 1px solid color-mix(in oklab, var(--color-base-content, #1f2937) 18%, var(--dex-line) 82%);
+    background: var(--dex-surface-strong);
   }
 
   .fishydex-details-icon {
@@ -1625,9 +1615,6 @@
       if (isCaught) {
         card.classList.add("is-caught");
       }
-      if (fish.is_prize || fish.grade === "Prize") {
-        card.classList.add("is-prize");
-      }
 
       const openButton = createElement("button", "fishydex-card-open");
       openButton.type = "button";
@@ -1654,17 +1641,11 @@
       actions.appendChild(caughtButton);
       top.appendChild(actions);
 
-      if (fish.grade) {
-        const grade = createElement(
-          "span",
-          `fishydex-grade badge badge-soft grade-${slugifyGrade(fish.grade)}`,
-          gradeLabel(filterGradeForEntry(fish))
-        );
-        top.appendChild(grade);
-      }
-
       const main = createElement("div", "fishydex-card-main");
-      const iconWrap = createElement("div", "fishydex-icon-wrap");
+      const iconWrap = createElement(
+        "div",
+        `fishydex-icon-wrap grade-${fish.is_prize || fish.grade === "Prize" ? "prize" : slugifyGrade(fish.grade)}`
+      );
       const iconUrl = fishItemIconUrl(itemId);
       if (iconUrl) {
         const icon = createElement("img", "fishydex-icon");
