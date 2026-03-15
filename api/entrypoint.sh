@@ -25,6 +25,14 @@ stop_pid() {
   fi
 }
 
+ensure_runtime_dirs() {
+  # dockerTools images do not guarantee a precreated /tmp. Dolt / Go temp-file
+  # paths assume it exists, so create it explicitly on boot.
+  mkdir -p /tmp /var/tmp "$DOLT_DATA_ROOT"
+  chmod 1777 /tmp /var/tmp
+  export TMPDIR=/tmp
+}
+
 wait_for_sql() {
   local host="$1"
   local port="$2"
@@ -165,6 +173,7 @@ DOLT_PID=""
 
 trap cleanup EXIT INT TERM
 
+ensure_runtime_dirs
 clone_remote_repo
 mkdir -p "$DOLT_CFG_DIR"
 bootstrap_sql_user "$BOOTSTRAP_SQL_CONFIG"
