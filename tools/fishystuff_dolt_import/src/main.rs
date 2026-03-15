@@ -183,6 +183,22 @@ struct PatchesImport {
     row_count: usize,
 }
 
+struct ImportCommand {
+    dolt_repo: PathBuf,
+    fishing_xlsx: PathBuf,
+    main_group_xlsx: PathBuf,
+    sub_group_xlsx: PathBuf,
+    item_table_xlsx: Option<PathBuf>,
+    fish_table_csv: Option<PathBuf>,
+    patches_csv: Option<PathBuf>,
+    languagedata_en_csv: Option<PathBuf>,
+    output_dir: Option<PathBuf>,
+    subset: SubsetMode,
+    apply_schema: Option<PathBuf>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
@@ -200,7 +216,7 @@ fn main() -> Result<()> {
             apply_schema,
             commit,
             commit_msg,
-        } => run_import(
+        } => run_import(ImportCommand {
             dolt_repo,
             fishing_xlsx,
             main_group_xlsx,
@@ -214,26 +230,27 @@ fn main() -> Result<()> {
             apply_schema,
             commit,
             commit_msg,
-        ),
+        }),
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_import(
-    dolt_repo: PathBuf,
-    fishing_xlsx: PathBuf,
-    main_group_xlsx: PathBuf,
-    sub_group_xlsx: PathBuf,
-    item_table_xlsx: Option<PathBuf>,
-    fish_table_csv: Option<PathBuf>,
-    patches_csv: Option<PathBuf>,
-    languagedata_en_csv: Option<PathBuf>,
-    output_dir: Option<PathBuf>,
-    subset: SubsetMode,
-    apply_schema: Option<PathBuf>,
-    commit: bool,
-    commit_msg: Option<String>,
-) -> Result<()> {
+fn run_import(command: ImportCommand) -> Result<()> {
+    let ImportCommand {
+        dolt_repo,
+        fishing_xlsx,
+        main_group_xlsx,
+        sub_group_xlsx,
+        item_table_xlsx,
+        fish_table_csv,
+        patches_csv,
+        languagedata_en_csv,
+        output_dir,
+        subset,
+        apply_schema,
+        commit,
+        commit_msg,
+    } = command;
+
     let output_dir = match output_dir {
         Some(path) => path,
         None => default_output_dir()?,
@@ -609,7 +626,6 @@ where
     Ok(row_count)
 }
 
-#[allow(clippy::too_many_arguments)]
 fn process_main_group_rows<'a, W, I>(
     rows: I,
     writer: &mut Writer<W>,
