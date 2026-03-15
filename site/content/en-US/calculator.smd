@@ -138,7 +138,6 @@
     const pet_special_html = selectedOption + noneOption + [tAFR].map(i => `<option value="${i}">${i}</option>`)
     const pet_talents_html = selectedOption + noneOption + [tDRR, tLEXP].map(i => `<option value="${i}">${i}</option>`)
     const pet_skills_html_list = [1, 2, 3, 4, 5].map(i => [tFEXP].map(skill => `<label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet${i}.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="${skill}">${skill}</label>`))
-
     const zones_html = selectedOption + mapOption(zonesWithBiteTimes)
     const level_html = selectedOption + [0, 1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`)
     const lifeskill_level_html = selectedOption + mapOption(lifeskill_levels)
@@ -236,8 +235,6 @@
     const calcChanceToReduce = (drr, lifeskill_level, brand) => (brand ? 0.5 : 1) * (1 - drr) *
         (Math.max(0.9 - 0.005 * searchListBy(lifeskill_levels, 'name', lifeskill_level)[0]["index"], 0.4))
 
-    const locale = 'en-US'
-    const durationFormatter = createDurationFormatter(locale)
     const calcCastsPerTime = (bitetime, aftime, time) => time / (parseFloat(bitetime) + parseFloat(aftime))
 
 </script>
@@ -293,10 +290,10 @@
          talent: 'Durability Reduction Resistance',
          skills: ['Fishing EXP'],
        },
-       timespan_hours: 8,
-       timespan_minutes: 0,
-       timespan: 3600,
-       timespan_text: '',
+       timespanAmount: 8,
+       timespanUnit: 'hours',
+       timespan: 28800,
+       timespanText: '8 hours',
        brand: true,
        active: false,
      }"
@@ -325,6 +322,11 @@
     <div class="hidden" data-computed-percent_catch="calcPercentageOfAverageTime($catchtime, $zone, $active)"></div>
     <div class="hidden" data-computed-percent_af="calcPercentageOfAverageTime($aftime, $zone, $active)"></div>
     <div class="hidden" data-computed-percent_improvement="1 - calcPercentageOfAverageTime($total_time, $zone, $active)"></div>
+    <div class="hidden" data-computed-timespan-amount-normalized="Math.max(0, Number($timespanAmount) || 0)"></div>
+    <div class="hidden" data-computed-timespan-unit-seconds="$timespanUnit === 'minutes' ? 60 : $timespanUnit === 'hours' ? 3600 : $timespanUnit === 'days' ? 86400 : 604800"></div>
+    <div class="hidden" data-computed-timespan-unit-label="$timespanUnit === 'minutes' ? ($timespanAmountNormalized === 1 ? 'minute' : 'minutes') : $timespanUnit === 'hours' ? ($timespanAmountNormalized === 1 ? 'hour' : 'hours') : $timespanUnit === 'days' ? ($timespanAmountNormalized === 1 ? 'day' : 'days') : ($timespanAmountNormalized === 1 ? 'week' : 'weeks')"></div>
+    <div class="hidden" data-computed-timespan="$timespanAmountNormalized * $timespanUnitSeconds"></div>
+    <div class="hidden" data-computed-timespan-text="Number($timespanAmountNormalized.toFixed(2)).toString() + ' ' + $timespanUnitLabel"></div>
 
     <section class="card card-border bg-base-100">
         <div class="card-body gap-5">
@@ -417,41 +419,59 @@
 
             <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
                 <legend class="fieldset-legend">Timespan</legend>
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div id="timespan" class="flex items-center gap-2">
-                        <label class="sr-only" for="hours">Hours</label>
-                        <input type="number"
-                               class="input validator w-24"
-                               id="hours"
-                               data-bind-timespan_hours
-                               name="hours"
-                               min="0">
-                        <span class="text-lg font-semibold">:</span>
-                        <label class="sr-only" for="minutes">Minutes</label>
-                        <input type="number"
-                               class="input validator w-24"
-                               id="minutes"
-                               data-bind-timespan_minutes
-                               name="minutes"
-                               min="0"
-                               max="59">
+                <div class="grid gap-4 xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] xl:items-end">
+                    <div class="grid gap-4">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-semibold">Session length</p>
+                                <p class="text-xs text-base-content/70">Use a common preset or fine-tune the duration below.</p>
+                            </div>
+                            <span class="badge badge-soft badge-secondary badge-lg" data-text="$timespanText"></span>
+                        </div>
+
+                        <div class="join join-vertical sm:join-horizontal">
+                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'hours'">1 hour</button>
+                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 8; $timespanUnit = 'hours'">8 hours</button>
+                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 10; $timespanUnit = 'hours'">10 hours</button>
+                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 12; $timespanUnit = 'hours'">12 hours</button>
+                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'days'">1 day</button>
+                        </div>
+
+                        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Amount</legend>
+                                <input type="number"
+                                       min="0"
+                                       step="any"
+                                       class="input input-sm w-full"
+                                       id="timespan_amount"
+                                       data-bind="timespanAmount"
+                                       name="timespan_amount">
+                            </fieldset>
+                            <fieldset class="fieldset">
+                                <legend class="fieldset-legend">Unit</legend>
+                                <select class="select select-sm w-full" id="timespan_unit" data-bind="timespanUnit">
+                                    <option value="minutes">Minutes</option>
+                                    <option value="hours">Hours</option>
+                                    <option value="days">Days</option>
+                                    <option value="weeks">Weeks</option>
+                                </select>
+                            </fieldset>
+                        </div>
                     </div>
 
                     <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 sm:stats-horizontal">
                         <div class="stat">
-                            <div class="stat-title" data-text="'Average Casts (' + $timespan_text + ')'"></div>
+                            <div class="stat-title" data-text="'Average Casts (' + $timespanText + ')'"></div>
                             <div class="stat-value text-xl" data-text="($timespan/$total_time).toFixed(2)"></div>
                         </div>
                         <div class="stat">
-                            <div class="stat-title" data-text="'Average Durability Loss (' + $timespan_text + ')'"></div>
+                            <div class="stat-title" data-text="'Average Durability Loss (' + $timespanText + ')'"></div>
                             <div class="stat-value text-xl" data-text="(($timespan/$total_time) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
                         </div>
                     </div>
                 </div>
             </fieldset>
-
-            <div class="hidden" data-computed-timespan="$timespan_hours * 3600 + $timespan_minutes * 60"></div>
-            <div class="hidden" data-computed-timespan_text="durationFormatter($timespan_hours * 60 + $timespan_minutes)"></div>
 
             <code data-show=$debug class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
                 <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="ctx.signals.JSON()"></pre>
