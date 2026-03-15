@@ -519,103 +519,103 @@
 
         <section class="card card-border bg-base-100">
             <div class="card-body">
-                <div id="pets" class="grid gap-4 lg:grid-cols-2">
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4 lg:col-span-2">
-                        <div class="grid gap-4 md:grid-cols-3">
+                <div id="pets" class="grid gap-4 md:grid-cols-2">
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
+                        <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select pet_tier w-full" id="pet1.tier" data-bind-pet1.tier></select>
+                                <select class="select select-sm pet_tier w-full" id="pet1.tier" data-bind-pet1.tier></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select pet_special w-full" id="pet1.special" data-bind-pet1.special></select>
+                                <select class="select select-sm pet_special w-full" id="pet1.special" data-bind-pet1.special></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select pet_talent w-full" id="pet1.talent" data-bind-pet1.talent></select>
+                                <select class="select select-sm pet_talent w-full" id="pet1.talent" data-bind-pet1.talent></select>
                             </fieldset>
                         </div>
-                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                        <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
                             <div id="pet1.skills" class="grid gap-2"></div>
                         </fieldset>
                     </div>
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4">
-                        <div class="grid gap-4">
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
+                        <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select pet_tier w-full" id="pet2.tier" data-bind-pet2.tier></select>
+                                <select class="select select-sm pet_tier w-full" id="pet2.tier" data-bind-pet2.tier></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select pet_special w-full" id="pet2.special" data-bind-pet2.special></select>
+                                <select class="select select-sm pet_special w-full" id="pet2.special" data-bind-pet2.special></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select pet_talent w-full" id="pet2.talent" data-bind-pet2.talent></select>
+                                <select class="select select-sm pet_talent w-full" id="pet2.talent" data-bind-pet2.talent></select>
                             </fieldset>
                         </div>
-                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                        <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
                             <div id="pet2.skills" class="grid gap-2"></div>
                         </fieldset>
                     </div>
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4">
-                        <div class="grid gap-4">
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
+                        <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select pet_tier w-full" id="pet3.tier" data-bind-pet3.tier></select>
+                                <select class="select select-sm pet_tier w-full" id="pet3.tier" data-bind-pet3.tier></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select pet_special w-full" id="pet3.special" data-bind-pet3.special></select>
+                                <select class="select select-sm pet_special w-full" id="pet3.special" data-bind-pet3.special></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select pet_talent w-full" id="pet3.talent" data-bind-pet3.talent></select>
+                                <select class="select select-sm pet_talent w-full" id="pet3.talent" data-bind-pet3.talent></select>
                             </fieldset>
                         </div>
-                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                        <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
                             <div id="pet3.skills" class="grid gap-2"></div>
                         </fieldset>
                     </div>
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4">
-                        <div class="grid gap-4">
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
+                        <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select pet_tier w-full" id="pet4.tier" data-bind-pet4.tier></select>
+                                <select class="select select-sm pet_tier w-full" id="pet4.tier" data-bind-pet4.tier></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select pet_special w-full" id="pet4.special" data-bind-pet4.special></select>
+                                <select class="select select-sm pet_special w-full" id="pet4.special" data-bind-pet4.special></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select pet_talent w-full" id="pet4.talent" data-bind-pet4.talent></select>
+                                <select class="select select-sm pet_talent w-full" id="pet4.talent" data-bind-pet4.talent></select>
                             </fieldset>
                         </div>
-                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                        <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
                             <div id="pet4.skills" class="grid gap-2"></div>
                         </fieldset>
                     </div>
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-4 lg:col-span-2">
-                        <div class="grid gap-4 md:grid-cols-3">
+                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
+                        <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select pet_tier w-full" id="pet5.tier" data-bind-pet5.tier></select>
+                                <select class="select select-sm pet_tier w-full" id="pet5.tier" data-bind-pet5.tier></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select pet_special w-full" id="pet5.special" data-bind-pet5.special></select>
+                                <select class="select select-sm pet_special w-full" id="pet5.special" data-bind-pet5.special></select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select pet_talent w-full" id="pet5.talent" data-bind-pet5.talent></select>
+                                <select class="select select-sm pet_talent w-full" id="pet5.talent" data-bind-pet5.talent></select>
                             </fieldset>
                         </div>
-                        <fieldset class="fieldset mt-4 rounded-box border border-base-300 bg-base-100 p-4">
+                        <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
                             <div id="pet5.skills" class="grid gap-2"></div>
                         </fieldset>
