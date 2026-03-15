@@ -60,6 +60,26 @@ in {
     targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
   };
 
+  git-hooks = {
+    enable = true;
+    hooks = {
+      rustfmt = {
+        enable = true;
+        packageOverrides = {
+          cargo = config.languages.rust.toolchainPackage;
+          rustfmt = config.languages.rust.toolchainPackage;
+        };
+      };
+      clippy = {
+        enable = true;
+        packageOverrides = {
+          cargo = config.languages.rust.toolchainPackage;
+          clippy = config.languages.rust.toolchainPackage;
+        };
+      };
+    };
+  };
+
   env = {
     FISHYSTUFF_DEV_DB_PORT = dbPort;
     FISHYSTUFF_DEV_API_PORT = apiPort;
