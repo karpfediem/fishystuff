@@ -91,6 +91,19 @@ clone_remote_repo() {
   log "clone complete"
 }
 
+ensure_repo_identity() {
+  (
+    cd "$DOLT_REPO_DIR"
+
+    if ! dolt config --local --get user.name >/dev/null 2>&1; then
+      dolt config --local --add user.name "$DOLT_REPO_USER_NAME"
+    fi
+    if ! dolt config --local --get user.email >/dev/null 2>&1; then
+      dolt config --local --add user.email "$DOLT_REPO_USER_EMAIL"
+    fi
+  )
+}
+
 sync_existing_repo() {
   log "using existing local Dolt clone at ${DOLT_REPO_DIR}"
 
@@ -101,6 +114,7 @@ sync_existing_repo() {
 
   (
     cd "$DOLT_REPO_DIR"
+    ensure_repo_identity
 
     log "fetching origin/${DOLT_REMOTE_BRANCH}"
     if ! dolt fetch origin "$DOLT_REMOTE_BRANCH"; then
@@ -135,6 +149,7 @@ ensure_local_repo() {
 
   rm -rf "$DOLT_REPO_DIR"
   clone_remote_repo
+  ensure_repo_identity
 }
 
 reset_sql_access_state() {
@@ -189,9 +204,15 @@ start_api() {
   export FISHYSTUFF_DATABASE_URL="mysql://${DOLT_API_SQL_USER}:${DOLT_API_SQL_PASSWORD}@${DOLT_SQL_HOST}:${DOLT_SQL_PORT}/${DOLT_DATABASE_NAME}"
 
   log "starting fishystuff_server on ${FISHYSTUFF_BIND}"
-  fishystuff_server \
-    --config "$API_CONFIG_PATH" \
-    --bind "$FISHYSTUFF_BIND" &
+  local api_cmd=(
+    fishystuff_server
+    --config "$API_CONFIG_PATH"
+    --bind "$FISHYSTUFF_BIND"
+  )
+  if [ -n "${FISHYSTUFF_REQUEST_TIMEOUT_SECS:-}" ]; then
+    api_cmd+=(--request-timeout-secs "$FISHYSTUFF_REQUEST_TIMEOUT_SECS")
+  fi
+  "${api_cmd[@]}" &
   API_PID="$!"
 }
 
@@ -211,6 +232,8 @@ DOLT_REPO_DIR="${DOLT_DATA_ROOT}/${DOLT_DATABASE_NAME}"
 DOLT_REMOTE_BRANCH="${DOLT_REMOTE_BRANCH:-main}"
 DOLT_CLONE_DEPTH="${DOLT_CLONE_DEPTH:-1}"
 DOLT_PULL_ON_BOOT="${DOLT_PULL_ON_BOOT:-true}"
+DOLT_REPO_USER_NAME="${DOLT_REPO_USER_NAME:-fishystuff api}"
+DOLT_REPO_USER_EMAIL="${DOLT_REPO_USER_EMAIL:-api@fishystuff.fish}"
 
 DOLT_SQL_HOST="${DOLT_SQL_HOST:-127.0.0.1}"
 DOLT_SQL_PORT="${DOLT_SQL_PORT:-3306}"

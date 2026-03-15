@@ -44,6 +44,9 @@ volume-backed auth database cannot block the API's loopback user.
 The loopback API user is granted broad non-admin SQL privileges because Dolt's
 access model rejects some normal read traffic under a plain `SELECT` grant, but
 the runtime server itself stays read-only in production.
+The boot path also writes a local Dolt repo identity before `pull`, so Fly
+machine restarts can fast-forward the on-volume clone without any interactive
+user config.
 
 Because the app uses a single attached Fly Volume, deployments should use an
 `immediate` strategy rather than rolling replacement.
