@@ -79,7 +79,9 @@ just deploy-api
 ```
 
 That recipe deploys against the existing `api-fishystuff-fish` Fly app defined
-in [api/fly.toml](/home/carp/code/fishystuff/api/fly.toml).
+in [api/fly.toml](/home/carp/code/fishystuff/api/fly.toml), disables Fly's
+startup smoke checks, and gives the machine a longer wait timeout because first
+boot includes a fresh Dolt clone before the API can bind `:8080`.
 
 The Fly app name is `api-fishystuff-fish`, and the intended public hostname is
 `https://api.fishystuff.fish`.

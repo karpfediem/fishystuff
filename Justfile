@@ -23,7 +23,7 @@ deploy-bot:
 # Build and deploy the Axum API
 deploy-api:
   skopeo --insecure-policy --debug copy docker-archive:"$(nix build .#api-container --no-link --print-out-paths)" docker://registry.fly.io/api-fishystuff-fish:latest --dest-creds x:"$(fly -a api-fishystuff-fish tokens create deploy --expiry 10m)" --format v2s2
-  flyctl deploy --remote-only -c api/fly.toml
+  flyctl deploy --remote-only --smoke-checks=false --wait-timeout 10m -c api/fly.toml
 
 # Run the Discord bot with the SecretSpec bot profile
 bot-run:

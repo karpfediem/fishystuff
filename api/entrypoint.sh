@@ -91,6 +91,7 @@ clone_remote_repo() {
     cd "$DOLT_DATA_ROOT"
     "${clone_cmd[@]}"
   )
+  log "clone complete"
 }
 
 bootstrap_sql_user() {

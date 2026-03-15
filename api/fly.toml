@@ -35,7 +35,7 @@ kill_timeout = "30s"
     path = "/healthz"
     interval = "15s"
     timeout = "5s"
-    grace_period = "20s"
+    grace_period = "120s"
 
 [[vm]]
   cpu_kind = "shared"
