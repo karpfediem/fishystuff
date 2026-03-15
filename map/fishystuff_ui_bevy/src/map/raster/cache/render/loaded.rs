@@ -102,7 +102,7 @@ impl RasterTileCache {
                         let tile_space = TileSpace::new(spec.tile_px, spec.y_flip);
                         let depth = tile_z(layer_runtime.z_base(spec.id), spec.max_level, key.z);
                         if needs_affine_quad(spec, world_transform) {
-                            let Some(mesh) = tile_quad_mesh(key, tile_space, world_transform)
+                            let Some(mesh) = tile_quad_mesh(key, spec, tile_space, world_transform)
                             else {
                                 entry.state = TileState::Failed;
                                 if stats.inflight > 0 {
@@ -133,7 +133,7 @@ impl RasterTileCache {
                             entry.depth = depth;
                         } else {
                             let Some((x0, y0, w, h)) =
-                                tile_world_rect(key, tile_space, world_transform)
+                                tile_world_rect(key, spec, tile_space, world_transform)
                             else {
                                 entry.state = TileState::Failed;
                                 if stats.inflight > 0 {

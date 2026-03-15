@@ -89,7 +89,7 @@ impl RasterTileCache {
                     } else if let Some(world_transform) = spec.world_transform(map_to_world) {
                         let tile_space = TileSpace::new(spec.tile_px, spec.y_flip);
                         if let Some((x0, y0, w, h)) =
-                            tile_world_rect(key, tile_space, world_transform)
+                            tile_world_rect(key, spec, tile_space, world_transform)
                         {
                             commands
                                 .entity(entity)
