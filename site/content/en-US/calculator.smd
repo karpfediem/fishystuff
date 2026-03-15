@@ -134,12 +134,12 @@
         return {afr: afr, drr: drr, fishing_exp: fishing_exp, life_exp: life_exp,}
     }
 
-    const pet_tier_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">Tier ${i}</option>`)
-    const pet_special_html = selectedOption + noneOption + [tAFR].map(i => `<option value="${i}">${i}</option>`)
-    const pet_talents_html = selectedOption + noneOption + [tDRR, tLEXP].map(i => `<option value="${i}">${i}</option>`)
-    const pet_skills_html_list = [1, 2, 3, 4, 5].map(i => [tFEXP].map(skill => `<label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet${i}.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="${skill}">${skill}</label>`))
+    const pet_tier_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">Tier ${i}</option>`).join('\n')
+    const pet_special_html = selectedOption + noneOption + [tAFR].map(i => `<option value="${i}">${i}</option>`).join('\n')
+    const pet_talents_html = selectedOption + noneOption + [tDRR, tLEXP].map(i => `<option value="${i}">${i}</option>`).join('\n')
+    const pet_skills_html_list = [1, 2, 3, 4, 5].map(i => [tFEXP].map(skill => `<label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet${i}.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="${skill}">${skill}</label>`).join('\n'))
     const zones_html = selectedOption + mapOption(zonesWithBiteTimes)
-    const level_html = selectedOption + [0, 1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`)
+    const level_html = selectedOption + [0, 1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`).join('\n')
     const lifeskill_level_html = selectedOption + mapOption(lifeskill_levels)
     const rods_html = selectedOption + mapOption(rods)
     const chairs_html = selectedOption + noneOption + mapOption(chairs)
