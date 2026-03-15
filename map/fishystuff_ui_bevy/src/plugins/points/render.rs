@@ -252,9 +252,8 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
             transform.translation.z = ICON_Z;
 
             if context.points.icons_enabled {
-                if let Some(handle) = icon_handle_for_fish(
-                    point.fish_id,
-                    point.aggregated,
+                if let Some(handle) = icon_handle_for_point(
+                    point,
                     &mut context.icon_cache,
                     &context.fish,
                     &mut context.remote_images,
@@ -338,17 +337,13 @@ pub(super) struct PointMarkerSync<'w, 's> {
     icons: PointIconQuery<'w, 's>,
 }
 
-fn icon_handle_for_fish(
-    fish_id: Option<i32>,
-    aggregated: bool,
+fn icon_handle_for_point(
+    point: &RenderPoint,
     cache: &mut PointIconCache,
     fish: &FishCatalog,
     remote_images: &mut RemoteImageCache,
 ) -> Option<Handle<Image>> {
-    if aggregated {
-        return None;
-    }
-    let fish_id = fish_id?;
+    let fish_id = point.fish_id?;
     let Some(item_id) = fish.item_id_for_fish(fish_id) else {
         cache.missing_catalog_ids.insert(fish_id);
         cache.loading_ids.remove(&fish_id);
@@ -522,4 +517,52 @@ pub(super) fn build_ring_texture() -> Image {
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::RENDER_WORLD,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::app::TaskPoolPlugin;
+    use bevy::prelude::App;
+
+    use super::{icon_handle_for_point, PointIconCache, RenderPoint};
+    use crate::plugins::api::{FishCatalog, FishEntry, RemoteImageCache};
+
+    #[test]
+    fn aggregated_points_still_request_icons_for_representative_fish() {
+        let mut app = App::new();
+        app.add_plugins(TaskPoolPlugin::default());
+
+        let mut fish = FishCatalog::default();
+        fish.replace(vec![FishEntry {
+            id: 88,
+            item_id: 8289,
+            encyclopedia_key: Some(88),
+            encyclopedia_id: Some(8588),
+            name: "Barbel Steed".to_string(),
+            name_lower: "barbel steed".to_string(),
+            grade: Some("Rare".to_string()),
+            is_prize: false,
+        }]);
+        let point = RenderPoint {
+            map_px_x: 100,
+            map_px_y: 200,
+            world_x: None,
+            world_z: None,
+            fish_id: Some(88),
+            zone_rgb_u32: None,
+            sample_count: 4,
+            aggregated: true,
+        };
+        let mut cache = PointIconCache::default();
+        let mut remote_images = RemoteImageCache::default();
+
+        let handle = icon_handle_for_point(&point, &mut cache, &fish, &mut remote_images);
+
+        assert!(handle.is_none());
+        assert_eq!(
+            cache.requested_urls.get(&88).map(String::as_str),
+            Some("https://cdn.fishystuff.fish/images/FishIcons/00008289.png")
+        );
+        assert!(cache.loading_ids.contains(&88));
+    }
 }

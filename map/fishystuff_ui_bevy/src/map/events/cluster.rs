@@ -208,4 +208,33 @@ mod tests {
             assert_eq!(left.fish_id, right.fish_id);
         }
     }
+
+    #[test]
+    fn aggregated_clusters_keep_a_representative_fish_id() {
+        let mut events = Vec::new();
+        for idx in 0..2501 {
+            events.push(EventPointCompact {
+                event_id: idx as i64,
+                fish_id: if idx < 2000 { 10 } else { 20 },
+                ts_utc: 1_700_000_000 + idx as i64,
+                map_px_x: 1000 + (idx % 8) as i32,
+                map_px_y: 2000 + (idx % 8) as i32,
+                length_milli: 1000,
+                world_x: Some(10_000 + idx as i32),
+                world_z: Some(20_000 + idx as i32),
+                zone_rgb_u32: None,
+                source_kind: None,
+                source_id: None,
+            });
+        }
+
+        let indices: Vec<usize> = (0..events.len()).collect();
+        let clustered = cluster_view_events(&events, &indices, 64);
+
+        assert_eq!(clustered.mode, EventsQueryMode::GridAggregate);
+        assert_eq!(clustered.points.len(), 1);
+        assert_eq!(clustered.points[0].fish_id, Some(10));
+        assert!(clustered.points[0].aggregated);
+        assert_eq!(clustered.points[0].sample_count, 2501);
+    }
 }
