@@ -9,6 +9,7 @@ use serde::Serialize;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod bench_support;
 pub mod fixtures;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod harness;
 pub mod scenario;
 

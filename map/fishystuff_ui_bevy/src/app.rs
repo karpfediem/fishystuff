@@ -1,36 +1,57 @@
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::app::{PanicHandlerPlugin, TaskPoolPlugin};
-use bevy::asset::{AssetApp, AssetMetaCheck, AssetPlugin, UnapprovedPathMode};
+#[cfg(not(target_arch = "wasm32"))]
+use bevy::asset::AssetApp;
+use bevy::asset::{AssetMetaCheck, AssetPlugin, UnapprovedPathMode};
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::diagnostic::{DiagnosticsPlugin, FrameCountPlugin};
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::image::ImagePlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::input::InputPlugin as BevyInputPlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::light::GlobalAmbientLight;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::log::LogPlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::mesh::MeshPlugin;
 use bevy::prelude::*;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::time::TimePlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use bevy::transform::TransformPlugin;
-use bevy::window::{ExitCondition, Window, WindowPlugin};
+#[cfg(not(target_arch = "wasm32"))]
+use bevy::window::ExitCondition;
+use bevy::window::{Window, WindowPlugin};
 use bevy_flair::prelude::FlairPlugin;
 
 #[cfg(target_arch = "wasm32")]
 use crate::bridge::host::BrowserBridgePlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::map::terrain::runtime::Terrain3dPlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::api::{
     ApiBootstrapState, FishCatalog, FishFilterState, MapDisplayState, PatchFilterState,
     RemoteImageCache, RemoteImageEpoch,
 };
 #[cfg(target_arch = "wasm32")]
 use crate::plugins::camera::initial_resolution;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::points::PointsPlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::raster::RasterPlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::ui::UiPointerCapture;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::vector_layers::VectorLayersPlugin;
 #[cfg(target_arch = "wasm32")]
 use crate::plugins::FishystuffPlugins;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::{camera::CameraPlugin, input::InputPlugin};
 #[cfg(target_arch = "wasm32")]
 use bevy::asset::io::web::WebAssetPlugin;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Clone)]
 pub struct NativeAppOptions {
     pub asset_root: String,
@@ -40,6 +61,7 @@ pub struct NativeAppOptions {
     pub renderless: bool,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Default for NativeAppOptions {
     fn default() -> Self {
         Self {
