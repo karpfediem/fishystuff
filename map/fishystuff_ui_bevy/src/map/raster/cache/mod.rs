@@ -276,6 +276,7 @@ impl RasterTileCache {
         residency: &TileResidencyState,
         layer_registry: &LayerRegistry,
     ) {
+        crate::perf_scope!("raster.eviction_policy");
         if self.entries.len() <= self.max_entries {
             return;
         }
@@ -326,6 +327,7 @@ impl RasterTileCache {
                 incr_level_count(&mut stats.cache_evictions_by_level, key.layer, key.z, 1);
             }
         }
+        crate::perf_counter_add!("raster.cache_evictions", remove_count);
     }
 
     pub(crate) fn resident_count_by_layer(&self, layer: LayerId) -> u32 {

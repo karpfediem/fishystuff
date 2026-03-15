@@ -1,0 +1,140 @@
+{
+  "revision": "perf-layers-v1",
+  "map_version_id": "perf-v1",
+  "layers": [
+    {
+      "layer_id": "minimap",
+      "name": "Minimap",
+      "enabled": true,
+      "kind": "tiled_raster",
+      "transform": {
+        "kind": "identity_map_space"
+      },
+      "tileset": {
+        "manifest_url": "images/tiles/minimap/v1/tileset.json",
+        "tile_url_template": "images/tiles/minimap/v1/{z}/{x}_{y}.png",
+        "version": "perf-v1"
+      },
+      "tile_px": 512,
+      "max_level": 1,
+      "y_flip": false,
+      "lod_policy": {
+        "target_tiles": 18,
+        "hysteresis_hi": 22.0,
+        "hysteresis_lo": 12.0,
+        "margin_tiles": 1,
+        "enable_refine": true,
+        "refine_debounce_ms": 0,
+        "max_detail_tiles": 32,
+        "max_resident_tiles": 96,
+        "pinned_coarse_levels": 1,
+        "coarse_pin_min_level": null,
+        "warm_margin_tiles": 1,
+        "protected_margin_tiles": 1,
+        "detail_eviction_weight": 4.0,
+        "max_detail_requests_while_camera_moving": 4,
+        "motion_suppresses_refine": true
+      },
+      "ui": {
+        "visible_default": true,
+        "opacity_default": 1.0,
+        "z_base": 0.0,
+        "display_order": 0
+      },
+      "request_weight": 1.0,
+      "pick_mode": "none"
+    },
+    {
+      "layer_id": "zone_mask",
+      "name": "Zone Mask",
+      "enabled": true,
+      "kind": "tiled_raster",
+      "transform": {
+        "kind": "identity_map_space"
+      },
+      "tileset": {
+        "manifest_url": "images/tiles/mask/v1/tileset.json",
+        "tile_url_template": "images/tiles/mask/v1/{z}/{x}_{y}.png",
+        "version": "perf-v1"
+      },
+      "tile_px": 512,
+      "max_level": 1,
+      "y_flip": false,
+      "lod_policy": {
+        "target_tiles": 18,
+        "hysteresis_hi": 22.0,
+        "hysteresis_lo": 12.0,
+        "margin_tiles": 1,
+        "enable_refine": true,
+        "refine_debounce_ms": 0,
+        "max_detail_tiles": 32,
+        "max_resident_tiles": 96,
+        "pinned_coarse_levels": 1,
+        "coarse_pin_min_level": null,
+        "warm_margin_tiles": 1,
+        "protected_margin_tiles": 1,
+        "detail_eviction_weight": 4.0,
+        "max_detail_requests_while_camera_moving": 4,
+        "motion_suppresses_refine": true
+      },
+      "ui": {
+        "visible_default": true,
+        "opacity_default": 0.55,
+        "z_base": 10.0,
+        "display_order": 1
+      },
+      "request_weight": 1.2,
+      "pick_mode": "exact_tile_pixel"
+    },
+    {
+      "layer_id": "region_groups",
+      "name": "Region Groups",
+      "enabled": true,
+      "kind": "vector_geojson",
+      "transform": {
+        "kind": "identity_map_space"
+      },
+      "tileset": {
+        "manifest_url": "",
+        "tile_url_template": "",
+        "version": "perf-v1"
+      },
+      "tile_px": 512,
+      "max_level": 0,
+      "y_flip": false,
+      "vector_source": {
+        "url": "region_groups/v1.geojson",
+        "revision": "rg-v1",
+        "geometry_space": "map_pixels",
+        "style_mode": "feature_property_palette",
+        "feature_id_property": "id",
+        "color_property": "c"
+      },
+      "lod_policy": {
+        "target_tiles": 0,
+        "hysteresis_hi": 0.0,
+        "hysteresis_lo": 0.0,
+        "margin_tiles": 0,
+        "enable_refine": false,
+        "refine_debounce_ms": 0,
+        "max_detail_tiles": 0,
+        "max_resident_tiles": 0,
+        "pinned_coarse_levels": 0,
+        "coarse_pin_min_level": null,
+        "warm_margin_tiles": 0,
+        "protected_margin_tiles": 0,
+        "detail_eviction_weight": 1.0,
+        "max_detail_requests_while_camera_moving": 0,
+        "motion_suppresses_refine": false
+      },
+      "ui": {
+        "visible_default": false,
+        "opacity_default": 0.9,
+        "z_base": 50.0,
+        "display_order": 5
+      },
+      "request_weight": 1.0,
+      "pick_mode": "none"
+    }
+  ]
+}

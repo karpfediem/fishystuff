@@ -25,6 +25,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     windows: Query<&Window>,
     camera_q: Query<(&Camera, &Transform), With<Map2dCamera>>,
 ) {
+    crate::perf_scope!("events.snapshot_query_refresh");
     if !display_state.show_points || view_mode.mode != ViewMode::Map2D {
         points.status = "points: hidden".to_string();
         points.request_sig = None;
@@ -108,11 +109,14 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         )),
     };
     let selection = snapshot.select_for_view(&local_query);
-    let clustered = cluster_view_events(
-        &snapshot.events,
-        &selection.filtered_indices,
-        cluster_bucket_px,
-    );
+    let clustered = {
+        crate::perf_scope!("events.clustering");
+        cluster_view_events(
+            &snapshot.events,
+            &selection.filtered_indices,
+            cluster_bucket_px,
+        )
+    };
     let rendered_points: Vec<RenderPoint> = clustered
         .points
         .into_iter()
@@ -139,6 +143,8 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     points.rendered_point_count = clustered.rendered_point_count;
     points.rendered_cluster_count = clustered.rendered_cluster_count;
     points.spatial_bucket_px = snapshot.spatial_index.bucket_px;
+    crate::perf_gauge!("events.cluster_count", points.rendered_cluster_count);
+    crate::perf_gauge!("events.raw_point_count", points.rendered_point_count);
     points.status = points_status_line(&points, &snapshot);
     points.dirty = true;
 }

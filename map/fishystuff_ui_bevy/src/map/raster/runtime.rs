@@ -70,6 +70,7 @@ fn update_tiles(
     evidence_zone_filter: Res<EvidenceZoneFilter>,
     vector_runtime: Res<VectorLayerRuntime>,
 ) {
+    crate::perf_scope!("raster.update_tiles");
     let (mut images, mut meshes, mut materials) =
         (&mut asset_ctx.0, &mut asset_ctx.1, &mut asset_ctx.2);
     let (layer_runtime, layer_registry) = (&mut layer_ctx.0, &layer_ctx.1);

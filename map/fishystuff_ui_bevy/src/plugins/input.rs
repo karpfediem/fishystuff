@@ -79,6 +79,7 @@ fn update_map2d_camera_controls(
     zoom_bounds: Res<CameraZoomBounds>,
     mut camera_q: Query<(&Camera, &mut Projection, &mut Transform), With<Map2dCamera>>,
 ) {
+    crate::perf_scope!("camera.2d_update");
     if view_mode.mode != ViewMode::Map2D {
         pan.dragging = false;
         return;

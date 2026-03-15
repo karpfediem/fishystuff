@@ -158,6 +158,7 @@ pub(in crate::map::terrain) fn apply_mode_to_camera_and_lighting(
     >,
     mut light_q: Query<&mut Visibility, With<TerrainLightTag>>,
 ) {
+    crate::perf_scope!("camera.mode_transition");
     if applied_mode.mode == Some(mode.mode) {
         return;
     }

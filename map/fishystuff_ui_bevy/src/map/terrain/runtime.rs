@@ -3,14 +3,12 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use async_channel::Receiver;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::platform::time::Instant;
-use bevy::tasks::IoTaskPool;
 use bevy::window::PrimaryWindow;
 use fishystuff_core::terrain::{
     chunk_grid_dims_for_level, decode_terrain_chunk, lod_for_view_distance,
     nearest_available_ancestor, DecodedTerrainLevel, TerrainChunkData, TerrainDrapeManifest,
     TerrainHeightEncoding, TerrainManifest,
 };
-use gloo_net::http::Request;
 use serde::Deserialize;
 
 use crate::map::camera::map2d::Map2dViewState;

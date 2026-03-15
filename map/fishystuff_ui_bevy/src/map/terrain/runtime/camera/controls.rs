@@ -28,6 +28,7 @@ pub(in crate::map::terrain::runtime) fn update_terrain3d_camera_controls(
     mut mouse_wheel: MessageReader<MouseWheel>,
     mut camera_q: Query<(&Camera, &mut Transform, &mut Projection), With<Terrain3dCamera>>,
 ) {
+    crate::perf_scope!("camera.3d_update");
     if mode.mode != ViewMode::Terrain3D {
         orbit_input.dragging = false;
         orbit_input.drag_mode = OrbitDragMode::Orbit;

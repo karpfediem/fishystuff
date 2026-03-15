@@ -1,0 +1,23 @@
+{
+  "tile_size_px": 512,
+  "levels": [
+    {
+      "z": 0,
+      "min_x": 0,
+      "min_y": 0,
+      "width": 4,
+      "height": 4,
+      "tile_count": 16,
+      "occupancy_b64": "//8="
+    },
+    {
+      "z": 1,
+      "min_x": 0,
+      "min_y": 0,
+      "width": 2,
+      "height": 2,
+      "tile_count": 4,
+      "occupancy_b64": "Dw=="
+    }
+  ]
+}

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
+use crate::runtime_io;
 use async_channel::Receiver;
 use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::tasks::IoTaskPool;
-use gloo_net::http::Request;
 
 #[derive(Resource, Default)]
 pub struct RemoteImageCache {
@@ -107,17 +107,7 @@ pub fn poll_remote_image_requests(
 }
 
 async fn fetch_remote_image(url: &str) -> Result<DecodedRemoteImage, String> {
-    let response = Request::get(url)
-        .send()
-        .await
-        .map_err(|err| format!("fetch {url}: {err}"))?;
-    if !response.ok() {
-        return Err(format!("fetch {url}: {}", response.status()));
-    }
-    let bytes = response
-        .binary()
-        .await
-        .map_err(|err| format!("read bytes {url}: {err}"))?;
+    let bytes = runtime_io::load_bytes(url)?;
     let image = image::load_from_memory(bytes.as_slice())
         .map_err(|err| format!("decode {url}: {err}"))?
         .to_rgba8();

@@ -92,6 +92,7 @@ fn update_vector_layers(
     cache_config: Res<VectorCacheConfig>,
     view_mode: Res<ViewModeState>,
 ) {
+    crate::perf_scope!("vector.layer_update");
     layer_runtime.sync_to_registry(&registry);
 
     if registry.is_changed() {
@@ -171,6 +172,7 @@ fn update_vector_layers(
         if let Some(bundle) = vector_runtime.finished.get(&cache_key) {
             runtime_state.vector_cache_last_hit = true;
             runtime_state.vector_cache_hits = runtime_state.vector_cache_hits.saturating_add(1);
+            crate::perf_counter_add!("vector.cache_hits", 1);
             bundle.set_depth(&mut commands, runtime_state.z_base, VECTOR_3D_BASE_Y);
             bundle.set_visibility(&mut commands, render_visible);
             bundle.set_opacity(&mut materials_2d, &mut materials_3d, runtime_state.opacity);
@@ -184,6 +186,7 @@ fn update_vector_layers(
 
         runtime_state.vector_cache_last_hit = false;
         runtime_state.vector_cache_misses = runtime_state.vector_cache_misses.saturating_add(1);
+        crate::perf_counter_add!("vector.cache_misses", 1);
 
         let mut state = vector_runtime
             .states

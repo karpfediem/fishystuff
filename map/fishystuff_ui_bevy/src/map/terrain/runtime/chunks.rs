@@ -7,6 +7,7 @@ pub(super) fn queue_visible_chunks(
     view: Res<Terrain3dViewState>,
     mut runtime: ResMut<TerrainRuntime>,
 ) {
+    crate::perf_scope!("terrain.visible_chunk_computation");
     let frame = runtime.frame;
     if mode.mode != ViewMode::Terrain3D {
         return;
@@ -101,20 +102,23 @@ pub(super) fn queue_visible_chunks(
 
     let mut render_set = HashSet::new();
     let mut fallback_count = 0_u32;
-    for key in &desired {
-        let resolved =
-            nearest_available_ancestor(key.raw(), manifest.manifest.max_level, |candidate| {
-                let entry = runtime.chunks.get(&TerrainChunkKey(candidate));
-                entry
-                    .map(|item| item.state == TerrainChunkState::Ready && item.chunk.is_some())
-                    .unwrap_or(false)
-            });
-        if let Some(found) = resolved {
-            let found_key = TerrainChunkKey(found);
-            if found_key != *key {
-                fallback_count = fallback_count.saturating_add(1);
+    {
+        crate::perf_scope!("terrain.chunk_cache_resolution");
+        for key in &desired {
+            let resolved =
+                nearest_available_ancestor(key.raw(), manifest.manifest.max_level, |candidate| {
+                    let entry = runtime.chunks.get(&TerrainChunkKey(candidate));
+                    entry
+                        .map(|item| item.state == TerrainChunkState::Ready && item.chunk.is_some())
+                        .unwrap_or(false)
+                });
+            if let Some(found) = resolved {
+                let found_key = TerrainChunkKey(found);
+                if found_key != *key {
+                    fallback_count = fallback_count.saturating_add(1);
+                }
+                render_set.insert(found_key);
             }
-            render_set.insert(found_key);
         }
     }
     runtime.render_chunks = render_set;
@@ -165,6 +169,7 @@ pub(super) fn build_chunks_incremental(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
+    crate::perf_scope!("terrain.chunk_build");
     if mode.mode != ViewMode::Terrain3D {
         return;
     }
@@ -241,7 +246,10 @@ pub(super) fn build_chunks_incremental(
         let Some(chunk) = entry.chunk.as_ref() else {
             continue;
         };
-        let mesh = build_chunk_mesh_from_data(chunk, &manifest.manifest, MapToWorld::default());
+        let mesh = {
+            crate::perf_scope!("terrain.mesh_build");
+            build_chunk_mesh_from_data(chunk, &manifest.manifest, MapToWorld::default())
+        };
         match mesh {
             Some(mesh) => {
                 if let Some(old) = entry.entity.take() {
@@ -297,6 +305,7 @@ fn enforce_terrain_cache_limits(
     config: &Terrain3dConfig,
     commands: &mut Commands,
 ) {
+    crate::perf_scope!("terrain.cache_eviction");
     let max_entries = config.terrain_cache_max_chunks.max(64);
     let resident = runtime
         .chunks
@@ -342,6 +351,7 @@ fn enforce_terrain_cache_limits(
             entry.chunk = None;
             entry.state = TerrainChunkState::NotRequested;
             runtime.cache_evictions = runtime.cache_evictions.saturating_add(1);
+            crate::perf_counter_add!("terrain.cache_evictions", 1);
             remove_count -= 1;
         }
     }

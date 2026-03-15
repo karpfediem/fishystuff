@@ -1,0 +1,24 @@
+{
+  "revision": "perf-terrain-v1",
+  "map_width": 2048,
+  "map_height": 2048,
+  "chunk_map_px": 1024,
+  "grid_size": 33,
+  "max_level": 0,
+  "bbox_y_min": -80.0,
+  "bbox_y_max": 420.0,
+  "encoding": "u16_norm",
+  "root": "images/terrain/v1",
+  "chunk_path": "levels/{level}/{x}_{y}.thc",
+  "levels": [
+    {
+      "level": 0,
+      "min_x": 0,
+      "min_y": 0,
+      "width": 2,
+      "height": 2,
+      "tile_count": 4,
+      "occupancy_b64": "Dw=="
+    }
+  ]
+}

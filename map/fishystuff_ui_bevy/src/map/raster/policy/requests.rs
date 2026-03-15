@@ -30,6 +30,7 @@ pub(crate) fn build_layer_requests(
     camera_unstable: bool,
     residency: &TileResidencyState,
 ) -> BuildResult {
+    crate::perf_scope!("raster.request_scheduling");
     let mut requests = Vec::new();
     let mut cache_hits: u32 = 0;
     let mut cache_hits_by_level = BTreeMap::new();
@@ -152,6 +153,11 @@ pub(crate) fn build_layer_requests(
     }
 
     dedupe_requests(&mut requests);
+    crate::perf_counter_add!("raster.cache_hits", cache_hits);
+    crate::perf_counter_add!(
+        "raster.cache_misses",
+        cache_misses_by_level.values().copied().sum::<u32>()
+    );
     BuildResult {
         requests,
         cache_hits,
@@ -172,6 +178,7 @@ fn build_requests_for_bounds(
     request_weight: f32,
     map_version_id: u64,
 ) -> BuildResult {
+    crate::perf_scope!("raster.cache_lookup_update");
     let Some(level) = tileset.level(bounds.z) else {
         return BuildResult {
             requests: Vec::new(),
@@ -260,6 +267,7 @@ pub(crate) fn start_tile_requests(
     camera_unstable: bool,
     stats: &mut crate::map::raster::TileStats,
 ) {
+    crate::perf_scope!("raster.request_start");
     let mut started = 0;
     let mut detail_started_by_layer: HashMap<LayerId, usize> = HashMap::new();
     while started < streamer.max_new_requests_per_frame && streamer.inflight < streamer.max_inflight
@@ -313,6 +321,7 @@ pub(crate) fn start_tile_requests(
         stats.inflight = streamer.inflight;
         started += 1;
     }
+    crate::perf_counter_add!("raster.requests_started", started);
 }
 
 pub(crate) fn tile_should_render(

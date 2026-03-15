@@ -1,0 +1,39 @@
+{
+  "revision": "perf-fish-v1",
+  "count": 3,
+  "fish": [
+    {
+      "item_id": 820101,
+      "encyclopedia_key": 101,
+      "encyclopedia_id": 9101,
+      "name": "Profiling Carp",
+      "grade": "Rare",
+      "is_prize": false,
+      "is_dried": false,
+      "catch_methods": [],
+      "vendor_price": 1000
+    },
+    {
+      "item_id": 820202,
+      "encyclopedia_key": 202,
+      "encyclopedia_id": 9202,
+      "name": "Profiling Herring",
+      "grade": "Common",
+      "is_prize": false,
+      "is_dried": false,
+      "catch_methods": [],
+      "vendor_price": 200
+    },
+    {
+      "item_id": 820303,
+      "encyclopedia_key": 303,
+      "encyclopedia_id": 9303,
+      "name": "Profiling Tuna",
+      "grade": "Epic",
+      "is_prize": true,
+      "is_dried": false,
+      "catch_methods": [],
+      "vendor_price": 3200
+    }
+  ]
+}

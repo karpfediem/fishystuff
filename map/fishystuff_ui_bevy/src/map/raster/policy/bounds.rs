@@ -21,6 +21,7 @@ pub(crate) fn compute_desired_layer_tiles(
     runtime: &mut LayerRuntimeState,
     previous: Option<DesiredLayerTiles>,
 ) -> DesiredLayerTiles {
+    crate::perf_scope!("raster.visible_tile_computation");
     let layer_aabb = world_transform.world_rect_to_layer_aabb(view_world);
 
     let mut candidates: Vec<(TileBounds, usize)> = Vec::new();

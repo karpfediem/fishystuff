@@ -135,6 +135,7 @@ pub(super) fn poll_terrain_manifest_ready(
     _config: Res<Terrain3dConfig>,
     mut runtime: ResMut<TerrainRuntime>,
 ) {
+    crate::perf_scope!("terrain.manifest_poll");
     if mode.mode != ViewMode::Terrain3D {
         return;
     }
@@ -210,16 +211,21 @@ pub(super) fn poll_terrain_manifest_ready(
         let entry = runtime.chunks.entry(key).or_default();
         entry.last_touched = frame;
         match result {
-            Ok(bytes) => match decode_terrain_chunk(&bytes) {
+            Ok(bytes) => match {
+                crate::perf_scope!("terrain.height_chunk_decode");
+                decode_terrain_chunk(&bytes)
+            } {
                 Ok(chunk) => {
                     entry.chunk = Some(chunk);
                     entry.state = TerrainChunkState::Building;
                     runtime.cache_hits = runtime.cache_hits.saturating_add(1);
+                    crate::perf_counter_add!("terrain.cache_hits", 1);
                 }
                 Err(err) => {
                     entry.chunk = None;
                     entry.state = TerrainChunkState::Failed;
                     runtime.cache_misses = runtime.cache_misses.saturating_add(1);
+                    crate::perf_counter_add!("terrain.cache_misses", 1);
                     bevy::log::warn!(
                         "terrain chunk decode failed level={} x={} y={}: {}",
                         key.level(),
@@ -233,6 +239,7 @@ pub(super) fn poll_terrain_manifest_ready(
                 entry.chunk = None;
                 entry.state = TerrainChunkState::Failed;
                 runtime.cache_misses = runtime.cache_misses.saturating_add(1);
+                crate::perf_counter_add!("terrain.cache_misses", 1);
                 bevy::log::warn!(
                     "terrain chunk load failed level={} x={} y={}: {}",
                     key.level(),
@@ -307,48 +314,9 @@ pub(super) fn spawn_json_request<T>(url: String) -> Receiver<Result<T, String>>
 where
     for<'de> T: Deserialize<'de> + Send + 'static,
 {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let result = fetch_json::<T>(&url).await;
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
+    crate::runtime_io::spawn_json_request(url)
 }
 
 pub(super) fn spawn_bytes_request(url: String) -> Receiver<Result<Vec<u8>, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let result = fetch_bytes(&url).await;
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
-}
-
-async fn fetch_json<T>(url: &str) -> Result<T, String>
-where
-    for<'de> T: Deserialize<'de> + Send + 'static,
-{
-    let response = Request::get(url)
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(format!("{}: {}", url, response.status()));
-    }
-    response.json::<T>().await.map_err(|err| err.to_string())
-}
-
-async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
-    let response = Request::get(url)
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !response.ok() {
-        return Err(format!("{}: {}", url, response.status()));
-    }
-    response.binary().await.map_err(|err| err.to_string())
+    crate::runtime_io::spawn_bytes_request(url)
 }

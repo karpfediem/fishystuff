@@ -28,6 +28,7 @@ impl RasterTileCache {
         residency: &TileResidencyState,
         stats: &mut TileStats,
     ) {
+        crate::perf_scope!("raster.tile_entity_update");
         for (key, entry) in self.entries.iter_mut() {
             if entry.state != TileState::Loading {
                 continue;

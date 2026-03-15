@@ -38,6 +38,7 @@ pub fn triangulate_polygon(
     geometry_space: GeometrySpace,
     map_to_world: MapToWorld,
 ) -> Result<Option<PolygonPiece>, String> {
+    crate::perf_scope!("vector.triangulation");
     if rings.is_empty() {
         return Ok(None);
     }

@@ -38,7 +38,20 @@ pub(super) fn default_from_patch_id(meta: &MetaResponse) -> Option<String> {
 }
 
 pub(super) fn now_utc_seconds() -> i64 {
-    (js_sys::Date::now() / 1000.0).floor() as i64
+    #[cfg(target_arch = "wasm32")]
+    {
+        return (js_sys::Date::now() / 1000.0).floor() as i64;
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        return SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|value| value.as_secs() as i64)
+            .unwrap_or_default();
+    }
 }
 
 pub(super) fn build_zone_stats_request(

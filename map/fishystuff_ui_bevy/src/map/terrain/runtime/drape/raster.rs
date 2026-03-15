@@ -14,6 +14,7 @@ pub(super) fn update_raster_tile_drapes(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
 ) {
+    crate::perf_scope!("terrain.drape_mesh_build");
     let Some(loaded_manifest) = runtime.manifest.clone() else {
         for entry in runtime.drape_entries.values() {
             commands.entity(entry.entity).insert(Visibility::Hidden);

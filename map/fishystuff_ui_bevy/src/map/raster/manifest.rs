@@ -3,13 +3,12 @@ use std::collections::HashMap;
 use async_channel::Receiver;
 use base64::Engine as _;
 use bevy::prelude::Resource;
-use bevy::tasks::IoTaskPool;
-use gloo_net::http::Request;
 use serde::Deserialize;
 
 use crate::map::layers::{LayerId, LayerManifestStatus, LayerSpec};
 use crate::map::spaces::layer_transform::{LayerTransform, TileSpace};
 use crate::map::spaces::world::MapToWorld;
+use crate::runtime_io;
 
 #[derive(Debug, Clone, Deserialize)]
 struct RawTilesetManifest {
@@ -389,26 +388,5 @@ pub(crate) fn implicit_identity_tileset(
 }
 
 fn spawn_tileset_request(url: String) -> Receiver<Result<RawTilesetManifest, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let result = fetch_json::<RawTilesetManifest>(&url).await;
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
-}
-
-async fn fetch_json<T>(url: &str) -> Result<T, String>
-where
-    for<'de> T: Deserialize<'de> + Send + 'static,
-{
-    let resp = Request::get(url)
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    if !resp.ok() {
-        return Err(format!("{}: {}", url, resp.status()));
-    }
-    resp.json::<T>().await.map_err(|err| err.to_string())
+    runtime_io::spawn_json_request(url)
 }

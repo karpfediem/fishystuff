@@ -142,6 +142,7 @@ pub(super) fn sync_point_markers(
         (With<EventPointIconMarker>, Without<EventPointRingMarker>),
     >,
 ) {
+    crate::perf_scope!("events.point_entity_update");
     if !display_state.show_points || view_mode.mode != ViewMode::Map2D {
         icon_cache.visible_icon_count = 0;
         icon_cache.visible_fish_ids_sample.clear();

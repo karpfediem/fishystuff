@@ -4,12 +4,11 @@ use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, WorldPoint};
 use crate::map::terrain::Terrain3dConfig;
 use crate::prelude::*;
+use crate::runtime_io;
 use async_channel::{Receiver, TryRecvError};
-use bevy::tasks::IoTaskPool;
 use fishystuff_core::terrain::{
     packed_rgb24_norm_from_rgb, world_height_from_normalized, TerrainManifest,
 };
-use gloo_net::http::Request;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct HeightTileKey {
@@ -275,31 +274,19 @@ fn spawn_height_tile_request(
     let root = config.height_tile_root_url.trim_end_matches('/');
     let url = format!("{root}/{}_{}.png", key.tx, key.ty);
     let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let result = fetch_height_tile(&url).await;
+    bevy::tasks::IoTaskPool::get()
+        .spawn(async move {
+            let result = runtime_io::load_bytes(&url).and_then(|bytes| {
+                decode_height_tile(bytes.as_slice()).map_err(|err| format!("decode {url}: {err}"))
+            });
             let _ = sender.send(result).await;
         })
         .detach();
     receiver
 }
 
-async fn fetch_height_tile(url: &str) -> Result<DecodedHeightTile, String> {
-    let response = Request::get(url)
-        .send()
-        .await
-        .map_err(|err| format!("fetch {url}: {err}"))?;
-    if !response.ok() {
-        return Err(format!("fetch {url}: {}", response.status()));
-    }
-    let bytes = response
-        .binary()
-        .await
-        .map_err(|err| format!("read bytes {url}: {err}"))?;
-    decode_height_tile(bytes.as_slice()).map_err(|err| format!("decode {url}: {err}"))
-}
-
 fn decode_height_tile(bytes: &[u8]) -> Result<DecodedHeightTile, String> {
+    crate::perf_scope!("terrain.height_tile_decode");
     let image = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
         .map_err(|err| err.to_string())?;
     let rgb = image.to_rgb8();

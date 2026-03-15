@@ -49,6 +49,7 @@ enum GeoJsonGeometry {
 }
 
 pub fn parse_geojson(bytes: &[u8]) -> Result<ParsedGeoJson, String> {
+    crate::perf_scope!("vector.geojson_parse");
     let collection: GeoJsonCollection =
         serde_json::from_slice(bytes).map_err(|err| format!("parse geojson: {err}"))?;
 

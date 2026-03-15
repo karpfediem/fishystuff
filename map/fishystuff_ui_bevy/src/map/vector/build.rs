@@ -3,8 +3,6 @@ use std::time::Duration;
 
 use async_channel::Receiver;
 use bevy::platform::time::Instant;
-use bevy::tasks::IoTaskPool;
-use gloo_net::http::Request;
 
 use crate::map::layers::{LayerVectorStatus, VectorSourceSpec};
 use crate::map::spaces::world::MapToWorld;
@@ -12,6 +10,7 @@ use crate::map::vector::cache::{BuiltVectorChunk, BuiltVectorGeometry, VectorLay
 use crate::map::vector::geojson::parse_geojson;
 use crate::map::vector::style::{style_bucket_key, StyleBucketKey};
 use crate::map::vector::triangulate::{triangulate_polygon, PolygonPiece};
+use crate::runtime_io;
 
 pub const DEFAULT_FRAME_BUDGET_MS: f64 = 3.0;
 pub const DEFAULT_FEATURES_PER_FRAME: usize = 64;
@@ -173,6 +172,7 @@ pub fn parse_into_job(
     let parsed = parse_geojson(&bytes)?;
     let mut features = Vec::with_capacity(parsed.features.len());
 
+    crate::perf_scope!("vector.feature_iteration");
     for (feature_index, feature) in parsed.features.into_iter().enumerate() {
         let bucket = style_bucket_key(&source, &feature.properties, feature_index);
         let polygons: Vec<Vec<Vec<[f64; 2]>>> = feature
@@ -276,6 +276,7 @@ pub fn advance_job(
 }
 
 pub fn finalize_job(job: VectorBuildJob, limits: VectorBuildLimits) -> BuiltVectorGeometry {
+    crate::perf_scope!("vector.chunk_mesh_build");
     let mut stats = job.stats;
     stats.progress = 1.0;
     stats.features_processed = stats.feature_count;
@@ -349,28 +350,7 @@ fn merge_pieces(color_rgba: [u8; 4], pieces: Vec<PolygonPiece>) -> Option<BuiltV
 }
 
 fn spawn_geojson_fetch(url: String) -> Receiver<Result<Vec<u8>, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let result = fetch_bytes(&url).await;
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
-}
-
-async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
-    let response = Request::get(url)
-        .send()
-        .await
-        .map_err(|err| format!("fetch {url}: {err}"))?;
-    if !response.ok() {
-        return Err(format!("fetch {url}: {}", response.status()));
-    }
-    response
-        .binary()
-        .await
-        .map_err(|err| format!("read bytes {url}: {err}"))
+    runtime_io::spawn_bytes_request(url)
 }
 
 #[cfg(test)]

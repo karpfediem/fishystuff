@@ -23,6 +23,7 @@ impl RasterTileCache {
         camera_unstable: bool,
         view_mode: ViewMode,
     ) -> std::collections::HashMap<LayerId, u32> {
+        crate::perf_scope!("raster.tile_render_prep");
         let mut visible_by_layer: std::collections::HashMap<LayerId, u32> =
             std::collections::HashMap::new();
         let map_to_world = MapToWorld::default();

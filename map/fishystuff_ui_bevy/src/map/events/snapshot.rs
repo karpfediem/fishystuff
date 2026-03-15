@@ -176,7 +176,10 @@ impl EventsSnapshotState {
         if !self.loaded {
             return ViewSelection::default();
         }
-        let candidate_indices = self.spatial_index.query_bbox(query.bbox, &self.events);
+        let candidate_indices = {
+            crate::perf_scope!("events.spatial_index_query");
+            self.spatial_index.query_bbox(query.bbox, &self.events)
+        };
         let candidate_count = candidate_indices.len();
         if candidate_indices.is_empty() {
             return ViewSelection {
@@ -185,28 +188,35 @@ impl EventsSnapshotState {
             };
         }
 
-        let mut filtered_indices = Vec::with_capacity(candidate_indices.len());
-        for idx in candidate_indices {
-            let Some(event) = self.events.get(idx) else {
-                continue;
-            };
-            if event.ts_utc < query.from_ts_utc || event.ts_utc >= query.to_ts_utc {
-                continue;
-            }
-            if !query.fish_ids.is_empty() && query.fish_ids.binary_search(&event.fish_id).is_err() {
-                continue;
-            }
-            if let Some(scope) = query.tile_scope.as_ref() {
-                if !scope.contains(event.map_px_x, event.map_px_y) {
+        let mut filtered_indices = {
+            crate::perf_scope!("events.filter_application");
+            let mut filtered_indices = Vec::with_capacity(candidate_indices.len());
+            for idx in candidate_indices {
+                let Some(event) = self.events.get(idx) else {
+                    continue;
+                };
+                if event.ts_utc < query.from_ts_utc || event.ts_utc >= query.to_ts_utc {
                     continue;
                 }
+                if !query.fish_ids.is_empty()
+                    && query.fish_ids.binary_search(&event.fish_id).is_err()
+                {
+                    continue;
+                }
+                if let Some(scope) = query.tile_scope.as_ref() {
+                    if !scope.contains(event.map_px_x, event.map_px_y) {
+                        continue;
+                    }
+                }
+                filtered_indices.push(idx);
             }
-            filtered_indices.push(idx);
-        }
+            filtered_indices
+        };
+        crate::perf_gauge!("events.filtered_count", filtered_indices.len());
 
         ViewSelection {
             candidate_count,
-            filtered_indices,
+            filtered_indices: std::mem::take(&mut filtered_indices),
         }
     }
 }

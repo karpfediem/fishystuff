@@ -56,11 +56,17 @@ pub fn initial_resolution() -> WindowResolution {
     WindowResolution::new(logical_width, logical_height)
 }
 
+#[cfg(target_arch = "wasm32")]
 fn viewport_logical_size() -> Option<(u32, u32)> {
     let window = web_sys::window()?;
     let width = window.inner_width().ok()?.as_f64()?.max(1.0);
     let height = window.inner_height().ok()?.as_f64()?.max(1.0);
     Some((width.round() as u32, height.round() as u32))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn viewport_logical_size() -> Option<(u32, u32)> {
+    None
 }
 
 fn spawn_cameras(mut commands: Commands) {

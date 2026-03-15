@@ -23,6 +23,7 @@ pub(crate) fn build_layer_residency_plan(
     cache: &RasterTileCache,
     camera_unstable: bool,
 ) -> LayerResidencyPlan {
+    crate::perf_scope!("raster.desired_tile_set_build");
     let mut plan = LayerResidencyPlan {
         max_detail_requests_while_moving: layer.lod_policy.max_detail_requests_while_camera_moving,
         motion_suppresses_refine: layer.lod_policy.motion_suppresses_refine,
@@ -185,6 +186,7 @@ pub(crate) fn apply_layer_residency_plan(
     plan: LayerResidencyPlan,
     residency: &mut TileResidencyState,
 ) {
+    crate::perf_scope!("raster.residency_apply");
     residency
         .render_visible
         .extend(plan.render_visible.iter().copied());
