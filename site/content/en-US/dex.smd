@@ -43,24 +43,31 @@
 
   .fishydex-shell {
     display: grid;
-    gap: 1.25rem;
+    gap: 1.5rem;
   }
 
-  .fishydex-top {
+  .fishydex-bento {
     display: grid;
-    gap: 1.25rem;
-    grid-template-columns: minmax(0, 1.2fr) minmax(16rem, 0.8fr);
+    gap: 1rem;
+  }
+
+  @media (min-width: 1024px) {
+    .fishydex-bento {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
   }
 
   .fishydex-screen,
-  .fishydex-stats {
-    border-radius: 1.25rem;
-    border: 1px solid var(--dex-screen-border);
-    background: var(--dex-screen);
+  .fishydex-stats,
+  .fishydex-grid-shell {
+    min-width: 0;
   }
 
-  .fishydex-screen {
-    padding: 1.25rem;
+  .fishydex-panel-body,
+  .fishydex-stats-body,
+  .fishydex-grid-body {
+    display: grid;
+    gap: 1rem;
   }
 
   .fishydex-heading {
@@ -91,40 +98,16 @@
 
   .fishydex-controls {
     display: grid;
-    gap: 0.9rem;
+    gap: 1rem;
   }
 
-  .fishydex-search {
-    appearance: none;
+  .fishydex-search-field {
     width: 100%;
-    border-radius: 1rem;
-    border: 1px solid var(--dex-line);
-    background: var(--dex-field);
-    color: var(--color-base-content, #1f2937);
-    font: inherit;
-    padding: 0.75rem 1rem;
-    font-size: 0.95rem;
-    transition: border-color 120ms ease, outline-color 120ms ease;
   }
 
-  .fishydex-search::placeholder {
-    color: var(--dex-text-muted);
-    opacity: 1;
-  }
-
-  .fishydex-search:hover {
-    border-color: color-mix(in oklab, var(--color-base-content, #1f2937) 34%, transparent);
-  }
-
-  .fishydex-search:focus,
-  .fishydex-search:focus-visible {
-    border-color: color-mix(in srgb, var(--color-primary, #e07a5f) 40%, var(--color-base-content, #1f2937));
-    outline: 2px solid var(--dex-focus);
-    outline-offset: 2px;
-  }
-
-  .fishydex-search:focus:not(:focus-visible) {
-    outline: none;
+  .fishydex-search-field input {
+    width: 100%;
+    min-width: 0;
   }
 
   .fishydex-actions {
@@ -136,14 +119,15 @@
   .fishydex-filter-stack {
     display: grid;
     gap: 0.85rem;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   }
 
   .fishydex-filter-group {
     display: grid;
-    gap: 0.45rem;
+    gap: 0.65rem;
   }
 
-  .fishydex-filter-label {
+  .fishydex-filter-group .fieldset-legend {
     color: var(--dex-text-muted);
     font-size: 0.78rem;
     font-weight: 800;
@@ -247,20 +231,12 @@
     white-space: nowrap;
   }
 
-  .fishydex-stats {
-    display: grid;
-    gap: 1rem;
+  .fishydex-stats-body {
     align-content: start;
-    padding: 1.25rem;
   }
 
   .fishydex-stat-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.85rem;
-    border: 1px solid var(--dex-line);
-    border-radius: 1rem;
-    background: var(--dex-surface);
+    width: 100%;
   }
 
   .fishydex-stat {
@@ -310,10 +286,6 @@
   }
 
   .fishydex-grid-shell {
-    padding: 1rem;
-    border-radius: 1.25rem;
-    border: 1px solid var(--dex-line);
-    background: var(--dex-screen);
     overflow-anchor: none;
   }
 
@@ -324,11 +296,7 @@
   }
 
   .fishydex-group {
-    border-radius: 1rem;
-    border: 1px solid var(--dex-line);
-    background: var(--dex-surface);
     color: var(--color-base-content, #1f2937);
-    padding: 1rem;
   }
 
   .fishydex-group-header {
@@ -618,11 +586,7 @@
   }
 
   .fishydex-empty {
-    border: 2px dashed var(--dex-line);
-    border-radius: 1.4rem;
-    background: var(--dex-surface);
     color: var(--color-base-content, #1f2937);
-    padding: 1.25rem;
     text-align: center;
   }
 
@@ -676,7 +640,6 @@
     z-index: 40;
     display: grid;
     place-items: center;
-    padding: 1rem;
   }
 
   .fishydex-details-backdrop {
@@ -693,14 +656,9 @@
   .fishydex-details-panel {
     position: relative;
     z-index: 1;
-    width: min(42rem, 100%);
     max-height: min(90vh, 46rem);
     overflow: auto;
-    border-radius: 1.25rem;
-    border: 1px solid var(--dex-screen-border);
-    background: var(--dex-screen);
     color: var(--color-base-content, #1f2937);
-    padding: 1.2rem;
   }
 
   .fishydex-details-header {
@@ -781,9 +739,6 @@
     display: grid;
     place-items: center;
     min-height: 14rem;
-    border-radius: 1rem;
-    border: 1px solid var(--dex-line);
-    background: var(--dex-surface);
     padding: 1rem;
   }
 
@@ -798,9 +753,6 @@
 
   .fishydex-details-meta-card,
   .fishydex-details-section {
-    border-radius: 1rem;
-    border: 1px solid var(--dex-line);
-    background: var(--dex-surface-soft);
     padding: 0.85rem 0.95rem;
   }
 
@@ -854,10 +806,6 @@
   }
 
   @media (max-width: 900px) {
-    .fishydex-top {
-      grid-template-columns: 1fr;
-    }
-
     .fishydex-details-header {
       grid-template-columns: 1fr;
     }
@@ -1589,7 +1537,8 @@
     }
 
     function renderEmptyState(hasActiveFilters) {
-      const empty = createElement("div", "fishydex-empty");
+      const empty = createElement("div", "fishydex-empty card card-dash bg-base-100");
+      const body = createElement("div", "card-body items-center");
       const title = createElement("h3", "fishydex-group-title", "No fish match this filter.");
       const detail = createElement(
         "p",
@@ -1598,7 +1547,8 @@
           ? "Try a broader search or clear some filters."
           : "The fish catalog is empty."
       );
-      empty.append(title, detail);
+      body.append(title, detail);
+      empty.appendChild(body);
       return empty;
     }
 
@@ -1622,7 +1572,7 @@
       openButton.setAttribute("aria-haspopup", "dialog");
       openButton.setAttribute("aria-label", `Open details for ${fish.name || `Fish ${itemId}`}`);
 
-      const content = createElement("div", "fishydex-card-content");
+      const content = createElement("div", "fishydex-card-content card-body");
       const top = createElement("div", "fishydex-card-top");
       const actions = createElement("div", "fishydex-card-actions");
       const caughtButton = createElement(
@@ -1669,7 +1619,8 @@
         return null;
       }
 
-      const section = createElement("section", "fishydex-group");
+      const section = createElement("section", "fishydex-group card card-border bg-base-100");
+      const body = createElement("div", "card-body");
       const header = createElement("div", "fishydex-group-header");
       header.appendChild(createElement("h3", "fishydex-group-title", gradeLabel(title)));
       header.appendChild(createElement("span", "fishydex-group-count badge badge-ghost", `${fish.length} fish`));
@@ -1681,7 +1632,8 @@
         nextAnimationIndex += 1;
       }
 
-      section.append(header, grid);
+      body.append(header, grid);
+      section.appendChild(body);
       return {
         section,
         nextAnimationIndex,
@@ -1855,11 +1807,13 @@
 
       const meta = fishMetaById(state.detailsFishId);
       if (!meta) {
+        modal.classList.remove("modal-open");
         modal.hidden = true;
         return;
       }
 
       modal.hidden = false;
+      modal.classList.add("modal-open");
       const title = document.getElementById("fishydex-details-title");
       const titleToggle = document.getElementById("fishydex-details-caught-toggle");
       const itemKey = document.getElementById("fishydex-details-item-key");
@@ -2256,27 +2210,38 @@
        })"></div>
 
   <section class="fishydex-shell">
-    <div class="fishydex-top">
-      <div class="fishydex-screen">
+    <div class="fishydex-bento">
+      <section class="fishydex-screen card card-border bg-base-100 lg:col-span-4">
+        <div class="card-body fishydex-panel-body">
         <div class="fishydex-heading">
           <h3>Filter</h3>
           <span class="fishydex-subtle">Revision <span data-text="$revision || 'pending'"></span></span>
         </div>
 
         <div class="fishydex-controls">
-          <label>
-            <span class="sr-only">Search fish</span>
-            <input class="fishydex-search input input-bordered"
-                   type="search"
-                   autocomplete="off"
-                   placeholder="Search by fish name or ID"
-                   data-bind-search_draft
-                   data-on-input__debounce.125ms="$search_query = ($search_draft || '').trim()">
-          </label>
+          <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
+            <legend class="fieldset-legend">Search</legend>
+            <label class="fishydex-search-field input input-bordered">
+              <svg class="h-[1em] opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+                <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="m21 21-4.3-4.3"></path>
+                </g>
+              </svg>
+              <span class="sr-only">Search fish</span>
+              <input class="fishydex-search"
+                     type="search"
+                     autocomplete="off"
+                     placeholder="Search by fish name or ID"
+                     data-bind-search_draft
+                     data-on-input__debounce.125ms="$search_query = ($search_draft || '').trim()">
+            </label>
+            <p class="label">Filter by fish name or item ID.</p>
+          </fieldset>
 
           <div class="fishydex-filter-stack">
-            <div class="fishydex-filter-group">
-              <span class="fishydex-filter-label">Caught Status</span>
+            <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
+              <legend class="fieldset-legend">Caught Status</legend>
               <div class="fishydex-filter-chips" role="group" aria-label="Caught status filters">
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip"
@@ -2294,10 +2259,12 @@
                         aria-pressed="false"
                         data-on-click="window.Fishydex.setCaughtFilter('missing')">Missing</button>
               </div>
-            </div>
+              <p class="label">Narrow the catalog by caught progress.</p>
+            </fieldset>
 
-            <div class="fishydex-filter-group" data-show="$supports_grade_filter">
-              <span class="fishydex-filter-label">Grade</span>
+            <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4"
+                      data-show="$supports_grade_filter">
+              <legend class="fieldset-legend">Grade</legend>
               <div class="fishydex-filter-chips" role="group" aria-label="Grade color filters">
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-prize"
@@ -2325,10 +2292,12 @@
                         aria-pressed="false"
                         data-on-click="window.Fishydex.toggleGradeFilter('Trash')">White</button>
               </div>
-            </div>
+              <p class="label">Use the existing fish color grades as filters.</p>
+            </fieldset>
 
-            <div class="fishydex-filter-group" data-show="$supports_method_filter || $supports_dried_filter">
-              <span class="fishydex-filter-label">Method</span>
+            <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4"
+                      data-show="$supports_method_filter || $supports_dried_filter">
+              <legend class="fieldset-legend">Method</legend>
               <div class="fishydex-filter-chips" role="group" aria-label="Catch method and dried filters">
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip"
@@ -2355,10 +2324,11 @@
                         aria-pressed="false"
                         data-on-click="window.Fishydex.toggleShowDried()">Show Dried</button>
               </div>
-            </div>
+              <p class="label">Filter by rod, harpoon, or dried variants.</p>
+            </fieldset>
 
-            <div class="fishydex-filter-group">
-              <span class="fishydex-filter-label">Sort</span>
+            <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
+              <legend class="fieldset-legend">Sort</legend>
               <div class="fishydex-filter-chips" role="group" aria-label="Sort controls">
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip"
@@ -2376,11 +2346,12 @@
                         aria-pressed="true"
                         data-on-click="window.Fishydex.toggleSortDirection()">Ascending</button>
               </div>
-            </div>
+              <p class="label">Switch between alphabetical and price-first views.</p>
+            </fieldset>
 
             <div class="fishydex-filter-meta">
               <span class="fishydex-subtle" data-text="$active_filter_message || 'No extra filters.'"></span>
-              <button type="button" class="btn btn-sm btn-outline fishydex-filter-clear" data-on-click="window.Fishydex.resetFilters()">Clear filters</button>
+              <button type="button" class="btn btn-sm btn-soft fishydex-filter-clear" data-on-click="window.Fishydex.resetFilters()">Clear filters</button>
             </div>
           </div>
 
@@ -2394,11 +2365,13 @@
             <div class="fishydex-subtle" data-show="($api_error_hint || '').length > 0" data-text="$api_error_hint"></div>
           </div>
         </div>
-      </div>
+        </div>
+      </section>
 
-      <aside class="fishydex-stats">
+      <aside class="fishydex-stats card card-border bg-base-100 lg:col-span-2">
+        <div class="card-body fishydex-stats-body">
         <h3>Progress</h3>
-        <div class="fishydex-stat-grid stats stats-vertical rounded-box bg-base-200 sm:stats-horizontal lg:stats-vertical">
+        <div class="fishydex-stat-grid stats stats-vertical rounded-box border border-base-300 bg-base-200 sm:stats-horizontal lg:stats-vertical">
           <div class="fishydex-stat stat">
             <span class="fishydex-stat-label stat-title">Caught</span>
             <span class="fishydex-stat-value stat-value" data-text="$caught_count || 0"></span>
@@ -2421,24 +2394,30 @@
           <div class="fishydex-subtle">Fetching the fish catalog from the Axum API.</div>
         </div>
         <div class="fishydex-actions" data-show="!$loading">
-          <button type="button" class="btn btn-sm btn-primary fishydex-button" data-on-click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
-          <button type="button" class="btn btn-sm btn-secondary fishydex-button" data-on-click="window.Fishydex.importCaught()">Import</button>
+          <button type="button" class="btn btn-sm btn-soft btn-primary fishydex-button" data-on-click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
+          <button type="button" class="btn btn-sm btn-outline fishydex-button" data-on-click="window.Fishydex.importCaught()">Import</button>
+        </div>
         </div>
       </aside>
     </div>
 
-    <div class="fishydex-grid-shell">
+    <section class="fishydex-grid-shell card card-border bg-base-100">
+      <div class="card-body fishydex-grid-body">
       <div id="fishydex-grid" class="fishydex-groups"></div>
-    </div>
+      </div>
+    </section>
   </section>
 
-  <div id="fishydex-details" class="fishydex-details-modal" hidden>
+  <div id="fishydex-details" class="fishydex-details-modal modal" hidden>
     <button type="button"
-            class="fishydex-details-backdrop"
+            class="fishydex-details-backdrop modal-backdrop"
             data-action="close-details"
             aria-label="Close fish details"></button>
 
-    <section class="fishydex-details-panel" role="dialog" aria-modal="true" aria-labelledby="fishydex-details-title">
+    <section class="fishydex-details-panel modal-box card card-border bg-base-100 w-11/12 max-w-5xl"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="fishydex-details-title">
       <div class="fishydex-details-header">
         <div class="fishydex-details-header-main">
           <div id="fishydex-details-icon-frame" class="fishydex-details-icon-wrap grade-unknown">
@@ -2472,25 +2451,25 @@
       </div>
 
       <div class="fishydex-details-guide">
-        <div class="fishydex-details-guide-frame">
+        <div class="fishydex-details-guide-frame rounded-box border border-base-300 bg-base-200">
           <img id="fishydex-details-guide-image" class="fishydex-details-guide-image" hidden>
           <div id="fishydex-details-guide-placeholder" class="fishydex-placeholder">?</div>
         </div>
       </div>
 
       <dl class="fishydex-details-meta">
-        <div class="fishydex-details-meta-card">
+        <div class="fishydex-details-meta-card card card-border bg-base-200">
           <dt>Item Key</dt>
           <dd id="fishydex-details-item-key"></dd>
         </div>
-        <div class="fishydex-details-meta-card">
+        <div class="fishydex-details-meta-card card card-border bg-base-200">
           <dt>Vendor Price</dt>
           <dd id="fishydex-details-vendor-price"></dd>
         </div>
       </dl>
 
       <div class="fishydex-details-stack">
-        <section class="fishydex-details-section">
+        <section class="fishydex-details-section card card-border bg-base-200">
           <h4>Best Spots</h4>
           <p id="fishydex-details-spots-note" class="fishydex-details-note"></p>
         </section>
