@@ -10,12 +10,12 @@ use bevy::prelude::*;
 use wasm_bindgen::prelude::*;
 
 use crate::bridge::contract::{
-    FishyMapCameraSnapshot, FishyMapCatalogSnapshot, FishyMapCommands, FishyMapFiltersState,
-    FishyMapFishSummary, FishyMapHoverSnapshot, FishyMapInputState, FishyMapLayerSummary,
-    FishyMapOutputEvent, FishyMapPatchSummary, FishyMapSelectionSnapshot, FishyMapStatePatch,
-    FishyMapStateSnapshot, FishyMapStatusSnapshot, FishyMapThemeColors, FishyMapViewMode,
-    FishyMapViewSnapshot, FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot,
-    FishyMapZoneEvidenceEntrySnapshot, FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
+    FishyMapCameraSnapshot, FishyMapCommands, FishyMapFiltersState, FishyMapFishSummary,
+    FishyMapHoverSnapshot, FishyMapInputState, FishyMapLayerSummary, FishyMapOutputEvent,
+    FishyMapPatchSummary, FishyMapSelectionSnapshot, FishyMapStatePatch, FishyMapStateSnapshot,
+    FishyMapStatusSnapshot, FishyMapThemeColors, FishyMapViewMode, FishyMapViewSnapshot,
+    FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot, FishyMapZoneEvidenceEntrySnapshot,
+    FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
 };
 use crate::bridge::theme::parse_css_color;
 use crate::map::camera::map2d::Map2dViewState;
