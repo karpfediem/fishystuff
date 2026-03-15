@@ -43,3 +43,18 @@ readiness ordering:
 That means the local site server only starts once the generated site output
 exists and the local API/CDN endpoints referenced by `.out/runtime-config.js`
 are already reachable.
+
+## Browser smoke check
+
+Once the local stack is up, run:
+
+- `tools/scripts/map-browser-smoke.sh`
+
+The smoke check launches headless Chromium against `http://127.0.0.1:1990/map/`,
+waits for `window.FishyMapBridge.getCurrentState().ready` to become `true`, and
+fails if startup stalls or the renderer error overlay appears.
+
+It writes a machine-readable result to `target/smoke/map-browser.json` by
+default. To override the timeout or report path:
+
+- `MAP_SMOKE_TIMEOUT_SECS=45 tools/scripts/map-browser-smoke.sh /tmp/map-browser.json`

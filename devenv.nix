@@ -44,6 +44,7 @@ in {
       skopeo
       xlsx2csv
       clang
+      chromium
       mariadb
       valgrind
       wasm-bindgen-cli_0_2_108
