@@ -62,7 +62,7 @@ Required deploy-time configuration:
 Typical setup:
 
 ```bash
-fly secrets set DOLT_REMOTE_URL='doltremoteapi/fishystuff/fishystuff'
+fly secrets set DOLT_REMOTE_URL='fishystuff/fishystuff'
 ```
 
 Override the upstream branch for a specific deployment with an env var update,

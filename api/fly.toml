@@ -20,7 +20,7 @@ kill_timeout = "30s"
   RUST_LOG = "info"
   # Set DOLT_REMOTE_URL before deploy. For a public DoltHub repo this can be a
   # regular Fly env var, but using a secret keeps the deploy path consistent:
-  # fly secrets set DOLT_REMOTE_URL='doltremoteapi/fishystuff/fishystuff'
+  # fly secrets set DOLT_REMOTE_URL='fishystuff/fishystuff'
   # Override DOLT_REMOTE_BRANCH per deployment if needed.
 
 [http_service]
