@@ -2252,7 +2252,6 @@
                      data-bind-search_draft
                      data-on-input__debounce.125ms="$search_query = ($search_draft || '').trim()">
             </label>
-            <p class="label">Filter by fish name or item ID.</p>
           </fieldset>
 
           <div class="fishydex-filter-stack">
@@ -2275,7 +2274,6 @@
                         aria-pressed="false"
                         data-on-click="window.Fishydex.setCaughtFilter('missing')">Missing</button>
               </div>
-              <p class="label">Narrow the catalog by caught progress.</p>
             </fieldset>
 
             <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4"
@@ -2308,7 +2306,6 @@
                         aria-pressed="false"
                         data-on-click="window.Fishydex.toggleGradeFilter('Trash')">White</button>
               </div>
-              <p class="label">Use the existing fish color grades as filters.</p>
             </fieldset>
 
             <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4"
@@ -2340,7 +2337,6 @@
                         aria-pressed="false"
                         data-on-click="window.Fishydex.toggleShowDried()">Show Dried</button>
               </div>
-              <p class="label">Filter by rod, harpoon, or dried variants.</p>
             </fieldset>
 
             <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
@@ -2362,7 +2358,6 @@
                         aria-pressed="true"
                         data-on-click="window.Fishydex.toggleSortDirection()">Ascending</button>
               </div>
-              <p class="label">Switch between alphabetical and price-first views.</p>
             </fieldset>
 
             <div class="fishydex-filter-meta">
