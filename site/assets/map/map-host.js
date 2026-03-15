@@ -1250,6 +1250,49 @@ function stableStringify(value) {
   return JSON.stringify(stripUndefined(cloneJson(value)));
 }
 
+function bootstrapStateSignature(state) {
+  const filters = state?.filters || {};
+  const ui = state?.ui || {};
+  const statuses = state?.statuses || {};
+  const catalog = state?.catalog || {};
+  return stableStringify({
+    ready: Boolean(state?.ready),
+    viewMode: state?.view?.viewMode || null,
+    selectionZoneRgb: state?.selection?.zoneRgb ?? null,
+    filters: {
+      patchId: filters.patchId ?? null,
+      fromPatchId: filters.fromPatchId ?? null,
+      toPatchId: filters.toPatchId ?? null,
+      fishIdsCount: Array.isArray(filters.fishIds) ? filters.fishIds.length : 0,
+      visibleLayerCount: Array.isArray(filters.layerIdsVisible)
+        ? filters.layerIdsVisible.length
+        : null,
+    },
+    ui: {
+      diagnosticsOpen: Boolean(ui.diagnosticsOpen),
+      legendOpen: Boolean(ui.legendOpen),
+      leftPanelOpen: Boolean(ui.leftPanelOpen),
+      showPoints: Boolean(ui.showPoints),
+      showPointIcons: Boolean(ui.showPointIcons),
+      pointIconScale: Number(ui.pointIconScale || 0),
+    },
+    statuses: {
+      metaStatus: statuses.metaStatus ?? null,
+      layersStatus: statuses.layersStatus ?? null,
+      zonesStatus: statuses.zonesStatus ?? null,
+      pointsStatus: statuses.pointsStatus ?? null,
+      fishStatus: statuses.fishStatus ?? null,
+      zoneStatsStatus: statuses.zoneStatsStatus ?? null,
+    },
+    catalog: {
+      capabilityCount: Array.isArray(catalog.capabilities) ? catalog.capabilities.length : 0,
+      layerCount: Array.isArray(catalog.layers) ? catalog.layers.length : 0,
+      patchCount: Array.isArray(catalog.patches) ? catalog.patches.length : 0,
+      fishCount: Array.isArray(catalog.fish) ? catalog.fish.length : 0,
+    },
+  });
+}
+
 function isMeaningfulPatch(patch) {
   const normalized = normalizeStatePatch(patch);
   return patchHasStateFields(normalized) || patchHasCommands(normalized);
@@ -1625,13 +1668,13 @@ class FishyMapBridgeImpl {
       return;
     }
     this.bootstrapSyncPasses += 1;
-    const previousState = this.getCurrentState();
-    const previousSerialized = stableStringify(previousState);
+    const previousState = this.currentState;
+    const previousSignature = bootstrapStateSignature(previousState);
 
     this.syncCanvasSize();
     this.refreshCurrentStateFromWasm();
 
-    if (stableStringify(this.currentState) !== previousSerialized) {
+    if (bootstrapStateSignature(this.currentState) !== previousSignature) {
       if (!previousState.ready && this.currentState.ready) {
         this.scheduleSessionStateSave();
         this.emit(FISHYMAP_EVENTS.ready, {
@@ -1716,6 +1759,26 @@ class FishyMapBridgeImpl {
       return;
     }
 
+    if (type === "view-changed") {
+      this.currentState = {
+        ...this.currentState,
+        view: {
+          ...this.currentState.view,
+          viewMode: payload.viewMode ?? this.currentState.view?.viewMode ?? "2d",
+          camera: payload.camera ? cloneJson(payload.camera) : this.currentState.view?.camera,
+        },
+      };
+      this.scheduleSessionStateSave();
+      this.emit(FISHYMAP_EVENTS.viewChanged, {
+        ...payload,
+        state: {
+          view: cloneJson(this.currentState.view),
+        },
+        inputState: this.getCurrentInputState(),
+      });
+      return;
+    }
+
     this.refreshCurrentStateFromWasm();
 
     const detail = {
@@ -1724,11 +1787,6 @@ class FishyMapBridgeImpl {
       inputState: this.getCurrentInputState(),
     };
 
-    if (type === "view-changed") {
-      this.scheduleSessionStateSave();
-      this.emit(FISHYMAP_EVENTS.viewChanged, detail);
-      return;
-    }
     if (type === "selection-changed") {
       this.scheduleSessionStateSave();
       this.emit(FISHYMAP_EVENTS.selectionChanged, detail);

@@ -349,6 +349,7 @@ test("wasm output events are redispatched as DOM CustomEvents", async () => {
       localStorage: env.localStorage,
       sessionStorage: env.sessionStorage,
     });
+    wasm.calls.stateReads = 0;
 
     const received = await new Promise((resolve) => {
       container.addEventListener(
@@ -373,6 +374,7 @@ test("wasm output events are redispatched as DOM CustomEvents", async () => {
     assert.equal(received.type, "view-changed");
     assert.equal(received.state.view.viewMode, "3d");
     assert.equal(received.state.view.camera.distance, 5000);
+    assert.equal(wasm.calls.stateReads, 0);
   } finally {
     bridge?.destroy();
     env.restore();
