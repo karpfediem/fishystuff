@@ -2,10 +2,6 @@
 
 Repository-level notes for working in this monorepo.
 
-## Subtree instructions
-- If you touch `zonegen/`, read [zonegen/AGENTS.md](/home/carp/code/fishystuff/zonegen/AGENTS.md) first.
-- `zonegen/AGENTS.md` is now for the temporary migration area only. `zonegen/` is no longer the primary Rust workspace.
-
 ## Component responsibilities
 - `api/`
   Deployable Axum/Tower API runtime, SQL migrations, and API deployment config.
@@ -21,8 +17,6 @@ Repository-level notes for working in this monorepo.
   Zine site and deployable static assets.
 - `tools/`
   Offline/admin Rust tooling crates and thin scripts under `tools/scripts/`.
-- `zonegen/`
-  Temporary migration residue only: legacy data/images/docs/devenv files still being phased out.
 
 ## Dependency rules
 - `lib/*` crates may be depended on by `api/`, `bot/`, `map/`, and `tools/`.
@@ -30,7 +24,6 @@ Repository-level notes for working in this monorepo.
 - `map/` depends on `lib/*` crates, not on `api/fishystuff_server`.
 - `tools/` depend on `lib/*` crates rather than runtime internals where avoidable.
 - `data/` is not a runtime dependency.
-- Do not add new Rust crates back under `zonegen/`.
 
 ## Devenv
 - This repo uses one top-level `devenv` environment rooted in:
@@ -86,7 +79,6 @@ Repository-level notes for working in this monorepo.
 - Small tracked landmark/reference CSVs may live under `data/landmarks/`.
 - Treat `data/` as local developer input/output state, not a serving root.
 - Stage CDN publish payloads under `data/cdn/`.
-- Some legacy local inputs still remain under `zonegen/data/` during migration. Do not make runtime components depend on them.
 
 ## Generated artifact policy
 - Hand-edited map host source lives under:

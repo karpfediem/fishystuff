@@ -15,9 +15,6 @@ members = [
   "tools/fishystuff_ingest",
   "tools/fishystuff_tilegen",
 ]
-exclude = [
-  "zonegen",
-]
 
 [workspace.package]
 edition = "2021"
