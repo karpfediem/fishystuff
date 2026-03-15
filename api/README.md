@@ -78,6 +78,9 @@ Deploy through the repo recipe:
 just deploy-api
 ```
 
+That recipe deploys against the existing `api-fishystuff-fish` Fly app defined
+in [api/fly.toml](/home/carp/code/fishystuff/api/fly.toml).
+
 The Fly app name is `api-fishystuff-fish`, and the intended public hostname is
 `https://api.fishystuff.fish`.
 
