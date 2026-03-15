@@ -487,26 +487,10 @@
         </fieldset>
 
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
-            <legend class="fieldset-legend ml-6 px-2">Timespan</legend>
-            <div class="card-body gap-4 pt-0">
-                <div class="grid gap-4">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <p class="text-sm font-semibold">Session length</p>
-                            <p class="text-xs text-base-content/70">Use a common preset or fine-tune the duration below.</p>
-                        </div>
-                        <span class="badge badge-soft badge-secondary badge-lg" data-text="$timespanText"></span>
-                    </div>
-
-                    <div class="join join-vertical sm:join-horizontal">
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'hours'">1 hour</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 8; $timespanUnit = 'hours'">8 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 10; $timespanUnit = 'hours'">10 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 12; $timespanUnit = 'hours'">12 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'days'">1 day</button>
-                    </div>
-
-                    <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+            <legend class="fieldset-legend ml-6 px-2">Session (<span data-text="$timespanText"></span>)</legend>
+            <div class="card-body gap-3 pt-0">
+                <div class="grid gap-3">
+                    <div class="grid grid-cols-2 gap-3">
                         <fieldset class="fieldset">
                             <legend class="fieldset-legend">Amount</legend>
                             <input type="number"
@@ -526,6 +510,14 @@
                                 <option value="weeks">Weeks</option>
                             </select>
                         </fieldset>
+                    </div>
+
+                    <div class="join join-vertical sm:join-horizontal">
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'hours'">1 hour</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 8; $timespanUnit = 'hours'">8 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 10; $timespanUnit = 'hours'">10 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 12; $timespanUnit = 'hours'">12 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'days'">1 day</button>
                     </div>
                 </div>
             </div>
