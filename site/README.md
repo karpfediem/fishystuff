@@ -51,8 +51,9 @@ Once the local stack is up, run:
 - `tools/scripts/map-browser-smoke.sh`
 
 The smoke check launches headless Chromium against `http://127.0.0.1:1990/map/`,
-waits for `window.FishyMapBridge.getCurrentState().ready` to become `true`, and
-fails if startup stalls or the renderer error overlay appears.
+waits for `window.FishyMapBridge.getCurrentState()` to reach `ready` with a
+non-empty fish catalog, and fails if startup stalls or the renderer error
+overlay appears.
 
 It writes a machine-readable result to `target/smoke/map-browser.json` by
 default. To override the timeout or report path:

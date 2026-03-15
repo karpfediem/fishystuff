@@ -15,6 +15,7 @@ export const FISHYMAP_EVENTS = Object.freeze({
   command: "fishymap:command",
   requestState: "fishymap:request-state",
   ready: "fishymap:ready",
+  stateChanged: "fishymap:state-changed",
   viewChanged: "fishymap:view-changed",
   selectionChanged: "fishymap:selection-changed",
   hoverChanged: "fishymap:hover-changed",
@@ -1293,6 +1294,12 @@ function bootstrapStateSignature(state) {
   });
 }
 
+function fishCatalogPending(state) {
+  return String(state?.statuses?.fishStatus || "")
+    .trim()
+    .toLowerCase() === "fish: pending";
+}
+
 function mergeBootstrapSnapshot(currentState, bootstrapState) {
   const current = currentState || createEmptySnapshot();
   const parsed = bootstrapState || {};
@@ -1685,16 +1692,22 @@ class FishyMapBridgeImpl {
     this.bootstrapSyncPasses += 1;
     const previousState = this.currentState;
     const previousSignature = bootstrapStateSignature(previousState);
+    const wasReady = previousState.ready === true;
+    const fishWasPending = fishCatalogPending(previousState);
 
     this.syncCanvasSize();
     this.refreshBootstrapStateFromWasm();
 
-    if (!previousState.ready && this.currentState.ready) {
+    const becameReady = !wasReady && this.currentState.ready;
+    const fishFinishedLoading =
+      this.currentState.ready && fishWasPending && !fishCatalogPending(this.currentState);
+
+    if (becameReady || fishFinishedLoading) {
       this.refreshCurrentStateFromWasm();
     }
 
     if (bootstrapStateSignature(this.currentState) !== previousSignature) {
-      if (!previousState.ready && this.currentState.ready) {
+      if (becameReady) {
         this.scheduleSessionStateSave();
         this.emit(FISHYMAP_EVENTS.ready, {
           type: "ready",
@@ -1703,12 +1716,20 @@ class FishyMapBridgeImpl {
           state: this.getCurrentState(),
           inputState: this.getCurrentInputState(),
         });
+      } else if (wasReady && this.currentState.ready) {
+        this.emit(FISHYMAP_EVENTS.stateChanged, {
+          type: "state-changed",
+          version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
+          state: this.getCurrentState(),
+          inputState: this.getCurrentInputState(),
+        });
       }
     }
 
     const shouldContinue =
       this.bootstrapSyncPasses < MIN_BOOTSTRAP_SYNC_PASSES ||
-      (!this.currentState.ready && this.bootstrapSyncPasses < MAX_BOOTSTRAP_SYNC_PASSES);
+      ((!this.currentState.ready || fishCatalogPending(this.currentState)) &&
+        this.bootstrapSyncPasses < MAX_BOOTSTRAP_SYNC_PASSES);
     if (shouldContinue) {
       this.scheduleBootstrapStateSync();
       return;

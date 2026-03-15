@@ -9,6 +9,8 @@ use super::super::state::{ApiBootstrapState, PatchFilterState};
 
 #[cfg(target_arch = "wasm32")]
 const PROD_CDN_BASE_URL: &str = "https://cdn.fishystuff.fish";
+#[cfg(target_arch = "wasm32")]
+const PROD_API_BASE_URL: &str = "https://api.fishystuff.fish";
 
 pub(super) fn pick_map_version(meta: &MetaResponse) -> Option<String> {
     if let Some(default) = meta.defaults.map_version_id.as_ref() {
@@ -123,6 +125,29 @@ pub(crate) fn normalize_public_base_url(value: Option<&str>) -> Option<String> {
         }
     }
     fallback_public_base_url()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(super) fn resolve_api_request_url(path: &str) -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let base = browser_global_base_url("__fishystuffApiBaseUrl")
+            .unwrap_or_else(|| PROD_API_BASE_URL.to_string());
+        if path.starts_with("http://") || path.starts_with("https://") {
+            return path.to_string();
+        }
+        return format!(
+            "{}{}{}",
+            base.trim_end_matches('/'),
+            if path.starts_with('/') { "" } else { "/" },
+            path
+        );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        path.to_string()
+    }
 }
 
 pub(super) fn absolutize_layers_response_assets(

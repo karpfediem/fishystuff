@@ -86,8 +86,8 @@
   tools/scripts/map-browser-smoke.sh
   ```
 - It launches headless Chromium against the local `/map` page, waits for
-  `FishyMapBridge` to report `ready`, and writes a JSON result to
-  `target/smoke/map-browser.json`.
+  `FishyMapBridge` to report `ready` with a usable fish catalog, and writes a
+  JSON result to `target/smoke/map-browser.json`.
 - Use it after `devenv up` to catch browser startup stalls or renderer startup
   regressions before making performance claims from native harness results.
 

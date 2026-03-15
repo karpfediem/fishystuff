@@ -594,6 +594,87 @@ test("bootstrap sync uses lightweight polling until the map becomes ready", asyn
   }
 });
 
+test("bootstrap sync refreshes the host cache when fish finishes loading after ready", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: false,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+        statuses: { metaStatus: "meta: pending", fishStatus: "fish: pending" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+
+    const initialStateReads = wasm.calls.stateReads;
+    const readyEvent = new Promise((resolve) => {
+      container.addEventListener(FISHYMAP_EVENTS.ready, (event) => resolve(event.detail), {
+        once: true,
+      });
+    });
+    snapshotRef.current = {
+      ...snapshotRef.current,
+      ready: true,
+      statuses: { metaStatus: "meta: loaded", fishStatus: "fish: pending" },
+    };
+
+    const readyDetail = await readyEvent;
+    assert.equal(readyDetail.state.ready, true);
+    assert.equal(readyDetail.state.catalog.fish.length, 0);
+    assert.equal(wasm.calls.stateReads, initialStateReads + 1);
+
+    const stateChangedEvent = new Promise((resolve) => {
+      container.addEventListener(
+        FISHYMAP_EVENTS.stateChanged,
+        (event) => resolve(event.detail),
+        { once: true },
+      );
+    });
+    snapshotRef.current = {
+      ...snapshotRef.current,
+      catalog: {
+        capabilities: [],
+        layers: [],
+        patches: [],
+        fish: [
+          { fishId: 1, name: "A" },
+          { fishId: 2, name: "B" },
+        ],
+      },
+      statuses: { metaStatus: "meta: loaded", fishStatus: "fish: 2" },
+    };
+
+    const stateChangedDetail = await stateChangedEvent;
+    assert.equal(stateChangedDetail.state.statuses.fishStatus, "fish: 2");
+    assert.equal(stateChangedDetail.state.catalog.fish.length, 2);
+    assert.equal(wasm.calls.stateReads, initialStateReads + 2);
+    assert.ok(
+      wasm.calls.bootstrapReads >= 2,
+      "bootstrap polling should continue while the fish catalog is pending",
+    );
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("mount does not persist an implicit hidden-all layer override before the map is ready", async () => {
   const env = installDomGlobals();
   let bridge;

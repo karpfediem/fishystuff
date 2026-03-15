@@ -1,3 +1,5 @@
+use async_channel::TryRecvError;
+
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::terrain::Terrain3dConfig;
 use crate::prelude::*;
@@ -13,94 +15,132 @@ use super::util::now_utc_seconds;
 
 pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
     if let Some(receiver) = state.pending.meta.as_ref() {
-        if let Ok(result) = receiver.try_recv() {
-            state.pending.meta = None;
-            match result {
-                Ok(meta) => apply_meta_response(
-                    &mut state.bootstrap,
-                    &mut state.patch_filter,
-                    &mut state.terrain_config,
-                    meta,
-                ),
-                Err(err) => {
-                    state.bootstrap.meta_status = format!("meta: {err}");
-                    state.bootstrap.layers_status = "layers: blocked".to_string();
+        match receiver.try_recv() {
+            Ok(result) => {
+                state.pending.meta = None;
+                match result {
+                    Ok(meta) => apply_meta_response(
+                        &mut state.bootstrap,
+                        &mut state.patch_filter,
+                        &mut state.terrain_config,
+                        meta,
+                    ),
+                    Err(err) => {
+                        state.bootstrap.meta_status = format!("meta: {err}");
+                        state.bootstrap.layers_status = "layers: blocked".to_string();
+                    }
                 }
             }
+            Err(TryRecvError::Closed) => {
+                state.pending.meta = None;
+                state.bootstrap.meta_status = "meta: request closed".to_string();
+                state.bootstrap.layers_status = "layers: blocked".to_string();
+            }
+            Err(TryRecvError::Empty) => {}
         }
     }
 
     if let Some(receiver) = state.pending.layers.as_ref() {
-        if let Ok(result) = receiver.try_recv() {
-            state.pending.layers = None;
-            match result {
-                Ok(response) => apply_layers_response(
-                    &mut state.bootstrap,
-                    &mut state.display_state,
-                    &mut state.layer_registry,
-                    &mut state.layer_runtime,
-                    response,
-                ),
-                Err(err) => {
-                    state.bootstrap.layers_status = format!("layers: {err}");
-                    state.bootstrap.layers_next_retry_at_utc = now_utc_seconds() + 2;
+        match receiver.try_recv() {
+            Ok(result) => {
+                state.pending.layers = None;
+                match result {
+                    Ok(response) => apply_layers_response(
+                        &mut state.bootstrap,
+                        &mut state.display_state,
+                        &mut state.layer_registry,
+                        &mut state.layer_runtime,
+                        response,
+                    ),
+                    Err(err) => {
+                        state.bootstrap.layers_status = format!("layers: {err}");
+                        state.bootstrap.layers_next_retry_at_utc = now_utc_seconds() + 2;
+                    }
                 }
             }
+            Err(TryRecvError::Closed) => {
+                state.pending.layers = None;
+                state.bootstrap.layers_status = "layers: request closed".to_string();
+                state.bootstrap.layers_next_retry_at_utc = now_utc_seconds() + 2;
+            }
+            Err(TryRecvError::Empty) => {}
         }
     }
 
     if let Some(receiver) = state.pending.zones.as_ref() {
-        if let Ok(result) = receiver.try_recv() {
-            state.pending.zones = None;
-            match result {
-                Ok(zones) => {
-                    state.bootstrap.zones.clear();
-                    for zone in zones.zones {
-                        state.bootstrap.zones.insert(zone.rgb_u32, zone.name);
+        match receiver.try_recv() {
+            Ok(result) => {
+                state.pending.zones = None;
+                match result {
+                    Ok(zones) => {
+                        state.bootstrap.zones.clear();
+                        for zone in zones.zones {
+                            state.bootstrap.zones.insert(zone.rgb_u32, zone.name);
+                        }
+                        state.bootstrap.zones_status =
+                            format!("zones: {}", state.bootstrap.zones.len());
                     }
-                    state.bootstrap.zones_status =
-                        format!("zones: {}", state.bootstrap.zones.len());
-                }
-                Err(err) => {
-                    state.bootstrap.zones_status = format!("zones: {err}");
+                    Err(err) => {
+                        state.bootstrap.zones_status = format!("zones: {err}");
+                    }
                 }
             }
+            Err(TryRecvError::Closed) => {
+                state.pending.zones = None;
+                state.bootstrap.zones_status = "zones: request closed".to_string();
+            }
+            Err(TryRecvError::Empty) => {}
         }
     }
 
     if let Some((rgb, receiver)) = state.pending.zone_stats.as_ref() {
-        if let Ok(result) = receiver.try_recv() {
-            let rgb = *rgb;
-            state.pending.zone_stats = None;
-            if state.selection.info.as_ref().map(|s| s.rgb_u32) != Some(rgb) {
-                return;
-            }
-            match result {
-                Ok(response) => {
-                    state.selection.zone_stats = Some(response);
-                    state.selection.zone_stats_status = "zone stats: loaded".to_string();
+        match receiver.try_recv() {
+            Ok(result) => {
+                let rgb = *rgb;
+                state.pending.zone_stats = None;
+                if state.selection.info.as_ref().map(|s| s.rgb_u32) != Some(rgb) {
+                    return;
                 }
-                Err(err) => {
-                    state.selection.zone_stats = None;
-                    state.selection.zone_stats_status = format!("zone stats: {err}");
+                match result {
+                    Ok(response) => {
+                        state.selection.zone_stats = Some(response);
+                        state.selection.zone_stats_status = "zone stats: loaded".to_string();
+                    }
+                    Err(err) => {
+                        state.selection.zone_stats = None;
+                        state.selection.zone_stats_status = format!("zone stats: {err}");
+                    }
                 }
             }
+            Err(TryRecvError::Closed) => {
+                state.pending.zone_stats = None;
+                state.selection.zone_stats = None;
+                state.selection.zone_stats_status = "zone stats: request closed".to_string();
+            }
+            Err(TryRecvError::Empty) => {}
         }
     }
 
     if let Some(receiver) = state.pending.fish_catalog.as_ref() {
-        if let Ok(result) = receiver.try_recv() {
-            state.pending.fish_catalog = None;
-            match result {
-                Ok(response) => {
-                    let entries = build_fish_catalog_entries(response.fish);
-                    state.fish.status = format!("fish: {}", entries.len());
-                    state.fish.replace(entries);
-                }
-                Err(err) => {
-                    state.fish.status = format!("fish: {err}");
+        match receiver.try_recv() {
+            Ok(result) => {
+                state.pending.fish_catalog = None;
+                match result {
+                    Ok(response) => {
+                        let entries = build_fish_catalog_entries(response.fish);
+                        state.fish.status = format!("fish: {}", entries.len());
+                        state.fish.replace(entries);
+                    }
+                    Err(err) => {
+                        state.fish.status = format!("fish: {err}");
+                    }
                 }
             }
+            Err(TryRecvError::Closed) => {
+                state.pending.fish_catalog = None;
+                state.fish.status = "fish: request closed".to_string();
+            }
+            Err(TryRecvError::Empty) => {}
         }
     }
 

@@ -2128,6 +2128,10 @@ function bindUi(shell, elements) {
     renderCurrentState(stateBundleFromEvent(event));
   });
 
+  shell.addEventListener(FISHYMAP_EVENTS.stateChanged, (event) => {
+    renderCurrentState(stateBundleFromEvent(event));
+  });
+
   shell.addEventListener(FISHYMAP_EVENTS.selectionChanged, (event) => {
     renderCurrentState(stateBundleFromEvent(event));
   });

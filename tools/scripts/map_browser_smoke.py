@@ -268,6 +268,8 @@ def print_summary(result: dict[str, Any]) -> None:
         f"layers={statuses.get('layersStatus')!r}",
         f"zones={statuses.get('zonesStatus')!r}",
         f"points={statuses.get('pointsStatus')!r}",
+        f"fish={statuses.get('fishStatus')!r}",
+        f"fish_count={bridge.get('fishCount')}",
     ]
     prefix = "PASS" if result.get("ok") else "FAIL"
     print(
@@ -350,15 +352,25 @@ def main() -> int:
                                 or "renderer error overlay became visible"
                             )
                             break
-                        if state.get("ready"):
+                        fish_status = str((state.get("statuses") or {}).get("fishStatus") or "")
+                        fish_pending = fish_status.strip().lower() == "fish: pending"
+                        fish_ready = int(state.get("fishCount") or 0) > 0
+                        if state.get("ready") and fish_ready:
                             result["ok"] = True
-                            result["reason"] = "bridge reached ready"
+                            result["reason"] = "bridge reached ready with fish catalog"
+                            break
+                        if state.get("ready") and fish_status and not fish_pending and not fish_ready:
+                            result["reason"] = (
+                                f"bridge became ready but fish catalog is unusable ({fish_status})"
+                            )
                             break
                         time.sleep(args.poll_interval_seconds)
                     else:
                         bridge_reason = "timeout waiting for FishyMapBridge.ready"
                         if last_state and not last_state.get("hasBridge"):
                             bridge_reason = "timeout waiting for FishyMapBridge to initialize"
+                        elif last_state and last_state.get("ready"):
+                            bridge_reason = "timeout waiting for fish catalog after ready"
                         result["reason"] = bridge_reason
                 finally:
                     client.close()
