@@ -41,7 +41,7 @@ Multilingual {
     "img/favicon.ico",
     "img/favicon-16x16.png",
     "img/favicon-32x32.png",
-    "img/default_preview.png",
+    "img/embed.png",
 
     // data files that need to be fetchable or linked
     "data/items.json",

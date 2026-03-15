@@ -40,7 +40,7 @@
             <meta property="og:image" content="$site.host_url.addPath($page.custom.get('og_image'))">
         </ctx>
         <ctx :if="$page.custom.has('og_image').not()">
-            <meta property="og:image" content="$site.host_url.addPath($site.asset('img/default_preview.png').link())">
+            <meta property="og:image" content="$site.host_url.addPath($site.asset('img/embed.png').link())">
         </ctx>
         </ctx>
 
@@ -61,7 +61,7 @@
             <meta name="twitter:image" content="$site.host_url.addPath($page.custom.get('og_image'))">
         </ctx>
         <ctx :if="$page.custom.has('og_image').not()">
-            <meta name="twitter:image" content="$site.host_url.addPath($site.asset('img/default_preview.png').link())">
+            <meta name="twitter:image" content="$site.host_url.addPath($site.asset('img/embed.png').link())">
         </ctx>
         </ctx>
 
