@@ -33,7 +33,7 @@ pub(super) fn sync_current_snapshot(
     map_view: Res<Map2dViewState>,
     terrain_view: Res<Terrain3dViewState>,
 ) {
-    let ready_changed = bootstrap.is_changed() || layer_registry.is_changed() || fish.is_changed();
+    let ready_changed = bootstrap.is_changed() || layer_registry.is_changed();
     let theme_changed = bridge.is_changed();
     let filters_changed = bridge.is_changed()
         || patch_filter.is_changed()
@@ -70,9 +70,7 @@ pub(super) fn sync_current_snapshot(
     CURRENT_SNAPSHOT.with(|snapshot| {
         let mut snapshot = snapshot.borrow_mut();
         if ready_changed {
-            snapshot.ready = bootstrap.meta.is_some()
-                && !layer_registry.ordered().is_empty()
-                && !fish.entries.is_empty();
+            snapshot.ready = bootstrap.meta.is_some() && !layer_registry.ordered().is_empty();
         }
         if theme_changed {
             snapshot.theme = bridge.input.theme.clone();

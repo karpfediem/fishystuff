@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
 
 use bevy::prelude::*;
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::bridge::contract::{
@@ -42,6 +43,14 @@ thread_local! {
     static LAST_VIEW_EMIT_SECS: RefCell<f64> = const { RefCell::new(0.0) };
     static LAST_HOVER_PAYLOAD: RefCell<Option<String>> = const { RefCell::new(None) };
     static LAST_DIAGNOSTIC_PAYLOAD: RefCell<Option<String>> = const { RefCell::new(None) };
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FishyMapBootstrapSnapshot {
+    version: u8,
+    ready: bool,
+    statuses: FishyMapStatusSnapshot,
 }
 
 #[wasm_bindgen]
@@ -89,6 +98,19 @@ pub fn fishymap_get_current_state_json() -> String {
     CURRENT_SNAPSHOT.with(|snapshot| {
         serde_json::to_string(&*snapshot.borrow())
             .unwrap_or_else(|_| "{\"version\":1,\"ready\":false}".to_string())
+    })
+}
+
+#[wasm_bindgen]
+pub fn fishymap_get_bootstrap_state_json() -> String {
+    CURRENT_SNAPSHOT.with(|snapshot| {
+        let snapshot = snapshot.borrow();
+        serde_json::to_string(&FishyMapBootstrapSnapshot {
+            version: snapshot.version,
+            ready: snapshot.ready,
+            statuses: snapshot.statuses.clone(),
+        })
+        .unwrap_or_else(|_| "{\"version\":1,\"ready\":false}".to_string())
     })
 }
 

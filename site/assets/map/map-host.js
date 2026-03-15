@@ -1293,6 +1293,21 @@ function bootstrapStateSignature(state) {
   });
 }
 
+function mergeBootstrapSnapshot(currentState, bootstrapState) {
+  const current = currentState || createEmptySnapshot();
+  const parsed = bootstrapState || {};
+  return {
+    ...current,
+    version: Number(parsed.version || current.version || FISHYMAP_CONTRACT_VERSION),
+    ready: parsed.ready === true,
+    statuses: {
+      ...createEmptySnapshot().statuses,
+      ...(current.statuses || {}),
+      ...(parsed.statuses || {}),
+    },
+  };
+}
+
 function isMeaningfulPatch(patch) {
   const normalized = normalizeStatePatch(patch);
   return patchHasStateFields(normalized) || patchHasCommands(normalized);
@@ -1672,7 +1687,11 @@ class FishyMapBridgeImpl {
     const previousSignature = bootstrapStateSignature(previousState);
 
     this.syncCanvasSize();
-    this.refreshCurrentStateFromWasm();
+    this.refreshBootstrapStateFromWasm();
+
+    if (!previousState.ready && this.currentState.ready) {
+      this.refreshCurrentStateFromWasm();
+    }
 
     if (bootstrapStateSignature(this.currentState) !== previousSignature) {
       if (!previousState.ready && this.currentState.ready) {
@@ -1709,6 +1728,22 @@ class FishyMapBridgeImpl {
       };
     } catch (_) {
       this.currentState = createEmptySnapshot();
+    }
+    return this.currentState;
+  }
+
+  refreshBootstrapStateFromWasm() {
+    if (!this.wasmReady) {
+      return this.currentState;
+    }
+    if (!this.wasmModule?.fishymap_get_bootstrap_state_json) {
+      return this.refreshCurrentStateFromWasm();
+    }
+    try {
+      const parsed = JSON.parse(this.wasmModule.fishymap_get_bootstrap_state_json());
+      this.currentState = mergeBootstrapSnapshot(this.currentState, parsed);
+    } catch (_) {
+      this.currentState = mergeBootstrapSnapshot(this.currentState, createEmptySnapshot());
     }
     return this.currentState;
   }

@@ -209,6 +209,7 @@ function createFakeWasm(snapshotRef) {
     commands: [],
     sink: null,
     stateReads: 0,
+    bootstrapReads: 0,
   };
   return {
     calls,
@@ -227,6 +228,14 @@ function createFakeWasm(snapshotRef) {
     fishymap_get_current_state_json() {
       calls.stateReads += 1;
       return JSON.stringify(snapshotRef.current);
+    },
+    fishymap_get_bootstrap_state_json() {
+      calls.bootstrapReads += 1;
+      return JSON.stringify({
+        version: snapshotRef.current?.version ?? 1,
+        ready: snapshotRef.current?.ready === true,
+        statuses: snapshotRef.current?.statuses || {},
+      });
     },
   };
 }
@@ -515,6 +524,70 @@ test("bootstrap sync replays state changes that happen after mount without wasm 
     assert.equal(detail.state.ready, true);
     assert.equal(detail.state.statuses.metaStatus, "meta: loaded");
     assert.deepEqual(detail.state.filters.layerIdsVisible, ["zones"]);
+    assert.ok(wasm.calls.bootstrapReads >= 1);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
+test("bootstrap sync uses lightweight polling until the map becomes ready", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: false,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [{ fishId: 1, name: "A" }] },
+        statuses: { metaStatus: "meta: pending" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+
+    const initialStateReads = wasm.calls.stateReads;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    assert.equal(
+      wasm.calls.stateReads,
+      initialStateReads,
+      "bootstrap polling should not repeatedly read the full snapshot while loading",
+    );
+    assert.ok(
+      wasm.calls.bootstrapReads >= 1,
+      "bootstrap polling should use the lightweight bootstrap getter",
+    );
+
+    const readyEvent = new Promise((resolve) => {
+      container.addEventListener(FISHYMAP_EVENTS.ready, (event) => resolve(event.detail), {
+        once: true,
+      });
+    });
+    snapshotRef.current = {
+      ...snapshotRef.current,
+      ready: true,
+      filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: ["zones"] },
+      statuses: { metaStatus: "meta: loaded" },
+    };
+
+    const detail = await readyEvent;
+    assert.equal(detail.state.ready, true);
+    assert.deepEqual(detail.state.filters.layerIdsVisible, ["zones"]);
+    assert.equal(wasm.calls.stateReads, initialStateReads + 1);
   } finally {
     bridge?.destroy();
     env.restore();
