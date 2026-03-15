@@ -1296,7 +1296,13 @@ function renderSearchResults(elements, matches, stateBundle) {
   const activeMatches = matches.slice(0, 12);
   const renderKey = JSON.stringify({
     query,
-    resultIds: activeMatches.map((fish) => fish.fishId),
+    results: activeMatches.map((fish) => [
+      fish.fishId,
+      fish.itemId ?? null,
+      fish.encyclopediaId ?? null,
+      fish.grade || "",
+      fish.isPrize === true ? 1 : 0,
+    ]),
     total: matches.length,
   });
   if (elements.searchResultsShell) {
@@ -1326,7 +1332,7 @@ function renderSearchResults(elements, matches, stateBundle) {
             data-fish-id="${fish.fishId}"
             type="button"
           >
-            ${renderFishAvatar(fish)}
+            ${renderFishAvatar(fish, "size-6", { gradeFrame: true })}
             <span class="truncate">${escapeHtml(fish.name)}</span>
           </button>
         </li>
@@ -1404,7 +1410,7 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
           data-zone-evidence-fish-id="${evidenceFish.fishId}"
           type="button"
         >
-          <div>${renderFishItemIcon(evidenceFish)}</div>
+          <div>${renderFishItemIcon(evidenceFish, "size-6")}</div>
           <div class="min-w-0">
             <div class="truncate font-semibold">${escapeHtml(evidenceFish.name)}</div>
           </div>
