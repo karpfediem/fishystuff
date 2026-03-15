@@ -1,16 +1,27 @@
 # Fly app name must be globally unique and cannot contain dots.
-app = "map-fishystuff-fish"
+app = "api-fishystuff-fish"
 primary_region = "fra"
 kill_signal = "SIGINT"
 kill_timeout = "30s"
 
-[env]
-  RUST_LOG = "info"
+[build]
+  image = "registry.fly.io/api-fishystuff-fish:latest"
 
-[processes]
-  # Database URL should be injected as a Fly secret:
-  # fly secrets set FISHYSTUFF_DATABASE_URL='mysql://...'
-  app = "fishystuff_server --config config.toml --bind 0.0.0.0:8080"
+[env]
+  DOLT_API_SQL_USER = "fishystuff_api"
+  DOLT_CLONE_DEPTH = "1"
+  DOLT_DATA_ROOT = "/data"
+  DOLT_DATABASE_NAME = "fishystuff"
+  DOLT_REMOTE_BRANCH = "main"
+  DOLT_SQL_HOST = "127.0.0.1"
+  DOLT_SQL_PORT = "3306"
+  DOLT_SQL_READ_ONLY = "true"
+  FISHYSTUFF_BIND = "0.0.0.0:8080"
+  RUST_LOG = "info"
+  # Set DOLT_REMOTE_URL before deploy. For a public DoltHub repo this can be a
+  # regular Fly env var, but using a secret keeps the deploy path consistent:
+  # fly secrets set DOLT_REMOTE_URL='doltremoteapi/fishystuff/fishystuff'
+  # Override DOLT_REMOTE_BRANCH per deployment if needed.
 
 [http_service]
   internal_port = 8080
@@ -18,7 +29,6 @@ kill_timeout = "30s"
   auto_start_machines = true
   auto_stop_machines = "off"
   min_machines_running = 1
-  processes = ["app"]
 
   [[http_service.checks]]
     method = "GET"

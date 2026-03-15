@@ -20,6 +20,11 @@ deploy-bot:
   skopeo --insecure-policy --debug copy docker-archive:"$(nix build .#bot-container --no-link --print-out-paths)" docker://registry.fly.io/criobot:latest --dest-creds x:"$(fly -a criobot tokens create deploy --expiry 10m)" --format v2s2
   flyctl deploy --remote-only -c bot/fly.toml
 
+# Build and deploy the Axum API
+deploy-api:
+  skopeo --insecure-policy --debug copy docker-archive:"$(nix build .#api-container --no-link --print-out-paths)" docker://registry.fly.io/api-fishystuff-fish:latest --dest-creds x:"$(fly -a api-fishystuff-fish tokens create deploy --expiry 10m)" --format v2s2
+  flyctl deploy --remote-only -c api/fly.toml
+
 # Run the Discord bot with the SecretSpec bot profile
 bot-run:
   secretspec run --profile bot -- cargo run --manifest-path bot/Cargo.toml

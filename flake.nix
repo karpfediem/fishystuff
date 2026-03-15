@@ -41,7 +41,8 @@
             cp -r ${./bot}/* ${waypoints}/* $out
           '';
 
-          craneLib = (crane.mkLib pkgs).overrideToolchain (p: p.rust-bin.stable.latest.default);
+          craneLib = crane.mkLib pkgs;
+          cargoSrc = craneLib.cleanCargoSource ./.;
           bot = craneLib.buildPackage { src = botSrc; };
           bot-container = pkgs.dockerTools.buildLayeredImage {
             name = "crio";
@@ -50,9 +51,47 @@
             config.Entrypoint = [ "bot" ];
             config.Env = [ "PATH=${bot}/bin" ];
           };
+
+          api = craneLib.buildPackage {
+            pname = "fishystuff_server";
+            version = "0.1.0";
+            src = cargoSrc;
+            cargoExtraArgs = "-p fishystuff_server";
+          };
+
+          apiConfig = pkgs.runCommandLocal "fishystuff-api-config" { } ''
+            mkdir -p $out/etc/fishystuff
+            cp ${./api/config.toml} $out/etc/fishystuff/config.toml
+          '';
+
+          apiEntrypoint = pkgs.writeShellApplication {
+            name = "fishystuff-api-entrypoint";
+            runtimeInputs = [
+              api
+              pkgs.coreutils
+              pkgs.dolt
+            ];
+            text = builtins.readFile ./api/entrypoint.sh;
+          };
+
+          api-container = pkgs.dockerTools.buildLayeredImage {
+            name = "api-fishystuff-fish";
+            tag = "latest";
+            contents = [
+              apiEntrypoint
+              apiConfig
+              pkgs.cacert
+            ];
+            config.Entrypoint = [ "${apiEntrypoint}/bin/fishystuff-api-entrypoint" ];
+            config.Env = [
+              "API_CONFIG_PATH=${apiConfig}/etc/fishystuff/config.toml"
+              "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+              "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+            ];
+          };
         in
         {
-          packages = { inherit bot bot-container; };
+          packages = { inherit api api-container bot bot-container; };
         };
       flake = { };
     });
