@@ -62,6 +62,10 @@ Repository-level notes for working in this monorepo.
   - JS host checks/tests
   - Rust/wasm checks and bundle rebuilds
 
+## Performance workflow
+- Do not make performance claims without running the native profiling harness or the relevant benchmark target.
+- Prefer measured improvements over speculative optimization.
+
 ## Secrets
 - Repo-level secret requirements live in `/home/carp/code/fishystuff/secretspec.toml`.
 - Use SecretSpec to load secrets at runtime:

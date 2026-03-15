@@ -1,4 +1,4 @@
-{ inputs, pkgs, config, ... }:
+{ inputs, pkgs, lib, config, ... }:
 let
   dbHost = "127.0.0.1";
   dbPort = "3306";
@@ -19,17 +19,34 @@ in {
       dolt
       flyctl
       gawk
+      hyperfine
+      jq
       lftp
+      libX11
+      libXcursor
+      libXext
+      libXi
+      libXinerama
+      libXrandr
+      libxcb
+      libxkbcommon
+      libxkbfile
       lsof
+      mesa
       rsync
       skopeo
       xlsx2csv
       clang
       mariadb
+      valgrind
       wasm-bindgen-cli_0_2_108
       imagemagick
       tailwindcss
       watchexec
+      xauth
+      xvfb
+      xvfb-run
+      linuxPackages.perf
       (inputs.zine.packages.${pkgs.system}.default.override { zigPreferMusl = true; })
     ];
 
@@ -51,6 +68,17 @@ in {
     FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${sitePort}";
+    LD_LIBRARY_PATH = lib.makeLibraryPath [
+      pkgs.libX11
+      pkgs.libXcursor
+      pkgs.libXext
+      pkgs.libXi
+      pkgs.libXinerama
+      pkgs.libXrandr
+      pkgs.libxcb
+      pkgs.libxkbcommon
+      pkgs.libxkbfile
+    ];
     FISHYSTUFF_CORS_ALLOWED_ORIGINS =
       "https://fishystuff.fish,https://www.fishystuff.fish,http://${siteHost}:${sitePort},http://localhost:${sitePort}";
   };
