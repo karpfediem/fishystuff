@@ -2382,7 +2382,7 @@
         </div>
         <div class="fishydex-status" data-show="$loading">
           <strong>Loading...</strong>
-          <div class="fishydex-subtle">Fetching the fish catalog from the Axum API.</div>
+          <div class="fishydex-subtle">Fetching the fish catalog from the API.</div>
         </div>
         <div class="fishydex-actions" data-show="!$loading">
           <button type="button" class="btn btn-sm btn-soft btn-primary fishydex-button" data-on-click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
