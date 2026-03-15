@@ -1473,9 +1473,10 @@ function syncLayerOpacityControl(container, layerId, opacity) {
 function renderPanel(elements, stateBundle) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
-  const catalogFish = state.catalog?.fish || [];
+  const isReady = state.ready === true;
+  const catalogFish = isReady ? state.catalog?.fish || [] : [];
   const patchRange = normalizePatchRangeSelection(
-    state.catalog?.patches || [],
+    isReady ? state.catalog?.patches || [] : [],
     inputState.filters?.fromPatchId ??
       state.filters?.fromPatchId ??
       inputState.filters?.patchId ??
@@ -1494,10 +1495,7 @@ function renderPanel(elements, stateBundle) {
   const pointIconScale = clampPointIconScale(
     inputState.ui?.pointIconScale ?? state.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN,
   );
-  const fishLookup = mergeZoneEvidenceIntoFishLookup(
-    buildFishLookup(catalogFish),
-    state.selection?.zoneStats || null,
-  );
+  const fishLookup = mergeZoneEvidenceIntoFishLookup(buildFishLookup(catalogFish), isReady ? state.selection?.zoneStats || null : null);
 
   applyThemeToShell(elements.shell);
 
@@ -1541,6 +1539,7 @@ function renderPanel(elements, stateBundle) {
     "Loading patches…",
   );
   if (
+    isReady &&
     elements.layerOpacityInteraction?.activeLayerId &&
     Number.isFinite(elements.layerOpacityInteraction?.activeValue) &&
     syncLayerOpacityControl(
@@ -1551,13 +1550,16 @@ function renderPanel(elements, stateBundle) {
   ) {
     // Keep the active slider mounted while the user is dragging it.
   } else {
-    renderLayerStack(elements.layers, stateBundle);
+    renderLayerStack(
+      elements.layers,
+      isReady ? stateBundle : { state: { catalog: { layers: [] } }, inputState: {} },
+    );
   }
   if (elements.layersCount) {
-    setTextContent(elements.layersCount, String((state.catalog?.layers || []).length));
+    setTextContent(elements.layersCount, String(isReady ? (state.catalog?.layers || []).length : 0));
   }
 
-  const matches = buildSearchMatches(stateBundle, searchText);
+  const matches = isReady ? buildSearchMatches(stateBundle, searchText) : [];
   renderSearchSelection(elements, stateBundle, fishLookup);
   renderSearchResults(elements, matches, stateBundle);
   renderZoneEvidence(elements, stateBundle, fishLookup);

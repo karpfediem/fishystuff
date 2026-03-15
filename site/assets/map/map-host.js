@@ -1684,16 +1684,6 @@ class FishyMapBridgeImpl {
           state: this.getCurrentState(),
           inputState: this.getCurrentInputState(),
         });
-      } else {
-        this.emit(FISHYMAP_EVENTS.diagnostic, {
-          type: "diagnostic",
-          version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
-          payload: {
-            bridgeStatus: "bootstrap-sync",
-          },
-          state: this.getCurrentState(),
-          inputState: this.getCurrentInputState(),
-        });
       }
     }
 
