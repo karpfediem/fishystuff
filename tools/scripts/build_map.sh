@@ -9,6 +9,7 @@ export CARGO_HOME
 export RUSTFLAGS='--cfg getrandom_backend="wasm_js"'
 
 PROFILE="${FISHYSTUFF_WASM_PROFILE:-release}"
+MAP_RUNTIME_RETENTION_DAYS="${MAP_RUNTIME_RETENTION_DAYS:-14}"
 if [ "$PROFILE" = "release" ]; then
   cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ui_bevy --target wasm32-unknown-unknown --release
   WASM_INPUT="target/wasm32-unknown-unknown/release/fishystuff_ui_bevy.wasm"
@@ -71,6 +72,13 @@ cat > "$CDN_MAP_ASSET_DIR/runtime-manifest.json" <<EOF
   "wasm": "${WASM_BUNDLE_FILE}"
 }
 EOF
+
+find "$CDN_MAP_ASSET_DIR" -maxdepth 1 -type f \
+  \( -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy_bg.*.wasm' \) \
+  ! -name "$JS_BUNDLE_FILE" \
+  ! -name "$WASM_BUNDLE_FILE" \
+  -mtime +"$MAP_RUNTIME_RETENTION_DAYS" \
+  -delete
 
 first_existing_path() {
   local candidate

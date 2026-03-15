@@ -47,6 +47,13 @@ cdn-sync:
   just cdn-stage
   just cdn-push
 
+# Build the map runtime, refresh staged map assets, and push only changed CDN roots.
+# Recent hashed wasm/js bundles are retained locally so Bunny keeps them too.
+cdn-sync-map:
+  ./tools/scripts/build_map.sh
+  ./tools/scripts/stage_cdn_assets.sh
+  secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
+
 # Validate that the local SecretSpec provider has the required values for a profile
 secrets-check profile="api":
   p='{{profile}}'; p="${p#profile=}"; secretspec check --profile "$p"

@@ -42,11 +42,21 @@ These values are declared in `/home/carp/code/fishystuff/secretspec.toml` under 
 profile. Populate them in your local SecretSpec provider and run Bunny syncs via
 `secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh` or `just cdn-push`.
 
+For a fast map-runtime-only publish path, use:
+
+- `just cdn-sync-map`
+
+That rebuilds the Bevy wasm/js runtime, refreshes staged `map/` host assets, and
+then runs the normal changed-root Bunny push. If only `map/` changed, only the
+CDN `map/` subtree is mirrored.
+
 `cdn-push` intentionally excludes local placeholder and metadata files such as
 `.gitkeep` and `.cdn-metadata.json` from the Bunny upload. It also keeps a local
 sync manifest so later pushes only re-scan and upload changed roots instead of
 walking the whole CDN tree every time. Large image/tile trees are mirrored at
 version-scoped roots such as `images/tiles/minimap/v1` instead of rescanning
-all of `images/tiles/`. The `map/` subtree still syncs with delete semantics so
-old hashed runtime bundles are cleaned up, while the other roots use
-`mirror --continue --only-newer` so interrupted uploads can resume cleanly.
+all of `images/tiles/`. The `map/` subtree still syncs with delete semantics,
+but the local map build now retains hashed wasm/js bundles for `14` days by
+default before pruning them, so older frontend caches can continue fetching the
+previous runtime for a short window. Override that retention with
+`MAP_RUNTIME_RETENTION_DAYS` when running the map build if needed.
