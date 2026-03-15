@@ -1668,14 +1668,15 @@
         `fishydex-icon-wrap grade-${fish.is_prize || fish.grade === "Prize" ? "prize" : slugifyGrade(fish.grade)}`
       );
       const iconUrl = fishItemIconUrl(itemId);
+      const iconPlaceholder = createElement("div", "fishydex-placeholder", "?");
       if (iconUrl) {
         const icon = createElement("img", "fishydex-icon");
-        icon.src = iconUrl;
-        icon.alt = `${fish.name} icon`;
         icon.loading = "lazy";
-        iconWrap.appendChild(icon);
+        iconPlaceholder.hidden = true;
+        setImageWithPlaceholder(icon, iconPlaceholder, iconUrl, `${fish.name} icon`);
+        iconWrap.append(icon, iconPlaceholder);
       } else {
-        iconWrap.appendChild(createElement("div", "fishydex-placeholder", "?"));
+        iconWrap.appendChild(iconPlaceholder);
       }
       main.appendChild(iconWrap);
       main.appendChild(createElement("div", "fishydex-name", fish.name || `Fish ${itemId}`));
@@ -1840,6 +1841,43 @@
       return path ? cdnUrl(path) : "";
     }
 
+    function setImageWithPlaceholder(image, placeholder, src, alt) {
+      if (!(image instanceof HTMLImageElement) || !(placeholder instanceof HTMLElement)) {
+        return;
+      }
+      image.onload = null;
+      image.onerror = null;
+      image.dataset.expectedSrc = src || "";
+      if (!src) {
+        image.hidden = true;
+        image.removeAttribute("src");
+        image.alt = "";
+        placeholder.hidden = false;
+        return;
+      }
+      placeholder.hidden = true;
+      image.hidden = false;
+      image.alt = alt;
+      image.onload = () => {
+        if (image.dataset.expectedSrc === src) {
+          placeholder.hidden = true;
+          image.hidden = false;
+        }
+      };
+      image.onerror = () => {
+        if (image.dataset.expectedSrc !== src) {
+          return;
+        }
+        image.onload = null;
+        image.onerror = null;
+        image.hidden = true;
+        image.removeAttribute("src");
+        image.alt = "";
+        placeholder.hidden = false;
+      };
+      image.src = src;
+    }
+
     function setElementText(element, text) {
       if (element) {
         element.textContent = text;
@@ -1943,30 +1981,10 @@
         if (iconFrame instanceof HTMLElement) {
           iconFrame.className = `fishydex-details-icon-wrap grade-${iconFrameGrade}`;
         }
-        if (itemIconUrl) {
-          icon.hidden = false;
-          icon.src = itemIconUrl;
-          icon.alt = `${meta.name} icon`;
-          placeholder.hidden = true;
-        } else {
-          icon.hidden = true;
-          icon.removeAttribute("src");
-          icon.alt = "";
-          placeholder.hidden = false;
-        }
+        setImageWithPlaceholder(icon, placeholder, itemIconUrl, `${meta.name} icon`);
       }
       if (guideImage instanceof HTMLImageElement && guidePlaceholder instanceof HTMLElement) {
-        if (guideIconUrl) {
-          guideImage.hidden = false;
-          guideImage.src = guideIconUrl;
-          guideImage.alt = `${meta.name} guide image`;
-          guidePlaceholder.hidden = true;
-        } else {
-          guideImage.hidden = true;
-          guideImage.removeAttribute("src");
-          guideImage.alt = "";
-          guidePlaceholder.hidden = false;
-        }
+        setImageWithPlaceholder(guideImage, guidePlaceholder, guideIconUrl, `${meta.name} guide image`);
       }
     }
 
