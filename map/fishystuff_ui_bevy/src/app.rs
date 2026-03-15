@@ -185,8 +185,33 @@ fn build_headless_native_app(options: &NativeAppOptions) -> App {
         ImagePlugin::default(),
         MeshPlugin,
     ))
+    .add_plugins(FlairPlugin)
     .init_resource::<GlobalAmbientLight>()
+    .init_asset::<Font>()
     .init_asset::<ColorMaterial>()
     .init_asset::<StandardMaterial>();
     app
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_native_app, NativeAppOptions};
+    use crate::map::ui_layers::LayerUiPlugin;
+    use crate::plugins::api::ApiPlugin;
+    use crate::plugins::mask::MaskPlugin;
+    use crate::plugins::ui::UiPlugin;
+
+    #[test]
+    fn ui_and_layer_plugins_start_without_access_panics() {
+        let mut app = build_native_app(&NativeAppOptions {
+            renderless: true,
+            ..NativeAppOptions::default()
+        });
+        app.add_plugins(ApiPlugin)
+            .add_plugins(MaskPlugin)
+            .add_plugins(UiPlugin)
+            .add_plugins(LayerUiPlugin);
+
+        app.update();
+    }
 }

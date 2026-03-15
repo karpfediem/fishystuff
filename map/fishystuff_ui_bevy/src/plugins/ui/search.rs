@@ -297,7 +297,7 @@ pub(super) fn update_autocomplete_ui(mut ui: AutocompleteUiContext<'_, '_>) {
         return;
     }
     let open = ui.search.open && !ui.search.results.is_empty();
-    if let Ok((mut vis, mut node)) = ui.frame_q.single_mut() {
+    if let Ok((mut vis, mut node)) = ui.queries.p0().single_mut() {
         *vis = if open {
             Visibility::Visible
         } else {
@@ -306,11 +306,12 @@ pub(super) fn update_autocomplete_ui(mut ui: AutocompleteUiContext<'_, '_>) {
         node.display = if open { Display::Flex } else { Display::None };
     }
     if !open {
-        if let Ok(mut scroll) = ui.scroll_q.single_mut() {
+        if let Ok(mut scroll) = ui.queries.p1().single_mut() {
             scroll.0.y = 0.0;
         }
     }
-    for (entry, mut vis, mut node, mut classes, children) in &mut ui.entry_q {
+    let mut row_updates = Vec::new();
+    for (entry, mut vis, mut node, mut classes, children) in &mut ui.queries.p2() {
         if !open || entry.idx >= ui.search.results.len() {
             *vis = Visibility::Hidden;
             node.display = Display::None;
@@ -323,12 +324,22 @@ pub(super) fn update_autocomplete_ui(mut ui: AutocompleteUiContext<'_, '_>) {
         let label = fish_entry
             .map(|f| format!("{} (#{})", f.name, f.id))
             .unwrap_or_else(|| "(unknown)".to_string());
-        for child in children.iter() {
-            if let Ok((mut icon, mut icon_vis)) = ui.icon_q.get_mut(child) {
-                if let Some(fish_entry) = fish_entry {
-                    if let Some(handle) =
-                        fish_icon_handle(fish_entry.item_id, &mut ui.remote_images)
-                    {
+        if entry.idx == ui.search.selected {
+            classes.add("selected");
+        } else {
+            classes.remove("selected");
+        }
+        row_updates.push(AutocompleteRowUpdate {
+            child_entities: children.iter().collect(),
+            fish_item_id: fish_entry.map(|entry| entry.item_id),
+            label,
+        });
+    }
+    for row in row_updates {
+        for child in row.child_entities {
+            if let Ok((mut icon, mut icon_vis)) = ui.queries.p4().get_mut(child) {
+                if let Some(item_id) = row.fish_item_id {
+                    if let Some(handle) = fish_icon_handle(item_id, &mut ui.remote_images) {
                         *icon = ImageNode::new(handle);
                         *icon_vis = Visibility::Visible;
                     } else {
@@ -339,17 +350,18 @@ pub(super) fn update_autocomplete_ui(mut ui: AutocompleteUiContext<'_, '_>) {
                 }
                 continue;
             }
-            if let Ok(mut text) = ui.text_q.get_mut(child) {
-                text.0 = label;
+            if let Ok(mut text) = ui.queries.p3().get_mut(child) {
+                text.0 = row.label.clone();
                 break;
             }
         }
-        if entry.idx == ui.search.selected {
-            classes.add("selected");
-        } else {
-            classes.remove("selected");
-        }
     }
+}
+
+struct AutocompleteRowUpdate {
+    child_entities: Vec<Entity>,
+    fish_item_id: Option<i32>,
+    label: String,
 }
 
 #[derive(SystemParam)]
@@ -358,11 +370,17 @@ pub(super) struct AutocompleteUiContext<'w, 's> {
     fish: Res<'w, FishCatalog>,
     remote_image_epoch: Res<'w, RemoteImageEpoch>,
     remote_images: ResMut<'w, RemoteImageCache>,
-    frame_q: AutocompleteFrameQuery<'w, 's>,
-    scroll_q: Query<'w, 's, &'static mut ScrollPosition, With<FishAutocompleteScroll>>,
-    entry_q: AutocompleteEntryQuery<'w, 's>,
-    text_q: Query<'w, 's, &'static mut Text>,
-    icon_q: AutocompleteIconQuery<'w, 's>,
+    queries: ParamSet<
+        'w,
+        's,
+        (
+            AutocompleteFrameQuery<'w, 's>,
+            Query<'w, 's, &'static mut ScrollPosition, With<FishAutocompleteScroll>>,
+            AutocompleteEntryQuery<'w, 's>,
+            Query<'w, 's, &'static mut Text>,
+            AutocompleteIconQuery<'w, 's>,
+        ),
+    >,
 }
 
 pub(super) fn rebuild_results(search: &mut SearchState, fish: &FishCatalog) {

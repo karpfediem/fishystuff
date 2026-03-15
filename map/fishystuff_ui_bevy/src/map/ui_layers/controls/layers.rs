@@ -73,7 +73,7 @@ pub(in crate::map::ui_layers) fn sync_layer_labels(
             classes.remove("on");
         }
     }
-    for (toggle_text, mut text) in &mut text_q.toggle_texts {
+    for (toggle_text, mut text) in &mut text_q.queries.p1() {
         let next = if settings.visible(toggle_text.id) {
             "On".to_string()
         } else {
@@ -83,7 +83,7 @@ pub(in crate::map::ui_layers) fn sync_layer_labels(
             text.0 = next;
         }
     }
-    for (label, mut text) in &mut text_q.labels {
+    for (label, mut text) in &mut text_q.queries.p0() {
         if settings.get(label.id).is_none() {
             let next = registry.label(label.id).to_string();
             if text.0 != next {
@@ -100,6 +100,12 @@ pub(in crate::map::ui_layers) fn sync_layer_labels(
 
 #[derive(SystemParam)]
 pub(in crate::map::ui_layers) struct LayerTextQueries<'w, 's> {
-    labels: Query<'w, 's, (&'static LayerLabel, &'static mut Text)>,
-    toggle_texts: Query<'w, 's, (&'static LayerToggleText, &'static mut Text)>,
+    queries: ParamSet<
+        'w,
+        's,
+        (
+            Query<'w, 's, (&'static LayerLabel, &'static mut Text)>,
+            Query<'w, 's, (&'static LayerToggleText, &'static mut Text)>,
+        ),
+    >,
 }
