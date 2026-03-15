@@ -195,22 +195,23 @@
     }
     const getAverageBiteTime = (zone) => getBiteTimes(zone).avg
     const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr))
-    const calcBiteTime = (zone, level, resources) => {
-        const {min, avg, max} = getBiteTimes(zone)
+    const getBiteTimeFactor = (level, resources) => {
         let reductions = [ 0.15, 0.3, 0.35, 0.4, 0.45, 0.5 ]
         let factor_level = 1 - (reductions[level] ?? 0)
         let factor_resources = 2 - resources / 100
-        console.log(JSON.stringify({
-            avg: avg,
-            level: factor_level,
-            factor_resources: factor_resources,
-            final: avg * factor_level * factor_resources
-        }))
-        const combinedBiteTimeFactor = factor_level * factor_resources
-        const minMod = min * combinedBiteTimeFactor
-        const maxMod = max * combinedBiteTimeFactor
-        const correctedAvg = (minMod + maxMod) / 2
-        return correctedAvg
+        return factor_level * factor_resources
+    }
+    const getEffectiveBiteTimes = (zone, level, resources) => {
+        const {min, avg, max} = getBiteTimes(zone)
+        const factor = getBiteTimeFactor(level, resources)
+        return {
+            min: min * factor,
+            avg: avg * factor,
+            max: max * factor,
+        }
+    }
+    const calcBiteTime = (zone, level, resources) => {
+        return getEffectiveBiteTimes(zone, level, resources).avg
     }
 
     const calcUnoptimizedTime = (zone, active) => {
@@ -324,6 +325,8 @@
     <div class="hidden" data-computed-percent_improvement="1 - calcPercentageOfAverageTime($total_time, $zone, $active)"></div>
     <div class="hidden" data-computed-zone_bite_min="getBiteTimes($zone).min.toFixed(2)"></div>
     <div class="hidden" data-computed-zone_bite_max="getBiteTimes($zone).max.toFixed(2)"></div>
+    <div class="hidden" data-computed-effective_bite_min="getEffectiveBiteTimes($zone, $level, $resources).min.toFixed(2)"></div>
+    <div class="hidden" data-computed-effective_bite_max="getEffectiveBiteTimes($zone, $level, $resources).max.toFixed(2)"></div>
     <div class="hidden" data-computed-timespan-amount-normalized="Math.max(0, Number($timespanAmount) || 0)"></div>
     <div class="hidden" data-computed-timespan-unit-seconds="$timespanUnit === 'minutes' ? 60 : $timespanUnit === 'hours' ? 3600 : $timespanUnit === 'days' ? 86400 : 604800"></div>
     <div class="hidden" data-computed-timespan-unit-label="$timespanUnit === 'minutes' ? ($timespanAmountNormalized === 1 ? 'minute' : 'minutes') : $timespanUnit === 'hours' ? ($timespanAmountNormalized === 1 ? 'hour' : 'hours') : $timespanUnit === 'days' ? ($timespanAmountNormalized === 1 ? 'day' : 'days') : ($timespanAmountNormalized === 1 ? 'week' : 'weeks')"></div>
@@ -383,91 +386,48 @@
                 </div>
             </div>
 
-            <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
-                <div class="stat">
-                    <div class="stat-title">Average Total Fishing Time</div>
-                    <div class="stat-value text-2xl" data-text="$total_time"></div>
-                    <div class="stat-desc">seconds</div>
+            <div class="grid gap-4">
+                <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
+                    <div class="stat">
+                        <div class="stat-title">Average Total Fishing Time</div>
+                        <div class="stat-value text-2xl" data-text="$total_time"></div>
+                        <div class="stat-desc">seconds</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">Average Bite Time</div>
+                        <div class="stat-value text-2xl" data-text="$bitetime"></div>
+                        <div class="stat-desc">seconds</div>
+                    </div>
+                    <div data-show="!$active" class="stat">
+                        <div class="stat-title">Auto-Fishing Time (AFT)</div>
+                        <div class="stat-value text-2xl" data-text="$aftime"></div>
+                        <div class="stat-desc">seconds</div>
+                    </div>
+                    <div data-show="!$active" class="stat">
+                        <div class="stat-title">Auto-Fishing Time Reduction (AFR)</div>
+                        <div class="stat-value text-2xl" data-text="($afr_uncapped * 100).toFixed(0) + '%'"></div>
+                    </div>
                 </div>
-                <div class="stat">
-                    <div class="stat-title">Average Bite Time</div>
-                    <div class="stat-value text-2xl" data-text="$bitetime"></div>
-                    <div class="stat-desc">seconds</div>
-                </div>
-                <div data-show="!$active" class="stat">
-                    <div class="stat-title">Auto-Fishing Time (AFT)</div>
-                    <div class="stat-value text-2xl" data-text="$aftime"></div>
-                    <div class="stat-desc">seconds</div>
-                </div>
-                <div data-show="!$active" class="stat">
-                    <div class="stat-title">Auto-Fishing Time Reduction (AFR)</div>
-                    <div class="stat-value text-2xl" data-text="($afr_uncapped * 100).toFixed(0) + '%'"></div>
-                </div>
-                <div class="stat">
-                    <div class="stat-title">Durability Reduction Resistance (DRR)</div>
-                    <div class="stat-value text-2xl" data-text="($drr * 100).toFixed(0) + '%'"></div>
-                </div>
-                <div class="stat">
-                    <div class="stat-title">Chance to consume Durability</div>
-                    <div class="stat-value text-2xl" data-text="(calcChanceToReduce($drr, $lifeskill_level, $brand) * 100).toFixed(2) + '%'"></div>
+
+                <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
+                    <div class="stat">
+                        <div class="stat-title whitespace-normal leading-snug" data-text="'Average Casts (' + $timespanText + ')'"></div>
+                        <div class="stat-value text-2xl" data-text="($timespan/$total_time).toFixed(2)"></div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">Durability Reduction Resistance (DRR)</div>
+                        <div class="stat-value text-2xl" data-text="($drr * 100).toFixed(0) + '%'"></div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">Chance to consume Durability</div>
+                        <div class="stat-value text-2xl" data-text="(calcChanceToReduce($drr, $lifeskill_level, $brand) * 100).toFixed(2) + '%'"></div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title whitespace-normal leading-snug" data-text="'Average Durability Loss (' + $timespanText + ')'"></div>
+                        <div class="stat-value text-2xl" data-text="(($timespan/$total_time) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
+                    </div>
                 </div>
             </div>
-
-            <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-                <legend class="fieldset-legend">Timespan</legend>
-                <div class="grid gap-4 xl:grid-cols-[minmax(0,28rem)_minmax(0,1fr)] xl:items-end">
-                    <div class="grid gap-4">
-                        <div class="flex flex-wrap items-center justify-between gap-3">
-                            <div>
-                                <p class="text-sm font-semibold">Session length</p>
-                                <p class="text-xs text-base-content/70">Use a common preset or fine-tune the duration below.</p>
-                            </div>
-                            <span class="badge badge-soft badge-secondary badge-lg" data-text="$timespanText"></span>
-                        </div>
-
-                        <div class="join join-vertical sm:join-horizontal">
-                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'hours'">1 hour</button>
-                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 8; $timespanUnit = 'hours'">8 hours</button>
-                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 10; $timespanUnit = 'hours'">10 hours</button>
-                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 12; $timespanUnit = 'hours'">12 hours</button>
-                            <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'days'">1 day</button>
-                        </div>
-
-                        <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Amount</legend>
-                                <input type="number"
-                                       min="0"
-                                       step="any"
-                                       class="input input-sm w-full"
-                                       id="timespan_amount"
-                                       data-bind="timespanAmount"
-                                       name="timespan_amount">
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Unit</legend>
-                                <select class="select select-sm w-full" id="timespan_unit" data-bind="timespanUnit">
-                                    <option value="minutes">Minutes</option>
-                                    <option value="hours">Hours</option>
-                                    <option value="days">Days</option>
-                                    <option value="weeks">Weeks</option>
-                                </select>
-                            </fieldset>
-                        </div>
-                    </div>
-
-                    <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 sm:stats-horizontal">
-                        <div class="stat">
-                            <div class="stat-title" data-text="'Average Casts (' + $timespanText + ')'"></div>
-                            <div class="stat-value text-xl" data-text="($timespan/$total_time).toFixed(2)"></div>
-                        </div>
-                        <div class="stat">
-                            <div class="stat-title" data-text="'Average Durability Loss (' + $timespanText + ')'"></div>
-                            <div class="stat-value text-xl" data-text="(($timespan/$total_time) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
-                        </div>
-                    </div>
-                </div>
-            </fieldset>
 
             <code data-show=$debug class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
                 <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="ctx.signals.JSON()"></pre>
@@ -475,15 +435,32 @@
         </div>
     </section>
 
-    <div class="grid gap-6 xl:grid-cols-3">
+    <div class="grid gap-6 xl:grid-cols-4">
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fieldset-legend ml-6 px-2">Zone</legend>
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-4">
+                    <select class="select w-full" id="zone" data-bind-zone></select>
+                    <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Min</div>
+                            <div class="stat-value text-lg" data-text="$zone_bite_min"></div>
+                            <div class="stat-desc">raw seconds</div>
+                        </div>
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Max</div>
+                            <div class="stat-value text-lg" data-text="$zone_bite_max"></div>
+                            <div class="stat-desc">raw seconds</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
         <fieldset class="card card-border bg-base-100">
             <legend class="fieldset-legend ml-6 px-2">Bite Time</legend>
             <div class="card-body gap-4 pt-0">
                 <div class="grid gap-4">
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Zone</legend>
-                        <select class="select w-full" id="zone" data-bind-zone></select>
-                    </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Fishing Level</legend>
                         <select class="select w-full" id="level" data-bind-level></select>
@@ -493,11 +470,16 @@
                         <input data-bind-resources type="range" class="range-xs range-secondary w-full" min="0" max="100">
                         <span class="label text-sm font-medium" data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
                     </fieldset>
-                    <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none">
+                    <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
                         <div class="stat px-4 py-3">
-                            <div class="stat-title">Zone Bite Time</div>
-                            <div class="stat-value text-lg" data-text="$zone_bite_min + ' - ' + $zone_bite_max"></div>
-                            <div class="stat-desc">seconds, raw min-max range</div>
+                            <div class="stat-title">Effective Min</div>
+                            <div class="stat-value text-lg" data-text="$effective_bite_min"></div>
+                            <div class="stat-desc">seconds</div>
+                        </div>
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Effective Max</div>
+                            <div class="stat-value text-lg" data-text="$effective_bite_max"></div>
+                            <div class="stat-desc">seconds</div>
                         </div>
                     </div>
                 </div>
@@ -505,6 +487,51 @@
         </fieldset>
 
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
+            <legend class="fieldset-legend ml-6 px-2">Timespan</legend>
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-semibold">Session length</p>
+                            <p class="text-xs text-base-content/70">Use a common preset or fine-tune the duration below.</p>
+                        </div>
+                        <span class="badge badge-soft badge-secondary badge-lg" data-text="$timespanText"></span>
+                    </div>
+
+                    <div class="join join-vertical sm:join-horizontal">
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'hours'">1 hour</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 8; $timespanUnit = 'hours'">8 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 10; $timespanUnit = 'hours'">10 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 12; $timespanUnit = 'hours'">12 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'days'">1 day</button>
+                    </div>
+
+                    <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Amount</legend>
+                            <input type="number"
+                                   min="0"
+                                   step="any"
+                                   class="input input-sm w-full"
+                                   id="timespan_amount"
+                                   data-bind="timespanAmount"
+                                   name="timespan_amount">
+                        </fieldset>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Unit</legend>
+                            <select class="select select-sm w-full" id="timespan_unit" data-bind="timespanUnit">
+                                <option value="minutes">Minutes</option>
+                                <option value="hours">Hours</option>
+                                <option value="days">Days</option>
+                                <option value="weeks">Weeks</option>
+                            </select>
+                        </fieldset>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="card card-border bg-base-100 xl:col-span-4">
             <legend class="fieldset-legend ml-6 px-2">Gear</legend>
             <div class="card-body pt-0">
                 <div id="items" class="grid gap-4 md:grid-cols-2">
@@ -554,7 +581,7 @@
             </div>
         </fieldset>
 
-        <fieldset class="card card-border bg-base-100 xl:col-span-3">
+        <fieldset class="card card-border bg-base-100 xl:col-span-4">
             <legend class="fieldset-legend ml-6 px-2">Pets</legend>
             <div class="card-body pt-0">
                 <div id="pets" class="grid gap-4 md:grid-cols-2">
