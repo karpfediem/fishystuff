@@ -38,6 +38,9 @@ On first boot, the machine performs a shallow single-branch clone from DoltHub
 into that volume. On later boots, it reuses the local clone and attempts a
 `fetch` / `pull` from DoltHub before starting `dolt sql-server` in read-only
 mode. If DoltHub sync fails, the API still starts from the last local clone.
+The repo clone is the only persisted Dolt state; the local SQL privilege and
+branch-control files under `/data/.doltcfg` are rebuilt on boot so a stale
+volume-backed auth database cannot block the API's loopback user.
 
 Because the app uses a single attached Fly Volume, deployments should use an
 `immediate` strategy rather than rolling replacement.

@@ -137,11 +137,23 @@ ensure_local_repo() {
   clone_remote_repo
 }
 
+reset_sql_access_state() {
+  if [ -f "$DOLT_PRIVILEGE_FILE" ] || [ -f "$DOLT_BRANCH_CONTROL_FILE" ]; then
+    log "resetting Dolt SQL auth state under ${DOLT_CFG_DIR}"
+  fi
+
+  rm -f "$DOLT_PRIVILEGE_FILE" "$DOLT_BRANCH_CONTROL_FILE"
+}
+
 bootstrap_sql_user() {
   local bootstrap_config="$1"
-  local bootstrap_host="localhost"
+  local bootstrap_host="$DOLT_SQL_HOST"
   local bootstrap_pid=""
 
+  # The Dolt repo clone is persistent on the Fly volume, but the SQL auth files
+  # are runtime-local state. Recreate them on boot so a stale privileges.db from
+  # an older machine cannot block the local API user.
+  reset_sql_access_state
   write_sql_server_config "$bootstrap_config" "$bootstrap_host" "false"
 
   log "starting bootstrap Dolt SQL server"
@@ -152,9 +164,10 @@ bootstrap_sql_user() {
 
   log "creating local read-only SQL user ${DOLT_API_SQL_USER}"
   dolt --host "$bootstrap_host" --port "$DOLT_SQL_PORT" --no-tls sql -q "
-CREATE USER IF NOT EXISTS '${DOLT_API_SQL_USER}'@'127.0.0.1' IDENTIFIED BY '${DOLT_API_SQL_PASSWORD}';
-ALTER USER '${DOLT_API_SQL_USER}'@'127.0.0.1' IDENTIFIED BY '${DOLT_API_SQL_PASSWORD}';
+CREATE USER '${DOLT_API_SQL_USER}'@'127.0.0.1' IDENTIFIED BY '${DOLT_API_SQL_PASSWORD}';
 GRANT SELECT ON *.* TO '${DOLT_API_SQL_USER}'@'127.0.0.1';
+CREATE USER '${DOLT_API_SQL_USER}'@'localhost' IDENTIFIED BY '${DOLT_API_SQL_PASSWORD}';
+GRANT SELECT ON *.* TO '${DOLT_API_SQL_USER}'@'localhost';
 "
 
   stop_pid "$bootstrap_pid"
