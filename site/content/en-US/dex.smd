@@ -124,10 +124,6 @@
     }
   }
 
-  .fishydex-filter-summary {
-    width: 100%;
-  }
-
   .fishydex-filter-group {
     display: grid;
     gap: 0.65rem;
@@ -231,6 +227,12 @@
 
   .fishydex-filter-clear {
     white-space: nowrap;
+  }
+
+  .fishydex-filter-count {
+    color: var(--dex-text-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
   }
 
   .fishydex-button {
@@ -2074,6 +2076,9 @@
       const supportsDriedFilter = fish.some((entry) => entry && entryIsDried(entry));
       const searchQuery = (snapshot.search_query || "").trim().toLowerCase();
       const caughtSet = new Set(caughtIds);
+      const catalogEntries = fish.filter((entry) => {
+        return entry && (showDried || !entryIsDried(entry));
+      });
       const filtered = fish.filter((entry) => {
         if (!entry) {
           return false;
@@ -2110,6 +2115,9 @@
         || caughtFilter !== "all"
         || gradeFilters.length > 0
         || methodFilters.length > 0;
+      const catalogCaughtCount = catalogEntries.reduce((count, entry) => {
+        return count + (caughtSet.has(fishItemId(entry)) ? 1 : 0);
+      }, 0);
       const gradeProgress = {
         Prize: { total: 0, caught: 0 },
         Rare: { total: 0, caught: 0 },
@@ -2117,10 +2125,7 @@
         General: { total: 0, caught: 0 },
         Trash: { total: 0, caught: 0 },
       };
-      for (const entry of fish) {
-        if (!entry) {
-          continue;
-        }
+      for (const entry of catalogEntries) {
         const grade = filterGradeForEntry(entry);
         if (!(grade in gradeProgress)) {
           continue;
@@ -2160,9 +2165,10 @@
       state.suppressCardAnimation = false;
 
       const patch = {
+        catalog_count: catalogEntries.length,
         total_count: fish.length,
         visible_count: filtered.length,
-        caught_count: caughtIds.length,
+        caught_count: catalogCaughtCount,
         prize_total_count: gradeProgress.Prize.total,
         prize_caught_count: gradeProgress.Prize.caught,
         rare_total_count: gradeProgress.Rare.total,
@@ -2268,6 +2274,7 @@
        sort_field: 'name',
        sort_direction: 'asc',
        caught_ids: [],
+       catalog_count: 0,
        total_count: 0,
        visible_count: 0,
        caught_count: 0,
@@ -2317,8 +2324,8 @@
               <div class="fishydex-stat-value stat-value text-xl" data-text="$caught_count || 0"></div>
             </div>
             <div class="fishydex-stat stat">
-              <div class="fishydex-stat-label stat-title">Red Caught</div>
-              <div class="fishydex-stat-value stat-value text-xl" data-text="$prize_caught_count || 0"></div>
+              <div class="fishydex-stat-label stat-title">Catalog</div>
+              <div class="fishydex-stat-value stat-value text-xl" data-text="$catalog_count || 0"></div>
             </div>
           </div>
           <div class="fishydex-grade-stats" data-show="$supports_grade_filter">
@@ -2378,17 +2385,6 @@
         </div>
 
         <div class="fishydex-controls">
-          <div class="fishydex-filter-summary stats stats-horizontal rounded-box border border-base-300 bg-base-200">
-            <div class="fishydex-stat stat">
-              <div class="fishydex-stat-label stat-title">Visible</div>
-              <div class="fishydex-stat-value stat-value text-xl" data-text="$visible_count || 0"></div>
-            </div>
-            <div class="fishydex-stat stat">
-              <div class="fishydex-stat-label stat-title">Catalog</div>
-              <div class="fishydex-stat-value stat-value text-xl" data-text="$total_count || $count || 0"></div>
-            </div>
-          </div>
-
           <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
             <legend class="fieldset-legend">Search</legend>
             <label class="fishydex-search-field input input-bordered">
@@ -2515,6 +2511,8 @@
             </fieldset>
 
             <div class="fishydex-filter-meta">
+              <span class="fishydex-filter-count"
+                    data-text="'Showing ' + ($visible_count || 0) + '/' + ($catalog_count || 0) + ' matches'"></span>
               <button type="button" class="btn btn-sm btn-soft fishydex-filter-clear" data-on-click="window.Fishydex.resetFilters()">Clear filters</button>
             </div>
           </div>
