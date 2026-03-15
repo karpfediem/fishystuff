@@ -705,6 +705,18 @@
     flex: none;
   }
 
+  #fishydex-details-caught-toggle {
+    transition: background 120ms ease, outline-color 120ms ease;
+  }
+
+  #fishydex-details-caught-toggle[data-caught-state="uncaught"] {
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 60%, transparent);
+  }
+
+  #fishydex-details-caught-toggle[data-caught-state="caught"] {
+    color: color-mix(in oklab, var(--color-success, #2f855a) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
   .fishydex-details-icon-wrap {
     display: grid;
     place-items: center;
@@ -1847,6 +1859,7 @@
       setElementText(title, meta.name);
       if (titleToggle instanceof HTMLButtonElement) {
         titleToggle.className = `fishydex-caught-button btn btn-sm btn-circle btn-ghost${meta.caught ? " is-caught" : ""}${shouldStampCaughtToggle(meta.fishId, meta.caught) ? " is-stamping" : ""}`;
+        titleToggle.dataset.caughtState = meta.caught ? "caught" : "uncaught";
         titleToggle.setAttribute("aria-pressed", meta.caught ? "true" : "false");
         titleToggle.setAttribute(
           "aria-label",
