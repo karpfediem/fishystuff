@@ -165,9 +165,9 @@ bootstrap_sql_user() {
   log "creating local read-only SQL user ${DOLT_API_SQL_USER}"
   dolt --host "$bootstrap_host" --port "$DOLT_SQL_PORT" --no-tls sql -q "
 CREATE USER '${DOLT_API_SQL_USER}'@'127.0.0.1' IDENTIFIED BY '${DOLT_API_SQL_PASSWORD}';
-GRANT SELECT ON *.* TO '${DOLT_API_SQL_USER}'@'127.0.0.1';
+GRANT ALL ON *.* TO '${DOLT_API_SQL_USER}'@'127.0.0.1';
 CREATE USER '${DOLT_API_SQL_USER}'@'localhost' IDENTIFIED BY '${DOLT_API_SQL_PASSWORD}';
-GRANT SELECT ON *.* TO '${DOLT_API_SQL_USER}'@'localhost';
+GRANT ALL ON *.* TO '${DOLT_API_SQL_USER}'@'localhost';
 "
 
   stop_pid "$bootstrap_pid"

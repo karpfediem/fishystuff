@@ -32,7 +32,7 @@ The Fly deployment path now assumes:
 - one Fly Machine runs both `dolt sql-server` and `fishystuff_server`
 - the Dolt repo lives on a Fly volume mounted at `/data`
 - the API connects only to the local Dolt SQL server on `127.0.0.1`
-- production does not hold Dolt write credentials
+- production does not hold DoltHub write credentials
 
 On first boot, the machine performs a shallow single-branch clone from DoltHub
 into that volume. On later boots, it reuses the local clone and attempts a
@@ -41,6 +41,9 @@ mode. If DoltHub sync fails, the API still starts from the last local clone.
 The repo clone is the only persisted Dolt state; the local SQL privilege and
 branch-control files under `/data/.doltcfg` are rebuilt on boot so a stale
 volume-backed auth database cannot block the API's loopback user.
+The loopback API user is granted broad non-admin SQL privileges because Dolt's
+access model rejects some normal read traffic under a plain `SELECT` grant, but
+the runtime server itself stays read-only in production.
 
 Because the app uses a single attached Fly Volume, deployments should use an
 `immediate` strategy rather than rolling replacement.
