@@ -4,6 +4,9 @@ primary_region = "fra"
 kill_signal = "SIGINT"
 kill_timeout = "30s"
 
+[deploy]
+  strategy = "immediate"
+
 [build]
   image = "registry.fly.io/api-fishystuff-fish:latest"
 
@@ -36,6 +39,11 @@ kill_timeout = "30s"
     interval = "15s"
     timeout = "5s"
     grace_period = "120s"
+
+[[mounts]]
+  source = "fishystuff_data"
+  destination = "/data"
+  initial_size = "3gb"
 
 [[vm]]
   cpu_kind = "shared"

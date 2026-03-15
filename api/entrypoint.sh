@@ -74,9 +74,6 @@ EOF
 }
 
 clone_remote_repo() {
-  mkdir -p "$DOLT_DATA_ROOT"
-  rm -rf "$DOLT_REPO_DIR"
-
   local clone_cmd=(
     dolt clone
     --branch "$DOLT_REMOTE_BRANCH"
@@ -92,6 +89,52 @@ clone_remote_repo() {
     "${clone_cmd[@]}"
   )
   log "clone complete"
+}
+
+sync_existing_repo() {
+  log "using existing local Dolt clone at ${DOLT_REPO_DIR}"
+
+  if [ "${DOLT_PULL_ON_BOOT}" != "true" ]; then
+    log "boot-time Dolt sync disabled; using local clone as-is"
+    return 0
+  fi
+
+  (
+    cd "$DOLT_REPO_DIR"
+
+    log "fetching origin/${DOLT_REMOTE_BRANCH}"
+    if ! dolt fetch origin "$DOLT_REMOTE_BRANCH"; then
+      log "fetch failed; continuing with existing local clone"
+      exit 0
+    fi
+
+    if ! dolt checkout "$DOLT_REMOTE_BRANCH" >/dev/null 2>&1; then
+      if ! dolt checkout -b "$DOLT_REMOTE_BRANCH" "origin/${DOLT_REMOTE_BRANCH}" >/dev/null 2>&1; then
+        log "could not switch to branch ${DOLT_REMOTE_BRANCH}; continuing with current local branch"
+        exit 0
+      fi
+    fi
+
+    log "pulling origin/${DOLT_REMOTE_BRANCH}"
+    if ! dolt pull origin "$DOLT_REMOTE_BRANCH"; then
+      log "pull failed; continuing with existing local clone"
+      exit 0
+    fi
+
+    log "pull complete"
+  )
+}
+
+ensure_local_repo() {
+  mkdir -p "$DOLT_DATA_ROOT"
+
+  if [ -d "${DOLT_REPO_DIR}/.dolt" ]; then
+    sync_existing_repo
+    return 0
+  fi
+
+  rm -rf "$DOLT_REPO_DIR"
+  clone_remote_repo
 }
 
 bootstrap_sql_user() {
@@ -154,6 +197,7 @@ DOLT_DATABASE_NAME="${DOLT_DATABASE_NAME:-fishystuff}"
 DOLT_REPO_DIR="${DOLT_DATA_ROOT}/${DOLT_DATABASE_NAME}"
 DOLT_REMOTE_BRANCH="${DOLT_REMOTE_BRANCH:-main}"
 DOLT_CLONE_DEPTH="${DOLT_CLONE_DEPTH:-1}"
+DOLT_PULL_ON_BOOT="${DOLT_PULL_ON_BOOT:-true}"
 
 DOLT_SQL_HOST="${DOLT_SQL_HOST:-127.0.0.1}"
 DOLT_SQL_PORT="${DOLT_SQL_PORT:-3306}"
@@ -175,7 +219,7 @@ DOLT_PID=""
 trap cleanup EXIT INT TERM
 
 ensure_runtime_dirs
-clone_remote_repo
+ensure_local_repo
 mkdir -p "$DOLT_CFG_DIR"
 bootstrap_sql_user "$BOOTSTRAP_SQL_CONFIG"
 start_runtime_sql_server "$RUNTIME_SQL_CONFIG"
