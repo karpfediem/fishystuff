@@ -254,6 +254,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
             if context.points.icons_enabled {
                 if let Some(handle) = icon_handle_for_fish(
                     point.fish_id,
+                    point.aggregated,
                     &mut context.icon_cache,
                     &context.fish,
                     &mut context.remote_images,
@@ -339,10 +340,14 @@ pub(super) struct PointMarkerSync<'w, 's> {
 
 fn icon_handle_for_fish(
     fish_id: Option<i32>,
+    aggregated: bool,
     cache: &mut PointIconCache,
     fish: &FishCatalog,
     remote_images: &mut RemoteImageCache,
 ) -> Option<Handle<Image>> {
+    if aggregated {
+        return None;
+    }
     let fish_id = fish_id?;
     let Some(item_id) = fish.item_id_for_fish(fish_id) else {
         cache.missing_catalog_ids.insert(fish_id);

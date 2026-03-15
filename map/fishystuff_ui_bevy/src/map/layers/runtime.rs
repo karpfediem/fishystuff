@@ -61,13 +61,19 @@ impl LayerRuntime {
     }
 
     pub fn sync_to_registry(&mut self, registry: &LayerRegistry) {
-        let mut next_states = HashMap::with_capacity(registry.ordered().len());
+        let valid_ids = registry
+            .ordered()
+            .iter()
+            .map(|spec| spec.id)
+            .collect::<HashSet<_>>();
+        self.states
+            .retain(|layer_id, _| valid_ids.contains(layer_id));
+
         for spec in registry.ordered() {
-            let mut state = self
+            let state = self
                 .states
-                .get(&spec.id)
-                .copied()
-                .unwrap_or_else(|| default_state_for_spec(spec));
+                .entry(spec.id)
+                .or_insert_with(|| default_state_for_spec(spec));
             if spec.is_vector() {
                 if state.vector_status == LayerVectorStatus::Inactive {
                     state.vector_status = LayerVectorStatus::NotRequested;
@@ -75,9 +81,9 @@ impl LayerRuntime {
             } else {
                 state.vector_status = LayerVectorStatus::Inactive;
             }
-            next_states.insert(spec.id, state);
+            state.z_base = spec.z_base;
+            state.display_order = spec.display_order;
         }
-        self.states = next_states;
     }
 
     pub fn reset_from_registry(&mut self, registry: &LayerRegistry) {

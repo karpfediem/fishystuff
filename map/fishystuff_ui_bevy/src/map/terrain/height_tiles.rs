@@ -271,9 +271,21 @@ fn spawn_height_tile_request(
     let root = config.height_tile_root_url.trim_end_matches('/');
     let url = format!("{root}/{}_{}.png", key.tx, key.ty);
     let (sender, receiver) = async_channel::bounded(1);
+
+    #[cfg(target_arch = "wasm32")]
+    bevy::tasks::IoTaskPool::get()
+        .spawn_local(async move {
+            let result = runtime_io::load_bytes_async(&url).await.and_then(|bytes| {
+                decode_height_tile(bytes.as_slice()).map_err(|err| format!("decode {url}: {err}"))
+            });
+            let _ = sender.send(result).await;
+        })
+        .detach();
+
+    #[cfg(not(target_arch = "wasm32"))]
     bevy::tasks::IoTaskPool::get()
         .spawn(async move {
-            let result = runtime_io::load_bytes(&url).and_then(|bytes| {
+            let result = runtime_io::load_bytes_async(&url).await.and_then(|bytes| {
                 decode_height_tile(bytes.as_slice()).map_err(|err| format!("decode {url}: {err}"))
             });
             let _ = sender.send(result).await;

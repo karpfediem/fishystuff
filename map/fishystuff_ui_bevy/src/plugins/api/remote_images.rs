@@ -107,7 +107,7 @@ pub fn poll_remote_image_requests(
 }
 
 async fn fetch_remote_image(url: &str) -> Result<DecodedRemoteImage, String> {
-    let bytes = runtime_io::load_bytes(url)?;
+    let bytes = runtime_io::load_bytes_async(url).await?;
     let image = image::load_from_memory(bytes.as_slice())
         .map_err(|err| format!("decode {url}: {err}"))?
         .to_rgba8();
