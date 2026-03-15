@@ -322,6 +322,8 @@
     <div class="hidden" data-computed-percent_catch="calcPercentageOfAverageTime($catchtime, $zone, $active)"></div>
     <div class="hidden" data-computed-percent_af="calcPercentageOfAverageTime($aftime, $zone, $active)"></div>
     <div class="hidden" data-computed-percent_improvement="1 - calcPercentageOfAverageTime($total_time, $zone, $active)"></div>
+    <div class="hidden" data-computed-zone_bite_min="getBiteTimes($zone).min.toFixed(2)"></div>
+    <div class="hidden" data-computed-zone_bite_max="getBiteTimes($zone).max.toFixed(2)"></div>
     <div class="hidden" data-computed-timespan-amount-normalized="Math.max(0, Number($timespanAmount) || 0)"></div>
     <div class="hidden" data-computed-timespan-unit-seconds="$timespanUnit === 'minutes' ? 60 : $timespanUnit === 'hours' ? 3600 : $timespanUnit === 'days' ? 86400 : 604800"></div>
     <div class="hidden" data-computed-timespan-unit-label="$timespanUnit === 'minutes' ? ($timespanAmountNormalized === 1 ? 'minute' : 'minutes') : $timespanUnit === 'hours' ? ($timespanAmountNormalized === 1 ? 'hour' : 'hours') : $timespanUnit === 'days' ? ($timespanAmountNormalized === 1 ? 'day' : 'days') : ($timespanAmountNormalized === 1 ? 'week' : 'weeks')"></div>
@@ -363,12 +365,6 @@
                     </button>
                 </div>
             </div>
-
-            <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4">
-                <legend class="fieldset-legend">Fishing Resources</legend>
-                <input data-bind-resources type="range" class="range-xs range-secondary w-full" min="0" max="100">
-                <span class="label text-sm font-medium" data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
-            </fieldset>
 
             <div class="rounded-box border border-base-300 bg-base-200 p-4">
                 <div id="fishing-timeline">
@@ -479,10 +475,11 @@
         </div>
     </section>
 
-    <div class="grid gap-6 xl:grid-cols-2">
-        <section class="card card-border bg-base-100">
-            <div class="card-body">
-                <div id="items" class="grid gap-4 md:grid-cols-2">
+    <div class="grid gap-6 xl:grid-cols-3">
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fieldset-legend ml-6 px-2">Bite Time</legend>
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-4">
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Zone</legend>
                         <select class="select w-full" id="zone" data-bind-zone></select>
@@ -491,6 +488,26 @@
                         <legend class="fieldset-legend">Fishing Level</legend>
                         <select class="select w-full" id="level" data-bind-level></select>
                     </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Fishing Resources</legend>
+                        <input data-bind-resources type="range" class="range-xs range-secondary w-full" min="0" max="100">
+                        <span class="label text-sm font-medium" data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
+                    </fieldset>
+                    <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none">
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Zone Bite Time</div>
+                            <div class="stat-value text-lg" data-text="$zone_bite_min + ' - ' + $zone_bite_max"></div>
+                            <div class="stat-desc">seconds, raw min-max range</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="card card-border bg-base-100 xl:col-span-2">
+            <legend class="fieldset-legend ml-6 px-2">Gear</legend>
+            <div class="card-body pt-0">
+                <div id="items" class="grid gap-4 md:grid-cols-2">
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Lifeskill Level</legend>
                         <select class="select w-full" id="lifeskill_level" data-bind-lifeskill_level></select>
@@ -535,10 +552,11 @@
                     </fieldset>
                 </div>
             </div>
-        </section>
+        </fieldset>
 
-        <section class="card card-border bg-base-100">
-            <div class="card-body">
+        <fieldset class="card card-border bg-base-100 xl:col-span-3">
+            <legend class="fieldset-legend ml-6 px-2">Pets</legend>
+            <div class="card-body pt-0">
                 <div id="pets" class="grid gap-4 md:grid-cols-2">
                     <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
                         <div class="grid gap-3">
@@ -656,7 +674,7 @@
         ).toFixed(2)"></div>
                 </div>
             </div>
-        </section>
+        </fieldset>
     </div>
 </div>
 
