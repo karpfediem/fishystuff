@@ -29,8 +29,8 @@ use fishystuff_api::version::API_VERSION;
 use fishystuff_core::constants::{MAP_HEIGHT, MAP_WIDTH};
 use fishystuff_core::prob::js_divergence;
 use fishystuff_core::tile::tile_dimensions;
-use mysql::OptsBuilder;
 use mysql::prelude::Queryable;
+use mysql::OptsBuilder;
 use mysql::{Opts, Pool, PoolConstraints, PoolOpts, Row};
 
 use crate::config::ZoneStatusConfig;
@@ -211,8 +211,8 @@ impl DoltMySqlStore {
             PoolConstraints::new(DOLT_POOL_MIN_CONNECTIONS, DOLT_POOL_MAX_CONNECTIONS)
                 .ok_or_else(|| AppError::internal("invalid Dolt pool constraints"))?;
         let pool_opts = PoolOpts::default().with_constraints(constraints);
-        let pool = Pool::new(OptsBuilder::from_opts(opts).pool_opts(pool_opts))
-            .map_err(db_unavailable)?;
+        let pool =
+            Pool::new(OptsBuilder::from_opts(opts).pool_opts(pool_opts)).map_err(db_unavailable)?;
         Ok(Self { pool, defaults })
     }
 

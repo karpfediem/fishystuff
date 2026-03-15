@@ -81,6 +81,9 @@ mod tests {
     use super::build_router;
 
     struct MockStore;
+    struct HealthcheckStore {
+        health_ok: bool,
+    }
 
     #[async_trait::async_trait]
     impl Store for MockStore {
@@ -138,6 +141,69 @@ mod tests {
         }
         async fn healthcheck(&self) -> crate::error::AppResult<()> {
             Ok(())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Store for HealthcheckStore {
+        async fn get_meta(&self) -> crate::error::AppResult<MetaResponse> {
+            Ok(MetaResponse::default())
+        }
+        async fn get_layers(
+            &self,
+            _map_version_id: Option<String>,
+        ) -> crate::error::AppResult<LayersResponse> {
+            Ok(LayersResponse::default())
+        }
+        async fn get_region_groups(
+            &self,
+            _map_version_id: Option<String>,
+        ) -> crate::error::AppResult<RegionGroupsResponse> {
+            Ok(RegionGroupsResponse::default())
+        }
+        async fn list_fish(
+            &self,
+            _lang: FishLang,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<FishListResponse> {
+            Ok(FishListResponse::default())
+        }
+        async fn list_zones(
+            &self,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<Vec<ZoneEntry>> {
+            Ok(Vec::new())
+        }
+        async fn zone_stats(
+            &self,
+            _request: ZoneStatsRequest,
+            _status_cfg: ZoneStatusConfig,
+        ) -> crate::error::AppResult<ZoneStatsResponse> {
+            Ok(ZoneStatsResponse::default())
+        }
+        async fn effort_grid(
+            &self,
+            _request: EffortGridRequest,
+        ) -> crate::error::AppResult<EffortGridResponse> {
+            Ok(EffortGridResponse::default())
+        }
+        async fn events_snapshot_meta(
+            &self,
+        ) -> crate::error::AppResult<EventsSnapshotMetaResponse> {
+            Ok(EventsSnapshotMetaResponse::default())
+        }
+        async fn events_snapshot(
+            &self,
+            _requested_revision: Option<String>,
+        ) -> crate::error::AppResult<EventsSnapshotResponse> {
+            Ok(EventsSnapshotResponse::default())
+        }
+        async fn healthcheck(&self) -> crate::error::AppResult<()> {
+            if self.health_ok {
+                Ok(())
+            } else {
+                Err(crate::error::AppError::unavailable("db not ready"))
+            }
         }
     }
 
@@ -210,6 +276,48 @@ mod tests {
             .headers()
             .get("access-control-allow-origin")
             .is_none());
+    }
+
+    #[tokio::test]
+    async fn healthz_is_pure_liveness() {
+        let router = build_router(AppState::for_tests(
+            test_config(vec!["https://fishystuff.fish"]),
+            Arc::new(HealthcheckStore { health_ok: false }),
+        ));
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/healthz")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn readyz_reports_store_health() {
+        let router = build_router(AppState::for_tests(
+            test_config(vec!["https://fishystuff.fish"]),
+            Arc::new(HealthcheckStore { health_ok: false }),
+        ));
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/readyz")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 }
 

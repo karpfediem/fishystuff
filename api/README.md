@@ -47,6 +47,9 @@ the runtime server itself stays read-only in production.
 The boot path also writes a local Dolt repo identity before `pull`, so Fly
 machine restarts can fast-forward the on-volume clone without any interactive
 user config.
+The HTTP probes are split intentionally: `/healthz` is a pure liveness check for
+Fly, while `/readyz` still exercises the local Dolt-backed store path for
+readiness debugging.
 
 Because the app uses a single attached Fly Volume, deployments should use an
 `immediate` strategy rather than rolling replacement.
