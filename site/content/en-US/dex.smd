@@ -53,12 +53,6 @@
     gap: 1rem;
   }
 
-  @media (min-width: 1024px) {
-    .fishydex-bento {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-    }
-  }
-
   .fishydex-screen,
   .fishydex-stats,
   .fishydex-grid-shell {
@@ -121,7 +115,17 @@
   .fishydex-filter-stack {
     display: grid;
     gap: 0.85rem;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 900px) {
+    .fishydex-filter-stack {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .fishydex-filter-summary {
+    width: 100%;
   }
 
   .fishydex-filter-group {
@@ -237,7 +241,23 @@
     align-content: start;
   }
 
-  .fishydex-stat-grid {
+  .fishydex-stat-stack {
+    display: grid;
+    gap: 0.85rem;
+    width: 100%;
+  }
+
+  .fishydex-stat-row {
+    width: 100%;
+  }
+
+  .fishydex-grade-stats {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: repeat(auto-fit, minmax(10.75rem, 1fr));
+  }
+
+  .fishydex-grade-stat {
     width: 100%;
   }
 
@@ -261,6 +281,36 @@
     display: block;
     font-size: clamp(1.3rem, 2vw, 2rem);
     font-weight: 800;
+  }
+
+  .fishydex-grade-stat .fishydex-stat-value {
+    font-size: clamp(1.1rem, 1.8vw, 1.45rem);
+  }
+
+  .fishydex-grade-stat .stat-desc {
+    color: var(--dex-text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+
+  .fishydex-grade-stat .fishydex-stat-label.grade-prize {
+    color: color-mix(in oklab, var(--dex-prize) 78%, var(--color-base-content, #1f2937) 22%);
+  }
+
+  .fishydex-grade-stat .fishydex-stat-label.grade-rare {
+    color: color-mix(in oklab, var(--dex-grade-rare) 78%, var(--color-base-content, #1f2937) 22%);
+  }
+
+  .fishydex-grade-stat .fishydex-stat-label.grade-highquality {
+    color: color-mix(in oklab, var(--dex-grade-highquality) 78%, var(--color-base-content, #1f2937) 22%);
+  }
+
+  .fishydex-grade-stat .fishydex-stat-label.grade-general {
+    color: color-mix(in oklab, var(--dex-grade-general) 78%, var(--color-base-content, #1f2937) 22%);
+  }
+
+  .fishydex-grade-stat .fishydex-stat-label.grade-trash {
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 82%, transparent);
   }
 
   .fishydex-status,
@@ -839,10 +889,6 @@
   }
 
   @media (max-width: 640px) {
-    .fishydex-stat-grid {
-      grid-template-columns: 1fr 1fr;
-    }
-
     .fishydex-card-grid {
       grid-template-columns: repeat(auto-fill, minmax(9.75rem, 1fr));
     }
@@ -2064,6 +2110,26 @@
         || caughtFilter !== "all"
         || gradeFilters.length > 0
         || methodFilters.length > 0;
+      const gradeProgress = {
+        Prize: { total: 0, caught: 0 },
+        Rare: { total: 0, caught: 0 },
+        HighQuality: { total: 0, caught: 0 },
+        General: { total: 0, caught: 0 },
+        Trash: { total: 0, caught: 0 },
+      };
+      for (const entry of fish) {
+        if (!entry) {
+          continue;
+        }
+        const grade = filterGradeForEntry(entry);
+        if (!(grade in gradeProgress)) {
+          continue;
+        }
+        gradeProgress[grade].total += 1;
+        if (caughtSet.has(fishItemId(entry))) {
+          gradeProgress[grade].caught += 1;
+        }
+      }
 
       const groups = new Map();
       for (const grade of GRADE_ORDER) {
@@ -2073,10 +2139,6 @@
         const grade = filterGradeForEntry(entry);
         groups.get(grade).push(entry);
       }
-
-      const prizeCaughtCount = fish.filter((entry) => {
-        return (entry.is_prize === true || entry.grade === "Prize") && caughtSet.has(fishItemId(entry));
-      }).length;
 
       const grid = document.getElementById("fishydex-grid");
       if (grid) {
@@ -2101,7 +2163,16 @@
         total_count: fish.length,
         visible_count: filtered.length,
         caught_count: caughtIds.length,
-        prize_caught_count: prizeCaughtCount,
+        prize_total_count: gradeProgress.Prize.total,
+        prize_caught_count: gradeProgress.Prize.caught,
+        rare_total_count: gradeProgress.Rare.total,
+        rare_caught_count: gradeProgress.Rare.caught,
+        highquality_total_count: gradeProgress.HighQuality.total,
+        highquality_caught_count: gradeProgress.HighQuality.caught,
+        general_total_count: gradeProgress.General.total,
+        general_caught_count: gradeProgress.General.caught,
+        trash_total_count: gradeProgress.Trash.total,
+        trash_caught_count: gradeProgress.Trash.caught,
         supports_grade_filter: supportsGradeFilter,
         supports_method_filter: supportsMethodFilter,
         supports_dried_filter: supportsDriedFilter,
@@ -2200,7 +2271,16 @@
        total_count: 0,
        visible_count: 0,
        caught_count: 0,
+       prize_total_count: 0,
        prize_caught_count: 0,
+       rare_total_count: 0,
+       rare_caught_count: 0,
+       highquality_total_count: 0,
+       highquality_caught_count: 0,
+       general_total_count: 0,
+       general_caught_count: 0,
+       trash_total_count: 0,
+       trash_caught_count: 0,
        supports_grade_filter: false,
        supports_method_filter: false,
        supports_dried_filter: false,
@@ -2227,7 +2307,70 @@
 
   <section class="fishydex-shell">
     <div class="fishydex-bento">
-      <section class="fishydex-screen card card-border bg-base-100 lg:col-span-4">
+      <aside class="fishydex-stats card card-border bg-base-100">
+        <div class="card-body fishydex-stats-body">
+        <h3>Progress</h3>
+        <div class="fishydex-stat-stack">
+          <div class="fishydex-stat-row stats stats-horizontal rounded-box border border-base-300 bg-base-200">
+            <div class="fishydex-stat stat">
+              <div class="fishydex-stat-label stat-title">Caught</div>
+              <div class="fishydex-stat-value stat-value text-xl" data-text="$caught_count || 0"></div>
+            </div>
+            <div class="fishydex-stat stat">
+              <div class="fishydex-stat-label stat-title">Red Caught</div>
+              <div class="fishydex-stat-value stat-value text-xl" data-text="$prize_caught_count || 0"></div>
+            </div>
+          </div>
+          <div class="fishydex-grade-stats" data-show="$supports_grade_filter">
+            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
+              <div class="fishydex-stat stat">
+                <div class="fishydex-stat-label stat-title grade-prize">Red</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$prize_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($prize_total_count || 0) + ' catalog'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
+              <div class="fishydex-stat stat">
+                <div class="fishydex-stat-label stat-title grade-rare">Yellow</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$rare_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($rare_total_count || 0) + ' catalog'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
+              <div class="fishydex-stat stat">
+                <div class="fishydex-stat-label stat-title grade-highquality">Blue</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$highquality_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($highquality_total_count || 0) + ' catalog'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
+              <div class="fishydex-stat stat">
+                <div class="fishydex-stat-label stat-title grade-general">Green</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$general_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($general_total_count || 0) + ' catalog'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
+              <div class="fishydex-stat stat">
+                <div class="fishydex-stat-label stat-title grade-trash">White</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$trash_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($trash_total_count || 0) + ' catalog'"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="fishydex-status" data-show="$loading">
+          <strong>Loading...</strong>
+          <div class="fishydex-subtle">Fetching the fish catalog from the Axum API.</div>
+        </div>
+        <div class="fishydex-actions" data-show="!$loading">
+          <button type="button" class="btn btn-sm btn-soft btn-primary fishydex-button" data-on-click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
+          <button type="button" class="btn btn-sm btn-outline fishydex-button" data-on-click="window.Fishydex.importCaught()">Import</button>
+        </div>
+        </div>
+      </aside>
+
+      <section class="fishydex-screen card card-border bg-base-100">
         <div class="card-body fishydex-panel-body">
         <div class="fishydex-heading">
           <h3>Filter</h3>
@@ -2235,6 +2378,17 @@
         </div>
 
         <div class="fishydex-controls">
+          <div class="fishydex-filter-summary stats stats-horizontal rounded-box border border-base-300 bg-base-200">
+            <div class="fishydex-stat stat">
+              <div class="fishydex-stat-label stat-title">Visible</div>
+              <div class="fishydex-stat-value stat-value text-xl" data-text="$visible_count || 0"></div>
+            </div>
+            <div class="fishydex-stat stat">
+              <div class="fishydex-stat-label stat-title">Catalog</div>
+              <div class="fishydex-stat-value stat-value text-xl" data-text="$total_count || $count || 0"></div>
+            </div>
+          </div>
+
           <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
             <legend class="fieldset-legend">Search</legend>
             <label class="fishydex-search-field input input-bordered">
@@ -2377,38 +2531,6 @@
         </div>
         </div>
       </section>
-
-      <aside class="fishydex-stats card card-border bg-base-100 lg:col-span-2">
-        <div class="card-body fishydex-stats-body">
-        <h3>Progress</h3>
-        <div class="fishydex-stat-grid stats stats-vertical rounded-box border border-base-300 bg-base-200 sm:stats-horizontal lg:stats-vertical">
-          <div class="fishydex-stat stat">
-            <span class="fishydex-stat-label stat-title">Caught</span>
-            <span class="fishydex-stat-value stat-value" data-text="$caught_count || 0"></span>
-          </div>
-          <div class="fishydex-stat stat">
-            <span class="fishydex-stat-label stat-title">Red Caught</span>
-            <span class="fishydex-stat-value stat-value" data-text="$prize_caught_count || 0"></span>
-          </div>
-          <div class="fishydex-stat stat">
-            <span class="fishydex-stat-label stat-title">Visible</span>
-            <span class="fishydex-stat-value stat-value" data-text="$visible_count || 0"></span>
-          </div>
-          <div class="fishydex-stat stat">
-            <span class="fishydex-stat-label stat-title">Catalog</span>
-            <span class="fishydex-stat-value stat-value" data-text="$total_count || $count || 0"></span>
-          </div>
-        </div>
-        <div class="fishydex-status" data-show="$loading">
-          <strong>Loading...</strong>
-          <div class="fishydex-subtle">Fetching the fish catalog from the Axum API.</div>
-        </div>
-        <div class="fishydex-actions" data-show="!$loading">
-          <button type="button" class="btn btn-sm btn-soft btn-primary fishydex-button" data-on-click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
-          <button type="button" class="btn btn-sm btn-outline fishydex-button" data-on-click="window.Fishydex.importCaught()">Import</button>
-        </div>
-        </div>
-      </aside>
     </div>
 
     <section class="fishydex-grid-shell card card-border bg-base-100">
