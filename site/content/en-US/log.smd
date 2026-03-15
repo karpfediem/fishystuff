@@ -8,12 +8,31 @@
   .layout = "log.xml",
   .output = "log/index.xml",
 }],
+.custom = { .updated = @date("2026-03-15T00:00:00") },
 .draft = false,
 --- 
 []($section.id('about'))
 This is a non-exhaustive, curated list of changes meant to help users quickly see what has improved since they last checked.
 
 You can <a href="index.xml">subscribe to this page via RSS</a>.
+
+[]($section.id('v1.0.0').data('date','2026-03-15'))
+# Interactive Map, data pipeline, Fishydex and complete site overhaul
+- Beautiful new illustrations thanks to Baklow 🤩
+- New Bevy-powered map built from scratch with 
+  - Zone and Region Group masks
+  - Search feature
+  - Fish Evidence Points (exact locations where people actually caught specific fish 😉)
+- Fishydex index for tracking your fish guide progress
+- Calculator cleanup with regrouped controls, improved catch-time/session panels
+- New API backend for fish, zones, region groups and other layers, fish evidence events
+- Site polish across the homepage, guides, devlog timeline, and shared layouts, plus a lot of legacy CSS and old code removed
+
+The map is still in a pretty rough state right now (please do not try 3D mode).
+Since is is run as single threaded WASM app, it might also suffer heavily from performance issues.
+
+But I'd rather have things available already and continuously improve it. So here we go :)
+I will try to push some fixes after doing profiling work.
 
 []($section.id('v0.2.0').data('date','2025-10-04'))
 # Website touch up
