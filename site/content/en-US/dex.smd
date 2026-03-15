@@ -2060,6 +2060,10 @@
       const sorted = filtered.slice().sort((left, right) => {
         return compareFishEntries(left, right, sortField, sortDirection);
       });
+      const hasNarrowingFilters = Boolean(searchQuery)
+        || caughtFilter !== "all"
+        || gradeFilters.length > 0
+        || methodFilters.length > 0;
 
       const groups = new Map();
       for (const grade of GRADE_ORDER) {
@@ -2087,7 +2091,7 @@
           }
         }
         if (!filtered.length) {
-          fragment.appendChild(renderEmptyState(activeFilterCount > 0));
+          fragment.appendChild(renderEmptyState(hasNarrowingFilters));
         }
         grid.replaceChildren(fragment);
       }
