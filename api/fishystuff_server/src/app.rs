@@ -34,6 +34,7 @@ pub fn build_router(state: SharedState) -> Router {
 
     Router::new()
         .route("/healthz", get(routes::meta::healthz))
+        .route("/readyz", get(routes::meta::readyz))
         .nest("/api/v1", api)
         .with_state(state)
         .layer(middleware::from_fn(request_id_middleware))

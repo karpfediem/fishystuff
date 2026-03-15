@@ -9,6 +9,12 @@ use crate::error::{with_timeout, AppError, AppResult};
 use crate::state::{RequestId, SharedState};
 
 pub async fn healthz(
+    Extension(_request_id): Extension<RequestId>,
+) -> AppResult<impl IntoResponse> {
+    Ok(Json(json!({ "status": "ok" })))
+}
+
+pub async fn readyz(
     State(state): State<SharedState>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<impl IntoResponse> {
