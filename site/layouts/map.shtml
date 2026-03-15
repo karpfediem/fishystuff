@@ -85,9 +85,6 @@
         max-height: calc(100% - 2rem);
         flex-direction: column;
         overflow: hidden;
-        border-radius: 1rem;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
-        background: var(--color-base-100);
       }
 
       #fishymap-panel[hidden],
@@ -113,17 +110,6 @@
 
       #fishymap-search-dock > * {
         pointer-events: auto;
-      }
-
-      #fishymap-search-shell,
-      #fishymap-search-results-shell {
-        border-radius: 1rem;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
-        background: var(--color-base-100);
-      }
-
-      #fishymap-search-shell {
-        padding: 0.8rem 0.9rem;
       }
 
       #fishymap-search-selection-shell {
@@ -152,15 +138,25 @@
         min-height: 0;
         width: 100%;
         flex-wrap: wrap;
-        gap: 0.5rem;
+        gap: 0.35rem;
         justify-content: flex-start;
         align-content: flex-start;
         overflow-x: hidden;
         overflow-y: auto;
         max-height: min(11rem, 26dvh);
-        padding: 0.65rem 0.8rem 0.8rem;
+        padding: 0.65rem 0.75rem 0.75rem;
         pointer-events: auto;
         scrollbar-width: thin;
+      }
+
+      #fishymap-search-count[hidden] {
+        display: none !important;
+      }
+
+      .fishymap-window-title {
+        font-family: 'Itim', sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.01em;
       }
 
       #fishymap-search-selection[hidden],
@@ -190,9 +186,6 @@
         height: min(30rem, calc(100% - 12rem));
         max-height: calc(100% - 12rem);
         overflow: hidden;
-        border-radius: 1rem;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
-        background: var(--color-base-100);
       }
 
       #fishymap-zone-evidence-body {
@@ -200,21 +193,16 @@
         min-height: 0;
         flex: 1 1 auto;
         flex-direction: column;
-        gap: 0.5rem;
-        padding: 0.75rem 1rem;
+        gap: 0.75rem;
+        padding: 1rem;
       }
 
       #fishymap-zone-evidence-list {
-        display: grid;
+        display: flex;
         min-height: 0;
         flex: 1 1 auto;
-        grid-auto-flow: row;
-        grid-auto-rows: max-content;
-        gap: 0.5rem;
-        padding: 0.5rem;
-        border-radius: 1rem;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 8%, transparent);
-        background: var(--color-base-200);
+        flex-direction: column;
+        gap: 0.35rem;
         overflow-x: hidden;
         overflow-y: auto;
       }
@@ -235,9 +223,6 @@
         min-height: 16rem;
         flex-direction: column;
         overflow: hidden;
-        border-radius: 1rem;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
-        background: var(--color-base-100);
       }
 
       #fishymap-view-toggle {
@@ -267,8 +252,8 @@
         min-height: 0;
         flex: 1 1 auto;
         flex-direction: column;
-        gap: 0.75rem;
-        padding: 0.75rem 1rem 1rem;
+        gap: 0.5rem;
+        padding: 1rem;
       }
 
       #fishymap-layers {
@@ -276,7 +261,7 @@
         min-height: 0;
         flex: 1 1 auto;
         flex-direction: column;
-        gap: 0.55rem;
+        gap: 0.5rem;
         overflow-x: hidden;
         overflow-y: auto;
       }
@@ -289,9 +274,6 @@
         gap: 0.75rem;
         margin-left: calc(var(--fishymap-layer-indent, 0) * 1.4rem);
         padding: 0.8rem 0.9rem;
-        border-radius: 1rem;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
-        background: var(--color-base-200);
         transition:
           border-color 140ms ease,
           background-color 140ms ease,
@@ -310,46 +292,24 @@
         background: color-mix(in srgb, var(--color-base-content) 14%, transparent);
       }
 
-      .fishymap-layer-card[data-locked="true"] {
-        background: color-mix(in srgb, var(--color-base-200) 70%, var(--color-base-100) 30%);
-      }
-
       .fishymap-layer-card[data-dragging="true"] {
         opacity: 0.45;
         transform: scale(0.985);
       }
 
       .fishymap-layer-card[data-drop-position="before"] {
-        box-shadow: inset 0 2px 0 color-mix(in srgb, var(--color-primary) 85%, transparent);
+        border-top-width: 2px;
         border-top-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
       }
 
       .fishymap-layer-card[data-drop-position="after"] {
-        box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--color-primary) 85%, transparent);
+        border-bottom-width: 2px;
         border-bottom-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
       }
 
       .fishymap-layer-card[data-drop-position="attach"] {
         border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
         background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-200) 90%);
-      }
-
-      .fishymap-layer-visibility,
-      .fishymap-layer-drag {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 2.25rem;
-        height: 2.25rem;
-        border-radius: 999px;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
-        background: var(--color-base-100);
-        color: inherit;
-      }
-
-      .fishymap-layer-visibility:hover,
-      .fishymap-layer-drag:hover {
-        background: color-mix(in srgb, var(--color-base-100) 70%, var(--color-base-200) 30%);
       }
 
       .fishymap-layer-drag {
@@ -402,9 +362,6 @@
         flex-direction: column;
         gap: 0.45rem;
         max-width: min(22rem, calc(100vw - 2rem));
-        border-radius: 1rem;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
-        background: var(--color-base-100);
         padding: 0.5rem 0.7rem;
         pointer-events: none;
         transform: translate3d(
@@ -465,9 +422,6 @@
         inset: auto 1rem 1rem auto;
         z-index: 30;
         width: min(32rem, calc(100vw - 2rem));
-        border-radius: 1rem;
-        border: 1px solid color-mix(in srgb, var(--color-error) 42%, transparent);
-        background: var(--color-base-100);
       }
 
       #fishymap-error-overlay[hidden] {
@@ -537,34 +491,45 @@
     <div id="map-page-shell">
       <canvas id="bevy"></canvas>
       <div id="fishymap-search-dock" class="not-prose">
-        <div id="fishymap-search-shell">
-          <input id="fishymap-search" class="input input-bordered input-md w-full rounded-full" type="search" placeholder="Search fish" autocomplete="off">
+        <div id="fishymap-search-shell" class="card card-border bg-base-100">
+          <div class="p-3">
+            <label class="input input-bordered input-md w-full rounded-full">
+              <svg class="h-[1em] opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
+                <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="m21 21-4.3-4.3"></path>
+                </g>
+              </svg>
+              <input id="fishymap-search" class="grow" type="search" placeholder="Search fish" autocomplete="off">
+              <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 fish</span>
+            </label>
+          </div>
         </div>
 
-        <div id="fishymap-search-results-shell" class="overflow-hidden" hidden>
-          <div id="fishymap-search-results" class="menu menu-sm max-h-56 overflow-auto p-2"></div>
+        <div id="fishymap-search-results-shell" class="card card-border bg-base-100 overflow-hidden" hidden>
+          <ul id="fishymap-search-results" class="menu menu-sm max-h-64 overflow-auto gap-1 p-2"></ul>
         </div>
       </div>
       <div id="fishymap-search-selection-shell" class="not-prose" hidden>
         <div id="fishymap-search-selection" hidden></div>
       </div>
-      <aside id="fishymap-zone-evidence-window" class="not-prose">
+      <aside id="fishymap-zone-evidence-window" class="card card-border bg-base-100 not-prose">
         <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
           <div class="flex items-center gap-2">
-            <span class="text-sm font-semibold">Zone evidence</span>
+            <span class="fishymap-window-title text-lg leading-tight">Zone evidence</span>
           </div>
           <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
         </div>
         <div id="fishymap-zone-evidence-body">
           <p id="fishymap-selection-summary" class="text-sm text-base-content/80">No zone selected.</p>
           <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
-          <div id="fishymap-zone-evidence-list"></div>
+          <div id="fishymap-zone-evidence-list" class="list rounded-box border border-base-300/70 bg-base-200 p-1"></div>
         </div>
       </aside>
-      <aside id="fishymap-layers-window" class="not-prose">
+      <aside id="fishymap-layers-window" class="card card-border bg-base-100 not-prose">
         <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
           <div>
-            <p class="text-sm font-semibold">Layers</p>
+            <p class="fishymap-window-title text-lg leading-tight">Layers</p>
           </div>
           <span id="fishymap-layers-count" class="badge badge-outline badge-sm">0</span>
         </div>
@@ -593,10 +558,10 @@
       >
         Map controls
       </button>
-      <aside id="fishymap-panel" class="not-prose">
+      <aside id="fishymap-panel" class="card card-border bg-base-100 not-prose">
         <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
           <div>
-            <p class="font-display text-lg leading-tight">Map Controls</p>
+            <p class="fishymap-window-title text-lg leading-tight">Map Controls</p>
           </div>
           <div class="flex items-center gap-2">
             <span id="fishymap-ready-pill" class="badge badge-outline badge-sm">Loading</span>
@@ -606,11 +571,9 @@
 
         <div id="fishymap-panel-body" class="flex flex-col gap-4 px-4 py-4">
           <div class="space-y-3">
-            <div class="rounded-box border border-base-300 bg-base-100 p-4">
-              <div class="mb-2 flex items-center justify-between gap-3">
-                <span class="text-sm font-semibold">Patch window</span>
-                <span class="text-[11px] uppercase tracking-[0.18em] text-base-content/45">Inclusive</span>
-              </div>
+            <fieldset class="fieldset rounded-box border border-base-300/70 bg-base-200 p-4">
+              <legend class="fieldset-legend px-1 text-sm font-semibold">Patch window</legend>
+              <span class="label px-1 pt-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Inclusive</span>
               <div class="grid grid-cols-2 gap-3">
                 <label class="form-control gap-2">
                   <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">From</span>
@@ -626,12 +589,13 @@
                   </select>
                 </label>
               </div>
-            </div>
+            </fieldset>
 
-            <button id="fishymap-reset-view" class="btn btn-secondary btn-sm w-full" type="button">Reset view</button>
+            <button id="fishymap-reset-view" class="btn btn-outline btn-secondary btn-sm w-full" type="button">Reset view</button>
 
-            <div class="rounded-box border border-base-300 bg-base-100 p-4">
-              <div class="space-y-3">
+            <fieldset class="fieldset rounded-box border border-base-300/70 bg-base-200 p-4">
+              <legend class="fieldset-legend px-1 text-sm font-semibold">Display</legend>
+              <div class="space-y-3 pt-1">
                 <label class="flex items-center justify-between gap-3 text-sm">
                   <span class="font-semibold">Show points / rings</span>
                   <input id="fishymap-show-points" class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked>
@@ -656,28 +620,28 @@
                   >
                 </div>
               </div>
-            </div>
+            </fieldset>
           </div>
 
-          <details id="fishymap-diagnostics" class="collapse collapse-arrow border border-base-300 bg-base-100">
+          <details id="fishymap-diagnostics" class="collapse collapse-arrow border border-base-300/70 bg-base-200">
             <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Diagnostics</summary>
             <div class="collapse-content space-y-3">
               <div id="fishymap-status-lines" class="space-y-1 text-xs text-base-content/70"></div>
-              <pre id="fishymap-diagnostic-json" class="rounded-box bg-neutral text-neutral-content p-3 text-[11px] leading-5">Waiting for bridge events…</pre>
+              <pre id="fishymap-diagnostic-json" class="rounded-box border border-neutral/20 bg-neutral text-neutral-content p-3 text-[11px] leading-5">Waiting for bridge events…</pre>
             </div>
           </details>
         </div>
       </aside>
 
-      <div id="fishymap-hover-tooltip" class="not-prose" hidden>
+      <div id="fishymap-hover-tooltip" class="card card-border bg-base-100 not-prose" hidden>
         <p id="fishymap-hover-summary" class="text-sm text-base-content/85">Hover a zone to inspect it.</p>
         <div id="fishymap-hover-layers" hidden></div>
       </div>
 
-      <div id="fishymap-error-overlay" class="not-prose" hidden>
+      <div id="fishymap-error-overlay" class="card card-border border-error/40 bg-base-100 not-prose" hidden>
         <div class="space-y-3 px-4 py-4">
           <div class="flex items-center justify-between gap-3">
-            <p class="font-display text-lg leading-tight text-error">Map renderer unavailable</p>
+            <p class="fishymap-window-title text-lg leading-tight text-error">Map renderer unavailable</p>
             <span class="badge badge-error badge-sm">Error</span>
           </div>
           <p class="text-sm text-base-content/80">

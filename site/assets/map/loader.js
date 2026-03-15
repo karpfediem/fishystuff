@@ -725,6 +725,28 @@ function renderFishAvatar(fish, sizeClass = "size-6") {
   `;
 }
 
+function renderFishItemIcon(fish, sizeClass = "size-5") {
+  const name = fish?.name || `Fish ${fish?.fishId ?? "?"}`;
+  const iconUrl = fishIconUrl(fish);
+  if (iconUrl) {
+    return `
+      <img
+        class="${sizeClass} block shrink-0 object-contain"
+        src="${escapeHtml(iconUrl)}"
+        alt="${escapeHtml(name)}"
+        loading="lazy"
+        decoding="async"
+      />
+    `;
+  }
+  const fallback = escapeHtml(String(name).trim().charAt(0).toUpperCase() || "?");
+  return `
+    <span class="${sizeClass} inline-flex shrink-0 items-center justify-center rounded-box bg-base-300 text-[11px] font-semibold text-base-content/70">
+      ${fallback}
+    </span>
+  `;
+}
+
 function resolveSelectedFishIds(stateBundle) {
   const inputFishIds = stateBundle.inputState?.filters?.fishIds;
   if (Array.isArray(inputFishIds)) {
@@ -982,7 +1004,7 @@ function renderLayerStack(container, stateBundle) {
     if (container.dataset.renderKey !== loadingKey) {
       container.dataset.renderKey = loadingKey;
       container.innerHTML =
-        '<p class="rounded-box border border-base-300 bg-base-200 px-3 py-3 text-xs text-base-content/60">Layer registry is loading…</p>';
+        '<p class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-xs text-base-content/60">Layer registry is loading…</p>';
     }
     return;
   }
@@ -1063,12 +1085,12 @@ function renderLayerStack(container, stateBundle) {
       const relationBadges = [];
       if (clipMaskName) {
         relationBadges.push(
-          `<span class="badge badge-outline badge-xs">Clipped by ${escapeHtml(clipMaskName)}</span>`,
+          `<span class="badge badge-soft badge-xs">Clipped by ${escapeHtml(clipMaskName)}</span>`,
         );
       }
       if (clippedLayers.length) {
         relationBadges.push(
-          `<span class="badge badge-outline badge-xs">Masks ${clippedLayers.length}</span>`,
+          `<span class="badge badge-soft badge-xs">Masks ${clippedLayers.length}</span>`,
         );
       }
       let helperText = "Drop onto a layer to attach. Drop between layers to reorder.";
@@ -1081,7 +1103,7 @@ function renderLayerStack(container, stateBundle) {
       }
       return `
         <article
-          class="fishymap-layer-card"
+          class="fishymap-layer-card card card-border bg-base-200"
           data-layer-id="${layer.layerId.replace(/"/g, "&quot;")}"
           data-indent-level="${indentLevel > 0 ? "1" : "0"}"
           data-locked="${locked ? "true" : "false"}"
@@ -1120,9 +1142,9 @@ function renderLayerStack(container, stateBundle) {
               locked
                 ? ""
                 : `
-                  <label class="fishymap-layer-opacity-control">
+                  <fieldset class="fishymap-layer-opacity-control fieldset">
                     <div class="flex items-center justify-between gap-3">
-                      <span class="text-[11px] uppercase tracking-[0.18em] text-base-content/45">Opacity</span>
+                      <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Opacity</span>
                       <span class="text-xs font-semibold text-base-content/60" data-layer-opacity-value>${layerOpacityLabel(layer.opacity)}</span>
                     </div>
                     <input
@@ -1135,12 +1157,14 @@ function renderLayerStack(container, stateBundle) {
                       value="${layerOpacityValue(layer.opacity)}"
                       aria-label="Opacity for ${escapeHtml(layer.name)}"
                     >
-                  </label>
+                  </fieldset>
                 `
             }
           </div>
           <button
-            class="fishymap-layer-visibility btn btn-sm btn-circle btn-ghost"
+            class="fishymap-layer-visibility btn btn-sm btn-circle ${
+              visible ? "btn-soft btn-primary" : "btn-ghost"
+            }"
             data-layer-visibility="${layer.layerId.replace(/"/g, "&quot;")}"
             data-layer-visible="${visible ? "true" : "false"}"
             type="button"
@@ -1226,13 +1250,13 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
       const active = fishId === currentFishId;
       const name = fish?.name || `Fish ${fishId}`;
       return `
-        <div class="inline-flex items-center gap-1 rounded-full border px-2 py-1 ${
+        <div class="join items-center rounded-full border p-1 ${
           active
             ? "border-primary bg-primary text-primary-content"
             : "border-base-300 bg-base-100 text-base-content"
         }">
           <button
-            class="fishymap-selection-focus btn btn-ghost btn-xs h-auto min-h-0 gap-2 rounded-full border-0 px-2 ${
+            class="fishymap-selection-focus btn btn-ghost btn-xs join-item h-auto min-h-0 gap-2 rounded-full border-0 px-2 ${
               active ? "text-primary-content hover:bg-primary-content/10" : "text-inherit"
             }"
             data-fish-id="${fishId}"
@@ -1242,8 +1266,8 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
             <span class="truncate max-w-36">${escapeHtml(name)}</span>
           </button>
           <button
-            class="fishymap-selection-remove btn btn-ghost btn-xs h-auto min-h-0 rounded-full border-0 px-2 ${
-              active ? "text-primary-content hover:bg-primary-content/10" : "text-inherit"
+            class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 ${
+              active ? "text-primary-content hover:bg-primary-content/10" : "text-base-content/70"
             }"
             data-fish-id="${fishId}"
             type="button"
@@ -1273,29 +1297,34 @@ function renderSearchResults(elements, matches, stateBundle) {
   }
   if (elements.searchCount) {
     setTextContent(elements.searchCount, `${matches.length} fish`);
+    setBooleanProperty(elements.searchCount, "hidden", !showResults);
   }
   if (elements.searchResults.dataset.renderKey === renderKey) {
     return;
   }
   elements.searchResults.dataset.renderKey = renderKey;
   if (!matches.length) {
-    elements.searchResults.innerHTML = `<div class="px-2 py-3 text-xs text-base-content/60">${
+    elements.searchResults.innerHTML = `<li class="menu-disabled"><span class="text-xs text-base-content/60">${
       query ? "No fish match the current filter." : "Start typing to filter fish."
-    }</div>`;
+    }</span></li>`;
     return;
   }
   elements.searchResults.innerHTML = activeMatches
     .map(
       (fish) => {
         return `
-        <button
-          class="btn btn-sm w-full justify-start rounded-box border border-base-300 bg-base-100 px-3 hover:bg-base-200"
-          data-fish-id="${fish.fishId}"
-          type="button"
-        >
-          ${renderFishAvatar(fish)}
-          <span class="truncate">${escapeHtml(fish.name)}</span>
-        </button>
+        <li>
+          <button
+            class="gap-3 rounded-box px-3 py-2 text-sm ${
+              currentFishId === fish.fishId ? "menu-active font-semibold" : ""
+            }"
+            data-fish-id="${fish.fishId}"
+            type="button"
+          >
+            ${renderFishAvatar(fish)}
+            <span class="truncate">${escapeHtml(fish.name)}</span>
+          </button>
+        </li>
       `;
       },
     )
@@ -1364,28 +1393,26 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
         Number.isFinite(entry.ciLow) && Number.isFinite(entry.ciHigh)
           ? `${formatDecimal(entry.ciLow)}-${formatDecimal(entry.ciHigh)}`
           : "n/a";
+      const detailLabel = `p ${formatDecimal(entry.pMean)} · weight ${formatDecimal(entry.evidenceWeight)} · CI ${ci}`;
       return `
         <button
-          class="btn btn-sm h-auto min-h-0 w-full justify-start rounded-box border px-3 py-2 ${
+          class="list-row w-full rounded-box border px-2.5 py-2 text-left ${
             active
-              ? "border-primary bg-primary text-primary-content"
-              : "border-base-300 bg-base-100 hover:bg-base-200"
+              ? "border-primary/40 bg-base-100"
+              : "border-transparent bg-base-100 hover:border-base-300"
           }"
           data-zone-evidence-fish-id="${evidenceFish.fishId}"
           type="button"
         >
-          ${renderFishAvatar(evidenceFish)}
-          <span class="min-w-0 flex-1 text-left">
-            <span class="block truncate">${escapeHtml(evidenceFish.name)}</span>
-            <span class="block text-[11px] ${
-              active ? "text-primary-content/80" : "text-base-content/55"
-            }">
-              p ${formatDecimal(entry.pMean)} · weight ${formatDecimal(entry.evidenceWeight)} · ci ${ci}
-            </span>
-          </span>
-          <span class="text-[11px] ${
-            active ? "text-primary-content/80" : "text-base-content/45"
-          }">${formatPercent(entry.pMean)}</span>
+          <div>${renderFishItemIcon(evidenceFish)}</div>
+          <div class="min-w-0">
+            <div class="truncate font-semibold">${escapeHtml(evidenceFish.name)}</div>
+          </div>
+          <span
+            class="badge ${active ? "badge-primary" : "badge-outline"} badge-sm cursor-help"
+            title="${escapeHtml(detailLabel)}"
+            aria-label="${escapeHtml(detailLabel)}"
+          >${formatPercent(entry.pMean)}</span>
         </button>
       `;
     })
