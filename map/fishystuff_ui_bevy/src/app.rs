@@ -1,7 +1,15 @@
-use bevy::asset::{AssetMetaCheck, AssetPlugin, UnapprovedPathMode};
+use bevy::app::{PanicHandlerPlugin, TaskPoolPlugin};
+use bevy::asset::{AssetApp, AssetMetaCheck, AssetPlugin, UnapprovedPathMode};
+use bevy::diagnostic::{DiagnosticsPlugin, FrameCountPlugin};
+use bevy::image::ImagePlugin;
+use bevy::input::InputPlugin as BevyInputPlugin;
+use bevy::light::GlobalAmbientLight;
+use bevy::log::LogPlugin;
+use bevy::mesh::MeshPlugin;
 use bevy::prelude::*;
-use bevy::render::{settings::WgpuSettings, RenderPlugin};
-use bevy::window::{Window, WindowPlugin};
+use bevy::time::TimePlugin;
+use bevy::transform::TransformPlugin;
+use bevy::window::{ExitCondition, Window, WindowPlugin};
 use bevy_flair::prelude::FlairPlugin;
 
 #[cfg(target_arch = "wasm32")]
@@ -76,38 +84,12 @@ pub fn run_browser() {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn build_native_app(options: &NativeAppOptions) -> App {
-    let mut app = App::new();
-    let mut plugins = DefaultPlugins
-        .set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "FishyStuff Zones Profiling".to_string(),
-                resolution: (options.width, options.height).into(),
-                visible: options.visible,
-                ..default()
-            }),
-            ..default()
-        })
-        .set(AssetPlugin {
-            file_path: options.asset_root.clone(),
-            meta_check: AssetMetaCheck::Never,
-            unapproved_path_mode: UnapprovedPathMode::Allow,
-            ..default()
-        });
-
-    if options.renderless {
-        plugins = plugins.set(RenderPlugin {
-            render_creation: WgpuSettings {
-                backends: None,
-                ..default()
-            }
-            .into(),
-            ..default()
-        });
-    }
-
-    app.add_plugins(plugins)
-        .add_plugins(FlairPlugin)
-        .init_resource::<UiPointerCapture>()
+    let mut app = if options.renderless {
+        build_headless_native_app(options)
+    } else {
+        build_windowed_native_app(options)
+    };
+    app.init_resource::<UiPointerCapture>()
         .init_resource::<ApiBootstrapState>()
         .init_resource::<PatchFilterState>()
         .init_resource::<FishFilterState>()
@@ -121,5 +103,68 @@ pub fn build_native_app(options: &NativeAppOptions) -> App {
         .add_plugins(RasterPlugin)
         .add_plugins(VectorLayersPlugin)
         .add_plugins(PointsPlugin);
+    app
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn build_windowed_native_app(options: &NativeAppOptions) -> App {
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "FishyStuff Zones Profiling".to_string(),
+                    resolution: (options.width, options.height).into(),
+                    visible: options.visible,
+                    ..default()
+                }),
+                ..default()
+            })
+            .set(AssetPlugin {
+                file_path: options.asset_root.clone(),
+                meta_check: AssetMetaCheck::Never,
+                unapproved_path_mode: UnapprovedPathMode::Allow,
+                ..default()
+            }),
+    )
+    .add_plugins(FlairPlugin);
+    app
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn build_headless_native_app(options: &NativeAppOptions) -> App {
+    let mut app = App::new();
+    app.add_plugins((
+        PanicHandlerPlugin,
+        LogPlugin::default(),
+        TaskPoolPlugin::default(),
+        FrameCountPlugin,
+        TimePlugin,
+        TransformPlugin,
+        DiagnosticsPlugin,
+        BevyInputPlugin,
+        WindowPlugin {
+            primary_window: Some(Window {
+                title: "FishyStuff Zones Profiling".to_string(),
+                resolution: (options.width, options.height).into(),
+                visible: false,
+                ..default()
+            }),
+            exit_condition: ExitCondition::DontExit,
+            close_when_requested: false,
+            ..default()
+        },
+        AssetPlugin {
+            file_path: options.asset_root.clone(),
+            meta_check: AssetMetaCheck::Never,
+            unapproved_path_mode: UnapprovedPathMode::Allow,
+            ..default()
+        },
+        ImagePlugin::default(),
+        MeshPlugin,
+    ))
+    .init_resource::<GlobalAmbientLight>()
+    .init_asset::<ColorMaterial>()
+    .init_asset::<StandardMaterial>();
     app
 }

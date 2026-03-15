@@ -11,16 +11,11 @@ pub const TERRAIN_CHUNK_MAGIC: [u8; 4] = *b"THC1";
 pub const TERRAIN_CHUNK_VERSION: u16 = 1;
 pub const TERRAIN_CHUNK_HEADER_LEN: usize = 24;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TerrainHeightEncoding {
+    #[default]
     U16Norm,
-}
-
-impl Default for TerrainHeightEncoding {
-    fn default() -> Self {
-        Self::U16Norm
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -334,10 +329,7 @@ where
         if is_available(key) {
             return Some(key);
         }
-        let Some(next) = parent_chunk_key(key, max_level) else {
-            return None;
-        };
-        key = next;
+        key = parent_chunk_key(key, max_level)?;
     }
 }
 
