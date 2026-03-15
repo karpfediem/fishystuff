@@ -1241,10 +1241,7 @@ impl DoltMySqlStore {
         }
 
         let mut distribution = Vec::new();
-        let mut fish_ids: Vec<i32> = summary.alpha_by_fish.keys().copied().collect();
-        fish_ids.sort_unstable();
-        for fish_id in fish_ids {
-            let alpha = summary.alpha_by_fish.get(&fish_id).copied().unwrap_or(0.0);
+        for fish_id in zone_distribution_fish_ids(&summary) {
             let p_mean = summary.p_mean_by_fish.get(&fish_id).copied().unwrap_or(0.0);
             let evidence = summary.c_zone.get(&fish_id).copied().unwrap_or(0.0);
             let (item_id, encyclopedia_key, encyclopedia_id) = fish_identities
@@ -1263,8 +1260,6 @@ impl DoltMySqlStore {
                 ci_low: None,
                 ci_high: None,
             });
-
-            let _ = alpha;
         }
 
         distribution.sort_by(|left, right| {
@@ -1540,6 +1535,12 @@ impl DoltMySqlStore {
     }
 }
 
+fn zone_distribution_fish_ids(summary: &WindowSummary) -> Vec<i32> {
+    let mut fish_ids: Vec<i32> = summary.c_zone.keys().copied().collect();
+    fish_ids.sort_unstable();
+    fish_ids
+}
+
 #[async_trait]
 impl Store for DoltMySqlStore {
     async fn get_meta(&self) -> AppResult<MetaResponse> {
@@ -1804,8 +1805,8 @@ mod tests {
         compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
         fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
         parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
-        synthetic_events_snapshot_revision, DoltMySqlStore, FishCatalogRow, FishIdentityEntry,
-        FishIdentityIndex, VectorSourceFields,
+        synthetic_events_snapshot_revision, zone_distribution_fish_ids, DoltMySqlStore,
+        FishCatalogRow, FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
     };
 
     fn vector_source_fields(
@@ -2128,5 +2129,20 @@ mod tests {
             Some(fishystuff_api::models::events::EventSourceKind::Ranking)
         );
         assert_eq!(event_source_kind_from_db(99), None);
+    }
+
+    #[test]
+    fn zone_distribution_fish_ids_excludes_prior_only_fish() {
+        let summary = WindowSummary {
+            alpha_total: 10.0,
+            alpha_by_fish: HashMap::from([(1, 5.0), (2, 5.0)]),
+            p_mean_by_fish: HashMap::from([(1, 0.5), (2, 0.5)]),
+            c_zone: HashMap::from([(1, 4.0)]),
+            ess: 4.0,
+            total_weight: 4.0,
+            last_seen: Some(100),
+        };
+
+        assert_eq!(zone_distribution_fish_ids(&summary), vec![1]);
     }
 }

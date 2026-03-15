@@ -366,10 +366,7 @@ pub fn compute_zone_stats_with_config(
     }
 
     let mut dist = Vec::new();
-    let mut fish_ids: Vec<i32> = summary.alpha_by_fish.keys().copied().collect();
-    fish_ids.sort_unstable();
-    for fish_id in fish_ids {
-        let alpha = summary.alpha_by_fish.get(&fish_id).copied().unwrap_or(0.0);
+    for fish_id in zone_distribution_fish_ids(&summary) {
         let p_mean = summary.p_mean_by_fish.get(&fish_id).copied().unwrap_or(0.0);
         let evidence = summary.c_zone.get(&fish_id).copied().unwrap_or(0.0);
         dist.push(FishEvidence {
@@ -380,7 +377,6 @@ pub fn compute_zone_stats_with_config(
             ci_low: None,
             ci_high: None,
         });
-        let _ = alpha;
     }
 
     dist.sort_by(|a, b| {
@@ -684,6 +680,12 @@ fn compute_window_summary(
         total_weight: w_sum,
         last_seen,
     })
+}
+
+fn zone_distribution_fish_ids(summary: &WindowSummary) -> Vec<i32> {
+    let mut fish_ids: Vec<i32> = summary.c_zone.keys().copied().collect();
+    fish_ids.sort_unstable();
+    fish_ids
 }
 
 fn median_effort(e_raw: &[f64], effort: &[f64]) -> Option<f64> {
@@ -1246,6 +1248,80 @@ mod tests {
             .notes
             .iter()
             .any(|n| n.contains("last_seen age_days")));
+    }
+
+    #[test]
+    fn compute_zone_stats_hides_prior_only_fish_from_distribution() {
+        let mut store = SqliteStore::open_in_memory().expect("db");
+        let zone_a = pack_rgb_u32(10, 20, 30);
+        let zone_b = pack_rgb_u32(40, 50, 60);
+        let events = vec![
+            Event {
+                ts_utc: 100,
+                fish_id: 1,
+                world_x: 0.0,
+                world_z: 0.0,
+                px: Some(0),
+                py: Some(0),
+                water_px: Some(0),
+                water_py: Some(0),
+                tile_x: Some(0),
+                tile_y: Some(0),
+                water_ok: true,
+            },
+            Event {
+                ts_utc: 200,
+                fish_id: 2,
+                world_x: 0.0,
+                world_z: 0.0,
+                px: Some(0),
+                py: Some(0),
+                water_px: Some(0),
+                water_py: Some(0),
+                tile_x: Some(0),
+                tile_y: Some(0),
+                water_ok: true,
+            },
+        ];
+        store.insert_events(&events).expect("insert events");
+        store
+            .insert_event_zones("v1", &[(1, zone_a), (2, zone_b)], true)
+            .expect("event zones");
+        store
+            .upsert_water_tiles(&[WaterTile {
+                tile_px: 11_560,
+                tile_x: 0,
+                tile_y: 0,
+                water_count: 100,
+            }])
+            .expect("water tiles");
+
+        let mut fish_names = HashMap::new();
+        fish_names.insert(1, "Zone Fish".to_string());
+        fish_names.insert(2, "Prior Fish".to_string());
+
+        let params = QueryParams {
+            map_version: "v1".to_string(),
+            from_ts_utc: 0,
+            to_ts_utc: 1_000,
+            half_life_days: None,
+            tile_px: 11_560,
+            sigma_tiles: 1.0,
+            fish_norm: false,
+            alpha0: 10.0,
+            top_k: 10,
+            drift_boundary_ts: None,
+        };
+
+        let stats = compute_zone_stats(&store, &HashMap::new(), &fish_names, &params, zone_a)
+            .expect("stats");
+
+        assert_eq!(stats.distribution.len(), 1);
+        assert_eq!(stats.distribution[0].fish_id, 1);
+        assert!(stats
+            .distribution
+            .iter()
+            .all(|fish| fish.evidence_weight > 0.0));
     }
 
     #[test]
