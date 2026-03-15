@@ -19,6 +19,7 @@ pub(crate) fn build_fish_catalog_entries(fish_response: FishListResponse) -> Vec
                 encyclopedia_id: entry.encyclopedia_id,
                 name_lower: name.to_lowercase(),
                 name,
+                grade: entry.grade,
                 is_prize: entry.is_prize.unwrap_or(false),
             }
         })

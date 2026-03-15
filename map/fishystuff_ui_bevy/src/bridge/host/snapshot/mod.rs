@@ -91,6 +91,7 @@ pub(super) fn sync_current_snapshot(
                     encyclopedia_key: entry.encyclopedia_key,
                     encyclopedia_id: entry.encyclopedia_id,
                     name: entry.name.clone(),
+                    grade: entry.grade.clone(),
                     is_prize: entry.is_prize,
                 })
                 .collect(),

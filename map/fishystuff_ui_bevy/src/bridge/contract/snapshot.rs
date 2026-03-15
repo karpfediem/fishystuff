@@ -145,6 +145,7 @@ pub struct FishyMapFishSummary {
     pub encyclopedia_key: Option<i32>,
     pub encyclopedia_id: Option<i32>,
     pub name: String,
+    pub grade: Option<String>,
     pub is_prize: bool,
 }
 

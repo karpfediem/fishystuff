@@ -60,6 +60,7 @@ pub struct FishEntry {
     pub encyclopedia_id: Option<i32>,
     pub name: String,
     pub name_lower: String,
+    pub grade: Option<String>,
     pub is_prize: bool,
 }
 
@@ -82,6 +83,7 @@ mod tests {
             encyclopedia_id: Some(8588),
             name: "Barbel Steed".to_string(),
             name_lower: "barbel steed".to_string(),
+            grade: Some("Rare".to_string()),
             is_prize: false,
         }]);
 

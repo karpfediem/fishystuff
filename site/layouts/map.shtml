@@ -52,6 +52,12 @@
         --fishymap-search-top: 1rem;
         --fishymap-search-width: min(52rem, calc(100vw - 2rem));
         --fishymap-search-selection-width: min(78rem, calc(100vw - 2rem));
+        --fishymap-grade-prize: var(--color-error, #d64545);
+        --fishymap-grade-rare: var(--color-warning, #f59e0b);
+        --fishymap-grade-highquality: var(--color-info, #6b8afd);
+        --fishymap-grade-general: var(--color-success, #2f855a);
+        --fishymap-grade-trash: var(--color-base-content, #1f2937);
+        --fishymap-grade-unknown: var(--color-neutral, #1f2937);
         position: relative;
         width: 100%;
         height: 100%;
@@ -157,6 +163,54 @@
         font-family: 'Itim', sans-serif;
         font-weight: 400;
         letter-spacing: 0.01em;
+      }
+
+      .fishymap-item-icon-frame {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        overflow: hidden;
+        border: 1px solid color-mix(in oklab, var(--color-base-content, #1f2937) 18%, var(--color-base-300, #d6d3d1) 82%);
+        border-radius: 34%;
+        background: var(--color-base-100);
+      }
+
+      .fishymap-item-icon-frame.grade-prize {
+        border-color: color-mix(in oklab, var(--fishymap-grade-prize) 28%, var(--color-base-300, #d6d3d1) 72%);
+      }
+
+      .fishymap-item-icon-frame.grade-rare {
+        border-color: color-mix(in oklab, var(--fishymap-grade-rare) 28%, var(--color-base-300, #d6d3d1) 72%);
+      }
+
+      .fishymap-item-icon-frame.grade-highquality {
+        border-color: color-mix(in oklab, var(--fishymap-grade-highquality) 28%, var(--color-base-300, #d6d3d1) 72%);
+      }
+
+      .fishymap-item-icon-frame.grade-general {
+        border-color: color-mix(in oklab, var(--fishymap-grade-general) 28%, var(--color-base-300, #d6d3d1) 72%);
+      }
+
+      .fishymap-item-icon-frame.grade-trash {
+        border-color: color-mix(in oklab, var(--fishymap-grade-trash) 22%, var(--color-base-300, #d6d3d1) 78%);
+      }
+
+      .fishymap-item-icon-frame.grade-unknown {
+        border-color: color-mix(in oklab, var(--fishymap-grade-unknown) 18%, var(--color-base-300, #d6d3d1) 82%);
+      }
+
+      .fishymap-item-icon {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .fishymap-item-icon-fallback {
+        font-size: 0.6875rem;
+        font-weight: 700;
+        color: color-mix(in oklab, var(--color-base-content, #1f2937) 72%, transparent);
       }
 
       #fishymap-search-selection[hidden],

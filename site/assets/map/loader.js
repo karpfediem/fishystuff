@@ -194,6 +194,27 @@ function buildFishLookup(catalogFish) {
   return map;
 }
 
+const FISH_GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash"];
+
+function normalizeFishGrade(fish) {
+  if (!fish || typeof fish !== "object") {
+    return "Unknown";
+  }
+  if (fish.isPrize === true || fish.grade === "Prize") {
+    return "Prize";
+  }
+  const grade = String(fish.grade || "").trim();
+  return FISH_GRADE_ORDER.includes(grade) ? grade : "Unknown";
+}
+
+function slugifyFishGrade(value) {
+  return String(value || "Unknown").toLowerCase();
+}
+
+function fishGradeFrameClass(fish) {
+  return `grade-${slugifyFishGrade(normalizeFishGrade(fish))}`;
+}
+
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
@@ -220,6 +241,7 @@ function mergeZoneEvidenceIntoFishLookup(fishLookup, zoneStats) {
         ? entry.encyclopediaId
         : existing.encyclopediaId,
       name: entry.fishName || existing.name || `Fish ${fishId}`,
+      grade: existing.grade || null,
       isPrize: existing.isPrize || false,
     });
   }
@@ -701,14 +723,17 @@ function hoverFromEventDetail(detail) {
   };
 }
 
-function renderFishAvatar(fish, sizeClass = "size-6") {
+function renderFishAvatar(fish, sizeClass = "size-6", options = {}) {
   const name = fish?.name || `Fish ${fish?.fishId ?? "?"}`;
   const iconUrl = fishIconUrl(fish);
+  const frameClass = options.gradeFrame
+    ? `fishymap-item-icon-frame ${fishGradeFrameClass(fish)}`
+    : "overflow-hidden rounded-full bg-base-200 ring-1 ring-base-300/80";
   if (iconUrl) {
     return `
-      <span class="${sizeClass} shrink-0 overflow-hidden rounded-full bg-base-200 ring-1 ring-base-300/80">
+      <span class="${sizeClass} shrink-0 ${frameClass}">
         <img
-          class="h-full w-full object-cover"
+          class="${options.gradeFrame ? "fishymap-item-icon" : "h-full w-full object-cover"}"
           src="${escapeHtml(iconUrl)}"
           alt="${escapeHtml(name)}"
           loading="lazy"
@@ -719,7 +744,11 @@ function renderFishAvatar(fish, sizeClass = "size-6") {
   }
   const fallback = escapeHtml(String(name).trim().charAt(0).toUpperCase() || "?");
   return `
-    <span class="${sizeClass} inline-flex shrink-0 items-center justify-center rounded-full bg-base-300 text-[11px] font-semibold text-base-content/70">
+    <span class="${sizeClass} inline-flex shrink-0 items-center justify-center ${
+      options.gradeFrame
+        ? `fishymap-item-icon-frame ${fishGradeFrameClass(fish)} fishymap-item-icon-fallback`
+        : "rounded-full bg-base-300 text-[11px] font-semibold text-base-content/70"
+    }">
       ${fallback}
     </span>
   `;
@@ -730,18 +759,20 @@ function renderFishItemIcon(fish, sizeClass = "size-5") {
   const iconUrl = fishIconUrl(fish);
   if (iconUrl) {
     return `
-      <img
-        class="${sizeClass} block shrink-0 object-contain"
-        src="${escapeHtml(iconUrl)}"
-        alt="${escapeHtml(name)}"
-        loading="lazy"
-        decoding="async"
-      />
+      <span class="${sizeClass} fishymap-item-icon-frame ${fishGradeFrameClass(fish)}">
+        <img
+          class="fishymap-item-icon"
+          src="${escapeHtml(iconUrl)}"
+          alt="${escapeHtml(name)}"
+          loading="lazy"
+          decoding="async"
+        />
+      </span>
     `;
   }
   const fallback = escapeHtml(String(name).trim().charAt(0).toUpperCase() || "?");
   return `
-    <span class="${sizeClass} inline-flex shrink-0 items-center justify-center rounded-box bg-base-300 text-[11px] font-semibold text-base-content/70">
+    <span class="${sizeClass} fishymap-item-icon-frame ${fishGradeFrameClass(fish)} fishymap-item-icon-fallback">
       ${fallback}
     </span>
   `;
@@ -1200,7 +1231,14 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
     selectedFishIds,
     selectedFish: selectedFishIds.map((fishId) => {
       const fish = fishLookup.get(fishId);
-      return [fishId, fish?.name || "", fish?.itemId || null, fish?.encyclopediaId || null];
+      return [
+        fishId,
+        fish?.name || "",
+        fish?.itemId || null,
+        fish?.encyclopediaId || null,
+        fish?.grade || "",
+        fish?.isPrize === true ? 1 : 0,
+      ];
     }),
   });
   if (elements.searchSelection.dataset.renderKey === renderKey) {
@@ -1235,7 +1273,7 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
       return `
         <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
           <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
-            ${renderFishAvatar(fish, "size-5")}
+            ${renderFishAvatar(fish, "size-5", { gradeFrame: true })}
             <span class="truncate max-w-36">${escapeHtml(name)}</span>
           </span>
           <button
@@ -1321,6 +1359,8 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
         entry.fishName || "",
         fish?.itemId ?? entry.itemId ?? null,
         fish?.encyclopediaId ?? entry.encyclopediaId ?? null,
+        fish?.grade || "",
+        fish?.isPrize === true ? 1 : 0,
         entry.evidenceWeight,
         entry.pMean,
         entry.ciLow,
