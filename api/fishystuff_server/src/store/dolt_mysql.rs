@@ -4,6 +4,7 @@ mod stats;
 mod util;
 
 use std::collections::{BTreeMap, HashMap};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use fishystuff_api::error::ApiError;
@@ -62,6 +63,16 @@ const EPS_FISH: f64 = 1e-9;
 const SOURCE_KIND_RANKING: i32 = 1;
 const DOLT_POOL_MIN_CONNECTIONS: usize = 0;
 const DOLT_POOL_MAX_CONNECTIONS: usize = 16;
+const DOLT_TCP_CONNECT_TIMEOUT_SECS: u64 = 3;
+const DOLT_SOCKET_READ_TIMEOUT_SECS: u64 = 10;
+const DOLT_SOCKET_WRITE_TIMEOUT_SECS: u64 = 10;
+const DOLT_TCP_KEEPALIVE_TIME_MS: u32 = 5_000;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+const DOLT_TCP_KEEPALIVE_PROBE_INTERVAL_SECS: u32 = 5;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+const DOLT_TCP_KEEPALIVE_PROBE_COUNT: u32 = 3;
+#[cfg(target_os = "linux")]
+const DOLT_TCP_USER_TIMEOUT_MS: u32 = 10_000;
 
 #[derive(Clone)]
 pub struct DoltMySqlStore {
@@ -211,8 +222,23 @@ impl DoltMySqlStore {
             PoolConstraints::new(DOLT_POOL_MIN_CONNECTIONS, DOLT_POOL_MAX_CONNECTIONS)
                 .ok_or_else(|| AppError::internal("invalid Dolt pool constraints"))?;
         let pool_opts = PoolOpts::default().with_constraints(constraints);
-        let pool =
-            Pool::new(OptsBuilder::from_opts(opts).pool_opts(pool_opts)).map_err(db_unavailable)?;
+        let mut builder = OptsBuilder::from_opts(opts)
+            .pool_opts(pool_opts)
+            .tcp_connect_timeout(Some(Duration::from_secs(DOLT_TCP_CONNECT_TIMEOUT_SECS)))
+            .read_timeout(Some(Duration::from_secs(DOLT_SOCKET_READ_TIMEOUT_SECS)))
+            .write_timeout(Some(Duration::from_secs(DOLT_SOCKET_WRITE_TIMEOUT_SECS)))
+            .tcp_keepalive_time_ms(Some(DOLT_TCP_KEEPALIVE_TIME_MS));
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        {
+            builder = builder
+                .tcp_keepalive_probe_interval_secs(Some(DOLT_TCP_KEEPALIVE_PROBE_INTERVAL_SECS))
+                .tcp_keepalive_probe_count(Some(DOLT_TCP_KEEPALIVE_PROBE_COUNT));
+        }
+        #[cfg(target_os = "linux")]
+        {
+            builder = builder.tcp_user_timeout_ms(Some(DOLT_TCP_USER_TIMEOUT_MS));
+        }
+        let pool = Pool::new(builder).map_err(db_unavailable)?;
         Ok(Self { pool, defaults })
     }
 
