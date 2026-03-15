@@ -379,13 +379,11 @@ mod tests {
     fn output_event_serializes_browser_facing_kebab_case_tag() {
         let json = serde_json::to_string(&FishyMapOutputEvent::SelectionChanged {
             version: 1,
-            fish_id: Some(821015),
             zone_rgb: Some(0x123456),
         })
         .expect("serialize");
 
         assert!(json.contains(r#""type":"selection-changed""#));
-        assert!(json.contains(r#""fishId":821015"#));
         assert!(json.contains(r#""zoneRgb":1193046"#));
     }
 

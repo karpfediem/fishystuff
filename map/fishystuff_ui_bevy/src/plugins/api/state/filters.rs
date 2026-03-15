@@ -27,17 +27,13 @@ impl Default for PatchFilterState {
 
 #[derive(Resource)]
 pub struct FishFilterState {
-    pub selected_fish: Option<i32>,
     pub selected_fish_ids: Vec<i32>,
-    pub selected_fish_name: Option<String>,
 }
 
 impl Default for FishFilterState {
     fn default() -> Self {
         Self {
-            selected_fish: None,
             selected_fish_ids: Vec::new(),
-            selected_fish_name: None,
         }
     }
 }

@@ -18,17 +18,13 @@ pub(in crate::bridge::host) fn emit_ready_event() {
     });
 }
 
-pub(in crate::bridge::host) fn emit_selection_changed_event(
-    fish_filter: Res<FishFilterState>,
-    selection: Res<SelectionState>,
-) {
-    if !fish_filter.is_changed() && !selection.is_changed() {
+pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<SelectionState>) {
+    if !selection.is_changed() {
         return;
     }
 
     let payload = FishyMapOutputEvent::SelectionChanged {
         version: 1,
-        fish_id: fish_filter.selected_fish,
         zone_rgb: selection.info.as_ref().map(|info| info.rgb_u32),
     };
     super::super::emit_event(&payload);

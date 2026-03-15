@@ -67,11 +67,8 @@ pub(super) fn sync_current_snapshot(
         );
         snapshot.ui = effective_ui_state(&bridge.input, &display_state, debug_layers.enabled);
         snapshot.view = effective_view_snapshot(&view_mode, &map_view, &terrain_view);
-        snapshot.selection = effective_selection_snapshot(
-            &fish_filter,
-            selection.info.as_ref(),
-            selection.zone_stats.as_ref(),
-        );
+        snapshot.selection =
+            effective_selection_snapshot(selection.info.as_ref(), selection.zone_stats.as_ref());
         snapshot.hover = effective_hover_snapshot(hover.info.as_ref());
         snapshot.catalog = FishyMapCatalogSnapshot {
             capabilities: bridge_capabilities(),

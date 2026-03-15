@@ -1179,22 +1179,8 @@ function renderLayerStack(container, stateBundle) {
     .join("");
 }
 
-function resolveCurrentFishId(stateBundle) {
-  const stateSelectionFishId = stateBundle.state?.selection?.fishId;
-  if (Number.isFinite(stateSelectionFishId)) {
-    return stateSelectionFishId;
-  }
-
-  const selectedFishIds = resolveSelectedFishIds(stateBundle);
-  if (selectedFishIds.length) {
-    return selectedFishIds[selectedFishIds.length - 1];
-  }
-
-  return null;
-}
-
-function moveFishIdToCurrent(selectedFishIds, fishId) {
-  return selectedFishIds.filter((id) => id !== fishId).concat(fishId);
+function addSelectedFishId(selectedFishIds, fishId) {
+  return selectedFishIds.includes(fishId) ? selectedFishIds : selectedFishIds.concat(fishId);
 }
 
 function removeSelectedFishId(selectedFishIds, fishId) {
@@ -1210,10 +1196,8 @@ function buildSearchMatches(stateBundle, searchText) {
 
 function renderSearchSelection(elements, stateBundle, fishLookup) {
   const selectedFishIds = resolveSelectedFishIds(stateBundle);
-  const currentFishId = resolveCurrentFishId(stateBundle);
   const renderKey = JSON.stringify({
     selectedFishIds,
-    currentFishId,
     selectedFish: selectedFishIds.map((fishId) => {
       const fish = fishLookup.get(fishId);
       return [fishId, fish?.name || "", fish?.itemId || null, fish?.encyclopediaId || null];
@@ -1247,28 +1231,15 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
   elements.searchSelection.innerHTML = selectedFishIds
     .map((fishId) => {
       const fish = fishLookup.get(fishId);
-      const active = fishId === currentFishId;
       const name = fish?.name || `Fish ${fishId}`;
       return `
-        <div class="join items-center rounded-full border p-1 ${
-          active
-            ? "border-primary bg-primary text-primary-content"
-            : "border-base-300 bg-base-100 text-base-content"
-        }">
-          <button
-            class="fishymap-selection-focus btn btn-ghost btn-xs join-item h-auto min-h-0 gap-2 rounded-full border-0 px-2 ${
-              active ? "text-primary-content hover:bg-primary-content/10" : "text-inherit"
-            }"
-            data-fish-id="${fishId}"
-            type="button"
-          >
+        <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
+          <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
             ${renderFishAvatar(fish, "size-5")}
             <span class="truncate max-w-36">${escapeHtml(name)}</span>
-          </button>
+          </span>
           <button
-            class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 ${
-              active ? "text-primary-content hover:bg-primary-content/10" : "text-base-content/70"
-            }"
+            class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
             data-fish-id="${fishId}"
             type="button"
             aria-label="Remove ${escapeHtml(name)}"
@@ -1285,10 +1256,8 @@ function renderSearchResults(elements, matches, stateBundle) {
   const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
   const showResults = Boolean(query);
   const activeMatches = matches.slice(0, 12);
-  const currentFishId = resolveCurrentFishId(stateBundle);
   const renderKey = JSON.stringify({
     query,
-    currentFishId,
     resultIds: activeMatches.map((fish) => fish.fishId),
     total: matches.length,
   });
@@ -1315,9 +1284,7 @@ function renderSearchResults(elements, matches, stateBundle) {
         return `
         <li>
           <button
-            class="gap-3 rounded-box px-3 py-2 text-sm ${
-              currentFishId === fish.fishId ? "menu-active font-semibold" : ""
-            }"
+            class="gap-3 rounded-box px-3 py-2 text-sm"
             data-fish-id="${fish.fishId}"
             type="button"
           >
@@ -1336,7 +1303,6 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
     return;
   }
   const zoneStats = stateBundle.state?.selection?.zoneStats || null;
-  const currentFishId = resolveCurrentFishId(stateBundle);
   const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone stats: idle";
   const summary = buildZoneEvidenceSummary(zoneStats);
 
@@ -1348,7 +1314,6 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
     zoneRgb: zoneStats?.zoneRgb ?? null,
     status: zoneStatsStatus,
     summary,
-    currentFishId,
     distribution: distribution.map((entry) => {
       const fish = fishLookup.get(entry.fishId);
       return [
@@ -1388,7 +1353,6 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
         encyclopediaId: fish?.encyclopediaId ?? entry.encyclopediaId ?? null,
         name: fish?.name || entry.fishName || `Fish ${entry.fishId}`,
       };
-      const active = evidenceFish.fishId === currentFishId;
       const ci =
         Number.isFinite(entry.ciLow) && Number.isFinite(entry.ciHigh)
           ? `${formatDecimal(entry.ciLow)}-${formatDecimal(entry.ciHigh)}`
@@ -1396,11 +1360,7 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
       const detailLabel = `p ${formatDecimal(entry.pMean)} · weight ${formatDecimal(entry.evidenceWeight)} · CI ${ci}`;
       return `
         <button
-          class="list-row w-full rounded-box border px-2.5 py-2 text-left ${
-            active
-              ? "border-primary/40 bg-base-100"
-              : "border-transparent bg-base-100 hover:border-base-300"
-          }"
+          class="list-row w-full rounded-box border border-transparent bg-base-100 px-2.5 py-2 text-left hover:border-base-300"
           data-zone-evidence-fish-id="${evidenceFish.fishId}"
           type="button"
         >
@@ -1409,7 +1369,7 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
             <div class="truncate font-semibold">${escapeHtml(evidenceFish.name)}</div>
           </div>
           <span
-            class="badge ${active ? "badge-primary" : "badge-outline"} badge-sm cursor-help"
+            class="badge badge-outline badge-sm cursor-help"
             title="${escapeHtml(detailLabel)}"
             aria-label="${escapeHtml(detailLabel)}"
           >${formatPercent(entry.pMean)}</span>
@@ -1468,7 +1428,6 @@ function renderPanel(elements, stateBundle) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
   const catalogFish = state.catalog?.fish || [];
-  const currentFishId = resolveCurrentFishId(stateBundle);
   const patchRange = normalizePatchRangeSelection(
     state.catalog?.patches || [],
     inputState.filters?.fromPatchId ??
@@ -1739,7 +1698,7 @@ function bindUi(shell, elements) {
       version: 1,
       filters: {
         searchText: "",
-        fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), top.fishId),
+        fishIds: addSelectedFishId(resolveSelectedFishIds(current), top.fishId),
       },
     });
     renderCurrentState(requestBridgeState(shell));
@@ -1757,27 +1716,13 @@ function bindUi(shell, elements) {
       version: 1,
       filters: {
         searchText: "",
-        fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
+        fishIds: addSelectedFishId(resolveSelectedFishIds(current), fishId),
       },
     });
     renderCurrentState(requestBridgeState(shell));
   });
 
   elements.searchSelection.addEventListener("click", (event) => {
-    const focusButton = event.target.closest("button.fishymap-selection-focus[data-fish-id]");
-    if (focusButton) {
-      const fishId = Number.parseInt(focusButton.getAttribute("data-fish-id"), 10);
-      const current = requestBridgeState(shell);
-      dispatchMapState(shell, {
-        version: 1,
-        filters: {
-          fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
-        },
-      });
-      renderCurrentState(requestBridgeState(shell));
-      return;
-    }
-
     const removeButton = event.target.closest("button.fishymap-selection-remove[data-fish-id]");
     if (!removeButton) {
       return;

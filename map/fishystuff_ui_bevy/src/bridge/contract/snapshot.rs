@@ -30,7 +30,6 @@ pub struct FishyMapViewSnapshot {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapSelectionSnapshot {
-    pub fish_id: Option<i32>,
     pub zone_rgb: Option<u32>,
     pub zone_name: Option<String>,
     pub world_x: Option<f64>,

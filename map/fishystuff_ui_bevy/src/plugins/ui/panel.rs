@@ -45,7 +45,7 @@ pub(super) fn sync_zone_evidence_list(
     remote_image_epoch: Res<RemoteImageEpoch>,
     mut remote_images: ResMut<RemoteImageCache>,
     fonts: Res<UiFonts>,
-    mut last_selected_fish: Local<Option<i32>>,
+    mut last_selected_fish_ids: Local<Vec<i32>>,
     mut commands: Commands,
     list_q: Query<(Entity, Option<&Children>), With<ZoneEvidenceList>>,
 ) {
@@ -53,7 +53,7 @@ pub(super) fn sync_zone_evidence_list(
         return;
     };
     let list_is_empty = children.map(|c| c.is_empty()).unwrap_or(true);
-    let selected_fish_changed = *last_selected_fish != fish_filter.selected_fish;
+    let selected_fish_changed = *last_selected_fish_ids != fish_filter.selected_fish_ids;
     if !selection.is_changed()
         && !fish.is_changed()
         && !selected_fish_changed
@@ -62,7 +62,7 @@ pub(super) fn sync_zone_evidence_list(
     {
         return;
     }
-    *last_selected_fish = fish_filter.selected_fish;
+    *last_selected_fish_ids = fish_filter.selected_fish_ids.clone();
 
     if let Some(children) = children {
         for child in children.iter() {
@@ -87,7 +87,7 @@ pub(super) fn sync_zone_evidence_list(
                         (Some(low), Some(high)) => format!("{low:.3}-{high:.3}"),
                         _ => "n/a".to_string(),
                     };
-                    let selected = fish_filter.selected_fish == Some(entry.fish_id);
+                    let selected = fish_filter.selected_fish_ids.contains(&entry.fish_id);
                     let icon_handle = fish_icon_handle(entry.item_id, &mut remote_images);
                     (
                         selected,

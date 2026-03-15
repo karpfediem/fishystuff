@@ -181,7 +181,6 @@ pub struct FishyMapUiPatch {
 pub struct FishyMapCommands {
     pub reset_view: Option<bool>,
     pub set_view_mode: Option<FishyMapViewMode>,
-    pub focus_fish_id: Option<i32>,
     pub select_zone_rgb: Option<u32>,
     pub restore_view: Option<FishyMapViewSnapshot>,
 }

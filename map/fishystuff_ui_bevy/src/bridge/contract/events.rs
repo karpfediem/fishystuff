@@ -21,7 +21,6 @@ pub enum FishyMapOutputEvent {
     },
     SelectionChanged {
         version: u8,
-        fish_id: Option<i32>,
         zone_rgb: Option<u32>,
     },
     HoverChanged {

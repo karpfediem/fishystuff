@@ -74,7 +74,6 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *   commands?: {
  *     resetView?: boolean,
  *     setViewMode?: "2d" | "3d",
- *     focusFishId?: number,
  *     selectZoneRgb?: number,
  *     restoreView?: {
  *       viewMode: "2d" | "3d",
@@ -533,12 +532,6 @@ export function normalizeStatePatch(patch = {}) {
     }
     if (patch.commands.setViewMode === "2d" || patch.commands.setViewMode === "3d") {
       normalized.commands.setViewMode = patch.commands.setViewMode;
-    }
-    if (hasOwn(patch.commands, "focusFishId")) {
-      const focusFishId = Number.parseInt(patch.commands.focusFishId, 10);
-      if (Number.isFinite(focusFishId)) {
-        normalized.commands.focusFishId = focusFishId;
-      }
     }
     if (hasOwn(patch.commands, "selectZoneRgb")) {
       const selectZoneRgb = Number.parseInt(patch.commands.selectZoneRgb, 10);
@@ -1053,7 +1046,6 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   }
   if (fishId != null) {
     patch.filters.fishIds = [fishId];
-    patch.commands = { ...(patch.commands || {}), focusFishId: fishId };
   }
   if (fromPatchId != null || toPatchId != null) {
     if (fromPatchId != null) {
@@ -1193,7 +1185,6 @@ export function snapshotToRestorePatch(snapshot) {
     patch.commands = {};
   }
   if (selectionFishId != null) {
-    patch.commands.focusFishId = selectionFishId;
     const restoredFishIds = normalizeFishIds(patch.filters?.fishIds);
     patch.filters = patch.filters || {};
     patch.filters.fishIds = restoredFishIds.length

@@ -100,7 +100,6 @@ Primary patch shape:
   "commands": {
     "resetView": false,
     "setViewMode": "3d",
-    "focusFishId": 821015,
     "selectZoneRgb": 1193046,
     "restoreView": {
       "viewMode": "3d",

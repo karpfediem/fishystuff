@@ -49,7 +49,7 @@ pub(super) fn handle_text_input(
     if keys.just_pressed(KeyCode::Backspace) {
         if search.query.is_empty() {
             if search.selected_fish_ids.pop().is_some() {
-                apply_search_filters_to_ui(&search, &fish, &mut fish_filter);
+                apply_search_filters_to_ui(&search, &mut fish_filter);
             }
         } else {
             search.query.pop();
@@ -121,7 +121,7 @@ pub(super) fn handle_search_tag_click(
         }
     }
     if removed {
-        apply_search_filters_to_ui(&search, &fish, &mut fish_filter);
+        apply_search_filters_to_ui(&search, &mut fish_filter);
         if !search.query.trim().is_empty() {
             rebuild_results(&mut search, &fish);
         }
@@ -393,7 +393,7 @@ pub(super) fn apply_fish_selection(
             search.selected_fish_ids.push(entry.id);
         }
         search.query.clear();
-        apply_search_filters_to_ui(search, fish, fish_filter);
+        apply_search_filters_to_ui(search, fish_filter);
         rebuild_results(search, fish);
         search.open = false;
     }
@@ -401,20 +401,7 @@ pub(super) fn apply_fish_selection(
 
 pub(super) fn apply_search_filters_to_ui(
     search: &SearchState,
-    fish: &FishCatalog,
     fish_filter: &mut FishFilterState,
 ) {
     fish_filter.selected_fish_ids = search.selected_fish_ids.clone();
-    if let Some(last_id) = search.selected_fish_ids.last().copied() {
-        fish_filter.selected_fish = Some(last_id);
-        fish_filter.selected_fish_name = fish
-            .entries
-            .iter()
-            .find(|entry| entry.id == last_id)
-            .map(|entry| entry.name.clone())
-            .or_else(|| Some(format!("Fish {last_id}")));
-    } else {
-        fish_filter.selected_fish = None;
-        fish_filter.selected_fish_name = None;
-    }
 }

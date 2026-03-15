@@ -675,11 +675,11 @@ test("restore priority is URL over session over local preferences", () => {
   assert.deepEqual(patch.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
   assert.deepEqual(patch.filters.layerOpacities, { zones: 0.6 });
   assert.deepEqual(patch.filters.layerClipMasks, { terrain: "zones" });
+  assert.deepEqual(patch.filters.fishIds, [77]);
   assert.equal(patch.ui.legendOpen, false);
   assert.equal(patch.ui.showPoints, false);
   assert.equal(patch.ui.showPointIcons, false);
   assert.equal(patch.ui.pointIconScale, 1.8);
-  assert.equal(patch.commands.focusFishId, 77);
   assert.equal(patch.commands.selectZoneRgb, 16711935);
   assert.equal(patch.commands.setViewMode, "3d");
   assert.equal(patch.commands.restoreView.viewMode, "3d");
@@ -770,7 +770,6 @@ test("session restore preserves multiple selected fish terms", () => {
   });
 
   assert.deepEqual(patch.filters.fishIds, [11, 22, 33]);
-  assert.equal(patch.commands.focusFishId, 33);
 });
 
 test("legacy empty layer visibility snapshots do not hide every layer on restore", () => {

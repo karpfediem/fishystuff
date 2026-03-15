@@ -67,7 +67,6 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         "patchId": filters.patch_id,
         "fromPatchId": filters.from_patch_id,
         "toPatchId": filters.to_patch_id,
-        "selectedFishId": fish_filter.selected_fish,
         "visibleLayers": layer_registry
             .ordered()
             .iter()

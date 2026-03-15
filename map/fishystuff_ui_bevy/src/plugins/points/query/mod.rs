@@ -20,13 +20,7 @@ fn normalized_time_and_fish_filters(
     if from_ts_utc >= to_ts_utc {
         return None;
     }
-    let mut fish_ids = if !fish_filter.selected_fish_ids.is_empty() {
-        fish_filter.selected_fish_ids.clone()
-    } else if let Some(fish_id) = fish_filter.selected_fish {
-        vec![fish_id]
-    } else {
-        Vec::new()
-    };
+    let mut fish_ids = fish_filter.selected_fish_ids.clone();
     fish_ids.sort_unstable();
     fish_ids.dedup();
     Some((from_ts_utc, to_ts_utc, fish_ids))
