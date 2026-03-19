@@ -216,6 +216,8 @@
       }
 
       #fishymap-search-titlebar {
+        justify-content: flex-start;
+        gap: 0.35rem;
         border: 1px solid color-mix(in oklab, var(--color-base-300, #d6d3d1) 78%, var(--color-base-content, #1f2937) 22%);
         border-radius: var(--radius-box, 1rem);
         background: color-mix(in oklab, var(--color-base-100, #ffffff) 84%, transparent);
@@ -236,9 +238,9 @@
       }
 
       .fishymap-search-title-input {
-        min-width: min(11rem, 100%);
-        width: clamp(11rem, 22vw, 15rem);
-        margin-left: auto;
+        min-width: 0;
+        width: auto;
+        flex: 1 1 auto;
         touch-action: auto;
       }
 
