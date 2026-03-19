@@ -210,18 +210,57 @@
         z-index: 24;
         width: var(--fishymap-search-width);
         transform: translateX(-50%);
+        overflow: visible;
+        background: transparent;
+        box-shadow: none;
+      }
+
+      #fishymap-search-titlebar {
+        border: 1px solid color-mix(in oklab, var(--color-base-300, #d6d3d1) 78%, var(--color-base-content, #1f2937) 22%);
+        border-radius: var(--radius-box, 1rem);
+        background: color-mix(in oklab, var(--color-base-100, #ffffff) 84%, transparent);
+        box-shadow: 0 18px 38px -28px color-mix(in oklab, var(--color-base-content, #1f2937) 44%, transparent);
+      }
+
+      #fishymap-search-window[data-dragging="true"] #fishymap-search-titlebar {
+        box-shadow: 0 22px 48px -24px color-mix(in oklab, var(--color-base-content, #1f2937) 54%, transparent);
+      }
+
+      #fishymap-search-title-text {
+        flex: 0 0 auto;
+      }
+
+      #fishymap-search-titlebar .fishymap-window-header-content {
+        min-width: 0;
+        flex: 0 0 auto;
+      }
+
+      .fishymap-search-title-input {
+        min-width: min(11rem, 100%);
+        width: clamp(11rem, 22vw, 15rem);
+        margin-left: auto;
+        touch-action: auto;
+      }
+
+      .fishymap-search-title-input > * {
+        pointer-events: none;
+      }
+
+      .fishymap-search-title-input input,
+      .fishymap-search-title-input #fishymap-search-count {
+        pointer-events: auto;
       }
 
       #fishymap-search-body {
+        position: relative;
         gap: 0.75rem;
-        padding: 0.85rem 0.9rem 0.95rem;
+        padding: 0.65rem 0 0;
+        background: transparent;
+        overflow: visible;
       }
 
       #fishymap-search-selection-shell {
-        border: 1px solid color-mix(in oklab, var(--color-base-300, #d6d3d1) 70%, transparent);
-        border-radius: var(--radius-box, 1rem);
-        background: color-mix(in oklab, var(--color-base-200, #f2f1ee) 94%, transparent);
-        padding: 0.7rem 0.8rem;
+        padding: 0;
       }
 
       #fishymap-search-results button {
@@ -230,8 +269,13 @@
       }
 
       #fishymap-search-results-shell {
-        position: relative;
-        z-index: 1;
+        position: absolute;
+        top: 0.65rem;
+        left: 0;
+        right: 0;
+        z-index: 25;
+        margin: 0;
+        box-shadow: 0 18px 38px -28px color-mix(in oklab, var(--color-base-content, #1f2937) 44%, transparent);
       }
 
       #fishymap-search-selection {
@@ -587,6 +631,17 @@
           width: min(100vw - 1.5rem, 52rem);
         }
 
+        #fishymap-search-titlebar {
+          flex-wrap: wrap;
+          align-items: stretch;
+        }
+
+        .fishymap-search-title-input {
+          min-width: 0;
+          width: 100%;
+          flex: 1 1 100%;
+        }
+
         #map-page-shell {
           --fishymap-search-top: 0.75rem;
           --fishymap-search-width: min(100vw - 1.5rem, 52rem);
@@ -695,21 +750,16 @@
           </svg>
         </button>
       </div>
-      <aside id="fishymap-search-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="search">
+      <aside id="fishymap-search-window" class="fishymap-window not-prose" data-window-id="search">
         <div
           class="fishymap-window-header"
           id="fishymap-search-titlebar"
           data-window-titlebar="search"
-          role="button"
-          tabindex="0"
-          aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <span class="fishymap-window-title text-lg leading-tight">Search</span>
+            <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
           </div>
-        </div>
-        <div id="fishymap-search-body" class="fishymap-window-body">
-          <label class="input input-bordered input-md w-full rounded-full">
+          <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
             <svg class="h-[1em] opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
               <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">
                 <circle cx="11" cy="11" r="8"></circle>
@@ -719,7 +769,8 @@
             <input id="fishymap-search" class="grow" type="search" placeholder="Search fish or zone" autocomplete="off">
             <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
           </label>
-
+        </div>
+        <div id="fishymap-search-body" class="fishymap-window-body">
           <div id="fishymap-search-selection-shell" class="not-prose" hidden>
             <div id="fishymap-search-selection" hidden></div>
           </div>

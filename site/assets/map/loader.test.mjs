@@ -161,14 +161,14 @@ test("parseWindowUiState falls back to defaults for invalid persisted state", ()
 
 test("serializeWindowUiState normalizes persisted window geometry and flags", () => {
   const serialized = serializeWindowUiState({
-    search: { open: 0, collapsed: "yes", x: 42.8, y: "13" },
+    search: { open: false, collapsed: "yes", x: 42.8, y: "13" },
     settings: { open: true, collapsed: false, x: null, y: null },
     zoneInfo: { open: true, collapsed: false, x: undefined, y: 5.2 },
     layers: { open: false, collapsed: 0, x: "bad", y: 99.9 },
   });
 
   assert.deepEqual(JSON.parse(serialized), {
-    search: { open: true, collapsed: true, x: 43, y: 13 },
+    search: { open: false, collapsed: false, x: 43, y: 13 },
     settings: { open: true, collapsed: false, x: null, y: null },
     zoneInfo: { open: true, collapsed: false, x: null, y: 5 },
     layers: { open: false, collapsed: false, x: null, y: 100 },

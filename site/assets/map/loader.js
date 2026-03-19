@@ -219,7 +219,10 @@ function normalizeWindowUiEntry(rawEntry, fallbackEntry) {
 export function normalizeWindowUiState(rawState) {
   const source = isPlainObject(rawState) ? rawState : {};
   return {
-    search: normalizeWindowUiEntry(source.search, DEFAULT_WINDOW_UI_STATE.search),
+    search: {
+      ...normalizeWindowUiEntry(source.search, DEFAULT_WINDOW_UI_STATE.search),
+      collapsed: false,
+    },
     settings: normalizeWindowUiEntry(source.settings, DEFAULT_WINDOW_UI_STATE.settings),
     zoneInfo: normalizeWindowUiEntry(source.zoneInfo, DEFAULT_WINDOW_UI_STATE.zoneInfo),
     layers: normalizeWindowUiEntry(source.layers, DEFAULT_WINDOW_UI_STATE.layers),
@@ -1635,7 +1638,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
 
 function renderSearchResults(elements, matches, stateBundle) {
   const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
-  const showResults = Boolean(query);
+  const showResults = matches.length > 0;
   const activeMatches = matches.slice(0, 12);
   const renderKey = JSON.stringify({
     query,
@@ -1658,16 +1661,14 @@ function renderSearchResults(elements, matches, stateBundle) {
   }
   if (elements.searchCount) {
     setTextContent(elements.searchCount, `${matches.length} ${matches.length === 1 ? "match" : "matches"}`);
-    setBooleanProperty(elements.searchCount, "hidden", !showResults);
+    setBooleanProperty(elements.searchCount, "hidden", !query);
   }
   if (elements.searchResults.dataset.renderKey === renderKey) {
     return;
   }
   elements.searchResults.dataset.renderKey = renderKey;
-  if (!matches.length) {
-    elements.searchResults.innerHTML = `<li class="menu-disabled"><span class="text-xs text-base-content/60">${
-      query ? "No fish or zones match the current filter." : "Start typing to filter fish or zones."
-    }</span></li>`;
+  if (!showResults) {
+    elements.searchResults.innerHTML = "";
     return;
   }
   elements.searchResults.innerHTML = activeMatches
@@ -1848,6 +1849,15 @@ function setManagedWindowPosition(root, state) {
   root.style.removeProperty("right");
   root.style.removeProperty("bottom");
   root.style.removeProperty("transform");
+}
+
+function isWindowTitlebarInteractiveTarget(target) {
+  return Boolean(
+    target instanceof Element &&
+      target.closest(
+        "input, textarea, select, button, a, label, summary, [data-window-drag-ignore='true']",
+      ),
+  );
 }
 
 function applyWindowVisibility(elements, windowUiState) {
@@ -2307,7 +2317,7 @@ function bindUi(shell, elements, options = {}) {
     if (!windowId) {
       return;
     }
-    if (!moved && toggleOnTap) {
+    if (!moved && toggleOnTap && windowId !== "search") {
       toggleManagedWindowCollapsed(windowId);
       return;
     }
@@ -2396,6 +2406,9 @@ function bindUi(shell, elements, options = {}) {
       if (event.button !== 0) {
         return;
       }
+      if (isWindowTitlebarInteractiveTarget(event.target)) {
+        return;
+      }
       const entry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
       if (entry.open === false) {
         return;
@@ -2464,6 +2477,12 @@ function bindUi(shell, elements, options = {}) {
     });
 
     titlebar.addEventListener("keydown", (event) => {
+      if (windowId === "search") {
+        return;
+      }
+      if (isWindowTitlebarInteractiveTarget(event.target)) {
+        return;
+      }
       if (event.key !== "Enter" && event.key !== " ") {
         return;
       }
