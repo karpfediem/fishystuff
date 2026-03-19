@@ -2,7 +2,8 @@ use super::super::super::persistence::apply_patch_range_override;
 use crate::bridge::contract::FishyMapInputState;
 use crate::map::ui_layers::LayerDebugSettings;
 use crate::plugins::api::{
-    FishFilterState, MapDisplayState, PatchFilterState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    FishFilterState, MapDisplayState, PatchFilterState, ZoneFilterState, POINT_ICON_SCALE_MAX,
+    POINT_ICON_SCALE_MIN,
 };
 
 pub(super) fn apply_display_flags(
@@ -21,6 +22,10 @@ pub(super) fn apply_display_flags(
 
 pub(super) fn apply_fish_filters(input: &FishyMapInputState, fish_filter: &mut FishFilterState) {
     fish_filter.selected_fish_ids = input.filters.fish_ids.clone();
+}
+
+pub(super) fn apply_zone_filters(input: &FishyMapInputState, zone_filter: &mut ZoneFilterState) {
+    zone_filter.selected_zone_rgbs = input.filters.zone_rgbs.clone();
 }
 
 pub(super) fn apply_patch_filters(input: &FishyMapInputState, patch_filter: &mut PatchFilterState) {

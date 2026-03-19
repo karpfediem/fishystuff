@@ -198,6 +198,14 @@ impl EventsSnapshotState {
                 {
                     continue;
                 }
+                if let Some(zone_rgbs) = query.zone_rgbs.as_ref() {
+                    let Some(zone_rgb) = event.zone_rgb_u32 else {
+                        continue;
+                    };
+                    if !zone_rgbs.contains(&zone_rgb) {
+                        continue;
+                    }
+                }
                 if let Some(scope) = query.tile_scope.as_ref() {
                     if !scope.contains(event.map_px_x, event.map_px_y) {
                         continue;
@@ -255,6 +263,8 @@ fn client_error_to_string(error: ClientError) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::*;
     use crate::map::events::{VisibleTileScope, VISIBLE_TILE_SCOPE_PX};
     use fishystuff_api::models::events::MapBboxPx;
@@ -270,7 +280,7 @@ mod tests {
                 length_milli: 1000,
                 world_x: Some(1000),
                 world_z: Some(2000),
-                zone_rgb_u32: None,
+                zone_rgb_u32: Some(0x112233),
                 source_kind: None,
                 source_id: None,
             },
@@ -283,7 +293,7 @@ mod tests {
                 length_milli: 1200,
                 world_x: Some(1300),
                 world_z: Some(2200),
-                zone_rgb_u32: None,
+                zone_rgb_u32: Some(0x445566),
                 source_kind: None,
                 source_id: None,
             },
@@ -296,7 +306,7 @@ mod tests {
                 length_milli: 1500,
                 world_x: None,
                 world_z: None,
-                zone_rgb_u32: None,
+                zone_rgb_u32: Some(0x112233),
                 source_kind: None,
                 source_id: None,
             },
@@ -322,6 +332,7 @@ mod tests {
             from_ts_utc: 150,
             to_ts_utc: 350,
             fish_ids: &[101],
+            zone_rgbs: None,
             tile_scope: Some(VisibleTileScope::from_bbox(
                 &MapBboxPx {
                     min_x: 3000,
@@ -335,6 +346,34 @@ mod tests {
 
         let selected = state.select_for_view(&query);
         assert_eq!(selected.filtered_indices, vec![2]);
+    }
+
+    #[test]
+    fn local_selection_applies_zone_filter() {
+        let mut state = EventsSnapshotState::default();
+        state.loaded = true;
+        state.events = sample_events();
+        state.event_count = state.events.len();
+        state.spatial_index.rebuild(&state.events);
+
+        let bbox = MapBboxPx {
+            min_x: 0,
+            min_y: 0,
+            max_x: 5000,
+            max_y: 5000,
+        };
+        let zones = HashSet::from([0x445566]);
+        let query = LocalEventQuery {
+            bbox: &bbox,
+            from_ts_utc: 0,
+            to_ts_utc: 1000,
+            fish_ids: &[],
+            zone_rgbs: Some(&zones),
+            tile_scope: None,
+        };
+
+        let selected = state.select_for_view(&query);
+        assert_eq!(selected.filtered_indices, vec![1]);
     }
 
     #[test]
@@ -403,6 +442,7 @@ mod tests {
             from_ts_utc: 0,
             to_ts_utc: 10_000,
             fish_ids: &[],
+            zone_rgbs: None,
             tile_scope: None,
         });
         let _ = state.select_for_view(&LocalEventQuery {
@@ -410,6 +450,7 @@ mod tests {
             from_ts_utc: 0,
             to_ts_utc: 10_000,
             fish_ids: &[],
+            zone_rgbs: None,
             tile_scope: None,
         });
 

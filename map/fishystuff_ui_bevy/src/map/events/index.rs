@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use fishystuff_api::models::events::{EventPointCompact, MapBboxPx};
 
@@ -113,6 +114,7 @@ pub struct LocalEventQuery<'a> {
     pub from_ts_utc: i64,
     pub to_ts_utc: i64,
     pub fish_ids: &'a [i32],
+    pub zone_rgbs: Option<&'a HashSet<u32>>,
     pub tile_scope: Option<VisibleTileScope>,
 }
 

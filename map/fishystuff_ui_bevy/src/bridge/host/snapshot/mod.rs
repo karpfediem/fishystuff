@@ -21,6 +21,7 @@ pub(super) fn sync_current_snapshot(
     bootstrap: Res<ApiBootstrapState>,
     patch_filter: Res<PatchFilterState>,
     fish_filter: Res<FishFilterState>,
+    zone_filter: Res<ZoneFilterState>,
     display_state: Res<MapDisplayState>,
     fish: Res<FishCatalog>,
     points: Res<PointsState>,
@@ -38,6 +39,7 @@ pub(super) fn sync_current_snapshot(
     let filters_changed = bridge.is_changed()
         || patch_filter.is_changed()
         || fish_filter.is_changed()
+        || zone_filter.is_changed()
         || layer_registry.is_changed()
         || layer_runtime.is_changed();
     let ui_changed = bridge.is_changed() || display_state.is_changed() || debug_layers.is_changed();
@@ -80,6 +82,7 @@ pub(super) fn sync_current_snapshot(
                 &bridge.input,
                 &patch_filter,
                 &fish_filter,
+                &zone_filter,
                 &layer_registry,
                 &layer_runtime,
             );

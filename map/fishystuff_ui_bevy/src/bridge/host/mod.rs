@@ -27,8 +27,8 @@ use crate::map::terrain::runtime::TerrainDiagnostics;
 use crate::map::ui_layers::LayerDebugSettings;
 use crate::plugins::api::{
     now_utc_seconds, ApiBootstrapState, FishCatalog, FishFilterState, HoverInfo, HoverLayerSample,
-    HoverState, MapDisplayState, PatchFilterState, SelectionState, POINT_ICON_SCALE_MAX,
-    POINT_ICON_SCALE_MIN,
+    HoverState, MapDisplayState, PatchFilterState, SelectionState, ZoneFilterState,
+    POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 use crate::plugins::camera::CameraZoomBounds;
 use crate::plugins::points::{PointIconCache, PointsState};

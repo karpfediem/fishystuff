@@ -26,8 +26,8 @@ impl Plugin for PointsPlugin {
                     loading::ensure_point_ring_assets,
                     loading::ensure_events_snapshot_loaded,
                     loading::poll_events_snapshot_requests,
-                    query::refresh_points_from_local_snapshot,
                     query::sync_evidence_zone_filter,
+                    query::refresh_points_from_local_snapshot,
                     render::mark_points_dirty_on_remote_image_update,
                     render::sync_point_markers,
                 )

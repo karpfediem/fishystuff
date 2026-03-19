@@ -55,6 +55,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *   theme?: { name?: string, colors?: FishyMapThemeColors },
  *   filters?: {
  *     fishIds?: number[],
+ *     zoneRgbs?: number[],
  *     searchText?: string,
  *     patchId?: string | null,
  *     fromPatchId?: string | null,
@@ -103,6 +104,7 @@ export function createEmptyInputState() {
     },
     filters: {
       fishIds: [],
+      zoneRgbs: [],
       searchText: "",
       patchId: null,
       fromPatchId: null,
@@ -133,6 +135,7 @@ export function createEmptySnapshot() {
     },
     filters: {
       fishIds: [],
+      zoneRgbs: [],
       searchText: "",
       patchId: null,
       fromPatchId: null,
@@ -330,6 +333,23 @@ function normalizeFishIds(values) {
   return out;
 }
 
+function normalizeZoneRgbs(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  const out = [];
+  const seen = new Set();
+  for (const value of values) {
+    const number = Number(value);
+    if (!Number.isFinite(number) || !Number.isInteger(number) || seen.has(number)) {
+      continue;
+    }
+    seen.add(number);
+    out.push(number);
+  }
+  return out;
+}
+
 function normalizeNullableString(value) {
   if (value == null) {
     return null;
@@ -458,6 +478,9 @@ export function normalizeStatePatch(patch = {}) {
     normalized.filters = {};
     if (hasOwn(patch.filters, "fishIds")) {
       normalized.filters.fishIds = normalizeFishIds(patch.filters.fishIds);
+    }
+    if (hasOwn(patch.filters, "zoneRgbs")) {
+      normalized.filters.zoneRgbs = normalizeZoneRgbs(patch.filters.zoneRgbs);
     }
     if (hasOwn(patch.filters, "searchText")) {
       normalized.filters.searchText = String(patch.filters.searchText ?? "").trim();
@@ -623,6 +646,7 @@ export function applyStatePatch(inputState, patch) {
   };
   next.filters = {
     fishIds: normalizeFishIds(current.filters?.fishIds),
+    zoneRgbs: normalizeZoneRgbs(current.filters?.zoneRgbs),
     searchText: String(current.filters?.searchText || ""),
     patchId: current.filters?.patchId ?? null,
     fromPatchId: current.filters?.fromPatchId ?? null,
@@ -665,6 +689,9 @@ export function applyStatePatch(inputState, patch) {
   if (normalized.filters) {
     if (hasOwn(normalized.filters, "fishIds")) {
       next.filters.fishIds = normalizeFishIds(normalized.filters.fishIds);
+    }
+    if (hasOwn(normalized.filters, "zoneRgbs")) {
+      next.filters.zoneRgbs = normalizeZoneRgbs(normalized.filters.zoneRgbs);
     }
     if (hasOwn(normalized.filters, "searchText")) {
       next.filters.searchText = normalized.filters.searchText || "";
@@ -1118,6 +1145,9 @@ export function snapshotToRestorePatch(snapshot) {
   if (isPlainObject(snapshot.filters)) {
     if (hasOwn(snapshot.filters, "fishIds")) {
       patch.filters.fishIds = normalizeFishIds(snapshot.filters.fishIds);
+    }
+    if (hasOwn(snapshot.filters, "zoneRgbs")) {
+      patch.filters.zoneRgbs = normalizeZoneRgbs(snapshot.filters.zoneRgbs);
     }
     if (hasOwn(snapshot.filters, "searchText")) {
       patch.filters.searchText = String(snapshot.filters.searchText || "");
@@ -1872,6 +1902,7 @@ class FishyMapBridgeImpl {
       },
       filters: {
         fishIds: this.inputState.filters.fishIds,
+        zoneRgbs: this.inputState.filters.zoneRgbs,
         searchText: this.inputState.filters.searchText,
         patchId:
           fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,

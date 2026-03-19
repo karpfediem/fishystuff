@@ -276,6 +276,7 @@ test("DOM state patches are forwarded to the wasm bridge", async () => {
         detail: {
           version: 1,
           filters: {
+            zoneRgbs: [0xc17f7f, 0x3c963c, 0xc17f7f],
             fromPatchId: "2026-02-26",
             toPatchId: "2026-03-12",
             layerIdsVisible: ["zones", "terrain"],
@@ -302,6 +303,7 @@ test("DOM state patches are forwarded to the wasm bridge", async () => {
     assert.equal(wasm.calls.applied.length, 1);
     assert.deepEqual(wasm.calls.applied[0].filters, {
       patchId: null,
+      zoneRgbs: [0xc17f7f, 0x3c963c],
       fromPatchId: "2026-02-26",
       toPatchId: "2026-03-12",
       layerIdsVisible: ["zones", "terrain"],
@@ -926,6 +928,29 @@ test("session restore preserves multiple selected fish terms", () => {
   });
 
   assert.deepEqual(patch.filters.fishIds, [11, 22, 33]);
+});
+
+test("session restore preserves selected zone filter terms", () => {
+  const sessionStorage = new MemoryStorage({
+    [FISHYMAP_STORAGE_KEYS.session]: JSON.stringify({
+      version: 1,
+      selection: {
+        zoneRgb: 0xc17f7f,
+      },
+      filters: {
+        zoneRgbs: [0xc17f7f, 0x3c963c, 0xc17f7f],
+      },
+    }),
+  });
+
+  const patch = buildInitialRestorePatch({
+    locationHref: "https://fishystuff.fish/map/",
+    localStorage: new MemoryStorage(),
+    sessionStorage,
+  });
+
+  assert.deepEqual(patch.filters.zoneRgbs, [0xc17f7f, 0x3c963c]);
+  assert.equal(patch.commands.selectZoneRgb, 0xc17f7f);
 });
 
 test("legacy empty layer visibility snapshots do not hide every layer on restore", () => {

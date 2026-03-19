@@ -9,6 +9,7 @@ use crate::map::events::{
 };
 use crate::plugins::api::{FishFilterState, MapDisplayState, PatchFilterState};
 use crate::plugins::camera::Map2dCamera;
+use crate::plugins::points::EvidenceZoneFilter;
 
 use super::super::render::view_bbox_map_px;
 use super::state::PointsQuerySignature;
@@ -74,6 +75,11 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     let cluster_bucket_px = suggested_cluster_bucket_px(&viewport_bbox);
     let signature = PointsQuerySignature {
         revision: refresh.snapshot.revision.clone(),
+        zone_filter_revision: if refresh.zone_filter.active {
+            refresh.zone_filter.revision
+        } else {
+            0
+        },
         from_ts_utc,
         to_ts_utc,
         fish_ids: fish_ids.clone(),
@@ -98,6 +104,10 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         from_ts_utc,
         to_ts_utc,
         fish_ids: fish_ids.as_slice(),
+        zone_rgbs: refresh
+            .zone_filter
+            .active
+            .then_some(&refresh.zone_filter.zone_rgbs),
         tile_scope: Some(VisibleTileScope::from_bbox(
             &tile_scope,
             VISIBLE_TILE_SCOPE_PX,
@@ -155,6 +165,7 @@ pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     points: ResMut<'w, PointsState>,
     patch_filter: Res<'w, PatchFilterState>,
     fish_filter: Res<'w, FishFilterState>,
+    zone_filter: Res<'w, EvidenceZoneFilter>,
     display_state: Res<'w, MapDisplayState>,
     view_mode: Res<'w, ViewModeState>,
     snapshot: Res<'w, EventsSnapshotState>,

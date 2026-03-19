@@ -554,8 +554,8 @@
                   <path d="m21 21-4.3-4.3"></path>
                 </g>
               </svg>
-              <input id="fishymap-search" class="grow" type="search" placeholder="Search fish" autocomplete="off">
-              <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 fish</span>
+              <input id="fishymap-search" class="grow" type="search" placeholder="Search fish or zone" autocomplete="off">
+              <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
             </label>
           </div>
         </div>

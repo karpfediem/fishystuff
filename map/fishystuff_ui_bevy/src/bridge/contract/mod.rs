@@ -11,7 +11,7 @@ pub use input::{
 };
 pub use normalize::{
     normalize_i32_list, normalize_layer_clip_mask_map, normalize_layer_opacity_map,
-    normalize_string_list,
+    normalize_string_list, normalize_u32_list,
 };
 pub use snapshot::{
     FishyMapCameraSnapshot, FishyMapCatalogSnapshot, FishyMapFishSummary,
@@ -41,6 +41,7 @@ mod tests {
                 "version": 1,
                 "filters": {
                     "fishIds": [10, 20],
+                    "zoneRgbs": [1193046, 1193046, 6636321],
                     "fromPatchId": "2026-02-26",
                     "toPatchId": "2026-03-12",
                     "layerIdsOrdered": ["zones", "terrain", "minimap"],
@@ -71,6 +72,13 @@ mod tests {
                 .as_ref()
                 .and_then(|filters| filters.fish_ids.clone()),
             Some(vec![10, 20])
+        );
+        assert_eq!(
+            patch
+                .filters
+                .as_ref()
+                .and_then(|filters| filters.zone_rgbs.clone()),
+            Some(vec![1193046, 1193046, 6636321])
         );
         assert_eq!(
             patch
@@ -178,6 +186,7 @@ mod tests {
                 "version": 1,
                 "filters": {
                     "fishIds": [821015, 821015, 42],
+                    "zoneRgbs": [1193046, 1193046, 6636321],
                     "layerIdsVisible": ["zones", "zones", "terrain"],
                     "layerIdsOrdered": ["zones", "terrain", "zones", "minimap"],
                     "layerOpacities": {
@@ -202,6 +211,7 @@ mod tests {
 
         assert_eq!(state, once);
         assert_eq!(state.filters.fish_ids, vec![821015, 42]);
+        assert_eq!(state.filters.zone_rgbs, vec![1193046, 6636321]);
         assert_eq!(
             state.filters.layer_ids_visible,
             Some(vec!["zones".to_string(), "terrain".to_string()])

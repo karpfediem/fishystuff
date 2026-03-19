@@ -6,6 +6,7 @@ import FishyMapBridge, {
 } from "./map-host.js";
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
+const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
 
 function dispatchMapEvent(target, type, detail) {
   target.dispatchEvent(new CustomEvent(type, { detail }));
@@ -221,6 +222,97 @@ function isPlainObject(value) {
 
 function hasOwnKey(object, key) {
   return !!object && Object.prototype.hasOwnProperty.call(object, key);
+}
+
+function rgbTripletToU32(r, g, b) {
+  return ((((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff)) >>> 0);
+}
+
+function parseCatalogRgbByte(value) {
+  const number = Number.parseFloat(value);
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+  if (number >= 0 && number <= 255 && Math.abs(number - Math.round(number)) < 1e-6) {
+    return Math.round(number);
+  }
+  return null;
+}
+
+function formatRgbKey(r, g, b, separator = ",") {
+  return `${r}${separator}${g}${separator}${b}`;
+}
+
+function formatNormalizedRgbComponent(value) {
+  return (value / 255).toFixed(6);
+}
+
+export function normalizeZoneCatalog(rawCatalog) {
+  const entries = Array.isArray(rawCatalog)
+    ? rawCatalog
+    : Array.isArray(rawCatalog?.zones)
+      ? rawCatalog.zones
+      : [];
+  const normalized = [];
+  for (const entry of entries) {
+    const r = parseCatalogRgbByte(entry?.r ?? entry?.rgb?.r);
+    const g = parseCatalogRgbByte(entry?.g ?? entry?.rgb?.g);
+    const b = parseCatalogRgbByte(entry?.b ?? entry?.rgb?.b);
+    if (![r, g, b].every(Number.isInteger)) {
+      continue;
+    }
+    const zoneRgb = rgbTripletToU32(r, g, b);
+    const rgbKey = formatRgbKey(r, g, b);
+    const normalizedParts = [
+      formatNormalizedRgbComponent(r),
+      formatNormalizedRgbComponent(g),
+      formatNormalizedRgbComponent(b),
+    ];
+    const hex = Number(zoneRgb).toString(16).padStart(6, "0");
+    const name = String(entry?.name || "").trim() || `Zone ${rgbKey}`;
+    const confirmedRaw = entry?.confirmed;
+    const confirmed =
+      confirmedRaw === true ||
+      confirmedRaw === 1 ||
+      String(confirmedRaw || "").trim() === "1" ||
+      String(confirmedRaw || "").trim().toLowerCase() === "true";
+    const order = Number.parseInt(entry?.order, 10);
+    normalized.push({
+      kind: "zone",
+      zoneRgb,
+      r,
+      g,
+      b,
+      name,
+      confirmed,
+      order: Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER,
+      rgbKey,
+      rgbSpaced: formatRgbKey(r, g, b, " "),
+      normalizedKey: normalizedParts.join(","),
+      normalizedSpaced: normalizedParts.join(" "),
+      hexKey: `0x${hex}`,
+      hashHexKey: `#${hex}`,
+      bareHexKey: hex,
+      _nameSearch: name.toLowerCase(),
+    });
+  }
+  return normalized;
+}
+
+async function loadZoneCatalog(fetchImpl = globalThis.fetch, url = DEFAULT_ZONE_CATALOG_URL) {
+  if (typeof fetchImpl !== "function") {
+    return [];
+  }
+  try {
+    const response = await fetchImpl(url);
+    if (!response?.ok) {
+      throw new Error(`zone catalog request failed with status ${response?.status ?? "unknown"}`);
+    }
+    return normalizeZoneCatalog(await response.json());
+  } catch (error) {
+    console.warn("Failed to load zone search catalog", error);
+    return [];
+  }
 }
 
 function mergeZoneEvidenceIntoFishLookup(fishLookup, zoneStats) {
@@ -790,6 +882,18 @@ function resolveSelectedFishIds(stateBundle) {
   return [];
 }
 
+function resolveSelectedZoneRgbs(stateBundle) {
+  const inputZoneRgbs = stateBundle.inputState?.filters?.zoneRgbs;
+  if (Array.isArray(inputZoneRgbs)) {
+    return inputZoneRgbs;
+  }
+  const stateZoneRgbs = stateBundle.state?.filters?.zoneRgbs;
+  if (Array.isArray(stateZoneRgbs)) {
+    return stateZoneRgbs;
+  }
+  return [];
+}
+
 function scoreFishMatch(fish, queryTerms) {
   if (!queryTerms.length) {
     return 0;
@@ -817,6 +921,14 @@ function scoreFishMatch(fish, queryTerms) {
   return score;
 }
 
+function scoreTermMatch(haystack, term, baseScore) {
+  const index = String(haystack || "").indexOf(term);
+  if (index < 0) {
+    return Number.NEGATIVE_INFINITY;
+  }
+  return baseScore - Math.min(index, baseScore - 1);
+}
+
 function findFishMatches(catalogFish, searchText) {
   const query = String(searchText || "").trim().toLowerCase();
   const terms = query ? query.split(/\s+/g).filter(Boolean) : [];
@@ -836,6 +948,111 @@ function findFishMatches(catalogFish, searchText) {
   filtered.sort((left, right) => {
     if (terms.length && right._score !== left._score) {
       return right._score - left._score;
+    }
+    return String(left.name || "").localeCompare(String(right.name || ""));
+  });
+  return filtered;
+}
+
+export function parseZoneRgbSearch(searchText) {
+  const query = String(searchText || "").trim().toLowerCase();
+  if (!query) {
+    return null;
+  }
+
+  const compactQuery = query.replace(/\s+/g, "");
+  const hexMatch = compactQuery.match(/^(?:#|0x)?([0-9a-f]{6})$/i);
+  if (hexMatch) {
+    return Number.parseInt(hexMatch[1], 16);
+  }
+
+  const sanitized = query.replace(/\b(?:rgb|rgba|vec3|vec4|normalized|norm|color|zone)\b/g, " ");
+  const components =
+    sanitized.match(/[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/g) || [];
+  if (components.length !== 3 && components.length !== 4) {
+    return null;
+  }
+  const remainder = sanitized
+    .replace(/[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/g, "")
+    .replace(/[\s,;:/()[\]{}]+/g, "");
+  if (remainder) {
+    return null;
+  }
+
+  const values = components.slice(0, 3).map((value) => Number.parseFloat(value));
+  if (values.some((value) => !Number.isFinite(value) || value < 0)) {
+    return null;
+  }
+  const normalized =
+    values.every((value) => value <= 1) &&
+    components
+      .slice(0, 3)
+      .some((value) => value.includes(".") || value.toLowerCase().includes("e"));
+  const bytes = normalized
+    ? values.map((value) => Math.round(value * 255))
+    : values.map((value) =>
+        value <= 255 && Math.abs(value - Math.round(value)) < 1e-6 ? Math.round(value) : null,
+      );
+  if (bytes.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) {
+    return null;
+  }
+  return rgbTripletToU32(bytes[0], bytes[1], bytes[2]);
+}
+
+function scoreZoneMatch(zone, queryTerms, parsedZoneRgb) {
+  if (parsedZoneRgb != null && zone.zoneRgb === parsedZoneRgb) {
+    return 500;
+  }
+  if (!queryTerms.length) {
+    return 0;
+  }
+  let score = 0;
+  for (const term of queryTerms) {
+    const best = Math.max(
+      scoreTermMatch(zone._nameSearch, term, 120),
+      scoreTermMatch(zone.rgbKey, term, 220),
+      scoreTermMatch(zone.rgbSpaced, term, 220),
+      scoreTermMatch(zone.normalizedKey, term, 240),
+      scoreTermMatch(zone.normalizedSpaced, term, 240),
+      scoreTermMatch(zone.hexKey, term, 230),
+      scoreTermMatch(zone.hashHexKey, term, 230),
+      scoreTermMatch(zone.bareHexKey, term, 225),
+    );
+    if (!Number.isFinite(best)) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    score += best;
+  }
+  return score;
+}
+
+export function findZoneMatches(zoneCatalog, searchText) {
+  const query = String(searchText || "").trim().toLowerCase();
+  const terms = query ? query.split(/\s+/g).filter(Boolean) : [];
+  if (!query) {
+    return [];
+  }
+  const parsedZoneRgb = parseZoneRgbSearch(query);
+  const filtered = [];
+  for (const zone of zoneCatalog || []) {
+    const score = scoreZoneMatch(zone, terms, parsedZoneRgb);
+    if (!Number.isFinite(score)) {
+      continue;
+    }
+    filtered.push({
+      ...zone,
+      _score: score,
+    });
+  }
+  filtered.sort((left, right) => {
+    if (right._score !== left._score) {
+      return right._score - left._score;
+    }
+    if (left.confirmed !== right.confirmed) {
+      return left.confirmed ? -1 : 1;
+    }
+    if (left.order !== right.order) {
+      return left.order - right.order;
     }
     return String(left.name || "").localeCompare(String(right.name || ""));
   });
@@ -1218,17 +1435,47 @@ function removeSelectedFishId(selectedFishIds, fishId) {
   return selectedFishIds.filter((id) => id !== fishId);
 }
 
-function buildSearchMatches(stateBundle, searchText) {
+function addSelectedZoneRgb(selectedZoneRgbs, zoneRgb) {
+  return selectedZoneRgbs.includes(zoneRgb) ? selectedZoneRgbs : selectedZoneRgbs.concat(zoneRgb);
+}
+
+function removeSelectedZoneRgb(selectedZoneRgbs, zoneRgb) {
+  return selectedZoneRgbs.filter((value) => value !== zoneRgb);
+}
+
+export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const catalogFish = stateBundle.state?.catalog?.fish || [];
-  const matches = findFishMatches(catalogFish, searchText);
   const selectedFishIds = new Set(resolveSelectedFishIds(stateBundle));
-  return matches.filter((fish) => !selectedFishIds.has(fish.fishId));
+  const selectedZoneRgbs = new Set(resolveSelectedZoneRgbs(stateBundle));
+  const fishMatches = findFishMatches(catalogFish, searchText)
+    .filter((fish) => !selectedFishIds.has(fish.fishId))
+    .map((fish) => ({
+      kind: "fish",
+      ...fish,
+    }));
+  const zoneMatches = findZoneMatches(zoneCatalog, searchText).filter(
+    (zone) => !selectedZoneRgbs.has(zone.zoneRgb),
+  );
+  return fishMatches.concat(zoneMatches).sort((left, right) => {
+    if (right._score !== left._score) {
+      return right._score - left._score;
+    }
+    if (left.kind !== right.kind) {
+      return left.kind === "zone" ? -1 : 1;
+    }
+    return String(left.name || "").localeCompare(String(right.name || ""));
+  });
 }
 
 function renderSearchSelection(elements, stateBundle, fishLookup) {
   const selectedFishIds = resolveSelectedFishIds(stateBundle);
+  const selectedZoneRgbs = resolveSelectedZoneRgbs(stateBundle);
+  const zoneLookup = new Map(
+    (elements.zoneCatalog || []).map((zone) => [zone.zoneRgb, zone]),
+  );
   const renderKey = JSON.stringify({
     selectedFishIds,
+    selectedZoneRgbs,
     selectedFish: selectedFishIds.map((fishId) => {
       const fish = fishLookup.get(fishId);
       return [
@@ -1240,13 +1487,17 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
         fish?.isPrize === true ? 1 : 0,
       ];
     }),
+    selectedZones: selectedZoneRgbs.map((zoneRgb) => {
+      const zone = zoneLookup.get(zoneRgb);
+      return [zoneRgb, zone?.name || "", zone?.rgbKey || ""];
+    }),
   });
   if (elements.searchSelection.dataset.renderKey === renderKey) {
     return;
   }
   elements.searchSelection.dataset.renderKey = renderKey;
 
-  if (!selectedFishIds.length) {
+  if (!selectedFishIds.length && !selectedZoneRgbs.length) {
     elements.searchSelection.innerHTML = "";
     elements.searchSelection.hidden = true;
     if (elements.searchSelectionShell) {
@@ -1287,6 +1538,33 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
         </div>
       `;
     })
+    .concat(
+      selectedZoneRgbs.map((zoneRgb) => {
+        const zone = zoneLookup.get(zoneRgb);
+        const name = zone?.name || `Zone ${formatZone(zoneRgb)}`;
+        const swatch = `rgb(${zone?.r ?? 0}, ${zone?.g ?? 0}, ${zone?.b ?? 0})`;
+        return `
+          <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
+            <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
+              <span
+                class="inline-flex size-5 shrink-0 rounded-full border border-base-300 shadow-sm"
+                style="background-color: ${escapeHtml(swatch)};"
+                aria-hidden="true"
+              ></span>
+              <span class="truncate max-w-40">${escapeHtml(name)}</span>
+            </span>
+            <button
+              class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
+              data-zone-rgb="${zoneRgb}"
+              type="button"
+              aria-label="Remove ${escapeHtml(name)}"
+            >
+              ×
+            </button>
+          </div>
+        `;
+      }),
+    )
     .join("");
 }
 
@@ -1296,20 +1574,25 @@ function renderSearchResults(elements, matches, stateBundle) {
   const activeMatches = matches.slice(0, 12);
   const renderKey = JSON.stringify({
     query,
-    results: activeMatches.map((fish) => [
-      fish.fishId,
-      fish.itemId ?? null,
-      fish.encyclopediaId ?? null,
-      fish.grade || "",
-      fish.isPrize === true ? 1 : 0,
-    ]),
+    results: activeMatches.map((match) =>
+      match.kind === "zone"
+        ? ["zone", match.zoneRgb, match.name, match.rgbKey]
+        : [
+            "fish",
+            match.fishId,
+            match.itemId ?? null,
+            match.encyclopediaId ?? null,
+            match.grade || "",
+            match.isPrize === true ? 1 : 0,
+          ],
+    ),
     total: matches.length,
   });
   if (elements.searchResultsShell) {
     setBooleanProperty(elements.searchResultsShell, "hidden", !showResults);
   }
   if (elements.searchCount) {
-    setTextContent(elements.searchCount, `${matches.length} fish`);
+    setTextContent(elements.searchCount, `${matches.length} ${matches.length === 1 ? "match" : "matches"}`);
     setBooleanProperty(elements.searchCount, "hidden", !showResults);
   }
   if (elements.searchResults.dataset.renderKey === renderKey) {
@@ -1318,27 +1601,53 @@ function renderSearchResults(elements, matches, stateBundle) {
   elements.searchResults.dataset.renderKey = renderKey;
   if (!matches.length) {
     elements.searchResults.innerHTML = `<li class="menu-disabled"><span class="text-xs text-base-content/60">${
-      query ? "No fish match the current filter." : "Start typing to filter fish."
+      query ? "No fish or zones match the current filter." : "Start typing to filter fish or zones."
     }</span></li>`;
     return;
   }
   elements.searchResults.innerHTML = activeMatches
-    .map(
-      (fish) => {
+    .map((match) => {
+      if (match.kind === "zone") {
+        const swatch = `rgb(${match.r}, ${match.g}, ${match.b})`;
         return `
         <li>
           <button
-            class="gap-3 rounded-box px-3 py-2 text-sm"
-            data-fish-id="${fish.fishId}"
+            class="items-start gap-3 rounded-box px-3 py-2 text-sm"
+            data-zone-rgb="${match.zoneRgb}"
             type="button"
           >
-            ${renderFishAvatar(fish, "size-6", { gradeFrame: true })}
-            <span class="truncate">${escapeHtml(fish.name)}</span>
+            <span
+              class="mt-0.5 inline-flex size-6 shrink-0 rounded-full border border-base-300 shadow-sm"
+              style="background-color: ${escapeHtml(swatch)};"
+              aria-hidden="true"
+            ></span>
+            <span class="min-w-0 flex-1 text-left">
+              <span class="flex items-center gap-2">
+                <span class="truncate">${escapeHtml(match.name)}</span>
+                <span class="badge badge-outline badge-xs">Zone</span>
+              </span>
+              <span class="block truncate text-xs text-base-content/60">
+                <code>${escapeHtml(match.rgbKey)}</code>
+                <span class="ml-2">${escapeHtml(formatZone(match.zoneRgb))}</span>
+              </span>
+            </span>
           </button>
         </li>
       `;
-      },
-    )
+      }
+      return `
+        <li>
+          <button
+            class="gap-3 rounded-box px-3 py-2 text-sm"
+            data-fish-id="${match.fishId}"
+            type="button"
+          >
+            ${renderFishAvatar(match, "size-6", { gradeFrame: true })}
+            <span class="truncate">${escapeHtml(match.name)}</span>
+          </button>
+        </li>
+      `;
+    })
     .join("");
 }
 
@@ -1470,7 +1779,7 @@ function syncLayerOpacityControl(container, layerId, opacity) {
   return true;
 }
 
-function renderPanel(elements, stateBundle) {
+function renderPanel(elements, stateBundle, zoneCatalog = []) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
   const isReady = state.ready === true;
@@ -1496,6 +1805,7 @@ function renderPanel(elements, stateBundle) {
     inputState.ui?.pointIconScale ?? state.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN,
   );
   const fishLookup = mergeZoneEvidenceIntoFishLookup(buildFishLookup(catalogFish), isReady ? state.selection?.zoneStats || null : null);
+  elements.zoneCatalog = zoneCatalog;
 
   applyThemeToShell(elements.shell);
 
@@ -1559,7 +1869,7 @@ function renderPanel(elements, stateBundle) {
     setTextContent(elements.layersCount, String(isReady ? (state.catalog?.layers || []).length : 0));
   }
 
-  const matches = isReady ? buildSearchMatches(stateBundle, searchText) : [];
+  const matches = isReady ? buildSearchMatches(stateBundle, searchText, zoneCatalog) : [];
   renderSearchSelection(elements, stateBundle, fishLookup);
   renderSearchResults(elements, matches, stateBundle);
   renderZoneEvidence(elements, stateBundle, fishLookup);
@@ -1595,9 +1905,32 @@ function renderPanel(elements, stateBundle) {
   );
 }
 
-function bindUi(shell, elements) {
+function applySearchMatchSelection(shell, elements, renderCurrentState, stateBundle, match) {
+  if (!match) {
+    return;
+  }
+  elements.search.value = "";
+  dispatchMapState(shell, {
+    version: 1,
+    filters: {
+      searchText: "",
+      ...(match.kind === "fish"
+        ? { fishIds: addSelectedFishId(resolveSelectedFishIds(stateBundle), match.fishId) }
+        : { zoneRgbs: addSelectedZoneRgb(resolveSelectedZoneRgbs(stateBundle), match.zoneRgb) }),
+    },
+  });
+  if (match.kind === "zone") {
+    dispatchMapCommand(shell, {
+      selectZoneRgb: match.zoneRgb,
+    });
+  }
+  renderCurrentState(requestBridgeState(shell));
+}
+
+function bindUi(shell, elements, options = {}) {
   let isRendering = false;
   let latestStateBundle = requestBridgeState(shell);
+  let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
   const layerDragState = {
     draggingLayerId: null,
     overLayerId: null,
@@ -1624,7 +1957,7 @@ function bindUi(shell, elements) {
     latestStateBundle = stateBundle;
     isRendering = true;
     try {
-      renderPanel(elements, stateBundle);
+      renderPanel(elements, stateBundle, zoneCatalog);
     } finally {
       isRendering = false;
     }
@@ -1731,52 +2064,59 @@ function bindUi(shell, elements) {
       return;
     }
     const current = requestBridgeState(shell);
-    const matches = findFishMatches(
-      current.state.catalog?.fish || [],
-      elements.search.value,
-    );
-    const selectedFishIds = new Set(resolveSelectedFishIds(current));
-    const top = matches.find((fish) => !selectedFishIds.has(fish.fishId));
+    const matches = buildSearchMatches(current, elements.search.value, zoneCatalog);
+    const top = matches[0];
     if (!top) {
       return;
     }
     event.preventDefault();
-    elements.search.value = "";
-    dispatchMapState(shell, {
-      version: 1,
-      filters: {
-        searchText: "",
-        fishIds: addSelectedFishId(resolveSelectedFishIds(current), top.fishId),
-      },
-    });
-    renderCurrentState(requestBridgeState(shell));
+    applySearchMatchSelection(shell, elements, renderCurrentState, current, top);
   });
 
   elements.searchResults.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-fish-id]");
+    const button = event.target.closest("button[data-fish-id], button[data-zone-rgb]");
     if (!button) {
       return;
     }
-    const fishId = Number.parseInt(button.getAttribute("data-fish-id"), 10);
     const current = requestBridgeState(shell);
-    elements.search.value = "";
-    dispatchMapState(shell, {
-      version: 1,
-      filters: {
-        searchText: "",
-        fishIds: addSelectedFishId(resolveSelectedFishIds(current), fishId),
-      },
+    const zoneRgb = Number.parseInt(button.getAttribute("data-zone-rgb"), 10);
+    if (Number.isFinite(zoneRgb)) {
+      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+        kind: "zone",
+        zoneRgb,
+      });
+      return;
+    }
+    const fishId = Number.parseInt(button.getAttribute("data-fish-id"), 10);
+    if (!Number.isFinite(fishId)) {
+      return;
+    }
+    applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+      kind: "fish",
+      fishId,
     });
-    renderCurrentState(requestBridgeState(shell));
   });
 
   elements.searchSelection.addEventListener("click", (event) => {
-    const removeButton = event.target.closest("button.fishymap-selection-remove[data-fish-id]");
+    const removeButton = event.target.closest(
+      "button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb]",
+    );
     if (!removeButton) {
       return;
     }
-    const fishId = Number.parseInt(removeButton.getAttribute("data-fish-id"), 10);
     const current = requestBridgeState(shell);
+    const zoneRgb = Number.parseInt(removeButton.getAttribute("data-zone-rgb"), 10);
+    if (Number.isFinite(zoneRgb)) {
+      dispatchMapState(shell, {
+        version: 1,
+        filters: {
+          zoneRgbs: removeSelectedZoneRgb(resolveSelectedZoneRgbs(current), zoneRgb),
+        },
+      });
+      renderCurrentState(requestBridgeState(shell));
+      return;
+    }
+    const fishId = Number.parseInt(removeButton.getAttribute("data-fish-id"), 10);
     dispatchMapState(shell, {
       version: 1,
       filters: {
@@ -2159,6 +2499,12 @@ function bindUi(shell, elements) {
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));
 
   renderCurrentState();
+  return {
+    setZoneCatalog(nextZoneCatalog) {
+      zoneCatalog = normalizeZoneCatalog(nextZoneCatalog);
+      renderCurrentState(requestBridgeState(shell));
+    },
+  };
 }
 
 async function main() {
@@ -2212,8 +2558,11 @@ async function main() {
 
   ensureZoneEvidenceElements(elements);
 
-  bindUi(shell, elements);
+  const ui = bindUi(shell, elements);
   applyThemeToShell(shell);
+  void loadZoneCatalog().then((zoneCatalog) => {
+    ui.setZoneCatalog(zoneCatalog);
+  });
   installRendererErrorHandlers(elements);
 
   if (!supportsWebgl2(document)) {
@@ -2232,4 +2581,10 @@ async function main() {
   }
 }
 
-main();
+if (
+  typeof window !== "undefined" &&
+  typeof document !== "undefined" &&
+  globalThis.__fishystuffLoaderAutoStart !== false
+) {
+  main();
+}

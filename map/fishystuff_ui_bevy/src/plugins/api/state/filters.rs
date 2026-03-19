@@ -19,6 +19,11 @@ pub struct FishFilterState {
     pub selected_fish_ids: Vec<i32>,
 }
 
+#[derive(Resource, Default)]
+pub struct ZoneFilterState {
+    pub selected_zone_rgbs: Vec<u32>,
+}
+
 #[derive(Resource)]
 pub struct MapDisplayState {
     pub show_effort: bool,

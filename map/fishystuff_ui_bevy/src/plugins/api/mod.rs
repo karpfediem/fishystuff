@@ -16,7 +16,7 @@ pub use requests::{
 pub use state::{
     ApiBootstrapState, FishCatalog, FishEntry, FishFilterState, HoverInfo, HoverLayerSample,
     HoverState, MapDisplayState, Patch, PatchFilterState, PendingRequests, SelectedInfo,
-    SelectionState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    SelectionState, ZoneFilterState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 
 pub struct ApiPlugin;
@@ -26,6 +26,7 @@ impl Plugin for ApiPlugin {
         app.init_resource::<ApiBootstrapState>()
             .init_resource::<PatchFilterState>()
             .init_resource::<FishFilterState>()
+            .init_resource::<ZoneFilterState>()
             .init_resource::<MapDisplayState>()
             .init_resource::<PendingRequests>()
             .init_resource::<HoverState>()
