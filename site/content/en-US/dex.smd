@@ -672,9 +672,9 @@
 
   .fishydex-price-icon iconify-icon {
     display: block;
-    width: 1rem;
-    height: 1rem;
-    transform: translateY(-0.04em);
+    width: 1.1rem;
+    height: 1.1rem;
+    transform: translateY(0.02em);
   }
 
   .fishydex-price-value {
@@ -945,8 +945,8 @@
       Trash: "White",
       Unknown: "Unknown",
     };
-    const ICON_CHECK_BADGE_OUTLINE = `<iconify-icon icon="fishy:check-badge-outline" class="size-6" aria-hidden="true"></iconify-icon>`;
-    const ICON_CHECK_BADGE_SOLID = `<iconify-icon icon="fishy:check-badge-solid" class="size-6" aria-hidden="true"></iconify-icon>`;
+    const ICON_CHECK_BADGE_OUTLINE = `<iconify-icon icon="fishy:check-badge-outline" class="size-7" aria-hidden="true"></iconify-icon>`;
+    const ICON_CHECK_BADGE_SOLID = `<iconify-icon icon="fishy:check-badge-solid" class="size-7" aria-hidden="true"></iconify-icon>`;
     const ICON_COIN_STACK = `<iconify-icon icon="fishy:coin-stack" aria-hidden="true"></iconify-icon>`;
     const CAUGHT_FILTER_ORDER = ["all", "caught", "missing"];
     const METHOD_ORDER = ["rod", "harpoon"];

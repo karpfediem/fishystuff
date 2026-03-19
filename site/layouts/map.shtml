@@ -195,8 +195,8 @@
       }
 
       .fishymap-toolbar-button iconify-icon {
-        width: 1.2rem;
-        height: 1.2rem;
+        width: 1.35rem;
+        height: 1.35rem;
       }
 
       .fishymap-toolbar-button > * {
@@ -420,8 +420,8 @@
       }
 
       #fishymap-view-toggle iconify-icon {
-        width: 1.25rem;
-        height: 1.25rem;
+        width: 1.4rem;
+        height: 1.4rem;
       }
 
       #fishymap-view-toggle-icon,
@@ -509,8 +509,8 @@
 
       .fishymap-layer-visibility iconify-icon,
       .fishymap-layer-drag iconify-icon {
-        width: 1.2rem;
-        height: 1.2rem;
+        width: 1.3rem;
+        height: 1.3rem;
       }
 
       .fishymap-layer-body {

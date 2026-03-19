@@ -67,7 +67,7 @@
             </ctx>
             <ctx :if="$loop.it.custom.has('og_image').not()">
               <figure class="grid aspect-[3/2] place-items-center bg-base-200/70 p-8">
-                <iconify-icon icon="fishy:book-open" class="size-20 text-base-content/55" aria-hidden="true"></iconify-icon>
+                <iconify-icon icon="fishy:book-open" class="size-24 text-base-content/55" aria-hidden="true"></iconify-icon>
               </figure>
             </ctx>
           </ctx>

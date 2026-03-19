@@ -355,15 +355,15 @@
 
                 <div class="flex flex-wrap gap-2">
                     <button class="btn btn-soft btn-secondary" data-on-click="@clipboard(presetURL(ctx.signals.JSON()))">
-                        <iconify-icon icon="fishy:link" class="size-6" aria-hidden="true"></iconify-icon>
+                        <iconify-icon icon="fishy:link" class="size-7" aria-hidden="true"></iconify-icon>
                         Copy URL
                     </button>
                     <button class="btn btn-soft btn-secondary" data-on-click="@clipboard('[FishyStuff Calculator Preset | ' + ($active ? 'Active | ' : $afr * 100 +'% AFR | ') + $drr * 100 +'% DRR | '+ $zone +'](' + presetURL(ctx.signals.JSON())+ ')')">
-                        <iconify-icon icon="fishy:share-nodes" class="size-6" aria-hidden="true"></iconify-icon>
+                        <iconify-icon icon="fishy:share-nodes" class="size-7" aria-hidden="true"></iconify-icon>
                         Copy Share
                     </button>
                     <button class="btn btn-dash btn-error" data-on-click="clearSignals()">
-                        <iconify-icon icon="fishy:x-circle" class="size-6" aria-hidden="true"></iconify-icon>
+                        <iconify-icon icon="fishy:x-circle" class="size-7" aria-hidden="true"></iconify-icon>
                         Clear
                     </button>
                 </div>

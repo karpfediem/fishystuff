@@ -87,7 +87,7 @@
                     <div class="flex min-w-0 flex-1 items-center gap-2">
                         <div class="dropdown lg:hidden">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false" aria-label="Open navigation menu">
-                                <iconify-icon icon="fishy:menu" class="size-5" aria-hidden="true"></iconify-icon>
+                                <iconify-icon icon="fishy:menu" class="size-6" aria-hidden="true"></iconify-icon>
                             </button>
 
                             <ul tabindex="0"
@@ -127,7 +127,7 @@
                         <div id="language-switcher" class="dropdown dropdown-end">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
                                 <span id="language-switcher-label">Language</span>
-                                <iconify-icon icon="fishy:caret-down" inline class="inline-block h-2 w-2 opacity-60" aria-hidden="true"></iconify-icon>
+                                <iconify-icon icon="fishy:caret-down" inline class="inline-block h-2.5 w-2.5 opacity-60" aria-hidden="true"></iconify-icon>
                             </button>
 
                             <ul tabindex="0"
@@ -149,7 +149,7 @@
                         <div id="theme-switcher" class="dropdown dropdown-end">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
                                 Theme
-                                <iconify-icon icon="fishy:caret-down" inline class="inline-block h-2 w-2 opacity-60" aria-hidden="true"></iconify-icon>
+                                <iconify-icon icon="fishy:caret-down" inline class="inline-block h-2.5 w-2.5 opacity-60" aria-hidden="true"></iconify-icon>
                             </button>
 
                             <ul tabindex="0"

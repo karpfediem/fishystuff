@@ -74,3 +74,76 @@ addCollection({
     ),
   },
 });
+
+function shouldInheritHostSize(icon) {
+  if (!(icon instanceof HTMLElement)) {
+    return false;
+  }
+  if (icon.hasAttribute("width") || icon.hasAttribute("height")) {
+    return false;
+  }
+
+  const computed = window.getComputedStyle(icon);
+  const fontSize = Number.parseFloat(computed.fontSize);
+  const width = Number.parseFloat(computed.width);
+  const height = Number.parseFloat(computed.height);
+
+  if (!Number.isFinite(fontSize) || !Number.isFinite(width) || !Number.isFinite(height)) {
+    return false;
+  }
+
+  // Iconify defaults SVGs to 1em. If the host is styled to a different box,
+  // switch the SVG to inherit host sizing so Tailwind/util CSS can take over.
+  return Math.abs(width - fontSize) > 0.5 || Math.abs(height - fontSize) > 0.5;
+}
+
+function syncIconSize(icon) {
+  if (!(icon instanceof HTMLElement) || icon.tagName !== "ICONIFY-ICON") {
+    return;
+  }
+  if (!shouldInheritHostSize(icon)) {
+    return;
+  }
+
+  if (icon.getAttribute("width") !== "unset") {
+    icon.setAttribute("width", "unset");
+  }
+  if (icon.getAttribute("height") !== "unset") {
+    icon.setAttribute("height", "unset");
+  }
+}
+
+function syncIconsIn(root) {
+  if (!(root instanceof Element || root instanceof Document || root instanceof DocumentFragment)) {
+    return;
+  }
+  if (root instanceof Element && root.tagName === "ICONIFY-ICON") {
+    syncIconSize(root);
+  }
+  root.querySelectorAll?.("iconify-icon").forEach(syncIconSize);
+}
+
+function installIconSizeSync() {
+  const run = () => syncIconsIn(document);
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+  } else {
+    run();
+  }
+
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      record.addedNodes.forEach((node) => {
+        syncIconsIn(node);
+      });
+    }
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+}
+
+installIconSizeSync();
