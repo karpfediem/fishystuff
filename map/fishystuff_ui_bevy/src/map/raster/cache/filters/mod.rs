@@ -30,6 +30,7 @@ impl RasterTileCache {
         commands: &mut Commands,
         context: VisualFilterContext<'_>,
     ) {
+        crate::perf_scope!("raster.sync_visual_filters");
         let VisualFilterContext {
             filter,
             hover_zone_rgb,
@@ -50,9 +51,9 @@ impl RasterTileCache {
             if read_entry.state != TileState::Ready || !read_entry.visible {
                 continue;
             }
-            let Some(source) = read_entry.pixel_data.clone() else {
+            if read_entry.pixel_data.is_none() {
                 continue;
-            };
+            }
             let handle = read_entry.handle.clone();
             let entity = read_entry.entity;
             let previous_filter_active = read_entry.filter_active;
@@ -132,6 +133,13 @@ impl RasterTileCache {
                 continue;
             }
 
+            let Some(source) = self
+                .entries
+                .get(&key)
+                .and_then(|entry| entry.pixel_data.clone())
+            else {
+                continue;
+            };
             let Some(image) = images.get_mut(&handle) else {
                 continue;
             };
