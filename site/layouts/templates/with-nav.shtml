@@ -87,9 +87,7 @@
                     <div class="flex min-w-0 flex-1 items-center gap-2">
                         <div class="dropdown lg:hidden">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false" aria-label="Open navigation menu">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5m-16.5 6.75h16.5m-16.5 6.75h16.5" />
-                                </svg>
+                                <iconify-icon icon="fishy:menu" class="size-5" aria-hidden="true"></iconify-icon>
                             </button>
 
                             <ul tabindex="0"
@@ -129,9 +127,7 @@
                         <div id="language-switcher" class="dropdown dropdown-end">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
                                 <span id="language-switcher-label">Language</span>
-                                <svg width="12" height="12" class="inline-block h-2 w-2 fill-current opacity-60" viewBox="0 0 2048 2048" aria-hidden="true">
-                                    <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
-                                </svg>
+                                <iconify-icon icon="fishy:caret-down" inline class="inline-block h-2 w-2 opacity-60" aria-hidden="true"></iconify-icon>
                             </button>
 
                             <ul tabindex="0"
@@ -153,9 +149,7 @@
                         <div id="theme-switcher" class="dropdown dropdown-end">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
                                 Theme
-                                <svg width="12" height="12" class="inline-block h-2 w-2 fill-current opacity-60" viewBox="0 0 2048 2048" aria-hidden="true">
-                                    <path d="M1799 349l242 241-1017 1017L7 590l242-241 775 775 775-775z"></path>
-                                </svg>
+                                <iconify-icon icon="fishy:caret-down" inline class="inline-block h-2 w-2 opacity-60" aria-hidden="true"></iconify-icon>
                             </button>
 
                             <ul tabindex="0"

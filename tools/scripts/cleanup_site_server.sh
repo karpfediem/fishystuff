@@ -20,7 +20,8 @@ fi
 while IFS= read -r pid; do
   [ -n "$pid" ] || continue
   cmdline="$(ps -o command= -p "$pid" 2>/dev/null || true)"
-  if printf '%s' "$cmdline" | grep -Fq "$ROOT_DIR/site/scripts/serve-release.mjs"; then
+  if printf '%s' "$cmdline" | grep -Fq "$ROOT_DIR/site/scripts/serve-release.mjs" \
+    || printf '%s' "$cmdline" | grep -Fq "./scripts/serve-release.mjs"; then
     echo "stopping stale site server on 127.0.0.1:$SITE_PORT (pid $pid)"
     kill "$pid" >/dev/null 2>&1 || true
   else

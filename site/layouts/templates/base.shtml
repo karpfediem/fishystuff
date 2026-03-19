@@ -183,6 +183,7 @@
   </script>
 
   <script src="$site.asset('js/theme.js').link()"></script>
+  <script src="$site.asset('js/iconify.js').link()"></script>
 
   <!-- Tailwind + daisyUI (compiled) -->
   <link rel="stylesheet" href="$site.asset('css/site.css').link()">

@@ -3,9 +3,23 @@ build-tailwind:
     bun run tailwind:build
 
 build-release-no-tailwind:
-    rm -rf .out
-    zine release --output .out
-    bun run ./scripts/write-runtime-config.mjs --out .out/runtime-config.js
+    mkdir -p .out-builds; \
+    build_dir=$(mktemp -d .out-builds/build.XXXXXX); \
+    trap 'rm -rf "$build_dir" .out.next' EXIT; \
+    zine release --output "$build_dir"; \
+    bun run ./scripts/write-runtime-config.mjs --out "$build_dir/runtime-config.js"; \
+    ln -sfn "$build_dir" .out.next; \
+    if [ -L .out ]; then \
+      mv -Tf .out.next .out; \
+    else \
+      rm -rf .out.prev; \
+      if [ -e .out ]; then mv .out .out.prev; fi; \
+      mv -Tf .out.next .out; \
+      rm -rf .out.prev; \
+    fi; \
+    current_target=$(readlink .out); \
+    find .out-builds -mindepth 1 -maxdepth 1 -type d ! -path "$current_target" -exec rm -rf {} +; \
+    trap - EXIT
 
 # one-off release
 build-release:

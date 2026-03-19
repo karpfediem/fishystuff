@@ -194,7 +194,7 @@
         color: var(--color-primary, #2563eb);
       }
 
-      .fishymap-toolbar-button svg {
+      .fishymap-toolbar-button iconify-icon {
         width: 1.2rem;
         height: 1.2rem;
       }
@@ -419,7 +419,7 @@
         border-radius: 999px;
       }
 
-      #fishymap-view-toggle svg {
+      #fishymap-view-toggle iconify-icon {
         width: 1.25rem;
         height: 1.25rem;
       }
@@ -507,8 +507,8 @@
         opacity: 0.45;
       }
 
-      .fishymap-layer-visibility svg,
-      .fishymap-layer-drag svg {
+      .fishymap-layer-visibility iconify-icon,
+      .fishymap-layer-drag iconify-icon {
         width: 1.2rem;
         height: 1.2rem;
       }
@@ -711,9 +711,7 @@
           aria-label="Hide search"
           title="Hide search"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7.5 7.5 0 1 0 5.4 5.4a7.5 7.5 0 0 0 11.25 11.25Z" />
-          </svg>
+          <iconify-icon icon="fishy:magnifying-glass" aria-hidden="true"></iconify-icon>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -723,9 +721,7 @@
           aria-label="Hide settings"
           title="Hide settings"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m12.75 6h-6.75m0 0a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0H3.75m12.75 6H20.25m-3.75 0a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0H3.75" />
-          </svg>
+          <iconify-icon icon="fishy:adjustments-horizontal" aria-hidden="true"></iconify-icon>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -735,9 +731,7 @@
           aria-label="Hide zone info"
           title="Hide zone info"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008h-.008v-.008Zm.75 3.75h.008v.008H12V15Zm0-11.25a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 5.25h.008v.008H12V9Z" />
-          </svg>
+          <iconify-icon icon="fishy:information-circle" aria-hidden="true"></iconify-icon>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -747,9 +741,7 @@
           aria-label="Hide layers"
           title="Hide layers"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 4.5h6v6h-6v-6Zm9 0h6v6h-6v-6Zm-9 9h6v6h-6v-6Zm9 0h6v6h-6v-6Z" />
-          </svg>
+          <iconify-icon icon="fishy:squares-2x2" aria-hidden="true"></iconify-icon>
         </button>
       </div>
       <aside id="fishymap-search-window" class="fishymap-window not-prose" data-window-id="search">
@@ -762,12 +754,7 @@
             <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
           </div>
           <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
-            <svg class="h-[1em] opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
-              <g stroke-linejoin="round" stroke-linecap="round" stroke-width="2.5" fill="none" stroke="currentColor">
-                <circle cx="11" cy="11" r="8"></circle>
-                <path d="m21 21-4.3-4.3"></path>
-              </g>
-            </svg>
+            <iconify-icon icon="fishy:search-field" inline class="h-[1em] opacity-50" aria-hidden="true"></iconify-icon>
             <input id="fishymap-search" class="grow" type="search" placeholder="Search fish or zone" autocomplete="off">
             <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
           </label>
@@ -828,9 +815,7 @@
         title="View mode: 2D. Click to switch to 3D."
       >
         <span id="fishymap-view-toggle-icon" aria-hidden="true">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498 4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 0 0-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0Z" />
-          </svg>
+          <iconify-icon icon="fishy:map-view"></iconify-icon>
         </span>
       </button>
       <aside id="fishymap-panel" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="settings">

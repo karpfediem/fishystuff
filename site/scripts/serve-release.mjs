@@ -87,7 +87,7 @@ async function main() {
     return;
   }
 
-  const root = path.resolve(process.cwd(), args.root);
+  const root = args.root;
   const server = Bun.serve({
     hostname: args.host,
     port: args.port,
@@ -101,7 +101,7 @@ async function main() {
     },
   });
 
-  console.log(`Serving ${root} at http://${server.hostname}:${server.port}/`);
+  console.log(`Serving ${path.resolve(process.cwd(), root)} at http://${server.hostname}:${server.port}/`);
 }
 
 main().catch((error) => {

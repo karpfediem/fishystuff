@@ -31,6 +31,7 @@ Multilingual {
 
     "js/datastar.js",
     "js/durationFormatter.js",
+    "js/iconify.js",
     "js/lz-string.min.js",
     "js/script.js",
 
