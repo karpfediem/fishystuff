@@ -6,6 +6,7 @@ const {
   buildSearchMatches,
   normalizeZoneCatalog,
   parseZoneRgbSearch,
+  renderSearchSelection,
 } = await import("./loader.js");
 delete globalThis.__fishystuffLoaderAutoStart;
 
@@ -114,4 +115,38 @@ test("buildSearchMatches filters already selected zones from zone results", () =
     matches.some((match) => match.kind === "zone" && match.zoneRgb === 0xc17f7f),
     false,
   );
+});
+
+test("renderSearchSelection restores visible chips after the search window is re-shown", () => {
+  const searchSelection = {
+    dataset: {},
+    hidden: true,
+    innerHTML: "",
+  };
+  const searchSelectionShell = {
+    hidden: true,
+  };
+  const searchDock = {
+    dataset: {},
+  };
+  const elements = {
+    searchSelection,
+    searchSelectionShell,
+    searchDock,
+    zoneCatalog: TEST_ZONE_CATALOG,
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.inputState.filters.zoneRgbs = [0xc17f7f];
+  const fishLookup = new Map();
+
+  renderSearchSelection(elements, stateBundle, fishLookup);
+  assert.equal(searchSelection.hidden, false);
+  assert.equal(searchSelectionShell.hidden, false);
+
+  searchSelection.hidden = true;
+  searchSelectionShell.hidden = true;
+
+  renderSearchSelection(elements, stateBundle, fishLookup);
+  assert.equal(searchSelection.hidden, false);
+  assert.equal(searchSelectionShell.hidden, false);
 });

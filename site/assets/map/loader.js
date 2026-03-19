@@ -1467,9 +1467,10 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   });
 }
 
-function renderSearchSelection(elements, stateBundle, fishLookup) {
+export function renderSearchSelection(elements, stateBundle, fishLookup) {
   const selectedFishIds = resolveSelectedFishIds(stateBundle);
   const selectedZoneRgbs = resolveSelectedZoneRgbs(stateBundle);
+  const hasSelection = selectedFishIds.length > 0 || selectedZoneRgbs.length > 0;
   const zoneLookup = new Map(
     (elements.zoneCatalog || []).map((zone) => [zone.zoneRgb, zone]),
   );
@@ -1493,11 +1494,18 @@ function renderSearchSelection(elements, stateBundle, fishLookup) {
     }),
   });
   if (elements.searchSelection.dataset.renderKey === renderKey) {
+    elements.searchSelection.hidden = !hasSelection;
+    if (elements.searchSelectionShell) {
+      elements.searchSelectionShell.hidden = !hasSelection;
+    }
+    if (elements.searchDock) {
+      elements.searchDock.dataset.hasSelection = hasSelection ? "true" : "false";
+    }
     return;
   }
   elements.searchSelection.dataset.renderKey = renderKey;
 
-  if (!selectedFishIds.length && !selectedZoneRgbs.length) {
+  if (!hasSelection) {
     elements.searchSelection.innerHTML = "";
     elements.searchSelection.hidden = true;
     if (elements.searchSelectionShell) {
