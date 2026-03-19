@@ -483,7 +483,7 @@ export function normalizeStatePatch(patch = {}) {
       normalized.filters.zoneRgbs = normalizeZoneRgbs(patch.filters.zoneRgbs);
     }
     if (hasOwn(patch.filters, "searchText")) {
-      normalized.filters.searchText = String(patch.filters.searchText ?? "").trim();
+      normalized.filters.searchText = String(patch.filters.searchText ?? "");
     }
     const hasPatchId = hasOwn(patch.filters, "patchId");
     const hasFromPatchId = hasOwn(patch.filters, "fromPatchId");

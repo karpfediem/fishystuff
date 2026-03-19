@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   FISHYMAP_EVENTS,
   FISHYMAP_STORAGE_KEYS,
+  applyStatePatch,
   buildInitialRestorePatch,
   createFishyMapBridge,
   extractThemeSnapshot,
@@ -323,6 +324,17 @@ test("DOM state patches are forwarded to the wasm bridge", async () => {
     bridge?.destroy();
     env.restore();
   }
+});
+
+test("search text patches preserve trailing spaces while typing", () => {
+  const next = applyStatePatch(undefined, {
+    version: 1,
+    filters: {
+      searchText: "Zenato Sea ",
+    },
+  });
+
+  assert.equal(next.filters.searchText, "Zenato Sea ");
 });
 
 test("wasm output events are redispatched as DOM CustomEvents", async () => {
