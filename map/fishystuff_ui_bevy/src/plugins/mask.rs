@@ -28,14 +28,26 @@ impl Plugin for MaskPlugin {
     }
 }
 
+fn hovered_zone_rgb(info: Option<&crate::plugins::api::HoverInfo>) -> Option<u32> {
+    info.and_then(|hover| hover.rgb_u32)
+}
+
+fn clear_hover_state(hover: &mut HoverState, display_state: &mut MapDisplayState) {
+    hover.info = None;
+    display_state.hovered_zone_rgb = None;
+}
+
 fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
-    context.display_state.hovered_zone_rgb = None;
     if context.view_mode.mode != ViewMode::Map2D {
-        context.hover.info = None;
+        clear_hover_state(&mut context.hover, &mut context.display_state);
+        return;
+    }
+    if context.mouse_buttons.pressed(MouseButton::Left) {
+        context.display_state.hovered_zone_rgb = hovered_zone_rgb(context.hover.info.as_ref());
         return;
     }
     if context.ui_capture.blocked {
-        context.hover.info = None;
+        clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     }
     let Ok(window) = context.windows.single() else {
@@ -45,14 +57,14 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         return;
     };
     let Some(cursor) = window.cursor_position() else {
-        context.hover.info = None;
+        clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     };
     let Some(world) = camera
         .viewport_to_world_2d(&GlobalTransform::from(*camera_transform), cursor)
         .ok()
     else {
-        context.hover.info = None;
+        clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     };
     let map_to_world = MapToWorld::default();
@@ -65,7 +77,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         || map_x >= map_to_world.image_size_x as f32
         || map_y >= map_to_world.image_size_y as f32
     {
-        context.hover.info = None;
+        clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     }
 
@@ -94,7 +106,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         });
 
     if zone_sample.is_none() && layer_samples.is_empty() {
-        context.hover.info = None;
+        clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     }
 
@@ -241,6 +253,7 @@ fn sample_hover_layer(
 
 #[derive(SystemParam)]
 struct HoverUpdateContext<'w, 's> {
+    mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
     tile_cache: Res<'w, RasterTileCache>,
@@ -277,6 +290,28 @@ struct HoverSamplingContext<'a> {
     world_point: WorldPoint,
     map_to_world: MapToWorld,
     registry_map_version_id: Option<&'a str>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hovered_zone_rgb;
+    use crate::plugins::api::HoverInfo;
+
+    #[test]
+    fn hovered_zone_rgb_reads_zone_from_hover_info() {
+        let info = HoverInfo {
+            map_px: 12,
+            map_py: 34,
+            rgb: None,
+            rgb_u32: Some(0x123456),
+            zone_name: Some("Test Zone".to_string()),
+            world_x: 1.0,
+            world_z: 2.0,
+            layer_samples: Vec::new(),
+        };
+        assert_eq!(hovered_zone_rgb(Some(&info)), Some(0x123456));
+        assert_eq!(hovered_zone_rgb(None), None);
+    }
 }
 
 fn sample_raster_layer_rgb(
