@@ -1,6 +1,7 @@
 {
   "dependencies": {},
   "devDependencies": {
+    "@iconify-json/mingcute": "^1.2.7",
     "@tailwindcss/cli": "^4.1.14",
     "@tailwindcss/typography": "^0.5.19",
     "daisyui": "^5.5.19",
