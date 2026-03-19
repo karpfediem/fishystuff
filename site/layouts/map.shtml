@@ -98,8 +98,59 @@
         display: none !important;
       }
 
+      #fishymap-toolbar[hidden],
+      #fishymap-search-dock[hidden],
+      #fishymap-zone-evidence-window[hidden],
+      #fishymap-layers-window[hidden] {
+        display: none !important;
+      }
+
       #fishymap-panel-body {
         overflow-y: auto;
+      }
+
+      #fishymap-toolbar {
+        position: absolute;
+        top: 50%;
+        left: 1rem;
+        z-index: 24;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+        transform: translateY(-50%);
+      }
+
+      .fishymap-toolbar-button {
+        width: 2.9rem;
+        height: 2.9rem;
+        min-height: 0;
+        padding: 0;
+        border-radius: 999px;
+        border: 1px solid color-mix(in oklab, var(--color-base-300, #d6d3d1) 78%, var(--color-base-content, #1f2937) 22%);
+        background: color-mix(in oklab, var(--color-base-100, #ffffff) 84%, transparent);
+        color: color-mix(in oklab, var(--color-base-content, #1f2937) 82%, transparent);
+        backdrop-filter: blur(14px);
+        box-shadow: 0 14px 32px -24px color-mix(in oklab, var(--color-base-content, #1f2937) 44%, transparent);
+      }
+
+      .fishymap-toolbar-button:hover {
+        border-color: color-mix(in oklab, var(--color-primary, #2563eb) 42%, var(--color-base-300, #d6d3d1) 58%);
+        color: var(--color-primary, #2563eb);
+      }
+
+      .fishymap-toolbar-button[data-open="true"] {
+        border-color: color-mix(in oklab, var(--color-primary, #2563eb) 52%, var(--color-base-300, #d6d3d1) 48%);
+        background: color-mix(in oklab, var(--color-primary, #2563eb) 18%, var(--color-base-100, #ffffff) 82%);
+        color: var(--color-primary, #2563eb);
+      }
+
+      .fishymap-toolbar-button svg {
+        width: 1.2rem;
+        height: 1.2rem;
+      }
+
+      .fishymap-toolbar-button > * {
+        pointer-events: none;
       }
 
       #fishymap-search-dock {
@@ -489,6 +540,18 @@
       }
 
       @media (max-width: 960px) {
+        #fishymap-toolbar {
+          top: auto;
+          bottom: 1rem;
+          left: 0.75rem;
+          transform: none;
+        }
+
+        .fishymap-toolbar-button {
+          width: 2.7rem;
+          height: 2.7rem;
+        }
+
         #fishymap-search-dock {
           width: min(100vw - 1.5rem, 52rem);
         }
@@ -544,6 +607,56 @@
     </style>
     <div id="map-page-shell">
       <canvas id="bevy"></canvas>
+      <div id="fishymap-toolbar" class="not-prose" aria-label="Map windows">
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="search"
+          type="button"
+          aria-pressed="true"
+          aria-label="Hide search"
+          title="Hide search"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35m0 0A7.5 7.5 0 1 0 5.4 5.4a7.5 7.5 0 0 0 11.25 11.25Z" />
+          </svg>
+        </button>
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="settings"
+          type="button"
+          aria-pressed="true"
+          aria-label="Hide settings"
+          title="Hide settings"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m12.75 6h-6.75m0 0a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0H3.75m12.75 6H20.25m-3.75 0a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0H3.75" />
+          </svg>
+        </button>
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="zone-info"
+          type="button"
+          aria-pressed="true"
+          aria-label="Hide zone info"
+          title="Hide zone info"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25h.008v.008h-.008v-.008Zm.75 3.75h.008v.008H12V15Zm0-11.25a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 5.25h.008v.008H12V9Z" />
+          </svg>
+        </button>
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="layers"
+          type="button"
+          aria-pressed="true"
+          aria-label="Hide layers"
+          title="Hide layers"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 4.5h6v6h-6v-6Zm9 0h6v6h-6v-6Zm-9 9h6v6h-6v-6Zm9 0h6v6h-6v-6Z" />
+          </svg>
+        </button>
+      </div>
       <div id="fishymap-search-dock" class="not-prose">
         <div id="fishymap-search-shell" class="card card-border bg-base-100">
           <div class="p-3">
@@ -570,7 +683,7 @@
       <aside id="fishymap-zone-evidence-window" class="card card-border bg-base-100 not-prose">
         <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
           <div class="flex items-center gap-2">
-            <span class="fishymap-window-title text-lg leading-tight">Zone evidence</span>
+            <span class="fishymap-window-title text-lg leading-tight">Zone Info</span>
           </div>
           <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
         </div>
@@ -610,12 +723,12 @@
         hidden
         type="button"
       >
-        Map controls
+        Settings
       </button>
       <aside id="fishymap-panel" class="card card-border bg-base-100 not-prose">
         <div class="flex items-center justify-between gap-3 border-b border-base-300/70 px-4 py-3">
           <div>
-            <p class="fishymap-window-title text-lg leading-tight">Map Controls</p>
+            <p class="fishymap-window-title text-lg leading-tight">Settings</p>
           </div>
           <div class="flex items-center gap-2">
             <span id="fishymap-ready-pill" class="badge badge-outline badge-sm">Loading</span>

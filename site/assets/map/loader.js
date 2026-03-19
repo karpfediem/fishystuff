@@ -1157,7 +1157,7 @@ function ensureZoneEvidenceElements(elements) {
   section.className = "space-y-2";
   section.innerHTML = `
     <div class="flex items-center justify-between gap-3">
-      <span class="text-sm font-semibold">Zone evidence</span>
+      <span class="text-sm font-semibold">Zone Info</span>
       <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
     </div>
     <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
@@ -1755,6 +1755,43 @@ function renderStatusLines(container, statuses) {
   );
 }
 
+function setToolbarButtonState(button, open, label) {
+  if (!button) {
+    return;
+  }
+  const action = open ? "Hide" : "Show";
+  button.dataset.open = open ? "true" : "false";
+  button.setAttribute("aria-pressed", open ? "true" : "false");
+  button.setAttribute("aria-label", `${action} ${label}`);
+  button.title = `${action} ${label}`;
+}
+
+function applyWindowVisibility(elements, stateBundle, windowState) {
+  const settingsOpen = stateBundle.inputState?.ui?.leftPanelOpen !== false;
+  const searchOpen = windowState.searchOpen !== false;
+  const zoneInfoOpen = windowState.zoneInfoOpen !== false;
+  const layersOpen = windowState.layersOpen !== false;
+
+  setBooleanProperty(elements.searchDock, "hidden", !searchOpen);
+  if (!searchOpen) {
+    setBooleanProperty(elements.searchSelectionShell, "hidden", true);
+    setBooleanProperty(elements.searchResultsShell, "hidden", true);
+  }
+
+  setBooleanProperty(elements.panel, "hidden", !settingsOpen);
+  if (elements.panelOpen) {
+    setBooleanProperty(elements.panelOpen, "hidden", true);
+  }
+
+  setBooleanProperty(elements.zoneEvidenceWindow, "hidden", !zoneInfoOpen);
+  setBooleanProperty(elements.layersWindow, "hidden", !layersOpen);
+
+  setToolbarButtonState(elements.searchWindowToggle, searchOpen, "Search");
+  setToolbarButtonState(elements.settingsWindowToggle, settingsOpen, "Settings");
+  setToolbarButtonState(elements.zoneInfoWindowToggle, zoneInfoOpen, "Zone Info");
+  setToolbarButtonState(elements.layersWindowToggle, layersOpen, "Layers");
+}
+
 function syncLayerOpacityControl(container, layerId, opacity) {
   if (!container || !layerId) {
     return false;
@@ -1931,6 +1968,11 @@ function bindUi(shell, elements, options = {}) {
   let isRendering = false;
   let latestStateBundle = requestBridgeState(shell);
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
+  const windowState = {
+    searchOpen: true,
+    zoneInfoOpen: true,
+    layersOpen: true,
+  };
   const layerDragState = {
     draggingLayerId: null,
     overLayerId: null,
@@ -1958,6 +2000,7 @@ function bindUi(shell, elements, options = {}) {
     isRendering = true;
     try {
       renderPanel(elements, stateBundle, zoneCatalog);
+      applyWindowVisibility(elements, stateBundle, windowState);
     } finally {
       isRendering = false;
     }
@@ -2168,6 +2211,40 @@ function bindUi(shell, elements, options = {}) {
       dispatchMapCommand(shell, {
         setViewMode: nextViewMode,
       });
+    });
+  }
+
+  if (elements.toolbar) {
+    elements.toolbar.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-window-toggle]");
+      if (!button) {
+        return;
+      }
+      const target = button.getAttribute("data-window-toggle");
+      if (target === "settings") {
+        const current = requestBridgeState(shell);
+        dispatchMapState(shell, {
+          version: 1,
+          ui: {
+            leftPanelOpen: current.inputState?.ui?.leftPanelOpen === false,
+          },
+        });
+        renderCurrentState(requestBridgeState(shell));
+        return;
+      }
+      if (target === "search") {
+        windowState.searchOpen = !windowState.searchOpen;
+        if (!windowState.searchOpen) {
+          elements.search?.blur?.();
+        }
+      } else if (target === "zone-info") {
+        windowState.zoneInfoOpen = !windowState.zoneInfoOpen;
+      } else if (target === "layers") {
+        windowState.layersOpen = !windowState.layersOpen;
+      } else {
+        return;
+      }
+      renderCurrentState(latestStateBundle || requestBridgeState(shell));
     });
   }
 
@@ -2516,6 +2593,11 @@ async function main() {
 
   const elements = {
     shell,
+    toolbar: document.getElementById("fishymap-toolbar"),
+    searchWindowToggle: document.querySelector("[data-window-toggle='search']"),
+    settingsWindowToggle: document.querySelector("[data-window-toggle='settings']"),
+    zoneInfoWindowToggle: document.querySelector("[data-window-toggle='zone-info']"),
+    layersWindowToggle: document.querySelector("[data-window-toggle='layers']"),
     searchDock: document.getElementById("fishymap-search-dock"),
     panel: document.getElementById("fishymap-panel"),
     panelBody: document.getElementById("fishymap-panel-body"),
@@ -2537,6 +2619,7 @@ async function main() {
     pointIconScale: document.getElementById("fishymap-point-icon-scale"),
     pointIconScaleValue: document.getElementById("fishymap-point-icon-scale-value"),
     layers: document.getElementById("fishymap-layers"),
+    layersWindow: document.getElementById("fishymap-layers-window"),
     layersCount: document.getElementById("fishymap-layers-count"),
     resetView: document.getElementById("fishymap-reset-view"),
     legend: document.getElementById("fishymap-legend"),
@@ -2544,6 +2627,7 @@ async function main() {
     statusLines: document.getElementById("fishymap-status-lines"),
     diagnosticJson: document.getElementById("fishymap-diagnostic-json"),
     selectionSummary: document.getElementById("fishymap-selection-summary"),
+    zoneEvidenceWindow: document.getElementById("fishymap-zone-evidence-window"),
     zoneEvidenceStatus: document.getElementById("fishymap-zone-evidence-status"),
     zoneEvidenceSummary: document.getElementById("fishymap-zone-evidence-summary"),
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
