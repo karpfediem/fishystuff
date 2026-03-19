@@ -7,6 +7,14 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
+const WINDOW_DRAG_THRESHOLD_PX = 8;
+const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
+const DEFAULT_WINDOW_UI_STATE = Object.freeze({
+  search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
+  settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
+  zoneInfo: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
+  layers: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
+});
 
 function dispatchMapEvent(target, type, detail) {
   target.dispatchEvent(new CustomEvent(type, { detail }));
@@ -182,6 +190,55 @@ function setMarkup(element, renderKey, html) {
   element.dataset.markupKey = nextKey;
   element.innerHTML = html;
   return true;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function normalizeWindowCoordinate(value) {
+  if (value == null || value === "") {
+    return null;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(number) : null;
+}
+
+function normalizeWindowUiEntry(rawEntry, fallbackEntry) {
+  const baseEntry = isPlainObject(rawEntry) ? rawEntry : {};
+  return {
+    open: hasOwnKey(baseEntry, "open") ? baseEntry.open !== false : fallbackEntry.open !== false,
+    collapsed: hasOwnKey(baseEntry, "collapsed")
+      ? Boolean(baseEntry.collapsed)
+      : Boolean(fallbackEntry.collapsed),
+    x: hasOwnKey(baseEntry, "x") ? normalizeWindowCoordinate(baseEntry.x) : fallbackEntry.x,
+    y: hasOwnKey(baseEntry, "y") ? normalizeWindowCoordinate(baseEntry.y) : fallbackEntry.y,
+  };
+}
+
+export function normalizeWindowUiState(rawState) {
+  const source = isPlainObject(rawState) ? rawState : {};
+  return {
+    search: normalizeWindowUiEntry(source.search, DEFAULT_WINDOW_UI_STATE.search),
+    settings: normalizeWindowUiEntry(source.settings, DEFAULT_WINDOW_UI_STATE.settings),
+    zoneInfo: normalizeWindowUiEntry(source.zoneInfo, DEFAULT_WINDOW_UI_STATE.zoneInfo),
+    layers: normalizeWindowUiEntry(source.layers, DEFAULT_WINDOW_UI_STATE.layers),
+  };
+}
+
+export function parseWindowUiState(serializedState) {
+  if (typeof serializedState !== "string" || !serializedState.trim()) {
+    return normalizeWindowUiState(null);
+  }
+  try {
+    return normalizeWindowUiState(JSON.parse(serializedState));
+  } catch (_) {
+    return normalizeWindowUiState(null);
+  }
+}
+
+export function serializeWindowUiState(windowUiState) {
+  return JSON.stringify(normalizeWindowUiState(windowUiState));
 }
 
 function buildFishLookup(catalogFish) {
@@ -1498,8 +1555,8 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
     if (elements.searchSelectionShell) {
       elements.searchSelectionShell.hidden = !hasSelection;
     }
-    if (elements.searchDock) {
-      elements.searchDock.dataset.hasSelection = hasSelection ? "true" : "false";
+    if (elements.searchWindow) {
+      elements.searchWindow.dataset.hasSelection = hasSelection ? "true" : "false";
     }
     return;
   }
@@ -1511,8 +1568,8 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
     if (elements.searchSelectionShell) {
       elements.searchSelectionShell.hidden = true;
     }
-    if (elements.searchDock) {
-      elements.searchDock.dataset.hasSelection = "false";
+    if (elements.searchWindow) {
+      elements.searchWindow.dataset.hasSelection = "false";
     }
     return;
   }
@@ -1521,8 +1578,8 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
   if (elements.searchSelectionShell) {
     elements.searchSelectionShell.hidden = false;
   }
-  if (elements.searchDock) {
-    elements.searchDock.dataset.hasSelection = "true";
+  if (elements.searchWindow) {
+    elements.searchWindow.dataset.hasSelection = "true";
   }
 
   elements.searchSelection.innerHTML = selectedFishIds
@@ -1774,30 +1831,79 @@ function setToolbarButtonState(button, open, label) {
   button.title = `${action} ${label}`;
 }
 
-function applyWindowVisibility(elements, stateBundle, windowState) {
-  const settingsOpen = stateBundle.inputState?.ui?.leftPanelOpen !== false;
-  const searchOpen = windowState.searchOpen !== false;
-  const zoneInfoOpen = windowState.zoneInfoOpen !== false;
-  const layersOpen = windowState.layersOpen !== false;
-
-  setBooleanProperty(elements.searchDock, "hidden", !searchOpen);
-  if (!searchOpen) {
-    setBooleanProperty(elements.searchSelectionShell, "hidden", true);
-    setBooleanProperty(elements.searchResultsShell, "hidden", true);
+function setManagedWindowPosition(root, state) {
+  if (!root) {
+    return;
   }
-
-  setBooleanProperty(elements.panel, "hidden", !settingsOpen);
-  if (elements.panelOpen) {
-    setBooleanProperty(elements.panelOpen, "hidden", true);
+  if (Number.isFinite(state?.x) && Number.isFinite(state?.y)) {
+    root.style.left = `${state.x}px`;
+    root.style.top = `${state.y}px`;
+    root.style.right = "auto";
+    root.style.bottom = "auto";
+    root.style.transform = "none";
+    return;
   }
+  root.style.removeProperty("left");
+  root.style.removeProperty("top");
+  root.style.removeProperty("right");
+  root.style.removeProperty("bottom");
+  root.style.removeProperty("transform");
+}
 
-  setBooleanProperty(elements.zoneEvidenceWindow, "hidden", !zoneInfoOpen);
-  setBooleanProperty(elements.layersWindow, "hidden", !layersOpen);
+function applyWindowVisibility(elements, windowUiState) {
+  const managedWindows = [
+    {
+      state: windowUiState.search,
+      root: elements.searchWindow,
+      body: elements.searchBody,
+      titlebar: elements.searchTitlebar,
+      toggle: elements.searchWindowToggle,
+      label: "Search",
+    },
+    {
+      state: windowUiState.settings,
+      root: elements.panel,
+      body: elements.panelBody,
+      titlebar: elements.panelTitlebar,
+      toggle: elements.settingsWindowToggle,
+      label: "Settings",
+    },
+    {
+      state: windowUiState.zoneInfo,
+      root: elements.zoneEvidenceWindow,
+      body: elements.zoneEvidenceBody,
+      titlebar: elements.zoneEvidenceTitlebar,
+      toggle: elements.zoneInfoWindowToggle,
+      label: "Zone Info",
+    },
+    {
+      state: windowUiState.layers,
+      root: elements.layersWindow,
+      body: elements.layersBody,
+      titlebar: elements.layersTitlebar,
+      toggle: elements.layersWindowToggle,
+      label: "Layers",
+    },
+  ];
 
-  setToolbarButtonState(elements.searchWindowToggle, searchOpen, "Search");
-  setToolbarButtonState(elements.settingsWindowToggle, settingsOpen, "Settings");
-  setToolbarButtonState(elements.zoneInfoWindowToggle, zoneInfoOpen, "Zone Info");
-  setToolbarButtonState(elements.layersWindowToggle, layersOpen, "Layers");
+  for (const windowPart of managedWindows) {
+    const isOpen = windowPart.state?.open !== false;
+    const isCollapsed = Boolean(windowPart.state?.collapsed);
+    setBooleanProperty(windowPart.root, "hidden", !isOpen);
+    if (windowPart.root) {
+      windowPart.root.dataset.collapsed = isCollapsed ? "true" : "false";
+    }
+    if (windowPart.titlebar) {
+      setAttributeValue(windowPart.titlebar, "aria-expanded", String(!isCollapsed));
+    }
+    if (windowPart.body) {
+      setBooleanProperty(windowPart.body, "hidden", isCollapsed);
+    }
+    if (windowPart.root && isOpen) {
+      setManagedWindowPosition(windowPart.root, windowPart.state);
+    }
+    setToolbarButtonState(windowPart.toggle, isOpen, windowPart.label);
+  }
 }
 
 function syncLayerOpacityControl(container, layerId, opacity) {
@@ -1926,10 +2032,6 @@ function renderPanel(elements, stateBundle, zoneCatalog = []) {
     setBooleanProperty(elements.diagnostics, "open", Boolean(inputState.ui?.diagnosticsOpen));
   }
 
-  const panelOpen = inputState.ui?.leftPanelOpen !== false;
-  setBooleanProperty(elements.panel, "hidden", !panelOpen);
-  setBooleanProperty(elements.panelOpen, "hidden", panelOpen);
-
   const zoneName =
     state.selection?.zoneName ||
     (state.selection?.zoneRgb != null ? `Zone ${formatZone(state.selection.zoneRgb)}` : null);
@@ -1976,10 +2078,49 @@ function bindUi(shell, elements, options = {}) {
   let isRendering = false;
   let latestStateBundle = requestBridgeState(shell);
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
-  const windowState = {
-    searchOpen: true,
-    zoneInfoOpen: true,
-    layersOpen: true,
+  let windowUiState = parseWindowUiState(elements.windowStateInput?.value);
+  let nextWindowZIndex = 30;
+  const managedWindows = {
+    search: {
+      root: elements.searchWindow,
+      body: elements.searchBody,
+      titlebar: elements.searchTitlebar,
+      toggle: elements.searchWindowToggle,
+    },
+    settings: {
+      root: elements.panel,
+      body: elements.panelBody,
+      titlebar: elements.panelTitlebar,
+      toggle: elements.settingsWindowToggle,
+    },
+    zoneInfo: {
+      root: elements.zoneEvidenceWindow,
+      body: elements.zoneEvidenceBody,
+      titlebar: elements.zoneEvidenceTitlebar,
+      toggle: elements.zoneInfoWindowToggle,
+    },
+    layers: {
+      root: elements.layersWindow,
+      body: elements.layersBody,
+      titlebar: elements.layersTitlebar,
+      toggle: elements.layersWindowToggle,
+    },
+  };
+  const toolbarTargetToWindowId = {
+    search: "search",
+    settings: "settings",
+    "zone-info": "zoneInfo",
+    layers: "layers",
+  };
+  const windowDragState = {
+    windowId: null,
+    pointerId: null,
+    startClientX: 0,
+    startClientY: 0,
+    baseX: 0,
+    baseY: 0,
+    moved: false,
+    titlebar: null,
   };
   const layerDragState = {
     draggingLayerId: null,
@@ -2003,12 +2144,182 @@ function bindUi(shell, elements, options = {}) {
     };
   }
 
+  function persistWindowUiState() {
+    if (!elements.windowStateInput) {
+      return;
+    }
+    const serialized = serializeWindowUiState(windowUiState);
+    if (elements.windowStateInput.value === serialized) {
+      return;
+    }
+    elements.windowStateInput.value = serialized;
+    elements.windowStateInput.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  function updateWindowUiEntry(windowId, patch) {
+    if (!hasOwnKey(managedWindows, windowId)) {
+      return false;
+    }
+    const currentEntry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
+    const nextEntry = normalizeWindowUiEntry(
+      { ...currentEntry, ...patch },
+      DEFAULT_WINDOW_UI_STATE[windowId],
+    );
+    if (
+      currentEntry.open === nextEntry.open &&
+      currentEntry.collapsed === nextEntry.collapsed &&
+      currentEntry.x === nextEntry.x &&
+      currentEntry.y === nextEntry.y
+    ) {
+      return false;
+    }
+    windowUiState = {
+      ...windowUiState,
+      [windowId]: nextEntry,
+    };
+    return true;
+  }
+
+  function bringManagedWindowToFront(windowId) {
+    const root = managedWindows[windowId]?.root;
+    if (!root) {
+      return;
+    }
+    nextWindowZIndex += 1;
+    root.style.zIndex = String(nextWindowZIndex);
+  }
+
+  function currentManagedWindowPosition(windowId) {
+    const entry = windowUiState[windowId];
+    if (Number.isFinite(entry?.x) && Number.isFinite(entry?.y)) {
+      return {
+        x: entry.x,
+        y: entry.y,
+      };
+    }
+    const root = managedWindows[windowId]?.root;
+    if (!root) {
+      return { x: 0, y: 0 };
+    }
+    const shellRect = elements.shell.getBoundingClientRect();
+    const rootRect = root.getBoundingClientRect();
+    return {
+      x: Math.round(rootRect.left - shellRect.left),
+      y: Math.round(rootRect.top - shellRect.top),
+    };
+  }
+
+  function clampManagedWindowPosition(windowId, x, y) {
+    const part = managedWindows[windowId];
+    if (!part?.root) {
+      return {
+        x: normalizeWindowCoordinate(x) ?? 0,
+        y: normalizeWindowCoordinate(y) ?? 0,
+      };
+    }
+    setManagedWindowPosition(part.root, { x, y });
+    const shellRect = elements.shell.getBoundingClientRect();
+    const rootRect = part.root.getBoundingClientRect();
+    const titlebarHeight = part.titlebar?.offsetHeight || WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX;
+    return {
+      x: clamp(
+        Math.round(x),
+        0,
+        Math.max(0, Math.round(shellRect.width - Math.min(rootRect.width, shellRect.width))),
+      ),
+      y: clamp(Math.round(y), 0, Math.max(0, Math.round(shellRect.height - titlebarHeight))),
+    };
+  }
+
+  function clampOpenManagedWindows() {
+    let changed = false;
+    for (const windowId of Object.keys(managedWindows)) {
+      const entry = windowUiState[windowId];
+      if (
+        !entry ||
+        entry.open === false ||
+        !Number.isFinite(entry.x) ||
+        !Number.isFinite(entry.y)
+      ) {
+        continue;
+      }
+      const clamped = clampManagedWindowPosition(windowId, entry.x, entry.y);
+      changed = updateWindowUiEntry(windowId, clamped) || changed;
+    }
+    return changed;
+  }
+
+  function applyManagedWindows({ persist = false } = {}) {
+    applyWindowVisibility(elements, windowUiState);
+    if (clampOpenManagedWindows()) {
+      applyWindowVisibility(elements, windowUiState);
+      persist = true;
+    }
+    if (persist) {
+      persistWindowUiState();
+    }
+  }
+
+  function toggleManagedWindowOpen(windowId) {
+    const entry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
+    if (!updateWindowUiEntry(windowId, { open: entry.open === false })) {
+      return;
+    }
+    if (windowUiState[windowId].open !== false) {
+      bringManagedWindowToFront(windowId);
+    } else if (windowId === "search") {
+      elements.search?.blur?.();
+    }
+    applyManagedWindows({ persist: true });
+  }
+
+  function toggleManagedWindowCollapsed(windowId) {
+    const entry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
+    if (!updateWindowUiEntry(windowId, { collapsed: !entry.collapsed })) {
+      return;
+    }
+    bringManagedWindowToFront(windowId);
+    applyManagedWindows({ persist: true });
+  }
+
+  function clearManagedWindowDrag() {
+    if (windowDragState.windowId) {
+      const root = managedWindows[windowDragState.windowId]?.root;
+      if (root) {
+        delete root.dataset.dragging;
+      }
+    }
+    windowDragState.windowId = null;
+    windowDragState.pointerId = null;
+    windowDragState.moved = false;
+    windowDragState.titlebar = null;
+  }
+
+  function finishManagedWindowDrag(toggleOnTap) {
+    const windowId = windowDragState.windowId;
+    const pointerId = windowDragState.pointerId;
+    const titlebar = windowDragState.titlebar;
+    const moved = windowDragState.moved;
+    if (titlebar && pointerId != null && titlebar.hasPointerCapture?.(pointerId)) {
+      titlebar.releasePointerCapture(pointerId);
+    }
+    clearManagedWindowDrag();
+    if (!windowId) {
+      return;
+    }
+    if (!moved && toggleOnTap) {
+      toggleManagedWindowCollapsed(windowId);
+      return;
+    }
+    applyManagedWindows({ persist: moved });
+  }
+
   function renderCurrentState(stateBundle = requestBridgeState(shell)) {
     latestStateBundle = stateBundle;
     isRendering = true;
     try {
       renderPanel(elements, stateBundle, zoneCatalog);
-      applyWindowVisibility(elements, stateBundle, windowState);
+      applyManagedWindows();
     } finally {
       isRendering = false;
     }
@@ -2068,6 +2379,98 @@ function bindUi(shell, elements, options = {}) {
     elements.hoverPointerActive = false;
     renderHoverTooltip(elements, null);
   });
+
+  for (const windowId of Object.keys(managedWindows)) {
+    managedWindows[windowId]?.root?.addEventListener(
+      "pointerdown",
+      () => {
+        bringManagedWindowToFront(windowId);
+      },
+      { capture: true },
+    );
+    const titlebar = managedWindows[windowId]?.titlebar;
+    if (!titlebar) {
+      continue;
+    }
+    titlebar.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+      const entry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
+      if (entry.open === false) {
+        return;
+      }
+      const currentPosition = currentManagedWindowPosition(windowId);
+      bringManagedWindowToFront(windowId);
+      windowDragState.windowId = windowId;
+      windowDragState.pointerId = event.pointerId;
+      windowDragState.startClientX = event.clientX;
+      windowDragState.startClientY = event.clientY;
+      windowDragState.baseX = currentPosition.x;
+      windowDragState.baseY = currentPosition.y;
+      windowDragState.moved = false;
+      windowDragState.titlebar = titlebar;
+      if (managedWindows[windowId]?.root) {
+        managedWindows[windowId].root.dataset.dragging = "true";
+      }
+      titlebar.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+
+    titlebar.addEventListener("pointermove", (event) => {
+      if (
+        windowDragState.windowId !== windowId ||
+        windowDragState.pointerId !== event.pointerId
+      ) {
+        return;
+      }
+      const deltaX = event.clientX - windowDragState.startClientX;
+      const deltaY = event.clientY - windowDragState.startClientY;
+      if (
+        !windowDragState.moved &&
+        Math.abs(deltaX) < WINDOW_DRAG_THRESHOLD_PX &&
+        Math.abs(deltaY) < WINDOW_DRAG_THRESHOLD_PX
+      ) {
+        return;
+      }
+      windowDragState.moved = true;
+      const nextPosition = clampManagedWindowPosition(
+        windowId,
+        windowDragState.baseX + deltaX,
+        windowDragState.baseY + deltaY,
+      );
+      updateWindowUiEntry(windowId, nextPosition);
+      setManagedWindowPosition(managedWindows[windowId]?.root, nextPosition);
+    });
+
+    titlebar.addEventListener("pointerup", (event) => {
+      if (
+        windowDragState.windowId !== windowId ||
+        windowDragState.pointerId !== event.pointerId
+      ) {
+        return;
+      }
+      finishManagedWindowDrag(true);
+    });
+
+    titlebar.addEventListener("pointercancel", (event) => {
+      if (
+        windowDragState.windowId !== windowId ||
+        windowDragState.pointerId !== event.pointerId
+      ) {
+        return;
+      }
+      finishManagedWindowDrag(false);
+    });
+
+    titlebar.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      toggleManagedWindowCollapsed(windowId);
+    });
+  }
 
   function pushSearchPatch() {
     const searchText = elements.search.value;
@@ -2228,31 +2631,11 @@ function bindUi(shell, elements, options = {}) {
       if (!button) {
         return;
       }
-      const target = button.getAttribute("data-window-toggle");
-      if (target === "settings") {
-        const current = requestBridgeState(shell);
-        dispatchMapState(shell, {
-          version: 1,
-          ui: {
-            leftPanelOpen: current.inputState?.ui?.leftPanelOpen === false,
-          },
-        });
-        renderCurrentState(requestBridgeState(shell));
+      const windowId = toolbarTargetToWindowId[button.getAttribute("data-window-toggle") || ""];
+      if (!windowId) {
         return;
       }
-      if (target === "search") {
-        windowState.searchOpen = !windowState.searchOpen;
-        if (!windowState.searchOpen) {
-          elements.search?.blur?.();
-        }
-      } else if (target === "zone-info") {
-        windowState.zoneInfoOpen = !windowState.zoneInfoOpen;
-      } else if (target === "layers") {
-        windowState.layersOpen = !windowState.layersOpen;
-      } else {
-        return;
-      }
-      renderCurrentState(latestStateBundle || requestBridgeState(shell));
+      toggleManagedWindowOpen(windowId);
     });
   }
 
@@ -2529,26 +2912,6 @@ function bindUi(shell, elements, options = {}) {
     });
   }
 
-  elements.panelClose.addEventListener("click", () => {
-    dispatchMapState(shell, {
-      version: 1,
-      ui: {
-        leftPanelOpen: false,
-      },
-    });
-    renderCurrentState(requestBridgeState(shell));
-  });
-
-  elements.panelOpen.addEventListener("click", () => {
-    dispatchMapState(shell, {
-      version: 1,
-      ui: {
-        leftPanelOpen: true,
-      },
-    });
-    renderCurrentState(requestBridgeState(shell));
-  });
-
   shell.addEventListener(FISHYMAP_EVENTS.ready, (event) => {
     renderCurrentState(stateBundleFromEvent(event));
   });
@@ -2582,6 +2945,7 @@ function bindUi(shell, elements, options = {}) {
   });
 
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));
+  window.addEventListener("resize", () => applyManagedWindows({ persist: true }));
 
   renderCurrentState();
   return {
@@ -2602,15 +2966,17 @@ async function main() {
   const elements = {
     shell,
     toolbar: document.getElementById("fishymap-toolbar"),
+    windowStateInput: document.getElementById("fishymap-window-state-input"),
     searchWindowToggle: document.querySelector("[data-window-toggle='search']"),
     settingsWindowToggle: document.querySelector("[data-window-toggle='settings']"),
     zoneInfoWindowToggle: document.querySelector("[data-window-toggle='zone-info']"),
     layersWindowToggle: document.querySelector("[data-window-toggle='layers']"),
-    searchDock: document.getElementById("fishymap-search-dock"),
+    searchWindow: document.getElementById("fishymap-search-window"),
+    searchTitlebar: document.getElementById("fishymap-search-titlebar"),
+    searchBody: document.getElementById("fishymap-search-body"),
     panel: document.getElementById("fishymap-panel"),
+    panelTitlebar: document.getElementById("fishymap-panel-titlebar"),
     panelBody: document.getElementById("fishymap-panel-body"),
-    panelOpen: document.getElementById("fishymap-panel-open"),
-    panelClose: document.getElementById("fishymap-panel-close"),
     readyPill: document.getElementById("fishymap-ready-pill"),
     search: document.getElementById("fishymap-search"),
     searchSelectionShell: document.getElementById("fishymap-search-selection-shell"),
@@ -2628,6 +2994,8 @@ async function main() {
     pointIconScaleValue: document.getElementById("fishymap-point-icon-scale-value"),
     layers: document.getElementById("fishymap-layers"),
     layersWindow: document.getElementById("fishymap-layers-window"),
+    layersTitlebar: document.getElementById("fishymap-layers-titlebar"),
+    layersBody: document.getElementById("fishymap-layers-body"),
     layersCount: document.getElementById("fishymap-layers-count"),
     resetView: document.getElementById("fishymap-reset-view"),
     legend: document.getElementById("fishymap-legend"),
@@ -2636,6 +3004,8 @@ async function main() {
     diagnosticJson: document.getElementById("fishymap-diagnostic-json"),
     selectionSummary: document.getElementById("fishymap-selection-summary"),
     zoneEvidenceWindow: document.getElementById("fishymap-zone-evidence-window"),
+    zoneEvidenceTitlebar: document.getElementById("fishymap-zone-evidence-titlebar"),
+    zoneEvidenceBody: document.getElementById("fishymap-zone-evidence-body"),
     zoneEvidenceStatus: document.getElementById("fishymap-zone-evidence-status"),
     zoneEvidenceSummary: document.getElementById("fishymap-zone-evidence-summary"),
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),

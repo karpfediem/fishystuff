@@ -5,8 +5,11 @@ globalThis.__fishystuffLoaderAutoStart = false;
 const {
   buildSearchMatches,
   normalizeZoneCatalog,
+  normalizeWindowUiState,
   parseZoneRgbSearch,
+  parseWindowUiState,
   renderSearchSelection,
+  serializeWindowUiState,
 } = await import("./loader.js");
 delete globalThis.__fishystuffLoaderAutoStart;
 
@@ -126,13 +129,13 @@ test("renderSearchSelection restores visible chips after the search window is re
   const searchSelectionShell = {
     hidden: true,
   };
-  const searchDock = {
+  const searchWindow = {
     dataset: {},
   };
   const elements = {
     searchSelection,
     searchSelectionShell,
-    searchDock,
+    searchWindow,
     zoneCatalog: TEST_ZONE_CATALOG,
   };
   const stateBundle = buildStateBundle();
@@ -149,4 +152,25 @@ test("renderSearchSelection restores visible chips after the search window is re
   renderSearchSelection(elements, stateBundle, fishLookup);
   assert.equal(searchSelection.hidden, false);
   assert.equal(searchSelectionShell.hidden, false);
+});
+
+test("parseWindowUiState falls back to defaults for invalid persisted state", () => {
+  assert.deepEqual(parseWindowUiState("not json"), normalizeWindowUiState(null));
+  assert.deepEqual(parseWindowUiState(""), normalizeWindowUiState(null));
+});
+
+test("serializeWindowUiState normalizes persisted window geometry and flags", () => {
+  const serialized = serializeWindowUiState({
+    search: { open: 0, collapsed: "yes", x: 42.8, y: "13" },
+    settings: { open: true, collapsed: false, x: null, y: null },
+    zoneInfo: { open: true, collapsed: false, x: undefined, y: 5.2 },
+    layers: { open: false, collapsed: 0, x: "bad", y: 99.9 },
+  });
+
+  assert.deepEqual(JSON.parse(serialized), {
+    search: { open: true, collapsed: true, x: 43, y: 13 },
+    settings: { open: true, collapsed: false, x: null, y: null },
+    zoneInfo: { open: true, collapsed: false, x: null, y: 5 },
+    layers: { open: false, collapsed: false, x: null, y: 100 },
+  });
 });
