@@ -81,6 +81,10 @@
         image-rendering: crisp-edges;
       }
 
+      #map-page-shell[data-bookmark-placing="true"] #bevy {
+        cursor: crosshair;
+      }
+
       #fishymap-panel {
         position: absolute;
         top: 1rem;
@@ -402,6 +406,101 @@
         width: 100%;
       }
 
+      #fishymap-bookmarks-window {
+        left: 1rem;
+        bottom: 1rem;
+        z-index: 18;
+        width: min(24rem, calc(100vw - 2rem));
+        height: min(22rem, calc(100% - 22rem));
+        max-height: calc(100% - 22rem);
+        min-height: 14rem;
+      }
+
+      #fishymap-bookmarks-body {
+        gap: 0.85rem;
+        padding: 1rem;
+      }
+
+      #fishymap-bookmarks-controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      #fishymap-bookmark-place .fishy-icon,
+      #fishymap-bookmarks-list .fishy-icon {
+        width: 1rem;
+        height: 1rem;
+      }
+
+      #fishymap-bookmark-status {
+        min-height: 1.25rem;
+      }
+
+      #fishymap-bookmarks-list {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 0.5rem;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
+
+      .fishymap-bookmark-card {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.85rem 0.9rem;
+      }
+
+      .fishymap-bookmark-copy {
+        justify-content: flex-start;
+      }
+
+      .fishymap-bookmark-main {
+        min-width: 0;
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 0.28rem;
+      }
+
+      .fishymap-bookmark-label {
+        font-size: 0.92rem;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+
+      .fishymap-bookmark-zone {
+        font-size: 0.72rem;
+        line-height: 1.3;
+        color: color-mix(in srgb, var(--color-base-content) 68%, transparent);
+      }
+
+      .fishymap-bookmark-coords {
+        font-size: 0.8rem;
+        line-height: 1.35;
+      }
+
+      .fishymap-bookmark-actions {
+        display: flex;
+        flex: none;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 0.35rem;
+      }
+
+      .fishymap-bookmark-empty {
+        display: flex;
+        min-height: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 1.4rem 1rem;
+        text-align: center;
+      }
+
       #fishymap-layers-window {
         right: 1rem;
         bottom: 1rem;
@@ -684,6 +783,17 @@
           min-height: 10rem;
         }
 
+        #fishymap-bookmarks-window {
+          top: 13.5rem;
+          right: 0.75rem;
+          bottom: auto;
+          left: 0.75rem;
+          width: auto;
+          height: min(20dvh, 13rem);
+          max-height: min(20dvh, 13rem);
+          min-height: 10rem;
+        }
+
         #fishymap-view-toggle {
           top: calc(0.75rem + 2.75rem);
           right: 0.75rem;
@@ -716,7 +826,17 @@
           aria-label="Hide search"
           title="Hide search"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-magnifying-glass"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-magnifying-glass"></use></svg>
+        </button>
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="bookmarks"
+          type="button"
+          aria-pressed="false"
+          aria-label="Show bookmarks"
+          title="Show bookmarks"
+        >
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-bookmarks"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -726,7 +846,7 @@
           aria-label="Hide settings"
           title="Hide settings"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-adjustments-horizontal"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-adjustments-horizontal"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -736,7 +856,7 @@
           aria-label="Hide zone info"
           title="Hide zone info"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-information-circle"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-information-circle"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -746,7 +866,7 @@
           aria-label="Hide layers"
           title="Hide layers"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-squares-2x2"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-squares-2x2"></use></svg>
         </button>
       </div>
       <aside id="fishymap-search-window" class="fishymap-window not-prose" data-window-id="search">
@@ -756,7 +876,7 @@
           data-window-titlebar="search"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-magnifying-glass"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-magnifying-glass"></use></svg>
             <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
           </div>
           <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
@@ -774,6 +894,39 @@
           </div>
         </div>
       </aside>
+      <aside id="fishymap-bookmarks-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="bookmarks">
+        <div
+          class="fishymap-window-header"
+          id="fishymap-bookmarks-titlebar"
+          data-window-titlebar="bookmarks"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+        >
+          <div class="fishymap-window-header-content">
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-bookmarks"></use></svg>
+            <span class="fishymap-window-title text-lg leading-tight">Bookmarks</span>
+          </div>
+          <span id="fishymap-bookmarks-count" class="badge badge-outline badge-sm">0</span>
+        </div>
+        <div id="fishymap-bookmarks-body" class="fishymap-window-body">
+          <div id="fishymap-bookmarks-controls">
+            <button id="fishymap-bookmark-place" class="btn btn-primary btn-sm" type="button">
+              <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-bookmark-add"></use></svg>
+              <span id="fishymap-bookmark-place-label">Drop bookmark</span>
+            </button>
+            <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden>Cancel</button>
+          </div>
+          <p id="fishymap-bookmark-status" class="text-xs text-base-content/70">
+            Click "Drop bookmark" and choose a point on the 2D map.
+          </p>
+          <div id="fishymap-bookmarks-list" class="rounded-box border border-base-300/70 bg-base-200 p-1">
+            <div class="fishymap-bookmark-empty text-sm text-base-content/65">
+              No bookmarks yet.
+            </div>
+          </div>
+        </div>
+      </aside>
       <aside id="fishymap-zone-evidence-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="zoneInfo">
         <div
           class="fishymap-window-header"
@@ -784,7 +937,7 @@
           aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-information-circle"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-information-circle"></use></svg>
             <span class="fishymap-window-title text-lg leading-tight">Zone Info</span>
           </div>
           <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
@@ -805,7 +958,7 @@
           aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-squares-2x2"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-squares-2x2"></use></svg>
             <p class="fishymap-window-title text-lg leading-tight">Layers</p>
           </div>
           <span id="fishymap-layers-count" class="badge badge-outline badge-sm">0</span>
@@ -822,7 +975,7 @@
         title="View mode: 2D. Click to switch to 3D."
       >
         <span id="fishymap-view-toggle-icon" aria-hidden="true">
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-map-view"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-map-view"></use></svg>
         </span>
       </button>
       <aside id="fishymap-panel" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="settings">
@@ -835,7 +988,7 @@
           aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-adjustments-horizontal"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-2#fishy-adjustments-horizontal"></use></svg>
             <p class="fishymap-window-title text-lg leading-tight">Settings</p>
           </div>
           <span id="fishymap-ready-pill" class="badge badge-outline badge-sm">Loading</span>

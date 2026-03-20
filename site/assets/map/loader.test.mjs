@@ -6,11 +6,15 @@ const {
   buildDefaultWindowUiStateSerialized,
   buildMapUiResetMountOptions,
   buildSearchMatches,
+  createBookmarkFromPlacement,
   normalizeZoneCatalog,
+  normalizeBookmarks,
+  normalizeBookmarkCoordinate,
   normalizeWindowUiState,
   parseZoneRgbSearch,
   parseWindowUiState,
   renderSearchSelection,
+  screenPointToWorldCoordinates,
   serializeWindowUiState,
 } = await import("./loader.js");
 delete globalThis.__fishystuffLoaderAutoStart;
@@ -167,6 +171,7 @@ test("serializeWindowUiState normalizes persisted window geometry and flags", ()
     settings: { open: true, collapsed: false, x: null, y: null },
     zoneInfo: { open: true, collapsed: false, x: undefined, y: 5.2 },
     layers: { open: false, collapsed: 0, x: "bad", y: 99.9 },
+    bookmarks: { open: true, collapsed: true, x: "14", y: 7.8 },
   });
 
   assert.deepEqual(JSON.parse(serialized), {
@@ -174,6 +179,7 @@ test("serializeWindowUiState normalizes persisted window geometry and flags", ()
     settings: { open: true, collapsed: false, x: null, y: null },
     zoneInfo: { open: true, collapsed: false, x: null, y: 5 },
     layers: { open: false, collapsed: false, x: null, y: 100 },
+    bookmarks: { open: true, collapsed: true, x: 14, y: 8 },
   });
 });
 
@@ -212,4 +218,126 @@ test("buildMapUiResetMountOptions preserves the current view while clearing UI s
       },
     },
   });
+});
+
+test("normalizeBookmarkCoordinate keeps finite floating point coordinates", () => {
+  assert.equal(normalizeBookmarkCoordinate("123.45678"), 123.457);
+  assert.equal(normalizeBookmarkCoordinate("-987.65432"), -987.654);
+  assert.equal(normalizeBookmarkCoordinate("nope"), null);
+});
+
+test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", () => {
+  assert.deepEqual(
+    normalizeBookmarks({
+      bookmarks: [
+        { id: "a", label: "", zoneName: "Velia Coast", worldX: 123.4567, worldZ: -45.6789 },
+        { id: "a", label: "duplicate", worldX: 999, worldZ: 999 },
+        { id: "b", label: "Manual", worldX: "bad", worldZ: 12 },
+        { id: "c", label: "Manual", zoneRgb: "255", worldX: "12.5", worldZ: "8.25" },
+      ],
+    }),
+    [
+      {
+        id: "a",
+        label: "Velia Coast",
+        zoneName: "Velia Coast",
+        zoneRgb: null,
+        worldX: 123.457,
+        worldZ: -45.679,
+        createdAt: null,
+      },
+      {
+        id: "c",
+        label: "Manual",
+        zoneName: null,
+        zoneRgb: 255,
+        worldX: 12.5,
+        worldZ: 8.25,
+        createdAt: null,
+      },
+    ],
+  );
+});
+
+test("createBookmarkFromPlacement uses zone name as the default label", () => {
+  assert.deepEqual(
+    createBookmarkFromPlacement(
+      {
+        worldX: 123.4567,
+        worldZ: -45.6789,
+        zoneName: "Cron Islands - Depth 2",
+        zoneRgb: 12345,
+      },
+      [],
+      {
+        idFactory: () => "bookmark-1",
+        now: Date.UTC(2026, 2, 20, 12, 0, 0),
+      },
+    ),
+    {
+      id: "bookmark-1",
+      label: "Cron Islands - Depth 2",
+      zoneName: "Cron Islands - Depth 2",
+      zoneRgb: 12345,
+      worldX: 123.457,
+      worldZ: -45.679,
+      createdAt: "2026-03-20T12:00:00.000Z",
+    },
+  );
+});
+
+test("screenPointToWorldCoordinates converts canvas clicks in 2D view", () => {
+  const canvas = {
+    getBoundingClientRect() {
+      return {
+        left: 10,
+        top: 20,
+        right: 410,
+        bottom: 220,
+        width: 400,
+        height: 200,
+      };
+    },
+  };
+
+  assert.deepEqual(
+    screenPointToWorldCoordinates(
+      canvas,
+      {
+        view: {
+          viewMode: "2d",
+          camera: {
+            centerWorldX: 100,
+            centerWorldZ: 200,
+            zoom: 2,
+          },
+        },
+      },
+      210,
+      120,
+    ),
+    {
+      worldX: 100,
+      worldZ: 200,
+    },
+  );
+
+  assert.equal(
+    screenPointToWorldCoordinates(
+      canvas,
+      {
+        view: {
+          viewMode: "3d",
+          camera: {
+            centerWorldX: 100,
+            centerWorldZ: 200,
+            zoom: 2,
+          },
+        },
+      },
+      210,
+      120,
+    ),
+    null,
+  );
 });

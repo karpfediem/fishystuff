@@ -25,6 +25,7 @@ export const FISHYMAP_EVENTS = Object.freeze({
 export const FISHYMAP_STORAGE_KEYS = Object.freeze({
   session: "fishystuff.map.session.v1",
   prefs: "fishystuff.map.prefs.v1",
+  bookmarks: "fishystuff.map.bookmarks.v1",
   caught: "fishystuff.pokedex.caught.v1",
 });
 

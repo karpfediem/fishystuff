@@ -9,13 +9,17 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-2";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
+const BOOKMARK_COORDINATE_DECIMALS = 3;
+const BOOKMARK_DEFAULT_STATUS = 'Click "Drop bookmark" and choose a point on the 2D map.';
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   zoneInfo: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   layers: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
+  bookmarks: Object.freeze({ open: false, collapsed: false, x: null, y: null }),
 });
 
 function dispatchMapEvent(target, type, detail) {
@@ -228,6 +232,7 @@ export function normalizeWindowUiState(rawState) {
     settings: normalizeWindowUiEntry(source.settings, DEFAULT_WINDOW_UI_STATE.settings),
     zoneInfo: normalizeWindowUiEntry(source.zoneInfo, DEFAULT_WINDOW_UI_STATE.zoneInfo),
     layers: normalizeWindowUiEntry(source.layers, DEFAULT_WINDOW_UI_STATE.layers),
+    bookmarks: normalizeWindowUiEntry(source.bookmarks, DEFAULT_WINDOW_UI_STATE.bookmarks),
   };
 }
 
@@ -264,6 +269,173 @@ export function buildMapUiResetMountOptions(currentState) {
       },
     },
   };
+}
+
+export function normalizeBookmarkCoordinate(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+  return Number(number.toFixed(BOOKMARK_COORDINATE_DECIMALS));
+}
+
+function formatBookmarkCoordinate(value) {
+  const normalized = normalizeBookmarkCoordinate(value);
+  if (normalized == null) {
+    return "";
+  }
+  return normalized
+    .toFixed(BOOKMARK_COORDINATE_DECIMALS)
+    .replace(/\.?0+$/, "");
+}
+
+function formatBookmarkCoords(bookmark) {
+  return `X ${formatBookmarkCoordinate(bookmark?.worldX)} · Z ${formatBookmarkCoordinate(bookmark?.worldZ)}`;
+}
+
+function formatBookmarkClipboardText(bookmark) {
+  return `${formatBookmarkCoordinate(bookmark?.worldX)}, ${formatBookmarkCoordinate(bookmark?.worldZ)}`;
+}
+
+function createBookmarkId() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `bookmark-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function defaultBookmarkLabel(index, zoneName = "") {
+  const normalizedZoneName = String(zoneName || "").trim();
+  if (normalizedZoneName) {
+    return normalizedZoneName;
+  }
+  return `Bookmark ${index + 1}`;
+}
+
+export function normalizeBookmarks(rawBookmarks) {
+  const entries = Array.isArray(rawBookmarks)
+    ? rawBookmarks
+    : Array.isArray(rawBookmarks?.bookmarks)
+      ? rawBookmarks.bookmarks
+      : [];
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of entries) {
+    const worldX = normalizeBookmarkCoordinate(entry?.worldX);
+    const worldZ = normalizeBookmarkCoordinate(entry?.worldZ);
+    const id = String(entry?.id || "").trim();
+    if (!id || worldX == null || worldZ == null || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    const zoneName = String(entry?.zoneName || "").trim();
+    const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
+    const createdAt = String(entry?.createdAt || "").trim();
+    normalized.push({
+      id,
+      label: String(entry?.label || "").trim() || defaultBookmarkLabel(normalized.length, zoneName),
+      worldX,
+      worldZ,
+      zoneName: zoneName || null,
+      zoneRgb: Number.isFinite(zoneRgb) ? zoneRgb : null,
+      createdAt: createdAt || null,
+    });
+  }
+  return normalized;
+}
+
+function loadPersistedBookmarks(storage = globalThis.localStorage) {
+  try {
+    return normalizeBookmarks(JSON.parse(storage?.getItem?.(FISHYMAP_STORAGE_KEYS.bookmarks) || "[]"));
+  } catch (_) {
+    return [];
+  }
+}
+
+function persistBookmarks(bookmarks, storage = globalThis.localStorage) {
+  try {
+    storage?.setItem?.(FISHYMAP_STORAGE_KEYS.bookmarks, JSON.stringify(normalizeBookmarks(bookmarks)));
+    return true;
+  } catch (error) {
+    console.warn("Failed to persist map bookmarks", error);
+    return false;
+  }
+}
+
+export function createBookmarkFromPlacement(
+  placement,
+  existingBookmarks = [],
+  options = {},
+) {
+  const worldX = normalizeBookmarkCoordinate(placement?.worldX);
+  const worldZ = normalizeBookmarkCoordinate(placement?.worldZ);
+  if (worldX == null || worldZ == null) {
+    return null;
+  }
+  const zoneName = String(placement?.zoneName || "").trim();
+  const zoneRgb = Number.parseInt(placement?.zoneRgb, 10);
+  const now = Number.isFinite(options.now) ? options.now : Date.now();
+  return {
+    id: typeof options.idFactory === "function" ? options.idFactory() : createBookmarkId(),
+    label: defaultBookmarkLabel(existingBookmarks.length, zoneName),
+    worldX,
+    worldZ,
+    zoneName: zoneName || null,
+    zoneRgb: Number.isFinite(zoneRgb) ? zoneRgb : null,
+    createdAt: new Date(now).toISOString(),
+  };
+}
+
+export function screenPointToWorldCoordinates(canvas, state, clientX, clientY) {
+  if (!canvas?.getBoundingClientRect || state?.view?.viewMode === "3d") {
+    return null;
+  }
+  const centerWorldX = Number(state?.view?.camera?.centerWorldX);
+  const centerWorldZ = Number(state?.view?.camera?.centerWorldZ);
+  const zoom = Number(state?.view?.camera?.zoom);
+  if (
+    !Number.isFinite(centerWorldX) ||
+    !Number.isFinite(centerWorldZ) ||
+    !Number.isFinite(zoom) ||
+    zoom <= 0
+  ) {
+    return null;
+  }
+  const rect = canvas.getBoundingClientRect();
+  if (!(rect.width > 0) || !(rect.height > 0)) {
+    return null;
+  }
+  const nx = clamp((clientX - rect.left) / rect.width, 0, 1);
+  const ny = clamp((rect.bottom - clientY) / rect.height, 0, 1);
+  return {
+    worldX: normalizeBookmarkCoordinate(centerWorldX + (nx - 0.5) * rect.width * zoom),
+    worldZ: normalizeBookmarkCoordinate(centerWorldZ + (ny - 0.5) * rect.height * zoom),
+  };
+}
+
+async function copyTextToClipboard(text) {
+  if (globalThis.navigator?.clipboard?.writeText) {
+    await globalThis.navigator.clipboard.writeText(text);
+    return;
+  }
+  const doc = globalThis.document;
+  if (!doc?.createElement || !doc?.body?.appendChild) {
+    throw new Error("Clipboard API unavailable");
+  }
+  const probe = doc.createElement("textarea");
+  probe.value = String(text ?? "");
+  probe.setAttribute("readonly", "");
+  probe.style.position = "fixed";
+  probe.style.opacity = "0";
+  probe.style.pointerEvents = "none";
+  doc.body.appendChild(probe);
+  probe.select();
+  probe.setSelectionRange(0, probe.value.length);
+  const copied = doc.execCommand?.("copy");
+  probe.remove();
+  if (!copied) {
+    throw new Error("Clipboard API unavailable");
+  }
 }
 
 function buildFishLookup(catalogFish) {
@@ -526,8 +698,8 @@ function layerKindLabel(kind) {
   return "Layer";
 }
 
-function spriteIcon(name) {
-  return `<svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-${name}"></use></svg>`;
+function spriteIcon(name, sizeClass = "size-5") {
+  return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${ICON_SPRITE_URL}#fishy-${name}"></use></svg>`;
 }
 
 function dragHandleIcon() {
@@ -876,6 +1048,104 @@ function hoverFromEventDetail(detail) {
     zoneName: detail?.zoneName ?? null,
     layerSamples: Array.isArray(detail?.layerSamples) ? detail.layerSamples : [],
   };
+}
+
+function bookmarkStatusMessage(state, bookmarkUi) {
+  if (bookmarkUi?.placing) {
+    if (state?.ready !== true) {
+      return "Wait for the map to finish loading before placing a bookmark.";
+    }
+    if (state?.view?.viewMode === "3d") {
+      return "Switch back to 2D view to place a bookmark.";
+    }
+    return "Click any point on the map to save its world coordinates.";
+  }
+  if (bookmarkUi?.status) {
+    return bookmarkUi.status;
+  }
+  if (state?.ready !== true) {
+    return "Bookmarks will be available once the map finishes loading.";
+  }
+  if (state?.view?.viewMode === "3d") {
+    return "Bookmarks can be placed from the 2D map view.";
+  }
+  return BOOKMARK_DEFAULT_STATUS;
+}
+
+function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
+  if (
+    !elements.bookmarksList ||
+    !elements.bookmarkStatus ||
+    !elements.bookmarkPlace ||
+    !elements.bookmarkPlaceLabel
+  ) {
+    return;
+  }
+  const state = stateBundle?.state || {};
+  const canPlace = state.ready === true && state.view?.viewMode !== "3d";
+
+  if (elements.shell) {
+    if (bookmarkUi?.placing) {
+      elements.shell.dataset.bookmarkPlacing = "true";
+    } else {
+      delete elements.shell.dataset.bookmarkPlacing;
+    }
+  }
+  if (elements.bookmarksCount) {
+    setTextContent(elements.bookmarksCount, String(bookmarks.length));
+  }
+  setBooleanProperty(elements.bookmarkPlace, "disabled", !canPlace && !bookmarkUi?.placing);
+  setTextContent(elements.bookmarkPlaceLabel, bookmarkUi?.placing ? "Click map to place" : "Drop bookmark");
+  setBooleanProperty(elements.bookmarkCancel, "hidden", !bookmarkUi?.placing);
+  setTextContent(elements.bookmarkStatus, bookmarkStatusMessage(state, bookmarkUi));
+
+  setMarkup(
+    elements.bookmarksList,
+    JSON.stringify(normalizeBookmarks(bookmarks)),
+    bookmarks.length
+      ? bookmarks
+          .map((bookmark) => {
+            const coords = formatBookmarkCoords(bookmark);
+            const zoneName =
+              bookmark.zoneName && bookmark.zoneName !== bookmark.label ? bookmark.zoneName : "";
+            return `
+              <div class="fishymap-bookmark-card rounded-box border border-base-300/70 bg-base-100">
+                <div class="fishymap-bookmark-main">
+                  <div class="fishymap-bookmark-label">${escapeHtml(bookmark.label)}</div>
+                  ${zoneName ? `<div class="fishymap-bookmark-zone">${escapeHtml(zoneName)}</div>` : ""}
+                  <code class="fishymap-bookmark-coords">${escapeHtml(coords)}</code>
+                </div>
+                <div class="fishymap-bookmark-actions">
+                  <button
+                    class="fishymap-bookmark-copy btn btn-soft btn-primary btn-xs"
+                    type="button"
+                    data-bookmark-copy="${escapeHtml(bookmark.id)}"
+                    aria-label="Copy bookmark coordinates"
+                    title="Copy bookmark coordinates"
+                  >
+                    ${spriteIcon("copy", "size-4")}
+                    <span>Copy</span>
+                  </button>
+                  <button
+                    class="btn btn-ghost btn-error btn-xs"
+                    type="button"
+                    data-bookmark-delete="${escapeHtml(bookmark.id)}"
+                    aria-label="Delete bookmark"
+                    title="Delete bookmark"
+                  >
+                    ${spriteIcon("trash", "size-4")}
+                  </button>
+                </div>
+              </div>
+            `;
+          })
+          .join("")
+      : `
+        <div class="fishymap-bookmark-empty text-sm text-base-content/65">
+          No bookmarks yet.
+        </div>
+      `,
+  );
 }
 
 function renderFishAvatar(fish, sizeClass = "size-6", options = {}) {
@@ -1882,6 +2152,14 @@ function applyWindowVisibility(elements, windowUiState) {
       label: "Settings",
     },
     {
+      state: windowUiState.bookmarks,
+      root: elements.bookmarksWindow,
+      body: elements.bookmarksBody,
+      titlebar: elements.bookmarksTitlebar,
+      toggle: elements.bookmarksWindowToggle,
+      label: "Bookmarks",
+    },
+    {
       state: windowUiState.zoneInfo,
       root: elements.zoneEvidenceWindow,
       body: elements.zoneEvidenceBody,
@@ -2092,6 +2370,11 @@ function bindUi(shell, elements, options = {}) {
   let latestStateBundle = requestBridgeState(shell);
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
   let windowUiState = parseWindowUiState(elements.windowStateInput?.value);
+  let bookmarks = loadPersistedBookmarks();
+  const bookmarkUi = {
+    placing: false,
+    status: "",
+  };
   let nextWindowZIndex = 30;
   const managedWindows = {
     search: {
@@ -2105,6 +2388,12 @@ function bindUi(shell, elements, options = {}) {
       body: elements.panelBody,
       titlebar: elements.panelTitlebar,
       toggle: elements.settingsWindowToggle,
+    },
+    bookmarks: {
+      root: elements.bookmarksWindow,
+      body: elements.bookmarksBody,
+      titlebar: elements.bookmarksTitlebar,
+      toggle: elements.bookmarksWindowToggle,
     },
     zoneInfo: {
       root: elements.zoneEvidenceWindow,
@@ -2121,6 +2410,7 @@ function bindUi(shell, elements, options = {}) {
   };
   const toolbarTargetToWindowId = {
     search: "search",
+    bookmarks: "bookmarks",
     settings: "settings",
     "zone-info": "zoneInfo",
     layers: "layers",
@@ -2153,8 +2443,33 @@ function bindUi(shell, elements, options = {}) {
         event.detail?.inputState ||
         (typeof FishyMapBridge.getCurrentInputState === "function"
           ? FishyMapBridge.getCurrentInputState()
-          : {}),
+        : {}),
     };
+  }
+
+  function setBookmarkStatus(message = "") {
+    bookmarkUi.status = String(message || "").trim();
+  }
+
+  function setBookmarkPlacementActive(active, options = {}) {
+    bookmarkUi.placing = Boolean(active);
+    if (!bookmarkUi.placing && options.keepStatus !== true) {
+      setBookmarkStatus(options.status || "");
+    } else if (bookmarkUi.placing && options.status) {
+      setBookmarkStatus(options.status);
+    }
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+  }
+
+  function persistBookmarksAndRender(nextBookmarks, statusMessage = "") {
+    bookmarks = normalizeBookmarks(nextBookmarks);
+    const persisted = persistBookmarks(bookmarks);
+    setBookmarkStatus(
+      persisted
+        ? statusMessage
+        : `${statusMessage || "Bookmark updated."} Browser storage is unavailable, so this will reset on reload.`,
+    );
+    renderCurrentState(requestBridgeState(shell));
   }
 
   function persistWindowUiState() {
@@ -2282,6 +2597,8 @@ function bindUi(shell, elements, options = {}) {
       bringManagedWindowToFront(windowId);
     } else if (windowId === "search") {
       elements.search?.blur?.();
+    } else if (windowId === "bookmarks") {
+      setBookmarkPlacementActive(false);
     }
     applyManagedWindows({ persist: true });
   }
@@ -2332,6 +2649,7 @@ function bindUi(shell, elements, options = {}) {
     isRendering = true;
     try {
       renderPanel(elements, stateBundle, zoneCatalog);
+      renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi);
       applyManagedWindows();
     } finally {
       isRendering = false;
@@ -2391,6 +2709,45 @@ function bindUi(shell, elements, options = {}) {
   elements.canvas.addEventListener("pointerleave", () => {
     elements.hoverPointerActive = false;
     renderHoverTooltip(elements, null);
+  });
+
+  elements.canvas.addEventListener("click", (event) => {
+    if (!bookmarkUi.placing) {
+      return;
+    }
+    const state = latestStateBundle?.state || requestBridgeState(shell).state;
+    const placement = screenPointToWorldCoordinates(
+      elements.canvas,
+      state,
+      event.clientX,
+      event.clientY,
+    );
+    if (!placement) {
+      setBookmarkStatus("Switch to the ready 2D map view to place a bookmark.");
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      return;
+    }
+    const hover = state.hover || null;
+    const hoverMatchesPlacement =
+      Number.isFinite(hover?.worldX) &&
+      Number.isFinite(hover?.worldZ) &&
+      Math.abs(hover.worldX - placement.worldX) <= 4 &&
+      Math.abs(hover.worldZ - placement.worldZ) <= 4;
+    const bookmark = createBookmarkFromPlacement(
+      {
+        ...placement,
+        zoneName: hoverMatchesPlacement ? hover?.zoneName : null,
+        zoneRgb: hoverMatchesPlacement ? hover?.zoneRgb : null,
+      },
+      bookmarks,
+    );
+    if (!bookmark) {
+      setBookmarkStatus("Could not read world coordinates for that click.");
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      return;
+    }
+    setBookmarkPlacementActive(false, { keepStatus: true });
+    persistBookmarksAndRender(bookmarks.concat(bookmark), `Saved ${bookmark.label}.`);
   });
 
   for (const windowId of Object.keys(managedWindows)) {
@@ -2661,6 +3018,60 @@ function bindUi(shell, elements, options = {}) {
     });
   }
 
+  elements.bookmarkPlace?.addEventListener("click", () => {
+    const state = latestStateBundle?.state || requestBridgeState(shell).state;
+    if (state.ready !== true) {
+      setBookmarkStatus("Wait for the map to finish loading before placing a bookmark.");
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      return;
+    }
+    if (state.view?.viewMode === "3d") {
+      setBookmarkStatus("Switch back to 2D view to place a bookmark.");
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      return;
+    }
+    bringManagedWindowToFront("bookmarks");
+    setBookmarkPlacementActive(true);
+  });
+
+  elements.bookmarkCancel?.addEventListener("click", () => {
+    setBookmarkPlacementActive(false);
+  });
+
+  elements.bookmarksList?.addEventListener("click", async (event) => {
+    const copyButton = event.target.closest("button[data-bookmark-copy]");
+    if (copyButton) {
+      const bookmark = bookmarks.find(
+        (entry) => entry.id === copyButton.getAttribute("data-bookmark-copy"),
+      );
+      if (!bookmark) {
+        return;
+      }
+      try {
+        await copyTextToClipboard(formatBookmarkClipboardText(bookmark));
+        setBookmarkStatus(`Copied ${formatBookmarkCoords(bookmark)}.`);
+      } catch (_) {
+        setBookmarkStatus("Clipboard access is unavailable in this browser.");
+      }
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      return;
+    }
+    const deleteButton = event.target.closest("button[data-bookmark-delete]");
+    if (!deleteButton) {
+      return;
+    }
+    const bookmark = bookmarks.find(
+      (entry) => entry.id === deleteButton.getAttribute("data-bookmark-delete"),
+    );
+    if (!bookmark) {
+      return;
+    }
+    persistBookmarksAndRender(
+      bookmarks.filter((entry) => entry.id !== bookmark.id),
+      `Removed ${bookmark.label}.`,
+    );
+  });
+
   if (elements.pointIconScale) {
     elements.pointIconScale.addEventListener("input", () => {
       if (isRendering) {
@@ -2909,6 +3320,7 @@ function bindUi(shell, elements, options = {}) {
     if (!resetButton || resetButton.disabled) {
       return;
     }
+    setBookmarkPlacementActive(false);
     const defaultWindowUiState = buildDefaultWindowUiStateSerialized();
     const remountOptions = buildMapUiResetMountOptions(requestBridgeState(shell).state);
     const originalLabel = resetButton.textContent;
@@ -3001,6 +3413,7 @@ function bindUi(shell, elements, options = {}) {
   shell.addEventListener(FISHYMAP_EVENTS.viewChanged, (event) => {
     latestStateBundle = stateBundleFromEvent(event);
     renderViewState(elements, latestStateBundle.state);
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
   shell.addEventListener(FISHYMAP_EVENTS.hoverChanged, (event) => {
@@ -3012,9 +3425,15 @@ function bindUi(shell, elements, options = {}) {
       };
     }
     renderHoverTooltip(elements, hover);
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && bookmarkUi.placing) {
+      setBookmarkPlacementActive(false);
+    }
+  });
   window.addEventListener("resize", () => applyManagedWindows({ persist: true }));
 
   renderCurrentState();
@@ -3038,12 +3457,22 @@ async function main() {
     toolbar: document.getElementById("fishymap-toolbar"),
     windowStateInput: document.getElementById("fishymap-window-state-input"),
     searchWindowToggle: document.querySelector("[data-window-toggle='search']"),
+    bookmarksWindowToggle: document.querySelector("[data-window-toggle='bookmarks']"),
     settingsWindowToggle: document.querySelector("[data-window-toggle='settings']"),
     zoneInfoWindowToggle: document.querySelector("[data-window-toggle='zone-info']"),
     layersWindowToggle: document.querySelector("[data-window-toggle='layers']"),
     searchWindow: document.getElementById("fishymap-search-window"),
     searchTitlebar: document.getElementById("fishymap-search-titlebar"),
     searchBody: document.getElementById("fishymap-search-body"),
+    bookmarksWindow: document.getElementById("fishymap-bookmarks-window"),
+    bookmarksTitlebar: document.getElementById("fishymap-bookmarks-titlebar"),
+    bookmarksBody: document.getElementById("fishymap-bookmarks-body"),
+    bookmarksCount: document.getElementById("fishymap-bookmarks-count"),
+    bookmarkPlace: document.getElementById("fishymap-bookmark-place"),
+    bookmarkPlaceLabel: document.getElementById("fishymap-bookmark-place-label"),
+    bookmarkCancel: document.getElementById("fishymap-bookmark-cancel"),
+    bookmarkStatus: document.getElementById("fishymap-bookmark-status"),
+    bookmarksList: document.getElementById("fishymap-bookmarks-list"),
     panel: document.getElementById("fishymap-panel"),
     panelTitlebar: document.getElementById("fishymap-panel-titlebar"),
     panelBody: document.getElementById("fishymap-panel-body"),
