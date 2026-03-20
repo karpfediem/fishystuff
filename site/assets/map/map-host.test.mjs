@@ -465,6 +465,51 @@ test("wasm output events are redispatched as DOM CustomEvents", async () => {
   }
 });
 
+test("requestState refreshes the current wasm snapshot before responding", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+        statuses: { metaStatus: "meta: old" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+    wasm.calls.stateReads = 0;
+    snapshotRef.current = {
+      ...snapshotRef.current,
+      statuses: { metaStatus: "meta: refreshed" },
+    };
+
+    const detail = {};
+    container.dispatchEvent(new CustomEvent(FISHYMAP_EVENTS.requestState, { detail }));
+
+    assert.equal(wasm.calls.stateReads, 1);
+    assert.equal(detail.state.statuses.metaStatus, "meta: refreshed");
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("hover output events are redispatched without cloning the full map state", async () => {
   const env = installDomGlobals();
   let bridge;

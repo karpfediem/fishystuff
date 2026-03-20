@@ -1438,7 +1438,7 @@ class FishyMapBridgeImpl {
     };
     this.boundRequestState = (event) => {
       const detail = event?.detail || {};
-      detail.state = this.getCurrentState();
+      detail.state = cloneJson(this.refreshCurrentStateFromWasm());
       detail.inputState = this.getCurrentInputState();
       if (typeof detail.callback === "function") {
         detail.callback(detail.state, detail.inputState);

@@ -1476,7 +1476,11 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
   return rows;
 }
 
-function resolveDisplayBookmarks(stateBundle, bookmarks) {
+function bookmarkListSignature(bookmarks) {
+  return JSON.stringify(normalizeBookmarks(bookmarks));
+}
+
+export function resolveDisplayBookmarks(stateBundle, bookmarks) {
   const localBookmarks = normalizeBookmarks(bookmarks);
   const snapshotBookmarks = normalizeBookmarks(stateBundle?.state?.ui?.bookmarks || []);
   if (!snapshotBookmarks.length) {
@@ -1494,6 +1498,27 @@ function resolveDisplayBookmarks(stateBundle, bookmarks) {
       resourceName: bookmark.resourceName || snapshotBookmark.resourceName || null,
       originName: bookmark.originName || snapshotBookmark.originName || null,
     };
+  });
+}
+
+function persistResolvedBookmarksFromStateBundle(stateBundle, bookmarks, bookmarkUi) {
+  const resolvedBookmarks = resolveDisplayBookmarks(stateBundle, bookmarks);
+  if (bookmarkListSignature(resolvedBookmarks) === bookmarkListSignature(bookmarks)) {
+    return bookmarks;
+  }
+  persistBookmarks(resolvedBookmarks);
+  bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(
+    resolvedBookmarks,
+    bookmarkUi?.selectedIds,
+  );
+  return resolvedBookmarks;
+}
+
+function bookmarksNeedDerivedMetadata(bookmarks) {
+  return normalizeBookmarks(bookmarks).some((bookmark) => {
+    const resourceName = String(bookmark?.resourceName || "").trim();
+    const originName = String(bookmark?.originName || "").trim();
+    return !resourceName || !originName;
   });
 }
 
@@ -2837,6 +2862,8 @@ function bindUi(shell, elements, options = {}) {
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
   let windowUiState = parseWindowUiState(elements.windowStateInput?.value);
   let bookmarks = loadPersistedBookmarks();
+  let bookmarkMetadataRefreshTimer = 0;
+  let bookmarkMetadataRefreshAttempts = 0;
   const bookmarkUi = {
     placing: false,
     selectedIds: [],
@@ -3027,6 +3054,30 @@ function bindUi(shell, elements, options = {}) {
     renderCurrentState(requestBridgeState(shell));
   }
 
+  function clearBookmarkMetadataRefresh() {
+    if (!bookmarkMetadataRefreshTimer) {
+      return;
+    }
+    globalThis.clearTimeout?.(bookmarkMetadataRefreshTimer);
+    bookmarkMetadataRefreshTimer = 0;
+  }
+
+  function scheduleBookmarkMetadataRefresh() {
+    if (!bookmarksNeedDerivedMetadata(bookmarks)) {
+      bookmarkMetadataRefreshAttempts = 0;
+      clearBookmarkMetadataRefresh();
+      return;
+    }
+    if (bookmarkMetadataRefreshTimer || bookmarkMetadataRefreshAttempts >= 20) {
+      return;
+    }
+    bookmarkMetadataRefreshTimer = globalThis.setTimeout(() => {
+      bookmarkMetadataRefreshTimer = 0;
+      bookmarkMetadataRefreshAttempts += 1;
+      renderCurrentState(requestBridgeState(shell));
+    }, 150);
+  }
+
   function persistWindowUiState() {
     if (!elements.windowStateInput) {
       return;
@@ -3201,6 +3252,8 @@ function bindUi(shell, elements, options = {}) {
 
   function renderCurrentState(stateBundle = requestBridgeState(shell)) {
     latestStateBundle = stateBundle;
+    bookmarks = persistResolvedBookmarksFromStateBundle(stateBundle, bookmarks, bookmarkUi);
+    scheduleBookmarkMetadataRefresh();
     isRendering = true;
     try {
       renderPanel(elements, stateBundle, zoneCatalog);

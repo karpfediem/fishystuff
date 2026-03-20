@@ -20,6 +20,7 @@ const {
   parseImportedBookmarks,
   parseWindowUiState,
   renameBookmark,
+  resolveDisplayBookmarks,
   renderSearchSelection,
   serializeBookmarksForExport,
   serializeWindowUiState,
@@ -425,6 +426,49 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
       },
     ],
   );
+});
+
+test("resolveDisplayBookmarks fills imported bookmark metadata from the snapshot state", () => {
+  const bookmarks = [
+    {
+      id: "bookmark-a",
+      label: "Tarif",
+      worldX: 12.5,
+      worldZ: 8.25,
+    },
+  ];
+
+  const stateBundle = {
+    state: {
+      ui: {
+        bookmarks: [
+          {
+            id: "bookmark-a",
+            label: "Tarif",
+            zoneName: "Mediah",
+            resourceName: "Tarif",
+            originName: "Tarif",
+            worldX: 12.5,
+            worldZ: 8.25,
+          },
+        ],
+      },
+    },
+  };
+
+  assert.deepEqual(resolveDisplayBookmarks(stateBundle, bookmarks), [
+    {
+      id: "bookmark-a",
+      label: "Tarif",
+      zoneName: "Mediah",
+      resourceName: "Tarif",
+      originName: "Tarif",
+      zoneRgb: null,
+      worldX: 12.5,
+      worldZ: 8.25,
+      createdAt: null,
+    },
+  ]);
 });
 
 test("createBookmarkFromPlacement uses zone name as the default label", () => {
