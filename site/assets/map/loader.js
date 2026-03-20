@@ -725,6 +725,24 @@ async function copyTextToClipboard(text) {
   }
 }
 
+function showSiteToast(tone, message, options = {}) {
+  const text = String(message || "").trim();
+  if (!text) {
+    return;
+  }
+  const toast = globalThis.__fishystuffToast;
+  if (!toast) {
+    return;
+  }
+  const handler =
+    typeof toast[tone] === "function"
+      ? toast[tone]
+      : typeof toast.show === "function"
+        ? (value, extra) => toast.show({ tone, message: value, ...(extra || {}) })
+        : null;
+  handler?.(text, options);
+}
+
 function buildFishLookup(catalogFish) {
   const map = new Map();
   for (const fish of catalogFish || []) {
@@ -3772,11 +3790,13 @@ function bindUi(shell, elements, options = {}) {
     }
     try {
       await copyTextToClipboard(formatBookmarkClipboardText(selectedBookmarks));
-      setBookmarkStatus(
-        `Copied XML for ${selectedBookmarks.length} ${pluralizeBookmarks(selectedBookmarks.length)}.`,
-      );
+      const message = `Copied XML for ${selectedBookmarks.length} ${pluralizeBookmarks(selectedBookmarks.length)}.`;
+      setBookmarkStatus(message);
+      showSiteToast("success", message);
     } catch (_) {
-      setBookmarkStatus("Clipboard access is unavailable in this browser.");
+      const message = "Clipboard access is unavailable in this browser.";
+      setBookmarkStatus(message);
+      showSiteToast("error", message);
     }
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
@@ -3801,13 +3821,16 @@ function bindUi(shell, elements, options = {}) {
     }
     try {
       downloadBookmarkExport(exportBookmarks);
-      setBookmarkStatus(
+      const message =
         selectedCount
           ? `Exported ${exportBookmarks.length} selected ${pluralizeBookmarks(exportBookmarks.length)}.`
-          : `Exported ${exportBookmarks.length} ${pluralizeBookmarks(exportBookmarks.length)}.`,
-      );
+          : `Exported ${exportBookmarks.length} ${pluralizeBookmarks(exportBookmarks.length)}.`;
+      setBookmarkStatus(message);
+      showSiteToast("info", message);
     } catch (_) {
-      setBookmarkStatus("Bookmark export is unavailable in this browser.");
+      const message = "Bookmark export is unavailable in this browser.";
+      setBookmarkStatus(message);
+      showSiteToast("error", message);
     }
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
@@ -3833,7 +3856,9 @@ function bindUi(shell, elements, options = {}) {
     try {
       const importedBookmarks = parseImportedBookmarks(await readBookmarkImportFile(file));
       if (!importedBookmarks.length) {
-        setBookmarkStatus("The selected file did not contain any bookmark XML.");
+        const message = "The selected file did not contain any bookmark XML.";
+        setBookmarkStatus(message);
+        showSiteToast("warning", message);
         renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
         return;
       }
@@ -3846,22 +3871,26 @@ function bindUi(shell, elements, options = {}) {
       const nextBookmarks = mergeImportedBookmarks(bookmarks, importedBookmarks);
       const importedCount = importedBookmarkIds.length;
       const skippedCount = importedBookmarks.length - importedCount;
+      const message = importedCount
+        ? `Imported ${importedCount} ${pluralizeBookmarks(importedCount)}${
+            skippedCount ? `; skipped ${skippedCount} duplicate${skippedCount === 1 ? "" : "s"}.` : "."
+          }`
+        : "No new bookmarks were imported.";
       persistBookmarksAndRender(
         nextBookmarks,
-        importedCount
-          ? `Imported ${importedCount} ${pluralizeBookmarks(importedCount)}${
-              skippedCount ? `; skipped ${skippedCount} duplicate${skippedCount === 1 ? "" : "s"}.` : "."
-            }`
-          : "No new bookmarks were imported.",
+        message,
         {
           selectedIds: importedCount
             ? normalizeSelectedBookmarkIds(nextBookmarks, bookmarkUi.selectedIds.concat(importedBookmarkIds))
             : bookmarkUi.selectedIds,
         },
       );
+      showSiteToast(importedCount ? "success" : "info", message);
     } catch (error) {
       console.warn("Failed to import map bookmarks", error);
-      setBookmarkStatus("Bookmark import failed. Choose a valid WorldmapBookMark XML file.");
+      const message = "Bookmark import failed. Choose a valid WorldmapBookMark XML file.";
+      setBookmarkStatus(message);
+      showSiteToast("error", message);
       renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
     } finally {
       elements.bookmarkImportInput.value = "";
@@ -3995,9 +4024,13 @@ function bindUi(shell, elements, options = {}) {
       }
       try {
         await copyTextToClipboard(formatBookmarkClipboardText([bookmark]));
-        setBookmarkStatus(`Copied XML for ${bookmark.label}.`);
+        const message = `Copied XML for ${bookmark.label}.`;
+        setBookmarkStatus(message);
+        showSiteToast("success", message);
       } catch (_) {
-        setBookmarkStatus("Clipboard access is unavailable in this browser.");
+        const message = "Clipboard access is unavailable in this browser.";
+        setBookmarkStatus(message);
+        showSiteToast("error", message);
       }
       renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
       return;

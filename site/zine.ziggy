@@ -33,6 +33,7 @@ Multilingual {
     "js/durationFormatter.js",
     "js/lz-string.min.js",
     "js/script.js",
+    "js/toast.js",
 
     "map/loader.js",
     "map/map-host.js",

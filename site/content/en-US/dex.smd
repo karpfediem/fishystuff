@@ -1285,6 +1285,22 @@
       URL.revokeObjectURL(url);
     }
 
+    function showToast(tone, message) {
+      const toast = window.__fishystuffToast;
+      if (!toast || !message) {
+        return;
+      }
+      const handler =
+        typeof toast[tone] === "function"
+          ? toast[tone]
+          : typeof toast.show === "function"
+            ? function (value) {
+                toast.show({ tone, message: value });
+              }
+            : null;
+      handler?.(message);
+    }
+
     async function exportCaught(caughtIds) {
       const normalized = normalizeCaughtIds(caughtIds);
       const text = JSON.stringify(normalized, null, 2);
@@ -1292,12 +1308,14 @@
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(text);
           mergeSignals({ status_message: `Copied ${normalized.length} caught fish IDs.` });
+          showToast("success", `Copied ${normalized.length} caught fish IDs.`);
           return;
         }
       } catch (_error) {
       }
       downloadJson("fishystuff-fishydex-caught.json", text);
       mergeSignals({ status_message: `Downloaded ${normalized.length} caught fish IDs.` });
+      showToast("info", `Downloaded ${normalized.length} caught fish IDs.`);
     }
 
     function importCaught() {
@@ -1313,10 +1331,12 @@
           caught_ids: caughtIds,
           status_message: `Imported ${caughtIds.length} caught fish IDs.`,
         });
+        showToast("success", `Imported ${caughtIds.length} caught fish IDs.`);
       } catch (_error) {
         mergeSignals({
           status_message: "Import failed. Paste a JSON array of fish IDs or a map like {\"8474\": true}.",
         });
+        showToast("error", "Import failed. Paste a JSON array of fish IDs or a map like {\"8474\": true}.");
       }
     }
 

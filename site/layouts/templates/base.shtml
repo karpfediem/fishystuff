@@ -183,6 +183,7 @@
   </script>
 
   <script src="$site.asset('js/theme.js').link()"></script>
+  <script src="$site.asset('js/toast.js').link()"></script>
   <!-- Tailwind + daisyUI (compiled) -->
   <link rel="stylesheet" href="$site.asset('css/site.css').link()">
   <!-- CSS -->
@@ -201,10 +202,38 @@
     :where(.fishy-icon--inline) {
       vertical-align: -0.05em;
     }
+
+    #fishystuff-toast-root {
+      z-index: 2200;
+    }
+
+    #fishystuff-toast-root .fishy-toast {
+      opacity: 0;
+      transform: translateY(-0.45rem) scale(0.985);
+      transition:
+        opacity 180ms ease,
+        transform 180ms ease;
+      cursor: pointer;
+    }
+
+    #fishystuff-toast-root .fishy-toast[data-state="open"] {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
+    #fishystuff-toast-root .fishy-toast[data-state="closing"] {
+      opacity: 0;
+      transform: translateY(-0.35rem) scale(0.985);
+    }
+
+    #fishystuff-toast-root .fishy-toast-message {
+      overflow-wrap: anywhere;
+    }
   </style>
   <super>
 </head>
 <body id="body" class="prose prose-lg lg:prose-xl max-w-none min-h-dvh bg-base-100 text-base-content">
 <super>
+<div id="fishystuff-toast-root" class="toast toast-top toast-center sm:toast-end pointer-events-none" aria-live="polite" aria-atomic="false"></div>
 </body>
 </html>
