@@ -9,7 +9,7 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-4";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-5";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
 const DRAG_AUTOSCROLL_EDGE_PX = 56;
@@ -1652,63 +1652,75 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
       ? normalizedBookmarks
           .map((bookmark, index) => {
             const overviewRows = buildBookmarkOverviewRows(bookmark, index);
+            const [titleRow, ...detailRows] = overviewRows;
+            const displayLabel = bookmarkDisplayLabel(bookmark, index);
             return `
               <div class="fishymap-bookmark-card rounded-box border border-base-300/70 bg-base-100" data-bookmark-id="${escapeHtml(bookmark.id)}">
-                <button
-                  class="fishymap-bookmark-drag btn btn-xs btn-circle btn-ghost"
-                  data-bookmark-drag="${escapeHtml(bookmark.id)}"
-                  type="button"
-                  aria-label="Drag ${escapeHtml(bookmark.label)}"
-                  draggable="true"
-                  tabindex="-1"
-                >
-                  ${dragHandleIcon()}
-                </button>
-                <label class="fishymap-bookmark-toggle" aria-label="Select ${escapeHtml(bookmark.label)}">
-                  <input
-                    class="checkbox checkbox-sm"
-                    type="checkbox"
-                    data-bookmark-select="${escapeHtml(bookmark.id)}"
-                    ${selectedIdSet.has(bookmark.id) ? "checked" : ""}
+                <div class="fishymap-bookmark-rail">
+                  <button
+                    class="fishymap-bookmark-drag btn btn-xs btn-circle btn-ghost"
+                    data-bookmark-drag="${escapeHtml(bookmark.id)}"
+                    type="button"
+                    aria-label="Drag ${escapeHtml(displayLabel)}"
+                    draggable="true"
+                    tabindex="-1"
                   >
-                </label>
+                    ${dragHandleIcon()}
+                  </button>
+                  <span class="fishymap-bookmark-order badge badge-soft badge-sm">${index + 1}</span>
+                  <label class="fishymap-bookmark-toggle" aria-label="Select ${escapeHtml(displayLabel)}">
+                    <input
+                      class="checkbox checkbox-sm"
+                      type="checkbox"
+                      data-bookmark-select="${escapeHtml(bookmark.id)}"
+                      ${selectedIdSet.has(bookmark.id) ? "checked" : ""}
+                    >
+                  </label>
+                </div>
                 <div class="fishymap-bookmark-main">
-                  <div class="fishymap-bookmark-summary">
-                    <span class="fishymap-bookmark-order badge badge-soft badge-sm">${index + 1}</span>
-                    <div class="fishymap-overview-list fishymap-overview-list--bookmark">
-                      ${overviewRows.map((row) => overviewRowMarkup(row)).join("")}
+                  <div class="fishymap-bookmark-titlebar">
+                    <div class="fishymap-bookmark-title">
+                      ${titleRow ? overviewRowMarkup(titleRow) : ""}
                     </div>
-                  </div>
-                  <div class="fishymap-bookmark-actions">
                     <button
-                      class="btn btn-soft btn-xs"
+                      class="fishymap-bookmark-rename btn btn-soft btn-sm btn-square"
                       type="button"
                       data-bookmark-rename="${escapeHtml(bookmark.id)}"
                       aria-label="Rename bookmark"
                       title="Rename bookmark"
                     >
-                      <span>Rename</span>
-                    </button>
-                    <button
-                      class="fishymap-bookmark-copy btn btn-soft btn-primary btn-xs"
-                      type="button"
-                      data-bookmark-copy="${escapeHtml(bookmark.id)}"
-                      aria-label="Copy bookmark XML"
-                      title="Copy bookmark XML"
-                    >
-                      ${spriteIcon("copy", "size-4")}
-                      <span>Copy XML</span>
-                    </button>
-                    <button
-                      class="btn btn-ghost btn-error btn-xs"
-                      type="button"
-                      data-bookmark-delete="${escapeHtml(bookmark.id)}"
-                      aria-label="Delete bookmark"
-                      title="Delete bookmark"
-                    >
-                      ${spriteIcon("trash", "size-4")}
+                      ${spriteIcon("bookmark-edit", "size-5")}
                     </button>
                   </div>
+                  ${
+                    detailRows.length
+                      ? `
+                    <div class="fishymap-overview-list fishymap-overview-list--bookmark">
+                      ${detailRows.map((row) => overviewRowMarkup(row)).join("")}
+                    </div>
+                  `
+                      : ""
+                  }
+                </div>
+                <div class="fishymap-bookmark-actions-rail">
+                  <button
+                    class="fishymap-bookmark-copy btn btn-soft btn-primary btn-sm btn-square"
+                    type="button"
+                    data-bookmark-copy="${escapeHtml(bookmark.id)}"
+                    aria-label="Copy bookmark XML"
+                    title="Copy bookmark XML"
+                  >
+                    ${spriteIcon("copy", "size-5")}
+                  </button>
+                  <button
+                    class="fishymap-bookmark-delete btn btn-ghost btn-error btn-xs btn-square"
+                    type="button"
+                    data-bookmark-delete="${escapeHtml(bookmark.id)}"
+                    aria-label="Delete bookmark"
+                    title="Delete bookmark"
+                  >
+                    ${spriteIcon("trash", "size-4")}
+                  </button>
                 </div>
               </div>
             `;

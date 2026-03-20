@@ -44,6 +44,7 @@ const iconSources = {
   "question-mark": { type: "mingcute", name: "question-2-fill" },
   bookmarks: { type: "mingcute", name: "bookmarks-fill" },
   "bookmark-add": { type: "mingcute", name: "bookmark-add-fill" },
+  "bookmark-edit": { type: "mingcute", name: "bookmark-edit-fill" },
   copy: { type: "mingcute", name: "copy-2-fill" },
   trash: { type: "mingcute", name: "delete-2-fill" },
   eye: { type: "mingcute", name: "eye-fill" },
