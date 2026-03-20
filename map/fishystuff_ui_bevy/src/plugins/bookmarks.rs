@@ -5,6 +5,7 @@ use bevy::color::Alpha;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::text::{Justify, TextLayout};
 
 use crate::bridge::contract::{FishyMapBookmarkEntry, FishyMapThemeColors};
 use crate::bridge::theme::parse_css_color;
@@ -27,7 +28,8 @@ const BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX: f32 = 12.0;
 const BOOKMARK_CALLOUT_GAP_SCREEN_PX: f32 = 10.0;
 const BOOKMARK_CALLOUT_BORDER_SCREEN_PX: f32 = 2.0;
 const BOOKMARK_CALLOUT_CORNER_RADIUS_SCREEN_PX: f32 = 10.0;
-const BOOKMARK_TEXT_WIDTH_FACTOR: f32 = 0.58;
+const BOOKMARK_TEXT_WIDTH_FACTOR: f32 = 0.72;
+const BOOKMARK_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 10.0;
 const BOOKMARK_TEXTURE_WIDTH_PX: usize = 32;
 const BOOKMARK_TEXTURE_HEIGHT_PX: usize = 32;
 const BOOKMARK_RING_RADIUS_PX: f32 = 12.0;
@@ -223,6 +225,7 @@ fn sync_bookmark_markers(
                             font_size: BOOKMARK_CALLOUT_LABEL_SIZE_PX,
                             ..default()
                         },
+                        TextLayout::new_with_no_wrap().with_justify(Justify::Center),
                         TextColor(callout_label_color),
                     ))
                     .id();
@@ -432,7 +435,8 @@ fn bookmark_display_label(bookmark: &FishyMapBookmarkEntry, index: usize) -> Str
 fn bookmark_callout_size_px(display_text: &str) -> Vec2 {
     let text_width_px = display_text.chars().count() as f32
         * BOOKMARK_CALLOUT_LABEL_SIZE_PX
-        * BOOKMARK_TEXT_WIDTH_FACTOR;
+        * BOOKMARK_TEXT_WIDTH_FACTOR
+        + BOOKMARK_TEXT_WIDTH_SLACK_SCREEN_PX;
     let width_px = (text_width_px + BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX * 2.0)
         .max(BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX);
     Vec2::new(width_px, BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX)

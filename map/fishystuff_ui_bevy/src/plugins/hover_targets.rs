@@ -3,6 +3,7 @@ use bevy::color::Alpha;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::text::{Justify, TextLayout};
 use bevy::window::PrimaryWindow;
 use serde_json::{Map, Value};
 
@@ -27,7 +28,8 @@ const HOVER_CALLOUT_HEIGHT_SCREEN_PX: f32 = 28.0;
 const HOVER_CALLOUT_PADDING_X_SCREEN_PX: f32 = 12.0;
 const HOVER_CALLOUT_BORDER_SCREEN_PX: f32 = 2.0;
 const HOVER_CALLOUT_CORNER_RADIUS_SCREEN_PX: f32 = 10.0;
-const HOVER_TEXT_WIDTH_FACTOR: f32 = 0.58;
+const HOVER_TEXT_WIDTH_FACTOR: f32 = 0.72;
+const HOVER_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 10.0;
 const HOVER_CALLOUT_BORDER_COLOR: Color = Color::srgba(0.74, 0.78, 0.86, 0.96);
 const HOVER_CALLOUT_PANEL_COLOR: Color = Color::srgba(0.07, 0.09, 0.12, 0.95);
 
@@ -244,6 +246,7 @@ fn sync_hover_targets(
                             font_size: HOVER_LABEL_SIZE_PX,
                             ..default()
                         },
+                        TextLayout::new_with_no_wrap().with_justify(Justify::Center),
                         TextColor(label_color),
                     ))
                     .id();
@@ -628,7 +631,8 @@ fn world_to_viewport(
 
 fn hover_callout_size_px(display_text: &str) -> Vec2 {
     let text_width_px =
-        display_text.chars().count() as f32 * HOVER_LABEL_SIZE_PX * HOVER_TEXT_WIDTH_FACTOR;
+        display_text.chars().count() as f32 * HOVER_LABEL_SIZE_PX * HOVER_TEXT_WIDTH_FACTOR
+            + HOVER_TEXT_WIDTH_SLACK_SCREEN_PX;
     let width_px = (text_width_px + HOVER_CALLOUT_PADDING_X_SCREEN_PX * 2.0)
         .max(HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX);
     Vec2::new(width_px, HOVER_CALLOUT_HEIGHT_SCREEN_PX)
