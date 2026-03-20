@@ -455,6 +455,50 @@
         padding: 0.85rem 0.9rem;
       }
 
+      .fishymap-bookmark-card[data-dragging="true"] {
+        opacity: 0.45;
+        transform: scale(0.985);
+      }
+
+      .fishymap-bookmark-card[data-drop-position="before"] {
+        border-top-width: 2px;
+        border-top-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
+      }
+
+      .fishymap-bookmark-card[data-drop-position="after"] {
+        border-bottom-width: 2px;
+        border-bottom-color: color-mix(in srgb, var(--color-primary) 85%, transparent);
+      }
+
+      .fishymap-bookmark-drag {
+        cursor: grab;
+      }
+
+      .fishymap-bookmark-drag:active {
+        cursor: grabbing;
+      }
+
+      .fishymap-bookmark-drag .fishy-icon {
+        width: 1.1rem;
+        height: 1.1rem;
+      }
+
+      .fishymap-bookmark-toggle {
+        flex: none;
+        padding-top: 0.12rem;
+      }
+
+      .fishymap-bookmark-label-row {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .fishymap-bookmark-order {
+        flex: none;
+      }
+
       .fishymap-bookmark-copy {
         justify-content: flex-start;
       }
@@ -468,6 +512,7 @@
       }
 
       .fishymap-bookmark-label {
+        min-width: 0;
         font-size: 0.92rem;
         font-weight: 600;
         line-height: 1.25;
@@ -909,8 +954,15 @@
         </div>
         <div id="fishymap-bookmarks-body" class="fishymap-window-body">
           <div id="fishymap-bookmarks-controls">
+            <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button">Copy XML</button>
+            <button id="fishymap-bookmark-export" class="btn btn-soft btn-sm" type="button">Export XML</button>
+            <button id="fishymap-bookmark-import-trigger" class="btn btn-soft btn-sm" type="button">Import XML</button>
+            <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button">Select all</button>
+            <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button">Clear</button>
             <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden>Cancel</button>
+            <input id="fishymap-bookmark-import-input" class="hidden" type="file" accept=".xml,.txt,text/xml,application/xml">
           </div>
+          <p id="fishymap-bookmark-selection-summary" class="text-xs text-base-content/55">No bookmarks selected.</p>
           <p id="fishymap-bookmark-status" class="text-xs text-base-content/70">
             Click "Drop bookmark" and choose a point on the 2D map.
           </p>

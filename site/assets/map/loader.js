@@ -13,6 +13,9 @@ const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-2";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
 const BOOKMARK_COORDINATE_DECIMALS = 3;
+const BOOKMARK_XML_POS_Y = "-8175.0";
+const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
+const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
 const BOOKMARK_DEFAULT_STATUS = 'Click "Drop bookmark" and choose a point on the 2D map.';
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
@@ -289,8 +292,27 @@ function formatBookmarkCoordinate(value) {
     .replace(/\.?0+$/, "");
 }
 
-function formatBookmarkClipboardText(bookmark) {
-  return `${formatBookmarkCoordinate(bookmark?.worldX)}, ${formatBookmarkCoordinate(bookmark?.worldZ)}`;
+function formatBookmarkClipboardText(bookmarks, options = {}) {
+  return serializeBookmarksForExport(bookmarks, options);
+}
+
+function pluralizeBookmarks(count) {
+  return count === 1 ? "bookmark" : "bookmarks";
+}
+
+function formatBookmarkExportTimestamp(timestamp) {
+  const date = new Date(timestamp);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const hours = String(date.getUTCHours()).padStart(2, "0");
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(date.getUTCSeconds()).padStart(2, "0");
+  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+}
+
+function buildBookmarkExportFilename(timestamp = Date.now()) {
+  return `fishystuff-map-bookmarks-${formatBookmarkExportTimestamp(timestamp)}.xml`;
 }
 
 function createBookmarkId() {
@@ -397,6 +419,244 @@ export function renameBookmark(bookmarks, bookmarkId, nextLabel) {
       ...bookmark,
       label: requestedLabel || defaultBookmarkLabel(index, bookmark.zoneName),
     };
+  });
+}
+
+function escapeXml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+function unescapeXml(value) {
+  return String(value ?? "")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&amp;", "&");
+}
+
+function formatBookmarkXmlCoordinate(value) {
+  const normalized = normalizeBookmarkCoordinate(value);
+  if (normalized == null) {
+    return "";
+  }
+  if (Number.isInteger(normalized)) {
+    return `${normalized.toFixed(1)}`;
+  }
+  return String(normalized);
+}
+
+function isGenericBookmarkCollectionTitle(title) {
+  const normalizedTitle = String(title || "").trim();
+  if (!normalizedTitle) {
+    return true;
+  }
+  return /^\d+\s+FishyStuff Bookmarks$/i.test(normalizedTitle);
+}
+
+function describeBookmarksForExport(bookmarks) {
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  if (!normalizedBookmarks.length) {
+    return "0 FishyStuff Bookmarks";
+  }
+  const zoneNames = normalizedBookmarks
+    .map((bookmark) => String(bookmark.zoneName || "").trim())
+    .filter(Boolean);
+  if (zoneNames.length === normalizedBookmarks.length && zoneNames.every((name) => name === zoneNames[0])) {
+    return zoneNames[0];
+  }
+  const labels = normalizedBookmarks
+    .map((bookmark) => String(bookmark.label || "").trim())
+    .filter(Boolean);
+  if (labels.length === normalizedBookmarks.length && labels.every((name) => name === labels[0])) {
+    return labels[0];
+  }
+  if (normalizedBookmarks.length === 1) {
+    return labels[0] || zoneNames[0] || "FishyStuff Bookmark";
+  }
+  return `${normalizedBookmarks.length} FishyStuff Bookmarks`;
+}
+
+function bookmarkDisplayLabel(bookmark, fallbackIndex = 0) {
+  return String(bookmark?.label || "").trim() || defaultBookmarkLabel(fallbackIndex, bookmark?.zoneName);
+}
+
+function formatBookmarkXmlName(bookmark, index) {
+  return `${index + 1}: ${bookmarkDisplayLabel(bookmark, index)}`;
+}
+
+function extractBookmarkCommentTitle(serializedBookmarks) {
+  const match = String(serializedBookmarks || "").match(/Waypoints\s+for:\s*([^\r\n]+)/i);
+  return String(match?.[1] || "").trim();
+}
+
+function parseBookmarkXmlAttributes(nodeText) {
+  const attributes = {};
+  const attributePattern = /([A-Za-z_:][A-Za-z0-9:._-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+  for (const match of String(nodeText || "").matchAll(attributePattern)) {
+    attributes[match[1]] = unescapeXml(match[2] ?? match[3] ?? "");
+  }
+  return attributes;
+}
+
+function normalizeBookmarkLabelFromXml(label, index) {
+  const trimmedLabel = String(label || "").trim().replace(/^\d+\s*:\s*/, "").trim();
+  return trimmedLabel || defaultBookmarkLabel(index);
+}
+
+function bookmarkMergeKey(bookmark) {
+  const normalizedBookmark = normalizeBookmarks([bookmark])[0];
+  if (!normalizedBookmark) {
+    return "";
+  }
+  return [
+    String(normalizedBookmark.label || "").trim().toLowerCase(),
+    formatBookmarkCoordinate(normalizedBookmark.worldX),
+    formatBookmarkCoordinate(normalizedBookmark.worldZ),
+  ].join("\u0000");
+}
+
+function parseXmlBookmarks(serializedBookmarks, options = {}) {
+  const serialized = String(serializedBookmarks || "");
+  const nodes = Array.from(serialized.matchAll(/<BookMark\b[^>]*\/?>/gi));
+  if (!nodes.length) {
+    return [];
+  }
+  const idFactory = typeof options.idFactory === "function" ? options.idFactory : createBookmarkId;
+  const commentTitle = extractBookmarkCommentTitle(serializedBookmarks);
+  const normalizedCommentTitle = !isGenericBookmarkCollectionTitle(commentTitle) ? commentTitle : "";
+  return normalizeBookmarks(
+    nodes.map((match, index) => {
+      const attributes = parseBookmarkXmlAttributes(match[0]);
+      const label = normalizeBookmarkLabelFromXml(attributes.BookMarkName, index);
+      const zoneName = normalizedCommentTitle || label;
+      return {
+        id: idFactory(),
+        label,
+        zoneName,
+        worldX: attributes.PosX,
+        worldZ: attributes.PosZ,
+      };
+    }),
+  );
+}
+
+export function serializeBookmarksForExport(bookmarks, options = {}) {
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  const title = String(options.title || "").trim() || describeBookmarksForExport(normalizedBookmarks);
+  const generatedBy = String(options.generatedBy || "").trim() || BOOKMARK_XML_GENERATED_BY;
+  const previewUrl = String(options.previewUrl || "").trim() || BOOKMARK_XML_PREVIEW_URL;
+  const posY = String(options.posY || "").trim() || BOOKMARK_XML_POS_Y;
+  const lines = [
+    "<!--",
+    `\tWaypoints for: ${title}`,
+    `\tAuto-Generated by: ${generatedBy}`,
+    `\tPreview at: ${previewUrl}`,
+    "-->",
+    "<WorldmapBookMark>",
+    ...normalizedBookmarks.map(
+      (bookmark, index) =>
+        `\t<BookMark BookMarkName="${escapeXml(formatBookmarkXmlName(bookmark, index))}" PosX="${escapeXml(formatBookmarkXmlCoordinate(bookmark.worldX))}" PosY="${escapeXml(posY)}" PosZ="${escapeXml(formatBookmarkXmlCoordinate(bookmark.worldZ))}" />`,
+    ),
+    "</WorldmapBookMark>",
+  ];
+  return lines.join("\n");
+}
+
+export function parseImportedBookmarks(serializedBookmarks, options = {}) {
+  if (typeof serializedBookmarks !== "string" || !serializedBookmarks.trim()) {
+    return [];
+  }
+  const xmlBookmarks = parseXmlBookmarks(serializedBookmarks, options);
+  if (xmlBookmarks.length) {
+    return xmlBookmarks;
+  }
+  return normalizeBookmarks(JSON.parse(serializedBookmarks));
+}
+
+export function mergeImportedBookmarks(existingBookmarks, importedBookmarks) {
+  const merged = normalizeBookmarks(existingBookmarks);
+  const seenKeys = new Set(merged.map((bookmark) => bookmarkMergeKey(bookmark)).filter(Boolean));
+  for (const bookmark of normalizeBookmarks(importedBookmarks)) {
+    const mergeKey = bookmarkMergeKey(bookmark);
+    if (!mergeKey || seenKeys.has(mergeKey)) {
+      continue;
+    }
+    seenKeys.add(mergeKey);
+    merged.push(bookmark);
+  }
+  return merged;
+}
+
+export function moveBookmarkBefore(bookmarks, movingBookmarkId, targetBookmarkId, position = "before") {
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  const sourceId = String(movingBookmarkId || "").trim();
+  const targetId = String(targetBookmarkId || "").trim();
+  if (!sourceId || !targetId || sourceId === targetId) {
+    return normalizedBookmarks;
+  }
+  const currentIndex = normalizedBookmarks.findIndex((bookmark) => bookmark.id === sourceId);
+  const targetIndex = normalizedBookmarks.findIndex((bookmark) => bookmark.id === targetId);
+  if (currentIndex < 0 || targetIndex < 0) {
+    return normalizedBookmarks;
+  }
+  const reordered = normalizedBookmarks.slice();
+  const [bookmark] = reordered.splice(currentIndex, 1);
+  const baseIndex = reordered.findIndex((candidate) => candidate.id === targetId);
+  const nextIndex = position === "after" ? baseIndex + 1 : baseIndex;
+  reordered.splice(nextIndex, 0, bookmark);
+  return reordered;
+}
+
+function downloadBookmarkExport(bookmarks, options = {}) {
+  const doc = options.document ?? globalThis.document;
+  const urlApi = options.url ?? globalThis.URL;
+  const blobCtor = options.Blob ?? globalThis.Blob;
+  if (
+    !doc?.createElement ||
+    !doc?.body?.appendChild ||
+    typeof blobCtor !== "function" ||
+    typeof urlApi?.createObjectURL !== "function"
+  ) {
+    throw new Error("Bookmark export is unavailable");
+  }
+  const timestamp = Number.isFinite(options.now) ? options.now : Date.now();
+  const anchor = doc.createElement("a");
+  const href = urlApi.createObjectURL(
+    new blobCtor([serializeBookmarksForExport(bookmarks, { now: timestamp })], {
+      type: "application/xml",
+    }),
+  );
+  anchor.href = href;
+  anchor.download = buildBookmarkExportFilename(timestamp);
+  anchor.rel = "noopener";
+  anchor.hidden = true;
+  doc.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  globalThis.setTimeout?.(() => {
+    urlApi.revokeObjectURL?.(href);
+  }, 0);
+}
+
+async function readBookmarkImportFile(file) {
+  if (typeof file?.text === "function") {
+    return file.text();
+  }
+  const readerCtor = globalThis.FileReader;
+  if (typeof readerCtor !== "function") {
+    throw new Error("Bookmark import is unavailable");
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new readerCtor();
+    reader.onerror = () => reject(reader.error || new Error("Failed to read bookmark import"));
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.readAsText(file);
   });
 }
 
@@ -1059,6 +1319,30 @@ function bookmarkStatusMessage(state, bookmarkUi) {
   return BOOKMARK_DEFAULT_STATUS;
 }
 
+function normalizeSelectedBookmarkIds(bookmarks, selectedIds) {
+  const availableIds = new Set(normalizeBookmarks(bookmarks).map((bookmark) => bookmark.id));
+  return Array.from(
+    new Set(
+      (Array.isArray(selectedIds) ? selectedIds : [])
+        .map((bookmarkId) => String(bookmarkId || "").trim())
+        .filter((bookmarkId) => availableIds.has(bookmarkId)),
+    ),
+  );
+}
+
+function selectedBookmarksInOrder(bookmarks, selectedIds) {
+  const selectedIdSet = new Set(normalizeSelectedBookmarkIds(bookmarks, selectedIds));
+  return normalizeBookmarks(bookmarks).filter((bookmark) => selectedIdSet.has(bookmark.id));
+}
+
+function bookmarkSelectionStatusLabel(bookmarks, selectedIds) {
+  const selectedCount = normalizeSelectedBookmarkIds(bookmarks, selectedIds).length;
+  if (selectedCount <= 0) {
+    return "No bookmarks selected.";
+  }
+  return `${selectedCount} ${pluralizeBookmarks(selectedCount)} selected.`;
+}
+
 function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
   if (
     !elements.bookmarksList ||
@@ -1078,24 +1362,60 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
       delete elements.shell.dataset.bookmarkPlacing;
     }
   }
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  const selectedIds = normalizeSelectedBookmarkIds(normalizedBookmarks, bookmarkUi?.selectedIds);
+  if (bookmarkUi) {
+    bookmarkUi.selectedIds = selectedIds;
+  }
+  const selectedIdSet = new Set(selectedIds);
   setBooleanProperty(elements.bookmarkPlace, "disabled", !canPlace && !bookmarkUi?.placing);
   setTextContent(elements.bookmarkPlaceLabel, bookmarkUi?.placing ? "Click map to place" : "Drop bookmark");
-  setBooleanProperty(elements.bookmarksControls, "hidden", !bookmarkUi?.placing);
+  setBooleanProperty(elements.bookmarkCopySelected, "disabled", selectedIds.length === 0);
+  setBooleanProperty(elements.bookmarkExport, "disabled", normalizedBookmarks.length === 0);
+  setBooleanProperty(elements.bookmarkSelectAll, "disabled", normalizedBookmarks.length === 0 || selectedIds.length === normalizedBookmarks.length);
+  setBooleanProperty(elements.bookmarkClearSelection, "disabled", selectedIds.length === 0);
   setBooleanProperty(elements.bookmarkCancel, "hidden", !bookmarkUi?.placing);
   setTextContent(elements.bookmarkStatus, bookmarkStatusMessage(state, bookmarkUi));
+  if (elements.bookmarkSelectionSummary) {
+    setTextContent(elements.bookmarkSelectionSummary, bookmarkSelectionStatusLabel(normalizedBookmarks, selectedIds));
+  }
 
   setMarkup(
     elements.bookmarksList,
-    JSON.stringify(normalizeBookmarks(bookmarks)),
-    bookmarks.length
-      ? bookmarks
-          .map((bookmark) => {
+    JSON.stringify({
+      bookmarks: normalizedBookmarks,
+      selectedIds,
+    }),
+    normalizedBookmarks.length
+      ? normalizedBookmarks
+          .map((bookmark, index) => {
             const zoneName =
               bookmark.zoneName && bookmark.zoneName !== bookmark.label ? bookmark.zoneName : "";
             return `
-              <div class="fishymap-bookmark-card rounded-box border border-base-300/70 bg-base-100">
+              <div class="fishymap-bookmark-card rounded-box border border-base-300/70 bg-base-100" data-bookmark-id="${escapeHtml(bookmark.id)}">
+                <button
+                  class="fishymap-bookmark-drag btn btn-xs btn-circle btn-ghost"
+                  data-bookmark-drag="${escapeHtml(bookmark.id)}"
+                  type="button"
+                  aria-label="Drag ${escapeHtml(bookmark.label)}"
+                  draggable="true"
+                  tabindex="-1"
+                >
+                  ${dragHandleIcon()}
+                </button>
+                <label class="fishymap-bookmark-toggle" aria-label="Select ${escapeHtml(bookmark.label)}">
+                  <input
+                    class="checkbox checkbox-sm"
+                    type="checkbox"
+                    data-bookmark-select="${escapeHtml(bookmark.id)}"
+                    ${selectedIdSet.has(bookmark.id) ? "checked" : ""}
+                  >
+                </label>
                 <div class="fishymap-bookmark-main">
-                  <div class="fishymap-bookmark-label">${escapeHtml(bookmark.label)}</div>
+                  <div class="fishymap-bookmark-label-row">
+                    <span class="fishymap-bookmark-order badge badge-soft badge-sm">${index + 1}</span>
+                    <div class="fishymap-bookmark-label">${escapeHtml(bookmark.label)}</div>
+                  </div>
                   ${zoneName ? `<div class="fishymap-bookmark-zone">${escapeHtml(zoneName)}</div>` : ""}
                 </div>
                 <div class="fishymap-bookmark-actions">
@@ -1112,11 +1432,11 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
                     class="fishymap-bookmark-copy btn btn-soft btn-primary btn-xs"
                     type="button"
                     data-bookmark-copy="${escapeHtml(bookmark.id)}"
-                    aria-label="Copy bookmark coordinates"
-                    title="Copy bookmark coordinates"
+                    aria-label="Copy bookmark XML"
+                    title="Copy bookmark XML"
                   >
                     ${spriteIcon("copy", "size-4")}
-                    <span>Copy</span>
+                    <span>Copy XML</span>
                   </button>
                   <button
                     class="btn btn-ghost btn-error btn-xs"
@@ -2365,6 +2685,7 @@ function bindUi(shell, elements, options = {}) {
   let bookmarks = loadPersistedBookmarks();
   const bookmarkUi = {
     placing: false,
+    selectedIds: [],
     status: "",
   };
   let nextWindowZIndex = 30;
@@ -2422,6 +2743,11 @@ function bindUi(shell, elements, options = {}) {
     overLayerId: null,
     mode: null,
   };
+  const bookmarkDragState = {
+    draggingBookmarkId: null,
+    overBookmarkId: null,
+    mode: null,
+  };
   const layerOpacityInteraction = {
     activeLayerId: null,
     activeValue: null,
@@ -2441,6 +2767,19 @@ function bindUi(shell, elements, options = {}) {
 
   function setBookmarkStatus(message = "") {
     bookmarkUi.status = String(message || "").trim();
+  }
+
+  function setSelectedBookmarkIds(nextSelectedIds) {
+    bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds);
+  }
+
+  function selectedBookmarksForCopy() {
+    return selectedBookmarksInOrder(bookmarks, bookmarkUi.selectedIds);
+  }
+
+  function bookmarksForExport() {
+    const selectedBookmarks = selectedBookmarksForCopy();
+    return selectedBookmarks.length ? selectedBookmarks : normalizeBookmarks(bookmarks);
   }
 
   function syncBookmarksToBridge(nextBookmarks = bookmarks) {
@@ -2463,8 +2802,11 @@ function bindUi(shell, elements, options = {}) {
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   }
 
-  function persistBookmarksAndRender(nextBookmarks, statusMessage = "") {
+  function persistBookmarksAndRender(nextBookmarks, statusMessage = "", options = {}) {
     bookmarks = normalizeBookmarks(nextBookmarks);
+    setSelectedBookmarkIds(
+      Array.isArray(options.selectedIds) ? options.selectedIds : bookmarkUi.selectedIds,
+    );
     const persisted = persistBookmarks(bookmarks);
     syncBookmarksToBridge(bookmarks);
     setBookmarkStatus(
@@ -2676,6 +3018,28 @@ function bindUi(shell, elements, options = {}) {
     const card = Array.from(
       elements.layers?.querySelectorAll?.(".fishymap-layer-card") || [],
     ).find((candidate) => candidate.getAttribute("data-layer-id") === targetLayerId);
+    if (card) {
+      card.dataset.dropPosition = mode;
+    }
+  }
+
+  function clearBookmarkDropState() {
+    bookmarkDragState.overBookmarkId = null;
+    bookmarkDragState.mode = null;
+    elements.bookmarksList
+      ?.querySelectorAll?.(".fishymap-bookmark-card[data-drop-position]")
+      ?.forEach?.((card) => {
+        delete card.dataset.dropPosition;
+      });
+  }
+
+  function applyBookmarkDropState(targetBookmarkId, mode) {
+    clearBookmarkDropState();
+    bookmarkDragState.overBookmarkId = targetBookmarkId;
+    bookmarkDragState.mode = mode;
+    const card = Array.from(
+      elements.bookmarksList?.querySelectorAll?.(".fishymap-bookmark-card") || [],
+    ).find((candidate) => candidate.getAttribute("data-bookmark-id") === targetBookmarkId);
     if (card) {
       card.dataset.dropPosition = mode;
     }
@@ -3033,6 +3397,199 @@ function bindUi(shell, elements, options = {}) {
     setBookmarkPlacementActive(false);
   });
 
+  elements.bookmarkCopySelected?.addEventListener("click", async () => {
+    const selectedBookmarks = selectedBookmarksForCopy();
+    if (!selectedBookmarks.length) {
+      setBookmarkStatus("Select one or more bookmarks to copy XML.");
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      return;
+    }
+    try {
+      await copyTextToClipboard(formatBookmarkClipboardText(selectedBookmarks));
+      setBookmarkStatus(
+        `Copied XML for ${selectedBookmarks.length} ${pluralizeBookmarks(selectedBookmarks.length)}.`,
+      );
+    } catch (_) {
+      setBookmarkStatus("Clipboard access is unavailable in this browser.");
+    }
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+  });
+
+  elements.bookmarkSelectAll?.addEventListener("click", () => {
+    setSelectedBookmarkIds(bookmarks.map((bookmark) => bookmark.id));
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+  });
+
+  elements.bookmarkClearSelection?.addEventListener("click", () => {
+    setSelectedBookmarkIds([]);
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+  });
+
+  elements.bookmarkExport?.addEventListener("click", () => {
+    const exportBookmarks = bookmarksForExport();
+    const selectedCount = selectedBookmarksForCopy().length;
+    if (!exportBookmarks.length) {
+      setBookmarkStatus("There are no bookmarks to export yet.");
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      return;
+    }
+    try {
+      downloadBookmarkExport(exportBookmarks);
+      setBookmarkStatus(
+        selectedCount
+          ? `Exported ${exportBookmarks.length} selected ${pluralizeBookmarks(exportBookmarks.length)}.`
+          : `Exported ${exportBookmarks.length} ${pluralizeBookmarks(exportBookmarks.length)}.`,
+      );
+    } catch (_) {
+      setBookmarkStatus("Bookmark export is unavailable in this browser.");
+    }
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+  });
+
+  elements.bookmarkImportTrigger?.addEventListener("click", () => {
+    if (!elements.bookmarkImportInput) {
+      setBookmarkStatus("Bookmark import is unavailable in this browser.");
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      return;
+    }
+    if (bookmarkUi.placing) {
+      setBookmarkPlacementActive(false);
+    }
+    elements.bookmarkImportInput.value = "";
+    elements.bookmarkImportInput.click();
+  });
+
+  elements.bookmarkImportInput?.addEventListener("change", async () => {
+    const file = elements.bookmarkImportInput?.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      const importedBookmarks = parseImportedBookmarks(await readBookmarkImportFile(file));
+      if (!importedBookmarks.length) {
+        setBookmarkStatus("The selected file did not contain any bookmark XML.");
+        renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+        return;
+      }
+      const existingBookmarkKeys = new Set(
+        normalizeBookmarks(bookmarks).map((bookmark) => bookmarkMergeKey(bookmark)).filter(Boolean),
+      );
+      const importedBookmarkIds = importedBookmarks
+        .filter((bookmark) => !existingBookmarkKeys.has(bookmarkMergeKey(bookmark)))
+        .map((bookmark) => bookmark.id);
+      const nextBookmarks = mergeImportedBookmarks(bookmarks, importedBookmarks);
+      const importedCount = importedBookmarkIds.length;
+      const skippedCount = importedBookmarks.length - importedCount;
+      persistBookmarksAndRender(
+        nextBookmarks,
+        importedCount
+          ? `Imported ${importedCount} ${pluralizeBookmarks(importedCount)}${
+              skippedCount ? `; skipped ${skippedCount} duplicate${skippedCount === 1 ? "" : "s"}.` : "."
+            }`
+          : "No new bookmarks were imported.",
+        {
+          selectedIds: importedCount
+            ? normalizeSelectedBookmarkIds(nextBookmarks, bookmarkUi.selectedIds.concat(importedBookmarkIds))
+            : bookmarkUi.selectedIds,
+        },
+      );
+    } catch (error) {
+      console.warn("Failed to import map bookmarks", error);
+      setBookmarkStatus("Bookmark import failed. Choose a valid WorldmapBookMark XML file.");
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+    } finally {
+      elements.bookmarkImportInput.value = "";
+    }
+  });
+
+  elements.bookmarksList?.addEventListener("change", (event) => {
+    const selectionInput = event.target.closest("input[data-bookmark-select]");
+    if (!selectionInput) {
+      return;
+    }
+    const bookmarkId = selectionInput.getAttribute("data-bookmark-select");
+    const nextSelectedIds = selectionInput.checked
+      ? bookmarkUi.selectedIds.concat(bookmarkId)
+      : bookmarkUi.selectedIds.filter((selectedId) => selectedId !== bookmarkId);
+    setSelectedBookmarkIds(nextSelectedIds);
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+  });
+
+  elements.bookmarksList?.addEventListener("dragstart", (event) => {
+    const handle = event.target.closest("button[data-bookmark-drag][draggable='true']");
+    const card = handle?.closest(".fishymap-bookmark-card");
+    if (!card || !handle || isRendering) {
+      return;
+    }
+    const bookmarkId = card.getAttribute("data-bookmark-id");
+    if (!bookmarkId) {
+      return;
+    }
+    bookmarkDragState.draggingBookmarkId = bookmarkId;
+    card.dataset.dragging = "true";
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", bookmarkId);
+    }
+  });
+
+  elements.bookmarksList?.addEventListener("dragover", (event) => {
+    if (!bookmarkDragState.draggingBookmarkId) {
+      return;
+    }
+    const card = event.target.closest(".fishymap-bookmark-card");
+    if (!card) {
+      clearBookmarkDropState();
+      return;
+    }
+    const targetBookmarkId = card.getAttribute("data-bookmark-id");
+    if (!targetBookmarkId || targetBookmarkId === bookmarkDragState.draggingBookmarkId) {
+      clearBookmarkDropState();
+      return;
+    }
+    event.preventDefault();
+    const rect = card.getBoundingClientRect();
+    const offsetY = event.clientY - rect.top;
+    applyBookmarkDropState(targetBookmarkId, offsetY >= rect.height / 2 ? "after" : "before");
+  });
+
+  elements.bookmarksList?.addEventListener("drop", (event) => {
+    if (
+      !bookmarkDragState.draggingBookmarkId ||
+      !bookmarkDragState.overBookmarkId ||
+      !bookmarkDragState.mode
+    ) {
+      clearBookmarkDropState();
+      return;
+    }
+    event.preventDefault();
+    const nextBookmarks = moveBookmarkBefore(
+      bookmarks,
+      bookmarkDragState.draggingBookmarkId,
+      bookmarkDragState.overBookmarkId,
+      bookmarkDragState.mode,
+    );
+    const movedBookmark = nextBookmarks.find(
+      (bookmark) => bookmark.id === bookmarkDragState.draggingBookmarkId,
+    );
+    clearBookmarkDropState();
+    bookmarkDragState.draggingBookmarkId = null;
+    persistBookmarksAndRender(
+      nextBookmarks,
+      movedBookmark ? `Moved ${movedBookmark.label}.` : "Reordered bookmarks.",
+    );
+  });
+
+  elements.bookmarksList?.addEventListener("dragend", () => {
+    elements.bookmarksList
+      ?.querySelectorAll?.(".fishymap-bookmark-card[data-dragging]")
+      ?.forEach?.((card) => {
+        delete card.dataset.dragging;
+      });
+    bookmarkDragState.draggingBookmarkId = null;
+    clearBookmarkDropState();
+  });
+
   elements.bookmarksList?.addEventListener("click", async (event) => {
     const renameButton = event.target.closest("button[data-bookmark-rename]");
     if (renameButton) {
@@ -3067,8 +3624,8 @@ function bindUi(shell, elements, options = {}) {
         return;
       }
       try {
-        await copyTextToClipboard(formatBookmarkClipboardText(bookmark));
-        setBookmarkStatus(`Copied coordinates for ${bookmark.label}.`);
+        await copyTextToClipboard(formatBookmarkClipboardText([bookmark]));
+        setBookmarkStatus(`Copied XML for ${bookmark.label}.`);
       } catch (_) {
         setBookmarkStatus("Clipboard access is unavailable in this browser.");
       }
@@ -3500,7 +4057,14 @@ async function main() {
     bookmarksControls: document.getElementById("fishymap-bookmarks-controls"),
     bookmarkPlace: document.getElementById("fishymap-bookmark-place"),
     bookmarkPlaceLabel: document.getElementById("fishymap-bookmark-place-label"),
+    bookmarkCopySelected: document.getElementById("fishymap-bookmark-copy-selected"),
+    bookmarkExport: document.getElementById("fishymap-bookmark-export"),
+    bookmarkImportTrigger: document.getElementById("fishymap-bookmark-import-trigger"),
+    bookmarkImportInput: document.getElementById("fishymap-bookmark-import-input"),
+    bookmarkSelectAll: document.getElementById("fishymap-bookmark-select-all"),
+    bookmarkClearSelection: document.getElementById("fishymap-bookmark-clear-selection"),
     bookmarkCancel: document.getElementById("fishymap-bookmark-cancel"),
+    bookmarkSelectionSummary: document.getElementById("fishymap-bookmark-selection-summary"),
     bookmarkStatus: document.getElementById("fishymap-bookmark-status"),
     bookmarksList: document.getElementById("fishymap-bookmarks-list"),
     panel: document.getElementById("fishymap-panel"),
