@@ -1064,11 +1064,9 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
       delete elements.shell.dataset.bookmarkPlacing;
     }
   }
-  if (elements.bookmarksCount) {
-    setTextContent(elements.bookmarksCount, String(bookmarks.length));
-  }
   setBooleanProperty(elements.bookmarkPlace, "disabled", !canPlace && !bookmarkUi?.placing);
   setTextContent(elements.bookmarkPlaceLabel, bookmarkUi?.placing ? "Click map to place" : "Drop bookmark");
+  setBooleanProperty(elements.bookmarksControls, "hidden", !bookmarkUi?.placing);
   setBooleanProperty(elements.bookmarkCancel, "hidden", !bookmarkUi?.placing);
   setTextContent(elements.bookmarkStatus, bookmarkStatusMessage(state, bookmarkUi));
 
@@ -3454,7 +3452,7 @@ async function main() {
     bookmarksWindow: document.getElementById("fishymap-bookmarks-window"),
     bookmarksTitlebar: document.getElementById("fishymap-bookmarks-titlebar"),
     bookmarksBody: document.getElementById("fishymap-bookmarks-body"),
-    bookmarksCount: document.getElementById("fishymap-bookmarks-count"),
+    bookmarksControls: document.getElementById("fishymap-bookmarks-controls"),
     bookmarkPlace: document.getElementById("fishymap-bookmark-place"),
     bookmarkPlaceLabel: document.getElementById("fishymap-bookmark-place-label"),
     bookmarkCancel: document.getElementById("fishymap-bookmark-cancel"),
