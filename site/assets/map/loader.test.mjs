@@ -20,6 +20,7 @@ const {
   parseImportedBookmarks,
   parseWindowUiState,
   renameBookmark,
+  resolveHoveredBookmark,
   resolveDisplayBookmarks,
   renderSearchSelection,
   serializeBookmarksForExport,
@@ -83,6 +84,12 @@ function buildStateBundle(selectedFishIds = []) {
 function buildHoverStateBundle() {
   return {
     state: {
+      view: {
+        viewMode: "2d",
+        camera: {
+          zoom: 1,
+        },
+      },
       catalog: {
         layers: [
           {
@@ -207,6 +214,105 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
         layerId: "regions",
         icon: "hover-origin",
         label: "Origin",
+        value: "Tarif",
+      },
+    ],
+  );
+});
+
+test("resolveHoveredBookmark matches the nearest bookmark under the cursor", () => {
+  const hoveredBookmark = resolveHoveredBookmark(
+    {
+      worldX: 100,
+      worldZ: 100,
+    },
+    buildHoverStateBundle(),
+    [
+      {
+        id: "bookmark-a",
+        label: "Velia route",
+        worldX: 104,
+        worldZ: 103,
+      },
+      {
+        id: "bookmark-b",
+        label: "Tarif route",
+        worldX: 112,
+        worldZ: 112,
+      },
+    ],
+  );
+  assert.equal(hoveredBookmark?.bookmark?.id, "bookmark-a");
+  assert.equal(hoveredBookmark?.bookmark?.label, "Velia route");
+  assert.equal(hoveredBookmark?.index, 0);
+
+  assert.equal(
+    resolveHoveredBookmark(
+      {
+        worldX: 100,
+        worldZ: 100,
+      },
+      buildHoverStateBundle(),
+      [
+        {
+          id: "bookmark-a",
+          label: "Velia route",
+          worldX: 150,
+          worldZ: 150,
+        },
+      ],
+    ),
+    null,
+  );
+});
+
+test("buildHoverOverviewRows keeps bookmark info out of the regular hover box", () => {
+  assert.deepEqual(
+    buildHoverOverviewRows(
+      {
+        worldX: 100,
+        worldZ: 100,
+        zoneName: "Demi River",
+        layerSamples: [
+          {
+            layerId: "region_groups",
+            regionGroup: 58,
+            regionName: "Tarif",
+            resourceBarWaypoint: 306,
+            originWaypoint: 1437,
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+      {
+        bookmarks: [
+          {
+            id: "bookmark-a",
+            label: "Velia route",
+            worldX: 102,
+            worldZ: 101,
+          },
+          {
+            id: "bookmark-b",
+            label: "Tarif route",
+            worldX: 300,
+            worldZ: 300,
+          },
+        ],
+        selectedIds: ["bookmark-a", "bookmark-b"],
+      },
+    ),
+    [
+      {
+        layerId: "zone_mask",
+        icon: "hover-zone",
+        label: "Zone",
+        value: "Demi River",
+      },
+      {
+        layerId: "region_groups",
+        icon: "hover-resources",
+        label: "Resources",
         value: "Tarif",
       },
     ],

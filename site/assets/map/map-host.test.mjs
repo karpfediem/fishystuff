@@ -362,6 +362,7 @@ test("bookmark ui patches are normalized in input state and omitted from persist
   const next = applyStatePatch(undefined, {
     version: 1,
     ui: {
+      bookmarkSelectedIds: [" bookmark-a ", "bookmark-a", "bookmark-b", ""],
       bookmarks: [
         {
           id: " bookmark-a ",
@@ -391,10 +392,13 @@ test("bookmark ui patches are normalized in input state and omitted from persist
       worldZ: -45.25,
     },
   ]);
+  assert.deepEqual(next.ui.bookmarkSelectedIds, ["bookmark-a", "bookmark-b"]);
 
   const bridge = createFishyMapBridge();
   bridge.inputState = next;
+  assert.equal("bookmarkSelectedIds" in bridge.createSessionSnapshot().ui, false);
   assert.equal("bookmarks" in bridge.createSessionSnapshot().ui, false);
+  assert.equal("bookmarkSelectedIds" in bridge.createPrefsSnapshot().ui, false);
   assert.equal("bookmarks" in bridge.createPrefsSnapshot().ui, false);
 });
 

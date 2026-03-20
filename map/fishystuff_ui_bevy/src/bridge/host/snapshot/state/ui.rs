@@ -23,6 +23,7 @@ pub(in crate::bridge::host::snapshot) fn effective_ui_state(
         point_icon_scale: display_state
             .point_icon_scale
             .clamp(POINT_ICON_SCALE_MIN, POINT_ICON_SCALE_MAX),
+        bookmark_selected_ids: bookmarks.selected_ids.clone(),
         bookmarks: effective_ui_bookmarks(bookmarks, layer_registry, vector_runtime),
     }
 }

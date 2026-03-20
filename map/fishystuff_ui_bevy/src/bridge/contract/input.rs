@@ -207,6 +207,7 @@ pub struct FishyMapUiState {
     pub show_points: bool,
     pub show_point_icons: bool,
     pub point_icon_scale: f32,
+    pub bookmark_selected_ids: Vec<String>,
     pub bookmarks: Vec<FishyMapBookmarkEntry>,
 }
 
@@ -219,6 +220,7 @@ impl Default for FishyMapUiState {
             show_points: true,
             show_point_icons: true,
             point_icon_scale: FISHYMAP_POINT_ICON_SCALE_MIN,
+            bookmark_selected_ids: Vec::new(),
             bookmarks: Vec::new(),
         }
     }
@@ -233,6 +235,7 @@ pub struct FishyMapUiPatch {
     pub show_points: Option<bool>,
     pub show_point_icons: Option<bool>,
     pub point_icon_scale: Option<f32>,
+    pub bookmark_selected_ids: Option<Vec<String>>,
     pub bookmarks: Option<Vec<FishyMapBookmarkEntry>>,
 }
 
@@ -376,6 +379,9 @@ impl FishyMapInputState {
             if let Some(value) = ui.point_icon_scale {
                 self.ui.point_icon_scale =
                     value.clamp(FISHYMAP_POINT_ICON_SCALE_MIN, FISHYMAP_POINT_ICON_SCALE_MAX);
+            }
+            if let Some(bookmark_selected_ids) = ui.bookmark_selected_ids {
+                self.ui.bookmark_selected_ids = normalize_string_list(bookmark_selected_ids);
             }
             if let Some(bookmarks) = ui.bookmarks {
                 self.ui.bookmarks = normalize_bookmarks(bookmarks);

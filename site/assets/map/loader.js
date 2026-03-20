@@ -1437,6 +1437,47 @@ function hoverLayerOverviewConfig(layerId) {
   return null;
 }
 
+const BOOKMARK_HIT_RADIUS_SCREEN_PX = 14;
+
+function bookmarkHitRadiusWorld(stateBundle) {
+  const zoom = Number(stateBundle?.state?.view?.camera?.zoom);
+  const normalizedZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return BOOKMARK_HIT_RADIUS_SCREEN_PX * normalizedZoom;
+}
+
+export function resolveHoveredBookmark(hover, stateBundle, bookmarks) {
+  const worldX = normalizeBookmarkCoordinate(hover?.worldX);
+  const worldZ = normalizeBookmarkCoordinate(hover?.worldZ);
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  if (worldX == null || worldZ == null || normalizedBookmarks.length === 0) {
+    return null;
+  }
+  const maxDistanceSq = bookmarkHitRadiusWorld(stateBundle) ** 2;
+  let closestBookmark = null;
+  for (let index = 0; index < normalizedBookmarks.length; index += 1) {
+    const bookmark = normalizedBookmarks[index];
+    const dx = bookmark.worldX - worldX;
+    const dz = bookmark.worldZ - worldZ;
+    const distanceSq = dx * dx + dz * dz;
+    if (distanceSq > maxDistanceSq) {
+      continue;
+    }
+    if (!closestBookmark || distanceSq < closestBookmark.distanceSq) {
+      closestBookmark = {
+        bookmark,
+        index,
+        distanceSq,
+      };
+    }
+  }
+  return closestBookmark
+    ? {
+        bookmark: closestBookmark.bookmark,
+        index: closestBookmark.index,
+      }
+    : null;
+}
+
 export function buildHoverOverviewRows(hover, stateBundle) {
   const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
   const sampleByLayerId = new Map(
@@ -1722,6 +1763,8 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
         </div>
       `,
   );
+
+  renderHoverTooltip(elements, state.hover || null, stateBundle);
 }
 
 function renderFishAvatar(fish, sizeClass = "size-6", options = {}) {
@@ -3088,6 +3131,13 @@ function bindUi(shell, elements, options = {}) {
 
   function setSelectedBookmarkIds(nextSelectedIds) {
     bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds);
+    FishyMapBridge.setState?.({
+      version: FISHYMAP_CONTRACT_VERSION,
+      ui: {
+        bookmarkSelectedIds: bookmarkUi.selectedIds,
+      },
+    });
+    FishyMapBridge.flushPendingPatchNow?.();
   }
 
   function selectedBookmarksForCopy() {
@@ -3103,6 +3153,7 @@ function bindUi(shell, elements, options = {}) {
     FishyMapBridge.setState?.({
       version: FISHYMAP_CONTRACT_VERSION,
       ui: {
+        bookmarkSelectedIds: normalizeSelectedBookmarkIds(nextBookmarks, bookmarkUi.selectedIds),
         bookmarks: normalizeBookmarks(nextBookmarks),
       },
     });
@@ -3421,11 +3472,16 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.canvas.addEventListener("click", () => {
-    if (!bookmarkUi.placing) {
-      return;
-    }
     const state = latestStateBundle?.state || requestBridgeState(shell).state;
     const hover = state.hover || null;
+    if (!bookmarkUi.placing) {
+      const hoveredBookmark = resolveHoveredBookmark(hover, latestStateBundle, bookmarks);
+      if (hoveredBookmark) {
+        setSelectedBookmarkIds(bookmarkUi.selectedIds.concat(hoveredBookmark.bookmark.id));
+        renderCurrentState(latestStateBundle);
+      }
+      return;
+    }
     const worldX = normalizeBookmarkCoordinate(hover?.worldX);
     const worldZ = normalizeBookmarkCoordinate(hover?.worldZ);
     const regionGroupSample = hoverSampleByLayerId(hover, "region_groups");

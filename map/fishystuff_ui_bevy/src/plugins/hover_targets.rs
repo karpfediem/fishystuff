@@ -1,23 +1,35 @@
 use bevy::asset::RenderAssetUsages;
+use bevy::color::Alpha;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy::sprite::{Anchor, Text2d, Text2dShadow};
-use bevy::text::{Justify, TextColor, TextFont, TextLayout};
 use bevy::window::PrimaryWindow;
 use serde_json::{Map, Value};
 
+use crate::bridge::contract::FishyMapThemeColors;
+use crate::bridge::theme::parse_css_color;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::layers::{LayerRegistry, VectorSourceSpec};
 use crate::plugins::api::{HoverInfo, HoverState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
+use crate::plugins::ui::UiFonts;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
+#[cfg(target_arch = "wasm32")]
+use crate::bridge::host::BrowserBridgeState;
+
 const HOVER_MARKER_Z: f32 = 40.6;
-const HOVER_LABEL_Z: f32 = 40.7;
 const HOVER_LABEL_SIZE_PX: f32 = 12.0;
 const HOVER_LABEL_COLOR: Color = Color::srgb(0.98, 0.97, 0.94);
+const HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX: f32 = 96.0;
+const HOVER_CALLOUT_HEIGHT_SCREEN_PX: f32 = 28.0;
+const HOVER_CALLOUT_PADDING_X_SCREEN_PX: f32 = 12.0;
+const HOVER_CALLOUT_BORDER_SCREEN_PX: f32 = 2.0;
+const HOVER_CALLOUT_CORNER_RADIUS_SCREEN_PX: f32 = 10.0;
+const HOVER_TEXT_WIDTH_FACTOR: f32 = 0.58;
+const HOVER_CALLOUT_BORDER_COLOR: Color = Color::srgba(0.74, 0.78, 0.86, 0.96);
+const HOVER_CALLOUT_PANEL_COLOR: Color = Color::srgba(0.07, 0.09, 0.12, 0.95);
 
 const HOVER_TEXTURE_WIDTH_PX: usize = 32;
 const HOVER_TEXTURE_HEIGHT_PX: usize = 32;
@@ -52,12 +64,16 @@ impl Plugin for HoverTargetsPlugin {
 struct HoverTargetMarker;
 
 #[derive(Component)]
-struct HoverTargetLabel;
+struct HoverTargetLabelRoot;
+
+#[derive(Component)]
+struct HoverTargetLabelText;
 
 #[derive(Clone, Copy, Debug)]
 struct HoverTargetVisualPair {
     marker: Entity,
-    label: Entity,
+    label_root: Entity,
+    label_text: Entity,
 }
 
 #[derive(Resource, Default)]
@@ -103,33 +119,49 @@ fn sync_hover_targets(
     mut commands: Commands,
     hover: Res<HoverState>,
     view_mode: Res<ViewModeState>,
+    #[cfg(target_arch = "wasm32")] bridge: Res<BrowserBridgeState>,
+    fonts: Res<UiFonts>,
     layer_registry: Res<LayerRegistry>,
     vector_runtime: Res<VectorLayerRuntime>,
     marker_assets: Res<HoverTargetMarkerAssets>,
     mut marker_pool: ResMut<HoverTargetMarkerPool>,
     windows: Query<&Window, With<PrimaryWindow>>,
     camera_q: Query<
-        (&Projection, &Transform),
+        (&Camera, &GlobalTransform, &Projection),
         (
             With<Map2dCamera>,
             Without<HoverTargetMarker>,
-            Without<HoverTargetLabel>,
+            Without<HoverTargetLabelRoot>,
+            Without<HoverTargetLabelText>,
         ),
     >,
     mut markers: Query<
         (&mut Transform, &mut Visibility, &mut Sprite),
         (
             With<HoverTargetMarker>,
-            Without<HoverTargetLabel>,
-            Without<Map2dCamera>,
+            Without<HoverTargetLabelRoot>,
+            Without<HoverTargetLabelText>,
         ),
     >,
-    mut labels: Query<
-        (&mut Transform, &mut Visibility, &mut Text2d),
+    mut label_roots: Query<
         (
-            With<HoverTargetLabel>,
+            &mut Node,
+            &mut Visibility,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        (
+            With<HoverTargetLabelRoot>,
             Without<HoverTargetMarker>,
-            Without<Map2dCamera>,
+            Without<HoverTargetLabelText>,
+        ),
+    >,
+    mut label_texts: Query<
+        (&mut Text, &mut TextFont, &mut TextColor),
+        (
+            With<HoverTargetLabelText>,
+            Without<HoverTargetMarker>,
+            Without<HoverTargetLabelRoot>,
         ),
     >,
 ) {
@@ -140,13 +172,30 @@ fn sync_hover_targets(
     };
 
     if targets.is_empty() {
-        hide_hover_targets(&marker_pool, &mut markers, &mut labels);
+        hide_hover_targets(&marker_pool, &mut markers, &mut label_roots);
         return;
     }
 
     let Some(texture) = marker_assets.texture.as_ref() else {
         return;
     };
+    let Ok((camera, camera_transform, _)) = camera_q.single() else {
+        hide_hover_targets(&marker_pool, &mut markers, &mut label_roots);
+        return;
+    };
+    #[cfg(target_arch = "wasm32")]
+    let theme_colors = Some(&bridge.input.theme.colors);
+    #[cfg(not(target_arch = "wasm32"))]
+    let theme_colors: Option<&FishyMapThemeColors> = None;
+    let label_color = theme_colors
+        .and_then(hover_target_label_color)
+        .unwrap_or(HOVER_LABEL_COLOR);
+    let callout_border_color = theme_colors
+        .and_then(hover_target_border_color)
+        .unwrap_or(HOVER_CALLOUT_BORDER_COLOR);
+    let callout_panel_color = theme_colors
+        .and_then(hover_target_panel_color)
+        .unwrap_or(HOVER_CALLOUT_PANEL_COLOR);
 
     while marker_pool.markers.len() < targets.len() {
         let marker = commands
@@ -162,27 +211,49 @@ fn sync_hover_targets(
                 Visibility::Hidden,
             ))
             .id();
-        let label = commands
+        let mut label_text = Entity::PLACEHOLDER;
+        let label_root = commands
             .spawn((
-                HoverTargetLabel,
-                World2dRenderEntity,
-                world_2d_layers(),
-                Text2d::new(""),
-                TextFont::from_font_size(HOVER_LABEL_SIZE_PX),
-                TextColor(HOVER_LABEL_COLOR),
-                TextLayout::new_with_justify(Justify::Center),
-                Text2dShadow {
-                    offset: Vec2::new(1.0, -1.0),
-                    color: Color::srgba(0.02, 0.03, 0.05, 0.9),
+                HoverTargetLabelRoot,
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(0.0),
+                    top: Val::Px(0.0),
+                    width: Val::Px(HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX),
+                    height: Val::Px(HOVER_CALLOUT_HEIGHT_SCREEN_PX),
+                    padding: UiRect::axes(Val::Px(HOVER_CALLOUT_PADDING_X_SCREEN_PX), Val::Px(0.0)),
+                    border: UiRect::all(Val::Px(HOVER_CALLOUT_BORDER_SCREEN_PX)),
+                    border_radius: BorderRadius::all(Val::Px(
+                        HOVER_CALLOUT_CORNER_RADIUS_SCREEN_PX,
+                    )),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
                 },
-                Anchor::BOTTOM_CENTER,
-                Transform::from_xyz(0.0, 0.0, HOVER_LABEL_Z),
+                BackgroundColor(callout_panel_color),
+                BorderColor::all(callout_border_color),
                 Visibility::Hidden,
             ))
+            .with_children(|parent| {
+                label_text = parent
+                    .spawn((
+                        HoverTargetLabelText,
+                        Text::new(""),
+                        TextFont {
+                            font: fonts.regular.clone(),
+                            font_size: HOVER_LABEL_SIZE_PX,
+                            ..default()
+                        },
+                        TextColor(label_color),
+                    ))
+                    .id();
+            })
             .id();
-        marker_pool
-            .markers
-            .push(HoverTargetVisualPair { marker, label });
+        marker_pool.markers.push(HoverTargetVisualPair {
+            marker,
+            label_root,
+            label_text,
+        });
     }
 
     let viewport_bounds = map_2d_viewport_bounds(&windows, &camera_q);
@@ -203,12 +274,48 @@ fn sync_hover_targets(
             sprite.custom_size = Some(Vec2::splat(target.marker_size_screen_px * scale));
             *visibility = Visibility::Visible;
         }
-        if let Ok((mut transform, mut visibility, mut text)) = labels.get_mut(pair.label) {
-            transform.translation.x = target.world_x;
-            transform.translation.y = target.world_z + target.label_offset_screen_px * scale;
-            transform.translation.z = HOVER_LABEL_Z;
-            text.0 = target.label.clone();
+        let Some(viewport_position) = world_to_viewport(
+            camera,
+            camera_transform,
+            Vec3::new(target.world_x, target.world_z, 0.0),
+        ) else {
+            hide_hover_target_label(pair, &mut label_roots);
+            continue;
+        };
+        let panel_size_px = hover_callout_size_px(&target.label);
+        let (left_px, top_px) = if let Ok(window) = windows.single() {
+            let max_left = (window.width() - panel_size_px.x).max(0.0);
+            let max_top = (window.height() - panel_size_px.y).max(0.0);
+            (
+                (viewport_position.x - panel_size_px.x * 0.5).clamp(0.0, max_left),
+                (viewport_position.y - target.label_offset_screen_px - panel_size_px.y)
+                    .clamp(0.0, max_top),
+            )
+        } else {
+            (
+                viewport_position.x - panel_size_px.x * 0.5,
+                viewport_position.y - target.label_offset_screen_px - panel_size_px.y,
+            )
+        };
+        if let Ok((mut node, mut visibility, mut background, mut border)) =
+            label_roots.get_mut(pair.label_root)
+        {
+            node.left = Val::Px(left_px);
+            node.top = Val::Px(top_px);
+            node.width = Val::Px(panel_size_px.x);
+            node.height = Val::Px(panel_size_px.y);
+            node.border = UiRect::all(Val::Px(HOVER_CALLOUT_BORDER_SCREEN_PX));
+            node.border_radius = BorderRadius::all(Val::Px(HOVER_CALLOUT_CORNER_RADIUS_SCREEN_PX));
+            *background = BackgroundColor(callout_panel_color);
+            *border = BorderColor::all(callout_border_color);
             *visibility = Visibility::Visible;
+        }
+        if let Ok((mut text, mut text_font, mut text_color)) = label_texts.get_mut(pair.label_text)
+        {
+            text.0 = target.label.clone();
+            text_font.font = fonts.regular.clone();
+            text_font.font_size = HOVER_LABEL_SIZE_PX;
+            text_color.0 = label_color;
         }
     }
 
@@ -216,9 +323,7 @@ fn sync_hover_targets(
         if let Ok((_, mut visibility, _)) = markers.get_mut(pair.marker) {
             *visibility = Visibility::Hidden;
         }
-        if let Ok((_, mut visibility, _)) = labels.get_mut(pair.label) {
-            *visibility = Visibility::Hidden;
-        }
+        hide_hover_target_label(*pair, &mut label_roots);
     }
 }
 
@@ -228,16 +333,21 @@ fn hide_hover_targets(
         (&mut Transform, &mut Visibility, &mut Sprite),
         (
             With<HoverTargetMarker>,
-            Without<HoverTargetLabel>,
-            Without<Map2dCamera>,
+            Without<HoverTargetLabelRoot>,
+            Without<HoverTargetLabelText>,
         ),
     >,
-    labels: &mut Query<
-        (&mut Transform, &mut Visibility, &mut Text2d),
+    label_roots: &mut Query<
         (
-            With<HoverTargetLabel>,
+            &mut Node,
+            &mut Visibility,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        (
+            With<HoverTargetLabelRoot>,
             Without<HoverTargetMarker>,
-            Without<Map2dCamera>,
+            Without<HoverTargetLabelText>,
         ),
     >,
 ) {
@@ -245,10 +355,57 @@ fn hide_hover_targets(
         if let Ok((_, mut visibility, _)) = markers.get_mut(pair.marker) {
             *visibility = Visibility::Hidden;
         }
-        if let Ok((_, mut visibility, _)) = labels.get_mut(pair.label) {
-            *visibility = Visibility::Hidden;
-        }
+        hide_hover_target_label(*pair, label_roots);
     }
+}
+
+fn hide_hover_target_label(
+    pair: HoverTargetVisualPair,
+    label_roots: &mut Query<
+        (
+            &mut Node,
+            &mut Visibility,
+            &mut BackgroundColor,
+            &mut BorderColor,
+        ),
+        (
+            With<HoverTargetLabelRoot>,
+            Without<HoverTargetMarker>,
+            Without<HoverTargetLabelText>,
+        ),
+    >,
+) {
+    if let Ok((_, mut visibility, _, _)) = label_roots.get_mut(pair.label_root) {
+        *visibility = Visibility::Hidden;
+    }
+}
+
+fn hover_target_border_color(colors: &FishyMapThemeColors) -> Option<Color> {
+    colors
+        .base300
+        .as_deref()
+        .or(colors.primary.as_deref())
+        .or(colors.base200.as_deref())
+        .and_then(parse_css_color)
+        .map(|color| color.with_alpha(0.96))
+}
+
+fn hover_target_panel_color(colors: &FishyMapThemeColors) -> Option<Color> {
+    colors
+        .base200
+        .as_deref()
+        .or(colors.base100.as_deref())
+        .and_then(parse_css_color)
+        .map(|color| color.with_alpha(0.95))
+}
+
+fn hover_target_label_color(colors: &FishyMapThemeColors) -> Option<Color> {
+    colors
+        .base_content
+        .as_deref()
+        .or(colors.primary_content.as_deref())
+        .and_then(parse_css_color)
+        .map(|color| color.with_alpha(0.98))
 }
 
 fn hover_targets_from_info(
@@ -387,27 +544,29 @@ fn json_f64(value: Option<&Value>) -> Option<f64> {
 fn map_2d_viewport_bounds(
     windows: &Query<&Window, With<PrimaryWindow>>,
     camera_q: &Query<
-        (&Projection, &Transform),
+        (&Camera, &GlobalTransform, &Projection),
         (
             With<Map2dCamera>,
             Without<HoverTargetMarker>,
-            Without<HoverTargetLabel>,
+            Without<HoverTargetLabelRoot>,
+            Without<HoverTargetLabelText>,
         ),
     >,
 ) -> Option<Map2dViewportBounds> {
     let window = windows.single().ok()?;
-    let (projection, transform) = camera_q.single().ok()?;
+    let (_, camera_transform, projection) = camera_q.single().ok()?;
     let Projection::Orthographic(orthographic) = projection else {
         return None;
     };
     let scale = orthographic.scale.max(f32::EPSILON);
     let half_width = window.width().max(1.0) * 0.5 * scale;
     let half_height = window.height().max(1.0) * 0.5 * scale;
+    let translation = camera_transform.translation();
     Some(Map2dViewportBounds {
-        min_x: transform.translation.x - half_width,
-        max_x: transform.translation.x + half_width,
-        min_z: transform.translation.y - half_height,
-        max_z: transform.translation.y + half_height,
+        min_x: translation.x - half_width,
+        max_x: translation.x + half_width,
+        min_z: translation.y - half_height,
+        max_z: translation.y + half_height,
         scale,
     })
 }
@@ -437,23 +596,42 @@ fn clamp_hover_target_to_viewport(
 
 fn camera_scale(
     camera_q: &Query<
-        (&Projection, &Transform),
+        (&Camera, &GlobalTransform, &Projection),
         (
             With<Map2dCamera>,
             Without<HoverTargetMarker>,
-            Without<HoverTargetLabel>,
+            Without<HoverTargetLabelRoot>,
+            Without<HoverTargetLabelText>,
         ),
     >,
 ) -> f32 {
     camera_q
         .single()
         .ok()
-        .and_then(|(projection, _)| match projection {
+        .and_then(|(_, _, projection)| match projection {
             Projection::Orthographic(ortho) => Some(ortho.scale),
             _ => None,
         })
         .unwrap_or(1.0)
         .max(f32::EPSILON)
+}
+
+fn world_to_viewport(
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
+    world_position: Vec3,
+) -> Option<Vec2> {
+    camera
+        .world_to_viewport(camera_transform, world_position)
+        .ok()
+}
+
+fn hover_callout_size_px(display_text: &str) -> Vec2 {
+    let text_width_px =
+        display_text.chars().count() as f32 * HOVER_LABEL_SIZE_PX * HOVER_TEXT_WIDTH_FACTOR;
+    let width_px = (text_width_px + HOVER_CALLOUT_PADDING_X_SCREEN_PX * 2.0)
+        .max(HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX);
+    Vec2::new(width_px, HOVER_CALLOUT_HEIGHT_SCREEN_PX)
 }
 
 fn color_from_rgb([red, green, blue]: [u8; 3]) -> Color {

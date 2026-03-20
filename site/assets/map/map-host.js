@@ -73,6 +73,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     showPoints?: boolean,
  *     showPointIcons?: boolean,
  *     pointIconScale?: number,
+ *     bookmarkSelectedIds?: string[],
  *     bookmarks?: Array<{
  *       id?: string,
  *       label?: string | null,
@@ -131,6 +132,7 @@ export function createEmptyInputState() {
       showPoints: true,
       showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+      bookmarkSelectedIds: [],
       bookmarks: [],
     },
   };
@@ -163,6 +165,7 @@ export function createEmptySnapshot() {
       showPoints: true,
       showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+      bookmarkSelectedIds: [],
       bookmarks: [],
     },
     view: {
@@ -597,6 +600,9 @@ export function normalizeStatePatch(patch = {}) {
         normalized.ui.pointIconScale = pointIconScale;
       }
     }
+    if (hasOwn(patch.ui, "bookmarkSelectedIds")) {
+      normalized.ui.bookmarkSelectedIds = normalizeStringList(patch.ui.bookmarkSelectedIds);
+    }
     if (hasOwn(patch.ui, "bookmarks")) {
       normalized.ui.bookmarks = normalizeBookmarksState(patch.ui.bookmarks);
     }
@@ -728,6 +734,7 @@ export function applyStatePatch(inputState, patch) {
     showPointIcons: current.ui?.showPointIcons !== false,
     pointIconScale:
       normalizePointIconScale(current.ui?.pointIconScale) ?? FISHYMAP_POINT_ICON_SCALE_MIN,
+    bookmarkSelectedIds: normalizeStringList(current.ui?.bookmarkSelectedIds),
     bookmarks: normalizeBookmarksState(current.ui?.bookmarks),
   };
 
@@ -807,6 +814,9 @@ export function applyStatePatch(inputState, patch) {
     if (hasOwn(normalized.ui, "pointIconScale")) {
       next.ui.pointIconScale =
         normalizePointIconScale(normalized.ui.pointIconScale) ?? next.ui.pointIconScale;
+    }
+    if (hasOwn(normalized.ui, "bookmarkSelectedIds")) {
+      next.ui.bookmarkSelectedIds = normalizeStringList(normalized.ui.bookmarkSelectedIds);
     }
     if (hasOwn(normalized.ui, "bookmarks")) {
       next.ui.bookmarks = normalizeBookmarksState(normalized.ui.bookmarks);
