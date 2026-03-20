@@ -497,6 +497,28 @@ function bookmarkDisplayLabel(bookmark, fallbackIndex = 0) {
   return String(bookmark?.label || "").trim() || defaultBookmarkLabel(fallbackIndex, bookmark?.zoneName);
 }
 
+export function buildBookmarkDeletionPrompt(bookmarks, options = {}) {
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  if (!normalizedBookmarks.length) {
+    return "";
+  }
+  if (normalizedBookmarks.length === 1) {
+    return `Delete bookmark "${bookmarkDisplayLabel(normalizedBookmarks[0], 0)}"?`;
+  }
+  const previewLines = normalizedBookmarks
+    .slice(0, 3)
+    .map((bookmark, index) => `${index + 1}. ${bookmarkDisplayLabel(bookmark, index)}`);
+  const remainingCount = normalizedBookmarks.length - previewLines.length;
+  return [
+    `Delete ${normalizedBookmarks.length} ${options.selection ? "selected " : ""}${pluralizeBookmarks(normalizedBookmarks.length)}?`,
+    "",
+    ...previewLines,
+    remainingCount > 0 ? `...and ${remainingCount} more.` : null,
+  ]
+    .filter((line) => line != null)
+    .join("\n");
+}
+
 function formatBookmarkXmlName(bookmark, index) {
   return `${index + 1}: ${bookmarkDisplayLabel(bookmark, index)}`;
 }
@@ -3826,6 +3848,17 @@ function bindUi(shell, elements, options = {}) {
       showSiteToast("warning", "Select one or more bookmarks to delete.");
       return;
     }
+    if (typeof globalThis.window?.confirm !== "function") {
+      showSiteToast("error", "Bookmark deletion confirmation is unavailable in this browser.");
+      return;
+    }
+    if (
+      !globalThis.window.confirm(
+        buildBookmarkDeletionPrompt(selectedBookmarks, { selection: true }),
+      )
+    ) {
+      return;
+    }
     const selectedIdSet = new Set(selectedBookmarks.map((bookmark) => bookmark.id));
     const nextBookmarks = bookmarks.filter((bookmark) => !selectedIdSet.has(bookmark.id));
     persistBookmarksAndRender(
@@ -4064,6 +4097,13 @@ function bindUi(shell, elements, options = {}) {
       (entry) => entry.id === deleteButton.getAttribute("data-bookmark-delete"),
     );
     if (!bookmark) {
+      return;
+    }
+    if (typeof globalThis.window?.confirm !== "function") {
+      showSiteToast("error", "Bookmark deletion confirmation is unavailable in this browser.");
+      return;
+    }
+    if (!globalThis.window.confirm(buildBookmarkDeletionPrompt([bookmark]))) {
       return;
     }
     persistBookmarksAndRender(

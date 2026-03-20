@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 globalThis.__fishystuffLoaderAutoStart = false;
 const {
+  buildBookmarkDeletionPrompt,
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
   buildHoverOverviewRows,
@@ -217,6 +218,62 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
         value: "Tarif",
       },
     ],
+  );
+});
+
+test("buildBookmarkDeletionPrompt uses the bookmark label for single deletions", () => {
+  assert.equal(
+    buildBookmarkDeletionPrompt([
+      {
+        id: "bookmark-a",
+        label: "Tarif route",
+        worldX: 10,
+        worldZ: 20,
+      },
+    ]),
+    'Delete bookmark "Tarif route"?',
+  );
+});
+
+test("buildBookmarkDeletionPrompt summarizes multi-delete confirmations", () => {
+  assert.equal(
+    buildBookmarkDeletionPrompt(
+      [
+        {
+          id: "bookmark-a",
+          label: "Tarif route",
+          worldX: 10,
+          worldZ: 20,
+        },
+        {
+          id: "bookmark-b",
+          label: "Velia route",
+          worldX: 30,
+          worldZ: 40,
+        },
+        {
+          id: "bookmark-c",
+          label: "Hasrah route",
+          worldX: 50,
+          worldZ: 60,
+        },
+        {
+          id: "bookmark-d",
+          label: "Ancado route",
+          worldX: 70,
+          worldZ: 80,
+        },
+      ],
+      { selection: true },
+    ),
+    [
+      "Delete 4 selected bookmarks?",
+      "",
+      "1. Tarif route",
+      "2. Velia route",
+      "3. Hasrah route",
+      "...and 1 more.",
+    ].join("\n"),
   );
 });
 
