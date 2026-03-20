@@ -72,7 +72,16 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     leftPanelOpen?: boolean,
  *     showPoints?: boolean,
  *     showPointIcons?: boolean,
- *     pointIconScale?: number
+ *     pointIconScale?: number,
+ *     bookmarks?: Array<{
+ *       id?: string,
+ *       label?: string | null,
+ *       worldX?: number,
+ *       worldZ?: number,
+ *       zoneName?: string | null,
+ *       zoneRgb?: number | null,
+ *       createdAt?: string | null
+ *     }>
  *   },
  *   commands?: {
  *     resetView?: boolean,
@@ -122,6 +131,7 @@ export function createEmptyInputState() {
       showPoints: true,
       showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+      bookmarks: [],
     },
   };
 }
@@ -153,6 +163,7 @@ export function createEmptySnapshot() {
       showPoints: true,
       showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+      bookmarks: [],
     },
     view: {
       viewMode: "2d",
@@ -455,6 +466,43 @@ function normalizePointIconScale(value) {
   return Math.min(FISHYMAP_POINT_ICON_SCALE_MAX, Math.max(FISHYMAP_POINT_ICON_SCALE_MIN, number));
 }
 
+function normalizeBookmarkCoordinate(value) {
+  if (value == null || value === "") {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function normalizeBookmarksState(values) {
+  const entries = Array.isArray(values) ? values : [];
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of entries) {
+    const id = String(entry?.id || "").trim();
+    const worldX = normalizeBookmarkCoordinate(entry?.worldX);
+    const worldZ = normalizeBookmarkCoordinate(entry?.worldZ);
+    if (!id || worldX === undefined || worldZ === undefined || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    const label = normalizeNullableString(entry?.label);
+    const zoneName = normalizeNullableString(entry?.zoneName);
+    const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
+    const createdAt = normalizeNullableString(entry?.createdAt);
+    normalized.push({
+      id,
+      ...(label != null ? { label } : {}),
+      worldX,
+      worldZ,
+      ...(zoneName != null ? { zoneName } : {}),
+      ...(Number.isFinite(zoneRgb) ? { zoneRgb } : {}),
+      ...(createdAt != null ? { createdAt } : {}),
+    });
+  }
+  return normalized;
+}
+
 export function normalizeStatePatch(patch = {}) {
   /** @type {FishyMapStatePatch} */
   const normalized = {
@@ -544,6 +592,9 @@ export function normalizeStatePatch(patch = {}) {
       if (pointIconScale !== undefined) {
         normalized.ui.pointIconScale = pointIconScale;
       }
+    }
+    if (hasOwn(patch.ui, "bookmarks")) {
+      normalized.ui.bookmarks = normalizeBookmarksState(patch.ui.bookmarks);
     }
     if (!Object.keys(normalized.ui).length) {
       delete normalized.ui;
@@ -673,6 +724,7 @@ export function applyStatePatch(inputState, patch) {
     showPointIcons: current.ui?.showPointIcons !== false,
     pointIconScale:
       normalizePointIconScale(current.ui?.pointIconScale) ?? FISHYMAP_POINT_ICON_SCALE_MIN,
+    bookmarks: normalizeBookmarksState(current.ui?.bookmarks),
   };
 
   if (normalized.theme) {
@@ -751,6 +803,9 @@ export function applyStatePatch(inputState, patch) {
     if (hasOwn(normalized.ui, "pointIconScale")) {
       next.ui.pointIconScale =
         normalizePointIconScale(normalized.ui.pointIconScale) ?? next.ui.pointIconScale;
+    }
+    if (hasOwn(normalized.ui, "bookmarks")) {
+      next.ui.bookmarks = normalizeBookmarksState(normalized.ui.bookmarks);
     }
   }
 
@@ -1300,14 +1355,14 @@ function bootstrapStateSignature(state) {
         ? filters.layerIdsVisible.length
         : null,
     },
-    ui: {
-      diagnosticsOpen: Boolean(ui.diagnosticsOpen),
-      legendOpen: Boolean(ui.legendOpen),
-      leftPanelOpen: Boolean(ui.leftPanelOpen),
-      showPoints: Boolean(ui.showPoints),
-      showPointIcons: Boolean(ui.showPointIcons),
-      pointIconScale: Number(ui.pointIconScale || 0),
-    },
+      ui: {
+        diagnosticsOpen: Boolean(ui.diagnosticsOpen),
+        legendOpen: Boolean(ui.legendOpen),
+        leftPanelOpen: Boolean(ui.leftPanelOpen),
+        showPoints: Boolean(ui.showPoints),
+        showPointIcons: Boolean(ui.showPointIcons),
+        pointIconScale: Number(ui.pointIconScale || 0),
+      },
     statuses: {
       metaStatus: statuses.metaStatus ?? null,
       layersStatus: statuses.layersStatus ?? null,
@@ -1931,7 +1986,14 @@ class FishyMapBridgeImpl {
             }
           : {}),
       },
-      ui: this.inputState.ui,
+      ui: {
+        diagnosticsOpen: this.inputState.ui.diagnosticsOpen,
+        legendOpen: this.inputState.ui.legendOpen,
+        leftPanelOpen: this.inputState.ui.leftPanelOpen,
+        showPoints: this.inputState.ui.showPoints,
+        showPointIcons: this.inputState.ui.showPointIcons,
+        pointIconScale: this.inputState.ui.pointIconScale,
+      },
     };
   }
 

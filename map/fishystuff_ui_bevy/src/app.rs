@@ -34,6 +34,8 @@ use crate::plugins::api::{
     ApiBootstrapState, FishCatalog, FishFilterState, MapDisplayState, PatchFilterState,
     RemoteImageCache, RemoteImageEpoch,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use crate::plugins::bookmarks::BookmarksPlugin;
 #[cfg(target_arch = "wasm32")]
 use crate::plugins::camera::initial_resolution;
 #[cfg(not(target_arch = "wasm32"))]
@@ -124,6 +126,7 @@ pub fn build_native_app(options: &NativeAppOptions) -> App {
         .add_plugins(InputPlugin)
         .add_plugins(RasterPlugin)
         .add_plugins(VectorLayersPlugin)
+        .add_plugins(BookmarksPlugin)
         .add_plugins(PointsPlugin);
     app
 }

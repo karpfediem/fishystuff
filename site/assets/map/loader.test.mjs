@@ -14,7 +14,6 @@ const {
   parseZoneRgbSearch,
   parseWindowUiState,
   renderSearchSelection,
-  screenPointToWorldCoordinates,
   serializeWindowUiState,
 } = await import("./loader.js");
 delete globalThis.__fishystuffLoaderAutoStart;
@@ -283,61 +282,5 @@ test("createBookmarkFromPlacement uses zone name as the default label", () => {
       worldZ: -45.679,
       createdAt: "2026-03-20T12:00:00.000Z",
     },
-  );
-});
-
-test("screenPointToWorldCoordinates converts canvas clicks in 2D view", () => {
-  const canvas = {
-    getBoundingClientRect() {
-      return {
-        left: 10,
-        top: 20,
-        right: 410,
-        bottom: 220,
-        width: 400,
-        height: 200,
-      };
-    },
-  };
-
-  assert.deepEqual(
-    screenPointToWorldCoordinates(
-      canvas,
-      {
-        view: {
-          viewMode: "2d",
-          camera: {
-            centerWorldX: 100,
-            centerWorldZ: 200,
-            zoom: 2,
-          },
-        },
-      },
-      210,
-      120,
-    ),
-    {
-      worldX: 100,
-      worldZ: 200,
-    },
-  );
-
-  assert.equal(
-    screenPointToWorldCoordinates(
-      canvas,
-      {
-        view: {
-          viewMode: "3d",
-          camera: {
-            centerWorldX: 100,
-            centerWorldZ: 200,
-            zoom: 2,
-          },
-        },
-      },
-      210,
-      120,
-    ),
-    null,
   );
 });

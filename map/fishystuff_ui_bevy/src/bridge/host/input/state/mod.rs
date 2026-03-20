@@ -1,3 +1,4 @@
+mod bookmarks;
 mod filters;
 mod layers;
 mod theme;
@@ -6,6 +7,7 @@ use crate::bridge::host::BrowserBridgeState;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::ui_layers::LayerDebugSettings;
 use crate::plugins::api::{FishFilterState, MapDisplayState, PatchFilterState, ZoneFilterState};
+use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::{Map2dCamera, Terrain3dCamera};
 use crate::prelude::*;
 
@@ -14,6 +16,7 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
     mut patch_filter: ResMut<PatchFilterState>,
     mut fish_filter: ResMut<FishFilterState>,
     mut zone_filter: ResMut<ZoneFilterState>,
+    mut bookmarks: ResMut<BookmarkState>,
     mut display_state: ResMut<MapDisplayState>,
     mut debug_layers: ResMut<LayerDebugSettings>,
     mut layer_runtime: ResMut<LayerRuntime>,
@@ -27,6 +30,7 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
     }
 
     layer_runtime.sync_to_registry(&layer_registry);
+    bookmarks::apply_bookmarks(&bridge.input, &mut bookmarks);
     filters::apply_display_flags(&bridge.input, &mut display_state, &mut debug_layers);
     filters::apply_fish_filters(&bridge.input, &mut fish_filter);
     filters::apply_zone_filters(&bridge.input, &mut zone_filter);

@@ -105,11 +105,6 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
                 .cloned()
         });
 
-    if zone_sample.is_none() && layer_samples.is_empty() {
-        clear_hover_state(&mut context.hover, &mut context.display_state);
-        return;
-    }
-
     let zone_name = zone_sample.as_ref().and_then(|sample| {
         context
             .bootstrap
@@ -120,18 +115,14 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
     });
     let zone_rgb = zone_sample.as_ref().map(|sample| sample.rgb);
     let zone_rgb_u32 = zone_sample.as_ref().map(|sample| sample.rgb_u32);
-    let world_at_center = map_to_world.map_to_world(crate::map::spaces::MapPoint::new(
-        map_px as f64 + 0.5,
-        map_py as f64 + 0.5,
-    ));
     context.hover.info = Some(crate::plugins::api::HoverInfo {
         map_px,
         map_py,
         rgb: zone_rgb,
         rgb_u32: zone_rgb_u32,
         zone_name,
-        world_x: world_at_center.x,
-        world_z: world_at_center.z,
+        world_x: world_point.x,
+        world_z: world_point.z,
         layer_samples,
     });
     context.display_state.hovered_zone_rgb = zone_rgb_u32;

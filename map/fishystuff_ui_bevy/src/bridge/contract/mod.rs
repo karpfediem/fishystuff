@@ -5,9 +5,9 @@ mod snapshot;
 
 pub use events::FishyMapOutputEvent;
 pub use input::{
-    FishyMapCommands, FishyMapFiltersPatch, FishyMapFiltersState, FishyMapInputState,
-    FishyMapStatePatch, FishyMapThemeColors, FishyMapThemePatch, FishyMapThemeState,
-    FishyMapUiPatch, FishyMapUiState, FishyMapViewMode,
+    FishyMapBookmarkEntry, FishyMapCommands, FishyMapFiltersPatch, FishyMapFiltersState,
+    FishyMapInputState, FishyMapStatePatch, FishyMapThemeColors, FishyMapThemePatch,
+    FishyMapThemeState, FishyMapUiPatch, FishyMapUiState, FishyMapViewMode,
 };
 pub use normalize::{
     normalize_i32_list, normalize_layer_clip_mask_map, normalize_layer_opacity_map,
@@ -56,7 +56,15 @@ mod tests {
                 "ui": {
                     "showPoints": false,
                     "showPointIcons": true,
-                    "pointIconScale": 2.25
+                    "pointIconScale": 2.25,
+                    "bookmarks": [
+                        {
+                            "id": "bookmark-a",
+                            "label": "Marker A",
+                            "worldX": 123.5,
+                            "worldZ": -456.25
+                        }
+                    ]
                 },
                 "commands": {
                     "setViewMode": "3d"
@@ -141,6 +149,18 @@ mod tests {
             patch.ui.as_ref().and_then(|ui| ui.show_point_icons),
             Some(true)
         );
+        assert_eq!(
+            patch.ui.as_ref().map(|ui| ui.bookmarks.clone()),
+            Some(vec![FishyMapBookmarkEntry {
+                id: "bookmark-a".to_string(),
+                label: Some("Marker A".to_string()),
+                world_x: 123.5,
+                world_z: -456.25,
+                zone_name: None,
+                zone_rgb: None,
+                created_at: None,
+            }])
+        );
     }
 
     #[test]
@@ -158,7 +178,15 @@ mod tests {
                         "diagnosticsOpen": true,
                         "showPoints": false,
                         "showPointIcons": false,
-                        "pointIconScale": 9.0
+                        "pointIconScale": 9.0,
+                        "bookmarks": [
+                            {
+                                "id": "bookmark-a",
+                                "label": "Marker A",
+                                "worldX": 123.5,
+                                "worldZ": -456.25
+                            }
+                        ]
                     },
                     "commands": {
                         "setViewMode": "2d"
@@ -172,6 +200,8 @@ mod tests {
         assert!(!state.ui.show_points);
         assert!(!state.ui.show_point_icons);
         assert_eq!(state.ui.point_icon_scale, FISHYMAP_POINT_ICON_SCALE_MAX);
+        assert_eq!(state.ui.bookmarks.len(), 1);
+        assert_eq!(state.ui.bookmarks[0].id, "bookmark-a");
         assert_eq!(state.filters.search_text, "coel");
         assert_eq!(state.filters.from_patch_id.as_deref(), Some("2026-02-26"));
         assert_eq!(state.filters.to_patch_id.as_deref(), Some("2026-03-12"));
@@ -351,6 +381,62 @@ mod tests {
         assert_eq!(state.filters.patch_id, None);
         assert_eq!(state.filters.from_patch_id.as_deref(), Some("2026-02-26"));
         assert_eq!(state.filters.to_patch_id.as_deref(), Some("2026-03-12"));
+    }
+
+    #[test]
+    fn bookmark_patches_are_normalized_and_replace_existing_entries() {
+        let mut state = FishyMapInputState::default();
+        state.ui.bookmarks = vec![FishyMapBookmarkEntry {
+            id: "existing".to_string(),
+            label: Some("Existing".to_string()),
+            world_x: 10.0,
+            world_z: 20.0,
+            zone_name: None,
+            zone_rgb: None,
+            created_at: None,
+        }];
+
+        state.apply_patch(
+            serde_json::from_str(
+                r#"{
+                    "version": 1,
+                    "ui": {
+                        "bookmarks": [
+                            {
+                                "id": " bookmark-a ",
+                                "label": " Marker A ",
+                                "worldX": 123.5,
+                                "worldZ": -456.25
+                            },
+                            {
+                                "id": "bookmark-a",
+                                "worldX": 999,
+                                "worldZ": 999
+                            },
+                            {
+                                "id": "",
+                                "worldX": 1,
+                                "worldZ": 2
+                            }
+                        ]
+                    }
+                }"#,
+            )
+            .expect("patch"),
+        );
+
+        assert_eq!(
+            state.ui.bookmarks,
+            vec![FishyMapBookmarkEntry {
+                id: "bookmark-a".to_string(),
+                label: Some("Marker A".to_string()),
+                world_x: 123.5,
+                world_z: -456.25,
+                zone_name: None,
+                zone_rgb: None,
+                created_at: None,
+            }]
+        );
     }
 
     #[test]

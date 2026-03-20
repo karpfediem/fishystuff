@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -143,6 +143,57 @@ pub struct FishyMapFiltersState {
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FishyMapBookmarkEntry {
+    pub id: String,
+    pub label: Option<String>,
+    pub world_x: f64,
+    pub world_z: f64,
+    pub zone_name: Option<String>,
+    pub zone_rgb: Option<u32>,
+    pub created_at: Option<String>,
+}
+
+impl FishyMapBookmarkEntry {
+    fn normalize(self) -> Option<Self> {
+        let id = self.id.trim().to_string();
+        if id.is_empty() || !self.world_x.is_finite() || !self.world_z.is_finite() {
+            return None;
+        }
+        let normalize_optional = |value: Option<String>| {
+            value.and_then(|value| {
+                let trimmed = value.trim().to_string();
+                (!trimmed.is_empty()).then_some(trimmed)
+            })
+        };
+        Some(Self {
+            id,
+            label: normalize_optional(self.label),
+            world_x: self.world_x,
+            world_z: self.world_z,
+            zone_name: normalize_optional(self.zone_name),
+            zone_rgb: self.zone_rgb,
+            created_at: normalize_optional(self.created_at),
+        })
+    }
+}
+
+fn normalize_bookmarks(bookmarks: Vec<FishyMapBookmarkEntry>) -> Vec<FishyMapBookmarkEntry> {
+    let mut seen = BTreeSet::new();
+    let mut normalized = Vec::with_capacity(bookmarks.len());
+    for bookmark in bookmarks {
+        let Some(bookmark) = bookmark.normalize() else {
+            continue;
+        };
+        if !seen.insert(bookmark.id.clone()) {
+            continue;
+        }
+        normalized.push(bookmark);
+    }
+    normalized
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapUiState {
@@ -152,6 +203,7 @@ pub struct FishyMapUiState {
     pub show_points: bool,
     pub show_point_icons: bool,
     pub point_icon_scale: f32,
+    pub bookmarks: Vec<FishyMapBookmarkEntry>,
 }
 
 impl Default for FishyMapUiState {
@@ -163,6 +215,7 @@ impl Default for FishyMapUiState {
             show_points: true,
             show_point_icons: true,
             point_icon_scale: FISHYMAP_POINT_ICON_SCALE_MIN,
+            bookmarks: Vec::new(),
         }
     }
 }
@@ -176,6 +229,7 @@ pub struct FishyMapUiPatch {
     pub show_points: Option<bool>,
     pub show_point_icons: Option<bool>,
     pub point_icon_scale: Option<f32>,
+    pub bookmarks: Option<Vec<FishyMapBookmarkEntry>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -318,6 +372,9 @@ impl FishyMapInputState {
             if let Some(value) = ui.point_icon_scale {
                 self.ui.point_icon_scale =
                     value.clamp(FISHYMAP_POINT_ICON_SCALE_MIN, FISHYMAP_POINT_ICON_SCALE_MAX);
+            }
+            if let Some(bookmarks) = ui.bookmarks {
+                self.ui.bookmarks = normalize_bookmarks(bookmarks);
             }
         }
 

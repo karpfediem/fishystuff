@@ -812,7 +812,7 @@
       <div
         id="fishymap-window-state"
         class="hidden"
-        data-signals='{"mapUiState":"{\"search\":{\"open\":true,\"collapsed\":false,\"x\":null,\"y\":null},\"settings\":{\"open\":true,\"collapsed\":false,\"x\":null,\"y\":null},\"zoneInfo\":{\"open\":true,\"collapsed\":false,\"x\":null,\"y\":null},\"layers\":{\"open\":true,\"collapsed\":false,\"x\":null,\"y\":null}}"}'
+        data-signals='{"mapUiState":"{\"search\":{\"open\":true,\"collapsed\":false,\"x\":null,\"y\":null},\"settings\":{\"open\":true,\"collapsed\":false,\"x\":null,\"y\":null},\"zoneInfo\":{\"open\":true,\"collapsed\":false,\"x\":null,\"y\":null},\"layers\":{\"open\":true,\"collapsed\":false,\"x\":null,\"y\":null},\"bookmarks\":{\"open\":false,\"collapsed\":false,\"x\":null,\"y\":null}}"}'
         data-persist-fishymap-ui="mapUiState"
       >
         <textarea id="fishymap-window-state-input" class="hidden" aria-hidden="true" tabindex="-1" data-bind="mapUiState"></textarea>

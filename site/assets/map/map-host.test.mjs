@@ -294,6 +294,19 @@ test("DOM state patches are forwarded to the wasm bridge", async () => {
             showPoints: false,
             showPointIcons: false,
             pointIconScale: 2.5,
+            bookmarks: [
+              {
+                id: "bookmark-a",
+                label: "Velia",
+                worldX: 123.5,
+                worldZ: -45.25,
+              },
+              {
+                id: "bookmark-a",
+                worldX: 999,
+                worldZ: 999,
+              },
+            ],
           },
         },
       }),
@@ -320,6 +333,14 @@ test("DOM state patches are forwarded to the wasm bridge", async () => {
     assert.equal(wasm.calls.applied[0].ui.showPoints, false);
     assert.equal(wasm.calls.applied[0].ui.showPointIcons, false);
     assert.equal(wasm.calls.applied[0].ui.pointIconScale, 2.5);
+    assert.deepEqual(wasm.calls.applied[0].ui.bookmarks, [
+      {
+        id: "bookmark-a",
+        label: "Velia",
+        worldX: 123.5,
+        worldZ: -45.25,
+      },
+    ]);
   } finally {
     bridge?.destroy();
     env.restore();
@@ -335,6 +356,46 @@ test("search text patches preserve trailing spaces while typing", () => {
   });
 
   assert.equal(next.filters.searchText, "Zenato Sea ");
+});
+
+test("bookmark ui patches are normalized in input state and omitted from persisted prefs", () => {
+  const next = applyStatePatch(undefined, {
+    version: 1,
+    ui: {
+      bookmarks: [
+        {
+          id: " bookmark-a ",
+          label: " Velia ",
+          worldX: 123.5,
+          worldZ: -45.25,
+        },
+        {
+          id: "bookmark-a",
+          worldX: 999,
+          worldZ: 999,
+        },
+        {
+          id: "",
+          worldX: 1,
+          worldZ: 2,
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(next.ui.bookmarks, [
+    {
+      id: "bookmark-a",
+      label: "Velia",
+      worldX: 123.5,
+      worldZ: -45.25,
+    },
+  ]);
+
+  const bridge = createFishyMapBridge();
+  bridge.inputState = next;
+  assert.equal("bookmarks" in bridge.createSessionSnapshot().ui, false);
+  assert.equal("bookmarks" in bridge.createPrefsSnapshot().ui, false);
 });
 
 test("wasm output events are redispatched as DOM CustomEvents", async () => {

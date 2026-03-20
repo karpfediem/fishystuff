@@ -1,4 +1,5 @@
 pub mod api;
+pub mod bookmarks;
 pub mod camera;
 #[cfg(target_arch = "wasm32")]
 pub mod diagnostics;
@@ -33,6 +34,7 @@ impl PluginGroup for FishystuffPlugins {
             .add(raster::RasterPlugin)
             .add(vector_layers::VectorLayersPlugin)
             .add(api::ApiPlugin)
+            .add(bookmarks::BookmarksPlugin)
             .add(points::PointsPlugin)
             .add(mask::MaskPlugin)
             .add(ui::UiPlugin)
