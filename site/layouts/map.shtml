@@ -1014,7 +1014,8 @@
             </div>
             <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--secondary">
               <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-select-all"></use></svg>Select all</button>
-              <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-clear"></use></svg>Clear</button>
+              <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-clear"></use></svg><span id="fishymap-bookmark-clear-selection-label">Clear</span></button>
+              <button id="fishymap-bookmark-delete-selected" class="btn btn-ghost btn-error btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-trash"></use></svg>Delete</button>
             </div>
             <input id="fishymap-bookmark-import-input" class="hidden" type="file" accept=".xml,.txt,text/xml,application/xml">
           </div>

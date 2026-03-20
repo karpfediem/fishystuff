@@ -1507,6 +1507,10 @@ function selectedBookmarksInOrder(bookmarks, selectedIds) {
   return normalizeBookmarks(bookmarks).filter((bookmark) => selectedIdSet.has(bookmark.id));
 }
 
+function bookmarkClearSelectionLabel(selectedCount) {
+  return selectedCount > 0 ? `Clear (${selectedCount})` : "Clear";
+}
+
 export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
   const label = bookmarkDisplayLabel(bookmark, fallbackIndex);
   const zoneName = String(bookmark?.zoneName || "").trim();
@@ -1623,7 +1627,9 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
   setBooleanProperty(elements.bookmarkCopySelected, "disabled", selectedIds.length === 0);
   setBooleanProperty(elements.bookmarkExport, "disabled", normalizedBookmarks.length === 0);
   setBooleanProperty(elements.bookmarkSelectAll, "disabled", normalizedBookmarks.length === 0 || selectedIds.length === normalizedBookmarks.length);
+  setBooleanProperty(elements.bookmarkDeleteSelected, "disabled", selectedIds.length === 0);
   setBooleanProperty(elements.bookmarkClearSelection, "disabled", selectedIds.length === 0);
+  setTextContent(elements.bookmarkClearSelectionLabel, bookmarkClearSelectionLabel(selectedIds.length));
   setBooleanProperty(elements.bookmarkCancel, "hidden", !bookmarkUi?.placing);
 
   setMarkup(
@@ -3758,6 +3764,23 @@ function bindUi(shell, elements, options = {}) {
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
+  elements.bookmarkDeleteSelected?.addEventListener("click", () => {
+    const selectedBookmarks = selectedBookmarksForCopy();
+    if (!selectedBookmarks.length) {
+      showSiteToast("warning", "Select one or more bookmarks to delete.");
+      return;
+    }
+    const selectedIdSet = new Set(selectedBookmarks.map((bookmark) => bookmark.id));
+    const nextBookmarks = bookmarks.filter((bookmark) => !selectedIdSet.has(bookmark.id));
+    persistBookmarksAndRender(
+      nextBookmarks,
+      `Removed ${selectedBookmarks.length} selected ${pluralizeBookmarks(selectedBookmarks.length)}.`,
+      {
+        selectedIds: [],
+      },
+    );
+  });
+
   elements.bookmarkClearSelection?.addEventListener("click", () => {
     setSelectedBookmarkIds([]);
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
@@ -4412,7 +4435,9 @@ async function main() {
     bookmarkImportTrigger: document.getElementById("fishymap-bookmark-import-trigger"),
     bookmarkImportInput: document.getElementById("fishymap-bookmark-import-input"),
     bookmarkSelectAll: document.getElementById("fishymap-bookmark-select-all"),
+    bookmarkDeleteSelected: document.getElementById("fishymap-bookmark-delete-selected"),
     bookmarkClearSelection: document.getElementById("fishymap-bookmark-clear-selection"),
+    bookmarkClearSelectionLabel: document.getElementById("fishymap-bookmark-clear-selection-label"),
     bookmarkCancel: document.getElementById("fishymap-bookmark-cancel"),
     bookmarksList: document.getElementById("fishymap-bookmarks-list"),
     panel: document.getElementById("fishymap-panel"),
