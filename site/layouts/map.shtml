@@ -479,11 +479,6 @@
         color: color-mix(in srgb, var(--color-base-content) 68%, transparent);
       }
 
-      .fishymap-bookmark-coords {
-        font-size: 0.8rem;
-        line-height: 1.35;
-      }
-
       .fishymap-bookmark-actions {
         display: flex;
         flex: none;

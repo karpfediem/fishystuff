@@ -13,6 +13,7 @@ const {
   normalizeWindowUiState,
   parseZoneRgbSearch,
   parseWindowUiState,
+  renameBookmark,
   renderSearchSelection,
   serializeWindowUiState,
 } = await import("./loader.js");
@@ -283,4 +284,40 @@ test("createBookmarkFromPlacement uses zone name as the default label", () => {
       createdAt: "2026-03-20T12:00:00.000Z",
     },
   );
+});
+
+test("renameBookmark updates the label and falls back to the zone name when cleared", () => {
+  const bookmarks = normalizeBookmarks([
+    {
+      id: "bookmark-1",
+      label: "Cron Islands - Depth 2",
+      zoneName: "Cron Islands - Depth 2",
+      worldX: 123.4567,
+      worldZ: -45.6789,
+    },
+  ]);
+
+  assert.deepEqual(renameBookmark(bookmarks, "bookmark-1", "Shipwreck Route"), [
+    {
+      id: "bookmark-1",
+      label: "Shipwreck Route",
+      zoneName: "Cron Islands - Depth 2",
+      zoneRgb: null,
+      worldX: 123.457,
+      worldZ: -45.679,
+      createdAt: null,
+    },
+  ]);
+
+  assert.deepEqual(renameBookmark(bookmarks, "bookmark-1", "   "), [
+    {
+      id: "bookmark-1",
+      label: "Cron Islands - Depth 2",
+      zoneName: "Cron Islands - Depth 2",
+      zoneRgb: null,
+      worldX: 123.457,
+      worldZ: -45.679,
+      createdAt: null,
+    },
+  ]);
 });

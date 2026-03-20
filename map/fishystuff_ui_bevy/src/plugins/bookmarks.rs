@@ -2,6 +2,8 @@ use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::sprite::{Anchor, Text2d, Text2dShadow};
+use bevy::text::{Justify, TextColor, TextFont, TextLayout};
 
 use crate::bridge::contract::FishyMapBookmarkEntry;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
@@ -10,6 +12,9 @@ use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 
 const BOOKMARK_MARKER_SIZE_SCREEN_PX: f32 = 22.0;
 const BOOKMARK_MARKER_Z: f32 = 40.4;
+const BOOKMARK_LABEL_Z: f32 = 40.5;
+const BOOKMARK_LABEL_SIZE_PX: f32 = 12.0;
+const BOOKMARK_LABEL_OFFSET_SCREEN_PX: f32 = 18.0;
 const BOOKMARK_TEXTURE_WIDTH_PX: usize = 32;
 const BOOKMARK_TEXTURE_HEIGHT_PX: usize = 32;
 const BOOKMARK_RING_RADIUS_PX: f32 = 12.0;
@@ -17,6 +22,7 @@ const BOOKMARK_RING_THICKNESS_PX: f32 = 4.0;
 const BOOKMARK_CORE_RADIUS_PX: f32 = 5.0;
 const BOOKMARK_COLOR: [u8; 3] = [239, 92, 31];
 const BOOKMARK_CORE_COLOR: [u8; 3] = [255, 242, 214];
+const BOOKMARK_LABEL_COLOR: Color = Color::srgb(0.98, 0.97, 0.94);
 const EDGE_FEATHER_PX: f32 = 1.2;
 
 pub struct BookmarksPlugin;
@@ -41,6 +47,15 @@ pub struct BookmarkState {
 #[derive(Component)]
 struct BookmarkMarker;
 
+#[derive(Component)]
+struct BookmarkLabel;
+
+#[derive(Clone, Copy, Debug)]
+struct BookmarkVisualPair {
+    marker: Entity,
+    label: Entity,
+}
+
 #[derive(Resource, Default)]
 struct BookmarkMarkerAssets {
     texture: Option<Handle<Image>>,
@@ -48,7 +63,7 @@ struct BookmarkMarkerAssets {
 
 #[derive(Resource, Default)]
 struct BookmarkMarkerPool {
-    markers: Vec<Entity>,
+    markers: Vec<BookmarkVisualPair>,
 }
 
 fn ensure_bookmark_marker_assets(
@@ -69,11 +84,21 @@ fn sync_bookmark_markers(
     marker_assets: Res<BookmarkMarkerAssets>,
     mut marker_pool: ResMut<BookmarkMarkerPool>,
     camera_q: Query<&Projection, With<Map2dCamera>>,
-    mut markers: Query<(&mut Transform, &mut Visibility, &mut Sprite), With<BookmarkMarker>>,
+    mut markers: Query<
+        (&mut Transform, &mut Visibility, &mut Sprite),
+        (With<BookmarkMarker>, Without<BookmarkLabel>),
+    >,
+    mut labels: Query<
+        (&mut Transform, &mut Visibility, &mut Text2d),
+        (With<BookmarkLabel>, Without<BookmarkMarker>),
+    >,
 ) {
     if view_mode.mode != ViewMode::Map2D || bookmarks.entries.is_empty() {
-        for entity in &marker_pool.markers {
-            if let Ok((_, mut visibility, _)) = markers.get_mut(*entity) {
+        for pair in &marker_pool.markers {
+            if let Ok((_, mut visibility, _)) = markers.get_mut(pair.marker) {
+                *visibility = Visibility::Hidden;
+            }
+            if let Ok((_, mut visibility, _)) = labels.get_mut(pair.label) {
                 *visibility = Visibility::Hidden;
             }
         }
@@ -84,6 +109,7 @@ fn sync_bookmark_markers(
         return;
     };
     let marker_size_world = bookmark_marker_world_size(&camera_q);
+    let label_offset_world = bookmark_label_offset_world(&camera_q, marker_size_world);
 
     while marker_pool.markers.len() < bookmarks.entries.len() {
         let marker = commands
@@ -100,12 +126,32 @@ fn sync_bookmark_markers(
                 Visibility::Hidden,
             ))
             .id();
-        marker_pool.markers.push(marker);
+        let label = commands
+            .spawn((
+                BookmarkLabel,
+                World2dRenderEntity,
+                world_2d_layers(),
+                Text2d::new(""),
+                TextFont::from_font_size(BOOKMARK_LABEL_SIZE_PX),
+                TextColor(BOOKMARK_LABEL_COLOR),
+                TextLayout::new_with_justify(Justify::Center),
+                Text2dShadow {
+                    offset: Vec2::new(1.0, -1.0),
+                    color: Color::srgba(0.02, 0.03, 0.05, 0.9),
+                },
+                Anchor::BOTTOM_CENTER,
+                Transform::from_xyz(0.0, 0.0, BOOKMARK_LABEL_Z),
+                Visibility::Hidden,
+            ))
+            .id();
+        marker_pool
+            .markers
+            .push(BookmarkVisualPair { marker, label });
     }
 
     for (index, bookmark) in bookmarks.entries.iter().enumerate() {
-        let entity = marker_pool.markers[index];
-        if let Ok((mut transform, mut visibility, mut sprite)) = markers.get_mut(entity) {
+        let pair = marker_pool.markers[index];
+        if let Ok((mut transform, mut visibility, mut sprite)) = markers.get_mut(pair.marker) {
             transform.translation.x = bookmark.world_x as f32;
             transform.translation.y = bookmark.world_z as f32;
             transform.translation.z = BOOKMARK_MARKER_Z;
@@ -113,10 +159,20 @@ fn sync_bookmark_markers(
             sprite.custom_size = Some(Vec2::splat(marker_size_world));
             *visibility = Visibility::Visible;
         }
+        if let Ok((mut transform, mut visibility, mut text)) = labels.get_mut(pair.label) {
+            transform.translation.x = bookmark.world_x as f32;
+            transform.translation.y = bookmark.world_z as f32 + label_offset_world;
+            transform.translation.z = BOOKMARK_LABEL_Z;
+            text.0 = bookmark.label.clone().unwrap_or_default();
+            *visibility = Visibility::Visible;
+        }
     }
 
-    for entity in marker_pool.markers.iter().skip(bookmarks.entries.len()) {
-        if let Ok((_, mut visibility, _)) = markers.get_mut(*entity) {
+    for pair in marker_pool.markers.iter().skip(bookmarks.entries.len()) {
+        if let Ok((_, mut visibility, _)) = markers.get_mut(pair.marker) {
+            *visibility = Visibility::Hidden;
+        }
+        if let Ok((_, mut visibility, _)) = labels.get_mut(pair.label) {
             *visibility = Visibility::Hidden;
         }
     }
@@ -133,6 +189,22 @@ fn bookmark_marker_world_size(camera_q: &Query<&Projection, With<Map2dCamera>>) 
         .unwrap_or(1.0)
         .max(f32::EPSILON);
     BOOKMARK_MARKER_SIZE_SCREEN_PX * current_scale
+}
+
+fn bookmark_label_offset_world(
+    camera_q: &Query<&Projection, With<Map2dCamera>>,
+    marker_size_world: f32,
+) -> f32 {
+    let current_scale = camera_q
+        .single()
+        .ok()
+        .and_then(|projection| match projection {
+            Projection::Orthographic(ortho) => Some(ortho.scale),
+            _ => None,
+        })
+        .unwrap_or(1.0)
+        .max(f32::EPSILON);
+    marker_size_world * 0.65 + BOOKMARK_LABEL_OFFSET_SCREEN_PX * current_scale
 }
 
 fn build_bookmark_marker_texture() -> Image {
@@ -201,4 +273,17 @@ fn circle_alpha(distance: f32, radius: f32) -> f32 {
         return 1.0 - (distance - radius) / EDGE_FEATHER_PX;
     }
     0.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::{IntoSystem, System};
+
+    #[test]
+    fn sync_bookmark_markers_initializes_without_query_access_conflicts() {
+        let mut world = World::new();
+        let mut system = IntoSystem::into_system(sync_bookmark_markers);
+        system.initialize(&mut world);
+    }
 }

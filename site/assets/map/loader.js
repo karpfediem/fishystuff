@@ -289,10 +289,6 @@ function formatBookmarkCoordinate(value) {
     .replace(/\.?0+$/, "");
 }
 
-function formatBookmarkCoords(bookmark) {
-  return `X ${formatBookmarkCoordinate(bookmark?.worldX)} · Z ${formatBookmarkCoordinate(bookmark?.worldZ)}`;
-}
-
 function formatBookmarkClipboardText(bookmark) {
   return `${formatBookmarkCoordinate(bookmark?.worldX)}, ${formatBookmarkCoordinate(bookmark?.worldZ)}`;
 }
@@ -384,6 +380,24 @@ export function createBookmarkFromPlacement(
     zoneRgb: Number.isFinite(zoneRgb) ? zoneRgb : null,
     createdAt: new Date(now).toISOString(),
   };
+}
+
+export function renameBookmark(bookmarks, bookmarkId, nextLabel) {
+  const targetId = String(bookmarkId || "").trim();
+  if (!targetId) {
+    return normalizeBookmarks(bookmarks);
+  }
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  const requestedLabel = String(nextLabel ?? "").trim();
+  return normalizedBookmarks.map((bookmark, index) => {
+    if (bookmark.id !== targetId) {
+      return bookmark;
+    }
+    return {
+      ...bookmark,
+      label: requestedLabel || defaultBookmarkLabel(index, bookmark.zoneName),
+    };
+  });
 }
 
 async function copyTextToClipboard(text) {
@@ -1076,7 +1090,6 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
     bookmarks.length
       ? bookmarks
           .map((bookmark) => {
-            const coords = formatBookmarkCoords(bookmark);
             const zoneName =
               bookmark.zoneName && bookmark.zoneName !== bookmark.label ? bookmark.zoneName : "";
             return `
@@ -1084,9 +1097,17 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
                 <div class="fishymap-bookmark-main">
                   <div class="fishymap-bookmark-label">${escapeHtml(bookmark.label)}</div>
                   ${zoneName ? `<div class="fishymap-bookmark-zone">${escapeHtml(zoneName)}</div>` : ""}
-                  <code class="fishymap-bookmark-coords">${escapeHtml(coords)}</code>
                 </div>
                 <div class="fishymap-bookmark-actions">
+                  <button
+                    class="btn btn-soft btn-xs"
+                    type="button"
+                    data-bookmark-rename="${escapeHtml(bookmark.id)}"
+                    aria-label="Rename bookmark"
+                    title="Rename bookmark"
+                  >
+                    <span>Rename</span>
+                  </button>
                   <button
                     class="fishymap-bookmark-copy btn btn-soft btn-primary btn-xs"
                     type="button"
@@ -3013,6 +3034,30 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.bookmarksList?.addEventListener("click", async (event) => {
+    const renameButton = event.target.closest("button[data-bookmark-rename]");
+    if (renameButton) {
+      const bookmark = bookmarks.find(
+        (entry) => entry.id === renameButton.getAttribute("data-bookmark-rename"),
+      );
+      if (!bookmark) {
+        return;
+      }
+      if (typeof globalThis.window?.prompt !== "function") {
+        setBookmarkStatus("Bookmark renaming is unavailable in this browser.");
+        renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+        return;
+      }
+      const requestedLabel = globalThis.window.prompt("Bookmark name", bookmark.label);
+      if (requestedLabel == null) {
+        return;
+      }
+      const nextBookmarks = renameBookmark(bookmarks, bookmark.id, requestedLabel);
+      const renamedBookmark =
+        nextBookmarks.find((entry) => entry.id === bookmark.id) || bookmark;
+      persistBookmarksAndRender(nextBookmarks, `Renamed bookmark to ${renamedBookmark.label}.`);
+      return;
+    }
+
     const copyButton = event.target.closest("button[data-bookmark-copy]");
     if (copyButton) {
       const bookmark = bookmarks.find(
@@ -3023,7 +3068,7 @@ function bindUi(shell, elements, options = {}) {
       }
       try {
         await copyTextToClipboard(formatBookmarkClipboardText(bookmark));
-        setBookmarkStatus(`Copied ${formatBookmarkCoords(bookmark)}.`);
+        setBookmarkStatus(`Copied coordinates for ${bookmark.label}.`);
       } catch (_) {
         setBookmarkStatus("Clipboard access is unavailable in this browser.");
       }
