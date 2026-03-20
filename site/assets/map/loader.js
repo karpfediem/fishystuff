@@ -9,7 +9,7 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-5";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-8";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
 const DRAG_AUTOSCROLL_EDGE_PX = 56;
@@ -1581,7 +1581,7 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
   const originName = String(bookmark?.originName || "").trim();
   const rows = [
     {
-      icon: "bookmarks",
+      icon: "bookmark",
       label: "Bookmark",
       value: label,
       hideLabel: true,

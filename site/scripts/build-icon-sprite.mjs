@@ -43,6 +43,7 @@ const iconSources = {
   "hover-origin": { type: "mingcute", name: "map-pin-fill" },
   "hover-resources": { type: "mingcute", name: "chart-bar-fill" },
   "question-mark": { type: "mingcute", name: "question-2-fill" },
+  bookmark: { type: "mingcute", name: "bookmark-fill" },
   bookmarks: { type: "mingcute", name: "bookmarks-fill" },
   "bookmark-add": { type: "mingcute", name: "bookmark-add-fill" },
   "bookmark-edit": { type: "mingcute", name: "bookmark-edit-fill" },
