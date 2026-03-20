@@ -1417,36 +1417,36 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
                     <div class="fishymap-bookmark-label">${escapeHtml(bookmark.label)}</div>
                   </div>
                   ${zoneName ? `<div class="fishymap-bookmark-zone">${escapeHtml(zoneName)}</div>` : ""}
-                </div>
-                <div class="fishymap-bookmark-actions">
-                  <button
-                    class="btn btn-soft btn-xs"
-                    type="button"
-                    data-bookmark-rename="${escapeHtml(bookmark.id)}"
-                    aria-label="Rename bookmark"
-                    title="Rename bookmark"
-                  >
-                    <span>Rename</span>
-                  </button>
-                  <button
-                    class="fishymap-bookmark-copy btn btn-soft btn-primary btn-xs"
-                    type="button"
-                    data-bookmark-copy="${escapeHtml(bookmark.id)}"
-                    aria-label="Copy bookmark XML"
-                    title="Copy bookmark XML"
-                  >
-                    ${spriteIcon("copy", "size-4")}
-                    <span>Copy XML</span>
-                  </button>
-                  <button
-                    class="btn btn-ghost btn-error btn-xs"
-                    type="button"
-                    data-bookmark-delete="${escapeHtml(bookmark.id)}"
-                    aria-label="Delete bookmark"
-                    title="Delete bookmark"
-                  >
-                    ${spriteIcon("trash", "size-4")}
-                  </button>
+                  <div class="fishymap-bookmark-actions">
+                    <button
+                      class="btn btn-soft btn-xs"
+                      type="button"
+                      data-bookmark-rename="${escapeHtml(bookmark.id)}"
+                      aria-label="Rename bookmark"
+                      title="Rename bookmark"
+                    >
+                      <span>Rename</span>
+                    </button>
+                    <button
+                      class="fishymap-bookmark-copy btn btn-soft btn-primary btn-xs"
+                      type="button"
+                      data-bookmark-copy="${escapeHtml(bookmark.id)}"
+                      aria-label="Copy bookmark XML"
+                      title="Copy bookmark XML"
+                    >
+                      ${spriteIcon("copy", "size-4")}
+                      <span>Copy XML</span>
+                    </button>
+                    <button
+                      class="btn btn-ghost btn-error btn-xs"
+                      type="button"
+                      data-bookmark-delete="${escapeHtml(bookmark.id)}"
+                      aria-label="Delete bookmark"
+                      title="Delete bookmark"
+                    >
+                      ${spriteIcon("trash", "size-4")}
+                    </button>
+                  </div>
                 </div>
               </div>
             `;

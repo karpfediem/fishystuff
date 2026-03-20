@@ -410,10 +410,10 @@
         left: 1rem;
         bottom: 1rem;
         z-index: 18;
-        width: min(24rem, calc(100vw - 2rem));
-        height: min(22rem, calc(100% - 22rem));
-        max-height: calc(100% - 22rem);
-        min-height: 14rem;
+        width: min(30rem, calc(100vw - 2rem));
+        height: min(28rem, calc(100% - 16rem));
+        max-height: calc(100% - 16rem);
+        min-height: 17rem;
       }
 
       #fishymap-bookmarks-body {
@@ -448,9 +448,9 @@
       }
 
       .fishymap-bookmark-card {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        align-items: start;
         gap: 0.75rem;
         padding: 0.85rem 0.9rem;
       }
@@ -491,7 +491,7 @@
       .fishymap-bookmark-label-row {
         display: flex;
         min-width: 0;
-        align-items: center;
+        align-items: flex-start;
         gap: 0.5rem;
       }
 
@@ -504,11 +504,11 @@
       }
 
       .fishymap-bookmark-main {
-        min-width: 0;
         display: flex;
         flex: 1 1 auto;
         flex-direction: column;
-        gap: 0.28rem;
+        min-width: 0;
+        gap: 0.35rem;
       }
 
       .fishymap-bookmark-label {
@@ -516,6 +516,7 @@
         font-size: 0.92rem;
         font-weight: 600;
         line-height: 1.25;
+        overflow-wrap: anywhere;
       }
 
       .fishymap-bookmark-zone {
@@ -528,7 +529,7 @@
         display: flex;
         flex: none;
         flex-wrap: wrap;
-        justify-content: flex-end;
+        justify-content: flex-start;
         gap: 0.35rem;
       }
 
@@ -829,9 +830,9 @@
           bottom: auto;
           left: 0.75rem;
           width: auto;
-          height: min(20dvh, 13rem);
-          max-height: min(20dvh, 13rem);
-          min-height: 10rem;
+          height: min(28dvh, 17rem);
+          max-height: min(28dvh, 17rem);
+          min-height: 12rem;
         }
 
         #fishymap-view-toggle {
