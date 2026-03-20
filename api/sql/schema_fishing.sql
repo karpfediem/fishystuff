@@ -508,6 +508,15 @@ INSERT INTO layers (
     'vector_geojson', '/region_groups/{map_version}.geojson', 'rg-v1', 'map_pixels', 'feature_property_palette', 'id', 'c',
     220, 280.0, 160.0, 1,
     0, 0, 0
+  ),
+  (
+    'regions', 'Regions', 1, 31, 0, 0.35, 31.0,
+    'identity_map_space', NULL, NULL, NULL, NULL, NULL, NULL,
+    '', '', '',
+    512, 0, 0, 0.45, 'none',
+    'vector_geojson', '/region_groups/regions.{map_version}.geojson', 'r-v1', 'map_pixels', 'feature_property_palette', 'r', 'c',
+    220, 280.0, 160.0, 1,
+    0, 0, 0
   )
 ON DUPLICATE KEY UPDATE
   name = VALUES(name),
@@ -554,7 +563,8 @@ INSERT INTO layer_configs (
 ) VALUES
   ('v1', 'minimap', 0.0, '/images/tiles/minimap/v1/tileset.json', '/images/tiles/minimap/v1/{level}/rader_{x}_{y}.png', 'v1', NULL, NULL),
   ('v1', 'zone_mask', 10.0, '/images/tiles/mask/v1/tileset.json', '/images/tiles/mask/v1/{level}/{x}_{y}.png', 'v1', NULL, NULL),
-  ('v1', 'region_groups', 30.0, '', '', '', '/region_groups/v1.geojson', 'rg-v1')
+  ('v1', 'region_groups', 30.0, '', '', '', '/region_groups/v1.geojson', 'rg-v1'),
+  ('v1', 'regions', 31.0, '', '', '', '/region_groups/regions.v1.geojson', 'r-v1')
 ON DUPLICATE KEY UPDATE
   z_base_override = VALUES(z_base_override),
   tileset_manifest_url_override = VALUES(tileset_manifest_url_override),

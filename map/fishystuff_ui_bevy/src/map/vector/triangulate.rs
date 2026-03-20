@@ -9,6 +9,12 @@ pub struct PolygonPiece {
     pub centroid_map: [f64; 2],
 }
 
+#[derive(Debug, Clone)]
+pub struct ProjectedPolygon {
+    pub world_rings: Vec<Vec<[f32; 2]>>,
+    pub centroid_map: [f64; 2],
+}
+
 pub fn validate_polygon_piece(piece: &PolygonPiece) -> Result<(), String> {
     if piece.positions.len() < 3 {
         return Err("polygon piece has fewer than 3 vertices".to_string());
@@ -38,24 +44,30 @@ pub fn triangulate_polygon(
     geometry_space: GeometrySpace,
     map_to_world: MapToWorld,
 ) -> Result<Option<PolygonPiece>, String> {
+    let Some(projected) = project_polygon(rings, geometry_space, map_to_world) else {
+        return Ok(None);
+    };
+    triangulate_projected_polygon(&projected)
+}
+
+pub fn project_polygon(
+    rings: &[Vec<[f64; 2]>],
+    geometry_space: GeometrySpace,
+    map_to_world: MapToWorld,
+) -> Option<ProjectedPolygon> {
     crate::perf_scope!("vector.triangulation");
     if rings.is_empty() {
-        return Ok(None);
+        return None;
     }
 
-    let mut flat_world = Vec::<f64>::new();
+    let mut world_rings = Vec::<Vec<[f32; 2]>>::new();
     let mut map_points = Vec::<[f64; 2]>::new();
-    let mut positions = Vec::<[f32; 3]>::new();
-    let mut hole_indices = Vec::<usize>::new();
-    let mut vertex_count = 0usize;
 
-    for (ring_index, ring) in rings.iter().enumerate() {
+    for ring in rings {
         let Some(cleaned) = prepare_ring(ring) else {
             continue;
         };
-        if ring_index > 0 {
-            hole_indices.push(vertex_count);
-        }
+        let mut world_ring = Vec::with_capacity(cleaned.len());
         for point in cleaned {
             let (map_x, map_y, world_x, world_z) = match geometry_space {
                 GeometrySpace::MapPixels => {
@@ -69,11 +81,50 @@ pub fn triangulate_polygon(
                     (map.x, map.y, world.x, world.z)
                 }
             };
-
-            flat_world.push(world_x);
-            flat_world.push(world_z);
             map_points.push([map_x, map_y]);
-            positions.push([world_x as f32, world_z as f32, 0.0]);
+            world_ring.push([world_x as f32, world_z as f32]);
+        }
+        if !world_ring.is_empty() {
+            world_rings.push(world_ring);
+        }
+    }
+
+    if world_rings.iter().map(Vec::len).sum::<usize>() < 3 {
+        return None;
+    }
+
+    let mut sum_x = 0.0;
+    let mut sum_y = 0.0;
+    for point in &map_points {
+        sum_x += point[0];
+        sum_y += point[1];
+    }
+
+    Some(ProjectedPolygon {
+        world_rings,
+        centroid_map: [
+            sum_x / map_points.len() as f64,
+            sum_y / map_points.len() as f64,
+        ],
+    })
+}
+
+pub fn triangulate_projected_polygon(
+    projected: &ProjectedPolygon,
+) -> Result<Option<PolygonPiece>, String> {
+    let mut flat_world = Vec::<f64>::new();
+    let mut positions = Vec::<[f32; 3]>::new();
+    let mut hole_indices = Vec::<usize>::new();
+    let mut vertex_count = 0usize;
+
+    for (ring_index, ring) in projected.world_rings.iter().enumerate() {
+        if ring_index > 0 {
+            hole_indices.push(vertex_count);
+        }
+        for point in ring {
+            flat_world.push(point[0] as f64);
+            flat_world.push(point[1] as f64);
+            positions.push([point[0], point[1], 0.0]);
             vertex_count += 1;
         }
     }
@@ -94,21 +145,10 @@ pub fn triangulate_polygon(
         indices.push(value);
     }
 
-    let mut sum_x = 0.0;
-    let mut sum_y = 0.0;
-    for point in &map_points {
-        sum_x += point[0];
-        sum_y += point[1];
-    }
-    let centroid_map = [
-        sum_x / map_points.len() as f64,
-        sum_y / map_points.len() as f64,
-    ];
-
     Ok(Some(PolygonPiece {
         positions,
         indices,
-        centroid_map,
+        centroid_map: projected.centroid_map,
     }))
 }
 

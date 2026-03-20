@@ -1,6 +1,7 @@
 mod mysql_store;
 mod ranking;
 mod region_groups;
+mod region_layers;
 
 use std::fs::File;
 use std::io::Read;
@@ -187,6 +188,18 @@ enum Commands {
         deck_rg_graphs: Option<PathBuf>,
         #[arg(long, default_value = "shrddr")]
         source: String,
+    },
+    BuildDetailedRegionsGeojson {
+        #[arg(long)]
+        regions_geojson: PathBuf,
+        #[arg(long)]
+        regioninfo: PathBuf,
+        #[arg(long)]
+        loc: PathBuf,
+        #[arg(long)]
+        deck_r_origins: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
     },
     DebugWatermapProjection {
         #[arg(long)]
@@ -414,6 +427,19 @@ fn main() -> Result<()> {
             deck_rg_graphs,
             source,
             config.as_ref(),
+        ),
+        Commands::BuildDetailedRegionsGeojson {
+            regions_geojson,
+            regioninfo,
+            loc,
+            deck_r_origins,
+            out,
+        } => run_build_detailed_regions_geojson(
+            regions_geojson,
+            regioninfo,
+            loc,
+            deck_r_origins,
+            out,
         ),
         Commands::DebugWatermapProjection {
             watermap,
@@ -987,6 +1013,29 @@ fn run_import_region_groups_mysql(
         meta_rows.len(),
         region_rows.len(),
         source.trim()
+    );
+    Ok(())
+}
+
+fn run_build_detailed_regions_geojson(
+    regions_geojson: PathBuf,
+    regioninfo: PathBuf,
+    loc: PathBuf,
+    deck_r_origins: PathBuf,
+    out: PathBuf,
+) -> Result<()> {
+    let summary = region_layers::build_detailed_regions_geojson(
+        &regions_geojson,
+        &regioninfo,
+        &loc,
+        &deck_r_origins,
+        &out,
+    )?;
+    println!(
+        "build-detailed-regions-geojson: out={} features={} named={}",
+        out.display(),
+        summary.feature_count,
+        summary.named_feature_count,
     );
     Ok(())
 }

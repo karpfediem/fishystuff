@@ -4,6 +4,7 @@ use bevy::prelude::{
     Assets, Color, ColorMaterial, Commands, Entity, Handle, StandardMaterial, Transform, Vec3,
     Visibility,
 };
+use serde_json::{Map, Value};
 
 use crate::map::layers::LayerId;
 
@@ -38,6 +39,7 @@ pub struct BuiltVectorChunk {
 #[derive(Debug)]
 pub struct BuiltVectorGeometry {
     pub chunks: Vec<BuiltVectorChunk>,
+    pub hover_features: Vec<HoverFeature>,
     pub stats: VectorLayerStats,
 }
 
@@ -53,7 +55,27 @@ pub struct VectorMeshChunk {
 pub struct VectorMeshBundleSet {
     pub chunks: Vec<VectorMeshChunk>,
     pub hover_chunks: Vec<BuiltVectorChunk>,
+    pub hover_features: Vec<HoverFeature>,
     pub stats: VectorLayerStats,
+}
+
+#[derive(Debug, Clone)]
+pub struct HoverFeature {
+    pub properties: Map<String, Value>,
+    pub polygons: Vec<HoverPolygon>,
+    pub min_world_x: f32,
+    pub max_world_x: f32,
+    pub min_world_z: f32,
+    pub max_world_z: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct HoverPolygon {
+    pub rings: Vec<Vec<[f32; 2]>>,
+    pub min_world_x: f32,
+    pub max_world_x: f32,
+    pub min_world_z: f32,
+    pub max_world_z: f32,
 }
 
 impl VectorMeshBundleSet {
@@ -131,6 +153,22 @@ impl VectorMeshBundleSet {
         }
         None
     }
+
+    pub fn sample_properties(&self, world_x: f32, world_z: f32) -> Option<&Map<String, Value>> {
+        for feature in self.hover_features.iter().rev() {
+            if world_x < feature.min_world_x
+                || world_x > feature.max_world_x
+                || world_z < feature.min_world_z
+                || world_z > feature.max_world_z
+            {
+                continue;
+            }
+            if feature_contains_point(feature, world_x, world_z) {
+                return Some(&feature.properties);
+            }
+        }
+        None
+    }
 }
 
 fn chunk_contains_point(chunk: &BuiltVectorChunk, world_x: f32, world_z: f32) -> bool {
@@ -151,6 +189,34 @@ fn chunk_contains_point(chunk: &BuiltVectorChunk, world_x: f32, world_z: f32) ->
     false
 }
 
+fn feature_contains_point(feature: &HoverFeature, world_x: f32, world_z: f32) -> bool {
+    feature
+        .polygons
+        .iter()
+        .any(|polygon| polygon_contains_point(polygon, world_x, world_z))
+}
+
+fn polygon_contains_point(polygon: &HoverPolygon, world_x: f32, world_z: f32) -> bool {
+    if world_x < polygon.min_world_x
+        || world_x > polygon.max_world_x
+        || world_z < polygon.min_world_z
+        || world_z > polygon.max_world_z
+    {
+        return false;
+    }
+    let Some(outer_ring) = polygon.rings.first() else {
+        return false;
+    };
+    if !point_in_ring_2d(world_x, world_z, outer_ring) {
+        return false;
+    }
+    !polygon
+        .rings
+        .iter()
+        .skip(1)
+        .any(|ring| point_in_ring_2d(world_x, world_z, ring))
+}
+
 fn point_in_triangle_2d(px: f32, pz: f32, a: &[f32; 3], b: &[f32; 3], c: &[f32; 3]) -> bool {
     let area = edge_fn(a[0], a[1], b[0], b[1], c[0], c[1]);
     if area.abs() <= f32::EPSILON {
@@ -166,6 +232,35 @@ fn point_in_triangle_2d(px: f32, pz: f32, a: &[f32; 3], b: &[f32; 3], c: &[f32; 
 
 fn edge_fn(ax: f32, az: f32, bx: f32, bz: f32, px: f32, pz: f32) -> f32 {
     (px - ax) * (bz - az) - (pz - az) * (bx - ax)
+}
+
+fn point_in_ring_2d(px: f32, pz: f32, ring: &[[f32; 2]]) -> bool {
+    if ring.len() < 3 {
+        return false;
+    }
+    let mut inside = false;
+    let mut previous = ring[ring.len() - 1];
+    for current in ring {
+        let x0 = previous[0];
+        let z0 = previous[1];
+        let x1 = current[0];
+        let z1 = current[1];
+        let z_delta = z1 - z0;
+        let intersects = ((z0 > pz) != (z1 > pz))
+            && (px
+                < (x1 - x0) * (pz - z0)
+                    / if z_delta.abs() <= f32::EPSILON {
+                        f32::EPSILON
+                    } else {
+                        z_delta
+                    }
+                    + x0);
+        if intersects {
+            inside = !inside;
+        }
+        previous = *current;
+    }
+    inside
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -305,8 +400,9 @@ impl VectorFinishedCache {
 
 #[cfg(test)]
 mod tests {
-    use super::{VectorFinishedCache, VectorMeshBundleSet};
+    use super::{HoverFeature, HoverPolygon, VectorFinishedCache, VectorMeshBundleSet};
     use crate::map::layers::LayerId;
+    use serde_json::{Map, Value};
 
     #[test]
     fn evicts_lru_non_visible_entry_when_over_capacity() {
@@ -349,5 +445,34 @@ mod tests {
         assert!(cache.get_ref(&k1).is_none());
         assert!(cache.get_ref(&k2).is_some());
         assert!(cache.get_ref(&k3).is_some());
+    }
+
+    #[test]
+    fn hover_feature_sampling_respects_polygon_holes() {
+        let mut properties = Map::new();
+        properties.insert("rg".to_string(), Value::from(118u32));
+        let bundle = VectorMeshBundleSet {
+            hover_features: vec![HoverFeature {
+                properties,
+                polygons: vec![HoverPolygon {
+                    rings: vec![
+                        vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]],
+                        vec![[3.0, 3.0], [7.0, 3.0], [7.0, 7.0], [3.0, 7.0]],
+                    ],
+                    min_world_x: 0.0,
+                    max_world_x: 10.0,
+                    min_world_z: 0.0,
+                    max_world_z: 10.0,
+                }],
+                min_world_x: 0.0,
+                max_world_x: 10.0,
+                min_world_z: 0.0,
+                max_world_z: 10.0,
+            }],
+            ..VectorMeshBundleSet::default()
+        };
+
+        assert!(bundle.sample_properties(1.0, 1.0).is_some());
+        assert!(bundle.sample_properties(5.0, 5.0).is_none());
     }
 }

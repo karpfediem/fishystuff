@@ -22,11 +22,16 @@ pub fn spawn_vector_meshes(
     z_base: f32,
     opacity: f32,
 ) -> VectorMeshBundleSet {
-    let mut chunks = Vec::with_capacity(geometry.chunks.len());
-    let mut hover_chunks = Vec::with_capacity(geometry.chunks.len());
+    let crate::map::vector::cache::BuiltVectorGeometry {
+        chunks: geometry_chunks,
+        hover_features,
+        stats,
+    } = geometry;
+    let mut chunks = Vec::with_capacity(geometry_chunks.len());
+    let mut hover_chunks = Vec::with_capacity(geometry_chunks.len());
     let alpha = opacity.clamp(0.0, 1.0);
 
-    for chunk in geometry.chunks {
+    for chunk in geometry_chunks {
         hover_chunks.push(chunk.clone());
         let mut mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
@@ -85,6 +90,7 @@ pub fn spawn_vector_meshes(
     VectorMeshBundleSet {
         chunks,
         hover_chunks,
-        stats: geometry.stats,
+        hover_features,
+        stats,
     }
 }

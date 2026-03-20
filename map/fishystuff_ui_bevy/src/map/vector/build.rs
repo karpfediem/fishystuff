@@ -3,13 +3,18 @@ use std::time::Duration;
 
 use async_channel::Receiver;
 use bevy::platform::time::Instant;
+use serde_json::{Map, Value};
 
 use crate::map::layers::{LayerVectorStatus, VectorSourceSpec};
 use crate::map::spaces::world::MapToWorld;
-use crate::map::vector::cache::{BuiltVectorChunk, BuiltVectorGeometry, VectorLayerStats};
+use crate::map::vector::cache::{
+    BuiltVectorChunk, BuiltVectorGeometry, HoverFeature, HoverPolygon, VectorLayerStats,
+};
 use crate::map::vector::geojson::parse_geojson;
 use crate::map::vector::style::{style_bucket_key, StyleBucketKey};
-use crate::map::vector::triangulate::{triangulate_polygon, PolygonPiece};
+use crate::map::vector::triangulate::{
+    project_polygon, triangulate_projected_polygon, PolygonPiece, ProjectedPolygon,
+};
 use crate::runtime_io;
 
 pub const DEFAULT_FRAME_BUDGET_MS: f64 = 3.0;
@@ -76,6 +81,7 @@ pub struct VectorBuildJob {
     source: VectorSourceSpec,
     revision: String,
     features: Vec<PreparedFeature>,
+    hover_features: Vec<HoverFeature>,
     next_feature: usize,
     buckets: HashMap<StyleBucketKey, StyleBucketBuild>,
     pub stats: VectorLayerStats,
@@ -84,6 +90,7 @@ pub struct VectorBuildJob {
 
 struct PreparedFeature {
     bucket: StyleBucketKey,
+    properties: Map<String, Value>,
     polygons: Vec<Vec<Vec<[f64; 2]>>>,
 }
 
@@ -180,7 +187,11 @@ pub fn parse_into_job(
         if polygons.is_empty() {
             continue;
         }
-        features.push(PreparedFeature { bucket, polygons });
+        features.push(PreparedFeature {
+            bucket,
+            properties: feature.properties,
+            polygons,
+        });
     }
 
     let feature_count = features.len() as u32;
@@ -188,6 +199,7 @@ pub fn parse_into_job(
         source,
         revision,
         features,
+        hover_features: Vec::with_capacity(feature_count as usize),
         next_feature: 0,
         buckets: HashMap::new(),
         stats: VectorLayerStats {
@@ -238,10 +250,13 @@ pub fn advance_job(
         }
 
         let feature = &job.features[job.next_feature];
+        let mut hover_polygons = Vec::new();
         for polygon in &feature.polygons {
-            if let Some(piece) =
-                triangulate_polygon(polygon, job.source.geometry_space, map_to_world)?
-            {
+            let Some(projected) = project_polygon(polygon, job.source.geometry_space, map_to_world)
+            else {
+                continue;
+            };
+            if let Some(piece) = triangulate_projected_polygon(&projected)? {
                 let vertex_count = piece.positions.len() as u32;
                 let triangle_count = (piece.indices.len() / 3) as u32;
                 let bucket = job.buckets.entry(feature.bucket).or_default();
@@ -253,6 +268,19 @@ pub fn advance_job(
                 job.stats.vertex_count = job.stats.vertex_count.saturating_add(vertex_count);
                 job.stats.triangle_count = job.stats.triangle_count.saturating_add(triangle_count);
             }
+            hover_polygons.push(projected_polygon_to_hover_polygon(&projected));
+        }
+        if !hover_polygons.is_empty() {
+            let (min_world_x, max_world_x, min_world_z, max_world_z) =
+                hover_feature_bounds(&hover_polygons);
+            job.hover_features.push(HoverFeature {
+                properties: feature.properties.clone(),
+                polygons: hover_polygons,
+                min_world_x,
+                max_world_x,
+                min_world_z,
+                max_world_z,
+            });
         }
 
         job.next_feature += 1;
@@ -302,7 +330,11 @@ pub fn finalize_job(job: VectorBuildJob, limits: VectorBuildLimits) -> BuiltVect
     }
 
     stats.mesh_count = chunks.len() as u32;
-    BuiltVectorGeometry { chunks, stats }
+    BuiltVectorGeometry {
+        chunks,
+        hover_features: job.hover_features,
+        stats,
+    }
 }
 
 fn merge_pieces(color_rgba: [u8; 4], pieces: Vec<PolygonPiece>) -> Option<BuiltVectorChunk> {
@@ -343,6 +375,42 @@ fn merge_pieces(color_rgba: [u8; 4], pieces: Vec<PolygonPiece>) -> Option<BuiltV
         min_world_z,
         max_world_z,
     })
+}
+
+fn projected_polygon_to_hover_polygon(projected: &ProjectedPolygon) -> HoverPolygon {
+    let mut min_world_x = f32::INFINITY;
+    let mut max_world_x = f32::NEG_INFINITY;
+    let mut min_world_z = f32::INFINITY;
+    let mut max_world_z = f32::NEG_INFINITY;
+    for ring in &projected.world_rings {
+        for point in ring {
+            min_world_x = min_world_x.min(point[0]);
+            max_world_x = max_world_x.max(point[0]);
+            min_world_z = min_world_z.min(point[1]);
+            max_world_z = max_world_z.max(point[1]);
+        }
+    }
+    HoverPolygon {
+        rings: projected.world_rings.clone(),
+        min_world_x,
+        max_world_x,
+        min_world_z,
+        max_world_z,
+    }
+}
+
+fn hover_feature_bounds(polygons: &[HoverPolygon]) -> (f32, f32, f32, f32) {
+    let mut min_world_x = f32::INFINITY;
+    let mut max_world_x = f32::NEG_INFINITY;
+    let mut min_world_z = f32::INFINITY;
+    let mut max_world_z = f32::NEG_INFINITY;
+    for polygon in polygons {
+        min_world_x = min_world_x.min(polygon.min_world_x);
+        max_world_x = max_world_x.max(polygon.max_world_x);
+        min_world_z = min_world_z.min(polygon.min_world_z);
+        max_world_z = max_world_z.max(polygon.max_world_z);
+    }
+    (min_world_x, max_world_x, min_world_z, max_world_z)
 }
 
 fn spawn_geojson_fetch(url: String) -> Receiver<Result<Vec<u8>, String>> {

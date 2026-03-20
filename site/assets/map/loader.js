@@ -1265,6 +1265,18 @@ function setHoverTooltipPosition(elements, clientX, clientY) {
   elements.hoverTooltip.style.setProperty("--fishymap-hover-y", `${clientY}px`);
 }
 
+function hoverLayerDetailLines(sample) {
+  const lines = [];
+  if (sample?.regionGroup != null) {
+    lines.push(`RG ${sample.regionGroup}`);
+  }
+  const regionName = String(sample?.regionName || "").trim();
+  if (regionName) {
+    lines.push(regionName);
+  }
+  return lines;
+}
+
 function renderHoverTooltip(elements, hover) {
   if (!elements.hoverTooltip || !elements.hoverSummary || !elements.hoverLayers) {
     return;
@@ -1284,7 +1296,7 @@ function renderHoverTooltip(elements, hover) {
     layerSamples
       .map((sample) => {
         const rgb = Array.isArray(sample?.rgb) ? sample.rgb : [];
-        return `${sample?.layerId ?? ""}:${rgb.join(",")}`;
+        return `${sample?.layerId ?? ""}:${rgb.join(",")}:${hoverLayerDetailLines(sample).join("/")}`;
       })
       .join("|"),
     layerSamples
@@ -1295,13 +1307,32 @@ function renderHoverTooltip(elements, hover) {
         const blue = Number.parseInt(rgb[2], 10) || 0;
         const layerName = String(sample?.layerName || sample?.layerId || "Layer").trim() || "Layer";
         const rgbLabel = `rgb(${red}, ${green}, ${blue})`;
+        const detailLines = hoverLayerDetailLines(sample);
+        const valueMarkup =
+          detailLines.length > 0
+            ? `
+              <span class="fishymap-hover-layer-value fishymap-hover-layer-value--stacked">
+                ${detailLines
+                  .map(
+                    (line, index) => `
+                      <span class="fishymap-hover-layer-detail${index === 0 ? " fishymap-hover-layer-detail--primary" : ""}">
+                        ${escapeHtml(line)}
+                      </span>
+                    `,
+                  )
+                  .join("")}
+              </span>
+            `
+            : `
+              <span class="fishymap-hover-layer-value">
+                <span class="fishymap-hover-layer-swatch" style="background-color: ${escapeHtml(rgbLabel)};"></span>
+                <code>${escapeHtml(rgbLabel)}</code>
+              </span>
+            `;
         return `
           <div class="fishymap-hover-layer-row">
             <span class="fishymap-hover-layer-name">${escapeHtml(layerName)}</span>
-            <span class="fishymap-hover-layer-value">
-              <span class="fishymap-hover-layer-swatch" style="background-color: ${escapeHtml(rgbLabel)};"></span>
-              <code>${escapeHtml(rgbLabel)}</code>
-            </span>
+            ${valueMarkup}
           </div>
         `;
       })

@@ -1,6 +1,7 @@
 use bevy::ecs::system::SystemParam;
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
+use serde_json::{Map, Value};
 
 use fishystuff_api::Rgb;
 
@@ -229,6 +230,16 @@ fn sample_hover_layer(
         return None;
     };
     let rgb_u32 = rgb.to_u32();
+    let (region_group, region_name) = if layer.is_vector() {
+        sample_vector_layer_hover_metadata(
+            layer,
+            sampling.vector_runtime,
+            sampling.registry_map_version_id,
+            sampling.world_point,
+        )
+    } else {
+        (None, None)
+    };
     Some(HoverLayerSample {
         layer_id: layer.key.clone(),
         layer_name: layer.name.clone(),
@@ -239,6 +250,8 @@ fn sample_hover_layer(
         },
         rgb,
         rgb_u32,
+        region_group,
+        region_name,
     })
 }
 
@@ -285,8 +298,9 @@ struct HoverSamplingContext<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::hovered_zone_rgb;
+    use super::{hover_metadata_from_properties, hovered_zone_rgb};
     use crate::plugins::api::HoverInfo;
+    use serde_json::{Map, Value};
 
     #[test]
     fn hovered_zone_rgb_reads_zone_from_hover_info() {
@@ -302,6 +316,19 @@ mod tests {
         };
         assert_eq!(hovered_zone_rgb(Some(&info)), Some(0x123456));
         assert_eq!(hovered_zone_rgb(None), None);
+    }
+
+    #[test]
+    fn hover_metadata_extracts_region_details_for_detailed_region_layer() {
+        let mut properties = Map::new();
+        properties.insert("rg".to_string(), Value::from(118u32));
+        properties.insert(
+            "on".to_string(),
+            Value::String("Solgaji Forest".to_string()),
+        );
+        let (region_group, region_name) = hover_metadata_from_properties("regions", &properties);
+        assert_eq!(region_group, Some(118));
+        assert_eq!(region_name.as_deref(), Some("Solgaji Forest"));
     }
 }
 
@@ -371,6 +398,60 @@ fn sample_vector_layer_rgb(
     let bundle = vector_runtime.finished.get_ref(&(layer.id, revision))?;
     let rgba = bundle.sample_rgb(world_point.x as f32, world_point.z as f32)?;
     Some(Rgb::new(rgba[0], rgba[1], rgba[2]))
+}
+
+fn sample_vector_layer_hover_metadata(
+    layer: &crate::map::layers::LayerSpec,
+    vector_runtime: &VectorLayerRuntime,
+    registry_map_version_id: Option<&str>,
+    world_point: WorldPoint,
+) -> (Option<u32>, Option<String>) {
+    if layer.key != "region_groups" && layer.key != "regions" {
+        return (None, None);
+    }
+    let Some(source) = layer.vector_source.as_ref() else {
+        return (None, None);
+    };
+    let revision = resolved_vector_revision(source, registry_map_version_id);
+    let Some(bundle) = vector_runtime.finished.get_ref(&(layer.id, revision)) else {
+        return (None, None);
+    };
+    let Some(properties) = bundle.sample_properties(world_point.x as f32, world_point.z as f32)
+    else {
+        return (None, None);
+    };
+    hover_metadata_from_properties(&layer.key, properties)
+}
+
+fn hover_metadata_from_properties(
+    layer_key: &str,
+    properties: &Map<String, Value>,
+) -> (Option<u32>, Option<String>) {
+    let region_group = json_u32(properties.get("rg"));
+    let region_name = if layer_key == "regions" {
+        json_string(properties.get("on"))
+    } else {
+        None
+    };
+    (region_group, region_name)
+}
+
+fn json_u32(value: Option<&Value>) -> Option<u32> {
+    match value {
+        Some(Value::Number(number)) => number.as_u64().and_then(|raw| u32::try_from(raw).ok()),
+        Some(Value::String(text)) => text.trim().parse::<u32>().ok(),
+        _ => None,
+    }
+}
+
+fn json_string(value: Option<&Value>) -> Option<String> {
+    match value {
+        Some(Value::String(text)) => {
+            let trimmed = text.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        }
+        _ => None,
+    }
 }
 
 fn resolved_vector_revision(

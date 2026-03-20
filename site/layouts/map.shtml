@@ -716,7 +716,7 @@
 
       .fishymap-hover-layer-row {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         justify-content: space-between;
         gap: 0.8rem;
         font-size: 0.78rem;
@@ -724,6 +724,7 @@
       }
 
       .fishymap-hover-layer-name {
+        flex: 1 1 auto;
         color: color-mix(in srgb, var(--color-base-content) 82%, transparent);
         font-weight: 600;
       }
@@ -733,6 +734,18 @@
         align-items: center;
         gap: 0.4rem;
         color: color-mix(in srgb, var(--color-base-content) 76%, transparent);
+        font-family: var(--font-mono, monospace);
+      }
+
+      .fishymap-hover-layer-value--stacked {
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.05rem;
+        font-family: inherit;
+        text-align: right;
+      }
+
+      .fishymap-hover-layer-detail--primary {
         font-family: var(--font-mono, monospace);
       }
 

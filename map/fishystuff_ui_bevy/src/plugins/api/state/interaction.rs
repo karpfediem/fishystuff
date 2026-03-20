@@ -32,6 +32,8 @@ pub struct HoverLayerSample {
     pub kind: String,
     pub rgb: Rgb,
     pub rgb_u32: u32,
+    pub region_group: Option<u32>,
+    pub region_name: Option<String>,
 }
 
 #[derive(Debug, Clone)]
