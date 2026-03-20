@@ -151,15 +151,17 @@ mod tests {
         );
         assert_eq!(
             patch.ui.as_ref().map(|ui| ui.bookmarks.clone()),
-            Some(vec![FishyMapBookmarkEntry {
+            Some(Some(vec![FishyMapBookmarkEntry {
                 id: "bookmark-a".to_string(),
                 label: Some("Marker A".to_string()),
                 world_x: 123.5,
                 world_z: -456.25,
                 zone_name: None,
+                resource_name: None,
+                origin_name: None,
                 zone_rgb: None,
                 created_at: None,
-            }])
+            }]))
         );
     }
 
@@ -392,6 +394,8 @@ mod tests {
             world_x: 10.0,
             world_z: 20.0,
             zone_name: None,
+            resource_name: None,
+            origin_name: None,
             zone_rgb: None,
             created_at: None,
         }];
@@ -433,6 +437,8 @@ mod tests {
                 world_x: 123.5,
                 world_z: -456.25,
                 zone_name: None,
+                resource_name: None,
+                origin_name: None,
                 zone_rgb: None,
                 created_at: None,
             }]

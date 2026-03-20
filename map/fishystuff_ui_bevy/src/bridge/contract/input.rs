@@ -151,6 +151,8 @@ pub struct FishyMapBookmarkEntry {
     pub world_x: f64,
     pub world_z: f64,
     pub zone_name: Option<String>,
+    pub resource_name: Option<String>,
+    pub origin_name: Option<String>,
     pub zone_rgb: Option<u32>,
     pub created_at: Option<String>,
 }
@@ -173,6 +175,8 @@ impl FishyMapBookmarkEntry {
             world_x: self.world_x,
             world_z: self.world_z,
             zone_name: normalize_optional(self.zone_name),
+            resource_name: normalize_optional(self.resource_name),
+            origin_name: normalize_optional(self.origin_name),
             zone_rgb: self.zone_rgb,
             created_at: normalize_optional(self.created_at),
         })

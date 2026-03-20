@@ -20,6 +20,7 @@ use crate::map::vector::build::{
 };
 use crate::map::vector::cache::{VectorFinishedCache, VectorLayerStats};
 use crate::map::vector::render::{spawn_vector_meshes, VECTOR_3D_BASE_Y};
+use crate::plugins::bookmarks::BookmarkState;
 
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct VectorBuildConfig {
@@ -124,7 +125,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             .get(&region_groups_id)
             .copied()
             .unwrap_or(false);
-        if keep_regions_loaded {
+        if keep_regions_loaded || !update.bookmarks.entries.is_empty() {
             active_by_layer.insert(regions_id, true);
         }
     }
@@ -492,6 +493,7 @@ struct VectorLayerUpdate<'w, 's> {
     build_config: Res<'w, VectorBuildConfig>,
     cache_config: Res<'w, VectorCacheConfig>,
     view_mode: Res<'w, ViewModeState>,
+    bookmarks: Res<'w, BookmarkState>,
     _marker: std::marker::PhantomData<&'s ()>,
 }
 

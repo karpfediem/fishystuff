@@ -1476,6 +1476,27 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
   return rows;
 }
 
+function resolveDisplayBookmarks(stateBundle, bookmarks) {
+  const localBookmarks = normalizeBookmarks(bookmarks);
+  const snapshotBookmarks = normalizeBookmarks(stateBundle?.state?.ui?.bookmarks || []);
+  if (!snapshotBookmarks.length) {
+    return localBookmarks;
+  }
+  const snapshotById = new Map(snapshotBookmarks.map((bookmark) => [bookmark.id, bookmark]));
+  return localBookmarks.map((bookmark) => {
+    const snapshotBookmark = snapshotById.get(bookmark.id);
+    if (!snapshotBookmark) {
+      return bookmark;
+    }
+    return {
+      ...bookmark,
+      zoneName: bookmark.zoneName || snapshotBookmark.zoneName || null,
+      resourceName: bookmark.resourceName || snapshotBookmark.resourceName || null,
+      originName: bookmark.originName || snapshotBookmark.originName || null,
+    };
+  });
+}
+
 function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
   if (
     !elements.bookmarksList ||
@@ -1495,7 +1516,7 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
       delete elements.shell.dataset.bookmarkPlacing;
     }
   }
-  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  const normalizedBookmarks = resolveDisplayBookmarks(stateBundle, bookmarks);
   const selectedIds = normalizeSelectedBookmarkIds(normalizedBookmarks, bookmarkUi?.selectedIds);
   if (bookmarkUi) {
     bookmarkUi.selectedIds = selectedIds;
