@@ -488,13 +488,6 @@
         padding-top: 0.12rem;
       }
 
-      .fishymap-bookmark-label-row {
-        display: flex;
-        min-width: 0;
-        align-items: flex-start;
-        gap: 0.5rem;
-      }
-
       .fishymap-bookmark-order {
         flex: none;
       }
@@ -508,21 +501,14 @@
         flex: 1 1 auto;
         flex-direction: column;
         min-width: 0;
-        gap: 0.35rem;
+        gap: 0.55rem;
       }
 
-      .fishymap-bookmark-label {
+      .fishymap-bookmark-summary {
+        display: flex;
         min-width: 0;
-        font-size: 0.92rem;
-        font-weight: 600;
-        line-height: 1.25;
-        overflow-wrap: anywhere;
-      }
-
-      .fishymap-bookmark-zone {
-        font-size: 0.72rem;
-        line-height: 1.3;
-        color: color-mix(in srgb, var(--color-base-content) 68%, transparent);
+        align-items: flex-start;
+        gap: 0.55rem;
       }
 
       .fishymap-bookmark-actions {
@@ -703,7 +689,6 @@
         display: none !important;
       }
 
-      #fishymap-hover-summary[hidden],
       #fishymap-hover-layers[hidden] {
         display: none !important;
       }
@@ -711,50 +696,50 @@
       #fishymap-hover-layers {
         display: flex;
         flex-direction: column;
-        gap: 0.35rem;
+        gap: 0.3rem;
       }
 
-      .fishymap-hover-layer-row {
+      .fishymap-overview-list {
         display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 0.8rem;
+        min-width: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 0.3rem;
+      }
+
+      .fishymap-overview-row {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        align-items: start;
+        gap: 0.45rem;
+        min-width: 0;
         font-size: 0.78rem;
         line-height: 1.3;
       }
 
-      .fishymap-hover-layer-name {
-        flex: 1 1 auto;
+      .fishymap-overview-icon {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        color: color-mix(in srgb, var(--color-base-content) 74%, transparent);
+      }
+
+      .fishymap-overview-label {
+        flex: none;
         color: color-mix(in srgb, var(--color-base-content) 82%, transparent);
         font-weight: 600;
+        white-space: nowrap;
       }
 
-      .fishymap-hover-layer-value {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
+      .fishymap-overview-value {
+        min-width: 0;
         color: color-mix(in srgb, var(--color-base-content) 76%, transparent);
-        font-family: var(--font-mono, monospace);
+        overflow-wrap: anywhere;
       }
 
-      .fishymap-hover-layer-value--stacked {
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 0.05rem;
-        font-family: inherit;
-        text-align: right;
-      }
-
-      .fishymap-hover-layer-detail--primary {
-        font-family: var(--font-mono, monospace);
-      }
-
-      .fishymap-hover-layer-swatch {
-        width: 0.8rem;
-        height: 0.8rem;
-        flex: none;
-        border-radius: 999px;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
+      .fishymap-overview-list--bookmark .fishymap-overview-row {
+        font-size: 0.82rem;
       }
 
       #fishymap-error-overlay {
@@ -1122,7 +1107,6 @@
       </aside>
 
       <div id="fishymap-hover-tooltip" class="card card-border bg-base-100 not-prose" hidden>
-        <p id="fishymap-hover-summary" class="text-sm text-base-content/85">Hover a zone to inspect it.</p>
         <div id="fishymap-hover-layers" hidden></div>
       </div>
 

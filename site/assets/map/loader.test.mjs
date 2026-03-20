@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 
 globalThis.__fishystuffLoaderAutoStart = false;
 const {
+  buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
+  buildHoverOverviewRows,
   buildMapUiResetMountOptions,
   buildSearchMatches,
   computeDragAutoScrollDelta,
   createBookmarkFromPlacement,
-  hoverLayerDetailLines,
   mergeImportedBookmarks,
   moveBookmarkBefore,
   normalizeZoneCatalog,
@@ -48,6 +49,7 @@ function buildStateBundle(selectedFishIds = []) {
   return {
     state: {
       catalog: {
+        layers: [],
         fish: [
           {
             fishId: 912,
@@ -72,6 +74,50 @@ function buildStateBundle(selectedFishIds = []) {
       filters: {
         fishIds: selectedFishIds,
         zoneRgbs: [],
+      },
+    },
+  };
+}
+
+function buildHoverStateBundle() {
+  return {
+    state: {
+      catalog: {
+        layers: [
+          {
+            layerId: "regions",
+            name: "Regions",
+            visible: true,
+            opacity: 1,
+            opacityDefault: 1,
+            displayOrder: 40,
+            kind: "vector-geojson",
+          },
+          {
+            layerId: "region_groups",
+            name: "Region Groups",
+            visible: true,
+            opacity: 1,
+            opacityDefault: 1,
+            displayOrder: 30,
+            kind: "vector-geojson",
+          },
+          {
+            layerId: "zone_mask",
+            name: "Zone Mask",
+            visible: true,
+            opacity: 1,
+            opacityDefault: 1,
+            displayOrder: 20,
+            kind: "tiled-raster",
+          },
+        ],
+        fish: [],
+      },
+    },
+    inputState: {
+      filters: {
+        layerIdsOrdered: ["regions", "region_groups", "zone_mask"],
       },
     },
   };
@@ -120,23 +166,84 @@ test("buildSearchMatches keeps fish search working and filters already selected 
   assert.equal(fishMatches[0]?.fishId, 77);
 });
 
-test("hoverLayerDetailLines includes region and waypoint locations", () => {
+test("buildHoverOverviewRows renders supported hover layers from bottom to top", () => {
   assert.deepEqual(
-    hoverLayerDetailLines({
-      regionGroup: 219,
-      regionName: "Juur Sea",
-      resourceBarWaypoint: 1438,
-      resourceBarWorldX: 985934.25,
-      resourceBarWorldZ: 449831.3125,
-      originWaypoint: 1437,
-      originWorldX: 98484.74786281586,
-      originWorldZ: 365929.37886714935,
-    }),
+    buildHoverOverviewRows(
+      {
+        zoneName: "Demi River",
+        layerSamples: [
+          {
+            layerId: "region_groups",
+            regionName: "Tarif",
+          },
+          {
+            layerId: "regions",
+            regionName: "Tarif",
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
     [
-      "RG 219",
-      "Juur Sea",
-      "Resource bar WP 1438: 985934.25, 449831.31",
-      "Origin node WP 1437: 98484.75, 365929.38",
+      {
+        layerId: "zone_mask",
+        icon: "hover-zone",
+        label: "Zone",
+        value: "Demi River",
+      },
+      {
+        layerId: "region_groups",
+        icon: "hover-resources",
+        label: "Resources",
+        value: "Tarif",
+      },
+      {
+        layerId: "regions",
+        icon: "hover-origin",
+        label: "Origin",
+        value: "Tarif",
+      },
+    ],
+  );
+});
+
+test("buildBookmarkOverviewRows mirrors the hover row style without duplicating the zone", () => {
+  assert.deepEqual(
+    buildBookmarkOverviewRows(
+      {
+        label: "Tarif hotspot",
+        zoneName: "Tarif",
+      },
+      0,
+    ),
+    [
+      {
+        icon: "bookmarks",
+        label: "Bookmark",
+        value: "Tarif hotspot",
+      },
+      {
+        icon: "hover-zone",
+        label: "Zone",
+        value: "Tarif",
+      },
+    ],
+  );
+
+  assert.deepEqual(
+    buildBookmarkOverviewRows(
+      {
+        label: "Tarif",
+        zoneName: "Tarif",
+      },
+      0,
+    ),
+    [
+      {
+        icon: "bookmarks",
+        label: "Bookmark",
+        value: "Tarif",
+      },
     ],
   );
 });

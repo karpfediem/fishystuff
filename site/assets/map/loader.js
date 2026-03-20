@@ -1265,120 +1265,99 @@ function setHoverTooltipPosition(elements, clientX, clientY) {
   elements.hoverTooltip.style.setProperty("--fishymap-hover-y", `${clientY}px`);
 }
 
-function formatHoverWaypointCoord(value) {
-  if (!Number.isFinite(value)) {
-    return null;
+function overviewRowMarkup(row, iconSizeClass = "size-4") {
+  const label = String(row?.label || "").trim();
+  const value = String(row?.value || "").trim();
+  const icon = String(row?.icon || "").trim();
+  if (!label || !value || !icon) {
+    return "";
   }
-  return Math.abs(value) >= 1000
-    ? value.toFixed(2)
-    : value.toFixed(3);
+  return `
+    <div class="fishymap-overview-row">
+      <span class="fishymap-overview-icon" aria-hidden="true">${spriteIcon(icon, iconSizeClass)}</span>
+      <span class="fishymap-overview-label">${escapeHtml(label)}</span>
+      <span class="fishymap-overview-value">${escapeHtml(value)}</span>
+    </div>
+  `;
 }
 
-function formatHoverWaypointLine(label, waypointId, worldX, worldZ) {
-  const formattedX = formatHoverWaypointCoord(worldX);
-  const formattedZ = formatHoverWaypointCoord(worldZ);
-  if (!formattedX || !formattedZ) {
-    return null;
-  }
-  const waypointText =
-    waypointId != null && Number.isFinite(Number(waypointId))
-      ? ` WP ${Number(waypointId)}`
-      : "";
-  return `${label}${waypointText}: ${formattedX}, ${formattedZ}`;
+function supportedHoverLayerIds() {
+  return ["zone_mask", "region_groups", "regions"];
 }
 
-export function hoverLayerDetailLines(sample) {
-  const lines = [];
-  if (sample?.regionGroup != null) {
-    lines.push(`RG ${sample.regionGroup}`);
+function hoverLayerOverviewValue(layerId, hover, sample) {
+  if (layerId === "zone_mask") {
+    return String(hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : "")).trim();
   }
-  const regionName = String(sample?.regionName || "").trim();
-  if (regionName) {
-    lines.push(regionName);
+  if (layerId === "region_groups") {
+    return String(sample?.regionName || "").trim();
   }
-  const resourceBarLine = formatHoverWaypointLine(
-    "Resource bar",
-    sample?.resourceBarWaypoint,
-    sample?.resourceBarWorldX,
-    sample?.resourceBarWorldZ,
+  if (layerId === "regions") {
+    return String(sample?.regionName || "").trim();
+  }
+  return "";
+}
+
+function hoverLayerOverviewConfig(layerId) {
+  if (layerId === "zone_mask") {
+    return { icon: "hover-zone", label: "Zone" };
+  }
+  if (layerId === "region_groups") {
+    return { icon: "hover-resources", label: "Resources" };
+  }
+  if (layerId === "regions") {
+    return { icon: "hover-origin", label: "Origin" };
+  }
+  return null;
+}
+
+export function buildHoverOverviewRows(hover, stateBundle) {
+  const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
+  const sampleByLayerId = new Map(
+    layerSamples
+      .map((sample) => [String(sample?.layerId || "").trim(), sample])
+      .filter(([layerId]) => Boolean(layerId)),
   );
-  if (resourceBarLine) {
-    lines.push(resourceBarLine);
-  }
-  const originLine = formatHoverWaypointLine(
-    "Origin node",
-    sample?.originWaypoint,
-    sample?.originWorldX,
-    sample?.originWorldZ,
-  );
-  if (originLine) {
-    lines.push(originLine);
-  }
-  return lines;
+  const orderedLayerIds = resolveLayerEntries(stateBundle || {})
+    .filter((layer) => layer.visible)
+    .map((layer) => String(layer?.layerId || "").trim())
+    .filter((layerId) => supportedHoverLayerIds().includes(layerId))
+    .reverse();
+  const layerIds = orderedLayerIds.length
+    ? orderedLayerIds
+    : supportedHoverLayerIds().filter((layerId) => layerId === "zone_mask" || sampleByLayerId.has(layerId));
+  return layerIds
+    .map((layerId) => {
+      const config = hoverLayerOverviewConfig(layerId);
+      const value = hoverLayerOverviewValue(layerId, hover, sampleByLayerId.get(layerId));
+      if (!config || !value) {
+        return null;
+      }
+      return {
+        layerId,
+        icon: config.icon,
+        label: config.label,
+        value,
+      };
+    })
+    .filter(Boolean);
 }
 
-function renderHoverTooltip(elements, hover) {
-  if (!elements.hoverTooltip || !elements.hoverSummary || !elements.hoverLayers) {
+function renderHoverTooltip(elements, hover, stateBundle) {
+  if (!elements.hoverTooltip || !elements.hoverLayers) {
     return;
   }
-  const label = hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : null);
-  const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
-  if ((!label && layerSamples.length === 0) || !elements.hoverPointerActive) {
+  const overviewRows = buildHoverOverviewRows(hover, stateBundle);
+  if (overviewRows.length === 0 || !elements.hoverPointerActive) {
     setBooleanProperty(elements.hoverTooltip, "hidden", true);
     return;
   }
-  if (label) {
-    setTextContent(elements.hoverSummary, label);
-  }
-  setBooleanProperty(elements.hoverSummary, "hidden", !label);
   setMarkup(
     elements.hoverLayers,
-    layerSamples
-      .map((sample) => {
-        const rgb = Array.isArray(sample?.rgb) ? sample.rgb : [];
-        return `${sample?.layerId ?? ""}:${rgb.join(",")}:${hoverLayerDetailLines(sample).join("/")}`;
-      })
-      .join("|"),
-    layerSamples
-      .map((sample) => {
-        const rgb = Array.isArray(sample?.rgb) ? sample.rgb : [0, 0, 0];
-        const red = Number.parseInt(rgb[0], 10) || 0;
-        const green = Number.parseInt(rgb[1], 10) || 0;
-        const blue = Number.parseInt(rgb[2], 10) || 0;
-        const layerName = String(sample?.layerName || sample?.layerId || "Layer").trim() || "Layer";
-        const rgbLabel = `rgb(${red}, ${green}, ${blue})`;
-        const detailLines = hoverLayerDetailLines(sample);
-        const valueMarkup =
-          detailLines.length > 0
-            ? `
-              <span class="fishymap-hover-layer-value fishymap-hover-layer-value--stacked">
-                ${detailLines
-                  .map(
-                    (line, index) => `
-                      <span class="fishymap-hover-layer-detail${index === 0 ? " fishymap-hover-layer-detail--primary" : ""}">
-                        ${escapeHtml(line)}
-                      </span>
-                    `,
-                  )
-                  .join("")}
-              </span>
-            `
-            : `
-              <span class="fishymap-hover-layer-value">
-                <span class="fishymap-hover-layer-swatch" style="background-color: ${escapeHtml(rgbLabel)};"></span>
-                <code>${escapeHtml(rgbLabel)}</code>
-              </span>
-            `;
-        return `
-          <div class="fishymap-hover-layer-row">
-            <span class="fishymap-hover-layer-name">${escapeHtml(layerName)}</span>
-            ${valueMarkup}
-          </div>
-        `;
-      })
-      .join(""),
+    JSON.stringify(overviewRows),
+    overviewRows.map((row) => overviewRowMarkup(row)).join(""),
   );
-  setBooleanProperty(elements.hoverLayers, "hidden", layerSamples.length === 0);
+  setBooleanProperty(elements.hoverLayers, "hidden", overviewRows.length === 0);
   setBooleanProperty(elements.hoverTooltip, "hidden", false);
 }
 
@@ -1444,6 +1423,26 @@ function bookmarkSelectionStatusLabel(bookmarks, selectedIds) {
   return `${selectedCount} ${pluralizeBookmarks(selectedCount)} selected.`;
 }
 
+export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
+  const label = bookmarkDisplayLabel(bookmark, fallbackIndex);
+  const zoneName = String(bookmark?.zoneName || "").trim();
+  const rows = [
+    {
+      icon: "bookmarks",
+      label: "Bookmark",
+      value: label,
+    },
+  ];
+  if (zoneName && zoneName !== label) {
+    rows.push({
+      icon: "hover-zone",
+      label: "Zone",
+      value: zoneName,
+    });
+  }
+  return rows;
+}
+
 function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
   if (
     !elements.bookmarksList ||
@@ -1490,8 +1489,7 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
     normalizedBookmarks.length
       ? normalizedBookmarks
           .map((bookmark, index) => {
-            const zoneName =
-              bookmark.zoneName && bookmark.zoneName !== bookmark.label ? bookmark.zoneName : "";
+            const overviewRows = buildBookmarkOverviewRows(bookmark, index);
             return `
               <div class="fishymap-bookmark-card rounded-box border border-base-300/70 bg-base-100" data-bookmark-id="${escapeHtml(bookmark.id)}">
                 <button
@@ -1513,11 +1511,12 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
                   >
                 </label>
                 <div class="fishymap-bookmark-main">
-                  <div class="fishymap-bookmark-label-row">
+                  <div class="fishymap-bookmark-summary">
                     <span class="fishymap-bookmark-order badge badge-soft badge-sm">${index + 1}</span>
-                    <div class="fishymap-bookmark-label">${escapeHtml(bookmark.label)}</div>
+                    <div class="fishymap-overview-list fishymap-overview-list--bookmark">
+                      ${overviewRows.map((row) => overviewRowMarkup(row)).join("")}
+                    </div>
                   </div>
-                  ${zoneName ? `<div class="fishymap-bookmark-zone">${escapeHtml(zoneName)}</div>` : ""}
                   <div class="fishymap-bookmark-actions">
                     <button
                       class="btn btn-soft btn-xs"
@@ -2747,7 +2746,7 @@ function renderPanel(elements, stateBundle, zoneCatalog = []) {
     }
   }
 
-  renderHoverTooltip(elements, state.hover || null);
+  renderHoverTooltip(elements, state.hover || null, stateBundle);
 
   renderStatusLines(elements.statusLines, state.statuses || {});
   setTextContent(
@@ -3232,7 +3231,7 @@ function bindUi(shell, elements, options = {}) {
 
   elements.canvas.addEventListener("pointerleave", () => {
     elements.hoverPointerActive = false;
-    renderHoverTooltip(elements, null);
+    renderHoverTooltip(elements, null, latestStateBundle);
   });
 
   elements.canvas.addEventListener("click", () => {
@@ -4173,7 +4172,7 @@ function bindUi(shell, elements, options = {}) {
         hover,
       };
     }
-    renderHoverTooltip(elements, hover);
+    renderHoverTooltip(elements, hover, latestStateBundle);
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
@@ -4269,7 +4268,6 @@ async function main() {
     zoneEvidenceSummary: document.getElementById("fishymap-zone-evidence-summary"),
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
     hoverTooltip: document.getElementById("fishymap-hover-tooltip"),
-    hoverSummary: document.getElementById("fishymap-hover-summary"),
     hoverLayers: document.getElementById("fishymap-hover-layers"),
     viewReadout: document.getElementById("fishymap-view-readout"),
     errorOverlay: document.getElementById("fishymap-error-overlay"),
