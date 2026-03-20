@@ -411,9 +411,9 @@
         bottom: 1rem;
         z-index: 18;
         width: min(30rem, calc(100vw - 2rem));
-        height: min(28rem, calc(100% - 16rem));
-        max-height: calc(100% - 16rem);
-        min-height: 17rem;
+        height: min(40rem, calc(100% - 10rem));
+        max-height: calc(100% - 10rem);
+        min-height: min(35rem, calc(100% - 10rem));
       }
 
       #fishymap-bookmarks-body {
@@ -830,9 +830,9 @@
           bottom: auto;
           left: 0.75rem;
           width: auto;
-          height: min(28dvh, 17rem);
-          max-height: min(28dvh, 17rem);
-          min-height: 12rem;
+          height: min(28rem, calc(100dvh - 15rem));
+          max-height: calc(100dvh - 15rem);
+          min-height: min(20rem, calc(100dvh - 15rem));
         }
 
         #fishymap-view-toggle {
