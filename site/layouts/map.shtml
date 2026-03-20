@@ -744,6 +744,10 @@
         line-height: 1.3;
       }
 
+      .fishymap-overview-row--label-less {
+        grid-template-columns: auto minmax(0, 1fr);
+      }
+
       .fishymap-overview-icon {
         display: inline-flex;
         flex: none;

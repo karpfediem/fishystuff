@@ -1280,13 +1280,14 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
   const value = String(row?.value || "").trim();
   const icon = String(row?.icon || "").trim();
   const statusIcon = String(row?.statusIcon || "").trim();
-  if (!label || !value || !icon) {
+  const hideLabel = row?.hideLabel === true;
+  if ((!label && !hideLabel) || !value || !icon) {
     return "";
   }
   return `
-    <div class="fishymap-overview-row">
+    <div class="fishymap-overview-row${hideLabel ? " fishymap-overview-row--label-less" : ""}">
       <span class="fishymap-overview-icon" aria-hidden="true">${spriteIcon(icon, iconSizeClass)}</span>
-      <span class="fishymap-overview-label">${escapeHtml(label)}</span>
+      ${hideLabel ? "" : `<span class="fishymap-overview-label">${escapeHtml(label)}</span>`}
       <span class="fishymap-overview-value">
         <span class="fishymap-overview-value-text">${escapeHtml(value)}</span>
         ${
@@ -1529,6 +1530,7 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
       icon: "bookmarks",
       label: "Bookmark",
       value: label,
+      hideLabel: true,
     },
   ];
   if (zoneName && zoneName !== label) {

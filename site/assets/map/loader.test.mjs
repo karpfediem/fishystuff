@@ -272,6 +272,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         icon: "bookmarks",
         label: "Bookmark",
         value: "Tarif hotspot",
+        hideLabel: true,
       },
       {
         icon: "hover-zone",
@@ -306,6 +307,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         icon: "bookmarks",
         label: "Bookmark",
         value: "Tarif",
+        hideLabel: true,
       },
       {
         icon: "hover-resources",
@@ -334,6 +336,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         icon: "bookmarks",
         label: "Bookmark",
         value: "Unknown route",
+        hideLabel: true,
       },
       {
         icon: "hover-resources",
