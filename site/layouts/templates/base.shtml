@@ -194,19 +194,12 @@
     :where(.fishy-icon) {
       display: inline-block;
       flex: none;
-      width: 1em;
-      height: 1em;
       line-height: 1;
       vertical-align: middle;
     }
 
     :where(.fishy-icon--inline) {
       vertical-align: -0.05em;
-    }
-
-    .fishy-icon--button {
-      width: 1.35em;
-      height: 1.35em;
     }
   </style>
   <super>

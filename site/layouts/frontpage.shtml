@@ -79,7 +79,7 @@
           <a href="$site.page('guides').link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
-                <svg class="fishy-icon size-8" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-academic-cap"></use></svg>
+                <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-guides"></use></svg>
                 <h2 class="card-title justify-center text-2xl">Guides</h2>
               <p class="text-sm text-base-content/75">
                 Community contributed guides to help you learn fishing.
@@ -93,7 +93,7 @@
           <a href="$site.page('map').link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
-              <svg class="fishy-icon size-8" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-map-pin"></use></svg>
+              <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-map-pin"></use></svg>
               <h2 class="card-title justify-center text-2xl">Map</h2>
               <p class="text-sm text-base-content/75">Searching for a specific fish?</p>
               <p class="text-sm text-base-content/75">Browse and compare zones, regions and fish evidence.</p>
@@ -106,7 +106,7 @@
           <a href="$site.page('dex').link()"
              class="card card-border h-full bg-base-100 text-left shadow-sm hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
             <div class="card-body items-center text-center">
-                <svg class="fishy-icon size-8" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-magnifying-glass"></use></svg>
+                <svg class="fishy-icon size-10" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-dex"></use></svg>
                 <h2 class="card-title justify-center text-2xl">Dex</h2>
               <p class="text-sm text-base-content/75">Gotta Catch 'Em All</p>
               <p class="text-sm text-base-content/75">Browse fish and track your progress.</p>
