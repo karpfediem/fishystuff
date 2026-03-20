@@ -505,7 +505,7 @@ function layerKindLabel(kind) {
 }
 
 function spriteIcon(name) {
-  return `<svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-${name}"></use></svg>`;
+  return `<svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-${name}"></use></svg>`;
 }
 
 function dragHandleIcon() {

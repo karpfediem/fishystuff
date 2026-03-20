@@ -355,15 +355,15 @@
 
                 <div class="flex flex-wrap gap-2">
                     <button class="btn btn-soft btn-secondary" data-on-click="@clipboard(presetURL(ctx.signals.JSON()))">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-link"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-link"></use></svg>
                         Copy URL
                     </button>
                     <button class="btn btn-soft btn-secondary" data-on-click="@clipboard('[FishyStuff Calculator Preset | ' + ($active ? 'Active | ' : $afr * 100 +'% AFR | ') + $drr * 100 +'% DRR | '+ $zone +'](' + presetURL(ctx.signals.JSON())+ ')')">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-share-nodes"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-share-nodes"></use></svg>
                         Copy Share
                     </button>
                     <button class="btn btn-dash btn-error" data-on-click="clearSignals()">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-x-circle"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-x-circle"></use></svg>
                         Clear
                     </button>
                 </div>

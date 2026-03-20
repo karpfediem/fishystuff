@@ -954,7 +954,7 @@
       if (className) {
         classes.push(className);
       }
-      return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-${name}"></use></svg>`;
+      return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-${name}"></use></svg>`;
     }
 
     const ICON_CHECK_BADGE_OUTLINE = spriteIconMarkup("check-badge-outline", "size-7");
@@ -2466,7 +2466,7 @@
           <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
             <legend class="fieldset-legend">Search</legend>
             <label class="fishydex-search-field input input-bordered">
-              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-search-field"></use></svg>
+              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-search-field"></use></svg>
               <span class="sr-only">Search fish</span>
               <input class="fishydex-search"
                      type="search"

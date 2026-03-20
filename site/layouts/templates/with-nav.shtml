@@ -87,18 +87,18 @@
                     <div class="flex min-w-0 flex-1 items-center gap-2">
                         <div class="dropdown lg:hidden">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false" aria-label="Open navigation menu">
-                                <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-menu"></use></svg>
+                                <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-menu"></use></svg>
                             </button>
 
                             <ul tabindex="0"
                                 role="menu"
                                 class="menu menu-sm dropdown-content rounded-box border border-base-300 bg-base-100 p-2 shadow-xl z-10 mt-2 w-56">
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-guides"></use></svg>Guides</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-map-pin"></use></svg>Map</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-dex"></use></svg>Dex</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-calculator"></use></svg>Calculator</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-community"></use></svg>Community</a></li>
-                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-log"></use></svg>Log</a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-guides"></use></svg>Guides</a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-map-pin"></use></svg>Map</a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-dex"></use></svg>Dex</a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-calculator"></use></svg>Calculator</a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-community"></use></svg>Community</a></li>
+                                <li><a class="inline-flex items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-log"></use></svg>Log</a></li>
                             </ul>
                         </div>
 
@@ -112,12 +112,12 @@
                         </div>
 
                         <div class="hidden min-w-0 flex-1 flex-wrap justify-center gap-1 lg:flex">
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-guides"></use></svg>Guides</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-map-pin"></use></svg>Map</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-dex"></use></svg>Dex</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-calculator"></use></svg>Calculator</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-community"></use></svg>Community</a>
-                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-nav-log"></use></svg>Log</a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('guides').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-guides"></use></svg>Guides</a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('map').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-map-pin"></use></svg>Map</a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('dex').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-dex"></use></svg>Dex</a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('calculator').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-calculator"></use></svg>Calculator</a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('community').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-community"></use></svg>Community</a>
+                            <a class="btn btn-sm btn-ghost items-center gap-2 leading-none font-bold no-underline hover:no-underline focus:no-underline" href="$site.page('log').link()"><svg class="fishy-icon size-6 shrink-0 opacity-90" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-nav-log"></use></svg>Log</a>
                         </div>
                     </div>
 
@@ -127,7 +127,7 @@
                         <div id="language-switcher" class="dropdown dropdown-end">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
                                 <span id="language-switcher-label">Language</span>
-                                <svg class="fishy-icon fishy-icon--inline inline-block h-2.5 w-2.5 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-caret-down"></use></svg>
+                                <svg class="fishy-icon fishy-icon--inline inline-block h-2.5 w-2.5 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-caret-down"></use></svg>
                             </button>
 
                             <ul tabindex="0"
@@ -149,7 +149,7 @@
                         <div id="theme-switcher" class="dropdown dropdown-end">
                             <button type="button" tabindex="0" class="btn btn-sm btn-ghost" aria-haspopup="menu" aria-expanded="false">
                                 Theme
-                                <svg class="fishy-icon fishy-icon--inline inline-block h-2.5 w-2.5 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-caret-down"></use></svg>
+                                <svg class="fishy-icon fishy-icon--inline inline-block h-2.5 w-2.5 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-caret-down"></use></svg>
                             </button>
 
                             <ul tabindex="0"
