@@ -6,6 +6,7 @@ const {
   buildDefaultWindowUiStateSerialized,
   buildMapUiResetMountOptions,
   buildSearchMatches,
+  computeDragAutoScrollDelta,
   createBookmarkFromPlacement,
   mergeImportedBookmarks,
   moveBookmarkBefore,
@@ -464,4 +465,19 @@ test("moveBookmarkBefore reorders bookmarks relative to the dragged target", () 
     ).map((bookmark) => bookmark.id),
     ["bookmark-2", "bookmark-3", "bookmark-1"],
   );
+});
+
+test("computeDragAutoScrollDelta scrolls toward the nearest list edge", () => {
+  const rect = { top: 100, bottom: 300 };
+
+  assert.ok(computeDragAutoScrollDelta(rect, 112) < 0);
+  assert.ok(computeDragAutoScrollDelta(rect, 288) > 0);
+  assert.equal(computeDragAutoScrollDelta(rect, 200), 0);
+});
+
+test("computeDragAutoScrollDelta stops when the pointer is too far from the container", () => {
+  const rect = { top: 100, bottom: 300 };
+
+  assert.equal(computeDragAutoScrollDelta(rect, 20), 0);
+  assert.equal(computeDragAutoScrollDelta(rect, 380), 0);
 });

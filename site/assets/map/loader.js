@@ -12,6 +12,8 @@ const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).
 const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-2";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
+const DRAG_AUTOSCROLL_EDGE_PX = 56;
+const DRAG_AUTOSCROLL_MAX_STEP_PX = 20;
 const BOOKMARK_COORDINATE_DECIMALS = 3;
 const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
@@ -611,6 +613,34 @@ export function moveBookmarkBefore(bookmarks, movingBookmarkId, targetBookmarkId
   const nextIndex = position === "after" ? baseIndex + 1 : baseIndex;
   reordered.splice(nextIndex, 0, bookmark);
   return reordered;
+}
+
+export function computeDragAutoScrollDelta(containerRect, pointerClientY, options = {}) {
+  const top = Number(containerRect?.top);
+  const bottom = Number(containerRect?.bottom);
+  const clientY = Number(pointerClientY);
+  if (!Number.isFinite(top) || !Number.isFinite(bottom) || !Number.isFinite(clientY) || bottom <= top) {
+    return 0;
+  }
+  const edgeThreshold = Math.max(
+    16,
+    Number.isFinite(options.edgeThreshold) ? Number(options.edgeThreshold) : DRAG_AUTOSCROLL_EDGE_PX,
+  );
+  const maxStep = Math.max(
+    4,
+    Number.isFinite(options.maxStep) ? Number(options.maxStep) : DRAG_AUTOSCROLL_MAX_STEP_PX,
+  );
+  const topDistance = clientY - top;
+  if (topDistance >= -edgeThreshold && topDistance <= edgeThreshold) {
+    const intensity = 1 - Math.abs(topDistance) / edgeThreshold;
+    return -Math.max(1, Math.round(maxStep * intensity));
+  }
+  const bottomDistance = bottom - clientY;
+  if (bottomDistance >= -edgeThreshold && bottomDistance <= edgeThreshold) {
+    const intensity = 1 - Math.abs(bottomDistance) / edgeThreshold;
+    return Math.max(1, Math.round(maxStep * intensity));
+  }
+  return 0;
 }
 
 function downloadBookmarkExport(bookmarks, options = {}) {
@@ -2748,11 +2778,67 @@ function bindUi(shell, elements, options = {}) {
     overBookmarkId: null,
     mode: null,
   };
+  const dragAutoScrollState = {
+    container: null,
+    clientY: null,
+    frameId: 0,
+  };
   const layerOpacityInteraction = {
     activeLayerId: null,
     activeValue: null,
   };
   elements.layerOpacityInteraction = layerOpacityInteraction;
+
+  function stopDragAutoScroll() {
+    if (dragAutoScrollState.frameId && typeof window.cancelAnimationFrame === "function") {
+      window.cancelAnimationFrame(dragAutoScrollState.frameId);
+    }
+    dragAutoScrollState.container = null;
+    dragAutoScrollState.clientY = null;
+    dragAutoScrollState.frameId = 0;
+  }
+
+  function tickDragAutoScroll() {
+    dragAutoScrollState.frameId = 0;
+    const container = dragAutoScrollState.container;
+    if (!container || !Number.isFinite(dragAutoScrollState.clientY)) {
+      return;
+    }
+    const delta = computeDragAutoScrollDelta(
+      container.getBoundingClientRect(),
+      dragAutoScrollState.clientY,
+    );
+    if (!delta) {
+      return;
+    }
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const nextScrollTop = Math.max(0, Math.min(maxScrollTop, container.scrollTop + delta));
+    if (nextScrollTop === container.scrollTop) {
+      return;
+    }
+    container.scrollTop = nextScrollTop;
+    dragAutoScrollState.frameId = window.requestAnimationFrame(tickDragAutoScroll);
+  }
+
+  function updateDragAutoScroll(container, clientY) {
+    dragAutoScrollState.container = container || null;
+    dragAutoScrollState.clientY = Number.isFinite(clientY) ? clientY : null;
+    if (!container || !Number.isFinite(dragAutoScrollState.clientY)) {
+      stopDragAutoScroll();
+      return;
+    }
+    const delta = computeDragAutoScrollDelta(container.getBoundingClientRect(), dragAutoScrollState.clientY);
+    if (!delta) {
+      if (dragAutoScrollState.frameId && typeof window.cancelAnimationFrame === "function") {
+        window.cancelAnimationFrame(dragAutoScrollState.frameId);
+      }
+      dragAutoScrollState.frameId = 0;
+      return;
+    }
+    if (!dragAutoScrollState.frameId) {
+      dragAutoScrollState.frameId = window.requestAnimationFrame(tickDragAutoScroll);
+    }
+  }
 
   function stateBundleFromEvent(event) {
     return {
@@ -3537,6 +3623,8 @@ function bindUi(shell, elements, options = {}) {
     if (!bookmarkDragState.draggingBookmarkId) {
       return;
     }
+    event.preventDefault();
+    updateDragAutoScroll(elements.bookmarksList, event.clientY);
     const card = event.target.closest(".fishymap-bookmark-card");
     if (!card) {
       clearBookmarkDropState();
@@ -3547,7 +3635,6 @@ function bindUi(shell, elements, options = {}) {
       clearBookmarkDropState();
       return;
     }
-    event.preventDefault();
     const rect = card.getBoundingClientRect();
     const offsetY = event.clientY - rect.top;
     applyBookmarkDropState(targetBookmarkId, offsetY >= rect.height / 2 ? "after" : "before");
@@ -3559,6 +3646,7 @@ function bindUi(shell, elements, options = {}) {
       !bookmarkDragState.overBookmarkId ||
       !bookmarkDragState.mode
     ) {
+      stopDragAutoScroll();
       clearBookmarkDropState();
       return;
     }
@@ -3572,6 +3660,7 @@ function bindUi(shell, elements, options = {}) {
     const movedBookmark = nextBookmarks.find(
       (bookmark) => bookmark.id === bookmarkDragState.draggingBookmarkId,
     );
+    stopDragAutoScroll();
     clearBookmarkDropState();
     bookmarkDragState.draggingBookmarkId = null;
     persistBookmarksAndRender(
@@ -3581,6 +3670,7 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.bookmarksList?.addEventListener("dragend", () => {
+    stopDragAutoScroll();
     elements.bookmarksList
       ?.querySelectorAll?.(".fishymap-bookmark-card[data-dragging]")
       ?.forEach?.((card) => {
@@ -3801,6 +3891,8 @@ function bindUi(shell, elements, options = {}) {
     if (!layerDragState.draggingLayerId) {
       return;
     }
+    event.preventDefault();
+    updateDragAutoScroll(elements.layers, event.clientY);
     const card = event.target.closest(".fishymap-layer-card");
     if (!card) {
       clearLayerDropState();
@@ -3811,7 +3903,6 @@ function bindUi(shell, elements, options = {}) {
       clearLayerDropState();
       return;
     }
-    event.preventDefault();
     const rect = card.getBoundingClientRect();
     const offsetY = event.clientY - rect.top;
     const locked = card.getAttribute("data-locked") === "true";
@@ -3840,6 +3931,7 @@ function bindUi(shell, elements, options = {}) {
       !layerDragState.overLayerId ||
       !layerDragState.mode
     ) {
+      stopDragAutoScroll();
       clearLayerDropState();
       return;
     }
@@ -3857,6 +3949,7 @@ function bindUi(shell, elements, options = {}) {
       layerDragState.draggingLayerId,
       dropMode === "attach" ? layerDragState.overLayerId : "",
     );
+    stopDragAutoScroll();
     clearLayerDropState();
     layerDragState.draggingLayerId = null;
     dispatchMapState(shell, {
@@ -3870,6 +3963,7 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.layers.addEventListener("dragend", () => {
+    stopDragAutoScroll();
     elements.layers
       ?.querySelectorAll?.(".fishymap-layer-card[data-dragging]")
       ?.forEach?.((card) => {
