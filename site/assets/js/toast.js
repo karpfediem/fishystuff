@@ -84,7 +84,7 @@
     }
     var root = doc.createElement("div");
     root.id = ROOT_ID;
-    root.className = "toast toast-top toast-center sm:toast-end pointer-events-none";
+    root.className = "toast toast-bottom toast-center pointer-events-none";
     root.setAttribute("aria-live", "polite");
     root.setAttribute("aria-atomic", "false");
     doc.body.appendChild(root);

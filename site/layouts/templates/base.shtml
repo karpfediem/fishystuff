@@ -234,6 +234,6 @@
 </head>
 <body id="body" class="prose prose-lg lg:prose-xl max-w-none min-h-dvh bg-base-100 text-base-content">
 <super>
-<div id="fishystuff-toast-root" class="toast toast-top toast-center sm:toast-end pointer-events-none" aria-live="polite" aria-atomic="false"></div>
+<div id="fishystuff-toast-root" class="toast toast-bottom toast-center pointer-events-none" aria-live="polite" aria-atomic="false"></div>
 </body>
 </html>
