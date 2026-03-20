@@ -9,7 +9,7 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-2";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-3";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
 const DRAG_AUTOSCROLL_EDGE_PX = 56;
@@ -349,6 +349,8 @@ export function normalizeBookmarks(rawBookmarks) {
     }
     seen.add(id);
     const zoneName = String(entry?.zoneName || "").trim();
+    const resourceName = String(entry?.resourceName || "").trim();
+    const originName = String(entry?.originName || "").trim();
     const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
     const createdAt = String(entry?.createdAt || "").trim();
     normalized.push({
@@ -357,6 +359,8 @@ export function normalizeBookmarks(rawBookmarks) {
       worldX,
       worldZ,
       zoneName: zoneName || null,
+      ...(resourceName ? { resourceName } : {}),
+      ...(originName ? { originName } : {}),
       zoneRgb: Number.isFinite(zoneRgb) ? zoneRgb : null,
       createdAt: createdAt || null,
     });
@@ -393,6 +397,8 @@ export function createBookmarkFromPlacement(
     return null;
   }
   const zoneName = String(placement?.zoneName || "").trim();
+  const resourceName = String(placement?.resourceName || "").trim();
+  const originName = String(placement?.originName || "").trim();
   const zoneRgb = Number.parseInt(placement?.zoneRgb, 10);
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   return {
@@ -401,6 +407,8 @@ export function createBookmarkFromPlacement(
     worldX,
     worldZ,
     zoneName: zoneName || null,
+    ...(resourceName ? { resourceName } : {}),
+    ...(originName ? { originName } : {}),
     zoneRgb: Number.isFinite(zoneRgb) ? zoneRgb : null,
     createdAt: new Date(now).toISOString(),
   };
@@ -1285,6 +1293,15 @@ function supportedHoverLayerIds() {
   return ["zone_mask", "region_groups", "regions"];
 }
 
+function hoverSampleByLayerId(hover, layerId) {
+  const targetLayerId = String(layerId || "").trim();
+  if (!targetLayerId) {
+    return null;
+  }
+  const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
+  return layerSamples.find((sample) => String(sample?.layerId || "").trim() === targetLayerId) || null;
+}
+
 function hoverLayerOverviewValue(layerId, hover, sample) {
   if (layerId === "zone_mask") {
     return String(hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : "")).trim();
@@ -1426,6 +1443,8 @@ function bookmarkSelectionStatusLabel(bookmarks, selectedIds) {
 export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
   const label = bookmarkDisplayLabel(bookmark, fallbackIndex);
   const zoneName = String(bookmark?.zoneName || "").trim();
+  const resourceName = String(bookmark?.resourceName || "").trim();
+  const originName = String(bookmark?.originName || "").trim();
   const rows = [
     {
       icon: "bookmarks",
@@ -1438,6 +1457,20 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
       icon: "hover-zone",
       label: "Zone",
       value: zoneName,
+    });
+  }
+  if (resourceName) {
+    rows.push({
+      icon: "hover-resources",
+      label: "Resources",
+      value: resourceName,
+    });
+  }
+  if (originName) {
+    rows.push({
+      icon: "hover-origin",
+      label: "Origin",
+      value: originName,
     });
   }
   return rows;
@@ -3242,6 +3275,8 @@ function bindUi(shell, elements, options = {}) {
     const hover = state.hover || null;
     const worldX = normalizeBookmarkCoordinate(hover?.worldX);
     const worldZ = normalizeBookmarkCoordinate(hover?.worldZ);
+    const regionGroupsName = hoverSampleByLayerId(hover, "region_groups")?.regionName;
+    const regionsName = hoverSampleByLayerId(hover, "regions")?.regionName;
     if (worldX == null || worldZ == null) {
       setBookmarkStatus("Move the cursor over the ready 2D map and click again.");
       renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
@@ -3252,6 +3287,8 @@ function bindUi(shell, elements, options = {}) {
         worldX,
         worldZ,
         zoneName: hover?.zoneName,
+        resourceName: regionGroupsName || regionsName,
+        originName: regionsName || regionGroupsName,
         zoneRgb: hover?.zoneRgb,
       },
       bookmarks,

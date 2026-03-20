@@ -488,6 +488,8 @@ function normalizeBookmarksState(values) {
     seen.add(id);
     const label = normalizeNullableString(entry?.label);
     const zoneName = normalizeNullableString(entry?.zoneName);
+    const resourceName = normalizeNullableString(entry?.resourceName);
+    const originName = normalizeNullableString(entry?.originName);
     const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
     const createdAt = normalizeNullableString(entry?.createdAt);
     normalized.push({
@@ -496,6 +498,8 @@ function normalizeBookmarksState(values) {
       worldX,
       worldZ,
       ...(zoneName != null ? { zoneName } : {}),
+      ...(resourceName != null ? { resourceName } : {}),
+      ...(originName != null ? { originName } : {}),
       ...(Number.isFinite(zoneRgb) ? { zoneRgb } : {}),
       ...(createdAt != null ? { createdAt } : {}),
     });

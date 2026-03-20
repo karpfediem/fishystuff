@@ -213,6 +213,8 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
       {
         label: "Tarif hotspot",
         zoneName: "Tarif",
+        resourceName: "Tarif",
+        originName: "Tarif",
       },
       0,
     ),
@@ -227,6 +229,16 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         label: "Zone",
         value: "Tarif",
       },
+      {
+        icon: "hover-resources",
+        label: "Resources",
+        value: "Tarif",
+      },
+      {
+        icon: "hover-origin",
+        label: "Origin",
+        value: "Tarif",
+      },
     ],
   );
 
@@ -235,6 +247,8 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
       {
         label: "Tarif",
         zoneName: "Tarif",
+        resourceName: "Tarif",
+        originName: "Tarif",
       },
       0,
     ),
@@ -242,6 +256,16 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
       {
         icon: "bookmarks",
         label: "Bookmark",
+        value: "Tarif",
+      },
+      {
+        icon: "hover-resources",
+        label: "Resources",
+        value: "Tarif",
+      },
+      {
+        icon: "hover-origin",
+        label: "Origin",
         value: "Tarif",
       },
     ],
@@ -364,7 +388,15 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
   assert.deepEqual(
     normalizeBookmarks({
       bookmarks: [
-        { id: "a", label: "", zoneName: "Velia Coast", worldX: 123.4567, worldZ: -45.6789 },
+        {
+          id: "a",
+          label: "",
+          zoneName: "Velia Coast",
+          resourceName: "Velia",
+          originName: "Velia",
+          worldX: 123.4567,
+          worldZ: -45.6789,
+        },
         { id: "a", label: "duplicate", worldX: 999, worldZ: 999 },
         { id: "b", label: "Manual", worldX: "bad", worldZ: 12 },
         { id: "c", label: "Manual", zoneRgb: "255", worldX: "12.5", worldZ: "8.25" },
@@ -375,6 +407,8 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
         id: "a",
         label: "Velia Coast",
         zoneName: "Velia Coast",
+        resourceName: "Velia",
+        originName: "Velia",
         zoneRgb: null,
         worldX: 123.457,
         worldZ: -45.679,
@@ -400,6 +434,8 @@ test("createBookmarkFromPlacement uses zone name as the default label", () => {
         worldX: 123.4567,
         worldZ: -45.6789,
         zoneName: "Cron Islands - Depth 2",
+        resourceName: "Tarif",
+        originName: "Tarif",
         zoneRgb: 12345,
       },
       [],
@@ -412,6 +448,8 @@ test("createBookmarkFromPlacement uses zone name as the default label", () => {
       id: "bookmark-1",
       label: "Cron Islands - Depth 2",
       zoneName: "Cron Islands - Depth 2",
+      resourceName: "Tarif",
+      originName: "Tarif",
       zoneRgb: 12345,
       worldX: 123.457,
       worldZ: -45.679,
