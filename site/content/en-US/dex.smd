@@ -469,14 +469,14 @@
     background: color-mix(in oklab, var(--dex-caught) 16%, var(--dex-surface-soft) 84%);
   }
 
-  .fishydex-caught-button iconify-icon {
+  .fishydex-caught-button .fishy-icon {
     inline-size: 2rem;
     block-size: 2rem;
     flex: none;
     transform-origin: 50% 60%;
   }
 
-  .fishydex-caught-button.is-stamping iconify-icon {
+  .fishydex-caught-button.is-stamping .fishy-icon {
     animation: fishydex-caught-stamp 360ms cubic-bezier(0.2, 0.9, 0.25, 1.15);
   }
 
@@ -671,7 +671,7 @@
     flex: 0 0 auto;
   }
 
-  .fishydex-price-icon iconify-icon {
+  .fishydex-price-icon .fishy-icon {
     display: block;
     width: 1.1rem;
     height: 1.1rem;
@@ -722,7 +722,7 @@
       animation: none;
     }
 
-    .fishydex-caught-button.is-stamping iconify-icon {
+    .fishydex-caught-button.is-stamping .fishy-icon {
       animation: none;
     }
   }
@@ -946,9 +946,20 @@
       Trash: "White",
       Unknown: "Unknown",
     };
-    const ICON_CHECK_BADGE_OUTLINE = `<iconify-icon icon="fishy:check-badge-outline" class="size-7" aria-hidden="true"></iconify-icon>`;
-    const ICON_CHECK_BADGE_SOLID = `<iconify-icon icon="fishy:check-badge-solid" class="size-7" aria-hidden="true"></iconify-icon>`;
-    const ICON_COIN_STACK = `<iconify-icon icon="fishy:coin-stack" aria-hidden="true"></iconify-icon>`;
+    function spriteIconMarkup(name, className = "", inline = false) {
+      const classes = ["fishy-icon"];
+      if (inline) {
+        classes.push("fishy-icon--inline");
+      }
+      if (className) {
+        classes.push(className);
+      }
+      return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-${name}"></use></svg>`;
+    }
+
+    const ICON_CHECK_BADGE_OUTLINE = spriteIconMarkup("check-badge-outline", "size-7");
+    const ICON_CHECK_BADGE_SOLID = spriteIconMarkup("check-badge-solid", "size-7");
+    const ICON_COIN_STACK = spriteIconMarkup("coin-stack");
     const CAUGHT_FILTER_ORDER = ["all", "caught", "missing"];
     const METHOD_ORDER = ["rod", "harpoon"];
     const SORT_FIELD_ORDER = ["name", "price"];
@@ -2455,7 +2466,7 @@
           <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
             <legend class="fieldset-legend">Search</legend>
             <label class="fishydex-search-field input input-bordered">
-              <iconify-icon icon="fishy:search-field" inline class="h-[1em] opacity-50" aria-hidden="true"></iconify-icon>
+              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-search-field"></use></svg>
               <span class="sr-only">Search fish</span>
               <input class="fishydex-search"
                      type="search"

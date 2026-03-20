@@ -504,23 +504,27 @@ function layerKindLabel(kind) {
   return "Layer";
 }
 
+function spriteIcon(name) {
+  return `<svg class="fishy-icon" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-${name}"></use></svg>`;
+}
+
 function dragHandleIcon() {
-  return `<iconify-icon icon="fishy:drag-handle" aria-hidden="true"></iconify-icon>`;
+  return spriteIcon("drag-handle");
 }
 
 function eyeIcon(visible) {
   if (visible) {
-    return `<iconify-icon icon="fishy:eye" aria-hidden="true"></iconify-icon>`;
+    return spriteIcon("eye");
   }
-  return `<iconify-icon icon="fishy:eye-slash" aria-hidden="true"></iconify-icon>`;
+  return spriteIcon("eye-slash");
 }
 
 function mapViewIcon() {
-  return `<iconify-icon icon="fishy:map-view" aria-hidden="true"></iconify-icon>`;
+  return spriteIcon("map-view");
 }
 
 function cubeViewIcon() {
-  return `<iconify-icon icon="fishy:cube-view" aria-hidden="true"></iconify-icon>`;
+  return spriteIcon("cube-view");
 }
 
 function resolveLayerEntries(stateBundle) {

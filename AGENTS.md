@@ -89,12 +89,16 @@ Repository-level notes for working in this monorepo.
   - `site/assets/map/loader.js`
   - `site/assets/map/map-host.js`
   - `site/assets/map/map-host.test.mjs`
+- Hand-edited site icon generation source lives under:
+  - `site/scripts/build-icon-sprite.mjs`
 - The copied Bevy UI stylesheet lives under:
   - `site/assets/map/ui/fishystuff.css`
 - Generated map runtime bundle outputs live under:
   - `data/cdn/public/map/runtime-manifest.json`
   - `data/cdn/public/map/fishystuff_ui_bevy.<hash>.js`
   - `data/cdn/public/map/fishystuff_ui_bevy_bg.<hash>.wasm`
+- Generated site icon sprite lives under:
+  - `site/assets/img/icons.svg`
 - Generated site runtime config lives under:
   - `site/.out/runtime-config.js`
 - Runtime-served image, tile, terrain, GeoJSON, and icon assets live under `data/cdn/public/`.
@@ -107,3 +111,6 @@ Repository-level notes for working in this monorepo.
 
 ## Frontend references
 - The site UI uses DaisyUI for frontend styling. For framework-oriented guidance and component conventions, use the daisyui-blueprint MCP server and optionally refer to <https://daisyui.com/llms.txt>.
+- The site is static. SVG icons must be static at runtime.
+- Do not add browser-side Iconify usage such as `iconify-icon`, runtime SVG generation, client-side icon fetches, or MutationObserver-based icon patching.
+- When adding or replacing site icons, generate static SVGs at build time with `@iconify/utils` via `site/scripts/build-icon-sprite.mjs`, update `site/assets/img/icons.svg`, and reference icons from templates/JS with `<svg><use href="/img/icons.svg#..."></use></svg>`.

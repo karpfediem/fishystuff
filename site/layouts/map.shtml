@@ -194,7 +194,7 @@
         color: var(--color-primary, #2563eb);
       }
 
-      .fishymap-toolbar-button iconify-icon {
+      .fishymap-toolbar-button .fishy-icon {
         width: 1.35rem;
         height: 1.35rem;
       }
@@ -419,7 +419,7 @@
         border-radius: 999px;
       }
 
-      #fishymap-view-toggle iconify-icon {
+      #fishymap-view-toggle .fishy-icon {
         width: 1.4rem;
         height: 1.4rem;
       }
@@ -507,8 +507,8 @@
         opacity: 0.45;
       }
 
-      .fishymap-layer-visibility iconify-icon,
-      .fishymap-layer-drag iconify-icon {
+      .fishymap-layer-visibility .fishy-icon,
+      .fishymap-layer-drag .fishy-icon {
         width: 1.3rem;
         height: 1.3rem;
       }
@@ -711,7 +711,7 @@
           aria-label="Hide search"
           title="Hide search"
         >
-          <iconify-icon icon="fishy:magnifying-glass" aria-hidden="true"></iconify-icon>
+          <svg class="fishy-icon" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-magnifying-glass"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -721,7 +721,7 @@
           aria-label="Hide settings"
           title="Hide settings"
         >
-          <iconify-icon icon="fishy:adjustments-horizontal" aria-hidden="true"></iconify-icon>
+          <svg class="fishy-icon" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-adjustments-horizontal"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -731,7 +731,7 @@
           aria-label="Hide zone info"
           title="Hide zone info"
         >
-          <iconify-icon icon="fishy:information-circle" aria-hidden="true"></iconify-icon>
+          <svg class="fishy-icon" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-information-circle"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -741,7 +741,7 @@
           aria-label="Hide layers"
           title="Hide layers"
         >
-          <iconify-icon icon="fishy:squares-2x2" aria-hidden="true"></iconify-icon>
+          <svg class="fishy-icon" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-squares-2x2"></use></svg>
         </button>
       </div>
       <aside id="fishymap-search-window" class="fishymap-window not-prose" data-window-id="search">
@@ -754,7 +754,7 @@
             <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
           </div>
           <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
-            <iconify-icon icon="fishy:search-field" inline class="h-[1em] opacity-50" aria-hidden="true"></iconify-icon>
+            <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-search-field"></use></svg>
             <input id="fishymap-search" class="grow" type="search" placeholder="Search fish or zone" autocomplete="off">
             <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
           </label>
@@ -815,7 +815,7 @@
         title="View mode: 2D. Click to switch to 3D."
       >
         <span id="fishymap-view-toggle-icon" aria-hidden="true">
-          <iconify-icon icon="fishy:map-view"></iconify-icon>
+          <svg class="fishy-icon" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-map-view"></use></svg>
         </span>
       </button>
       <aside id="fishymap-panel" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="settings">

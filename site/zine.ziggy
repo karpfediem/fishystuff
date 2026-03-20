@@ -31,7 +31,6 @@ Multilingual {
 
     "js/datastar.js",
     "js/durationFormatter.js",
-    "js/iconify.js",
     "js/lz-string.min.js",
     "js/script.js",
 
@@ -43,6 +42,7 @@ Multilingual {
     "img/favicon-16x16.png",
     "img/favicon-32x32.png",
     "img/embed.png",
+    "img/icons.svg",
 
     // data files that need to be fetchable or linked
     "data/items.json",

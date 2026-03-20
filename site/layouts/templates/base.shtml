@@ -183,8 +183,6 @@
   </script>
 
   <script src="$site.asset('js/theme.js').link()"></script>
-  <script src="$site.asset('js/iconify.js').link()"></script>
-
   <!-- Tailwind + daisyUI (compiled) -->
   <link rel="stylesheet" href="$site.asset('css/site.css').link()">
   <!-- CSS -->
@@ -193,15 +191,22 @@
   <link rel="stylesheet" href="$site.asset('css/style.css').link()">
   <link rel="stylesheet" href="$site.asset('css/highlight.css').link()">
   <style>
-    iconify-icon {
+    :where(.fishy-icon) {
       display: inline-block;
       flex: none;
+      width: 1em;
+      height: 1em;
       line-height: 1;
       vertical-align: middle;
     }
 
-    iconify-icon[inline] {
+    :where(.fishy-icon--inline) {
       vertical-align: -0.05em;
+    }
+
+    .fishy-icon--button {
+      width: 1.35em;
+      height: 1.35em;
     }
   </style>
   <super>
