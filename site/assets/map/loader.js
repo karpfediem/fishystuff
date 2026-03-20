@@ -9,7 +9,7 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-3";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-4";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
 const DRAG_AUTOSCROLL_EDGE_PX = 56;
@@ -19,6 +19,8 @@ const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
 const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
 const BOOKMARK_DEFAULT_STATUS = 'Click "Drop bookmark" and choose a point on the 2D map.';
+const REGION_GROUP_FALLBACK_RE = /^RG\d+$/;
+const REGION_FALLBACK_RE = /^R\d+$/;
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
@@ -1277,6 +1279,7 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
   const label = String(row?.label || "").trim();
   const value = String(row?.value || "").trim();
   const icon = String(row?.icon || "").trim();
+  const statusIcon = String(row?.statusIcon || "").trim();
   if (!label || !value || !icon) {
     return "";
   }
@@ -1284,7 +1287,14 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
     <div class="fishymap-overview-row">
       <span class="fishymap-overview-icon" aria-hidden="true">${spriteIcon(icon, iconSizeClass)}</span>
       <span class="fishymap-overview-label">${escapeHtml(label)}</span>
-      <span class="fishymap-overview-value">${escapeHtml(value)}</span>
+      <span class="fishymap-overview-value">
+        <span class="fishymap-overview-value-text">${escapeHtml(value)}</span>
+        ${
+          statusIcon
+            ? `<span class="fishymap-overview-status" aria-hidden="true">${spriteIcon(statusIcon, "size-4")}</span>`
+            : ""
+        }
+      </span>
     </div>
   `;
 }
@@ -1302,17 +1312,98 @@ function hoverSampleByLayerId(hover, layerId) {
   return layerSamples.find((sample) => String(sample?.layerId || "").trim() === targetLayerId) || null;
 }
 
-function hoverLayerOverviewValue(layerId, hover, sample) {
+function normalizedMapId(value) {
+  const number = Number.parseInt(value, 10);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function sampleHasResourceAssignment(sample) {
+  return (
+    normalizedMapId(sample?.resourceBarWaypoint) != null ||
+    Number.isFinite(sample?.resourceBarWorldX) ||
+    Number.isFinite(sample?.resourceBarWorldZ)
+  );
+}
+
+function sampleHasOriginAssignment(sample) {
+  return (
+    normalizedMapId(sample?.originWaypoint) != null ||
+    Number.isFinite(sample?.originWorldX) ||
+    Number.isFinite(sample?.originWorldZ)
+  );
+}
+
+function regionGroupFallbackValue(sample) {
+  const regionGroupId = normalizedMapId(sample?.regionGroup);
+  return regionGroupId != null ? `RG${regionGroupId}` : "";
+}
+
+function regionFallbackValue(sample) {
+  const regionId = normalizedMapId(sample?.regionId);
+  return regionId != null ? `R${regionId}` : "";
+}
+
+function resourceOverviewValue(sample) {
+  const originName = String(sample?.regionName || "").trim();
+  if (!sampleHasResourceAssignment(sample)) {
+    return {
+      value: regionGroupFallbackValue(sample),
+      statusIcon: "question-mark",
+    };
+  }
+  if (sampleHasOriginAssignment(sample) && originName) {
+    return {
+      value: originName,
+    };
+  }
+  return {
+    value: regionFallbackValue(sample) || originName,
+    statusIcon: "question-mark",
+  };
+}
+
+function originOverviewValue(sample) {
+  const originName = String(sample?.regionName || "").trim();
+  if (sampleHasOriginAssignment(sample) && originName) {
+    return {
+      value: originName,
+    };
+  }
+  return {
+    value: regionFallbackValue(sample) || originName,
+    statusIcon: "question-mark",
+  };
+}
+
+function hoverLayerOverviewRow(layerId, hover, sample) {
+  const config = hoverLayerOverviewConfig(layerId);
+  if (!config) {
+    return null;
+  }
   if (layerId === "zone_mask") {
-    return String(hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : "")).trim();
+    const value = String(hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : "")).trim();
+    return value
+      ? {
+          layerId,
+          icon: config.icon,
+          label: config.label,
+          value,
+        }
+      : null;
   }
-  if (layerId === "region_groups") {
-    return String(sample?.regionName || "").trim();
+  const resolved =
+    layerId === "region_groups" ? resourceOverviewValue(sample) : originOverviewValue(sample);
+  const value = String(resolved?.value || "").trim();
+  if (!value) {
+    return null;
   }
-  if (layerId === "regions") {
-    return String(sample?.regionName || "").trim();
-  }
-  return "";
+  return {
+    layerId,
+    icon: config.icon,
+    label: config.label,
+    value,
+    ...(resolved?.statusIcon ? { statusIcon: resolved.statusIcon } : {}),
+  };
 }
 
 function hoverLayerOverviewConfig(layerId) {
@@ -1344,19 +1435,7 @@ export function buildHoverOverviewRows(hover, stateBundle) {
     ? orderedLayerIds
     : supportedHoverLayerIds().filter((layerId) => layerId === "zone_mask" || sampleByLayerId.has(layerId));
   return layerIds
-    .map((layerId) => {
-      const config = hoverLayerOverviewConfig(layerId);
-      const value = hoverLayerOverviewValue(layerId, hover, sampleByLayerId.get(layerId));
-      if (!config || !value) {
-        return null;
-      }
-      return {
-        layerId,
-        icon: config.icon,
-        label: config.label,
-        value,
-      };
-    })
+    .map((layerId) => hoverLayerOverviewRow(layerId, hover, sampleByLayerId.get(layerId)))
     .filter(Boolean);
 }
 
@@ -1464,6 +1543,9 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
       icon: "hover-resources",
       label: "Resources",
       value: resourceName,
+      ...(REGION_GROUP_FALLBACK_RE.test(resourceName) || REGION_FALLBACK_RE.test(resourceName)
+        ? { statusIcon: "question-mark" }
+        : {}),
     });
   }
   if (originName) {
@@ -1471,6 +1553,7 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
       icon: "hover-origin",
       label: "Origin",
       value: originName,
+      ...(REGION_FALLBACK_RE.test(originName) ? { statusIcon: "question-mark" } : {}),
     });
   }
   return rows;
@@ -3349,8 +3432,10 @@ function bindUi(shell, elements, options = {}) {
     const hover = state.hover || null;
     const worldX = normalizeBookmarkCoordinate(hover?.worldX);
     const worldZ = normalizeBookmarkCoordinate(hover?.worldZ);
-    const regionGroupsName = hoverSampleByLayerId(hover, "region_groups")?.regionName;
-    const regionsName = hoverSampleByLayerId(hover, "regions")?.regionName;
+    const regionGroupSample = hoverSampleByLayerId(hover, "region_groups");
+    const regionSample = hoverSampleByLayerId(hover, "regions");
+    const regionGroupsName = resourceOverviewValue(regionGroupSample)?.value || null;
+    const regionsName = originOverviewValue(regionSample)?.value || null;
     if (worldX == null || worldZ == null) {
       setBookmarkStatus("Move the cursor over the ready 2D map and click again.");
       renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
@@ -3361,8 +3446,8 @@ function bindUi(shell, elements, options = {}) {
         worldX,
         worldZ,
         zoneName: hover?.zoneName,
-        resourceName: regionGroupsName || regionsName,
-        originName: regionsName || regionGroupsName,
+        resourceName: regionGroupsName,
+        originName: regionsName,
         zoneRgb: hover?.zoneRgb,
       },
       bookmarks,

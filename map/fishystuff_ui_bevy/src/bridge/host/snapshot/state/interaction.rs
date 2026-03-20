@@ -39,6 +39,7 @@ pub(in crate::bridge::host) fn hover_layer_samples_snapshot(
                 kind: sample.kind.clone(),
                 rgb: sample.rgb.as_array(),
                 rgb_u32: sample.rgb_u32,
+                region_id: sample.region_id,
                 region_group: sample.region_group,
                 region_name: sample.region_name.clone(),
                 resource_bar_waypoint: sample.resource_bar_waypoint,

@@ -242,6 +242,9 @@ fn enrich_region_group_samples_with_region_origin(
         .iter_mut()
         .filter(|sample| sample.layer_id == "region_groups")
     {
+        if sample.region_id.is_none() {
+            sample.region_id = metadata.region_id;
+        }
         if sample.region_name.is_none() {
             sample.region_name = metadata.region_name.clone();
         }
@@ -295,6 +298,7 @@ fn build_origin_hover_sample(
         kind: "vector-geojson".to_string(),
         rgb,
         rgb_u32: rgb.to_u32(),
+        region_id: metadata.region_id,
         region_group: metadata.region_group,
         region_name: metadata.region_name,
         resource_bar_waypoint: None,
@@ -350,6 +354,7 @@ fn sample_hover_layer(
         },
         rgb,
         rgb_u32,
+        region_id: hover_metadata.region_id,
         region_group: hover_metadata.region_group,
         region_name: hover_metadata.region_name,
         resource_bar_waypoint: hover_metadata.resource_bar_waypoint,
@@ -363,6 +368,7 @@ fn sample_hover_layer(
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct HoverVectorMetadata {
+    region_id: Option<u32>,
     region_group: Option<u32>,
     region_name: Option<String>,
     resource_bar_waypoint: Option<u32>,
@@ -439,6 +445,7 @@ mod tests {
     #[test]
     fn hover_metadata_extracts_region_details_for_detailed_region_layer() {
         let mut properties = Map::new();
+        properties.insert("r".to_string(), Value::from(76u32));
         properties.insert("rg".to_string(), Value::from(118u32));
         properties.insert(
             "on".to_string(),
@@ -454,6 +461,7 @@ mod tests {
         assert_eq!(
             metadata,
             HoverVectorMetadata {
+                region_id: Some(76),
                 region_group: Some(118),
                 region_name: Some("Solgaji Forest".to_string()),
                 resource_bar_waypoint: Some(1785),
@@ -473,6 +481,7 @@ mod tests {
         properties.insert("on".to_string(), Value::String("Tarif".to_string()));
         properties.insert("rgwp".to_string(), Value::from(306u32));
         let metadata = hover_metadata_from_properties("region_groups", &properties);
+        assert_eq!(metadata.region_id, None);
         assert_eq!(metadata.region_group, Some(58));
         assert_eq!(metadata.region_name, None);
         assert_eq!(metadata.resource_bar_waypoint, Some(306));
@@ -575,6 +584,7 @@ fn hover_metadata_from_properties(
     properties: &Map<String, Value>,
 ) -> HoverVectorMetadata {
     HoverVectorMetadata {
+        region_id: json_u32(properties.get("r")),
         region_group: json_u32(properties.get("rg")),
         region_name: if layer_key == "regions" {
             json_string(properties.get("on"))

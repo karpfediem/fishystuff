@@ -175,11 +175,16 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
         layerSamples: [
           {
             layerId: "region_groups",
+            regionGroup: 58,
             regionName: "Tarif",
+            resourceBarWaypoint: 306,
+            originWaypoint: 1437,
           },
           {
             layerId: "regions",
+            regionId: 76,
             regionName: "Tarif",
+            originWaypoint: 1437,
           },
         ],
       },
@@ -203,6 +208,49 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
         icon: "hover-origin",
         label: "Origin",
         value: "Tarif",
+      },
+    ],
+  );
+});
+
+test("buildHoverOverviewRows falls back to region ids when assignments are missing", () => {
+  assert.deepEqual(
+    buildHoverOverviewRows(
+      {
+        zoneName: "Demi River",
+        layerSamples: [
+          {
+            layerId: "region_groups",
+            regionGroup: 16,
+          },
+          {
+            layerId: "regions",
+            regionId: 76,
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    [
+      {
+        layerId: "zone_mask",
+        icon: "hover-zone",
+        label: "Zone",
+        value: "Demi River",
+      },
+      {
+        layerId: "region_groups",
+        icon: "hover-resources",
+        label: "Resources",
+        value: "RG16",
+        statusIcon: "question-mark",
+      },
+      {
+        layerId: "regions",
+        icon: "hover-origin",
+        label: "Origin",
+        value: "R76",
+        statusIcon: "question-mark",
       },
     ],
   );
@@ -268,6 +316,36 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         icon: "hover-origin",
         label: "Origin",
         value: "Tarif",
+      },
+    ],
+  );
+
+  assert.deepEqual(
+    buildBookmarkOverviewRows(
+      {
+        label: "Unknown route",
+        resourceName: "RG16",
+        originName: "R76",
+      },
+      0,
+    ),
+    [
+      {
+        icon: "bookmarks",
+        label: "Bookmark",
+        value: "Unknown route",
+      },
+      {
+        icon: "hover-resources",
+        label: "Resources",
+        value: "RG16",
+        statusIcon: "question-mark",
+      },
+      {
+        icon: "hover-origin",
+        label: "Origin",
+        value: "R76",
+        statusIcon: "question-mark",
       },
     ],
   );

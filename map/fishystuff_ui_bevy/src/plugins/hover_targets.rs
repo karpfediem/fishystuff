@@ -543,6 +543,7 @@ mod tests {
             kind: "vector-geojson".to_string(),
             rgb: Rgb::new(0, 0, 0),
             rgb_u32: 0,
+            region_id: None,
             region_group: None,
             region_name: None,
             resource_bar_waypoint: None,

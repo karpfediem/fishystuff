@@ -45,6 +45,7 @@ pub struct FishyMapHoverLayerSampleSnapshot {
     pub kind: String,
     pub rgb: [u8; 3],
     pub rgb_u32: u32,
+    pub region_id: Option<u32>,
     pub region_group: Option<u32>,
     pub region_name: Option<String>,
     pub resource_bar_waypoint: Option<u32>,

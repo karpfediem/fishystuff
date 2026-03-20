@@ -734,8 +734,23 @@
 
       .fishymap-overview-value {
         min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        flex-wrap: wrap;
         color: color-mix(in srgb, var(--color-base-content) 76%, transparent);
+      }
+
+      .fishymap-overview-value-text {
         overflow-wrap: anywhere;
+      }
+
+      .fishymap-overview-status {
+        display: inline-flex;
+        flex: none;
+        align-items: center;
+        justify-content: center;
+        color: var(--color-primary, #2563eb);
       }
 
       .fishymap-overview-list--bookmark .fishymap-overview-row {
@@ -865,7 +880,7 @@
           aria-label="Hide search"
           title="Hide search"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-magnifying-glass"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-magnifying-glass"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -875,7 +890,7 @@
           aria-label="Show bookmarks"
           title="Show bookmarks"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-bookmarks"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-bookmarks"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -885,7 +900,7 @@
           aria-label="Hide settings"
           title="Hide settings"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-adjustments-horizontal"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-adjustments-horizontal"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -895,7 +910,7 @@
           aria-label="Hide zone info"
           title="Hide zone info"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-information-circle"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-information-circle"></use></svg>
         </button>
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -905,7 +920,7 @@
           aria-label="Hide layers"
           title="Hide layers"
         >
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-squares-2x2"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-squares-2x2"></use></svg>
         </button>
       </div>
       <aside id="fishymap-search-window" class="fishymap-window not-prose" data-window-id="search">
@@ -915,7 +930,7 @@
           data-window-titlebar="search"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-magnifying-glass"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-magnifying-glass"></use></svg>
             <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
           </div>
           <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
@@ -943,11 +958,11 @@
           aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-bookmarks"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-bookmarks"></use></svg>
             <span class="fishymap-window-title text-lg leading-tight">Bookmarks</span>
           </div>
           <button id="fishymap-bookmark-place" class="btn btn-primary btn-sm" type="button">
-            <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-bookmark-add"></use></svg>
+            <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-bookmark-add"></use></svg>
             <span id="fishymap-bookmark-place-label">Drop bookmark</span>
           </button>
         </div>
@@ -982,7 +997,7 @@
           aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-information-circle"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-information-circle"></use></svg>
             <span class="fishymap-window-title text-lg leading-tight">Zone Info</span>
           </div>
           <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
@@ -1003,7 +1018,7 @@
           aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-squares-2x2"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-squares-2x2"></use></svg>
             <p class="fishymap-window-title text-lg leading-tight">Layers</p>
           </div>
           <span id="fishymap-layers-count" class="badge badge-outline badge-sm">0</span>
@@ -1020,7 +1035,7 @@
         title="View mode: 2D. Click to switch to 3D."
       >
         <span id="fishymap-view-toggle-icon" aria-hidden="true">
-          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-map-view"></use></svg>
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-map-view"></use></svg>
         </span>
       </button>
       <aside id="fishymap-panel" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="settings">
@@ -1033,7 +1048,7 @@
           aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-3#fishy-adjustments-horizontal"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-4#fishy-adjustments-horizontal"></use></svg>
             <p class="fishymap-window-title text-lg leading-tight">Settings</p>
           </div>
           <span id="fishymap-ready-pill" class="badge badge-outline badge-sm">Loading</span>

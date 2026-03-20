@@ -41,6 +41,7 @@ const iconSources = {
   "hover-zone": { type: "mingcute", name: "fullscreen-line" },
   "hover-origin": { type: "mingcute", name: "map-pin-fill" },
   "hover-resources": { type: "mingcute", name: "chart-bar-fill" },
+  "question-mark": { type: "mingcute", name: "question-2-fill" },
   bookmarks: { type: "mingcute", name: "bookmarks-fill" },
   "bookmark-add": { type: "mingcute", name: "bookmark-add-fill" },
   copy: { type: "mingcute", name: "copy-2-fill" },
