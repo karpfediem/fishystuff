@@ -1265,7 +1265,29 @@ function setHoverTooltipPosition(elements, clientX, clientY) {
   elements.hoverTooltip.style.setProperty("--fishymap-hover-y", `${clientY}px`);
 }
 
-function hoverLayerDetailLines(sample) {
+function formatHoverWaypointCoord(value) {
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return Math.abs(value) >= 1000
+    ? value.toFixed(2)
+    : value.toFixed(3);
+}
+
+function formatHoverWaypointLine(label, waypointId, worldX, worldZ) {
+  const formattedX = formatHoverWaypointCoord(worldX);
+  const formattedZ = formatHoverWaypointCoord(worldZ);
+  if (!formattedX || !formattedZ) {
+    return null;
+  }
+  const waypointText =
+    waypointId != null && Number.isFinite(Number(waypointId))
+      ? ` WP ${Number(waypointId)}`
+      : "";
+  return `${label}${waypointText}: ${formattedX}, ${formattedZ}`;
+}
+
+export function hoverLayerDetailLines(sample) {
   const lines = [];
   if (sample?.regionGroup != null) {
     lines.push(`RG ${sample.regionGroup}`);
@@ -1273,6 +1295,24 @@ function hoverLayerDetailLines(sample) {
   const regionName = String(sample?.regionName || "").trim();
   if (regionName) {
     lines.push(regionName);
+  }
+  const resourceBarLine = formatHoverWaypointLine(
+    "Resource bar",
+    sample?.resourceBarWaypoint,
+    sample?.resourceBarWorldX,
+    sample?.resourceBarWorldZ,
+  );
+  if (resourceBarLine) {
+    lines.push(resourceBarLine);
+  }
+  const originLine = formatHoverWaypointLine(
+    "Origin node",
+    sample?.originWaypoint,
+    sample?.originWorldX,
+    sample?.originWorldZ,
+  );
+  if (originLine) {
+    lines.push(originLine);
   }
   return lines;
 }

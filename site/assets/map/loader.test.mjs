@@ -8,6 +8,7 @@ const {
   buildSearchMatches,
   computeDragAutoScrollDelta,
   createBookmarkFromPlacement,
+  hoverLayerDetailLines,
   mergeImportedBookmarks,
   moveBookmarkBefore,
   normalizeZoneCatalog,
@@ -117,6 +118,27 @@ test("buildSearchMatches keeps fish search working and filters already selected 
   const fishMatches = buildSearchMatches(buildStateBundle(), "Serendia Carp", TEST_ZONE_CATALOG);
   assert.equal(fishMatches[0]?.kind, "fish");
   assert.equal(fishMatches[0]?.fishId, 77);
+});
+
+test("hoverLayerDetailLines includes region and waypoint locations", () => {
+  assert.deepEqual(
+    hoverLayerDetailLines({
+      regionGroup: 219,
+      regionName: "Juur Sea",
+      resourceBarWaypoint: 1438,
+      resourceBarWorldX: 985934.25,
+      resourceBarWorldZ: 449831.3125,
+      originWaypoint: 1437,
+      originWorldX: 98484.74786281586,
+      originWorldZ: 365929.37886714935,
+    }),
+    [
+      "RG 219",
+      "Juur Sea",
+      "Resource bar WP 1438: 985934.25, 449831.31",
+      "Origin node WP 1437: 98484.75, 365929.38",
+    ],
+  );
 });
 
 test("buildSearchMatches filters already selected zones from zone results", () => {

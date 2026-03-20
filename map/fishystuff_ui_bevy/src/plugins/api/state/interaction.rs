@@ -34,6 +34,12 @@ pub struct HoverLayerSample {
     pub rgb_u32: u32,
     pub region_group: Option<u32>,
     pub region_name: Option<String>,
+    pub resource_bar_waypoint: Option<u32>,
+    pub resource_bar_world_x: Option<f64>,
+    pub resource_bar_world_z: Option<f64>,
+    pub origin_waypoint: Option<u32>,
+    pub origin_world_x: Option<f64>,
+    pub origin_world_z: Option<f64>,
 }
 
 #[derive(Debug, Clone)]

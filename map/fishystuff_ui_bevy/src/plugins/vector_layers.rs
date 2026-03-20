@@ -106,7 +106,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
     let map_version_id = registry.map_version_id();
     let frame_start = Instant::now();
     let clip_mask_source_ids = layer_runtime.clip_mask_source_ids();
-    let active_by_layer: HashMap<LayerId, bool> = layer_runtime
+    let mut active_by_layer: HashMap<LayerId, bool> = layer_runtime
         .iter()
         .map(|(layer_id, state)| {
             (
@@ -116,6 +116,18 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             )
         })
         .collect();
+    if let (Some(region_groups_id), Some(regions_id)) = (
+        registry.id_by_key("region_groups"),
+        registry.id_by_key("regions"),
+    ) {
+        let keep_regions_loaded = active_by_layer
+            .get(&region_groups_id)
+            .copied()
+            .unwrap_or(false);
+        if keep_regions_loaded {
+            active_by_layer.insert(regions_id, true);
+        }
+    }
     let visible_cache_keys = collect_visible_cache_keys(registry, &active_by_layer, map_version_id);
     for evicted in vector_runtime
         .finished
@@ -128,8 +140,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         let Some(runtime_state) = layer_runtime.get_mut(layer.id) else {
             continue;
         };
-        let active = (runtime_state.visible || clip_mask_source_ids.contains(&layer.id))
-            && matches!(view_mode.mode, ViewMode::Map2D | ViewMode::Terrain3D);
+        let active = active_by_layer.get(&layer.id).copied().unwrap_or(false);
         let render_visible = runtime_state.visible
             && matches!(view_mode.mode, ViewMode::Map2D | ViewMode::Terrain3D);
         let previous_status = runtime_state.vector_status;

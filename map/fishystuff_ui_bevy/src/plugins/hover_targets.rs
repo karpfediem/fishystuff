@@ -1,0 +1,657 @@
+use bevy::asset::RenderAssetUsages;
+use bevy::image::Image;
+use bevy::prelude::*;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::sprite::{Anchor, Text2d, Text2dShadow};
+use bevy::text::{Justify, TextColor, TextFont, TextLayout};
+use bevy::window::PrimaryWindow;
+use serde_json::{Map, Value};
+
+use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::layers::{LayerRegistry, VectorSourceSpec};
+use crate::plugins::api::{HoverInfo, HoverState};
+use crate::plugins::camera::Map2dCamera;
+use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
+use crate::plugins::vector_layers::VectorLayerRuntime;
+
+const HOVER_MARKER_Z: f32 = 40.6;
+const HOVER_LABEL_Z: f32 = 40.7;
+const HOVER_LABEL_SIZE_PX: f32 = 12.0;
+const HOVER_LABEL_COLOR: Color = Color::srgb(0.98, 0.97, 0.94);
+
+const HOVER_TEXTURE_WIDTH_PX: usize = 32;
+const HOVER_TEXTURE_HEIGHT_PX: usize = 32;
+const HOVER_RING_RADIUS_PX: f32 = 12.0;
+const HOVER_RING_THICKNESS_PX: f32 = 3.0;
+const HOVER_CORE_RADIUS_PX: f32 = 4.5;
+const EDGE_FEATHER_PX: f32 = 1.2;
+
+const RESOURCE_BAR_MARKER_SIZE_SCREEN_PX: f32 = 28.0;
+const ORIGIN_NODE_MARKER_SIZE_SCREEN_PX: f32 = 20.0;
+const RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX: f32 = 20.0;
+const ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX: f32 = 36.0;
+const VIEW_EDGE_PADDING_SCREEN_PX: f32 = 12.0;
+
+const RESOURCE_BAR_MARKER_COLOR: [u8; 3] = [77, 211, 255];
+const ORIGIN_NODE_MARKER_COLOR: [u8; 3] = [255, 196, 66];
+
+pub struct HoverTargetsPlugin;
+
+impl Plugin for HoverTargetsPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<HoverTargetMarkerAssets>()
+            .init_resource::<HoverTargetMarkerPool>()
+            .add_systems(
+                Update,
+                (ensure_hover_target_marker_assets, sync_hover_targets),
+            );
+    }
+}
+
+#[derive(Component)]
+struct HoverTargetMarker;
+
+#[derive(Component)]
+struct HoverTargetLabel;
+
+#[derive(Clone, Copy, Debug)]
+struct HoverTargetVisualPair {
+    marker: Entity,
+    label: Entity,
+}
+
+#[derive(Resource, Default)]
+struct HoverTargetMarkerAssets {
+    texture: Option<Handle<Image>>,
+}
+
+#[derive(Resource, Default)]
+struct HoverTargetMarkerPool {
+    markers: Vec<HoverTargetVisualPair>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct HoverTargetVisual {
+    world_x: f32,
+    world_z: f32,
+    label: String,
+    marker_size_screen_px: f32,
+    label_offset_screen_px: f32,
+    color_rgb: [u8; 3],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Map2dViewportBounds {
+    min_x: f32,
+    max_x: f32,
+    min_z: f32,
+    max_z: f32,
+    scale: f32,
+}
+
+fn ensure_hover_target_marker_assets(
+    mut marker_assets: ResMut<HoverTargetMarkerAssets>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    if marker_assets.texture.is_some() {
+        return;
+    }
+    marker_assets.texture = Some(images.add(build_hover_marker_texture()));
+}
+
+fn sync_hover_targets(
+    mut commands: Commands,
+    hover: Res<HoverState>,
+    view_mode: Res<ViewModeState>,
+    layer_registry: Res<LayerRegistry>,
+    vector_runtime: Res<VectorLayerRuntime>,
+    marker_assets: Res<HoverTargetMarkerAssets>,
+    mut marker_pool: ResMut<HoverTargetMarkerPool>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    camera_q: Query<
+        (&Projection, &Transform),
+        (
+            With<Map2dCamera>,
+            Without<HoverTargetMarker>,
+            Without<HoverTargetLabel>,
+        ),
+    >,
+    mut markers: Query<
+        (&mut Transform, &mut Visibility, &mut Sprite),
+        (
+            With<HoverTargetMarker>,
+            Without<HoverTargetLabel>,
+            Without<Map2dCamera>,
+        ),
+    >,
+    mut labels: Query<
+        (&mut Transform, &mut Visibility, &mut Text2d),
+        (
+            With<HoverTargetLabel>,
+            Without<HoverTargetMarker>,
+            Without<Map2dCamera>,
+        ),
+    >,
+) {
+    let targets = if view_mode.mode == ViewMode::Map2D {
+        hover_targets_from_info(hover.info.as_ref(), &layer_registry, &vector_runtime)
+    } else {
+        Vec::new()
+    };
+
+    if targets.is_empty() {
+        hide_hover_targets(&marker_pool, &mut markers, &mut labels);
+        return;
+    }
+
+    let Some(texture) = marker_assets.texture.as_ref() else {
+        return;
+    };
+
+    while marker_pool.markers.len() < targets.len() {
+        let marker = commands
+            .spawn((
+                HoverTargetMarker,
+                World2dRenderEntity,
+                world_2d_layers(),
+                Sprite {
+                    image: texture.clone(),
+                    ..default()
+                },
+                Transform::from_xyz(0.0, 0.0, HOVER_MARKER_Z),
+                Visibility::Hidden,
+            ))
+            .id();
+        let label = commands
+            .spawn((
+                HoverTargetLabel,
+                World2dRenderEntity,
+                world_2d_layers(),
+                Text2d::new(""),
+                TextFont::from_font_size(HOVER_LABEL_SIZE_PX),
+                TextColor(HOVER_LABEL_COLOR),
+                TextLayout::new_with_justify(Justify::Center),
+                Text2dShadow {
+                    offset: Vec2::new(1.0, -1.0),
+                    color: Color::srgba(0.02, 0.03, 0.05, 0.9),
+                },
+                Anchor::BOTTOM_CENTER,
+                Transform::from_xyz(0.0, 0.0, HOVER_LABEL_Z),
+                Visibility::Hidden,
+            ))
+            .id();
+        marker_pool
+            .markers
+            .push(HoverTargetVisualPair { marker, label });
+    }
+
+    let viewport_bounds = map_2d_viewport_bounds(&windows, &camera_q);
+    let scale = viewport_bounds
+        .map(|bounds| bounds.scale)
+        .unwrap_or_else(|| camera_scale(&camera_q));
+    for (index, target) in targets.iter().enumerate() {
+        let target = viewport_bounds
+            .map(|bounds| clamp_hover_target_to_viewport(target, bounds))
+            .unwrap_or_else(|| target.clone());
+        let pair = marker_pool.markers[index];
+        if let Ok((mut transform, mut visibility, mut sprite)) = markers.get_mut(pair.marker) {
+            transform.translation.x = target.world_x;
+            transform.translation.y = target.world_z;
+            transform.translation.z = HOVER_MARKER_Z;
+            sprite.image = texture.clone();
+            sprite.color = color_from_rgb(target.color_rgb);
+            sprite.custom_size = Some(Vec2::splat(target.marker_size_screen_px * scale));
+            *visibility = Visibility::Visible;
+        }
+        if let Ok((mut transform, mut visibility, mut text)) = labels.get_mut(pair.label) {
+            transform.translation.x = target.world_x;
+            transform.translation.y = target.world_z + target.label_offset_screen_px * scale;
+            transform.translation.z = HOVER_LABEL_Z;
+            text.0 = target.label.clone();
+            *visibility = Visibility::Visible;
+        }
+    }
+
+    for pair in marker_pool.markers.iter().skip(targets.len()) {
+        if let Ok((_, mut visibility, _)) = markers.get_mut(pair.marker) {
+            *visibility = Visibility::Hidden;
+        }
+        if let Ok((_, mut visibility, _)) = labels.get_mut(pair.label) {
+            *visibility = Visibility::Hidden;
+        }
+    }
+}
+
+fn hide_hover_targets(
+    marker_pool: &HoverTargetMarkerPool,
+    markers: &mut Query<
+        (&mut Transform, &mut Visibility, &mut Sprite),
+        (
+            With<HoverTargetMarker>,
+            Without<HoverTargetLabel>,
+            Without<Map2dCamera>,
+        ),
+    >,
+    labels: &mut Query<
+        (&mut Transform, &mut Visibility, &mut Text2d),
+        (
+            With<HoverTargetLabel>,
+            Without<HoverTargetMarker>,
+            Without<Map2dCamera>,
+        ),
+    >,
+) {
+    for pair in &marker_pool.markers {
+        if let Ok((_, mut visibility, _)) = markers.get_mut(pair.marker) {
+            *visibility = Visibility::Hidden;
+        }
+        if let Ok((_, mut visibility, _)) = labels.get_mut(pair.label) {
+            *visibility = Visibility::Hidden;
+        }
+    }
+}
+
+fn hover_targets_from_info(
+    info: Option<&HoverInfo>,
+    layer_registry: &LayerRegistry,
+    vector_runtime: &VectorLayerRuntime,
+) -> Vec<HoverTargetVisual> {
+    let Some(info) = info else {
+        return Vec::new();
+    };
+
+    let mut resource_bar = None;
+    let mut origin_node = None;
+
+    for sample in &info.layer_samples {
+        if resource_bar.is_none() {
+            resource_bar = hover_target_from_resource_bar(sample);
+        }
+        if origin_node.is_none() {
+            origin_node = hover_target_from_origin_node(sample);
+        }
+        if resource_bar.is_some() && origin_node.is_some() {
+            break;
+        }
+    }
+    if origin_node.is_none() {
+        origin_node = hover_target_from_regions_lookup(info, layer_registry, vector_runtime);
+    }
+
+    let mut targets = Vec::with_capacity(2);
+    if let Some(resource_bar) = resource_bar {
+        targets.push(resource_bar);
+    }
+    if let Some(origin_node) = origin_node {
+        targets.push(origin_node);
+    }
+    targets
+}
+
+fn hover_target_from_resource_bar(
+    sample: &crate::plugins::api::HoverLayerSample,
+) -> Option<HoverTargetVisual> {
+    Some(HoverTargetVisual {
+        world_x: sample.resource_bar_world_x? as f32,
+        world_z: sample.resource_bar_world_z? as f32,
+        label: "Resource bar".to_string(),
+        marker_size_screen_px: RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
+        label_offset_screen_px: RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
+        color_rgb: RESOURCE_BAR_MARKER_COLOR,
+    })
+}
+
+fn hover_target_from_origin_node(
+    sample: &crate::plugins::api::HoverLayerSample,
+) -> Option<HoverTargetVisual> {
+    let label = sample
+        .region_name
+        .as_ref()
+        .map(|name| format!("Origin: {name}"))
+        .unwrap_or_else(|| "Origin node".to_string());
+    Some(HoverTargetVisual {
+        world_x: sample.origin_world_x? as f32,
+        world_z: sample.origin_world_z? as f32,
+        label,
+        marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
+        label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
+        color_rgb: ORIGIN_NODE_MARKER_COLOR,
+    })
+}
+
+fn hover_target_from_regions_lookup(
+    info: &HoverInfo,
+    layer_registry: &LayerRegistry,
+    vector_runtime: &VectorLayerRuntime,
+) -> Option<HoverTargetVisual> {
+    let regions_layer = layer_registry.get_by_key("regions")?;
+    let source = regions_layer.vector_source.as_ref()?;
+    let revision = resolved_vector_revision(source, layer_registry.map_version_id());
+    let bundle = vector_runtime
+        .finished
+        .get_ref(&(regions_layer.id, revision))?;
+    let properties = bundle.sample_properties(info.world_x as f32, info.world_z as f32)?;
+    hover_target_from_region_properties(properties)
+}
+
+fn hover_target_from_region_properties(
+    properties: &Map<String, Value>,
+) -> Option<HoverTargetVisual> {
+    let label = json_string(properties.get("on"))
+        .map(|name| format!("Origin: {name}"))
+        .unwrap_or_else(|| "Origin node".to_string());
+    Some(HoverTargetVisual {
+        world_x: json_f64(properties.get("ox"))? as f32,
+        world_z: json_f64(properties.get("oz"))? as f32,
+        label,
+        marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
+        label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
+        color_rgb: ORIGIN_NODE_MARKER_COLOR,
+    })
+}
+
+fn resolved_vector_revision(source: &VectorSourceSpec, map_version_id: Option<&str>) -> String {
+    let mut url = source.url.clone();
+    if url.contains("{map_version}") {
+        let version = map_version_id
+            .filter(|value| !value.trim().is_empty() && *value != "0v0")
+            .unwrap_or("v1");
+        url = url.replace("{map_version}", version);
+    }
+    let revision = source.revision.trim();
+    if revision.is_empty() {
+        format!("url:{url}")
+    } else {
+        revision.to_string()
+    }
+}
+
+fn json_string(value: Option<&Value>) -> Option<String> {
+    match value {
+        Some(Value::String(text)) => {
+            let trimmed = text.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        }
+        _ => None,
+    }
+}
+
+fn json_f64(value: Option<&Value>) -> Option<f64> {
+    match value {
+        Some(Value::Number(number)) => number.as_f64(),
+        Some(Value::String(text)) => text.trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+fn map_2d_viewport_bounds(
+    windows: &Query<&Window, With<PrimaryWindow>>,
+    camera_q: &Query<
+        (&Projection, &Transform),
+        (
+            With<Map2dCamera>,
+            Without<HoverTargetMarker>,
+            Without<HoverTargetLabel>,
+        ),
+    >,
+) -> Option<Map2dViewportBounds> {
+    let window = windows.single().ok()?;
+    let (projection, transform) = camera_q.single().ok()?;
+    let Projection::Orthographic(orthographic) = projection else {
+        return None;
+    };
+    let scale = orthographic.scale.max(f32::EPSILON);
+    let half_width = window.width().max(1.0) * 0.5 * scale;
+    let half_height = window.height().max(1.0) * 0.5 * scale;
+    Some(Map2dViewportBounds {
+        min_x: transform.translation.x - half_width,
+        max_x: transform.translation.x + half_width,
+        min_z: transform.translation.y - half_height,
+        max_z: transform.translation.y + half_height,
+        scale,
+    })
+}
+
+fn clamp_hover_target_to_viewport(
+    target: &HoverTargetVisual,
+    viewport: Map2dViewportBounds,
+) -> HoverTargetVisual {
+    let margin_world =
+        (target.marker_size_screen_px * 0.5 + VIEW_EDGE_PADDING_SCREEN_PX) * viewport.scale;
+    let clamped_x = target
+        .world_x
+        .clamp(viewport.min_x + margin_world, viewport.max_x - margin_world);
+    let clamped_z = target
+        .world_z
+        .clamp(viewport.min_z + margin_world, viewport.max_z - margin_world);
+    let mut next = target.clone();
+    if (clamped_x - target.world_x).abs() > f32::EPSILON
+        || (clamped_z - target.world_z).abs() > f32::EPSILON
+    {
+        next.label = format!("{} (offscreen)", next.label);
+    }
+    next.world_x = clamped_x;
+    next.world_z = clamped_z;
+    next
+}
+
+fn camera_scale(
+    camera_q: &Query<
+        (&Projection, &Transform),
+        (
+            With<Map2dCamera>,
+            Without<HoverTargetMarker>,
+            Without<HoverTargetLabel>,
+        ),
+    >,
+) -> f32 {
+    camera_q
+        .single()
+        .ok()
+        .and_then(|(projection, _)| match projection {
+            Projection::Orthographic(ortho) => Some(ortho.scale),
+            _ => None,
+        })
+        .unwrap_or(1.0)
+        .max(f32::EPSILON)
+}
+
+fn color_from_rgb([red, green, blue]: [u8; 3]) -> Color {
+    Color::srgb_u8(red, green, blue)
+}
+
+fn build_hover_marker_texture() -> Image {
+    let width = HOVER_TEXTURE_WIDTH_PX;
+    let height = HOVER_TEXTURE_HEIGHT_PX;
+    let center_x = (width as f32 - 1.0) * 0.5;
+    let center_y = (height as f32 - 1.0) * 0.5;
+
+    let mut texture_data = vec![0_u8; width * height * 4];
+    for y in 0..height {
+        for x in 0..width {
+            let dx = x as f32 - center_x;
+            let dy = y as f32 - center_y;
+            let distance = (dx * dx + dy * dy).sqrt();
+
+            let ring_alpha = ring_alpha(distance);
+            let core_alpha = circle_alpha(distance, HOVER_CORE_RADIUS_PX);
+            let alpha = ring_alpha.max(core_alpha);
+            if alpha <= 0.0 {
+                continue;
+            }
+
+            let offset = (y * width + x) * 4;
+            texture_data[offset] = 255;
+            texture_data[offset + 1] = 255;
+            texture_data[offset + 2] = 255;
+            texture_data[offset + 3] = (alpha * 255.0).round() as u8;
+        }
+    }
+
+    Image::new_fill(
+        Extent3d {
+            width: width as u32,
+            height: height as u32,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        &texture_data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+fn ring_alpha(distance: f32) -> f32 {
+    let half_thickness = HOVER_RING_THICKNESS_PX * 0.5;
+    let edge_distance = (distance - HOVER_RING_RADIUS_PX).abs();
+    if edge_distance <= half_thickness {
+        return 1.0;
+    }
+    if edge_distance <= half_thickness + EDGE_FEATHER_PX {
+        return 1.0 - (edge_distance - half_thickness) / EDGE_FEATHER_PX;
+    }
+    0.0
+}
+
+fn circle_alpha(distance: f32, radius: f32) -> f32 {
+    if distance <= radius {
+        return 1.0;
+    }
+    if distance <= radius + EDGE_FEATHER_PX {
+        return 1.0 - (distance - radius) / EDGE_FEATHER_PX;
+    }
+    0.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        clamp_hover_target_to_viewport, hover_targets_from_info, HoverTargetVisual,
+        Map2dViewportBounds, ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX, ORIGIN_NODE_MARKER_COLOR,
+        ORIGIN_NODE_MARKER_SIZE_SCREEN_PX, RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
+        RESOURCE_BAR_MARKER_COLOR, RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
+    };
+    use crate::map::layers::LayerRegistry;
+    use crate::plugins::api::{HoverInfo, HoverLayerSample};
+    use crate::plugins::vector_layers::VectorLayerRuntime;
+    use fishystuff_api::Rgb;
+
+    fn sample(layer_id: &str) -> HoverLayerSample {
+        HoverLayerSample {
+            layer_id: layer_id.to_string(),
+            layer_name: layer_id.to_string(),
+            kind: "vector-geojson".to_string(),
+            rgb: Rgb::new(0, 0, 0),
+            rgb_u32: 0,
+            region_group: None,
+            region_name: None,
+            resource_bar_waypoint: None,
+            resource_bar_world_x: None,
+            resource_bar_world_z: None,
+            origin_waypoint: None,
+            origin_world_x: None,
+            origin_world_z: None,
+        }
+    }
+
+    #[test]
+    fn hover_targets_include_resource_bar_and_origin_node() {
+        let mut regions = sample("regions");
+        regions.region_name = Some("Tarif".to_string());
+        regions.resource_bar_world_x = Some(123.0);
+        regions.resource_bar_world_z = Some(456.0);
+        regions.origin_world_x = Some(789.0);
+        regions.origin_world_z = Some(321.0);
+
+        let info = HoverInfo {
+            map_px: 0,
+            map_py: 0,
+            rgb: None,
+            rgb_u32: None,
+            zone_name: None,
+            world_x: 0.0,
+            world_z: 0.0,
+            layer_samples: vec![regions],
+        };
+
+        let layer_registry = LayerRegistry::default();
+        let vector_runtime = VectorLayerRuntime::default();
+        assert_eq!(
+            hover_targets_from_info(Some(&info), &layer_registry, &vector_runtime),
+            vec![
+                HoverTargetVisual {
+                    world_x: 123.0,
+                    world_z: 456.0,
+                    label: "Resource bar".to_string(),
+                    marker_size_screen_px: RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
+                    label_offset_screen_px: RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
+                    color_rgb: RESOURCE_BAR_MARKER_COLOR,
+                },
+                HoverTargetVisual {
+                    world_x: 789.0,
+                    world_z: 321.0,
+                    label: "Origin: Tarif".to_string(),
+                    marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
+                    label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
+                    color_rgb: ORIGIN_NODE_MARKER_COLOR,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn hover_targets_fall_back_to_separate_samples() {
+        let mut region_group = sample("region_groups");
+        region_group.resource_bar_world_x = Some(10.0);
+        region_group.resource_bar_world_z = Some(20.0);
+
+        let mut region = sample("regions");
+        region.origin_world_x = Some(30.0);
+        region.origin_world_z = Some(40.0);
+
+        let info = HoverInfo {
+            map_px: 0,
+            map_py: 0,
+            rgb: None,
+            rgb_u32: None,
+            zone_name: None,
+            world_x: 0.0,
+            world_z: 0.0,
+            layer_samples: vec![region_group, region],
+        };
+
+        let layer_registry = LayerRegistry::default();
+        let vector_runtime = VectorLayerRuntime::default();
+        let targets = hover_targets_from_info(Some(&info), &layer_registry, &vector_runtime);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].world_x, 10.0);
+        assert_eq!(targets[0].world_z, 20.0);
+        assert_eq!(targets[1].world_x, 30.0);
+        assert_eq!(targets[1].world_z, 40.0);
+    }
+
+    #[test]
+    fn clamp_hover_target_to_viewport_marks_offscreen_targets() {
+        let target = HoverTargetVisual {
+            world_x: 500.0,
+            world_z: 800.0,
+            label: "Origin: Tarif".to_string(),
+            marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
+            label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
+            color_rgb: ORIGIN_NODE_MARKER_COLOR,
+        };
+        let clamped = clamp_hover_target_to_viewport(
+            &target,
+            Map2dViewportBounds {
+                min_x: 0.0,
+                max_x: 100.0,
+                min_z: 0.0,
+                max_z: 100.0,
+                scale: 1.0,
+            },
+        );
+        assert!(clamped.world_x <= 100.0);
+        assert!(clamped.world_z <= 100.0);
+        assert_eq!(clamped.label, "Origin: Tarif (offscreen)");
+    }
+}

@@ -22,6 +22,7 @@ Current migration contents:
 - `tools/scripts/run_cdn_server.sh`
 - `tools/scripts/serve_cdn.py`
 - `tools/scripts/rebuild_detailed_regions_layer.sh`
+- `tools/scripts/rebuild_region_groups_vector_layer.sh`
 - `tools/scripts/rebuild_region_groups_overlay.sh`
 - `tools/scripts/rebuild_water_overlay.sh`
 - `tools/scripts/xlsx-*`

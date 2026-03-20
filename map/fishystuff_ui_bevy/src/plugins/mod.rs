@@ -3,6 +3,7 @@ pub mod bookmarks;
 pub mod camera;
 #[cfg(target_arch = "wasm32")]
 pub mod diagnostics;
+pub mod hover_targets;
 pub mod input;
 pub mod mask;
 pub mod points;
@@ -37,6 +38,7 @@ impl PluginGroup for FishystuffPlugins {
             .add(bookmarks::BookmarksPlugin)
             .add(points::PointsPlugin)
             .add(mask::MaskPlugin)
+            .add(hover_targets::HoverTargetsPlugin)
             .add(ui::UiPlugin)
             .add(LayerUiPlugin)
             .add(diagnostics::DiagnosticsPlugin)

@@ -199,6 +199,22 @@ enum Commands {
         #[arg(long)]
         deck_r_origins: PathBuf,
         #[arg(long)]
+        deck_rg_graphs: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    BuildRegionGroupsGeojson {
+        #[arg(long)]
+        region_groups_geojson: PathBuf,
+        #[arg(long)]
+        regioninfo: PathBuf,
+        #[arg(long)]
+        loc: PathBuf,
+        #[arg(long)]
+        deck_r_origins: PathBuf,
+        #[arg(long)]
+        deck_rg_graphs: PathBuf,
+        #[arg(long)]
         out: PathBuf,
     },
     DebugWatermapProjection {
@@ -433,12 +449,29 @@ fn main() -> Result<()> {
             regioninfo,
             loc,
             deck_r_origins,
+            deck_rg_graphs,
             out,
         } => run_build_detailed_regions_geojson(
             regions_geojson,
             regioninfo,
             loc,
             deck_r_origins,
+            deck_rg_graphs,
+            out,
+        ),
+        Commands::BuildRegionGroupsGeojson {
+            region_groups_geojson,
+            regioninfo,
+            loc,
+            deck_r_origins,
+            deck_rg_graphs,
+            out,
+        } => run_build_region_groups_geojson(
+            region_groups_geojson,
+            regioninfo,
+            loc,
+            deck_r_origins,
+            deck_rg_graphs,
             out,
         ),
         Commands::DebugWatermapProjection {
@@ -1022,6 +1055,7 @@ fn run_build_detailed_regions_geojson(
     regioninfo: PathBuf,
     loc: PathBuf,
     deck_r_origins: PathBuf,
+    deck_rg_graphs: PathBuf,
     out: PathBuf,
 ) -> Result<()> {
     let summary = region_layers::build_detailed_regions_geojson(
@@ -1029,13 +1063,40 @@ fn run_build_detailed_regions_geojson(
         &regioninfo,
         &loc,
         &deck_r_origins,
+        &deck_rg_graphs,
         &out,
     )?;
     println!(
-        "build-detailed-regions-geojson: out={} features={} named={}",
+        "build-detailed-regions-geojson: out={} features={} named={} resource_waypoints={}",
         out.display(),
         summary.feature_count,
         summary.named_feature_count,
+        summary.resource_feature_count,
+    );
+    Ok(())
+}
+
+fn run_build_region_groups_geojson(
+    region_groups_geojson: PathBuf,
+    regioninfo: PathBuf,
+    loc: PathBuf,
+    deck_r_origins: PathBuf,
+    deck_rg_graphs: PathBuf,
+    out: PathBuf,
+) -> Result<()> {
+    let summary = region_layers::build_region_groups_geojson(
+        &region_groups_geojson,
+        &regioninfo,
+        &loc,
+        &deck_r_origins,
+        &deck_rg_graphs,
+        &out,
+    )?;
+    println!(
+        "build-region-groups-geojson: out={} features={} resource_waypoints={}",
+        out.display(),
+        summary.feature_count,
+        summary.resource_feature_count,
     );
     Ok(())
 }
