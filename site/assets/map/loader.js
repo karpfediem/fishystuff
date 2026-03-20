@@ -1,7 +1,9 @@
 import FishyMapBridge, {
+  FISHYMAP_CONTRACT_VERSION,
   FISHYMAP_EVENTS,
   FISHYMAP_POINT_ICON_SCALE_MAX,
   FISHYMAP_POINT_ICON_SCALE_MIN,
+  FISHYMAP_STORAGE_KEYS,
   resolveCdnBaseUrl,
 } from "./map-host.js";
 
@@ -242,6 +244,26 @@ export function parseWindowUiState(serializedState) {
 
 export function serializeWindowUiState(windowUiState) {
   return JSON.stringify(normalizeWindowUiState(windowUiState));
+}
+
+export function buildDefaultWindowUiStateSerialized() {
+  return serializeWindowUiState(DEFAULT_WINDOW_UI_STATE);
+}
+
+export function buildMapUiResetMountOptions(currentState) {
+  const view = isPlainObject(currentState?.view) ? currentState.view : null;
+  if (!view) {
+    return {};
+  }
+  return {
+    initialState: {
+      version: FISHYMAP_CONTRACT_VERSION,
+      commands: {
+        setViewMode: view.viewMode === "3d" ? "3d" : "2d",
+        restoreView: view,
+      },
+    },
+  };
 }
 
 function buildFishLookup(catalogFish) {
@@ -2882,6 +2904,54 @@ function bindUi(shell, elements, options = {}) {
     dispatchMapCommand(shell, { resetView: true });
   });
 
+  async function resetMapUiToInitialState() {
+    const resetButton = elements.resetUi;
+    if (!resetButton || resetButton.disabled) {
+      return;
+    }
+    const defaultWindowUiState = buildDefaultWindowUiStateSerialized();
+    const remountOptions = buildMapUiResetMountOptions(requestBridgeState(shell).state);
+    const originalLabel = resetButton.textContent;
+
+    setBooleanProperty(resetButton, "disabled", true);
+    setTextContent(resetButton, "Resetting...");
+
+    windowUiState = parseWindowUiState(defaultWindowUiState);
+    if (elements.windowStateInput) {
+      elements.windowStateInput.value = defaultWindowUiState;
+      elements.windowStateInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    applyManagedWindows({ persist: true });
+
+    try {
+      globalThis.sessionStorage?.removeItem?.(FISHYMAP_STORAGE_KEYS.session);
+    } catch (_) {}
+    try {
+      globalThis.localStorage?.removeItem?.(FISHYMAP_STORAGE_KEYS.prefs);
+    } catch (_) {}
+
+    try {
+      FishyMapBridge.destroy?.();
+      renderCurrentState(requestBridgeState(shell));
+      await FishyMapBridge.mount(shell, {
+        canvas: elements.canvas,
+        ...remountOptions,
+      });
+      renderCurrentState(requestBridgeState(shell));
+    } catch (error) {
+      console.error("Failed to reset map UI", error);
+      globalThis.window?.location?.reload?.();
+      return;
+    } finally {
+      setTextContent(resetButton, originalLabel || "Reset UI");
+      setBooleanProperty(resetButton, "disabled", false);
+    }
+  }
+
+  elements.resetUi?.addEventListener("click", () => {
+    void resetMapUiToInitialState();
+  });
+
   if (elements.legend) {
     elements.legend.addEventListener("toggle", () => {
       if (isRendering) {
@@ -2998,6 +3068,7 @@ async function main() {
     layersBody: document.getElementById("fishymap-layers-body"),
     layersCount: document.getElementById("fishymap-layers-count"),
     resetView: document.getElementById("fishymap-reset-view"),
+    resetUi: document.getElementById("fishymap-reset-ui"),
     legend: document.getElementById("fishymap-legend"),
     diagnostics: document.getElementById("fishymap-diagnostics"),
     statusLines: document.getElementById("fishymap-status-lines"),

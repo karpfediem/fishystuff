@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 globalThis.__fishystuffLoaderAutoStart = false;
 const {
+  buildDefaultWindowUiStateSerialized,
+  buildMapUiResetMountOptions,
   buildSearchMatches,
   normalizeZoneCatalog,
   normalizeWindowUiState,
@@ -172,5 +174,42 @@ test("serializeWindowUiState normalizes persisted window geometry and flags", ()
     settings: { open: true, collapsed: false, x: null, y: null },
     zoneInfo: { open: true, collapsed: false, x: null, y: 5 },
     layers: { open: false, collapsed: false, x: null, y: 100 },
+  });
+});
+
+test("buildDefaultWindowUiStateSerialized matches the default managed window layout", () => {
+  assert.deepEqual(
+    JSON.parse(buildDefaultWindowUiStateSerialized()),
+    normalizeWindowUiState(null),
+  );
+});
+
+test("buildMapUiResetMountOptions preserves the current view while clearing UI state", () => {
+  assert.deepEqual(buildMapUiResetMountOptions(null), {});
+
+  assert.deepEqual(buildMapUiResetMountOptions({
+    view: {
+      viewMode: "3d",
+      camera: {
+        centerWorldX: 12,
+        centerWorldZ: 34,
+        distance: 56,
+      },
+    },
+  }), {
+    initialState: {
+      version: 1,
+      commands: {
+        setViewMode: "3d",
+        restoreView: {
+          viewMode: "3d",
+          camera: {
+            centerWorldX: 12,
+            centerWorldZ: 34,
+            distance: 56,
+          },
+        },
+      },
+    },
   });
 });
