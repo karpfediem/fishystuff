@@ -18,7 +18,6 @@ const BOOKMARK_COORDINATE_DECIMALS = 3;
 const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
 const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
-const BOOKMARK_DEFAULT_STATUS = 'Click "Drop bookmark" and choose a point on the 2D map.';
 const REGION_GROUP_FALLBACK_RE = /^RG\d+$/;
 const REGION_FALLBACK_RE = /^R\d+$/;
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
@@ -1492,28 +1491,6 @@ function hoverFromEventDetail(detail) {
   };
 }
 
-function bookmarkStatusMessage(state, bookmarkUi) {
-  if (bookmarkUi?.placing) {
-    if (state?.ready !== true) {
-      return "Wait for the map to finish loading before placing a bookmark.";
-    }
-    if (state?.view?.viewMode === "3d") {
-      return "Switch back to 2D view to place a bookmark.";
-    }
-    return "Click any point on the map to save its world coordinates.";
-  }
-  if (bookmarkUi?.status) {
-    return bookmarkUi.status;
-  }
-  if (state?.ready !== true) {
-    return "Bookmarks will be available once the map finishes loading.";
-  }
-  if (state?.view?.viewMode === "3d") {
-    return "Bookmarks can be placed from the 2D map view.";
-  }
-  return BOOKMARK_DEFAULT_STATUS;
-}
-
 function normalizeSelectedBookmarkIds(bookmarks, selectedIds) {
   const availableIds = new Set(normalizeBookmarks(bookmarks).map((bookmark) => bookmark.id));
   return Array.from(
@@ -1528,14 +1505,6 @@ function normalizeSelectedBookmarkIds(bookmarks, selectedIds) {
 function selectedBookmarksInOrder(bookmarks, selectedIds) {
   const selectedIdSet = new Set(normalizeSelectedBookmarkIds(bookmarks, selectedIds));
   return normalizeBookmarks(bookmarks).filter((bookmark) => selectedIdSet.has(bookmark.id));
-}
-
-function bookmarkSelectionStatusLabel(bookmarks, selectedIds) {
-  const selectedCount = normalizeSelectedBookmarkIds(bookmarks, selectedIds).length;
-  if (selectedCount <= 0) {
-    return "No bookmarks selected.";
-  }
-  return `${selectedCount} ${pluralizeBookmarks(selectedCount)} selected.`;
 }
 
 export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
@@ -1628,7 +1597,6 @@ function bookmarksNeedDerivedMetadata(bookmarks) {
 function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
   if (
     !elements.bookmarksList ||
-    !elements.bookmarkStatus ||
     !elements.bookmarkPlace ||
     !elements.bookmarkPlaceLabel
   ) {
@@ -1651,16 +1619,12 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
   }
   const selectedIdSet = new Set(selectedIds);
   setBooleanProperty(elements.bookmarkPlace, "disabled", !canPlace && !bookmarkUi?.placing);
-  setTextContent(elements.bookmarkPlaceLabel, bookmarkUi?.placing ? "Click map to place" : "Drop bookmark");
+  setTextContent(elements.bookmarkPlaceLabel, bookmarkUi?.placing ? "Click map to place" : "New bookmark");
   setBooleanProperty(elements.bookmarkCopySelected, "disabled", selectedIds.length === 0);
   setBooleanProperty(elements.bookmarkExport, "disabled", normalizedBookmarks.length === 0);
   setBooleanProperty(elements.bookmarkSelectAll, "disabled", normalizedBookmarks.length === 0 || selectedIds.length === normalizedBookmarks.length);
   setBooleanProperty(elements.bookmarkClearSelection, "disabled", selectedIds.length === 0);
   setBooleanProperty(elements.bookmarkCancel, "hidden", !bookmarkUi?.placing);
-  setTextContent(elements.bookmarkStatus, bookmarkStatusMessage(state, bookmarkUi));
-  if (elements.bookmarkSelectionSummary) {
-    setTextContent(elements.bookmarkSelectionSummary, bookmarkSelectionStatusLabel(normalizedBookmarks, selectedIds));
-  }
 
   setMarkup(
     elements.bookmarksList,
@@ -2982,7 +2946,6 @@ function bindUi(shell, elements, options = {}) {
   const bookmarkUi = {
     placing: false,
     selectedIds: [],
-    status: "",
   };
   let nextWindowZIndex = 30;
   const managedWindows = {
@@ -3117,10 +3080,6 @@ function bindUi(shell, elements, options = {}) {
     };
   }
 
-  function setBookmarkStatus(message = "") {
-    bookmarkUi.status = String(message || "").trim();
-  }
-
   function setSelectedBookmarkIds(nextSelectedIds) {
     bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds);
   }
@@ -3146,11 +3105,6 @@ function bindUi(shell, elements, options = {}) {
 
   function setBookmarkPlacementActive(active, options = {}) {
     bookmarkUi.placing = Boolean(active);
-    if (!bookmarkUi.placing && options.keepStatus !== true) {
-      setBookmarkStatus(options.status || "");
-    } else if (bookmarkUi.placing && options.status) {
-      setBookmarkStatus(options.status);
-    }
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   }
 
@@ -3163,13 +3117,11 @@ function bindUi(shell, elements, options = {}) {
     syncBookmarksToBridge(bookmarks);
     const normalizedStatusMessage = String(statusMessage || "").trim();
     if (persisted) {
-      setBookmarkStatus(options.keepStatus === true ? bookmarkUi.status : "");
       if (normalizedStatusMessage) {
         showSiteToast(options.toastTone || "success", normalizedStatusMessage);
       }
     } else {
       const storageMessage = `${normalizedStatusMessage || "Bookmark updated."} Browser storage is unavailable, so this will reset on reload.`;
-      setBookmarkStatus(storageMessage);
       showSiteToast("warning", storageMessage);
     }
     renderCurrentState(requestBridgeState(shell));
@@ -3475,8 +3427,7 @@ function bindUi(shell, elements, options = {}) {
     const regionGroupsName = resourceOverviewValue(regionGroupSample)?.value || null;
     const regionsName = originOverviewValue(regionSample)?.value || null;
     if (worldX == null || worldZ == null) {
-      setBookmarkStatus("Move the cursor over the ready 2D map and click again.");
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      showSiteToast("warning", "Move the cursor over the ready 2D map and click again.");
       return;
     }
     const bookmark = createBookmarkFromPlacement(
@@ -3491,11 +3442,10 @@ function bindUi(shell, elements, options = {}) {
       bookmarks,
     );
     if (!bookmark) {
-      setBookmarkStatus("Could not read world coordinates for that click.");
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      showSiteToast("error", "Could not read world coordinates for that click.");
       return;
     }
-    setBookmarkPlacementActive(false, { keepStatus: true });
+    setBookmarkPlacementActive(false);
     persistBookmarksAndRender(bookmarks.concat(bookmark), `Saved ${bookmark.label}.`, {
       toastTone: "success",
     });
@@ -3772,13 +3722,11 @@ function bindUi(shell, elements, options = {}) {
   elements.bookmarkPlace?.addEventListener("click", () => {
     const state = latestStateBundle?.state || requestBridgeState(shell).state;
     if (state.ready !== true) {
-      setBookmarkStatus("Wait for the map to finish loading before placing a bookmark.");
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      showSiteToast("warning", "Wait for the map to finish loading before placing a bookmark.");
       return;
     }
     if (state.view?.viewMode === "3d") {
-      setBookmarkStatus("Switch back to 2D view to place a bookmark.");
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      showSiteToast("warning", "Switch back to 2D view to place a bookmark.");
       return;
     }
     bringManagedWindowToFront("bookmarks");
@@ -3792,21 +3740,17 @@ function bindUi(shell, elements, options = {}) {
   elements.bookmarkCopySelected?.addEventListener("click", async () => {
     const selectedBookmarks = selectedBookmarksForCopy();
     if (!selectedBookmarks.length) {
-      setBookmarkStatus("Select one or more bookmarks to copy XML.");
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      showSiteToast("warning", "Select one or more bookmarks to copy.");
       return;
     }
     try {
       await copyTextToClipboard(formatBookmarkClipboardText(selectedBookmarks));
       const message = `Copied XML for ${selectedBookmarks.length} ${pluralizeBookmarks(selectedBookmarks.length)}.`;
-      setBookmarkStatus("");
       showSiteToast("success", message);
     } catch (_) {
       const message = "Clipboard access is unavailable in this browser.";
-      setBookmarkStatus(message);
       showSiteToast("error", message);
     }
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
   elements.bookmarkSelectAll?.addEventListener("click", () => {
@@ -3823,8 +3767,7 @@ function bindUi(shell, elements, options = {}) {
     const exportBookmarks = bookmarksForExport();
     const selectedCount = selectedBookmarksForCopy().length;
     if (!exportBookmarks.length) {
-      setBookmarkStatus("There are no bookmarks to export yet.");
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      showSiteToast("warning", "There are no bookmarks to export yet.");
       return;
     }
     try {
@@ -3833,20 +3776,16 @@ function bindUi(shell, elements, options = {}) {
         selectedCount
           ? `Exported ${exportBookmarks.length} selected ${pluralizeBookmarks(exportBookmarks.length)}.`
           : `Exported ${exportBookmarks.length} ${pluralizeBookmarks(exportBookmarks.length)}.`;
-      setBookmarkStatus("");
       showSiteToast("info", message);
     } catch (_) {
       const message = "Bookmark export is unavailable in this browser.";
-      setBookmarkStatus(message);
       showSiteToast("error", message);
     }
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
   elements.bookmarkImportTrigger?.addEventListener("click", () => {
     if (!elements.bookmarkImportInput) {
-      setBookmarkStatus("Bookmark import is unavailable in this browser.");
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+      showSiteToast("error", "Bookmark import is unavailable in this browser.");
       return;
     }
     if (bookmarkUi.placing) {
@@ -3865,9 +3804,7 @@ function bindUi(shell, elements, options = {}) {
       const importedBookmarks = parseImportedBookmarks(await readBookmarkImportFile(file));
       if (!importedBookmarks.length) {
         const message = "The selected file did not contain any bookmark XML.";
-        setBookmarkStatus("");
         showSiteToast("warning", message);
-        renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
         return;
       }
       const existingBookmarkKeys = new Set(
@@ -3897,9 +3834,7 @@ function bindUi(shell, elements, options = {}) {
     } catch (error) {
       console.warn("Failed to import map bookmarks", error);
       const message = "Bookmark import failed. Choose a valid WorldmapBookMark XML file.";
-      setBookmarkStatus(message);
       showSiteToast("error", message);
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
     } finally {
       elements.bookmarkImportInput.value = "";
     }
@@ -4008,8 +3943,7 @@ function bindUi(shell, elements, options = {}) {
         return;
       }
       if (typeof globalThis.window?.prompt !== "function") {
-        setBookmarkStatus("Bookmark renaming is unavailable in this browser.");
-        renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+        showSiteToast("error", "Bookmark renaming is unavailable in this browser.");
         return;
       }
       const requestedLabel = globalThis.window.prompt("Bookmark name", bookmark.label);
@@ -4036,14 +3970,11 @@ function bindUi(shell, elements, options = {}) {
       try {
         await copyTextToClipboard(formatBookmarkClipboardText([bookmark]));
         const message = `Copied XML for ${bookmark.label}.`;
-        setBookmarkStatus("");
         showSiteToast("success", message);
       } catch (_) {
         const message = "Clipboard access is unavailable in this browser.";
-        setBookmarkStatus(message);
         showSiteToast("error", message);
       }
-      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
       return;
     }
     const deleteButton = event.target.closest("button[data-bookmark-delete]");
@@ -4483,8 +4414,6 @@ async function main() {
     bookmarkSelectAll: document.getElementById("fishymap-bookmark-select-all"),
     bookmarkClearSelection: document.getElementById("fishymap-bookmark-clear-selection"),
     bookmarkCancel: document.getElementById("fishymap-bookmark-cancel"),
-    bookmarkSelectionSummary: document.getElementById("fishymap-bookmark-selection-summary"),
-    bookmarkStatus: document.getElementById("fishymap-bookmark-status"),
     bookmarksList: document.getElementById("fishymap-bookmarks-list"),
     panel: document.getElementById("fishymap-panel"),
     panelTitlebar: document.getElementById("fishymap-panel-titlebar"),

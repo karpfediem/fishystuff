@@ -423,18 +423,25 @@
 
       #fishymap-bookmarks-controls {
         display: flex;
-        flex-wrap: wrap;
+        flex-direction: column;
         gap: 0.5rem;
+      }
+
+      .fishymap-bookmarks-controls-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .fishymap-bookmarks-controls-row--secondary {
+        row-gap: 0.35rem;
       }
 
       #fishymap-bookmark-place .fishy-icon,
       #fishymap-bookmarks-list .fishy-icon {
         width: 1rem;
         height: 1rem;
-      }
-
-      #fishymap-bookmark-status {
-        min-height: 1.25rem;
       }
 
       #fishymap-bookmarks-list {
@@ -989,28 +996,28 @@
           aria-expanded="true"
         >
           <div class="fishymap-window-header-content">
-            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-5#fishy-bookmarks"></use></svg>
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-bookmarks"></use></svg>
             <span class="fishymap-window-title text-lg leading-tight">Bookmarks</span>
           </div>
           <button id="fishymap-bookmark-place" class="btn btn-primary btn-sm" type="button">
-            <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-5#fishy-bookmark-add"></use></svg>
-            <span id="fishymap-bookmark-place-label">Drop bookmark</span>
+            <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-bookmark-add"></use></svg>
+            <span id="fishymap-bookmark-place-label">New bookmark</span>
           </button>
         </div>
         <div id="fishymap-bookmarks-body" class="fishymap-window-body">
           <div id="fishymap-bookmarks-controls">
-            <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button">Copy XML</button>
-            <button id="fishymap-bookmark-export" class="btn btn-soft btn-sm" type="button">Export XML</button>
-            <button id="fishymap-bookmark-import-trigger" class="btn btn-soft btn-sm" type="button">Import XML</button>
-            <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button">Select all</button>
-            <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button">Clear</button>
-            <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden>Cancel</button>
+            <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--primary">
+              <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-copy"></use></svg>Copy</button>
+              <button id="fishymap-bookmark-export" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-export"></use></svg>Export</button>
+              <button id="fishymap-bookmark-import-trigger" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-import"></use></svg>Import</button>
+              <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-clear"></use></svg>Cancel</button>
+            </div>
+            <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--secondary">
+              <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-select-all"></use></svg>Select all</button>
+              <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-7#fishy-clear"></use></svg>Clear</button>
+            </div>
             <input id="fishymap-bookmark-import-input" class="hidden" type="file" accept=".xml,.txt,text/xml,application/xml">
           </div>
-          <p id="fishymap-bookmark-selection-summary" class="text-xs text-base-content/55">No bookmarks selected.</p>
-          <p id="fishymap-bookmark-status" class="text-xs text-base-content/70">
-            Click "Drop bookmark" and choose a point on the 2D map.
-          </p>
           <div id="fishymap-bookmarks-list" class="rounded-box border border-base-300/70 bg-base-200 p-1">
             <div class="fishymap-bookmark-empty text-sm text-base-content/65">
               No bookmarks yet.
