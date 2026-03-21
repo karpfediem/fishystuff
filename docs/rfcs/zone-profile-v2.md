@@ -741,6 +741,12 @@ User-facing rule:
 - add source-family enums and support-grade enums
 - keep `/api/v1/zone_stats` intact
 
+Status after first additive slice:
+
+- completed
+- additive endpoint now exists at `/api/v1/zone_profile_v2`
+- `/api/v1/zone_stats` remains intact
+
 ### Phase 2
 
 - add a ranking-heavy `zone_profile_v2` backend composition path
@@ -751,6 +757,13 @@ User-facing rule:
   - `diagnostics`
 - keep `catch_rates` unavailable / placeholder
 - move ranking percentages into advanced-only `ranking_evidence`
+
+Status after first additive slice:
+
+- partially completed
+- ranking-backed `presence_support`, `ranking_evidence`, and `diagnostics` are now wired
+- `assignment.border` remains an explicit unavailable placeholder
+- `catch_rates` remains an explicit pending-source placeholder
 
 ### Phase 3
 
@@ -777,7 +790,7 @@ This sequence is preferred because it fixes semantics and model boundaries befor
 
 Live server path:
 
-- loads all zone-assigned in-window events with `load_events_with_zone_in_window`
+- loads ranking-scoped zone-assigned in-window events with `load_ranking_events_with_zone_in_window`
 - computes `w_time` from `half_life_days`
 - if `fish_norm` is enabled, computes per-fish normalization from recency-weight sums
 - uses `u = w_time` for zone total weight and ESS
@@ -800,16 +813,17 @@ Yes.
 
 ### Whether live `zone_stats` SQL filters `events.source_kind`
 
-No.
+Yes, now.
 
-- the live `EVENTS_WITH_ZONE_SQL` query filters `water_ok` and the time window but not `source_kind`
+- the ranking-derived zone-evidence query now filters `e.source_kind = SOURCE_KIND_RANKING`
+- this safeguard is shared by the ranking-backed `zone_profile_v2` path and the existing ranking-derived `zone_stats` / `effort_grid` loaders
 
 ### Whether that creates a concrete future contamination risk
 
-Yes.
+Previously yes; this slice now mitigates that specific loading-path risk.
 
-- today the runtime DB only contains ranking rows
-- once new event types are inserted, the current live query would silently mix them into ranking evidence
+- the public source enum still only exposes `Ranking`
+- future multi-source work still needs explicit new query paths rather than reusing ranking-only loaders
 
 ### Whether `EventSourceKind` supports anything beyond ranking
 
@@ -848,22 +862,70 @@ Feasible, but not currently implemented.
 - exact mask RGB sampling code exists
 - no distance-transform or nearest-boundary primitive currently exists
 
-## Recommended first implementation slice
+## Implemented first additive slice
 
-Lowest-risk follow-up after this RFC:
+This repo now includes the first additive `zone_profile_v2` slice:
 
-1. Add `zone_profile_v2` typed models only.
-2. Add source-family and support-grade enums.
-3. Add semantics-focused model tests.
-4. Define normalized import structs for workbook-backed community support:
-   - zone RGB
-   - zone label
-   - fish id/name
-   - support remark/status
-   - optional subgroup hint
-   - workbook provenance
-5. In the next patch, add a ranking-only composition layer that maps current `zone_stats` into the new response shape without changing current UI.
-6. Before adding new event sources, isolate ranking evidence loading by `source_kind`.
+1. typed request/response models under `lib/fishystuff_api/src/models/zone_profile_v2.rs`
+2. additive backend route at `/api/v1/zone_profile_v2`
+3. ranking-heavy composition path that maps current ranking evidence into separated sections:
+   - `assignment`
+   - `presence_support`
+   - `ranking_evidence`
+   - `catch_rates`
+   - `diagnostics`
+4. semantics-focused tests that lock:
+   - ranking evidence share is nested and explicitly named
+   - missing ranking evidence is not treated as absence
+   - placeholder border state is explicit
+   - catch rates remain a typed pending-source placeholder
+5. ranking-event load path isolation via `source_kind`
+
+### Fully implemented in this slice
+
+- additive `/api/v1/zone_profile_v2` route and store plumbing
+- ranking-backed `presence_support`
+- ranking-backed `ranking_evidence`
+- explicit typed `catch_rates` placeholder
+- explicit typed `assignment.border` unavailable placeholder
+- diagnostics notes that separate ranking evidence, assignment ambiguity, and catch-rate estimation
+
+### Still placeholder in this slice
+
+- point-level border distance and neighbor inference
+- legacy fishing-table support claims
+- workbook/community support claims
+- player-log catch-rate summaries
+- border stress metrics and overlays
+
+### Public wording for this slice
+
+Use wording like:
+
+- `observed in ranking data`
+- `insufficient ranking evidence`
+- `border ambiguity unavailable`
+- `catch rates unavailable`
+
+Avoid wording like:
+
+- `drop rate`
+- `chance to catch`
+- `border confidence`
+
+### Advanced wording for this slice
+
+- `ranking evidence share`
+- `effective sample size (ESS)`
+- `fresh/stale/drifting ranking evidence`
+
+Advanced wording must still avoid describing ranking evidence share as a drop rate.
+
+### Migration note
+
+- `/api/v1/zone_stats` is intentionally preserved for compatibility
+- the old route still exposes `p_mean`/CI semantics that are easy to misread publicly
+- the new route is the additive path for safer semantics and future multi-source composition
 
 ## Non-goals for this RFC pass
 

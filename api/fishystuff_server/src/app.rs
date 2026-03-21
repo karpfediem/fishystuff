@@ -23,6 +23,10 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/zones", get(routes::zones::list_zones))
         .route("/fish", get(routes::fish::list_fish))
         .route("/fish/", get(routes::fish::list_fish))
+        .route(
+            "/zone_profile_v2",
+            post(routes::zone_profile_v2::zone_profile_v2),
+        )
         .route("/zone_stats", post(routes::zone_stats::zone_stats))
         .route("/effort_grid", post(routes::effort::effort_grid))
         .route(
@@ -71,6 +75,7 @@ mod tests {
     use fishystuff_api::models::layers::LayersResponse;
     use fishystuff_api::models::meta::MetaResponse;
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
+    use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
 
@@ -121,6 +126,13 @@ mod tests {
             _status_cfg: ZoneStatusConfig,
         ) -> crate::error::AppResult<ZoneStatsResponse> {
             Ok(ZoneStatsResponse::default())
+        }
+        async fn zone_profile_v2(
+            &self,
+            _request: ZoneProfileV2Request,
+            _status_cfg: ZoneStatusConfig,
+        ) -> crate::error::AppResult<ZoneProfileV2Response> {
+            Ok(ZoneProfileV2Response::default())
         }
         async fn effort_grid(
             &self,
@@ -180,6 +192,13 @@ mod tests {
             _status_cfg: ZoneStatusConfig,
         ) -> crate::error::AppResult<ZoneStatsResponse> {
             Ok(ZoneStatsResponse::default())
+        }
+        async fn zone_profile_v2(
+            &self,
+            _request: ZoneProfileV2Request,
+            _status_cfg: ZoneStatusConfig,
+        ) -> crate::error::AppResult<ZoneProfileV2Response> {
+            Ok(ZoneProfileV2Response::default())
         }
         async fn effort_grid(
             &self,

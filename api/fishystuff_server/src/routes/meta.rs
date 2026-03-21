@@ -54,6 +54,7 @@ pub async fn openapi_json() -> Json<serde_json::Value> {
         "/api/v1/region_groups": { "get": { "summary": "Get region-group metadata" } },
         "/api/v1/zones": { "get": { "summary": "List zones" } },
         "/api/v1/fish": { "get": { "summary": "List fish metadata" } },
+        "/api/v1/zone_profile_v2": { "post": { "summary": "Structured zone profile with separated ranking evidence and placeholders for border analysis and catch rates" } },
         "/api/v1/zone_stats": { "post": { "summary": "Zone evidence distribution" } },
         "/api/v1/effort_grid": { "post": { "summary": "Effort grid" } },
         "/api/v1/events_snapshot_meta": { "get": { "summary": "Ranking events snapshot metadata" } },

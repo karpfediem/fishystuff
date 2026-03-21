@@ -128,7 +128,7 @@ pub const EVENT_ZONE_ASSIGNMENT_COUNT_SQL: &str =
 pub const WATER_TILES_SQL: &str =
     "SELECT tile_x, tile_y, water_count FROM water_tiles WHERE map_version = ? AND tile_px = ?";
 
-pub const EVENTS_WITH_ZONE_SQL: &str = "
+pub const RANKING_EVENTS_WITH_ZONE_SQL: &str = "
 SELECT
   CAST(TIMESTAMPDIFF(SECOND, '1970-01-01 00:00:00', e.ts_utc) AS SIGNED) AS ts_utc,
   e.fish_id,
@@ -138,6 +138,7 @@ SELECT
 FROM events e
 JOIN event_zone_assignment z ON z.event_id = e.event_id AND z.layer_revision_id = ?
 WHERE e.water_ok = 1
+  AND e.source_kind = ?
   AND e.ts_utc >= ?
   AND e.ts_utc < ?";
 

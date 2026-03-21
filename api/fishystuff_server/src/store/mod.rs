@@ -6,6 +6,7 @@ use fishystuff_api::models::fish::FishListResponse;
 use fishystuff_api::models::layers::LayersResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::region_groups::RegionGroupsResponse;
+use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::models::zones::ZoneEntry;
 
@@ -53,6 +54,11 @@ pub trait Store: Send + Sync {
         request: ZoneStatsRequest,
         status_cfg: ZoneStatusConfig,
     ) -> AppResult<ZoneStatsResponse>;
+    async fn zone_profile_v2(
+        &self,
+        request: ZoneProfileV2Request,
+        status_cfg: ZoneStatusConfig,
+    ) -> AppResult<ZoneProfileV2Response>;
     async fn effort_grid(&self, request: EffortGridRequest) -> AppResult<EffortGridResponse>;
     async fn events_snapshot_meta(&self) -> AppResult<EventsSnapshotMetaResponse>;
     async fn events_snapshot(

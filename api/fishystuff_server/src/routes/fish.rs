@@ -84,6 +84,7 @@ mod tests {
     use fishystuff_api::models::layers::LayersResponse;
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
+    use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
     use hyper::body::to_bytes;
@@ -158,6 +159,14 @@ mod tests {
             _request: ZoneStatsRequest,
             _status_cfg: ZoneStatusConfig,
         ) -> AppResult<ZoneStatsResponse> {
+            panic!("unused in test")
+        }
+
+        async fn zone_profile_v2(
+            &self,
+            _request: ZoneProfileV2Request,
+            _status_cfg: ZoneStatusConfig,
+        ) -> AppResult<ZoneProfileV2Response> {
             panic!("unused in test")
         }
 

@@ -40,10 +40,8 @@ pub struct ZoneProfileV2Request {
 pub struct ZoneProfileV2Response {
     pub assignment: ZoneAssignment,
     pub presence_support: ZonePresenceSupport,
-    #[serde(default)]
-    pub ranking_evidence: Option<ZoneRankingEvidence>,
-    #[serde(default)]
-    pub catch_rates: Option<ZoneCatchRateSummary>,
+    pub ranking_evidence: ZoneRankingEvidence,
+    pub catch_rates: ZoneCatchRateSummary,
     pub diagnostics: ZoneDiagnostics,
 }
 
@@ -105,8 +103,22 @@ pub struct ZoneNeighborCandidate {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ZonePresenceSupport {
+    pub state: ZonePresenceState,
+    #[serde(default)]
+    pub evaluated_sources: Vec<ZoneSourceFamily>,
     #[serde(default)]
     pub fish: Vec<ZoneFishSupport>,
+    #[serde(default)]
+    pub notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ZonePresenceState {
+    Supported,
+    InsufficientEvidence,
+    #[default]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -145,6 +157,7 @@ pub enum ZoneSupportGrade {
     ObservedHistorical,
     ReferenceSupported,
     WeakHint,
+    InsufficientEvidence,
     #[default]
     Unknown,
 }
@@ -172,6 +185,7 @@ pub enum ZoneClaimType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ZoneRankingEvidence {
+    pub availability: ZoneMetricAvailability,
     pub source_family: ZoneSourceFamily,
     pub share_kind: ZoneRankingShareKind,
     pub total_weight: f64,
@@ -185,6 +199,8 @@ pub struct ZoneRankingEvidence {
     pub status: ZoneRankingStatus,
     #[serde(default)]
     pub drift: Option<ZoneRankingDrift>,
+    #[serde(default)]
+    pub notes: Vec<String>,
     #[serde(default)]
     pub fish: Vec<ZoneRankingFishEvidence>,
 }
@@ -329,9 +345,10 @@ mod tests {
 
     use super::{
         ZoneAssignment, ZoneBorderAssessment, ZoneBorderClass, ZoneBorderMethod, ZoneDiagnostics,
-        ZoneFishSupport, ZonePresenceSupport, ZoneProfileV2Response, ZonePublicState,
-        ZoneRankingEvidence, ZoneRankingFishEvidence, ZoneRankingShareKind, ZoneRankingStatus,
-        ZoneSourceFamily, ZoneSupportClaim, ZoneSupportGrade,
+        ZoneFishSupport, ZoneMetricAvailability, ZonePresenceState, ZonePresenceSupport,
+        ZoneProfileV2Response, ZonePublicState, ZoneRankingEvidence, ZoneRankingFishEvidence,
+        ZoneRankingShareKind, ZoneRankingStatus, ZoneSourceFamily, ZoneSupportClaim,
+        ZoneSupportGrade,
     };
     use crate::ids::RgbKey;
 
@@ -351,8 +368,14 @@ mod tests {
                 },
                 neighboring_zones: Vec::new(),
             },
-            presence_support: ZonePresenceSupport::default(),
-            ranking_evidence: Some(ZoneRankingEvidence {
+            presence_support: ZonePresenceSupport {
+                state: ZonePresenceState::Supported,
+                evaluated_sources: vec![ZoneSourceFamily::Ranking],
+                fish: Vec::new(),
+                notes: vec!["ranking-backed support only".to_string()],
+            },
+            ranking_evidence: ZoneRankingEvidence {
+                availability: ZoneMetricAvailability::Available,
                 source_family: ZoneSourceFamily::Ranking,
                 share_kind: ZoneRankingShareKind::PosteriorMeanEvidenceShare,
                 total_weight: 12.5,
@@ -362,6 +385,7 @@ mod tests {
                 age_days_last: Some(2.0),
                 status: ZoneRankingStatus::Stale,
                 drift: None,
+                notes: vec!["ranking evidence share, not catch/drop rate".to_string()],
                 fish: vec![ZoneRankingFishEvidence {
                     fish_id: 820115,
                     item_id: 820115,
@@ -373,8 +397,13 @@ mod tests {
                     ci_low: Some(0.20),
                     ci_high: Some(0.61),
                 }],
-            }),
-            catch_rates: None,
+            },
+            catch_rates: super::ZoneCatchRateSummary {
+                source_family: ZoneSourceFamily::Logs,
+                availability: ZoneMetricAvailability::PendingSource,
+                fish: Vec::new(),
+                notes: vec!["player-log catch rates not yet available".to_string()],
+            },
             diagnostics: ZoneDiagnostics {
                 public_state: ZonePublicState::InsufficientEvidence,
                 insufficient_evidence: true,
@@ -393,9 +422,16 @@ mod tests {
             value["ranking_evidence"]["fish"][0]["evidence_share_mean"],
             json!(0.42)
         );
+        assert_eq!(
+            value["ranking_evidence"]["availability"],
+            json!("available")
+        );
         assert!(value.get("p_mean").is_none());
         assert!(value.get("pMean").is_none());
-        assert!(value["catch_rates"].is_null());
+        assert_eq!(
+            value["catch_rates"]["availability"],
+            json!("pending_source")
+        );
     }
 
     #[test]
@@ -430,5 +466,23 @@ mod tests {
         let border_value = serde_json::to_value(border).expect("serialize border");
         assert_eq!(border_value["class"], json!("unavailable"));
         assert_eq!(border_value["method"], json!("unavailable"));
+    }
+
+    #[test]
+    fn presence_support_can_explicitly_encode_insufficient_evidence() {
+        let presence = ZonePresenceSupport {
+            state: ZonePresenceState::InsufficientEvidence,
+            evaluated_sources: vec![ZoneSourceFamily::Ranking],
+            fish: Vec::new(),
+            notes: vec!["missing ranking evidence is not evidence of absence".to_string()],
+        };
+
+        let value = serde_json::to_value(presence).expect("serialize presence support");
+        assert_eq!(value["state"], json!("insufficient_evidence"));
+        assert_eq!(value["evaluated_sources"][0], json!("ranking"));
+        assert_eq!(
+            value["notes"][0],
+            json!("missing ranking evidence is not evidence of absence")
+        );
     }
 }

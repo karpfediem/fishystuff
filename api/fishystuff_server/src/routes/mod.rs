@@ -5,5 +5,6 @@ pub mod layers;
 pub mod meta;
 pub(crate) mod public_assets;
 pub mod region_groups;
+pub mod zone_profile_v2;
 pub mod zone_stats;
 pub mod zones;
