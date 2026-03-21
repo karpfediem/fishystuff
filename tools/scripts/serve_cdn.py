@@ -31,7 +31,9 @@ class CdnHandler(http.server.SimpleHTTPRequestHandler):
     def _cache_control_for_path(self) -> str:
         path = self.path.split("?", 1)[0]
         name = Path(path).name
-        if name == "runtime-manifest.json":
+        if name == "runtime-manifest.json" or (
+            name.startswith("runtime-manifest.") and name.endswith(".json")
+        ):
             return NO_STORE_CACHE_CONTROL
         if (
             name.startswith("fishystuff_ui_bevy.")

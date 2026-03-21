@@ -21,6 +21,11 @@ require_path "$CDN_ROOT/images"
 require_path "$CDN_ROOT/region_groups"
 require_path "$CDN_MAP_ASSETS_DIR/runtime-manifest.json"
 
+if ! find "$CDN_MAP_ASSETS_DIR" -maxdepth 1 -type f -name 'runtime-manifest.*.json' | grep -q .; then
+  echo "required cache-busted CDN map runtime manifest missing under $CDN_MAP_ASSETS_DIR" >&2
+  echo "Run tools/scripts/build_map.sh first." >&2
+  exit 1
+fi
 if ! find "$CDN_MAP_ASSETS_DIR" -maxdepth 1 -type f -name 'fishystuff_ui_bevy.*.js' | grep -q .; then
   echo "required CDN map runtime bundle missing under $CDN_MAP_ASSETS_DIR" >&2
   echo "Run tools/scripts/build_map.sh first." >&2

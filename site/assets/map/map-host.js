@@ -925,31 +925,37 @@ export function resolveMapRuntimeBaseUrl(
   return `${resolveCdnBaseUrl(locationLike, explicitBaseUrl)}/map/`;
 }
 
+function normalizeMapRuntimeManifestCacheKey(cacheKey) {
+  const normalized = String(cacheKey ?? "").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 export function resolveMapRuntimeManifestUrl(
   locationLike = globalThis.location,
-  cacheKey = runtimeConfigValue("mapAssetCacheKey") || Date.now(),
+  cacheKey = runtimeConfigValue("mapAssetCacheKey"),
   explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
 ) {
-  const manifestUrl = new URL("runtime-manifest.json", resolveMapRuntimeBaseUrl(locationLike, explicitBaseUrl));
-  if (cacheKey != null) {
-    manifestUrl.searchParams.set("v", String(cacheKey));
-  }
-  return manifestUrl.toString();
+  const normalizedCacheKey = normalizeMapRuntimeManifestCacheKey(cacheKey);
+  const manifestFileName = normalizedCacheKey
+    ? `runtime-manifest.${normalizedCacheKey}.json`
+    : "runtime-manifest.json";
+  return new URL(manifestFileName, resolveMapRuntimeBaseUrl(locationLike, explicitBaseUrl)).toString();
 }
 
 async function loadMapRuntimeManifest({
   locationLike = globalThis.location,
   cdnBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
-  cacheKey = runtimeConfigValue("mapAssetCacheKey") || Date.now(),
+  cacheKey = runtimeConfigValue("mapAssetCacheKey"),
   fetchImpl = globalThis.fetch?.bind(globalThis),
 } = {}) {
   if (typeof fetchImpl !== "function") {
     throw new Error("FishyMapBridge requires fetch() to load the runtime manifest");
   }
   const manifestUrl = resolveMapRuntimeManifestUrl(locationLike, cacheKey, cdnBaseUrl);
-  const response = await fetchImpl(manifestUrl, {
-    cache: typeof cacheKey === "string" && cacheKey.trim() ? "force-cache" : "no-store",
-  });
+  const response = await fetchImpl(manifestUrl, { cache: "no-store" });
   if (!response?.ok) {
     throw new Error(`failed to load map runtime manifest: ${manifestUrl} (${response?.status || "unknown"})`);
   }
@@ -969,8 +975,7 @@ async function loadMapRuntimeModule(options = {}) {
   const { moduleUrl } = await loadMapRuntimeManifest({
     locationLike: options.locationLike ?? globalThis.location,
     cdnBaseUrl: options.cdnBaseUrl,
-    cacheKey:
-      options.runtimeManifestCacheKey ?? (runtimeConfigValue("mapAssetCacheKey") || Date.now()),
+    cacheKey: options.runtimeManifestCacheKey ?? runtimeConfigValue("mapAssetCacheKey"),
     fetchImpl: options.fetchImpl ?? globalThis.fetch?.bind(globalThis),
   });
   return import(moduleUrl);

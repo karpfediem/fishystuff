@@ -1315,10 +1315,18 @@ test("runtime manifest URL is cache-busted against the CDN base", () => {
       123,
       "http://127.0.0.1:4040",
     ),
-    "http://localhost:4040/map/runtime-manifest.json?v=123",
+    "http://localhost:4040/map/runtime-manifest.123.json",
   );
   assert.equal(
     resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, "deploy-456"),
-    "https://cdn.fishystuff.fish/map/runtime-manifest.json?v=deploy-456",
+    "https://cdn.fishystuff.fish/map/runtime-manifest.deploy-456.json",
+  );
+  assert.equal(
+    resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, "  release / candidate  "),
+    "https://cdn.fishystuff.fish/map/runtime-manifest.release-candidate.json",
+  );
+  assert.equal(
+    resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, ""),
+    "https://cdn.fishystuff.fish/map/runtime-manifest.json",
   );
 });

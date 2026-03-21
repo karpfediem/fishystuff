@@ -8,8 +8,28 @@ cd "$ROOT_DIR"
 export CARGO_HOME
 export RUSTFLAGS='--cfg getrandom_backend="wasm_js"'
 
+resolve_map_runtime_manifest_cache_key() {
+  local cache_key="${FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY:-}"
+  if [ -z "$cache_key" ]; then
+    if git -C "$ROOT_DIR" rev-parse HEAD >/dev/null 2>&1; then
+      cache_key="$(git -C "$ROOT_DIR" rev-parse --short=16 HEAD)"
+    else
+      cache_key="$(date -u +%Y%m%dT%H%M%SZ)"
+    fi
+  fi
+
+  cache_key="$(printf '%s' "$cache_key" | tr -cs 'A-Za-z0-9._-' '-' | sed -E 's/^-+//; s/-+$//')"
+  if [ -z "$cache_key" ]; then
+    cache_key="$(date -u +%Y%m%dT%H%M%SZ)"
+  fi
+
+  printf '%s\n' "$cache_key"
+}
+
 PROFILE="${FISHYSTUFF_WASM_PROFILE:-release}"
 MAP_RUNTIME_RETENTION_DAYS="${MAP_RUNTIME_RETENTION_DAYS:-14}"
+MAP_RUNTIME_MANIFEST_CACHE_KEY="$(resolve_map_runtime_manifest_cache_key)"
+MAP_RUNTIME_MANIFEST_FILE="runtime-manifest.${MAP_RUNTIME_MANIFEST_CACHE_KEY}.json"
 if [ "$PROFILE" = "release" ]; then
   cargo build --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ui_bevy --target wasm32-unknown-unknown --release
   WASM_INPUT="target/wasm32-unknown-unknown/release/fishystuff_ui_bevy.wasm"
@@ -48,7 +68,8 @@ WASM_BUNDLE_PATH="$CDN_MAP_ASSET_DIR/$WASM_BUNDLE_FILE"
 rm -f \
   "$CDN_MAP_ASSET_DIR/fishystuff_ui_bevy.js" \
   "$CDN_MAP_ASSET_DIR/fishystuff_ui_bevy_bg.wasm" \
-  "$CDN_MAP_ASSET_DIR/runtime-manifest.json"
+  "$CDN_MAP_ASSET_DIR/runtime-manifest.json" \
+  "$CDN_MAP_ASSET_DIR/$MAP_RUNTIME_MANIFEST_FILE"
 
 cp -f "$WASM_BUNDLE_INPUT" "$WASM_BUNDLE_PATH"
 
@@ -63,18 +84,23 @@ JS_BUNDLE_PATH="$CDN_MAP_ASSET_DIR/$JS_BUNDLE_FILE"
 
 cp -f "$JS_BUNDLE_PATCHED_INPUT" "$JS_BUNDLE_PATH"
 
-cat > "$CDN_MAP_ASSET_DIR/runtime-manifest.json" <<EOF
+manifest_payload="$(cat <<EOF
 {
   "generated_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "module": "${JS_BUNDLE_FILE}",
   "wasm": "${WASM_BUNDLE_FILE}"
 }
 EOF
+)"
+
+printf '%s\n' "$manifest_payload" > "$CDN_MAP_ASSET_DIR/runtime-manifest.json"
+printf '%s\n' "$manifest_payload" > "$CDN_MAP_ASSET_DIR/$MAP_RUNTIME_MANIFEST_FILE"
 
 find "$CDN_MAP_ASSET_DIR" -maxdepth 1 -type f \
-  \( -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy_bg.*.wasm' \) \
+  \( -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy_bg.*.wasm' -o -name 'runtime-manifest.*.json' \) \
   ! -name "$JS_BUNDLE_FILE" \
   ! -name "$WASM_BUNDLE_FILE" \
+  ! -name "$MAP_RUNTIME_MANIFEST_FILE" \
   -mtime +"$MAP_RUNTIME_RETENTION_DAYS" \
   -delete
 

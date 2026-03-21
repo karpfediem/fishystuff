@@ -158,6 +158,15 @@ list_required_files_under_root() {
     exit 1
   fi
 
+  while IFS= read -r manifest_file; do
+    [ -n "$manifest_file" ] || continue
+    printf 'map/%s\n' "$(basename "$manifest_file")" >> "$out_file"
+  done < <(
+    find "$CDN_ROOT/map" -maxdepth 1 -type f \
+      \( -name 'runtime-manifest.json' -o -name 'runtime-manifest.*.json' \) \
+      -print |
+      LC_ALL=C sort
+  )
   printf 'map/%s\n' "$module_path" >> "$out_file"
   printf 'map/%s\n' "$wasm_path" >> "$out_file"
   LC_ALL=C sort -u -o "$out_file" "$out_file"
@@ -481,7 +490,7 @@ echo "selected CDN roots:" >&2
 sed 's/^/  - /' "$sync_roots_file" >&2
 if [ -s "$upload_paths_file" ]; then
   awk '
-    $0 == "map/runtime-manifest.json" {
+    $0 ~ /^map\/runtime-manifest(\.[^/]+)?\.json$/ {
       print > deferred
       next
     }
