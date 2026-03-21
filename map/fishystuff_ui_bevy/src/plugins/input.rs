@@ -252,7 +252,7 @@ fn update_map2d_camera_controls(
         }
     }
 
-    if !ui_input_blocked {
+    if !ui_input_blocked && touch_recent {
         match active_touches.as_slice() {
             [touch] => {
                 let was_pinch = touch_gesture.active_pinch_ids.is_some();
@@ -372,6 +372,8 @@ fn update_map2d_camera_controls(
                 touch_gesture.reset();
             }
         }
+    } else if active_touches.is_empty() {
+        touch_gesture.reset();
     }
 
     if changed {
