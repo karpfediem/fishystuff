@@ -5,8 +5,6 @@ mod util;
 mod zone_profile_v2;
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -32,7 +30,6 @@ use fishystuff_api::models::zone_stats::{
 use fishystuff_api::models::zones::ZoneEntry;
 use fishystuff_api::version::API_VERSION;
 use fishystuff_core::constants::{MAP_HEIGHT, MAP_WIDTH};
-use fishystuff_core::masks::ZoneMask;
 use fishystuff_core::prob::js_divergence;
 use fishystuff_core::tile::tile_dimensions;
 use mysql::prelude::Queryable;
@@ -83,8 +80,6 @@ const DOLT_TCP_USER_TIMEOUT_MS: u32 = 10_000;
 pub struct DoltMySqlStore {
     pool: Pool,
     defaults: MetaDefaults,
-    zone_mask: Option<Arc<ZoneMask>>,
-    zone_mask_warning: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -223,11 +218,7 @@ impl QueryParams {
 }
 
 impl DoltMySqlStore {
-    pub fn new(
-        database_url: String,
-        defaults: MetaDefaults,
-        images_dir: PathBuf,
-    ) -> AppResult<Self> {
+    pub fn new(database_url: String, defaults: MetaDefaults) -> AppResult<Self> {
         let opts = Opts::from_url(&database_url).map_err(db_unavailable)?;
         let constraints =
             PoolConstraints::new(DOLT_POOL_MIN_CONNECTIONS, DOLT_POOL_MAX_CONNECTIONS)
@@ -250,23 +241,7 @@ impl DoltMySqlStore {
             builder = builder.tcp_user_timeout_ms(Some(DOLT_TCP_USER_TIMEOUT_MS));
         }
         let pool = Pool::new(builder).map_err(db_unavailable)?;
-        let zone_mask_path = images_dir.join("zones_mask_v1.png");
-        let (zone_mask, zone_mask_warning) = match ZoneMask::load_png(&zone_mask_path) {
-            Ok(mask) => (Some(Arc::new(mask)), None),
-            Err(err) => (
-                None,
-                Some(format!(
-                    "zone mask unavailable for local border classification: {} ({err})",
-                    zone_mask_path.display()
-                )),
-            ),
-        };
-        Ok(Self {
-            pool,
-            defaults,
-            zone_mask,
-            zone_mask_warning,
-        })
+        Ok(Self { pool, defaults })
     }
 
     fn query_patches(&self) -> AppResult<Vec<PatchInfo>> {

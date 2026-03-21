@@ -1,4 +1,3 @@
-mod assignment;
 mod community_support;
 mod legacy_support;
 mod response;
@@ -15,7 +14,6 @@ use crate::error::{AppError, AppResult};
 use crate::store::FishLang;
 
 use super::{DoltMySqlStore, QueryParams};
-use assignment::compute_zone_assignment;
 use response::build_zone_profile_v2_response;
 
 impl DoltMySqlStore {
@@ -74,23 +72,13 @@ impl DoltMySqlStore {
         )?;
         let community_support =
             self.query_community_zone_support(zone_rgb_u32, request.ref_id.as_deref())?;
-        let assignment = compute_zone_assignment(
-            zone_rgb_u32,
-            request.rgb.clone(),
-            zone_stats.zone_name.clone(),
-            request.map_px_x,
-            request.map_px_y,
-            self.zone_mask.as_deref(),
-            self.zone_mask_warning.as_deref(),
-            &zones,
-        );
 
         Ok(build_zone_profile_v2_response(
-            assignment,
+            &request,
+            &layer_revision_id,
             zone_stats,
             legacy_support,
             community_support,
-            &layer_revision_id,
         ))
     }
 }

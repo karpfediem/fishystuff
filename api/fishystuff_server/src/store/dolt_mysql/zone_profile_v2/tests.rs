@@ -1,72 +1,50 @@
-use std::collections::HashMap;
-
-use fishystuff_api::ids::{Rgb, RgbKey};
+use fishystuff_api::ids::RgbKey;
 use fishystuff_api::models::zone_profile_v2::{
-    ZoneAssignment, ZoneBorderAssessment, ZoneBorderClass, ZoneBorderMethod, ZoneClaimType,
-    ZoneMetricAvailability, ZonePresenceState, ZonePublicState, ZoneRankingStatus,
-    ZoneSourceFamily, ZoneSupportGrade,
+    ZoneBorderClass, ZoneClaimType, ZoneMetricAvailability, ZonePresenceState,
+    ZoneProfileV2Request, ZonePublicState, ZoneRankingStatus, ZoneSourceFamily, ZoneSupportGrade,
 };
 use fishystuff_api::models::zone_stats::{
     ZoneConfidence, ZoneFishEvidence, ZoneStatsResponse, ZoneStatsWindow, ZoneStatus,
 };
-use fishystuff_api::models::zones::ZoneEntry;
-use fishystuff_core::masks::ZoneMask;
 
 use crate::store::queries;
 
-use super::assignment::compute_zone_assignment;
 use super::community_support::{
     CommunitySupportStatus, CommunityZoneFishSupport, CommunityZoneSupportSummary,
 };
 use super::legacy_support::{LegacyZoneFishSupport, LegacyZoneSupportSummary};
 use super::response::build_zone_profile_v2_response;
 
-fn default_assignment() -> ZoneAssignment {
-    ZoneAssignment {
-        zone_rgb_u32: 0x010203,
-        zone_rgb: RgbKey("1,2,3".to_string()),
-        zone_name: Some("Test Zone".to_string()),
-        point: None,
-        border: ZoneBorderAssessment {
-            class: ZoneBorderClass::Unavailable,
-            nearest_border_distance_px: None,
-            method: ZoneBorderMethod::Unavailable,
-            warnings: vec!["point coordinates were not provided".to_string()],
-        },
-        neighboring_zones: Vec::new(),
+fn zone_profile_request() -> ZoneProfileV2Request {
+    ZoneProfileV2Request {
+        layer_revision_id: None,
+        layer_id: None,
+        patch_id: None,
+        at_ts_utc: None,
+        map_version_id: None,
+        rgb: RgbKey("1,2,3".to_string()),
+        map_px_x: None,
+        map_px_y: None,
+        from_ts_utc: 1_700_000_000,
+        to_ts_utc: 1_700_086_400,
+        tile_px: 32,
+        sigma_tiles: 3.0,
+        fish_norm: false,
+        alpha0: 1.0,
+        top_k: 30,
+        half_life_days: None,
+        drift_boundary_ts_utc: None,
+        ref_id: None,
+        lang: None,
     }
-}
-
-fn zone_entries(entries: &[(u32, &str)]) -> HashMap<u32, ZoneEntry> {
-    entries
-        .iter()
-        .map(|(rgb_u32, name)| {
-            let rgb = Rgb::from_u32(*rgb_u32);
-            (
-                *rgb_u32,
-                ZoneEntry {
-                    rgb_u32: *rgb_u32,
-                    rgb,
-                    rgb_key: rgb.key(),
-                    name: Some((*name).to_string()),
-                },
-            )
-        })
-        .collect()
-}
-
-fn solid_mask_rgb(width: u32, height: u32, rgb: [u8; 3]) -> Vec<u8> {
-    let mut data = Vec::with_capacity((width * height * 3) as usize);
-    for _ in 0..(width * height) {
-        data.extend_from_slice(&rgb);
-    }
-    data
 }
 
 #[test]
 fn zone_profile_v2_marks_missing_ranking_evidence_as_insufficient() {
+    let request = zone_profile_request();
     let profile = build_zone_profile_v2_response(
-        default_assignment(),
+        &request,
+        "v1",
         ZoneStatsResponse {
             zone_rgb_u32: 0x010203,
             zone_rgb: RgbKey("1,2,3".to_string()),
@@ -85,7 +63,6 @@ fn zone_profile_v2_marks_missing_ranking_evidence_as_insufficient() {
         },
         LegacyZoneSupportSummary::default(),
         CommunityZoneSupportSummary::default(),
-        "v1",
     );
 
     assert_eq!(
@@ -115,8 +92,10 @@ fn zone_profile_v2_marks_missing_ranking_evidence_as_insufficient() {
 
 #[test]
 fn zone_profile_v2_keeps_ranking_support_separate_from_catch_rates() {
+    let request = zone_profile_request();
     let profile = build_zone_profile_v2_response(
-        default_assignment(),
+        &request,
+        "v1",
         ZoneStatsResponse {
             zone_rgb_u32: 0x010203,
             zone_rgb: RgbKey("1,2,3".to_string()),
@@ -145,7 +124,6 @@ fn zone_profile_v2_keeps_ranking_support_separate_from_catch_rates() {
         },
         LegacyZoneSupportSummary::default(),
         CommunityZoneSupportSummary::default(),
-        "v1",
     );
 
     assert_eq!(
@@ -180,8 +158,10 @@ fn zone_profile_v2_keeps_ranking_support_separate_from_catch_rates() {
 
 #[test]
 fn zone_profile_v2_merges_legacy_reference_support_without_blurring_ranking() {
+    let request = zone_profile_request();
     let profile = build_zone_profile_v2_response(
-        default_assignment(),
+        &request,
+        "v1",
         ZoneStatsResponse {
             zone_rgb_u32: 0x010203,
             zone_rgb: RgbKey("1,2,3".to_string()),
@@ -210,7 +190,6 @@ fn zone_profile_v2_merges_legacy_reference_support_without_blurring_ranking() {
             notes: vec!["legacy support evaluated".to_string()],
         },
         CommunityZoneSupportSummary::default(),
-        "v1",
     );
 
     assert_eq!(profile.presence_support.state, ZonePresenceState::Supported);
@@ -242,8 +221,10 @@ fn zone_profile_v2_merges_legacy_reference_support_without_blurring_ranking() {
 
 #[test]
 fn zone_profile_v2_keeps_ranking_and_legacy_claims_separate_for_same_fish() {
+    let request = zone_profile_request();
     let profile = build_zone_profile_v2_response(
-        default_assignment(),
+        &request,
+        "v1",
         ZoneStatsResponse {
             zone_rgb_u32: 0x010203,
             zone_rgb: RgbKey("1,2,3".to_string()),
@@ -282,7 +263,6 @@ fn zone_profile_v2_keeps_ranking_and_legacy_claims_separate_for_same_fish() {
             notes: Vec::new(),
         },
         CommunityZoneSupportSummary::default(),
-        "v1",
     );
 
     assert_eq!(profile.presence_support.fish.len(), 1);
@@ -321,8 +301,10 @@ fn ranking_events_query_is_source_filtered() {
 
 #[test]
 fn zone_profile_v2_merges_confirmed_community_support_without_blurring_ranking() {
+    let request = zone_profile_request();
     let profile = build_zone_profile_v2_response(
-        default_assignment(),
+        &request,
+        "v1",
         ZoneStatsResponse {
             zone_rgb_u32: 0x010203,
             zone_rgb: RgbKey("1,2,3".to_string()),
@@ -350,7 +332,6 @@ fn zone_profile_v2_merges_confirmed_community_support_without_blurring_ranking()
             }],
             notes: vec!["community support evaluated".to_string()],
         },
-        "v1",
     );
 
     assert_eq!(profile.presence_support.state, ZonePresenceState::Supported);
@@ -376,8 +357,10 @@ fn zone_profile_v2_merges_confirmed_community_support_without_blurring_ranking()
 
 #[test]
 fn zone_profile_v2_maps_unconfirmed_community_rows_to_weak_hint() {
+    let request = zone_profile_request();
     let profile = build_zone_profile_v2_response(
-        default_assignment(),
+        &request,
+        "v1",
         ZoneStatsResponse {
             zone_rgb_u32: 0x010203,
             zone_rgb: RgbKey("1,2,3".to_string()),
@@ -405,7 +388,6 @@ fn zone_profile_v2_maps_unconfirmed_community_rows_to_weak_hint() {
             }],
             notes: Vec::new(),
         },
-        "v1",
     );
 
     assert_eq!(profile.presence_support.fish.len(), 1);
@@ -421,121 +403,4 @@ fn zone_profile_v2_maps_unconfirmed_community_rows_to_weak_hint() {
         .confidence_note
         .as_deref()
         .is_some_and(|note| note.contains("unconfirmed")));
-}
-
-#[test]
-fn zone_profile_assignment_marks_core_when_no_neighbor_zone_is_seen() {
-    let target = 0x010203;
-    let mask = ZoneMask::from_rgb(5, 5, solid_mask_rgb(5, 5, [1, 2, 3])).expect("mask");
-    let assignment = compute_zone_assignment(
-        target,
-        Rgb::from_u32(target).key(),
-        Some("Core Zone".to_string()),
-        Some(2),
-        Some(2),
-        Some(&mask),
-        None,
-        &zone_entries(&[(target, "Core Zone")]),
-    );
-
-    assert_eq!(assignment.border.class, ZoneBorderClass::Core);
-    assert_eq!(
-        assignment.border.method,
-        ZoneBorderMethod::LocalNeighborhood
-    );
-    assert!(assignment.neighboring_zones.is_empty());
-    assert!(assignment.border.nearest_border_distance_px.is_none());
-}
-
-#[test]
-fn zone_profile_assignment_marks_near_border_with_single_neighbor() {
-    let target = 0x010203;
-    let neighbor = 0x040506;
-    let mut data = solid_mask_rgb(5, 5, [1, 2, 3]);
-    let idx = (2 * 5 + 3) * 3;
-    data[idx] = 4;
-    data[idx + 1] = 5;
-    data[idx + 2] = 6;
-    let mask = ZoneMask::from_rgb(5, 5, data).expect("mask");
-
-    let assignment = compute_zone_assignment(
-        target,
-        Rgb::from_u32(target).key(),
-        Some("Target Zone".to_string()),
-        Some(2),
-        Some(2),
-        Some(&mask),
-        None,
-        &zone_entries(&[(target, "Target Zone"), (neighbor, "Neighbor Zone")]),
-    );
-
-    assert_eq!(assignment.border.class, ZoneBorderClass::NearBorder);
-    assert_eq!(
-        assignment.border.method,
-        ZoneBorderMethod::LocalNeighborhood
-    );
-    assert_eq!(assignment.neighboring_zones.len(), 1);
-    assert_eq!(assignment.neighboring_zones[0].zone_rgb_u32, neighbor);
-}
-
-#[test]
-fn zone_profile_assignment_marks_ambiguous_when_point_samples_different_zone() {
-    let target = 0x010203;
-    let center = 0x040506;
-    let mut data = solid_mask_rgb(5, 5, [1, 2, 3]);
-    let idx = (2 * 5 + 2) * 3;
-    data[idx] = 4;
-    data[idx + 1] = 5;
-    data[idx + 2] = 6;
-    let mask = ZoneMask::from_rgb(5, 5, data).expect("mask");
-
-    let assignment = compute_zone_assignment(
-        target,
-        Rgb::from_u32(target).key(),
-        Some("Target Zone".to_string()),
-        Some(2),
-        Some(2),
-        Some(&mask),
-        None,
-        &zone_entries(&[(target, "Target Zone"), (center, "Center Zone")]),
-    );
-
-    assert_eq!(assignment.border.class, ZoneBorderClass::Ambiguous);
-    assert_eq!(
-        assignment.border.method,
-        ZoneBorderMethod::LocalNeighborhood
-    );
-    assert_eq!(assignment.neighboring_zones[0].zone_rgb_u32, center);
-    assert!(assignment
-        .border
-        .warnings
-        .iter()
-        .any(|warning| warning.contains("samples zone RGB")));
-}
-
-#[test]
-fn zone_profile_assignment_keeps_terrain_named_neighbors_when_present_in_mask() {
-    let target = 0x010203;
-    let terrain = 0x3c3c96;
-    let mut data = solid_mask_rgb(5, 5, [1, 2, 3]);
-    let idx = (2 * 5 + 3) * 3;
-    data[idx] = 60;
-    data[idx + 1] = 60;
-    data[idx + 2] = 150;
-    let mask = ZoneMask::from_rgb(5, 5, data).expect("mask");
-
-    let assignment = compute_zone_assignment(
-        target,
-        Rgb::from_u32(target).key(),
-        Some("Target Zone".to_string()),
-        Some(2),
-        Some(2),
-        Some(&mask),
-        None,
-        &zone_entries(&[(target, "Target Zone"), (terrain, "Calpheon - Terrain")]),
-    );
-
-    assert_eq!(assignment.border.class, ZoneBorderClass::NearBorder);
-    assert_eq!(assignment.neighboring_zones.len(), 1);
-    assert_eq!(assignment.neighboring_zones[0].zone_rgb_u32, terrain);
 }

@@ -777,7 +777,7 @@ Status after first additive slice:
 
 - partially completed
 - ranking-backed `presence_support`, `ranking_evidence`, and `diagnostics` are now wired
-- `assignment.border` remains an explicit unavailable placeholder when point coordinates are absent or the zone mask runtime asset is unavailable
+- `assignment.border` remains an explicit unavailable placeholder
 - `catch_rates` remains an explicit pending-source placeholder
 
 ### Phase 3
@@ -793,8 +793,7 @@ Status after the current additive slice:
 - `presence_support` now merges ranking observations with legacy fishing-table support resolved through `fishing_table -> item_main_group_table -> item_sub_group_table`
 - community-backed support is now wired through a dedicated `community_zone_fish_support` runtime table and merged into `presence_support` as source-scoped claims
 - if the community support table is missing or present-but-empty, the API still reports the community layer as unavailable rather than implying absence
-- point-level border classification now uses local zone-mask neighborhood sampling when click coordinates are provided
-- exact border distance remains unimplemented and is intentionally reported as unavailable rather than estimated
+- point-level border classification is still placeholder
 
 ### Phase 4
 
@@ -885,12 +884,11 @@ No current schema or ingestion path was found.
 
 ### Whether border distance can be computed from currently available assets
 
-Partially.
+Feasible, but not currently implemented.
 
 - assets exist locally
 - exact mask RGB sampling code exists
-- local-neighborhood border classification is now implemented from the cached zone mask asset
-- no distance-transform or nearest-boundary primitive currently exists, so exact border distance is still unavailable
+- no distance-transform or nearest-boundary primitive currently exists
 
 ## Implemented first additive slice
 
@@ -913,7 +911,6 @@ This repo now includes the first additive `zone_profile_v2` slice:
 6. legacy-backed `presence_support` claims resolved from the current Dolt runtime tables rather than from workbook parsing in the API path
 7. community-backed `presence_support` claims resolved from a dedicated imported runtime table rather than from workbook parsing in the API path
 8. store-side v2 profile composition moved under `api/fishystuff_server/src/store/dolt_mysql/zone_profile_v2/` so future work does not accumulate inside `dolt_mysql.rs`
-9. point-level border classification now uses cached `zones_mask_v1.png` neighborhood sampling for `core | near_border | ambiguous | unavailable`
 
 ### Fully implemented in this slice
 
@@ -923,12 +920,12 @@ This repo now includes the first additive `zone_profile_v2` slice:
 - community-backed `presence_support` claims from `community_zone_fish_support` when that table is populated
 - ranking-backed `ranking_evidence`
 - explicit typed `catch_rates` placeholder
-- explicit typed `assignment.border` classification from local mask-neighborhood sampling when point coordinates are available
+- explicit typed `assignment.border` unavailable placeholder
 - diagnostics notes that separate ranking evidence, assignment ambiguity, and catch-rate estimation
 
 ### Still placeholder in this slice
 
-- exact point-level border distance
+- point-level border distance and neighbor inference
 - live-populated community support data in the current runtime
 - player-log catch-rate summaries
 - border stress metrics and overlays
