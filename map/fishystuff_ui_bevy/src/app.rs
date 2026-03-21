@@ -30,11 +30,6 @@ use crate::bridge::host::BrowserBridgePlugin;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::map::terrain::runtime::Terrain3dPlugin;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::plugins::api::{
-    ApiBootstrapState, FishCatalog, FishFilterState, MapDisplayState, PatchFilterState,
-    RemoteImageCache, RemoteImageEpoch,
-};
-#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::bookmarks::BookmarksPlugin;
 #[cfg(target_arch = "wasm32")]
 use crate::plugins::camera::initial_resolution;
@@ -43,13 +38,13 @@ use crate::plugins::points::PointsPlugin;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::raster::RasterPlugin;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::plugins::ui::UiPointerCapture;
+use crate::plugins::ui::{UiFonts, UiPointerCapture};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::vector_layers::VectorLayersPlugin;
 #[cfg(target_arch = "wasm32")]
 use crate::plugins::FishystuffPlugins;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::plugins::{camera::CameraPlugin, input::InputPlugin};
+use crate::plugins::{api::ApiPlugin, camera::CameraPlugin, input::InputPlugin};
 #[cfg(target_arch = "wasm32")]
 use bevy::asset::io::web::WebAssetPlugin;
 
@@ -114,13 +109,8 @@ pub fn build_native_app(options: &NativeAppOptions) -> App {
         build_windowed_native_app(options)
     };
     app.init_resource::<UiPointerCapture>()
-        .init_resource::<ApiBootstrapState>()
-        .init_resource::<PatchFilterState>()
-        .init_resource::<FishFilterState>()
-        .init_resource::<MapDisplayState>()
-        .init_resource::<FishCatalog>()
-        .init_resource::<RemoteImageCache>()
-        .init_resource::<RemoteImageEpoch>()
+        .init_resource::<UiFonts>()
+        .add_plugins(ApiPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(Terrain3dPlugin)
         .add_plugins(InputPlugin)

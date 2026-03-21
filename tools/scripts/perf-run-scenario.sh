@@ -9,6 +9,12 @@ fi
 scenario="$1"
 output="${2:-target/perf/${scenario}.json}"
 trace_path="${PERF_TRACE_CHROME_PATH:-}"
+frames="${PERF_FRAMES:-}"
+seconds="${PERF_SECONDS:-}"
+warmup_frames="${PERF_WARMUP_FRAMES:-}"
+fixture_root="${PERF_FIXTURE_ROOT:-}"
+window_width="${PERF_WINDOW_WIDTH:-}"
+window_height="${PERF_WINDOW_HEIGHT:-}"
 
 mkdir -p "$(dirname "$output")"
 
@@ -22,6 +28,35 @@ cmd=(
   --output "$output"
   --headless
 )
+
+if [ -n "$frames" ] && [ -n "$seconds" ]; then
+  echo "PERF_FRAMES and PERF_SECONDS are mutually exclusive" >&2
+  exit 2
+fi
+
+if [ -n "$frames" ]; then
+  cmd+=(--frames "$frames")
+fi
+
+if [ -n "$seconds" ]; then
+  cmd+=(--seconds "$seconds")
+fi
+
+if [ -n "$warmup_frames" ]; then
+  cmd+=(--warmup-frames "$warmup_frames")
+fi
+
+if [ -n "$fixture_root" ]; then
+  cmd+=(--fixture-root "$fixture_root")
+fi
+
+if [ -n "$window_width" ]; then
+  cmd+=(--window-width "$window_width")
+fi
+
+if [ -n "$window_height" ]; then
+  cmd+=(--window-height "$window_height")
+fi
 
 if [ -n "$trace_path" ]; then
   mkdir -p "$(dirname "$trace_path")"

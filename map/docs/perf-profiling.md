@@ -16,6 +16,10 @@
 - Fixture sizes are intentionally small enough to keep runs repeatable while still exercising raster, vector, terrain, and event workloads.
 
 ## Native harness
+- Canonical baseline scenario:
+  ```bash
+  PERF_WARMUP_FRAMES=0 tools/scripts/perf-run-scenario.sh load_map
+  ```
 - Run one scenario:
   ```bash
   tools/scripts/perf-run-scenario.sh raster_2d_pan_zoom
@@ -30,6 +34,14 @@
     tools/scripts/perf-run-scenario.sh terrain3d_enter_and_orbit
   ```
 - The wrapper uses local `cargo`/`xvfb-run` when they are already on `PATH` and otherwise falls back to `devenv shell`.
+- `load_map` is the simplest scenario and is the recommended canonical baseline when you want to measure the plain startup/load path before comparing more behavior-heavy scenarios.
+- `tools/scripts/perf-run-scenario.sh` also accepts optional environment overrides:
+  - `PERF_FRAMES`
+  - `PERF_SECONDS`
+  - `PERF_WARMUP_FRAMES`
+  - `PERF_FIXTURE_ROOT`
+  - `PERF_WINDOW_WIDTH`
+  - `PERF_WINDOW_HEIGHT`
 
 ## Report artifacts
 - Default scenario reports land under `target/perf/<scenario>.json`.

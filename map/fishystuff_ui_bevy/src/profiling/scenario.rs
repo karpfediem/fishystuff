@@ -15,6 +15,8 @@ const MAP_CENTER: f32 = 1024.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum ScenarioName {
+    #[value(name = "load_map")]
+    LoadMap,
     #[value(name = "raster_2d_pan_zoom")]
     Raster2dPanZoom,
     #[value(name = "points_overlay_filtering")]
@@ -30,6 +32,7 @@ pub enum ScenarioName {
 impl ScenarioName {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::LoadMap => "load_map",
             Self::Raster2dPanZoom => "raster_2d_pan_zoom",
             Self::PointsOverlayFiltering => "points_overlay_filtering",
             Self::VectorRegionGroupsEnable => "vector_region_groups_enable",
@@ -40,6 +43,7 @@ impl ScenarioName {
 
     pub fn default_frames(self) -> u64 {
         match self {
+            Self::LoadMap => 240,
             Self::Raster2dPanZoom => 600,
             Self::PointsOverlayFiltering => 600,
             Self::VectorRegionGroupsEnable => 480,
@@ -51,6 +55,12 @@ impl ScenarioName {
     pub fn apply(self, world: &mut World, frame: u64, total_frames: u64) {
         let total_frames = total_frames.max(1);
         match self {
+            Self::LoadMap => {
+                let _ = frame;
+                let _ = total_frames;
+                configure_common_layers(world, false, false);
+                set_map_2d_view(world, MAP_CENTER, MAP_CENTER, 1.0);
+            }
             Self::Raster2dPanZoom => {
                 configure_common_layers(world, false, false);
                 let progress = frame as f32 / total_frames as f32;
