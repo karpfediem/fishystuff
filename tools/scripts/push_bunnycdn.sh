@@ -121,6 +121,48 @@ list_local_files_under_root() {
     LC_ALL=C sort > "$out_file"
 }
 
+list_required_files_under_root() {
+  local root="$1"
+  local out_file="$2"
+  local manifest_path
+  local module_path
+  local wasm_path
+
+  if [ "$root" != "map" ]; then
+    list_local_files_under_root "$root" "$out_file"
+    return 0
+  fi
+
+  : > "$out_file"
+  list_local_files_under_root "$root" "$local_root_files_file"
+
+  awk '
+    {
+      if ($0 !~ /(^|\/)[^/]+\.[[:xdigit:]]{8,}\.[[:alnum:]]+$/) {
+        print $0
+      }
+    }
+  ' "$local_root_files_file" >> "$out_file"
+
+  manifest_path="$CDN_ROOT/map/runtime-manifest.json"
+  if [ ! -f "$manifest_path" ]; then
+    echo "required map manifest is missing: $manifest_path" >&2
+    exit 1
+  fi
+
+  module_path="$(jq -r '.module // empty' "$manifest_path")"
+  wasm_path="$(jq -r '.wasm // empty' "$manifest_path")"
+
+  if [ -z "$module_path" ] || [ -z "$wasm_path" ]; then
+    echo "runtime-manifest.json is missing module/wasm entries" >&2
+    exit 1
+  fi
+
+  printf 'map/%s\n' "$module_path" >> "$out_file"
+  printf 'map/%s\n' "$wasm_path" >> "$out_file"
+  LC_ALL=C sort -u -o "$out_file" "$out_file"
+}
+
 http_list_dir() {
   local remote_dir="$1"
   local out_file="$2"
@@ -278,9 +320,15 @@ current_manifest_file="$(mktemp)"
 changed_paths_file="$(mktemp)"
 sync_roots_file="$(mktemp)"
 upload_paths_file="$(mktemp)"
+required_local_files_file="$(mktemp)"
+selected_local_files_file="$(mktemp)"
+selected_remote_files_file="$(mktemp)"
+missing_remote_files_file="$(mktemp)"
+mutable_changed_files_file="$(mktemp)"
 local_root_files_file="$(mktemp)"
 remote_root_files_file="$(mktemp)"
 stale_remote_files_file="$(mktemp)"
+next_state_file="$(mktemp)"
 
 cleanup_tmp_files() {
   rm -f \
@@ -288,13 +336,44 @@ cleanup_tmp_files() {
     "$changed_paths_file" \
     "$sync_roots_file" \
     "$upload_paths_file" \
+    "$required_local_files_file" \
+    "$selected_local_files_file" \
+    "$selected_remote_files_file" \
+    "$missing_remote_files_file" \
+    "$mutable_changed_files_file" \
     "$local_root_files_file" \
     "$remote_root_files_file" \
-    "$stale_remote_files_file"
+    "$stale_remote_files_file" \
+    "$next_state_file"
 }
 trap cleanup_tmp_files EXIT
 
 build_manifest > "$current_manifest_file"
+
+if [ -f "$STATE_FILE" ]; then
+  awk -F '\t' '
+    NR == FNR {
+      old[$1] = $0
+      next
+    }
+    {
+      current[$1] = $0
+      if (!($1 in old) || old[$1] != $0) {
+        print $1
+      }
+    }
+    END {
+      for (path in old) {
+        if (!(path in current)) {
+          print path
+        }
+      }
+    }
+  ' "$STATE_FILE" "$current_manifest_file" |
+    LC_ALL=C sort -u > "$changed_paths_file"
+else
+  cut -f1 "$current_manifest_file" > "$changed_paths_file"
+fi
 
 if [ -n "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
   printf '%s\n' "$EXPLICIT_SYNC_ROOTS_RAW" |
@@ -303,31 +382,6 @@ if [ -n "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
     awk 'NF > 0' |
     LC_ALL=C sort -u > "$sync_roots_file"
 else
-  if [ -f "$STATE_FILE" ]; then
-    awk -F '\t' '
-      NR == FNR {
-        old[$1] = $0
-        next
-      }
-      {
-        current[$1] = $0
-        if (!($1 in old) || old[$1] != $0) {
-          print $1
-        }
-      }
-      END {
-        for (path in old) {
-          if (!(path in current)) {
-            print path
-          }
-        }
-      }
-    ' "$STATE_FILE" "$current_manifest_file" |
-      LC_ALL=C sort -u > "$changed_paths_file"
-  else
-    cut -f1 "$current_manifest_file" > "$changed_paths_file"
-  fi
-
   if [ ! -s "$changed_paths_file" ]; then
     echo "CDN payload unchanged; nothing to upload."
     exit 0
@@ -346,30 +400,78 @@ fi
 : > "$upload_paths_file"
 
 if [ -n "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
+  : > "$required_local_files_file"
+  : > "$selected_local_files_file"
+  : > "$selected_remote_files_file"
+
   while IFS= read -r sync_root; do
+    list_required_files_under_root "$sync_root" "$local_root_files_file"
+    cat "$local_root_files_file" >> "$required_local_files_file"
+
     list_local_files_under_root "$sync_root" "$local_root_files_file"
-    cat "$local_root_files_file" >> "$upload_paths_file"
+    cat "$local_root_files_file" >> "$selected_local_files_file"
+
+    list_remote_files_under_root "$sync_root" "$remote_root_files_file"
+    cat "$remote_root_files_file" >> "$selected_remote_files_file"
   done < "$sync_roots_file"
+
+  LC_ALL=C sort -u -o "$required_local_files_file" "$required_local_files_file"
+  LC_ALL=C sort -u -o "$selected_local_files_file" "$selected_local_files_file"
+  LC_ALL=C sort -u -o "$selected_remote_files_file" "$selected_remote_files_file"
+
+  comm -23 "$required_local_files_file" "$selected_remote_files_file" > "$missing_remote_files_file"
+
+  awk '
+    NR == FNR {
+      changed[$0] = 1
+      next
+    }
+    {
+      if ($0 in changed) {
+        print $0
+      }
+    }
+  ' "$changed_paths_file" "$required_local_files_file" |
+    awk '
+      NR == FNR {
+        remote[$0] = 1
+        next
+      }
+      {
+        if (!($0 in remote)) {
+          next
+        }
+        if ($0 ~ /(^|\/)[^/]+\.[[:xdigit:]]{8,}\.[[:alnum:]]+$/) {
+          next
+        }
+        print $0
+      }
+    ' "$selected_remote_files_file" - > "$mutable_changed_files_file"
+
+  cat "$missing_remote_files_file" "$mutable_changed_files_file" |
+    awk 'NF > 0' |
+    LC_ALL=C sort -u > "$upload_paths_file"
+
+  echo "explicit sync remote files: $(wc -l < "$selected_remote_files_file")" >&2
+  echo "explicit sync required local files: $(wc -l < "$required_local_files_file")" >&2
+  echo "explicit sync local files: $(wc -l < "$selected_local_files_file")" >&2
+  echo "explicit sync missing remote files: $(wc -l < "$missing_remote_files_file")" >&2
+  echo "explicit sync changed mutable files: $(wc -l < "$mutable_changed_files_file")" >&2
 else
   while IFS= read -r sync_root; do
-    if is_delete_root "$sync_root"; then
-      list_local_files_under_root "$sync_root" "$local_root_files_file"
-      cat "$local_root_files_file" >> "$upload_paths_file"
-    else
-      awk -v prefix="${sync_root}/" 'index($0, prefix) == 1 { print }' "$changed_paths_file" >> "$upload_paths_file"
-    fi
+    awk -v prefix="${sync_root}/" 'index($0, prefix) == 1 { print }' "$changed_paths_file" >> "$upload_paths_file"
   done < "$sync_roots_file"
-fi
 
-if [ -s "$upload_paths_file" ]; then
-  awk 'NF > 0' "$upload_paths_file" |
-    while IFS= read -r relative_path; do
-      if [ -f "$CDN_ROOT/$relative_path" ]; then
-        printf '%s\n' "$relative_path"
-      fi
-    done |
-    LC_ALL=C sort -u > "${upload_paths_file}.filtered"
-  mv "${upload_paths_file}.filtered" "$upload_paths_file"
+  if [ -s "$upload_paths_file" ]; then
+    awk 'NF > 0' "$upload_paths_file" |
+      while IFS= read -r relative_path; do
+        if [ -f "$CDN_ROOT/$relative_path" ]; then
+          printf '%s\n' "$relative_path"
+        fi
+      done |
+      LC_ALL=C sort -u > "${upload_paths_file}.filtered"
+    mv "${upload_paths_file}.filtered" "$upload_paths_file"
+  fi
 fi
 
 echo "selected CDN roots:" >&2
@@ -397,7 +499,49 @@ while IFS= read -r sync_root; do
   done < "$stale_remote_files_file"
 done < "$sync_roots_file"
 
-if [ -z "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
+if [ -n "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
+  if [ -f "$STATE_FILE" ]; then
+    awk -F '\t' '
+      NR == FNR {
+        roots[$1] = 1
+        next
+      }
+      {
+        path = $1
+        keep = 1
+        for (root in roots) {
+          if (index(path, root "/") == 1) {
+            keep = 0
+            break
+          }
+        }
+        if (keep) {
+          print $0
+        }
+      }
+    ' "$sync_roots_file" "$STATE_FILE" > "$next_state_file"
+  else
+    : > "$next_state_file"
+  fi
+
+  awk -F '\t' '
+    NR == FNR {
+      roots[$1] = 1
+      next
+    }
+    {
+      path = $1
+      for (root in roots) {
+        if (index(path, root "/") == 1) {
+          print $0
+          break
+        }
+      }
+    }
+  ' "$sync_roots_file" "$current_manifest_file" >> "$next_state_file"
+  LC_ALL=C sort -u -o "$next_state_file" "$next_state_file"
+  cp "$next_state_file" "$STATE_FILE"
+else
   cp "$current_manifest_file" "$STATE_FILE"
 fi
 
