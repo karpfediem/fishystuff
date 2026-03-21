@@ -795,7 +795,6 @@ Status after the current additive slice:
 - if the community support table is missing or present-but-empty, the API still reports the community layer as unavailable rather than implying absence
 - point-level border classification now uses local zone-mask neighborhood sampling when click coordinates are provided
 - exact border distance remains unimplemented and is intentionally reported as unavailable rather than estimated
-- terrain-only mask neighbors are ignored for point-level border ambiguity so shoreline proximity does not masquerade as neighboring-zone ambiguity
 
 ### Phase 4
 

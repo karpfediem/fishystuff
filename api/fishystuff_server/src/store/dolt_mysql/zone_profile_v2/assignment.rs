@@ -114,12 +114,9 @@ pub(super) fn compute_zone_assignment(
                 target_seen_nearby = true;
                 continue;
             }
-            let Some(zone) = zones.get(&sample_rgb) else {
+            let Some(_zone) = zones.get(&sample_rgb) else {
                 continue;
             };
-            if !is_plausible_neighbor_zone(zone) {
-                continue;
-            }
             *neighbor_counts.entry(sample_rgb).or_default() += 1;
         }
     }
@@ -129,34 +126,14 @@ pub(super) fn compute_zone_assignment(
             .to_string(),
     ];
 
-    let center_zone = zones.get(&center_rgb);
-    let center_zone_known = center_zone.is_some();
+    let center_zone_known = zones.contains_key(&center_rgb);
     let border_class = if center_rgb == zone_rgb_u32 {
         match neighbor_counts.len() {
             0 => ZoneBorderClass::Core,
             1 => ZoneBorderClass::NearBorder,
             _ => ZoneBorderClass::Ambiguous,
         }
-    } else if let Some(center_zone) = center_zone {
-        if !is_plausible_neighbor_zone(center_zone) {
-            warnings.push(format!(
-                "point samples non-fishing terrain zone RGB {} instead of the requested zone",
-                format_rgb(center_rgb)
-            ));
-            return ZoneAssignment {
-                zone_rgb_u32,
-                zone_rgb,
-                zone_name,
-                point: Some(point),
-                border: ZoneBorderAssessment {
-                    class: ZoneBorderClass::Unavailable,
-                    nearest_border_distance_px: None,
-                    method: ZoneBorderMethod::Unavailable,
-                    warnings,
-                },
-                neighboring_zones: Vec::new(),
-            };
-        }
+    } else if center_zone_known {
         warnings.push(format!(
             "point samples zone RGB {} instead of requested zone RGB {}",
             format_rgb(center_rgb),
@@ -241,10 +218,4 @@ fn format_rgb(rgb_u32: u32) -> String {
     let g = (rgb_u32 >> 8) & 0xff;
     let b = rgb_u32 & 0xff;
     format!("{r},{g},{b}")
-}
-
-fn is_plausible_neighbor_zone(zone: &ZoneEntry) -> bool {
-    zone.name
-        .as_deref()
-        .is_some_and(|name| !name.contains("Terrain"))
 }

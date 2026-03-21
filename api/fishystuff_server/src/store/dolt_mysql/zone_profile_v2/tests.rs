@@ -514,7 +514,7 @@ fn zone_profile_assignment_marks_ambiguous_when_point_samples_different_zone() {
 }
 
 #[test]
-fn zone_profile_assignment_ignores_terrain_neighbors_for_border_classification() {
+fn zone_profile_assignment_keeps_terrain_named_neighbors_when_present_in_mask() {
     let target = 0x010203;
     let terrain = 0x3c3c96;
     let mut data = solid_mask_rgb(5, 5, [1, 2, 3]);
@@ -535,6 +535,7 @@ fn zone_profile_assignment_ignores_terrain_neighbors_for_border_classification()
         &zone_entries(&[(target, "Target Zone"), (terrain, "Calpheon - Terrain")]),
     );
 
-    assert_eq!(assignment.border.class, ZoneBorderClass::Core);
-    assert!(assignment.neighboring_zones.is_empty());
+    assert_eq!(assignment.border.class, ZoneBorderClass::NearBorder);
+    assert_eq!(assignment.neighboring_zones.len(), 1);
+    assert_eq!(assignment.neighboring_zones[0].zone_rgb_u32, terrain);
 }
