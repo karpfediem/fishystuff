@@ -2129,6 +2129,8 @@ export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()
         itemId: fish?.itemId ?? entry.itemId ?? null,
         encyclopediaId: fish?.encyclopediaId ?? entry.encyclopediaId ?? null,
         name: fish?.name || entry.fishName || `Fish ${entry.fishId}`,
+        grade: fish?.grade ?? entry?.grade ?? null,
+        isPrize: fish?.isPrize === true || entry?.isPrize === true,
       };
       const ci =
         Number.isFinite(entry.ciLow) && Number.isFinite(entry.ciHigh)

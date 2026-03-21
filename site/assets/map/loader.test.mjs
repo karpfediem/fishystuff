@@ -583,6 +583,8 @@ test("buildZoneEvidenceListMarkup hides stability percentages while keeping the 
         itemId: 3012,
         encyclopediaId: 4012,
         name: "Cron Dart",
+        grade: "Rare",
+        isPrize: false,
       },
     ],
   ]);
@@ -608,6 +610,7 @@ test("buildZoneEvidenceListMarkup hides stability percentages while keeping the 
       markup.includes('aria-description="p 0.027 · weight 0.031 · CI 0.000-0.184"'),
       true,
     );
+    assert.equal(markup.includes("fishymap-item-icon-frame grade-rare"), true);
     assert.equal(markup.includes("2.7%"), false);
     assert.equal(markup.includes("badge badge-outline badge-sm cursor-help"), false);
   } finally {
