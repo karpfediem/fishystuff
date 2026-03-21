@@ -518,12 +518,39 @@ ZoneProfileV2Request {
 
 If a caller only knows zone RGB and not click position, `assignment` should explicitly return `unavailable` for point-level border distance/classification rather than fabricating precision.
 
+### Spatial source of truth
+
+For `assignment`, the current zone-mask bitmap is the authoritative source of truth.
+
+- the current runtime source is the zone mask bitmap at `data/cdn/public/images/zones_mask_v1.png`
+- `assignment.zone_rgb` should come from sampling that bitmap at the clicked pixel when `map_px_x` and `map_px_y` are available
+- `assignment.zone_name` should then be resolved from the sampled RGB
+- `neighboring_zones` should be derived only from other RGBs found in the bitmap near the clicked point or along the nearest boundary search
+- `border.class` and any future `nearest_border_distance_px` should be derived only from bitmap geometry
+
+This part of the system is already conceptually solved. It is not an inference problem and it is not a ranking-evidence problem.
+
+Implications:
+
+- do not use ranking evidence, ESS, drift, or source-family support to decide assignment
+- do not use zone names or labels such as `Terrain` to include or exclude neighboring zones
+- do not invent semantic filters like “fishable neighbor” unless there is an explicit, separate, maintained data source for that
+- if the bitmap says the clicked pixel belongs to RGB `X`, then the assignment is `X`
+
+Compatibility note:
+
+- the request currently still carries `rgb` because existing consumers already have that value
+- in the target design, `rgb` should be treated as caller context / selected zone context
+- when click coordinates are present, the bitmap sample is the canonical spatial truth
+- if sampled RGB and request RGB disagree, that should be surfaced explicitly as a mismatch or ambiguity, not “resolved” by heuristics
+
 ### Assignment
 
 Purpose:
 
 - answers where the click is, spatially
 - does not speak for ranking evidence quality
+- is a pure bitmap/geometry concern, not a semantic/source-merging concern
 
 Suggested shape:
 
@@ -544,6 +571,23 @@ ZoneBorderAssessment {
     warnings: Vec<String>,
 }
 ```
+
+Target interpretation:
+
+- `zone_rgb_u32` / `zone_rgb`:
+  exact sampled bitmap RGB for the click when point coordinates are present
+- `neighboring_zones`:
+  other RGBs observed in the bitmap near the click or at the nearest boundary
+- `border.class`:
+  a geometric statement about proximity to a boundary in the bitmap
+- `warnings`:
+  runtime/availability notes, not ranking-confidence notes
+
+Anti-goals:
+
+- not a “can I fish here” decision layer
+- not a filter over which neighboring RGBs are considered “valid” based on names
+- not a blend of bitmap assignment and evidence support
 
 ### Presence support
 
@@ -689,10 +733,17 @@ Recommended classes:
 
 Recommended behavior:
 
-- if click pixel is available, sample the zone mask at that pixel
-- if a border-distance implementation exists, return distance and class
-- if only local neighborhood sampling exists, return a class and plausible neighbors without fake exact distance
-- if no point coordinates are provided, return `unavailable`
+- if click pixel is available, sample the zone mask at that exact pixel and use that RGB as the assignment truth
+- if a border-distance implementation exists, compute distance-to-different-RGB directly from the same bitmap and return distance and class
+- if only local neighborhood sampling exists, return a class and neighboring RGBs from the bitmap without fake exact distance
+- if no point coordinates are provided, return `unavailable` for border geometry, but do not pretend this is an evidence problem
+
+Do not do any of the following in this layer:
+
+- infer assignment from ranking evidence
+- suppress neighboring RGBs because of their names
+- ask whether a neighboring RGB is “real enough” if it is present in the current mask bitmap
+- reinterpret bitmap ambiguity as support uncertainty
 
 Current feasibility assessment:
 
@@ -703,9 +754,10 @@ Current feasibility assessment:
 
 Conclusion:
 
+- exact zone assignment is already available from the bitmap
 - point-level border distance is feasible with new code
-- it is not currently supported
-- first-pass API should therefore model availability explicitly
+- exact border distance is not currently supported
+- first-pass API should therefore model availability explicitly for border geometry while keeping bitmap assignment authoritative
 
 ### B) Zone-level border sensitivity / stress
 
@@ -784,7 +836,7 @@ Status after first additive slice:
 
 - add legacy/community support inputs into `presence_support`
 - keep `fishing_table` as the zone-slot baseline and prefer legacy/community enrichment at the group-table layer
-- add first point-level border classification
+- add first point-level border geometry implementation from the current zone-mask bitmap
 - keep exact distance optional until the mask-distance primitive exists
 
 Status after the current additive slice:
@@ -793,7 +845,8 @@ Status after the current additive slice:
 - `presence_support` now merges ranking observations with legacy fishing-table support resolved through `fishing_table -> item_main_group_table -> item_sub_group_table`
 - community-backed support is now wired through a dedicated `community_zone_fish_support` runtime table and merged into `presence_support` as source-scoped claims
 - if the community support table is missing or present-but-empty, the API still reports the community layer as unavailable rather than implying absence
-- point-level border classification is still placeholder
+- point-level border geometry is still placeholder after the revert of the earlier heuristic attempt
+- the next implementation attempt should target exact bitmap assignment / bitmap-derived border geometry only
 
 ### Phase 4
 
