@@ -2183,6 +2183,18 @@ function ensureZoneEvidenceElements(elements) {
       <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
     </div>
     <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
+    <div class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
+      <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
+        <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
+        Disclaimer
+      </p>
+      <div class="space-y-2 leading-5">
+        <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
+        <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
+        <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
+        <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
+      </div>
+    </div>
     <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2"></div>
   `;
 
