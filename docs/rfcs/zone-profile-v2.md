@@ -1,1031 +1,784 @@
-# RFC: Zone Profile V2
+# RFC: Zone Profiles, Evidence Semantics, and Fishing Map Requirements
 
 ## Status
 
 Draft.
 
+This document replaces the previous work and defines the product semantics, guardrails, and capability requirements for fish zone assignment, fish presence support, and future quantitative fishing analysis.
+
+This RFC is intentionally **implementation agnostic**. It defines what the system must mean and support. It does **not** require one specific spatial backend, storage model, rendering model, or inference algorithm.
+
+---
+
+## 1. Purpose
+
+The project needs to answer several related but distinct questions:
+
+1. **Which zone does a clicked point belong to?**
+2. **Which fish are supported in that zone?**
+3. **How strong and how fresh is that support?**
+4. **Which parts of the map likely need boundary updates?**
+5. **How can future player-tracked data support group inference and relative catch-rate analysis?**
+
+Historically, the product mixed some of these concerns together. In particular, fish-level `%` values derived from ranking evidence were easy for readers to interpret as **drop rates**, even though they were actually a **stability / evidence-share signal** tied to sample assignment and effective sample size (ESS), not item probability.
+
+This RFC formalizes the separation between:
+
+* spatial assignment,
+* fish presence support,
+* ranking-evidence diagnostics,
+* future player-tracked quantitative analysis,
+* and boundary maintenance.
+
+---
+
+## 2. Scope
+
 This RFC covers:
 
-- audit of the current `zone_stats` public surface
-- verified semantics of the live server path
-- comparison against the documented and standalone analytics semantics
-- a proposed `zone_profile_v2` domain model and migration plan
-- low-risk scaffolding direction only
+* core glossary and semantic definitions,
+* user-facing capability requirements,
+* source and evidence classes,
+* public UX guardrails,
+* required separations in the data/API/domain model,
+* and future-proof requirements for integrating new evidence sources.
 
-This RFC does not replace `/api/v1/zone_stats` yet.
+This RFC does **not** prescribe:
 
-## Verification notes
+* a final storage schema,
+* a final API shape,
+* one permanent map representation,
+* or one permanent implementation of zone lookup.
 
-Verified directly from code:
+---
 
-- `docs/problem-and-scope.md`
-- `docs/zone-signatures.md`
-- `docs/confidence-and-recency.md`
-- `docs/ingestion-and-indexing.md`
-- `docs/boundary-qa-and-updates.md`
-- `docs/implementation-plan.md`
-- `lib/fishystuff_api/src/models/zone_stats.rs`
-- `lib/fishystuff_api/src/models/events.rs`
-- `api/fishystuff_server/src/routes/zone_stats.rs`
-- `api/fishystuff_server/src/app.rs`
-- `site/assets/map/loader.js`
-- `api/fishystuff_server/src/store/dolt_mysql.rs`
-- `api/fishystuff_server/src/store/dolt_mysql/stats.rs`
-- `api/fishystuff_server/src/store/queries/mod.rs`
-- `lib/fishystuff_analytics/src/lib.rs`
-- `lib/fishystuff_store/src/sqlite.rs`
-- `lib/fishystuff_core/src/masks.rs`
-- `api/sql/schema_fishing.sql`
-- `api/sql/migrations/20260301_events_evidence_pipeline.sql`
+## 3. Non-Goals
 
-Verified from local workbook sources via `devenv shell -- xlsx2csv`:
+This RFC does **not**:
 
-- `data/fishing_tables_101/Fishing Data.xlsx`
-- `data/fishing_tables_101/BDO - PRIZE FISHES.xlsx`
-- `data/fishing_tables_101/fishing_tables_101.md`
-- `data/data/excel/Fishing_Table.xlsx`
-- `data/data/excel/ItemMainGroup_Table.xlsx`
-- `data/data/excel/ItemSubGroup_Table.xlsx`
-- `data/data/excel/Item_Table.xlsx`
+* guarantee exact true item drop rates from current ranking evidence,
+* require that current legacy fishing datasets are fully up to date,
+* require a single blended confidence score,
+* require a single global “truth source” for all fish presence questions,
+* require immediate support for user accounts or authenticated user submissions,
+* require a specific backend implementation such as bitmap masks, polygons, or a spatial index,
+* require exact border-distance or ambiguity calculations in the first slice,
+* or require one fish to belong to only one fish group in a zone.
 
-Verified from local runtime data via `devenv shell -- dolt sql`:
+---
 
-- `events`, `event_zone_assignment`, `fishing_table`, `fish_table`, `item_main_group_table`, `item_sub_group_table`, `fishing_zone_slots`, `item_main_group_options`, and `item_sub_group_item_variants` are present.
-- `events.source_kind` currently has one live value only: `1`, with `26938` rows.
-- `event_zone_assignment` has `26938` rows for `layer_revision_id='v1'`.
-- `fishing_table` has `276` rows.
-- `fish_table` has `300` rows.
-- `item_main_group_table` has `405` rows.
-- `item_sub_group_table` has `1676` rows.
-- `item_main_group_options` has `469` rows.
-- `item_sub_group_item_variants` has `1330` rows.
+## 4. Design Principles
 
-Verified from local workbook content:
+### 4.1 Semantic separation before implementation
 
-- `Fishing Data.xlsx` contains a translated sheet named `Fishing Data Translated` with `158` RGB-keyed rows.
-- That sheet includes columns `R,G,B,Harpoon ID,Prize Catch,Rare,Large,General,Treasure,Min Bite (s),Max Bite (s),Description`.
-- `BDO - PRIZE FISHES.xlsx` contains a `DATA` sheet with structured per-zone fish rows and status-like remarks.
-- The `DATA` sheet yielded `126` distinct zone references in quick local inspection.
-- The same `DATA` sheet yielded `322` rows labeled `CONFIRMED`, `60` labeled `UNCONFIRMED`, and `53` labeled `DATA INCOMPLETE`.
-- The workbook also contains dedicated tabs such as `CONFIRMED`, `UNCONFIRMED`, `INCOMPLETE`, `NEW PRIZE FISHES`, and per-fish tabs.
+The system must first be correct in meaning. Backend and rendering choices are secondary.
 
-Not runtime-verified:
+### 4.2 Source provenance must be preserved
 
-- the remote Google Sheet contents were not queried from the local environment
-- no existing player-log table or log-ingestion pipeline was found in runtime tables or repo code
+Different evidence sources answer different questions. They must not be flattened into one ambiguous score.
 
-## 1) Current Public Surface Audit
+### 4.3 Time matters
 
-### What the current product exposes
+All evidence should be time-attributed so that it can be aligned with patches, map revisions, and historical interpretation.
 
-The live product exposes one zone-evidence response model, `ZoneStatsResponse`, via `POST /api/v1/zone_stats`.
+### 4.4 Unknown is valid
 
-Current API shape:
+The system must be allowed to say:
 
-- zone identity: `zone_rgb_u32`, `zone_rgb`, `zone_name`
-- echoed analysis window: `window`
-- confidence block: `ess`, `total_weight`, `last_seen_ts_utc`, `age_days_last`, `status`, `notes`, optional `drift`
-- fish distribution rows: `fish_id`, `item_id`, `encyclopedia_key`, `encyclopedia_id`, `fish_name`, `evidence_weight`, `p_mean`, `ci_low`, `ci_high`
+* unknown,
+* insufficient evidence,
+* not yet modeled,
+* or unavailable.
 
-Current route and app surface:
+It must not fabricate precision.
 
-- `api/fishystuff_server/src/app.rs` mounts `POST /api/v1/zone_stats`
-- `api/fishystuff_server/src/routes/zone_stats.rs` is a thin cache wrapper around the store call
+### 4.5 Public UX must avoid misleading signals
 
-Current client request defaults:
+The default public UI must not present ranking-derived fish-level `%` as if it were an item catch/drop rate.
 
-- the Bevy request builder sends `fish_norm: false`
-- default parameters come from API meta defaults
-- current UI behavior therefore reflects recency weighting plus the live server defaults, not the richer standalone analytics semantics
+### 4.6 Quantitative claims require setup-aware data
 
-### Where the confusion surface actually is
+Future catch-rate analysis must only use controlled player-tracked data with setup metadata and explicit exclusions.
 
-The public confusion surface is not abstract. It is in the current UI:
+---
 
-- `site/assets/map/loader.js` shows `ESS`, `weight`, `last seen`, and `drift` in the zone evidence summary
-- the same file renders each fish row with a percent badge from `entry.pMean`
-- the tooltip labels that row as `p ... · weight ... · CI ...`
+## 5. Glossary
 
-This means the current product presents a fish-level percent directly in the default map panel, even though the docs explicitly say the value is not a true in-game drop rate.
+## 5.1 Zone
 
-### Semantically risky public fields
+A **zone** is a spatially defined region of world-space.
 
-Highest risk:
+Fishing actions attributed to that region are interpreted through the zone-assigned fishing tables. In practice, a zone maps to an index into table-driven fishing groups and fish-group contents.
 
-- `distribution[].p_mean`
-  - technically a posterior mean evidence share
-  - publicly rendered as a percent badge
-  - easy for normal users to read as drop rate
+A zone may be represented internally as:
 
-Medium risk:
+* a bitmap/mask,
+* polygons,
+* a spatial index,
+* or another maintained structure.
 
-- `confidence.ess`
-  - valid confidence proxy for weighting stability
-  - easily misread as certainty that the clicked point is safely inside the zone
+This RFC only requires that the user-facing answer to “which zone is this point in?” is well-defined.
 
-- `confidence.total_weight`
-  - meaningful to power users
-  - not self-explanatory in public UX
+---
 
-- `confidence.drift`
-  - meaningful for patch-aware diagnostics
-  - easy to confuse with border instability or map-assignment instability
+## 5.2 Fishing tables
 
-### Authoritative code paths today
+Fishing is modeled as a two-stage process:
 
-Authoritative live server path:
+1. **Group roll**
+   A fishing action lands in a fishing group/category.
 
-- request model: `lib/fishystuff_api/src/models/zone_stats.rs`
-- route: `api/fishystuff_server/src/routes/zone_stats.rs`
-- store entrypoint: `api/fishystuff_server/src/store/dolt_mysql.rs` `Store::zone_stats`
-- live aggregation: `compute_zone_stats` and `compute_window_summary`
-- event-loading SQL: `api/fishystuff_server/src/store/queries/mod.rs` `EVENTS_WITH_ZONE_SQL`
+2. **Item roll within that group**
+   An item is chosen from the items available in that group.
 
-Standalone analytics comparison path:
+Legacy resources and community references may still be useful for understanding or reconstructing this structure, but this RFC does not claim that any one legacy table snapshot is complete or current truth.
 
-- `lib/fishystuff_analytics/src/lib.rs`
-- backing SQLite store query: `lib/fishystuff_store/src/sqlite.rs`
+---
 
-### Reusable parts
+## 5.3 Bookmark
 
-Reusable for `zone_profile_v2`:
+A **bookmark** is a world-coordinate point that can be imported/exported between the site and the game.
 
-- fish identity/name resolution from `fish_table`, `fish_names_*`, and `languagedata_en`
-- zone metadata lookup from `zones_merged`
-- ranking evidence freshness, ESS, and drift structures
-- existing status thresholds in server config
-- zone mask asset infrastructure and `ZoneMask` PNG loader
-- boundary-QA terminology and JSD-based comparison concepts from existing docs
+Bookmarks are practically useful as a user-facing location interface, but small rounding differences can occur when moving between systems.
 
-Not reusable as-is:
+---
 
-- `distribution[].p_mean` as a default public field
-- the current single-layer response shape, which mixes assignment, support, confidence, and advanced ranking stats into one panel
+## 5.4 Ranking evidence
 
-## 2) Three-Way Semantics Comparison Table
+**Ranking evidence** is fish-guide-derived observation data.
 
-| Dimension | Docs semantics | Live server semantics | Standalone analytics semantics |
-| --- | --- | --- | --- |
-| Primary input meaning | Ranking evidence distribution | Ranking evidence distribution | Ranking evidence distribution |
-| Event weighting for displayed fish evidence | `w = w_time * w_eff * optional w_fish` | `w = w_time * optional w_fish` | `w = w_time * w_eff * optional w_fish` |
-| Weight used for ESS | `u = w_time * w_eff` | `u = w_time` | `u = w_time * w_eff` |
-| ESS formula | `ESS = W^2 / max(W2, eps)` | same formula | same formula |
-| Effort debiasing active | documented as active | not active in live `zone_stats` | active |
-| Per-fish normalization | optional | optional field exists, UI currently sends `false` | optional |
-| Prior/posterior model | Dirichlet posterior over evidence share | implemented | implemented |
-| Credible intervals | required / recommended | implemented via Monte Carlo Beta CI for top-K | implemented via Monte Carlo Beta CI for top-K |
-| Drift behavior | patch-aware drift expected | implemented when `drift_boundary_ts_utc` is provided | implemented when `drift_boundary_ts` is provided |
-| Source filtering behavior | ranking pipeline assumed | `zone_stats` SQL does not filter `events.source_kind` | SQLite analytics query also does not filter by source kind; assumes ranking-only store |
-| Public percent rendering in current UI | docs say label as evidence share | yes, current UI renders `pMean` as a percent badge | not directly public; library only |
-| Border ambiguity support | not part of zone signatures | none | none |
-| Catch-rate support | explicitly not justified from ranking | not supported | not supported |
+It is useful because it provides:
 
-### Concrete mismatch summary
+* positive evidence that a fish has appeared near a location,
+* freshness and historical context,
+* ranking-based support for fish presence,
+* and a basis for assignment diagnostics such as ESS.
 
-1. Docs vs live server:
+It is limited because:
 
-- docs describe effort-debiased evidence and effort-aware ESS
-- live server currently computes recency-only evidence and recency-only ESS
+* new samples become rarer over time,
+* it is not a true catch-rate source,
+* and sample attribution is approximate.
 
-2. Live server vs standalone analytics:
+Ranking evidence is therefore a **support and diagnostics** source, not a universal quantitative truth source.
 
-- analytics uses the richer `w_eff` model and water-tile effort normalization
-- live server does not
+---
 
-3. Docs/UI mismatch:
+## 5.5 Float position
 
-- docs explicitly warn that `p_hat` is not a drop probability
-- current UI still renders the value as the primary percent in the default zone evidence list
+The game resolves the fishing action from a float position that is approximately **500 game units** away from the player position.
 
-4. Source-isolation mismatch:
+For some sample types, that means the actual catch attribution belongs to a **ring around the player position**, not the exact player coordinate.
 
-- event snapshot queries explicitly filter `e.source_kind = ranking`
-- live `zone_stats` SQL does not
+This distinction is important for sample attribution.
 
-## 3) Source-Family Audit
+---
 
-### Legacy fishing tables
+## 5.6 Sample attribution model
 
-Type:
+A **sample attribution model** defines how a sample can be spatially assigned.
 
-- legacy reference
+At minimum, the system should distinguish between:
 
-Concrete schema/runtime support:
+* **FloatPosition**
+  The catch is attributed to a known point or a small-radius neighborhood around a point.
 
-- `fishing_table` provides zone RGB to slot-level group references and slot rates
-- `fishing_zone_slots` flattens `DropRate1..5` and `DropID1..5`
-- `item_main_group_options` flattens main-group to subgroup choices and option rates
-- `fish_table` provides encyclopedia key to item key and icon/name identity joins
-- the local workbook sheet `Fishing Data Translated` is broadly aligned with `fishing_table`, but not perfectly 1:1
+* **PlayerPositionRing**
+  The catch is attributed to a ring around the player position. Ranking evidence belongs here.
 
-What it can support:
+The system must not collapse these into one fake “exact point” model.
 
-- legacy zone-level support claims
-- legacy zone-slot / group references
-- item-level subgroup baselines where the local group tables are populated
-- provenance that a zone was historically associated with certain group slots
-- fish identity joins and icons
+---
 
-What it cannot reliably support today:
+## 5.7 Effective sample size (ESS)
 
-- current truth for newer or changed regions
-- trustworthy freshness
-- trustworthy subgroup item rates from the raw legacy XLSX files alone
-- a blanket direct overwrite of `fishing_table` from auxiliary reference material
+ESS is a measure used for diagnostics around sample assignment stability.
 
-Important runtime finding:
+ESS may be useful to communicate:
 
-- in the raw legacy import path, subgroup item expansion is structurally modeled but initially empty because the raw subgroup workbook does not carry usable `SelectRate_*` values
-- the current local runtime now has subgroup baselines populated in the legacy group tables
-- `item_sub_group_item_variants` now has `1330` rows across `260` subgroup keys
-- `item_main_group_table` now has `405` rows and `item_main_group_options` now has `469` rows
-- `fishing_table` remains at `276` rows
-- in sample RGB checks, workbook `Harpoon ID` matched `fishing_table.DropIDHarpoon`
-- workbook category percentages matched `fishing_zone_slots.slot_idx` `2..5` for the sampled zones
-- workbook `Prize Catch` IDs did not cleanly match `fishing_table.DropID` in the sampled zones
-- some workbook `Prize Catch` IDs exist in Dolt as group keys (`11057`, `11058`, `11060`), while others sampled from the workbook (`11056`, `11073`) were absent from the current runtime snapshot
-- therefore the durable rule is:
-  - treat `fishing_table` as the legacy RGB-to-slot layer
-  - enrich `item_main_group_table` and `item_sub_group_table` for subgroup resolution
-  - do not assume auxiliary workbook ids can safely overwrite `fishing_table` rows directly
+* how stable a ranking-derived support signal is,
+* whether evidence is sparse,
+* or whether a result should be treated cautiously.
 
-Public label recommendation:
+ESS is **not** a drop-rate and must not be presented as one.
 
-- `legacy reference`
-- never present as “current confirmed rate”
-- where workbook-derived wording is surfaced, prefer `legacy table reference`
+---
 
-### Community sheet
+## 6. Source and Evidence Classes
 
-Type:
+The system must keep source families explicit.
 
-- curated hint / curated support layer
+## 6.1 Legacy/reference sources
 
-What it can support:
+Examples:
 
-- zone-level fish presence hints
-- optionally zone+group hints where explicitly curated
-- support claims even where ranking evidence is sparse
+* legacy fishing tables,
+* older map interpretations,
+* static community-maintained reconstructions.
 
-What it cannot support by itself:
+These are useful as:
 
-- freshness guarantees unless versioned locally
-- true drop rates
-- consistent denominators
+* historical structure,
+* baseline hints,
+* and scaffolding for current work.
 
-Repo/runtime findings:
+They are not automatically current truth.
 
-- no direct ingestion tooling for the provided remote sheet ids was found in the repo
-- however, local workbook material exists under `data/fishing_tables_101/`
-- `BDO - PRIZE FISHES.xlsx` already encodes source-like support semantics:
-  - zone RGB
-  - region
-  - zone name
-  - fish entries
-  - remark/status values such as `CONFIRMED`, `UNCONFIRMED`, and `DATA INCOMPLETE`
-- `Fishing Data.xlsx` provides a translated RGB-to-table-reference sheet with human descriptions and category-rate fields
+---
 
-Interpretation:
+## 6.2 Curated community support
 
-- for local ingestion design, the immediate practical input is not “remote Google Sheet only”
-- the immediate practical input is “local manually curated workbook data, likely derived from the same community-maintained knowledge base”
-- this is enough to design a first normalized import contract without blocking on online access
+Examples:
 
-Recommended next step:
+* manually maintained fish-to-zone assignments,
+* screenshot-backed claims,
+* workbook-style support evidence,
+* explicit contributor tips.
 
-- define a local normalized ingestion contract for workbook-backed community support first
-- keep direct Google Sheet ingestion as a later convenience layer or sync source
-- do not block `zone_profile_v2` on live network access to the sheet
+These are useful for:
 
-Public label recommendation:
+* fish presence support,
+* fast incremental updates,
+* and zones/fish where no better evidence exists yet.
 
-- `community overlay`
-- `community hint`
-- for `CONFIRMED` workbook entries, `reference_supported` is a reasonable initial support-grade mapping
-- for `UNCONFIRMED` or `DATA INCOMPLETE` workbook entries, `weak_hint` is the safer initial support-grade mapping
+They do **not** justify exact rates by themselves.
 
-### Ranking events
+---
 
-Type:
+## 6.3 Ranking evidence
 
-- direct observation, but positive-only and time-bounded
+Ranking evidence is:
 
-What they can support:
+* positive evidence that a fish appeared,
+* ranking-derived support,
+* freshness and historical context,
+* a source for assignment diagnostics and ESS.
 
-- positive evidence that a fish has appeared in a zone
-- recency/freshness
-- ESS / stability of weighted evidence
-- drift comparison across time windows
-- advanced evidence-share summaries
+It is **not**:
 
-What they cannot support:
+* direct catch-rate truth,
+* strong absence evidence,
+* or a long-term complete picture for old fish.
 
-- true catch/drop rates
-- absence claims
-- denominator-aware setup-specific rates
-- border certainty
+---
 
-Repo/runtime findings:
+## 6.4 Player-tracked evidence
 
-- only `EventSourceKind::Ranking` exists in the public enum today
-- runtime `events.source_kind` currently contains only `1`
-- ranking snapshot and metadata APIs already expose ranking-only semantics
-- `zone_stats` event-loading query does not filter `source_kind`, so the path is vulnerable to future contamination if additional event types are inserted
+Player-tracked evidence includes:
 
-Public label recommendation:
+* manual tracking,
+* exact or approximate float/player position,
+* setup information,
+* and eventually automated helper-assisted logs.
 
-- `observed in ranking data`
-- `ranking evidence share` for advanced-only percentages
+This source is the intended foundation for:
 
-### Player logs
+* relative catch-rate estimation,
+* fish-group inference,
+* and stronger long-term quantitative modeling.
 
-Type:
+---
 
-- direct observation with denominator potential
+## 6.5 Future user-submitted evidence
 
-What they should support in future:
+Future site-submitted evidence may include:
 
-- positive presence claims
-- setup- and location-scoped catch counts
-- denominator-aware catch-rate summaries
-- eventual subgroup/setup inference
+* “I found this fish at this bookmark”
+* “I found this fish in this zone”
+* manual upload of controlled logs
 
-What they cannot support unless collected carefully:
+This RFC allows those paths, but does not require login or identity systems.
 
-- global rates without bias controls
-- generalized zone-wide rates from a tiny contributor set
+---
 
-Repo/runtime findings:
+## 7. Core Semantic Separations
 
-- no existing player-log table was found in runtime tables
-- no player-log ingestion path was found in current code
-- docs only mention direct catch logs as future work
+These concerns must remain separate.
 
-Public label recommendation:
+## 7.1 Point-to-zone assignment
 
-- when added, separate this family clearly from ranking evidence
-- `player logs`
-- `catch-rate summary`
+Question: **Which zone does this clicked point belong to?**
 
-## 4) Risk Register
+This is a spatial lookup problem.
 
-### Risk: public misreads `p_mean` as drop rate
+It is not:
 
-Why it exists:
+* a support-quality problem,
+* a catch-rate problem,
+* or a ranking-ESS problem.
 
-- current default map panel renders `pMean` as a percent badge
+---
 
-Mitigation:
+## 7.2 Fish presence support
 
-- remove percent as the default public primary signal in `zone_profile_v2`
-- if preserved, nest it under `ranking_evidence` and rename it to `ranking evidence share`
+Question: **What support exists that this fish is in this zone?**
 
-### Risk: source-kind contamination
+This is a provenance-aware evidence problem.
 
-Why it exists:
+It is not:
 
-- live `zone_stats` SQL joins `events` and `event_zone_assignment` without filtering `events.source_kind`
+* point assignment,
+* boundary certainty,
+* or a true drop-rate problem.
 
-Impact:
+---
 
-- future non-ranking event types could silently change ranking evidence semantics
+## 7.3 Ranking evidence quality
 
-Mitigation:
+Question: **How stable, fresh, and substantial is the ranking-derived support?**
 
-- isolate ranking evidence loading by source family
-- add typed source-family boundaries in the new model
-- add tests around source-specific loading before multi-source ingestion lands
+This is where ESS and ranking-derived evidence-share diagnostics belong.
 
-### Risk: outdated legacy data looks authoritative
+It is not:
 
-Why it exists:
+* a catch rate,
+* or a universal confidence score over all source families.
 
-- `fishing_table` contains structured rates and slot/group keys
+---
 
-Impact:
+## 7.4 Quantitative catch analysis
 
-- users may treat historical or stale tables as current truth
+Question: **Under a consistent setup, what relative rates can be estimated from tracked catches?**
 
-Mitigation:
+This is a player-tracked quantitative analysis problem.
 
-- label as `legacy reference`
-- keep legacy support in `presence_support`, not `catch_rates`
-- attach freshness / provenance notes where available
+It must remain separate from:
 
-### Risk: border ambiguity is confused with evidence uncertainty
+* ranking evidence,
+* legacy support,
+* and anecdotal screenshots.
 
-Why it exists:
+---
 
-- current product has one mixed zone-evidence panel and no point-level border model
+## 7.5 Fish-group inference
 
-Impact:
+Question: **Which items can co-occur in which fish groups at a zone?**
 
-- ESS or drift may be wrongly read as “confidence the click belongs to this zone”
+This is related to controlled player tracking, especially with Triple-Float co-catch evidence.
 
-Mitigation:
+It is separate from ordinary item-rate displays.
 
-- create separate `assignment` and `ranking_evidence` sections
-- reserve ESS for evidence quality only
-- add explicit border class and neighboring-zone output
+---
 
-### Risk: missing evidence is misread as absence
+## 7.6 Boundary QA / redraw maintenance
 
-Why it exists:
+Question: **Where are the current map boundaries likely wrong or under stress?**
 
-- sparse ranking evidence naturally produces empty distributions
+This is a maintainer-facing QA concept.
 
-Impact:
+It is not:
 
-- users over-trust empty or weak panels as proof a fish is absent
+* ESS,
+* a fish drop rate,
+* or a click-assignment percentage.
 
-Mitigation:
+---
 
-- preserve `unknown` / `insufficient_evidence`
-- distinguish “no support observed” from “not present”
+## 8. Problem 1: Mapping World Coordinates to a Zone
 
-### Risk: newer-zone geometry reliability issues
+## 8.1 User stories
 
-Why it exists:
+* As a user, I want to click a point on the map and determine which zone it belongs to.
+* As a user, I want to visually understand where zones are so I can plan fishing trips.
+* As a maintainer, I want to keep zone boundaries accurate across patches and redraws.
 
-- community zone masks are updated manually and can lag content changes
+## 8.2 Requirement
 
-Impact:
+Given a point in world-space or map-space, the system must return the assigned zone.
 
-- assignment and presence support may disagree near boundaries or changed regions
+This answer must be authoritative for the current map revision being used.
 
-Mitigation:
+## 8.3 Backend-agnostic approaches
 
-- explicit border ambiguity state
-- border stress diagnostics
-- boundary QA outputs linked to evidence divergence
+This RFC does not require one representation.
 
-### Risk: future player logs contaminate ranking evidence
+Possible valid implementations include:
 
-Why it exists:
+* a fishing zone mask bitmap,
+* a manually maintained fishing table in Dolt,
+* a separate table assigning names to zone IDs,
+* manually redrawn masks,
+* polygons,
+* or a spatial index.
 
-- current live `zone_stats` loading path is not source-filtered
-- `EventSourceKind` does not yet model additional source families
+The implementation may evolve, but the semantic behavior must remain stable.
 
-Mitigation:
+## 8.4 Border ambiguity
 
-- make ranking evidence a source-scoped submodel
-- treat logs as a separate source family and separate metric family
-- never aggregate logs into ranking evidence share fields
+Border ambiguity is optional in the first slice.
 
-## 5) Proposed Target Model
+If implemented, it must be presented as a **spatial diagnostic**:
 
-### Core response
+* “this point is near a boundary”
+* “assignment is close to another zone edge”
 
-```rust
-ZoneProfileV2 {
-    assignment: ZoneAssignment,
-    presence_support: ZonePresenceSupport,
-    ranking_evidence: Option<ZoneRankingEvidence>,
-    catch_rates: Option<ZoneCatchRateSummary>,
-    diagnostics: ZoneDiagnostics,
-}
-```
+It must not be conflated with ESS or fish probability.
 
-### Proposed request shape
+If not implemented, the product should return a plain assignment and avoid pretending to know more.
 
-`zone_profile_v2` should not reuse the exact `zone_stats` request unchanged.
+---
 
-It needs the current analysis window, but also the clicked point context needed for border ambiguity:
+## 9. Problem 2: Determining Fish Presence
 
-```rust
-ZoneProfileV2Request {
-    layer_revision_id: Option<String>,
-    layer_id: Option<String>,
-    patch_id: Option<String>,
-    at_ts_utc: Option<Timestamp>,
-    map_version_id: Option<MapVersionId>,
-    rgb: RgbKey,
-    map_px_x: Option<i32>,
-    map_px_y: Option<i32>,
-    from_ts_utc: Timestamp,
-    to_ts_utc: Timestamp,
-    tile_px: u32,
-    sigma_tiles: f64,
-    fish_norm: bool,
-    alpha0: f64,
-    top_k: usize,
-    half_life_days: Option<f64>,
-    drift_boundary_ts_utc: Option<Timestamp>,
-    ref_id: Option<String>,
-    lang: Option<String>,
-}
-```
+## 9.1 User stories
 
-If a caller only knows zone RGB and not click position, `assignment` should explicitly return `unavailable` for point-level border distance/classification rather than fabricating precision.
+* As a user, I want to know which zones contain a fish I am targeting.
+* As a user, I want to know which fish are supported in a zone.
+* As a community contributor, I want to submit support evidence that a fish is present in a zone.
 
-### Spatial source of truth
+## 9.2 Requirement
 
-For `assignment`, the current zone-mask bitmap is the authoritative source of truth.
+The system must support a fish-presence view that is:
 
-- the current runtime source is the zone mask bitmap at `data/cdn/public/images/zones_mask_v1.png`
-- `assignment.zone_rgb` should come from sampling that bitmap at the clicked pixel when `map_px_x` and `map_px_y` are available
-- `assignment.zone_name` should then be resolved from the sampled RGB
-- `neighboring_zones` should be derived only from other RGBs found in the bitmap near the clicked point or along the nearest boundary search
-- `border.class` and any future `nearest_border_distance_px` should be derived only from bitmap geometry
+* source-aware,
+* time-aware,
+* and explicit about uncertainty.
 
-This part of the system is already conceptually solved. It is not an inference problem and it is not a ranking-evidence problem.
+## 9.3 Presence support states
 
-Implications:
+The system should be able to distinguish at least these categories:
 
-- do not use ranking evidence, ESS, drift, or source-family support to decide assignment
-- do not use zone names or labels such as `Terrain` to include or exclude neighboring zones
-- do not invent semantic filters like “fishable neighbor” unless there is an explicit, separate, maintained data source for that
-- if the bitmap says the clicked pixel belongs to RGB `X`, then the assignment is `X`
+* **Observed recently**
+* **Observed historically**
+* **Reference-supported**
+* **Curated-support only**
+* **Weak hint**
+* **Insufficient evidence**
+* **Unknown**
 
-Compatibility note:
+The exact final labels may vary, but the distinction between strong, weak, historical, and unknown support must remain explicit.
 
-- the request currently still carries `rgb` because existing consumers already have that value
-- in the target design, `rgb` should be treated as caller context / selected zone context
-- when click coordinates are present, the bitmap sample is the canonical spatial truth
-- if sampled RGB and request RGB disagree, that should be surfaced explicitly as a mismatch or ambiguity, not “resolved” by heuristics
+## 9.4 Critical guardrail
 
-### Assignment
+**Missing evidence is not evidence of absence.**
 
-Purpose:
+Lack of ranking data or lack of curated support must not be interpreted as “this fish is not in the zone.”
 
-- answers where the click is, spatially
-- does not speak for ranking evidence quality
-- is a pure bitmap/geometry concern, not a semantic/source-merging concern
+---
 
-Suggested shape:
+## 10. Problem 3: Determining Catch Rates and Group Assignments
 
-```rust
-ZoneAssignment {
-    zone_rgb_u32: u32,
-    zone_rgb: RgbKey,
-    zone_name: Option<String>,
-    point: Option<ZonePoint>,
-    border: ZoneBorderAssessment,
-    neighboring_zones: Vec<ZoneNeighborCandidate>,
-}
+This section must be explicitly split in two.
 
-ZoneBorderAssessment {
-    class: ZoneBorderClass,        // core | near_border | ambiguous | unavailable
-    nearest_border_distance_px: Option<f64>,
-    method: ZoneBorderMethod,      // mask_distance | local_sample | unavailable
-    warnings: Vec<String>,
-}
-```
+## 10.1 Relative catch-rate estimation
 
-Target interpretation:
+This is the future quantitative feature for controlled player tracking.
 
-- `zone_rgb_u32` / `zone_rgb`:
-  exact sampled bitmap RGB for the click when point coordinates are present
-- `neighboring_zones`:
-  other RGBs observed in the bitmap near the click or at the nearest boundary
-- `border.class`:
-  a geometric statement about proximity to a boundary in the bitmap
-- `warnings`:
-  runtime/availability notes, not ranking-confidence notes
+### Requirement
 
-Anti-goals:
+Relative catch-rate analysis must be **setup-scoped**.
 
-- not a “can I fish here” decision layer
-- not a filter over which neighboring RGBs are considered “valid” based on names
-- not a blend of bitmap assignment and evidence support
+That means samples must be grouped or filtered by effective setup, including any modifiers that materially affect group or item outcomes.
 
-### Presence support
+Examples include:
 
-Purpose:
+* mastery-related effects,
+* prize/rare/group modifiers,
+* and other relevant fishing bonuses.
 
-- answers what support exists that a fish appears in this zone
-- makes provenance explicit
+### Guardrails
 
-Suggested shape:
+The system must not:
 
-```rust
-ZonePresenceSupport {
-    fish: Vec<ZoneFishSupport>,
-}
+* pool materially different setups into one “catch-rate” result,
+* claim universal rates when only setup-relative rates are known,
+* or derive quantitative rates from ranking evidence alone.
 
-ZoneFishSupport {
-    fish_id: i32,
-    item_id: i32,
-    encyclopedia_key: Option<i32>,
-    encyclopedia_id: Option<i32>,
-    fish_name: Option<String>,
-    support_grade: ZoneSupportGrade,
-    source_badges: Vec<ZoneSourceFamily>,
-    claims: Vec<ZoneSupportClaim>,
-}
-```
+## 10.2 Fish-group assignment inference
 
-Support grades:
+This is the future feature for inferring which items belong to which fish groups.
 
-- `observed_recent`
-- `observed_historical`
-- `reference_supported`
-- `weak_hint`
-- `unknown`
+### Primary discussed method
 
-Source families:
+The Triple-Float rod can catch multiple fish from a single cast, with the important observation that the co-caught items belong to the same group.
 
-- `legacy`
-- `community`
-- `ranking`
-- `logs`
+This makes co-catch data useful for inferring fish-group membership.
 
-### Ranking evidence
+### Requirement
 
-Purpose:
+The system must support a model where:
 
-- advanced ranking-only diagnostics
-- not the default public interpretation layer
+* items may co-occur in the same group,
+* one fish may belong to one or multiple candidate groups if supported by evidence,
+* and this inference remains separate from rate estimation.
 
-Suggested shape:
+## 10.3 Exclusions
 
-```rust
-ZoneRankingEvidence {
-    source_family: ZoneSourceFamily,   // always ranking
-    total_weight: f64,
-    ess: f64,
-    raw_event_count: Option<u64>,
-    last_seen_ts_utc: Option<Timestamp>,
-    age_days_last: Option<f64>,
-    status: ZoneRankingStatus,
-    drift: Option<ZoneRankingDrift>,
-    fish: Vec<ZoneRankingFishEvidence>,
-}
+Certain event-only or event-tainted items should be excluded by default from:
 
-ZoneRankingFishEvidence {
-    fish_id: i32,
-    item_id: i32,
-    encyclopedia_key: Option<i32>,
-    encyclopedia_id: Option<i32>,
-    fish_name: Option<String>,
-    evidence_weight: f64,
-    evidence_share_mean: Option<f64>,
-    ci_low: Option<f64>,
-    ci_high: Option<f64>,
-}
-```
+* relative catch-rate analysis,
+* and fish-group inference.
 
-Naming rule:
+---
 
-- do not carry forward raw `p_mean` as the public semantic name
-- if kept, rename to `evidence_share_mean` and label it explicitly as ranking-only
+## 11. Problem 4: Boundary Stress and Redraw QA
 
-### Catch rates
+## 11.1 User story
 
-Purpose:
+As a maintainer, I want to understand where the current zone borders are likely wrong or under stress, so I can prioritize redraw work.
 
-- future denominator-aware player-log statistics only
+## 11.2 Requirement
 
-Suggested shape:
+The system should support a maintainers’ QA view that identifies:
 
-```rust
-ZoneCatchRateSummary {
-    source_family: ZoneSourceFamily,   // logs
-    availability: ZoneMetricAvailability,
-    fish: Vec<ZoneFishCatchRate>,
-    notes: Vec<String>,
-}
-```
+* areas with conflicting evidence across neighboring zones,
+* likely problematic boundaries,
+* and zones whose current borders deserve review.
 
-Important rule:
+## 11.3 Guardrail
 
-- never infer this from ranking events
-- `None` or `availability=unavailable` is the correct result until logs exist
+Boundary stress is a **maintenance signal**, not a public fish-rate statistic.
 
-### Diagnostics
+It must not be confused with:
 
-Purpose:
+* ESS,
+* click assignment itself,
+* or fish probability.
 
-- explain warnings and future optimization hooks without blending semantics
+---
 
-Suggested shape:
+## 12. Public UX Requirements
 
-```rust
-ZoneDiagnostics {
-    public_state: ZonePublicState,
-    insufficient_evidence: bool,
-    border_sensitive: Option<bool>,
-    border_stress: Option<ZoneBorderStressSummary>,
-    notes: Vec<String>,
-}
-```
+## 12.1 Default public view
 
-`public_state` should cover user-facing availability, for example:
+The default public zone/fish UI must **not** display an exact fish-level `%` as the primary signal.
 
-- `unknown`
-- `insufficient_evidence`
-- `supported`
-- `stale`
-- `drifting`
+Instead, the default should emphasize:
 
-## 6) Border Ambiguity And Border Stress
+* fish presence support state,
+* source badges,
+* evidence freshness,
+* and explicit unknown / insufficient-evidence messaging.
 
-### A) Point-level border ambiguity
+## 12.2 Advanced diagnostics
 
-This is a click-level assignment question, not an evidence-quality question.
+Advanced or expert-facing UI may show:
 
-Recommended classes:
+* ranking evidence share,
+* ESS,
+* freshness,
+* drift,
+* confidence intervals,
+* and similar diagnostics.
 
-- `core`
-- `near_border`
-- `ambiguous`
-- `unavailable`
+But these must be:
 
-Recommended behavior:
+* clearly labeled as **ranking-only diagnostics**,
+* visually separated from catch-rate displays,
+* and not framed as drop rates.
 
-- if click pixel is available, sample the zone mask at that exact pixel and use that RGB as the assignment truth
-- if a border-distance implementation exists, compute distance-to-different-RGB directly from the same bitmap and return distance and class
-- if only local neighborhood sampling exists, return a class and neighboring RGBs from the bitmap without fake exact distance
-- if no point coordinates are provided, return `unavailable` for border geometry, but do not pretend this is an evidence problem
+## 12.3 Explicit wording guardrail
 
-Do not do any of the following in this layer:
+Any retained percent-like signal derived from ranking evidence must use wording that cannot reasonably be mistaken for an item drop rate.
 
-- infer assignment from ranking evidence
-- suppress neighboring RGBs because of their names
-- ask whether a neighboring RGB is “real enough” if it is present in the current mask bitmap
-- reinterpret bitmap ambiguity as support uncertainty
+For example:
 
-Current feasibility assessment:
+* “ranking evidence share”
+* “ranking-derived support share”
+* “assignment stability”
+* or similar
 
-- exact border distance is not currently implemented anywhere in the repo
-- however it is feasible from currently available assets
-- the repo has a full local zone mask PNG at `data/cdn/public/images/zones_mask_v1.png`
-- the repo also has `ZoneMask::load_png` and exact RGB sampling in `lib/fishystuff_core/src/masks.rs`
+and not simply “% chance” or “rate”.
 
-Conclusion:
+---
 
-- exact zone assignment is already available from the bitmap
-- point-level border distance is feasible with new code
-- exact border distance is not currently supported
-- first-pass API should therefore model availability explicitly for border geometry while keeping bitmap assignment authoritative
+## 13. Data / API / Domain Model Requirements
 
-### B) Zone-level border sensitivity / stress
+The system should preserve the following conceptual sections, whether in one endpoint or several:
 
-This is a zone-diagnostic and mask-QA concept, not the same thing as point-level ambiguity.
+* `assignment`
+* `presence_support`
+* `ranking_evidence`
+* `catch_rates`
+* `diagnostics`
 
-Recommended method:
+## 13.1 Assignment
 
-1. Define a border band around each zone in mask space.
-2. Partition evidence into:
-   - core region
-   - near-border band
-   - neighbor-border bands
-3. Compute ranking evidence distributions for each partition.
-4. Compare:
-   - zone core vs its border band
-   - border band vs neighboring-zone border bands
-5. Use divergence metrics such as JSD.
+Must represent:
 
-Recommended outputs:
+* the assigned zone,
+* the point that was queried,
+* and optional border-analysis diagnostics if available.
 
-- `border_sensitive: bool`
-- `near_border_weight_fraction`
-- `core_vs_border_jsd`
-- per-neighbor stress summary:
-  - `neighbor_zone_rgb`
-  - `neighbor_zone_name`
-  - `shared_border_weight`
-  - `cross_border_jsd`
-- future debug overlay:
-  - raster or vector heatmap of stressed boundary segments
+## 13.2 Presence support
 
-Fit with existing docs:
+Must represent:
 
-- this aligns with `docs/boundary-qa-and-updates.md`
-- the existing “edge divergence map” should become one of the diagnostic inputs for `border_stress`
+* which fish are supported,
+* support state per fish,
+* which source families support that claim,
+* optional time/freshness context,
+* and explicit uncertainty states.
 
-User-facing rule:
+## 13.3 Ranking evidence
 
-- border stress is a diagnostic about zone-mask quality and cross-boundary mixing
-- it is not the same thing as freshness or ESS
+Must represent ranking-only diagnostics such as:
 
-## 7) Migration Plan
+* ESS,
+* weight,
+* freshness,
+* drift,
+* and optional fish-level evidence-share metrics.
 
-### Phase 1
+These must not be the default public fish-rate display.
 
-- ship this RFC
-- add typed `zone_profile_v2` request/response models
-- add source-family enums and support-grade enums
-- keep `/api/v1/zone_stats` intact
+## 13.4 Catch rates
 
-Status after first additive slice:
+Must represent player-tracked quantitative analysis only.
 
-- completed
-- additive endpoint now exists at `/api/v1/zone_profile_v2`
-- `/api/v1/zone_stats` remains intact
+If unavailable, the product should say so explicitly.
 
-### Phase 2
+## 13.5 Diagnostics
 
-- add a ranking-heavy `zone_profile_v2` backend composition path
-- split the payload into:
-  - `assignment`
-  - `presence_support`
-  - `ranking_evidence`
-  - `diagnostics`
-- keep `catch_rates` unavailable / placeholder
-- move ranking percentages into advanced-only `ranking_evidence`
+Must represent:
 
-Status after first additive slice:
+* public-state warnings,
+* insufficient-evidence states,
+* optional boundary stress,
+* and explanatory notes.
 
-- partially completed
-- ranking-backed `presence_support`, `ranking_evidence`, and `diagnostics` are now wired
-- `assignment.border` remains an explicit unavailable placeholder
-- `catch_rates` remains an explicit pending-source placeholder
+---
 
-### Phase 3
+## 14. Architectural Guardrails
 
-- add legacy/community support inputs into `presence_support`
-- keep `fishing_table` as the zone-slot baseline and prefer legacy/community enrichment at the group-table layer
-- add first point-level border geometry implementation from the current zone-mask bitmap
-- keep exact distance optional until the mask-distance primitive exists
+## 14.1 Spatial backend is replaceable
 
-Status after the current additive slice:
+The project may use bitmaps today and something else tomorrow. The product semantics must not depend on one backend.
 
-- partially completed
-- `presence_support` now merges ranking observations with legacy fishing-table support resolved through `fishing_table -> item_main_group_table -> item_sub_group_table`
-- community-backed support is now wired through a dedicated `community_zone_fish_support` runtime table and merged into `presence_support` as source-scoped claims
-- if the community support table is missing or present-but-empty, the API still reports the community layer as unavailable rather than implying absence
-- point-level border geometry is still placeholder after the revert of the earlier heuristic attempt
-- the next implementation attempt should target exact bitmap assignment / bitmap-derived border geometry only
+## 14.2 Evidence provenance must remain visible
 
-### Phase 4
+Different sources must not be merged into one undifferentiated score.
 
-- add player-log schema and ingestion
-- add denominator-aware `catch_rates`
-- preserve strict separation from ranking evidence
+## 14.3 Time attribution is required
 
-### Phase 5
+All meaningful evidence should be time-attributed so it can be aligned with:
 
-- add border stress analytics and debug outputs
-- expose QA overlays or offline analytics outputs for mask maintenance
+* patches,
+* map revisions,
+* and historical analysis.
 
-This sequence is preferred because it fixes semantics and model boundaries before adding more data sources.
+## 14.4 Sample attribution geometry must be explicit
 
-## Concrete answers to required verification tasks
+The system must support distinct sample attribution models such as:
 
-### How the live `zone_stats` path computes weights and ESS
+* `FloatPosition`
+* `PlayerPositionRing`
 
-Live server path:
+and not pretend they are all exact points.
 
-- loads ranking-scoped zone-assigned in-window events with `load_ranking_events_with_zone_in_window`
-- computes `w_time` from `half_life_days`
-- if `fish_norm` is enabled, computes per-fish normalization from recency-weight sums
-- uses `u = w_time` for zone total weight and ESS
-- uses `w = u * fish_norm` only for displayed fish evidence when `fish_norm=true`
-- computes `ESS = (w_sum * w_sum) / w2_sum`
+## 14.5 Click assignment and sample evidence are distinct
 
-### Whether live server semantics differ from docs semantics
+The clicked point belonging to a zone is not the same thing as a ranking sample being exactly attributable to that zone.
 
-Yes.
+## 14.6 Unavailable is acceptable
 
-- docs say effort debiasing is part of zone evidence and ESS
-- live server does not apply `w_eff`
+If a capability is not yet modeled or not supported by current evidence, the system should return “unavailable”, “unknown”, or “insufficient evidence”, rather than a fabricated number.
 
-### Whether standalone analytics semantics differ from live server
+---
 
-Yes.
+## 15. Migration Plan
 
-- analytics computes blurred effort, inverse-effort clipping, and uses it in both fish evidence and ESS
-- live server does not
+## Phase 1 — Immediate public correction
 
-### Whether live `zone_stats` SQL filters `events.source_kind`
+* Remove exact fish-level `%` from the default public zone panel.
+* Keep fish presence support and source/freshness visible.
+* If needed, move ranking evidence share into an advanced diagnostics section with explicit labeling.
 
-Yes, now.
+## Phase 2 — Semantic hardening
 
-- the ranking-derived zone-evidence query now filters `e.source_kind = SOURCE_KIND_RANKING`
-- this safeguard is shared by the ranking-backed `zone_profile_v2` path and the existing ranking-derived `zone_stats` / `effort_grid` loaders
+* Preserve or introduce explicit separation between assignment, presence support, ranking evidence, catch rates, and diagnostics.
+* Avoid collapsing these back into one blended response.
 
-### Whether that creates a concrete future contamination risk
+## Phase 3 — Spatial assignment refinement
 
-Previously yes; this slice now mitigates that specific loading-path risk.
+* Continue improving clicked-point zone assignment.
+* Optionally add border proximity / ambiguity diagnostics.
 
-- the public source enum still only exposes `Ranking`
-- future multi-source work still needs explicit new query paths rather than reusing ranking-only loaders
+## Phase 4 — Sample attribution framework
 
-### Whether `EventSourceKind` supports anything beyond ranking
+* Add explicit sample attribution models.
+* Support exact and ring-based evidence attribution.
 
-No.
+## Phase 5 — Player-tracked quantitative pipeline
 
-- current public enum contains only `Ranking`
-- current DB mapping helper also only maps code `1` to `Ranking`
+* Add controlled player-tracked data ingestion.
+* Add setup-scoped relative rate analysis.
+* Add Triple-Float-based group inference.
 
-### What `fishing_table` and related schema can concretely provide
+## Phase 6 — Boundary QA tooling
 
-Available today:
+* Add maintainers’ views for stress and redraw prioritization.
 
-- zone RGB to slot rows
-- slot-level legacy rates
-- main-group references
-- main-group option rows
-- subgroup item variants in the current local runtime
-- fish identity/icon mapping
+---
 
-Not available from the raw legacy import alone:
+## 16. Verified Facts vs Maintainer Assumptions
 
-- trustworthy subgroup item variants without additional backfill or enrichment work
+## 16.1 Verified or accepted project facts
 
-Additional local-source finding:
+* Fishing behavior is modeled as a two-stage group-and-item process.
+* Bookmark transfer between site and game is useful but subject to small rounding differences.
+* Ranking evidence becomes sparse over time.
+* Ranking evidence should be time-attributed.
+* Float/player-position geometry matters for evidence attribution.
 
-- the workbook `Fishing Data.xlsx` provides a human-readable translated RGB table that can supplement runtime SQL with descriptions and category-rate context during ingestion or auditing
-- the workbook has `158` translated RGB rows, while runtime `fishing_table` currently has `276` rows, so the workbook should be treated as a dated reference subset rather than a full live mirror
-- the raw legacy XLSX dump under `data/data/excel/` is the durable source-schema backbone for `fishing_table`, `item_main_group_table`, `item_sub_group_table`, and `item_table`
-- maintained import work should enrich the legacy group tables first; it should not assume a direct `fishing_table` rewrite is safe
+## 16.2 Maintainer assumptions to preserve explicitly
 
-### Whether player-log schema already exists
+These may be highly plausible and operationally useful, but they should still be treated as assumptions until specifically validated:
 
-No current schema or ingestion path was found.
+* rare/prize/group modifiers act at the group-selection stage,
+* Triple-Float co-catches are same-group evidence,
+* event-only or event-tainted items should be excluded by default from quantitative analysis,
+* ring-based attribution for ranking evidence is the correct spatial model.
 
-### Whether border distance can be computed from currently available assets
+The product may use these assumptions, but it should avoid presenting them as stronger than they are.
 
-Feasible, but not currently implemented.
+---
 
-- assets exist locally
-- exact mask RGB sampling code exists
-- no distance-transform or nearest-boundary primitive currently exists
+## 17. Normative Requirements Summary
 
-## Implemented first additive slice
+## Must
 
-This repo now includes the first additive `zone_profile_v2` slice:
+* The default public UI must not present ranking-derived exact `%` as the primary fish-level signal.
+* The system must separate:
 
-1. typed request/response models under `lib/fishystuff_api/src/models/zone_profile_v2.rs`
-2. additive backend route at `/api/v1/zone_profile_v2`
-3. ranking-heavy composition path that maps current ranking evidence into separated sections:
-   - `assignment`
-   - `presence_support`
-   - `ranking_evidence`
-   - `catch_rates`
-   - `diagnostics`
-4. semantics-focused tests that lock:
-   - ranking evidence share is nested and explicitly named
-   - missing ranking evidence is not treated as absence
-   - placeholder border state is explicit
-   - catch rates remain a typed pending-source placeholder
-5. ranking-event load path isolation via `source_kind`
-6. legacy-backed `presence_support` claims resolved from the current Dolt runtime tables rather than from workbook parsing in the API path
-7. community-backed `presence_support` claims resolved from a dedicated imported runtime table rather than from workbook parsing in the API path
-8. store-side v2 profile composition moved under `api/fishystuff_server/src/store/dolt_mysql/zone_profile_v2/` so future work does not accumulate inside `dolt_mysql.rs`
+    * point assignment,
+    * fish presence support,
+    * ranking evidence quality,
+    * catch-rate estimation,
+    * fish-group inference,
+    * and boundary stress.
+* The system must preserve source provenance.
+* The system must preserve time attribution for evidence.
+* The system must not treat missing evidence as absence.
+* The system must not present ranking evidence share as a drop/catch rate.
+* The system must support setup-scoped quantitative analysis for future player tracking.
+* The system must treat click assignment and sample attribution as separate concepts.
+* The system must support explicit unavailable / unknown / insufficient-evidence states.
 
-### Fully implemented in this slice
+## Should
 
-- additive `/api/v1/zone_profile_v2` route and store plumbing
-- ranking-backed `presence_support`
-- legacy-backed `presence_support` claims from the current Dolt fishing tables
-- community-backed `presence_support` claims from `community_zone_fish_support` when that table is populated
-- ranking-backed `ranking_evidence`
-- explicit typed `catch_rates` placeholder
-- explicit typed `assignment.border` unavailable placeholder
-- diagnostics notes that separate ranking evidence, assignment ambiguity, and catch-rate estimation
+* The default public UI should emphasize fish support states, source badges, and freshness.
+* Advanced diagnostics should remain available behind explicit ranking-only framing.
+* Boundary stress should be available to maintainers for redraw QA.
+* Fish-group inference should allow multiple candidate groups if evidence supports that.
+* New implementation work should be modular by concern.
 
-### Still placeholder in this slice
+## May
 
-- point-level border distance and neighbor inference
-- live-populated community support data in the current runtime
-- player-log catch-rate summaries
-- border stress metrics and overlays
+* Border-distance / ambiguity may be added later.
+* Advanced ESS / drift / confidence displays may be expanded in expert-facing tools.
+* Additional evidence classes may be introduced later.
 
-### Public wording for this slice
+---
 
-Use wording like:
+## 18. Practical Immediate Product Change
 
-- `observed in ranking data`
-- `supported by legacy fishing tables`
-- `supported by curated community zone data`
-- `insufficient ranking evidence`
-- `border ambiguity unavailable`
-- `catch rates unavailable`
+The immediate action implied by this RFC is simple:
 
-Avoid wording like:
+> **Stop showing exact fish-level `%` in the default public zone view.**
 
-- `drop rate`
-- `chance to catch`
-- `border confidence`
+If that signal remains anywhere, it must be:
 
-### Advanced wording for this slice
-
-- `ranking evidence share`
-- `effective sample size (ESS)`
-- `fresh/stale/drifting ranking evidence`
-
-Advanced wording must still avoid describing ranking evidence share as a drop rate.
-
-### Migration note
-
-- `/api/v1/zone_stats` is intentionally preserved for compatibility
-- the old route still exposes `p_mean`/CI semantics that are easy to misread publicly
-- the new route is the additive path for safer semantics and future multi-source composition
-- the new route keeps ranking evidence and legacy support in separate sections/claims rather than blending them into one score
-- the new route also keeps curated community support in `presence_support` rather than promoting it into ranking evidence or catch-rate semantics
-
-### Current community-support runtime note
-
-- the repo now defines a dedicated `community_zone_fish_support` table for curated zone/fish presence claims
-- the importer for the maintained community prize-fish workbook writes into that table
-- the API treats a missing table or an empty table as `unavailable`, not as `no fish supported`
-- this is intentional so an unpopulated runtime does not silently turn missing community data into false absence
-
-## Non-goals for this RFC pass
-
-- no sweeping UI rewrite
-- no replacement of `/api/v1/zone_stats`
-- no fabricated border-distance number
-- no fake catch-rate summaries
+* relabeled as a ranking-only support diagnostic,
+* moved under an advanced section,
+* and visually separated from anything that looks like a drop-rate display.
