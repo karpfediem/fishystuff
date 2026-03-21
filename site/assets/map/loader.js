@@ -2119,6 +2119,40 @@ function buildZoneEvidenceSummary(zoneStats) {
   return parts.join(" · ") || "No confidence data.";
 }
 
+export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()) {
+  const entries = Array.isArray(distribution) ? distribution : [];
+  return entries
+    .map((entry) => {
+      const fish = fishLookup.get(entry.fishId);
+      const evidenceFish = {
+        fishId: entry.fishId,
+        itemId: fish?.itemId ?? entry.itemId ?? null,
+        encyclopediaId: fish?.encyclopediaId ?? entry.encyclopediaId ?? null,
+        name: fish?.name || entry.fishName || `Fish ${entry.fishId}`,
+      };
+      const ci =
+        Number.isFinite(entry.ciLow) && Number.isFinite(entry.ciHigh)
+          ? `${formatDecimal(entry.ciLow)}-${formatDecimal(entry.ciHigh)}`
+          : "n/a";
+      const detailLabel = `p ${formatDecimal(entry.pMean)} · weight ${formatDecimal(entry.evidenceWeight)} · CI ${ci}`;
+      return `
+        <button
+          class="list-row w-full rounded-box border border-transparent bg-base-100 px-2.5 py-2 text-left hover:border-base-300"
+          data-zone-evidence-fish-id="${evidenceFish.fishId}"
+          title="${escapeHtml(detailLabel)}"
+          aria-description="${escapeHtml(detailLabel)}"
+          type="button"
+        >
+          <div>${renderFishItemIcon(evidenceFish, "size-6")}</div>
+          <div class="min-w-0">
+            <div class="truncate font-semibold">${escapeHtml(evidenceFish.name)}</div>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+}
+
 function ensureZoneEvidenceElements(elements) {
   if (elements.zoneEvidenceStatus && elements.zoneEvidenceSummary && elements.zoneEvidenceList) {
     return elements;
@@ -2670,39 +2704,7 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
     return;
   }
 
-  elements.zoneEvidenceList.innerHTML = distribution
-    .map((entry) => {
-      const fish = fishLookup.get(entry.fishId);
-      const evidenceFish = {
-        fishId: entry.fishId,
-        itemId: fish?.itemId ?? entry.itemId ?? null,
-        encyclopediaId: fish?.encyclopediaId ?? entry.encyclopediaId ?? null,
-        name: fish?.name || entry.fishName || `Fish ${entry.fishId}`,
-      };
-      const ci =
-        Number.isFinite(entry.ciLow) && Number.isFinite(entry.ciHigh)
-          ? `${formatDecimal(entry.ciLow)}-${formatDecimal(entry.ciHigh)}`
-          : "n/a";
-      const detailLabel = `p ${formatDecimal(entry.pMean)} · weight ${formatDecimal(entry.evidenceWeight)} · CI ${ci}`;
-      return `
-        <button
-          class="list-row w-full rounded-box border border-transparent bg-base-100 px-2.5 py-2 text-left hover:border-base-300"
-          data-zone-evidence-fish-id="${evidenceFish.fishId}"
-          type="button"
-        >
-          <div>${renderFishItemIcon(evidenceFish, "size-6")}</div>
-          <div class="min-w-0">
-            <div class="truncate font-semibold">${escapeHtml(evidenceFish.name)}</div>
-          </div>
-          <span
-            class="badge badge-outline badge-sm cursor-help"
-            title="${escapeHtml(detailLabel)}"
-            aria-label="${escapeHtml(detailLabel)}"
-          >${formatPercent(entry.pMean)}</span>
-        </button>
-      `;
-    })
-    .join("");
+  elements.zoneEvidenceList.innerHTML = buildZoneEvidenceListMarkup(distribution, fishLookup);
 }
 
 function renderStatusLines(container, statuses) {

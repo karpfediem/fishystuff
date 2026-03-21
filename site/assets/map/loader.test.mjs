@@ -7,6 +7,7 @@ const {
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
   buildHoverOverviewRows,
+  buildZoneEvidenceListMarkup,
   buildMapUiResetMountOptions,
   buildSearchMatches,
   computeDragAutoScrollDelta,
@@ -561,6 +562,58 @@ test("renderSearchSelection restores visible chips after the search window is re
   renderSearchSelection(elements, stateBundle, fishLookup);
   assert.equal(searchSelection.hidden, false);
   assert.equal(searchSelectionShell.hidden, false);
+});
+
+test("buildZoneEvidenceListMarkup hides stability percentages while keeping the detail tooltip", () => {
+  const originalWindow = globalThis.window;
+  const originalLocation = globalThis.location;
+  globalThis.window = {
+    location: {
+      href: "https://fishystuff.fish/map/",
+      hostname: "fishystuff.fish",
+    },
+  };
+  globalThis.location = globalThis.window.location;
+
+  const fishLookup = new Map([
+    [
+      912,
+      {
+        fishId: 912,
+        itemId: 3012,
+        encyclopediaId: 4012,
+        name: "Cron Dart",
+      },
+    ],
+  ]);
+
+  try {
+    const markup = buildZoneEvidenceListMarkup(
+      [
+        {
+          fishId: 912,
+          fishName: "Cron Dart",
+          pMean: 0.027,
+          evidenceWeight: 0.031,
+          ciLow: 0.0,
+          ciHigh: 0.184,
+        },
+      ],
+      fishLookup,
+    );
+
+    assert.equal(markup.includes('data-zone-evidence-fish-id="912"'), true);
+    assert.equal(markup.includes('title="p 0.027 · weight 0.031 · CI 0.000-0.184"'), true);
+    assert.equal(
+      markup.includes('aria-description="p 0.027 · weight 0.031 · CI 0.000-0.184"'),
+      true,
+    );
+    assert.equal(markup.includes("2.7%"), false);
+    assert.equal(markup.includes("badge badge-outline badge-sm cursor-help"), false);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.location = originalLocation;
+  }
 });
 
 test("parseWindowUiState falls back to defaults for invalid persisted state", () => {
