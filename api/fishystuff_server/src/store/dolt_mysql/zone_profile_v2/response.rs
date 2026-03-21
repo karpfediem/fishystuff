@@ -9,6 +9,7 @@ use fishystuff_api::models::zone_profile_v2::{
 };
 use fishystuff_api::models::zone_stats::{DriftInfo, ZoneStatsResponse, ZoneStatus};
 
+use super::community_support::{CommunitySupportStatus, CommunityZoneSupportSummary};
 use super::legacy_support::LegacyZoneSupportSummary;
 
 fn ranking_status_from_zone_status(status: ZoneStatus) -> ZoneRankingStatus {
@@ -88,11 +89,35 @@ fn map_drift_info(drift: DriftInfo) -> ZoneRankingDrift {
     }
 }
 
+fn support_grade_from_community_status(status: CommunitySupportStatus) -> ZoneSupportGrade {
+    match status {
+        CommunitySupportStatus::Confirmed => ZoneSupportGrade::ReferenceSupported,
+        CommunitySupportStatus::Unconfirmed | CommunitySupportStatus::DataIncomplete => {
+            ZoneSupportGrade::WeakHint
+        }
+    }
+}
+
+fn support_note_from_community_status(status: CommunitySupportStatus) -> &'static str {
+    match status {
+        CommunitySupportStatus::Confirmed => {
+            "supported by curated community zone data for this zone"
+        }
+        CommunitySupportStatus::Unconfirmed => {
+            "listed in curated community zone data as an unconfirmed fish for this zone"
+        }
+        CommunitySupportStatus::DataIncomplete => {
+            "listed in curated community zone data for an incomplete/uncertain zone row"
+        }
+    }
+}
+
 pub(super) fn build_zone_profile_v2_response(
     request: &ZoneProfileV2Request,
     layer_revision_id: &str,
     zone_stats: ZoneStatsResponse,
     legacy_support: LegacyZoneSupportSummary,
+    community_support: CommunityZoneSupportSummary,
 ) -> ZoneProfileV2Response {
     struct PresenceAccumulator {
         fish: ZoneFishSupport,
@@ -105,6 +130,11 @@ pub(super) fn build_zone_profile_v2_response(
         fish: legacy_fish_rows,
         notes: legacy_notes,
     } = legacy_support;
+    let CommunityZoneSupportSummary {
+        evaluated: community_evaluated,
+        fish: community_fish_rows,
+        notes: community_notes,
+    } = community_support;
 
     let point = match (request.map_px_x, request.map_px_y) {
         (Some(map_px_x), Some(map_px_y)) => Some(ZonePoint { map_px_x, map_px_y }),
@@ -126,6 +156,7 @@ pub(super) fn build_zone_profile_v2_response(
     let ranking_support_grade =
         support_grade_from_zone_status(zone_stats.confidence.status.clone());
     let has_legacy_support = !legacy_fish_rows.is_empty();
+    let has_community_support = !community_fish_rows.is_empty();
     let mut presence_notes = if zone_stats.distribution.is_empty() {
         vec![
             "ranking evidence was checked for the selected window, but no positive evidence was found"
@@ -144,11 +175,21 @@ pub(super) fn build_zone_profile_v2_response(
                 .to_string(),
         );
     }
+    if has_community_support {
+        presence_notes.push(
+            "community support provides curated zone/fish claims alongside ranking and legacy sources"
+                .to_string(),
+        );
+    }
     presence_notes.extend(legacy_notes);
-    presence_notes.push(
-        "community overlay and player-log source families remain placeholders in this slice"
-            .to_string(),
-    );
+    presence_notes.extend(community_notes);
+    if !community_evaluated {
+        presence_notes.push(
+            "community support is unavailable in the current runtime until the imported support table is populated"
+                .to_string(),
+        );
+    }
+    presence_notes.push("player-log source families remain placeholders in this slice".to_string());
 
     let mut presence_by_item: BTreeMap<i32, PresenceAccumulator> = BTreeMap::new();
     for (ranking_rank, fish) in zone_stats.distribution.iter().enumerate() {
@@ -236,6 +277,55 @@ pub(super) fn build_zone_profile_v2_response(
         }
     }
 
+    for community_fish in community_fish_rows {
+        let community_claim = ZoneSupportClaim {
+            source_family: ZoneSourceFamily::Community,
+            claim_type: ZoneClaimType::PresenceReferenced,
+            confidence_note: Some(
+                support_note_from_community_status(community_fish.status).to_string(),
+            ),
+            observed_at_ts_utc: None,
+            source_revision: request
+                .ref_id
+                .as_ref()
+                .map(|ref_id| format!("community_ref:{ref_id}"))
+                .or_else(|| Some("community_zone_fish_support".to_string())),
+        };
+
+        if let Some(accumulator) = presence_by_item.get_mut(&community_fish.item_id) {
+            accumulator.fish.support_grade = merge_support_grade(
+                &accumulator.fish.support_grade,
+                &support_grade_from_community_status(community_fish.status),
+            );
+            add_source_badge(
+                &mut accumulator.fish.source_badges,
+                ZoneSourceFamily::Community,
+            );
+            accumulator.fish.claims.push(community_claim);
+            if accumulator.fish.fish_name.is_none() {
+                accumulator.fish.fish_name = community_fish.fish_name.clone();
+            }
+        } else {
+            presence_by_item.insert(
+                community_fish.item_id,
+                PresenceAccumulator {
+                    fish: ZoneFishSupport {
+                        fish_id: community_fish.item_id,
+                        item_id: community_fish.item_id,
+                        encyclopedia_key: None,
+                        encyclopedia_id: None,
+                        fish_name: community_fish.fish_name,
+                        support_grade: support_grade_from_community_status(community_fish.status),
+                        source_badges: vec![ZoneSourceFamily::Community],
+                        claims: vec![community_claim],
+                    },
+                    ranking_rank: None,
+                    legacy_weight: 0.0,
+                },
+            );
+        }
+    }
+
     let mut presence_fish = presence_by_item.into_values().collect::<Vec<_>>();
     presence_fish.sort_by(|left, right| {
         left.ranking_rank
@@ -266,6 +356,11 @@ pub(super) fn build_zone_profile_v2_response(
                 .to_string(),
         );
     }
+    if has_community_support {
+        ranking_notes.push(
+            "community support is shown in presence_support, not in ranking_evidence".to_string(),
+        );
+    }
 
     let ranking_fish = zone_stats
         .distribution
@@ -283,24 +378,28 @@ pub(super) fn build_zone_profile_v2_response(
         })
         .collect();
 
-    let public_state = public_state_from_zone_stats(&zone_stats, has_legacy_support);
+    let public_state =
+        public_state_from_zone_stats(&zone_stats, has_legacy_support || has_community_support);
     let insufficient_evidence = public_state == ZonePublicState::InsufficientEvidence;
 
     let mut evaluated_sources = vec![ZoneSourceFamily::Ranking];
     if legacy_evaluated {
         evaluated_sources.push(ZoneSourceFamily::Legacy);
     }
+    if community_evaluated {
+        evaluated_sources.push(ZoneSourceFamily::Community);
+    }
 
     let mut diagnostics_notes = vec![
         "ranking evidence, border ambiguity, and catch-rate estimation are separate sections in zone_profile_v2".to_string(),
         "border ambiguity is intentionally unavailable in this slice rather than estimated from unsupported geometry".to_string(),
-        "legacy reference support is populated from the current Dolt fishing tables; community overlay and player-log sources remain placeholders".to_string(),
+        "legacy and community support are populated in presence_support; player-log sources remain placeholders".to_string(),
     ];
     if insufficient_evidence {
         diagnostics_notes.push("missing ranking evidence is not evidence of absence".to_string());
-    } else if zone_stats.distribution.is_empty() && has_legacy_support {
+    } else if zone_stats.distribution.is_empty() && (has_legacy_support || has_community_support) {
         diagnostics_notes.push(
-            "ranking evidence is absent in the selected window, but legacy reference support exists for this zone"
+            "ranking evidence is absent in the selected window, but non-ranking support exists for this zone"
                 .to_string(),
         );
     }

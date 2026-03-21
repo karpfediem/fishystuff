@@ -9,6 +9,9 @@ use fishystuff_api::models::zone_stats::{
 
 use crate::store::queries;
 
+use super::community_support::{
+    CommunitySupportStatus, CommunityZoneFishSupport, CommunityZoneSupportSummary,
+};
 use super::legacy_support::{LegacyZoneFishSupport, LegacyZoneSupportSummary};
 use super::response::build_zone_profile_v2_response;
 
@@ -59,6 +62,7 @@ fn zone_profile_v2_marks_missing_ranking_evidence_as_insufficient() {
             distribution: Vec::new(),
         },
         LegacyZoneSupportSummary::default(),
+        CommunityZoneSupportSummary::default(),
     );
 
     assert_eq!(
@@ -119,6 +123,7 @@ fn zone_profile_v2_keeps_ranking_support_separate_from_catch_rates() {
             }],
         },
         LegacyZoneSupportSummary::default(),
+        CommunityZoneSupportSummary::default(),
     );
 
     assert_eq!(
@@ -184,6 +189,7 @@ fn zone_profile_v2_merges_legacy_reference_support_without_blurring_ranking() {
             }],
             notes: vec!["legacy support evaluated".to_string()],
         },
+        CommunityZoneSupportSummary::default(),
     );
 
     assert_eq!(profile.presence_support.state, ZonePresenceState::Supported);
@@ -210,7 +216,7 @@ fn zone_profile_v2_merges_legacy_reference_support_without_blurring_ranking() {
         .diagnostics
         .notes
         .iter()
-        .any(|note| note.contains("legacy reference support exists")));
+        .any(|note| note.contains("non-ranking support exists")));
 }
 
 #[test]
@@ -256,6 +262,7 @@ fn zone_profile_v2_keeps_ranking_and_legacy_claims_separate_for_same_fish() {
             }],
             notes: Vec::new(),
         },
+        CommunityZoneSupportSummary::default(),
     );
 
     assert_eq!(profile.presence_support.fish.len(), 1);
@@ -290,4 +297,110 @@ fn zone_profile_v2_keeps_ranking_and_legacy_claims_separate_for_same_fish() {
 #[test]
 fn ranking_events_query_is_source_filtered() {
     assert!(queries::RANKING_EVENTS_WITH_ZONE_SQL.contains("e.source_kind = ?"));
+}
+
+#[test]
+fn zone_profile_v2_merges_confirmed_community_support_without_blurring_ranking() {
+    let request = zone_profile_request();
+    let profile = build_zone_profile_v2_response(
+        &request,
+        "v1",
+        ZoneStatsResponse {
+            zone_rgb_u32: 0x010203,
+            zone_rgb: RgbKey("1,2,3".to_string()),
+            zone_name: Some("Test Zone".to_string()),
+            window: ZoneStatsWindow::default(),
+            confidence: ZoneConfidence {
+                ess: 0.0,
+                total_weight: 0.0,
+                last_seen_ts_utc: None,
+                age_days_last: None,
+                status: ZoneStatus::Unknown,
+                notes: vec!["no evidence in window".to_string()],
+                drift: None,
+            },
+            distribution: Vec::new(),
+        },
+        LegacyZoneSupportSummary::default(),
+        CommunityZoneSupportSummary {
+            evaluated: true,
+            fish: vec![CommunityZoneFishSupport {
+                item_id: 8201,
+                fish_name: Some("Mudskipper".to_string()),
+                status: CommunitySupportStatus::Confirmed,
+                claim_count: 2,
+            }],
+            notes: vec!["community support evaluated".to_string()],
+        },
+    );
+
+    assert_eq!(profile.presence_support.state, ZonePresenceState::Supported);
+    assert_eq!(
+        profile.presence_support.evaluated_sources,
+        vec![ZoneSourceFamily::Ranking, ZoneSourceFamily::Community]
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].support_grade,
+        ZoneSupportGrade::ReferenceSupported
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].source_badges,
+        vec![ZoneSourceFamily::Community]
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].claims[0].claim_type,
+        ZoneClaimType::PresenceReferenced
+    );
+    assert!(profile.ranking_evidence.fish.is_empty());
+    assert_eq!(profile.diagnostics.public_state, ZonePublicState::Supported);
+}
+
+#[test]
+fn zone_profile_v2_maps_unconfirmed_community_rows_to_weak_hint() {
+    let request = zone_profile_request();
+    let profile = build_zone_profile_v2_response(
+        &request,
+        "v1",
+        ZoneStatsResponse {
+            zone_rgb_u32: 0x010203,
+            zone_rgb: RgbKey("1,2,3".to_string()),
+            zone_name: Some("Test Zone".to_string()),
+            window: ZoneStatsWindow::default(),
+            confidence: ZoneConfidence {
+                ess: 0.0,
+                total_weight: 0.0,
+                last_seen_ts_utc: None,
+                age_days_last: None,
+                status: ZoneStatus::Unknown,
+                notes: vec!["no evidence in window".to_string()],
+                drift: None,
+            },
+            distribution: Vec::new(),
+        },
+        LegacyZoneSupportSummary::default(),
+        CommunityZoneSupportSummary {
+            evaluated: true,
+            fish: vec![CommunityZoneFishSupport {
+                item_id: 8202,
+                fish_name: Some("Sea Eel".to_string()),
+                status: CommunitySupportStatus::Unconfirmed,
+                claim_count: 1,
+            }],
+            notes: Vec::new(),
+        },
+    );
+
+    assert_eq!(profile.presence_support.fish.len(), 1);
+    assert_eq!(
+        profile.presence_support.fish[0].support_grade,
+        ZoneSupportGrade::WeakHint
+    );
+    assert_eq!(
+        profile.presence_support.fish[0].source_badges,
+        vec![ZoneSourceFamily::Community]
+    );
+    assert!(profile.presence_support.fish[0].claims[0]
+        .confidence_note
+        .as_deref()
+        .is_some_and(|note| note.contains("unconfirmed")));
 }

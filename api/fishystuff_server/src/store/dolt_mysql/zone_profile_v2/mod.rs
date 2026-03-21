@@ -1,3 +1,4 @@
+mod community_support;
 mod legacy_support;
 mod response;
 
@@ -69,12 +70,15 @@ impl DoltMySqlStore {
             &event_fish_names,
             &event_fish_identities,
         )?;
+        let community_support =
+            self.query_community_zone_support(zone_rgb_u32, request.ref_id.as_deref())?;
 
         Ok(build_zone_profile_v2_response(
             &request,
             &layer_revision_id,
             zone_stats,
             legacy_support,
+            community_support,
         ))
     }
 }
