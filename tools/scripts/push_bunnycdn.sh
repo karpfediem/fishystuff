@@ -58,6 +58,16 @@ join_remote_path() {
   fi
 }
 
+curl_storage_request() {
+  curl -sS \
+    --connect-timeout "$BUNNY_STORAGE_CONNECT_TIMEOUT" \
+    --max-time "$BUNNY_STORAGE_MAX_TIME" \
+    --speed-limit "$BUNNY_STORAGE_SPEED_LIMIT" \
+    --speed-time "$BUNNY_STORAGE_SPEED_TIME" \
+    --retry 3 --retry-all-errors --retry-delay 2 \
+    "$@"
+}
+
 build_manifest() {
   find "$CDN_ROOT" -type f \
     ! -name '.gitkeep' \
@@ -121,8 +131,9 @@ http_list_dir() {
   remote_path="$(join_remote_path "$REMOTE_ROOT" "$remote_dir")"
   url="${STORAGE_BASE_URL}/${remote_path}/"
 
+  echo "LIST ${remote_dir}" >&2
   status="$(
-    curl -sS -o "$out_file" -w '%{http_code}' \
+    curl_storage_request -o "$out_file" -w '%{http_code}' \
       -H "AccessKey: ${BUNNY_STORAGE_ACCESS_KEY}" \
       "$url"
   )"
@@ -184,16 +195,11 @@ upload_file() {
 
   echo "PUT ${relative_path}" >&2
   status="$(
-    curl -sS -o "$response_file" -w '%{http_code}' \
-    --connect-timeout "$BUNNY_STORAGE_CONNECT_TIMEOUT" \
-    --max-time "$BUNNY_STORAGE_MAX_TIME" \
-    --speed-limit "$BUNNY_STORAGE_SPEED_LIMIT" \
-    --speed-time "$BUNNY_STORAGE_SPEED_TIME" \
-    --retry 3 --retry-all-errors --retry-delay 2 \
-    -X PUT \
-    -H "AccessKey: ${BUNNY_STORAGE_ACCESS_KEY}" \
-    --upload-file "$local_path" \
-    "$url"
+    curl_storage_request -o "$response_file" -w '%{http_code}' \
+      -X PUT \
+      -H "AccessKey: ${BUNNY_STORAGE_ACCESS_KEY}" \
+      --upload-file "$local_path" \
+      "$url"
   )"
 
   case "$status" in
@@ -223,8 +229,7 @@ delete_remote_file() {
   response_file="$(mktemp)"
 
   status="$(
-    curl -sS -o "$response_file" -w '%{http_code}' \
-      --retry 3 --retry-all-errors --retry-delay 2 \
+    curl_storage_request -o "$response_file" -w '%{http_code}' \
       -X DELETE \
       -H "AccessKey: ${BUNNY_STORAGE_ACCESS_KEY}" \
       "$url"
@@ -275,6 +280,7 @@ sync_roots_file="$(mktemp)"
 upload_paths_file="$(mktemp)"
 local_root_files_file="$(mktemp)"
 remote_root_files_file="$(mktemp)"
+stale_remote_files_file="$(mktemp)"
 
 cleanup_tmp_files() {
   rm -f \
@@ -283,7 +289,8 @@ cleanup_tmp_files() {
     "$sync_roots_file" \
     "$upload_paths_file" \
     "$local_root_files_file" \
-    "$remote_root_files_file"
+    "$remote_root_files_file" \
+    "$stale_remote_files_file"
 }
 trap cleanup_tmp_files EXIT
 
@@ -375,15 +382,19 @@ while IFS= read -r sync_root; do
     continue
   fi
 
+  echo "checking remote deletes under ${sync_root}" >&2
   list_local_files_under_root "$sync_root" "$local_root_files_file"
   list_remote_files_under_root "$sync_root" "$remote_root_files_file"
+  comm -23 "$remote_root_files_file" "$local_root_files_file" > "$stale_remote_files_file"
+
+  echo "remote files under ${sync_root}: $(wc -l < "$remote_root_files_file")" >&2
+  echo "local files under ${sync_root}: $(wc -l < "$local_root_files_file")" >&2
+  echo "stale remote files under ${sync_root}: $(wc -l < "$stale_remote_files_file")" >&2
 
   while IFS= read -r remote_path; do
     [ -n "$remote_path" ] || continue
-    if ! grep -Fxq "$remote_path" "$local_root_files_file"; then
-      delete_remote_file "$remote_path"
-    fi
-  done < "$remote_root_files_file"
+    delete_remote_file "$remote_path"
+  done < "$stale_remote_files_file"
 done < "$sync_roots_file"
 
 if [ -z "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
