@@ -2315,14 +2315,6 @@ function renderLayerStack(container, stateBundle) {
           `<span class="badge badge-soft badge-xs">Masks ${clippedLayers.length}</span>`,
         );
       }
-      let helperText = "Drop onto a layer to attach. Drop between layers to reorder.";
-      if (locked) {
-        helperText = "Pinned as the base layer.";
-      } else if (clipMaskName) {
-        helperText = "Attached. Drop between layers to detach, or onto another layer to retarget.";
-      } else if (clippedLayers.length) {
-        helperText = "Drop another layer onto this card to use it as a clip mask.";
-      }
       return `
         <article
           class="fishymap-layer-card card card-border bg-base-200"
@@ -2350,7 +2342,6 @@ function renderLayerStack(container, stateBundle) {
               ${locked ? '<span class="badge badge-outline badge-xs">Ground</span>' : ""}
             </div>
             ${relationBadges.length ? `<div class="fishymap-layer-relations">${relationBadges.join("")}</div>` : ""}
-            <p class="text-[11px] text-base-content/55">${helperText}</p>
             ${
               clippedLayerNames.length
                 ? `
