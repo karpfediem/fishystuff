@@ -20,7 +20,7 @@
 
         <!-- Favicons -->
         <link rel="icon" type="image/png" sizes="32x32" href="$site.asset('img/favicon-32x32.png').link()">
-        <link rel="shortcut icon" href="$site.asset('img/favicon.ico').link()">
+        <link rel="icon" type="image/png" sizes="16x16" href="$site.asset('img/favicon-16x16.png').link()">
 
         <!-- Open Graph -->
         <meta property="og:type" content="website">
