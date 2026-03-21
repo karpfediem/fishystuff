@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 
 use fishystuff_api::models::zone_profile_v2::{
-    ZoneAssignment, ZoneBorderAssessment, ZoneBorderClass, ZoneBorderMethod, ZoneCatchRateSummary,
-    ZoneClaimType, ZoneDiagnostics, ZoneFishSupport, ZoneMetricAvailability, ZonePoint,
-    ZonePresenceState, ZonePresenceSupport, ZoneProfileV2Request, ZoneProfileV2Response,
+    ZoneAssignment, ZoneCatchRateSummary, ZoneClaimType, ZoneDiagnostics, ZoneFishSupport,
+    ZoneMetricAvailability, ZonePresenceState, ZonePresenceSupport, ZoneProfileV2Response,
     ZonePublicState, ZoneRankingDrift, ZoneRankingEvidence, ZoneRankingFishEvidence,
     ZoneRankingShareKind, ZoneRankingStatus, ZoneSourceFamily, ZoneSupportClaim, ZoneSupportGrade,
 };
@@ -113,11 +112,11 @@ fn support_note_from_community_status(status: CommunitySupportStatus) -> &'stati
 }
 
 pub(super) fn build_zone_profile_v2_response(
-    request: &ZoneProfileV2Request,
-    layer_revision_id: &str,
+    assignment: ZoneAssignment,
     zone_stats: ZoneStatsResponse,
     legacy_support: LegacyZoneSupportSummary,
     community_support: CommunityZoneSupportSummary,
+    layer_revision_id: &str,
 ) -> ZoneProfileV2Response {
     struct PresenceAccumulator {
         fish: ZoneFishSupport,
@@ -135,23 +134,6 @@ pub(super) fn build_zone_profile_v2_response(
         fish: community_fish_rows,
         notes: community_notes,
     } = community_support;
-
-    let point = match (request.map_px_x, request.map_px_y) {
-        (Some(map_px_x), Some(map_px_y)) => Some(ZonePoint { map_px_x, map_px_y }),
-        _ => None,
-    };
-    let point_incomplete = request.map_px_x.is_some() ^ request.map_px_y.is_some();
-
-    let mut border_warnings = vec![
-        "border distance and neighboring-zone analysis are not yet implemented for zone_profile_v2"
-            .to_string(),
-    ];
-    if point_incomplete {
-        border_warnings
-            .push("point coordinates were incomplete; assignment.point was omitted".to_string());
-    } else if point.is_none() {
-        border_warnings.push("point coordinates were not provided".to_string());
-    }
 
     let ranking_support_grade =
         support_grade_from_zone_status(zone_stats.confidence.status.clone());
@@ -229,11 +211,7 @@ pub(super) fn build_zone_profile_v2_response(
                     .to_string(),
             ),
             observed_at_ts_utc: None,
-            source_revision: request
-                .ref_id
-                .as_ref()
-                .map(|ref_id| format!("legacy_ref:{ref_id}"))
-                .or_else(|| Some("legacy_runtime_tables".to_string())),
+            source_revision: Some("legacy_runtime_tables".to_string()),
         };
 
         if let Some(accumulator) = presence_by_item.get_mut(&legacy_fish.item_id) {
@@ -285,11 +263,7 @@ pub(super) fn build_zone_profile_v2_response(
                 support_note_from_community_status(community_fish.status).to_string(),
             ),
             observed_at_ts_utc: None,
-            source_revision: request
-                .ref_id
-                .as_ref()
-                .map(|ref_id| format!("community_ref:{ref_id}"))
-                .or_else(|| Some("community_zone_fish_support".to_string())),
+            source_revision: Some("community_zone_fish_support".to_string()),
         };
 
         if let Some(accumulator) = presence_by_item.get_mut(&community_fish.item_id) {
@@ -392,9 +366,24 @@ pub(super) fn build_zone_profile_v2_response(
 
     let mut diagnostics_notes = vec![
         "ranking evidence, border ambiguity, and catch-rate estimation are separate sections in zone_profile_v2".to_string(),
-        "border ambiguity is intentionally unavailable in this slice rather than estimated from unsupported geometry".to_string(),
         "legacy and community support are populated in presence_support; player-log sources remain placeholders".to_string(),
     ];
+    match assignment.border.method {
+        fishystuff_api::models::zone_profile_v2::ZoneBorderMethod::LocalNeighborhood => {
+            diagnostics_notes.push(
+                "border ambiguity uses local zone-mask neighborhood sampling and does not report an exact border distance"
+                    .to_string(),
+            );
+        }
+        fishystuff_api::models::zone_profile_v2::ZoneBorderMethod::Unavailable => {
+            diagnostics_notes
+                .push("border ambiguity is unavailable for this request or runtime".to_string());
+        }
+        fishystuff_api::models::zone_profile_v2::ZoneBorderMethod::MaskDistance => {
+            diagnostics_notes
+                .push("border ambiguity uses mask-distance classification".to_string());
+        }
+    }
     if insufficient_evidence {
         diagnostics_notes.push("missing ranking evidence is not evidence of absence".to_string());
     } else if zone_stats.distribution.is_empty() && (has_legacy_support || has_community_support) {
@@ -405,19 +394,7 @@ pub(super) fn build_zone_profile_v2_response(
     }
 
     ZoneProfileV2Response {
-        assignment: ZoneAssignment {
-            zone_rgb_u32: zone_stats.zone_rgb_u32,
-            zone_rgb: zone_stats.zone_rgb,
-            zone_name: zone_stats.zone_name,
-            point,
-            border: ZoneBorderAssessment {
-                class: ZoneBorderClass::Unavailable,
-                nearest_border_distance_px: None,
-                method: ZoneBorderMethod::Unavailable,
-                warnings: border_warnings,
-            },
-            neighboring_zones: Vec::new(),
-        },
+        assignment,
         presence_support: ZonePresenceSupport {
             state: support_state,
             evaluated_sources,

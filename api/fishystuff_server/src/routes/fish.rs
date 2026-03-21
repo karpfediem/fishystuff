@@ -71,6 +71,7 @@ fn datastar_fish_sse(response: FishListResponse) -> AppResult<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -195,6 +196,7 @@ mod tests {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
             cors_allowed_origins: vec!["https://fishystuff.fish".to_string()],
+            images_dir: PathBuf::from("data/cdn/public/images"),
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,

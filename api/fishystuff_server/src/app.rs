@@ -63,6 +63,7 @@ fn build_cors_layer(cors_allowed_origins: &[String]) -> CorsLayer {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use std::sync::Arc;
 
     use axum::body::Body;
@@ -231,6 +232,7 @@ mod tests {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
             cors_allowed_origins: origins.into_iter().map(str::to_string).collect(),
+            images_dir: PathBuf::from("data/cdn/public/images"),
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,
