@@ -103,6 +103,11 @@ function runMagick(sourcePath, outputPath, width, quality) {
     cwd: siteDir,
     stdio: "inherit",
   });
+  if (result.error?.code === "ENOENT") {
+    throw new Error(
+      "ImageMagick 'magick' was not found on PATH; install imagemagick before running site image builds.",
+    );
+  }
   if (result.status !== 0) {
     throw new Error(`magick failed for ${path.relative(siteDir, sourcePath)} -> ${path.relative(siteDir, outputPath)}`);
   }

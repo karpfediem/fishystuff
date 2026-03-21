@@ -21,6 +21,10 @@ jobs:
         with:
           fetch-depth: 0  # Change if you need git info
       - uses: oven-sh/setup-bun@v2
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends imagemagick
 
       - run: bun install
       - run: bun run pre-build
