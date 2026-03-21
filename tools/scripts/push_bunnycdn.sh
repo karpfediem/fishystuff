@@ -431,7 +431,7 @@ if [ -n "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
   LC_ALL=C sort -u -o "$selected_local_files_file" "$selected_local_files_file"
   LC_ALL=C sort -u -o "$selected_remote_files_file" "$selected_remote_files_file"
 
-  comm -23 "$required_local_files_file" "$selected_remote_files_file" > "$missing_remote_files_file"
+  LC_ALL=C comm -23 "$required_local_files_file" "$selected_remote_files_file" > "$missing_remote_files_file"
 
   awk '
     NR == FNR {
@@ -518,7 +518,7 @@ while IFS= read -r sync_root; do
   echo "checking remote deletes under ${sync_root}" >&2
   list_local_files_under_root "$sync_root" "$local_root_files_file"
   list_remote_files_under_root "$sync_root" "$remote_root_files_file"
-  comm -23 "$remote_root_files_file" "$local_root_files_file" > "$stale_remote_files_file"
+  LC_ALL=C comm -23 "$remote_root_files_file" "$local_root_files_file" > "$stale_remote_files_file"
 
   echo "remote files under ${sync_root}: $(wc -l < "$remote_root_files_file")" >&2
   echo "local files under ${sync_root}: $(wc -l < "$local_root_files_file")" >&2
