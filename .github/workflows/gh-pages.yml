@@ -10,6 +10,7 @@ jobs:
     environment:
       name: github-pages
     permissions:
+      contents: read
       id-token: write
       pages: write
     runs-on: ubuntu-latest
@@ -18,14 +19,15 @@ jobs:
         with:
           fetch-depth: 0  # Change if you need git info
       - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v16
-        with:
-          name: devenv
-      - name: Install devenv.sh
+      - name: Install site build tooling
         shell: bash
-        run: nix profile add nixpkgs#devenv
-      - name: Build site in devenv
-        shell: devenv shell bash -- -e {0}
+        run: nix profile add nixpkgs#bun nixpkgs#imagemagick nixpkgs#python3Packages.fonttools nixpkgs#woff2
+      - name: Setup Zine
+        uses: kristoff-it/setup-zine@v1
+        with:
+          version: v0.11.2
+      - name: Build site
+        shell: bash
         run: |
           cd site
           bun install --frozen-lockfile
