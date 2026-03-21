@@ -12,7 +12,6 @@ kill_timeout = "30s"
 
 [env]
   DOLT_API_SQL_USER = "fishystuff_api"
-  DOLT_CLONE_DEPTH = "1"
   DOLT_DATA_ROOT = "/data"
   DOLT_DATABASE_NAME = "fishystuff"
   DOLT_REMOTE_BRANCH = "main"

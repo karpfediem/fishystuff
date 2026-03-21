@@ -81,6 +81,7 @@
               apiEntrypoint
               apiConfig
               pkgs.cacert
+              pkgs.dockerTools.fakeNss
             ];
             config.Entrypoint = [ "${apiEntrypoint}/bin/fishystuff-api-entrypoint" ];
             config.Env = [

@@ -74,16 +74,24 @@ EOF
 }
 
 clone_remote_repo() {
+  local repo_name="${1:-$DOLT_DATABASE_NAME}"
+  local repo_dir="${DOLT_DATA_ROOT}/${repo_name}"
   local clone_cmd=(
     dolt clone
     --branch "$DOLT_REMOTE_BRANCH"
     --single-branch
-    --depth "$DOLT_CLONE_DEPTH"
-    "$DOLT_REMOTE_URL"
-    "$DOLT_DATABASE_NAME"
   )
 
-  log "cloning ${DOLT_REMOTE_URL} branch ${DOLT_REMOTE_BRANCH} into ${DOLT_REPO_DIR}"
+  if [ -n "${DOLT_CLONE_DEPTH:-}" ]; then
+    clone_cmd+=(--depth "$DOLT_CLONE_DEPTH")
+  fi
+
+  clone_cmd+=(
+    "$DOLT_REMOTE_URL"
+    "$repo_name"
+  )
+
+  log "cloning ${DOLT_REMOTE_URL} branch ${DOLT_REMOTE_BRANCH} into ${repo_dir}"
   (
     cd "$DOLT_DATA_ROOT"
     "${clone_cmd[@]}"
@@ -92,8 +100,9 @@ clone_remote_repo() {
 }
 
 ensure_repo_identity() {
+  local repo_dir="${1:-$DOLT_REPO_DIR}"
   (
-    cd "$DOLT_REPO_DIR"
+    cd "$repo_dir"
 
     if ! dolt config --local --get user.name >/dev/null 2>&1; then
       dolt config --local --add user.name "$DOLT_REPO_USER_NAME"
@@ -104,6 +113,31 @@ ensure_repo_identity() {
   )
 }
 
+replace_repo_with_fresh_clone() {
+  local reason="$1"
+  local temp_name=""
+  local temp_dir=""
+  local backup_dir=""
+
+  temp_name="${DOLT_DATABASE_NAME}.reclone.$(random_hex)"
+  temp_dir="${DOLT_DATA_ROOT}/${temp_name}"
+  backup_dir="${DOLT_REPO_DIR}.bak.$(date +%s)"
+
+  log "attempting fresh clone because ${reason}"
+  cd "$DOLT_DATA_ROOT"
+  rm -rf "$temp_dir"
+  if ! clone_remote_repo "$temp_name"; then
+    rm -rf "$temp_dir"
+    return 1
+  fi
+
+  ensure_repo_identity "$temp_dir"
+  mv "$DOLT_REPO_DIR" "$backup_dir"
+  mv "$temp_dir" "$DOLT_REPO_DIR"
+  rm -rf "$backup_dir"
+  log "fresh clone replaced existing local repo"
+}
+
 sync_existing_repo() {
   log "using existing local Dolt clone at ${DOLT_REPO_DIR}"
 
@@ -112,31 +146,11 @@ sync_existing_repo() {
     return 0
   fi
 
-  (
-    cd "$DOLT_REPO_DIR"
-    ensure_repo_identity
+  if replace_repo_with_fresh_clone "boot-time sync requested"; then
+    return 0
+  fi
 
-    log "fetching origin/${DOLT_REMOTE_BRANCH}"
-    if ! dolt fetch origin "$DOLT_REMOTE_BRANCH"; then
-      log "fetch failed; continuing with existing local clone"
-      exit 0
-    fi
-
-    if ! dolt checkout "$DOLT_REMOTE_BRANCH" >/dev/null 2>&1; then
-      if ! dolt checkout -b "$DOLT_REMOTE_BRANCH" "origin/${DOLT_REMOTE_BRANCH}" >/dev/null 2>&1; then
-        log "could not switch to branch ${DOLT_REMOTE_BRANCH}; continuing with current local branch"
-        exit 0
-      fi
-    fi
-
-    log "pulling origin/${DOLT_REMOTE_BRANCH}"
-    if ! dolt pull origin "$DOLT_REMOTE_BRANCH"; then
-      log "pull failed; continuing with existing local clone"
-      exit 0
-    fi
-
-    log "pull complete"
-  )
+  log "fresh clone sync failed; continuing with existing local clone"
 }
 
 ensure_local_repo() {
@@ -230,7 +244,7 @@ DOLT_DATA_ROOT="${DOLT_DATA_ROOT:-/data}"
 DOLT_DATABASE_NAME="${DOLT_DATABASE_NAME:-fishystuff}"
 DOLT_REPO_DIR="${DOLT_DATA_ROOT}/${DOLT_DATABASE_NAME}"
 DOLT_REMOTE_BRANCH="${DOLT_REMOTE_BRANCH:-main}"
-DOLT_CLONE_DEPTH="${DOLT_CLONE_DEPTH:-1}"
+DOLT_CLONE_DEPTH="${DOLT_CLONE_DEPTH:-}"
 DOLT_PULL_ON_BOOT="${DOLT_PULL_ON_BOOT:-true}"
 DOLT_REPO_USER_NAME="${DOLT_REPO_USER_NAME:-fishystuff api}"
 DOLT_REPO_USER_EMAIL="${DOLT_REPO_USER_EMAIL:-api@fishystuff.fish}"
