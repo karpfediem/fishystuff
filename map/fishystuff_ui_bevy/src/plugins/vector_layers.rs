@@ -78,8 +78,27 @@ impl Plugin for VectorLayersPlugin {
         app.insert_resource(VectorLayerRuntime::with_defaults())
             .init_resource::<VectorBuildConfig>()
             .init_resource::<VectorCacheConfig>()
-            .add_systems(Update, update_vector_layers);
+            .add_systems(
+                Update,
+                update_vector_layers.run_if(vector_layers_need_update),
+            );
     }
+}
+
+fn vector_layers_need_update(
+    registry: Res<'_, LayerRegistry>,
+    layer_runtime: Res<'_, LayerRuntime>,
+    vector_runtime: Res<'_, VectorLayerRuntime>,
+    cache_config: Res<'_, VectorCacheConfig>,
+    view_mode: Res<'_, ViewModeState>,
+    bookmarks: Res<'_, BookmarkState>,
+) -> bool {
+    registry.is_changed()
+        || layer_runtime.is_changed()
+        || cache_config.is_changed()
+        || view_mode.is_changed()
+        || bookmarks.is_changed()
+        || !vector_runtime.states.is_empty()
 }
 
 fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_, '_>) {
@@ -162,6 +181,13 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             clear_vector_metrics(runtime_state, LayerVectorStatus::Failed);
             continue;
         };
+        if !active
+            && !vector_runtime.states.contains_key(&layer.id)
+            && vector_runtime.finished.layer_len(layer.id) == 0
+        {
+            clear_vector_build_metrics(runtime_state, LayerVectorStatus::NotRequested);
+            continue;
+        }
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
         let revision = effective_revision(&source);
         invalidate_non_active_revisions(vector_runtime, layer.id, &revision, &mut commands);
@@ -197,8 +223,6 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         }
 
         runtime_state.vector_cache_last_hit = false;
-        runtime_state.vector_cache_misses = runtime_state.vector_cache_misses.saturating_add(1);
-        crate::perf_counter_add!("vector.cache_misses", 1);
 
         let mut state = vector_runtime
             .states
@@ -220,6 +244,9 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             vector_runtime.states.insert(layer.id, state);
             continue;
         }
+
+        runtime_state.vector_cache_misses = runtime_state.vector_cache_misses.saturating_add(1);
+        crate::perf_counter_add!("vector.cache_misses", 1);
 
         state = match state {
             VectorBuildState::NotRequested => begin_fetch(source.clone(), revision.clone()),
@@ -434,6 +461,12 @@ fn resolve_vector_source_for_map_version(
 }
 
 fn clear_vector_metrics(runtime_state: &mut LayerRuntimeState, status: LayerVectorStatus) {
+    clear_vector_build_metrics(runtime_state, status);
+    runtime_state.vector_cache_hits = 0;
+    runtime_state.vector_cache_misses = 0;
+}
+
+fn clear_vector_build_metrics(runtime_state: &mut LayerRuntimeState, status: LayerVectorStatus) {
     runtime_state.vector_status = status;
     runtime_state.vector_progress = 0.0;
     runtime_state.vector_fetched_bytes = 0;
@@ -446,8 +479,6 @@ fn clear_vector_metrics(runtime_state: &mut LayerRuntimeState, status: LayerVect
     runtime_state.vector_triangle_count = 0;
     runtime_state.vector_build_ms = 0.0;
     runtime_state.vector_last_frame_build_ms = 0.0;
-    runtime_state.vector_cache_hits = 0;
-    runtime_state.vector_cache_misses = 0;
     runtime_state.vector_cache_last_hit = false;
     runtime_state.vector_cache_entries = 0;
 }

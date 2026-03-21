@@ -77,13 +77,13 @@ impl ScenarioName {
                 let zoom = 0.65 + oscillate(progress * 3.0) * 1.4;
                 set_map_2d_view(world, map_x, map_y, zoom.max(0.35));
 
-                let mut fish_filter = world.resource_mut::<FishFilterState>();
-                fish_filter.selected_fish_ids = match ((frame / 120) % 4) as usize {
-                    0 => Vec::new(),
-                    1 => vec![101],
-                    2 => vec![202],
-                    _ => vec![101, 202],
+                let selected_fish_ids: &[i32] = match ((frame / 120) % 4) as usize {
+                    0 => &[],
+                    1 => &[101],
+                    2 => &[202],
+                    _ => &[101, 202],
                 };
+                set_selected_fish_ids(world, selected_fish_ids);
             }
             Self::VectorRegionGroupsEnable => {
                 configure_common_layers(world, false, true);
@@ -150,7 +150,14 @@ impl ScenarioName {
 }
 
 fn configure_common_layers(world: &mut World, show_points: bool, allow_vector: bool) {
-    {
+    let needs_display_update = {
+        let display = world.resource::<MapDisplayState>();
+        display.show_points != show_points
+            || display.show_point_icons
+            || !display.show_zone_mask
+            || (display.zone_mask_opacity - 0.5).abs() > f32::EPSILON
+    };
+    if needs_display_update {
         let mut display = world.resource_mut::<MapDisplayState>();
         display.show_points = show_points;
         display.show_point_icons = false;
@@ -167,15 +174,18 @@ fn configure_common_layers(world: &mut World, show_points: bool, allow_vector: b
 fn set_map_2d_view(world: &mut World, map_x: f32, map_y: f32, zoom: f32) {
     let map_to_world = MapToWorld::default();
     let world_point = map_to_world.map_to_world(MapPoint::new(map_x as f64, map_y as f64));
-    {
+    if world.resource::<ViewModeState>().mode != ViewMode::Map2D {
         let mut mode = world.resource_mut::<ViewModeState>();
         mode.mode = ViewMode::Map2D;
     }
-
-    let mut view = world.resource_mut::<Map2dViewState>();
-    view.center_world_x = world_point.x as f32;
-    view.center_world_z = world_point.z as f32;
-    view.zoom = zoom.max(0.25);
+    let desired_view = Map2dViewState {
+        center_world_x: world_point.x as f32,
+        center_world_z: world_point.z as f32,
+        zoom: zoom.max(0.25),
+    };
+    if *world.resource::<Map2dViewState>() != desired_view {
+        *world.resource_mut::<Map2dViewState>() = desired_view;
+    }
 }
 
 fn set_terrain_view(
@@ -188,19 +198,24 @@ fn set_terrain_view(
 ) {
     let map_to_world = MapToWorld::default();
     let world_point = map_to_world.map_to_world(MapPoint::new(map_x as f64, map_y as f64));
-    {
+    let needs_mode_update = {
+        let mode = world.resource::<ViewModeState>();
+        mode.mode != ViewMode::Terrain3D || !mode.terrain_initialized
+    };
+    if needs_mode_update {
         let mut mode = world.resource_mut::<ViewModeState>();
         mode.mode = ViewMode::Terrain3D;
         mode.terrain_initialized = true;
     }
-
-    let mut view = world.resource_mut::<Terrain3dViewState>();
-    view.pivot_world.x = world_point.x as f32;
-    view.pivot_world.y = 0.0;
-    view.pivot_world.z = world_point.z as f32;
-    view.yaw = yaw;
-    view.pitch = pitch;
-    view.set_distance_clamped(distance);
+    let mut desired_view = *world.resource::<Terrain3dViewState>();
+    desired_view.pivot_world =
+        bevy::math::Vec3::new(world_point.x as f32, 0.0, world_point.z as f32);
+    desired_view.yaw = yaw;
+    desired_view.pitch = pitch;
+    desired_view.set_distance_clamped(distance);
+    if *world.resource::<Terrain3dViewState>() != desired_view {
+        *world.resource_mut::<Terrain3dViewState>() = desired_view;
+    }
 }
 
 fn set_layer_visibility(world: &mut World, key: &str, visible: bool) {
@@ -208,9 +223,22 @@ fn set_layer_visibility(world: &mut World, key: &str, visible: bool) {
     let Some(layer_id) = layer_id else {
         return;
     };
-    world
-        .resource_mut::<LayerRuntime>()
-        .set_visible(layer_id, visible);
+    if world.resource::<LayerRuntime>().visible(layer_id) != visible {
+        world
+            .resource_mut::<LayerRuntime>()
+            .set_visible(layer_id, visible);
+    }
+}
+
+fn set_selected_fish_ids(world: &mut World, selected_fish_ids: &[i32]) {
+    if world
+        .resource::<FishFilterState>()
+        .selected_fish_ids
+        .as_slice()
+        != selected_fish_ids
+    {
+        world.resource_mut::<FishFilterState>().selected_fish_ids = selected_fish_ids.to_vec();
+    }
 }
 
 fn oscillate(value: f32) -> f32 {
