@@ -2,6 +2,7 @@ use bevy::camera::ScalingMode;
 use bevy::ecs::system::SystemParam;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy::input::touch::Touches;
 use bevy::input::ButtonInput;
 use bevy::ui::{ComputedNode, UiGlobalTransform};
 use bevy::window::{CursorMoved, PrimaryWindow};
@@ -23,6 +24,27 @@ pub struct PanState {
 #[derive(Resource, Default)]
 pub struct CursorState {
     pub last_pos: Option<Vec2>,
+}
+
+#[derive(Default)]
+struct MapTouchGestureState {
+    active_pinch_ids: Option<(u64, u64)>,
+    last_pinch_center: Option<Vec2>,
+    last_pinch_distance: Option<f32>,
+}
+
+impl MapTouchGestureState {
+    fn reset(&mut self) {
+        self.active_pinch_ids = None;
+        self.last_pinch_center = None;
+        self.last_pinch_distance = None;
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ActiveTouchPoint {
+    id: u64,
+    position: Vec2,
 }
 
 pub struct InputPlugin;
@@ -54,6 +76,7 @@ fn map2d_controls_should_run(mode: ViewMode, camera_active: bool) -> bool {
 fn track_cursor(
     windows: Query<Entity, With<PrimaryWindow>>,
     mut cursor: ResMut<CursorState>,
+    touches: Res<Touches>,
     mut cursor_moved: MessageReader<CursorMoved>,
 ) {
     let Ok(window_entity) = windows.single() else {
@@ -64,12 +87,19 @@ fn track_cursor(
             cursor.last_pos = Some(ev.position);
         }
     }
+    if let Some(position) = primary_touch_position(&touches) {
+        cursor.last_pos = Some(position);
+    }
 }
 
-fn update_map2d_camera_controls(mut controls: Map2dCameraControls<'_, '_>) {
+fn update_map2d_camera_controls(
+    mut controls: Map2dCameraControls<'_, '_>,
+    mut touch_gesture: Local<MapTouchGestureState>,
+) {
     crate::perf_scope!("camera.2d_update");
     if controls.view_mode.mode != ViewMode::Map2D {
         controls.pan.dragging = false;
+        touch_gesture.reset();
         return;
     }
     let Ok(window) = controls.windows.single() else {
@@ -80,6 +110,7 @@ fn update_map2d_camera_controls(mut controls: Map2dCameraControls<'_, '_>) {
     };
     if !map2d_controls_should_run(controls.view_mode.mode, camera.is_active) {
         controls.pan.dragging = false;
+        touch_gesture.reset();
         return;
     }
     let ortho_template = match &*projection {
@@ -102,8 +133,14 @@ fn update_map2d_camera_controls(mut controls: Map2dCameraControls<'_, '_>) {
     let mut changed = (working_zoom - unclamped_zoom).abs() > 1e-6;
 
     let ui_input_blocked = controls.ui_capture.blocked || controls.ui_capture.text_input_active;
+    let active_touches = active_touch_points(&controls.touches);
+    let touch_recent = !active_touches.is_empty()
+        || controls.touches.any_just_released()
+        || controls.touches.any_just_canceled();
+
     if ui_input_blocked {
         controls.pan.dragging = false;
+        touch_gesture.reset();
     }
 
     if controls.key_buttons.just_pressed(KeyCode::Home) && !controls.ui_capture.text_input_active {
@@ -123,7 +160,8 @@ fn update_map2d_camera_controls(mut controls: Map2dCameraControls<'_, '_>) {
     }
     let cursor_pos = window.cursor_position().or(controls.cursor.last_pos);
 
-    if controls.mouse_buttons.just_pressed(MouseButton::Left) && !ui_input_blocked {
+    if !touch_recent && controls.mouse_buttons.just_pressed(MouseButton::Left) && !ui_input_blocked
+    {
         if let Some(pos) = cursor_pos {
             controls.pan.dragging = true;
             controls.pan.last_cursor = pos;
@@ -131,7 +169,8 @@ fn update_map2d_camera_controls(mut controls: Map2dCameraControls<'_, '_>) {
         }
     }
 
-    if controls.mouse_buttons.pressed(MouseButton::Left)
+    if !touch_recent
+        && controls.mouse_buttons.pressed(MouseButton::Left)
         && controls.pan.dragging
         && !ui_input_blocked
     {
@@ -166,49 +205,173 @@ fn update_map2d_camera_controls(mut controls: Map2dCameraControls<'_, '_>) {
         }
     }
 
-    if controls.mouse_buttons.just_released(MouseButton::Left) {
+    if !touch_recent && controls.mouse_buttons.just_released(MouseButton::Left) {
         controls.pan.dragging = false;
     }
 
-    for ev in controls.mouse_wheel.read() {
-        if ui_input_blocked {
-            continue;
-        }
-        let mut scroll = ev.y;
-        if matches!(ev.unit, MouseScrollUnit::Pixel) {
-            scroll /= 100.0;
-        }
-        scroll = scroll.clamp(-10.0, 10.0);
-        let zoom_delta = 2.0_f32.powf(-scroll / ZOOM_TICKS_PER_DOUBLE);
-        let new_scale = (working_zoom * zoom_delta).clamp(
-            controls.zoom_bounds.min_scale,
-            controls.zoom_bounds.max_scale,
-        );
-        if let Some(cursor) = cursor_pos {
-            let before = screen_to_world_with_scale(
-                window,
-                &ortho_template,
-                &working_transform,
-                cursor,
-                working_zoom,
+    if !touch_recent {
+        for ev in controls.mouse_wheel.read() {
+            if ui_input_blocked {
+                continue;
+            }
+            let mut scroll = ev.y;
+            if matches!(ev.unit, MouseScrollUnit::Pixel) {
+                scroll /= 100.0;
+            }
+            scroll = scroll.clamp(-10.0, 10.0);
+            let zoom_delta = 2.0_f32.powf(-scroll / ZOOM_TICKS_PER_DOUBLE);
+            let new_scale = (working_zoom * zoom_delta).clamp(
+                controls.zoom_bounds.min_scale,
+                controls.zoom_bounds.max_scale,
             );
-            let after = screen_to_world_with_scale(
-                window,
-                &ortho_template,
-                &working_transform,
-                cursor,
-                new_scale,
-            );
-            if let (Some(before), Some(after)) = (before, after) {
-                let delta = before - after;
-                working_center.x += delta.x;
-                working_center.y += delta.y;
-                working_transform.translation.x = working_center.x;
-                working_transform.translation.y = working_center.y;
+            if let Some(cursor) = cursor_pos {
+                let before = screen_to_world_with_scale(
+                    window,
+                    &ortho_template,
+                    &working_transform,
+                    cursor,
+                    working_zoom,
+                );
+                let after = screen_to_world_with_scale(
+                    window,
+                    &ortho_template,
+                    &working_transform,
+                    cursor,
+                    new_scale,
+                );
+                if let (Some(before), Some(after)) = (before, after) {
+                    let delta = before - after;
+                    working_center.x += delta.x;
+                    working_center.y += delta.y;
+                    working_transform.translation.x = working_center.x;
+                    working_transform.translation.y = working_center.y;
+                }
+            }
+            working_zoom = new_scale;
+            changed = true;
+        }
+    }
+
+    if !ui_input_blocked {
+        match active_touches.as_slice() {
+            [touch] => {
+                let was_pinch = touch_gesture.active_pinch_ids.is_some();
+                touch_gesture.reset();
+                if controls.pan.dragging {
+                    if let (Some(prev), Some(curr)) = (
+                        screen_to_world_with_scale(
+                            window,
+                            &ortho_template,
+                            &working_transform,
+                            controls.pan.last_cursor,
+                            working_zoom,
+                        ),
+                        screen_to_world_with_scale(
+                            window,
+                            &ortho_template,
+                            &working_transform,
+                            touch.position,
+                            working_zoom,
+                        ),
+                    ) {
+                        let delta = prev - curr;
+                        working_center.x += delta.x;
+                        working_center.y += delta.y;
+                        controls.pan.drag_distance += delta.length();
+                        changed = true;
+                    }
+                } else {
+                    controls.pan.dragging = true;
+                    if !was_pinch {
+                        controls.pan.drag_distance = 0.0;
+                    }
+                }
+                controls.pan.last_cursor = touch.position;
+            }
+            [first, second] => {
+                let pinch_ids = (first.id, second.id);
+                let center = (first.position + second.position) * 0.5;
+                let distance = first.position.distance(second.position);
+                controls.pan.dragging = false;
+                if touch_gesture.active_pinch_ids != Some(pinch_ids) {
+                    touch_gesture.active_pinch_ids = Some(pinch_ids);
+                    touch_gesture.last_pinch_center = Some(center);
+                    touch_gesture.last_pinch_distance = Some(distance);
+                    controls.pan.drag_distance = DRAG_THRESHOLD + 1.0;
+                } else {
+                    if let Some(previous_center) = touch_gesture.last_pinch_center {
+                        if let (Some(prev), Some(curr)) = (
+                            screen_to_world_with_scale(
+                                window,
+                                &ortho_template,
+                                &working_transform,
+                                previous_center,
+                                working_zoom,
+                            ),
+                            screen_to_world_with_scale(
+                                window,
+                                &ortho_template,
+                                &working_transform,
+                                center,
+                                working_zoom,
+                            ),
+                        ) {
+                            let delta = prev - curr;
+                            working_center.x += delta.x;
+                            working_center.y += delta.y;
+                            working_transform.translation.x = working_center.x;
+                            working_transform.translation.y = working_center.y;
+                            controls.pan.drag_distance += delta.length();
+                            changed = true;
+                        }
+                    }
+
+                    if let Some(previous_distance) = touch_gesture.last_pinch_distance {
+                        if previous_distance > f32::EPSILON && distance > f32::EPSILON {
+                            let new_scale = (working_zoom * previous_distance / distance).clamp(
+                                controls.zoom_bounds.min_scale,
+                                controls.zoom_bounds.max_scale,
+                            );
+                            if (new_scale - working_zoom).abs() > 1e-6 {
+                                let before = screen_to_world_with_scale(
+                                    window,
+                                    &ortho_template,
+                                    &working_transform,
+                                    center,
+                                    working_zoom,
+                                );
+                                let after = screen_to_world_with_scale(
+                                    window,
+                                    &ortho_template,
+                                    &working_transform,
+                                    center,
+                                    new_scale,
+                                );
+                                if let (Some(before), Some(after)) = (before, after) {
+                                    let delta = before - after;
+                                    working_center.x += delta.x;
+                                    working_center.y += delta.y;
+                                }
+                                working_zoom = new_scale;
+                                changed = true;
+                            }
+                        }
+                    }
+
+                    touch_gesture.last_pinch_center = Some(center);
+                    touch_gesture.last_pinch_distance = Some(distance);
+                }
+            }
+            [] => {
+                controls.pan.dragging = false;
+                touch_gesture.reset();
+            }
+            _ => {
+                controls.pan.dragging = false;
+                controls.pan.drag_distance = DRAG_THRESHOLD + 1.0;
+                touch_gesture.reset();
             }
         }
-        working_zoom = new_scale;
-        changed = true;
     }
 
     if changed {
@@ -226,6 +389,7 @@ struct Map2dCameraControls<'w, 's> {
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
     key_buttons: Res<'w, ButtonInput<KeyCode>>,
+    touches: Res<'w, Touches>,
     mouse_wheel: MessageReader<'w, 's, MouseWheel>,
     pan: ResMut<'w, PanState>,
     control_mutations: ResMut<'w, CameraControlMutationFlags>,
@@ -248,6 +412,7 @@ struct Map2dCameraControls<'w, 's> {
 
 fn update_ui_pointer_capture(
     windows: Query<&Window, With<PrimaryWindow>>,
+    touches: Res<Touches>,
     blockers: Query<
         (
             &ComputedNode,
@@ -262,13 +427,46 @@ fn update_ui_pointer_capture(
         capture.blocked = false;
         return;
     };
-    let Some(cursor) = window.physical_cursor_position() else {
+    let Some(cursor) = window.physical_cursor_position().or_else(|| {
+        touches
+            .first_pressed_position()
+            .map(|position| position * window.scale_factor())
+    }) else {
         capture.blocked = false;
         return;
     };
     capture.blocked = blockers.iter().any(|(node, transform, visibility)| {
         visibility.map(|v| v.get()).unwrap_or(true) && node.contains_point(*transform, cursor)
     });
+}
+
+fn primary_touch_position(touches: &Touches) -> Option<Vec2> {
+    touches
+        .first_pressed_position()
+        .or_else(|| {
+            touches
+                .iter_just_released()
+                .next()
+                .map(|touch| touch.position())
+        })
+        .or_else(|| {
+            touches
+                .iter_just_canceled()
+                .next()
+                .map(|touch| touch.position())
+        })
+}
+
+fn active_touch_points(touches: &Touches) -> Vec<ActiveTouchPoint> {
+    let mut points = touches
+        .iter()
+        .map(|touch| ActiveTouchPoint {
+            id: touch.id(),
+            position: touch.position(),
+        })
+        .collect::<Vec<_>>();
+    points.sort_by_key(|point| point.id);
+    points
 }
 
 fn screen_to_world_with_scale(

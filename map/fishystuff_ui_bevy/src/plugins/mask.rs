@@ -1,4 +1,5 @@
 use bevy::ecs::system::SystemParam;
+use bevy::input::touch::Touches;
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 use serde_json::{Map, Value};
@@ -43,7 +44,11 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     }
-    if context.mouse_buttons.pressed(MouseButton::Left) {
+    let active_touch_count = context.touches.iter().count();
+    if context.mouse_buttons.pressed(MouseButton::Left)
+        || active_touch_count >= 2
+        || (active_touch_count == 1 && context.pan.drag_distance > DRAG_THRESHOLD)
+    {
         context.display_state.hovered_zone_rgb = hovered_zone_rgb(context.hover.info.as_ref());
         return;
     }
@@ -57,7 +62,10 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
     let Ok((camera, camera_transform)) = context.camera_q.single() else {
         return;
     };
-    let Some(cursor) = window.cursor_position() else {
+    let Some(cursor) = window
+        .cursor_position()
+        .or_else(|| touch_hover_position(&context.touches))
+    else {
         clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     };
@@ -141,7 +149,9 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     if context.ui_capture.blocked {
         return;
     }
-    if !context.mouse_buttons.just_released(MouseButton::Left) {
+    if !context.mouse_buttons.just_released(MouseButton::Left)
+        && !context.touches.any_just_released()
+    {
         return;
     }
     if context.pan.drag_distance > DRAG_THRESHOLD {
@@ -382,6 +392,7 @@ struct HoverVectorMetadata {
 #[derive(SystemParam)]
 struct HoverUpdateContext<'w, 's> {
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
+    touches: Res<'w, Touches>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
     tile_cache: Res<'w, RasterTileCache>,
@@ -390,6 +401,7 @@ struct HoverUpdateContext<'w, 's> {
     display_state: ResMut<'w, MapDisplayState>,
     ui_capture: Res<'w, UiPointerCapture>,
     hover: ResMut<'w, HoverState>,
+    pan: Res<'w, PanState>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
@@ -399,6 +411,7 @@ struct HoverUpdateContext<'w, 's> {
 #[derive(SystemParam)]
 struct MaskClickContext<'w, 's> {
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
+    touches: Res<'w, Touches>,
     pending: ResMut<'w, PendingRequests>,
     selection: ResMut<'w, SelectionState>,
     hover: Res<'w, HoverState>,
@@ -408,6 +421,15 @@ struct MaskClickContext<'w, 's> {
     ui_capture: Res<'w, UiPointerCapture>,
     view_mode: Res<'w, ViewModeState>,
     _marker: std::marker::PhantomData<&'s ()>,
+}
+
+fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
+    touches.first_pressed_position().or_else(|| {
+        touches
+            .iter_just_released()
+            .next()
+            .map(|touch| touch.position())
+    })
 }
 
 struct HoverSamplingContext<'a> {
