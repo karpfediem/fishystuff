@@ -102,7 +102,6 @@ fn vector_layers_need_update(
 }
 
 fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_, '_>) {
-    crate::perf_scope!("vector.layer_update");
     let meshes = &mut update.meshes;
     let materials_2d = &mut update.materials_2d;
     let materials_3d = &mut update.materials_3d;
@@ -122,10 +121,31 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         .finished
         .set_max_entries(cache_config.max_entries.max(1));
 
+    let clip_mask_source_ids = layer_runtime.clip_mask_source_ids();
+    let has_visible_vector_inputs = registry.ordered().iter().any(|layer| {
+        layer.is_vector()
+            && (layer_runtime.visible(layer.id) || clip_mask_source_ids.contains(&layer.id))
+    });
+    if !has_visible_vector_inputs
+        && update.bookmarks.entries.is_empty()
+        && vector_runtime.states.is_empty()
+        && vector_runtime.finished.is_empty()
+    {
+        for layer in registry.ordered() {
+            if !layer.is_vector() {
+                continue;
+            }
+            if let Some(runtime_state) = layer_runtime.get_mut(layer.id) {
+                clear_vector_build_metrics(runtime_state, LayerVectorStatus::NotRequested);
+            }
+        }
+        return;
+    }
+
+    crate::perf_scope!("vector.layer_update");
     let map_to_world = MapToWorld::default();
     let map_version_id = registry.map_version_id();
     let frame_start = Instant::now();
-    let clip_mask_source_ids = layer_runtime.clip_mask_source_ids();
     let mut active_by_layer: HashMap<LayerId, bool> = layer_runtime
         .iter()
         .map(|(layer_id, state)| {
