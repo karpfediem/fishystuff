@@ -7,6 +7,7 @@ build-release-no-tailwind:
     build_dir=$(mktemp -d .out-builds/build.XXXXXX); \
     trap 'rm -rf "$build_dir" .out.next' EXIT; \
     bun run images:build; \
+    bun run fonts:build; \
     zine release --output "$build_dir"; \
     bun run ./scripts/write-runtime-config.mjs --out "$build_dir/runtime-config.js"; \
     ln -sfn "$build_dir" .out.next; \

@@ -45,8 +45,10 @@ in {
       clang
       chromium
       mariadb
+      python3Packages.fonttools
       valgrind
       wasm-bindgen-cli_0_2_108
+      woff2
       imagemagick
       tailwindcss
       watchexec
