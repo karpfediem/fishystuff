@@ -15,6 +15,6 @@
     "tailwind:scan": "bun run ./scripts/write-tailwind-scan.mjs",
     "tailwind:build": "bun run icons:build && bun run tailwind:scan && bunx @tailwindcss/cli -i tailwind.input.css -o assets/css/site.css",
     "pre-build": "bun run images:build && bun run fonts:build && bun run tailwind:build",
-    "build": "bun run images:build && bun run fonts:build && bun run icons:build && bun run ./scripts/write-runtime-config.mjs --out public/runtime-config.js && bun run tailwind:scan && bunx @tailwindcss/cli -i tailwind.input.css -o public/css/site.css --minify"
+    "build": "bash ./scripts/build-public-release.sh"
   }
 }
