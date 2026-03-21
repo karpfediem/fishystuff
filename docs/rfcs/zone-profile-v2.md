@@ -787,6 +787,13 @@ Status after first additive slice:
 - add first point-level border classification
 - keep exact distance optional until the mask-distance primitive exists
 
+Status after the current additive slice:
+
+- partially completed
+- `presence_support` now merges ranking observations with legacy fishing-table support resolved through `fishing_table -> item_main_group_table -> item_sub_group_table`
+- community-backed support is still placeholder
+- point-level border classification is still placeholder
+
 ### Phase 4
 
 - add player-log schema and ingestion
@@ -900,11 +907,14 @@ This repo now includes the first additive `zone_profile_v2` slice:
    - placeholder border state is explicit
    - catch rates remain a typed pending-source placeholder
 5. ranking-event load path isolation via `source_kind`
+6. legacy-backed `presence_support` claims resolved from the current Dolt runtime tables rather than from workbook parsing in the API path
+7. store-side v2 profile composition moved under `api/fishystuff_server/src/store/dolt_mysql/zone_profile_v2/` so future work does not accumulate inside `dolt_mysql.rs`
 
 ### Fully implemented in this slice
 
 - additive `/api/v1/zone_profile_v2` route and store plumbing
 - ranking-backed `presence_support`
+- legacy-backed `presence_support` claims from the current Dolt fishing tables
 - ranking-backed `ranking_evidence`
 - explicit typed `catch_rates` placeholder
 - explicit typed `assignment.border` unavailable placeholder
@@ -913,7 +923,6 @@ This repo now includes the first additive `zone_profile_v2` slice:
 ### Still placeholder in this slice
 
 - point-level border distance and neighbor inference
-- legacy fishing-table support claims
 - workbook/community support claims
 - player-log catch-rate summaries
 - border stress metrics and overlays
@@ -923,6 +932,7 @@ This repo now includes the first additive `zone_profile_v2` slice:
 Use wording like:
 
 - `observed in ranking data`
+- `supported by legacy fishing tables`
 - `insufficient ranking evidence`
 - `border ambiguity unavailable`
 - `catch rates unavailable`
@@ -946,6 +956,7 @@ Advanced wording must still avoid describing ranking evidence share as a drop ra
 - `/api/v1/zone_stats` is intentionally preserved for compatibility
 - the old route still exposes `p_mean`/CI semantics that are easy to misread publicly
 - the new route is the additive path for safer semantics and future multi-source composition
+- the new route keeps ranking evidence and legacy support in separate sections/claims rather than blending them into one score
 
 ## Non-goals for this RFC pass
 

@@ -2,6 +2,7 @@ mod catalog;
 mod layers;
 mod stats;
 mod util;
+mod zone_profile_v2;
 
 use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
@@ -21,13 +22,7 @@ use fishystuff_api::models::meta::{
     CanonicalMapInfo, MapVersionInfo, MetaDefaults, MetaResponse, PatchInfo,
 };
 use fishystuff_api::models::region_groups::{RegionGroupDescriptor, RegionGroupsResponse};
-use fishystuff_api::models::zone_profile_v2::{
-    ZoneAssignment, ZoneBorderAssessment, ZoneBorderClass, ZoneBorderMethod, ZoneCatchRateSummary,
-    ZoneClaimType, ZoneDiagnostics, ZoneFishSupport, ZoneMetricAvailability, ZonePoint,
-    ZonePresenceState, ZonePresenceSupport, ZoneProfileV2Request, ZoneProfileV2Response,
-    ZonePublicState, ZoneRankingDrift, ZoneRankingEvidence, ZoneRankingFishEvidence,
-    ZoneRankingShareKind, ZoneRankingStatus, ZoneSourceFamily, ZoneSupportClaim, ZoneSupportGrade,
-};
+use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
 use fishystuff_api::models::zone_stats::{
     DriftInfo, ZoneConfidence, ZoneFishEvidence, ZoneStatsRequest, ZoneStatsResponse,
     ZoneStatsWindow, ZoneStatus,
@@ -1550,204 +1545,6 @@ fn zone_distribution_fish_ids(summary: &WindowSummary) -> Vec<i32> {
     fish_ids
 }
 
-fn ranking_status_from_zone_status(status: ZoneStatus) -> ZoneRankingStatus {
-    match status {
-        ZoneStatus::Fresh => ZoneRankingStatus::Fresh,
-        ZoneStatus::Stale => ZoneRankingStatus::Stale,
-        ZoneStatus::Drifting => ZoneRankingStatus::Drifting,
-        ZoneStatus::Unknown => ZoneRankingStatus::Unknown,
-    }
-}
-
-fn support_grade_from_zone_status(status: ZoneStatus) -> ZoneSupportGrade {
-    match status {
-        ZoneStatus::Fresh | ZoneStatus::Drifting => ZoneSupportGrade::ObservedRecent,
-        ZoneStatus::Stale => ZoneSupportGrade::ObservedHistorical,
-        ZoneStatus::Unknown => ZoneSupportGrade::Unknown,
-    }
-}
-
-fn public_state_from_zone_stats(zone_stats: &ZoneStatsResponse) -> ZonePublicState {
-    if zone_stats.distribution.is_empty() || zone_stats.confidence.total_weight <= 0.0 {
-        return ZonePublicState::InsufficientEvidence;
-    }
-
-    match zone_stats.confidence.status {
-        ZoneStatus::Fresh => ZonePublicState::Supported,
-        ZoneStatus::Stale => ZonePublicState::Stale,
-        ZoneStatus::Drifting => ZonePublicState::Drifting,
-        ZoneStatus::Unknown => ZonePublicState::Unknown,
-    }
-}
-
-fn map_drift_info(drift: DriftInfo) -> ZoneRankingDrift {
-    ZoneRankingDrift {
-        boundary_ts_utc: drift.boundary_ts_utc,
-        jsd_mean: drift.jsd_mean,
-        p_drift: drift.p_drift,
-        ess_old: drift.ess_old,
-        ess_new: drift.ess_new,
-        samples: drift.samples,
-        jsd_threshold: drift.jsd_threshold,
-    }
-}
-
-fn build_zone_profile_v2_response(
-    request: &ZoneProfileV2Request,
-    layer_revision_id: &str,
-    zone_stats: ZoneStatsResponse,
-) -> ZoneProfileV2Response {
-    let point = match (request.map_px_x, request.map_px_y) {
-        (Some(map_px_x), Some(map_px_y)) => Some(ZonePoint { map_px_x, map_px_y }),
-        _ => None,
-    };
-    let point_incomplete = request.map_px_x.is_some() ^ request.map_px_y.is_some();
-
-    let mut border_warnings = vec![
-        "border distance and neighboring-zone analysis are not yet implemented for zone_profile_v2"
-            .to_string(),
-    ];
-    if point_incomplete {
-        border_warnings
-            .push("point coordinates were incomplete; assignment.point was omitted".to_string());
-    } else if point.is_none() {
-        border_warnings.push("point coordinates were not provided".to_string());
-    }
-
-    let support_grade = support_grade_from_zone_status(zone_stats.confidence.status.clone());
-    let support_state = if zone_stats.distribution.is_empty() {
-        ZonePresenceState::InsufficientEvidence
-    } else {
-        ZonePresenceState::Supported
-    };
-
-    let mut presence_notes = if zone_stats.distribution.is_empty() {
-        vec![
-            "ranking evidence was checked for the selected window, but no positive evidence was found"
-                .to_string(),
-            "missing ranking evidence is not evidence of absence".to_string(),
-        ]
-    } else {
-        vec![
-            "presence support in this slice is populated from ranking observations only"
-                .to_string(),
-        ]
-    };
-    presence_notes.push(
-        "legacy, community, and player-log source families remain placeholders in this slice"
-            .to_string(),
-    );
-
-    let presence_fish = zone_stats
-        .distribution
-        .iter()
-        .map(|fish| ZoneFishSupport {
-            fish_id: fish.fish_id,
-            item_id: fish.item_id,
-            encyclopedia_key: fish.encyclopedia_key,
-            encyclopedia_id: fish.encyclopedia_id,
-            fish_name: fish.fish_name.clone(),
-            support_grade: support_grade.clone(),
-            source_badges: vec![ZoneSourceFamily::Ranking],
-            claims: vec![ZoneSupportClaim {
-                source_family: ZoneSourceFamily::Ranking,
-                claim_type: ZoneClaimType::PresenceObserved,
-                confidence_note: Some(
-                    "observed in ranking data for the selected time window".to_string(),
-                ),
-                observed_at_ts_utc: zone_stats.confidence.last_seen_ts_utc,
-                source_revision: Some(format!("layer_revision:{layer_revision_id}")),
-            }],
-        })
-        .collect();
-
-    let mut ranking_notes = zone_stats.confidence.notes.clone();
-    ranking_notes.push("ranking evidence share is not a catch/drop rate".to_string());
-    if zone_stats.distribution.is_empty() {
-        ranking_notes.push("no ranking evidence in the selected window".to_string());
-    }
-
-    let ranking_fish = zone_stats
-        .distribution
-        .iter()
-        .map(|fish| ZoneRankingFishEvidence {
-            fish_id: fish.fish_id,
-            item_id: fish.item_id,
-            encyclopedia_key: fish.encyclopedia_key,
-            encyclopedia_id: fish.encyclopedia_id,
-            fish_name: fish.fish_name.clone(),
-            evidence_weight: fish.evidence_weight,
-            evidence_share_mean: Some(fish.p_mean),
-            ci_low: fish.ci_low,
-            ci_high: fish.ci_high,
-        })
-        .collect();
-
-    let public_state = public_state_from_zone_stats(&zone_stats);
-    let insufficient_evidence = public_state == ZonePublicState::InsufficientEvidence;
-
-    let mut diagnostics_notes = vec![
-        "ranking evidence, border ambiguity, and catch-rate estimation are separate sections in zone_profile_v2".to_string(),
-        "border ambiguity is intentionally unavailable in this slice rather than estimated from unsupported geometry".to_string(),
-        "legacy, community, and player-log source families are reserved but not yet populated in this slice".to_string(),
-    ];
-    if insufficient_evidence {
-        diagnostics_notes.push("missing ranking evidence is not evidence of absence".to_string());
-    }
-
-    ZoneProfileV2Response {
-        assignment: ZoneAssignment {
-            zone_rgb_u32: zone_stats.zone_rgb_u32,
-            zone_rgb: zone_stats.zone_rgb,
-            zone_name: zone_stats.zone_name,
-            point,
-            border: ZoneBorderAssessment {
-                class: ZoneBorderClass::Unavailable,
-                nearest_border_distance_px: None,
-                method: ZoneBorderMethod::Unavailable,
-                warnings: border_warnings,
-            },
-            neighboring_zones: Vec::new(),
-        },
-        presence_support: ZonePresenceSupport {
-            state: support_state,
-            evaluated_sources: vec![ZoneSourceFamily::Ranking],
-            fish: presence_fish,
-            notes: presence_notes,
-        },
-        ranking_evidence: ZoneRankingEvidence {
-            availability: ZoneMetricAvailability::Available,
-            source_family: ZoneSourceFamily::Ranking,
-            share_kind: ZoneRankingShareKind::PosteriorMeanEvidenceShare,
-            total_weight: zone_stats.confidence.total_weight,
-            ess: zone_stats.confidence.ess,
-            raw_event_count: None,
-            last_seen_ts_utc: zone_stats.confidence.last_seen_ts_utc,
-            age_days_last: zone_stats.confidence.age_days_last,
-            status: ranking_status_from_zone_status(zone_stats.confidence.status),
-            drift: zone_stats.confidence.drift.map(map_drift_info),
-            notes: ranking_notes,
-            fish: ranking_fish,
-        },
-        catch_rates: ZoneCatchRateSummary {
-            source_family: ZoneSourceFamily::Logs,
-            availability: ZoneMetricAvailability::PendingSource,
-            fish: Vec::new(),
-            notes: vec![
-                "player-tracked catch-rate statistics are not yet available in zone_profile_v2"
-                    .to_string(),
-            ],
-        },
-        diagnostics: ZoneDiagnostics {
-            public_state,
-            insufficient_evidence,
-            border_sensitive: None,
-            border_stress: None,
-            notes: diagnostics_notes,
-        },
-    }
-}
-
 #[async_trait]
 impl Store for DoltMySqlStore {
     async fn get_meta(&self) -> AppResult<MetaResponse> {
@@ -1934,57 +1731,9 @@ impl Store for DoltMySqlStore {
         status_cfg: ZoneStatusConfig,
     ) -> AppResult<ZoneProfileV2Response> {
         let this = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let zone_rgb_u32 = request.rgb.to_u32().map_err(AppError::invalid_argument)?;
-            let layer_revision_id = this.resolve_layer_revision_id(
-                request.layer_revision_id.as_deref(),
-                request.map_version_id.as_ref(),
-                request.layer_id.as_deref(),
-                request.patch_id.as_deref(),
-                request.at_ts_utc,
-                request.to_ts_utc,
-            )?;
-
-            let params = QueryParams {
-                map_version: layer_revision_id.clone(),
-                from_ts_utc: request.from_ts_utc,
-                to_ts_utc: request.to_ts_utc,
-                half_life_days: request.half_life_days,
-                tile_px: request.tile_px,
-                sigma_tiles: request.sigma_tiles,
-                fish_norm: request.fish_norm,
-                alpha0: request.alpha0,
-                top_k: request.top_k,
-                drift_boundary_ts: request.drift_boundary_ts_utc,
-            };
-            params.validate()?;
-
-            let lang = FishLang::from_param(request.lang.as_deref());
-            let fish_names = this.query_fish_names(lang, request.ref_id.as_deref())?;
-            let fish_table = this.query_fish_identities(request.ref_id.as_deref())?;
-            let zones_vec = this.query_zones(request.ref_id.as_deref())?;
-            let zones: HashMap<u32, ZoneEntry> = zones_vec
-                .into_iter()
-                .map(|zone| (zone.rgb_u32, zone))
-                .collect();
-            let event_fish_names = DoltMySqlStore::build_event_fish_names(&fish_names, &fish_table);
-            let event_fish_identities = DoltMySqlStore::build_event_fish_identity_map(&fish_table);
-            let zone_stats = this.compute_zone_stats(
-                &zones,
-                &event_fish_names,
-                &event_fish_identities,
-                &params,
-                zone_rgb_u32,
-                &status_cfg,
-            )?;
-            Ok(build_zone_profile_v2_response(
-                &request,
-                &layer_revision_id,
-                zone_stats,
-            ))
-        })
-        .await
-        .map_err(|err| AppError::internal(err.to_string()))?
+        tokio::task::spawn_blocking(move || this.compute_zone_profile_v2(request, status_cfg))
+            .await
+            .map_err(|err| AppError::internal(err.to_string()))?
     }
 
     async fn effort_grid(&self, request: EffortGridRequest) -> AppResult<EffortGridResponse> {
@@ -2061,28 +1810,18 @@ mod tests {
     use std::collections::HashMap;
 
     use fishystuff_api::error::ApiErrorCode;
-    use fishystuff_api::ids::RgbKey;
     use fishystuff_api::models::layers::{GeometrySpace, LayerKind, StyleMode};
-    use fishystuff_api::models::zone_profile_v2::{
-        ZoneBorderClass, ZoneClaimType, ZoneMetricAvailability, ZonePresenceState, ZonePublicState,
-        ZoneRankingStatus, ZoneSourceFamily,
-    };
-    use fishystuff_api::models::zone_stats::{
-        ZoneConfidence, ZoneFishEvidence, ZoneStatsResponse, ZoneStatsWindow, ZoneStatus,
-    };
+    use fishystuff_api::models::zone_stats::ZoneStatus;
 
     use crate::config::ZoneStatusConfig;
-    use crate::store::queries;
 
     use super::{
-        build_zone_profile_v2_response,
         catalog::{encyclopedia_icon_id_from_db, is_web_icon_path},
         compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
         fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
         parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
         synthetic_events_snapshot_revision, zone_distribution_fish_ids, DoltMySqlStore,
         FishCatalogRow, FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
-        ZoneProfileV2Request,
     };
 
     fn vector_source_fields(
@@ -2100,30 +1839,6 @@ mod tests {
             style_mode: style_mode.map(str::to_string),
             feature_id_property: feature_id_property.map(str::to_string),
             color_property: color_property.map(str::to_string),
-        }
-    }
-
-    fn zone_profile_request() -> ZoneProfileV2Request {
-        ZoneProfileV2Request {
-            layer_revision_id: None,
-            layer_id: None,
-            patch_id: None,
-            at_ts_utc: None,
-            map_version_id: None,
-            rgb: RgbKey("1,2,3".to_string()),
-            map_px_x: None,
-            map_px_y: None,
-            from_ts_utc: 1_700_000_000,
-            to_ts_utc: 1_700_086_400,
-            tile_px: 32,
-            sigma_tiles: 3.0,
-            fish_norm: false,
-            alpha0: 1.0,
-            top_k: 30,
-            half_life_days: None,
-            drift_boundary_ts_utc: None,
-            ref_id: None,
-            lang: None,
         }
     }
 
@@ -2444,123 +2159,5 @@ mod tests {
         };
 
         assert_eq!(zone_distribution_fish_ids(&summary), vec![1]);
-    }
-
-    #[test]
-    fn zone_profile_v2_marks_missing_ranking_evidence_as_insufficient() {
-        let request = zone_profile_request();
-        let profile = build_zone_profile_v2_response(
-            &request,
-            "v1",
-            ZoneStatsResponse {
-                zone_rgb_u32: 0x010203,
-                zone_rgb: RgbKey("1,2,3".to_string()),
-                zone_name: Some("Test Zone".to_string()),
-                window: ZoneStatsWindow::default(),
-                confidence: ZoneConfidence {
-                    ess: 0.0,
-                    total_weight: 0.0,
-                    last_seen_ts_utc: None,
-                    age_days_last: None,
-                    status: ZoneStatus::Unknown,
-                    notes: vec!["no evidence in window".to_string()],
-                    drift: None,
-                },
-                distribution: Vec::new(),
-            },
-        );
-
-        assert_eq!(
-            profile.presence_support.state,
-            ZonePresenceState::InsufficientEvidence
-        );
-        assert!(profile.presence_support.fish.is_empty());
-        assert_eq!(
-            profile.assignment.border.class,
-            ZoneBorderClass::Unavailable
-        );
-        assert_eq!(
-            profile.diagnostics.public_state,
-            ZonePublicState::InsufficientEvidence
-        );
-        assert!(profile.diagnostics.insufficient_evidence);
-        assert_eq!(
-            profile.catch_rates.availability,
-            ZoneMetricAvailability::PendingSource
-        );
-        assert!(profile
-            .presence_support
-            .notes
-            .iter()
-            .any(|note| note.contains("not evidence of absence")));
-    }
-
-    #[test]
-    fn zone_profile_v2_keeps_ranking_support_separate_from_catch_rates() {
-        let request = zone_profile_request();
-        let profile = build_zone_profile_v2_response(
-            &request,
-            "v1",
-            ZoneStatsResponse {
-                zone_rgb_u32: 0x010203,
-                zone_rgb: RgbKey("1,2,3".to_string()),
-                zone_name: Some("Test Zone".to_string()),
-                window: ZoneStatsWindow::default(),
-                confidence: ZoneConfidence {
-                    ess: 12.0,
-                    total_weight: 4.0,
-                    last_seen_ts_utc: Some(1_700_080_000),
-                    age_days_last: Some(0.07),
-                    status: ZoneStatus::Fresh,
-                    notes: Vec::new(),
-                    drift: None,
-                },
-                distribution: vec![ZoneFishEvidence {
-                    fish_id: 8201,
-                    item_id: 8201,
-                    encyclopedia_key: Some(821001),
-                    encyclopedia_id: Some(8501),
-                    fish_name: Some("Mudskipper".to_string()),
-                    evidence_weight: 4.0,
-                    p_mean: 0.6,
-                    ci_low: Some(0.4),
-                    ci_high: Some(0.8),
-                }],
-            },
-        );
-
-        assert_eq!(
-            profile.presence_support.evaluated_sources,
-            vec![ZoneSourceFamily::Ranking]
-        );
-        assert_eq!(
-            profile.presence_support.fish[0].source_badges,
-            vec![ZoneSourceFamily::Ranking]
-        );
-        assert_eq!(
-            profile.presence_support.fish[0].claims[0].claim_type,
-            ZoneClaimType::PresenceObserved
-        );
-        assert_eq!(profile.ranking_evidence.status, ZoneRankingStatus::Fresh);
-        assert_eq!(
-            profile.ranking_evidence.fish[0].evidence_share_mean,
-            Some(0.6)
-        );
-        assert_eq!(
-            profile.catch_rates.availability,
-            ZoneMetricAvailability::PendingSource
-        );
-        assert!(profile.catch_rates.fish.is_empty());
-        assert_eq!(profile.diagnostics.public_state, ZonePublicState::Supported);
-        assert!(profile
-            .ranking_evidence
-            .notes
-            .iter()
-            .any(|note| note.contains("not a catch/drop rate")));
-    }
-
-    #[test]
-    fn ranking_events_query_is_source_filtered() {
-        assert!(queries::RANKING_EVENTS_WITH_ZONE_SQL.contains("e.source_kind = ?"));
     }
 }
