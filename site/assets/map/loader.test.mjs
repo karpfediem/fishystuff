@@ -420,6 +420,77 @@ test("buildHoverOverviewRows falls back to region ids when assignments are missi
   );
 });
 
+test("buildHoverOverviewRows keeps a soft unknown marker when resource coordinates exist without a name", () => {
+  assert.deepEqual(
+    buildHoverOverviewRows(
+      {
+        zoneName: "Demi River",
+        layerSamples: [
+          {
+            layerId: "region_groups",
+            regionGroup: 16,
+            regionId: 76,
+            resourceBarWorldX: 120,
+            resourceBarWorldZ: 240,
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    [
+      {
+        layerId: "zone_mask",
+        icon: "hover-zone",
+        label: "Zone",
+        value: "Demi River",
+      },
+      {
+        layerId: "region_groups",
+        icon: "hover-resources",
+        label: "Resources",
+        value: "R76",
+        statusIcon: "question-mark",
+        statusIconTone: "subtle",
+      },
+    ],
+  );
+});
+
+test("buildHoverOverviewRows keeps a soft unknown marker when origin coordinates exist without a name", () => {
+  assert.deepEqual(
+    buildHoverOverviewRows(
+      {
+        zoneName: "Demi River",
+        layerSamples: [
+          {
+            layerId: "regions",
+            regionId: 76,
+            originWorldX: 120,
+            originWorldZ: 240,
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    [
+      {
+        layerId: "zone_mask",
+        icon: "hover-zone",
+        label: "Zone",
+        value: "Demi River",
+      },
+      {
+        layerId: "regions",
+        icon: "hover-origin",
+        label: "Origin",
+        value: "R76",
+        statusIcon: "question-mark",
+        statusIconTone: "subtle",
+      },
+    ],
+  );
+});
+
 test("buildBookmarkOverviewRows mirrors the hover row style without duplicating the zone", () => {
   assert.deepEqual(
     buildBookmarkOverviewRows(

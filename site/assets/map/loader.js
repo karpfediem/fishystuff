@@ -1319,6 +1319,7 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
   const value = String(row?.value || "").trim();
   const icon = String(row?.icon || "").trim();
   const statusIcon = String(row?.statusIcon || "").trim();
+  const statusIconTone = String(row?.statusIconTone || "").trim();
   const hideLabel = row?.hideLabel === true;
   if ((!label && !hideLabel) || !value || !icon) {
     return "";
@@ -1331,7 +1332,9 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
         <span class="fishymap-overview-value-text">${escapeHtml(value)}</span>
         ${
           statusIcon
-            ? `<span class="fishymap-overview-status" aria-hidden="true">${spriteIcon(statusIcon, "size-4")}</span>`
+            ? `<span class="fishymap-overview-status${
+                statusIconTone === "subtle" ? " fishymap-overview-status--subtle" : ""
+              }" aria-hidden="true">${spriteIcon(statusIcon, "size-4")}</span>`
             : ""
         }
       </span>
@@ -1397,8 +1400,9 @@ function resourceOverviewValue(sample) {
     };
   }
   return {
-    value: regionFallbackValue(sample) || originName,
+    value: regionFallbackValue(sample) || originName || regionGroupFallbackValue(sample),
     statusIcon: "question-mark",
+    statusIconTone: "subtle",
   };
 }
 
@@ -1407,6 +1411,13 @@ function originOverviewValue(sample) {
   if (sampleHasOriginAssignment(sample) && originName) {
     return {
       value: originName,
+    };
+  }
+  if (sampleHasOriginAssignment(sample)) {
+    return {
+      value: regionFallbackValue(sample),
+      statusIcon: "question-mark",
+      statusIconTone: "subtle",
     };
   }
   return {
@@ -1443,6 +1454,7 @@ function hoverLayerOverviewRow(layerId, hover, sample) {
     label: config.label,
     value,
     ...(resolved?.statusIcon ? { statusIcon: resolved.statusIcon } : {}),
+    ...(resolved?.statusIconTone ? { statusIconTone: resolved.statusIconTone } : {}),
   };
 }
 

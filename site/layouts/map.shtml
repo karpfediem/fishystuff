@@ -791,6 +791,10 @@
         color: var(--color-primary, #2563eb);
       }
 
+      .fishymap-overview-status--subtle {
+        color: color-mix(in srgb, var(--color-base-content) 44%, transparent);
+      }
+
       .fishymap-overview-list--bookmark .fishymap-overview-row {
         font-size: 0.82rem;
       }
