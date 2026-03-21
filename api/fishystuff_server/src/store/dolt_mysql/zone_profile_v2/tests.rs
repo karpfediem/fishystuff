@@ -512,3 +512,29 @@ fn zone_profile_assignment_marks_ambiguous_when_point_samples_different_zone() {
         .iter()
         .any(|warning| warning.contains("samples zone RGB")));
 }
+
+#[test]
+fn zone_profile_assignment_ignores_terrain_neighbors_for_border_classification() {
+    let target = 0x010203;
+    let terrain = 0x3c3c96;
+    let mut data = solid_mask_rgb(5, 5, [1, 2, 3]);
+    let idx = (2 * 5 + 3) * 3;
+    data[idx] = 60;
+    data[idx + 1] = 60;
+    data[idx + 2] = 150;
+    let mask = ZoneMask::from_rgb(5, 5, data).expect("mask");
+
+    let assignment = compute_zone_assignment(
+        target,
+        Rgb::from_u32(target).key(),
+        Some("Target Zone".to_string()),
+        Some(2),
+        Some(2),
+        Some(&mask),
+        None,
+        &zone_entries(&[(target, "Target Zone"), (terrain, "Calpheon - Terrain")]),
+    );
+
+    assert_eq!(assignment.border.class, ZoneBorderClass::Core);
+    assert!(assignment.neighboring_zones.is_empty());
+}
