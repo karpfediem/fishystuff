@@ -320,6 +320,7 @@ current_manifest_file="$(mktemp)"
 changed_paths_file="$(mktemp)"
 sync_roots_file="$(mktemp)"
 upload_paths_file="$(mktemp)"
+deferred_upload_paths_file="$(mktemp)"
 required_local_files_file="$(mktemp)"
 selected_local_files_file="$(mktemp)"
 selected_remote_files_file="$(mktemp)"
@@ -336,6 +337,7 @@ cleanup_tmp_files() {
     "$changed_paths_file" \
     "$sync_roots_file" \
     "$upload_paths_file" \
+    "$deferred_upload_paths_file" \
     "$required_local_files_file" \
     "$selected_local_files_file" \
     "$selected_remote_files_file" \
@@ -398,6 +400,7 @@ if [ ! -s "$sync_roots_file" ]; then
 fi
 
 : > "$upload_paths_file"
+: > "$deferred_upload_paths_file"
 
 if [ -n "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
   : > "$required_local_files_file"
@@ -476,8 +479,27 @@ fi
 
 echo "selected CDN roots:" >&2
 sed 's/^/  - /' "$sync_roots_file" >&2
+if [ -s "$upload_paths_file" ]; then
+  awk '
+    $0 == "map/runtime-manifest.json" {
+      print > deferred
+      next
+    }
+    {
+      print > immediate
+    }
+  ' immediate="$upload_paths_file.filtered" deferred="$deferred_upload_paths_file" "$upload_paths_file"
+  mv "$upload_paths_file.filtered" "$upload_paths_file"
+fi
 echo "uploading $(wc -l < "$upload_paths_file") files via Bunny HTTP API" >&2
 run_parallel_uploads "$upload_paths_file"
+if [ -s "$deferred_upload_paths_file" ]; then
+  echo "uploading deferred manifest files" >&2
+  while IFS= read -r relative_path; do
+    [ -n "$relative_path" ] || continue
+    upload_file "$relative_path"
+  done < "$deferred_upload_paths_file"
+fi
 
 while IFS= read -r sync_root; do
   if ! is_delete_root "$sync_root"; then

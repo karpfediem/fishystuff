@@ -845,6 +845,11 @@ function runtimeConfigBaseUrl(key) {
   return normalizeBaseUrl(globalThis.window?.__fishystuffRuntimeConfig?.[key]);
 }
 
+function runtimeConfigValue(key) {
+  const normalized = String(globalThis.window?.__fishystuffRuntimeConfig?.[key] ?? "").trim();
+  return normalized || "";
+}
+
 function isLoopbackHost(hostname) {
   return hostname === "127.0.0.1" || hostname === "localhost";
 }
@@ -922,7 +927,7 @@ export function resolveMapRuntimeBaseUrl(
 
 export function resolveMapRuntimeManifestUrl(
   locationLike = globalThis.location,
-  cacheKey = Date.now(),
+  cacheKey = runtimeConfigValue("mapAssetCacheKey") || Date.now(),
   explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
 ) {
   const manifestUrl = new URL("runtime-manifest.json", resolveMapRuntimeBaseUrl(locationLike, explicitBaseUrl));
@@ -935,7 +940,7 @@ export function resolveMapRuntimeManifestUrl(
 async function loadMapRuntimeManifest({
   locationLike = globalThis.location,
   cdnBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
-  cacheKey = Date.now(),
+  cacheKey = runtimeConfigValue("mapAssetCacheKey") || Date.now(),
   fetchImpl = globalThis.fetch?.bind(globalThis),
 } = {}) {
   if (typeof fetchImpl !== "function") {
@@ -943,7 +948,7 @@ async function loadMapRuntimeManifest({
   }
   const manifestUrl = resolveMapRuntimeManifestUrl(locationLike, cacheKey, cdnBaseUrl);
   const response = await fetchImpl(manifestUrl, {
-    cache: "no-store",
+    cache: typeof cacheKey === "string" && cacheKey.trim() ? "force-cache" : "no-store",
   });
   if (!response?.ok) {
     throw new Error(`failed to load map runtime manifest: ${manifestUrl} (${response?.status || "unknown"})`);
@@ -964,7 +969,8 @@ async function loadMapRuntimeModule(options = {}) {
   const { moduleUrl } = await loadMapRuntimeManifest({
     locationLike: options.locationLike ?? globalThis.location,
     cdnBaseUrl: options.cdnBaseUrl,
-    cacheKey: options.runtimeManifestCacheKey ?? Date.now(),
+    cacheKey:
+      options.runtimeManifestCacheKey ?? (runtimeConfigValue("mapAssetCacheKey") || Date.now()),
     fetchImpl: options.fetchImpl ?? globalThis.fetch?.bind(globalThis),
   });
   return import(moduleUrl);

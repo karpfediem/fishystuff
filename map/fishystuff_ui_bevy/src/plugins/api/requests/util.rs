@@ -154,6 +154,7 @@ pub(super) fn absolutize_layers_response_assets(
     response: &mut LayersResponse,
     public_base_url: Option<&str>,
 ) {
+    let map_asset_cache_key = map_asset_cache_key();
     for layer in &mut response.layers {
         layer.tileset.manifest_url =
             resolve_public_asset_url(Some(&layer.tileset.manifest_url), public_base_url)
@@ -164,8 +165,35 @@ pub(super) fn absolutize_layers_response_assets(
         if let Some(vector_source) = layer.vector_source.as_mut() {
             vector_source.url = resolve_public_asset_url(Some(&vector_source.url), public_base_url)
                 .unwrap_or_default();
+            let cache_key = normalize_vector_cache_key(
+                Some(vector_source.revision.as_str()),
+                map_asset_cache_key.as_deref(),
+            );
+            vector_source.url =
+                append_cache_key_to_public_asset_url(&vector_source.url, Some(cache_key.as_str()));
         }
     }
+}
+
+fn append_cache_key_to_public_asset_url(url: &str, cache_key: Option<&str>) -> String {
+    let cache_key = cache_key.map(str::trim).unwrap_or("");
+    if cache_key.is_empty() {
+        return url.to_string();
+    }
+    let separator = if url.contains('?') { '&' } else { '?' };
+    format!("{url}{separator}v={cache_key}")
+}
+
+fn normalize_vector_cache_key(revision: Option<&str>, map_asset_cache_key: Option<&str>) -> String {
+    let map_asset_cache_key = map_asset_cache_key.map(str::trim).unwrap_or("");
+    if !map_asset_cache_key.is_empty() {
+        return map_asset_cache_key.to_string();
+    }
+    let revision = revision.map(str::trim).unwrap_or("");
+    if !revision.is_empty() {
+        return revision.to_string();
+    }
+    String::new()
 }
 
 fn fallback_public_base_url() -> Option<String> {
@@ -193,6 +221,35 @@ fn browser_global_base_url(name: &str) -> Option<String> {
     normalize_public_base_url(Some(value.as_str()))
 }
 
+#[cfg(target_arch = "wasm32")]
+fn map_asset_cache_key() -> Option<String> {
+    use wasm_bindgen::JsValue;
+
+    let window = web_sys::window()?;
+    let runtime_config = js_sys::Reflect::get(
+        window.as_ref(),
+        &JsValue::from_str("__fishystuffRuntimeConfig"),
+    )
+    .ok()?;
+    if runtime_config.is_null() || runtime_config.is_undefined() {
+        return None;
+    }
+    let value = js_sys::Reflect::get(&runtime_config, &JsValue::from_str("mapAssetCacheKey"))
+        .ok()?
+        .as_string()?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn map_asset_cache_key() -> Option<String> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use fishystuff_api::models::layers::{
@@ -200,7 +257,8 @@ mod tests {
     };
 
     use super::{
-        absolutize_layers_response_assets, default_from_patch_id, default_from_ts,
+        absolutize_layers_response_assets, append_cache_key_to_public_asset_url,
+        default_from_patch_id, default_from_ts, normalize_vector_cache_key,
         resolve_public_asset_url,
     };
     use fishystuff_api::ids::PatchId;
@@ -286,7 +344,35 @@ mod tests {
                 .vector_source
                 .as_ref()
                 .map(|source| source.url.as_str()),
-            Some("https://cdn.example.com/region_groups/v1.geojson")
+            Some("https://cdn.example.com/region_groups/v1.geojson?v=rg-v1")
         );
+    }
+
+    #[test]
+    fn append_cache_key_adds_query_parameter() {
+        assert_eq!(
+            append_cache_key_to_public_asset_url("/region_groups/v1.geojson", Some("deploy-123")),
+            "/region_groups/v1.geojson?v=deploy-123"
+        );
+        assert_eq!(
+            append_cache_key_to_public_asset_url(
+                "https://cdn.example.com/region_groups/v1.geojson?lang=en",
+                Some("deploy-123"),
+            ),
+            "https://cdn.example.com/region_groups/v1.geojson?lang=en&v=deploy-123"
+        );
+    }
+
+    #[test]
+    fn normalize_vector_cache_key_prefers_vector_revision() {
+        assert_eq!(
+            normalize_vector_cache_key(Some("rg-v1"), Some("deploy-123")),
+            "deploy-123"
+        );
+        assert_eq!(
+            normalize_vector_cache_key(Some(""), Some("deploy-123")),
+            "deploy-123"
+        );
+        assert_eq!(normalize_vector_cache_key(Some("rg-v1"), None), "rg-v1");
     }
 }

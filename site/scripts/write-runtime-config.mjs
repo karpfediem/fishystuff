@@ -42,6 +42,11 @@ function normalizeBaseUrl(value) {
   return normalized.replace(/\/+$/, "");
 }
 
+function normalizeCacheKey(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || "";
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -56,6 +61,7 @@ async function main() {
       normalizeBaseUrl(process.env.FISHYSTUFF_RUNTIME_API_BASE_URL) || "https://api.fishystuff.fish",
     cdnBaseUrl:
       normalizeBaseUrl(process.env.FISHYSTUFF_RUNTIME_CDN_BASE_URL) || "https://cdn.fishystuff.fish",
+    mapAssetCacheKey: normalizeCacheKey(process.env.FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY),
   };
 
   const outPath = path.resolve(process.cwd(), args.out);
