@@ -6,6 +6,10 @@
 .draft = false,
 .custom = {
   .og_image_asset = "groups.png",
+  .card_image_src = "/guides/groups/groups.card-320.webp",
+  .card_image_srcset = "/guides/groups/groups.card-320.webp 320w, /guides/groups/groups.card-640.webp 640w",
+  .card_image_loading = "eager",
+  .card_image_fetchpriority = "high",
 },
 ---
 

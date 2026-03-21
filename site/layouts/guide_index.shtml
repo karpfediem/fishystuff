@@ -55,7 +55,16 @@
 
           <ctx :if="$loop.it.custom.has('og_image_asset')">
             <figure class="overflow-hidden bg-base-200">
-              <img src="$loop.it.asset($loop.it.custom.get('og_image_asset')).link()" alt="" class="block h-auto w-full">
+              <img src="$loop.it.custom.getOr('card_image_src',$loop.it.asset($loop.it.custom.get('og_image_asset')).link())"
+                   srcset="$loop.it.custom.getOr('card_image_srcset','')"
+                   sizes="(min-width: 1280px) 17rem, (min-width: 640px) calc(50vw - 2rem), calc(100vw - 2rem)"
+                   width="1080"
+                   height="720"
+                   loading="$loop.it.custom.getOr('card_image_loading','lazy')"
+                   fetchpriority="$loop.it.custom.getOr('card_image_fetchpriority','auto')"
+                   decoding="async"
+                   alt=""
+                   class="block h-auto w-full">
             </figure>
           </ctx>
 

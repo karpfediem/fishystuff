@@ -44,6 +44,8 @@ Multilingual {
     "img/favicon-32x32.png",
     "img/embed.png",
     "img/icons.svg",
+    "img/logo-32.png",
+    "img/logo-64.png",
 
     // data files that need to be fetchable or linked
     "data/items.json",
