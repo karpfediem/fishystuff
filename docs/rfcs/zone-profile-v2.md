@@ -43,6 +43,10 @@ Verified from local workbook sources via `devenv shell -- xlsx2csv`:
 - `data/fishing_tables_101/Fishing Data.xlsx`
 - `data/fishing_tables_101/BDO - PRIZE FISHES.xlsx`
 - `data/fishing_tables_101/fishing_tables_101.md`
+- `data/data/excel/Fishing_Table.xlsx`
+- `data/data/excel/ItemMainGroup_Table.xlsx`
+- `data/data/excel/ItemSubGroup_Table.xlsx`
+- `data/data/excel/Item_Table.xlsx`
 
 Verified from local runtime data via `devenv shell -- dolt sql`:
 
@@ -51,11 +55,10 @@ Verified from local runtime data via `devenv shell -- dolt sql`:
 - `event_zone_assignment` has `26938` rows for `layer_revision_id='v1'`.
 - `fishing_table` has `276` rows.
 - `fish_table` has `300` rows.
-- `item_main_group_table` has `282` rows.
-- `item_sub_group_table` has `346` rows.
-- `item_main_group_options` has `346` rows.
-- `item_sub_group_item_variants` currently has `0` rows.
-- `item_sub_group_table.SelectRate_0..2` are all zero in current runtime data.
+- `item_main_group_table` has `405` rows.
+- `item_sub_group_table` has `1676` rows.
+- `item_main_group_options` has `469` rows.
+- `item_sub_group_item_variants` has `1330` rows.
 
 Verified from local workbook content:
 
@@ -213,11 +216,13 @@ Concrete schema/runtime support:
 - `fishing_zone_slots` flattens `DropRate1..5` and `DropID1..5`
 - `item_main_group_options` flattens main-group to subgroup choices and option rates
 - `fish_table` provides encyclopedia key to item key and icon/name identity joins
+- the local workbook sheet `Fishing Data Translated` is broadly aligned with `fishing_table`, but not perfectly 1:1
 
 What it can support:
 
 - legacy zone-level support claims
 - legacy zone-slot / group references
+- item-level subgroup baselines where the local group tables are populated
 - provenance that a zone was historically associated with certain group slots
 - fish identity joins and icons
 
@@ -225,14 +230,24 @@ What it cannot reliably support today:
 
 - current truth for newer or changed regions
 - trustworthy freshness
-- runtime-expanded subgroup-to-item fish probabilities in the current DB state
+- trustworthy subgroup item rates from the raw legacy XLSX files alone
+- a blanket direct overwrite of `fishing_table` from auxiliary reference material
 
 Important runtime finding:
 
-- subgroup item expansion is structurally modeled but not populated in useful runtime form
-- `item_sub_group_item_variants` currently has zero rows
-- all `item_sub_group_table.SelectRate_*` values are zero in the current runtime snapshot
-- therefore group-level legacy rates are only partially usable today
+- in the raw legacy import path, subgroup item expansion is structurally modeled but initially empty because the raw subgroup workbook does not carry usable `SelectRate_*` values
+- the current local runtime now has subgroup baselines populated in the legacy group tables
+- `item_sub_group_item_variants` now has `1330` rows across `260` subgroup keys
+- `item_main_group_table` now has `405` rows and `item_main_group_options` now has `469` rows
+- `fishing_table` remains at `276` rows
+- in sample RGB checks, workbook `Harpoon ID` matched `fishing_table.DropIDHarpoon`
+- workbook category percentages matched `fishing_zone_slots.slot_idx` `2..5` for the sampled zones
+- workbook `Prize Catch` IDs did not cleanly match `fishing_table.DropID` in the sampled zones
+- some workbook `Prize Catch` IDs exist in Dolt as group keys (`11057`, `11058`, `11060`), while others sampled from the workbook (`11056`, `11073`) were absent from the current runtime snapshot
+- therefore the durable rule is:
+  - treat `fishing_table` as the legacy RGB-to-slot layer
+  - enrich `item_main_group_table` and `item_sub_group_table` for subgroup resolution
+  - do not assume auxiliary workbook ids can safely overwrite `fishing_table` rows directly
 
 Public label recommendation:
 
@@ -768,6 +783,7 @@ Status after first additive slice:
 ### Phase 3
 
 - add legacy/community support inputs into `presence_support`
+- keep `fishing_table` as the zone-slot baseline and prefer legacy/community enrichment at the group-table layer
 - add first point-level border classification
 - keep exact distance optional until the mask-distance primitive exists
 
@@ -840,15 +856,19 @@ Available today:
 - slot-level legacy rates
 - main-group references
 - main-group option rows
+- subgroup item variants in the current local runtime
 - fish identity/icon mapping
 
-Not currently available in useful runtime form:
+Not available from the raw legacy import alone:
 
-- subgroup item variants and therefore concrete item-level rates derived from subgroup tables
+- trustworthy subgroup item variants without additional backfill or enrichment work
 
 Additional local-source finding:
 
 - the workbook `Fishing Data.xlsx` provides a human-readable translated RGB table that can supplement runtime SQL with descriptions and category-rate context during ingestion or auditing
+- the workbook has `158` translated RGB rows, while runtime `fishing_table` currently has `276` rows, so the workbook should be treated as a dated reference subset rather than a full live mirror
+- the raw legacy XLSX dump under `data/data/excel/` is the durable source-schema backbone for `fishing_table`, `item_main_group_table`, `item_sub_group_table`, and `item_table`
+- maintained import work should enrich the legacy group tables first; it should not assume a direct `fishing_table` rewrite is safe
 
 ### Whether player-log schema already exists
 

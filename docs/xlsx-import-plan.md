@@ -20,6 +20,14 @@ Date: 2026-02-26
 Other artifact:
 - FishingTables.zip (not expanded/inspected in this pass)
 
+Additional local legacy dataset:
+
+- `data/data/excel/Fishing_Table.xlsx`
+- `data/data/excel/ItemMainGroup_Table.xlsx`
+- `data/data/excel/ItemSubGroup_Table.xlsx`
+- `data/data/excel/Item_Table.xlsx`
+- auxiliary fishing-adjacent workbooks such as `FloatFishing_Table.xlsx`, `FloatFishingPoint_Table.xlsx`, `Water_Table.xlsx`, `DiscardFish.xlsx`, and `FishingStatData.xlsx`
+
 ## Fishing-related sheets and candidate keys
 
 - Fishing_Table (Fishing_Table.xlsx)
@@ -50,3 +58,39 @@ Other artifact:
 ## Reports
 
 - JSON reports live in data/import_reports/ keyed by the source file SHA256.
+
+## Current durable conclusions
+
+- The raw legacy XLSX dump under `data/data/excel/` is the durable source-schema backbone for:
+  - `fishing_table`
+  - `item_main_group_table`
+  - `item_sub_group_table`
+  - `item_table`
+- `fishing_table` should remain the legacy RGB-to-slot baseline.
+- `item_main_group_table` and `item_sub_group_table` are the correct merge targets for subgroup-resolution enrichment.
+- The raw `ItemSubGroup_Table.xlsx` layout is structurally correct, but its `SelectRate_0..2` values are not sufficient on their own for usable subgroup item expansion in Dolt.
+- Maintained import work should prefer enriching group tables over rewriting existing `fishing_table` RGB rows.
+
+## Maintained import boundary
+
+For durable import work:
+
+1. Import the raw legacy zone-slot layer into `fishing_table`.
+2. Preserve `fishing_table` row identities keyed by `R,G,B`.
+3. Import raw legacy main/subgroup rows into `item_main_group_table` and `item_sub_group_table`.
+4. Apply any later subgroup-baseline enrichment at the group-table layer, not by bulk-overwriting `fishing_table`.
+5. Exclude user-entered placeholder group keys from maintained imports.
+
+## Runtime state after subgroup baseline backfill
+
+- `fishing_table`: `276` rows
+- `item_main_group_table`: `405` rows
+- `item_sub_group_table`: `1676` rows
+- `item_main_group_options`: `469` rows
+- `item_sub_group_item_variants`: `1330` rows
+
+This means the local runtime can now resolve subgroup item variants, but the maintained source contract is still:
+
+- raw legacy XLSX for the schema backbone
+- explicit enrichment of group tables
+- no blanket `fishing_table` rewrite
