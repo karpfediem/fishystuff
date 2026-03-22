@@ -1,5 +1,7 @@
 use crate::config::TILE_CACHE_MAX;
-use crate::map::layers::{LayerRegistry, LayerRuntime, LayerRuntimeState, LayerSpec, LodPolicy};
+use crate::map::layers::{
+    LayerRegistry, LayerRuntime, LayerRuntimeState, LayerSpec, LodPolicy, PickMode,
+};
 use crate::map::spaces::layer_transform::{TileSpace, WorldTransform};
 use crate::map::spaces::{WorldPoint, WorldRect};
 use crate::plugins::input::PanState;
@@ -37,10 +39,11 @@ pub(crate) fn compute_desired_layer_tiles(input: DesiredTileComputation<'_>) -> 
         previous,
     } = input;
     let layer_aabb = world_transform.world_rect_to_layer_aabb(view_world);
+    let visible_max_level = effective_visible_max_level(layer, tileset);
 
     let mut candidates: Vec<(TileBounds, usize)> = Vec::new();
     for level in &tileset.levels {
-        if level.z < 0 || level.z as u8 > layer.max_level {
+        if level.z < 0 || level.z > visible_max_level {
             continue;
         }
         let Some(bounds) = bounds_for_level(
@@ -95,6 +98,23 @@ pub(crate) fn compute_desired_layer_tiles(input: DesiredTileComputation<'_>) -> 
     runtime.current_detail_lod = detail.and_then(|value| u8::try_from(value.z).ok());
 
     DesiredLayerTiles { base, detail }
+}
+
+fn effective_visible_max_level(layer: &LayerSpec, tileset: &LoadedTileset) -> i32 {
+    let configured = i32::from(layer.max_level);
+    if layer.pick_mode != PickMode::ExactTilePixel {
+        return configured;
+    }
+
+    // Exact-pixel pick layers already request z=0 tiles explicitly for hover and selection.
+    // If the manifest includes coarser levels, visible coverage can safely use them.
+    tileset
+        .levels
+        .iter()
+        .map(|level| level.z)
+        .max()
+        .unwrap_or(configured)
+        .max(configured)
 }
 
 fn bounds_for_level(

@@ -209,3 +209,45 @@ if [ "${REBUILD_MINIMAP_PYRAMID:-0}" = "1" ]; then
     --root-url /images/tiles/minimap/v1 \
     --y-flip
 fi
+
+mask_level0_dir="$CDN_IMAGE_ASSET_DIR/tiles/mask/v1/0"
+mask_tileset_dir="$CDN_IMAGE_ASSET_DIR/tiles/mask/v1"
+mask_source_image="${ZONE_MASK_SOURCE_IMAGE:-$CDN_IMAGE_ASSET_DIR/zones_mask_v1.png}"
+mask_tiles_rebuilt=0
+mask_level0_input_dir="$mask_level0_dir"
+
+mask_tiles_need_rebuild() {
+  if [ ! -d "$mask_level0_dir" ] || [ ! -f "$mask_level0_dir/0_0.png" ]; then
+    return 0
+  fi
+  if find "$mask_level0_dir" -maxdepth 1 -type f -size 0c -print -quit | grep -q .; then
+    return 0
+  fi
+  return 1
+}
+
+if [ "${REBUILD_MASK_TILES:-0}" = "1" ] || mask_tiles_need_rebuild; then
+  if [ -f "$mask_source_image" ]; then
+    mask_level0_build_dir="$(mktemp -d)"
+    cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin fishystuff_tilegen -- \
+      --input "$mask_source_image" \
+      --out-dir "$mask_level0_build_dir" \
+      --tile-size 512 \
+      --expect-width 11560 \
+      --expect-height 10540
+    mask_tiles_rebuilt=1
+    mask_level0_input_dir="$mask_level0_build_dir"
+  fi
+fi
+
+if [ "${REBUILD_MASK_PYRAMID:-0}" = "1" ] || [ "$mask_tiles_rebuilt" = "1" ] || [ -d "$mask_level0_dir" -a ! -f "$mask_tileset_dir/1/0_0.png" ]; then
+  mask_tileset_build_dir="$(mktemp -d)"
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin mask_pyramid -- \
+    --input-dir "$mask_level0_input_dir" \
+    --out-dir "$mask_tileset_build_dir" \
+    --tile-px 512 \
+    --max-level 4 \
+    --root-url /images/tiles/mask/v1
+  rm -rf "$mask_tileset_dir"
+  mv "$mask_tileset_build_dir" "$mask_tileset_dir"
+fi
