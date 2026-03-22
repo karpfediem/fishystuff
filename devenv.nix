@@ -86,6 +86,15 @@ in {
           clippy = rustHookToolchain;
         };
       };
+      cdn-map-runtime = {
+        enable = true;
+        name = "CDN map runtime";
+        entry = "./tools/scripts/check_cdn_map_runtime_assets.sh";
+        files = "^(Cargo\\.lock|Cargo\\.toml|devenv\\.nix|lib/fishystuff_(api|client|core)/|map/fishystuff_ui_bevy/|site/assets/map/|site/scripts/(build-public-release|write-runtime-config)\\.mjs|tools/scripts/(build_map|check_cdn_map_runtime_assets|resolve_map_runtime_cache_key|push_bunnycdn|stage_cdn_assets)\\.sh)";
+        language = "system";
+        pass_filenames = false;
+        stages = [ "pre-push" ];
+      };
     };
   };
 
