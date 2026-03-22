@@ -19,7 +19,6 @@ mod render;
 pub(crate) use filters::VisualFilterContext;
 pub(crate) use render::loaded::{RasterLoadedAssets, RasterLoadedContext};
 pub(crate) use render::visibility::VisibilityUpdateContext;
-pub(crate) use render::zone_mask_material::{ZoneMaskMaterial, ZoneMaskMaterialPlugin};
 
 #[derive(Component, Debug)]
 pub struct RasterTileEntity;
@@ -88,7 +87,6 @@ pub(crate) struct RasterTileEntry {
     pub(crate) handle: Handle<Image>,
     pub(crate) entity: Option<Entity>,
     pub(crate) material: Option<Handle<ColorMaterial>>,
-    pub(crate) zone_mask_material: Option<Handle<ZoneMaskMaterial>>,
     pub(crate) state: TileState,
     pub(crate) visible: bool,
     pub(crate) alpha: f32,
@@ -215,7 +213,6 @@ impl RasterTileCache {
                 handle,
                 entity: None,
                 material: None,
-                zone_mask_material: None,
                 state: TileState::Loading,
                 visible,
                 alpha,

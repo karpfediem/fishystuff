@@ -144,10 +144,6 @@ impl LayerSpec {
         self.is_raster() && self.pick_mode == PickMode::ExactTilePixel && self.key == "zone_mask"
     }
 
-    pub fn uses_gpu_hover_highlight(&self) -> bool {
-        self.is_zone_mask_visual_layer()
-    }
-
     pub fn exact_lookup_url(&self) -> Option<String> {
         if self.pick_mode != PickMode::ExactTilePixel {
             return None;

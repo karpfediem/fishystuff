@@ -9,13 +9,6 @@ anyhow = { workspace = true }
 async-channel = "2"
 base64 = "0.22"
 bevy_flair = "0.7"
-bevy_asset = { version = "0.18", default-features = false }
-bevy_image = { version = "0.18", default-features = false }
-bevy_math = { version = "0.18", default-features = false }
-bevy_reflect = { version = "0.18", default-features = false }
-bevy_render = { version = "0.18", default-features = false }
-bevy_shader = { version = "0.18", default-features = false }
-bevy_sprite_render = { version = "0.18", default-features = false }
 clap = { workspace = true, features = ["derive"] }
 earcutr = "0.4"
 fishystuff_api = { path = "../../lib/fishystuff_api" }

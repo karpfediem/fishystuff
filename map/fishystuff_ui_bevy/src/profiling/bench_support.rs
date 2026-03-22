@@ -466,7 +466,6 @@ fn cache_from_fixture(fixture: &RasterBenchFixture) -> RasterTileCache {
                 handle: Handle::<Image>::default(),
                 entity: None,
                 material: None,
-                zone_mask_material: None,
                 state: TileState::Ready,
                 visible: false,
                 alpha: 1.0,

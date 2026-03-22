@@ -217,7 +217,6 @@ mod tests {
             handle: Handle::default(),
             entity: None,
             material: None,
-            zone_mask_material: None,
             state: TileState::Ready,
             visible: false,
             alpha: 1.0,

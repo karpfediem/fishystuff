@@ -23,9 +23,11 @@ This note keeps the latest direction visible without rereading the full task his
   - tile size: `2048`
   - single level: `z=0`
   - exact hover/click and exact clip semantics still come from the exact-lookup asset, not from the visual tiles.
-- Hover highlight no longer repaints zone-mask tile pixels on the CPU.
-  - The highlight is now a material/shader effect on the zone-mask display tiles.
-  - Exact lookup still determines which zone is hovered.
+- The custom GPU hover-highlight material experiment was backed out.
+  - It caused a browser-side wgpu/WebGL panic and blank map output in the integrated shell.
+- The current stable path keeps the zone-mask visual on fixed display chunks and only reruns CPU visual filtering when relevant state actually changes.
+  - exact lookup still determines which zone is hovered
+  - the filter path is no longer called every 2D frame while idle
 
 ## Current diagnosis
 
@@ -38,13 +40,13 @@ This note keeps the latest direction visible without rereading the full task his
   - exact lookup is cheap, bounded, and independent
   - visual raster work is measured and bounded separately
   - bridge work stays coarse and batched
-- Current measured result of the fixed display-tileset plus GPU hover path:
-  - `zone_mask_hover_sweep` browser frame avg improved from the earlier `10.634 ms` baseline to `3.760 ms`
-  - frame p95 improved from `45.0 ms` to `7.5 ms`
-  - `raster.sync_visual_filters` dropped out of the top hover spans entirely
-  - top hover spans are now `raster.update_tiles`, `raster.tile_entity_update`, and smaller bridge hover emission
+- Current measured result of the stable recovered path:
+  - browser smoke passes again and the map is visible
+  - `zone_mask_hover_sweep` is `6.084 ms` avg with `27.4 ms` p95
+  - top hover spans are `raster.update_tiles`, `raster.sync_visual_filters`, and `raster.tile_entity_update`
+  - this is slower than the GPU-material experiment, but unlike that experiment it survives the integrated browser path
 - Current integrated vector activation result on the same zone-mask path:
-  - `vector_region_groups_enable` frame avg is `7.629 ms`
+  - `vector_region_groups_enable` frame avg is `8.192 ms`
   - top spans remain `vector.layer_update`, `vector.geojson_parse`, then raster update/render prep
 - The browser bridge is measurable but not the current dominant cost in these runs.
 
@@ -82,7 +84,8 @@ Backend-neutral stages:
 - `zone_mask` visual rendering now uses fixed display chunks instead of the old visual/semantic tile coupling
   - build output: `/images/tiles/zone_mask_visual/v1`
   - runtime override: `map/layers/registry.rs`
-  - hover highlight render path: `map/raster/cache/render/zone_mask_material.rs`
+- Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame
+- Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
 Current generated lookup asset:
@@ -97,13 +100,14 @@ Current generated lookup asset:
 1. Keep exact semantics off the visual raster path.
    - no reintroduction of pick-probe tile fetches
    - exact hover/click should stay available even when visual raster is still converging
-2. Keep hover highlight off the CPU raster compose path.
-   - do not reintroduce per-hover tile image mutation for `zone_mask`
-   - exact lookup should remain the semantic source; highlight should stay a render-time effect
+2. Reduce the remaining cost of the stable CPU hover-highlight path.
+   - exact lookup should remain the semantic source
+   - keep the filter path change-driven, not per-frame
+   - if we revisit a GPU path later, it must survive the integrated browser shell first
 3. Reduce the remaining visual raster working set.
    - the current pre-capture busy layers are still `zone_mask` and `minimap`
    - continue measuring busy-layer counts before and after each change
-4. Reduce browser vector activation cost now that hover is no longer the main regression.
+4. Reduce browser vector activation cost now that the blank-screen regression is gone.
    - focus on `vector.layer_update`
    - treat `vector.geojson_parse` as a separate one-shot activation cost
 5. Keep the profiling surface stable across backends.
@@ -121,8 +125,9 @@ Current generated lookup asset:
    - visual tile fetch/decode
    - visual tile upload
    - bridge event flush
-5. Attack the next measured hotspot after hover stabilization.
+5. Attack the next measured hotspot after this recovery point.
    - current top activation hotspot: `vector.layer_update`
+   - current hover hotspot: `raster.sync_visual_filters`
    - current remaining raster source: `minimap`
 6. Only after the single-threaded pipeline is clean, revisit worker/thread options.
 
