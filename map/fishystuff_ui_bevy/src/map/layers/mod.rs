@@ -342,5 +342,13 @@ mod tests {
         assert_eq!(layer.tile_px, 1280);
         assert_eq!(layer.max_level, 4);
         assert!(!layer.y_flip);
+        assert_eq!(layer.lod_policy.target_tiles, 16);
+        assert_eq!(layer.lod_policy.hysteresis_hi, 24.0);
+        assert_eq!(layer.lod_policy.hysteresis_lo, 8.0);
+        assert_eq!(layer.lod_policy.margin_tiles, 0);
+        assert_eq!(layer.lod_policy.max_resident_tiles, 256);
+        assert_eq!(layer.lod_policy.pinned_coarse_levels, 0);
+        assert_eq!(layer.lod_policy.warm_margin_tiles, 0);
+        assert_eq!(layer.lod_policy.protected_margin_tiles, 0);
     }
 }

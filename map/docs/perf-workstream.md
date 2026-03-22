@@ -29,6 +29,13 @@ This note keeps the latest direction visible without rereading the full task his
   - levels: `z=0..4`
   - only the finest display level keeps source-equivalent minimap detail
   - parent levels now shrink by 2x per level (`3855 -> 1928 -> 964 -> 482 -> 241`) to keep browser memory bounded
+  - runtime LOD is now overridden specifically for minimap startup:
+    - `target_tiles=16`
+    - `hysteresis_hi=24`
+    - `hysteresis_lo=8`
+    - `margin_tiles=0`
+    - no coarse pinning, no warm/protected ring, no refine
+  - this keeps startup on coarse minimap levels and only reaches finest detail when zoom actually requires it
   - the old 128px source-space `minimap` pyramid is no longer the runtime visual path
   - the raw `rader_*` source tiles are remapped offline into canonical map-space display tiles during `build_map.sh`
 - The earlier custom GPU hover-highlight experiment was unstable and was backed out.
@@ -77,8 +84,11 @@ This note keeps the latest direction visible without rereading the full task his
   - full-detail-on-all-levels `1280` minimap pyramid reached `minimap_enable` avg `21.439 ms`, p95 `84.4 ms`
   - that full-detail-on-all-levels `1280` variant later hit a browser `rust_oom` during real map convergence and was backed out
   - current browser-safe `1280` pyramid with shrinking parent levels reaches `minimap_enable` avg `23.547 ms`, p95 `124.3 ms`
-  - current browser-safe `1280` pyramid with shrinking parent levels reaches `load_map` avg `35.029 ms`, p95 `102.1 ms`
-  - a longer `load_map` browser run completed without OOM and captured `81` frames at `19.120 ms` avg
+  - adding the minimap-specific startup LOD override drops `minimap_enable` further to `12.086 ms` avg, `108.6 ms` p95
+  - that is `11.461 ms` faster than the parent-shrunk-only variant on `minimap_enable`
+  - `raster.update_tiles` drops from `732.3 ms` to `431.5 ms` on `minimap_enable`
+  - `raster.tile_entity_update` drops from `725.9 ms` to `424.1 ms` on `minimap_enable`
+  - a longer `load_map` browser run completed without OOM and captured `110` frames at `16.109 ms` avg
   - `minimap_enable` is still `4.434 ms` faster than the earlier `1024` full-detail attempt
   - the old raw `minimap/v1` runtime visual surface was `26,777` PNGs / about `815.8 MiB` on disk
   - the current `minimap_visual/v1` display pyramid is `129` PNGs / about `993.8 MiB` on disk
@@ -123,6 +133,7 @@ Backend-neutral stages:
   - build output: `/images/tiles/minimap_visual/v1`
   - generator: `tools/fishystuff_tilegen/src/bin/minimap_display_tiles.rs`
   - runtime override: `map/layers/registry.rs`
+  - startup LOD override: `target_tiles=16`, no refine, no coarse pinning
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame
 - Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
 - Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs
@@ -154,6 +165,7 @@ Current generated lookup asset:
    - the biggest remaining startup spans are still `raster.update_tiles` and `raster.tile_entity_update`
    - `minimap` is no longer using the pathological raw 128px decode surface, but it still participates in raster startup cost
    - the current browser-safe `1280` display pyramid keeps detail only where needed and avoids the all-level full-detail OOM path
+   - the minimap LOD override is now part of that guarantee; removing it reintroduces startup fetches of the finest tiles
    - continue measuring busy-layer counts before and after each change
 4. Reduce browser vector activation cost now that the blank-screen regression is gone.
    - focus on `vector.layer_update`

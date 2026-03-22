@@ -290,3 +290,61 @@ pub(crate) fn compute_cache_budget(
         sum.clamp(256, 16_384)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{choose_bounds_with_hysteresis, TileBounds};
+    use crate::map::layers::LodPolicy;
+
+    fn bounds(z: i32) -> TileBounds {
+        TileBounds {
+            min_tx: 0,
+            max_tx: 0,
+            min_ty: 0,
+            max_ty: 0,
+            z,
+            map_version: 1,
+        }
+    }
+
+    fn lod_policy(target_tiles: usize, hi: f32, lo: f32) -> LodPolicy {
+        LodPolicy {
+            target_tiles,
+            hysteresis_hi: hi,
+            hysteresis_lo: lo,
+            margin_tiles: 0,
+            enable_refine: false,
+            refine_debounce_ms: 0,
+            max_detail_tiles: 0,
+            max_resident_tiles: 256,
+            pinned_coarse_levels: 0,
+            coarse_pin_min_level: None,
+            warm_margin_tiles: 0,
+            protected_margin_tiles: 0,
+            detail_eviction_weight: 1.0,
+            max_detail_requests_while_camera_moving: 1,
+            motion_suppresses_refine: true,
+        }
+    }
+
+    #[test]
+    fn low_target_tiles_avoids_finest_level_for_full_map() {
+        let candidates = vec![
+            (bounds(0), 90),
+            (bounds(1), 25),
+            (bounds(2), 9),
+            (bounds(3), 4),
+        ];
+        let chosen = choose_bounds_with_hysteresis(&candidates, None, &lod_policy(16, 24.0, 8.0))
+            .expect("chosen base lod");
+        assert_eq!(chosen.z, 2);
+    }
+
+    #[test]
+    fn low_target_tiles_still_allow_finest_level_when_zoomed_in() {
+        let candidates = vec![(bounds(0), 4), (bounds(1), 1), (bounds(2), 1)];
+        let chosen = choose_bounds_with_hysteresis(&candidates, None, &lod_policy(16, 24.0, 8.0))
+            .expect("chosen base lod");
+        assert_eq!(chosen.z, 0);
+    }
+}

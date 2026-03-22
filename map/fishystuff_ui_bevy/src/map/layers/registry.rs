@@ -20,6 +20,10 @@ use super::{
 const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
 const MINIMAP_VISUAL_TILE_PX: u32 = 1280;
 const MINIMAP_VISUAL_MAX_LEVEL: u8 = 4;
+const MINIMAP_TARGET_TILES: usize = 16;
+const MINIMAP_HYSTERESIS_HI: f32 = 24.0;
+const MINIMAP_HYSTERESIS_LO: f32 = 8.0;
+const MINIMAP_MAX_RESIDENT_TILES: usize = 256;
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct LayerRegistry {
@@ -171,6 +175,25 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
     let mut tile_px = tile_px.max(1);
     let mut max_level = max_level;
     let mut y_flip = y_flip;
+    let mut lod_policy = LodPolicy {
+        target_tiles: lod_policy.target_tiles.max(1),
+        hysteresis_hi: lod_policy.hysteresis_hi.max(1.0),
+        hysteresis_lo: lod_policy.hysteresis_lo.max(0.0),
+        margin_tiles: lod_policy.margin_tiles,
+        enable_refine: lod_policy.enable_refine,
+        refine_debounce_ms: lod_policy.refine_debounce_ms,
+        max_detail_tiles: lod_policy.max_detail_tiles,
+        max_resident_tiles: lod_policy.max_resident_tiles.max(128),
+        pinned_coarse_levels: lod_policy.pinned_coarse_levels,
+        coarse_pin_min_level: lod_policy.coarse_pin_min_level,
+        warm_margin_tiles: lod_policy.warm_margin_tiles.max(0),
+        protected_margin_tiles: lod_policy.protected_margin_tiles.max(0),
+        detail_eviction_weight: lod_policy.detail_eviction_weight.max(0.1),
+        max_detail_requests_while_camera_moving: lod_policy
+            .max_detail_requests_while_camera_moving
+            .max(1),
+        motion_suppresses_refine: lod_policy.motion_suppresses_refine,
+    };
     if kind == LayerKind::TiledRaster
         && pick_mode == PickMode::ExactTilePixel
         && layer_id == "zone_mask"
@@ -205,6 +228,20 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         tile_px = MINIMAP_VISUAL_TILE_PX;
         max_level = MINIMAP_VISUAL_MAX_LEVEL;
         y_flip = false;
+        lod_policy.target_tiles = MINIMAP_TARGET_TILES;
+        lod_policy.hysteresis_hi = MINIMAP_HYSTERESIS_HI;
+        lod_policy.hysteresis_lo = MINIMAP_HYSTERESIS_LO;
+        lod_policy.margin_tiles = 0;
+        lod_policy.enable_refine = false;
+        lod_policy.refine_debounce_ms = 0;
+        lod_policy.max_detail_tiles = 0;
+        lod_policy.max_resident_tiles = MINIMAP_MAX_RESIDENT_TILES;
+        lod_policy.pinned_coarse_levels = 0;
+        lod_policy.coarse_pin_min_level = None;
+        lod_policy.warm_margin_tiles = 0;
+        lod_policy.protected_margin_tiles = 0;
+        lod_policy.max_detail_requests_while_camera_moving = 1;
+        lod_policy.motion_suppresses_refine = true;
     }
 
     Some(LayerSpec {
@@ -223,25 +260,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         tile_px,
         max_level,
         y_flip,
-        lod_policy: LodPolicy {
-            target_tiles: lod_policy.target_tiles.max(1),
-            hysteresis_hi: lod_policy.hysteresis_hi.max(1.0),
-            hysteresis_lo: lod_policy.hysteresis_lo.max(0.0),
-            margin_tiles: lod_policy.margin_tiles,
-            enable_refine: lod_policy.enable_refine,
-            refine_debounce_ms: lod_policy.refine_debounce_ms,
-            max_detail_tiles: lod_policy.max_detail_tiles,
-            max_resident_tiles: lod_policy.max_resident_tiles.max(128),
-            pinned_coarse_levels: lod_policy.pinned_coarse_levels,
-            coarse_pin_min_level: lod_policy.coarse_pin_min_level,
-            warm_margin_tiles: lod_policy.warm_margin_tiles.max(0),
-            protected_margin_tiles: lod_policy.protected_margin_tiles.max(0),
-            detail_eviction_weight: lod_policy.detail_eviction_weight.max(0.1),
-            max_detail_requests_while_camera_moving: lod_policy
-                .max_detail_requests_while_camera_moving
-                .max(1),
-            motion_suppresses_refine: lod_policy.motion_suppresses_refine,
-        },
+        lod_policy,
         request_weight: request_weight.max(0.05),
         pick_mode,
         display_order: ui.display_order,
