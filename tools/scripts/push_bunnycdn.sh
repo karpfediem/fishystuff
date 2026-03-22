@@ -129,6 +129,7 @@ list_local_files_under_root() {
 list_required_files_under_root() {
   local root="$1"
   local out_file="$2"
+  local all_local_files_file
   local manifest_path
   local current_cached_manifest
   local module_path
@@ -139,8 +140,9 @@ list_required_files_under_root() {
     return 0
   fi
 
+  all_local_files_file="$(mktemp)"
   : > "$out_file"
-  list_local_files_under_root "$root" "$local_root_files_file"
+  list_local_files_under_root "$root" "$all_local_files_file"
 
   awk '
     {
@@ -148,7 +150,7 @@ list_required_files_under_root() {
         print $0
       }
     }
-  ' "$local_root_files_file" >> "$out_file"
+  ' "$all_local_files_file" >> "$out_file"
 
   manifest_path="$CDN_ROOT/map/runtime-manifest.json"
   if [ ! -f "$manifest_path" ]; then
@@ -178,6 +180,7 @@ list_required_files_under_root() {
   printf 'map/%s\n' "$module_path" >> "$out_file"
   printf 'map/%s\n' "$wasm_path" >> "$out_file"
   LC_ALL=C sort -u -o "$out_file" "$out_file"
+  rm -f "$all_local_files_file"
 }
 
 http_list_dir() {
