@@ -11,6 +11,8 @@ Use it to keep the latest diagnosis, priorities, and next cuts visible without r
 - The coarse `zone_mask` pyramid cut was a real startup win, but it introduced an edge-coverage regression because parent tiles on partial east/south edges were being emitted as full-size `512x512` images.
 - Those coarse edge parents now preserve their actual occupied dimensions before downsampling, which keeps the visible mask aligned with the canonical map bounds.
 - The local rebuild and browser smoke/profile runs are clean again after regenerating the mask pyramid.
+- Browser robustness bug: transient raster image EOF/load failures were previously cached as permanent `Failed` tiles, so the runtime would never retry them and could leave persistent holes until a full reload.
+- Failed raster tiles are now retriable in the scheduler/residency path so temporary local CDN rebuild races can recover automatically.
 
 ## Current diagnosis
 

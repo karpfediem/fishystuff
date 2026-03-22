@@ -146,7 +146,7 @@ fn ingest_desired_coverage(
                 plan.protected.insert(ancestor);
             } else {
                 if let Some(ancestor_key) = nearest_available_ancestor_key(key, tileset) {
-                    if !cache.contains(&ancestor_key) {
+                    if !cache.contains_live(&ancestor_key) {
                         plan.ancestor_requests.insert(ancestor_key);
                     }
                 }

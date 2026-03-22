@@ -160,6 +160,13 @@ impl RasterTileCache {
             .unwrap_or(false)
     }
 
+    pub(crate) fn contains_live(&self, key: &TileKey) -> bool {
+        self.entries
+            .get(key)
+            .map(|entry| entry.state != TileState::Failed)
+            .unwrap_or(false)
+    }
+
     pub(crate) fn nearest_loaded_ancestor(
         &self,
         key: TileKey,
