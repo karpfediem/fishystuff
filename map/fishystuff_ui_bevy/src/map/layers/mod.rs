@@ -339,8 +339,8 @@ mod tests {
             layer.tile_url_template,
             "/images/tiles/minimap_visual/v1/{z}/{x}_{y}.png"
         );
-        assert_eq!(layer.tile_px, 2048);
-        assert_eq!(layer.max_level, 0);
+        assert_eq!(layer.tile_px, 1280);
+        assert_eq!(layer.max_level, 4);
         assert!(!layer.y_flip);
     }
 }

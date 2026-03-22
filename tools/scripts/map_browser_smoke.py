@@ -5,6 +5,7 @@ import argparse
 import base64
 import json
 import os
+import shutil
 import socket
 import struct
 import subprocess
@@ -322,8 +323,8 @@ def main() -> int:
         "chromium_stderr_tail": [],
     }
 
-    with tempfile.TemporaryDirectory(prefix="fishystuff-map-smoke-") as temp_dir:
-        temp_root = Path(temp_dir)
+    temp_root = Path(tempfile.mkdtemp(prefix="fishystuff-map-smoke-"))
+    try:
         stderr_path = temp_root / "chromium.stderr.log"
         stdout_path = temp_root / "chromium.stdout.log"
         chromium_args = [
@@ -412,6 +413,8 @@ def main() -> int:
         write_output(args.output_json, result)
         print_summary(result)
         return 0 if result["ok"] else 1
+    finally:
+        shutil.rmtree(temp_root, ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -18,7 +18,8 @@ use super::{
 };
 
 const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
-const MINIMAP_VISUAL_TILE_PX: u32 = 2048;
+const MINIMAP_VISUAL_TILE_PX: u32 = 1280;
+const MINIMAP_VISUAL_MAX_LEVEL: u8 = 4;
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct LayerRegistry {
@@ -202,7 +203,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         .unwrap_or_else(|| "/images/tiles/minimap_visual/v1/{z}/{x}_{y}.png".to_string());
         transform = LayerTransform::IdentityMapSpace;
         tile_px = MINIMAP_VISUAL_TILE_PX;
-        max_level = 0;
+        max_level = MINIMAP_VISUAL_MAX_LEVEL;
         y_flip = false;
     }
 

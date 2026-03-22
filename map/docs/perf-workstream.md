@@ -23,12 +23,13 @@ This note keeps the latest direction visible without rereading the full task his
   - tile size: `2048`
   - single level: `z=0`
   - exact hover/click and exact clip semantics still come from the exact-lookup asset, not from the visual tiles.
-- The visual `minimap` now also uses fixed display chunks:
+- The visual `minimap` now uses a map-space display pyramid:
   - `/images/tiles/minimap_visual/v1/tileset.json`
-  - tile size: `2048`
-  - single level: `z=0`
-  - the old 128px multi-level `minimap` pyramid is no longer the runtime visual path
-  - the raw `rader_*` source tiles are now remapped offline into canonical map-space display tiles during `build_map.sh`
+  - logical tile size: `1280`
+  - levels: `z=0..4`
+  - finest display tiles preserve source-equivalent minimap detail at high zoom
+  - the old 128px source-space `minimap` pyramid is no longer the runtime visual path
+  - the raw `rader_*` source tiles are remapped offline into canonical map-space display tiles during `build_map.sh`
 - The earlier custom GPU hover-highlight experiment was unstable and was backed out.
   - It caused a browser-side wgpu/WebGL panic and blank map output in the integrated shell.
 - The current hover path is now hybrid:
@@ -48,7 +49,8 @@ This note keeps the latest direction visible without rereading the full task his
 - Visual transport format and semantic lookup format must be treated as separate concerns.
 - The same rule now applies to minimap transport:
   - the browser should not pay tens of thousands of tiny PNG decodes for a static visual layer
-  - coarse display chunks are the right shape for the current single-threaded Wasm baseline
+  - the right runtime shape is a map-space display pyramid with far fewer, larger tiles than the raw source set
+  - high-zoom detail is a hard requirement, so minimap work must preserve source-equivalent finest-level density
 - The first stable target is:
   - exact lookup is cheap, bounded, and independent
   - visual raster work is measured and bounded separately
@@ -68,13 +70,17 @@ This note keeps the latest direction visible without rereading the full task his
 - Current integrated vector activation result on the same zone-mask path:
   - latest `vector_region_groups_enable` frame avg is `7.835 ms`
   - top spans are `vector.layer_update`, `vector.geojson_parse`, then host/bridge patch ingest
-- Current integrated minimap startup result after the coarse-display-tile cut:
-  - `load_map` frame avg improved from `52.558 ms` to `44.513 ms`
-  - `load_map` p95 improved from `209.1 ms` to `128.5 ms`
-  - `raster.update_tiles` dropped from `499.6 ms` total to `437.8 ms`
-  - `raster.tile_entity_update` dropped from `495.7 ms` total to `432.7 ms`
-  - the old `minimap/v1` runtime visual surface was `36,167` PNGs / about `1.09 GiB` on disk
-  - the new `minimap_visual/v1` runtime visual surface is `36` PNGs / about `118.9 MiB` on disk
+- Current integrated minimap results:
+  - coarse single-level minimap cut previously reached `load_map` avg `44.513 ms`, p95 `128.5 ms`
+  - first full-detail `1024` minimap pyramid reached `minimap_enable` avg `27.981 ms`, p95 `87.1 ms`
+  - current `1280` full-detail minimap pyramid reaches `minimap_enable` avg `21.439 ms`, p95 `84.4 ms`
+  - current `1280` full-detail minimap pyramid reaches `load_map` avg `31.633 ms`, p95 `59.7 ms`
+  - `minimap_enable` improved by `6.542 ms` avg versus the `1024` full-detail attempt
+  - `raster.update_tiles` dropped from `833.0 ms` total to `635.8 ms` on `minimap_enable`
+  - `raster.tile_entity_update` dropped from `825.8 ms` total to `631.0 ms` on `minimap_enable`
+  - the old raw `minimap/v1` runtime visual surface was `26,777` PNGs / about `815.8 MiB` on disk
+  - the current `minimap_visual/v1` display pyramid is `129` PNGs / about `1.216 GiB` on disk
+  - on-disk size is still too large, but runtime decode count is much lower and the integrated browser path is materially faster
 - The browser bridge is measurable but not the current dominant cost in these runs.
 
 ## Current module split
@@ -111,7 +117,7 @@ Backend-neutral stages:
 - `zone_mask` visual rendering now uses fixed display chunks instead of the old visual/semantic tile coupling
   - build output: `/images/tiles/zone_mask_visual/v1`
   - runtime override: `map/layers/registry.rs`
-- `minimap` visual rendering now uses fixed map-space display chunks instead of the old 128px decode-heavy pyramid
+- `minimap` visual rendering now uses a source-equivalent map-space display pyramid instead of the old 128px decode-heavy source pyramid
   - build output: `/images/tiles/minimap_visual/v1`
   - generator: `tools/fishystuff_tilegen/src/bin/minimap_display_tiles.rs`
   - runtime override: `map/layers/registry.rs`
@@ -144,7 +150,8 @@ Current generated lookup asset:
   - next tuning knob is the tile-fanout threshold that switches between the two
 3. Reduce the remaining visual raster working set.
    - the biggest remaining startup spans are still `raster.update_tiles` and `raster.tile_entity_update`
-   - `minimap` is no longer the worst decode surface, but it still participates in raster startup cost
+   - `minimap` is no longer using the pathological raw 128px decode surface, but it still participates in raster startup cost
+   - the current `1280` display pyramid is the best measured detail-preserving point so far
    - continue measuring busy-layer counts before and after each change
 4. Reduce browser vector activation cost now that the blank-screen regression is gone.
    - focus on `vector.layer_update`
@@ -158,24 +165,28 @@ Current generated lookup asset:
 
 1. Keep the exact-lookup split and fixed display-tileset path measured.
 2. Keep `zone_mask` on the fixed visual chunk path, not the full-image path and not the old pyramid branch.
-3. Reduce residual raster startup/backlog for `zone_mask` + `minimap` without breaking exact semantics.
-4. Add explicit stage measurements for:
+3. Keep `minimap` on the measured `1280` source-equivalent display pyramid unless a replacement beats it with data.
+4. Reduce residual raster startup/backlog for `zone_mask` + `minimap` without breaking exact semantics.
+5. Add explicit stage measurements for:
    - exact lookup load
    - exact lookup sample
    - visual tile fetch/decode
    - visual tile upload
    - bridge event flush
-5. Attack the next measured hotspot after the hover-path split.
+6. Attack the next measured hotspot after the hover-path split.
   - current top activation hotspot: `vector.layer_update`
   - current top hover hotspots: `raster.update_tiles`, `raster.visible_tile_computation`, and `raster.desired_tile_set_build`
   - current startup raster hotspot after the minimap cut: `raster.update_tiles` / `raster.tile_entity_update`
   - `minimap_enable` is now the dedicated browser regression scenario for that layer
-6. Only after the single-threaded pipeline is clean, revisit worker/thread options.
+7. Keep browser smoke/profile automation trustworthy.
+  - `tools/scripts/map_browser_smoke.py` now ignores Chromium temp-profile cleanup races after successful runs
+  - keep one-command local browser validation green while iterating
+8. Only after the single-threaded pipeline is clean, revisit worker/thread options.
 
 ## Non-goals for this phase
 
 - Do not wait on future Bevy web multithreading.
-- Do not reintroduce more tile-pyramid work.
+- Do not reintroduce the raw source-space 128px `minimap` pyramid.
 - Do not go back to the direct full-image `zone_mask` path.
 - Do not let exact hover/click depend on display-tile residency again.
 - Do not make performance claims without a browser or native profiling run.

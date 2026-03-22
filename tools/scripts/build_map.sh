@@ -218,7 +218,8 @@ if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
     --texture-px 256 \
     --kind raster-visual
 fi
-MINIMAP_DISPLAY_TILE_PX=2048
+MINIMAP_DISPLAY_TILE_PX=1280
+MINIMAP_DISPLAY_MAX_LEVEL=4
 minimap_display_source_dir="$CDN_IMAGE_ASSET_DIR/tiles/minimap"
 minimap_display_root="$CDN_IMAGE_ASSET_DIR/tiles/minimap_visual/v1"
 minimap_display_manifest="$minimap_display_root/tileset.json"
@@ -235,10 +236,11 @@ if [ -d "$minimap_display_source_dir" ] && {
   find "$minimap_display_source_dir" -maxdepth 1 -name 'rader_*.png' -newer "$minimap_display_manifest" -print -quit | grep -q .
 }; then
   rm -rf "$minimap_display_root"
-  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin minimap_display_tiles -- \
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --release -p fishystuff_tilegen --bin minimap_display_tiles -- \
     --input-dir "$minimap_display_source_dir" \
     --out-dir "$minimap_display_root" \
     --tile-px "$MINIMAP_DISPLAY_TILE_PX" \
+    --max-level "$MINIMAP_DISPLAY_MAX_LEVEL" \
     --root-url /images/tiles/minimap_visual/v1
 fi
 
