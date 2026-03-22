@@ -380,6 +380,52 @@ test("search text patches preserve trailing spaces while typing", () => {
   assert.equal(next.filters.searchText, "Zenato Sea ");
 });
 
+test("setState updates cached input state without forcing a wasm state read", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+        statuses: {},
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      debounceMs: 0,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+    wasm.calls.stateReads = 0;
+
+    bridge.setState({
+      version: 1,
+      filters: {
+        searchText: "Padjal",
+      },
+    });
+
+    assert.equal(bridge.getCurrentInputState().filters.searchText, "Padjal");
+    assert.equal(wasm.calls.stateReads, 0);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("bookmark ui patches are normalized in input state and omitted from persisted prefs", () => {
   const next = applyStatePatch(undefined, {
     version: 1,

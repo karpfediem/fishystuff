@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "scenario",
-        choices=["load_map", "vector_region_groups_enable"],
+        choices=["load_map", "vector_region_groups_enable", "vector_region_groups_dom_toggle"],
         help="Integrated browser profiling scenario to run.",
     )
     parser.add_argument(
@@ -71,6 +71,8 @@ def scenario_capture_frames(scenario: str, capture_frames: int | None) -> int:
     if scenario == "load_map":
         return 0
     if scenario == "vector_region_groups_enable":
+        return 180
+    if scenario == "vector_region_groups_dom_toggle":
         return 180
     return 0
 
@@ -205,6 +207,42 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     capture_frames_target: {capture_frames},
     completed_frames: frameWait.completedFrames,
     frame_wait_timed_out: frameWait.timedOut,
+  }};
+  return report;
+}})()
+""".strip()
+    if scenario == "vector_region_groups_dom_toggle":
+        return f"""
+(async () => {{
+  const bridge = globalThis.window?.FishyMapBridge ?? null;
+  if (!bridge?.resetPerformanceSnapshot || !bridge?.getPerformanceSnapshot) {{
+    throw new Error("FishyMapBridge profiling API is unavailable");
+  }}
+  const waitForLayerToggle = async () => {{
+    const deadline = performance.now() + 10000;
+    while (performance.now() < deadline) {{
+      const button = document.querySelector('button[data-layer-visibility="region_groups"]');
+      if (button) {{
+        return button;
+      }}
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }}
+    throw new Error("region_groups visibility button not found");
+  }};
+  const button = await waitForLayerToggle();
+  bridge.resetPerformanceSnapshot({{
+    scenario: "vector_region_groups_dom_toggle",
+    warmupFrames: 0,
+  }});
+  button.click();
+  const frameWait = {wait_frames};
+  const report = bridge.getPerformanceSnapshot();
+  report.browser_action = {{
+    target_layer_id: "region_groups",
+    capture_frames_target: {capture_frames},
+    completed_frames: frameWait.completedFrames,
+    frame_wait_timed_out: frameWait.timedOut,
+    trigger: "dom_click",
   }};
   return report;
 }})()

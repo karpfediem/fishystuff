@@ -4,6 +4,7 @@ import FishyMapBridge, {
   FISHYMAP_POINT_ICON_SCALE_MAX,
   FISHYMAP_POINT_ICON_SCALE_MIN,
   FISHYMAP_STORAGE_KEYS,
+  applyStatePatch,
   resolveCdnBaseUrl,
 } from "./map-host.js";
 
@@ -123,9 +124,11 @@ function installRendererErrorHandlers(elements) {
   window.addEventListener("unhandledrejection", onRejection);
 }
 
-function requestBridgeState(target) {
+function requestBridgeState(target, options = {}) {
   const detail = {};
-  dispatchMapEvent(target, FISHYMAP_EVENTS.requestState, detail);
+  if (options.refresh === true) {
+    dispatchMapEvent(target, FISHYMAP_EVENTS.requestState, detail);
+  }
   return {
     state: detail.state || FishyMapBridge.getCurrentState(),
     inputState:
@@ -133,6 +136,13 @@ function requestBridgeState(target) {
       (typeof FishyMapBridge.getCurrentInputState === "function"
         ? FishyMapBridge.getCurrentInputState()
         : {}),
+  };
+}
+
+export function projectStateBundleStatePatch(stateBundle, patch) {
+  return {
+    state: stateBundle?.state || {},
+    inputState: applyStatePatch(stateBundle?.inputState, patch),
   };
 }
 
@@ -3008,7 +3018,7 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
     return;
   }
   elements.search.value = "";
-  dispatchMapState(shell, {
+  const patch = {
     version: 1,
     filters: {
       searchText: "",
@@ -3016,13 +3026,14 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
         ? { fishIds: addSelectedFishId(resolveSelectedFishIds(stateBundle), match.fishId) }
         : { zoneRgbs: addSelectedZoneRgb(resolveSelectedZoneRgbs(stateBundle), match.zoneRgb) }),
     },
-  });
+  };
+  dispatchMapState(shell, patch);
   if (match.kind === "zone") {
     dispatchMapCommand(shell, {
       selectZoneRgb: match.zoneRgb,
     });
   }
-  renderCurrentState(requestBridgeState(shell));
+  renderCurrentState(projectStateBundleStatePatch(stateBundle, patch));
 }
 
 function bindUi(shell, elements, options = {}) {
@@ -3166,19 +3177,39 @@ function bindUi(shell, elements, options = {}) {
         event.detail?.inputState ||
         (typeof FishyMapBridge.getCurrentInputState === "function"
           ? FishyMapBridge.getCurrentInputState()
-        : {}),
+          : {}),
     };
+  }
+
+  function getLatestStateBundle(options = {}) {
+    if (options.refresh !== true && latestStateBundle) {
+      return latestStateBundle;
+    }
+    latestStateBundle = requestBridgeState(shell, options);
+    return latestStateBundle;
+  }
+
+  function applyInputStatePatchLocally(patch) {
+    latestStateBundle = projectStateBundleStatePatch(getLatestStateBundle(), patch);
+    return latestStateBundle;
+  }
+
+  function dispatchStatePatchAndRender(patch) {
+    dispatchMapState(shell, patch);
+    renderCurrentState(applyInputStatePatchLocally(patch));
   }
 
   function setSelectedBookmarkIds(nextSelectedIds) {
     bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds);
-    FishyMapBridge.setState?.({
+    const patch = {
       version: FISHYMAP_CONTRACT_VERSION,
       ui: {
         bookmarkSelectedIds: bookmarkUi.selectedIds,
       },
-    });
+    };
+    FishyMapBridge.setState?.(patch);
     FishyMapBridge.flushPendingPatchNow?.();
+    applyInputStatePatchLocally(patch);
   }
 
   function selectedBookmarksForCopy() {
@@ -3191,14 +3222,16 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function syncBookmarksToBridge(nextBookmarks = bookmarks) {
-    FishyMapBridge.setState?.({
+    const patch = {
       version: FISHYMAP_CONTRACT_VERSION,
       ui: {
         bookmarkSelectedIds: normalizeSelectedBookmarkIds(nextBookmarks, bookmarkUi.selectedIds),
         bookmarks: normalizeBookmarks(nextBookmarks),
       },
-    });
+    };
+    FishyMapBridge.setState?.(patch);
     FishyMapBridge.flushPendingPatchNow?.();
+    applyInputStatePatchLocally(patch);
   }
 
   function setBookmarkPlacementActive(active, options = {}) {
@@ -3222,7 +3255,7 @@ function bindUi(shell, elements, options = {}) {
       const storageMessage = `${normalizedStatusMessage || "Bookmark updated."} Browser storage is unavailable, so this will reset on reload.`;
       showSiteToast("warning", storageMessage);
     }
-    renderCurrentState(requestBridgeState(shell));
+    renderCurrentState(getLatestStateBundle());
   }
 
   function clearBookmarkMetadataRefresh() {
@@ -3245,7 +3278,7 @@ function bindUi(shell, elements, options = {}) {
     bookmarkMetadataRefreshTimer = globalThis.setTimeout(() => {
       bookmarkMetadataRefreshTimer = 0;
       bookmarkMetadataRefreshAttempts += 1;
-      renderCurrentState(requestBridgeState(shell));
+      renderCurrentState(getLatestStateBundle());
     }, 150);
   }
 
@@ -3421,7 +3454,7 @@ function bindUi(shell, elements, options = {}) {
     applyManagedWindows({ persist: moved });
   }
 
-  function renderCurrentState(stateBundle = requestBridgeState(shell)) {
+  function renderCurrentState(stateBundle = latestStateBundle || requestBridgeState(shell)) {
     latestStateBundle = stateBundle;
     bookmarks = persistResolvedBookmarksFromStateBundle(stateBundle, bookmarks, bookmarkUi);
     scheduleBookmarkMetadataRefresh();
@@ -3496,10 +3529,9 @@ function bindUi(shell, elements, options = {}) {
     if (!layerOpacityInteraction.activeLayerId) {
       return;
     }
-    latestStateBundle = requestBridgeState(shell);
     layerOpacityInteraction.activeLayerId = null;
     layerOpacityInteraction.activeValue = null;
-    renderCurrentState(latestStateBundle);
+    renderCurrentState(getLatestStateBundle());
   }
 
   elements.canvas.addEventListener("pointermove", (event) => {
@@ -3513,7 +3545,7 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.canvas.addEventListener("click", () => {
-    const state = latestStateBundle?.state || requestBridgeState(shell).state;
+    const state = getLatestStateBundle().state;
     const hover = state.hover || null;
     if (!bookmarkUi.placing) {
       const hoveredBookmark = resolveHoveredBookmark(hover, latestStateBundle, bookmarks);
@@ -3657,17 +3689,16 @@ function bindUi(shell, elements, options = {}) {
 
   function pushSearchPatch() {
     const searchText = elements.search.value;
-    dispatchMapState(shell, {
+    dispatchStatePatchAndRender({
       version: 1,
       filters: {
         searchText,
       },
     });
-    renderCurrentState(requestBridgeState(shell));
   }
 
   function pushPatchRangePatch() {
-    const current = requestBridgeState(shell);
+    const current = getLatestStateBundle();
     const patchRange = normalizePatchRangeSelection(
       current.state.catalog?.patches || [],
       elements.patchFrom.value || null,
@@ -3679,14 +3710,13 @@ function bindUi(shell, elements, options = {}) {
 
     elements.patchFrom.value = patchRange.fromPatchId;
     elements.patchTo.value = patchRange.toPatchId;
-    dispatchMapState(shell, {
+    dispatchStatePatchAndRender({
       version: 1,
       filters: {
         fromPatchId: patchRange.fromPatchId,
         toPatchId: patchRange.toPatchId,
       },
     });
-    renderCurrentState(requestBridgeState(shell));
   }
 
   elements.search.addEventListener("input", () => {
@@ -3700,7 +3730,7 @@ function bindUi(shell, elements, options = {}) {
     if (event.key !== "Enter") {
       return;
     }
-    const current = requestBridgeState(shell);
+    const current = getLatestStateBundle();
     const matches = buildSearchMatches(current, elements.search.value, zoneCatalog);
     const top = matches[0];
     if (!top) {
@@ -3715,7 +3745,7 @@ function bindUi(shell, elements, options = {}) {
     if (!button) {
       return;
     }
-    const current = requestBridgeState(shell);
+    const current = getLatestStateBundle();
     const zoneRgb = Number.parseInt(button.getAttribute("data-zone-rgb"), 10);
     if (Number.isFinite(zoneRgb)) {
       applySearchMatchSelection(shell, elements, renderCurrentState, current, {
@@ -3741,26 +3771,24 @@ function bindUi(shell, elements, options = {}) {
     if (!removeButton) {
       return;
     }
-    const current = requestBridgeState(shell);
+    const current = getLatestStateBundle();
     const zoneRgb = Number.parseInt(removeButton.getAttribute("data-zone-rgb"), 10);
     if (Number.isFinite(zoneRgb)) {
-      dispatchMapState(shell, {
+      dispatchStatePatchAndRender({
         version: 1,
         filters: {
           zoneRgbs: removeSelectedZoneRgb(resolveSelectedZoneRgbs(current), zoneRgb),
         },
       });
-      renderCurrentState(requestBridgeState(shell));
       return;
     }
     const fishId = Number.parseInt(removeButton.getAttribute("data-fish-id"), 10);
-    dispatchMapState(shell, {
+    dispatchStatePatchAndRender({
       version: 1,
       filters: {
         fishIds: removeSelectedFishId(resolveSelectedFishIds(current), fishId),
       },
     });
-    renderCurrentState(requestBridgeState(shell));
   });
 
   if (elements.zoneEvidenceList) {
@@ -3773,14 +3801,13 @@ function bindUi(shell, elements, options = {}) {
       if (!Number.isFinite(fishId)) {
         return;
       }
-      const current = requestBridgeState(shell);
-      dispatchMapState(shell, {
+      const current = getLatestStateBundle();
+      dispatchStatePatchAndRender({
         version: 1,
         filters: {
           fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
         },
       });
-      renderCurrentState(requestBridgeState(shell));
     });
   }
 
@@ -3800,7 +3827,7 @@ function bindUi(shell, elements, options = {}) {
 
   if (elements.viewToggle) {
     elements.viewToggle.addEventListener("click", () => {
-      const current = latestStateBundle?.state || requestBridgeState(shell).state;
+      const current = getLatestStateBundle().state;
       const nextViewMode = current?.view?.viewMode === "3d" ? "2d" : "3d";
       dispatchMapCommand(shell, {
         setViewMode: nextViewMode,
@@ -3823,7 +3850,7 @@ function bindUi(shell, elements, options = {}) {
   }
 
   elements.bookmarkPlace?.addEventListener("click", () => {
-    const state = latestStateBundle?.state || requestBridgeState(shell).state;
+    const state = getLatestStateBundle().state;
     if (state.ready !== true) {
       showSiteToast("warning", "Wait for the map to finish loading before placing a bookmark.");
       return;
@@ -4141,13 +4168,12 @@ function bindUi(shell, elements, options = {}) {
       if (elements.pointIconScaleValue) {
         elements.pointIconScaleValue.textContent = pointIconScaleLabel(pointIconScale);
       }
-      dispatchMapState(shell, {
+      dispatchStatePatchAndRender({
         version: 1,
         ui: {
           pointIconScale,
         },
       });
-      renderCurrentState(requestBridgeState(shell));
     });
   }
 
@@ -4156,13 +4182,12 @@ function bindUi(shell, elements, options = {}) {
       if (isRendering) {
         return;
       }
-      dispatchMapState(shell, {
+      dispatchStatePatchAndRender({
         version: 1,
         ui: {
           showPoints: elements.showPoints.checked,
         },
       });
-      renderCurrentState(requestBridgeState(shell));
     });
   }
 
@@ -4171,13 +4196,12 @@ function bindUi(shell, elements, options = {}) {
       if (isRendering) {
         return;
       }
-      dispatchMapState(shell, {
+      dispatchStatePatchAndRender({
         version: 1,
         ui: {
           showPointIcons: elements.showPointIcons.checked,
         },
       });
-      renderCurrentState(requestBridgeState(shell));
     });
   }
 
@@ -4190,14 +4214,14 @@ function bindUi(shell, elements, options = {}) {
     if (!layerId) {
       return;
     }
-    const current = requestBridgeState(shell);
+    const current = getLatestStateBundle();
     const visibleIds = new Set(resolveVisibleLayerIds(current));
     if (visibleIds.has(layerId)) {
       visibleIds.delete(layerId);
     } else {
       visibleIds.add(layerId);
     }
-    dispatchMapState(shell, {
+    dispatchStatePatchAndRender({
       version: 1,
       filters: {
         layerIdsVisible: resolveLayerEntries(current)
@@ -4205,7 +4229,6 @@ function bindUi(shell, elements, options = {}) {
           .filter((candidateId) => visibleIds.has(candidateId)),
       },
     });
-    renderCurrentState(requestBridgeState(shell));
   });
 
   elements.layers.addEventListener("input", (event) => {
@@ -4218,14 +4241,15 @@ function bindUi(shell, elements, options = {}) {
     if (!layerId) {
       return;
     }
-    const current = latestStateBundle || requestBridgeState(shell);
-    dispatchMapState(shell, {
+    const current = getLatestStateBundle();
+    const patch = {
       version: 1,
       filters: {
         layerOpacities: buildLayerOpacityPatch(current, layerId, slider.value),
       },
-    });
-    latestStateBundle = requestBridgeState(shell);
+    };
+    dispatchMapState(shell, patch);
+    applyInputStatePatchLocally(patch);
   });
 
   elements.layers.addEventListener("pointerdown", (event) => {
@@ -4330,7 +4354,7 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     event.preventDefault();
-    const current = requestBridgeState(shell);
+    const current = getLatestStateBundle();
     const dropMode = layerDragState.mode;
     const nextOrder = moveLayerIdBefore(
       resolveLayerEntries(current),
@@ -4346,14 +4370,13 @@ function bindUi(shell, elements, options = {}) {
     stopDragAutoScroll();
     clearLayerDropState();
     layerDragState.draggingLayerId = null;
-    dispatchMapState(shell, {
+    dispatchStatePatchAndRender({
       version: 1,
       filters: {
         layerIdsOrdered: nextOrder,
         layerClipMasks: nextClipMasks,
       },
     });
-    renderCurrentState(requestBridgeState(shell));
   });
 
   elements.layers.addEventListener("dragend", () => {
@@ -4386,7 +4409,7 @@ function bindUi(shell, elements, options = {}) {
     }
     setBookmarkPlacementActive(false);
     const defaultWindowUiState = buildDefaultWindowUiStateSerialized();
-    const remountOptions = buildMapUiResetMountOptions(requestBridgeState(shell).state);
+    const remountOptions = buildMapUiResetMountOptions(getLatestStateBundle().state);
     const originalLabel = resetButton.textContent;
 
     setBooleanProperty(resetButton, "disabled", true);
@@ -4408,13 +4431,15 @@ function bindUi(shell, elements, options = {}) {
 
     try {
       FishyMapBridge.destroy?.();
-      renderCurrentState(requestBridgeState(shell));
+      latestStateBundle = requestBridgeState(shell);
+      renderCurrentState(latestStateBundle);
       await FishyMapBridge.mount(shell, {
         canvas: elements.canvas,
         ...remountOptions,
       });
+      latestStateBundle = requestBridgeState(shell, { refresh: true });
       syncBookmarksToBridge(bookmarks);
-      renderCurrentState(requestBridgeState(shell));
+      renderCurrentState(latestStateBundle);
     } catch (error) {
       console.error("Failed to reset map UI", error);
       globalThis.window?.location?.reload?.();
@@ -4434,13 +4459,12 @@ function bindUi(shell, elements, options = {}) {
       if (isRendering) {
         return;
       }
-      dispatchMapState(shell, {
+      dispatchStatePatchAndRender({
         version: 1,
         ui: {
           legendOpen: elements.legend.open,
         },
       });
-      renderCurrentState(requestBridgeState(shell));
     });
   }
 
@@ -4449,13 +4473,12 @@ function bindUi(shell, elements, options = {}) {
       if (isRendering) {
         return;
       }
-      dispatchMapState(shell, {
+      dispatchStatePatchAndRender({
         version: 1,
         ui: {
           diagnosticsOpen: elements.diagnostics.open,
         },
       });
-      renderCurrentState(requestBridgeState(shell));
     });
   }
 
@@ -4515,7 +4538,7 @@ function bindUi(shell, elements, options = {}) {
   return {
     setZoneCatalog(nextZoneCatalog) {
       zoneCatalog = normalizeZoneCatalog(nextZoneCatalog);
-      renderCurrentState(requestBridgeState(shell));
+      renderCurrentState(getLatestStateBundle());
     },
   };
 }

@@ -1,5 +1,7 @@
 # Map Performance Profiling
 
+Current execution priorities are tracked in [perf-workstream.md](./perf-workstream.md).
+
 ## Goals
 - Measure the native Bevy map runtime with deterministic inputs.
 - Separate end-to-end scenario timings from pure CPU hot-path microbenchmarks.
@@ -112,6 +114,10 @@
 - Run the vector-layer enable scenario that exercises the integrated browser path:
   ```bash
   tools/scripts/map-browser-profile.sh vector_region_groups_enable
+  ```
+- Run the real page-shell DOM toggle scenario that exercises `loader.js` plus the bridge:
+  ```bash
+  tools/scripts/map-browser-profile.sh vector_region_groups_dom_toggle
   ```
 - Browser profiling reports default to `target/perf/browser/<scenario>.json`.
 - The browser report keeps the same top-level shape as the native harness report:
