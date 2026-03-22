@@ -35,8 +35,9 @@ impl RasterTileCache {
         commands: &mut Commands,
         assets: RasterLoadedAssets<'_>,
         context: RasterLoadedContext<'_>,
-    ) {
+    ) -> bool {
         crate::perf_scope!("raster.tile_entity_update");
+        let mut changed = false;
         let RasterLoadedAssets {
             images,
             meshes,
@@ -57,12 +58,14 @@ impl RasterTileCache {
             }
             match asset_server.get_load_state(&entry.handle) {
                 Some(LoadState::Failed(_)) => {
+                    changed = true;
                     entry.state = TileState::Failed;
                     if stats.inflight > 0 {
                         stats.inflight -= 1;
                     }
                 }
                 Some(LoadState::Loaded) => {
+                    changed = true;
                     let Some(spec) = layer_registry.get(key.layer) else {
                         entry.state = TileState::Failed;
                         if stats.inflight > 0 {
@@ -190,5 +193,6 @@ impl RasterTileCache {
                 _ => {}
             }
         }
+        changed
     }
 }

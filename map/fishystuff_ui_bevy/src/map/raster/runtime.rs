@@ -74,6 +74,11 @@ struct RasterUpdateContext<'w, 's> {
 
 fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     crate::perf_scope!("raster.update_tiles");
+    let display_state_changed = ctx.display_state.is_changed();
+    let bootstrap_changed = ctx.bootstrap.is_changed();
+    let evidence_zone_filter_changed = ctx.evidence_zone_filter.is_changed();
+    let vector_runtime_changed = ctx.vector_runtime.is_changed();
+    let view_mode_changed = ctx.view_mode.is_changed();
     let commands = &mut ctx.commands;
     let asset_server = &ctx.asset_server;
     let images = &mut ctx.images;
@@ -370,7 +375,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         stats,
     });
 
-    cache.update_loaded(
+    let loaded_changed = cache.update_loaded(
         commands,
         RasterLoadedAssets {
             images,
@@ -388,7 +393,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         },
     );
 
-    let visible_by_layer = cache.update_visibility(
+    let (visible_by_layer, visibility_changed) = cache.update_visibility(
         commands,
         VisibilityUpdateContext {
             materials,
@@ -401,19 +406,37 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         },
     );
 
-    cache.sync_visual_filters(
-        images,
-        commands,
-        VisualFilterContext {
-            filter: evidence_zone_filter,
-            hover_zone_rgb: display_state.hovered_zone_rgb,
-            layer_registry,
-            layer_runtime,
-            vector_runtime,
-            map_version: bootstrap.map_version.as_deref(),
-            view_mode: view_mode.mode,
-        },
-    );
+    let has_active_raster_clip_masks = layer_runtime.iter().any(|(layer_id, state)| {
+        state.clip_mask_layer.is_some()
+            && layer_registry
+                .get(layer_id)
+                .map(|layer| layer.is_raster())
+                .unwrap_or(false)
+    });
+    let should_sync_visual_filters = view_mode.mode == ViewMode::Map2D
+        || has_active_raster_clip_masks
+        || loaded_changed
+        || visibility_changed
+        || display_state_changed
+        || bootstrap_changed
+        || evidence_zone_filter_changed
+        || vector_runtime_changed
+        || view_mode_changed;
+    if should_sync_visual_filters {
+        cache.sync_visual_filters(
+            images,
+            commands,
+            VisualFilterContext {
+                filter: evidence_zone_filter,
+                hover_zone_rgb: display_state.hovered_zone_rgb,
+                layer_registry,
+                layer_runtime,
+                vector_runtime,
+                map_version: bootstrap.map_version.as_deref(),
+                view_mode: view_mode.mode,
+            },
+        );
+    }
     if any_zoom_level_changed && !debug_controls.disable_eviction {
         cache.evict(commands, images, stats, residency, layer_registry);
     }

@@ -26,8 +26,9 @@ impl RasterTileCache {
         &mut self,
         commands: &mut Commands,
         context: VisibilityUpdateContext<'_>,
-    ) -> std::collections::HashMap<LayerId, u32> {
+    ) -> (std::collections::HashMap<LayerId, u32>, bool) {
         crate::perf_scope!("raster.tile_render_prep");
+        let mut changed = false;
         let VisibilityUpdateContext {
             materials,
             layer_registry,
@@ -70,6 +71,7 @@ impl RasterTileCache {
             let alpha_changed = (entry.alpha - alpha).abs() > f32::EPSILON;
             let next_depth = tile_z(layer_state.z_base, spec.max_level, key.z);
             let depth_changed = (entry.depth - next_depth).abs() > f32::EPSILON;
+            changed |= entry.visible != now_visible;
             entry.visible = now_visible;
             entry.alpha = alpha;
             entry.depth = next_depth;
@@ -125,6 +127,6 @@ impl RasterTileCache {
                 *visible_by_layer.entry(key.layer).or_insert(0) += 1;
             }
         }
-        visible_by_layer
+        (visible_by_layer, changed)
     }
 }
