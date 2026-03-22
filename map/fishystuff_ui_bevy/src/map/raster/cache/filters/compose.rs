@@ -12,7 +12,7 @@ use super::super::super::TileKey;
 use super::super::{RasterTileCache, TilePixelData};
 use super::clip_mask::clip_mask_allows_world_point;
 
-const HOVER_HIGHLIGHT_RGB: [u8; 3] = [255, 80, 224];
+const HOVER_HIGHLIGHT_RGB: [u8; 3] = [48, 255, 96];
 
 pub(super) struct RasterVisualComposeContext<'a> {
     pub(super) key: TileKey,

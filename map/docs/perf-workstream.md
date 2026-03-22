@@ -55,7 +55,7 @@ This note keeps the latest direction visible without rereading the full task his
   - the filter path is no longer called every 2D frame while idle
   - all hover transitions currently use the targeted CPU span-delta path
   - the previous large-fanout shader overlay was disabled because sampled display-color matching missed some sea-depth and Kamasylvia zones
-  - the hover highlight color is now high-contrast magenta instead of green so it still reads clearly on green/yellow sea zones
+  - the hover highlight color is now bright green
   - clip-mask and evidence-filter cases still use the compose path
 - The 2D zoom-in clamp has been loosened again.
   - the current minimum zoom factor is `0.0025 * fit_scale`
