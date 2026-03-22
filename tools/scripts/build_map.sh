@@ -219,7 +219,7 @@ if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
     --kind raster-visual
 fi
 MINIMAP_DISPLAY_TILE_PX=512
-MINIMAP_DISPLAY_MAX_LEVEL=4
+MINIMAP_DISPLAY_MAX_LEVEL=3
 minimap_display_source_dir="$CDN_IMAGE_ASSET_DIR/tiles/minimap"
 minimap_display_root="$CDN_IMAGE_ASSET_DIR/tiles/minimap_visual/v1"
 minimap_display_manifest="$minimap_display_root/tileset.json"

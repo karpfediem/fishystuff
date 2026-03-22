@@ -340,7 +340,7 @@ mod tests {
             "/images/tiles/minimap_visual/v1/{z}/{x}_{y}.png"
         );
         assert_eq!(layer.tile_px, 512);
-        assert_eq!(layer.max_level, 4);
+        assert_eq!(layer.max_level, 3);
         assert!(!layer.y_flip);
         assert_eq!(layer.lod_policy.target_tiles, 16);
         assert_eq!(layer.lod_policy.hysteresis_hi, 24.0);

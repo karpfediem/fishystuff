@@ -26,14 +26,15 @@ This note keeps the latest direction visible without rereading the full task his
 - The visual `minimap` now uses a map-space display pyramid:
   - `/images/tiles/minimap_visual/v1/tileset.json`
   - logical tile size: `512`
-  - levels: `z=0..4`
+  - levels: `z=0..3`
   - only the finest display level keeps source-equivalent minimap detail
   - finest-level output textures are now about `1542px` wide instead of `3855px`, so highest zoom keeps detail without giant per-tile browser decodes
   - every minimap level is now sampled directly from the raw minimap source tiles in canonical map space
   - parent LODs are no longer built by stitching child PNG quadrants together
   - that removes the partial-edge distortion/misalignment bug from the previous parent-composition path
-  - parent levels now shrink by 2x per level (`1542 -> 771 -> 386 -> 193 -> 97`) to keep browser memory bounded
-  - the old mushy final `1x1` minimap level was removed
+  - parent levels now shrink by 2x per level (`1542 -> 771 -> 386 -> 193`) to keep browser memory bounded
+  - the old mushy final `1x1` and `2x2` minimap levels were removed
+  - this is a visual-quality tradeoff, not a pure perf win: the browser now never falls back to those very coarse minimap views
   - runtime LOD is now overridden specifically for minimap startup:
     - `target_tiles=16`
     - `hysteresis_hi=24`
@@ -102,10 +103,13 @@ This note keeps the latest direction visible without rereading the full task his
   - adding the minimap-specific startup LOD override drops `minimap_enable` further to `12.086 ms` avg, `108.6 ms` p95
   - that was `11.461 ms` faster than the parent-shrunk-only variant on `minimap_enable`, but it still left very large finest-level decodes
   - the first `512px` finest-level minimap pyramid plus real over-budget eviction reached `minimap_enable` avg `9.606 ms`, p95 `10.2 ms`
-  - after replacing parent-quadrant composition with direct source sampling and removing the final `1x1` level, `minimap_enable` is now `8.645 ms` avg, `40.7 ms` p95
-  - `minimap_pan_zoom` now completes at `2.758 ms` avg, `5.7 ms` p95
-  - `raster.update_tiles` is now `408.0 ms` on `minimap_enable`
-  - `raster.tile_entity_update` is now `394.3 ms` on `minimap_enable`
+  - after replacing parent-quadrant composition with direct source sampling and removing the final `1x1` level, `minimap_enable` reached `8.645 ms` avg, `40.7 ms` p95
+  - `minimap_pan_zoom` reached `2.758 ms` avg, `5.7 ms` p95
+  - after also removing the `2x2` coarse level, the current `z=0..3` pyramid reaches `minimap_enable` at `16.598 ms` avg, `146.8 ms` p95
+  - the current `z=0..3` pyramid reaches `minimap_pan_zoom` at `4.800 ms` avg, `11.4 ms` p95
+  - that is slower than the `z=0..4` direct-sampled variant, but visually cleaner at the farthest zooms
+  - `raster.update_tiles` is now `499.9 ms` on `minimap_enable`
+  - `raster.tile_entity_update` is now `470.5 ms` on `minimap_enable`
   - a longer `load_map` browser run completed and captured `101` frames at `17.049 ms` avg without renderer failure
   - the old raw `minimap/v1` runtime visual surface was `26,777` PNGs / about `815.8 MiB` on disk
   - the current `minimap_visual/v1` display pyramid is `665` PNGs / about `987 MiB` on disk
@@ -199,7 +203,7 @@ Current generated lookup asset:
 
 1. Keep the exact-lookup split and fixed display-tileset path measured.
 2. Keep `zone_mask` on the fixed visual chunk path, not the full-image path and not the old pyramid branch.
-3. Keep `minimap` on the browser-safe `512` source-equivalent finest-level pyramid unless a replacement beats it with data.
+3. Keep `minimap` on the browser-safe `512` source-equivalent finest-level pyramid with `z=0..3` unless a replacement beats it with data.
 4. Reduce residual raster startup/backlog for `zone_mask` + `minimap` without breaking exact semantics.
 5. Add explicit stage measurements for:
    - exact lookup load
