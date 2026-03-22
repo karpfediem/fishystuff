@@ -139,3 +139,6 @@
 - Named span totals and counter deltas are usually more stable than wall-clock frame time.
 - First-run shader compilation and dependency builds are noisy; compare warmed runs.
 - Scenario reports are intended for before/after comparisons on the same machine class and shell configuration.
+
+## Hotspot notes
+- The first measured hotspot ranking for the current browser/native setup is in [perf-hotspots-initial.md](./perf-hotspots-initial.md).
