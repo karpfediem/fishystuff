@@ -138,6 +138,15 @@ impl LayerSpec {
     pub fn is_vector(&self) -> bool {
         self.kind == LayerKind::VectorGeoJson
     }
+
+    pub fn exact_lookup_url(&self) -> Option<String> {
+        if self.pick_mode != PickMode::ExactTilePixel {
+            return None;
+        }
+        let version = self.tileset_version.trim();
+        let version = if version.is_empty() { "v1" } else { version };
+        Some(format!("/images/exact_lookup/{}.{}.bin", self.key, version))
+    }
 }
 
 #[cfg(test)]
@@ -261,6 +270,10 @@ mod tests {
         assert_eq!(
             layer.tile_url_template,
             "/images/tiles/mask/v1/{level}/{x}_{y}.png"
+        );
+        assert_eq!(
+            layer.exact_lookup_url().as_deref(),
+            Some("/images/exact_lookup/zone_mask.v1.bin")
         );
     }
 }

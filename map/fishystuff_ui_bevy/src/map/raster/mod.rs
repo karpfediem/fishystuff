@@ -4,15 +4,13 @@ pub mod policy;
 pub mod runtime;
 
 pub use crate::map::streaming::TileKey;
+pub(crate) use cache::{
+    RasterLoadedAssets, RasterLoadedContext, VisibilityUpdateContext, VisualFilterContext,
+};
 pub use cache::{
     RasterTileCache, RasterTileEntity, ReadyRasterTile, TileDebugControls, TilePixelData, TileStats,
 };
 pub use manifest::{map_version_id, LoadedTileset};
-pub use policy::queue_pick_probe_request;
-
-pub(crate) use cache::{
-    RasterLoadedAssets, RasterLoadedContext, VisibilityUpdateContext, VisualFilterContext,
-};
 
 pub(crate) use manifest::{
     ensure_manifest_request, implicit_identity_tileset, layer_map_version, layer_tileset_url,

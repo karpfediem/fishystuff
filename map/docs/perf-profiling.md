@@ -1,6 +1,7 @@
 # Map Performance Profiling
 
 Current execution priorities are tracked in [perf-workstream.md](./perf-workstream.md).
+The single-threaded-web baseline and future threading constraints are recorded in [web-threading-readiness.md](./web-threading-readiness.md).
 
 ## Goals
 - Measure the native Bevy map runtime with deterministic inputs.

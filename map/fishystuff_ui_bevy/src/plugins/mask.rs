@@ -7,11 +7,14 @@ use serde_json::{Map, Value};
 use fishystuff_api::Rgb;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::exact_lookup::{
+    ensure_exact_lookup_request, poll_exact_lookup_requests, sample_exact_lookup_rgb,
+    ExactLookupCache, PendingExactLookups,
+};
 use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
-use crate::map::raster::{map_version_id, queue_pick_probe_request, RasterTileCache, TileKey};
+use crate::map::raster::{map_version_id, RasterTileCache, TileKey};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
-use crate::map::streaming::TileStreamer;
 use crate::plugins::api::{
     build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, HoverLayerSample,
     HoverState, MapDisplayState, PatchFilterState, PendingRequests, SelectionState,
@@ -26,7 +29,49 @@ pub struct MaskPlugin;
 
 impl Plugin for MaskPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (update_hover, handle_click));
+        app.init_resource::<ExactLookupCache>()
+            .init_resource::<PendingExactLookups>()
+            .add_systems(
+                Update,
+                (update_exact_lookup_cache, update_hover, handle_click).chain(),
+            );
+    }
+}
+
+fn update_exact_lookup_cache(
+    layer_registry: Res<LayerRegistry>,
+    mut exact_lookups: ResMut<ExactLookupCache>,
+    mut pending_lookups: ResMut<PendingExactLookups>,
+) {
+    poll_exact_lookup_requests(&mut exact_lookups, &mut pending_lookups);
+
+    let active_layer_ids = layer_registry
+        .ordered()
+        .iter()
+        .filter(|layer| layer.exact_lookup_url().is_some())
+        .map(|layer| layer.id)
+        .collect::<std::collections::HashSet<_>>();
+
+    for layer in layer_registry.ordered() {
+        ensure_exact_lookup_request(layer, &mut exact_lookups, &mut pending_lookups);
+    }
+
+    let stale_lookup_ids = exact_lookups
+        .layer_ids()
+        .into_iter()
+        .filter(|layer_id| !active_layer_ids.contains(layer_id))
+        .collect::<Vec<_>>();
+    for layer_id in stale_lookup_ids {
+        exact_lookups.remove_layer(layer_id);
+    }
+
+    let stale_pending_ids = pending_lookups
+        .layer_ids()
+        .into_iter()
+        .filter(|layer_id| !active_layer_ids.contains(layer_id))
+        .collect::<Vec<_>>();
+    for layer_id in stale_pending_ids {
+        pending_lookups.remove_layer(layer_id);
     }
 }
 
@@ -95,11 +140,12 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
     let world_point = WorldPoint::new(world.x as f64, world.y as f64);
     let hover_layers = current_hover_layers(&context.layer_registry, &context.layer_runtime);
     let mut sampling = HoverSamplingContext {
+        exact_lookups: &context.exact_lookups,
         tile_cache: &context.tile_cache,
-        streamer: &mut context.streamer,
         vector_runtime: &context.vector_runtime,
         bootstrap: &context.bootstrap,
         world_point,
+        map_px: (map_px, map_py),
         map_to_world,
         registry_map_version_id: context.layer_registry.map_version_id(),
     };
@@ -327,10 +373,11 @@ fn sample_hover_layer(
     let rgb = if layer.is_raster() {
         sample_raster_layer_rgb(
             layer,
+            sampling.exact_lookups,
             sampling.tile_cache,
-            sampling.streamer,
             sampling.bootstrap,
             sampling.world_point,
+            sampling.map_px,
             sampling.map_to_world,
         )?
     } else if layer.is_vector() {
@@ -395,8 +442,8 @@ struct HoverUpdateContext<'w, 's> {
     touches: Res<'w, Touches>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
+    exact_lookups: Res<'w, ExactLookupCache>,
     tile_cache: Res<'w, RasterTileCache>,
-    streamer: ResMut<'w, TileStreamer>,
     bootstrap: Res<'w, ApiBootstrapState>,
     display_state: ResMut<'w, MapDisplayState>,
     ui_capture: Res<'w, UiPointerCapture>,
@@ -433,11 +480,12 @@ fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
 }
 
 struct HoverSamplingContext<'a> {
+    exact_lookups: &'a ExactLookupCache,
     tile_cache: &'a RasterTileCache,
-    streamer: &'a mut TileStreamer,
     vector_runtime: &'a VectorLayerRuntime,
     bootstrap: &'a ApiBootstrapState,
     world_point: WorldPoint,
+    map_px: (i32, i32),
     map_to_world: MapToWorld,
     registry_map_version_id: Option<&'a str>,
 }
@@ -512,12 +560,17 @@ mod tests {
 
 fn sample_raster_layer_rgb(
     layer: &crate::map::layers::LayerSpec,
+    exact_lookups: &ExactLookupCache,
     tile_cache: &RasterTileCache,
-    streamer: &mut TileStreamer,
     bootstrap: &ApiBootstrapState,
     world_point: WorldPoint,
+    map_px: (i32, i32),
     map_to_world: MapToWorld,
 ) -> Option<Rgb> {
+    if layer.pick_mode == PickMode::ExactTilePixel {
+        return sample_exact_lookup_rgb(layer, exact_lookups, map_px.0, map_px.1);
+    }
+
     let world_transform = layer.world_transform(map_to_world)?;
     let layer_px = world_transform.world_to_layer(world_point);
     if layer_px.x < 0.0 || layer_px.y < 0.0 {
@@ -543,12 +596,7 @@ fn sample_raster_layer_rgb(
         tx: tx as i32,
         ty: ty as i32,
     };
-    let Some(tile) = tile_cache.get_ready_pixel_data(&key) else {
-        if !tile_cache.contains(&key) && !streamer.has_queued_key(&key) {
-            queue_pick_probe_request(streamer, layer, key, map_version);
-        }
-        return None;
-    };
+    let tile = tile_cache.get_ready_pixel_data(&key)?;
     let local_x = layer_ix - tx * tile_px;
     let local_y = layer_iy - ty * tile_px;
     if local_x >= tile.width || local_y >= tile.height {

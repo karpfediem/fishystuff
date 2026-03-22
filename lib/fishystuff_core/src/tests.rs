@@ -3,7 +3,9 @@ use std::f64::consts::LN_2;
 use crate::constants::{LEFT, SECTOR_PER_PIXEL, SECTOR_SCALE, TOP};
 use crate::coord::{pixel_in_bounds, pixel_to_world, world_to_pixel_f, world_to_pixel_round};
 use crate::gaussian::gaussian_blur_grid;
-use crate::masks::{pack_rgb_u32, unpack_rgb_u32, WaterMask, WaterSampler, ZoneMask};
+use crate::masks::{
+    pack_rgb_u32, unpack_rgb_u32, WaterMask, WaterSampler, ZoneLookupRows, ZoneMask,
+};
 use crate::prob::{dirichlet_posterior_mean, js_divergence};
 use crate::snap::snap_to_water;
 use crate::transform::{MapToWaterTransform, TransformKind};
@@ -181,4 +183,24 @@ fn zonemask_sample_clamped() {
     assert_eq!(rgb, pack_rgb_u32(255, 0, 0));
     let rgb = mask.sample_rgb_u32_clamped(99, 99);
     assert_eq!(rgb, pack_rgb_u32(255, 255, 255));
+}
+
+#[test]
+fn zone_lookup_rows_roundtrip_and_sample() {
+    let data = vec![
+        1, 2, 3, 1, 2, 3, 4, 5, 6, 4, 5, 6, //
+        7, 8, 9, 7, 8, 9, 4, 5, 6, 4, 5, 6,
+    ];
+    let mask = ZoneMask::from_rgb(4, 2, data).expect("mask");
+    let lookup = ZoneLookupRows::from_zone_mask(&mask).expect("lookup");
+    assert_eq!(lookup.segment_count(), 4);
+    assert_eq!(lookup.rgb_u32(0, 0), Some(pack_rgb_u32(1, 2, 3)));
+    assert_eq!(lookup.rgb_u32(2, 0), Some(pack_rgb_u32(4, 5, 6)));
+    assert_eq!(lookup.rgb_u32(1, 1), Some(pack_rgb_u32(7, 8, 9)));
+    assert_eq!(lookup.rgb_u32(4, 0), None);
+
+    let bytes = lookup.to_bytes();
+    let decoded = ZoneLookupRows::from_bytes(&bytes).expect("decode");
+    assert_eq!(decoded, lookup);
+    assert_eq!(decoded.sample_rgb_u32_clamped(-4, 9), pack_rgb_u32(7, 8, 9));
 }

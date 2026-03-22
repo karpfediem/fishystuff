@@ -11,8 +11,6 @@ mod bounds;
 mod requests;
 mod residency;
 
-pub use requests::queue_pick_probe_request;
-
 pub(crate) use bounds::{
     compute_cache_budget, compute_desired_layer_tiles, desired_change_is_minor, lod_signature,
     update_camera_motion_state, DesiredTileComputation,

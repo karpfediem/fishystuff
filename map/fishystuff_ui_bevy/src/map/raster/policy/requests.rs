@@ -280,7 +280,6 @@ fn build_requests_for_bounds(input: BoundsRequestBuild<'_>) -> BuildResult {
 
 fn request_priority(kind: RequestKind, distance2: i64, request_weight: f32) -> f32 {
     let kind_bias = match kind {
-        RequestKind::PickProbe => 0.0,
         RequestKind::BaseCoverage => 1_000_000.0,
         RequestKind::DetailRefine => 2_000_000.0,
     };
@@ -346,7 +345,7 @@ pub(crate) fn start_tile_requests(input: StartTileRequests<'_>) {
         cache.insert_loading(req.key, handle, visible, alpha);
         stats.requested_tiles = stats.requested_tiles.saturating_add(1);
         match req.kind {
-            RequestKind::BaseCoverage | RequestKind::PickProbe => {
+            RequestKind::BaseCoverage => {
                 stats.coverage_requests_started = stats.coverage_requests_started.saturating_add(1);
             }
             RequestKind::DetailRefine => {
@@ -393,22 +392,4 @@ pub(crate) fn log_tile_stats(stats: &mut crate::map::raster::TileStats, time: &T
         stats.detail_requests_started = 0;
         stats.coverage_requests_started = 0;
     }
-}
-
-pub fn queue_pick_probe_request(
-    streamer: &mut TileStreamer,
-    layer: &LayerSpec,
-    key: TileKey,
-    map_version: Option<&str>,
-) {
-    if streamer.has_queued_key(&key) {
-        return;
-    }
-    let request = TileRequest {
-        key,
-        url: layer_tile_url(layer, map_version, key.z, key.tx, key.ty),
-        priority: request_priority(RequestKind::PickProbe, 0, layer.request_weight * 2.0),
-        kind: RequestKind::PickProbe,
-    };
-    streamer.push_request(request);
 }

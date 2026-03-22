@@ -1,5 +1,6 @@
 pub mod camera;
 pub mod events;
+pub mod exact_lookup;
 pub mod layers;
 pub mod raster;
 pub mod render;

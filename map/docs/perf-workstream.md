@@ -2,113 +2,103 @@
 
 Last updated: 2026-03-22
 
-This note is the short-lived execution log for the current browser performance push.
+This note keeps the latest direction visible without rereading the full task history.
 
-Use it to keep the latest diagnosis, priorities, and next cuts visible without rereading the whole task history.
+## Current baseline
+
+- Treat single-threaded Wasm as the production baseline.
+- Do not assume future Bevy web multithreading will rescue the current data path.
+- Keep the pipeline backend-neutral so later worker/thread backends can slot in without changing the measurement interface.
+
+## Latest pivot
+
+- The zone-mask pyramid / retry branch was rolled back.
+- Exact zone semantics are now separated from visual raster residency.
+- The map no longer uses raster pick-probe requests for hover or click on the exact zone mask.
+- A dedicated exact-lookup asset is now built from the canonical zone mask PNG and loaded directly into Wasm memory.
 
 ## Current diagnosis
 
-- The native Bevy harness is useful for subsystem attribution, but it does not reproduce the severe browser FPS collapse on its committed fixtures.
-- The integrated browser profiler is the source of truth for user-visible regressions.
-- Browser measurements show real raster/vector cost, and the first JS boundary cut removed routine host state pulls from the page-shell interaction path.
-- The current blocker is that the browser profiler still cannot reach a raster-idle baseline before vector-layer capture. The hot path remains dominated by raster tile churn rather than bridge reads.
-- The latest integrated runs show `zone_mask` and `minimap` staying busy for 10s+ before capture, which means vector regressions are still being measured on top of unresolved raster work.
+- The browser slowdown is not just "Bevy is slow". The hotter architectural problem is coupling exact semantics to the visual raster tile cache.
+- Exact hover/click work should not depend on whether the display tiles for that pixel happen to be resident.
+- Visual transport format and semantic lookup format must be treated as separate concerns.
+- The first stable target is:
+  - exact lookup is cheap, bounded, and independent
+  - visual raster work is measured and bounded separately
+  - bridge work stays coarse and batched
+
+## Current module split
+
+Backend-neutral stages:
+
+1. `tile_visibility`
+   - pure visible-set logic
+2. `tile_scheduler`
+   - request prioritization and cancellation
+3. `visual_tile_source`
+   - display-oriented fetch/decode path
+4. `exact_lookup`
+   - semantic zone lookup path
+5. `tile_cache`
+   - bounded visual residency
+6. `upload_budgeter`
+   - GPU admission / per-frame upload limits
+7. `pick_lookup`
+   - world/map px to semantic id
+8. `bridge_events`
+   - coarse outbound notifications only
+
+## What is implemented now
+
+- Shared exact lookup domain type in `lib/fishystuff_core`:
+  - `ZoneLookupRows`
+- Dedicated asset builder in `tools/fishystuff_tilegen`:
+  - `zone_lookup`
+- Build integration in `tools/scripts/build_map.sh`
+- Map-side exact lookup cache in `map/exact_lookup.rs`
+- Hover/click path in `plugins/mask.rs` now samples the exact lookup asset instead of queueing raster pick probes
+- Old raster pick-probe request path was removed from `map/streaming.rs` and `map/raster/policy/requests.rs`
+
+Current generated lookup asset:
+
+- `/images/exact_lookup/zone_mask.v1.bin`
+- size: `1,790,476` bytes
+- dimensions: `11560x10540`
+- row segments: `291,382`
 
 ## Current priorities
 
-1. Keep the browser profiler honest.
-   - Gate vector scenarios on pre-capture raster-idle checks.
-   - Surface per-layer raster busy counts from the bridge snapshot so reports identify which layers are still active.
-2. Investigate idle raster churn first.
-   - Explain why `zone_mask` and `minimap` keep `pending`/`inflight` work alive in the steady state.
-   - Prioritize request planning, desired-set, and residency churn before deeper vector optimization.
-3. Keep the JS↔Wasm boundary cold on the hot path.
-   - Preserve the `loader.js` no-pull-after-patch behavior.
-   - Keep hot state ownership in Wasm and let the shell consume cached state plus semantic events.
-4. Re-run browser reports and compare:
-   - `host.wasm.state_reads`
-   - `host.state_pull`
-   - `host.handle_event`
-   - `raster.update_tiles`
-   - `raster.tile_entity_update`
-   - per-layer `pendingCount` / `inflightCount`
-   - `vector.layer_update`
-5. Only after raster idle is under control, continue deeper vector optimization.
+1. Keep exact semantics off the visual raster path.
+   - no reintroduction of pick-probe tile fetches
+   - exact hover/click should stay available even when visual raster is still converging
+2. Redesign visual zone-mask display separately.
+   - evaluate a non-pick visual path such as a single-image overlay or a simpler bounded visual source
+   - do not mix this back into semantic lookup
+3. Bound the visual raster working set.
+   - visible ring
+   - prefetch ring
+   - upload budget per frame
+   - cancellation / reprioritization
+4. Keep the profiling surface stable across backends.
+   - measure the same named stages whether decode runs on the main thread, in JS workers, or in future wasm threads
+5. Record future web-threading constraints, but do not block current optimization work on them.
 
 ## Current plan
 
-1. Land the profiling transparency batch:
-   - snapshot layer runtime counts in the bridge contract
-   - a cold-path `refreshCurrentStateNow()` host method for browser profiling only
-   - browser profile scenarios that explicitly record whether raster was idle before capture
-2. Use those measurements to identify why the default map view never settles.
-   - start in `map/raster/runtime.rs`
-   - inspect request planning in `map/raster/policy/requests.rs`
-   - inspect default-view bounds/LOD behavior in `map/raster/policy/bounds.rs`
-3. Optimize the raster steady state until the integrated vector scenarios start from an actually idle baseline.
-4. Re-check whether bridge cost is still material once raster churn is reduced.
+1. Land the exact-lookup split and keep it measured.
+2. Measure browser interaction again with exact lookup no longer coupled to raster residency.
+3. Simplify the visual zone-mask path without bringing back tile-pyramid complexity.
+4. Add explicit stage measurements for:
+   - exact lookup load
+   - exact lookup sample
+   - visual tile fetch/decode
+   - visual tile upload
+   - bridge event flush
+5. Only after the single-threaded pipeline is clean, revisit worker/thread options.
 
-## Latest measured result
+## Non-goals for this phase
 
-First boundary cut: `loader.js` now projects local input-state patches and no longer forces a wasm state read after routine UI state changes.
-
-Measured on the real browser DOM-toggle scenario (`vector_region_groups_dom_toggle`):
-
-- Before:
-  - `host.wasm.state_reads=2`
-  - `host.state_pull total_ms=0.5`
-  - `browser_action.completed_frames=45`
-- After:
-  - `host.wasm.state_reads=0`
-  - `host.state_pull` absent
-  - `browser_action.completed_frames=71`
-
-Interpretation:
-
-- The page shell is materially less chatty across the JS↔Wasm boundary for this interaction.
-- The dominant browser cost is still raster/vector work, so this boundary cut is necessary but not sufficient.
-
-Latest profiler hardening result:
-
-- Direct bridge-enable scenario (`vector_region_groups_enable`):
-  - `frame_avg_ms=20.26`
-  - `pre_capture_raster_idle_timed_out=true`
-  - busy raster layers: `zone_mask`, `minimap`
-  - busy raster tiles before capture: `685`
-- Real page-shell DOM-toggle scenario (`vector_region_groups_dom_toggle`):
-  - `frame_avg_ms=18.34`
-  - `pre_capture_raster_idle_timed_out=true`
-  - busy raster layers: `zone_mask`, `minimap`
-  - busy raster tiles before capture: `435`
-- Dominant spans in both runs remained:
-  - `raster.update_tiles`
-  - `raster.tile_entity_update`
-  - `vector.layer_update`
-
-Interpretation:
-
-- The current vector browser slowdown is still confounded by unresolved raster streaming or residency churn that exists before the vector action.
-- The next optimization target is not generic bridge work; it is the raster steady-state path that should already be idle before the vector action.
-
-## Canonical browser scenarios right now
-
-- Startup:
-  - `tools/scripts/map-browser-profile.sh load_map`
-- Direct bridge vector enable:
-  - `tools/scripts/map-browser-profile.sh vector_region_groups_enable`
-- Real page-shell DOM toggle:
-  - `tools/scripts/map-browser-profile.sh vector_region_groups_dom_toggle`
-
-## Expected direction of travel
-
-- `host.wasm.state_reads` should trend toward cold-path-only usage.
-- `host.state_pull` should disappear from routine UI interactions.
-- Vector browser scenarios should begin from `pre_capture_raster_idle_timed_out=false` or at least from much smaller busy raster counts.
-- JS should batch intent in, and mostly react to outbound semantic events rather than polling.
-- If the browser still collapses after boundary cleanup, the next likely cause is render/raster/GPU churn rather than bridge shape.
-
-## Explicit non-goals for this phase
-
-- Do not rewrite the whole bridge in one pass.
-- Do not chase cold-path serialization or mount-only work before hot interaction paths are cleaned up.
-- Do not claim wins without updated browser measurements.
+- Do not wait on future Bevy web multithreading.
+- Do not reintroduce more tile-pyramid work.
+- Do not let exact hover/click depend on display-tile residency again.
+- Do not make performance claims without a browser or native profiling run.

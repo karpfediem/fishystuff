@@ -209,3 +209,13 @@ if [ "${REBUILD_MINIMAP_PYRAMID:-0}" = "1" ]; then
     --root-url /images/tiles/minimap/v1 \
     --y-flip
 fi
+
+zone_lookup_source_image="${ZONE_LOOKUP_SOURCE_IMAGE:-$CDN_IMAGE_ASSET_DIR/zones_mask_v1.png}"
+zone_lookup_out_dir="$CDN_IMAGE_ASSET_DIR/exact_lookup"
+zone_lookup_output="$zone_lookup_out_dir/zone_mask.v1.bin"
+if [ -f "$zone_lookup_source_image" ] && { [ "${REBUILD_ZONE_LOOKUP:-0}" = "1" ] || [ ! -f "$zone_lookup_output" ] || [ "$zone_lookup_source_image" -nt "$zone_lookup_output" ]; }; then
+  mkdir -p "$zone_lookup_out_dir"
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin zone_lookup -- \
+    --input "$zone_lookup_source_image" \
+    --output "$zone_lookup_output"
+fi

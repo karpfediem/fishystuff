@@ -22,6 +22,8 @@ pub fn format_rgb_u32(rgb: u32) -> String {
     format!("{},{},{}", r, g, b)
 }
 
+const ZONE_LOOKUP_MAGIC: &[u8; 8] = b"FSZLKP01";
+
 #[derive(Debug, Clone)]
 pub struct WaterMask {
     width: u32,
@@ -318,5 +320,203 @@ impl ZoneMask {
         let g = self.data[idx + 1];
         let b = self.data[idx + 2];
         pack_rgb_u32(r, g, b)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ZoneLookupRows {
+    width: u16,
+    height: u16,
+    row_offsets: Vec<u32>,
+    row_end_xs: Vec<u16>,
+    row_rgbs: Vec<u32>,
+}
+
+impl ZoneLookupRows {
+    pub fn from_zone_mask(mask: &ZoneMask) -> Result<Self> {
+        let width = u16::try_from(mask.width)
+            .map_err(|_| anyhow::anyhow!("zone lookup width {} exceeds u16", mask.width))?;
+        let height = u16::try_from(mask.height)
+            .map_err(|_| anyhow::anyhow!("zone lookup height {} exceeds u16", mask.height))?;
+        if width == 0 || height == 0 {
+            bail!("zone lookup dimensions must be non-zero");
+        }
+        let mut row_offsets = Vec::with_capacity(height as usize + 1);
+        let mut row_end_xs = Vec::new();
+        let mut row_rgbs = Vec::new();
+
+        for y in 0..mask.height {
+            row_offsets.push(row_end_xs.len() as u32);
+            let mut current_rgb = mask.sample_rgb_u32_clamped(0, y as i32);
+            for x in 1..mask.width {
+                let rgb = mask.sample_rgb_u32_clamped(x as i32, y as i32);
+                if rgb == current_rgb {
+                    continue;
+                }
+                row_end_xs.push(u16::try_from(x).expect("x fits in u16"));
+                row_rgbs.push(current_rgb);
+                current_rgb = rgb;
+            }
+            row_end_xs.push(width);
+            row_rgbs.push(current_rgb);
+        }
+        row_offsets.push(row_end_xs.len() as u32);
+
+        Ok(Self {
+            width,
+            height,
+            row_offsets,
+            row_end_xs,
+            row_rgbs,
+        })
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() < 20 {
+            bail!("zone lookup payload too short: {}", bytes.len());
+        }
+        if &bytes[..8] != ZONE_LOOKUP_MAGIC {
+            bail!("invalid zone lookup header");
+        }
+        let width = u16::from_le_bytes([bytes[8], bytes[9]]);
+        let height = u16::from_le_bytes([bytes[10], bytes[11]]);
+        let row_offset_count =
+            u32::from_le_bytes([bytes[12], bytes[13], bytes[14], bytes[15]]) as usize;
+        let segment_count =
+            u32::from_le_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]) as usize;
+        let expected = 20 + row_offset_count * 4 + segment_count * 2 + segment_count * 4;
+        if bytes.len() != expected {
+            bail!(
+                "zone lookup payload length mismatch: {} != {}",
+                bytes.len(),
+                expected
+            );
+        }
+        if row_offset_count != height as usize + 1 {
+            bail!(
+                "zone lookup row offset count mismatch: {} != {}",
+                row_offset_count,
+                height as usize + 1
+            );
+        }
+
+        let mut cursor = 20;
+        let mut row_offsets = Vec::with_capacity(row_offset_count);
+        for _ in 0..row_offset_count {
+            row_offsets.push(u32::from_le_bytes([
+                bytes[cursor],
+                bytes[cursor + 1],
+                bytes[cursor + 2],
+                bytes[cursor + 3],
+            ]));
+            cursor += 4;
+        }
+
+        let mut row_end_xs = Vec::with_capacity(segment_count);
+        for _ in 0..segment_count {
+            row_end_xs.push(u16::from_le_bytes([bytes[cursor], bytes[cursor + 1]]));
+            cursor += 2;
+        }
+
+        let mut row_rgbs = Vec::with_capacity(segment_count);
+        for _ in 0..segment_count {
+            row_rgbs.push(u32::from_le_bytes([
+                bytes[cursor],
+                bytes[cursor + 1],
+                bytes[cursor + 2],
+                bytes[cursor + 3],
+            ]));
+            cursor += 4;
+        }
+
+        if *row_offsets.first().unwrap_or(&1) != 0 {
+            bail!("zone lookup row offsets must start at 0");
+        }
+        if *row_offsets.last().unwrap_or(&0) as usize != segment_count {
+            bail!("zone lookup row offsets must end at segment count");
+        }
+        if row_offsets.windows(2).any(|pair| pair[0] > pair[1]) {
+            bail!("zone lookup row offsets must be monotonic");
+        }
+        for y in 0..height as usize {
+            let start = row_offsets[y] as usize;
+            let end = row_offsets[y + 1] as usize;
+            if start == end {
+                bail!("zone lookup row {} has no coverage", y);
+            }
+            let row = &row_end_xs[start..end];
+            if row.windows(2).any(|pair| pair[0] >= pair[1]) {
+                bail!("zone lookup row {} has non-increasing segment ends", y);
+            }
+            if row.last().copied() != Some(width) {
+                bail!("zone lookup row {} must terminate at width {}", y, width);
+            }
+        }
+
+        Ok(Self {
+            width,
+            height,
+            row_offsets,
+            row_end_xs,
+            row_rgbs,
+        })
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = Vec::with_capacity(
+            20 + self.row_offsets.len() * 4 + self.row_end_xs.len() * 2 + self.row_rgbs.len() * 4,
+        );
+        out.extend_from_slice(ZONE_LOOKUP_MAGIC);
+        out.extend_from_slice(&self.width.to_le_bytes());
+        out.extend_from_slice(&self.height.to_le_bytes());
+        out.extend_from_slice(&(self.row_offsets.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(self.row_end_xs.len() as u32).to_le_bytes());
+        for offset in &self.row_offsets {
+            out.extend_from_slice(&offset.to_le_bytes());
+        }
+        for end_x in &self.row_end_xs {
+            out.extend_from_slice(&end_x.to_le_bytes());
+        }
+        for rgb in &self.row_rgbs {
+            out.extend_from_slice(&rgb.to_le_bytes());
+        }
+        out
+    }
+
+    pub fn width(&self) -> u16 {
+        self.width
+    }
+
+    pub fn height(&self) -> u16 {
+        self.height
+    }
+
+    pub fn segment_count(&self) -> usize {
+        self.row_end_xs.len()
+    }
+
+    pub fn rgb_u32(&self, px: i32, py: i32) -> Option<u32> {
+        if px < 0 || py < 0 {
+            return None;
+        }
+        let x = u16::try_from(px).ok()?;
+        let y = u16::try_from(py).ok()?;
+        if x >= self.width || y >= self.height {
+            return None;
+        }
+        let start = self.row_offsets[y as usize] as usize;
+        let end = self.row_offsets[y as usize + 1] as usize;
+        let row = &self.row_end_xs[start..end];
+        let idx = row.partition_point(|end_x| *end_x <= x);
+        self.row_rgbs.get(start + idx).copied()
+    }
+
+    pub fn sample_rgb_u32_clamped(&self, px: i32, py: i32) -> u32 {
+        if self.width == 0 || self.height == 0 {
+            return 0;
+        }
+        let x = px.clamp(0, self.width as i32 - 1);
+        let y = py.clamp(0, self.height as i32 - 1);
+        self.rgb_u32(x, y).unwrap_or(0)
     }
 }
