@@ -136,6 +136,13 @@ pub struct FishyMapLayerSummary {
     pub opacity_default: f32,
     pub display_order: i32,
     pub kind: String,
+    pub visible_tile_count: u32,
+    pub resident_tile_count: u32,
+    pub pending_count: u32,
+    pub inflight_count: u32,
+    pub manifest_status: String,
+    pub vector_status: String,
+    pub vector_progress: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

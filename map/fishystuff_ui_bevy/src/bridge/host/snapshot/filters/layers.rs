@@ -1,4 +1,5 @@
 use super::super::super::*;
+use crate::map::layers::LayerManifestStatus;
 
 pub(in crate::bridge::host) fn current_layer_order<'a>(
     layer_registry: &'a LayerRegistry,
@@ -28,22 +29,70 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
 ) -> Vec<FishyMapLayerSummary> {
     current_layer_order(layer_registry, layer_runtime)
         .into_iter()
-        .map(|layer| FishyMapLayerSummary {
-            layer_id: layer.key.clone(),
-            name: layer.name.clone(),
-            visible: layer_runtime.visible(layer.id),
-            opacity: layer_runtime.opacity(layer.id),
-            opacity_default: layer.opacity_default,
-            display_order: layer_runtime
-                .get(layer.id)
-                .map(|state| state.display_order)
-                .unwrap_or(layer.display_order),
-            kind: match layer.kind {
-                LayerKind::TiledRaster => "tiled-raster".to_string(),
-                LayerKind::VectorGeoJson => "vector-geojson".to_string(),
-            },
+        .map(|layer| {
+            let runtime_state = layer_runtime.get(layer.id);
+            FishyMapLayerSummary {
+                layer_id: layer.key.clone(),
+                name: layer.name.clone(),
+                visible: runtime_state
+                    .map(|state| state.visible)
+                    .unwrap_or(layer.visible_default),
+                opacity: runtime_state
+                    .map(|state| state.opacity)
+                    .unwrap_or(layer.opacity_default),
+                opacity_default: layer.opacity_default,
+                display_order: runtime_state
+                    .map(|state| state.display_order)
+                    .unwrap_or(layer.display_order),
+                kind: match layer.kind {
+                    LayerKind::TiledRaster => "tiled-raster".to_string(),
+                    LayerKind::VectorGeoJson => "vector-geojson".to_string(),
+                },
+                visible_tile_count: runtime_state
+                    .map(|state| state.visible_tile_count)
+                    .unwrap_or_default(),
+                resident_tile_count: runtime_state
+                    .map(|state| state.resident_tile_count)
+                    .unwrap_or_default(),
+                pending_count: runtime_state
+                    .map(|state| state.pending_count)
+                    .unwrap_or_default(),
+                inflight_count: runtime_state
+                    .map(|state| state.inflight_count)
+                    .unwrap_or_default(),
+                manifest_status: runtime_state
+                    .map(|state| manifest_status_label(state.manifest_status).to_string())
+                    .unwrap_or_else(|| "missing".to_string()),
+                vector_status: runtime_state
+                    .map(|state| vector_status_label(state.vector_status).to_string())
+                    .unwrap_or_else(|| "inactive".to_string()),
+                vector_progress: runtime_state
+                    .map(|state| state.vector_progress)
+                    .unwrap_or_default(),
+            }
         })
         .collect()
+}
+
+fn manifest_status_label(status: LayerManifestStatus) -> &'static str {
+    match status {
+        LayerManifestStatus::Missing => "missing",
+        LayerManifestStatus::Loading => "loading",
+        LayerManifestStatus::Ready => "ready",
+        LayerManifestStatus::Failed => "failed",
+    }
+}
+
+fn vector_status_label(status: crate::map::layers::LayerVectorStatus) -> &'static str {
+    match status {
+        crate::map::layers::LayerVectorStatus::Inactive => "inactive",
+        crate::map::layers::LayerVectorStatus::NotRequested => "not-requested",
+        crate::map::layers::LayerVectorStatus::Fetching => "fetching",
+        crate::map::layers::LayerVectorStatus::Parsing => "parsing",
+        crate::map::layers::LayerVectorStatus::Building => "building",
+        crate::map::layers::LayerVectorStatus::Ready => "ready",
+        crate::map::layers::LayerVectorStatus::Failed => "failed",
+    }
 }
 
 pub(in crate::bridge::host::snapshot::filters) fn current_layer_opacity_overrides(

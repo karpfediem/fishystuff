@@ -727,6 +727,52 @@ test("bootstrap sync replays state changes that happen after mount without wasm 
   }
 });
 
+test("refreshCurrentStateNow forces a wasm read and updates the cached snapshot", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+        statuses: { metaStatus: "meta: old" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+
+    snapshotRef.current = {
+      ...snapshotRef.current,
+      statuses: { metaStatus: "meta: refreshed" },
+    };
+    wasm.calls.stateReads = 0;
+
+    const refreshed = bridge.refreshCurrentStateNow();
+
+    assert.equal(wasm.calls.stateReads, 1);
+    assert.equal(refreshed.statuses.metaStatus, "meta: refreshed");
+    assert.equal(bridge.getCurrentState().statuses.metaStatus, "meta: refreshed");
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("bootstrap sync uses lightweight polling until the map becomes ready", async () => {
   const env = installDomGlobals();
   let bridge;

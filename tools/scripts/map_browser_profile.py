@@ -149,8 +149,50 @@ await new Promise((resolve) => {{
 """.strip()
 
 
+def wait_for_raster_idle_js() -> str:
+    return """
+const waitForRasterIdle = async () => {
+  const deadline = performance.now() + 10000;
+  while (performance.now() < deadline) {
+    const state = typeof bridge.refreshCurrentStateNow === "function"
+      ? bridge.refreshCurrentStateNow()
+      : bridge.getCurrentState();
+    const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
+    const busyLayers = layers.filter((layer) =>
+      layer?.kind === "tiled-raster" &&
+      ((Number(layer?.pendingCount) || 0) > 0 || (Number(layer?.inflightCount) || 0) > 0),
+    );
+    const busyLayerIds = busyLayers.map((layer) => String(layer?.layerId || ""));
+    const busyTiles = busyLayers.reduce(
+      (sum, layer) => sum + (Number(layer?.pendingCount) || 0) + (Number(layer?.inflightCount) || 0),
+      0,
+    );
+    if (busyTiles <= 0) {
+      return { timedOut: false, busyLayers: busyLayers.length, busyLayerIds, busyTiles, state };
+    }
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+  }
+  const state = typeof bridge.refreshCurrentStateNow === "function"
+    ? bridge.refreshCurrentStateNow()
+    : bridge.getCurrentState();
+  const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
+  const busyLayers = layers.filter((layer) =>
+    layer?.kind === "tiled-raster" &&
+    ((Number(layer?.pendingCount) || 0) > 0 || (Number(layer?.inflightCount) || 0) > 0),
+  );
+  const busyLayerIds = busyLayers.map((layer) => String(layer?.layerId || ""));
+  const busyTiles = busyLayers.reduce(
+    (sum, layer) => sum + (Number(layer?.pendingCount) || 0) + (Number(layer?.inflightCount) || 0),
+    0,
+  );
+  return { timedOut: true, busyLayers: busyLayers.length, busyLayerIds, busyTiles, state };
+};
+""".strip()
+
+
 def build_profile_expression(scenario: str, capture_frames: int) -> str:
     wait_frames = wait_frames_js(capture_frames)
+    wait_for_raster_idle = wait_for_raster_idle_js()
     if scenario == "load_map":
         return f"""
 (async () => {{
@@ -175,7 +217,9 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   if (!bridge?.resetPerformanceSnapshot || !bridge?.setState || !bridge?.getCurrentState) {{
     throw new Error("FishyMapBridge profiling API is unavailable");
   }}
-  const state = bridge.getCurrentState();
+  {wait_for_raster_idle}
+  const settle = await waitForRasterIdle();
+  const state = settle.state || bridge.getCurrentState();
   const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
   const targetLayer =
     layers.find((layer) => layer?.layerId === "region_groups") ||
@@ -204,6 +248,10 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   const report = bridge.getPerformanceSnapshot();
   report.browser_action = {{
     target_layer_id: targetLayer.layerId,
+    pre_capture_raster_idle_timed_out: settle.timedOut,
+    pre_capture_busy_raster_layers: settle.busyLayers,
+    pre_capture_busy_raster_layer_ids: settle.busyLayerIds,
+    pre_capture_busy_raster_tiles: settle.busyTiles,
     capture_frames_target: {capture_frames},
     completed_frames: frameWait.completedFrames,
     frame_wait_timed_out: frameWait.timedOut,
@@ -218,6 +266,7 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   if (!bridge?.resetPerformanceSnapshot || !bridge?.getPerformanceSnapshot) {{
     throw new Error("FishyMapBridge profiling API is unavailable");
   }}
+  {wait_for_raster_idle}
   const waitForLayerToggle = async () => {{
     const deadline = performance.now() + 10000;
     while (performance.now() < deadline) {{
@@ -230,6 +279,7 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     throw new Error("region_groups visibility button not found");
   }};
   const button = await waitForLayerToggle();
+  const settle = await waitForRasterIdle();
   bridge.resetPerformanceSnapshot({{
     scenario: "vector_region_groups_dom_toggle",
     warmupFrames: 0,
@@ -239,6 +289,10 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   const report = bridge.getPerformanceSnapshot();
   report.browser_action = {{
     target_layer_id: "region_groups",
+    pre_capture_raster_idle_timed_out: settle.timedOut,
+    pre_capture_busy_raster_layers: settle.busyLayers,
+    pre_capture_busy_raster_layer_ids: settle.busyLayerIds,
+    pre_capture_busy_raster_tiles: settle.busyTiles,
     capture_frames_target: {capture_frames},
     completed_frames: frameWait.completedFrames,
     frame_wait_timed_out: frameWait.timedOut,

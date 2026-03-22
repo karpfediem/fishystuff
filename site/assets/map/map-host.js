@@ -1784,6 +1784,10 @@ class FishyMapBridgeImpl {
     return cloneJson(this.currentState);
   }
 
+  refreshCurrentStateNow() {
+    return cloneJson(this.refreshCurrentStateFromWasm());
+  }
+
   getCurrentInputState() {
     return cloneJson(this.inputState);
   }
