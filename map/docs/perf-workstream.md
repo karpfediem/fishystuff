@@ -26,10 +26,14 @@ This note keeps the latest direction visible without rereading the full task his
 - The visual `minimap` now uses a map-space display pyramid:
   - `/images/tiles/minimap_visual/v1/tileset.json`
   - logical tile size: `512`
-  - levels: `z=0..5`
+  - levels: `z=0..4`
   - only the finest display level keeps source-equivalent minimap detail
   - finest-level output textures are now about `1542px` wide instead of `3855px`, so highest zoom keeps detail without giant per-tile browser decodes
-  - parent levels now shrink by 2x per level (`1542 -> 771 -> 386 -> 193 -> 97 -> 49`) to keep browser memory bounded
+  - every minimap level is now sampled directly from the raw minimap source tiles in canonical map space
+  - parent LODs are no longer built by stitching child PNG quadrants together
+  - that removes the partial-edge distortion/misalignment bug from the previous parent-composition path
+  - parent levels now shrink by 2x per level (`1542 -> 771 -> 386 -> 193 -> 97`) to keep browser memory bounded
+  - the old mushy final `1x1` minimap level was removed
   - runtime LOD is now overridden specifically for minimap startup:
     - `target_tiles=16`
     - `hysteresis_hi=24`
@@ -40,6 +44,7 @@ This note keeps the latest direction visible without rereading the full task his
   - this keeps startup on coarse minimap levels and only reaches finest detail when zoom actually requires it
   - the old 128px source-space `minimap` pyramid is no longer the runtime visual path
   - the raw `rader_*` source tiles are remapped offline into canonical map-space display tiles during `build_map.sh`
+  - the minimap rebuild guard now tracks both `tile_size_px` and maximum generated level so stale pyramids do not survive config changes
 - The earlier custom GPU hover-highlight experiment was unstable and was backed out.
   - It caused a browser-side wgpu/WebGL panic and blank map output in the integrated shell.
 - The current hover path is now hybrid:
@@ -96,9 +101,11 @@ This note keeps the latest direction visible without rereading the full task his
   - current browser-safe `1280` pyramid with shrinking parent levels reaches `minimap_enable` avg `23.547 ms`, p95 `124.3 ms`
   - adding the minimap-specific startup LOD override drops `minimap_enable` further to `12.086 ms` avg, `108.6 ms` p95
   - that was `11.461 ms` faster than the parent-shrunk-only variant on `minimap_enable`, but it still left very large finest-level decodes
-  - the current `512px` finest-level minimap pyramid plus real over-budget eviction reaches `minimap_enable` avg `9.606 ms`, p95 `10.2 ms`
-  - `raster.update_tiles` is now `445.0 ms` on `minimap_enable`
-  - `raster.tile_entity_update` is now `434.5 ms` on `minimap_enable`
+  - the first `512px` finest-level minimap pyramid plus real over-budget eviction reached `minimap_enable` avg `9.606 ms`, p95 `10.2 ms`
+  - after replacing parent-quadrant composition with direct source sampling and removing the final `1x1` level, `minimap_enable` is now `8.645 ms` avg, `40.7 ms` p95
+  - `minimap_pan_zoom` now completes at `2.758 ms` avg, `5.7 ms` p95
+  - `raster.update_tiles` is now `408.0 ms` on `minimap_enable`
+  - `raster.tile_entity_update` is now `394.3 ms` on `minimap_enable`
   - a longer `load_map` browser run completed and captured `101` frames at `17.049 ms` avg without renderer failure
   - the old raw `minimap/v1` runtime visual surface was `26,777` PNGs / about `815.8 MiB` on disk
   - the current `minimap_visual/v1` display pyramid is `665` PNGs / about `987 MiB` on disk
@@ -145,6 +152,7 @@ Backend-neutral stages:
   - runtime override: `map/layers/registry.rs`
   - startup LOD override: `target_tiles=16`, no refine, no coarse pinning, `max_resident_tiles=64`
   - the raster cache now evicts whenever it is actually over budget, not just when the chosen LOD changes
+  - parent minimap levels are now direct source resamples, not stitched child quadrants
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame
 - Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
 - Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs

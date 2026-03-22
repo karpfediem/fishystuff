@@ -9,7 +9,6 @@ use clap::Parser;
 use fishystuff_core::constants::{
     DEFAULT_PIXEL_CENTER_OFFSET, LEFT, MAP_HEIGHT, MAP_WIDTH, SECTOR_PER_PIXEL, SECTOR_SCALE, TOP,
 };
-use image::imageops::{overlay, resize, FilterType};
 use image::ImageReader;
 use image::{Rgba, RgbaImage};
 use serde::Serialize;
@@ -25,12 +24,12 @@ struct Args {
     #[arg(long)]
     out_dir: PathBuf,
     /// Logical map-space tile span for the finest level.
-    #[arg(long, default_value_t = 1280)]
+    #[arg(long, default_value_t = 512)]
     tile_px: u32,
     /// Output texture size for every pyramid level. Defaults to source-equivalent resolution.
     #[arg(long)]
     output_px: Option<u32>,
-    #[arg(long, default_value_t = 4)]
+    #[arg(long, default_value_t = 5)]
     max_level: u32,
     #[arg(long, default_value_t = 128)]
     source_tile_px: u32,
@@ -55,8 +54,6 @@ struct Args {
     #[arg(long, default_value = "/images/tiles/minimap_visual/v1")]
     root_url: String,
 }
-
-type ParentChildren = Vec<(u32, u32, u32, u32)>;
 
 #[derive(Debug, Clone, Copy)]
 struct Affine2D {
@@ -175,11 +172,9 @@ fn main() -> Result<()> {
             .with_context(|| format!("create level dir {}", level.z))?;
     }
 
-    build_level0(&args, &levels[0], output_px, source_tile_px, map_to_layer)?;
-    for level in levels.iter().skip(1) {
-        let prev_output_px = level_output_px(output_px, level.z - 1);
-        let next_output_px = level_output_px(output_px, level.z);
-        build_parent_level(&args.out_dir, level.z, prev_output_px, next_output_px)?;
+    for level in &levels {
+        let level_output_px = level_output_px(output_px, level.z);
+        build_level_from_source(&args, level, level_output_px, source_tile_px, map_to_layer)?;
     }
 
     let manifest_levels = levels
@@ -240,21 +235,22 @@ fn level_output_px(base_output_px: u32, z: u32) -> u32 {
     base_output_px.div_ceil(divisor).max(1)
 }
 
-fn build_level0(
+fn build_level_from_source(
     args: &Args,
     level: &PyramidLevel,
     output_px: u32,
     source_tile_px: i32,
     map_to_layer: Affine2D,
 ) -> Result<()> {
-    let level0_dir = args.out_dir.join("0");
+    let level_dir = args.out_dir.join(level.z.to_string());
+    let tile_span_px = args.tile_px.checked_shl(level.z).unwrap_or(u32::MAX).max(1);
     for ty in 0..level.height {
         for tx in 0..level.width {
             let mut out = RgbaImage::from_pixel(output_px, output_px, Rgba([0, 0, 0, 0]));
-            let map_x0 = tx * args.tile_px;
-            let map_y0 = ty * args.tile_px;
-            let map_x1 = (map_x0 + args.tile_px).min(args.map_width);
-            let map_y1 = (map_y0 + args.tile_px).min(args.map_height);
+            let map_x0 = tx * tile_span_px;
+            let map_y0 = ty * tile_span_px;
+            let map_x1 = map_x0.saturating_add(tile_span_px).min(args.map_width);
+            let map_y1 = map_y0.saturating_add(tile_span_px).min(args.map_height);
             let map_span_x = f64::from(map_x1 - map_x0);
             let map_span_y = f64::from(map_y1 - map_y0);
 
@@ -292,91 +288,12 @@ fn build_level0(
                 }
             }
 
-            let out_path = level0_dir.join(format!("{}_{}.png", tx, ty));
+            let out_path = level_dir.join(format!("{}_{}.png", tx, ty));
             out.save(&out_path)
                 .with_context(|| format!("write {}", out_path.display()))?;
         }
     }
     Ok(())
-}
-
-fn build_parent_level(
-    out_dir: &Path,
-    z: u32,
-    prev_output_px: u32,
-    next_output_px: u32,
-) -> Result<()> {
-    let prev_dir = out_dir.join((z - 1).to_string());
-    let next_dir = out_dir.join(z.to_string());
-    let prev_files = collect_level_tiles(&prev_dir)?;
-    let mut parents: HashMap<(u32, u32), ParentChildren> = HashMap::new();
-    for &(x, y) in &prev_files {
-        let parent = (x / 2, y / 2);
-        let quadrant = (x % 2, y % 2);
-        parents
-            .entry(parent)
-            .or_default()
-            .push((x, y, quadrant.0, quadrant.1));
-    }
-
-    for ((px, py), children) in parents {
-        let mut canvas =
-            RgbaImage::from_pixel(prev_output_px * 2, prev_output_px * 2, Rgba([0, 0, 0, 0]));
-        for (cx, cy, qx, qy) in children {
-            let child_path = prev_dir.join(format!("{}_{}.png", cx, cy));
-            let child = ImageReader::open(&child_path)
-                .with_context(|| format!("open {}", child_path.display()))?
-                .with_guessed_format()
-                .with_context(|| format!("guess format for {}", child_path.display()))?
-                .decode()
-                .with_context(|| format!("decode {}", child_path.display()))?
-                .to_rgba8();
-            overlay(
-                &mut canvas,
-                &child,
-                i64::from(qx * prev_output_px),
-                i64::from(qy * prev_output_px),
-            );
-        }
-        let down = resize(
-            &canvas,
-            next_output_px,
-            next_output_px,
-            FilterType::Triangle,
-        );
-        let out_path = next_dir.join(format!("{}_{}.png", px, py));
-        down.save(&out_path)
-            .with_context(|| format!("write {}", out_path.display()))?;
-    }
-    Ok(())
-}
-
-fn collect_level_tiles(dir: &Path) -> Result<Vec<(u32, u32)>> {
-    let mut tiles = Vec::new();
-    for entry in fs::read_dir(dir).with_context(|| format!("read {}", dir.display()))? {
-        let entry = entry?;
-        if !entry.file_type()?.is_file() {
-            continue;
-        }
-        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
-            continue;
-        };
-        if let Some(coords) = parse_level_tile_name(&name) {
-            tiles.push(coords);
-        }
-    }
-    Ok(tiles)
-}
-
-fn parse_level_tile_name(name: &str) -> Option<(u32, u32)> {
-    let stem = name.strip_suffix(".png")?;
-    let mut parts = stem.split('_');
-    let x = parts.next()?.parse().ok()?;
-    let y = parts.next()?.parse().ok()?;
-    if parts.next().is_some() {
-        return None;
-    }
-    Some((x, y))
 }
 
 fn full_occupancy(width: u32, height: u32) -> String {
@@ -492,7 +409,7 @@ fn sample_source_nearest(
 
 #[cfg(test)]
 mod tests {
-    use super::{default_output_px, level_output_px, Affine2D};
+    use super::{build_levels, default_output_px, level_output_px, Affine2D};
 
     #[test]
     fn default_output_px_preserves_minimap_source_density() {
@@ -511,10 +428,23 @@ mod tests {
 
     #[test]
     fn parent_levels_shrink_output_resolution() {
-        assert_eq!(level_output_px(3855, 0), 3855);
-        assert_eq!(level_output_px(3855, 1), 1928);
-        assert_eq!(level_output_px(3855, 2), 964);
-        assert_eq!(level_output_px(3855, 3), 482);
-        assert_eq!(level_output_px(3855, 4), 241);
+        assert_eq!(level_output_px(1542, 0), 1542);
+        assert_eq!(level_output_px(1542, 1), 771);
+        assert_eq!(level_output_px(1542, 2), 386);
+        assert_eq!(level_output_px(1542, 3), 193);
+        assert_eq!(level_output_px(1542, 4), 97);
+    }
+
+    #[test]
+    fn build_levels_stops_before_single_tile_when_max_level_limited() {
+        let levels = build_levels(11_560, 10_540, 512, 4);
+        let dims: Vec<(u32, u32, u32)> = levels
+            .iter()
+            .map(|level| (level.z, level.width, level.height))
+            .collect();
+        assert_eq!(
+            dims,
+            vec![(0, 23, 21), (1, 12, 11), (2, 6, 6), (3, 3, 3), (4, 2, 2)]
+        );
     }
 }

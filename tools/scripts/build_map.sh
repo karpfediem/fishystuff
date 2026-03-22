@@ -219,20 +219,35 @@ if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
     --kind raster-visual
 fi
 MINIMAP_DISPLAY_TILE_PX=512
-MINIMAP_DISPLAY_MAX_LEVEL=5
+MINIMAP_DISPLAY_MAX_LEVEL=4
 minimap_display_source_dir="$CDN_IMAGE_ASSET_DIR/tiles/minimap"
 minimap_display_root="$CDN_IMAGE_ASSET_DIR/tiles/minimap_visual/v1"
 minimap_display_manifest="$minimap_display_root/tileset.json"
 minimap_display_manifest_tile_px=""
+minimap_display_manifest_max_level=""
 if [ -f "$minimap_display_manifest" ]; then
   minimap_display_manifest_tile_px="$(
     read_json_u32_field "$minimap_display_manifest" "tile_size_px" || true
+  )"
+  minimap_display_manifest_max_level="$(
+    python3 - "$minimap_display_manifest" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as fh:
+    data = json.load(fh)
+levels = data.get("levels") or []
+if not levels:
+    print("")
+else:
+    print(max(int(level.get("z", 0)) for level in levels))
+PY
   )"
 fi
 if [ -d "$minimap_display_source_dir" ] && {
   [ "${REBUILD_MINIMAP_DISPLAY_TILES:-0}" = "1" ] ||
   [ ! -f "$minimap_display_manifest" ] ||
   [ "$minimap_display_manifest_tile_px" != "$MINIMAP_DISPLAY_TILE_PX" ] ||
+  [ "$minimap_display_manifest_max_level" != "$MINIMAP_DISPLAY_MAX_LEVEL" ] ||
   find "$minimap_display_source_dir" -maxdepth 1 -name 'rader_*.png' -newer "$minimap_display_manifest" -print -quit | grep -q .
 }; then
   minimap_display_tmp_root="${minimap_display_root}.tmp.$$"
