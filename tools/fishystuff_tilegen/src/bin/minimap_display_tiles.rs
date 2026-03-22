@@ -177,7 +177,9 @@ fn main() -> Result<()> {
 
     build_level0(&args, &levels[0], output_px, source_tile_px, map_to_layer)?;
     for level in levels.iter().skip(1) {
-        build_parent_level(&args.out_dir, level.z, output_px)?;
+        let prev_output_px = level_output_px(output_px, level.z - 1);
+        let next_output_px = level_output_px(output_px, level.z);
+        build_parent_level(&args.out_dir, level.z, prev_output_px, next_output_px)?;
     }
 
     let manifest_levels = levels
@@ -231,6 +233,11 @@ fn default_output_px(map_to_layer: Affine2D, tile_px: u32) -> u32 {
     let scale_y = map_to_layer.b.hypot(map_to_layer.d);
     let source_px_per_map_px = scale_x.max(scale_y).max(1.0);
     (f64::from(tile_px) * source_px_per_map_px).round().max(1.0) as u32
+}
+
+fn level_output_px(base_output_px: u32, z: u32) -> u32 {
+    let divisor = 1_u32.checked_shl(z).unwrap_or(u32::MAX).max(1);
+    base_output_px.div_ceil(divisor).max(1)
 }
 
 fn build_level0(
@@ -293,7 +300,12 @@ fn build_level0(
     Ok(())
 }
 
-fn build_parent_level(out_dir: &Path, z: u32, output_px: u32) -> Result<()> {
+fn build_parent_level(
+    out_dir: &Path,
+    z: u32,
+    prev_output_px: u32,
+    next_output_px: u32,
+) -> Result<()> {
     let prev_dir = out_dir.join((z - 1).to_string());
     let next_dir = out_dir.join(z.to_string());
     let prev_files = collect_level_tiles(&prev_dir)?;
@@ -308,7 +320,8 @@ fn build_parent_level(out_dir: &Path, z: u32, output_px: u32) -> Result<()> {
     }
 
     for ((px, py), children) in parents {
-        let mut canvas = RgbaImage::from_pixel(output_px * 2, output_px * 2, Rgba([0, 0, 0, 0]));
+        let mut canvas =
+            RgbaImage::from_pixel(prev_output_px * 2, prev_output_px * 2, Rgba([0, 0, 0, 0]));
         for (cx, cy, qx, qy) in children {
             let child_path = prev_dir.join(format!("{}_{}.png", cx, cy));
             let child = ImageReader::open(&child_path)
@@ -321,11 +334,16 @@ fn build_parent_level(out_dir: &Path, z: u32, output_px: u32) -> Result<()> {
             overlay(
                 &mut canvas,
                 &child,
-                i64::from(qx * output_px),
-                i64::from(qy * output_px),
+                i64::from(qx * prev_output_px),
+                i64::from(qy * prev_output_px),
             );
         }
-        let down = resize(&canvas, output_px, output_px, FilterType::Triangle);
+        let down = resize(
+            &canvas,
+            next_output_px,
+            next_output_px,
+            FilterType::Triangle,
+        );
         let out_path = next_dir.join(format!("{}_{}.png", px, py));
         down.save(&out_path)
             .with_context(|| format!("write {}", out_path.display()))?;
@@ -474,7 +492,7 @@ fn sample_source_nearest(
 
 #[cfg(test)]
 mod tests {
-    use super::{default_output_px, Affine2D};
+    use super::{default_output_px, level_output_px, Affine2D};
 
     #[test]
     fn default_output_px_preserves_minimap_source_density() {
@@ -489,5 +507,14 @@ mod tests {
         assert_eq!(default_output_px(map_to_layer, 1024), 3084);
         assert_eq!(default_output_px(map_to_layer, 1280), 3855);
         assert_eq!(default_output_px(map_to_layer, 2048), 6168);
+    }
+
+    #[test]
+    fn parent_levels_shrink_output_resolution() {
+        assert_eq!(level_output_px(3855, 0), 3855);
+        assert_eq!(level_output_px(3855, 1), 1928);
+        assert_eq!(level_output_px(3855, 2), 964);
+        assert_eq!(level_output_px(3855, 3), 482);
+        assert_eq!(level_output_px(3855, 4), 241);
     }
 }

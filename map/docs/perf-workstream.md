@@ -27,7 +27,8 @@ This note keeps the latest direction visible without rereading the full task his
   - `/images/tiles/minimap_visual/v1/tileset.json`
   - logical tile size: `1280`
   - levels: `z=0..4`
-  - finest display tiles preserve source-equivalent minimap detail at high zoom
+  - only the finest display level keeps source-equivalent minimap detail
+  - parent levels now shrink by 2x per level (`3855 -> 1928 -> 964 -> 482 -> 241`) to keep browser memory bounded
   - the old 128px source-space `minimap` pyramid is no longer the runtime visual path
   - the raw `rader_*` source tiles are remapped offline into canonical map-space display tiles during `build_map.sh`
 - The earlier custom GPU hover-highlight experiment was unstable and was backed out.
@@ -73,14 +74,15 @@ This note keeps the latest direction visible without rereading the full task his
 - Current integrated minimap results:
   - coarse single-level minimap cut previously reached `load_map` avg `44.513 ms`, p95 `128.5 ms`
   - first full-detail `1024` minimap pyramid reached `minimap_enable` avg `27.981 ms`, p95 `87.1 ms`
-  - current `1280` full-detail minimap pyramid reaches `minimap_enable` avg `21.439 ms`, p95 `84.4 ms`
-  - current `1280` full-detail minimap pyramid reaches `load_map` avg `31.633 ms`, p95 `59.7 ms`
-  - `minimap_enable` improved by `6.542 ms` avg versus the `1024` full-detail attempt
-  - `raster.update_tiles` dropped from `833.0 ms` total to `635.8 ms` on `minimap_enable`
-  - `raster.tile_entity_update` dropped from `825.8 ms` total to `631.0 ms` on `minimap_enable`
+  - full-detail-on-all-levels `1280` minimap pyramid reached `minimap_enable` avg `21.439 ms`, p95 `84.4 ms`
+  - that full-detail-on-all-levels `1280` variant later hit a browser `rust_oom` during real map convergence and was backed out
+  - current browser-safe `1280` pyramid with shrinking parent levels reaches `minimap_enable` avg `23.547 ms`, p95 `124.3 ms`
+  - current browser-safe `1280` pyramid with shrinking parent levels reaches `load_map` avg `35.029 ms`, p95 `102.1 ms`
+  - a longer `load_map` browser run completed without OOM and captured `81` frames at `19.120 ms` avg
+  - `minimap_enable` is still `4.434 ms` faster than the earlier `1024` full-detail attempt
   - the old raw `minimap/v1` runtime visual surface was `26,777` PNGs / about `815.8 MiB` on disk
-  - the current `minimap_visual/v1` display pyramid is `129` PNGs / about `1.216 GiB` on disk
-  - on-disk size is still too large, but runtime decode count is much lower and the integrated browser path is materially faster
+  - the current `minimap_visual/v1` display pyramid is `129` PNGs / about `993.8 MiB` on disk
+  - on-disk size is still too large, but the browser-safe version preserves top-zoom detail without crashing the renderer
 - The browser bridge is measurable but not the current dominant cost in these runs.
 
 ## Current module split
@@ -151,7 +153,7 @@ Current generated lookup asset:
 3. Reduce the remaining visual raster working set.
    - the biggest remaining startup spans are still `raster.update_tiles` and `raster.tile_entity_update`
    - `minimap` is no longer using the pathological raw 128px decode surface, but it still participates in raster startup cost
-   - the current `1280` display pyramid is the best measured detail-preserving point so far
+   - the current browser-safe `1280` display pyramid keeps detail only where needed and avoids the all-level full-detail OOM path
    - continue measuring busy-layer counts before and after each change
 4. Reduce browser vector activation cost now that the blank-screen regression is gone.
    - focus on `vector.layer_update`
@@ -165,7 +167,7 @@ Current generated lookup asset:
 
 1. Keep the exact-lookup split and fixed display-tileset path measured.
 2. Keep `zone_mask` on the fixed visual chunk path, not the full-image path and not the old pyramid branch.
-3. Keep `minimap` on the measured `1280` source-equivalent display pyramid unless a replacement beats it with data.
+3. Keep `minimap` on the browser-safe `1280` source-equivalent finest-level pyramid unless a replacement beats it with data.
 4. Reduce residual raster startup/backlog for `zone_mask` + `minimap` without breaking exact semantics.
 5. Add explicit stage measurements for:
    - exact lookup load
