@@ -39,10 +39,12 @@ This note keeps the latest direction visible without rereading the full task his
     - `target_tiles=16`
     - `hysteresis_hi=24`
     - `hysteresis_lo=8`
-    - `margin_tiles=0`
-    - no coarse pinning, no warm/protected ring, no refine
-    - `max_resident_tiles=64`
-  - this keeps startup on coarse minimap levels and only reaches finest detail when zoom actually requires it
+    - `margin_tiles=1`
+    - no coarse pinning, no refine
+    - `warm_margin_tiles=1`
+    - `protected_margin_tiles=1`
+    - `max_resident_tiles=128`
+  - this keeps startup on coarse minimap levels, preserves a small edge ring while panning, and only reaches finest detail when zoom actually requires it
   - the old 128px source-space `minimap` pyramid is no longer the runtime visual path
   - the raw `rader_*` source tiles are remapped offline into canonical map-space display tiles during `build_map.sh`
   - the minimap rebuild guard now tracks both `tile_size_px` and maximum generated level so stale pyramids do not survive config changes
@@ -153,7 +155,8 @@ Backend-neutral stages:
   - build output: `/images/tiles/minimap_visual/v1`
   - generator: `tools/fishystuff_tilegen/src/bin/minimap_display_tiles.rs`
   - runtime override: `map/layers/registry.rs`
-  - startup LOD override: `target_tiles=16`, no refine, no coarse pinning, `max_resident_tiles=64`
+  - startup LOD override: `target_tiles=16`, no refine, no coarse pinning, `margin_tiles=1`, `warm_margin_tiles=1`, `protected_margin_tiles=1`, `max_resident_tiles=128`
+  - idle raster queue refresh now only runs when a layer still has blank visible tiles or failed entries to recover
   - the raster cache now evicts whenever it is actually over budget, not just when the chosen LOD changes
   - parent minimap levels are now direct source resamples, not stitched child quadrants
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame

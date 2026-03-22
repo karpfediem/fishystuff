@@ -312,10 +312,22 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         let refresh_slot = frame % REQUEST_REFRESH_INTERVAL_FRAMES
             == u64::from(layer.id.as_u16()) % REQUEST_REFRESH_INTERVAL_FRAMES;
         let queue_empty = streamer.pending_len_for_layer(layer.id) == 0;
+        let has_blank_visible_tiles = residency
+            .blank_visible_by_layer
+            .get(&layer.id)
+            .copied()
+            .unwrap_or(0)
+            > 0;
+        let has_failed_entries = cache.has_failed_entries(layer.id, map_version_id);
         let should_rebuild_requests = if desired_changed {
             !minor_shift || queue_empty
         } else {
-            queue_empty && refresh_slot
+            should_refresh_idle_requests(
+                queue_empty,
+                refresh_slot,
+                has_blank_visible_tiles,
+                has_failed_entries,
+            )
         };
         if should_rebuild_requests {
             let BuildResult {
@@ -508,14 +520,32 @@ fn should_run_cache_eviction(
     any_zoom_level_changed || cache_len > max_entries
 }
 
+fn should_refresh_idle_requests(
+    queue_empty: bool,
+    refresh_slot: bool,
+    has_blank_visible_tiles: bool,
+    has_failed_entries: bool,
+) -> bool {
+    queue_empty && refresh_slot && (has_blank_visible_tiles || has_failed_entries)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::should_run_cache_eviction;
+    use super::{should_refresh_idle_requests, should_run_cache_eviction};
 
     #[test]
     fn cache_eviction_runs_when_over_budget_without_lod_change() {
         assert!(should_run_cache_eviction(false, 65, 64));
         assert!(!should_run_cache_eviction(false, 64, 64));
         assert!(should_run_cache_eviction(true, 64, 64));
+    }
+
+    #[test]
+    fn idle_request_refresh_only_runs_when_recovery_is_needed() {
+        assert!(!should_refresh_idle_requests(true, true, false, false));
+        assert!(!should_refresh_idle_requests(false, true, true, false));
+        assert!(!should_refresh_idle_requests(true, false, true, false));
+        assert!(should_refresh_idle_requests(true, true, true, false));
+        assert!(should_refresh_idle_requests(true, true, false, true));
     }
 }

@@ -23,7 +23,9 @@ const MINIMAP_VISUAL_MAX_LEVEL: u8 = 2;
 const MINIMAP_TARGET_TILES: usize = 16;
 const MINIMAP_HYSTERESIS_HI: f32 = 24.0;
 const MINIMAP_HYSTERESIS_LO: f32 = 8.0;
-const MINIMAP_MAX_RESIDENT_TILES: usize = 64;
+const MINIMAP_MAX_RESIDENT_TILES: usize = 128;
+const MINIMAP_REQUEST_MARGIN_TILES: i32 = 1;
+const MINIMAP_RETENTION_MARGIN_TILES: i32 = 1;
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct LayerRegistry {
@@ -231,15 +233,15 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         lod_policy.target_tiles = MINIMAP_TARGET_TILES;
         lod_policy.hysteresis_hi = MINIMAP_HYSTERESIS_HI;
         lod_policy.hysteresis_lo = MINIMAP_HYSTERESIS_LO;
-        lod_policy.margin_tiles = 0;
+        lod_policy.margin_tiles = MINIMAP_REQUEST_MARGIN_TILES;
         lod_policy.enable_refine = false;
         lod_policy.refine_debounce_ms = 0;
         lod_policy.max_detail_tiles = 0;
         lod_policy.max_resident_tiles = MINIMAP_MAX_RESIDENT_TILES;
         lod_policy.pinned_coarse_levels = 0;
         lod_policy.coarse_pin_min_level = None;
-        lod_policy.warm_margin_tiles = 0;
-        lod_policy.protected_margin_tiles = 0;
+        lod_policy.warm_margin_tiles = MINIMAP_RETENTION_MARGIN_TILES;
+        lod_policy.protected_margin_tiles = MINIMAP_RETENTION_MARGIN_TILES;
         lod_policy.max_detail_requests_while_camera_moving = 1;
         lod_policy.motion_suppresses_refine = true;
     }

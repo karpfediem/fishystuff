@@ -408,6 +408,12 @@ impl RasterTileCache {
             .count()
     }
 
+    pub(crate) fn has_failed_entries(&self, layer: LayerId, map_version: u64) -> bool {
+        self.entries.iter().any(|(key, entry)| {
+            key.layer == layer && key.map_version == map_version && entry.state == TileState::Failed
+        })
+    }
+
     pub(crate) fn resident_counts_by_layer_level(&self) -> HashMap<LayerId, BTreeMap<i32, u32>> {
         let mut counts: HashMap<LayerId, BTreeMap<i32, u32>> = HashMap::new();
         for (key, entry) in &self.entries {
