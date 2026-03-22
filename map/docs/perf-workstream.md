@@ -157,6 +157,7 @@ Backend-neutral stages:
   - runtime override: `map/layers/registry.rs`
   - startup LOD override: `target_tiles=16`, no refine, no coarse pinning, `margin_tiles=1`, `warm_margin_tiles=1`, `protected_margin_tiles=1`, `max_resident_tiles=128`
   - idle raster queue refresh now only runs when a layer still has blank visible tiles or failed entries to recover
+  - minimap LOD selection now counts only the truly visible tiles; the one-tile request ring no longer pollutes hysteresis and freeze the minimap on a coarse level when zoomed in
   - the raster cache now evicts whenever it is actually over budget, not just when the chosen LOD changes
   - parent minimap levels are now direct source resamples, not stitched child quadrants
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame

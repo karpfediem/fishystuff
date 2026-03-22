@@ -24,6 +24,12 @@ pub(crate) struct DesiredTileComputation<'a> {
 
 pub(crate) type LodSignature = (Option<(i32, u64)>, Option<(i32, u64)>);
 
+#[derive(Clone, Copy, Debug)]
+struct LodCandidate {
+    request_bounds: TileBounds,
+    visible_count: usize,
+}
+
 pub(crate) fn compute_desired_layer_tiles(input: DesiredTileComputation<'_>) -> DesiredLayerTiles {
     crate::perf_scope!("raster.visible_tile_computation");
     let DesiredTileComputation {
@@ -38,24 +44,39 @@ pub(crate) fn compute_desired_layer_tiles(input: DesiredTileComputation<'_>) -> 
     } = input;
     let layer_aabb = world_transform.world_rect_to_layer_aabb(view_world);
 
-    let mut candidates: Vec<(TileBounds, usize)> = Vec::new();
+    let mut candidates: Vec<LodCandidate> = Vec::new();
     for level in &tileset.levels {
         if level.z < 0 || level.z as u8 > layer.max_level {
             continue;
         }
-        let Some(bounds) = bounds_for_level(
-            layer,
-            layer_aabb,
-            level,
-            map_version,
-            layer.lod_policy.margin_tiles,
-        ) else {
+        let Some(visible_bounds) = bounds_for_level(layer, layer_aabb, level, map_version, 0)
+        else {
             continue;
         };
-        let count = level.count_in_rect(bounds.min_tx, bounds.max_tx, bounds.min_ty, bounds.max_ty);
-        candidates.push((bounds, count));
+        let request_bounds = if layer.lod_policy.margin_tiles > 0 {
+            bounds_for_level(
+                layer,
+                layer_aabb,
+                level,
+                map_version,
+                layer.lod_policy.margin_tiles,
+            )
+            .unwrap_or(visible_bounds)
+        } else {
+            visible_bounds
+        };
+        let visible_count = level.count_in_rect(
+            visible_bounds.min_tx,
+            visible_bounds.max_tx,
+            visible_bounds.min_ty,
+            visible_bounds.max_ty,
+        );
+        candidates.push(LodCandidate {
+            request_bounds,
+            visible_count,
+        });
     }
-    candidates.sort_by_key(|(bounds, _)| bounds.z);
+    candidates.sort_by_key(|candidate| candidate.request_bounds.z);
 
     let previous_base = previous.and_then(|state| state.base);
     let base = choose_bounds_with_hysteresis(&candidates, previous_base, &layer.lod_policy);
@@ -134,7 +155,7 @@ fn bounds_for_level(
 }
 
 fn choose_bounds_with_hysteresis(
-    candidates: &[(TileBounds, usize)],
+    candidates: &[LodCandidate],
     current: Option<TileBounds>,
     policy: &LodPolicy,
 ) -> Option<TileBounds> {
@@ -148,46 +169,48 @@ fn choose_bounds_with_hysteresis(
 
     let ideal = candidates
         .iter()
-        .find(|(_, count)| *count <= target)
+        .find(|candidate| candidate.visible_count <= target)
         .copied()
         .unwrap_or_else(|| *candidates.last().expect("non-empty"));
 
     let Some(current) = current else {
-        return Some(ideal.0);
+        return Some(ideal.request_bounds);
     };
 
-    let Some((current_bounds, current_count)) = candidates
+    let Some(current_candidate) = candidates
         .iter()
-        .find(|(bounds, _)| bounds.z == current.z)
+        .find(|candidate| candidate.request_bounds.z == current.z)
         .copied()
     else {
-        return Some(ideal.0);
+        return Some(ideal.request_bounds);
     };
+    let current_bounds = current_candidate.request_bounds;
+    let current_count = current_candidate.visible_count;
 
     if current_count > hi {
         let choice = candidates
             .iter()
-            .filter(|(bounds, _)| bounds.z >= current.z)
-            .find(|(_, count)| *count <= target)
+            .filter(|candidate| candidate.request_bounds.z >= current.z)
+            .find(|candidate| candidate.visible_count <= target)
             .copied()
             .or_else(|| {
                 candidates
                     .iter()
-                    .rfind(|(bounds, _)| bounds.z >= current.z)
+                    .rfind(|candidate| candidate.request_bounds.z >= current.z)
                     .copied()
             })
             .unwrap_or(ideal);
-        return Some(choice.0);
+        return Some(choice.request_bounds);
     }
 
     if current_count < lo {
         let finer = candidates
             .iter()
-            .filter(|(bounds, _)| bounds.z <= current.z)
-            .find(|(_, count)| *count <= target)
+            .filter(|candidate| candidate.request_bounds.z <= current.z)
+            .find(|candidate| candidate.visible_count <= target)
             .copied();
-        if let Some((bounds, _)) = finer {
-            return Some(bounds);
+        if let Some(candidate) = finer {
+            return Some(candidate.request_bounds);
         }
     }
 
@@ -293,7 +316,7 @@ pub(crate) fn compute_cache_budget(
 
 #[cfg(test)]
 mod tests {
-    use super::{choose_bounds_with_hysteresis, TileBounds};
+    use super::{choose_bounds_with_hysteresis, LodCandidate, TileBounds};
     use crate::map::layers::LodPolicy;
 
     fn bounds(z: i32) -> TileBounds {
@@ -304,6 +327,13 @@ mod tests {
             max_ty: 0,
             z,
             map_version: 1,
+        }
+    }
+
+    fn candidate(z: i32, visible_count: usize) -> LodCandidate {
+        LodCandidate {
+            request_bounds: bounds(z),
+            visible_count,
         }
     }
 
@@ -330,10 +360,10 @@ mod tests {
     #[test]
     fn low_target_tiles_avoids_finest_level_for_full_map() {
         let candidates = vec![
-            (bounds(0), 90),
-            (bounds(1), 25),
-            (bounds(2), 9),
-            (bounds(3), 4),
+            candidate(0, 90),
+            candidate(1, 25),
+            candidate(2, 9),
+            candidate(3, 4),
         ];
         let chosen = choose_bounds_with_hysteresis(&candidates, None, &lod_policy(16, 24.0, 8.0))
             .expect("chosen base lod");
@@ -342,9 +372,19 @@ mod tests {
 
     #[test]
     fn low_target_tiles_still_allow_finest_level_when_zoomed_in() {
-        let candidates = vec![(bounds(0), 4), (bounds(1), 1), (bounds(2), 1)];
+        let candidates = vec![candidate(0, 4), candidate(1, 1), candidate(2, 1)];
         let chosen = choose_bounds_with_hysteresis(&candidates, None, &lod_policy(16, 24.0, 8.0))
             .expect("chosen base lod");
+        assert_eq!(chosen.z, 0);
+    }
+
+    #[test]
+    fn request_ring_does_not_freeze_coarse_lod() {
+        let current = TileBounds { z: 2, ..bounds(2) };
+        let candidates = vec![candidate(0, 9), candidate(1, 9), candidate(2, 1)];
+        let chosen =
+            choose_bounds_with_hysteresis(&candidates, Some(current), &lod_policy(16, 24.0, 8.0))
+                .expect("chosen base lod");
         assert_eq!(chosen.z, 0);
     }
 }
