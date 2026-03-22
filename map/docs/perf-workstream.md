@@ -26,14 +26,14 @@ This note keeps the latest direction visible without rereading the full task his
 - The visual `minimap` now uses a map-space display pyramid:
   - `/images/tiles/minimap_visual/v1/tileset.json`
   - logical tile size: `512`
-  - levels: `z=0..3`
+  - levels: `z=0..2`
   - only the finest display level keeps source-equivalent minimap detail
   - finest-level output textures are now about `1542px` wide instead of `3855px`, so highest zoom keeps detail without giant per-tile browser decodes
   - every minimap level is now sampled directly from the raw minimap source tiles in canonical map space
   - parent LODs are no longer built by stitching child PNG quadrants together
   - that removes the partial-edge distortion/misalignment bug from the previous parent-composition path
-  - parent levels now shrink by 2x per level (`1542 -> 771 -> 386 -> 193`) to keep browser memory bounded
-  - the old mushy final `1x1` and `2x2` minimap levels were removed
+  - parent levels now shrink by 2x per level (`1542 -> 771 -> 386`) to keep browser memory bounded
+  - the old mushy final `1x1`, `2x2`, and `3x3` minimap levels were removed
   - this is a visual-quality tradeoff, not a pure perf win: the browser now never falls back to those very coarse minimap views
   - runtime LOD is now overridden specifically for minimap startup:
     - `target_tiles=16`
@@ -54,6 +54,7 @@ This note keeps the latest direction visible without rereading the full task his
   - small hover transitions still use the targeted CPU span-delta path because it remains the fastest local-case path
   - larger hover transitions now switch to a per-tile shader overlay instead of rewriting tile textures
   - the overlay alpha has been restored to track the layer opacity directly so the visible highlight matches the older full-recolor path more closely
+  - the hover highlight color is now high-contrast magenta instead of green so it still reads clearly on green/yellow sea and Kamasylvia zones
   - the shader overlay uses the layer's actual depth plus a small bias, so variable display order still works
   - clip-mask and evidence-filter cases still fall back to the compose path until the overlay path can support them directly
 - The 2D zoom-in clamp has been loosened again.
@@ -105,8 +106,8 @@ This note keeps the latest direction visible without rereading the full task his
   - the first `512px` finest-level minimap pyramid plus real over-budget eviction reached `minimap_enable` avg `9.606 ms`, p95 `10.2 ms`
   - after replacing parent-quadrant composition with direct source sampling and removing the final `1x1` level, `minimap_enable` reached `8.645 ms` avg, `40.7 ms` p95
   - `minimap_pan_zoom` reached `2.758 ms` avg, `5.7 ms` p95
-  - after also removing the `2x2` coarse level, the current `z=0..3` pyramid reaches `minimap_enable` at `16.598 ms` avg, `146.8 ms` p95
-  - the current `z=0..3` pyramid reaches `minimap_pan_zoom` at `4.800 ms` avg, `11.4 ms` p95
+  - after also removing the `2x2` and `3x3` coarse levels, the current `z=0..2` pyramid reaches `minimap_enable` at `17.619 ms` avg, `124.8 ms` p95
+  - the current `z=0..2` pyramid reaches `minimap_pan_zoom` at `4.539 ms` avg, `10.6 ms` p95
   - that is slower than the `z=0..4` direct-sampled variant, but visually cleaner at the farthest zooms
   - `raster.update_tiles` is now `499.9 ms` on `minimap_enable`
   - `raster.tile_entity_update` is now `470.5 ms` on `minimap_enable`
@@ -203,7 +204,7 @@ Current generated lookup asset:
 
 1. Keep the exact-lookup split and fixed display-tileset path measured.
 2. Keep `zone_mask` on the fixed visual chunk path, not the full-image path and not the old pyramid branch.
-3. Keep `minimap` on the browser-safe `512` source-equivalent finest-level pyramid with `z=0..3` unless a replacement beats it with data.
+3. Keep `minimap` on the browser-safe `512` source-equivalent finest-level pyramid with `z=0..2` unless a replacement beats it with data.
 4. Reduce residual raster startup/backlog for `zone_mask` + `minimap` without breaking exact semantics.
 5. Add explicit stage measurements for:
    - exact lookup load

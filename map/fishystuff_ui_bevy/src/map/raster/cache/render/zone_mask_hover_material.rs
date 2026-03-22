@@ -13,7 +13,7 @@ use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 
 const HOVER_OVERLAY_ALPHA: f32 = 1.0;
-const HOVER_HIGHLIGHT_RGB: [u8; 3] = [64, 255, 128];
+const HOVER_HIGHLIGHT_RGB: [u8; 3] = [255, 80, 224];
 
 pub(crate) struct ZoneMaskHoverMaterialPlugin;
 
