@@ -28,6 +28,7 @@ This note keeps the latest direction visible without rereading the full task his
 - The current stable path keeps the zone-mask visual on fixed display chunks and only reruns CPU visual filtering when relevant state actually changes.
   - exact lookup still determines which zone is hovered
   - the filter path is no longer called every 2D frame while idle
+  - hover-only changes now update just the old/new zone spans inside a tile instead of cloning and recomposing full tile images
 
 ## Current diagnosis
 
@@ -42,12 +43,14 @@ This note keeps the latest direction visible without rereading the full task his
   - bridge work stays coarse and batched
 - Current measured result of the stable recovered path:
   - browser smoke passes again and the map is visible
-  - `zone_mask_hover_sweep` is `6.084 ms` avg with `27.4 ms` p95
-  - top hover spans are `raster.update_tiles`, `raster.sync_visual_filters`, and `raster.tile_entity_update`
-  - this is slower than the GPU-material experiment, but unlike that experiment it survives the integrated browser path
+  - previous `zone_mask_hover_sweep` baseline was `9.653 ms` avg with `46.0 ms` p95
+  - current `zone_mask_hover_sweep` is `4.635 ms` avg with `9.6 ms` p95
+  - `raster.sync_visual_filters` dropped from `353.5 ms` total to `17.2 ms` total
+  - top hover spans are now `raster.update_tiles`, `raster.tile_entity_update`, and `raster.sync_visual_filters`
+  - this survives the integrated browser path without the GPU-material instability
 - Current integrated vector activation result on the same zone-mask path:
-  - `vector_region_groups_enable` frame avg is `8.192 ms`
-  - top spans remain `vector.layer_update`, `vector.geojson_parse`, then raster update/render prep
+  - latest `vector_region_groups_enable` frame avg is `7.835 ms`
+  - top spans are `vector.layer_update`, `vector.geojson_parse`, then host/bridge patch ingest
 - The browser bridge is measurable but not the current dominant cost in these runs.
 
 ## Current module split
@@ -86,6 +89,7 @@ Backend-neutral stages:
   - runtime override: `map/layers/registry.rs`
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame
 - Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
+- Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
 Current generated lookup asset:
@@ -103,6 +107,7 @@ Current generated lookup asset:
 2. Reduce the remaining cost of the stable CPU hover-highlight path.
    - exact lookup should remain the semantic source
    - keep the filter path change-driven, not per-frame
+   - prefer span/delta updates over whole-image rewrites
    - if we revisit a GPU path later, it must survive the integrated browser shell first
 3. Reduce the remaining visual raster working set.
    - the current pre-capture busy layers are still `zone_mask` and `minimap`
@@ -110,6 +115,7 @@ Current generated lookup asset:
 4. Reduce browser vector activation cost now that the blank-screen regression is gone.
    - focus on `vector.layer_update`
    - treat `vector.geojson_parse` as a separate one-shot activation cost
+   - host/bridge patch ingest is now visible enough to profile alongside vector work
 5. Keep the profiling surface stable across backends.
    - measure the same named stages whether decode runs on the main thread, in JS workers, or in future wasm threads
 6. Record future web-threading constraints, but do not block current optimization work on them.
@@ -127,7 +133,7 @@ Current generated lookup asset:
    - bridge event flush
 5. Attack the next measured hotspot after this recovery point.
    - current top activation hotspot: `vector.layer_update`
-   - current hover hotspot: `raster.sync_visual_filters`
+   - current top hover hotspots: `raster.update_tiles` and `raster.tile_entity_update`
    - current remaining raster source: `minimap`
 6. Only after the single-threaded pipeline is clean, revisit worker/thread options.
 

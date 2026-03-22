@@ -475,6 +475,7 @@ fn cache_from_fixture(fixture: &RasterBenchFixture) -> RasterTileCache {
                 sprite_size: None,
                 pixel_data: None,
                 zone_rgbs: Vec::new(),
+                zone_lookup_rows: None,
                 filter_active: false,
                 filter_revision: 0,
                 pixel_filtered: false,

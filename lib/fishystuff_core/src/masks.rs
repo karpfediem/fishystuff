@@ -371,6 +371,62 @@ impl ZoneLookupRows {
         })
     }
 
+    pub fn from_rgba(width: u32, height: u32, data: &[u8]) -> Result<Self> {
+        let width = u16::try_from(width)
+            .map_err(|_| anyhow::anyhow!("zone lookup width {} exceeds u16", width))?;
+        let height = u16::try_from(height)
+            .map_err(|_| anyhow::anyhow!("zone lookup height {} exceeds u16", height))?;
+        if width == 0 || height == 0 {
+            bail!("zone lookup dimensions must be non-zero");
+        }
+        let expected_len = usize::from(width)
+            .checked_mul(usize::from(height))
+            .and_then(|value| value.checked_mul(4))
+            .ok_or_else(|| anyhow::anyhow!("zone lookup rgba length overflow"))?;
+        if data.len() != expected_len {
+            bail!(
+                "zone lookup rgba length mismatch: {} != {}",
+                data.len(),
+                expected_len
+            );
+        }
+
+        let mut row_offsets = Vec::with_capacity(height as usize + 1);
+        let mut row_end_xs = Vec::new();
+        let mut row_rgbs = Vec::new();
+        let row_stride = usize::from(width) * 4;
+
+        for row in data.chunks_exact(row_stride) {
+            row_offsets.push(row_end_xs.len() as u32);
+            let mut current_rgb = pack_rgb_u32(row[0], row[1], row[2]);
+            for x in 1..usize::from(width) {
+                let pixel_offset = x * 4;
+                let rgb = pack_rgb_u32(
+                    row[pixel_offset],
+                    row[pixel_offset + 1],
+                    row[pixel_offset + 2],
+                );
+                if rgb == current_rgb {
+                    continue;
+                }
+                row_end_xs.push(u16::try_from(x).expect("x fits in u16"));
+                row_rgbs.push(current_rgb);
+                current_rgb = rgb;
+            }
+            row_end_xs.push(width);
+            row_rgbs.push(current_rgb);
+        }
+        row_offsets.push(row_end_xs.len() as u32);
+
+        Ok(Self {
+            width,
+            height,
+            row_offsets,
+            row_end_xs,
+            row_rgbs,
+        })
+    }
+
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() < 20 {
             bail!("zone lookup payload too short: {}", bytes.len());
@@ -493,6 +549,21 @@ impl ZoneLookupRows {
 
     pub fn segment_count(&self) -> usize {
         self.row_end_xs.len()
+    }
+
+    pub fn for_each_span_matching(&self, target_rgb: u32, mut visit: impl FnMut(u16, u16, u16)) {
+        for y in 0..self.height as usize {
+            let start = self.row_offsets[y] as usize;
+            let end = self.row_offsets[y + 1] as usize;
+            let mut span_start = 0_u16;
+            for idx in start..end {
+                let span_end = self.row_end_xs[idx];
+                if self.row_rgbs[idx] == target_rgb {
+                    visit(y as u16, span_start, span_end);
+                }
+                span_start = span_end;
+            }
+        }
     }
 
     pub fn rgb_u32(&self, px: i32, py: i32) -> Option<u32> {

@@ -1,5 +1,6 @@
 use bevy::asset::{AssetServer, LoadState};
 use bevy::image::ImageSampler;
+use fishystuff_core::masks::ZoneLookupRows;
 
 use crate::map::camera::mode::ViewMode;
 use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
@@ -89,6 +90,8 @@ impl RasterTileCache {
                             if let Some(data) = image.data.clone() {
                                 let size = image.texture_descriptor.size;
                                 entry.zone_rgbs = collect_tile_zone_rgbs(&data);
+                                entry.zone_lookup_rows =
+                                    ZoneLookupRows::from_rgba(size.width, size.height, &data).ok();
                                 entry.pixel_data = Some(TilePixelData {
                                     width: size.width,
                                     height: size.height,
@@ -97,6 +100,7 @@ impl RasterTileCache {
                             }
                         } else {
                             entry.zone_rgbs.clear();
+                            entry.zone_lookup_rows = None;
                             entry.pixel_data = None;
                         }
                     }

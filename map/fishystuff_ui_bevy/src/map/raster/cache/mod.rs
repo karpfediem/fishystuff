@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use bevy::prelude::Image;
+use fishystuff_core::masks::ZoneLookupRows;
 
 use crate::config::TILE_CACHE_MAX;
 use crate::map::layers::{LayerId, LayerRegistry};
@@ -96,6 +97,7 @@ pub(crate) struct RasterTileEntry {
     pub(crate) sprite_size: Option<Vec2>,
     pub(crate) pixel_data: Option<TilePixelData>,
     pub(crate) zone_rgbs: Vec<u32>,
+    pub(crate) zone_lookup_rows: Option<ZoneLookupRows>,
     pub(crate) filter_active: bool,
     pub(crate) filter_revision: u64,
     pub(crate) pixel_filtered: bool,
@@ -222,6 +224,7 @@ impl RasterTileCache {
                 sprite_size: None,
                 pixel_data: None,
                 zone_rgbs: Vec::new(),
+                zone_lookup_rows: None,
                 filter_active: false,
                 filter_revision: 0,
                 pixel_filtered: false,

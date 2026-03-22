@@ -10,7 +10,8 @@ use crate::prelude::*;
 
 use self::clip_mask::clip_mask_state_revision;
 use self::compose::{
-    compose_raster_visuals_in_place, restore_rgba_in_place, RasterVisualComposeContext,
+    compose_raster_visuals_in_place, restore_rgba_in_place, update_hover_highlight_in_place,
+    RasterVisualComposeContext,
 };
 use super::{RasterTileCache, TileState};
 
@@ -66,7 +67,12 @@ impl RasterTileCache {
             let previous_clip_mask_layer = read_entry.clip_mask_layer;
             let previous_clip_mask_revision = read_entry.clip_mask_revision;
             let previous_clip_mask_applied = read_entry.clip_mask_applied;
-            let zone_rgbs = read_entry.zone_rgbs.clone();
+            let zone_rgbs = &read_entry.zone_rgbs;
+            let source = match read_entry.pixel_data.as_ref() {
+                Some(source) => source,
+                None => continue,
+            };
+            let zone_lookup_rows = read_entry.zone_lookup_rows.as_ref();
 
             let apply_pick_filter =
                 spec.pick_mode == PickMode::ExactTilePixel && view_mode == ViewMode::Map2D;
@@ -136,13 +142,6 @@ impl RasterTileCache {
                 continue;
             }
 
-            let Some(source) = self
-                .entries
-                .get(&key)
-                .and_then(|entry| entry.pixel_data.clone())
-            else {
-                continue;
-            };
             let Some(image) = images.get_mut(&handle) else {
                 continue;
             };
@@ -153,16 +152,36 @@ impl RasterTileCache {
                 continue;
             }
 
-            if !requires_pixel_filter && target_hover_zone.is_none() && clip_mask_layer.is_none() {
+            let hover_only_fast_path = !next_filter_active
+                && !previous_filter_active
+                && !previous_pixel_filtered
+                && clip_mask_layer.is_none()
+                && !previous_clip_mask_applied
+                && zone_lookup_rows.is_some();
+
+            if hover_only_fast_path {
+                if let Some(zone_rows) = zone_lookup_rows {
+                    update_hover_highlight_in_place(
+                        source,
+                        image_data,
+                        zone_rows,
+                        previous_hover_highlight_zone,
+                        target_hover_zone,
+                    );
+                }
+            } else if !requires_pixel_filter
+                && target_hover_zone.is_none()
+                && clip_mask_layer.is_none()
+            {
                 if previous_pixel_filtered
                     || previous_hover_highlight_zone.is_some()
                     || previous_clip_mask_applied
                 {
-                    restore_rgba_in_place(&source, image_data);
+                    restore_rgba_in_place(source, image_data);
                 }
             } else {
                 compose_raster_visuals_in_place(
-                    &source,
+                    source,
                     image_data,
                     &RasterVisualComposeContext {
                         key,

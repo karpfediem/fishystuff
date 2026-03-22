@@ -204,3 +204,35 @@ fn zone_lookup_rows_roundtrip_and_sample() {
     assert_eq!(decoded, lookup);
     assert_eq!(decoded.sample_rgb_u32_clamped(-4, 9), pack_rgb_u32(7, 8, 9));
 }
+
+#[test]
+fn zone_lookup_rows_from_rgba_matches_zone_mask_rows() {
+    let rgb_data = vec![
+        1, 2, 3, 1, 2, 3, 4, 5, 6, 4, 5, 6, //
+        7, 8, 9, 7, 8, 9, 4, 5, 6, 4, 5, 6,
+    ];
+    let rgba_data = vec![
+        1, 2, 3, 255, 1, 2, 3, 255, 4, 5, 6, 255, 4, 5, 6, 255, //
+        7, 8, 9, 255, 7, 8, 9, 255, 4, 5, 6, 255, 4, 5, 6, 255,
+    ];
+    let mask = ZoneMask::from_rgb(4, 2, rgb_data).expect("mask");
+    let from_mask = ZoneLookupRows::from_zone_mask(&mask).expect("mask rows");
+    let from_rgba = ZoneLookupRows::from_rgba(4, 2, &rgba_data).expect("rgba rows");
+
+    assert_eq!(from_rgba, from_mask);
+}
+
+#[test]
+fn zone_lookup_rows_matching_spans_return_expected_ranges() {
+    let rgba_data = vec![
+        1, 2, 3, 255, 1, 2, 3, 255, 4, 5, 6, 255, 4, 5, 6, 255, //
+        4, 5, 6, 255, 7, 8, 9, 255, 7, 8, 9, 255, 4, 5, 6, 255,
+    ];
+    let lookup = ZoneLookupRows::from_rgba(4, 2, &rgba_data).expect("rgba rows");
+    let mut spans = Vec::new();
+    lookup.for_each_span_matching(pack_rgb_u32(4, 5, 6), |row, start_x, end_x| {
+        spans.push((row, start_x, end_x));
+    });
+
+    assert_eq!(spans, vec![(0, 2, 4), (1, 0, 1), (1, 3, 4)]);
+}
