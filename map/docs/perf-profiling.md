@@ -103,6 +103,38 @@
 - Use it after `devenv up` to catch browser startup stalls or renderer startup
   regressions before making performance claims from native harness results.
 
+## Integrated browser profiling
+- The browser-integrated profiler measures the JS host, wasm bridge, and Bevy runtime together from the real `/map` page.
+- Run the canonical browser startup scenario:
+  ```bash
+  tools/scripts/map-browser-profile.sh load_map
+  ```
+- Run the vector-layer enable scenario that exercises the integrated browser path:
+  ```bash
+  tools/scripts/map-browser-profile.sh vector_region_groups_enable
+  ```
+- Browser profiling reports default to `target/perf/browser/<scenario>.json`.
+- The browser report keeps the same top-level shape as the native harness report:
+  - `scenario`
+  - `frames`
+  - `warmup_frames`
+  - `frame_time_ms`
+  - `named_spans`
+  - `counters`
+- That means the existing helpers also work on browser reports:
+  ```bash
+  tools/scripts/perf-top-spans.sh target/perf/browser/vector_region_groups_enable.json
+  tools/scripts/perf-compare.sh baseline-browser.json candidate-browser.json
+  ```
+- Browser reports also include nested `host` and `wasm` sections:
+  - `host.*` spans/counters cover `map-host.js` work such as patch flush, bootstrap polling, wasm state pulls, and event handling.
+  - `bridge.*` spans/counters cover wasm bridge work such as patch ingest, state apply, snapshot sync, and event emission.
+- For long or degraded browser scenarios, `browser_action` records how much of the requested capture window actually completed:
+  - `capture_frames_target`
+  - `completed_frames`
+  - `frame_wait_timed_out`
+- `frame_wait_timed_out=true` means the integrated browser run did not advance the requested number of animation frames in time. Treat that as a strong regression signal rather than a normal successful run.
+
 ## Stability expectations
 - Named span totals and counter deltas are usually more stable than wall-clock frame time.
 - First-run shader compilation and dependency builds are noisy; compare warmed runs.

@@ -175,30 +175,50 @@ class DevToolsClient:
         self._send_frame(json.dumps(payload))
         return message_id
 
-    def wait_for_result(self, message_id: int) -> dict[str, Any]:
+    def wait_for_result(
+        self, message_id: int, timeout_seconds: float | None = None
+    ) -> dict[str, Any]:
+        deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
         while True:
-            message = self._recv_frame()
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(f"timed out waiting for DevTools result {message_id}")
+                self.sock.settimeout(max(0.1, min(1.0, remaining)))
+            try:
+                message = self._recv_frame()
+            except TimeoutError:
+                continue
             if message is None:
                 raise RuntimeError("DevTools websocket closed")
             payload = json.loads(message)
             if payload.get("id") == message_id:
                 return payload
 
-    def evaluate_json(self, expression: str) -> Any:
+    def evaluate_json(
+        self,
+        expression: str,
+        await_promise: bool = False,
+        timeout_seconds: float | None = None,
+    ) -> Any:
         message_id = self.send(
             "Runtime.evaluate",
             {
                 "expression": expression,
                 "returnByValue": True,
+                "awaitPromise": await_promise,
             },
         )
-        payload = self.wait_for_result(message_id)
+        payload = self.wait_for_result(message_id, timeout_seconds=timeout_seconds)
         if "error" in payload:
             raise RuntimeError(str(payload["error"]))
         result = payload.get("result", {}).get("result", {})
         if "value" not in result:
             raise RuntimeError(f"Runtime.evaluate returned no value: {payload}")
-        return json.loads(result["value"])
+        value = result["value"]
+        if isinstance(value, str):
+            return json.loads(value)
+        return value
 
     def close(self) -> None:
         try:

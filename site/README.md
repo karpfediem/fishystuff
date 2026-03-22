@@ -59,3 +59,26 @@ It writes a machine-readable result to `target/smoke/map-browser.json` by
 default. To override the timeout or report path:
 
 - `MAP_SMOKE_TIMEOUT_SECS=45 tools/scripts/map-browser-smoke.sh /tmp/map-browser.json`
+
+## Browser profiling
+
+For integrated browser profiling against the real `/map` page, run:
+
+- `tools/scripts/map-browser-profile.sh load_map`
+- `tools/scripts/map-browser-profile.sh vector_region_groups_enable`
+
+These reports land under `target/perf/browser/` by default and include:
+
+- JS host timings from `site/assets/map/map-host.js`
+- wasm bridge timings from `map/fishystuff_ui_bevy/src/bridge/host/`
+- Bevy runtime spans from the wasm map app itself
+
+The output JSON intentionally matches the native profiling report shape at the
+top level, so the existing helpers also work:
+
+- `tools/scripts/perf-top-spans.sh target/perf/browser/load_map.json`
+- `tools/scripts/perf-compare.sh baseline-browser.json candidate-browser.json`
+
+For browser scenarios that fail to advance the requested number of frames in
+time, inspect `browser_action.frame_wait_timed_out` in the report. That is a
+signal that the integrated page became too slow or stalled during the scenario.
