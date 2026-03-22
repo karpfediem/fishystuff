@@ -6,7 +6,6 @@ use crate::map::spaces::world::MapToWorld;
 use crate::prelude::*;
 
 use super::super::super::policy::TileResidencyState;
-use super::super::filters::hover_overlay::hover_overlay_depth;
 use super::super::{RasterTileCache, TileState};
 use super::geometry::tile_world_rect;
 
@@ -121,27 +120,6 @@ impl RasterTileCache {
                     }
                 }
             }
-
-            if let Some(overlay) = entry.hover_overlay_entity {
-                let overlay_visible = now_visible
-                    && view_mode == ViewMode::Map2D
-                    && entry.hover_highlight_zone.is_some();
-                commands.entity(overlay).insert(if overlay_visible {
-                    Visibility::Visible
-                } else {
-                    Visibility::Hidden
-                });
-                if depth_changed {
-                    commands
-                        .entity(overlay)
-                        .insert(Transform::from_translation(Vec3::new(
-                            0.0,
-                            0.0,
-                            hover_overlay_depth(next_depth),
-                        )));
-                }
-            }
-
             if now_visible {
                 self.use_counter = self.use_counter.wrapping_add(1);
                 entry.last_used = self.use_counter;

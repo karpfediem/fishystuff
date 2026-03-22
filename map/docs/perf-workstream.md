@@ -48,15 +48,13 @@ This note keeps the latest direction visible without rereading the full task his
   - the minimap rebuild guard now tracks both `tile_size_px` and maximum generated level so stale pyramids do not survive config changes
 - The earlier custom GPU hover-highlight experiment was unstable and was backed out.
   - It caused a browser-side wgpu/WebGL panic and blank map output in the integrated shell.
-- The current hover path is now hybrid:
+- The current hover path is now correctness-first and exact-lookup-backed:
   - exact lookup still determines which zone is hovered
   - the filter path is no longer called every 2D frame while idle
-  - small hover transitions still use the targeted CPU span-delta path because it remains the fastest local-case path
-  - larger hover transitions now switch to a per-tile shader overlay instead of rewriting tile textures
-  - the overlay alpha has been restored to track the layer opacity directly so the visible highlight matches the older full-recolor path more closely
-  - the hover highlight color is now high-contrast magenta instead of green so it still reads clearly on green/yellow sea and Kamasylvia zones
-  - the shader overlay uses the layer's actual depth plus a small bias, so variable display order still works
-  - clip-mask and evidence-filter cases still fall back to the compose path until the overlay path can support them directly
+  - all hover transitions currently use the targeted CPU span-delta path
+  - the previous large-fanout shader overlay was disabled because sampled display-color matching missed some sea-depth and Kamasylvia zones
+  - the hover highlight color is now high-contrast magenta instead of green so it still reads clearly on green/yellow sea zones
+  - clip-mask and evidence-filter cases still use the compose path
 - The 2D zoom-in clamp has been loosened again.
   - the current minimum zoom factor is `0.0025 * fit_scale`
   - this restores deeper zooming without changing the initial fit-to-world behavior
@@ -80,18 +78,18 @@ This note keeps the latest direction visible without rereading the full task his
   - exact lookup is cheap, bounded, and independent
   - visual raster work is measured and bounded separately
   - bridge work stays coarse and batched
-- Current measured result of the current hybrid path:
+- Current measured result of the current exact span path:
   - browser smoke passes again and the map is visible
   - previous `zone_mask_hover_sweep` baseline was `9.653 ms` avg with `46.0 ms` p95
   - first hover optimization reduced `zone_mask_hover_sweep` to `4.635 ms` avg with `9.6 ms` p95
   - previous targeted hover path reduced `zone_mask_hover_sweep` to `3.026 ms` avg with `6.2 ms` p95
-  - current hybrid hover path reduces `zone_mask_hover_sweep` further to `2.684 ms` avg with `4.5 ms` p95
-  - new `zone_mask_hover_far_jumps` browser scenario is `2.905 ms` avg with `5.0 ms` p95
-  - `raster.sync_visual_filters` dropped from `353.5 ms` total to `17.2 ms`, then to `13.8 ms`
-  - `raster.update_tiles` is now `22.0 ms` total on `zone_mask_hover_sweep`
-  - `raster.sync_visual_filters` is now `2.2 ms` total on `zone_mask_hover_sweep`
-  - top hover spans are now `raster.update_tiles`, `raster.visible_tile_computation`, and `raster.desired_tile_set_build`
-  - the shader path is stable in the integrated browser shell, but only engaged when the hover transition fans out beyond a tile threshold
+  - the now-disabled shader-overlay branch reduced `zone_mask_hover_sweep` to `2.684 ms` avg with `4.5 ms` p95, but it was incorrect for some zones
+  - current all-CPU `zone_mask_hover_sweep` is `4.946 ms` avg with `18.4 ms` p95
+  - current all-CPU `zone_mask_hover_far_jumps` is `5.207 ms` avg with `16.3 ms` p95
+  - `raster.sync_visual_filters` dropped from `353.5 ms` total to `17.2 ms`, then to `13.8 ms`, and now sits at `22.9 ms` total in the correctness-first all-CPU path
+  - `raster.update_tiles` is now `32.6 ms` total on `zone_mask_hover_sweep`
+  - top hover spans are now `raster.update_tiles`, `raster.sync_visual_filters`, and `raster.desired_tile_set_build`
+  - the current source of truth is the exact span path; any future fast path must derive from exact zone semantics, not sampled display color
 - Current integrated vector activation result on the same zone-mask path:
   - latest `vector_region_groups_enable` frame avg is `7.835 ms`
   - top spans are `vector.layer_update`, `vector.geojson_parse`, then host/bridge patch ingest
@@ -162,7 +160,7 @@ Backend-neutral stages:
 - Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
 - Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs
 - Hover-only visual updates now use a zone-to-tile index so only tiles containing the old/new hovered zones are touched
-- Larger hover fanout now uses a per-tile `Material2d` overlay driven by the loaded zone-mask texture instead of CPU texture rewrites
+- Larger hover fanout currently stays on the exact span path until a non-color-matching fast path replaces it
 - Browser profiling now includes a `minimap_enable` scenario for minimap visibility regressions after startup
 - Browser profiling now includes a `minimap_pan_zoom` scenario for exploration-time minimap regressions
 - Browser profiling now includes a `zone_mask_hover_far_jumps` scenario for large-distance hover transitions
@@ -180,12 +178,12 @@ Current generated lookup asset:
 1. Keep exact semantics off the visual raster path.
    - no reintroduction of pick-probe tile fetches
    - exact hover/click should stay available even when visual raster is still converging
-2. Reduce the remaining hover cost without regressing the local fast path.
+2. Restore a fast large-fanout hover path without regressing correctness.
   - exact lookup should remain the semantic source
   - keep the filter path change-driven, not per-frame
-  - keep the CPU span/delta path for small hover transitions
-  - use the shader overlay only where it is measurably better
-  - next tuning knob is the tile-fanout threshold that switches between the two
+  - the current CPU span/delta path is the correctness baseline for all hover transitions
+  - do not reintroduce sampled-display-color matching
+  - the next fast path must derive overlay coverage from exact zone semantics
 3. Reduce the remaining visual raster working set.
    - the biggest remaining startup spans are still `raster.update_tiles` and `raster.tile_entity_update`
    - `minimap` is no longer using the pathological raw 128px decode surface, but it still participates in raster startup cost

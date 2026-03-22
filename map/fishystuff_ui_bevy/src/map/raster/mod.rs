@@ -10,7 +10,6 @@ pub(crate) use cache::{
 pub use cache::{
     RasterTileCache, RasterTileEntity, ReadyRasterTile, TileDebugControls, TilePixelData, TileStats,
 };
-pub(crate) use cache::{ZoneMaskHoverMaterial, ZoneMaskHoverMaterialPlugin};
 pub use manifest::{map_version_id, LoadedTileset};
 
 pub(crate) use manifest::{

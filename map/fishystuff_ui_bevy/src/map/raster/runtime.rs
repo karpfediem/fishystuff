@@ -24,12 +24,11 @@ use super::{
     LayerManifestCache, LayerRequestBuild, LayerViewState, PendingLayerManifests,
     RasterLoadedAssets, RasterLoadedContext, RasterTileCache, StartTileRequests, TileDebugControls,
     TileFrameClock, TileResidencyState, TileStats, VisibilityUpdateContext, VisualFilterContext,
-    ZoneMaskHoverMaterial, ZoneMaskHoverMaterialPlugin, REQUEST_REFRESH_INTERVAL_FRAMES,
+    REQUEST_REFRESH_INTERVAL_FRAMES,
 };
 
 pub(crate) fn build_plugin(app: &mut App) {
-    app.add_plugins(ZoneMaskHoverMaterialPlugin)
-        .init_resource::<LayerRegistry>()
+    app.init_resource::<LayerRegistry>()
         .init_resource::<LayerRuntime>()
         .init_resource::<LayerViewState>()
         .init_resource::<TileFrameClock>()
@@ -52,7 +51,6 @@ struct RasterUpdateContext<'w, 's> {
     images: ResMut<'w, Assets<Image>>,
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<ColorMaterial>>,
-    hover_materials: ResMut<'w, Assets<ZoneMaskHoverMaterial>>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
     pan_state: Res<'w, PanState>,
@@ -90,7 +88,6 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     let images = &mut ctx.images;
     let meshes = &mut ctx.meshes;
     let materials = &mut ctx.materials;
-    let hover_materials = &mut ctx.hover_materials;
     let windows = &ctx.windows;
     let camera_q = &ctx.camera_q;
     let pan_state = &ctx.pan_state;
@@ -444,8 +441,6 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         cache.sync_hover_highlights_only(
             images,
             commands,
-            meshes,
-            hover_materials,
             layer_registry,
             display_state.hovered_zone_rgb,
         );
@@ -453,8 +448,6 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         cache.sync_visual_filters(
             images,
             commands,
-            meshes,
-            hover_materials,
             VisualFilterContext {
                 filter: evidence_zone_filter,
                 hover_zone_rgb: display_state.hovered_zone_rgb,

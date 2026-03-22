@@ -20,9 +20,6 @@ mod render;
 pub(crate) use filters::VisualFilterContext;
 pub(crate) use render::loaded::{RasterLoadedAssets, RasterLoadedContext};
 pub(crate) use render::visibility::VisibilityUpdateContext;
-pub(crate) use render::zone_mask_hover_material::{
-    ZoneMaskHoverMaterial, ZoneMaskHoverMaterialPlugin,
-};
 
 #[derive(Component, Debug)]
 pub struct RasterTileEntity;
@@ -91,9 +88,6 @@ pub(crate) struct RasterTileEntry {
     pub(crate) handle: Handle<Image>,
     pub(crate) entity: Option<Entity>,
     pub(crate) material: Option<Handle<ColorMaterial>>,
-    pub(crate) hover_overlay_entity: Option<Entity>,
-    pub(crate) hover_overlay_mesh: Option<Handle<Mesh>>,
-    pub(crate) hover_overlay_material: Option<Handle<ZoneMaskHoverMaterial>>,
     pub(crate) state: TileState,
     pub(crate) visible: bool,
     pub(crate) alpha: f32,
@@ -227,9 +221,6 @@ impl RasterTileCache {
                 handle,
                 entity: None,
                 material: None,
-                hover_overlay_entity: None,
-                hover_overlay_mesh: None,
-                hover_overlay_material: None,
                 state: TileState::Loading,
                 visible,
                 alpha,
@@ -314,9 +305,6 @@ impl RasterTileCache {
                 if let Some(entity) = entry.entity {
                     commands.entity(entity).despawn();
                 }
-                if let Some(overlay) = entry.hover_overlay_entity {
-                    commands.entity(overlay).despawn();
-                }
                 images.remove(entry.handle.id());
             }
         }
@@ -329,9 +317,6 @@ impl RasterTileCache {
             if let Some(entry) = self.entries.remove(&key) {
                 if let Some(entity) = entry.entity {
                     commands.entity(entity).despawn();
-                }
-                if let Some(overlay) = entry.hover_overlay_entity {
-                    commands.entity(overlay).despawn();
                 }
                 images.remove(entry.handle.id());
             }
@@ -392,9 +377,6 @@ impl RasterTileCache {
             if let Some(entry) = self.entries.remove(&key) {
                 if let Some(entity) = entry.entity {
                     commands.entity(entity).despawn();
-                }
-                if let Some(overlay) = entry.hover_overlay_entity {
-                    commands.entity(overlay).despawn();
                 }
                 images.remove(entry.handle.id());
                 stats.cache_evictions = stats.cache_evictions.saturating_add(1);
