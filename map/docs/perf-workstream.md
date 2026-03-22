@@ -6,6 +6,12 @@ This note is the short-lived execution log for the current browser performance p
 
 Use it to keep the latest diagnosis, priorities, and next cuts visible without rereading the whole task history.
 
+## Latest follow-up
+
+- The coarse `zone_mask` pyramid cut was a real startup win, but it introduced an edge-coverage regression because parent tiles on partial east/south edges were being emitted as full-size `512x512` images.
+- Those coarse edge parents now preserve their actual occupied dimensions before downsampling, which keeps the visible mask aligned with the canonical map bounds.
+- The local rebuild and browser smoke/profile runs are clean again after regenerating the mask pyramid.
+
 ## Current diagnosis
 
 - The native Bevy harness is useful for subsystem attribution, but it does not reproduce the severe browser FPS collapse on its committed fixtures.

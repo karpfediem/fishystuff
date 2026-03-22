@@ -172,30 +172,37 @@ fn build_next_level(
     for ((px, py), children) in parents {
         let mut canvas = RgbaImage::from_pixel(tile_px * 2, tile_px * 2, Rgba([0, 0, 0, 0]));
         let mut has_child = false;
+        let mut occupied_width = 0_u32;
+        let mut occupied_height = 0_u32;
         for (cx, cy, qx, qy) in children {
             let child_path = prev_dir.join(tile_name(cx, cy));
-            let mut child = ImageReader::open(&child_path)
+            let child = ImageReader::open(&child_path)
                 .with_context(|| format!("open child tile {}", child_path.display()))?
                 .with_guessed_format()
                 .with_context(|| format!("guess format for {}", child_path.display()))?
                 .decode()
                 .with_context(|| format!("decode child tile {}", child_path.display()))?
                 .to_rgba8();
-            if child.width() != tile_px || child.height() != tile_px {
-                child = resize(&child, tile_px, tile_px, FilterType::Triangle);
-            }
-            overlay(
-                &mut canvas,
-                &child,
-                (qx * tile_px) as i64,
-                (qy * tile_px) as i64,
-            );
+            let draw_x = qx * tile_px;
+            let draw_y = qy * tile_px;
+            overlay(&mut canvas, &child, draw_x as i64, draw_y as i64);
+            occupied_width = occupied_width.max(draw_x + child.width());
+            occupied_height = occupied_height.max(draw_y + child.height());
             has_child = true;
         }
         if !has_child {
             continue;
         }
-        let down = resize(&canvas, tile_px, tile_px, FilterType::Triangle);
+        let occupied_width = occupied_width.max(1);
+        let occupied_height = occupied_height.max(1);
+        let occupied =
+            image::imageops::crop_imm(&canvas, 0, 0, occupied_width, occupied_height).to_image();
+        let down = resize(
+            &occupied,
+            occupied_width.div_ceil(2),
+            occupied_height.div_ceil(2),
+            FilterType::Triangle,
+        );
         let out_path = next_dir.join(tile_name(px, py));
         down.save(&out_path)
             .with_context(|| format!("write parent tile {}", out_path.display()))?;
@@ -262,7 +269,48 @@ fn tile_parent_quadrant(x: i32, y: i32) -> (i32, i32, u32, u32) {
 
 #[cfg(test)]
 mod tests {
-    use super::tile_parent_quadrant;
+    use std::collections::HashSet;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use image::{ImageReader, Rgba, RgbaImage};
+
+    use super::{build_next_level, tile_name, tile_parent_quadrant};
+
+    static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDir {
+        path: PathBuf,
+    }
+
+    impl TestDir {
+        fn new() -> Self {
+            let unique = format!(
+                "fishystuff-mask-pyramid-{}-{}",
+                std::process::id(),
+                TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed)
+            );
+            let path = std::env::temp_dir().join(unique);
+            fs::create_dir_all(&path).expect("create temp test directory");
+            Self { path }
+        }
+
+        fn join(&self, name: &str) -> PathBuf {
+            self.path.join(name)
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    fn write_tile(path: &Path, width: u32, height: u32) {
+        let tile = RgbaImage::from_pixel(width, height, Rgba([255, 0, 0, 255]));
+        tile.save(path).expect("write test tile");
+    }
 
     #[test]
     fn parent_quadrants_handle_positive_tiles() {
@@ -270,5 +318,51 @@ mod tests {
         assert_eq!(tile_parent_quadrant(1, 0), (0, 0, 1, 0));
         assert_eq!(tile_parent_quadrant(0, 1), (0, 0, 0, 1));
         assert_eq!(tile_parent_quadrant(3, 2), (1, 1, 1, 0));
+    }
+
+    #[test]
+    fn partial_edge_children_preserve_parent_edge_dimensions() {
+        let root = TestDir::new();
+        let prev_dir = root.join("0");
+        let next_dir = root.join("1");
+        fs::create_dir_all(&prev_dir).expect("create prev dir");
+
+        write_tile(&prev_dir.join(tile_name(22, 20)), 296, 300);
+
+        let prev_coords = HashSet::from([(22, 20)]);
+        let next_coords =
+            build_next_level(&prev_dir, &next_dir, &prev_coords, 512).expect("build next level");
+        assert_eq!(next_coords, HashSet::from([(11, 10)]));
+
+        let parent = ImageReader::open(next_dir.join(tile_name(11, 10)))
+            .expect("open parent tile")
+            .decode()
+            .expect("decode parent tile");
+        assert_eq!(parent.width(), 148);
+        assert_eq!(parent.height(), 150);
+    }
+
+    #[test]
+    fn full_children_still_generate_full_parent_tiles() {
+        let root = TestDir::new();
+        let prev_dir = root.join("0");
+        let next_dir = root.join("1");
+        fs::create_dir_all(&prev_dir).expect("create prev dir");
+
+        for &(x, y) in &[(0, 0), (1, 0), (0, 1), (1, 1)] {
+            write_tile(&prev_dir.join(tile_name(x, y)), 512, 512);
+        }
+
+        let prev_coords = HashSet::from([(0, 0), (1, 0), (0, 1), (1, 1)]);
+        let next_coords =
+            build_next_level(&prev_dir, &next_dir, &prev_coords, 512).expect("build next level");
+        assert_eq!(next_coords, HashSet::from([(0, 0)]));
+
+        let parent = ImageReader::open(next_dir.join(tile_name(0, 0)))
+            .expect("open parent tile")
+            .decode()
+            .expect("decode parent tile");
+        assert_eq!(parent.width(), 512);
+        assert_eq!(parent.height(), 512);
     }
 }
