@@ -28,6 +28,7 @@ resolve_map_runtime_manifest_cache_key() {
 
 PROFILE="${FISHYSTUFF_WASM_PROFILE:-release}"
 MAP_RUNTIME_RETENTION_DAYS="${MAP_RUNTIME_RETENTION_DAYS:-14}"
+PRUNE_OLD_MAP_RUNTIME_FILES="${PRUNE_OLD_MAP_RUNTIME_FILES:-0}"
 MAP_RUNTIME_MANIFEST_CACHE_KEY="$(resolve_map_runtime_manifest_cache_key)"
 MAP_RUNTIME_MANIFEST_FILE="runtime-manifest.${MAP_RUNTIME_MANIFEST_CACHE_KEY}.json"
 if [ "$PROFILE" = "release" ]; then
@@ -96,13 +97,15 @@ EOF
 printf '%s\n' "$manifest_payload" > "$CDN_MAP_ASSET_DIR/runtime-manifest.json"
 printf '%s\n' "$manifest_payload" > "$CDN_MAP_ASSET_DIR/$MAP_RUNTIME_MANIFEST_FILE"
 
-find "$CDN_MAP_ASSET_DIR" -maxdepth 1 -type f \
-  \( -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy_bg.*.wasm' -o -name 'runtime-manifest.*.json' \) \
-  ! -name "$JS_BUNDLE_FILE" \
-  ! -name "$WASM_BUNDLE_FILE" \
-  ! -name "$MAP_RUNTIME_MANIFEST_FILE" \
-  -mtime +"$MAP_RUNTIME_RETENTION_DAYS" \
-  -delete
+if [ "$PRUNE_OLD_MAP_RUNTIME_FILES" = "1" ]; then
+  find "$CDN_MAP_ASSET_DIR" -maxdepth 1 -type f \
+    \( -name 'fishystuff_ui_bevy.*.js' -o -name 'fishystuff_ui_bevy_bg.*.wasm' -o -name 'runtime-manifest.*.json' \) \
+    ! -name "$JS_BUNDLE_FILE" \
+    ! -name "$WASM_BUNDLE_FILE" \
+    ! -name "$MAP_RUNTIME_MANIFEST_FILE" \
+    -mtime +"$MAP_RUNTIME_RETENTION_DAYS" \
+    -delete
+fi
 
 first_existing_path() {
   local candidate

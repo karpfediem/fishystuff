@@ -7,6 +7,7 @@ STATE_FILE="${BUNNY_SYNC_STATE_FILE:-$ROOT_DIR/data/cdn/.last-push-manifest.tsv}
 REMOTE_ROOT="${BUNNY_REMOTE_ROOT:-.}"
 PARALLEL_TRANSFERS="${BUNNY_STORAGE_PARALLEL:-${BUNNY_FTP_PARALLEL:-8}}"
 EXPLICIT_SYNC_ROOTS_RAW="${BUNNY_SYNC_ROOTS:-}"
+BUNNY_ALLOW_REMOTE_DELETES="${BUNNY_ALLOW_REMOTE_DELETES:-0}"
 BUNNY_STORAGE_CONNECT_TIMEOUT="${BUNNY_STORAGE_CONNECT_TIMEOUT:-10}"
 BUNNY_STORAGE_MAX_TIME="${BUNNY_STORAGE_MAX_TIME:-1800}"
 BUNNY_STORAGE_SPEED_LIMIT="${BUNNY_STORAGE_SPEED_LIMIT:-1024}"
@@ -96,6 +97,10 @@ sync_root_for_path() {
 }
 
 is_delete_root() {
+  if [ "$BUNNY_ALLOW_REMOTE_DELETES" != "1" ]; then
+    return 1
+  fi
+
   case "$1" in
     map|region_groups) return 0 ;;
     *) return 1 ;;
@@ -508,6 +513,10 @@ if [ -s "$deferred_upload_paths_file" ]; then
     [ -n "$relative_path" ] || continue
     upload_file "$relative_path"
   done < "$deferred_upload_paths_file"
+fi
+
+if [ "$BUNNY_ALLOW_REMOTE_DELETES" != "1" ]; then
+  echo "remote delete pass disabled; keeping older live Bunny files." >&2
 fi
 
 while IFS= read -r sync_root; do
