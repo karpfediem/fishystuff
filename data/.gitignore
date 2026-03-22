@@ -13,5 +13,4 @@
 !landmarks/
 !landmarks/*.csv
 !spec/
-!spec/expected-inputs.md
-!spec/layout.md
+!spec/*.md
