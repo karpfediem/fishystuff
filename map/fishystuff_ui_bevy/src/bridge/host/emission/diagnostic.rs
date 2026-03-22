@@ -16,6 +16,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
     layer_registry: Res<LayerRegistry>,
     layer_runtime: Res<LayerRuntime>,
 ) {
+    crate::perf_scope!("bridge.emit.diagnostic");
     if !bridge.input.ui.diagnostics_open {
         return;
     }
@@ -99,6 +100,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         if last_payload.as_deref() == Some(serialized.as_str()) {
             return;
         }
+        crate::perf_counter_add!("bridge.emit.diagnostic.count", 1);
         CURRENT_SNAPSHOT.with(|snapshot| {
             snapshot.borrow_mut().last_diagnostic = Some(payload);
         });

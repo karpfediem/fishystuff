@@ -211,9 +211,22 @@ function createFakeWasm(snapshotRef) {
     sink: null,
     stateReads: 0,
     bootstrapReads: 0,
+    profilingResets: [],
   };
   return {
     calls,
+    profilingSummary: {
+      scenario: "browser",
+      bevy_version: "0.18.0",
+      git_revision: null,
+      build_profile: "dev",
+      frames: 0,
+      warmup_frames: 0,
+      wall_clock_ms: 0,
+      frame_time_ms: { avg: 0, p50: 0, p95: 0, p99: 0, max: 0 },
+      named_spans: {},
+      counters: {},
+    },
     async default() {},
     fishymap_set_event_sink(callback) {
       calls.sink = callback;
@@ -237,6 +250,15 @@ function createFakeWasm(snapshotRef) {
         ready: snapshotRef.current?.ready === true,
         statuses: snapshotRef.current?.statuses || {},
       });
+    },
+    fishymap_reset_profiling_json(json) {
+      calls.profilingResets.push(JSON.parse(json));
+    },
+    fishymap_get_profiling_summary_json() {
+      return JSON.stringify(this.profilingSummary);
+    },
+    fishymap_get_profiling_trace_json() {
+      return JSON.stringify({ traceEvents: [] });
     },
   };
 }
@@ -1329,4 +1351,86 @@ test("runtime manifest URL is cache-busted against the CDN base", () => {
     resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, ""),
     "https://cdn.fishystuff.fish/map/runtime-manifest.json",
   );
+});
+
+test("performance snapshot merges host and wasm profiling summaries", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [{ fishId: 1 }] },
+        statuses: { fishStatus: "fish: 1" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    wasm.profilingSummary = {
+      scenario: "vector_region_groups_enable",
+      bevy_version: "0.18.0",
+      git_revision: null,
+      build_profile: "profiling",
+      frames: 120,
+      warmup_frames: 12,
+      wall_clock_ms: 2500,
+      frame_time_ms: { avg: 1.2, p50: 1.1, p95: 2.2, p99: 2.8, max: 4.0 },
+      named_spans: {
+        "bridge.state_apply": {
+          count: 8,
+          avg_ms: 0.15,
+          p50_ms: 0.1,
+          p95_ms: 0.25,
+          p99_ms: 0.25,
+          max_ms: 0.3,
+          total_ms: 1.2,
+        },
+      },
+      counters: {
+        "bridge.events.ready": 1,
+      },
+    };
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      debounceMs: 0,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+
+    bridge.resetPerformanceSnapshot({
+      scenario: "vector_region_groups_enable",
+      warmupFrames: 12,
+    });
+    bridge.sendCommand({ resetView: true });
+
+    const report = bridge.getPerformanceSnapshot();
+    assert.deepEqual(wasm.calls.profilingResets.at(-1), {
+      scenario: "vector_region_groups_enable",
+      warmupFrames: 12,
+      captureTrace: false,
+    });
+    assert.equal(report.scenario, "vector_region_groups_enable");
+    assert.equal(report.frames, 120);
+    assert.equal(report.warmup_frames, 12);
+    assert.equal(report.counters["bridge.events.ready"], 1);
+    assert.ok(report.counters["host.commands.sent"] >= 1);
+    assert.ok(report.named_spans["host.send_command"]);
+    assert.deepEqual(
+      report.named_spans["bridge.state_apply"],
+      wasm.profilingSummary.named_spans["bridge.state_apply"],
+    );
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
 });

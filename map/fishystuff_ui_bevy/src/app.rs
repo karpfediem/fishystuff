@@ -46,6 +46,8 @@ use crate::plugins::FishystuffPlugins;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::{api::ApiPlugin, camera::CameraPlugin, input::InputPlugin};
 #[cfg(target_arch = "wasm32")]
+use crate::profiling::browser::BrowserProfilingPlugin;
+#[cfg(target_arch = "wasm32")]
 use bevy::asset::io::web::WebAssetPlugin;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -96,6 +98,7 @@ pub fn run_browser() {
                 }),
         )
         .add_plugins(FlairPlugin)
+        .add_plugins(BrowserProfilingPlugin)
         .add_plugins(BrowserBridgePlugin)
         .add_plugins(FishystuffPlugins)
         .run();

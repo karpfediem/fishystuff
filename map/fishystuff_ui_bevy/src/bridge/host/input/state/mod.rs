@@ -25,10 +25,12 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
     mut map_camera_q: Query<&mut Camera, (With<Map2dCamera>, Without<Terrain3dCamera>)>,
     mut terrain_camera_q: Query<&mut Camera, (With<Terrain3dCamera>, Without<Map2dCamera>)>,
 ) {
+    crate::perf_scope!("bridge.state_apply");
     if !bridge.is_changed() && !layer_registry.is_changed() {
         return;
     }
 
+    crate::perf_counter_add!("bridge.state_apply.count", 1);
     layer_runtime.sync_to_registry(&layer_registry);
     bookmarks::apply_bookmarks(&bridge.input, &mut bookmarks);
     filters::apply_display_flags(&bridge.input, &mut display_state, &mut debug_layers);

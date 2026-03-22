@@ -192,6 +192,124 @@ export function createEmptySnapshot() {
   };
 }
 
+function performanceNowMs() {
+  if (typeof globalThis.performance?.now === "function") {
+    return globalThis.performance.now();
+  }
+  return Date.now();
+}
+
+function createPerformanceCollector(scenario = "browser") {
+  return {
+    scenario: String(scenario || "browser"),
+    startedAtMs: performanceNowMs(),
+    spanSamples: new Map(),
+    counters: new Map(),
+  };
+}
+
+function normalizePerformanceOptions(options = {}) {
+  const warmupFrames = Number.parseInt(options.warmupFrames, 10);
+  return {
+    scenario: String(options.scenario || "browser").trim() || "browser",
+    warmupFrames: Number.isFinite(warmupFrames) && warmupFrames >= 0 ? warmupFrames : 0,
+    captureTrace: options.captureTrace === true,
+  };
+}
+
+function addPerformanceSpanSample(collector, name, durationMs) {
+  if (!collector || !name) {
+    return;
+  }
+  const samples = collector.spanSamples.get(name) || [];
+  samples.push(Math.max(0, Number(durationMs) || 0));
+  collector.spanSamples.set(name, samples);
+}
+
+function addPerformanceCounter(collector, name, delta = 1) {
+  if (!collector || !name) {
+    return;
+  }
+  const nextValue = (collector.counters.get(name) || 0) + Number(delta || 0);
+  collector.counters.set(name, nextValue);
+}
+
+function summarizeSamples(samples) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return {
+      count: 0,
+      avg_ms: 0,
+      p50_ms: 0,
+      p95_ms: 0,
+      p99_ms: 0,
+      max_ms: 0,
+      total_ms: 0,
+    };
+  }
+  const sorted = samples.slice().sort((left, right) => left - right);
+  const totalMs = sorted.reduce((sum, value) => sum + value, 0);
+  const pick = (p) => sorted[Math.min(sorted.length - 1, Math.round((sorted.length - 1) * p))];
+  return {
+    count: sorted.length,
+    avg_ms: totalMs / sorted.length,
+    p50_ms: pick(0.5),
+    p95_ms: pick(0.95),
+    p99_ms: pick(0.99),
+    max_ms: sorted[sorted.length - 1],
+    total_ms: totalMs,
+  };
+}
+
+function snapshotPerformanceCollector(collector) {
+  const namedSpans = {};
+  for (const [name, samples] of collector?.spanSamples || []) {
+    namedSpans[name] = summarizeSamples(samples);
+  }
+  const counters = {};
+  for (const [name, value] of collector?.counters || []) {
+    counters[name] = value;
+  }
+  return {
+    scenario: collector?.scenario || "browser",
+    elapsed_ms: Math.max(0, performanceNowMs() - (collector?.startedAtMs || performanceNowMs())),
+    named_spans: namedSpans,
+    counters,
+  };
+}
+
+function emptyQuantileSummary() {
+  return {
+    avg: 0,
+    p50: 0,
+    p95: 0,
+    p99: 0,
+    max: 0,
+  };
+}
+
+function emptyProfileSummary(scenario = "browser", warmupFrames = 0) {
+  return {
+    scenario,
+    bevy_version: null,
+    git_revision: null,
+    build_profile: "browser",
+    frames: 0,
+    warmup_frames: warmupFrames,
+    wall_clock_ms: 0,
+    frame_time_ms: emptyQuantileSummary(),
+    named_spans: {},
+    counters: {},
+  };
+}
+
+function normalizePerfCounterSuffix(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function cloneJson(value) {
   if (value == null) {
     return value;
@@ -1481,132 +1599,185 @@ class FishyMapBridgeImpl {
         this.saveLocalPrefsNow();
       }
     };
+    this.performanceOptions = normalizePerformanceOptions({ scenario: "load_map" });
+    this.performanceCollector = createPerformanceCollector(this.performanceOptions.scenario);
+  }
+
+  measurePerformanceSpan(name, callback) {
+    const startedAtMs = performanceNowMs();
+    try {
+      return callback();
+    } finally {
+      addPerformanceSpanSample(this.performanceCollector, name, performanceNowMs() - startedAtMs);
+    }
+  }
+
+  async measurePerformanceSpanAsync(name, callback) {
+    const startedAtMs = performanceNowMs();
+    try {
+      return await callback();
+    } finally {
+      addPerformanceSpanSample(this.performanceCollector, name, performanceNowMs() - startedAtMs);
+    }
+  }
+
+  addPerformanceCounter(name, delta = 1) {
+    addPerformanceCounter(this.performanceCollector, name, delta);
+  }
+
+  syncWasmProfiling() {
+    if (!this.wasmReady || !this.wasmModule?.fishymap_reset_profiling_json) {
+      return;
+    }
+    this.wasmModule.fishymap_reset_profiling_json(
+      JSON.stringify({
+        scenario: this.performanceOptions.scenario,
+        warmupFrames: this.performanceOptions.warmupFrames,
+        captureTrace: this.performanceOptions.captureTrace,
+      }),
+    );
   }
 
   async mount(container, options = {}) {
-    if (!container) {
-      throw new Error("FishyMapBridge.mount requires a container element");
-    }
-    if (this.container) {
-      this.destroy();
-    }
-    this.patchDebounceMs =
-      Number.isFinite(options.debounceMs) && options.debounceMs >= 0
-        ? options.debounceMs
-        : DEFAULT_PATCH_DEBOUNCE_MS;
-    this.sessionSaveDebounceMs =
-      Number.isFinite(options.sessionSaveDebounceMs) && options.sessionSaveDebounceMs >= 0
-        ? options.sessionSaveDebounceMs
-        : DEFAULT_SESSION_SAVE_MS;
-
-    this.container = container;
-    this.canvas =
-      options.canvas ||
-      container.querySelector?.("canvas") ||
-      globalThis.document?.getElementById?.("bevy") ||
-      null;
-
-    this.attachDomListeners();
-    this.installCanvasSizeSync();
-    this.installThemeSync();
-    this.installPersistenceHooks();
-
-    const wasmModule = options.wasmModule || (await loadMapRuntimeModule(options));
-    try {
-      await wasmModule.default();
-    } catch (error) {
-      const message =
-        error && typeof error === "object" && "message" in error
-          ? String(error.message)
-          : String(error);
-      if (!message.includes("Using exceptions for control flow")) {
-        throw error;
+    return this.measurePerformanceSpanAsync("host.mount", async () => {
+      if (!container) {
+        throw new Error("FishyMapBridge.mount requires a container element");
       }
-    }
-    this.wasmModule = wasmModule;
-    if (typeof wasmModule.fishymap_set_event_sink === "function") {
-      wasmModule.fishymap_set_event_sink(this.boundEventSink);
-    }
-    if (typeof wasmModule.fishymap_mount === "function") {
-      wasmModule.fishymap_mount();
-    }
-    this.wasmReady = true;
-    this.refreshCurrentStateFromWasm();
+      if (this.container) {
+        this.destroy();
+      }
+      this.resetPerformanceSnapshot({ scenario: options.profileScenario || "load_map" });
+      this.patchDebounceMs =
+        Number.isFinite(options.debounceMs) && options.debounceMs >= 0
+          ? options.debounceMs
+          : DEFAULT_PATCH_DEBOUNCE_MS;
+      this.sessionSaveDebounceMs =
+        Number.isFinite(options.sessionSaveDebounceMs) && options.sessionSaveDebounceMs >= 0
+          ? options.sessionSaveDebounceMs
+          : DEFAULT_SESSION_SAVE_MS;
 
-    const initialRestorePatch = mergeStatePatch(options.initialState, buildInitialRestorePatch(options));
-    if (isMeaningfulPatch(initialRestorePatch)) {
-      this.setState(initialRestorePatch);
-    }
-    this.syncTheme();
-    this.flushPendingPatchNow();
-    this.flushQueuedCommands();
-    this.scheduleBootstrapStateSync();
-    return this.getCurrentState();
+      this.container = container;
+      this.canvas =
+        options.canvas ||
+        container.querySelector?.("canvas") ||
+        globalThis.document?.getElementById?.("bevy") ||
+        null;
+
+      this.attachDomListeners();
+      this.installCanvasSizeSync();
+      this.installThemeSync();
+      this.installPersistenceHooks();
+
+      const wasmModule = options.wasmModule || (await loadMapRuntimeModule(options));
+      try {
+        await wasmModule.default();
+      } catch (error) {
+        const message =
+          error && typeof error === "object" && "message" in error
+            ? String(error.message)
+            : String(error);
+        if (!message.includes("Using exceptions for control flow")) {
+          throw error;
+        }
+      }
+      this.wasmModule = wasmModule;
+      if (typeof wasmModule.fishymap_set_event_sink === "function") {
+        wasmModule.fishymap_set_event_sink(this.boundEventSink);
+      }
+      if (typeof wasmModule.fishymap_mount === "function") {
+        wasmModule.fishymap_mount();
+      }
+      this.wasmReady = true;
+      this.syncWasmProfiling();
+      this.refreshCurrentStateFromWasm();
+
+      const initialRestorePatch = mergeStatePatch(
+        options.initialState,
+        buildInitialRestorePatch(options),
+      );
+      if (isMeaningfulPatch(initialRestorePatch)) {
+        this.setState(initialRestorePatch);
+      }
+      this.syncTheme();
+      this.flushPendingPatchNow();
+      this.flushQueuedCommands();
+      this.scheduleBootstrapStateSync();
+      return this.getCurrentState();
+    });
   }
 
   destroy() {
-    globalThis.clearTimeout(this.flushPatchTimer);
-    globalThis.clearTimeout(this.flushSessionTimer);
-    globalThis.clearTimeout(this.bootstrapSyncTimer);
-    this.flushPatchTimer = 0;
-    this.flushSessionTimer = 0;
-    this.bootstrapSyncTimer = 0;
-    this.bootstrapSyncPasses = 0;
-    this.detachDomListeners();
-    this.teardownCanvasSizeSync();
-    this.teardownThemeSync();
-    this.teardownPersistenceHooks();
+    this.measurePerformanceSpan("host.destroy", () => {
+      globalThis.clearTimeout(this.flushPatchTimer);
+      globalThis.clearTimeout(this.flushSessionTimer);
+      globalThis.clearTimeout(this.bootstrapSyncTimer);
+      this.flushPatchTimer = 0;
+      this.flushSessionTimer = 0;
+      this.bootstrapSyncTimer = 0;
+      this.bootstrapSyncPasses = 0;
+      this.detachDomListeners();
+      this.teardownCanvasSizeSync();
+      this.teardownThemeSync();
+      this.teardownPersistenceHooks();
 
-    if (this.wasmModule?.fishymap_destroy) {
-      this.wasmModule.fishymap_destroy();
-    } else if (this.wasmModule?.fishymap_clear_event_sink) {
-      this.wasmModule.fishymap_clear_event_sink();
-    }
+      if (this.wasmModule?.fishymap_destroy) {
+        this.wasmModule.fishymap_destroy();
+      } else if (this.wasmModule?.fishymap_clear_event_sink) {
+        this.wasmModule.fishymap_clear_event_sink();
+      }
 
-    this.wasmModule = null;
-    this.wasmReady = false;
-    this.container = null;
-    this.canvas = null;
-    this.pendingStatePatch = normalizeStatePatch({});
-    this.pendingCommands = [];
-    this.inputState = createEmptyInputState();
-    this.currentState = createEmptySnapshot();
+      this.wasmModule = null;
+      this.wasmReady = false;
+      this.container = null;
+      this.canvas = null;
+      this.pendingStatePatch = normalizeStatePatch({});
+      this.pendingCommands = [];
+      this.inputState = createEmptyInputState();
+      this.currentState = createEmptySnapshot();
+    });
   }
 
   setState(patch) {
-    const normalized = normalizeStatePatch(patch);
-    if (!patchHasStateFields(normalized) && !patchHasCommands(normalized)) {
-      return;
-    }
-
-    if (patchHasStateFields(normalized)) {
-      const nextInputState = applyStatePatch(this.inputState, normalized);
-      if (stableStringify(nextInputState) !== stableStringify(this.inputState)) {
-        this.inputState = nextInputState;
-        this.pendingStatePatch = mergeStatePatch(
-          this.pendingStatePatch,
-          patchWithoutCommands(normalized),
-        );
-        this.saveLocalPrefsNow();
-        this.schedulePatchFlush();
+    this.measurePerformanceSpan("host.set_state", () => {
+      const normalized = normalizeStatePatch(patch);
+      if (!patchHasStateFields(normalized) && !patchHasCommands(normalized)) {
+        return;
       }
-    }
 
-    if (patchHasCommands(normalized)) {
-      this.sendCommand(normalized.commands);
-    }
+      if (patchHasStateFields(normalized)) {
+        const nextInputState = applyStatePatch(this.inputState, normalized);
+        if (stableStringify(nextInputState) !== stableStringify(this.inputState)) {
+          this.inputState = nextInputState;
+          this.pendingStatePatch = mergeStatePatch(
+            this.pendingStatePatch,
+            patchWithoutCommands(normalized),
+          );
+          this.addPerformanceCounter("host.patches.queued");
+          this.saveLocalPrefsNow();
+          this.schedulePatchFlush();
+        }
+      }
+
+      if (patchHasCommands(normalized)) {
+        this.sendCommand(normalized.commands);
+      }
+    });
   }
 
   sendCommand(command) {
-    const normalized = normalizeStatePatch({ commands: command }).commands;
-    if (!normalized || !Object.keys(normalized).length) {
-      return;
-    }
-    if (!this.wasmReady || !this.wasmModule?.fishymap_send_command_json) {
-      this.pendingCommands.push(normalized);
-      return;
-    }
-    this.wasmModule.fishymap_send_command_json(JSON.stringify(normalized));
+    this.measurePerformanceSpan("host.send_command", () => {
+      const normalized = normalizeStatePatch({ commands: command }).commands;
+      if (!normalized || !Object.keys(normalized).length) {
+        return;
+      }
+      this.addPerformanceCounter("host.commands.sent");
+      if (!this.wasmReady || !this.wasmModule?.fishymap_send_command_json) {
+        this.pendingCommands.push(normalized);
+        this.addPerformanceCounter("host.commands.buffered");
+        return;
+      }
+      this.wasmModule.fishymap_send_command_json(JSON.stringify(normalized));
+    });
   }
 
   getCurrentState() {
@@ -1615,6 +1786,67 @@ class FishyMapBridgeImpl {
 
   getCurrentInputState() {
     return cloneJson(this.inputState);
+  }
+
+  resetPerformanceSnapshot(options = {}) {
+    this.performanceOptions = normalizePerformanceOptions({
+      ...this.performanceOptions,
+      ...options,
+    });
+    this.performanceCollector = createPerformanceCollector(this.performanceOptions.scenario);
+    this.syncWasmProfiling();
+    return this.getPerformanceSnapshot();
+  }
+
+  readWasmPerformanceSummary() {
+    if (!this.wasmReady || !this.wasmModule?.fishymap_get_profiling_summary_json) {
+      return null;
+    }
+    try {
+      return JSON.parse(this.wasmModule.fishymap_get_profiling_summary_json());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  getPerformanceTraceJson() {
+    if (!this.wasmReady || !this.wasmModule?.fishymap_get_profiling_trace_json) {
+      return "";
+    }
+    try {
+      return String(this.wasmModule.fishymap_get_profiling_trace_json() || "");
+    } catch (_) {
+      return "";
+    }
+  }
+
+  getPerformanceSnapshot() {
+    const host = snapshotPerformanceCollector(this.performanceCollector);
+    const wasm =
+      this.readWasmPerformanceSummary() ||
+      emptyProfileSummary(host.scenario, this.performanceOptions.warmupFrames);
+    return {
+      scenario: wasm.scenario || host.scenario,
+      bevy_version: wasm.bevy_version ?? null,
+      git_revision: wasm.git_revision ?? null,
+      build_profile: wasm.build_profile ?? "browser",
+      frames: wasm.frames ?? 0,
+      warmup_frames: wasm.warmup_frames ?? this.performanceOptions.warmupFrames,
+      wall_clock_ms: wasm.wall_clock_ms ?? host.elapsed_ms,
+      browser_elapsed_ms: host.elapsed_ms,
+      frame_time_ms: wasm.frame_time_ms || emptyQuantileSummary(),
+      named_spans: {
+        ...host.named_spans,
+        ...(wasm.named_spans || {}),
+      },
+      counters: {
+        ...host.counters,
+        ...(wasm.counters || {}),
+      },
+      bridge_state: this.getCurrentState(),
+      host,
+      wasm,
+    };
   }
 
   on(type, handler) {
@@ -1626,11 +1858,15 @@ class FishyMapBridgeImpl {
   }
 
   emit(type, detail) {
-    const event = createCustomEvent(type, detail);
-    this.eventTarget.dispatchEvent(event);
-    if (this.container?.dispatchEvent) {
-      this.container.dispatchEvent(createCustomEvent(type, detail));
-    }
+    this.measurePerformanceSpan("host.emit", () => {
+      const suffix = normalizePerfCounterSuffix(type) || "unknown";
+      this.addPerformanceCounter(`host.events.emitted.${suffix}`);
+      const event = createCustomEvent(type, detail);
+      this.eventTarget.dispatchEvent(event);
+      if (this.container?.dispatchEvent) {
+        this.container.dispatchEvent(createCustomEvent(type, detail));
+      }
+    });
   }
 
   attachDomListeners() {
@@ -1765,25 +2001,31 @@ class FishyMapBridgeImpl {
   }
 
   flushPendingPatchNow() {
-    if (!this.wasmReady || !this.wasmModule?.fishymap_apply_state_patch_json) {
-      return;
-    }
-    if (!patchHasStateFields(this.pendingStatePatch)) {
-      return;
-    }
-    const patch = this.pendingStatePatch;
-    this.pendingStatePatch = normalizeStatePatch({});
-    this.wasmModule.fishymap_apply_state_patch_json(JSON.stringify(patch));
+    this.measurePerformanceSpan("host.patch_flush", () => {
+      if (!this.wasmReady || !this.wasmModule?.fishymap_apply_state_patch_json) {
+        return;
+      }
+      if (!patchHasStateFields(this.pendingStatePatch)) {
+        return;
+      }
+      const patch = this.pendingStatePatch;
+      this.pendingStatePatch = normalizeStatePatch({});
+      this.addPerformanceCounter("host.patches.flushed");
+      this.wasmModule.fishymap_apply_state_patch_json(JSON.stringify(patch));
+    });
   }
 
   flushQueuedCommands() {
-    if (!this.wasmReady || !this.wasmModule?.fishymap_send_command_json) {
-      return;
-    }
-    const commands = this.pendingCommands.splice(0, this.pendingCommands.length);
-    for (const command of commands) {
-      this.wasmModule.fishymap_send_command_json(JSON.stringify(command));
-    }
+    this.measurePerformanceSpan("host.command_flush", () => {
+      if (!this.wasmReady || !this.wasmModule?.fishymap_send_command_json) {
+        return;
+      }
+      const commands = this.pendingCommands.splice(0, this.pendingCommands.length);
+      this.addPerformanceCounter("host.commands.flushed", commands.length);
+      for (const command of commands) {
+        this.wasmModule.fishymap_send_command_json(JSON.stringify(command));
+      }
+    });
   }
 
   scheduleBootstrapStateSync() {
@@ -1797,166 +2039,180 @@ class FishyMapBridgeImpl {
   }
 
   runBootstrapStateSync() {
-    if (!this.wasmReady) {
-      return;
-    }
-    this.bootstrapSyncPasses += 1;
-    const previousState = this.currentState;
-    const previousSignature = bootstrapStateSignature(previousState);
-    const wasReady = previousState.ready === true;
-    const fishWasPending = fishCatalogPending(previousState);
-
-    this.syncCanvasSize();
-    this.refreshBootstrapStateFromWasm();
-
-    const becameReady = !wasReady && this.currentState.ready;
-    const fishFinishedLoading =
-      this.currentState.ready && fishWasPending && !fishCatalogPending(this.currentState);
-
-    if (becameReady || fishFinishedLoading) {
-      this.refreshCurrentStateFromWasm();
-    }
-
-    if (bootstrapStateSignature(this.currentState) !== previousSignature) {
-      if (becameReady) {
-        this.scheduleSessionStateSave();
-        this.emit(FISHYMAP_EVENTS.ready, {
-          type: "ready",
-          version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
-          capabilities: cloneJson(this.currentState.catalog?.capabilities || []),
-          state: this.getCurrentState(),
-          inputState: this.getCurrentInputState(),
-        });
-      } else if (wasReady && this.currentState.ready) {
-        this.emit(FISHYMAP_EVENTS.stateChanged, {
-          type: "state-changed",
-          version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
-          state: this.getCurrentState(),
-          inputState: this.getCurrentInputState(),
-        });
+    this.measurePerformanceSpan("host.bootstrap_sync", () => {
+      if (!this.wasmReady) {
+        return;
       }
-    }
+      this.bootstrapSyncPasses += 1;
+      this.addPerformanceCounter("host.bootstrap.passes");
+      const previousState = this.currentState;
+      const previousSignature = bootstrapStateSignature(previousState);
+      const wasReady = previousState.ready === true;
+      const fishWasPending = fishCatalogPending(previousState);
 
-    const shouldContinue =
-      this.bootstrapSyncPasses < MIN_BOOTSTRAP_SYNC_PASSES ||
-      ((!this.currentState.ready || fishCatalogPending(this.currentState)) &&
-        this.bootstrapSyncPasses < MAX_BOOTSTRAP_SYNC_PASSES);
-    if (shouldContinue) {
-      this.scheduleBootstrapStateSync();
-      return;
-    }
-    this.bootstrapSyncPasses = 0;
+      this.syncCanvasSize();
+      this.refreshBootstrapStateFromWasm();
+
+      const becameReady = !wasReady && this.currentState.ready;
+      const fishFinishedLoading =
+        this.currentState.ready && fishWasPending && !fishCatalogPending(this.currentState);
+
+      if (becameReady || fishFinishedLoading) {
+        this.refreshCurrentStateFromWasm();
+      }
+
+      if (bootstrapStateSignature(this.currentState) !== previousSignature) {
+        if (becameReady) {
+          this.scheduleSessionStateSave();
+          this.emit(FISHYMAP_EVENTS.ready, {
+            type: "ready",
+            version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
+            capabilities: cloneJson(this.currentState.catalog?.capabilities || []),
+            state: this.getCurrentState(),
+            inputState: this.getCurrentInputState(),
+          });
+        } else if (wasReady && this.currentState.ready) {
+          this.emit(FISHYMAP_EVENTS.stateChanged, {
+            type: "state-changed",
+            version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
+            state: this.getCurrentState(),
+            inputState: this.getCurrentInputState(),
+          });
+        }
+      }
+
+      const shouldContinue =
+        this.bootstrapSyncPasses < MIN_BOOTSTRAP_SYNC_PASSES ||
+        ((!this.currentState.ready || fishCatalogPending(this.currentState)) &&
+          this.bootstrapSyncPasses < MAX_BOOTSTRAP_SYNC_PASSES);
+      if (shouldContinue) {
+        this.scheduleBootstrapStateSync();
+        return;
+      }
+      this.bootstrapSyncPasses = 0;
+    });
   }
 
   refreshCurrentStateFromWasm() {
-    if (!this.wasmReady || !this.wasmModule?.fishymap_get_current_state_json) {
+    return this.measurePerformanceSpan("host.state_pull", () => {
+      if (!this.wasmReady || !this.wasmModule?.fishymap_get_current_state_json) {
+        return this.currentState;
+      }
+      this.addPerformanceCounter("host.wasm.state_reads");
+      try {
+        const parsed = JSON.parse(this.wasmModule.fishymap_get_current_state_json());
+        this.currentState = {
+          ...createEmptySnapshot(),
+          ...parsed,
+        };
+      } catch (_) {
+        this.currentState = createEmptySnapshot();
+      }
       return this.currentState;
-    }
-    try {
-      const parsed = JSON.parse(this.wasmModule.fishymap_get_current_state_json());
-      this.currentState = {
-        ...createEmptySnapshot(),
-        ...parsed,
-      };
-    } catch (_) {
-      this.currentState = createEmptySnapshot();
-    }
-    return this.currentState;
+    });
   }
 
   refreshBootstrapStateFromWasm() {
-    if (!this.wasmReady) {
+    return this.measurePerformanceSpan("host.bootstrap_pull", () => {
+      if (!this.wasmReady) {
+        return this.currentState;
+      }
+      if (!this.wasmModule?.fishymap_get_bootstrap_state_json) {
+        return this.refreshCurrentStateFromWasm();
+      }
+      this.addPerformanceCounter("host.wasm.bootstrap_reads");
+      try {
+        const parsed = JSON.parse(this.wasmModule.fishymap_get_bootstrap_state_json());
+        this.currentState = mergeBootstrapSnapshot(this.currentState, parsed);
+      } catch (_) {
+        this.currentState = mergeBootstrapSnapshot(this.currentState, createEmptySnapshot());
+      }
       return this.currentState;
-    }
-    if (!this.wasmModule?.fishymap_get_bootstrap_state_json) {
-      return this.refreshCurrentStateFromWasm();
-    }
-    try {
-      const parsed = JSON.parse(this.wasmModule.fishymap_get_bootstrap_state_json());
-      this.currentState = mergeBootstrapSnapshot(this.currentState, parsed);
-    } catch (_) {
-      this.currentState = mergeBootstrapSnapshot(this.currentState, createEmptySnapshot());
-    }
-    return this.currentState;
+    });
   }
 
   handleWasmEvent(json) {
-    let payload;
-    try {
-      payload = JSON.parse(json);
-    } catch (error) {
-      this.emit(FISHYMAP_EVENTS.diagnostic, {
-        type: "diagnostic",
-        version: FISHYMAP_CONTRACT_VERSION,
-        payload: {
-          bridgeError: `invalid event payload: ${error}`,
-          raw: String(json),
-        },
+    this.measurePerformanceSpan("host.handle_event", () => {
+      let payload;
+      try {
+        payload = JSON.parse(json);
+      } catch (error) {
+        this.addPerformanceCounter("host.events.invalid");
+        this.emit(FISHYMAP_EVENTS.diagnostic, {
+          type: "diagnostic",
+          version: FISHYMAP_CONTRACT_VERSION,
+          payload: {
+            bridgeError: `invalid event payload: ${error}`,
+            raw: String(json),
+          },
+          state: this.getCurrentState(),
+        });
+        return;
+      }
+
+      const type = String(payload.type || "");
+      const suffix = normalizePerfCounterSuffix(type) || "unknown";
+      this.addPerformanceCounter(`host.events.handled.${suffix}`);
+      if (type === "hover-changed") {
+        this.currentState = {
+          ...this.currentState,
+          hover: {
+            worldX: payload.worldX ?? null,
+            worldZ: payload.worldZ ?? null,
+            zoneRgb: payload.zoneRgb ?? null,
+            zoneName: payload.zoneName ?? null,
+            layerSamples: Array.isArray(payload.layerSamples) ? cloneJson(payload.layerSamples) : [],
+          },
+        };
+        this.emit(FISHYMAP_EVENTS.hoverChanged, {
+          ...payload,
+          hover: cloneJson(this.currentState.hover),
+        });
+        return;
+      }
+
+      if (type === "view-changed") {
+        this.currentState = {
+          ...this.currentState,
+          view: {
+            ...this.currentState.view,
+            viewMode: payload.viewMode ?? this.currentState.view?.viewMode ?? "2d",
+            camera: payload.camera ? cloneJson(payload.camera) : this.currentState.view?.camera,
+          },
+        };
+        this.scheduleSessionStateSave();
+        this.emit(FISHYMAP_EVENTS.viewChanged, {
+          ...payload,
+          state: {
+            view: cloneJson(this.currentState.view),
+          },
+          inputState: this.getCurrentInputState(),
+        });
+        return;
+      }
+
+      this.refreshCurrentStateFromWasm();
+
+      const detail = {
+        ...payload,
         state: this.getCurrentState(),
-      });
-      return;
-    }
-
-    const type = String(payload.type || "");
-    if (type === "hover-changed") {
-      this.currentState = {
-        ...this.currentState,
-        hover: {
-          worldX: payload.worldX ?? null,
-          worldZ: payload.worldZ ?? null,
-          zoneRgb: payload.zoneRgb ?? null,
-          zoneName: payload.zoneName ?? null,
-          layerSamples: Array.isArray(payload.layerSamples) ? cloneJson(payload.layerSamples) : [],
-        },
-      };
-      this.emit(FISHYMAP_EVENTS.hoverChanged, {
-        ...payload,
-        hover: cloneJson(this.currentState.hover),
-      });
-      return;
-    }
-
-    if (type === "view-changed") {
-      this.currentState = {
-        ...this.currentState,
-        view: {
-          ...this.currentState.view,
-          viewMode: payload.viewMode ?? this.currentState.view?.viewMode ?? "2d",
-          camera: payload.camera ? cloneJson(payload.camera) : this.currentState.view?.camera,
-        },
-      };
-      this.scheduleSessionStateSave();
-      this.emit(FISHYMAP_EVENTS.viewChanged, {
-        ...payload,
-        state: {
-          view: cloneJson(this.currentState.view),
-        },
         inputState: this.getCurrentInputState(),
-      });
-      return;
-    }
+      };
 
-    this.refreshCurrentStateFromWasm();
-
-    const detail = {
-      ...payload,
-      state: this.getCurrentState(),
-      inputState: this.getCurrentInputState(),
-    };
-
-    if (type === "selection-changed") {
-      this.scheduleSessionStateSave();
-      this.emit(FISHYMAP_EVENTS.selectionChanged, detail);
-      return;
-    }
-    if (type === "ready") {
-      this.scheduleSessionStateSave();
-      this.emit(FISHYMAP_EVENTS.ready, detail);
-      return;
-    }
-    if (type === "diagnostic") {
-      this.emit(FISHYMAP_EVENTS.diagnostic, detail);
-    }
+      if (type === "selection-changed") {
+        this.scheduleSessionStateSave();
+        this.emit(FISHYMAP_EVENTS.selectionChanged, detail);
+        return;
+      }
+      if (type === "ready") {
+        this.scheduleSessionStateSave();
+        this.emit(FISHYMAP_EVENTS.ready, detail);
+        return;
+      }
+      if (type === "diagnostic") {
+        this.emit(FISHYMAP_EVENTS.diagnostic, detail);
+      }
+    });
   }
 
   createSessionSnapshot() {

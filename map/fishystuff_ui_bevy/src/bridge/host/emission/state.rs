@@ -2,6 +2,7 @@ use super::super::snapshot::hover_layer_samples_snapshot;
 use super::super::*;
 
 pub(in crate::bridge::host) fn emit_ready_event() {
+    crate::perf_scope!("bridge.emit.ready");
     CURRENT_SNAPSHOT.with(|snapshot| {
         let snapshot = snapshot.borrow();
         READY_EMITTED.with(|emitted| {
@@ -9,6 +10,7 @@ pub(in crate::bridge::host) fn emit_ready_event() {
             if *emitted || !snapshot.ready {
                 return;
             }
+            crate::perf_counter_add!("bridge.emit.ready.count", 1);
             super::super::emit_event(&FishyMapOutputEvent::Ready {
                 version: snapshot.version,
                 capabilities: snapshot.catalog.capabilities.clone(),
@@ -19,10 +21,12 @@ pub(in crate::bridge::host) fn emit_ready_event() {
 }
 
 pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<SelectionState>) {
+    crate::perf_scope!("bridge.emit.selection");
     if !selection.is_changed() {
         return;
     }
 
+    crate::perf_counter_add!("bridge.emit.selection.count", 1);
     let payload = FishyMapOutputEvent::SelectionChanged {
         version: 1,
         zone_rgb: selection.info.as_ref().map(|info| info.rgb_u32),
@@ -31,6 +35,7 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
 }
 
 pub(in crate::bridge::host) fn emit_hover_changed_event(hover: Res<HoverState>) {
+    crate::perf_scope!("bridge.emit.hover");
     if !hover.is_changed() {
         return;
     }
@@ -55,6 +60,7 @@ pub(in crate::bridge::host) fn emit_hover_changed_event(hover: Res<HoverState>) 
         if last_payload.as_deref() == Some(serialized.as_str()) {
             return;
         }
+        crate::perf_counter_add!("bridge.emit.hover.count", 1);
         super::super::emit_event(&payload);
         *last_payload = Some(serialized);
     });

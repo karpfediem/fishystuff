@@ -20,8 +20,11 @@ pub(in crate::bridge::host) fn apply_browser_commands(
     mut map_view: ResMut<Map2dViewState>,
     mut terrain_view: ResMut<Terrain3dViewState>,
 ) {
+    crate::perf_scope!("bridge.command_apply");
     let mut commands = Vec::new();
     std::mem::swap(&mut bridge.pending_commands, &mut commands);
+    crate::perf_gauge!("bridge.pending_commands", commands.len());
+    crate::perf_counter_add!("bridge.commands.applied", commands.len());
 
     for command in commands {
         view::apply_view_commands(

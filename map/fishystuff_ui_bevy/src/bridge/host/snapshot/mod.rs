@@ -21,6 +21,7 @@ pub(super) fn initial_snapshot() -> FishyMapStateSnapshot {
 }
 
 pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
+    crate::perf_scope!("bridge.snapshot_sync");
     let ready_changed = context.bootstrap.is_changed() || context.layer_registry.is_changed();
     let theme_changed = context.bridge.is_changed();
     let filters_changed = context.bridge.is_changed()
@@ -62,6 +63,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
     {
         return;
     }
+
+    crate::perf_counter_add!("bridge.snapshot_sync.count", 1);
 
     CURRENT_SNAPSHOT.with(|snapshot| {
         let mut snapshot = snapshot.borrow_mut();

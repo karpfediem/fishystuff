@@ -8,6 +8,7 @@ pub(in crate::bridge::host) fn emit_view_changed_event(
     map_view: Res<Map2dViewState>,
     terrain_view: Res<Terrain3dViewState>,
 ) {
+    crate::perf_scope!("bridge.emit.view");
     let payload = FishyMapOutputEvent::ViewChanged {
         version: 1,
         view_mode: contract_view_mode(view_mode.mode),
@@ -29,6 +30,7 @@ pub(in crate::bridge::host) fn emit_view_changed_event(
             if !(mode_changed || (changed && interval_elapsed)) {
                 return;
             }
+            crate::perf_counter_add!("bridge.emit.view.count", 1);
             super::super::emit_event(&payload);
             *last_payload = Some(serialized);
             *last_emit = now;

@@ -75,7 +75,7 @@ bevy = { version = "0.18", default-features = false, features = [
 gloo-net = { version = "0.5", features = ["http"] }
 js-sys = "0.3"
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["Window"] }
+web-sys = { version = "0.3", features = ["Performance", "Window"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 uuid = { version = "1", features = ["js"] }
 

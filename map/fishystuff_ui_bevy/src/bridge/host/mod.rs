@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
 
 use bevy::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
 use crate::bridge::contract::{
@@ -53,6 +53,14 @@ struct FishyMapBootstrapSnapshot {
     statuses: FishyMapStatusSnapshot,
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct FishyMapProfilingOptions {
+    scenario: Option<String>,
+    warmup_frames: u64,
+    capture_trace: bool,
+}
+
 #[wasm_bindgen]
 pub fn fishymap_set_event_sink(callback: js_sys::Function) {
     EVENT_SINK.with(|sink| {
@@ -72,8 +80,10 @@ pub fn fishymap_mount() {}
 
 #[wasm_bindgen]
 pub fn fishymap_apply_state_patch_json(json: &str) -> Result<(), JsValue> {
+    let _profiling_scope = crate::profiling::scope("bridge.patch_json_parse");
     let patch: FishyMapStatePatch =
         serde_json::from_str(json).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    crate::perf_counter_add!("bridge.patch_json_parse.count", 1);
     PENDING_PATCHES.with(|pending| {
         pending.borrow_mut().push(patch);
     });
@@ -82,8 +92,10 @@ pub fn fishymap_apply_state_patch_json(json: &str) -> Result<(), JsValue> {
 
 #[wasm_bindgen]
 pub fn fishymap_send_command_json(json: &str) -> Result<(), JsValue> {
+    let _profiling_scope = crate::profiling::scope("bridge.command_json_parse");
     let commands: FishyMapCommands =
         serde_json::from_str(json).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    crate::perf_counter_add!("bridge.command_json_parse.count", 1);
     PENDING_PATCHES.with(|pending| {
         pending.borrow_mut().push(FishyMapStatePatch {
             commands: Some(commands),
@@ -95,7 +107,9 @@ pub fn fishymap_send_command_json(json: &str) -> Result<(), JsValue> {
 
 #[wasm_bindgen]
 pub fn fishymap_get_current_state_json() -> String {
+    let _profiling_scope = crate::profiling::scope("bridge.state_export");
     CURRENT_SNAPSHOT.with(|snapshot| {
+        crate::perf_counter_add!("bridge.state_export.count", 1);
         serde_json::to_string(&*snapshot.borrow())
             .unwrap_or_else(|_| "{\"version\":1,\"ready\":false}".to_string())
     })
@@ -103,8 +117,10 @@ pub fn fishymap_get_current_state_json() -> String {
 
 #[wasm_bindgen]
 pub fn fishymap_get_bootstrap_state_json() -> String {
+    let _profiling_scope = crate::profiling::scope("bridge.bootstrap_export");
     CURRENT_SNAPSHOT.with(|snapshot| {
         let snapshot = snapshot.borrow();
+        crate::perf_counter_add!("bridge.bootstrap_export.count", 1);
         serde_json::to_string(&FishyMapBootstrapSnapshot {
             version: snapshot.version,
             ready: snapshot.ready,
@@ -115,8 +131,32 @@ pub fn fishymap_get_bootstrap_state_json() -> String {
 }
 
 #[wasm_bindgen]
+pub fn fishymap_reset_profiling_json(json: &str) -> Result<(), JsValue> {
+    let options: FishyMapProfilingOptions =
+        serde_json::from_str(json).map_err(|err| JsValue::from_str(&err.to_string()))?;
+    crate::profiling::start_live_session(
+        options.scenario.unwrap_or_else(|| "browser".to_string()),
+        options.warmup_frames,
+        options.capture_trace,
+    );
+    Ok(())
+}
+
+#[wasm_bindgen]
+pub fn fishymap_get_profiling_summary_json() -> String {
+    serde_json::to_string(&crate::profiling::live_report())
+        .unwrap_or_else(|_| "{\"scenario\":\"browser\"}".to_string())
+}
+
+#[wasm_bindgen]
+pub fn fishymap_get_profiling_trace_json() -> String {
+    crate::profiling::trace_json().unwrap_or_else(|_| "{\"traceEvents\":[]}".to_string())
+}
+
+#[wasm_bindgen]
 pub fn fishymap_destroy() {
     fishymap_clear_event_sink();
+    crate::profiling::clear_live_session();
     PENDING_PATCHES.with(|pending| pending.borrow_mut().clear());
     CURRENT_SNAPSHOT.with(|snapshot| {
         *snapshot.borrow_mut() = snapshot::initial_snapshot();
@@ -172,15 +212,29 @@ pub(super) fn parse_theme_background_color(colors: &FishyMapThemeColors) -> Opti
 }
 
 pub(super) fn emit_event(event: &FishyMapOutputEvent) {
+    crate::perf_scope!("bridge.emit.dispatch");
     let Ok(json) = serde_json::to_string(event) else {
         return;
     };
+    crate::perf_counter_add!("bridge.events.total", 1);
+    crate::perf_counter_add!(event_counter_name(event), 1);
+    crate::perf_gauge!("bridge.emit.payload_bytes", json.len());
     EVENT_SINK.with(|sink| {
         let Some(callback) = sink.borrow().as_ref().cloned() else {
             return;
         };
         let _ = callback.call1(&JsValue::NULL, &JsValue::from_str(&json));
     });
+}
+
+fn event_counter_name(event: &FishyMapOutputEvent) -> &'static str {
+    match event {
+        FishyMapOutputEvent::Ready { .. } => "bridge.events.ready",
+        FishyMapOutputEvent::ViewChanged { .. } => "bridge.events.view_changed",
+        FishyMapOutputEvent::SelectionChanged { .. } => "bridge.events.selection_changed",
+        FishyMapOutputEvent::HoverChanged { .. } => "bridge.events.hover_changed",
+        FishyMapOutputEvent::Diagnostic { .. } => "bridge.events.diagnostic",
+    }
 }
 
 #[cfg(test)]
