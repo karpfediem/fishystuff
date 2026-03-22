@@ -15,6 +15,7 @@ Current migration contents:
 - `tools/fishystuff_ingest`
 - `tools/fishystuff_tilegen`
 - `tools/fishystuff_dolt_import`
+- `tools/pazifista`
 - `tools/scripts/build_map.sh`
 - `tools/scripts/stage_cdn_assets.sh`
 - `tools/scripts/push_bunnycdn.sh`

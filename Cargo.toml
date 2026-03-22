@@ -14,6 +14,7 @@ members = [
   "tools/fishystuff_dolt_import",
   "tools/fishystuff_ingest",
   "tools/fishystuff_tilegen",
+  "tools/pazifista",
 ]
 
 [workspace.package]
