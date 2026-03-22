@@ -253,6 +253,9 @@ if [ -d "$minimap_display_source_dir" ] && {
   [ "$minimap_display_manifest_max_level" != "$MINIMAP_DISPLAY_MAX_LEVEL" ] ||
   find "$minimap_display_source_dir" -maxdepth 1 -name 'rader_*.png' -newer "$minimap_display_manifest" -print -quit | grep -q .
 }; then
+  find "$(dirname "$minimap_display_root")" -maxdepth 1 -type d \
+    -name "$(basename "$minimap_display_root").tmp.*" \
+    -exec rm -rf {} +
   minimap_display_tmp_root="${minimap_display_root}.tmp.$$"
   rm -rf "$minimap_display_tmp_root"
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" --release -p fishystuff_tilegen --bin minimap_display_tiles -- \

@@ -75,6 +75,8 @@ build_manifest() {
     ! -name '.cdn-metadata.json' \
     ! -name '.DS_Store' \
     ! -name 'Thumbs.db' \
+    ! -path '*/*.tmp.*' \
+    ! -path '*/*.tmp.*/*' \
     -printf '%P\t%s\t%T@\n' |
     LC_ALL=C sort
 }
@@ -122,6 +124,8 @@ list_local_files_under_root() {
     ! -name '.cdn-metadata.json' \
     ! -name '.DS_Store' \
     ! -name 'Thumbs.db' \
+    ! -path '*/*.tmp.*' \
+    ! -path '*/*.tmp.*/*' \
     -printf "$root/%P\n" |
     LC_ALL=C sort > "$out_file"
 }
