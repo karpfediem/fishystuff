@@ -10,6 +10,8 @@ const RID_FOOTER_LEN: usize = 47;
 const RID_FOOTER_SIGNATURE: [u8; 10] = [0x00, 0x00, 0x60, 0xFF, 0xFF, 0xFF, 0x78, 0x87, 0x00, 0x00];
 const BKD_TRAILER_LEN: usize = 12;
 const INDEX_SENTINEL: u16 = u16::MAX;
+pub const DEFAULT_ROW_SHIFT: u32 = 0x0EF0;
+const BACKGROUND_BGR: [u8; 3] = [193, 154, 79];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Breakpoint {
@@ -38,7 +40,6 @@ pub struct PabrMap {
     pub bkd_path: PathBuf,
     pub rid: RidFile,
     pub bkd: BkdFile,
-    dictionary_colors_bgr: Vec<[u8; 3]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,6 +54,7 @@ pub struct PabrInspect {
     pub scanline_rows: usize,
     pub native_width: u32,
     pub native_height: u32,
+    pub wrapped_bands: usize,
     pub used_dictionary_entries: usize,
     pub used_region_ids: usize,
     pub transparent_breakpoints: usize,
@@ -87,19 +89,11 @@ impl PabrMap {
         let rid = RidFile::from_path(rid_path)?;
         let bkd = BkdFile::from_path(bkd_path)?;
 
-        let dictionary_colors_bgr = rid
-            .region_ids
-            .iter()
-            .copied()
-            .map(color_bgr_for_region_id)
-            .collect();
-
         Ok(Self {
             rid_path: rid_path.to_path_buf(),
             bkd_path: bkd_path.to_path_buf(),
             rid,
             bkd,
-            dictionary_colors_bgr,
         })
     }
 
@@ -139,6 +133,7 @@ impl PabrMap {
             scanline_rows: self.bkd.rows.len(),
             native_width: self.rid.native_width,
             native_height: self.rid.native_height,
+            wrapped_bands: self.band_count()?,
             used_dictionary_entries: used_dictionary_entries.len(),
             used_region_ids: used_region_ids.len(),
             transparent_breakpoints,
@@ -189,6 +184,7 @@ impl PabrMap {
         &self,
         output_path: &Path,
         dimensions: OutputDimensions,
+        row_shift: u32,
     ) -> Result<RenderSummary> {
         if dimensions.width == 0 || dimensions.height == 0 {
             bail!("output dimensions must be greater than zero");
@@ -226,7 +222,12 @@ impl PabrMap {
         for output_y in (0..dimensions.height).rev() {
             let source_row = sample_source_row(output_y, dimensions.height, self.bkd.rows.len());
             if source_row != cached_source_row {
-                self.render_scanline_row(source_row, dimensions.width, &mut cached_pixels)?;
+                self.render_scanline_row(
+                    source_row,
+                    dimensions.width,
+                    row_shift,
+                    &mut cached_pixels,
+                )?;
                 cached_source_row = source_row;
             }
             writer
@@ -248,6 +249,7 @@ impl PabrMap {
         &self,
         source_row: usize,
         output_width: u32,
+        row_shift: u32,
         row_buffer: &mut [u8],
     ) -> Result<()> {
         let row = self
@@ -255,6 +257,10 @@ impl PabrMap {
             .rows
             .get(source_row)
             .with_context(|| format!("source row {} is out of bounds", source_row))?;
+        let band_count = self.band_count()?;
+        let native_width = self.rid.native_width;
+        let row_offset =
+            ((source_row as u64 * u64::from(row_shift)) % u64::from(native_width)) as u32;
 
         let pixel_bytes = output_width as usize * 3;
         row_buffer.fill(0);
@@ -263,14 +269,36 @@ impl PabrMap {
             return Ok(());
         }
 
-        let mut run_index = 0usize;
+        let mut band_positions = vec![0usize; band_count];
+        let mut folded_region_ids = Vec::with_capacity(band_count);
         for output_x in 0..output_width as usize {
-            let source_x = sample_source_x(output_x, output_width);
-            while run_index + 1 < row.len() && row[run_index + 1].source_x <= source_x {
-                run_index += 1;
+            let local_x = sample_local_x(output_x, output_width, native_width);
+            folded_region_ids.clear();
+
+            for (band, band_position) in band_positions.iter_mut().enumerate() {
+                let global_x = local_x + row_offset + band as u32 * native_width;
+                if global_x > u32::from(u16::MAX) {
+                    continue;
+                }
+
+                while *band_position + 1 < row.len()
+                    && u32::from(row[*band_position + 1].source_x) <= global_x
+                {
+                    *band_position += 1;
+                }
+
+                let dictionary_index = row[*band_position].dictionary_index;
+                if dictionary_index == INDEX_SENTINEL {
+                    continue;
+                }
+                folded_region_ids.push(self.region_id_for_dictionary_index(dictionary_index)?);
             }
 
-            let color = self.color_for_dictionary_index(row[run_index].dictionary_index)?;
+            let color = if folded_region_ids.is_empty() {
+                BACKGROUND_BGR
+            } else {
+                color_bgr_for_region_id(mode_region_id(&folded_region_ids))
+            };
             let pixel_offset = output_x * 3;
             row_buffer[pixel_offset..pixel_offset + 3].copy_from_slice(&color);
         }
@@ -279,21 +307,26 @@ impl PabrMap {
         Ok(())
     }
 
-    fn color_for_dictionary_index(&self, dictionary_index: u16) -> Result<[u8; 3]> {
-        if dictionary_index == INDEX_SENTINEL {
-            return Ok([0, 0, 0]);
-        }
-
-        self.dictionary_colors_bgr
+    fn region_id_for_dictionary_index(&self, dictionary_index: u16) -> Result<u16> {
+        self.rid
+            .region_ids
             .get(usize::from(dictionary_index))
             .copied()
             .with_context(|| {
                 format!(
                     "dictionary index {} exceeds RID dictionary length {}",
                     dictionary_index,
-                    self.dictionary_colors_bgr.len()
+                    self.rid.region_ids.len()
                 )
             })
+    }
+
+    fn band_count(&self) -> Result<usize> {
+        if self.rid.native_width == 0 {
+            bail!("RID footer reported a zero native width");
+        }
+
+        Ok((u32::from(self.bkd.max_source_x) / self.rid.native_width) as usize + 1)
     }
 }
 
@@ -465,10 +498,10 @@ fn sample_source_row(output_y: u32, output_height: u32, source_rows: usize) -> u
     ((numerator / denominator) as usize).min(source_rows.saturating_sub(1))
 }
 
-fn sample_source_x(output_x: usize, output_width: u32) -> u16 {
-    let numerator = (output_x as u64 * 2 + 1) * 65536u64;
+fn sample_local_x(output_x: usize, output_width: u32, native_width: u32) -> u32 {
+    let numerator = (output_x as u64 * 2 + 1) * u64::from(native_width);
     let denominator = u64::from(output_width) * 2;
-    ((numerator / denominator) as u32).min(u32::from(u16::MAX)) as u16
+    ((numerator / denominator) as u32).min(native_width.saturating_sub(1))
 }
 
 fn color_bgr_for_region_id(region_id: u16) -> [u8; 3] {
@@ -483,6 +516,27 @@ fn color_bgr_for_region_id(region_id: u16) -> [u8; 3] {
     let green = 64 + ((state >> 8) as u8 & 0x7F);
     let blue = 64 + (state as u8 & 0x7F);
     [blue, green, red]
+}
+
+fn mode_region_id(region_ids: &[u16]) -> u16 {
+    let mut best_id = region_ids[0];
+    let mut best_count = 1usize;
+
+    for &candidate in region_ids {
+        let mut count = 0usize;
+        for &value in region_ids {
+            if value == candidate {
+                count += 1;
+            }
+        }
+
+        if count > best_count || (count == best_count && candidate < best_id) {
+            best_id = candidate;
+            best_count = count;
+        }
+    }
+
+    best_id
 }
 
 fn read_u16(bytes: &[u8], offset: usize) -> Result<u16> {
@@ -508,8 +562,8 @@ fn read_u32(bytes: &[u8], offset: usize) -> Result<u32> {
 #[cfg(test)]
 mod tests {
     use super::{
-        color_bgr_for_region_id, sample_source_row, sample_source_x, BkdFile, Breakpoint,
-        OutputDimensions, PabrMap, RidFile, RID_FOOTER_LEN, RID_FOOTER_SIGNATURE,
+        color_bgr_for_region_id, mode_region_id, sample_local_x, sample_source_row, BkdFile,
+        Breakpoint, OutputDimensions, PabrMap, RidFile, RID_FOOTER_LEN, RID_FOOTER_SIGNATURE,
     };
 
     fn make_rid_bytes(region_ids: &[u16], width: u16, height: u16, prefix: &[u8]) -> Vec<u8> {
@@ -579,7 +633,6 @@ mod tests {
                 trailer_words: [0, 24, 0],
                 max_source_x: 32768,
             },
-            dictionary_colors_bgr: vec![color_bgr_for_region_id(4), color_bgr_for_region_id(17)],
         }
     }
 
@@ -650,8 +703,8 @@ mod tests {
 
     #[test]
     fn sampling_uses_pixel_centers() {
-        assert_eq!(sample_source_x(0, 4), 8192);
-        assert_eq!(sample_source_x(3, 4), 57344);
+        assert_eq!(sample_local_x(0, 4, 11560), 1445);
+        assert_eq!(sample_local_x(3, 4, 11560), 10115);
         assert_eq!(sample_source_row(0, 4, 2), 0);
         assert_eq!(sample_source_row(3, 4, 2), 1);
     }
@@ -675,5 +728,11 @@ mod tests {
         };
         assert_eq!(dimensions.width, 128);
         assert_eq!(dimensions.height, 64);
+    }
+
+    #[test]
+    fn mode_prefers_majority_then_lowest_region_id() {
+        assert_eq!(mode_region_id(&[9, 4, 9, 4, 4]), 4);
+        assert_eq!(mode_region_id(&[9, 4]), 4);
     }
 }

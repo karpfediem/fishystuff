@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use archive::{ArchiveIndex, ExtractOptions};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand};
-use pabr::PabrMap;
+use pabr::{PabrMap, DEFAULT_ROW_SHIFT};
 
 const VERSION_HEADER: &str =
     "pazifista - tool for extracting Black Desert Online archives and decoding PABR region maps.";
@@ -87,6 +87,8 @@ struct PabrRenderCli {
     height: Option<u32>,
     #[arg(long = "scale", value_name = "factor")]
     scale: Option<f32>,
+    #[arg(long = "row-shift", value_name = "value", default_value_t = DEFAULT_ROW_SHIFT)]
+    row_shift: u32,
     #[arg(short = 'q')]
     quiet: bool,
 }
@@ -171,6 +173,7 @@ fn run_pabr(cli: PabrCli) -> Result<()> {
                 "Native size: {}x{}",
                 inspect.native_width, inspect.native_height
             );
+            println!("Wrapped bands: {}", inspect.wrapped_bands);
             println!("Dictionary entries: {}", inspect.dictionary_entries);
             println!("Scanline rows: {}", inspect.scanline_rows);
             println!(
@@ -199,12 +202,13 @@ fn run_pabr(cli: PabrCli) -> Result<()> {
             let map = load_pabr_map(&args.input_file)?;
             let output_path = normalize_output_path(&args.output)?;
             let dimensions = map.resolve_output_dimensions(args.width, args.height, args.scale)?;
-            let summary = map.render_bmp(&output_path, dimensions)?;
+            let summary = map.render_bmp(&output_path, dimensions, args.row_shift)?;
 
             if !args.quiet {
                 println!("{VERSION_HEADER}");
                 println!("RID file: {}", map.rid_path.display());
                 println!("BKD file: {}", map.bkd_path.display());
+                println!("Row shift: {}", args.row_shift);
                 println!(
                     "Rendered BMP: {} ({}x{})",
                     summary.output_path.display(),
