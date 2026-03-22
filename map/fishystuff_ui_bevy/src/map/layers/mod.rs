@@ -3,6 +3,8 @@ mod runtime;
 
 use crate::map::spaces::layer_transform::{LayerTransform, WorldTransform};
 use crate::map::spaces::world::MapToWorld;
+use crate::map::spaces::{LayerPoint, LayerRect};
+use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 
 pub use registry::LayerRegistry;
 pub use runtime::{LayerManifestStatus, LayerRuntime, LayerRuntimeState, LayerSettings};
@@ -135,8 +137,54 @@ impl LayerSpec {
         self.kind == LayerKind::TiledRaster
     }
 
+    pub fn streams_raster_tiles(&self) -> bool {
+        self.is_raster() && self.static_image_url().is_none()
+    }
+
     pub fn is_vector(&self) -> bool {
         self.kind == LayerKind::VectorGeoJson
+    }
+
+    pub fn static_image_url(&self) -> Option<String> {
+        if self.kind == LayerKind::TiledRaster
+            && self.pick_mode == PickMode::ExactTilePixel
+            && self.key == "zone_mask"
+        {
+            resolve_public_asset_url(
+                Some("/images/zones_mask_v1.png"),
+                normalize_public_base_url(None).as_deref(),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn static_layer_bounds(&self, map_to_world: MapToWorld) -> Option<LayerRect> {
+        let _ = self.static_image_url()?;
+        match self.transform {
+            LayerTransform::IdentityMapSpace | LayerTransform::AffineToMap(_) => {
+                let world_transform = self.world_transform(map_to_world)?;
+                let corners = map_to_world
+                    .map_bounds()
+                    .corners()
+                    .map(|corner| world_transform.map_to_layer(corner));
+                let mut min_x = f64::INFINITY;
+                let mut min_y = f64::INFINITY;
+                let mut max_x = f64::NEG_INFINITY;
+                let mut max_y = f64::NEG_INFINITY;
+                for corner in corners {
+                    min_x = min_x.min(corner.x);
+                    min_y = min_y.min(corner.y);
+                    max_x = max_x.max(corner.x);
+                    max_y = max_y.max(corner.y);
+                }
+                Some(LayerRect {
+                    min: LayerPoint::new(min_x, min_y),
+                    max: LayerPoint::new(max_x, max_y),
+                })
+            }
+            LayerTransform::AffineToWorld(_) => None,
+        }
     }
 
     pub fn exact_lookup_url(&self) -> Option<String> {
@@ -145,7 +193,13 @@ impl LayerSpec {
         }
         let version = self.tileset_version.trim();
         let version = if version.is_empty() { "v1" } else { version };
-        Some(format!("/images/exact_lookup/{}.{}.bin", self.key, version))
+        resolve_public_asset_url(
+            Some(&format!(
+                "/images/exact_lookup/{}.{}.bin",
+                self.key, version
+            )),
+            normalize_public_base_url(None).as_deref(),
+        )
     }
 }
 
@@ -275,5 +329,10 @@ mod tests {
             layer.exact_lookup_url().as_deref(),
             Some("/images/exact_lookup/zone_mask.v1.bin")
         );
+        assert_eq!(
+            layer.static_image_url().as_deref(),
+            Some("/images/zones_mask_v1.png")
+        );
+        assert!(!layer.streams_raster_tiles());
     }
 }

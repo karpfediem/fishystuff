@@ -210,7 +210,15 @@ if [ "${REBUILD_MINIMAP_PYRAMID:-0}" = "1" ]; then
     --y-flip
 fi
 
-zone_lookup_source_image="${ZONE_LOOKUP_SOURCE_IMAGE:-$CDN_IMAGE_ASSET_DIR/zones_mask_v1.png}"
+zone_mask_source_image="${ZONE_MASK_SOURCE_IMAGE:-$(first_existing_path \
+  data/imagery/zones_mask_2025_12.png \
+  "$CDN_IMAGE_ASSET_DIR/zones_mask_v1.png")}"
+zone_mask_cdn_image="$CDN_IMAGE_ASSET_DIR/zones_mask_v1.png"
+if [ -f "$zone_mask_source_image" ] && [ "$zone_mask_source_image" != "$zone_mask_cdn_image" ] && { [ ! -f "$zone_mask_cdn_image" ] || [ "$zone_mask_source_image" -nt "$zone_mask_cdn_image" ]; }; then
+  cp -f "$zone_mask_source_image" "$zone_mask_cdn_image"
+fi
+
+zone_lookup_source_image="${ZONE_LOOKUP_SOURCE_IMAGE:-$zone_mask_cdn_image}"
 zone_lookup_out_dir="$CDN_IMAGE_ASSET_DIR/exact_lookup"
 zone_lookup_output="$zone_lookup_out_dir/zone_mask.v1.bin"
 if [ -f "$zone_lookup_source_image" ] && { [ "${REBUILD_ZONE_LOOKUP:-0}" = "1" ] || [ ! -f "$zone_lookup_output" ] || [ "$zone_lookup_source_image" -nt "$zone_lookup_output" ]; }; then

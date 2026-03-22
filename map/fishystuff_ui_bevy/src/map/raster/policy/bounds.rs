@@ -281,7 +281,7 @@ pub(crate) fn compute_cache_budget(
     let sum = layer_registry
         .ordered()
         .iter()
-        .filter(|layer| layer.is_raster() && layer_runtime.visible(layer.id))
+        .filter(|layer| layer.streams_raster_tiles() && layer_runtime.visible(layer.id))
         .map(|layer| layer.lod_policy.max_resident_tiles)
         .sum::<usize>();
     if sum == 0 {

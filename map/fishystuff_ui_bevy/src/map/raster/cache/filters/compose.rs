@@ -1,5 +1,6 @@
 use fishystuff_core::masks::pack_rgb_u32;
 
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerId, LayerRegistry, LayerSpec};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::LayerPoint;
@@ -20,6 +21,7 @@ pub(super) struct RasterVisualComposeContext<'a> {
     pub(super) hover_zone_rgb: Option<u32>,
     pub(super) clip_mask_layer: Option<LayerId>,
     pub(super) layer_registry: &'a LayerRegistry,
+    pub(super) exact_lookups: &'a ExactLookupCache,
     pub(super) tile_cache: &'a RasterTileCache,
     pub(super) vector_runtime: &'a VectorLayerRuntime,
     pub(super) map_version: Option<&'a str>,
@@ -45,6 +47,7 @@ pub(super) fn compose_raster_visuals_in_place(
         hover_zone_rgb,
         clip_mask_layer,
         layer_registry,
+        exact_lookups,
         tile_cache,
         vector_runtime,
         map_version,
@@ -100,6 +103,7 @@ pub(super) fn compose_raster_visuals_in_place(
                 mask_layer_id,
                 world_point,
                 layer_registry,
+                exact_lookups,
                 tile_cache,
                 vector_runtime,
                 filter,

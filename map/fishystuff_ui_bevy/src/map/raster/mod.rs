@@ -2,6 +2,7 @@ pub mod cache;
 pub mod manifest;
 pub mod policy;
 pub mod runtime;
+mod static_image;
 
 pub use crate::map::streaming::TileKey;
 pub(crate) use cache::{
@@ -24,3 +25,4 @@ pub(crate) use policy::{
     StartTileRequests, TileFrameClock, TileResidencyState, REQUEST_REFRESH_INTERVAL_FRAMES,
 };
 pub(crate) use runtime::build_plugin;
+pub(crate) use static_image::StaticRasterCache;

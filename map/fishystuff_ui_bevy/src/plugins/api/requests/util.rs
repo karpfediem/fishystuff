@@ -3,12 +3,10 @@ use fishystuff_api::models::layers::LayersResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::ZoneStatsRequest;
 use fishystuff_api::Rgb;
-use fishystuff_core::asset_urls::normalize_site_asset_path;
 
 use super::super::state::{ApiBootstrapState, PatchFilterState};
+pub(crate) use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 
-#[cfg(target_arch = "wasm32")]
-const PROD_CDN_BASE_URL: &str = "https://cdn.fishystuff.fish";
 #[cfg(target_arch = "wasm32")]
 const PROD_API_BASE_URL: &str = "https://api.fishystuff.fish";
 
@@ -89,44 +87,6 @@ pub(super) fn build_zone_stats_request(
     })
 }
 
-pub(crate) fn resolve_public_asset_url(
-    value: Option<&str>,
-    public_base_url: Option<&str>,
-) -> Option<String> {
-    let normalized = normalize_site_asset_path(value?);
-    let raw = normalized.trim();
-    if raw.is_empty() {
-        return None;
-    }
-    if raw.starts_with("http://") || raw.starts_with("https://") {
-        return Some(raw.to_string());
-    }
-    if raw.starts_with('/') {
-        if let Some(base) = public_base_url {
-            let base = base.trim_end_matches('/');
-            if !base.is_empty() {
-                return Some(format!("{base}{raw}"));
-            }
-        }
-        return Some(raw.to_string());
-    }
-    let base = public_base_url?.trim_end_matches('/');
-    if base.is_empty() {
-        return None;
-    }
-    let path = raw.trim_start_matches('/');
-    Some(format!("{base}/{path}"))
-}
-
-pub(crate) fn normalize_public_base_url(value: Option<&str>) -> Option<String> {
-    if let Some(raw) = value.map(str::trim) {
-        if !raw.is_empty() {
-            return Some(raw.trim_end_matches('/').to_string());
-        }
-    }
-    fallback_public_base_url()
-}
-
 #[cfg(target_arch = "wasm32")]
 pub(super) fn resolve_api_request_url(path: &str) -> String {
     #[cfg(target_arch = "wasm32")]
@@ -194,21 +154,6 @@ fn normalize_vector_cache_key(revision: Option<&str>, map_asset_cache_key: Optio
         return revision.to_string();
     }
     String::new()
-}
-
-fn fallback_public_base_url() -> Option<String> {
-    #[cfg(target_arch = "wasm32")]
-    {
-        if let Some(configured) = browser_global_base_url("__fishystuffCdnBaseUrl") {
-            return Some(configured);
-        }
-        return Some(PROD_CDN_BASE_URL.to_string());
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        None
-    }
 }
 
 #[cfg(target_arch = "wasm32")]

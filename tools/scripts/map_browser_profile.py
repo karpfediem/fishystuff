@@ -340,7 +340,9 @@ def main() -> int:
     probe_page(args.url)
 
     devtools_port = pick_free_tcp_port()
-    with tempfile.TemporaryDirectory(prefix="fishystuff-map-profile-") as temp_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="fishystuff-map-profile-", ignore_cleanup_errors=True
+    ) as temp_dir:
         temp_root = Path(temp_dir)
         stderr_path = temp_root / "chromium.stderr.log"
         stdout_path = temp_root / "chromium.stdout.log"

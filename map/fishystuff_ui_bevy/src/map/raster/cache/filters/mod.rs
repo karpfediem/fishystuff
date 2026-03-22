@@ -2,6 +2,7 @@ mod clip_mask;
 mod compose;
 
 use crate::map::camera::mode::ViewMode;
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
 use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
@@ -18,6 +19,7 @@ pub(crate) struct VisualFilterContext<'a> {
     pub(crate) hover_zone_rgb: Option<u32>,
     pub(crate) layer_registry: &'a LayerRegistry,
     pub(crate) layer_runtime: &'a LayerRuntime,
+    pub(crate) exact_lookups: &'a ExactLookupCache,
     pub(crate) vector_runtime: &'a VectorLayerRuntime,
     pub(crate) map_version: Option<&'a str>,
     pub(crate) view_mode: ViewMode,
@@ -36,6 +38,7 @@ impl RasterTileCache {
             hover_zone_rgb,
             layer_registry,
             layer_runtime,
+            exact_lookups,
             vector_runtime,
             map_version,
             view_mode,
@@ -169,6 +172,7 @@ impl RasterTileCache {
                         hover_zone_rgb: target_hover_zone,
                         clip_mask_layer,
                         layer_registry,
+                        exact_lookups,
                         tile_cache: self,
                         vector_runtime,
                         map_version,

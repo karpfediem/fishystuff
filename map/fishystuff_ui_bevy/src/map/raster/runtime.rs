@@ -2,6 +2,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::window::PrimaryWindow;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerManifestStatus, LayerRegistry, LayerRuntime, PickMode};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{WorldPoint, WorldRect};
@@ -36,9 +37,14 @@ pub(crate) fn build_plugin(app: &mut App) {
         .init_resource::<PendingLayerManifests>()
         .init_resource::<crate::map::streaming::TileStreamer>()
         .init_resource::<RasterTileCache>()
+        .init_resource::<ExactLookupCache>()
+        .init_resource::<super::StaticRasterCache>()
         .init_resource::<TileStats>()
         .init_resource::<TileDebugControls>()
-        .add_systems(Update, update_tiles);
+        .add_systems(
+            Update,
+            (update_tiles, super::static_image::update_static_images).chain(),
+        );
 }
 
 #[derive(SystemParam)]
@@ -70,6 +76,7 @@ struct RasterUpdateContext<'w, 's> {
     time: Res<'w, Time>,
     evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
+    exact_lookups: Res<'w, ExactLookupCache>,
 }
 
 fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
@@ -106,6 +113,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     let time = &ctx.time;
     let evidence_zone_filter = &ctx.evidence_zone_filter;
     let vector_runtime = &ctx.vector_runtime;
+    let exact_lookups = &ctx.exact_lookups;
 
     layer_runtime.sync_to_registry(layer_registry);
 
@@ -227,6 +235,12 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
 
         if !layer.is_raster() {
             runtime_state.manifest_status = LayerManifestStatus::Missing;
+            streamer.clear_layer(layer.id);
+            view_state.per_layer.remove(&layer.id);
+            continue;
+        }
+
+        if !layer.streams_raster_tiles() {
             streamer.clear_layer(layer.id);
             view_state.per_layer.remove(&layer.id);
             continue;
@@ -410,7 +424,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         state.clip_mask_layer.is_some()
             && layer_registry
                 .get(layer_id)
-                .map(|layer| layer.is_raster())
+                .map(|layer| layer.streams_raster_tiles())
                 .unwrap_or(false)
     });
     let should_sync_visual_filters = view_mode.mode == ViewMode::Map2D
@@ -431,6 +445,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
                 hover_zone_rgb: display_state.hovered_zone_rgb,
                 layer_registry,
                 layer_runtime,
+                exact_lookups,
                 vector_runtime,
                 map_version: bootstrap.map_version.as_deref(),
                 view_mode: view_mode.mode,
