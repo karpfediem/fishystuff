@@ -23,13 +23,15 @@ This note keeps the latest direction visible without rereading the full task his
   - tile size: `2048`
   - single level: `z=0`
   - exact hover/click and exact clip semantics still come from the exact-lookup asset, not from the visual tiles.
-- The custom GPU hover-highlight material experiment was backed out.
+- The earlier custom GPU hover-highlight experiment was unstable and was backed out.
   - It caused a browser-side wgpu/WebGL panic and blank map output in the integrated shell.
-- The current stable path keeps the zone-mask visual on fixed display chunks and only reruns CPU visual filtering when relevant state actually changes.
+- The current hover path is now hybrid:
   - exact lookup still determines which zone is hovered
   - the filter path is no longer called every 2D frame while idle
-  - hover-only changes now update just the old/new zone spans inside a tile instead of cloning and recomposing full tile images
-  - hover-only updates are now also targeted to just the tiles that contain the old/new hovered zones instead of scanning every ready visible exact tile
+  - small hover transitions still use the targeted CPU span-delta path because it remains the fastest local-case path
+  - larger hover transitions now switch to a per-tile shader overlay instead of rewriting tile textures
+  - the shader overlay uses the layer's actual depth plus a small bias, so variable display order still works
+  - clip-mask and evidence-filter cases still fall back to the compose path until the overlay path can support them directly
 
 ## Current diagnosis
 
@@ -42,15 +44,18 @@ This note keeps the latest direction visible without rereading the full task his
   - exact lookup is cheap, bounded, and independent
   - visual raster work is measured and bounded separately
   - bridge work stays coarse and batched
-- Current measured result of the stable recovered path:
+- Current measured result of the current hybrid path:
   - browser smoke passes again and the map is visible
   - previous `zone_mask_hover_sweep` baseline was `9.653 ms` avg with `46.0 ms` p95
   - first hover optimization reduced `zone_mask_hover_sweep` to `4.635 ms` avg with `9.6 ms` p95
-  - current targeted hover path reduces `zone_mask_hover_sweep` again to `3.026 ms` avg with `6.2 ms` p95
+  - previous targeted hover path reduced `zone_mask_hover_sweep` to `3.026 ms` avg with `6.2 ms` p95
+  - current hybrid hover path reduces `zone_mask_hover_sweep` further to `2.684 ms` avg with `4.5 ms` p95
+  - new `zone_mask_hover_far_jumps` browser scenario is `2.905 ms` avg with `5.0 ms` p95
   - `raster.sync_visual_filters` dropped from `353.5 ms` total to `17.2 ms`, then to `13.8 ms`
-  - `raster.update_tiles` dropped from `81.3 ms` total to `32.4 ms` after the targeted hover-only path
-  - top hover spans are now `raster.update_tiles`, `raster.sync_visual_filters`, and `raster.desired_tile_set_build`
-  - this survives the integrated browser path without the GPU-material instability
+  - `raster.update_tiles` is now `22.0 ms` total on `zone_mask_hover_sweep`
+  - `raster.sync_visual_filters` is now `2.2 ms` total on `zone_mask_hover_sweep`
+  - top hover spans are now `raster.update_tiles`, `raster.visible_tile_computation`, and `raster.desired_tile_set_build`
+  - the shader path is stable in the integrated browser shell, but only engaged when the hover transition fans out beyond a tile threshold
 - Current integrated vector activation result on the same zone-mask path:
   - latest `vector_region_groups_enable` frame avg is `7.835 ms`
   - top spans are `vector.layer_update`, `vector.geojson_parse`, then host/bridge patch ingest
@@ -94,6 +99,8 @@ Backend-neutral stages:
 - Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
 - Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs
 - Hover-only visual updates now use a zone-to-tile index so only tiles containing the old/new hovered zones are touched
+- Larger hover fanout now uses a per-tile `Material2d` overlay driven by the loaded zone-mask texture instead of CPU texture rewrites
+- Browser profiling now includes a `zone_mask_hover_far_jumps` scenario for large-distance hover transitions
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
 Current generated lookup asset:
@@ -108,12 +115,12 @@ Current generated lookup asset:
 1. Keep exact semantics off the visual raster path.
    - no reintroduction of pick-probe tile fetches
    - exact hover/click should stay available even when visual raster is still converging
-2. Reduce the remaining cost of the stable CPU hover-highlight path.
-   - exact lookup should remain the semantic source
-   - keep the filter path change-driven, not per-frame
-   - prefer span/delta updates over whole-image rewrites
-   - prefer targeted tile updates over scanning all visible exact tiles
-   - if we revisit a GPU path later, it must survive the integrated browser shell first
+2. Reduce the remaining hover cost without regressing the local fast path.
+  - exact lookup should remain the semantic source
+  - keep the filter path change-driven, not per-frame
+  - keep the CPU span/delta path for small hover transitions
+  - use the shader overlay only where it is measurably better
+  - next tuning knob is the tile-fanout threshold that switches between the two
 3. Reduce the remaining visual raster working set.
    - the current pre-capture busy layers are still `zone_mask` and `minimap`
    - continue measuring busy-layer counts before and after each change
@@ -136,10 +143,10 @@ Current generated lookup asset:
    - visual tile fetch/decode
    - visual tile upload
    - bridge event flush
-5. Attack the next measured hotspot after this recovery point.
-   - current top activation hotspot: `vector.layer_update`
-   - current top hover hotspots: `raster.update_tiles` and `raster.sync_visual_filters`
-   - current remaining raster source: `minimap`
+5. Attack the next measured hotspot after the hover-path split.
+  - current top activation hotspot: `vector.layer_update`
+  - current top hover hotspots: `raster.update_tiles`, `raster.visible_tile_computation`, and `raster.desired_tile_set_build`
+  - current remaining raster source: `minimap`
 6. Only after the single-threaded pipeline is clean, revisit worker/thread options.
 
 ## Non-goals for this phase

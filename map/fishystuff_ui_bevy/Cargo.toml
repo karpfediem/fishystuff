@@ -8,8 +8,12 @@ license = "MIT"
 anyhow = { workspace = true }
 async-channel = "2"
 base64 = "0.22"
+bevy_asset = { version = "0.18", default-features = false }
 bevy_flair = "0.7"
+bevy_image = { version = "0.18", default-features = false }
+bevy_render = { version = "0.18", default-features = false }
 clap = { workspace = true, features = ["derive"] }
+encase = "0.12"
 earcutr = "0.4"
 fishystuff_api = { path = "../../lib/fishystuff_api" }
 fishystuff_client = { path = "../../lib/fishystuff_client" }

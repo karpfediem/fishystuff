@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
             "vector_region_groups_enable",
             "vector_region_groups_dom_toggle",
             "zone_mask_hover_sweep",
+            "zone_mask_hover_far_jumps",
         ],
         help="Integrated browser profiling scenario to run.",
     )
@@ -80,6 +81,8 @@ def scenario_capture_frames(scenario: str, capture_frames: int | None) -> int:
     if scenario == "vector_region_groups_dom_toggle":
         return 180
     if scenario == "zone_mask_hover_sweep":
+        return 120
+    if scenario == "zone_mask_hover_far_jumps":
         return 120
     return 0
 
@@ -308,7 +311,31 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   return report;
 }})()
 """.strip()
-    if scenario == "zone_mask_hover_sweep":
+    if scenario in {"zone_mask_hover_sweep", "zone_mask_hover_far_jumps"}:
+        hover_points = (
+            """
+  const hoverPoints = [
+    [0.20, 0.24],
+    [0.33, 0.30],
+    [0.46, 0.36],
+    [0.59, 0.42],
+    [0.72, 0.48],
+  ];
+"""
+            if scenario == "zone_mask_hover_sweep"
+            else """
+  const hoverPoints = [
+    [0.12, 0.18],
+    [0.84, 0.18],
+    [0.18, 0.76],
+    [0.82, 0.74],
+    [0.50, 0.24],
+    [0.24, 0.54],
+    [0.74, 0.56],
+    [0.50, 0.80],
+  ];
+"""
+        )
         return f"""
 (async () => {{
   const bridge = globalThis.window?.FishyMapBridge ?? null;
@@ -326,7 +353,7 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   }}
   const settle = await waitForRasterIdle();
   bridge.resetPerformanceSnapshot({{
-    scenario: "zone_mask_hover_sweep",
+    scenario: "{scenario}",
     warmupFrames: 0,
   }});
   const dispatchHover = (fx, fy) => {{
@@ -341,13 +368,7 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
       buttons: 0,
     }}));
   }};
-  const hoverPoints = [
-    [0.20, 0.24],
-    [0.33, 0.30],
-    [0.46, 0.36],
-    [0.59, 0.42],
-    [0.72, 0.48],
-  ];
+{hover_points}
   for (const [fx, fy] of hoverPoints) {{
     dispatchHover(fx, fy);
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));

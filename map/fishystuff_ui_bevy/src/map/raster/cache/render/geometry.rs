@@ -22,7 +22,7 @@ pub(super) fn needs_affine_quad(layer: &LayerSpec, world_transform: WorldTransfo
         || matches!(layer.transform, LayerTransform::AffineToMap(_))
 }
 
-pub(super) fn tile_quad_mesh(
+pub(crate) fn tile_quad_mesh(
     key: &TileKey,
     layer: &LayerSpec,
     tile_space: TileSpace,
