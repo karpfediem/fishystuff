@@ -292,4 +292,55 @@ mod tests {
             Some("/images/exact_lookup/zone_mask.v1.bin")
         );
     }
+
+    #[test]
+    fn minimap_visual_tiles_are_overridden_to_map_space_display_chunks() {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![LayerDescriptor {
+                layer_id: "minimap".to_string(),
+                name: "Minimap".to_string(),
+                enabled: true,
+                kind: LayerKindDto::TiledRaster,
+                transform: LayerTransformDto::AffineToWorld {
+                    a: 100.0,
+                    b: 0.0,
+                    tx: 0.0,
+                    c: 0.0,
+                    d: 100.0,
+                    ty: 0.0,
+                },
+                tileset: TilesetRef {
+                    manifest_url: "/images/tiles/minimap/v1/tileset.json".to_string(),
+                    tile_url_template: "/images/tiles/minimap/v1/{level}/rader_{x}_{y}.png"
+                        .to_string(),
+                    version: "v1".to_string(),
+                },
+                tile_px: 128,
+                max_level: 6,
+                y_flip: true,
+                vector_source: None,
+                lod_policy: LodPolicyDto::default(),
+                ui: LayerUiInfo::default(),
+                request_weight: 1.0,
+                pick_mode: "none".to_string(),
+            }],
+        });
+
+        let layer = registry.ordered().first().expect("minimap layer");
+        assert!(matches!(layer.transform, LayerTransform::IdentityMapSpace));
+        assert_eq!(
+            layer.tileset_url,
+            "/images/tiles/minimap_visual/v1/tileset.json"
+        );
+        assert_eq!(
+            layer.tile_url_template,
+            "/images/tiles/minimap_visual/v1/{z}/{x}_{y}.png"
+        );
+        assert_eq!(layer.tile_px, 2048);
+        assert_eq!(layer.max_level, 0);
+        assert!(!layer.y_flip);
+    }
 }

@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
         "scenario",
         choices=[
             "load_map",
+            "minimap_enable",
             "vector_region_groups_enable",
             "vector_region_groups_dom_toggle",
             "zone_mask_hover_sweep",
@@ -76,6 +77,8 @@ def scenario_capture_frames(scenario: str, capture_frames: int | None) -> int:
         return max(0, capture_frames)
     if scenario == "load_map":
         return 0
+    if scenario == "minimap_enable":
+        return 120
     if scenario == "vector_region_groups_enable":
         return 180
     if scenario == "vector_region_groups_dom_toggle":
@@ -265,6 +268,50 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     capture_frames_target: {capture_frames},
     completed_frames: frameWait.completedFrames,
     frame_wait_timed_out: frameWait.timedOut,
+  }};
+  return report;
+}})()
+""".strip()
+    if scenario == "minimap_enable":
+        return f"""
+(async () => {{
+  const bridge = globalThis.window?.FishyMapBridge ?? null;
+  if (!bridge?.resetPerformanceSnapshot || !bridge?.setState || !bridge?.getCurrentState) {{
+    throw new Error("FishyMapBridge profiling API is unavailable");
+  }}
+  const state = bridge.getCurrentState();
+  const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
+  const targetLayer = layers.find((layer) => layer?.layerId === "minimap") || null;
+  if (!targetLayer?.layerId) {{
+    throw new Error("minimap layer is unavailable for profiling");
+  }}
+  const visibleLayerIds = Array.isArray(state?.filters?.layerIdsVisible)
+    ? state.filters.layerIdsVisible.slice()
+    : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId);
+  const withoutMinimap = visibleLayerIds.filter((layerId) => layerId !== targetLayer.layerId);
+  bridge.setState({{
+    filters: {{
+      layerIdsVisible: withoutMinimap,
+    }},
+  }});
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  bridge.resetPerformanceSnapshot({{
+    scenario: "minimap_enable",
+    warmupFrames: 0,
+  }});
+  bridge.setState({{
+    filters: {{
+      layerIdsVisible: withoutMinimap.concat([targetLayer.layerId]),
+    }},
+  }});
+  const frameWait = {wait_frames};
+  const report = bridge.getPerformanceSnapshot();
+  report.browser_action = {{
+    target_layer_id: targetLayer.layerId,
+    capture_frames_target: {capture_frames},
+    completed_frames: frameWait.completedFrames,
+    frame_wait_timed_out: frameWait.timedOut,
+    trigger: "set_state",
   }};
   return report;
 }})()

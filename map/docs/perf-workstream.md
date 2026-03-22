@@ -23,6 +23,12 @@ This note keeps the latest direction visible without rereading the full task his
   - tile size: `2048`
   - single level: `z=0`
   - exact hover/click and exact clip semantics still come from the exact-lookup asset, not from the visual tiles.
+- The visual `minimap` now also uses fixed display chunks:
+  - `/images/tiles/minimap_visual/v1/tileset.json`
+  - tile size: `2048`
+  - single level: `z=0`
+  - the old 128px multi-level `minimap` pyramid is no longer the runtime visual path
+  - the raw `rader_*` source tiles are now remapped offline into canonical map-space display tiles during `build_map.sh`
 - The earlier custom GPU hover-highlight experiment was unstable and was backed out.
   - It caused a browser-side wgpu/WebGL panic and blank map output in the integrated shell.
 - The current hover path is now hybrid:
@@ -40,6 +46,9 @@ This note keeps the latest direction visible without rereading the full task his
 - Exact/static assets must resolve through the configured public CDN base just like tiles and GeoJSON.
   - Site-root relative URLs (`/images/...`) are wrong in the integrated site shell and break both display tiles and exact-lookup hover.
 - Visual transport format and semantic lookup format must be treated as separate concerns.
+- The same rule now applies to minimap transport:
+  - the browser should not pay tens of thousands of tiny PNG decodes for a static visual layer
+  - coarse display chunks are the right shape for the current single-threaded Wasm baseline
 - The first stable target is:
   - exact lookup is cheap, bounded, and independent
   - visual raster work is measured and bounded separately
@@ -59,6 +68,13 @@ This note keeps the latest direction visible without rereading the full task his
 - Current integrated vector activation result on the same zone-mask path:
   - latest `vector_region_groups_enable` frame avg is `7.835 ms`
   - top spans are `vector.layer_update`, `vector.geojson_parse`, then host/bridge patch ingest
+- Current integrated minimap startup result after the coarse-display-tile cut:
+  - `load_map` frame avg improved from `52.558 ms` to `44.513 ms`
+  - `load_map` p95 improved from `209.1 ms` to `128.5 ms`
+  - `raster.update_tiles` dropped from `499.6 ms` total to `437.8 ms`
+  - `raster.tile_entity_update` dropped from `495.7 ms` total to `432.7 ms`
+  - the old `minimap/v1` runtime visual surface was `36,167` PNGs / about `1.09 GiB` on disk
+  - the new `minimap_visual/v1` runtime visual surface is `36` PNGs / about `118.9 MiB` on disk
 - The browser bridge is measurable but not the current dominant cost in these runs.
 
 ## Current module split
@@ -95,11 +111,16 @@ Backend-neutral stages:
 - `zone_mask` visual rendering now uses fixed display chunks instead of the old visual/semantic tile coupling
   - build output: `/images/tiles/zone_mask_visual/v1`
   - runtime override: `map/layers/registry.rs`
+- `minimap` visual rendering now uses fixed map-space display chunks instead of the old 128px decode-heavy pyramid
+  - build output: `/images/tiles/minimap_visual/v1`
+  - generator: `tools/fishystuff_tilegen/src/bin/minimap_display_tiles.rs`
+  - runtime override: `map/layers/registry.rs`
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame
 - Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
 - Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs
 - Hover-only visual updates now use a zone-to-tile index so only tiles containing the old/new hovered zones are touched
 - Larger hover fanout now uses a per-tile `Material2d` overlay driven by the loaded zone-mask texture instead of CPU texture rewrites
+- Browser profiling now includes a `minimap_enable` scenario for minimap visibility regressions after startup
 - Browser profiling now includes a `zone_mask_hover_far_jumps` scenario for large-distance hover transitions
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
@@ -122,7 +143,8 @@ Current generated lookup asset:
   - use the shader overlay only where it is measurably better
   - next tuning knob is the tile-fanout threshold that switches between the two
 3. Reduce the remaining visual raster working set.
-   - the current pre-capture busy layers are still `zone_mask` and `minimap`
+   - the biggest remaining startup spans are still `raster.update_tiles` and `raster.tile_entity_update`
+   - `minimap` is no longer the worst decode surface, but it still participates in raster startup cost
    - continue measuring busy-layer counts before and after each change
 4. Reduce browser vector activation cost now that the blank-screen regression is gone.
    - focus on `vector.layer_update`
@@ -146,7 +168,8 @@ Current generated lookup asset:
 5. Attack the next measured hotspot after the hover-path split.
   - current top activation hotspot: `vector.layer_update`
   - current top hover hotspots: `raster.update_tiles`, `raster.visible_tile_computation`, and `raster.desired_tile_set_build`
-  - current remaining raster source: `minimap`
+  - current startup raster hotspot after the minimap cut: `raster.update_tiles` / `raster.tile_entity_update`
+  - `minimap_enable` is now the dedicated browser regression scenario for that layer
 6. Only after the single-threaded pipeline is clean, revisit worker/thread options.
 
 ## Non-goals for this phase

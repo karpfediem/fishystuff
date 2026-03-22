@@ -218,14 +218,28 @@ if [ "${REBUILD_TERRAIN_DRAPE_MINIMAP:-0}" = "1" ]; then
     --texture-px 256 \
     --kind raster-visual
 fi
-if [ "${REBUILD_MINIMAP_PYRAMID:-0}" = "1" ]; then
-  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin minimap_pyramid -- \
-    --input-dir "$CDN_IMAGE_ASSET_DIR/tiles/minimap" \
-    --out-dir "$CDN_IMAGE_ASSET_DIR/tiles/minimap/v1" \
-    --tile-px 128 \
-    --max-level 8 \
-    --root-url /images/tiles/minimap/v1 \
-    --y-flip
+MINIMAP_DISPLAY_TILE_PX=2048
+minimap_display_source_dir="$CDN_IMAGE_ASSET_DIR/tiles/minimap"
+minimap_display_root="$CDN_IMAGE_ASSET_DIR/tiles/minimap_visual/v1"
+minimap_display_manifest="$minimap_display_root/tileset.json"
+minimap_display_manifest_tile_px=""
+if [ -f "$minimap_display_manifest" ]; then
+  minimap_display_manifest_tile_px="$(
+    read_json_u32_field "$minimap_display_manifest" "tile_size_px" || true
+  )"
+fi
+if [ -d "$minimap_display_source_dir" ] && {
+  [ "${REBUILD_MINIMAP_DISPLAY_TILES:-0}" = "1" ] ||
+  [ ! -f "$minimap_display_manifest" ] ||
+  [ "$minimap_display_manifest_tile_px" != "$MINIMAP_DISPLAY_TILE_PX" ] ||
+  find "$minimap_display_source_dir" -maxdepth 1 -name 'rader_*.png' -newer "$minimap_display_manifest" -print -quit | grep -q .
+}; then
+  rm -rf "$minimap_display_root"
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin minimap_display_tiles -- \
+    --input-dir "$minimap_display_source_dir" \
+    --out-dir "$minimap_display_root" \
+    --tile-px "$MINIMAP_DISPLAY_TILE_PX" \
+    --root-url /images/tiles/minimap_visual/v1
 fi
 
 zone_mask_source_image="${ZONE_MASK_SOURCE_IMAGE:-$(first_existing_path \

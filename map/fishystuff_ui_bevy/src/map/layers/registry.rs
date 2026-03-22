@@ -18,6 +18,7 @@ use super::{
 };
 
 const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
+const MINIMAP_VISUAL_TILE_PX: u32 = 2048;
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct LayerRegistry {
@@ -141,7 +142,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         pick_mode,
     } = descriptor;
 
-    let transform = layer_transform_from_dto(transform);
+    let mut transform = layer_transform_from_dto(transform);
     if WorldTransform::new(transform, MapToWorld::default()).is_none() {
         bevy::log::warn!(
             "dropping layer {} because transform is non-invertible",
@@ -168,6 +169,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
     let mut tile_url_template = normalize_site_asset_path(&tileset.tile_url_template);
     let mut tile_px = tile_px.max(1);
     let mut max_level = max_level;
+    let mut y_flip = y_flip;
     if kind == LayerKind::TiledRaster
         && pick_mode == PickMode::ExactTilePixel
         && layer_id == "zone_mask"
@@ -185,6 +187,23 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         .unwrap_or_else(|| "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png".to_string());
         tile_px = ZONE_MASK_VISUAL_TILE_PX;
         max_level = 0;
+    }
+    if kind == LayerKind::TiledRaster && layer_id == "minimap" {
+        let public_base = normalize_public_base_url(None);
+        tileset_url = resolve_public_asset_url(
+            Some("/images/tiles/minimap_visual/v1/tileset.json"),
+            public_base.as_deref(),
+        )
+        .unwrap_or_else(|| "/images/tiles/minimap_visual/v1/tileset.json".to_string());
+        tile_url_template = resolve_public_asset_url(
+            Some("/images/tiles/minimap_visual/v1/{z}/{x}_{y}.png"),
+            public_base.as_deref(),
+        )
+        .unwrap_or_else(|| "/images/tiles/minimap_visual/v1/{z}/{x}_{y}.png".to_string());
+        transform = LayerTransform::IdentityMapSpace;
+        tile_px = MINIMAP_VISUAL_TILE_PX;
+        max_level = 0;
+        y_flip = false;
     }
 
     Some(LayerSpec {

@@ -116,6 +116,10 @@ The single-threaded-web baseline and future threading constraints are recorded i
   ```bash
   tools/scripts/map-browser-profile.sh vector_region_groups_enable
   ```
+- Run the minimap visibility scenario that exercises the integrated browser path after startup:
+  ```bash
+  tools/scripts/map-browser-profile.sh minimap_enable
+  ```
 - Run the real page-shell DOM toggle scenario that exercises `loader.js` plus the bridge:
   ```bash
   tools/scripts/map-browser-profile.sh vector_region_groups_dom_toggle
