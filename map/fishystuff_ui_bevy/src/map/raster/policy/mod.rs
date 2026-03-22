@@ -263,66 +263,6 @@ mod tests {
     }
 
     #[test]
-    fn exact_pick_layers_can_render_coarser_manifest_levels() {
-        let mut layer = test_layer(0);
-        layer.pick_mode = PickMode::ExactTilePixel;
-        layer.lod_policy.target_tiles = 10;
-        layer.lod_policy.hysteresis_hi = 12.0;
-        layer.lod_policy.hysteresis_lo = 6.0;
-        layer.lod_policy.enable_refine = false;
-
-        let tileset = full_tileset(3);
-        let world_transform = crate::map::spaces::layer_transform::WorldTransform::new(
-            LayerTransform::IdentityMapSpace,
-            crate::map::spaces::world::MapToWorld::default(),
-        )
-        .expect("identity transform");
-        let mut runtime = crate::map::layers::LayerRuntimeState {
-            visible: true,
-            opacity: 1.0,
-            clip_mask_layer: None,
-            z_base: 0.0,
-            display_order: 0,
-            current_base_lod: None,
-            current_detail_lod: None,
-            last_view_update_frame: 0,
-            visible_tile_count: 0,
-            resident_tile_count: 0,
-            pending_count: 0,
-            inflight_count: 0,
-            manifest_status: crate::map::layers::LayerManifestStatus::Ready,
-            vector_status: crate::map::layers::LayerVectorStatus::Inactive,
-            vector_progress: 0.0,
-            vector_fetched_bytes: 0,
-            vector_feature_count: 0,
-            vector_features_processed: 0,
-            vector_polygon_count: 0,
-            vector_multipolygon_count: 0,
-            vector_hole_ring_count: 0,
-            vector_vertex_count: 0,
-            vector_triangle_count: 0,
-            vector_build_ms: 0.0,
-            vector_last_frame_build_ms: 0.0,
-            vector_cache_hits: 0,
-            vector_cache_misses: 0,
-            vector_cache_last_hit: false,
-            vector_cache_entries: 0,
-        };
-        let desired = compute_desired_layer_tiles(DesiredTileComputation {
-            layer: &layer,
-            tileset: &tileset,
-            world_transform,
-            view_world: crate::map::spaces::world::MapToWorld::default().world_bounds(),
-            map_version: 1,
-            frame: 0,
-            runtime: &mut runtime,
-            previous: None,
-        });
-
-        assert_eq!(desired.base.map(|bounds| bounds.z), Some(2));
-    }
-
-    #[test]
     fn coarse_pinning_marks_root_as_protected() {
         let layer = test_layer(3);
         let tileset = full_tileset(3);

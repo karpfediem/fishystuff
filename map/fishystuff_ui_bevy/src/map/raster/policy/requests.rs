@@ -105,7 +105,7 @@ pub(crate) fn build_layer_requests(input: LayerRequestBuild<'_>) -> BuildResult 
         .collect();
     ancestor_keys.sort_by_key(|key| (key.z, key.ty, key.tx));
     for key in ancestor_keys {
-        if cache.contains_live(&key) {
+        if cache.contains(&key) {
             cache_hits = cache_hits.saturating_add(1);
             *cache_hits_by_level.entry(key.z).or_default() += 1;
             continue;
@@ -243,7 +243,7 @@ fn build_requests_for_bounds(input: BoundsRequestBuild<'_>) -> BuildResult {
                 tx,
                 ty,
             };
-            if cache.contains_live(&key) {
+            if cache.contains(&key) {
                 cache_hits += 1;
                 continue;
             }
@@ -311,7 +311,7 @@ pub(crate) fn start_tile_requests(input: StartTileRequests<'_>) {
         let Some(req) = streamer.next_request() else {
             break;
         };
-        if cache.contains_live(&req.key) {
+        if cache.contains(&req.key) {
             continue;
         }
         let Some(layer) = layer_registry.get(req.key.layer) else {
@@ -411,147 +411,4 @@ pub fn queue_pick_probe_request(
         kind: RequestKind::PickProbe,
     };
     streamer.push_request(request);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{build_requests_for_bounds, BoundsRequestBuild};
-    use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
-    use crate::map::raster::cache::{RasterTileCache, TileState};
-    use crate::map::raster::manifest::{LevelInfo, LoadedTileset};
-    use crate::map::spaces::layer_transform::LayerTransform;
-    use crate::map::streaming::{RequestKind, TileKey};
-    use bevy::prelude::Handle;
-
-    fn full_level(z: i32) -> LevelInfo {
-        LevelInfo {
-            z,
-            min_x: 0,
-            min_y: 0,
-            max_x: 0,
-            max_y: 0,
-            width: 1,
-            height: 1,
-            tile_count: 1,
-            occupancy: vec![1],
-        }
-    }
-
-    fn test_tileset() -> LoadedTileset {
-        LoadedTileset {
-            tile_px: 512,
-            max_level: 0,
-            levels: vec![full_level(0)],
-        }
-    }
-
-    fn test_layer() -> LayerSpec {
-        LayerSpec {
-            id: LayerId::from_raw(0),
-            key: "zone_mask".to_string(),
-            name: "Zone Mask".to_string(),
-            visible_default: true,
-            opacity_default: 1.0,
-            z_base: 0.0,
-            kind: LayerKind::TiledRaster,
-            tileset_url: "/tileset.json".to_string(),
-            tile_url_template: "/tiles/{z}/{x}_{y}.png".to_string(),
-            tileset_version: "v1".to_string(),
-            vector_source: None,
-            transform: LayerTransform::IdentityMapSpace,
-            tile_px: 512,
-            max_level: 0,
-            y_flip: false,
-            lod_policy: LodPolicy {
-                target_tiles: 64,
-                hysteresis_hi: 80.0,
-                hysteresis_lo: 40.0,
-                margin_tiles: 0,
-                enable_refine: false,
-                refine_debounce_ms: 0,
-                max_detail_tiles: 128,
-                max_resident_tiles: 256,
-                pinned_coarse_levels: 0,
-                coarse_pin_min_level: None,
-                warm_margin_tiles: 1,
-                protected_margin_tiles: 0,
-                detail_eviction_weight: 4.0,
-                max_detail_requests_while_camera_moving: 1,
-                motion_suppresses_refine: true,
-            },
-            request_weight: 1.0,
-            pick_mode: PickMode::ExactTilePixel,
-            display_order: 0,
-        }
-    }
-
-    fn full_bounds() -> super::TileBounds {
-        super::TileBounds {
-            min_tx: 0,
-            max_tx: 0,
-            min_ty: 0,
-            max_ty: 0,
-            z: 0,
-            map_version: 7,
-        }
-    }
-
-    fn only_tile_key(layer_id: LayerId) -> TileKey {
-        TileKey {
-            layer: layer_id,
-            map_version: 7,
-            z: 0,
-            tx: 0,
-            ty: 0,
-        }
-    }
-
-    #[test]
-    fn failed_tiles_are_requeued() {
-        let layer = test_layer();
-        let tileset = test_tileset();
-        let key = only_tile_key(layer.id);
-        let mut cache = RasterTileCache::default();
-        cache.insert_loading(key, Handle::default(), true, 1.0);
-        cache.entries.get_mut(&key).expect("tile entry").state = TileState::Failed;
-
-        let result = build_requests_for_bounds(BoundsRequestBuild {
-            layer: &layer,
-            tileset: &tileset,
-            bounds: full_bounds(),
-            map_version: None,
-            cache: &cache,
-            kind: RequestKind::BaseCoverage,
-            request_weight: 1.0,
-            map_version_id: key.map_version,
-        });
-
-        assert_eq!(result.cache_hits, 0);
-        assert_eq!(result.requests.len(), 1);
-        assert_eq!(result.requests[0].key, key);
-    }
-
-    #[test]
-    fn ready_tiles_still_count_as_cache_hits() {
-        let layer = test_layer();
-        let tileset = test_tileset();
-        let key = only_tile_key(layer.id);
-        let mut cache = RasterTileCache::default();
-        cache.insert_loading(key, Handle::default(), true, 1.0);
-        cache.entries.get_mut(&key).expect("tile entry").state = TileState::Ready;
-
-        let result = build_requests_for_bounds(BoundsRequestBuild {
-            layer: &layer,
-            tileset: &tileset,
-            bounds: full_bounds(),
-            map_version: None,
-            cache: &cache,
-            kind: RequestKind::BaseCoverage,
-            request_weight: 1.0,
-            map_version_id: key.map_version,
-        });
-
-        assert_eq!(result.cache_hits, 1);
-        assert!(result.requests.is_empty());
-    }
 }

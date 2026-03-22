@@ -6,14 +6,6 @@ This note is the short-lived execution log for the current browser performance p
 
 Use it to keep the latest diagnosis, priorities, and next cuts visible without rereading the whole task history.
 
-## Latest follow-up
-
-- The coarse `zone_mask` pyramid cut was a real startup win, but it introduced an edge-coverage regression because parent tiles on partial east/south edges were being emitted as full-size `512x512` images.
-- Those coarse edge parents now preserve their actual occupied dimensions before downsampling, which keeps the visible mask aligned with the canonical map bounds.
-- The local rebuild and browser smoke/profile runs are clean again after regenerating the mask pyramid.
-- Browser robustness bug: transient raster image EOF/load failures were previously cached as permanent `Failed` tiles, so the runtime would never retry them and could leave persistent holes until a full reload.
-- Failed raster tiles are now retriable in the scheduler/residency path so temporary local CDN rebuild races can recover automatically.
-
 ## Current diagnosis
 
 - The native Bevy harness is useful for subsystem attribution, but it does not reproduce the severe browser FPS collapse on its committed fixtures.
@@ -54,10 +46,7 @@ Use it to keep the latest diagnosis, priorities, and next cuts visible without r
    - inspect request planning in `map/raster/policy/requests.rs`
    - inspect default-view bounds/LOD behavior in `map/raster/policy/bounds.rs`
 3. Optimize the raster steady state until the integrated vector scenarios start from an actually idle baseline.
-   - first cut: add a coarse visible pyramid for `zone_mask`
-   - keep exact hover/selection on `z=0` through the existing pick-probe path
 4. Re-check whether bridge cost is still material once raster churn is reduced.
-5. After the mask-pyramid cut, focus on the remaining `minimap` + residual `zone_mask` backlog until the browser scenarios can actually begin from idle.
 
 ## Latest measured result
 
@@ -100,31 +89,6 @@ Interpretation:
 
 - The current vector browser slowdown is still confounded by unresolved raster streaming or residency churn that exists before the vector action.
 - The next optimization target is not generic bridge work; it is the raster steady-state path that should already be idle before the vector action.
-- The most likely first win is reducing whole-world `zone_mask` rendering cost at the default full-map view, because hover already has an explicit full-resolution pick path.
-
-Latest optimization result:
-
-- Added a coarse visible pyramid for `zone_mask` and allowed exact-pixel pick layers to use coarser manifest levels for visible coverage only.
-- The build pipeline now regenerates `zone_mask` level-0 tiles from `zones_mask_v1.png` when needed and stages the finished mask pyramid atomically.
-- Measured on integrated browser scenarios:
-  - `vector_region_groups_dom_toggle`
-    - `frame_avg_ms: 18.34 -> 6.96`
-    - `frame_p95_ms: 29.7 -> 16.4`
-    - `pre_capture_busy_raster_tiles: 435 -> 118`
-    - `raster.update_tiles total_ms: 746.1 -> 141.9`
-    - `raster.tile_entity_update total_ms: 712.1 -> 115.5`
-  - `vector_region_groups_enable`
-    - `frame_avg_ms: 20.26 -> 6.45`
-    - `frame_p95_ms: 34.8 -> 13.5`
-    - `pre_capture_busy_raster_tiles: 685 -> 125`
-    - `raster.update_tiles total_ms: 869.2 -> 146.1`
-    - `raster.tile_entity_update total_ms: 827.4 -> 116.0`
-
-Interpretation:
-
-- The mask pyramid was a real hotspot fix, not noise.
-- The browser path is still not fully idle before vector capture, but the residual raster backlog is now much smaller.
-- With raster startup pressure reduced, vector build/update cost is now easier to see and measure honestly.
 
 ## Canonical browser scenarios right now
 
