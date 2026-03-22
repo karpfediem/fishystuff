@@ -115,6 +115,24 @@ first_existing_path() {
   printf '%s\n' "$1"
 }
 
+read_json_u32_field() {
+  local json_path="$1"
+  local field_name="$2"
+  python3 - "$json_path" "$field_name" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+json_path = Path(sys.argv[1])
+field_name = sys.argv[2]
+with json_path.open("r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+value = payload.get(field_name)
+if isinstance(value, int):
+    print(value)
+PY
+}
+
 prepare_terrain_source_tiles() {
   : "${TERRAIN_SOURCE_IMAGE:=$(first_existing_path \
     data/terrain/Karpfen/terraintiles/whole_fullres.png \
@@ -222,7 +240,18 @@ ZONE_MASK_DISPLAY_TILE_PX=2048
 zone_mask_display_root="$CDN_IMAGE_ASSET_DIR/tiles/zone_mask_visual/v1"
 zone_mask_display_level0="$zone_mask_display_root/0"
 zone_mask_display_manifest="$zone_mask_display_root/tileset.json"
-if [ -f "$zone_mask_cdn_image" ] && { [ "${REBUILD_ZONE_MASK_DISPLAY_TILES:-0}" = "1" ] || [ ! -f "$zone_mask_display_manifest" ] || [ "$zone_mask_cdn_image" -nt "$zone_mask_display_manifest" ]; }; then
+zone_mask_display_manifest_tile_px=""
+if [ -f "$zone_mask_display_manifest" ]; then
+  zone_mask_display_manifest_tile_px="$(
+    read_json_u32_field "$zone_mask_display_manifest" "tile_size_px" || true
+  )"
+fi
+if [ -f "$zone_mask_cdn_image" ] && {
+  [ "${REBUILD_ZONE_MASK_DISPLAY_TILES:-0}" = "1" ] ||
+  [ ! -f "$zone_mask_display_manifest" ] ||
+  [ "$zone_mask_cdn_image" -nt "$zone_mask_display_manifest" ] ||
+  [ "$zone_mask_display_manifest_tile_px" != "$ZONE_MASK_DISPLAY_TILE_PX" ];
+}; then
   rm -rf "$zone_mask_display_root"
   mkdir -p "$zone_mask_display_level0"
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin fishystuff_tilegen -- \
