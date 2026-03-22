@@ -417,6 +417,16 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
                 .map(|layer| layer.is_raster())
                 .unwrap_or(false)
     });
+    let hover_only_visual_update = !has_active_raster_clip_masks
+        && !loaded_changed
+        && !visibility_changed
+        && !bootstrap_changed
+        && !evidence_zone_filter_changed
+        && !vector_runtime_changed
+        && !view_mode_changed
+        && display_state_changed
+        && !evidence_zone_filter.active
+        && cache.applied_hover_zone_rgb != display_state.hovered_zone_rgb;
     let should_sync_visual_filters = has_active_raster_clip_masks
         || loaded_changed
         || visibility_changed
@@ -425,7 +435,9 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         || evidence_zone_filter_changed
         || vector_runtime_changed
         || view_mode_changed;
-    if should_sync_visual_filters {
+    if hover_only_visual_update {
+        cache.sync_hover_highlights_only(images, display_state.hovered_zone_rgb);
+    } else if should_sync_visual_filters {
         cache.sync_visual_filters(
             images,
             commands,

@@ -39,6 +39,7 @@ impl RasterTileCache {
     ) -> bool {
         crate::perf_scope!("raster.tile_entity_update");
         let mut changed = false;
+        let mut zone_tile_index_dirty = false;
         let RasterLoadedAssets {
             images,
             meshes,
@@ -97,11 +98,13 @@ impl RasterTileCache {
                                     height: size.height,
                                     data,
                                 });
+                                zone_tile_index_dirty = true;
                             }
                         } else {
                             entry.zone_rgbs.clear();
                             entry.zone_lookup_rows = None;
                             entry.pixel_data = None;
+                            zone_tile_index_dirty = true;
                         }
                     }
 
@@ -196,6 +199,9 @@ impl RasterTileCache {
                 }
                 _ => {}
             }
+        }
+        if zone_tile_index_dirty {
+            self.mark_zone_tile_index_dirty();
         }
         changed
     }

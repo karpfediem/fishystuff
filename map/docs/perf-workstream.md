@@ -29,6 +29,7 @@ This note keeps the latest direction visible without rereading the full task his
   - exact lookup still determines which zone is hovered
   - the filter path is no longer called every 2D frame while idle
   - hover-only changes now update just the old/new zone spans inside a tile instead of cloning and recomposing full tile images
+  - hover-only updates are now also targeted to just the tiles that contain the old/new hovered zones instead of scanning every ready visible exact tile
 
 ## Current diagnosis
 
@@ -44,9 +45,11 @@ This note keeps the latest direction visible without rereading the full task his
 - Current measured result of the stable recovered path:
   - browser smoke passes again and the map is visible
   - previous `zone_mask_hover_sweep` baseline was `9.653 ms` avg with `46.0 ms` p95
-  - current `zone_mask_hover_sweep` is `4.635 ms` avg with `9.6 ms` p95
-  - `raster.sync_visual_filters` dropped from `353.5 ms` total to `17.2 ms` total
-  - top hover spans are now `raster.update_tiles`, `raster.tile_entity_update`, and `raster.sync_visual_filters`
+  - first hover optimization reduced `zone_mask_hover_sweep` to `4.635 ms` avg with `9.6 ms` p95
+  - current targeted hover path reduces `zone_mask_hover_sweep` again to `3.026 ms` avg with `6.2 ms` p95
+  - `raster.sync_visual_filters` dropped from `353.5 ms` total to `17.2 ms`, then to `13.8 ms`
+  - `raster.update_tiles` dropped from `81.3 ms` total to `32.4 ms` after the targeted hover-only path
+  - top hover spans are now `raster.update_tiles`, `raster.sync_visual_filters`, and `raster.desired_tile_set_build`
   - this survives the integrated browser path without the GPU-material instability
 - Current integrated vector activation result on the same zone-mask path:
   - latest `vector_region_groups_enable` frame avg is `7.835 ms`
@@ -90,6 +93,7 @@ Backend-neutral stages:
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame
 - Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
 - Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs
+- Hover-only visual updates now use a zone-to-tile index so only tiles containing the old/new hovered zones are touched
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
 Current generated lookup asset:
@@ -108,6 +112,7 @@ Current generated lookup asset:
    - exact lookup should remain the semantic source
    - keep the filter path change-driven, not per-frame
    - prefer span/delta updates over whole-image rewrites
+   - prefer targeted tile updates over scanning all visible exact tiles
    - if we revisit a GPU path later, it must survive the integrated browser shell first
 3. Reduce the remaining visual raster working set.
    - the current pre-capture busy layers are still `zone_mask` and `minimap`
@@ -133,7 +138,7 @@ Current generated lookup asset:
    - bridge event flush
 5. Attack the next measured hotspot after this recovery point.
    - current top activation hotspot: `vector.layer_update`
-   - current top hover hotspots: `raster.update_tiles` and `raster.tile_entity_update`
+   - current top hover hotspots: `raster.update_tiles` and `raster.sync_visual_filters`
    - current remaining raster source: `minimap`
 6. Only after the single-threaded pipeline is clean, revisit worker/thread options.
 

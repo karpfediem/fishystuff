@@ -113,6 +113,9 @@ pub struct RasterTileCache {
     pub(crate) entries: HashMap<TileKey, RasterTileEntry>,
     pub(crate) use_counter: u64,
     pub(crate) max_entries: usize,
+    pub(crate) applied_hover_zone_rgb: Option<u32>,
+    pub(crate) zone_tile_index: HashMap<u32, Vec<TileKey>>,
+    pub(crate) zone_tile_index_dirty: bool,
 }
 
 impl Default for RasterTileCache {
@@ -121,6 +124,9 @@ impl Default for RasterTileCache {
             entries: HashMap::new(),
             use_counter: 0,
             max_entries: TILE_CACHE_MAX,
+            applied_hover_zone_rgb: None,
+            zone_tile_index: HashMap::new(),
+            zone_tile_index_dirty: true,
         }
     }
 }
@@ -237,6 +243,51 @@ impl RasterTileCache {
         );
     }
 
+    pub(crate) fn mark_zone_tile_index_dirty(&mut self) {
+        self.zone_tile_index_dirty = true;
+    }
+
+    pub(crate) fn hovered_zone_transition_keys(
+        &mut self,
+        previous_hover_zone_rgb: Option<u32>,
+        next_hover_zone_rgb: Option<u32>,
+    ) -> Vec<TileKey> {
+        if previous_hover_zone_rgb == next_hover_zone_rgb && !self.zone_tile_index_dirty {
+            return Vec::new();
+        }
+        if self.zone_tile_index_dirty {
+            self.zone_tile_index.clear();
+            for (key, entry) in &self.entries {
+                if entry.state != TileState::Ready || entry.zone_rgbs.is_empty() {
+                    continue;
+                }
+                for zone_rgb in &entry.zone_rgbs {
+                    self.zone_tile_index
+                        .entry(*zone_rgb)
+                        .or_default()
+                        .push(*key);
+                }
+            }
+            self.zone_tile_index_dirty = false;
+        }
+
+        let mut keys = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for zone_rgb in [previous_hover_zone_rgb, next_hover_zone_rgb]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(zone_keys) = self.zone_tile_index.get(&zone_rgb) {
+                for key in zone_keys {
+                    if seen.insert(*key) {
+                        keys.push(*key);
+                    }
+                }
+            }
+        }
+        keys
+    }
+
     pub(crate) fn clear_layer(
         &mut self,
         layer: LayerId,
@@ -257,6 +308,7 @@ impl RasterTileCache {
                 images.remove(entry.handle.id());
             }
         }
+        self.mark_zone_tile_index_dirty();
     }
 
     pub(crate) fn clear_all(&mut self, commands: &mut Commands, images: &mut Assets<Image>) {
@@ -269,6 +321,7 @@ impl RasterTileCache {
                 images.remove(entry.handle.id());
             }
         }
+        self.mark_zone_tile_index_dirty();
     }
 
     pub(crate) fn evict(
@@ -330,6 +383,7 @@ impl RasterTileCache {
                 incr_level_count(&mut stats.cache_evictions_by_level, key.layer, key.z, 1);
             }
         }
+        self.mark_zone_tile_index_dirty();
         crate::perf_counter_add!("raster.cache_evictions", remove_count);
     }
 

@@ -27,6 +27,69 @@ pub(crate) struct VisualFilterContext<'a> {
 }
 
 impl RasterTileCache {
+    pub(crate) fn sync_hover_highlights_only(
+        &mut self,
+        images: &mut Assets<Image>,
+        hover_zone_rgb: Option<u32>,
+    ) {
+        crate::perf_scope!("raster.sync_visual_filters");
+        let previous_hover_zone_rgb = self.applied_hover_zone_rgb;
+        if previous_hover_zone_rgb == hover_zone_rgb {
+            return;
+        }
+
+        let keys = self.hovered_zone_transition_keys(previous_hover_zone_rgb, hover_zone_rgb);
+        for key in keys {
+            let Some(read_entry) = self.entries.get(&key) else {
+                continue;
+            };
+            if read_entry.state != TileState::Ready || !read_entry.visible {
+                continue;
+            }
+            let source = match read_entry.pixel_data.as_ref() {
+                Some(source) => source,
+                None => continue,
+            };
+            let zone_rows = match read_entry.zone_lookup_rows.as_ref() {
+                Some(zone_rows) => zone_rows,
+                None => continue,
+            };
+            let target_hover_zone = hover_zone_rgb.filter(|hover_rgb| {
+                read_entry
+                    .zone_rgbs
+                    .iter()
+                    .any(|zone_rgb| zone_rgb == hover_rgb)
+            });
+            if read_entry.hover_highlight_zone == target_hover_zone {
+                continue;
+            }
+
+            let Some(image) = images.get_mut(&read_entry.handle) else {
+                continue;
+            };
+            let Some(image_data) = image.data.as_mut() else {
+                continue;
+            };
+            if image_data.len() != source.data.len() {
+                continue;
+            }
+
+            update_hover_highlight_in_place(
+                source,
+                image_data,
+                zone_rows,
+                read_entry.hover_highlight_zone,
+                target_hover_zone,
+            );
+
+            if let Some(entry) = self.entries.get_mut(&key) {
+                entry.hover_highlight_zone = target_hover_zone;
+            }
+        }
+
+        self.applied_hover_zone_rgb = hover_zone_rgb;
+    }
+
     pub(crate) fn sync_visual_filters(
         &mut self,
         images: &mut Assets<Image>,
@@ -209,5 +272,6 @@ impl RasterTileCache {
                 entry.clip_mask_applied = clip_mask_layer.is_some();
             }
         }
+        self.applied_hover_zone_rgb = hover_zone_rgb;
     }
 }
