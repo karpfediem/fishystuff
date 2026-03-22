@@ -56,8 +56,19 @@ pushes only the CDN `map/` subtree instead of scanning unrelated image roots.
 `.gitkeep` and `.cdn-metadata.json` from the Bunny upload. It keeps a local sync
 manifest so normal runs can upload only locally changed files without asking the
 remote for a full file listing. Only delete-semantic roots such as `map/` and
-`region_groups/` perform a remote listing, and those are small. The local map
-build retains hashed wasm/js bundles for `14` days by default before pruning
-them, so older frontend caches can continue fetching the previous runtime for a
-short window. Override that retention with `MAP_RUNTIME_RETENTION_DAYS` when
-running the map build if needed.
+`region_groups/` perform a remote listing, and those are small when remote
+deletes are explicitly enabled.
+
+The local map build now keeps older hashed wasm/js bundles by default. Opt into
+local pruning with `PRUNE_OLD_MAP_RUNTIME_FILES=1`; `MAP_RUNTIME_RETENTION_DAYS`
+still controls the retention window when pruning is enabled.
+
+Map pushes also upload only the current deployment runtime set:
+
+- `map/runtime-manifest.json`
+- the newest cache-keyed `runtime-manifest.<key>.json`
+- the current hashed `fishystuff_ui_bevy.<hash>.js`
+- the current hashed `fishystuff_ui_bevy_bg.<hash>.wasm`
+
+Older live map bundles can remain on Bunny without being re-uploaded on every
+push. Remote stale-file deletion is opt-in via `BUNNY_ALLOW_REMOTE_DELETES=1`.

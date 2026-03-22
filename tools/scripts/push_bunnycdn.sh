@@ -130,6 +130,7 @@ list_required_files_under_root() {
   local root="$1"
   local out_file="$2"
   local manifest_path
+  local current_cached_manifest
   local module_path
   local wasm_path
 
@@ -163,15 +164,17 @@ list_required_files_under_root() {
     exit 1
   fi
 
-  while IFS= read -r manifest_file; do
-    [ -n "$manifest_file" ] || continue
-    printf 'map/%s\n' "$(basename "$manifest_file")" >> "$out_file"
-  done < <(
-    find "$CDN_ROOT/map" -maxdepth 1 -type f \
-      \( -name 'runtime-manifest.json' -o -name 'runtime-manifest.*.json' \) \
-      -print |
-      LC_ALL=C sort
-  )
+  printf 'map/runtime-manifest.json\n' >> "$out_file"
+  current_cached_manifest="$(
+    find "$CDN_ROOT/map" -maxdepth 1 -type f -name 'runtime-manifest.*.json' \
+      -printf '%T@\t%f\n' |
+      LC_ALL=C sort -nr |
+      head -n 1 |
+      cut -f2-
+  )"
+  if [ -n "$current_cached_manifest" ]; then
+    printf 'map/%s\n' "$current_cached_manifest" >> "$out_file"
+  fi
   printf 'map/%s\n' "$module_path" >> "$out_file"
   printf 'map/%s\n' "$wasm_path" >> "$out_file"
   LC_ALL=C sort -u -o "$out_file" "$out_file"
@@ -476,7 +479,19 @@ if [ -n "$EXPLICIT_SYNC_ROOTS_RAW" ]; then
   echo "explicit sync changed mutable files: $(wc -l < "$mutable_changed_files_file")" >&2
 else
   while IFS= read -r sync_root; do
-    awk -v prefix="${sync_root}/" 'index($0, prefix) == 1 { print }' "$changed_paths_file" >> "$upload_paths_file"
+    list_required_files_under_root "$sync_root" "$local_root_files_file"
+    awk -v prefix="${sync_root}/" 'index($0, prefix) == 1 { print }' "$changed_paths_file" |
+      awk '
+        NR == FNR {
+          required[$0] = 1
+          next
+        }
+        {
+          if ($0 in required) {
+            print
+          }
+        }
+      ' "$local_root_files_file" - >> "$upload_paths_file"
   done < "$sync_roots_file"
 
   if [ -s "$upload_paths_file" ]; then
