@@ -18,12 +18,12 @@ use super::{
 };
 
 const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
-const MINIMAP_VISUAL_TILE_PX: u32 = 1280;
-const MINIMAP_VISUAL_MAX_LEVEL: u8 = 4;
+const MINIMAP_VISUAL_TILE_PX: u32 = 512;
+const MINIMAP_VISUAL_MAX_LEVEL: u8 = 5;
 const MINIMAP_TARGET_TILES: usize = 16;
 const MINIMAP_HYSTERESIS_HI: f32 = 24.0;
 const MINIMAP_HYSTERESIS_LO: f32 = 8.0;
-const MINIMAP_MAX_RESIDENT_TILES: usize = 256;
+const MINIMAP_MAX_RESIDENT_TILES: usize = 64;
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct LayerRegistry {

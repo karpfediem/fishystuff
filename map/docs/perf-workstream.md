@@ -25,16 +25,18 @@ This note keeps the latest direction visible without rereading the full task his
   - exact hover/click and exact clip semantics still come from the exact-lookup asset, not from the visual tiles.
 - The visual `minimap` now uses a map-space display pyramid:
   - `/images/tiles/minimap_visual/v1/tileset.json`
-  - logical tile size: `1280`
-  - levels: `z=0..4`
+  - logical tile size: `512`
+  - levels: `z=0..5`
   - only the finest display level keeps source-equivalent minimap detail
-  - parent levels now shrink by 2x per level (`3855 -> 1928 -> 964 -> 482 -> 241`) to keep browser memory bounded
+  - finest-level output textures are now about `1542px` wide instead of `3855px`, so highest zoom keeps detail without giant per-tile browser decodes
+  - parent levels now shrink by 2x per level (`1542 -> 771 -> 386 -> 193 -> 97 -> 49`) to keep browser memory bounded
   - runtime LOD is now overridden specifically for minimap startup:
     - `target_tiles=16`
     - `hysteresis_hi=24`
     - `hysteresis_lo=8`
     - `margin_tiles=0`
     - no coarse pinning, no warm/protected ring, no refine
+    - `max_resident_tiles=64`
   - this keeps startup on coarse minimap levels and only reaches finest detail when zoom actually requires it
   - the old 128px source-space `minimap` pyramid is no longer the runtime visual path
   - the raw `rader_*` source tiles are remapped offline into canonical map-space display tiles during `build_map.sh`
@@ -45,12 +47,20 @@ This note keeps the latest direction visible without rereading the full task his
   - the filter path is no longer called every 2D frame while idle
   - small hover transitions still use the targeted CPU span-delta path because it remains the fastest local-case path
   - larger hover transitions now switch to a per-tile shader overlay instead of rewriting tile textures
+  - the overlay alpha has been restored to track the layer opacity directly so the visible highlight matches the older full-recolor path more closely
   - the shader overlay uses the layer's actual depth plus a small bias, so variable display order still works
   - clip-mask and evidence-filter cases still fall back to the compose path until the overlay path can support them directly
+- The 2D zoom-in clamp has been loosened again.
+  - the current minimum zoom factor is `0.0025 * fit_scale`
+  - this restores deeper zooming without changing the initial fit-to-world behavior
 
 ## Current diagnosis
 
 - The browser slowdown is not just "Bevy is slow". The hotter architectural problem is coupling exact semantics to the visual raster tile cache.
+- A concrete cache bug also existed in the raster runtime:
+  - eviction only ran on LOD changes
+  - panning at a fixed zoom could keep accumulating decoded raster tiles without ever trimming the cache
+  - that pattern matches the recent minimap OOMs after exploration better than startup alone
 - Exact hover/click work should not depend on whether the display tiles for that pixel happen to be resident.
 - Exact/static assets must resolve through the configured public CDN base just like tiles and GeoJSON.
   - Site-root relative URLs (`/images/...`) are wrong in the integrated site shell and break both display tiles and exact-lookup hover.
@@ -85,14 +95,14 @@ This note keeps the latest direction visible without rereading the full task his
   - that full-detail-on-all-levels `1280` variant later hit a browser `rust_oom` during real map convergence and was backed out
   - current browser-safe `1280` pyramid with shrinking parent levels reaches `minimap_enable` avg `23.547 ms`, p95 `124.3 ms`
   - adding the minimap-specific startup LOD override drops `minimap_enable` further to `12.086 ms` avg, `108.6 ms` p95
-  - that is `11.461 ms` faster than the parent-shrunk-only variant on `minimap_enable`
-  - `raster.update_tiles` drops from `732.3 ms` to `431.5 ms` on `minimap_enable`
-  - `raster.tile_entity_update` drops from `725.9 ms` to `424.1 ms` on `minimap_enable`
-  - a longer `load_map` browser run completed without OOM and captured `110` frames at `16.109 ms` avg
-  - `minimap_enable` is still `4.434 ms` faster than the earlier `1024` full-detail attempt
+  - that was `11.461 ms` faster than the parent-shrunk-only variant on `minimap_enable`, but it still left very large finest-level decodes
+  - the current `512px` finest-level minimap pyramid plus real over-budget eviction reaches `minimap_enable` avg `9.606 ms`, p95 `10.2 ms`
+  - `raster.update_tiles` is now `445.0 ms` on `minimap_enable`
+  - `raster.tile_entity_update` is now `434.5 ms` on `minimap_enable`
+  - a longer `load_map` browser run completed and captured `101` frames at `17.049 ms` avg without renderer failure
   - the old raw `minimap/v1` runtime visual surface was `26,777` PNGs / about `815.8 MiB` on disk
-  - the current `minimap_visual/v1` display pyramid is `129` PNGs / about `993.8 MiB` on disk
-  - on-disk size is still too large, but the browser-safe version preserves top-zoom detail without crashing the renderer
+  - the current `minimap_visual/v1` display pyramid is `665` PNGs / about `987 MiB` on disk
+  - on-disk size is still large, but the finest-level decoded working set is now much safer because each top-level PNG is around `7–8 MiB` compressed instead of `30–43 MiB`
 - The browser bridge is measurable but not the current dominant cost in these runs.
 
 ## Current module split
@@ -133,13 +143,15 @@ Backend-neutral stages:
   - build output: `/images/tiles/minimap_visual/v1`
   - generator: `tools/fishystuff_tilegen/src/bin/minimap_display_tiles.rs`
   - runtime override: `map/layers/registry.rs`
-  - startup LOD override: `target_tiles=16`, no refine, no coarse pinning
+  - startup LOD override: `target_tiles=16`, no refine, no coarse pinning, `max_resident_tiles=64`
+  - the raster cache now evicts whenever it is actually over budget, not just when the chosen LOD changes
 - Hover/click state updates in `plugins/mask.rs` are now deduplicated so unchanged hover samples do not churn the 2D raster path every frame
 - Raster visual filtering in `map/raster/runtime.rs` now reruns on real state changes instead of every Map2D frame
 - Zone-mask visual tiles now keep row-span lookup data so hover-only transitions can restore/apply just the affected zone runs
 - Hover-only visual updates now use a zone-to-tile index so only tiles containing the old/new hovered zones are touched
 - Larger hover fanout now uses a per-tile `Material2d` overlay driven by the loaded zone-mask texture instead of CPU texture rewrites
 - Browser profiling now includes a `minimap_enable` scenario for minimap visibility regressions after startup
+- Browser profiling now includes a `minimap_pan_zoom` scenario for exploration-time minimap regressions
 - Browser profiling now includes a `zone_mask_hover_far_jumps` scenario for large-distance hover transitions
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
@@ -164,8 +176,8 @@ Current generated lookup asset:
 3. Reduce the remaining visual raster working set.
    - the biggest remaining startup spans are still `raster.update_tiles` and `raster.tile_entity_update`
    - `minimap` is no longer using the pathological raw 128px decode surface, but it still participates in raster startup cost
-   - the current browser-safe `1280` display pyramid keeps detail only where needed and avoids the all-level full-detail OOM path
-   - the minimap LOD override is now part of that guarantee; removing it reintroduces startup fetches of the finest tiles
+   - the current browser-safe `512` finest-level pyramid keeps top-zoom detail while greatly reducing per-tile decode spikes
+   - the minimap LOD override plus real over-budget eviction are now part of that guarantee; removing either one reintroduces browser-risky finest-tile accumulation
    - continue measuring busy-layer counts before and after each change
 4. Reduce browser vector activation cost now that the blank-screen regression is gone.
    - focus on `vector.layer_update`
@@ -179,7 +191,7 @@ Current generated lookup asset:
 
 1. Keep the exact-lookup split and fixed display-tileset path measured.
 2. Keep `zone_mask` on the fixed visual chunk path, not the full-image path and not the old pyramid branch.
-3. Keep `minimap` on the browser-safe `1280` source-equivalent finest-level pyramid unless a replacement beats it with data.
+3. Keep `minimap` on the browser-safe `512` source-equivalent finest-level pyramid unless a replacement beats it with data.
 4. Reduce residual raster startup/backlog for `zone_mask` + `minimap` without breaking exact semantics.
 5. Add explicit stage measurements for:
    - exact lookup load
@@ -191,7 +203,7 @@ Current generated lookup asset:
   - current top activation hotspot: `vector.layer_update`
   - current top hover hotspots: `raster.update_tiles`, `raster.visible_tile_computation`, and `raster.desired_tile_set_build`
   - current startup raster hotspot after the minimap cut: `raster.update_tiles` / `raster.tile_entity_update`
-  - `minimap_enable` is now the dedicated browser regression scenario for that layer
+  - `minimap_enable` and `minimap_pan_zoom` are now the dedicated browser regression scenarios for that layer
 7. Keep browser smoke/profile automation trustworthy.
   - `tools/scripts/map_browser_smoke.py` now ignores Chromium temp-profile cleanup races after successful runs
   - keep one-command local browser validation green while iterating

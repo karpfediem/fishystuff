@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
         choices=[
             "load_map",
             "minimap_enable",
+            "minimap_pan_zoom",
             "vector_region_groups_enable",
             "vector_region_groups_dom_toggle",
             "zone_mask_hover_sweep",
@@ -79,6 +80,8 @@ def scenario_capture_frames(scenario: str, capture_frames: int | None) -> int:
         return 0
     if scenario == "minimap_enable":
         return 120
+    if scenario == "minimap_pan_zoom":
+        return 240
     if scenario == "vector_region_groups_enable":
         return 180
     if scenario == "vector_region_groups_dom_toggle":
@@ -312,6 +315,99 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     completed_frames: frameWait.completedFrames,
     frame_wait_timed_out: frameWait.timedOut,
     trigger: "set_state",
+  }};
+  return report;
+}})()
+""".strip()
+    if scenario == "minimap_pan_zoom":
+        return f"""
+(async () => {{
+  const bridge = globalThis.window?.FishyMapBridge ?? null;
+  if (!bridge?.resetPerformanceSnapshot || !bridge?.setState || !bridge?.getCurrentState) {{
+    throw new Error("FishyMapBridge profiling API is unavailable");
+  }}
+  {wait_for_raster_idle}
+  const waitFrames = async (count) => {{
+    if (count <= 0) {{
+      return;
+    }}
+    await new Promise((resolve) => {{
+      let remaining = count;
+      const tick = () => {{
+        remaining -= 1;
+        if (remaining <= 0) {{
+          resolve();
+          return;
+        }}
+        requestAnimationFrame(tick);
+      }};
+      requestAnimationFrame(tick);
+    }});
+  }};
+  const state = bridge.getCurrentState();
+  const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
+  const targetLayer = layers.find((layer) => layer?.layerId === "minimap") || null;
+  if (!targetLayer?.layerId) {{
+    throw new Error("minimap layer is unavailable for profiling");
+  }}
+  const visibleLayerIds = Array.isArray(state?.filters?.layerIdsVisible)
+    ? state.filters.layerIdsVisible.slice()
+    : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId);
+  if (!visibleLayerIds.includes(targetLayer.layerId)) {{
+    visibleLayerIds.push(targetLayer.layerId);
+  }}
+  bridge.setState({{
+    filters: {{
+      layerIdsVisible: visibleLayerIds,
+    }},
+  }});
+  const settle = await waitForRasterIdle();
+  const current = (settle.state || bridge.getCurrentState());
+  const camera = current?.view?.camera || {{}};
+  const centerWorldX = Number(camera.centerWorldX) || 0;
+  const centerWorldZ = Number(camera.centerWorldZ) || 0;
+  const zoom = Math.max(Number(camera.zoom) || 1, 1e-5);
+  const path = [
+    {{ dx: 0, dz: 0, zoomFactor: 1.0 }},
+    {{ dx: 450000, dz: -320000, zoomFactor: 0.55 }},
+    {{ dx: -620000, dz: 380000, zoomFactor: 0.20 }},
+    {{ dx: 720000, dz: 160000, zoomFactor: 0.12 }},
+    {{ dx: -280000, dz: -540000, zoomFactor: 0.32 }},
+    {{ dx: 220000, dz: 120000, zoomFactor: 0.65 }},
+  ];
+  bridge.resetPerformanceSnapshot({{
+    scenario: "minimap_pan_zoom",
+    warmupFrames: 0,
+  }});
+  for (const step of path) {{
+    bridge.setState({{
+      commands: {{
+        setViewMode: "2d",
+        restoreView: {{
+          viewMode: "2d",
+          camera: {{
+            centerWorldX: centerWorldX + step.dx,
+            centerWorldZ: centerWorldZ + step.dz,
+            zoom: zoom * step.zoomFactor,
+          }},
+        }},
+      }},
+    }});
+    await waitFrames(12);
+  }}
+  const frameWait = {wait_frames};
+  const report = bridge.getPerformanceSnapshot();
+  report.browser_action = {{
+    target_layer_id: targetLayer.layerId,
+    pre_capture_raster_idle_timed_out: settle.timedOut,
+    pre_capture_busy_raster_layers: settle.busyLayers,
+    pre_capture_busy_raster_layer_ids: settle.busyLayerIds,
+    pre_capture_busy_raster_tiles: settle.busyTiles,
+    path_steps: path.length,
+    capture_frames_target: {capture_frames},
+    completed_frames: frameWait.completedFrames,
+    frame_wait_timed_out: frameWait.timedOut,
+    trigger: "restore_view_path",
   }};
   return report;
 }})()

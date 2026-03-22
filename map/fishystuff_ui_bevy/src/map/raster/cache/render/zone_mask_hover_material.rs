@@ -12,7 +12,7 @@ use bevy::render::RenderApp;
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d, Material2dPlugin};
 
-const HOVER_OVERLAY_ALPHA: f32 = 0.42;
+const HOVER_OVERLAY_ALPHA: f32 = 1.0;
 const HOVER_HIGHLIGHT_RGB: [u8; 3] = [64, 255, 128];
 
 pub(crate) struct ZoneMaskHoverMaterialPlugin;
@@ -112,5 +112,17 @@ impl Material2d for ZoneMaskHoverMaterial {
 
     fn alpha_mode(&self) -> AlphaMode2d {
         AlphaMode2d::Blend
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ZoneMaskHoverMaterial;
+    use bevy::prelude::Handle;
+
+    #[test]
+    fn overlay_alpha_tracks_layer_opacity() {
+        let material = ZoneMaskHoverMaterial::new(Handle::default(), 0x00FF00, 0.5);
+        assert!((material.params.highlight_rgba.w - 0.5).abs() < 0.01);
     }
 }

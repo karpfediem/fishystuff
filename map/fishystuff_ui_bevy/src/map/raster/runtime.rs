@@ -1,6 +1,7 @@
 use bevy::ecs::system::SystemParam;
 use bevy::window::PrimaryWindow;
 
+use crate::config::{RASTER_CACHE_HEADROOM, RASTER_CACHE_MIN_BUDGET};
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerManifestStatus, LayerRegistry, LayerRuntime, PickMode};
@@ -213,10 +214,10 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         .protected
         .len()
         .saturating_add(residency.warm.len())
-        .saturating_add(128);
+        .saturating_add(RASTER_CACHE_HEADROOM);
     cache.max_entries = base_budget
         .max(residency_floor)
-        .clamp(256, crate::config::TILE_CACHE_MAX);
+        .clamp(RASTER_CACHE_MIN_BUDGET, crate::config::TILE_CACHE_MAX);
     let mut any_zoom_level_changed = false;
 
     let clip_mask_source_ids = layer_runtime.clip_mask_source_ids();
@@ -466,7 +467,9 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
             },
         );
     }
-    if any_zoom_level_changed && !debug_controls.disable_eviction {
+    if should_run_cache_eviction(any_zoom_level_changed, cache.len(), cache.max_entries)
+        && !debug_controls.disable_eviction
+    {
         cache.evict(commands, images, stats, residency, layer_registry);
     }
 
@@ -502,4 +505,24 @@ fn view_rect(camera: &Camera, camera_transform: &Transform, window: &Window) -> 
         min: WorldPoint::new(min.x.min(max.x) as f64, min.y.min(max.y) as f64),
         max: WorldPoint::new(min.x.max(max.x) as f64, min.y.max(max.y) as f64),
     })
+}
+
+fn should_run_cache_eviction(
+    any_zoom_level_changed: bool,
+    cache_len: usize,
+    max_entries: usize,
+) -> bool {
+    any_zoom_level_changed || cache_len > max_entries
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_run_cache_eviction;
+
+    #[test]
+    fn cache_eviction_runs_when_over_budget_without_lod_change() {
+        assert!(should_run_cache_eviction(false, 65, 64));
+        assert!(!should_run_cache_eviction(false, 64, 64));
+        assert!(should_run_cache_eviction(true, 64, 64));
+    }
 }

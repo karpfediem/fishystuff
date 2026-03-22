@@ -1,4 +1,4 @@
-use crate::config::TILE_CACHE_MAX;
+use crate::config::{RASTER_CACHE_MIN_BUDGET, TILE_CACHE_MAX};
 use crate::map::layers::{LayerRegistry, LayerRuntime, LayerRuntimeState, LayerSpec, LodPolicy};
 use crate::map::spaces::layer_transform::{TileSpace, WorldTransform};
 use crate::map::spaces::{WorldPoint, WorldRect};
@@ -287,7 +287,7 @@ pub(crate) fn compute_cache_budget(
     if sum == 0 {
         TILE_CACHE_MAX
     } else {
-        sum.clamp(256, 16_384)
+        sum.clamp(RASTER_CACHE_MIN_BUDGET, 16_384)
     }
 }
 
