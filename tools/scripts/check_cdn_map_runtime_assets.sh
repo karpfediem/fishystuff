@@ -36,6 +36,43 @@ check_url_exists() {
     "$url" >/dev/null
 }
 
+check_url_cors() {
+  local url="$1"
+  local headers_file
+  local allow_origin
+
+  headers_file="$(mktemp)"
+  curl -fsSI \
+    --connect-timeout "$CURL_CONNECT_TIMEOUT" \
+    --max-time "$CURL_MAX_TIME" \
+    -H "Referer: ${CDN_CHECK_REFERRER_URL}" \
+    -H "Origin: ${CDN_CHECK_ORIGIN_URL}" \
+    "$url" >"$headers_file"
+
+  allow_origin="$(
+    awk '
+      BEGIN { IGNORECASE = 1 }
+      /^Access-Control-Allow-Origin:/ {
+        sub(/^[^:]+:[[:space:]]*/, "", $0)
+        sub(/\r$/, "", $0)
+        print
+        exit
+      }
+    ' "$headers_file"
+  )"
+  rm -f "$headers_file"
+
+  if [ -z "$allow_origin" ]; then
+    echo "missing Access-Control-Allow-Origin header: $url" >&2
+    exit 1
+  fi
+
+  if [ "$allow_origin" != "*" ] && [ "$allow_origin" != "$CDN_CHECK_ORIGIN_URL" ]; then
+    echo "unexpected Access-Control-Allow-Origin header for $url: $allow_origin" >&2
+    exit 1
+  fi
+}
+
 join_url() {
   local base="$1"
   local path="$2"
@@ -100,8 +137,22 @@ required_urls=(
   "$(join_url "$CDN_BASE_URL" "/images/tiles/zone_mask_visual/v1/tileset.json")"
 )
 
+cors_required_urls=(
+  "$current_manifest_url"
+  "$stable_manifest_url"
+  "$(join_url "$CDN_BASE_URL" "/map/${current_module}")"
+  "$(join_url "$CDN_BASE_URL" "/map/${current_wasm}")"
+  "$(join_url "$CDN_BASE_URL" "/images/exact_lookup/zone_mask.v1.bin")"
+  "$(join_url "$CDN_BASE_URL" "/images/tiles/minimap_visual/v1/tileset.json")"
+  "$(join_url "$CDN_BASE_URL" "/images/tiles/zone_mask_visual/v1/tileset.json")"
+)
+
 for url in "${required_urls[@]}"; do
   check_url_exists "$url"
 done
 
-echo "CDN map runtime assets are reachable." >&2
+for url in "${cors_required_urls[@]}"; do
+  check_url_cors "$url"
+done
+
+echo "CDN map runtime assets are reachable and CORS-readable." >&2
