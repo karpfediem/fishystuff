@@ -7,7 +7,7 @@ PREV_DIR="$SITE_DIR/public.prev"
 
 if [ -z "${FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY:-}" ]; then
   if git -C "$SITE_DIR/.." rev-parse HEAD >/dev/null 2>&1; then
-    FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY="$(git -C "$SITE_DIR/.." rev-parse --short=16 HEAD)"
+    FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY="$("$SITE_DIR/../tools/scripts/resolve_map_runtime_cache_key.sh")"
   else
     FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY="$(date -u +%Y%m%dT%H%M%SZ)"
   fi

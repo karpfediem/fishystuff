@@ -12,7 +12,7 @@ resolve_map_runtime_manifest_cache_key() {
   local cache_key="${FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY:-}"
   if [ -z "$cache_key" ]; then
     if git -C "$ROOT_DIR" rev-parse HEAD >/dev/null 2>&1; then
-      cache_key="$(git -C "$ROOT_DIR" rev-parse --short=16 HEAD)"
+      cache_key="$("$ROOT_DIR/tools/scripts/resolve_map_runtime_cache_key.sh")"
     else
       cache_key="$(date -u +%Y%m%dT%H%M%SZ)"
     fi
