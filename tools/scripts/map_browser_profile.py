@@ -27,7 +27,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "scenario",
-        choices=["load_map", "vector_region_groups_enable", "vector_region_groups_dom_toggle"],
+        choices=[
+            "load_map",
+            "vector_region_groups_enable",
+            "vector_region_groups_dom_toggle",
+            "zone_mask_hover_sweep",
+        ],
         help="Integrated browser profiling scenario to run.",
     )
     parser.add_argument(
@@ -74,6 +79,8 @@ def scenario_capture_frames(scenario: str, capture_frames: int | None) -> int:
         return 180
     if scenario == "vector_region_groups_dom_toggle":
         return 180
+    if scenario == "zone_mask_hover_sweep":
+        return 120
     return 0
 
 
@@ -297,6 +304,65 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     completed_frames: frameWait.completedFrames,
     frame_wait_timed_out: frameWait.timedOut,
     trigger: "dom_click",
+  }};
+  return report;
+}})()
+""".strip()
+    if scenario == "zone_mask_hover_sweep":
+        return f"""
+(async () => {{
+  const bridge = globalThis.window?.FishyMapBridge ?? null;
+  if (!bridge?.resetPerformanceSnapshot || !bridge?.getPerformanceSnapshot) {{
+    throw new Error("FishyMapBridge profiling API is unavailable");
+  }}
+  {wait_for_raster_idle}
+  const canvas = document.getElementById("bevy");
+  if (!canvas) {{
+    throw new Error("map canvas not found");
+  }}
+  const rect = canvas.getBoundingClientRect();
+  if (!rect || !(rect.width > 0) || !(rect.height > 0)) {{
+    throw new Error("map canvas has no measurable size");
+  }}
+  const settle = await waitForRasterIdle();
+  bridge.resetPerformanceSnapshot({{
+    scenario: "zone_mask_hover_sweep",
+    warmupFrames: 0,
+  }});
+  const dispatchHover = (fx, fy) => {{
+    canvas.dispatchEvent(new PointerEvent("pointermove", {{
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left + rect.width * fx,
+      clientY: rect.top + rect.height * fy,
+      pointerId: 1,
+      pointerType: "mouse",
+      isPrimary: true,
+      buttons: 0,
+    }}));
+  }};
+  const hoverPoints = [
+    [0.20, 0.24],
+    [0.33, 0.30],
+    [0.46, 0.36],
+    [0.59, 0.42],
+    [0.72, 0.48],
+  ];
+  for (const [fx, fy] of hoverPoints) {{
+    dispatchHover(fx, fy);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }}
+  const frameWait = {wait_frames};
+  const report = bridge.getPerformanceSnapshot();
+  report.browser_action = {{
+    pre_capture_raster_idle_timed_out: settle.timedOut,
+    pre_capture_busy_raster_layers: settle.busyLayers,
+    pre_capture_busy_raster_layer_ids: settle.busyLayerIds,
+    pre_capture_busy_raster_tiles: settle.busyTiles,
+    hover_points: hoverPoints.length,
+    capture_frames_target: {capture_frames},
+    completed_frames: frameWait.completedFrames,
+    frame_wait_timed_out: frameWait.timedOut,
   }};
   return report;
 }})()

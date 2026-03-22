@@ -16,26 +16,37 @@ This note keeps the latest direction visible without rereading the full task his
 - Exact zone semantics are now separated from visual raster residency.
 - The map no longer uses raster pick-probe requests for hover or click on the exact zone mask.
 - A dedicated exact-lookup asset is now built from the canonical zone mask PNG and loaded directly into Wasm memory.
-- The visual `zone_mask` no longer streams hundreds of raster tiles on the browser hot path.
-  - It now renders directly from the canonical `/images/zones_mask_v1.png` image as one async image asset.
-  - Hover/click and exact clip semantics still come from the exact-lookup asset, not from the visual image.
+- The direct full-image `zone_mask` experiment was removed.
+  - It caused WebGL upload failures and was not viable on the browser path.
+- The visual `zone_mask` now uses a fixed display-tileset:
+  - `/images/tiles/zone_mask_visual/v1/tileset.json`
+  - tile size: `2048`
+  - single level: `z=0`
+  - exact hover/click and exact clip semantics still come from the exact-lookup asset, not from the visual tiles.
+- Hover highlight no longer repaints zone-mask tile pixels on the CPU.
+  - The highlight is now a material/shader effect on the zone-mask display tiles.
+  - Exact lookup still determines which zone is hovered.
 
 ## Current diagnosis
 
 - The browser slowdown is not just "Bevy is slow". The hotter architectural problem is coupling exact semantics to the visual raster tile cache.
 - Exact hover/click work should not depend on whether the display tiles for that pixel happen to be resident.
 - Exact/static assets must resolve through the configured public CDN base just like tiles and GeoJSON.
-  - Site-root relative URLs (`/images/...`) are wrong in the integrated site shell and break both direct-image display and exact-lookup hover.
+  - Site-root relative URLs (`/images/...`) are wrong in the integrated site shell and break both display tiles and exact-lookup hover.
 - Visual transport format and semantic lookup format must be treated as separate concerns.
 - The first stable target is:
   - exact lookup is cheap, bounded, and independent
   - visual raster work is measured and bounded separately
   - bridge work stays coarse and batched
-- Current measured result of the direct `zone_mask` image path:
-  - `vector_region_groups_enable` browser frame avg improved from `16.165 ms` to `6.206 ms`
-  - frame p95 improved from `24.8 ms` to `13.5 ms`
-  - pre-capture busy raster backlog improved from `422` tiles across `zone_mask` + `minimap` to `0`
-  - `raster.update_tiles total_ms` improved from `768.4` to `17.3`
+- Current measured result of the fixed display-tileset plus GPU hover path:
+  - `zone_mask_hover_sweep` browser frame avg improved from the earlier `10.634 ms` baseline to `3.760 ms`
+  - frame p95 improved from `45.0 ms` to `7.5 ms`
+  - `raster.sync_visual_filters` dropped out of the top hover spans entirely
+  - top hover spans are now `raster.update_tiles`, `raster.tile_entity_update`, and smaller bridge hover emission
+- Current integrated vector activation result on the same zone-mask path:
+  - `vector_region_groups_enable` frame avg is `7.629 ms`
+  - top spans remain `vector.layer_update`, `vector.geojson_parse`, then raster update/render prep
+- The browser bridge is measurable but not the current dominant cost in these runs.
 
 ## Current module split
 
@@ -68,10 +79,10 @@ Backend-neutral stages:
 - Map-side exact lookup cache in `map/exact_lookup.rs`
 - Hover/click path in `plugins/mask.rs` now samples the exact lookup asset instead of queueing raster pick probes
 - Old raster pick-probe request path was removed from `map/streaming.rs` and `map/raster/policy/requests.rs`
-- `zone_mask` visual rendering now uses a direct static image path instead of the tile streamer
-  - runtime: `map/raster/static_image.rs`
-  - asset path: `/images/zones_mask_v1.png`
-  - build staging keeps the canonical source image available under the CDN root
+- `zone_mask` visual rendering now uses fixed display chunks instead of the old visual/semantic tile coupling
+  - build output: `/images/tiles/zone_mask_visual/v1`
+  - runtime override: `map/layers/registry.rs`
+  - hover highlight render path: `map/raster/cache/render/zone_mask_material.rs`
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
 Current generated lookup asset:
@@ -86,14 +97,13 @@ Current generated lookup asset:
 1. Keep exact semantics off the visual raster path.
    - no reintroduction of pick-probe tile fetches
    - exact hover/click should stay available even when visual raster is still converging
-2. Keep `zone_mask` on the direct image path.
-   - do not move it back into the raster tile streamer
-   - keep direct-image and exact-lookup asset URLs on the configured CDN/public base path
-   - if future devices hit texture-size constraints, split it deliberately rather than reviving tile churn
+2. Keep hover highlight off the CPU raster compose path.
+   - do not reintroduce per-hover tile image mutation for `zone_mask`
+   - exact lookup should remain the semantic source; highlight should stay a render-time effect
 3. Reduce the remaining visual raster working set.
-   - the next raster candidate is `minimap`, which is still tile-streamed
+   - the current pre-capture busy layers are still `zone_mask` and `minimap`
    - continue measuring busy-layer counts before and after each change
-4. Reduce browser vector activation cost now that raster no longer dominates.
+4. Reduce browser vector activation cost now that hover is no longer the main regression.
    - focus on `vector.layer_update`
    - treat `vector.geojson_parse` as a separate one-shot activation cost
 5. Keep the profiling surface stable across backends.
@@ -102,17 +112,17 @@ Current generated lookup asset:
 
 ## Current plan
 
-1. Land the exact-lookup split and keep it measured.
-2. Keep `zone_mask` on the direct image path and re-measure the integrated browser setup.
-3. Simplify the remaining visual raster sources without bringing back tile-pyramid complexity.
+1. Keep the exact-lookup split and fixed display-tileset path measured.
+2. Keep `zone_mask` on the fixed visual chunk path, not the full-image path and not the old pyramid branch.
+3. Reduce residual raster startup/backlog for `zone_mask` + `minimap` without breaking exact semantics.
 4. Add explicit stage measurements for:
    - exact lookup load
    - exact lookup sample
    - visual tile fetch/decode
    - visual tile upload
    - bridge event flush
-5. Attack the next measured hotspot after `zone_mask`.
-   - current top steady-state browser hotspot: `vector.layer_update`
+5. Attack the next measured hotspot after hover stabilization.
+   - current top activation hotspot: `vector.layer_update`
    - current remaining raster source: `minimap`
 6. Only after the single-threaded pipeline is clean, revisit worker/thread options.
 
@@ -120,5 +130,6 @@ Current generated lookup asset:
 
 - Do not wait on future Bevy web multithreading.
 - Do not reintroduce more tile-pyramid work.
+- Do not go back to the direct full-image `zone_mask` path.
 - Do not let exact hover/click depend on display-tile residency again.
 - Do not make performance claims without a browser or native profiling run.

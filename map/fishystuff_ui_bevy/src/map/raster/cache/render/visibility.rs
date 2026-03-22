@@ -8,17 +8,20 @@ use crate::prelude::*;
 use super::super::super::policy::TileResidencyState;
 use super::super::{RasterTileCache, TileState};
 use super::geometry::tile_world_rect;
+use super::zone_mask_material::ZoneMaskMaterial;
 
 const DETAIL_LINGER_FRAMES: u64 = 24;
 
 pub(crate) struct VisibilityUpdateContext<'a> {
     pub(crate) materials: &'a mut Assets<ColorMaterial>,
+    pub(crate) zone_mask_materials: &'a mut Assets<ZoneMaskMaterial>,
     pub(crate) layer_registry: &'a LayerRegistry,
     pub(crate) layer_runtime: &'a LayerRuntime,
     pub(crate) residency: &'a TileResidencyState,
     pub(crate) frame: u64,
     pub(crate) camera_unstable: bool,
     pub(crate) view_mode: ViewMode,
+    pub(crate) hovered_zone_rgb: Option<u32>,
 }
 
 impl RasterTileCache {
@@ -31,12 +34,14 @@ impl RasterTileCache {
         let mut changed = false;
         let VisibilityUpdateContext {
             materials,
+            zone_mask_materials,
             layer_registry,
             layer_runtime,
             residency,
             frame,
             camera_unstable,
             view_mode,
+            hovered_zone_rgb,
         } = context;
         let mut visible_by_layer: std::collections::HashMap<LayerId, u32> =
             std::collections::HashMap::new();
@@ -104,7 +109,19 @@ impl RasterTileCache {
                     }
                 }
                 if alpha_changed {
-                    if entry.exact_quad {
+                    if let Some(material) = entry.zone_mask_material.as_ref() {
+                        if let Some(value) = zone_mask_materials.get_mut(material) {
+                            let hover_zone = if spec.uses_gpu_hover_highlight()
+                                && view_mode == ViewMode::Map2D
+                                && entity_visible
+                            {
+                                hovered_zone_rgb
+                            } else {
+                                None
+                            };
+                            value.sync_visual_state(alpha, hover_zone);
+                        }
+                    } else if entry.exact_quad {
                         if let Some(material) = entry.material.as_ref() {
                             if let Some(value) = materials.get_mut(material) {
                                 value.color = Color::srgba(1.0, 1.0, 1.0, alpha);
@@ -117,6 +134,18 @@ impl RasterTileCache {
                             color: Color::srgba(1.0, 1.0, 1.0, alpha),
                             ..default()
                         });
+                    }
+                } else if let Some(material) = entry.zone_mask_material.as_ref() {
+                    if let Some(value) = zone_mask_materials.get_mut(material) {
+                        let hover_zone = if spec.uses_gpu_hover_highlight()
+                            && view_mode == ViewMode::Map2D
+                            && entity_visible
+                        {
+                            hovered_zone_rgb
+                        } else {
+                            None
+                        };
+                        value.sync_visual_state(alpha, hover_zone);
                     }
                 }
             }

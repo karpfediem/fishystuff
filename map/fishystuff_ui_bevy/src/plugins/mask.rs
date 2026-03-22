@@ -79,9 +79,22 @@ fn hovered_zone_rgb(info: Option<&crate::plugins::api::HoverInfo>) -> Option<u32
     info.and_then(|hover| hover.rgb_u32)
 }
 
+fn set_hover_state(
+    hover: &mut HoverState,
+    display_state: &mut MapDisplayState,
+    next_info: Option<crate::plugins::api::HoverInfo>,
+) {
+    if hover.info != next_info {
+        hover.info = next_info.clone();
+    }
+    let next_hovered_zone_rgb = hovered_zone_rgb(next_info.as_ref());
+    if display_state.hovered_zone_rgb != next_hovered_zone_rgb {
+        display_state.hovered_zone_rgb = next_hovered_zone_rgb;
+    }
+}
+
 fn clear_hover_state(hover: &mut HoverState, display_state: &mut MapDisplayState) {
-    hover.info = None;
-    display_state.hovered_zone_rgb = None;
+    set_hover_state(hover, display_state, None);
 }
 
 fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
@@ -94,7 +107,10 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         || active_touch_count >= 2
         || (active_touch_count == 1 && context.pan.drag_distance > DRAG_THRESHOLD)
     {
-        context.display_state.hovered_zone_rgb = hovered_zone_rgb(context.hover.info.as_ref());
+        let next_hovered_zone_rgb = hovered_zone_rgb(context.hover.info.as_ref());
+        if context.display_state.hovered_zone_rgb != next_hovered_zone_rgb {
+            context.display_state.hovered_zone_rgb = next_hovered_zone_rgb;
+        }
         return;
     }
     if context.ui_capture.blocked {
@@ -175,7 +191,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
     });
     let zone_rgb = zone_sample.as_ref().map(|sample| sample.rgb);
     let zone_rgb_u32 = zone_sample.as_ref().map(|sample| sample.rgb_u32);
-    context.hover.info = Some(crate::plugins::api::HoverInfo {
+    let next_hover = crate::plugins::api::HoverInfo {
         map_px,
         map_py,
         rgb: zone_rgb,
@@ -184,8 +200,12 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         world_x: world_point.x,
         world_z: world_point.z,
         layer_samples,
-    });
-    context.display_state.hovered_zone_rgb = zone_rgb_u32;
+    };
+    set_hover_state(
+        &mut context.hover,
+        &mut context.display_state,
+        Some(next_hover),
+    );
 }
 
 fn handle_click(mut context: MaskClickContext<'_, '_>) {

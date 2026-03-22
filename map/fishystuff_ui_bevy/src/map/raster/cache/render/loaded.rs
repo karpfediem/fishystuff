@@ -12,11 +12,13 @@ use crate::prelude::*;
 use super::super::super::policy::{tile_should_render, TileResidencyState};
 use super::super::{RasterTileCache, RasterTileEntity, TilePixelData, TileState, TileStats};
 use super::geometry::{collect_tile_zone_rgbs, needs_affine_quad, tile_quad_mesh, tile_world_rect};
+use super::zone_mask_material::ZoneMaskMaterial;
 
 pub(crate) struct RasterLoadedAssets<'a> {
     pub(crate) images: &'a mut Assets<Image>,
     pub(crate) meshes: &'a mut Assets<Mesh>,
     pub(crate) materials: &'a mut Assets<ColorMaterial>,
+    pub(crate) zone_mask_materials: &'a mut Assets<ZoneMaskMaterial>,
 }
 
 pub(crate) struct RasterLoadedContext<'a> {
@@ -42,6 +44,7 @@ impl RasterTileCache {
             images,
             meshes,
             materials,
+            zone_mask_materials,
         } = assets;
         let RasterLoadedContext {
             asset_server,
@@ -104,7 +107,7 @@ impl RasterTileCache {
                     if entry.entity.is_none() {
                         let tile_space = TileSpace::new(spec.tile_px, spec.y_flip);
                         let depth = tile_z(layer_runtime.z_base(spec.id), spec.max_level, key.z);
-                        if needs_affine_quad(spec, world_transform) {
+                        if spec.uses_gpu_hover_highlight() {
                             let Some(mesh) = tile_quad_mesh(key, spec, tile_space, world_transform)
                             else {
                                 entry.state = TileState::Failed;
@@ -114,7 +117,36 @@ impl RasterTileCache {
                                 continue;
                             };
                             let mesh_handle = meshes.add(mesh);
-                            let material_handle = materials.add(ColorMaterial {
+                            let zone_mask_material_handle = zone_mask_materials.add(
+                                ZoneMaskMaterial::new(entry.handle.clone(), entry.alpha, None),
+                            );
+                            let entity = commands
+                                .spawn((
+                                    RasterTileEntity,
+                                    World2dRenderEntity,
+                                    world_2d_layers(),
+                                    Mesh2d(mesh_handle),
+                                    MeshMaterial2d(zone_mask_material_handle.clone()),
+                                    Transform::from_translation(Vec3::new(0.0, 0.0, depth)),
+                                ))
+                                .id();
+                            entry.entity = Some(entity);
+                            entry.material = None;
+                            entry.zone_mask_material = Some(zone_mask_material_handle);
+                            entry.exact_quad = true;
+                            entry.sprite_size = None;
+                            entry.depth = depth;
+                        } else if needs_affine_quad(spec, world_transform) {
+                            let Some(mesh) = tile_quad_mesh(key, spec, tile_space, world_transform)
+                            else {
+                                entry.state = TileState::Failed;
+                                if stats.inflight > 0 {
+                                    stats.inflight -= 1;
+                                }
+                                continue;
+                            };
+                            let mesh_handle = meshes.add(mesh);
+                            let color_material_handle = materials.add(ColorMaterial {
                                 texture: Some(entry.handle.clone()),
                                 color: Color::srgba(1.0, 1.0, 1.0, entry.alpha),
                                 ..default()
@@ -125,12 +157,13 @@ impl RasterTileCache {
                                     World2dRenderEntity,
                                     world_2d_layers(),
                                     Mesh2d(mesh_handle),
-                                    MeshMaterial2d(material_handle.clone()),
+                                    MeshMaterial2d(color_material_handle.clone()),
                                     Transform::from_translation(Vec3::new(0.0, 0.0, depth)),
                                 ))
                                 .id();
                             entry.entity = Some(entity);
-                            entry.material = Some(material_handle);
+                            entry.material = Some(color_material_handle);
+                            entry.zone_mask_material = None;
                             entry.exact_quad = true;
                             entry.sprite_size = None;
                             entry.depth = depth;
@@ -164,6 +197,7 @@ impl RasterTileCache {
                                 .id();
                             entry.entity = Some(entity);
                             entry.material = None;
+                            entry.zone_mask_material = None;
                             entry.exact_quad = false;
                             entry.sprite_size = Some(Vec2::new(w, h));
                             entry.depth = depth;

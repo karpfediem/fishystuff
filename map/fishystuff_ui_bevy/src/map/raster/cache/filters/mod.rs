@@ -88,7 +88,7 @@ impl RasterTileCache {
                 && zone_rgbs
                     .iter()
                     .all(|zone_rgb| filter.zone_rgbs.contains(zone_rgb));
-            let target_hover_zone = if apply_pick_filter {
+            let target_hover_zone = if apply_pick_filter && !spec.uses_gpu_hover_highlight() {
                 hover_zone_rgb
                     .filter(|hover_rgb| zone_rgbs.iter().any(|zone_rgb| zone_rgb == hover_rgb))
             } else {

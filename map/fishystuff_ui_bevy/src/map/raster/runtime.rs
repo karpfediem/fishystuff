@@ -14,6 +14,7 @@ use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
+use super::cache::{ZoneMaskMaterial, ZoneMaskMaterialPlugin};
 use super::{
     apply_layer_residency_plan, build_layer_requests, build_layer_residency_plan,
     compute_cache_budget, compute_desired_layer_tiles, desired_change_is_minor,
@@ -27,7 +28,8 @@ use super::{
 };
 
 pub(crate) fn build_plugin(app: &mut App) {
-    app.init_resource::<LayerRegistry>()
+    app.add_plugins(ZoneMaskMaterialPlugin)
+        .init_resource::<LayerRegistry>()
         .init_resource::<LayerRuntime>()
         .init_resource::<LayerViewState>()
         .init_resource::<TileFrameClock>()
@@ -38,13 +40,9 @@ pub(crate) fn build_plugin(app: &mut App) {
         .init_resource::<crate::map::streaming::TileStreamer>()
         .init_resource::<RasterTileCache>()
         .init_resource::<ExactLookupCache>()
-        .init_resource::<super::StaticRasterCache>()
         .init_resource::<TileStats>()
         .init_resource::<TileDebugControls>()
-        .add_systems(
-            Update,
-            (update_tiles, super::static_image::update_static_images).chain(),
-        );
+        .add_systems(Update, update_tiles);
 }
 
 #[derive(SystemParam)]
@@ -54,6 +52,7 @@ struct RasterUpdateContext<'w, 's> {
     images: ResMut<'w, Assets<Image>>,
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<ColorMaterial>>,
+    zone_mask_materials: ResMut<'w, Assets<ZoneMaskMaterial>>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
     pan_state: Res<'w, PanState>,
@@ -91,6 +90,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
     let images = &mut ctx.images;
     let meshes = &mut ctx.meshes;
     let materials = &mut ctx.materials;
+    let zone_mask_materials = &mut ctx.zone_mask_materials;
     let windows = &ctx.windows;
     let camera_q = &ctx.camera_q;
     let pan_state = &ctx.pan_state;
@@ -235,12 +235,6 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
 
         if !layer.is_raster() {
             runtime_state.manifest_status = LayerManifestStatus::Missing;
-            streamer.clear_layer(layer.id);
-            view_state.per_layer.remove(&layer.id);
-            continue;
-        }
-
-        if !layer.streams_raster_tiles() {
             streamer.clear_layer(layer.id);
             view_state.per_layer.remove(&layer.id);
             continue;
@@ -395,6 +389,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
             images,
             meshes,
             materials,
+            zone_mask_materials,
         },
         RasterLoadedContext {
             asset_server,
@@ -411,12 +406,14 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         commands,
         VisibilityUpdateContext {
             materials,
+            zone_mask_materials,
             layer_registry,
             layer_runtime,
             residency,
             frame,
             camera_unstable: motion_state.unstable,
             view_mode: view_mode.mode,
+            hovered_zone_rgb: display_state.hovered_zone_rgb,
         },
     );
 
@@ -424,7 +421,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         state.clip_mask_layer.is_some()
             && layer_registry
                 .get(layer_id)
-                .map(|layer| layer.streams_raster_tiles())
+                .map(|layer| layer.is_raster())
                 .unwrap_or(false)
     });
     let should_sync_visual_filters = view_mode.mode == ViewMode::Map2D

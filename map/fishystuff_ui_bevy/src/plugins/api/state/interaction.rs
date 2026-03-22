@@ -25,7 +25,7 @@ impl Default for SelectionState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HoverLayerSample {
     pub layer_id: String,
     pub layer_name: String,
@@ -43,7 +43,7 @@ pub struct HoverLayerSample {
     pub origin_world_z: Option<f64>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HoverInfo {
     pub map_px: i32,
     pub map_py: i32,
@@ -55,7 +55,7 @@ pub struct HoverInfo {
     pub layer_samples: Vec<HoverLayerSample>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SelectedInfo {
     pub map_px: i32,
     pub map_py: i32,

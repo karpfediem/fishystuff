@@ -218,6 +218,27 @@ if [ -f "$zone_mask_source_image" ] && [ "$zone_mask_source_image" != "$zone_mas
   cp -f "$zone_mask_source_image" "$zone_mask_cdn_image"
 fi
 
+ZONE_MASK_DISPLAY_TILE_PX=2048
+zone_mask_display_root="$CDN_IMAGE_ASSET_DIR/tiles/zone_mask_visual/v1"
+zone_mask_display_level0="$zone_mask_display_root/0"
+zone_mask_display_manifest="$zone_mask_display_root/tileset.json"
+if [ -f "$zone_mask_cdn_image" ] && { [ "${REBUILD_ZONE_MASK_DISPLAY_TILES:-0}" = "1" ] || [ ! -f "$zone_mask_display_manifest" ] || [ "$zone_mask_cdn_image" -nt "$zone_mask_display_manifest" ]; }; then
+  rm -rf "$zone_mask_display_root"
+  mkdir -p "$zone_mask_display_level0"
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin fishystuff_tilegen -- \
+    --input "$zone_mask_cdn_image" \
+    --out-dir "$zone_mask_display_level0" \
+    --tile-size "$ZONE_MASK_DISPLAY_TILE_PX" \
+    --expect-width 11560 \
+    --expect-height 10540
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin single_level_tileset -- \
+    --out "$zone_mask_display_manifest" \
+    --tile-px "$ZONE_MASK_DISPLAY_TILE_PX" \
+    --map-width 11560 \
+    --map-height 10540 \
+    --root-url /images/tiles/zone_mask_visual/v1
+fi
+
 zone_lookup_source_image="${ZONE_LOOKUP_SOURCE_IMAGE:-$zone_mask_cdn_image}"
 zone_lookup_out_dir="$CDN_IMAGE_ASSET_DIR/exact_lookup"
 zone_lookup_output="$zone_lookup_out_dir/zone_mask.v1.bin"

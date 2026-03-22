@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 use bevy::prelude::Resource;
 use fishystuff_api::models::layers::{
     GeometrySpace as GeometrySpaceDto, LayerDescriptor, LayerKind as LayerKindDto,
@@ -15,6 +16,8 @@ use crate::map::spaces::world::MapToWorld;
 use super::{
     GeometrySpace, LayerId, LayerKind, LayerSpec, LodPolicy, PickMode, StyleMode, VectorSourceSpec,
 };
+
+const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
 
 #[derive(Resource, Debug, Clone, Default)]
 pub struct LayerRegistry {
@@ -148,6 +151,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
     }
 
     let kind = layer_kind_from_dto(kind);
+    let pick_mode = parse_pick_mode(&pick_mode);
     let vector_source = vector_source
         .and_then(vector_source_from_dto)
         .filter(|_| kind == LayerKind::VectorGeoJson);
@@ -160,6 +164,29 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         return None;
     }
 
+    let mut tileset_url = normalize_site_asset_path(&tileset.manifest_url);
+    let mut tile_url_template = normalize_site_asset_path(&tileset.tile_url_template);
+    let mut tile_px = tile_px.max(1);
+    let mut max_level = max_level;
+    if kind == LayerKind::TiledRaster
+        && pick_mode == PickMode::ExactTilePixel
+        && layer_id == "zone_mask"
+    {
+        let public_base = normalize_public_base_url(None);
+        tileset_url = resolve_public_asset_url(
+            Some("/images/tiles/zone_mask_visual/v1/tileset.json"),
+            public_base.as_deref(),
+        )
+        .unwrap_or_else(|| "/images/tiles/zone_mask_visual/v1/tileset.json".to_string());
+        tile_url_template = resolve_public_asset_url(
+            Some("/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png"),
+            public_base.as_deref(),
+        )
+        .unwrap_or_else(|| "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png".to_string());
+        tile_px = ZONE_MASK_VISUAL_TILE_PX;
+        max_level = 0;
+    }
+
     Some(LayerSpec {
         id,
         key: layer_id,
@@ -168,12 +195,12 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         opacity_default: ui.opacity_default.clamp(0.0, 1.0),
         z_base: ui.z_base,
         kind,
-        tileset_url: normalize_site_asset_path(&tileset.manifest_url),
-        tile_url_template: normalize_site_asset_path(&tileset.tile_url_template),
+        tileset_url,
+        tile_url_template,
         tileset_version: tileset.version,
         vector_source,
         transform,
-        tile_px: tile_px.max(1),
+        tile_px,
         max_level,
         y_flip,
         lod_policy: LodPolicy {
@@ -196,7 +223,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
             motion_suppresses_refine: lod_policy.motion_suppresses_refine,
         },
         request_weight: request_weight.max(0.05),
-        pick_mode: parse_pick_mode(&pick_mode),
+        pick_mode,
         display_order: ui.display_order,
     })
 }
