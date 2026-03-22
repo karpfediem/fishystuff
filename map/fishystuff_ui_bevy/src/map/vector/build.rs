@@ -83,7 +83,7 @@ pub struct VectorBuildJob {
     features: Vec<PreparedFeature>,
     hover_features: Vec<HoverFeature>,
     next_feature: usize,
-    buckets: HashMap<StyleBucketKey, StyleBucketBuild>,
+    pieces: Vec<PolygonPiece>,
     pub stats: VectorLayerStats,
     started_at: Instant,
 }
@@ -92,13 +92,6 @@ struct PreparedFeature {
     bucket: StyleBucketKey,
     properties: Map<String, Value>,
     polygons: Vec<Vec<Vec<[f64; 2]>>>,
-}
-
-#[derive(Default)]
-struct StyleBucketBuild {
-    pieces: Vec<PolygonPiece>,
-    vertex_count: usize,
-    triangle_count: usize,
 }
 
 impl VectorBuildJob {
@@ -201,7 +194,7 @@ pub fn parse_into_job(
         features,
         hover_features: Vec::with_capacity(feature_count as usize),
         next_feature: 0,
-        buckets: HashMap::new(),
+        pieces: Vec::new(),
         stats: VectorLayerStats {
             fetched_bytes: bytes.len() as u32,
             feature_count,
@@ -256,15 +249,11 @@ pub fn advance_job(
             else {
                 continue;
             };
-            if let Some(piece) = triangulate_projected_polygon(&projected)? {
+            if let Some(mut piece) = triangulate_projected_polygon(&projected)? {
+                piece.color_rgba = feature.bucket.rgba;
                 let vertex_count = piece.positions.len() as u32;
                 let triangle_count = (piece.indices.len() / 3) as u32;
-                let bucket = job.buckets.entry(feature.bucket).or_default();
-                bucket.vertex_count = bucket.vertex_count.saturating_add(piece.positions.len());
-                bucket.triangle_count = bucket
-                    .triangle_count
-                    .saturating_add(piece.indices.len() / 3);
-                bucket.pieces.push(piece);
+                job.pieces.push(piece);
                 job.stats.vertex_count = job.stats.vertex_count.saturating_add(vertex_count);
                 job.stats.triangle_count = job.stats.triangle_count.saturating_add(triangle_count);
             }
@@ -307,26 +296,24 @@ pub fn finalize_job(job: VectorBuildJob, limits: VectorBuildLimits) -> BuiltVect
     stats.build_ms = job.started_at.elapsed().as_secs_f32() * 1000.0;
 
     let mut chunks = Vec::new();
-    for (bucket_key, bucket) in job.buckets {
-        let use_chunking = bucket.vertex_count > limits.max_chunk_vertices
-            || bucket.triangle_count > limits.max_chunk_triangles;
+    let use_chunking = stats.vertex_count as usize > limits.max_chunk_vertices
+        || stats.triangle_count as usize > limits.max_chunk_triangles;
 
-        if use_chunking {
-            stats.chunked_bucket_count = stats.chunked_bucket_count.saturating_add(1);
-            let mut groups: HashMap<(i32, i32), Vec<PolygonPiece>> = HashMap::new();
-            for piece in bucket.pieces {
-                let chunk_x = (piece.centroid_map[0] / MAP_CHUNK_PX).floor() as i32;
-                let chunk_y = (piece.centroid_map[1] / MAP_CHUNK_PX).floor() as i32;
-                groups.entry((chunk_x, chunk_y)).or_default().push(piece);
-            }
-            for pieces in groups.into_values() {
-                if let Some(chunk) = merge_pieces(bucket_key.rgba, pieces) {
-                    chunks.push(chunk);
-                }
-            }
-        } else if let Some(chunk) = merge_pieces(bucket_key.rgba, bucket.pieces) {
-            chunks.push(chunk);
+    if use_chunking {
+        stats.chunked_bucket_count = 1;
+        let mut groups: HashMap<(i32, i32), Vec<PolygonPiece>> = HashMap::new();
+        for piece in job.pieces {
+            let chunk_x = (piece.centroid_map[0] / MAP_CHUNK_PX).floor() as i32;
+            let chunk_y = (piece.centroid_map[1] / MAP_CHUNK_PX).floor() as i32;
+            groups.entry((chunk_x, chunk_y)).or_default().push(piece);
         }
+        for pieces in groups.into_values() {
+            if let Some(chunk) = merge_pieces(pieces) {
+                chunks.push(chunk);
+            }
+        }
+    } else if let Some(chunk) = merge_pieces(job.pieces) {
+        chunks.push(chunk);
     }
 
     stats.mesh_count = chunks.len() as u32;
@@ -337,16 +324,18 @@ pub fn finalize_job(job: VectorBuildJob, limits: VectorBuildLimits) -> BuiltVect
     }
 }
 
-fn merge_pieces(color_rgba: [u8; 4], pieces: Vec<PolygonPiece>) -> Option<BuiltVectorChunk> {
+fn merge_pieces(pieces: Vec<PolygonPiece>) -> Option<BuiltVectorChunk> {
     if pieces.is_empty() {
         return None;
     }
 
     let mut positions = Vec::new();
+    let mut vertex_colors = Vec::new();
     let mut indices = Vec::new();
 
     for piece in pieces {
         let base_index = positions.len() as u32;
+        vertex_colors.extend(std::iter::repeat_n(piece.color_rgba, piece.positions.len()));
         positions.extend(piece.positions);
         indices.extend(piece.indices.into_iter().map(|value| value + base_index));
     }
@@ -367,7 +356,8 @@ fn merge_pieces(color_rgba: [u8; 4], pieces: Vec<PolygonPiece>) -> Option<BuiltV
     }
 
     Some(BuiltVectorChunk {
-        color_rgba,
+        color_rgba: vertex_colors.first().copied().unwrap_or([0, 0, 0, 0]),
+        vertex_colors,
         positions,
         indices,
         min_world_x,
@@ -466,7 +456,7 @@ mod tests {
         assert_eq!(built.stats.polygon_count, 3);
         assert_eq!(built.stats.multipolygon_count, 1);
         assert_eq!(built.stats.hole_ring_count, 0);
-        assert_eq!(built.stats.mesh_count, 2);
+        assert_eq!(built.stats.mesh_count, 1);
     }
 
     #[test]

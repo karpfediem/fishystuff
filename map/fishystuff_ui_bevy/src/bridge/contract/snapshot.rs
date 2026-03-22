@@ -143,6 +143,14 @@ pub struct FishyMapLayerSummary {
     pub manifest_status: String,
     pub vector_status: String,
     pub vector_progress: f32,
+    pub vector_feature_count: u32,
+    pub vector_vertex_count: u32,
+    pub vector_triangle_count: u32,
+    pub vector_mesh_count: u32,
+    pub vector_chunked_bucket_count: u32,
+    pub vector_build_ms: f32,
+    pub vector_last_frame_build_ms: f32,
+    pub vector_cache_entries: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

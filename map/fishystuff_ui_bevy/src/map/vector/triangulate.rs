@@ -4,6 +4,7 @@ use crate::map::spaces::{MapPoint, WorldPoint};
 
 #[derive(Debug, Clone)]
 pub struct PolygonPiece {
+    pub color_rgba: [u8; 4],
     pub positions: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
     pub centroid_map: [f64; 2],
@@ -146,6 +147,7 @@ pub fn triangulate_projected_polygon(
     }
 
     Ok(Some(PolygonPiece {
+        color_rgba: [0, 0, 0, 0],
         positions,
         indices,
         centroid_map: projected.centroid_map,

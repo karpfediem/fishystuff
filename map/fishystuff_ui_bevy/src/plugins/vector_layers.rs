@@ -69,6 +69,12 @@ impl VectorLayerRuntime {
             finished: VectorFinishedCache::with_capacity(VECTOR_FINISHED_CACHE_MAX),
         }
     }
+
+    fn has_pending_work(&self) -> bool {
+        self.states
+            .values()
+            .any(vector_build_state_needs_frame_updates)
+    }
 }
 
 pub struct VectorLayersPlugin;
@@ -98,7 +104,7 @@ fn vector_layers_need_update(
         || cache_config.is_changed()
         || view_mode.is_changed()
         || bookmarks.is_changed()
-        || !vector_runtime.states.is_empty()
+        || vector_runtime.has_pending_work()
 }
 
 fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_, '_>) {
@@ -156,15 +162,8 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             )
         })
         .collect();
-    if let (Some(region_groups_id), Some(regions_id)) = (
-        registry.id_by_key("region_groups"),
-        registry.id_by_key("regions"),
-    ) {
-        let keep_regions_loaded = active_by_layer
-            .get(&region_groups_id)
-            .copied()
-            .unwrap_or(false);
-        if keep_regions_loaded || !update.bookmarks.entries.is_empty() {
+    if let Some(regions_id) = registry.id_by_key("regions") {
+        if !update.bookmarks.entries.is_empty() {
             active_by_layer.insert(regions_id, true);
         }
     }
@@ -497,6 +496,8 @@ fn clear_vector_build_metrics(runtime_state: &mut LayerRuntimeState, status: Lay
     runtime_state.vector_hole_ring_count = 0;
     runtime_state.vector_vertex_count = 0;
     runtime_state.vector_triangle_count = 0;
+    runtime_state.vector_mesh_count = 0;
+    runtime_state.vector_chunked_bucket_count = 0;
     runtime_state.vector_build_ms = 0.0;
     runtime_state.vector_last_frame_build_ms = 0.0;
     runtime_state.vector_cache_last_hit = false;
@@ -572,6 +573,8 @@ fn apply_stats(
     runtime_state.vector_hole_ring_count = stats.hole_ring_count;
     runtime_state.vector_vertex_count = stats.vertex_count;
     runtime_state.vector_triangle_count = stats.triangle_count;
+    runtime_state.vector_mesh_count = stats.mesh_count;
+    runtime_state.vector_chunked_bucket_count = stats.chunked_bucket_count;
     runtime_state.vector_build_ms = stats.build_ms;
     runtime_state.vector_last_frame_build_ms = stats.last_frame_build_ms;
 }
@@ -582,5 +585,72 @@ fn effective_revision(source: &VectorSourceSpec) -> String {
         format!("url:{}", source.url)
     } else {
         revision.to_string()
+    }
+}
+
+fn vector_build_state_needs_frame_updates(state: &VectorBuildState) -> bool {
+    matches!(
+        state,
+        VectorBuildState::Fetching { .. }
+            | VectorBuildState::Parsing { .. }
+            | VectorBuildState::Building { .. }
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{vector_build_state_needs_frame_updates, VectorBuildState, VectorLayerRuntime};
+    use crate::map::layers::{GeometrySpace, LayerId, StyleMode, VectorSourceSpec};
+    use bevy::platform::time::Instant;
+    use std::collections::HashMap;
+
+    #[test]
+    fn ready_vector_state_does_not_force_frame_updates() {
+        assert!(!vector_build_state_needs_frame_updates(
+            &VectorBuildState::Ready {
+                revision: "rg-v1".to_string(),
+            }
+        ));
+        assert!(!vector_build_state_needs_frame_updates(
+            &VectorBuildState::Failed {
+                revision: "rg-v1".to_string(),
+                error: "nope".to_string(),
+            }
+        ));
+    }
+
+    #[test]
+    fn runtime_only_requires_frame_updates_for_pending_work() {
+        let mut runtime = VectorLayerRuntime {
+            states: HashMap::new(),
+            finished: Default::default(),
+        };
+        assert!(!runtime.has_pending_work());
+
+        runtime.states.insert(
+            LayerId::from_raw(1),
+            VectorBuildState::Ready {
+                revision: "ready".to_string(),
+            },
+        );
+        assert!(!runtime.has_pending_work());
+
+        runtime.states.insert(
+            LayerId::from_raw(2),
+            VectorBuildState::Parsing {
+                source: VectorSourceSpec {
+                    url: "/region_groups/v1.geojson".to_string(),
+                    revision: "rg-v1".to_string(),
+                    geometry_space: GeometrySpace::MapPixels,
+                    style_mode: StyleMode::FeaturePropertyPalette,
+                    feature_id_property: Some("id".to_string()),
+                    color_property: Some("c".to_string()),
+                },
+                revision: "parsing".to_string(),
+                bytes: vec![1, 2, 3],
+                started_at: Instant::now(),
+            },
+        );
+        assert!(runtime.has_pending_work());
     }
 }

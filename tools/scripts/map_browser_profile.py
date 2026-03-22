@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
             "load_map",
             "minimap_enable",
             "minimap_pan_zoom",
+            "vector_regions_enable",
             "vector_region_groups_enable",
             "vector_region_groups_dom_toggle",
             "zone_mask_hover_sweep",
@@ -82,6 +83,8 @@ def scenario_capture_frames(scenario: str, capture_frames: int | None) -> int:
         return 120
     if scenario == "minimap_pan_zoom":
         return 240
+    if scenario == "vector_regions_enable":
+        return 180
     if scenario == "vector_region_groups_enable":
         return 180
     if scenario == "vector_region_groups_dom_toggle":
@@ -245,12 +248,14 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   if (!targetLayer?.layerId) {{
     throw new Error("No vector layer is available for profiling");
   }}
-  const visibleLayerIds = Array.isArray(state?.filters?.layerIdsVisible)
+  const visibleLayerIds = (Array.isArray(state?.filters?.layerIdsVisible)
     ? state.filters.layerIdsVisible.slice()
-    : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId);
-  if (!visibleLayerIds.includes(targetLayer.layerId)) {{
-    visibleLayerIds.push(targetLayer.layerId);
-  }}
+    : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId))
+    .filter((layerId) => {{
+      const layer = layers.find((candidate) => candidate?.layerId === layerId);
+      return layer?.kind !== "vector-geojson";
+    }});
+  visibleLayerIds.push(targetLayer.layerId);
   bridge.resetPerformanceSnapshot({{
     scenario: "vector_region_groups_enable",
     warmupFrames: 0,
@@ -262,6 +267,10 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   }});
   const frameWait = {wait_frames};
   const report = bridge.getPerformanceSnapshot();
+  const finalState = typeof bridge.refreshCurrentStateNow === "function"
+    ? bridge.refreshCurrentStateNow()
+    : bridge.getCurrentState();
+  const finalLayers = Array.isArray(finalState?.catalog?.layers) ? finalState.catalog.layers : [];
   report.browser_action = {{
     target_layer_id: targetLayer.layerId,
     pre_capture_raster_idle_timed_out: settle.timedOut,
@@ -271,6 +280,103 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     capture_frames_target: {capture_frames},
     completed_frames: frameWait.completedFrames,
     frame_wait_timed_out: frameWait.timedOut,
+  }};
+  report.state_excerpt = {{
+    visible_layer_ids: Array.isArray(finalState?.filters?.layerIdsVisible)
+      ? finalState.filters.layerIdsVisible.slice()
+      : [],
+        vector_layers: finalLayers
+      .filter((layer) => layer?.kind === "vector-geojson")
+      .map((layer) => ({{
+        layer_id: layer.layerId,
+        visible: layer.visible,
+        vector_status: layer.vectorStatus,
+        vector_progress: layer.vectorProgress,
+        vector_feature_count: layer.vectorFeatureCount,
+        vector_vertex_count: layer.vectorVertexCount,
+        vector_triangle_count: layer.vectorTriangleCount,
+        vector_mesh_count: layer.vectorMeshCount,
+        vector_chunked_bucket_count: layer.vectorChunkedBucketCount,
+        vector_build_ms: layer.vectorBuildMs,
+        vector_last_frame_build_ms: layer.vectorLastFrameBuildMs,
+        vector_cache_entries: layer.vectorCacheEntries,
+      }})),
+  }};
+  return report;
+}})()
+""".strip()
+    if scenario == "vector_regions_enable":
+        return f"""
+(async () => {{
+  const bridge = globalThis.window?.FishyMapBridge ?? null;
+  if (!bridge?.resetPerformanceSnapshot || !bridge?.setState || !bridge?.getCurrentState) {{
+    throw new Error("FishyMapBridge profiling API is unavailable");
+  }}
+  {wait_for_raster_idle}
+  const settle = await waitForRasterIdle();
+  const state = settle.state || bridge.getCurrentState();
+  const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
+  const targetLayer =
+    layers.find((layer) => layer?.layerId === "regions") ||
+    layers.find((layer) => layer?.kind === "vector-geojson" && layer?.layerId !== "region_groups") ||
+    layers.find((layer) => layer?.kind === "vector-geojson") ||
+    null;
+  if (!targetLayer?.layerId) {{
+    throw new Error("No vector layer is available for profiling");
+  }}
+  const visibleLayerIds = (Array.isArray(state?.filters?.layerIdsVisible)
+    ? state.filters.layerIdsVisible.slice()
+    : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId))
+    .filter((layerId) => {{
+      const layer = layers.find((candidate) => candidate?.layerId === layerId);
+      return layer?.kind !== "vector-geojson";
+    }});
+  visibleLayerIds.push(targetLayer.layerId);
+  bridge.resetPerformanceSnapshot({{
+    scenario: "vector_regions_enable",
+    warmupFrames: 0,
+  }});
+  bridge.setState({{
+    filters: {{
+      layerIdsVisible: visibleLayerIds,
+    }},
+  }});
+  const frameWait = {wait_frames};
+  const report = bridge.getPerformanceSnapshot();
+  const finalState = typeof bridge.refreshCurrentStateNow === "function"
+    ? bridge.refreshCurrentStateNow()
+    : bridge.getCurrentState();
+  const finalLayers = Array.isArray(finalState?.catalog?.layers) ? finalState.catalog.layers : [];
+  report.browser_action = {{
+    target_layer_id: targetLayer.layerId,
+    pre_capture_raster_idle_timed_out: settle.timedOut,
+    pre_capture_busy_raster_layers: settle.busyLayers,
+    pre_capture_busy_raster_layer_ids: settle.busyLayerIds,
+    pre_capture_busy_raster_tiles: settle.busyTiles,
+    capture_frames_target: {capture_frames},
+    completed_frames: frameWait.completedFrames,
+    frame_wait_timed_out: frameWait.timedOut,
+  }};
+  report.state_excerpt = {{
+    visible_layer_ids: Array.isArray(finalState?.filters?.layerIdsVisible)
+      ? finalState.filters.layerIdsVisible.slice()
+      : [],
+    vector_layers: finalLayers
+      .filter((layer) => layer?.kind === "vector-geojson")
+      .map((layer) => ({{
+        layer_id: layer.layerId,
+        visible: layer.visible,
+        vector_status: layer.vectorStatus,
+        vector_progress: layer.vectorProgress,
+        vector_feature_count: layer.vectorFeatureCount,
+        vector_vertex_count: layer.vectorVertexCount,
+        vector_triangle_count: layer.vectorTriangleCount,
+        vector_mesh_count: layer.vectorMeshCount,
+        vector_chunked_bucket_count: layer.vectorChunkedBucketCount,
+        vector_build_ms: layer.vectorBuildMs,
+        vector_last_frame_build_ms: layer.vectorLastFrameBuildMs,
+        vector_cache_entries: layer.vectorCacheEntries,
+      }})),
   }};
   return report;
 }})()
@@ -432,6 +538,21 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     throw new Error("region_groups visibility button not found");
   }};
   const button = await waitForLayerToggle();
+  const state = bridge.getCurrentState();
+  const layers = Array.isArray(state?.catalog?.layers) ? state.catalog.layers : [];
+  const visibleLayerIds = (Array.isArray(state?.filters?.layerIdsVisible)
+    ? state.filters.layerIdsVisible.slice()
+    : layers.filter((layer) => layer?.visible === true).map((layer) => layer.layerId))
+    .filter((layerId) => {{
+      const layer = layers.find((candidate) => candidate?.layerId === layerId);
+      return layer?.kind !== "vector-geojson";
+    }});
+  bridge.setState({{
+    filters: {{
+      layerIdsVisible: visibleLayerIds,
+    }},
+  }});
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   const settle = await waitForRasterIdle();
   bridge.resetPerformanceSnapshot({{
     scenario: "vector_region_groups_dom_toggle",
@@ -440,6 +561,10 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
   button.click();
   const frameWait = {wait_frames};
   const report = bridge.getPerformanceSnapshot();
+  const finalState = typeof bridge.refreshCurrentStateNow === "function"
+    ? bridge.refreshCurrentStateNow()
+    : bridge.getCurrentState();
+  const finalLayers = Array.isArray(finalState?.catalog?.layers) ? finalState.catalog.layers : [];
   report.browser_action = {{
     target_layer_id: "region_groups",
     pre_capture_raster_idle_timed_out: settle.timedOut,
@@ -450,6 +575,27 @@ def build_profile_expression(scenario: str, capture_frames: int) -> str:
     completed_frames: frameWait.completedFrames,
     frame_wait_timed_out: frameWait.timedOut,
     trigger: "dom_click",
+  }};
+  report.state_excerpt = {{
+    visible_layer_ids: Array.isArray(finalState?.filters?.layerIdsVisible)
+      ? finalState.filters.layerIdsVisible.slice()
+      : [],
+    vector_layers: finalLayers
+      .filter((layer) => layer?.kind === "vector-geojson")
+      .map((layer) => ({{
+        layer_id: layer.layerId,
+        visible: layer.visible,
+        vector_status: layer.vectorStatus,
+        vector_progress: layer.vectorProgress,
+        vector_feature_count: layer.vectorFeatureCount,
+        vector_vertex_count: layer.vectorVertexCount,
+        vector_triangle_count: layer.vectorTriangleCount,
+        vector_mesh_count: layer.vectorMeshCount,
+        vector_chunked_bucket_count: layer.vectorChunkedBucketCount,
+        vector_build_ms: layer.vectorBuildMs,
+        vector_last_frame_build_ms: layer.vectorLastFrameBuildMs,
+        vector_cache_entries: layer.vectorCacheEntries,
+      }})),
   }};
   return report;
 }})()

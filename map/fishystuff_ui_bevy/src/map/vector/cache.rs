@@ -28,6 +28,7 @@ pub struct VectorLayerStats {
 #[derive(Debug, Clone)]
 pub struct BuiltVectorChunk {
     pub color_rgba: [u8; 4],
+    pub vertex_colors: Vec<[u8; 4]>,
     pub positions: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
     pub min_world_x: f32,
@@ -148,6 +149,9 @@ impl VectorMeshBundleSet {
                 continue;
             }
             if chunk_contains_point(chunk, world_x, world_z) {
+                if let Some(color) = triangle_color(chunk, world_x, world_z) {
+                    return Some(color);
+                }
                 return Some(chunk.color_rgba);
             }
         }
@@ -172,6 +176,10 @@ impl VectorMeshBundleSet {
 }
 
 fn chunk_contains_point(chunk: &BuiltVectorChunk, world_x: f32, world_z: f32) -> bool {
+    triangle_color(chunk, world_x, world_z).is_some()
+}
+
+fn triangle_color(chunk: &BuiltVectorChunk, world_x: f32, world_z: f32) -> Option<[u8; 4]> {
     for triangle in chunk.indices.chunks_exact(3) {
         let Some(a) = chunk.positions.get(triangle[0] as usize) else {
             continue;
@@ -183,10 +191,14 @@ fn chunk_contains_point(chunk: &BuiltVectorChunk, world_x: f32, world_z: f32) ->
             continue;
         };
         if point_in_triangle_2d(world_x, world_z, a, b, c) {
-            return true;
+            return chunk
+                .vertex_colors
+                .get(triangle[0] as usize)
+                .copied()
+                .or(Some(chunk.color_rgba));
         }
     }
-    false
+    None
 }
 
 fn feature_contains_point(feature: &HoverFeature, world_x: f32, world_z: f32) -> bool {

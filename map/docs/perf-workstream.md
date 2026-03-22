@@ -93,8 +93,21 @@ This note keeps the latest direction visible without rereading the full task his
   - top hover spans are now `raster.update_tiles`, `raster.sync_visual_filters`, and `raster.desired_tile_set_build`
   - the current source of truth is the exact span path; any future fast path must derive from exact zone semantics, not sampled display color
 - Current integrated vector activation result on the same zone-mask path:
-  - latest `vector_region_groups_enable` frame avg is `7.835 ms`
-  - top spans are `vector.layer_update`, `vector.geojson_parse`, then host/bridge patch ingest
+  - the browser vector scenarios now explicitly isolate a single vector layer instead of accidentally inheriting both default-visible vector layers
+  - the first measured fix stopped forcing `regions` active when `region_groups` is enabled, and stopped `vector.layer_update` from running every frame just because a layer stayed `Ready`
+  - the main remaining vector bottleneck was not raw triangle count; it was mesh count
+  - before the render-path change:
+    - `region_groups` alone built `240` meshes for `240` features
+    - `regions` alone built `1244` meshes for `1252` features
+  - the current vector render path now uses per-vertex color in shared chunk meshes instead of one mesh/material bucket per unique feature color
+  - after that change:
+    - `region_groups` alone builds `1` mesh for `40351` triangles / `41074` vertices
+    - `regions` alone builds `1` mesh for `108595` triangles / `113343` vertices
+  - latest isolated browser results:
+    - `vector_region_groups_enable`: `7.498 ms` avg / `18.4 ms` p95 -> `4.249 ms` avg / `12.0 ms` p95
+    - `vector_region_groups_dom_toggle`: `8.283 ms` avg / `15.9 ms` p95 -> `4.244 ms` avg / `12.1 ms` p95
+    - `vector_regions_enable`: `8.777 ms` avg / `21.8 ms` p95 -> `5.002 ms` avg / `10.3 ms` p95
+  - current top vector spans are now `vector.layer_update`, `vector.geojson_parse`, then light residual raster work from the rest of the scene
 - Current integrated minimap results:
   - coarse single-level minimap cut previously reached `load_map` avg `44.513 ms`, p95 `128.5 ms`
   - first full-detail `1024` minimap pyramid reached `minimap_enable` avg `27.981 ms`, p95 `87.1 ms`
@@ -168,6 +181,7 @@ Backend-neutral stages:
 - Browser profiling now includes a `minimap_enable` scenario for minimap visibility regressions after startup
 - Browser profiling now includes a `minimap_pan_zoom` scenario for exploration-time minimap regressions
 - Browser profiling now includes a `zone_mask_hover_far_jumps` scenario for large-distance hover transitions
+- Browser profiling now includes both `vector_region_groups_enable` and `vector_regions_enable` as isolated single-layer scenarios
 - Browser profiling temp directories no longer cause false non-zero exits after successful runs
 
 Current generated lookup asset:
@@ -194,10 +208,11 @@ Current generated lookup asset:
    - the current browser-safe `512` finest-level pyramid keeps top-zoom detail while greatly reducing per-tile decode spikes
    - the minimap LOD override plus real over-budget eviction are now part of that guarantee; removing either one reintroduces browser-risky finest-tile accumulation
    - continue measuring busy-layer counts before and after each change
-4. Reduce browser vector activation cost now that the blank-screen regression is gone.
-   - focus on `vector.layer_update`
-   - treat `vector.geojson_parse` as a separate one-shot activation cost
-   - host/bridge patch ingest is now visible enough to profile alongside vector work
+4. Reduce the remaining browser vector activation cost now that the draw-call cliff is fixed.
+   - the per-feature mesh explosion is gone; keep `vector_mesh_count` low
+   - current activation hotspots are `vector.layer_update` and `vector.geojson_parse`
+   - the next vector work should focus on one-shot build/parse cost, not reintroducing per-feature draw buckets
+   - host/bridge patch ingest is visible but still secondary in the current isolated vector scenarios
 5. Keep the profiling surface stable across backends.
    - measure the same named stages whether decode runs on the main thread, in JS workers, or in future wasm threads
 6. Record future web-threading constraints, but do not block current optimization work on them.
@@ -214,8 +229,9 @@ Current generated lookup asset:
    - visual tile fetch/decode
    - visual tile upload
    - bridge event flush
-6. Attack the next measured hotspot after the hover-path split.
+6. Attack the next measured hotspot after the vector draw-call collapse.
   - current top activation hotspot: `vector.layer_update`
+  - current top one-shot vector hotspot: `vector.geojson_parse`
   - current top hover hotspots: `raster.update_tiles`, `raster.visible_tile_computation`, and `raster.desired_tile_set_build`
   - current startup raster hotspot after the minimap cut: `raster.update_tiles` / `raster.tile_entity_update`
   - `minimap_enable` and `minimap_pan_zoom` are now the dedicated browser regression scenarios for that layer

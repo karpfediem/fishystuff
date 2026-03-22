@@ -37,18 +37,29 @@ pub fn spawn_vector_meshes(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::default(),
         );
+        let vertex_colors = chunk
+            .vertex_colors
+            .iter()
+            .map(|rgba| {
+                [
+                    rgba[0] as f32 / 255.0,
+                    rgba[1] as f32 / 255.0,
+                    rgba[2] as f32 / 255.0,
+                    rgba[3] as f32 / 255.0,
+                ]
+            })
+            .collect::<Vec<_>>();
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, chunk.positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
         mesh.insert_indices(Indices::U32(chunk.indices));
 
         let mesh_handle = meshes.add(mesh);
-        let rgba = chunk.color_rgba;
-        let color = Color::srgba_u8(rgba[0], rgba[1], rgba[2], rgba[3]).to_srgba();
         let material_2d = materials_2d.add(ColorMaterial {
-            color: Color::srgba(color.red, color.green, color.blue, alpha),
+            color: Color::srgba(1.0, 1.0, 1.0, alpha),
             ..Default::default()
         });
         let material_3d = materials_3d.add(StandardMaterial {
-            base_color: Color::srgba(color.red, color.green, color.blue, alpha),
+            base_color: Color::srgba(1.0, 1.0, 1.0, alpha),
             alpha_mode: if alpha >= 0.999 {
                 bevy::prelude::AlphaMode::Opaque
             } else {

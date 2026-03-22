@@ -69,6 +69,30 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
                 vector_progress: runtime_state
                     .map(|state| state.vector_progress)
                     .unwrap_or_default(),
+                vector_feature_count: runtime_state
+                    .map(|state| state.vector_feature_count)
+                    .unwrap_or_default(),
+                vector_vertex_count: runtime_state
+                    .map(|state| state.vector_vertex_count)
+                    .unwrap_or_default(),
+                vector_triangle_count: runtime_state
+                    .map(|state| state.vector_triangle_count)
+                    .unwrap_or_default(),
+                vector_mesh_count: runtime_state
+                    .map(|state| state.vector_mesh_count)
+                    .unwrap_or_default(),
+                vector_chunked_bucket_count: runtime_state
+                    .map(|state| state.vector_chunked_bucket_count)
+                    .unwrap_or_default(),
+                vector_build_ms: runtime_state
+                    .map(|state| state.vector_build_ms)
+                    .unwrap_or_default(),
+                vector_last_frame_build_ms: runtime_state
+                    .map(|state| state.vector_last_frame_build_ms)
+                    .unwrap_or_default(),
+                vector_cache_entries: runtime_state
+                    .map(|state| state.vector_cache_entries)
+                    .unwrap_or_default(),
             }
         })
         .collect()

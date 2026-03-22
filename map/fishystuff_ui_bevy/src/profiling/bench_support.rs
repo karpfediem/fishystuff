@@ -445,6 +445,8 @@ fn runtime_state_for(layer: &LayerSpec) -> LayerRuntimeState {
         vector_hole_ring_count: 0,
         vector_vertex_count: 0,
         vector_triangle_count: 0,
+        vector_mesh_count: 0,
+        vector_chunked_bucket_count: 0,
         vector_build_ms: 0.0,
         vector_last_frame_build_ms: 0.0,
         vector_cache_hits: 0,
