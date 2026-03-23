@@ -25,6 +25,7 @@ const {
   parseZoneRgbSearch,
   parseImportedBookmarks,
   parseWindowUiState,
+  projectStateBundleStatePatch,
   renameBookmark,
   resolveHoveredBookmark,
   resolveDisplayBookmarks,
@@ -347,6 +348,32 @@ test("buildSelectionSummaryText prefers semantic row keys over display labels", 
     ),
     "Olvia",
   );
+});
+
+test("projectStateBundleStatePatch preserves unrelated applied filters for optimistic search selection", () => {
+  const stateBundle = {
+    state: {},
+    inputState: {
+      version: 1,
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [0xc17f7f],
+        searchText: "cron",
+      },
+    },
+  };
+
+  const nextFilters = projectStateBundleStatePatch(stateBundle, {
+    version: 1,
+    filters: {
+      searchText: "",
+      fishIds: [912, 77],
+    },
+  }).inputState.filters;
+
+  assert.deepEqual(nextFilters.fishIds, [912, 77]);
+  assert.deepEqual(nextFilters.zoneRgbs, [0xc17f7f]);
+  assert.equal(nextFilters.searchText, "");
 });
 
 test("buildZoneEvidenceSummary explains that non-zone selections have no zone evidence", () => {

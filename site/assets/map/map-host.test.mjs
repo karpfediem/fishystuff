@@ -720,6 +720,15 @@ test("selection output events include semantic payload and refreshed state", asy
       sessionStorage: env.sessionStorage,
     });
     wasm.calls.stateReads = 0;
+    bridge.setState({
+      version: 1,
+      filters: {
+        searchText: "coastal",
+        fishIds: [77],
+        zoneRgbs: [0xc17f7f],
+      },
+    });
+    wasm.calls.stateReads = 0;
 
     const received = await new Promise((resolve) => {
       container.addEventListener(
@@ -745,6 +754,9 @@ test("selection output events include semantic payload and refreshed state", asy
     assert.equal(received.worldZ, 22);
     assert.deepEqual(received.layerSamples, semanticSelection.layerSamples);
     assert.deepEqual(received.state.selection, semanticSelection);
+    assert.deepEqual(received.inputState.filters.fishIds, [77]);
+    assert.deepEqual(received.inputState.filters.zoneRgbs, [0xc17f7f]);
+    assert.equal(received.inputState.filters.searchText, "coastal");
   } finally {
     bridge?.destroy();
     env.restore();
