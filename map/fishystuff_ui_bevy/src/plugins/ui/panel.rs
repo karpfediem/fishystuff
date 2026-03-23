@@ -1,6 +1,8 @@
 use super::setup::text_style;
 use super::*;
-use crate::map::interaction_summary::{selection_heading, selection_summary_text};
+use crate::map::interaction_summary::{
+    selection_heading, selection_overview_lines, selection_summary_text,
+};
 use bevy::ecs::system::SystemParam;
 pub(super) fn update_selected_text(
     selection: Res<SelectionState>,
@@ -36,6 +38,48 @@ pub(super) fn update_panel_title(
     } else {
         "FishyStuff Map".to_string()
     };
+}
+
+pub(super) fn sync_selection_overview_list(
+    selection: Res<SelectionState>,
+    fonts: Res<UiFonts>,
+    mut commands: Commands,
+    list_q: Query<(Entity, Option<&Children>), With<SelectionOverviewList>>,
+) {
+    let Ok((list_entity, children)) = list_q.single() else {
+        return;
+    };
+    let list_is_empty = children.map(|children| children.is_empty()).unwrap_or(true);
+    if !selection.is_changed() && !list_is_empty {
+        return;
+    }
+    if let Some(children) = children {
+        for child in children.iter() {
+            commands.entity(child).despawn();
+        }
+    }
+
+    let style = text_style(12.0, Color::srgb(0.82, 0.84, 0.90), fonts.regular.clone());
+    let lines = selection
+        .info
+        .as_ref()
+        .map(selection_overview_lines)
+        .unwrap_or_default();
+    if lines.is_empty() {
+        return;
+    }
+    commands.entity(list_entity).with_children(|list| {
+        for line in lines {
+            list.spawn((
+                UiTextBundle::new(line, &style),
+                Node {
+                    width: Val::Percent(100.0),
+                    ..default()
+                },
+                ClassList::new("label selection-overview-item"),
+            ));
+        }
+    });
 }
 
 pub(super) fn sync_zone_evidence_list(mut sync: ZoneEvidenceListSync<'_, '_>) {
@@ -109,7 +153,7 @@ pub(super) fn sync_zone_evidence_list(mut sync: ZoneEvidenceListSync<'_, '_>) {
 
     let placeholder = if sync.selection.zone_stats.is_none() {
         if sync.selection.info.is_some() {
-            "No zone evidence loaded."
+            "No zone evidence loaded for this selection."
         } else {
             "Click a zone on the map to load evidence."
         }

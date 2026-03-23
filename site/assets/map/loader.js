@@ -2163,7 +2163,7 @@ function ensureZoneEvidenceElements(elements) {
   section.className = "space-y-2";
   section.innerHTML = `
     <div class="flex items-center justify-between gap-3">
-      <span class="text-sm font-semibold">Zone Info</span>
+      <span class="text-sm font-semibold">Selection</span>
       <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
     </div>
     <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>

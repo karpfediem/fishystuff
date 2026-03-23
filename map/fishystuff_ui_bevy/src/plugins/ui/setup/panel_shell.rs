@@ -48,6 +48,16 @@ pub(super) fn spawn_selection_panel(root: &mut ChildSpawnerCommands, styles: &Se
             ClassList::new("label"),
         ));
         panel.spawn((
+            SelectionOverviewList,
+            Node {
+                width: Val::Percent(100.0),
+                row_gap: Val::Px(4.0),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            ClassList::new("selection-overview-list"),
+        ));
+        panel.spawn((
             UiTextBundle::new("Evidence", &styles.small_style),
             ClassList::new("section-title"),
         ));

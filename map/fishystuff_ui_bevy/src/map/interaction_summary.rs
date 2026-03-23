@@ -30,7 +30,7 @@ pub fn selection_heading(info: &SelectedInfo) -> Option<SelectionHeading> {
 
 pub fn selection_summary_text(info: &SelectedInfo) -> String {
     let heading = selection_heading(info);
-    let lines = selection_overview_lines(info, heading.as_ref());
+    let lines = selection_overview_lines_with_heading(info, heading.as_ref());
     if !lines.is_empty() {
         return lines.into_iter().take(2).collect::<Vec<_>>().join(" · ");
     }
@@ -40,7 +40,12 @@ pub fn selection_summary_text(info: &SelectedInfo) -> String {
     )
 }
 
-fn selection_overview_lines(
+pub fn selection_overview_lines(info: &SelectedInfo) -> Vec<String> {
+    let heading = selection_heading(info);
+    selection_overview_lines_with_heading(info, heading.as_ref())
+}
+
+fn selection_overview_lines_with_heading(
     info: &SelectedInfo,
     heading: Option<&SelectionHeading>,
 ) -> Vec<String> {
@@ -123,7 +128,7 @@ fn nonempty(value: Option<&str>) -> Option<&str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{selection_heading, selection_summary_text};
+    use super::{selection_heading, selection_overview_lines, selection_summary_text};
     use crate::map::layer_query::LayerQuerySample;
     use crate::plugins::api::SelectedInfo;
     use fishystuff_api::Rgb;
@@ -254,6 +259,10 @@ mod tests {
         assert_eq!(
             selection_summary_text(&info),
             "Resources: Tarif · Origin: Tarif".to_string()
+        );
+        assert_eq!(
+            selection_overview_lines(&info),
+            vec!["Resources: Tarif".to_string(), "Origin: Tarif".to_string()]
         );
     }
 

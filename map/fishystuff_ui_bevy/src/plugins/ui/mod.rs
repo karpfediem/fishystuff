@@ -69,6 +69,9 @@ struct PanelTitleText;
 struct SelectionSummaryText;
 
 #[derive(Component)]
+struct SelectionOverviewList;
+
+#[derive(Component)]
 struct ZoneEvidenceScroll;
 
 #[derive(Component)]
@@ -328,6 +331,7 @@ impl Plugin for UiPlugin {
                     search::update_autocomplete_ui,
                     panel::update_panel_title,
                     panel::update_selected_text,
+                    panel::sync_selection_overview_list,
                     panel::sync_zone_evidence_list,
                     scroll::handle_autocomplete_scrollbar_drag,
                     scroll::sync_autocomplete_scrollbar,
