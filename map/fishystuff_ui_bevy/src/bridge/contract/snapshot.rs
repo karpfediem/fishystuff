@@ -7,6 +7,18 @@ use super::{
     FishyMapViewMode, FISHYMAP_CONTRACT_VERSION,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum FishyMapSelectionPointKind {
+    #[default]
+    #[serde(rename = "clicked")]
+    Clicked,
+    #[serde(rename = "waypoint")]
+    Waypoint,
+    #[serde(rename = "bookmark")]
+    Bookmark,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapCameraSnapshot {
@@ -33,6 +45,8 @@ pub struct FishyMapViewSnapshot {
 pub struct FishyMapSelectionSnapshot {
     pub world_x: Option<f64>,
     pub world_z: Option<f64>,
+    pub point_kind: Option<FishyMapSelectionPointKind>,
+    pub point_label: Option<String>,
     pub layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
     pub zone_stats: Option<FishyMapZoneStatsSnapshot>,
 }

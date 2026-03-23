@@ -1,3 +1,4 @@
+use crate::bridge::contract::FishyMapSelectionPointKind;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::field_semantics::semantic_sample_for_field_id;
 use crate::map::field_view::sample_rgb_for_field_id;
@@ -17,6 +18,8 @@ pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
         world_x: hover.world_x,
         world_z: hover.world_z,
         sampled_world_point: true,
+        point_kind: Some(FishyMapSelectionPointKind::Clicked),
+        point_label: None,
         layer_samples: hover.layer_samples.clone(),
     })
 }
@@ -24,9 +27,17 @@ pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
 pub fn selected_info_at_world_point(
     world_point: WorldPoint,
     context: &WorldPointQueryContext<'_>,
+    point_kind: FishyMapSelectionPointKind,
+    point_label: Option<&str>,
 ) -> Option<SelectedInfo> {
     let hover = hover_info_at_world_point(world_point, context)?;
-    selected_info_from_hover(&hover)
+    let mut selected = selected_info_from_hover(&hover)?;
+    selected.point_kind = Some(point_kind);
+    selected.point_label = point_label
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    Some(selected)
 }
 
 pub fn selected_info_for_zone_rgb(
@@ -44,6 +55,8 @@ pub fn selected_info_for_zone_rgb(
         world_x: f64::NAN,
         world_z: f64::NAN,
         sampled_world_point: false,
+        point_kind: None,
+        point_label: None,
         layer_samples,
     }
 }
@@ -62,6 +75,8 @@ pub fn selected_info_for_semantic_field(
         world_x: f64::NAN,
         world_z: f64::NAN,
         sampled_world_point: false,
+        point_kind: None,
+        point_label: None,
         layer_samples: vec![layer_sample],
     })
 }
@@ -93,6 +108,7 @@ mod tests {
         selected_info_for_semantic_field, selected_info_for_zone_rgb, selected_info_from_hover,
         semantic_layer_sample_for_field_id,
     };
+    use crate::bridge::contract::FishyMapSelectionPointKind;
     use crate::map::field_metadata::FieldMetadataCache;
     use crate::map::layer_query::LayerQuerySample;
     use crate::map::layers::LayerRegistry;
@@ -162,6 +178,11 @@ mod tests {
         assert_eq!(selected.map_py, 34);
         assert_eq!(selected.zone_rgb_u32(), Some(0x123456));
         assert!(selected.sampled_world_point);
+        assert_eq!(
+            selected.point_kind,
+            Some(FishyMapSelectionPointKind::Clicked)
+        );
+        assert_eq!(selected.point_label, None);
         assert_eq!(selected.world_x, 1.25);
         assert_eq!(selected.world_z, 2.5);
         assert_eq!(selected.layer_samples, hover.layer_samples);
@@ -189,6 +210,10 @@ mod tests {
         let selected = selected_info_from_hover(&hover).expect("selected info");
         assert_eq!(selected.zone_rgb_u32(), None);
         assert!(selected.sampled_world_point);
+        assert_eq!(
+            selected.point_kind,
+            Some(FishyMapSelectionPointKind::Clicked)
+        );
         assert_eq!(selected.layer_samples, hover.layer_samples);
     }
 
@@ -258,6 +283,8 @@ mod tests {
         let selected = selected_info_for_zone_rgb(&registry, &field_metadata, 0x223344);
         assert_eq!(selected.zone_rgb_u32(), Some(0x223344));
         assert!(!selected.sampled_world_point);
+        assert_eq!(selected.point_kind, None);
+        assert_eq!(selected.point_label, None);
         assert!(!selected.world_x.is_finite());
         assert!(!selected.world_z.is_finite());
         assert_eq!(selected.layer_samples.len(), 1);

@@ -147,6 +147,8 @@ mod tests {
             world_x: 100.0,
             world_z: 200.0,
             sampled_world_point: true,
+            point_kind: Some(crate::bridge::contract::FishyMapSelectionPointKind::Clicked),
+            point_label: None,
             layer_samples,
         }
     }

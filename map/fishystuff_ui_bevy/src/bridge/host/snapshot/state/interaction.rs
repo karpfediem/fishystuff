@@ -9,6 +9,8 @@ pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
     FishyMapSelectionSnapshot {
         world_x: selected_world_point.map(|value| value.0),
         world_z: selected_world_point.map(|value| value.1),
+        point_kind: info.and_then(|value| value.point_kind),
+        point_label: info.and_then(|value| value.point_label.clone()),
         layer_samples: info
             .map(|value| hover_layer_samples_snapshot(&value.layer_samples))
             .unwrap_or_default(),
@@ -115,6 +117,8 @@ mod tests {
             world_x: f64::NAN,
             world_z: f64::NAN,
             sampled_world_point: false,
+            point_kind: None,
+            point_label: None,
             layer_samples: vec![crate::map::layer_query::LayerQuerySample {
                 layer_id: "zone_mask".to_string(),
                 layer_name: "Zone Mask".to_string(),
@@ -138,6 +142,8 @@ mod tests {
             world_x: 123.0,
             world_z: 456.0,
             sampled_world_point: true,
+            point_kind: Some(crate::bridge::contract::FishyMapSelectionPointKind::Clicked),
+            point_label: Some("Clicked point".to_string()),
             layer_samples: vec![crate::map::layer_query::LayerQuerySample {
                 layer_id: "zone_mask".to_string(),
                 layer_name: "Zone Mask".to_string(),
@@ -151,5 +157,11 @@ mod tests {
         };
 
         assert_eq!(info.effective_world_point(), Some((123.0, 456.0)));
+        let snapshot = super::effective_selection_snapshot(Some(&info), None);
+        assert_eq!(
+            snapshot.point_kind,
+            Some(crate::bridge::contract::FishyMapSelectionPointKind::Clicked)
+        );
+        assert_eq!(snapshot.point_label.as_deref(), Some("Clicked point"));
     }
 }

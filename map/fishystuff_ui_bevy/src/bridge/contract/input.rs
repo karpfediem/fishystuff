@@ -7,6 +7,7 @@ use super::normalize::{
     deserialize_nullable_string_field, normalize_i32_list, normalize_layer_clip_mask_map,
     normalize_layer_opacity_map, normalize_string_list, normalize_u32_list, normalize_u32_map,
 };
+use super::snapshot::FishyMapSelectionPointKind;
 use super::{
     default_contract_version, FishyMapViewSnapshot, FISHYMAP_CONTRACT_VERSION,
     FISHYMAP_POINT_ICON_SCALE_MAX, FISHYMAP_POINT_ICON_SCALE_MIN,
@@ -273,6 +274,8 @@ pub struct FishyMapUiPatch {
 pub struct FishyMapWorldPointCommand {
     pub world_x: f64,
     pub world_z: f64,
+    pub point_kind: Option<FishyMapSelectionPointKind>,
+    pub point_label: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

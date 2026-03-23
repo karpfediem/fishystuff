@@ -1,5 +1,6 @@
 use fishystuff_api::models::zone_stats::ZoneStatsResponse;
 
+use crate::bridge::contract::FishyMapSelectionPointKind;
 use crate::map::layer_query::LayerQuerySample;
 use crate::prelude::*;
 
@@ -61,6 +62,8 @@ pub struct SelectedInfo {
     pub world_x: f64,
     pub world_z: f64,
     pub sampled_world_point: bool,
+    pub point_kind: Option<FishyMapSelectionPointKind>,
+    pub point_label: Option<String>,
     pub layer_samples: Vec<LayerQuerySample>,
 }
 

@@ -17,10 +17,10 @@ pub use normalize::{
 pub use snapshot::{
     FishyMapCameraSnapshot, FishyMapCatalogSnapshot, FishyMapFishSummary,
     FishyMapHoverLayerSampleSnapshot, FishyMapHoverSnapshot, FishyMapLayerSummary,
-    FishyMapPatchSummary, FishyMapSelectionSnapshot, FishyMapSemanticTermSummary,
-    FishyMapStateSnapshot, FishyMapStatusSnapshot, FishyMapViewSnapshot,
-    FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot, FishyMapZoneEvidenceEntrySnapshot,
-    FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
+    FishyMapPatchSummary, FishyMapSelectionPointKind, FishyMapSelectionSnapshot,
+    FishyMapSemanticTermSummary, FishyMapStateSnapshot, FishyMapStatusSnapshot,
+    FishyMapViewSnapshot, FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot,
+    FishyMapZoneEvidenceEntrySnapshot, FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
 };
 
 pub const FISHYMAP_CONTRACT_VERSION: u8 = 1;
@@ -479,6 +479,8 @@ mod tests {
             version: 1,
             world_x: Some(10.0),
             world_z: Some(20.0),
+            point_kind: Some(FishyMapSelectionPointKind::Waypoint),
+            point_label: Some("Olvia Academy".to_string()),
             layer_samples: Vec::new(),
         })
         .expect("serialize");
@@ -486,6 +488,8 @@ mod tests {
         assert!(json.contains(r#""type":"selection-changed""#));
         assert!(json.contains(r#""worldX":10.0"#));
         assert!(json.contains(r#""worldZ":20.0"#));
+        assert!(json.contains(r#""pointKind":"waypoint""#));
+        assert!(json.contains(r#""pointLabel":"Olvia Academy""#));
     }
 
     #[test]

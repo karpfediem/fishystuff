@@ -1,7 +1,10 @@
 use serde::Serialize;
 use serde_json::Value;
 
-use super::{FishyMapCameraSnapshot, FishyMapHoverLayerSampleSnapshot, FishyMapViewMode};
+use super::{
+    FishyMapCameraSnapshot, FishyMapHoverLayerSampleSnapshot, FishyMapSelectionPointKind,
+    FishyMapViewMode,
+};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(
@@ -23,6 +26,8 @@ pub enum FishyMapOutputEvent {
         version: u8,
         world_x: Option<f64>,
         world_z: Option<f64>,
+        point_kind: Option<FishyMapSelectionPointKind>,
+        point_label: Option<String>,
         layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
     },
     HoverChanged {

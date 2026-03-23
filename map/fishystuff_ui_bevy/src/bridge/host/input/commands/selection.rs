@@ -1,3 +1,4 @@
+use crate::bridge::contract::FishyMapSelectionPointKind;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::hover_query::WorldPointQueryContext;
@@ -53,10 +54,11 @@ pub(super) fn apply_semantic_field_selection_command(
 ) {
     let selected_info =
         selected_info_for_semantic_field(layer_registry, field_metadata, layer_key, field_id);
-    let target_world_point = selected_info
+    let preferred_target = selected_info
         .as_ref()
-        .and_then(|info| preferred_selection_target(info, target_key))
-        .map(|target| WorldPoint::new(target.world_x, target.world_z));
+        .and_then(|info| preferred_selection_target(info, target_key));
+    let target_world_point =
+        preferred_target.map(|target| WorldPoint::new(target.world_x, target.world_z));
     let selected_info = target_world_point
         .and_then(|world_point| {
             selected_info_at_world_point(
@@ -70,6 +72,8 @@ pub(super) fn apply_semantic_field_selection_command(
                     vector_runtime,
                     map_to_world: MapToWorld::default(),
                 },
+                FishyMapSelectionPointKind::Waypoint,
+                preferred_target.map(|target| target.label.as_str()),
             )
         })
         .or(selected_info);
@@ -90,6 +94,8 @@ pub(super) fn apply_world_point_selection_command(
     pending: &mut PendingRequests,
     world_x: f64,
     world_z: f64,
+    point_kind: Option<FishyMapSelectionPointKind>,
+    point_label: Option<&str>,
 ) {
     let selected_info = selected_info_at_world_point(
         WorldPoint::new(world_x, world_z),
@@ -102,6 +108,8 @@ pub(super) fn apply_world_point_selection_command(
             vector_runtime,
             map_to_world: MapToWorld::default(),
         },
+        point_kind.unwrap_or(FishyMapSelectionPointKind::Clicked),
+        point_label,
     );
     apply_selected_info(bootstrap, patch_filter, selection, pending, selected_info);
 }
@@ -156,6 +164,7 @@ fn apply_selected_info(
 #[cfg(test)]
 mod tests {
     use super::apply_selected_info;
+    use crate::bridge::contract::FishyMapSelectionPointKind;
     use crate::plugins::api::{PendingRequests, SelectedInfo, SelectionState};
 
     #[test]
@@ -190,6 +199,8 @@ mod tests {
             world_x: 123.0,
             world_z: 456.0,
             sampled_world_point: true,
+            point_kind: Some(FishyMapSelectionPointKind::Clicked),
+            point_label: None,
             layer_samples: Vec::new(),
         };
 

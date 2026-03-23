@@ -89,6 +89,8 @@ pub(in crate::bridge::host) fn apply_browser_commands(
                 &mut pending,
                 world_point.world_x,
                 world_point.world_z,
+                world_point.point_kind,
+                world_point.point_label.as_deref(),
             );
         }
     }

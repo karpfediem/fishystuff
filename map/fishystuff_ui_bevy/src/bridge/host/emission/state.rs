@@ -36,6 +36,11 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
         version: 1,
         world_x: selected_world_point.map(|value| value.0),
         world_z: selected_world_point.map(|value| value.1),
+        point_kind: selection.info.as_ref().and_then(|info| info.point_kind),
+        point_label: selection
+            .info
+            .as_ref()
+            .and_then(|info| info.point_label.clone()),
         layer_samples: selection
             .info
             .as_ref()
