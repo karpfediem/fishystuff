@@ -9,6 +9,7 @@ import {
   createFishyMapBridge,
   extractThemeSnapshot,
   mergeStatePatch,
+  normalizeStatePatch,
   parseQueryState,
   resolveApiBaseUrl,
   resolveCdnBaseUrl,
@@ -1041,6 +1042,8 @@ test("restore priority is URL over session over local preferences", () => {
       selection: {
         fishId: 33,
         zoneRgb: 16711935,
+        worldX: 321.5,
+        worldZ: -654.25,
       },
       filters: {
         fromPatchId: "session-from",
@@ -1080,7 +1083,11 @@ test("restore priority is URL over session over local preferences", () => {
   assert.equal(patch.ui.showPoints, false);
   assert.equal(patch.ui.showPointIcons, false);
   assert.equal(patch.ui.pointIconScale, 1.8);
-  assert.equal(patch.commands.selectZoneRgb, 16711935);
+  assert.deepEqual(patch.commands.selectWorldPoint, {
+    worldX: 321.5,
+    worldZ: -654.25,
+  });
+  assert.equal("selectZoneRgb" in patch.commands, false);
   assert.equal(patch.commands.setViewMode, "3d");
   assert.equal(patch.commands.restoreView.viewMode, "3d");
 });
@@ -1193,6 +1200,22 @@ test("session restore preserves selected zone filter terms", () => {
 
   assert.deepEqual(patch.filters.zoneRgbs, [0xc17f7f, 0x3c963c]);
   assert.equal(patch.commands.selectZoneRgb, 0xc17f7f);
+});
+
+test("state patch normalizes selectWorldPoint commands", () => {
+  const patch = normalizeStatePatch({
+    commands: {
+      selectWorldPoint: {
+        worldX: "12.5",
+        worldZ: "-7.25",
+      },
+    },
+  });
+
+  assert.deepEqual(patch.commands.selectWorldPoint, {
+    worldX: 12.5,
+    worldZ: -7.25,
+  });
 });
 
 test("legacy empty layer visibility snapshots do not hide every layer on restore", () => {

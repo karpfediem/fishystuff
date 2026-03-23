@@ -5,10 +5,14 @@ use crate::bridge::host::BrowserBridgeState;
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::ViewModeState;
 use crate::map::camera::terrain3d::Terrain3dViewState;
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::layers::LayerRegistry;
+use crate::map::layers::LayerRuntime;
+use crate::map::raster::RasterTileCache;
 use crate::plugins::api::{ApiBootstrapState, PatchFilterState, PendingRequests, SelectionState};
 use crate::plugins::camera::CameraZoomBounds;
+use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
 pub(in crate::bridge::host) fn apply_browser_commands(
@@ -17,7 +21,11 @@ pub(in crate::bridge::host) fn apply_browser_commands(
     bootstrap: Res<ApiBootstrapState>,
     patch_filter: Res<PatchFilterState>,
     layer_registry: Res<LayerRegistry>,
+    layer_runtime: Res<LayerRuntime>,
+    exact_lookups: Res<ExactLookupCache>,
     field_metadata: Res<FieldMetadataCache>,
+    tile_cache: Res<RasterTileCache>,
+    vector_runtime: Res<VectorLayerRuntime>,
     mut selection: ResMut<SelectionState>,
     mut pending: ResMut<PendingRequests>,
     mut view_mode: ResMut<ViewModeState>,
@@ -48,6 +56,22 @@ pub(in crate::bridge::host) fn apply_browser_commands(
                 &mut selection,
                 &mut pending,
                 zone_rgb,
+            );
+        }
+        if let Some(world_point) = command.select_world_point {
+            selection::apply_world_point_selection_command(
+                &bootstrap,
+                &patch_filter,
+                &layer_registry,
+                &layer_runtime,
+                &exact_lookups,
+                &field_metadata,
+                &tile_cache,
+                &vector_runtime,
+                &mut selection,
+                &mut pending,
+                world_point.world_x,
+                world_point.world_z,
             );
         }
     }

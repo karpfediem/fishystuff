@@ -8,6 +8,7 @@ pub use input::{
     FishyMapBookmarkEntry, FishyMapCommands, FishyMapFiltersPatch, FishyMapFiltersState,
     FishyMapInputState, FishyMapStatePatch, FishyMapThemeColors, FishyMapThemePatch,
     FishyMapThemeState, FishyMapUiPatch, FishyMapUiState, FishyMapViewMode,
+    FishyMapWorldPointCommand,
 };
 pub use normalize::{
     normalize_i32_list, normalize_layer_clip_mask_map, normalize_layer_opacity_map,

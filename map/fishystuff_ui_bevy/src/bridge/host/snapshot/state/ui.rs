@@ -5,6 +5,7 @@ use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::field_semantics::{loaded_semantic_field_layer, SemanticFieldLayerView};
 use crate::map::layers::LayerRegistry;
 use crate::map::spaces::world::MapToWorld;
+use crate::map::spaces::WorldPoint;
 use crate::plugins::bookmarks::BookmarkState;
 use fishystuff_core::field_metadata::{FIELD_HOVER_ROW_KEY_ORIGIN, FIELD_HOVER_ROW_KEY_RESOURCES};
 

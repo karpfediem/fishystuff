@@ -12,5 +12,6 @@ fn commands_is_empty(commands: &FishyMapCommands) -> bool {
     !commands.reset_view.unwrap_or(false)
         && commands.set_view_mode.is_none()
         && commands.select_zone_rgb.is_none()
+        && commands.select_world_point.is_none()
         && commands.restore_view.is_none()
 }

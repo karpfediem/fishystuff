@@ -241,10 +241,18 @@ pub struct FishyMapUiPatch {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
+pub struct FishyMapWorldPointCommand {
+    pub world_x: f64,
+    pub world_z: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct FishyMapCommands {
     pub reset_view: Option<bool>,
     pub set_view_mode: Option<FishyMapViewMode>,
     pub select_zone_rgb: Option<u32>,
+    pub select_world_point: Option<FishyMapWorldPointCommand>,
     pub restore_view: Option<FishyMapViewSnapshot>,
 }
 

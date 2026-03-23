@@ -4,11 +4,12 @@ pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
     info: Option<&crate::plugins::api::SelectedInfo>,
     zone_stats: Option<&fishystuff_api::models::zone_stats::ZoneStatsResponse>,
 ) -> FishyMapSelectionSnapshot {
+    let selected_world_point = info.and_then(selection_world_point);
     FishyMapSelectionSnapshot {
         zone_rgb: info.and_then(|value| value.rgb_u32),
         zone_name: info.and_then(|value| value.zone_name.clone()),
-        world_x: info.map(|value| value.world_x),
-        world_z: info.map(|value| value.world_z),
+        world_x: selected_world_point.map(|value| value.0),
+        world_z: selected_world_point.map(|value| value.1),
         layer_samples: info
             .map(|value| hover_layer_samples_snapshot(&value.layer_samples))
             .unwrap_or_default(),
@@ -48,6 +49,16 @@ pub(in crate::bridge::host) fn hover_layer_samples_snapshot(
             },
         )
         .collect()
+}
+
+fn selection_world_point(info: &crate::plugins::api::SelectedInfo) -> Option<(f64, f64)> {
+    if !info.world_x.is_finite() || !info.world_z.is_finite() {
+        return None;
+    }
+    if info.layer_samples.is_empty() && info.rgb_u32.is_some() {
+        return None;
+    }
+    Some((info.world_x, info.world_z))
 }
 
 fn zone_stats_snapshot(
@@ -101,5 +112,53 @@ fn zone_stats_snapshot(
                 ci_high: entry.ci_high,
             })
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selection_world_point;
+    use crate::plugins::api::SelectedInfo;
+    use fishystuff_api::Rgb;
+
+    #[test]
+    fn synthetic_zone_selection_does_not_emit_fake_world_point() {
+        let info = SelectedInfo {
+            map_px: 0,
+            map_py: 0,
+            rgb: Some(Rgb::from_u32(0x123456)),
+            rgb_u32: Some(0x123456),
+            zone_name: Some("Velia".to_string()),
+            world_x: 0.0,
+            world_z: 0.0,
+            layer_samples: Vec::new(),
+        };
+
+        assert_eq!(selection_world_point(&info), None);
+    }
+
+    #[test]
+    fn sampled_selection_keeps_world_point() {
+        let info = SelectedInfo {
+            map_px: 10,
+            map_py: 20,
+            rgb: Some(Rgb::from_u32(0x654321)),
+            rgb_u32: Some(0x654321),
+            zone_name: Some("Cron Castle".to_string()),
+            world_x: 123.0,
+            world_z: 456.0,
+            layer_samples: vec![crate::map::layer_query::LayerQuerySample {
+                layer_id: "zone_mask".to_string(),
+                layer_name: "Zone Mask".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x654321),
+                rgb_u32: 0x654321,
+                field_id: Some(0x654321),
+                rows: Vec::new(),
+                targets: Vec::new(),
+            }],
+        };
+
+        assert_eq!(selection_world_point(&info), Some((123.0, 456.0)));
     }
 }

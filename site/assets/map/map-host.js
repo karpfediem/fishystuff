@@ -88,6 +88,10 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     resetView?: boolean,
  *     setViewMode?: "2d" | "3d",
  *     selectZoneRgb?: number,
+ *     selectWorldPoint?: {
+ *       worldX?: number,
+ *       worldZ?: number
+ *     },
  *     restoreView?: {
  *       viewMode: "2d" | "3d",
  *       camera?: {
@@ -595,6 +599,18 @@ function normalizeBookmarkCoordinate(value) {
   return Number.isFinite(number) ? number : undefined;
 }
 
+function normalizeWorldPointCommand(value) {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const worldX = normalizeBookmarkCoordinate(value.worldX);
+  const worldZ = normalizeBookmarkCoordinate(value.worldZ);
+  if (worldX === undefined || worldZ === undefined) {
+    return undefined;
+  }
+  return { worldX, worldZ };
+}
+
 function normalizeBookmarksState(values) {
   const entries = Array.isArray(values) ? values : [];
   const normalized = [];
@@ -741,6 +757,12 @@ export function normalizeStatePatch(patch = {}) {
       const selectZoneRgb = Number.parseInt(patch.commands.selectZoneRgb, 10);
       if (Number.isFinite(selectZoneRgb)) {
         normalized.commands.selectZoneRgb = selectZoneRgb;
+      }
+    }
+    if (hasOwn(patch.commands, "selectWorldPoint")) {
+      const selectWorldPoint = normalizeWorldPointCommand(patch.commands.selectWorldPoint);
+      if (selectWorldPoint) {
+        normalized.commands.selectWorldPoint = selectWorldPoint;
       }
     }
     if (hasOwn(patch.commands, "restoreView")) {
@@ -1410,8 +1432,15 @@ export function snapshotToRestorePatch(snapshot) {
 
   const selectionFishId = parseIntegerParam(snapshot.selection?.fishId);
   const selectionZoneRgb = parseIntegerParam(snapshot.selection?.zoneRgb);
+  const selectionWorldX = normalizeBookmarkCoordinate(snapshot.selection?.worldX);
+  const selectionWorldZ = normalizeBookmarkCoordinate(snapshot.selection?.worldZ);
   const restoreView = normalizeRestoreView(snapshot.view);
-  if (selectionFishId != null || selectionZoneRgb != null || restoreView) {
+  if (
+    selectionFishId != null ||
+    selectionZoneRgb != null ||
+    (selectionWorldX !== undefined && selectionWorldZ !== undefined) ||
+    restoreView
+  ) {
     patch.commands = {};
   }
   if (selectionFishId != null) {
@@ -1423,7 +1452,12 @@ export function snapshotToRestorePatch(snapshot) {
         : restoredFishIds.concat(selectionFishId)
       : [selectionFishId];
   }
-  if (selectionZoneRgb != null) {
+  if (selectionWorldX !== undefined && selectionWorldZ !== undefined) {
+    patch.commands.selectWorldPoint = {
+      worldX: selectionWorldX,
+      worldZ: selectionWorldZ,
+    };
+  } else if (selectionZoneRgb != null) {
     patch.commands.selectZoneRgb = selectionZoneRgb;
   }
   if (restoreView) {
@@ -2240,6 +2274,8 @@ class FishyMapBridgeImpl {
       selection: {
         fishId: state.selection?.fishId ?? state.filters?.fishIds?.[0] ?? null,
         zoneRgb: state.selection?.zoneRgb ?? null,
+        worldX: state.selection?.worldX ?? null,
+        worldZ: state.selection?.worldZ ?? null,
       },
       filters: {
         fishIds: this.inputState.filters.fishIds,
