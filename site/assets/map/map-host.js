@@ -225,7 +225,6 @@ function normalizeHoverSnapshotValue(value) {
   return {
     worldX: normalizeWorldCoordinate(value?.worldX),
     worldZ: normalizeWorldCoordinate(value?.worldZ),
-    zoneRgb: zoneRgbFromLayerSamples(layerSamples),
     layerSamples,
   };
 }
@@ -236,7 +235,6 @@ function normalizeSelectionSnapshotValue(value) {
     ...(isPlainObject(value) ? cloneJson(value) : {}),
     worldX: normalizeWorldCoordinate(value?.worldX),
     worldZ: normalizeWorldCoordinate(value?.worldZ),
-    zoneRgb: zoneRgbFromLayerSamples(layerSamples),
     layerSamples,
   };
 }
@@ -1594,7 +1592,7 @@ function bootstrapStateSignature(state) {
   return stableStringify({
     ready: Boolean(state?.ready),
     viewMode: state?.view?.viewMode || null,
-    selectionZoneRgb: state?.selection?.zoneRgb ?? null,
+    selectionZoneRgb: zoneRgbFromLayerSamples(state?.selection?.layerSamples),
     filters: {
       patchId: filters.patchId ?? null,
       fromPatchId: filters.fromPatchId ?? null,
@@ -2349,7 +2347,7 @@ class FishyMapBridgeImpl {
       view: state.view,
       selection: {
         fishId: state.selection?.fishId ?? state.filters?.fishIds?.[0] ?? null,
-        zoneRgb: state.selection?.zoneRgb ?? null,
+        zoneRgb: zoneRgbFromLayerSamples(state.selection?.layerSamples),
         worldX: state.selection?.worldX ?? null,
         worldZ: state.selection?.worldZ ?? null,
       },

@@ -653,7 +653,6 @@ test("hover output events are redispatched without cloning the full map state", 
     assert.deepEqual(received.hover, {
       worldX: 11,
       worldZ: 22,
-      zoneRgb: 1193046,
       layerSamples: [
         {
           layerId: "zone_mask",
@@ -764,10 +763,7 @@ test("selection output events include semantic payload and refreshed state", asy
     assert.equal(received.worldX, 11);
     assert.equal(received.worldZ, 22);
     assert.deepEqual(received.layerSamples, semanticSelection.layerSamples);
-    assert.deepEqual(received.state.selection, {
-      ...semanticSelection,
-      zoneRgb: 1193046,
-    });
+    assert.deepEqual(received.state.selection, semanticSelection);
     assert.deepEqual(received.inputState.filters.fishIds, [77]);
     assert.deepEqual(received.inputState.filters.zoneRgbs, [0xc17f7f]);
     assert.equal(received.inputState.filters.searchText, "coastal");

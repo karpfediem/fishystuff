@@ -1608,7 +1608,6 @@ function hoverFromEventDetail(detail) {
     const layerSamples = Array.isArray(detail.hover.layerSamples) ? detail.hover.layerSamples : [];
     return {
       ...detail.hover,
-      zoneRgb: detail.hover.zoneRgb ?? zoneRgbFromLayerSamples(layerSamples),
       layerSamples,
     };
   }
@@ -1616,7 +1615,6 @@ function hoverFromEventDetail(detail) {
   return {
     worldX: detail?.worldX ?? null,
     worldZ: detail?.worldZ ?? null,
-    zoneRgb: detail?.zoneRgb ?? zoneRgbFromLayerSamples(layerSamples),
     layerSamples,
   };
 }
