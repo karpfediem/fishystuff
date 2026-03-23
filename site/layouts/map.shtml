@@ -378,7 +378,7 @@
         display: block;
       }
 
-      #fishymap-zone-evidence-window {
+      #fishymap-zone-info-window {
         top: 6rem;
         right: 1rem;
         z-index: 18;
@@ -387,11 +387,16 @@
         max-height: calc(100% - 12rem);
       }
 
-      #fishymap-zone-evidence-body {
+      #fishymap-zone-info-body {
         gap: 0.75rem;
         padding: 1rem;
         overflow-y: auto;
         overscroll-behavior: contain;
+      }
+
+      #fishymap-zone-info-overview-panel[hidden],
+      #fishymap-zone-info-evidence-panel[hidden] {
+        display: none !important;
       }
 
       #fishymap-zone-evidence-list {
@@ -858,7 +863,7 @@
           max-height: min(55dvh, 34rem);
         }
 
-        #fishymap-zone-evidence-window {
+        #fishymap-zone-info-window {
           top: auto;
           right: 0.75rem;
           bottom: 8.5rem;
@@ -1030,10 +1035,10 @@
           </div>
         </div>
       </aside>
-      <aside id="fishymap-zone-evidence-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="zoneInfo">
+      <aside id="fishymap-zone-info-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="zoneInfo">
         <div
           class="fishymap-window-header"
-          id="fishymap-zone-evidence-titlebar"
+          id="fishymap-zone-info-titlebar"
           data-window-titlebar="zoneInfo"
           role="button"
           tabindex="0"
@@ -1043,27 +1048,71 @@
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
             <span class="fishymap-window-title text-lg leading-tight">Zone Info</span>
           </div>
-          <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">no selection</span>
+          <span id="fishymap-zone-info-status" class="text-xs text-base-content/60">no selection</span>
         </div>
-        <div id="fishymap-zone-evidence-body" class="fishymap-window-body">
-          <p id="fishymap-selection-summary" class="text-sm text-base-content/80">No selection.</p>
-          <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
-          <div id="fishymap-zone-evidence-shell" class="space-y-2" hidden>
-            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Zone Evidence</p>
-            <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
-            <div id="fishymap-zone-evidence-disclaimer" class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
-              <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
-                <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
-                Disclaimer
-              </p>
-              <div class="space-y-2 leading-5">
-                <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
-                <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
-                <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
-                <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
+        <div id="fishymap-zone-info-body" class="fishymap-window-body">
+          <div
+            id="fishymap-zone-info-tabs"
+            role="tablist"
+            class="tabs tabs-box bg-base-200/80 p-1"
+            aria-label="Zone info detail tabs"
+          >
+            <button
+              id="fishymap-zone-info-tab-overview"
+              class="tab tab-active flex-1 gap-2 text-xs font-semibold sm:text-sm"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="fishymap-zone-info-overview-panel"
+              data-zone-info-tab="overview"
+            >
+              Overview
+            </button>
+            <button
+              id="fishymap-zone-info-tab-zone-evidence"
+              class="tab flex-1 gap-2 text-xs font-semibold sm:text-sm"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="fishymap-zone-info-evidence-panel"
+              data-zone-info-tab="zoneEvidence"
+            >
+              Zone Evidence
+            </button>
+          </div>
+          <div
+            id="fishymap-zone-info-overview-panel"
+            class="space-y-3"
+            role="tabpanel"
+            aria-labelledby="fishymap-zone-info-tab-overview"
+          >
+            <p id="fishymap-selection-summary" class="text-sm text-base-content/80">No selection.</p>
+            <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
+          </div>
+          <div
+            id="fishymap-zone-info-evidence-panel"
+            class="space-y-3"
+            role="tabpanel"
+            aria-labelledby="fishymap-zone-info-tab-zone-evidence"
+            hidden
+          >
+            <div id="fishymap-zone-evidence-shell" class="space-y-2" hidden>
+              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Zone Evidence</p>
+              <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
+              <div id="fishymap-zone-evidence-disclaimer" class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
+                <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
+                  <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
+                  Disclaimer
+                </p>
+                <div class="space-y-2 leading-5">
+                  <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
+                  <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
+                  <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
+                  <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
+                </div>
               </div>
+              <div id="fishymap-zone-evidence-list" class="list rounded-box border border-base-300/70 bg-base-200 p-1"></div>
             </div>
-            <div id="fishymap-zone-evidence-list" class="list rounded-box border border-base-300/70 bg-base-200 p-1"></div>
           </div>
         </div>
       </aside>

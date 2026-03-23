@@ -23,6 +23,7 @@ const {
   normalizeZoneCatalog,
   normalizeBookmarks,
   normalizeBookmarkCoordinate,
+  normalizeZoneInfoTab,
   normalizeWindowUiState,
   parseZoneRgbSearch,
   parseImportedBookmarks,
@@ -31,6 +32,7 @@ const {
   renameBookmark,
   resolveHoveredBookmark,
   resolveDisplayBookmarks,
+  resolveZoneInfoActiveTab,
   renderSearchSelection,
   selectionHasZoneEvidence,
   serializeBookmarksForExport,
@@ -457,6 +459,32 @@ test("selectionHasZoneEvidence and buildZoneEvidenceStatusText distinguish gener
       null,
     ),
     "zone stats: ready",
+  );
+});
+
+test("resolveZoneInfoActiveTab falls back to overview when zone evidence is unavailable", () => {
+  assert.equal(normalizeZoneInfoTab("nope"), "overview");
+  assert.equal(
+    resolveZoneInfoActiveTab(
+      {
+        zoneInfo: { tab: "zoneEvidence" },
+      },
+      { layerSamples: [] },
+      null,
+    ),
+    "overview",
+  );
+  assert.equal(
+    resolveZoneInfoActiveTab(
+      {
+        zoneInfo: { tab: "zoneEvidence" },
+      },
+      {
+        layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }],
+      },
+      null,
+    ),
+    "zoneEvidence",
   );
 });
 
@@ -1003,7 +1031,7 @@ test("serializeWindowUiState normalizes persisted window geometry and flags", ()
   const serialized = serializeWindowUiState({
     search: { open: false, collapsed: "yes", x: 42.8, y: "13" },
     settings: { open: true, collapsed: false, x: null, y: null },
-    zoneInfo: { open: true, collapsed: false, x: undefined, y: 5.2 },
+    zoneInfo: { open: true, collapsed: false, x: undefined, y: 5.2, tab: "zoneEvidence" },
     layers: { open: false, collapsed: 0, x: "bad", y: 99.9 },
     bookmarks: { open: true, collapsed: true, x: "14", y: 7.8 },
   });
@@ -1011,7 +1039,7 @@ test("serializeWindowUiState normalizes persisted window geometry and flags", ()
   assert.deepEqual(JSON.parse(serialized), {
     search: { open: false, collapsed: false, x: 43, y: 13 },
     settings: { open: true, collapsed: false, x: null, y: null },
-    zoneInfo: { open: true, collapsed: false, x: null, y: 5 },
+    zoneInfo: { open: true, collapsed: false, x: null, y: 5, tab: "zoneEvidence" },
     layers: { open: false, collapsed: false, x: null, y: 100 },
     bookmarks: { open: true, collapsed: true, x: 14, y: 8 },
   });

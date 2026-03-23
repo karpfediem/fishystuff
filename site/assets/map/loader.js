@@ -21,10 +21,20 @@ const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
 const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
 const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
+const DEFAULT_ZONE_INFO_TAB = "overview";
+const ZONE_INFO_TABS = Object.freeze(["overview", "zoneEvidence"]);
+const ZONE_INFO_TAB_BUTTON_CLASS =
+  "tab flex-1 gap-2 text-xs font-semibold sm:text-sm";
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
-  zoneInfo: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
+  zoneInfo: Object.freeze({
+    open: true,
+    collapsed: false,
+    x: null,
+    y: null,
+    tab: DEFAULT_ZONE_INFO_TAB,
+  }),
   layers: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   bookmarks: Object.freeze({ open: false, collapsed: false, x: null, y: null }),
 });
@@ -240,6 +250,11 @@ function normalizeWindowCoordinate(value) {
   return Number.isFinite(number) ? Math.round(number) : null;
 }
 
+export function normalizeZoneInfoTab(value) {
+  const normalized = String(value || "").trim();
+  return ZONE_INFO_TABS.includes(normalized) ? normalized : DEFAULT_ZONE_INFO_TAB;
+}
+
 function normalizeWindowUiEntry(rawEntry, fallbackEntry) {
   const baseEntry = isPlainObject(rawEntry) ? rawEntry : {};
   return {
@@ -252,6 +267,16 @@ function normalizeWindowUiEntry(rawEntry, fallbackEntry) {
   };
 }
 
+function normalizeZoneInfoWindowUiEntry(rawEntry, fallbackEntry) {
+  const baseEntry = isPlainObject(rawEntry) ? rawEntry : {};
+  return {
+    ...normalizeWindowUiEntry(baseEntry, fallbackEntry),
+    tab: hasOwnKey(baseEntry, "tab")
+      ? normalizeZoneInfoTab(baseEntry.tab)
+      : normalizeZoneInfoTab(fallbackEntry?.tab),
+  };
+}
+
 export function normalizeWindowUiState(rawState) {
   const source = isPlainObject(rawState) ? rawState : {};
   return {
@@ -260,7 +285,7 @@ export function normalizeWindowUiState(rawState) {
       collapsed: false,
     },
     settings: normalizeWindowUiEntry(source.settings, DEFAULT_WINDOW_UI_STATE.settings),
-    zoneInfo: normalizeWindowUiEntry(source.zoneInfo, DEFAULT_WINDOW_UI_STATE.zoneInfo),
+    zoneInfo: normalizeZoneInfoWindowUiEntry(source.zoneInfo, DEFAULT_WINDOW_UI_STATE.zoneInfo),
     layers: normalizeWindowUiEntry(source.layers, DEFAULT_WINDOW_UI_STATE.layers),
     bookmarks: normalizeWindowUiEntry(source.bookmarks, DEFAULT_WINDOW_UI_STATE.bookmarks),
   };
@@ -283,6 +308,16 @@ export function serializeWindowUiState(windowUiState) {
 
 export function buildDefaultWindowUiStateSerialized() {
   return serializeWindowUiState(DEFAULT_WINDOW_UI_STATE);
+}
+
+function windowUiEntriesEqual(left, right) {
+  return (
+    Boolean(left?.open) === Boolean(right?.open) &&
+    Boolean(left?.collapsed) === Boolean(right?.collapsed) &&
+    normalizeWindowCoordinate(left?.x) === normalizeWindowCoordinate(right?.x) &&
+    normalizeWindowCoordinate(left?.y) === normalizeWindowCoordinate(right?.y) &&
+    String(left?.tab || "") === String(right?.tab || "")
+  );
 }
 
 export function buildMapUiResetMountOptions(currentState) {
@@ -2295,6 +2330,14 @@ export function selectionHasZoneEvidence(selection, zoneStats = null) {
   return zoneRgb != null;
 }
 
+export function resolveZoneInfoActiveTab(windowUiState, selection, zoneStats = null) {
+  const requestedTab = normalizeZoneInfoTab(windowUiState?.zoneInfo?.tab);
+  if (requestedTab === "zoneEvidence" && !selectionHasZoneEvidence(selection, zoneStats)) {
+    return DEFAULT_ZONE_INFO_TAB;
+  }
+  return requestedTab;
+}
+
 export function buildZoneEvidenceStatusText(selection, zoneStatsStatus, zoneStats = null) {
   const mode = selectionDetailWindowMode(selection, zoneStats);
   if (mode === "zone") {
@@ -2343,14 +2386,24 @@ export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()
     .join("");
 }
 
-function ensureZoneEvidenceElements(elements) {
+function zoneInfoTabButtonClass(active, disabled) {
+  return `${ZONE_INFO_TAB_BUTTON_CLASS}${active ? " tab-active" : ""}${disabled ? " tab-disabled" : ""}`;
+}
+
+function ensureZoneInfoElements(elements) {
   if (
     elements.zoneEvidenceShell &&
-    elements.zoneEvidenceStatus &&
+    elements.zoneInfoStatus &&
     elements.zoneEvidenceSummary &&
+    elements.selectionSummary &&
     elements.selectionOverview &&
     elements.zoneEvidenceDisclaimer &&
-    elements.zoneEvidenceList
+    elements.zoneEvidenceList &&
+    elements.zoneInfoTabs &&
+    elements.zoneInfoTabOverview &&
+    elements.zoneInfoTabZoneEvidence &&
+    elements.zoneInfoOverviewPanel &&
+    elements.zoneInfoEvidencePanel
   ) {
     return elements;
   }
@@ -2359,30 +2412,65 @@ function ensureZoneEvidenceElements(elements) {
   }
 
   const section = document.createElement("div");
-  section.className = "space-y-2";
+  section.className = "space-y-3";
   section.innerHTML = `
     <div class="flex items-center justify-between gap-3">
-      <span class="text-sm font-semibold">Selection</span>
-      <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">no selection</span>
+      <span class="text-sm font-semibold">Zone Info</span>
+      <span id="fishymap-zone-info-status" class="text-xs text-base-content/60">no selection</span>
     </div>
-    <div id="fishymap-zone-evidence-shell" class="space-y-2" hidden>
-      <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Zone Evidence</p>
-      <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Select a zone to load evidence.</p>
-      <div id="fishymap-zone-evidence-disclaimer" class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
-        <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
-          <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
-          Disclaimer
-        </p>
-        <div class="space-y-2 leading-5">
-          <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
-          <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
-          <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
-          <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
+    <div id="fishymap-zone-info-tabs" role="tablist" class="tabs tabs-box bg-base-200/80 p-1" aria-label="Zone info detail tabs">
+      <button
+        id="fishymap-zone-info-tab-overview"
+        class="${zoneInfoTabButtonClass(true, false)}"
+        type="button"
+        role="tab"
+        aria-selected="true"
+        aria-controls="fishymap-zone-info-overview-panel"
+        data-zone-info-tab="overview"
+      >
+        Overview
+      </button>
+      <button
+        id="fishymap-zone-info-tab-zone-evidence"
+        class="${zoneInfoTabButtonClass(false, false)}"
+        type="button"
+        role="tab"
+        aria-selected="false"
+        aria-controls="fishymap-zone-info-evidence-panel"
+        data-zone-info-tab="zoneEvidence"
+      >
+        Zone Evidence
+      </button>
+    </div>
+    <div id="fishymap-zone-info-overview-panel" class="space-y-3" role="tabpanel" aria-labelledby="fishymap-zone-info-tab-overview">
+      <p id="fishymap-selection-summary" class="text-sm text-base-content/80">No selection.</p>
+      <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
+    </div>
+    <div
+      id="fishymap-zone-info-evidence-panel"
+      class="space-y-3"
+      role="tabpanel"
+      aria-labelledby="fishymap-zone-info-tab-zone-evidence"
+      hidden
+    >
+      <div id="fishymap-zone-evidence-shell" class="space-y-2" hidden>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Zone Evidence</p>
+        <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Select a zone to load evidence.</p>
+        <div id="fishymap-zone-evidence-disclaimer" class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
+          <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
+            <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
+            Disclaimer
+          </p>
+          <div class="space-y-2 leading-5">
+            <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
+            <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
+            <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
+            <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
+          </div>
         </div>
+        <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2"></div>
       </div>
-      <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2"></div>
     </div>
-    <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
   `;
 
   if (elements.legend?.parentNode === elements.panelBody) {
@@ -2391,9 +2479,15 @@ function ensureZoneEvidenceElements(elements) {
     elements.panelBody.appendChild(section);
   }
 
+  elements.zoneInfoTabs = section.querySelector("#fishymap-zone-info-tabs");
+  elements.zoneInfoTabOverview = section.querySelector("#fishymap-zone-info-tab-overview");
+  elements.zoneInfoTabZoneEvidence = section.querySelector("#fishymap-zone-info-tab-zone-evidence");
+  elements.zoneInfoOverviewPanel = section.querySelector("#fishymap-zone-info-overview-panel");
+  elements.zoneInfoEvidencePanel = section.querySelector("#fishymap-zone-info-evidence-panel");
   elements.zoneEvidenceShell = section.querySelector("#fishymap-zone-evidence-shell");
-  elements.zoneEvidenceStatus = section.querySelector("#fishymap-zone-evidence-status");
+  elements.zoneInfoStatus = section.querySelector("#fishymap-zone-info-status");
   elements.zoneEvidenceSummary = section.querySelector("#fishymap-zone-evidence-summary");
+  elements.selectionSummary = section.querySelector("#fishymap-selection-summary");
   elements.selectionOverview = section.querySelector("#fishymap-selection-overview");
   elements.zoneEvidenceDisclaimer = section.querySelector("#fishymap-zone-evidence-disclaimer");
   elements.zoneEvidenceList = section.querySelector("#fishymap-zone-evidence-list");
@@ -3000,7 +3094,7 @@ function renderSearchResults(elements, matches, stateBundle) {
 }
 
 function renderZoneEvidence(elements, stateBundle, fishLookup) {
-  if (!elements.zoneEvidenceStatus || !elements.zoneEvidenceSummary || !elements.zoneEvidenceList) {
+  if (!elements.zoneInfoStatus || !elements.zoneEvidenceSummary || !elements.zoneEvidenceList) {
     return;
   }
   const selection = stateBundle.state?.selection || null;
@@ -3010,15 +3104,15 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
   const hasZoneEvidence = detailMode === "zone";
   const summary = buildZoneEvidenceSummary(selection, zoneStats);
 
-  if (elements.zoneEvidenceWindow) {
-    elements.zoneEvidenceWindow.dataset.detailMode = detailMode;
+  if (elements.zoneInfoWindow) {
+    elements.zoneInfoWindow.dataset.detailMode = detailMode;
   }
-  if (elements.zoneEvidenceBody) {
-    elements.zoneEvidenceBody.dataset.detailMode = detailMode;
+  if (elements.zoneInfoBody) {
+    elements.zoneInfoBody.dataset.detailMode = detailMode;
   }
 
   setTextContent(
-    elements.zoneEvidenceStatus,
+    elements.zoneInfoStatus,
     buildZoneEvidenceStatusText(selection, zoneStatsStatus, zoneStats),
   );
   setTextContent(elements.zoneEvidenceSummary, summary);
@@ -3073,6 +3167,59 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
   }
 
   elements.zoneEvidenceList.innerHTML = buildZoneEvidenceListMarkup(distribution, fishLookup);
+}
+
+function renderZoneInfoTabs(elements, stateBundle, windowUiState) {
+  if (
+    !elements.zoneInfoTabs ||
+    !elements.zoneInfoTabOverview ||
+    !elements.zoneInfoTabZoneEvidence ||
+    !elements.zoneInfoOverviewPanel ||
+    !elements.zoneInfoEvidencePanel
+  ) {
+    return;
+  }
+  const selection = stateBundle.state?.selection || null;
+  const zoneStats = stateBundle.state?.selection?.zoneStats || null;
+  const activeTab = resolveZoneInfoActiveTab(windowUiState, selection, zoneStats);
+  const hasZoneEvidence = selectionHasZoneEvidence(selection, zoneStats);
+  const tabs = [
+    {
+      id: "overview",
+      button: elements.zoneInfoTabOverview,
+      panel: elements.zoneInfoOverviewPanel,
+      disabled: false,
+      title: "Show selection overview.",
+    },
+    {
+      id: "zoneEvidence",
+      button: elements.zoneInfoTabZoneEvidence,
+      panel: elements.zoneInfoEvidencePanel,
+      disabled: !hasZoneEvidence,
+      title: hasZoneEvidence
+        ? "Inspect fish evidence for the selected zone."
+        : "Zone evidence is only available for zone-backed selections.",
+    },
+  ];
+
+  if (elements.zoneInfoWindow) {
+    elements.zoneInfoWindow.dataset.activeTab = activeTab;
+  }
+  if (elements.zoneInfoBody) {
+    elements.zoneInfoBody.dataset.activeTab = activeTab;
+  }
+  elements.zoneInfoTabs.dataset.activeTab = activeTab;
+
+  for (const tab of tabs) {
+    const isActive = tab.id === activeTab;
+    setClassName(tab.button, zoneInfoTabButtonClass(isActive, tab.disabled));
+    setAttributeValue(tab.button, "aria-selected", String(isActive));
+    setAttributeValue(tab.button, "aria-disabled", String(tab.disabled));
+    setAttributeValue(tab.button, "tabindex", isActive ? "0" : "-1");
+    setAttributeValue(tab.button, "title", tab.title);
+    setBooleanProperty(tab.button, "disabled", tab.disabled);
+    setBooleanProperty(tab.panel, "hidden", !isActive);
+  }
 }
 
 function renderStatusLines(container, statuses) {
@@ -3163,9 +3310,9 @@ function applyWindowVisibility(elements, windowUiState) {
     },
     {
       state: windowUiState.zoneInfo,
-      root: elements.zoneEvidenceWindow,
-      body: elements.zoneEvidenceBody,
-      titlebar: elements.zoneEvidenceTitlebar,
+      root: elements.zoneInfoWindow,
+      body: elements.zoneInfoBody,
+      titlebar: elements.zoneInfoTitlebar,
       toggle: elements.zoneInfoWindowToggle,
       label: "Zone Info",
     },
@@ -3223,7 +3370,7 @@ function syncLayerOpacityControl(container, layerId, opacity) {
   return true;
 }
 
-function renderPanel(elements, stateBundle, zoneCatalog = []) {
+function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DEFAULT_WINDOW_UI_STATE) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
   const isReady = state.ready === true;
@@ -3316,7 +3463,6 @@ function renderPanel(elements, stateBundle, zoneCatalog = []) {
   const matches = isReady ? buildSearchMatches(stateBundle, searchText, zoneCatalog) : [];
   renderSearchSelection(elements, stateBundle, fishLookup);
   renderSearchResults(elements, matches, stateBundle);
-  renderZoneEvidence(elements, stateBundle, fishLookup);
 
   if (elements.legend) {
     setBooleanProperty(elements.legend, "open", Boolean(inputState.ui?.legendOpen));
@@ -3332,6 +3478,8 @@ function renderPanel(elements, stateBundle, zoneCatalog = []) {
     );
   }
   renderSelectionOverview(elements, state.selection || null, stateBundle);
+  renderZoneEvidence(elements, stateBundle, fishLookup);
+  renderZoneInfoTabs(elements, stateBundle, windowUiState);
 
   renderHoverTooltip(elements, state.hover || null, stateBundle);
 
@@ -3426,9 +3574,9 @@ function bindUi(shell, elements, options = {}) {
       toggle: elements.bookmarksWindowToggle,
     },
     zoneInfo: {
-      root: elements.zoneEvidenceWindow,
-      body: elements.zoneEvidenceBody,
-      titlebar: elements.zoneEvidenceTitlebar,
+      root: elements.zoneInfoWindow,
+      body: elements.zoneInfoBody,
+      titlebar: elements.zoneInfoTitlebar,
       toggle: elements.zoneInfoWindowToggle,
     },
     layers: {
@@ -3668,16 +3816,17 @@ function bindUi(shell, elements, options = {}) {
       return false;
     }
     const currentEntry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
-    const nextEntry = normalizeWindowUiEntry(
-      { ...currentEntry, ...patch },
-      DEFAULT_WINDOW_UI_STATE[windowId],
-    );
-    if (
-      currentEntry.open === nextEntry.open &&
-      currentEntry.collapsed === nextEntry.collapsed &&
-      currentEntry.x === nextEntry.x &&
-      currentEntry.y === nextEntry.y
-    ) {
+    const nextEntry =
+      windowId === "zoneInfo"
+        ? normalizeZoneInfoWindowUiEntry(
+            { ...currentEntry, ...patch },
+            DEFAULT_WINDOW_UI_STATE.zoneInfo,
+          )
+        : normalizeWindowUiEntry(
+            { ...currentEntry, ...patch },
+            DEFAULT_WINDOW_UI_STATE[windowId],
+          );
+    if (windowUiEntriesEqual(currentEntry, nextEntry)) {
       return false;
     }
     windowUiState = {
@@ -3782,6 +3931,22 @@ function bindUi(shell, elements, options = {}) {
     applyManagedWindows({ persist: true });
   }
 
+  function setZoneInfoTab(nextTab) {
+    const requestedTab = normalizeZoneInfoTab(nextTab);
+    const current = getLatestStateBundle();
+    const selection = current.state?.selection || null;
+    const zoneStats = current.state?.selection?.zoneStats || null;
+    if (requestedTab === "zoneEvidence" && !selectionHasZoneEvidence(selection, zoneStats)) {
+      return false;
+    }
+    if (!updateWindowUiEntry("zoneInfo", { tab: requestedTab })) {
+      return false;
+    }
+    persistWindowUiState();
+    renderCurrentState(current);
+    return true;
+  }
+
   function toggleManagedWindowCollapsed(windowId) {
     const entry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
     if (!updateWindowUiEntry(windowId, { collapsed: !entry.collapsed })) {
@@ -3829,7 +3994,7 @@ function bindUi(shell, elements, options = {}) {
     scheduleBookmarkMetadataRefresh();
     isRendering = true;
     try {
-      renderPanel(elements, stateBundle, zoneCatalog);
+      renderPanel(elements, stateBundle, zoneCatalog, windowUiState);
       renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi);
       applyManagedWindows();
     } finally {
@@ -4210,6 +4375,42 @@ function bindUi(shell, elements, options = {}) {
       });
     });
   }
+
+  elements.zoneInfoTabs?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-zone-info-tab]");
+    if (!button) {
+      return;
+    }
+    setZoneInfoTab(button.getAttribute("data-zone-info-tab"));
+  });
+
+  elements.zoneInfoTabs?.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+    const buttons = ZONE_INFO_TABS.map((tabId) =>
+      tabId === "overview" ? elements.zoneInfoTabOverview : elements.zoneInfoTabZoneEvidence,
+    ).filter((button) => button && button.disabled !== true);
+    if (!buttons.length) {
+      return;
+    }
+    const currentButton = event.target.closest("button[data-zone-info-tab]");
+    const currentIndex = Math.max(0, buttons.indexOf(currentButton));
+    let nextButton = buttons[currentIndex] || buttons[0];
+    if (event.key === "Home") {
+      nextButton = buttons[0];
+    } else if (event.key === "End") {
+      nextButton = buttons[buttons.length - 1];
+    } else if (event.key === "ArrowLeft") {
+      nextButton = buttons[(currentIndex - 1 + buttons.length) % buttons.length];
+    } else if (event.key === "ArrowRight") {
+      nextButton = buttons[(currentIndex + 1) % buttons.length];
+    }
+    event.preventDefault();
+    if (setZoneInfoTab(nextButton?.getAttribute("data-zone-info-tab"))) {
+      nextButton?.focus?.();
+    }
+  });
 
   elements.patchFrom.addEventListener("change", () => {
     if (isRendering) {
@@ -5018,11 +5219,16 @@ async function main() {
     diagnosticJson: document.getElementById("fishymap-diagnostic-json"),
     selectionSummary: document.getElementById("fishymap-selection-summary"),
     selectionOverview: document.getElementById("fishymap-selection-overview"),
-    zoneEvidenceWindow: document.getElementById("fishymap-zone-evidence-window"),
-    zoneEvidenceTitlebar: document.getElementById("fishymap-zone-evidence-titlebar"),
-    zoneEvidenceBody: document.getElementById("fishymap-zone-evidence-body"),
+    zoneInfoWindow: document.getElementById("fishymap-zone-info-window"),
+    zoneInfoTitlebar: document.getElementById("fishymap-zone-info-titlebar"),
+    zoneInfoBody: document.getElementById("fishymap-zone-info-body"),
+    zoneInfoTabs: document.getElementById("fishymap-zone-info-tabs"),
+    zoneInfoTabOverview: document.getElementById("fishymap-zone-info-tab-overview"),
+    zoneInfoTabZoneEvidence: document.getElementById("fishymap-zone-info-tab-zone-evidence"),
+    zoneInfoOverviewPanel: document.getElementById("fishymap-zone-info-overview-panel"),
+    zoneInfoEvidencePanel: document.getElementById("fishymap-zone-info-evidence-panel"),
     zoneEvidenceShell: document.getElementById("fishymap-zone-evidence-shell"),
-    zoneEvidenceStatus: document.getElementById("fishymap-zone-evidence-status"),
+    zoneInfoStatus: document.getElementById("fishymap-zone-info-status"),
     zoneEvidenceSummary: document.getElementById("fishymap-zone-evidence-summary"),
     zoneEvidenceDisclaimer: document.getElementById("fishymap-zone-evidence-disclaimer"),
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
@@ -5034,7 +5240,7 @@ async function main() {
     canvas,
   };
 
-  ensureZoneEvidenceElements(elements);
+  ensureZoneInfoElements(elements);
 
   const ui = bindUi(shell, elements);
   applyThemeToShell(shell);
