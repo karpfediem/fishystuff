@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use fishystuff_api::Rgb;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
-use crate::map::exact_lookup::{sample_exact_lookup_rgb, ExactLookupCache};
+use crate::map::exact_lookup::{sample_exact_lookup_rgb, sample_field_layer_rgb, ExactLookupCache};
 use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
 use crate::map::raster::{map_version_id, RasterTileCache, TileKey};
 use crate::map::spaces::world::MapToWorld;
@@ -543,6 +543,10 @@ fn sample_raster_layer_rgb(
     map_px: (i32, i32),
     map_to_world: MapToWorld,
 ) -> Option<Rgb> {
+    if layer.field_url().is_some() {
+        return sample_field_layer_rgb(layer, exact_lookups, map_px.0, map_px.1);
+    }
+
     if layer.pick_mode == PickMode::ExactTilePixel {
         return sample_exact_lookup_rgb(layer, exact_lookups, map_px.0, map_px.1);
     }

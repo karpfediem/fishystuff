@@ -8,7 +8,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use fishystuff_api::Rgb;
 use fishystuff_core::masks::ZoneLookupRows;
 
-use crate::map::layers::{LayerId, LayerSpec};
+use crate::map::layers::{FieldColorMode, LayerId, LayerSpec};
 use crate::map::raster::TileKey;
 use crate::map::spaces::layer_transform::LayerTransform;
 use crate::runtime_io;
@@ -107,7 +107,7 @@ pub fn ensure_exact_lookup_request(
     lookups: &mut ExactLookupCache,
     pending: &mut PendingExactLookups,
 ) {
-    let Some(url) = layer.exact_lookup_url() else {
+    let Some(url) = layer.field_url() else {
         lookups.remove_layer(layer.id);
         pending.remove_layer(layer.id);
         return;
@@ -198,14 +198,23 @@ pub fn sample_exact_lookup_rgb(
     map_px_x: i32,
     map_px_y: i32,
 ) -> Option<Rgb> {
-    let url = layer.exact_lookup_url()?;
+    if layer.field_color_mode() != Some(FieldColorMode::RgbU24) {
+        return None;
+    }
+    sample_field_layer_rgb(layer, lookups, map_px_x, map_px_y)
+}
+
+pub fn sample_field_layer_rgb(
+    layer: &LayerSpec,
+    lookups: &ExactLookupCache,
+    map_px_x: i32,
+    map_px_y: i32,
+) -> Option<Rgb> {
+    let url = layer.field_url()?;
+    let color_mode = layer.field_color_mode()?;
     let lookup = lookups.get(layer.id, &url)?;
-    let rgb = lookup.rgb_u32(map_px_x, map_px_y)?;
-    let [r, g, b] = [
-        ((rgb >> 16) & 0xff) as u8,
-        ((rgb >> 8) & 0xff) as u8,
-        (rgb & 0xff) as u8,
-    ];
+    let id = lookup.cell_id_u32(map_px_x, map_px_y)?;
+    let [r, g, b] = rgb_bytes_for_field_id(id, color_mode);
     Some(Rgb::new(r, g, b))
 }
 
@@ -220,7 +229,10 @@ pub fn render_exact_lookup_tile_image(
     if layer.y_flip || key.z < 0 {
         return None;
     }
-    let url = layer.exact_lookup_url()?;
+    let url = layer.field_url()?;
+    if layer.field_color_mode() != Some(FieldColorMode::RgbU24) {
+        return None;
+    }
     let lookup = lookups.get(layer.id, &url)?;
     let scale = 1_u32.checked_shl(key.z as u32)?;
     let source_span = layer.tile_px.checked_mul(scale)?;
@@ -269,6 +281,32 @@ pub fn render_exact_lookup_tile_image(
     ))
 }
 
+fn rgb_bytes_for_field_id(id: u32, color_mode: FieldColorMode) -> [u8; 3] {
+    match color_mode {
+        FieldColorMode::RgbU24 => [
+            ((id >> 16) & 0xff) as u8,
+            ((id >> 8) & 0xff) as u8,
+            (id & 0xff) as u8,
+        ],
+        FieldColorMode::DebugHash => {
+            let hash = hash_u32(id);
+            [
+                ((hash >> 16) & 0xff) as u8,
+                ((hash >> 8) & 0xff) as u8,
+                (hash & 0xff) as u8,
+            ]
+        }
+    }
+}
+
+fn hash_u32(mut value: u32) -> u32 {
+    value ^= value >> 16;
+    value = value.wrapping_mul(0x7feb_352d);
+    value ^= value >> 15;
+    value = value.wrapping_mul(0x846c_a68b);
+    value ^ (value >> 16)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,6 +327,7 @@ mod tests {
             tileset_url: "/images/tiles/mask/v1/tileset.json".to_string(),
             tile_url_template: "/images/tiles/mask/v1/{level}/{x}_{y}.png".to_string(),
             tileset_version: "v1".to_string(),
+            field_source: None,
             vector_source: None,
             transform: LayerTransform::IdentityMapSpace,
             tile_px: 512,
@@ -330,7 +369,7 @@ mod tests {
         )
         .expect("mask");
         let lookup = mask.to_lookup_rows().expect("lookup");
-        let url = layer.exact_lookup_url().expect("lookup url");
+        let url = layer.field_url().expect("lookup url");
         let mut cache = ExactLookupCache::default();
         cache.entries.insert(
             layer.id,
@@ -364,7 +403,7 @@ mod tests {
         )
         .expect("mask");
         let lookup = mask.to_lookup_rows().expect("lookup");
-        let url = layer.exact_lookup_url().expect("lookup url");
+        let url = layer.field_url().expect("lookup url");
         let mut cache = ExactLookupCache::default();
         cache.entries.insert(
             layer.id,

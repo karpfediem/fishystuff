@@ -772,6 +772,7 @@ mod tests {
             tile_px: 512,
             max_level: 0,
             y_flip: false,
+            field_source: None,
             vector_source: Some(VectorSourceRef {
                 url: format!("/{layer_id}/v1.geojson"),
                 revision: format!("{layer_id}-v1"),

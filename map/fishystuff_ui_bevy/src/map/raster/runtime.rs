@@ -222,7 +222,7 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
             continue;
         };
 
-        if layer.exact_lookup_url().is_some() {
+        if layer.field_url().is_some() {
             streamer.clear_layer(layer.id);
             view_state.per_layer.remove(&layer.id);
             cache.clear_layer(layer.id, commands, images);

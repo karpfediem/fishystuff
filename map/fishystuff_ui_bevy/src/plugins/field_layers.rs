@@ -10,7 +10,9 @@ use crate::map::exact_lookup::{
     ensure_exact_lookup_request, poll_exact_lookup_requests, ExactLookupCache, ExactLookupStatus,
     PendingExactLookups,
 };
-use crate::map::layers::{LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime};
+use crate::map::layers::{
+    FieldColorMode, LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime,
+};
 use crate::map::spaces::layer_transform::LayerTransform;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, MapRect, WorldPoint, WorldRect};
@@ -92,12 +94,12 @@ fn sync_exact_lookup_cache(
     let active_layer_ids = layer_registry
         .ordered()
         .iter()
-        .filter(|layer| layer.exact_lookup_url().is_some())
+        .filter(|layer| layer.field_url().is_some())
         .map(|layer| layer.id)
         .collect::<HashSet<_>>();
 
     for layer in layer_registry.ordered() {
-        let Some(url) = layer.exact_lookup_url() else {
+        let Some(url) = layer.field_url() else {
             continue;
         };
         ensure_exact_lookup_request(layer, &mut exact_lookups, &mut pending_lookups);
@@ -165,7 +167,7 @@ fn update_field_layer_visuals(
     let active_exact_layers = layer_registry
         .ordered()
         .iter()
-        .filter(|layer| layer.exact_lookup_url().is_some())
+        .filter(|layer| layer.field_url().is_some())
         .map(|layer| layer.id)
         .collect::<HashSet<_>>();
     cleanup_stale_field_layers(
@@ -202,7 +204,10 @@ fn update_field_layer_visuals(
     };
 
     for layer in layer_registry.ordered() {
-        let Some(url) = layer.exact_lookup_url() else {
+        let Some(url) = layer.field_url() else {
+            continue;
+        };
+        let Some(color_mode) = layer.field_color_mode() else {
             continue;
         };
         let Some(runtime_state) = layer_runtime.get(layer.id) else {
@@ -234,6 +239,7 @@ fn update_field_layer_visuals(
             layer.id,
             next_request,
             lookup,
+            color_mode,
         );
 
         let Some(entry) = field_runtime.entries.get(&layer.id) else {
@@ -261,6 +267,7 @@ fn ensure_field_layer_image(
     layer_id: LayerId,
     next_request: FieldTextureRequest,
     lookup: &fishystuff_core::field::DiscreteFieldRows,
+    color_mode: FieldColorMode,
 ) {
     let should_rerender = field_runtime
         .entries
@@ -271,7 +278,7 @@ fn ensure_field_layer_image(
         return;
     }
 
-    let image = render_lookup_request_image(lookup, next_request);
+    let image = render_lookup_request_image(lookup, next_request, color_mode);
     if let Some(entry) = field_runtime.entries.get_mut(&layer_id) {
         images.remove(entry.image.id());
         entry.image = images.add(image);
@@ -431,6 +438,7 @@ fn request_world_placement(
 fn render_lookup_request_image(
     lookup: &fishystuff_core::field::DiscreteFieldRows,
     request: FieldTextureRequest,
+    color_mode: FieldColorMode,
 ) -> Image {
     let chunk = lookup.render_rgba_resampled_chunk(
         request.source_origin_x,
@@ -439,14 +447,7 @@ fn render_lookup_request_image(
         request.source_height,
         request.output_width,
         request.output_height,
-        |rgb| {
-            [
-                ((rgb >> 16) & 0xff) as u8,
-                ((rgb >> 8) & 0xff) as u8,
-                (rgb & 0xff) as u8,
-                255,
-            ]
-        },
+        |id| render_field_id_rgba(id, color_mode),
     );
     Image::new(
         Extent3d {
@@ -459,6 +460,32 @@ fn render_lookup_request_image(
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::RENDER_WORLD,
     )
+}
+
+fn render_field_id_rgba(id: u32, color_mode: FieldColorMode) -> [u8; 4] {
+    match color_mode {
+        FieldColorMode::RgbU24 => [
+            ((id >> 16) & 0xff) as u8,
+            ((id >> 8) & 0xff) as u8,
+            (id & 0xff) as u8,
+            255,
+        ],
+        FieldColorMode::DebugHash => {
+            let hash = hash_u32(id);
+            let r = ((hash >> 16) & 0xff) as u8;
+            let g = ((hash >> 8) & 0xff) as u8;
+            let b = (hash & 0xff) as u8;
+            [r.max(32), g.max(32), b.max(32), 255]
+        }
+    }
+}
+
+fn hash_u32(mut value: u32) -> u32 {
+    value ^= value >> 16;
+    value = value.wrapping_mul(0x7feb_352d);
+    value ^= value >> 15;
+    value = value.wrapping_mul(0x846c_a68b);
+    value ^ (value >> 16)
 }
 
 fn world_rect_to_clamped_map_rect(world_rect: WorldRect, map_to_world: MapToWorld) -> MapRect {

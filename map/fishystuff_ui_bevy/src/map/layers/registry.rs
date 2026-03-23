@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 use bevy::prelude::Resource;
 use fishystuff_api::models::layers::{
+    FieldColorMode as FieldColorModeDto, FieldSourceRef as FieldSourceRefDto,
     GeometrySpace as GeometrySpaceDto, LayerDescriptor, LayerKind as LayerKindDto,
     LayerTransformDto, LayersResponse, StyleMode as StyleModeDto,
     VectorSourceRef as VectorSourceRefDto,
@@ -14,7 +15,8 @@ use crate::map::spaces::layer_transform::{LayerTransform, WorldTransform};
 use crate::map::spaces::world::MapToWorld;
 
 use super::{
-    GeometrySpace, LayerId, LayerKind, LayerSpec, LodPolicy, PickMode, StyleMode, VectorSourceSpec,
+    FieldColorMode, FieldSourceSpec, GeometrySpace, LayerId, LayerKind, LayerSpec, LodPolicy,
+    PickMode, StyleMode, VectorSourceSpec,
 };
 
 const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
@@ -142,6 +144,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         tile_px,
         max_level,
         y_flip,
+        field_source,
         vector_source,
         lod_policy,
         ui,
@@ -160,6 +163,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
 
     let kind = layer_kind_from_dto(kind);
     let pick_mode = parse_pick_mode(&pick_mode);
+    let field_source = field_source.and_then(field_source_from_dto);
     let vector_source = vector_source
         .and_then(vector_source_from_dto)
         .filter(|_| kind == LayerKind::VectorGeoJson);
@@ -257,6 +261,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         tileset_url,
         tile_url_template,
         tileset_version: tileset.version,
+        field_source,
         vector_source,
         transform,
         tile_px,
@@ -283,10 +288,29 @@ fn geometry_space_from_dto(space: GeometrySpaceDto) -> GeometrySpace {
     }
 }
 
+fn field_color_mode_from_dto(mode: FieldColorModeDto) -> FieldColorMode {
+    match mode {
+        FieldColorModeDto::RgbU24 => FieldColorMode::RgbU24,
+        FieldColorModeDto::DebugHash => FieldColorMode::DebugHash,
+    }
+}
+
 fn style_mode_from_dto(mode: StyleModeDto) -> StyleMode {
     match mode {
         StyleModeDto::FeaturePropertyPalette => StyleMode::FeaturePropertyPalette,
     }
+}
+
+fn field_source_from_dto(dto: FieldSourceRefDto) -> Option<FieldSourceSpec> {
+    let url = normalize_site_asset_path(&dto.url);
+    if url.is_empty() {
+        return None;
+    }
+    Some(FieldSourceSpec {
+        url,
+        revision: dto.revision.trim().to_string(),
+        color_mode: field_color_mode_from_dto(dto.color_mode),
+    })
 }
 
 fn vector_source_from_dto(dto: VectorSourceRefDto) -> Option<VectorSourceSpec> {

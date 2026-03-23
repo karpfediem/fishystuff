@@ -122,6 +122,16 @@ pub(super) fn absolutize_layers_response_assets(
         layer.tileset.tile_url_template =
             resolve_public_asset_url(Some(&layer.tileset.tile_url_template), public_base_url)
                 .unwrap_or_default();
+        if let Some(field_source) = layer.field_source.as_mut() {
+            field_source.url = resolve_public_asset_url(Some(&field_source.url), public_base_url)
+                .unwrap_or_default();
+            let cache_key = normalize_vector_cache_key(
+                Some(field_source.revision.as_str()),
+                map_asset_cache_key.as_deref(),
+            );
+            field_source.url =
+                append_cache_key_to_public_asset_url(&field_source.url, Some(cache_key.as_str()));
+        }
         if let Some(vector_source) = layer.vector_source.as_mut() {
             vector_source.url = resolve_public_asset_url(Some(&vector_source.url), public_base_url)
                 .unwrap_or_default();

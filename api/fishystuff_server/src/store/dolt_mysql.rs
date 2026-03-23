@@ -436,6 +436,7 @@ impl DoltMySqlStore {
                 tile_px: clamp_i64_to_u32(tile_px, 1).max(1),
                 max_level: clamp_i64_to_u8(max_level, 0),
                 y_flip: y_flip != 0,
+                field_source: None,
                 vector_source,
                 lod_policy: LodPolicyDto {
                     target_tiles: clamp_i64_to_usize(lod_target_tiles, 1),

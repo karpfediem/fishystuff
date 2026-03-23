@@ -70,6 +70,19 @@ pub enum StyleMode {
     FeaturePropertyPalette,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FieldColorMode {
+    RgbU24,
+    DebugHash,
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldSourceSpec {
+    pub url: String,
+    pub revision: String,
+    pub color_mode: FieldColorMode,
+}
+
 #[derive(Debug, Clone)]
 pub struct VectorSourceSpec {
     pub url: String,
@@ -109,6 +122,7 @@ pub struct LayerSpec {
     pub tile_px: u32,
     pub max_level: u8,
     pub y_flip: bool,
+    pub field_source: Option<FieldSourceSpec>,
     pub lod_policy: LodPolicy,
     pub request_weight: f32,
     pub pick_mode: PickMode,
@@ -144,6 +158,28 @@ impl LayerSpec {
         self.is_raster() && self.pick_mode == PickMode::ExactTilePixel && self.key == "zone_mask"
     }
 
+    pub fn field_url(&self) -> Option<String> {
+        if let Some(field_source) = self.field_source.as_ref() {
+            let url = field_source.url.trim();
+            return (!url.is_empty()).then(|| url.to_string());
+        }
+        self.exact_lookup_url()
+    }
+
+    pub fn field_revision(&self) -> Option<&str> {
+        self.field_source.as_ref().and_then(|field_source| {
+            let revision = field_source.revision.trim();
+            (!revision.is_empty()).then_some(revision)
+        })
+    }
+
+    pub fn field_color_mode(&self) -> Option<FieldColorMode> {
+        self.field_source
+            .as_ref()
+            .map(|field_source| field_source.color_mode)
+            .or_else(|| self.exact_lookup_url().map(|_| FieldColorMode::RgbU24))
+    }
+
     pub fn exact_lookup_url(&self) -> Option<String> {
         if self.pick_mode != PickMode::ExactTilePixel {
             return None;
@@ -162,11 +198,14 @@ impl LayerSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::{LayerKind, LayerRegistry, LayerRuntime, LayerVectorStatus, PickMode};
+    use super::{
+        FieldColorMode, LayerKind, LayerRegistry, LayerRuntime, LayerVectorStatus, PickMode,
+    };
     use crate::map::spaces::layer_transform::LayerTransform;
     use fishystuff_api::models::layers::{
-        GeometrySpace, LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo,
-        LayersResponse, LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
+        FieldColorMode as FieldColorModeDto, FieldSourceRef, GeometrySpace, LayerDescriptor,
+        LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo, LayersResponse, LodPolicyDto,
+        StyleMode, TilesetRef, VectorSourceRef,
     };
 
     fn vector_descriptor(with_source: bool) -> LayerDescriptor {
@@ -180,6 +219,7 @@ mod tests {
             tile_px: 512,
             max_level: 0,
             y_flip: false,
+            field_source: None,
             vector_source: with_source.then_some(VectorSourceRef {
                 url: "/region_groups/v1.geojson".to_string(),
                 revision: "rg-v1".to_string(),
@@ -268,6 +308,7 @@ mod tests {
                 tile_px: 512,
                 max_level: 0,
                 y_flip: false,
+                field_source: None,
                 vector_source: None,
                 lod_policy: LodPolicyDto::default(),
                 ui: LayerUiInfo::default(),
@@ -291,6 +332,7 @@ mod tests {
             layer.exact_lookup_url().as_deref(),
             Some("/images/exact_lookup/zone_mask.v1.bin")
         );
+        assert_eq!(layer.field_color_mode(), Some(FieldColorMode::RgbU24));
     }
 
     #[test]
@@ -321,6 +363,7 @@ mod tests {
                 tile_px: 128,
                 max_level: 6,
                 y_flip: true,
+                field_source: None,
                 vector_source: None,
                 lod_policy: LodPolicyDto::default(),
                 ui: LayerUiInfo::default(),
@@ -350,5 +393,47 @@ mod tests {
         assert_eq!(layer.lod_policy.pinned_coarse_levels, 0);
         assert_eq!(layer.lod_policy.warm_margin_tiles, 1);
         assert_eq!(layer.lod_policy.protected_margin_tiles, 1);
+    }
+
+    #[test]
+    fn explicit_field_source_is_preferred_over_exact_lookup_convention() {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![LayerDescriptor {
+                layer_id: "zone_mask".to_string(),
+                name: "Zone Mask".to_string(),
+                enabled: true,
+                kind: LayerKindDto::TiledRaster,
+                transform: LayerTransformDto::IdentityMapSpace,
+                tileset: TilesetRef::default(),
+                tile_px: 512,
+                max_level: 0,
+                y_flip: false,
+                field_source: Some(FieldSourceRef {
+                    url: "/fields/custom-zone-mask.bin".to_string(),
+                    revision: "custom-v1".to_string(),
+                    color_mode: FieldColorModeDto::DebugHash,
+                }),
+                vector_source: None,
+                lod_policy: LodPolicyDto::default(),
+                ui: LayerUiInfo::default(),
+                request_weight: 1.0,
+                pick_mode: "exact_tile_pixel".to_string(),
+            }],
+        });
+
+        let layer = registry.ordered().first().expect("field-backed layer");
+        assert_eq!(
+            layer.field_url().as_deref(),
+            Some("/fields/custom-zone-mask.bin")
+        );
+        assert_eq!(layer.field_revision(), Some("custom-v1"));
+        assert_eq!(layer.field_color_mode(), Some(FieldColorMode::DebugHash));
+        assert_eq!(
+            layer.exact_lookup_url().as_deref(),
+            Some("/images/exact_lookup/zone_mask.v1.bin")
+        );
     }
 }

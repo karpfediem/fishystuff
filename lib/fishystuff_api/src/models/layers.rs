@@ -26,6 +26,8 @@ pub struct LayerDescriptor {
     #[serde(default)]
     pub y_flip: bool,
     #[serde(default)]
+    pub field_source: Option<FieldSourceRef>,
+    #[serde(default)]
     pub vector_source: Option<VectorSourceRef>,
     #[serde(default)]
     pub lod_policy: LodPolicyDto,
@@ -49,6 +51,7 @@ impl Default for LayerDescriptor {
             tile_px: 512,
             max_level: 0,
             y_flip: false,
+            field_source: None,
             vector_source: None,
             lod_policy: LodPolicyDto::default(),
             ui: LayerUiInfo::default(),
@@ -85,6 +88,28 @@ pub enum StyleMode {
     /// Style features by inspecting a per-feature property (for example `c` for RGB arrays).
     #[default]
     FeaturePropertyPalette,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldColorMode {
+    /// Interpret field ids as `0xRRGGBB` and render them directly.
+    #[default]
+    RgbU24,
+    /// Render ids with a deterministic debug palette derived from the integer id.
+    DebugHash,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FieldSourceRef {
+    /// URL for the compact field asset.
+    pub url: String,
+    /// Revision identifier used to invalidate cached field state.
+    #[serde(default)]
+    pub revision: String,
+    /// Declares how field ids should be visualized when a direct texture is requested.
+    #[serde(default)]
+    pub color_mode: FieldColorMode,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -251,8 +276,9 @@ const fn default_motion_suppresses_refine() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        GeometrySpace, LayerDescriptor, LayerKind, LayerTransformDto, LayerUiInfo, LayersResponse,
-        LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
+        FieldColorMode, FieldSourceRef, GeometrySpace, LayerDescriptor, LayerKind,
+        LayerTransformDto, LayerUiInfo, LayersResponse, LodPolicyDto, StyleMode, TilesetRef,
+        VectorSourceRef,
     };
 
     #[test]
@@ -270,6 +296,7 @@ mod tests {
                 tile_px: 512,
                 max_level: 0,
                 y_flip: false,
+                field_source: None,
                 vector_source: Some(VectorSourceRef {
                     url: "/region_groups/v1.geojson".to_string(),
                     revision: "rg-v1".to_string(),
@@ -298,6 +325,45 @@ mod tests {
         assert_eq!(
             json["layers"][0]["vector_source"]["url"],
             "/region_groups/v1.geojson"
+        );
+    }
+
+    #[test]
+    fn field_source_serializes_with_color_mode() {
+        let response = LayersResponse {
+            revision: "rev-1".to_string(),
+            map_version_id: None,
+            layers: vec![LayerDescriptor {
+                layer_id: "regions".to_string(),
+                name: "Regions".to_string(),
+                enabled: true,
+                kind: LayerKind::TiledRaster,
+                transform: LayerTransformDto::IdentityMapSpace,
+                tileset: TilesetRef::default(),
+                tile_px: 512,
+                max_level: 0,
+                y_flip: false,
+                field_source: Some(FieldSourceRef {
+                    url: "/fields/regions.v1.bin".to_string(),
+                    revision: "regions-field-v1".to_string(),
+                    color_mode: FieldColorMode::DebugHash,
+                }),
+                vector_source: None,
+                lod_policy: LodPolicyDto::default(),
+                ui: LayerUiInfo::default(),
+                request_weight: 1.0,
+                pick_mode: "none".to_string(),
+            }],
+        };
+
+        let json = serde_json::to_value(response).expect("serialize");
+        assert_eq!(
+            json["layers"][0]["field_source"]["url"],
+            "/fields/regions.v1.bin"
+        );
+        assert_eq!(
+            json["layers"][0]["field_source"]["color_mode"],
+            "debug_hash"
         );
     }
 }

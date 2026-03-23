@@ -545,6 +545,7 @@ mod tests {
                 tile_px: 512,
                 max_level: 0,
                 y_flip: false,
+                field_source: None,
                 vector_source: Some(VectorSourceRef {
                     url: "/tests/tiny.geojson".to_string(),
                     revision: "tiny-v1".to_string(),

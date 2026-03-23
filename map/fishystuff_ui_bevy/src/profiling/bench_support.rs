@@ -70,6 +70,7 @@ pub fn raster_fixture() -> RasterBenchFixture {
         tileset_url: "bench://tileset.json".to_string(),
         tile_url_template: "bench://tiles/{z}/{x}_{y}.png".to_string(),
         tileset_version: "bench-v1".to_string(),
+        field_source: None,
         vector_source: None,
         transform: LayerTransform::IdentityMapSpace,
         tile_px: 512,

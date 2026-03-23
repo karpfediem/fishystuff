@@ -198,6 +198,7 @@ mod tests {
                 tile_px: 512,
                 max_level: 0,
                 y_flip: false,
+                field_source: None,
                 vector_source: Some(fishystuff_api::models::layers::VectorSourceRef {
                     url: "/region_groups/regions.v1.geojson".to_string(),
                     revision: "regions-v1".to_string(),
@@ -281,6 +282,7 @@ mod tests {
                 tile_px: 512,
                 max_level: 0,
                 y_flip: false,
+                field_source: None,
                 vector_source: Some(fishystuff_api::models::layers::VectorSourceRef {
                     url: "/region_groups/regions.v1.geojson".to_string(),
                     revision: "regions-v1".to_string(),

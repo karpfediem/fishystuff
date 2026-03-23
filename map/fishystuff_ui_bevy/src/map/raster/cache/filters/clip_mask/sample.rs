@@ -184,6 +184,7 @@ mod tests {
             tileset_url: "/tileset.json".to_string(),
             tile_url_template: "/tiles/{z}/{x}_{y}.png".to_string(),
             tileset_version: "v1".to_string(),
+            field_source: None,
             vector_source: None,
             transform: LayerTransform::IdentityMapSpace,
             tile_px: 512,
