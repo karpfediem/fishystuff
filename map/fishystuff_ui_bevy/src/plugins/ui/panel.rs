@@ -162,10 +162,10 @@ pub(super) fn sync_zone_evidence_list(mut sync: ZoneEvidenceListSync<'_, '_>) {
             {
                 "No zone evidence loaded."
             } else {
-                "Zone evidence is only available for zone selections."
+                "Zone evidence is only available for zone-backed selections."
             }
         } else {
-            "Click a zone on the map to load evidence."
+            "Select a zone-backed result to inspect fish evidence."
         }
     } else if rows.is_empty() {
         "No fish evidence in this window."

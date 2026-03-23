@@ -6,6 +6,7 @@ const {
   buildBookmarkDeletionPrompt,
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
+  buildZoneEvidenceStatusText,
   buildHoverOverviewRows,
   buildSelectWorldPointCommand,
   buildZoneEvidenceSummary,
@@ -30,6 +31,7 @@ const {
   resolveHoveredBookmark,
   resolveDisplayBookmarks,
   renderSearchSelection,
+  selectionHasZoneEvidence,
   serializeBookmarksForExport,
   serializeWindowUiState,
 } = await import("./loader.js");
@@ -417,6 +419,33 @@ test("projectStateBundleStatePatch preserves unrelated applied filters for optim
 test("buildZoneEvidenceSummary explains that non-zone selections have no zone evidence", () => {
   assert.equal(buildZoneEvidenceSummary({ zoneRgb: null }, null), "Zone evidence is only available for zone selections.");
   assert.equal(buildZoneEvidenceSummary({ zoneRgb: 0xc17f7f }, null), "No zone evidence loaded.");
+});
+
+test("selectionHasZoneEvidence and buildZoneEvidenceStatusText distinguish generic selections", () => {
+  assert.equal(selectionHasZoneEvidence(null, null), false);
+  assert.equal(selectionHasZoneEvidence({ layerSamples: [] }, null), false);
+  assert.equal(
+    selectionHasZoneEvidence(
+      {
+        layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }],
+      },
+      null,
+    ),
+    true,
+  );
+  assert.equal(buildZoneEvidenceStatusText(null, "zone evidence: idle", null), "no selection");
+  assert.equal(
+    buildZoneEvidenceStatusText({ layerSamples: [] }, "zone evidence: idle", null),
+    "selection details",
+  );
+  assert.equal(
+    buildZoneEvidenceStatusText(
+      { layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }] },
+      "zone stats: ready",
+      null,
+    ),
+    "zone stats: ready",
+  );
 });
 
 test("buildBookmarkDeletionPrompt uses the bookmark label for single deletions", () => {

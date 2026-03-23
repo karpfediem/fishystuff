@@ -2282,6 +2282,23 @@ export function buildZoneEvidenceSummary(selection, zoneStats) {
   return parts.join(" · ") || "No confidence data.";
 }
 
+export function selectionHasZoneEvidence(selection, zoneStats = null) {
+  const zoneRgb =
+    zoneStats?.zoneRgb ?? selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples);
+  return zoneRgb != null;
+}
+
+export function buildZoneEvidenceStatusText(selection, zoneStatsStatus, zoneStats = null) {
+  if (selectionHasZoneEvidence(selection, zoneStats)) {
+    const normalized = String(zoneStatsStatus || "").trim();
+    return normalized || "zone evidence: idle";
+  }
+  if (selection) {
+    return "selection details";
+  }
+  return "no selection";
+}
+
 export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()) {
   const entries = Array.isArray(distribution) ? distribution : [];
   return entries
@@ -2320,9 +2337,11 @@ export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()
 
 function ensureZoneEvidenceElements(elements) {
   if (
+    elements.zoneEvidenceShell &&
     elements.zoneEvidenceStatus &&
     elements.zoneEvidenceSummary &&
     elements.selectionOverview &&
+    elements.zoneEvidenceDisclaimer &&
     elements.zoneEvidenceList
   ) {
     return elements;
@@ -2336,23 +2355,26 @@ function ensureZoneEvidenceElements(elements) {
   section.innerHTML = `
     <div class="flex items-center justify-between gap-3">
       <span class="text-sm font-semibold">Selection</span>
-      <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
+      <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">no selection</span>
     </div>
-    <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Select a zone to load evidence.</p>
-    <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
-    <div class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
-      <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
-        <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
-        Disclaimer
-      </p>
-      <div class="space-y-2 leading-5">
-        <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
-        <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
-        <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
-        <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
+    <div id="fishymap-zone-evidence-shell" class="space-y-2" hidden>
+      <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Zone Evidence</p>
+      <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Select a zone to load evidence.</p>
+      <div id="fishymap-zone-evidence-disclaimer" class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
+        <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
+          <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
+          Disclaimer
+        </p>
+        <div class="space-y-2 leading-5">
+          <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
+          <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
+          <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
+          <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
+        </div>
       </div>
+      <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2"></div>
     </div>
-    <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2"></div>
+    <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
   `;
 
   if (elements.legend?.parentNode === elements.panelBody) {
@@ -2361,9 +2383,11 @@ function ensureZoneEvidenceElements(elements) {
     elements.panelBody.appendChild(section);
   }
 
+  elements.zoneEvidenceShell = section.querySelector("#fishymap-zone-evidence-shell");
   elements.zoneEvidenceStatus = section.querySelector("#fishymap-zone-evidence-status");
   elements.zoneEvidenceSummary = section.querySelector("#fishymap-zone-evidence-summary");
   elements.selectionOverview = section.querySelector("#fishymap-selection-overview");
+  elements.zoneEvidenceDisclaimer = section.querySelector("#fishymap-zone-evidence-disclaimer");
   elements.zoneEvidenceList = section.querySelector("#fishymap-zone-evidence-list");
   return elements;
 }
@@ -2973,11 +2997,21 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
   }
   const selection = stateBundle.state?.selection || null;
   const zoneStats = stateBundle.state?.selection?.zoneStats || null;
-  const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone stats: idle";
+  const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone evidence: idle";
+  const hasZoneEvidence = selectionHasZoneEvidence(selection, zoneStats);
   const summary = buildZoneEvidenceSummary(selection, zoneStats);
 
-  setTextContent(elements.zoneEvidenceStatus, zoneStatsStatus);
+  setTextContent(
+    elements.zoneEvidenceStatus,
+    buildZoneEvidenceStatusText(selection, zoneStatsStatus, zoneStats),
+  );
   setTextContent(elements.zoneEvidenceSummary, summary);
+  if (elements.zoneEvidenceShell) {
+    setBooleanProperty(elements.zoneEvidenceShell, "hidden", !hasZoneEvidence);
+  }
+  if (elements.zoneEvidenceDisclaimer) {
+    setBooleanProperty(elements.zoneEvidenceDisclaimer, "hidden", !hasZoneEvidence);
+  }
 
   const distribution = Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : [];
   const renderKey = JSON.stringify({
@@ -3005,6 +3039,10 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
   }
   elements.zoneEvidenceList.dataset.renderKey = renderKey;
 
+  if (!hasZoneEvidence) {
+    elements.zoneEvidenceList.innerHTML = "";
+    return;
+  }
   if (!zoneStats) {
     elements.zoneEvidenceList.innerHTML =
       (selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples)) != null
@@ -3113,7 +3151,7 @@ function applyWindowVisibility(elements, windowUiState) {
       body: elements.zoneEvidenceBody,
       titlebar: elements.zoneEvidenceTitlebar,
       toggle: elements.zoneInfoWindowToggle,
-      label: "Zone Info",
+      label: "Selection",
     },
     {
       state: windowUiState.layers,
@@ -4967,8 +5005,10 @@ async function main() {
     zoneEvidenceWindow: document.getElementById("fishymap-zone-evidence-window"),
     zoneEvidenceTitlebar: document.getElementById("fishymap-zone-evidence-titlebar"),
     zoneEvidenceBody: document.getElementById("fishymap-zone-evidence-body"),
+    zoneEvidenceShell: document.getElementById("fishymap-zone-evidence-shell"),
     zoneEvidenceStatus: document.getElementById("fishymap-zone-evidence-status"),
     zoneEvidenceSummary: document.getElementById("fishymap-zone-evidence-summary"),
+    zoneEvidenceDisclaimer: document.getElementById("fishymap-zone-evidence-disclaimer"),
     zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
     hoverTooltip: document.getElementById("fishymap-hover-tooltip"),
     hoverLayers: document.getElementById("fishymap-hover-layers"),

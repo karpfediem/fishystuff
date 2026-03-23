@@ -58,7 +58,7 @@ pub(super) fn spawn_selection_panel(root: &mut ChildSpawnerCommands, styles: &Se
             ClassList::new("selection-overview-list"),
         ));
         panel.spawn((
-            UiTextBundle::new("Evidence", &styles.small_style),
+            UiTextBundle::new("Zone Evidence", &styles.small_style),
             ClassList::new("section-title"),
         ));
         panel
