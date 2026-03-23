@@ -5,6 +5,8 @@ use crate::bridge::host::BrowserBridgeState;
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::ViewModeState;
 use crate::map::camera::terrain3d::Terrain3dViewState;
+use crate::map::field_metadata::FieldMetadataCache;
+use crate::map::layers::LayerRegistry;
 use crate::plugins::api::{ApiBootstrapState, PatchFilterState, PendingRequests, SelectionState};
 use crate::plugins::camera::CameraZoomBounds;
 use crate::prelude::*;
@@ -14,6 +16,8 @@ pub(in crate::bridge::host) fn apply_browser_commands(
     zoom_bounds: Res<CameraZoomBounds>,
     bootstrap: Res<ApiBootstrapState>,
     patch_filter: Res<PatchFilterState>,
+    layer_registry: Res<LayerRegistry>,
+    field_metadata: Res<FieldMetadataCache>,
     mut selection: ResMut<SelectionState>,
     mut pending: ResMut<PendingRequests>,
     mut view_mode: ResMut<ViewModeState>,
@@ -39,6 +43,8 @@ pub(in crate::bridge::host) fn apply_browser_commands(
             selection::apply_zone_selection_command(
                 &bootstrap,
                 &patch_filter,
+                &layer_registry,
+                &field_metadata,
                 &mut selection,
                 &mut pending,
                 zone_rgb,

@@ -128,24 +128,8 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         registry_map_version_id: context.layer_registry.map_version_id(),
     };
     let layer_samples = collect_hover_layer_samples(&hover_layers, &mut sampling);
-    let zone_sample = hover_layers
-        .iter()
-        .find(|layer| layer.pick_mode == PickMode::ExactTilePixel)
-        .and_then(|layer| {
-            layer_samples
-                .iter()
-                .find(|sample| sample.layer_id == layer.key)
-                .cloned()
-        });
-
-    let zone_name = zone_sample.as_ref().and_then(|sample| {
-        context
-            .bootstrap
-            .zones
-            .get(&sample.rgb_u32)
-            .cloned()
-            .unwrap_or(None)
-    });
+    let zone_sample = zone_mask_hover_sample(&layer_samples);
+    let zone_name = zone_sample.and_then(|sample| zone_name_from_hover_rows(&sample.rows));
     let zone_rgb = zone_sample.as_ref().map(|sample| sample.rgb);
     let zone_rgb_u32 = zone_sample.as_ref().map(|sample| sample.rgb_u32);
     let next_hover = crate::plugins::api::HoverInfo {
@@ -263,13 +247,7 @@ fn sample_hover_layer(
         );
         (
             rgb,
-            sample_field_layer_semantics(
-                layer,
-                field_id,
-                rgb.to_u32(),
-                sampling.field_metadata,
-                sampling.bootstrap,
-            ),
+            sample_field_layer_semantics(layer, field_id, sampling.field_metadata),
             "field".to_string(),
         )
     } else if layer.is_raster() {
@@ -401,25 +379,9 @@ fn sample_field_layer_hover_metadata(
 fn sample_field_layer_semantics(
     layer: &crate::map::layers::LayerSpec,
     field_id: Option<u32>,
-    rgb_u32: u32,
     field_metadata: &FieldMetadataCache,
-    bootstrap: &ApiBootstrapState,
 ) -> HoverLayerSemantics {
-    let mut semantics = sample_field_layer_hover_metadata(layer, field_metadata, field_id);
-    if layer.key == "zone_mask" && semantics.rows.is_empty() {
-        if let Some(zone_name) = bootstrap.zones.get(&rgb_u32).cloned().unwrap_or(None) {
-            semantics.rows.push(FieldHoverRow {
-                key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
-                icon: "hover-zone".to_string(),
-                label: "Zone".to_string(),
-                value: zone_name,
-                hide_label: false,
-                status_icon: None,
-                status_icon_tone: None,
-            });
-        }
-    }
-    semantics
+    sample_field_layer_hover_metadata(layer, field_metadata, field_id)
 }
 
 fn hover_metadata_from_field_entry(
@@ -433,12 +395,30 @@ fn hover_metadata_from_field_entry(
     }
 }
 
+fn zone_mask_hover_sample(layer_samples: &[HoverLayerSample]) -> Option<&HoverLayerSample> {
+    layer_samples
+        .iter()
+        .find(|sample| sample.layer_id == "zone_mask")
+}
+
+fn zone_name_from_hover_rows(rows: &[FieldHoverRow]) -> Option<String> {
+    rows.iter()
+        .find(|row| row.key == FIELD_HOVER_ROW_KEY_ZONE)
+        .map(|row| row.value.trim())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{hover_metadata_from_field_entry, hovered_zone_rgb, HoverLayerSemantics};
-    use crate::plugins::api::HoverInfo;
+    use super::{
+        hover_metadata_from_field_entry, hovered_zone_rgb, zone_mask_hover_sample,
+        zone_name_from_hover_rows, HoverLayerSemantics,
+    };
+    use crate::plugins::api::{HoverInfo, HoverLayerSample};
+    use fishystuff_api::Rgb;
     use fishystuff_core::field_metadata::{
-        FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget,
+        FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget, FIELD_HOVER_ROW_KEY_ZONE,
     };
 
     #[test]
@@ -484,6 +464,53 @@ mod tests {
                 rows: entry.rows,
                 targets: entry.targets,
             }
+        );
+    }
+
+    #[test]
+    fn zone_name_from_hover_rows_reads_zone_row() {
+        let rows = vec![FieldHoverRow {
+            key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
+            icon: "hover-zone".to_string(),
+            label: "Zone".to_string(),
+            value: "Olvia Coast".to_string(),
+            hide_label: false,
+            status_icon: None,
+            status_icon_tone: None,
+        }];
+        assert_eq!(
+            zone_name_from_hover_rows(&rows),
+            Some("Olvia Coast".to_string())
+        );
+    }
+
+    #[test]
+    fn zone_mask_hover_sample_prefers_zone_mask_layer_id() {
+        let samples = vec![
+            HoverLayerSample {
+                layer_id: "regions".to_string(),
+                layer_name: "Regions".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x112233),
+                rgb_u32: 0x112233,
+                field_id: Some(88),
+                rows: Vec::new(),
+                targets: Vec::new(),
+            },
+            HoverLayerSample {
+                layer_id: "zone_mask".to_string(),
+                layer_name: "Zone Mask".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x445566),
+                rgb_u32: 0x445566,
+                field_id: Some(0x445566),
+                rows: Vec::new(),
+                targets: Vec::new(),
+            },
+        ];
+        assert_eq!(
+            zone_mask_hover_sample(&samples).map(|sample| sample.rgb_u32),
+            Some(0x445566)
         );
     }
 }

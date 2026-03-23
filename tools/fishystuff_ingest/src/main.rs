@@ -1,3 +1,4 @@
+mod field_layers;
 mod mysql_store;
 mod ranking;
 mod region_groups;
@@ -244,6 +245,14 @@ enum Commands {
         loc: PathBuf,
         #[arg(long = "waypoint-xml", required = true)]
         waypoint_xml: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    BuildZoneMaskFieldMetadata {
+        #[arg(long)]
+        field: PathBuf,
+        #[arg(long)]
+        zones_csv: PathBuf,
         #[arg(long)]
         out: PathBuf,
     },
@@ -536,6 +545,11 @@ fn main() -> Result<()> {
             waypoint_xml,
             out,
         ),
+        Commands::BuildZoneMaskFieldMetadata {
+            field,
+            zones_csv,
+            out,
+        } => run_build_zone_mask_field_metadata(field, zones_csv, out),
         Commands::DebugWatermapProjection {
             watermap,
             out,
@@ -1171,7 +1185,7 @@ fn run_build_regions_field_metadata(
     waypoint_xml: Vec<PathBuf>,
     out: PathBuf,
 ) -> Result<()> {
-    let summary = region_layers::build_regions_field_hover_metadata(
+    let summary = field_layers::build_regions_field_hover_metadata(
         &field,
         &loc,
         &regioninfo_bss,
@@ -1197,7 +1211,7 @@ fn run_build_region_groups_field_metadata(
     waypoint_xml: Vec<PathBuf>,
     out: PathBuf,
 ) -> Result<()> {
-    let summary = region_layers::build_region_groups_field_hover_metadata(
+    let summary = field_layers::build_region_groups_field_hover_metadata(
         &field,
         &regions_field,
         &loc,
@@ -1208,6 +1222,21 @@ fn run_build_region_groups_field_metadata(
     )?;
     println!(
         "build-region-groups-field-metadata: out={} field_ids={} entries={}",
+        out.display(),
+        summary.field_id_count,
+        summary.entry_count,
+    );
+    Ok(())
+}
+
+fn run_build_zone_mask_field_metadata(
+    field: PathBuf,
+    zones_csv: PathBuf,
+    out: PathBuf,
+) -> Result<()> {
+    let summary = field_layers::build_zone_mask_field_hover_metadata(&field, &zones_csv, &out)?;
+    println!(
+        "build-zone-mask-field-metadata: out={} field_ids={} entries={}",
         out.display(),
         summary.field_id_count,
         summary.entry_count,

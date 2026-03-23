@@ -320,6 +320,22 @@ if [ -f "$zone_lookup_source_image" ] && { [ "${REBUILD_ZONE_LOOKUP:-0}" = "1" ]
     --output "$zone_lookup_output"
 fi
 
+zone_metadata_csv="${ZONE_METADATA_CSV:-$(first_existing_path \
+  data/data/zones_merged.csv)}"
+zone_mask_field_metadata_output="$CDN_FIELD_ASSET_DIR/zone_mask.v1.meta.json"
+if [ -f "$zone_lookup_output" ] && [ -f "$zone_metadata_csv" ] && {
+  [ "${REBUILD_ZONE_MASK_FIELD_METADATA:-0}" = "1" ] ||
+  [ ! -f "$zone_mask_field_metadata_output" ] ||
+  [ "$zone_lookup_output" -nt "$zone_mask_field_metadata_output" ] ||
+  [ "$zone_metadata_csv" -nt "$zone_mask_field_metadata_output" ];
+}; then
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
+    build-zone-mask-field-metadata \
+    --field "$zone_lookup_output" \
+    --zones-csv "$zone_metadata_csv" \
+    --out "$zone_mask_field_metadata_output"
+fi
+
 regions_field_input="${REGIONS_FIELD_INPUT:-$(first_existing_path \
   data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid)}"
 regioninfo_bss_input="${REGIONINFO_BSS_INPUT:-$(first_existing_path \

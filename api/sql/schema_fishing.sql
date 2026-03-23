@@ -525,7 +525,9 @@ INSERT INTO layers (
     'identity_map_space', NULL, NULL, NULL, NULL, NULL, NULL,
     '/images/tiles/mask/{map_version}/tileset.json', '/images/tiles/mask/{map_version}/{level}/{x}_{y}.png', 'v1',
     512, 0, 0, 0.7, 'exact_tile_pixel',
-    'tiled_raster', NULL, NULL, 'rgb_u24', NULL, NULL, NULL, NULL, 'map_pixels', 'feature_property_palette', NULL, NULL,
+    'tiled_raster', NULL, NULL, 'rgb_u24',
+    '/fields/zone_mask.{map_version}.meta.json', 'zone-meta-v1',
+    NULL, NULL, 'map_pixels', 'feature_property_palette', NULL, NULL,
     300, 360.0, 220.0, 1,
     0, 0, 0
   ),

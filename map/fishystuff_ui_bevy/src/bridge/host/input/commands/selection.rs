@@ -1,5 +1,8 @@
 use fishystuff_api::Rgb;
+use fishystuff_core::field_metadata::FIELD_HOVER_ROW_KEY_ZONE;
 
+use crate::map::field_metadata::FieldMetadataCache;
+use crate::map::layers::LayerRegistry;
 use crate::plugins::api::{
     build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, PatchFilterState,
     PendingRequests, SelectionState,
@@ -8,6 +11,8 @@ use crate::plugins::api::{
 pub(super) fn apply_zone_selection_command(
     bootstrap: &ApiBootstrapState,
     patch_filter: &PatchFilterState,
+    layer_registry: &LayerRegistry,
+    field_metadata: &FieldMetadataCache,
     selection: &mut SelectionState,
     pending: &mut PendingRequests,
     zone_rgb: u32,
@@ -18,7 +23,7 @@ pub(super) fn apply_zone_selection_command(
         map_py: 0,
         rgb,
         rgb_u32: zone_rgb,
-        zone_name: bootstrap.zones.get(&zone_rgb).cloned().unwrap_or(None),
+        zone_name: resolve_zone_name(layer_registry, field_metadata, zone_rgb),
         world_x: 0.0,
         world_z: 0.0,
     });
@@ -29,4 +34,16 @@ pub(super) fn apply_zone_selection_command(
     } else {
         selection.zone_stats_status = "zone stats: missing defaults".to_string();
     }
+}
+
+fn resolve_zone_name(
+    layer_registry: &LayerRegistry,
+    field_metadata: &FieldMetadataCache,
+    zone_rgb: u32,
+) -> Option<String> {
+    let layer = layer_registry.get_by_key("zone_mask")?;
+    let metadata_url = layer.field_metadata_url()?;
+    let entry = field_metadata.entry(layer.id, &metadata_url, zone_rgb)?;
+    let value = entry.row_value(FIELD_HOVER_ROW_KEY_ZONE)?.trim();
+    (!value.is_empty()).then(|| value.to_string())
 }
