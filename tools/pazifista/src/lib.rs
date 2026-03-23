@@ -102,9 +102,17 @@ enum PabrCommand {
     )]
     ExportRegionsGeojson(PabrExportRegionsGeojsonCli),
     #[command(
+        about = "Export a compact regions field derived directly from a PABR .rid/.bkd pair"
+    )]
+    ExportRegionsField(PabrExportRegionsFieldCli),
+    #[command(
         about = "Export unsmoothed region-groups GeoJSON derived directly from a PABR .rid/.bkd pair"
     )]
     ExportRegionGroupsGeojson(PabrExportRegionGroupsGeojsonCli),
+    #[command(
+        about = "Export a compact region-groups field derived directly from a PABR .rid/.bkd pair"
+    )]
+    ExportRegionGroupsField(PabrExportRegionGroupsFieldCli),
     #[command(about = "Match PABR region IDs against the current regions GeoJSON by overlap")]
     MatchRegions(PabrMatchRegionsCli),
 }
@@ -182,7 +190,33 @@ struct PabrExportRegionsGeojsonCli {
 }
 
 #[derive(Debug, Parser)]
+struct PabrExportRegionsFieldCli {
+    #[arg(value_name = "input file", help = "Either the .rid or .bkd file")]
+    input_file: PathBuf,
+    #[arg(short = 'o', long = "output", value_name = "path")]
+    output: PathBuf,
+    #[arg(long = "row-shift", value_name = "value", default_value_t = DEFAULT_ROW_SHIFT)]
+    row_shift: u32,
+    #[arg(short = 'q')]
+    quiet: bool,
+}
+
+#[derive(Debug, Parser)]
 struct PabrExportRegionGroupsGeojsonCli {
+    #[arg(value_name = "input file", help = "Either the .rid or .bkd file")]
+    input_file: PathBuf,
+    #[arg(long = "regioninfo-bss", value_name = "path")]
+    regioninfo_bss: PathBuf,
+    #[arg(short = 'o', long = "output", value_name = "path")]
+    output: PathBuf,
+    #[arg(long = "row-shift", value_name = "value", default_value_t = DEFAULT_ROW_SHIFT)]
+    row_shift: u32,
+    #[arg(short = 'q')]
+    quiet: bool,
+}
+
+#[derive(Debug, Parser)]
+struct PabrExportRegionGroupsFieldCli {
     #[arg(value_name = "input file", help = "Either the .rid or .bkd file")]
     input_file: PathBuf,
     #[arg(long = "regioninfo-bss", value_name = "path")]
@@ -609,6 +643,27 @@ fn run_pabr(cli: PabrCli) -> Result<()> {
             }
             Ok(())
         }
+        PabrCommand::ExportRegionsField(args) => {
+            let map = load_pabr_map(&args.input_file)?;
+            let output_path = normalize_output_path(&args.output)?;
+            let summary = map.export_regions_field(&output_path, args.row_shift)?;
+
+            if !args.quiet {
+                println!("{VERSION_HEADER}");
+                println!("RID file: {}", map.rid_path.display());
+                println!("BKD file: {}", map.bkd_path.display());
+                println!("Row shift: {}", args.row_shift);
+                println!(
+                    "Exported regions field: {} ({}x{}, segments={}, bytes={})",
+                    summary.output_path.display(),
+                    summary.width,
+                    summary.height,
+                    summary.segment_count,
+                    summary.byte_len
+                );
+            }
+            Ok(())
+        }
         PabrCommand::ExportRegionGroupsGeojson(args) => {
             let map = load_pabr_map(&args.input_file)?;
             let output_path = normalize_output_path(&args.output)?;
@@ -628,6 +683,30 @@ fn run_pabr(cli: PabrCli) -> Result<()> {
                     summary.output_path.display(),
                     summary.feature_count,
                     summary.rectangle_count
+                );
+            }
+            Ok(())
+        }
+        PabrCommand::ExportRegionGroupsField(args) => {
+            let map = load_pabr_map(&args.input_file)?;
+            let output_path = normalize_output_path(&args.output)?;
+            let regioninfo_bss_path = canonical_existing_path(&args.regioninfo_bss)?;
+            let mapping = load_region_group_mapping(&regioninfo_bss_path)?;
+            let summary = map.export_region_groups_field(&output_path, args.row_shift, &mapping)?;
+
+            if !args.quiet {
+                println!("{VERSION_HEADER}");
+                println!("RID file: {}", map.rid_path.display());
+                println!("BKD file: {}", map.bkd_path.display());
+                println!("Region info BSS: {}", regioninfo_bss_path.display());
+                println!("Row shift: {}", args.row_shift);
+                println!(
+                    "Exported region-groups field: {} ({}x{}, segments={}, bytes={})",
+                    summary.output_path.display(),
+                    summary.width,
+                    summary.height,
+                    summary.segment_count,
+                    summary.byte_len
                 );
             }
             Ok(())

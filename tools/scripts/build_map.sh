@@ -43,9 +43,11 @@ SITE_MAP_ASSET_DIR="$ROOT_DIR/site/assets/map"
 CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 CDN_MAP_ASSET_DIR="$CDN_ROOT/map"
 CDN_IMAGE_ASSET_DIR="$CDN_ROOT/images"
+CDN_FIELD_ASSET_DIR="$CDN_ROOT/fields"
 mkdir -p "$SITE_MAP_ASSET_DIR/ui"
 mkdir -p "$CDN_MAP_ASSET_DIR"
 mkdir -p "$CDN_IMAGE_ASSET_DIR"
+mkdir -p "$CDN_FIELD_ASSET_DIR"
 
 cp -f map/fishystuff_ui_bevy/assets/ui/fishystuff.css "$SITE_MAP_ASSET_DIR/ui/fishystuff.css"
 rm -f \
@@ -316,4 +318,31 @@ if [ -f "$zone_lookup_source_image" ] && { [ "${REBUILD_ZONE_LOOKUP:-0}" = "1" ]
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_tilegen --bin zone_lookup -- \
     --input "$zone_lookup_source_image" \
     --output "$zone_lookup_output"
+fi
+
+regions_field_input="${REGIONS_FIELD_INPUT:-$(first_existing_path \
+  data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid)}"
+regioninfo_bss_input="${REGIONINFO_BSS_INPUT:-$(first_existing_path \
+  data/scratch/gamecommondata/binary/regioninfo.bss)}"
+regions_field_output="$CDN_FIELD_ASSET_DIR/regions.v1.bin"
+region_groups_field_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.bin"
+
+if [ -f "$regions_field_input" ] && { [ "${REBUILD_REGIONS_FIELD:-0}" = "1" ] || [ ! -f "$regions_field_output" ] || [ "$regions_field_input" -nt "$regions_field_output" ]; }; then
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p pazifista --bin pazifista -- \
+    pabr export-regions-field \
+    "$regions_field_input" \
+    --output "$regions_field_output"
+fi
+
+if [ -f "$regions_field_input" ] && [ -f "$regioninfo_bss_input" ] && {
+  [ "${REBUILD_REGION_GROUPS_FIELD:-0}" = "1" ] ||
+  [ ! -f "$region_groups_field_output" ] ||
+  [ "$regions_field_input" -nt "$region_groups_field_output" ] ||
+  [ "$regioninfo_bss_input" -nt "$region_groups_field_output" ];
+}; then
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p pazifista --bin pazifista -- \
+    pabr export-region-groups-field \
+    "$regions_field_input" \
+    --regioninfo-bss "$regioninfo_bss_input" \
+    --output "$region_groups_field_output"
 fi

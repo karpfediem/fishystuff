@@ -27,6 +27,13 @@ impl FieldRgbaChunk {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FieldRowSpan {
+    pub start_x: u32,
+    pub end_x: u32,
+    pub id: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscreteFieldRows {
     width: u16,
@@ -114,6 +121,103 @@ impl DiscreteFieldRows {
             ids.push(((pixel[0] as u32) << 16) | ((pixel[1] as u32) << 8) | pixel[2] as u32);
         }
         Self::from_u32_grid(u32::from(width_u16), u32::from(height_u16), &ids)
+    }
+
+    pub fn from_row_spans<I>(width: u32, height: u32, rows: I) -> Result<Self>
+    where
+        I: IntoIterator<Item = Vec<FieldRowSpan>>,
+    {
+        let width = u16::try_from(width)
+            .map_err(|_| anyhow::anyhow!("field width {} exceeds u16", width))?;
+        let height = u16::try_from(height)
+            .map_err(|_| anyhow::anyhow!("field height {} exceeds u16", height))?;
+        if width == 0 || height == 0 {
+            bail!("field dimensions must be non-zero");
+        }
+
+        let mut row_offsets = Vec::with_capacity(height as usize + 1);
+        let mut row_end_xs = Vec::new();
+        let mut row_ids = Vec::new();
+        let mut row_count = 0usize;
+
+        for spans in rows {
+            if row_count >= height as usize {
+                bail!(
+                    "field row count exceeds height: {} > {}",
+                    row_count + 1,
+                    height
+                );
+            }
+
+            row_offsets.push(row_end_xs.len() as u32);
+            let mut cursor_x = 0u32;
+            let mut last_id: Option<u32> = None;
+
+            for span in spans {
+                if span.start_x > span.end_x {
+                    bail!(
+                        "field row {} has reversed span [{}..{})",
+                        row_count,
+                        span.start_x,
+                        span.end_x
+                    );
+                }
+                if span.end_x > u32::from(width) {
+                    bail!(
+                        "field row {} span end {} exceeds width {}",
+                        row_count,
+                        span.end_x,
+                        width
+                    );
+                }
+                if span.start_x < cursor_x {
+                    bail!(
+                        "field row {} spans overlap or are unsorted at x {}",
+                        row_count,
+                        span.start_x
+                    );
+                }
+                if span.start_x > cursor_x {
+                    push_row_segment(&mut row_end_xs, &mut row_ids, &mut last_id, span.start_x, 0);
+                }
+                cursor_x = span.end_x;
+                if span.start_x < span.end_x {
+                    push_row_segment(
+                        &mut row_end_xs,
+                        &mut row_ids,
+                        &mut last_id,
+                        span.end_x,
+                        span.id,
+                    );
+                }
+            }
+
+            if cursor_x < u32::from(width) || row_end_xs.len() == row_offsets[row_count] as usize {
+                push_row_segment(
+                    &mut row_end_xs,
+                    &mut row_ids,
+                    &mut last_id,
+                    u32::from(width),
+                    0,
+                );
+            }
+
+            row_count += 1;
+        }
+
+        if row_count != height as usize {
+            bail!("field row count mismatch: {} != {}", row_count, height);
+        }
+        row_offsets.push(row_end_xs.len() as u32);
+        validate_rows(width, height, &row_offsets, &row_end_xs)?;
+
+        Ok(Self {
+            width,
+            height,
+            row_offsets,
+            row_end_xs,
+            row_ids,
+        })
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
@@ -363,6 +467,28 @@ impl DiscreteFieldRows {
     }
 }
 
+fn push_row_segment(
+    row_end_xs: &mut Vec<u16>,
+    row_ids: &mut Vec<u32>,
+    last_id: &mut Option<u32>,
+    end_x: u32,
+    id: u32,
+) {
+    let end_x = u16::try_from(end_x).expect("field span end fits in u16");
+    match last_id {
+        Some(previous_id) if *previous_id == id => {
+            if let Some(previous_end) = row_end_xs.last_mut() {
+                *previous_end = end_x;
+            }
+        }
+        _ => {
+            row_end_xs.push(end_x);
+            row_ids.push(id);
+            *last_id = Some(id);
+        }
+    }
+}
+
 fn validate_rows(width: u16, height: u16, row_offsets: &[u32], row_end_xs: &[u16]) -> Result<()> {
     let segment_count = row_end_xs.len();
     if *row_offsets.first().unwrap_or(&1) != 0 {
@@ -393,7 +519,7 @@ fn validate_rows(width: u16, height: u16, row_offsets: &[u32], row_end_xs: &[u16
 
 #[cfg(test)]
 mod tests {
-    use super::DiscreteFieldRows;
+    use super::{DiscreteFieldRows, FieldRowSpan};
 
     #[test]
     fn u32_grid_roundtrips_and_samples() {
@@ -407,6 +533,41 @@ mod tests {
         let bytes = field.to_bytes();
         let decoded = DiscreteFieldRows::from_bytes(&bytes).expect("decode");
         assert_eq!(decoded, field);
+    }
+
+    #[test]
+    fn row_spans_fill_background_gaps_and_merge_adjacent_ids() {
+        let field = DiscreteFieldRows::from_row_spans(
+            5,
+            2,
+            vec![
+                vec![
+                    FieldRowSpan {
+                        start_x: 1,
+                        end_x: 3,
+                        id: 7,
+                    },
+                    FieldRowSpan {
+                        start_x: 3,
+                        end_x: 5,
+                        id: 7,
+                    },
+                ],
+                vec![FieldRowSpan {
+                    start_x: 0,
+                    end_x: 2,
+                    id: 9,
+                }],
+            ],
+        )
+        .expect("field");
+
+        assert_eq!(field.segment_count(), 4);
+        assert_eq!(field.cell_id_u32(0, 0), Some(0));
+        assert_eq!(field.cell_id_u32(1, 0), Some(7));
+        assert_eq!(field.cell_id_u32(4, 0), Some(7));
+        assert_eq!(field.cell_id_u32(0, 1), Some(9));
+        assert_eq!(field.cell_id_u32(4, 1), Some(0));
     }
 
     #[test]

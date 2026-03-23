@@ -210,12 +210,21 @@ pub fn sample_field_layer_rgb(
     map_px_x: i32,
     map_px_y: i32,
 ) -> Option<Rgb> {
-    let url = layer.field_url()?;
     let color_mode = layer.field_color_mode()?;
-    let lookup = lookups.get(layer.id, &url)?;
-    let id = lookup.cell_id_u32(map_px_x, map_px_y)?;
+    let id = sample_field_layer_id_u32(layer, lookups, map_px_x, map_px_y)?;
     let [r, g, b] = rgb_bytes_for_field_id(id, color_mode);
     Some(Rgb::new(r, g, b))
+}
+
+pub fn sample_field_layer_id_u32(
+    layer: &LayerSpec,
+    lookups: &ExactLookupCache,
+    map_px_x: i32,
+    map_px_y: i32,
+) -> Option<u32> {
+    let url = layer.field_url()?;
+    let lookup = lookups.get(layer.id, &url)?;
+    lookup.cell_id_u32(map_px_x, map_px_y)
 }
 
 pub fn render_exact_lookup_tile_image(

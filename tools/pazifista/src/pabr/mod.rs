@@ -82,6 +82,15 @@ pub struct GeoJsonExportSummary {
 }
 
 #[derive(Clone, Debug)]
+pub struct FieldExportSummary {
+    pub output_path: PathBuf,
+    pub width: u16,
+    pub height: u16,
+    pub segment_count: usize,
+    pub byte_len: usize,
+}
+
+#[derive(Clone, Debug)]
 pub struct RegionMatchSummary {
     pub output_path: PathBuf,
     pub pabr_region_count: usize,

@@ -1,6 +1,8 @@
 use fishystuff_core::masks::pack_rgb_u32;
 
-use crate::map::exact_lookup::{sample_exact_lookup_rgb, ExactLookupCache};
+use crate::map::exact_lookup::{
+    sample_exact_lookup_rgb, sample_field_layer_id_u32, ExactLookupCache,
+};
 use crate::map::layers::{LayerSpec, PickMode};
 use crate::map::raster::{layer_map_version, TileKey};
 use crate::map::spaces::world::MapToWorld;
@@ -21,7 +23,9 @@ pub(in crate::map::raster::cache::filters) fn clip_mask_allows_world_point(
     map_version: Option<&str>,
 ) -> Option<bool> {
     let mask_layer = layer_registry.get(mask_layer_id)?;
-    if mask_layer.pick_mode == PickMode::ExactTilePixel {
+    if mask_layer.field_url().is_some() {
+        sample_field_clip_mask(mask_layer, world_point, exact_lookups, filter)
+    } else if mask_layer.pick_mode == PickMode::ExactTilePixel {
         sample_exact_clip_mask(mask_layer, world_point, exact_lookups, filter)
     } else if mask_layer.is_raster() {
         sample_raster_clip_mask(mask_layer, world_point, tile_cache, filter, map_version)
@@ -57,6 +61,31 @@ fn sample_exact_clip_mask(
         return Some(true);
     }
     Some(filter.zone_rgbs.contains(&rgb.to_u32()))
+}
+
+fn sample_field_clip_mask(
+    layer: &LayerSpec,
+    world_point: WorldPoint,
+    exact_lookups: &ExactLookupCache,
+    filter: &EvidenceZoneFilter,
+) -> Option<bool> {
+    let map_point = MapToWorld::default().world_to_map(world_point);
+    if map_point.x < 0.0 || map_point.y < 0.0 {
+        return Some(false);
+    }
+    let field_id = sample_field_layer_id_u32(
+        layer,
+        exact_lookups,
+        map_point.x.floor() as i32,
+        map_point.y.floor() as i32,
+    )?;
+    if field_id == 0 {
+        return Some(false);
+    }
+    if layer.pick_mode == PickMode::ExactTilePixel && filter.active {
+        return Some(filter.zone_rgbs.contains(&field_id));
+    }
+    Some(true)
 }
 
 fn sample_raster_clip_mask(

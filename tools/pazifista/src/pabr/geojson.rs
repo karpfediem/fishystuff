@@ -7,8 +7,12 @@ use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use serde_json::{Map, Value};
 
-use super::{GeoJsonExportSummary, PabrMap, RegionGroupMapping, RowSegment, INDEX_SENTINEL};
+use super::{
+    FieldExportSummary, GeoJsonExportSummary, PabrMap, RegionGroupMapping, RowSegment,
+    INDEX_SENTINEL,
+};
 use crate::pabr::util::{color_rgb_for_value, mode_value, sample_source_row};
+use fishystuff_core::field::{DiscreteFieldRows, FieldRowSpan};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Rectangle {
@@ -61,6 +65,27 @@ impl PabrMap {
             mapping.region_group_for_region(region_id).map(u32::from)
         })?;
         self.write_region_groups_geojson(output_path, rectangles, mapping)
+    }
+
+    pub fn export_regions_field(
+        &self,
+        output_path: &Path,
+        row_shift: u32,
+    ) -> Result<FieldExportSummary> {
+        let field = self.build_field_rows(row_shift, |region_id| Some(u32::from(region_id)))?;
+        write_field(output_path, &field)
+    }
+
+    pub fn export_region_groups_field(
+        &self,
+        output_path: &Path,
+        row_shift: u32,
+        mapping: &RegionGroupMapping,
+    ) -> Result<FieldExportSummary> {
+        let field = self.build_field_rows(row_shift, |region_id| {
+            mapping.region_group_for_region(region_id).map(u32::from)
+        })?;
+        write_field(output_path, &field)
     }
 
     pub(crate) fn decoded_row_segments<F>(
@@ -299,6 +324,44 @@ impl PabrMap {
 
         Ok(rectangles_by_value)
     }
+
+    fn build_field_rows<F>(&self, row_shift: u32, mapper: F) -> Result<DiscreteFieldRows>
+    where
+        F: Fn(u16) -> Option<u32>,
+    {
+        if self.rid.native_width == 0 || self.rid.native_height == 0 {
+            bail!("PABR export requires non-zero native dimensions");
+        }
+        if self.bkd.rows.is_empty() {
+            bail!("PABR export requires at least one BKD row");
+        }
+
+        let mut rows = Vec::with_capacity(self.rid.native_height as usize);
+        let mut cached_source_row = usize::MAX;
+        let mut cached_segments = Vec::new();
+
+        for output_y in 0..self.rid.native_height {
+            let source_row =
+                sample_source_row(output_y, self.rid.native_height, self.bkd.rows.len());
+            if source_row != cached_source_row {
+                cached_segments = self.decoded_row_segments(source_row, row_shift, &mapper)?;
+                cached_source_row = source_row;
+            }
+
+            rows.push(
+                cached_segments
+                    .iter()
+                    .map(|segment| FieldRowSpan {
+                        start_x: segment.start_x,
+                        end_x: segment.end_x,
+                        id: segment.value,
+                    })
+                    .collect::<Vec<_>>(),
+            );
+        }
+
+        DiscreteFieldRows::from_row_spans(self.rid.native_width, self.rid.native_height, rows)
+    }
 }
 
 fn rectangles_to_geometry(rectangles: &[Rectangle]) -> GeoJsonGeometry {
@@ -344,10 +407,33 @@ fn write_geojson(output_path: &Path, features: &[GeoJsonFeature]) -> Result<()> 
     .with_context(|| format!("failed to write {}", output_path.display()))
 }
 
+fn write_field(output_path: &Path, field: &DiscreteFieldRows) -> Result<FieldExportSummary> {
+    if let Some(parent) = output_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create output directory {}", parent.display())
+            })?;
+        }
+    }
+
+    let bytes = field.to_bytes();
+    fs::write(output_path, &bytes)
+        .with_context(|| format!("failed to write {}", output_path.display()))?;
+
+    Ok(FieldExportSummary {
+        output_path: output_path.to_path_buf(),
+        width: field.width(),
+        height: field.height(),
+        segment_count: field.segment_count(),
+        byte_len: bytes.len(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{rectangles_to_geometry, GeoJsonGeometry, PabrMap, Rectangle};
     use crate::pabr::{BkdFile, Breakpoint, RidFile};
+    use fishystuff_core::field::DiscreteFieldRows;
 
     #[test]
     fn build_rectangles_merges_matching_runs_vertically() {
@@ -426,6 +512,58 @@ mod tests {
                 },
             ])
         );
+    }
+
+    #[test]
+    fn build_field_rows_preserves_background_gaps() {
+        let map = PabrMap {
+            rid_path: "test.rid".into(),
+            bkd_path: "test.bkd".into(),
+            rid: RidFile {
+                region_ids: vec![4],
+                native_width: 4,
+                native_height: 2,
+                trailer_prefix_len: 0,
+            },
+            bkd: BkdFile {
+                rows: vec![vec![
+                    Breakpoint {
+                        source_x: 1,
+                        dictionary_index: 0,
+                    },
+                    Breakpoint {
+                        source_x: 3,
+                        dictionary_index: u16::MAX,
+                    },
+                ]],
+                trailer_words: [0, 0, 0],
+                max_source_x: 3,
+            },
+        };
+
+        let field = map
+            .build_field_rows(0, |region_id| Some(u32::from(region_id)))
+            .expect("field");
+
+        let expected = DiscreteFieldRows::from_row_spans(
+            4,
+            2,
+            vec![
+                vec![fishystuff_core::field::FieldRowSpan {
+                    start_x: 0,
+                    end_x: 3,
+                    id: 4,
+                }],
+                vec![fishystuff_core::field::FieldRowSpan {
+                    start_x: 0,
+                    end_x: 3,
+                    id: 4,
+                }],
+            ],
+        )
+        .expect("expected field");
+
+        assert_eq!(field, expected);
     }
 
     #[test]

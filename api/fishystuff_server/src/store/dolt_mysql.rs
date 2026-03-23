@@ -45,8 +45,9 @@ use catalog::{
     fish_is_dried, merge_fish_catalog_row, parse_positive_i64,
 };
 use layers::{
-    normalize_pick_mode, parse_layer_kind, parse_layer_transform, parse_vector_source,
-    resolve_layer_asset_url, substitute_map_version, VectorSourceFields,
+    normalize_pick_mode, parse_field_source, parse_layer_kind, parse_layer_transform,
+    parse_vector_source, resolve_layer_asset_url, substitute_map_version, FieldSourceFields,
+    VectorSourceFields,
 };
 use stats::{
     align_alpha, align_probs, beta_ci, compute_status, gaussian_blur_grid, pixel_to_tile_index,
@@ -328,7 +329,7 @@ impl DoltMySqlStore {
                 }
                 Err(err) if is_layers_schema_error(&err) => {
                     return Err(AppError::not_found(
-                        "layers schema is outdated; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
+                        "layers schema is outdated; apply the latest layer migrations including api/sql/migrations/20260323_add_field_sources.sql",
                     ));
                 }
                 Err(err) => return Err(db_unavailable(err)),
@@ -343,7 +344,7 @@ impl DoltMySqlStore {
                 }
                 Err(err) if is_layers_schema_error(&err) => {
                     return Err(AppError::not_found(
-                        "layers schema is outdated; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
+                        "layers schema is outdated; apply the latest layer migrations including api/sql/migrations/20260323_add_field_sources.sql",
                     ));
                 }
                 Err(err) => return Err(db_unavailable(err)),
@@ -386,12 +387,15 @@ impl DoltMySqlStore {
             let request_weight = row_f64(&row, 27, 1.0);
             let pick_mode = row_string(&row, 28).unwrap_or_else(|| "none".to_string());
             let layer_kind = row_string(&row, 29).unwrap_or_else(|| "tiled_raster".to_string());
-            let vector_source_url = row_string(&row, 30);
-            let vector_source_revision = row_string(&row, 31);
-            let vector_geometry_space = row_string(&row, 32);
-            let vector_style_mode = row_string(&row, 33);
-            let vector_feature_id_property = row_string(&row, 34);
-            let vector_color_property = row_string(&row, 35);
+            let field_source_url = row_string(&row, 30);
+            let field_source_revision = row_string(&row, 31);
+            let field_color_mode = row_string(&row, 32);
+            let vector_source_url = row_string(&row, 33);
+            let vector_source_revision = row_string(&row, 34);
+            let vector_geometry_space = row_string(&row, 35);
+            let vector_style_mode = row_string(&row, 36);
+            let vector_feature_id_property = row_string(&row, 37);
+            let vector_color_property = row_string(&row, 38);
 
             let transform = parse_layer_transform(
                 &transform_kind,
@@ -409,6 +413,15 @@ impl DoltMySqlStore {
                 map_version_id,
             ));
             let kind = parse_layer_kind(&layer_id, &layer_kind)?;
+            let field_source = parse_field_source(
+                &layer_id,
+                FieldSourceFields {
+                    source_url: field_source_url,
+                    source_revision: field_source_revision,
+                    color_mode: field_color_mode,
+                },
+                map_version_id,
+            )?;
             let vector_source = parse_vector_source(
                 &layer_id,
                 kind,
@@ -436,7 +449,7 @@ impl DoltMySqlStore {
                 tile_px: clamp_i64_to_u32(tile_px, 1).max(1),
                 max_level: clamp_i64_to_u8(max_level, 0),
                 y_flip: y_flip != 0,
-                field_source: None,
+                field_source,
                 vector_source,
                 lod_policy: LodPolicyDto {
                     target_tiles: clamp_i64_to_usize(lod_target_tiles, 1),

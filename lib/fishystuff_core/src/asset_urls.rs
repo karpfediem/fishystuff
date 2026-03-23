@@ -58,10 +58,14 @@ fn normalize_known_public_asset_path(raw: &str) -> Option<String> {
         return Some(normalized);
     }
 
-    if raw.starts_with("/images/") || raw.starts_with("/region_groups/") {
+    if raw.starts_with("/images/")
+        || raw.starts_with("/region_groups/")
+        || raw.starts_with("/fields/")
+    {
         return Some(raw.to_string());
     }
-    if raw.starts_with("images/") || raw.starts_with("region_groups/") {
+    if raw.starts_with("images/") || raw.starts_with("region_groups/") || raw.starts_with("fields/")
+    {
         return Some(format!("/{raw}"));
     }
 
@@ -165,6 +169,10 @@ mod tests {
         assert_eq!(
             normalize_public_asset_reference("https://cdn.example.com/region_groups/v1.geojson"),
             "/region_groups/v1.geojson"
+        );
+        assert_eq!(
+            normalize_public_asset_reference("https://cdn.example.com/fields/regions.v1.bin"),
+            "/fields/regions.v1.bin"
         );
         assert_eq!(
             normalize_public_asset_reference(

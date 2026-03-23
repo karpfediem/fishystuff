@@ -208,7 +208,8 @@ fn map_asset_cache_key() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use fishystuff_api::models::layers::{
-        LayerDescriptor, LayersResponse, TilesetRef, VectorSourceRef,
+        FieldColorMode, FieldSourceRef, LayerDescriptor, LayersResponse, TilesetRef,
+        VectorSourceRef,
     };
 
     use super::{
@@ -271,6 +272,11 @@ mod tests {
                     tile_url_template: "/tiles/mask/v1/{level}/{x}_{y}.png".to_string(),
                     version: "v1".to_string(),
                 },
+                field_source: Some(FieldSourceRef {
+                    url: "/fields/regions.v1.bin".to_string(),
+                    revision: "regions-field-v1".to_string(),
+                    color_mode: FieldColorMode::DebugHash,
+                }),
                 vector_source: Some(VectorSourceRef {
                     url: "/region_groups/v1.geojson".to_string(),
                     revision: "rg-v1".to_string(),
@@ -293,6 +299,13 @@ mod tests {
         assert_eq!(
             layer.tileset.tile_url_template,
             "https://cdn.example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
+        );
+        assert_eq!(
+            layer
+                .field_source
+                .as_ref()
+                .map(|source| source.url.as_str()),
+            Some("https://cdn.example.com/fields/regions.v1.bin?v=regions-field-v1")
         );
         assert_eq!(
             layer

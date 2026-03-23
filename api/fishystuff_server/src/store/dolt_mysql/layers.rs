@@ -1,5 +1,6 @@
 use fishystuff_api::models::layers::{
-    GeometrySpace, LayerKind, LayerTransformDto, StyleMode, VectorSourceRef,
+    FieldColorMode, FieldSourceRef, GeometrySpace, LayerKind, LayerTransformDto, StyleMode,
+    VectorSourceRef,
 };
 use fishystuff_core::asset_urls::normalize_site_asset_path;
 
@@ -14,6 +15,12 @@ pub(super) struct VectorSourceFields {
     pub style_mode: Option<String>,
     pub feature_id_property: Option<String>,
     pub color_property: Option<String>,
+}
+
+pub(super) struct FieldSourceFields {
+    pub source_url: Option<String>,
+    pub source_revision: Option<String>,
+    pub color_mode: Option<String>,
 }
 
 pub(super) fn parse_layer_transform(
@@ -132,6 +139,49 @@ pub(super) fn parse_vector_source(
     }))
 }
 
+fn parse_field_color_mode(layer_id: &str, value: Option<String>) -> AppResult<FieldColorMode> {
+    let Some(value) = value else {
+        return Ok(FieldColorMode::RgbU24);
+    };
+    let normalized = value.trim();
+    if normalized.eq_ignore_ascii_case("rgb_u24") || normalized.is_empty() {
+        Ok(FieldColorMode::RgbU24)
+    } else if normalized.eq_ignore_ascii_case("debug_hash") {
+        Ok(FieldColorMode::DebugHash)
+    } else {
+        Err(AppError::invalid_argument(format!(
+            "layer '{}' has unsupported field_color_mode '{}'",
+            layer_id, value
+        )))
+    }
+}
+
+pub(super) fn parse_field_source(
+    layer_id: &str,
+    source: FieldSourceFields,
+    map_version_id: Option<&str>,
+) -> AppResult<Option<FieldSourceRef>> {
+    let FieldSourceFields {
+        source_url,
+        source_revision,
+        color_mode,
+    } = source;
+    let source_url = resolve_layer_asset_url(&substitute_map_version(
+        source_url.as_deref().unwrap_or(""),
+        map_version_id,
+    ));
+    if source_url.trim().is_empty() {
+        return Ok(None);
+    }
+    let source_revision =
+        substitute_map_version(source_revision.as_deref().unwrap_or(""), map_version_id);
+    Ok(Some(FieldSourceRef {
+        url: source_url,
+        revision: source_revision,
+        color_mode: parse_field_color_mode(layer_id, color_mode)?,
+    }))
+}
+
 pub(super) fn normalize_pick_mode(value: String) -> String {
     let normalized = value.trim().to_ascii_lowercase();
     match normalized.as_str() {
@@ -158,7 +208,9 @@ pub(super) fn resolve_layer_asset_url(url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_layer_asset_url;
+    use fishystuff_api::models::layers::FieldColorMode;
+
+    use super::{parse_field_source, resolve_layer_asset_url, FieldSourceFields};
 
     #[test]
     fn resolve_layer_asset_url_normalizes_legacy_site_paths() {
@@ -174,5 +226,24 @@ mod tests {
             resolve_layer_asset_url("https://example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"),
             "https://example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
         );
+    }
+
+    #[test]
+    fn parse_field_source_supports_map_version_and_color_mode() {
+        let source = parse_field_source(
+            "regions",
+            FieldSourceFields {
+                source_url: Some("/fields/regions.{map_version}.bin".to_string()),
+                source_revision: Some("regions-field-{map_version}".to_string()),
+                color_mode: Some("debug_hash".to_string()),
+            },
+            Some("v1"),
+        )
+        .expect("field source parse")
+        .expect("field source");
+
+        assert_eq!(source.url, "/fields/regions.v1.bin");
+        assert_eq!(source.revision, "regions-field-v1");
+        assert_eq!(source.color_mode, FieldColorMode::DebugHash);
     }
 }

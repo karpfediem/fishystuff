@@ -428,6 +428,9 @@ CREATE TABLE IF NOT EXISTS layers (
   request_weight DOUBLE NOT NULL DEFAULT 1.0,
   pick_mode VARCHAR(32) NOT NULL DEFAULT 'none',
   layer_kind VARCHAR(32) NOT NULL DEFAULT 'tiled_raster',
+  field_source_url VARCHAR(512) NULL,
+  field_source_revision VARCHAR(128) NULL,
+  field_color_mode VARCHAR(32) NOT NULL DEFAULT 'rgb_u24',
   vector_source_url VARCHAR(512) NULL,
   vector_source_revision VARCHAR(128) NULL,
   vector_geometry_space VARCHAR(32) NOT NULL DEFAULT 'map_pixels',
@@ -499,7 +502,8 @@ INSERT INTO layers (
   transform_kind, affine_a, affine_b, affine_tx, affine_c, affine_d, affine_ty,
   tileset_manifest_url, tile_url_template, tileset_version,
   tile_px, max_level, y_flip, request_weight, pick_mode,
-  layer_kind, vector_source_url, vector_source_revision, vector_geometry_space, vector_style_mode,
+  layer_kind, field_source_url, field_source_revision, field_color_mode,
+  vector_source_url, vector_source_revision, vector_geometry_space, vector_style_mode,
   vector_feature_id_property, vector_color_property,
   lod_target_tiles, lod_hysteresis_hi, lod_hysteresis_lo, lod_margin_tiles,
   lod_enable_refine, lod_refine_debounce_ms, lod_max_detail_tiles
@@ -509,7 +513,7 @@ INSERT INTO layers (
     'affine_to_world', 100.0, 0.0, 0.0, 0.0, 100.0, 0.0,
     '/images/tiles/minimap/v1/tileset.json', '/images/tiles/minimap/v1/{level}/rader_{x}_{y}.png', 'v1',
     128, 6, 1, 1.0, 'none',
-    'tiled_raster', NULL, NULL, 'map_pixels', 'feature_property_palette', NULL, NULL,
+    'tiled_raster', NULL, NULL, 'rgb_u24', NULL, NULL, 'map_pixels', 'feature_property_palette', NULL, NULL,
     256, 320.0, 192.0, 2,
     1, 150, 256
   ),
@@ -518,7 +522,7 @@ INSERT INTO layers (
     'identity_map_space', NULL, NULL, NULL, NULL, NULL, NULL,
     '/images/tiles/mask/{map_version}/tileset.json', '/images/tiles/mask/{map_version}/{level}/{x}_{y}.png', 'v1',
     512, 0, 0, 0.7, 'exact_tile_pixel',
-    'tiled_raster', NULL, NULL, 'map_pixels', 'feature_property_palette', NULL, NULL,
+    'tiled_raster', NULL, NULL, 'rgb_u24', NULL, NULL, 'map_pixels', 'feature_property_palette', NULL, NULL,
     300, 360.0, 220.0, 1,
     0, 0, 0
   ),
@@ -527,7 +531,8 @@ INSERT INTO layers (
     'identity_map_space', NULL, NULL, NULL, NULL, NULL, NULL,
     '', '', '',
     512, 0, 0, 0.4, 'none',
-    'vector_geojson', '/region_groups/{map_version}.geojson', 'rg-v1', 'map_pixels', 'feature_property_palette', 'id', 'c',
+    'vector_geojson', '/fields/region_groups.{map_version}.bin', 'rg-field-v1', 'debug_hash',
+    '/region_groups/{map_version}.geojson', 'rg-v1', 'map_pixels', 'feature_property_palette', 'id', 'c',
     220, 280.0, 160.0, 1,
     0, 0, 0
   ),
@@ -536,7 +541,8 @@ INSERT INTO layers (
     'identity_map_space', NULL, NULL, NULL, NULL, NULL, NULL,
     '', '', '',
     512, 0, 0, 0.45, 'none',
-    'vector_geojson', '/region_groups/regions.{map_version}.geojson', 'r-v1', 'map_pixels', 'feature_property_palette', 'r', 'c',
+    'vector_geojson', '/fields/regions.{map_version}.bin', 'r-field-v1', 'debug_hash',
+    '/region_groups/regions.{map_version}.geojson', 'r-v1', 'map_pixels', 'feature_property_palette', 'r', 'c',
     220, 280.0, 160.0, 1,
     0, 0, 0
   )
@@ -563,6 +569,9 @@ ON DUPLICATE KEY UPDATE
   request_weight = VALUES(request_weight),
   pick_mode = VALUES(pick_mode),
   layer_kind = VALUES(layer_kind),
+  field_source_url = VALUES(field_source_url),
+  field_source_revision = VALUES(field_source_revision),
+  field_color_mode = VALUES(field_color_mode),
   vector_source_url = VALUES(vector_source_url),
   vector_source_revision = VALUES(vector_source_revision),
   vector_geometry_space = VALUES(vector_geometry_space),
