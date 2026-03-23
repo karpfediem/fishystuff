@@ -4,13 +4,12 @@ use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
 use fishystuff_api::Rgb;
-use fishystuff_core::field_metadata::{
-    FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget, FIELD_HOVER_ROW_KEY_ZONE,
-};
+use fishystuff_core::field_metadata::{FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE};
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
+use crate::map::field_semantics::{loaded_semantic_field_layer, SemanticFieldLayerView};
 use crate::map::field_view::{loaded_field_layer, FieldLayerView};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::{map_version_id, RasterTileCache, TileKey};
@@ -231,13 +230,15 @@ fn sample_hover_layer(
     layer: &crate::map::layers::LayerSpec,
     sampling: &mut HoverSamplingContext<'_>,
 ) -> Option<HoverLayerSample> {
-    let (rgb, semantics, kind) = if layer.field_url().is_some() {
-        let field = loaded_field_layer(layer, sampling.exact_lookups)?;
-        let rgb = field.rgb_at_map_px(sampling.map_px.0, sampling.map_px.1)?;
-        let field_id = field.field_id_at_map_px(sampling.map_px.0, sampling.map_px.1);
+    let (rgb, field_id, rows, targets, kind) = if layer.field_url().is_some() {
+        let semantics =
+            loaded_semantic_field_layer(layer, sampling.exact_lookups, sampling.field_metadata)?
+                .semantic_sample_at_map_px(sampling.map_px.0, sampling.map_px.1)?;
         (
-            rgb,
-            sample_field_layer_semantics(layer, field_id, sampling.field_metadata),
+            semantics.rgb,
+            Some(semantics.field_id),
+            semantics.rows,
+            semantics.targets,
             "field".to_string(),
         )
     } else if layer.is_raster() {
@@ -251,7 +252,9 @@ fn sample_hover_layer(
                 sampling.map_px,
                 sampling.map_to_world,
             )?,
-            HoverLayerSemantics::default(),
+            None,
+            Vec::new(),
+            Vec::new(),
             "tiled-raster".to_string(),
         )
     } else if layer.is_vector() {
@@ -262,7 +265,9 @@ fn sample_hover_layer(
                 sampling.registry_map_version_id,
                 sampling.world_point,
             )?,
-            HoverLayerSemantics::default(),
+            None,
+            Vec::new(),
+            Vec::new(),
             "vector-geojson".to_string(),
         )
     } else {
@@ -274,17 +279,10 @@ fn sample_hover_layer(
         kind,
         rgb,
         rgb_u32: rgb.to_u32(),
-        field_id: semantics.field_id,
-        rows: semantics.rows,
-        targets: semantics.targets,
+        field_id,
+        rows,
+        targets,
     })
-}
-
-#[derive(Debug, Clone, Default, PartialEq)]
-struct HoverLayerSemantics {
-    field_id: Option<u32>,
-    rows: Vec<FieldHoverRow>,
-    targets: Vec<FieldHoverTarget>,
 }
 
 #[derive(SystemParam)]
@@ -343,48 +341,6 @@ struct HoverSamplingContext<'a> {
     registry_map_version_id: Option<&'a str>,
 }
 
-fn sample_field_layer_hover_metadata(
-    layer: &crate::map::layers::LayerSpec,
-    field_metadata: &FieldMetadataCache,
-    field_id: Option<u32>,
-) -> HoverLayerSemantics {
-    let Some(field_id) = field_id else {
-        return HoverLayerSemantics::default();
-    };
-    let Some(metadata_url) = layer.field_metadata_url() else {
-        return HoverLayerSemantics {
-            field_id: Some(field_id),
-            ..HoverLayerSemantics::default()
-        };
-    };
-    let Some(entry) = field_metadata.entry(layer.id, &metadata_url, field_id) else {
-        return HoverLayerSemantics {
-            field_id: Some(field_id),
-            ..HoverLayerSemantics::default()
-        };
-    };
-    hover_metadata_from_field_entry(field_id, entry)
-}
-
-fn sample_field_layer_semantics(
-    layer: &crate::map::layers::LayerSpec,
-    field_id: Option<u32>,
-    field_metadata: &FieldMetadataCache,
-) -> HoverLayerSemantics {
-    sample_field_layer_hover_metadata(layer, field_metadata, field_id)
-}
-
-fn hover_metadata_from_field_entry(
-    field_id: u32,
-    entry: &FieldHoverMetadataEntry,
-) -> HoverLayerSemantics {
-    HoverLayerSemantics {
-        field_id: Some(field_id),
-        rows: entry.rows.clone(),
-        targets: entry.targets.clone(),
-    }
-}
-
 fn zone_mask_hover_sample(layer_samples: &[HoverLayerSample]) -> Option<&HoverLayerSample> {
     layer_samples
         .iter()
@@ -401,15 +357,10 @@ fn zone_name_from_hover_rows(rows: &[FieldHoverRow]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        hover_metadata_from_field_entry, hovered_zone_rgb, zone_mask_hover_sample,
-        zone_name_from_hover_rows, HoverLayerSemantics,
-    };
+    use super::{hovered_zone_rgb, zone_mask_hover_sample, zone_name_from_hover_rows};
     use crate::plugins::api::{HoverInfo, HoverLayerSample};
     use fishystuff_api::Rgb;
-    use fishystuff_core::field_metadata::{
-        FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget, FIELD_HOVER_ROW_KEY_ZONE,
-    };
+    use fishystuff_core::field_metadata::{FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE};
 
     #[test]
     fn hovered_zone_rgb_reads_zone_from_hover_info() {
@@ -425,36 +376,6 @@ mod tests {
         };
         assert_eq!(hovered_zone_rgb(Some(&info)), Some(0x123456));
         assert_eq!(hovered_zone_rgb(None), None);
-    }
-
-    #[test]
-    fn hover_metadata_copies_rows_and_targets_from_field_entries() {
-        let entry = FieldHoverMetadataEntry {
-            rows: vec![FieldHoverRow {
-                key: "origin".to_string(),
-                icon: "hover-origin".to_string(),
-                label: "Origin".to_string(),
-                value: "Tarif".to_string(),
-                hide_label: false,
-                status_icon: None,
-                status_icon_tone: None,
-            }],
-            targets: vec![FieldHoverTarget {
-                key: "origin_node".to_string(),
-                label: "Origin: Tarif".to_string(),
-                world_x: 120.0,
-                world_z: 240.0,
-            }],
-        };
-        let metadata = hover_metadata_from_field_entry(76, &entry);
-        assert_eq!(
-            metadata,
-            HoverLayerSemantics {
-                field_id: Some(76),
-                rows: entry.rows,
-                targets: entry.targets,
-            }
-        );
     }
 
     #[test]
