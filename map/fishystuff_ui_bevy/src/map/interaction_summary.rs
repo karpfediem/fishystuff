@@ -144,8 +144,6 @@ mod tests {
         SelectedInfo {
             map_px: 12,
             map_py: 34,
-            rgb: Some(Rgb::from_u32(0x112233)),
-            rgb_u32: Some(0x112233),
             world_x: 100.0,
             world_z: 200.0,
             sampled_world_point: true,

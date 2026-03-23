@@ -737,8 +737,6 @@ mod tests {
         let info = HoverInfo {
             map_px: 0,
             map_py: 0,
-            rgb: None,
-            rgb_u32: None,
             world_x: 0.0,
             world_z: 0.0,
             layer_samples: vec![region_group, regions],
@@ -790,8 +788,6 @@ mod tests {
         let info = HoverInfo {
             map_px: 0,
             map_py: 0,
-            rgb: None,
-            rgb_u32: None,
             world_x: 0.0,
             world_z: 0.0,
             layer_samples: vec![region_group, region],
@@ -828,8 +824,6 @@ mod tests {
         let info = HoverInfo {
             map_px: 0,
             map_py: 0,
-            rgb: None,
-            rgb_u32: None,
             world_x: 0.0,
             world_z: 0.0,
             layer_samples: vec![region_group.clone(), region.clone()],

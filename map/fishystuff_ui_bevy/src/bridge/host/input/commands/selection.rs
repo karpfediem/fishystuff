@@ -126,8 +126,6 @@ mod tests {
         let info = SelectedInfo {
             map_px: 10,
             map_py: 20,
-            rgb: None,
-            rgb_u32: None,
             world_x: 123.0,
             world_z: 456.0,
             sampled_world_point: true,

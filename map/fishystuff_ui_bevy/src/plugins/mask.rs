@@ -249,8 +249,6 @@ mod tests {
         let info = HoverInfo {
             map_px: 12,
             map_py: 34,
-            rgb: None,
-            rgb_u32: Some(0x123456),
             world_x: 1.0,
             world_z: 2.0,
             layer_samples: vec![crate::map::layer_query::LayerQuerySample {

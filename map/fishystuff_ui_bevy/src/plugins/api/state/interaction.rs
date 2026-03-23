@@ -1,5 +1,4 @@
 use fishystuff_api::models::zone_stats::ZoneStatsResponse;
-use fishystuff_api::Rgb;
 
 use crate::map::layer_query::LayerQuerySample;
 use crate::prelude::*;
@@ -36,8 +35,6 @@ impl Default for SelectionState {
 pub struct HoverInfo {
     pub map_px: i32,
     pub map_py: i32,
-    pub rgb: Option<Rgb>,
-    pub rgb_u32: Option<u32>,
     pub world_x: f64,
     pub world_z: f64,
     pub layer_samples: Vec<LayerQuerySample>,
@@ -48,7 +45,7 @@ impl HoverInfo {
         zone_layer_sample(&self.layer_samples)
     }
 
-    pub fn zone_rgb(&self) -> Option<Rgb> {
+    pub fn zone_rgb(&self) -> Option<fishystuff_api::Rgb> {
         self.zone_layer_sample().map(|sample| sample.rgb)
     }
 
@@ -61,8 +58,6 @@ impl HoverInfo {
 pub struct SelectedInfo {
     pub map_px: i32,
     pub map_py: i32,
-    pub rgb: Option<Rgb>,
-    pub rgb_u32: Option<u32>,
     pub world_x: f64,
     pub world_z: f64,
     pub sampled_world_point: bool,
@@ -74,7 +69,7 @@ impl SelectedInfo {
         zone_layer_sample(&self.layer_samples)
     }
 
-    pub fn zone_rgb(&self) -> Option<Rgb> {
+    pub fn zone_rgb(&self) -> Option<fishystuff_api::Rgb> {
         self.zone_layer_sample().map(|sample| sample.rgb)
     }
 

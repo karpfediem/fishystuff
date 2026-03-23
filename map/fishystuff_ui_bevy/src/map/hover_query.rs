@@ -1,8 +1,6 @@
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::layer_query::{
-    sample_layers_at_world_point, LayerQuerySample, LayerSamplingContext,
-};
+use crate::map::layer_query::{sample_layers_at_world_point, LayerSamplingContext};
 use crate::map::layers::{LayerRegistry, LayerRuntime, LayerSpec};
 use crate::map::raster::RasterTileCache;
 use crate::map::spaces::world::MapToWorld;
@@ -50,14 +48,9 @@ pub fn hover_info_at_world_point(
             map_version_id: context.layer_registry.map_version_id(),
         },
     );
-    let zone_sample = zone_mask_hover_sample(&layer_samples);
-    let zone_rgb = zone_sample.as_ref().map(|sample| sample.rgb);
-    let zone_rgb_u32 = zone_sample.as_ref().map(|sample| sample.rgb_u32);
     Some(HoverInfo {
         map_px,
         map_py,
-        rgb: zone_rgb,
-        rgb_u32: zone_rgb_u32,
         world_x: world_point.x,
         world_z: world_point.z,
         layer_samples,
@@ -90,15 +83,9 @@ fn current_hover_layers<'a>(
     layers
 }
 
-fn zone_mask_hover_sample(layer_samples: &[LayerQuerySample]) -> Option<&LayerQuerySample> {
-    layer_samples
-        .iter()
-        .find(|sample| sample.layer_id == "zone_mask")
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{hover_info_at_world_point, zone_mask_hover_sample};
+    use super::hover_info_at_world_point;
     use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::field_metadata::FieldMetadataCache;
     use crate::map::layer_query::LayerQuerySample;
@@ -112,6 +99,12 @@ mod tests {
         LodPolicyDto, TilesetRef,
     };
     use fishystuff_api::Rgb;
+
+    fn zone_mask_hover_sample(layer_samples: &[LayerQuerySample]) -> Option<&LayerQuerySample> {
+        layer_samples
+            .iter()
+            .find(|sample| sample.layer_id == "zone_mask")
+    }
 
     #[test]
     fn zone_mask_hover_sample_prefers_zone_mask_layer_id() {
@@ -208,6 +201,7 @@ mod tests {
         .expect("hover info");
 
         assert!(info.layer_samples.is_empty());
+        assert_eq!(info.zone_rgb_u32(), None);
         assert_eq!(info.map_px, 0);
         assert_eq!(info.map_py, 0);
     }

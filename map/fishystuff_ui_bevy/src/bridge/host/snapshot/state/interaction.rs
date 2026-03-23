@@ -114,8 +114,6 @@ mod tests {
         let info = SelectedInfo {
             map_px: 0,
             map_py: 0,
-            rgb: Some(Rgb::from_u32(0x123456)),
-            rgb_u32: Some(0x123456),
             world_x: f64::NAN,
             world_z: f64::NAN,
             sampled_world_point: false,
@@ -139,8 +137,6 @@ mod tests {
         let info = SelectedInfo {
             map_px: 10,
             map_py: 20,
-            rgb: Some(Rgb::from_u32(0x654321)),
-            rgb_u32: Some(0x654321),
             world_x: 123.0,
             world_z: 456.0,
             sampled_world_point: true,
