@@ -13,6 +13,7 @@ findings that are not yet polished into a final spec.
 Related reference:
 
 - [world-map-sector-model.md](/home/carp/code/fishystuff/data/spec/world-map-sector-model.md)
+- [field-first-map-layer-architecture.md](/home/carp/code/fishystuff/data/spec/field-first-map-layer-architecture.md)
 
 ## Purpose
 
