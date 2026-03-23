@@ -6,7 +6,7 @@ use fishystuff_core::field_metadata::{
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::field_view::{loaded_field_layer, FieldLayerView, LoadedFieldLayer};
-use crate::map::layers::LayerSpec;
+use crate::map::layers::{LayerRegistry, LayerSpec};
 use crate::map::spaces::layer_transform::WorldTransform;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{LayerPoint, WorldPoint};
@@ -111,6 +111,18 @@ pub struct LoadedSemanticFieldLayer<'a> {
     metadata: Option<&'a FieldHoverMetadataAsset>,
 }
 
+pub fn ordered_semantic_layers<'a>(layer_registry: &'a LayerRegistry) -> Vec<&'a LayerSpec> {
+    layer_registry
+        .ordered()
+        .iter()
+        .filter(|layer| {
+            layer.key != "minimap"
+                && layer.field_url().is_some()
+                && layer.field_metadata_url().is_some()
+        })
+        .collect()
+}
+
 pub fn loaded_semantic_field_layer<'a>(
     layer: &'a LayerSpec,
     exact_lookups: &'a ExactLookupCache,
@@ -193,7 +205,10 @@ impl SemanticFieldLayerView for LoadedSemanticFieldLayer<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{field_row_value_for_id, loaded_semantic_field_layer, SemanticFieldLayerView};
+    use super::{
+        field_row_value_for_id, loaded_semantic_field_layer, ordered_semantic_layers,
+        SemanticFieldLayerView,
+    };
     use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::field_metadata::FieldMetadataCache;
     use crate::map::layers::LayerRegistry;
@@ -248,6 +263,95 @@ mod tests {
             )],
         });
         registry
+    }
+
+    #[test]
+    fn ordered_semantic_layers_follow_registry_order_and_skip_nonsemantic_layers() {
+        let mut registry = LayerRegistry::default();
+        let mut zone_mask = field_layer_descriptor(
+            "zone_mask",
+            fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace,
+        );
+        zone_mask.ui.display_order = 20;
+        let mut regions = field_layer_descriptor(
+            "regions",
+            fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace,
+        );
+        regions.ui.display_order = 40;
+        registry.apply_layers_response(fishystuff_api::models::layers::LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![
+                fishystuff_api::models::layers::LayerDescriptor {
+                    layer_id: "minimap".to_string(),
+                    name: "Minimap".to_string(),
+                    enabled: true,
+                    kind: fishystuff_api::models::layers::LayerKind::TiledRaster,
+                    transform: fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace,
+                    tileset: fishystuff_api::models::layers::TilesetRef::default(),
+                    tile_px: 512,
+                    max_level: 0,
+                    y_flip: false,
+                    field_source: Some(fishystuff_api::models::layers::FieldSourceRef {
+                        url: "/fields/minimap.v1.bin".to_string(),
+                        revision: "minimap-field-v1".to_string(),
+                        color_mode: fishystuff_api::models::layers::FieldColorMode::DebugHash,
+                    }),
+                    field_metadata_source: Some(
+                        fishystuff_api::models::layers::FieldMetadataSourceRef {
+                            url: "/fields/minimap.v1.meta.json".to_string(),
+                            revision: "minimap-meta-v1".to_string(),
+                        },
+                    ),
+                    vector_source: None,
+                    lod_policy: fishystuff_api::models::layers::LodPolicyDto::default(),
+                    ui: fishystuff_api::models::layers::LayerUiInfo {
+                        display_order: 10,
+                        ..Default::default()
+                    },
+                    request_weight: 1.0,
+                    pick_mode: "none".to_string(),
+                },
+                zone_mask,
+                regions,
+                fishystuff_api::models::layers::LayerDescriptor {
+                    layer_id: "vector".to_string(),
+                    name: "Vector".to_string(),
+                    enabled: true,
+                    kind: fishystuff_api::models::layers::LayerKind::VectorGeoJson,
+                    transform: fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace,
+                    tileset: fishystuff_api::models::layers::TilesetRef::default(),
+                    tile_px: 512,
+                    max_level: 0,
+                    y_flip: false,
+                    field_source: None,
+                    field_metadata_source: None,
+                    vector_source: Some(fishystuff_api::models::layers::VectorSourceRef {
+                        url: "/vector.geojson".to_string(),
+                        revision: "vector-v1".to_string(),
+                        geometry_space: fishystuff_api::models::layers::GeometrySpace::MapPixels,
+                        style_mode:
+                            fishystuff_api::models::layers::StyleMode::FeaturePropertyPalette,
+                        feature_id_property: None,
+                        color_property: None,
+                    }),
+                    lod_policy: fishystuff_api::models::layers::LodPolicyDto::default(),
+                    ui: fishystuff_api::models::layers::LayerUiInfo {
+                        display_order: 50,
+                        ..Default::default()
+                    },
+                    request_weight: 1.0,
+                    pick_mode: "none".to_string(),
+                },
+            ],
+        });
+
+        let ordered = ordered_semantic_layers(&registry)
+            .into_iter()
+            .map(|layer| layer.key.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(ordered, vec!["zone_mask", "regions"]);
     }
 
     fn transformed_registry(transform: LayerTransform) -> LayerRegistry {

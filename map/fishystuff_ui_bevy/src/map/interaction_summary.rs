@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
 use fishystuff_core::field_metadata::{
-    FieldHoverRow, FIELD_HOVER_ROW_KEY_ORIGIN, FIELD_HOVER_ROW_KEY_RESOURCES,
-    FIELD_HOVER_ROW_KEY_ZONE,
+    preferred_hover_row, FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE,
 };
 
 use crate::map::layer_query::LayerQuerySample;
@@ -67,17 +66,7 @@ fn selection_overview_lines_with_heading(
 }
 
 fn preferred_title_row(samples: &[LayerQuerySample]) -> Option<&FieldHoverRow> {
-    for key in [
-        FIELD_HOVER_ROW_KEY_ZONE,
-        FIELD_HOVER_ROW_KEY_RESOURCES,
-        FIELD_HOVER_ROW_KEY_ORIGIN,
-    ] {
-        if let Some(row) = flattened_rows(samples).find(|row| row.key == key && row_is_visible(row))
-        {
-            return Some(row);
-        }
-    }
-    flattened_rows(samples).find(|row| row_is_visible(row))
+    preferred_hover_row(flattened_rows(samples))
 }
 
 fn flattened_rows<'a>(samples: &'a [LayerQuerySample]) -> impl Iterator<Item = &'a FieldHoverRow> {
@@ -115,11 +104,6 @@ fn overview_line(row: &FieldHoverRow) -> Option<String> {
     }
     let label = nonempty(Some(row.label.as_str()))?;
     Some(format!("{label}: {value}"))
-}
-
-fn row_is_visible(row: &FieldHoverRow) -> bool {
-    nonempty(Some(row.value.as_str())).is_some()
-        && (row.hide_label || nonempty(Some(row.label.as_str())).is_some())
 }
 
 fn nonempty(value: Option<&str>) -> Option<&str> {

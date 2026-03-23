@@ -14,10 +14,7 @@ use crate::plugins::api::{HoverInfo, HoverState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::ui::UiFonts;
-use fishystuff_core::field_metadata::{
-    FieldHoverRow, FIELD_HOVER_ROW_KEY_ORIGIN, FIELD_HOVER_ROW_KEY_RESOURCES,
-    FIELD_HOVER_ROW_KEY_ZONE,
-};
+use fishystuff_core::field_metadata::{preferred_hover_row_value, FieldHoverRow};
 
 #[cfg(target_arch = "wasm32")]
 use crate::bridge::host::BrowserBridgeState;
@@ -430,25 +427,7 @@ fn bookmark_display_label(bookmark: &FishyMapBookmarkEntry, index: usize) -> Str
 }
 
 fn bookmark_primary_row_value(rows: &[FieldHoverRow]) -> Option<String> {
-    [
-        FIELD_HOVER_ROW_KEY_ZONE,
-        FIELD_HOVER_ROW_KEY_RESOURCES,
-        FIELD_HOVER_ROW_KEY_ORIGIN,
-    ]
-    .into_iter()
-    .find_map(|key| {
-        rows.iter()
-            .find(|row| row.key == key)
-            .map(|row| row.value.trim())
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
-    })
-    .or_else(|| {
-        rows.iter()
-            .map(|row| row.value.trim())
-            .find(|value| !value.is_empty())
-            .map(ToOwned::to_owned)
-    })
+    preferred_hover_row_value(rows.iter()).map(ToOwned::to_owned)
 }
 
 fn bookmark_callout_size_px(display_text: &str) -> Vec2 {

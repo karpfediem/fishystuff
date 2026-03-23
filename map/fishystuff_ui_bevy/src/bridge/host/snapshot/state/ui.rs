@@ -2,7 +2,9 @@ use super::super::super::*;
 use crate::bridge::contract::FishyMapBookmarkEntry;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::field_semantics::{loaded_semantic_field_layer, SemanticFieldLayerView};
+use crate::map::field_semantics::{
+    loaded_semantic_field_layer, ordered_semantic_layers, SemanticFieldLayerView,
+};
 use crate::map::layers::LayerRegistry;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
@@ -67,30 +69,20 @@ fn collect_bookmark_rows(
     exact_lookups: &ExactLookupCache,
     field_metadata: &FieldMetadataCache,
 ) -> Vec<FieldHoverRow> {
-    ["zone_mask", "region_groups", "regions"]
+    ordered_semantic_layers(layer_registry)
         .into_iter()
-        .flat_map(|layer_key| {
-            sample_bookmark_layer_rows(
-                bookmark,
-                layer_key,
-                layer_registry,
-                exact_lookups,
-                field_metadata,
-            )
+        .flat_map(|layer| {
+            sample_bookmark_layer_rows(bookmark, layer, exact_lookups, field_metadata)
         })
         .collect()
 }
 
 fn sample_bookmark_layer_rows(
     bookmark: &FishyMapBookmarkEntry,
-    layer_key: &str,
-    layer_registry: &LayerRegistry,
+    layer: &crate::map::layers::LayerSpec,
     exact_lookups: &ExactLookupCache,
     field_metadata: &FieldMetadataCache,
 ) -> Vec<FieldHoverRow> {
-    let Some(layer) = layer_registry.get_by_key(layer_key) else {
-        return Vec::new();
-    };
     let world_point = WorldPoint::new(bookmark.world_x, bookmark.world_z);
     loaded_semantic_field_layer(layer, exact_lookups, field_metadata)
         .and_then(|field| {
@@ -115,6 +107,7 @@ mod tests {
     fn field_layer_descriptor(
         layer_id: &str,
         name: &str,
+        display_order: i32,
     ) -> fishystuff_api::models::layers::LayerDescriptor {
         fishystuff_api::models::layers::LayerDescriptor {
             layer_id: layer_id.to_string(),
@@ -137,7 +130,10 @@ mod tests {
             }),
             vector_source: None,
             lod_policy: fishystuff_api::models::layers::LodPolicyDto::default(),
-            ui: fishystuff_api::models::layers::LayerUiInfo::default(),
+            ui: fishystuff_api::models::layers::LayerUiInfo {
+                display_order,
+                ..Default::default()
+            },
             request_weight: 1.0,
             pick_mode: "none".to_string(),
         }
@@ -149,9 +145,9 @@ mod tests {
             revision: "rev".to_string(),
             map_version_id: None,
             layers: vec![
-                field_layer_descriptor("zone_mask", "Zone Mask"),
-                field_layer_descriptor("regions", "Regions"),
-                field_layer_descriptor("region_groups", "Region Groups"),
+                field_layer_descriptor("zone_mask", "Zone Mask", 20),
+                field_layer_descriptor("region_groups", "Region Groups", 30),
+                field_layer_descriptor("regions", "Regions", 40),
             ],
         });
         registry
