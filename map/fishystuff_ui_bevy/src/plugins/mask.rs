@@ -9,6 +9,7 @@ use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::hover_query::{hover_info_at_world_point, HoverQueryContext};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::RasterTileCache;
+use crate::map::selection_query::selected_info_from_hover;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{
@@ -133,18 +134,12 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     let Some(hover) = context.hover.info.clone() else {
         return;
     };
-    let (Some(rgb), Some(rgb_u32)) = (hover.rgb, hover.rgb_u32) else {
+    let Some(selected_info) = selected_info_from_hover(&hover) else {
         return;
     };
-    context.selection.info = Some(crate::plugins::api::SelectedInfo {
-        map_px: hover.map_px,
-        map_py: hover.map_py,
-        rgb,
-        rgb_u32,
-        zone_name: hover.zone_name.clone(),
-        world_x: hover.world_x,
-        world_z: hover.world_z,
-    });
+    let rgb = selected_info.rgb;
+    let rgb_u32 = selected_info.rgb_u32;
+    context.selection.info = Some(selected_info);
     context.selection.zone_stats = None;
     context.selection.zone_stats_status = "zone stats: loading".to_string();
 

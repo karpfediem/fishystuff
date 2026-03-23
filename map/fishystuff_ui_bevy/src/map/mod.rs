@@ -9,6 +9,7 @@ pub mod layer_query;
 pub mod layers;
 pub mod raster;
 pub mod render;
+pub mod selection_query;
 pub mod spaces;
 pub mod streaming;
 pub mod terrain;
