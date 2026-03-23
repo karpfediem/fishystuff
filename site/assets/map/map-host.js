@@ -1282,6 +1282,8 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     parseLayerSetParam(params.get("layers")) ?? parseLayerSetParam(params.get("layerSet"));
   const viewMode = params.get("view") === "3d" || params.get("mode") === "3d" ? "3d" : undefined;
   const zoneRgb = parseIntegerParam(params.get("zone"));
+  const worldX = normalizeBookmarkCoordinate(params.get("worldX") ?? params.get("x"));
+  const worldZ = normalizeBookmarkCoordinate(params.get("worldZ") ?? params.get("z"));
 
   if (
     fishId != null ||
@@ -1323,13 +1325,15 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     patch.ui.legendOpen = legendOpen;
   }
 
-  if (viewMode || zoneRgb != null) {
+  if (viewMode || zoneRgb != null || (worldX !== undefined && worldZ !== undefined)) {
     patch.commands = { ...(patch.commands || {}) };
   }
   if (viewMode) {
     patch.commands.setViewMode = viewMode;
   }
-  if (zoneRgb != null) {
+  if (worldX !== undefined && worldZ !== undefined) {
+    patch.commands.selectWorldPoint = { worldX, worldZ };
+  } else if (zoneRgb != null) {
     patch.commands.selectZoneRgb = zoneRgb;
   }
 

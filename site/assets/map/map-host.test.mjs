@@ -1275,6 +1275,18 @@ test("explicit query range keeps the canonical patch id empty", () => {
   assert.equal(patch.filters.toPatchId, "2026-03-12");
 });
 
+test("query state supports direct world-point selection", () => {
+  const patch = parseQueryState(
+    "https://fishystuff.fish/map/?worldX=123.4567&worldZ=-45.6789&zone=16711935",
+  );
+
+  assert.deepEqual(patch.commands.selectWorldPoint, {
+    worldX: 123.4567,
+    worldZ: -45.6789,
+  });
+  assert.equal("selectZoneRgb" in patch.commands, false);
+});
+
 test("theme extraction returns resolved theme tokens", () => {
   const snapshot = extractThemeSnapshot({
     doc: {
