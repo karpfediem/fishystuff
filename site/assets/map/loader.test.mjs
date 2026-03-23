@@ -6,8 +6,6 @@ const {
   buildBookmarkDeletionPrompt,
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
-  selectionDetailWindowMode,
-  buildZoneEvidenceStatusText,
   buildHoverOverviewRows,
   buildSelectWorldPointCommand,
   buildZoneEvidenceSummary,
@@ -424,18 +422,7 @@ test("buildZoneEvidenceSummary explains that non-zone selections have no zone ev
   assert.equal(buildZoneEvidenceSummary({ zoneRgb: 0xc17f7f }, null), "No zone evidence loaded.");
 });
 
-test("selectionHasZoneEvidence and buildZoneEvidenceStatusText distinguish generic selections", () => {
-  assert.equal(selectionDetailWindowMode(null, null), "empty");
-  assert.equal(selectionDetailWindowMode({ layerSamples: [] }, null), "generic");
-  assert.equal(
-    selectionDetailWindowMode(
-      {
-        layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }],
-      },
-      null,
-    ),
-    "zone",
-  );
+test("selectionHasZoneEvidence distinguishes zone-backed selections", () => {
   assert.equal(selectionHasZoneEvidence(null, null), false);
   assert.equal(selectionHasZoneEvidence({ layerSamples: [] }, null), false);
   assert.equal(
@@ -447,44 +434,39 @@ test("selectionHasZoneEvidence and buildZoneEvidenceStatusText distinguish gener
     ),
     true,
   );
-  assert.equal(buildZoneEvidenceStatusText(null, "zone evidence: idle", null), "no selection");
-  assert.equal(
-    buildZoneEvidenceStatusText({ layerSamples: [] }, "zone evidence: idle", null),
-    "selection details",
-  );
-  assert.equal(
-    buildZoneEvidenceStatusText(
-      { layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }] },
-      "zone stats: ready",
-      null,
-    ),
-    "zone stats: ready",
-  );
 });
 
-test("resolveZoneInfoActiveTab falls back to overview when zone evidence is unavailable", () => {
-  assert.equal(normalizeZoneInfoTab("nope"), "overview");
+test("resolveZoneInfoActiveTab falls back to the first sampled layer", () => {
+  assert.equal(normalizeZoneInfoTab(" regions "), "regions");
   assert.equal(
     resolveZoneInfoActiveTab(
       {
-        zoneInfo: { tab: "zoneEvidence" },
+        zoneInfo: { tab: "region_groups" },
       },
-      { layerSamples: [] },
-      null,
+      {
+        layerSamples: [
+          { layerId: "zone_mask", rgbU32: 0xc17f7f },
+          { layerId: "region_groups", fieldId: 295 },
+        ],
+      },
+      buildStateBundle(),
     ),
-    "overview",
+    "region_groups",
   );
   assert.equal(
     resolveZoneInfoActiveTab(
       {
-        zoneInfo: { tab: "zoneEvidence" },
+        zoneInfo: { tab: "missing" },
       },
       {
-        layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }],
+        layerSamples: [
+          { layerId: "zone_mask", rgbU32: 0xc17f7f },
+          { layerId: "region_groups", fieldId: 295 },
+        ],
       },
-      null,
+      buildStateBundle(),
     ),
-    "zoneEvidence",
+    "zone_mask",
   );
 });
 

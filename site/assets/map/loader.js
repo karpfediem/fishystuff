@@ -21,8 +21,7 @@ const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
 const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
 const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
-const DEFAULT_ZONE_INFO_TAB = "overview";
-const ZONE_INFO_TABS = Object.freeze(["overview", "zoneEvidence"]);
+const DEFAULT_ZONE_INFO_TAB = "";
 const ZONE_INFO_TAB_BUTTON_CLASS =
   "tab flex-1 gap-2 text-xs font-semibold sm:text-sm";
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
@@ -51,16 +50,23 @@ function dispatchMapCommand(target, command) {
   dispatchMapEvent(target, FISHYMAP_EVENTS.command, command);
 }
 
-export function buildSelectWorldPointCommand(worldX, worldZ) {
+export function buildSelectWorldPointCommand(worldX, worldZ, options = {}) {
   const normalizedWorldX = normalizeBookmarkCoordinate(worldX);
   const normalizedWorldZ = normalizeBookmarkCoordinate(worldZ);
   if (normalizedWorldX == null || normalizedWorldZ == null) {
     return null;
   }
+  const pointKind = normalizeSelectionPointKind(options.pointKind);
+  const pointLabel =
+    typeof options.pointLabel === "string" && options.pointLabel.trim()
+      ? options.pointLabel.trim()
+      : null;
   return {
     selectWorldPoint: {
       worldX: normalizedWorldX,
       worldZ: normalizedWorldZ,
+      ...(pointKind ? { pointKind } : {}),
+      ...(pointLabel ? { pointLabel } : {}),
     },
   };
 }
@@ -251,8 +257,7 @@ function normalizeWindowCoordinate(value) {
 }
 
 export function normalizeZoneInfoTab(value) {
-  const normalized = String(value || "").trim();
-  return ZONE_INFO_TABS.includes(normalized) ? normalized : DEFAULT_ZONE_INFO_TAB;
+  return String(value || "").trim();
 }
 
 function normalizeWindowUiEntry(rawEntry, fallbackEntry) {
@@ -342,6 +347,11 @@ export function normalizeBookmarkCoordinate(value) {
     return null;
   }
   return Number(number.toFixed(BOOKMARK_COORDINATE_DECIMALS));
+}
+
+function normalizeSelectionPointKind(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return ["clicked", "waypoint", "bookmark"].includes(normalized) ? normalized : "";
 }
 
 function formatBookmarkCoordinate(value) {
@@ -1536,12 +1546,50 @@ export function buildSelectionOverviewRows(selection, stateBundle) {
   return filteredRows.length > 0 ? filteredRows : overviewRows;
 }
 
+function selectionMatchesBookmark(selection, bookmark) {
+  const worldX = normalizeBookmarkCoordinate(selection?.worldX);
+  const worldZ = normalizeBookmarkCoordinate(selection?.worldZ);
+  if (worldX == null || worldZ == null) {
+    return false;
+  }
+  return (
+    Math.abs(bookmark.worldX - worldX) <= 0.001 &&
+    Math.abs(bookmark.worldZ - worldZ) <= 0.001
+  );
+}
+
+function selectedBookmarkForSelection(selection, stateBundle) {
+  if (normalizeSelectionPointKind(selection?.pointKind) !== "bookmark") {
+    return null;
+  }
+  const bookmarks = normalizeBookmarks(
+    stateBundle?.state?.ui?.bookmarks || stateBundle?.inputState?.ui?.bookmarks || [],
+  );
+  const selectedIds = normalizeSelectedBookmarkIds(
+    bookmarks,
+    stateBundle?.inputState?.ui?.bookmarkSelectedIds || stateBundle?.state?.ui?.bookmarkSelectedIds,
+  );
+  if (selectedIds.length !== 1) {
+    return null;
+  }
+  const bookmark = bookmarks.find((entry) => entry.id === selectedIds[0]);
+  return bookmark && selectionMatchesBookmark(selection, bookmark) ? bookmark : null;
+}
+
 export function buildSelectionSummaryText(selection, stateBundle) {
+  const selectedBookmark = selectedBookmarkForSelection(selection, stateBundle);
+  if (selectedBookmark) {
+    return bookmarkDisplayLabel(selectedBookmark);
+  }
   const preferredValue = String(
     preferredLayerSampleRow(selection?.layerSamples, stateBundle)?.value || "",
   ).trim();
   if (preferredValue) {
     return preferredValue;
+  }
+  const pointLabel = String(selection?.pointLabel || "").trim();
+  if (pointLabel) {
+    return pointLabel;
   }
   const zoneRgb = selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples);
   return zoneRgb != null
@@ -2317,37 +2365,10 @@ export function buildZoneEvidenceSummary(selection, zoneStats) {
   return parts.join(" · ") || "No confidence data.";
 }
 
-export function selectionDetailWindowMode(selection, zoneStats = null) {
-  if (!selection) {
-    return "empty";
-  }
-  return selectionHasZoneEvidence(selection, zoneStats) ? "zone" : "generic";
-}
-
 export function selectionHasZoneEvidence(selection, zoneStats = null) {
   const zoneRgb =
     zoneStats?.zoneRgb ?? selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples);
   return zoneRgb != null;
-}
-
-export function resolveZoneInfoActiveTab(windowUiState, selection, zoneStats = null) {
-  const requestedTab = normalizeZoneInfoTab(windowUiState?.zoneInfo?.tab);
-  if (requestedTab === "zoneEvidence" && !selectionHasZoneEvidence(selection, zoneStats)) {
-    return DEFAULT_ZONE_INFO_TAB;
-  }
-  return requestedTab;
-}
-
-export function buildZoneEvidenceStatusText(selection, zoneStatsStatus, zoneStats = null) {
-  const mode = selectionDetailWindowMode(selection, zoneStats);
-  if (mode === "zone") {
-    const normalized = String(zoneStatsStatus || "").trim();
-    return normalized || "zone evidence: idle";
-  }
-  if (mode === "generic") {
-    return "selection details";
-  }
-  return "no selection";
 }
 
 export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()) {
@@ -2386,24 +2407,19 @@ export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()
     .join("");
 }
 
-function zoneInfoTabButtonClass(active, disabled) {
-  return `${ZONE_INFO_TAB_BUTTON_CLASS}${active ? " tab-active" : ""}${disabled ? " tab-disabled" : ""}`;
+function zoneInfoTabButtonClass(active) {
+  return `${ZONE_INFO_TAB_BUTTON_CLASS}${active ? " tab-active" : ""}`;
 }
 
 function ensureZoneInfoElements(elements) {
   if (
-    elements.zoneEvidenceShell &&
     elements.zoneInfoStatus &&
-    elements.zoneEvidenceSummary &&
-    elements.selectionSummary &&
-    elements.selectionOverview &&
-    elements.zoneEvidenceDisclaimer &&
-    elements.zoneEvidenceList &&
     elements.zoneInfoTabs &&
-    elements.zoneInfoTabOverview &&
-    elements.zoneInfoTabZoneEvidence &&
-    elements.zoneInfoOverviewPanel &&
-    elements.zoneInfoEvidencePanel
+    elements.zoneInfoPanel &&
+    elements.zoneInfoTitle &&
+    elements.zoneInfoTitleIcon &&
+    elements.zoneInfoStatusIcon &&
+    elements.zoneInfoStatusText
   ) {
     return elements;
   }
@@ -2415,62 +2431,17 @@ function ensureZoneInfoElements(elements) {
   section.className = "space-y-3";
   section.innerHTML = `
     <div class="flex items-center justify-between gap-3">
-      <span class="text-sm font-semibold">Zone Info</span>
-      <span id="fishymap-zone-info-status" class="text-xs text-base-content/60">no selection</span>
+      <span class="inline-flex min-w-0 items-center gap-2 text-sm font-semibold">
+        <span id="fishymap-zone-info-title-icon" class="inline-flex text-base-content/70" aria-hidden="true">${spriteIcon("information-circle", "size-4")}</span>
+        <span id="fishymap-zone-info-title" class="truncate">Zone Info</span>
+      </span>
+      <span id="fishymap-zone-info-status" class="inline-flex min-w-0 items-center gap-2 text-xs text-base-content/60">
+        <span id="fishymap-zone-info-status-icon" class="inline-flex text-base-content/55" aria-hidden="true">${spriteIcon("information-circle", "size-4")}</span>
+        <span id="fishymap-zone-info-status-text" class="truncate">no selection</span>
+      </span>
     </div>
-    <div id="fishymap-zone-info-tabs" role="tablist" class="tabs tabs-box bg-base-200/80 p-1" aria-label="Zone info detail tabs">
-      <button
-        id="fishymap-zone-info-tab-overview"
-        class="${zoneInfoTabButtonClass(true, false)}"
-        type="button"
-        role="tab"
-        aria-selected="true"
-        aria-controls="fishymap-zone-info-overview-panel"
-        data-zone-info-tab="overview"
-      >
-        Overview
-      </button>
-      <button
-        id="fishymap-zone-info-tab-zone-evidence"
-        class="${zoneInfoTabButtonClass(false, false)}"
-        type="button"
-        role="tab"
-        aria-selected="false"
-        aria-controls="fishymap-zone-info-evidence-panel"
-        data-zone-info-tab="zoneEvidence"
-      >
-        Zone Evidence
-      </button>
-    </div>
-    <div id="fishymap-zone-info-overview-panel" class="space-y-3" role="tabpanel" aria-labelledby="fishymap-zone-info-tab-overview">
-      <p id="fishymap-selection-summary" class="text-sm text-base-content/80">No selection.</p>
-      <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
-    </div>
-    <div
-      id="fishymap-zone-info-evidence-panel"
-      class="space-y-3"
-      role="tabpanel"
-      aria-labelledby="fishymap-zone-info-tab-zone-evidence"
-      hidden
-    >
-      <div id="fishymap-zone-evidence-shell" class="space-y-2" hidden>
-        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Zone Evidence</p>
-        <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Select a zone to load evidence.</p>
-        <div id="fishymap-zone-evidence-disclaimer" class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
-          <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
-            <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
-            Disclaimer
-          </p>
-          <div class="space-y-2 leading-5">
-            <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
-            <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
-            <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
-            <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
-          </div>
-        </div>
-        <div id="fishymap-zone-evidence-list" class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2"></div>
-      </div>
-    </div>
+    <div id="fishymap-zone-info-tabs" role="tablist" class="tabs tabs-box flex-nowrap overflow-x-auto bg-base-200/80 p-1" aria-label="Point layer tabs" hidden></div>
+    <div id="fishymap-zone-info-panel" class="space-y-3"></div>
   `;
 
   if (elements.legend?.parentNode === elements.panelBody) {
@@ -2480,18 +2451,212 @@ function ensureZoneInfoElements(elements) {
   }
 
   elements.zoneInfoTabs = section.querySelector("#fishymap-zone-info-tabs");
-  elements.zoneInfoTabOverview = section.querySelector("#fishymap-zone-info-tab-overview");
-  elements.zoneInfoTabZoneEvidence = section.querySelector("#fishymap-zone-info-tab-zone-evidence");
-  elements.zoneInfoOverviewPanel = section.querySelector("#fishymap-zone-info-overview-panel");
-  elements.zoneInfoEvidencePanel = section.querySelector("#fishymap-zone-info-evidence-panel");
-  elements.zoneEvidenceShell = section.querySelector("#fishymap-zone-evidence-shell");
+  elements.zoneInfoPanel = section.querySelector("#fishymap-zone-info-panel");
   elements.zoneInfoStatus = section.querySelector("#fishymap-zone-info-status");
-  elements.zoneEvidenceSummary = section.querySelector("#fishymap-zone-evidence-summary");
-  elements.selectionSummary = section.querySelector("#fishymap-selection-summary");
-  elements.selectionOverview = section.querySelector("#fishymap-selection-overview");
-  elements.zoneEvidenceDisclaimer = section.querySelector("#fishymap-zone-evidence-disclaimer");
-  elements.zoneEvidenceList = section.querySelector("#fishymap-zone-evidence-list");
+  elements.zoneInfoStatusIcon = section.querySelector("#fishymap-zone-info-status-icon");
+  elements.zoneInfoStatusText = section.querySelector("#fishymap-zone-info-status-text");
+  elements.zoneInfoTitle = section.querySelector("#fishymap-zone-info-title");
+  elements.zoneInfoTitleIcon = section.querySelector("#fishymap-zone-info-title-icon");
   return elements;
+}
+
+function layerSampleTabs(selection, stateBundle) {
+  const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
+  const sampleByLayerId = new Map(
+    layerSamples
+      .map((sample) => [String(sample?.layerId || "").trim(), sample])
+      .filter(([layerId]) => Boolean(layerId)),
+  );
+  const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
+  return layerIds
+    .map((layerId) => {
+      const sample = sampleByLayerId.get(layerId);
+      if (!sample) {
+        return null;
+      }
+      const preferredRow = preferredLayerSampleRow([sample], stateBundle);
+      const label = String(sample?.layerName || layerId).trim() || layerId;
+      return {
+        id: layerId,
+        sample,
+        label,
+        icon: String(preferredRow?.icon || "").trim() || "information-circle",
+        summary: String(preferredRow?.value || "").trim(),
+      };
+    })
+    .filter(Boolean);
+}
+
+export function resolveZoneInfoActiveTab(windowUiState, selection, stateBundle) {
+  const tabs = layerSampleTabs(selection, stateBundle);
+  const requestedTab = normalizeZoneInfoTab(windowUiState?.zoneInfo?.tab);
+  if (requestedTab && tabs.some((tab) => tab.id === requestedTab)) {
+    return requestedTab;
+  }
+  return tabs[0]?.id || DEFAULT_ZONE_INFO_TAB;
+}
+
+function pointKindIcon(pointKind) {
+  switch (normalizeSelectionPointKind(pointKind)) {
+    case "bookmark":
+      return "bookmark";
+    case "waypoint":
+      return "map-pin";
+    case "clicked":
+      return "hover-zone";
+    default:
+      return "information-circle";
+  }
+}
+
+function pointKindStatusText(pointKind, pointLabel) {
+  const normalizedLabel = String(pointLabel || "").trim();
+  switch (normalizeSelectionPointKind(pointKind)) {
+    case "bookmark":
+      return normalizedLabel || "Bookmark";
+    case "waypoint":
+      return normalizedLabel || "Waypoint";
+    case "clicked":
+      return "Clicked point";
+    default:
+      return "no selection";
+  }
+}
+
+function zoneInfoTitleDescriptor(selection, stateBundle) {
+  const selectedBookmark = selectedBookmarkForSelection(selection, stateBundle);
+  if (selectedBookmark) {
+    return {
+      title: bookmarkDisplayLabel(selectedBookmark),
+      titleIcon: "bookmark",
+      statusIcon: "bookmark",
+      statusText: pointKindStatusText("bookmark", selectedBookmark.label),
+      pointKind: "bookmark",
+    };
+  }
+  if (!selection) {
+    return {
+      title: "Zone Info",
+      titleIcon: "information-circle",
+      statusIcon: "information-circle",
+      statusText: "no selection",
+      pointKind: "",
+    };
+  }
+  const pointKind = normalizeSelectionPointKind(selection?.pointKind);
+  const pointLabel = String(selection?.pointLabel || "").trim();
+  const title = buildSelectionSummaryText(selection, stateBundle) || "Zone Info";
+  return {
+    title,
+    titleIcon: pointKindIcon(pointKind),
+    statusIcon: pointKindIcon(pointKind),
+    statusText: pointKindStatusText(pointKind, pointLabel),
+    pointKind,
+  };
+}
+
+function zoneInfoTargetMarkup(target) {
+  const label = String(target?.label || "").trim();
+  const worldX = normalizeBookmarkCoordinate(target?.worldX);
+  const worldZ = normalizeBookmarkCoordinate(target?.worldZ);
+  if (!label || worldX == null || worldZ == null) {
+    return "";
+  }
+  return `
+    <button
+      class="btn btn-soft btn-sm justify-start"
+      type="button"
+      data-zone-info-target-world-x="${worldX}"
+      data-zone-info-target-world-z="${worldZ}"
+      data-zone-info-target-label="${escapeHtml(label)}"
+    >
+      ${spriteIcon("map-pin", "size-4")}
+      <span class="truncate">${escapeHtml(label)}</span>
+    </button>
+  `;
+}
+
+function zoneInfoZoneEvidenceMarkup(selection, zoneStats, zoneStatsStatus, fishLookup) {
+  const summary = buildZoneEvidenceSummary(selection, zoneStats);
+  const distribution = Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : [];
+  const listMarkup = !zoneStats
+    ? '<div class="px-2 py-3 text-xs text-base-content/60">No zone evidence loaded.</div>'
+    : !distribution.length
+      ? '<div class="px-2 py-3 text-xs text-base-content/60">No fish evidence in this window.</div>'
+      : buildZoneEvidenceListMarkup(distribution, fishLookup);
+  return `
+    <section class="space-y-2">
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Zone Evidence</p>
+        <span class="text-[11px] text-base-content/55">${escapeHtml(String(zoneStatsStatus || "zone evidence: idle"))}</span>
+      </div>
+      <p class="text-xs text-base-content/70">${escapeHtml(summary)}</p>
+      <div class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
+        <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
+          <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${ICON_SPRITE_URL}#fishy-information-circle"></use></svg>
+          Disclaimer
+        </p>
+        <div class="space-y-2 leading-5">
+          <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
+          <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
+          <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
+          <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
+        </div>
+      </div>
+      <div class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2">${listMarkup}</div>
+    </section>
+  `;
+}
+
+function zoneInfoLayerPanelMarkup(tab, selection, stateBundle, fishLookup) {
+  const rows = hoverSampleRows(tab.sample);
+  const targets = Array.isArray(tab.sample?.targets) ? tab.sample.targets : [];
+  const zoneStats = stateBundle.state?.selection?.zoneStats || null;
+  const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone evidence: idle";
+  const summary = tab.summary || buildSelectionSummaryText(selection, stateBundle);
+  return `
+    <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(tab.id)}">
+      ${
+        summary
+          ? `<p class="text-sm font-semibold text-base-content/80">${escapeHtml(summary)}</p>`
+          : ""
+      }
+      ${
+        rows.length
+          ? `<div class="fishymap-overview-list">${rows
+              .map((row) =>
+                overviewRowMarkup({
+                  layerId: tab.id,
+                  icon: row.icon,
+                  label: row.label,
+                  value: row.value,
+                  ...(row.hideLabel === true ? { hideLabel: true } : {}),
+                  ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
+                  ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
+                }),
+              )
+              .join("")}</div>`
+          : '<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">No semantic rows available for this layer at the selected point.</div>'
+      }
+      ${
+        targets.length
+          ? `
+            <section class="space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Targets</p>
+              <div class="flex flex-wrap gap-2">
+                ${targets.map((target) => zoneInfoTargetMarkup(target)).join("")}
+              </div>
+            </section>
+          `
+          : ""
+      }
+      ${
+        tab.id === "zone_mask" && selectionHasZoneEvidence(selection, zoneStats)
+          ? zoneInfoZoneEvidenceMarkup(selection, zoneStats, zoneStatsStatus, fishLookup)
+          : ""
+      }
+    </section>
+  `;
 }
 
 function orderPatchesByStart(patches) {
@@ -3093,133 +3258,92 @@ function renderSearchResults(elements, matches, stateBundle) {
     .join("");
 }
 
-function renderZoneEvidence(elements, stateBundle, fishLookup) {
-  if (!elements.zoneInfoStatus || !elements.zoneEvidenceSummary || !elements.zoneEvidenceList) {
-    return;
-  }
-  const selection = stateBundle.state?.selection || null;
-  const zoneStats = stateBundle.state?.selection?.zoneStats || null;
-  const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone evidence: idle";
-  const detailMode = selectionDetailWindowMode(selection, zoneStats);
-  const hasZoneEvidence = detailMode === "zone";
-  const summary = buildZoneEvidenceSummary(selection, zoneStats);
-
-  if (elements.zoneInfoWindow) {
-    elements.zoneInfoWindow.dataset.detailMode = detailMode;
-  }
-  if (elements.zoneInfoBody) {
-    elements.zoneInfoBody.dataset.detailMode = detailMode;
-  }
-
-  setTextContent(
-    elements.zoneInfoStatus,
-    buildZoneEvidenceStatusText(selection, zoneStatsStatus, zoneStats),
-  );
-  setTextContent(elements.zoneEvidenceSummary, summary);
-  if (elements.zoneEvidenceShell) {
-    setBooleanProperty(elements.zoneEvidenceShell, "hidden", !hasZoneEvidence);
-  }
-  if (elements.zoneEvidenceDisclaimer) {
-    setBooleanProperty(elements.zoneEvidenceDisclaimer, "hidden", !hasZoneEvidence);
-  }
-
-  const distribution = Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : [];
-  const renderKey = JSON.stringify({
-    zoneRgb: zoneStats?.zoneRgb ?? null,
-    status: zoneStatsStatus,
-    summary,
-    distribution: distribution.map((entry) => {
-      const fish = fishLookup.get(entry.fishId);
-      return [
-        entry.fishId,
-        entry.fishName || "",
-        fish?.itemId ?? entry.itemId ?? null,
-        fish?.encyclopediaId ?? entry.encyclopediaId ?? null,
-        fish?.grade || "",
-        fish?.isPrize === true ? 1 : 0,
-        entry.evidenceWeight,
-        entry.pMean,
-        entry.ciLow,
-        entry.ciHigh,
-      ];
-    }),
-  });
-  if (elements.zoneEvidenceList.dataset.renderKey === renderKey) {
-    return;
-  }
-  elements.zoneEvidenceList.dataset.renderKey = renderKey;
-
-  if (!hasZoneEvidence) {
-    elements.zoneEvidenceList.innerHTML = "";
-    return;
-  }
-  if (!zoneStats) {
-    elements.zoneEvidenceList.innerHTML =
-      (selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples)) != null
-        ? '<div class="px-2 py-3 text-xs text-base-content/60">No zone evidence loaded.</div>'
-        : '<div class="px-2 py-3 text-xs text-base-content/60">Zone evidence is only available for zone selections.</div>';
-    return;
-  }
-  if (!distribution.length) {
-    elements.zoneEvidenceList.innerHTML =
-      '<div class="px-2 py-3 text-xs text-base-content/60">No fish evidence in this window.</div>';
-    return;
-  }
-
-  elements.zoneEvidenceList.innerHTML = buildZoneEvidenceListMarkup(distribution, fishLookup);
-}
-
-function renderZoneInfoTabs(elements, stateBundle, windowUiState) {
+function renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup) {
   if (
     !elements.zoneInfoTabs ||
-    !elements.zoneInfoTabOverview ||
-    !elements.zoneInfoTabZoneEvidence ||
-    !elements.zoneInfoOverviewPanel ||
-    !elements.zoneInfoEvidencePanel
+    !elements.zoneInfoPanel ||
+    !elements.zoneInfoTitle ||
+    !elements.zoneInfoTitleIcon ||
+    !elements.zoneInfoStatusIcon ||
+    !elements.zoneInfoStatusText
   ) {
     return;
   }
   const selection = stateBundle.state?.selection || null;
-  const zoneStats = stateBundle.state?.selection?.zoneStats || null;
-  const activeTab = resolveZoneInfoActiveTab(windowUiState, selection, zoneStats);
-  const hasZoneEvidence = selectionHasZoneEvidence(selection, zoneStats);
-  const tabs = [
-    {
-      id: "overview",
-      button: elements.zoneInfoTabOverview,
-      panel: elements.zoneInfoOverviewPanel,
-      disabled: false,
-      title: "Show selection overview.",
-    },
-    {
-      id: "zoneEvidence",
-      button: elements.zoneInfoTabZoneEvidence,
-      panel: elements.zoneInfoEvidencePanel,
-      disabled: !hasZoneEvidence,
-      title: hasZoneEvidence
-        ? "Inspect fish evidence for the selected zone."
-        : "Zone evidence is only available for zone-backed selections.",
-    },
-  ];
+  const descriptor = zoneInfoTitleDescriptor(selection, stateBundle);
+  const tabs = layerSampleTabs(selection, stateBundle);
+  const activeTab = resolveZoneInfoActiveTab(windowUiState, selection, stateBundle);
+  const activeLayerTab = tabs.find((tab) => tab.id === activeTab) || null;
 
   if (elements.zoneInfoWindow) {
-    elements.zoneInfoWindow.dataset.activeTab = activeTab;
+    elements.zoneInfoWindow.dataset.activeTab = activeTab || "";
+    elements.zoneInfoWindow.dataset.pointKind = descriptor.pointKind || "";
   }
   if (elements.zoneInfoBody) {
-    elements.zoneInfoBody.dataset.activeTab = activeTab;
+    elements.zoneInfoBody.dataset.activeTab = activeTab || "";
+    elements.zoneInfoBody.dataset.pointKind = descriptor.pointKind || "";
   }
-  elements.zoneInfoTabs.dataset.activeTab = activeTab;
 
-  for (const tab of tabs) {
-    const isActive = tab.id === activeTab;
-    setClassName(tab.button, zoneInfoTabButtonClass(isActive, tab.disabled));
-    setAttributeValue(tab.button, "aria-selected", String(isActive));
-    setAttributeValue(tab.button, "aria-disabled", String(tab.disabled));
-    setAttributeValue(tab.button, "tabindex", isActive ? "0" : "-1");
-    setAttributeValue(tab.button, "title", tab.title);
-    setBooleanProperty(tab.button, "disabled", tab.disabled);
-    setBooleanProperty(tab.panel, "hidden", !isActive);
+  setTextContent(elements.zoneInfoTitle, descriptor.title);
+  setMarkup(
+    elements.zoneInfoTitleIcon,
+    descriptor.titleIcon,
+    spriteIcon(descriptor.titleIcon, "size-4"),
+  );
+  setMarkup(
+    elements.zoneInfoStatusIcon,
+    descriptor.statusIcon,
+    spriteIcon(descriptor.statusIcon, "size-4"),
+  );
+  setTextContent(elements.zoneInfoStatusText, descriptor.statusText);
+
+  setBooleanProperty(elements.zoneInfoTabs, "hidden", tabs.length === 0);
+  const tabMarkup = tabs
+    .map((tab) => {
+      const isActive = tab.id === activeTab;
+      const titleText = tab.summary
+        ? `${tab.label}: ${tab.summary}`
+        : `Show ${tab.label} details.`;
+      return `
+        <button
+          id="fishymap-zone-info-tab-${escapeHtml(tab.id)}"
+          class="${zoneInfoTabButtonClass(isActive)}"
+          type="button"
+          role="tab"
+          aria-selected="${isActive ? "true" : "false"}"
+          data-zone-info-tab="${escapeHtml(tab.id)}"
+          title="${escapeHtml(titleText)}"
+          tabindex="${isActive ? "0" : "-1"}"
+        >
+          ${spriteIcon(tab.icon || "information-circle", "size-4")}
+          <span class="truncate">${escapeHtml(tab.label)}</span>
+        </button>
+      `;
+    })
+    .join("");
+  setMarkup(elements.zoneInfoTabs, JSON.stringify(tabs.map((tab) => [tab.id, tab.label, tab.summary])), tabMarkup);
+
+  if (!selection || !activeLayerTab) {
+    setMarkup(
+      elements.zoneInfoPanel,
+      JSON.stringify({ empty: true, title: descriptor.title }),
+      '<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">Click the map, use a waypoint target, or select a bookmark to inspect layers at a world point.</div>',
+    );
+    return;
   }
+
+  setMarkup(
+    elements.zoneInfoPanel,
+    JSON.stringify({
+      activeTab,
+      summary: activeLayerTab.summary,
+      rows: activeLayerTab.sample?.rows || [],
+      targets: activeLayerTab.sample?.targets || [],
+      zoneStats: stateBundle.state?.selection?.zoneStats || null,
+      zoneStatsStatus: stateBundle.state?.statuses?.zoneStatsStatus || "",
+    }),
+    zoneInfoLayerPanelMarkup(activeLayerTab, selection, stateBundle, fishLookup),
+  );
 }
 
 function renderStatusLines(container, statuses) {
@@ -3471,15 +3595,7 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
     setBooleanProperty(elements.diagnostics, "open", Boolean(inputState.ui?.diagnosticsOpen));
   }
 
-  if (elements.selectionSummary) {
-    setTextContent(
-      elements.selectionSummary,
-      buildSelectionSummaryText(state.selection || null, stateBundle),
-    );
-  }
-  renderSelectionOverview(elements, state.selection || null, stateBundle);
-  renderZoneEvidence(elements, stateBundle, fishLookup);
-  renderZoneInfoTabs(elements, stateBundle, windowUiState);
+  renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup);
 
   renderHoverTooltip(elements, state.hover || null, stateBundle);
 
@@ -3523,14 +3639,7 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
     },
   };
   dispatchMapState(shell, patch);
-  if (match.kind === "zone") {
-    dispatchMapCommand(shell, {
-      selectSemanticField: {
-        layerId: "zone_mask",
-        fieldId: match.zoneRgb,
-      },
-    });
-  } else if (match.kind === "semantic") {
+  if (match.kind === "semantic") {
     dispatchMapCommand(shell, {
       selectSemanticField: {
         layerId: match.layerId,
@@ -3710,7 +3819,10 @@ function bindUi(shell, elements, options = {}) {
     }
     setSelectedBookmarkIds([bookmark.id]);
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
-    const command = buildSelectWorldPointCommand(bookmark.worldX, bookmark.worldZ);
+    const command = buildSelectWorldPointCommand(bookmark.worldX, bookmark.worldZ, {
+      pointKind: "bookmark",
+      pointLabel: bookmarkDisplayLabel(bookmark),
+    });
     if (command) {
       dispatchMapCommand(shell, command);
     }
@@ -3935,8 +4047,8 @@ function bindUi(shell, elements, options = {}) {
     const requestedTab = normalizeZoneInfoTab(nextTab);
     const current = getLatestStateBundle();
     const selection = current.state?.selection || null;
-    const zoneStats = current.state?.selection?.zoneStats || null;
-    if (requestedTab === "zoneEvidence" && !selectionHasZoneEvidence(selection, zoneStats)) {
+    const availableTabs = layerSampleTabs(selection, current).map((tab) => tab.id);
+    if (!requestedTab || !availableTabs.includes(requestedTab)) {
       return false;
     }
     if (!updateWindowUiEntry("zoneInfo", { tab: requestedTab })) {
@@ -4356,25 +4468,48 @@ function bindUi(shell, elements, options = {}) {
     });
   });
 
-  if (elements.zoneEvidenceList) {
-    elements.zoneEvidenceList.addEventListener("click", (event) => {
+  elements.zoneInfoBody?.addEventListener("click", (event) => {
+    {
       const button = event.target.closest("button[data-zone-evidence-fish-id]");
-      if (!button) {
+      if (button) {
+        const fishId = Number.parseInt(button.getAttribute("data-zone-evidence-fish-id"), 10);
+        if (!Number.isFinite(fishId)) {
+          return;
+        }
+        const current = getLatestStateBundle();
+        dispatchStatePatchAndRender({
+          version: 1,
+          filters: {
+            fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
+          },
+        });
         return;
       }
-      const fishId = Number.parseInt(button.getAttribute("data-zone-evidence-fish-id"), 10);
-      if (!Number.isFinite(fishId)) {
+    }
+    {
+      const button = event.target.closest("button[data-zone-info-target-world-x]");
+      if (button) {
+        const worldX = normalizeBookmarkCoordinate(
+          button.getAttribute("data-zone-info-target-world-x"),
+        );
+        const worldZ = normalizeBookmarkCoordinate(
+          button.getAttribute("data-zone-info-target-world-z"),
+        );
+        if (worldX == null || worldZ == null) {
+          return;
+        }
+        const pointLabel = button.getAttribute("data-zone-info-target-label") || "";
+        const command = buildSelectWorldPointCommand(worldX, worldZ, {
+          pointKind: "waypoint",
+          pointLabel,
+        });
+        if (command) {
+          dispatchMapCommand(shell, command);
+        }
         return;
       }
-      const current = getLatestStateBundle();
-      dispatchStatePatchAndRender({
-        version: 1,
-        filters: {
-          fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
-        },
-      });
-    });
-  }
+    }
+  });
 
   elements.zoneInfoTabs?.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-zone-info-tab]");
@@ -4388,8 +4523,8 @@ function bindUi(shell, elements, options = {}) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
       return;
     }
-    const buttons = ZONE_INFO_TABS.map((tabId) =>
-      tabId === "overview" ? elements.zoneInfoTabOverview : elements.zoneInfoTabZoneEvidence,
+    const buttons = Array.from(
+      elements.zoneInfoTabs?.querySelectorAll?.("button[data-zone-info-tab]") || [],
     ).filter((button) => button && button.disabled !== true);
     if (!buttons.length) {
       return;
@@ -5217,21 +5352,16 @@ async function main() {
     diagnostics: document.getElementById("fishymap-diagnostics"),
     statusLines: document.getElementById("fishymap-status-lines"),
     diagnosticJson: document.getElementById("fishymap-diagnostic-json"),
-    selectionSummary: document.getElementById("fishymap-selection-summary"),
-    selectionOverview: document.getElementById("fishymap-selection-overview"),
     zoneInfoWindow: document.getElementById("fishymap-zone-info-window"),
     zoneInfoTitlebar: document.getElementById("fishymap-zone-info-titlebar"),
     zoneInfoBody: document.getElementById("fishymap-zone-info-body"),
+    zoneInfoTitle: document.getElementById("fishymap-zone-info-title"),
+    zoneInfoTitleIcon: document.getElementById("fishymap-zone-info-title-icon"),
     zoneInfoTabs: document.getElementById("fishymap-zone-info-tabs"),
-    zoneInfoTabOverview: document.getElementById("fishymap-zone-info-tab-overview"),
-    zoneInfoTabZoneEvidence: document.getElementById("fishymap-zone-info-tab-zone-evidence"),
-    zoneInfoOverviewPanel: document.getElementById("fishymap-zone-info-overview-panel"),
-    zoneInfoEvidencePanel: document.getElementById("fishymap-zone-info-evidence-panel"),
-    zoneEvidenceShell: document.getElementById("fishymap-zone-evidence-shell"),
+    zoneInfoPanel: document.getElementById("fishymap-zone-info-panel"),
     zoneInfoStatus: document.getElementById("fishymap-zone-info-status"),
-    zoneEvidenceSummary: document.getElementById("fishymap-zone-evidence-summary"),
-    zoneEvidenceDisclaimer: document.getElementById("fishymap-zone-evidence-disclaimer"),
-    zoneEvidenceList: document.getElementById("fishymap-zone-evidence-list"),
+    zoneInfoStatusIcon: document.getElementById("fishymap-zone-info-status-icon"),
+    zoneInfoStatusText: document.getElementById("fishymap-zone-info-status-text"),
     hoverTooltip: document.getElementById("fishymap-hover-tooltip"),
     hoverLayers: document.getElementById("fishymap-hover-layers"),
     viewReadout: document.getElementById("fishymap-view-readout"),

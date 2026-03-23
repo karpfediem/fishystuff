@@ -104,7 +104,9 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     },
  *     selectWorldPoint?: {
  *       worldX?: number,
- *       worldZ?: number
+ *       worldZ?: number,
+ *       pointKind?: "clicked" | "waypoint" | "bookmark",
+ *       pointLabel?: string | null
  *     },
  *     restoreView?: {
  *       viewMode: "2d" | "3d",
@@ -262,6 +264,8 @@ function normalizeSelectionSnapshotValue(value) {
     ...(isPlainObject(value) ? cloneJson(value) : {}),
     worldX: normalizeWorldCoordinate(value?.worldX),
     worldZ: normalizeWorldCoordinate(value?.worldZ),
+    pointKind: normalizeSelectionPointKind(value?.pointKind),
+    pointLabel: normalizeNullableString(value?.pointLabel),
     layerSamples,
   };
 }
@@ -584,6 +588,14 @@ function normalizeNullableString(value) {
   return normalized || null;
 }
 
+function normalizeSelectionPointKind(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "clicked" || normalized === "waypoint" || normalized === "bookmark") {
+    return normalized;
+  }
+  return null;
+}
+
 function normalizeCssColor(value, doc = globalThis.document) {
   if (typeof value !== "string") {
     return "";
@@ -724,7 +736,14 @@ function normalizeWorldPointCommand(value) {
   if (worldX === undefined || worldZ === undefined) {
     return undefined;
   }
-  return { worldX, worldZ };
+  const pointKind = normalizeSelectionPointKind(value.pointKind);
+  const pointLabel = normalizeNullableString(value.pointLabel);
+  return {
+    worldX,
+    worldZ,
+    ...(pointKind != null ? { pointKind } : {}),
+    ...(pointLabel != null ? { pointLabel } : {}),
+  };
 }
 
 function normalizeSemanticFieldCommand(value) {
@@ -1441,6 +1460,8 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   const semanticFieldId = parseIntegerParam(params.get("semanticField"));
   const worldX = normalizeBookmarkCoordinate(params.get("worldX") ?? params.get("x"));
   const worldZ = normalizeBookmarkCoordinate(params.get("worldZ") ?? params.get("z"));
+  const pointKind = normalizeSelectionPointKind(params.get("pointKind"));
+  const pointLabel = normalizeNullableString(params.get("pointLabel"));
 
   if (
     fishId != null ||
@@ -1494,7 +1515,12 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     patch.commands.setViewMode = viewMode;
   }
   if (worldX !== undefined && worldZ !== undefined) {
-    patch.commands.selectWorldPoint = { worldX, worldZ };
+    patch.commands.selectWorldPoint = {
+      worldX,
+      worldZ,
+      ...(pointKind != null ? { pointKind } : {}),
+      ...(pointLabel != null ? { pointLabel } : {}),
+    };
   } else if (semanticLayerId && semanticFieldId != null) {
     patch.commands.selectSemanticField = {
       layerId: semanticLayerId,
@@ -1597,6 +1623,9 @@ export function snapshotToRestorePatch(snapshot) {
         patch.ui.pointIconScale = pointIconScale;
       }
     }
+    if (hasOwn(snapshot.ui, "bookmarkSelectedIds")) {
+      patch.ui.bookmarkSelectedIds = normalizeStringList(snapshot.ui.bookmarkSelectedIds);
+    }
   }
 
   if (patch.filters && !Object.keys(patch.filters).length) {
@@ -1612,6 +1641,8 @@ export function snapshotToRestorePatch(snapshot) {
   const selectionSemanticFieldId = parseIntegerParam(snapshot.selection?.semanticFieldId);
   const selectionWorldX = normalizeBookmarkCoordinate(snapshot.selection?.worldX);
   const selectionWorldZ = normalizeBookmarkCoordinate(snapshot.selection?.worldZ);
+  const selectionPointKind = normalizeSelectionPointKind(snapshot.selection?.pointKind);
+  const selectionPointLabel = normalizeNullableString(snapshot.selection?.pointLabel);
   const restoreView = normalizeRestoreView(snapshot.view);
   if (
     selectionFishId != null ||
@@ -1635,6 +1666,8 @@ export function snapshotToRestorePatch(snapshot) {
     patch.commands.selectWorldPoint = {
       worldX: selectionWorldX,
       worldZ: selectionWorldZ,
+      ...(selectionPointKind != null ? { pointKind: selectionPointKind } : {}),
+      ...(selectionPointLabel != null ? { pointLabel: selectionPointLabel } : {}),
     };
   } else if (selectionSemanticLayerId && selectionSemanticFieldId != null) {
     patch.commands.selectSemanticField = {
@@ -2422,6 +2455,19 @@ class FishyMapBridgeImpl {
       }
 
       this.refreshCurrentStateFromWasm();
+      if (type === "selection-changed") {
+        this.currentState = {
+          ...this.currentState,
+          selection: normalizeSelectionSnapshotValue({
+            ...this.currentState.selection,
+            worldX: payload.worldX,
+            worldZ: payload.worldZ,
+            pointKind: payload.pointKind,
+            pointLabel: payload.pointLabel,
+            layerSamples: Array.isArray(payload.layerSamples) ? payload.layerSamples : [],
+          }),
+        };
+      }
 
       const detail = {
         ...payload,
@@ -2473,6 +2519,8 @@ class FishyMapBridgeImpl {
         semanticFieldId: semanticSelection?.fieldId ?? null,
         worldX: state.selection?.worldX ?? null,
         worldZ: state.selection?.worldZ ?? null,
+        pointKind: normalizeSelectionPointKind(state.selection?.pointKind),
+        pointLabel: normalizeNullableString(state.selection?.pointLabel),
       },
       filters: {
         fishIds: this.inputState.filters.fishIds,
@@ -2514,6 +2562,7 @@ class FishyMapBridgeImpl {
         showPoints: this.inputState.ui.showPoints,
         showPointIcons: this.inputState.ui.showPointIcons,
         pointIconScale: this.inputState.ui.pointIconScale,
+        bookmarkSelectedIds: normalizeStringList(this.inputState.ui.bookmarkSelectedIds),
       },
     };
   }

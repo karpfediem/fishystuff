@@ -484,7 +484,10 @@ test("bookmark ui patches are normalized in input state and omitted from persist
 
   const bridge = createFishyMapBridge();
   bridge.inputState = next;
-  assert.equal("bookmarkSelectedIds" in bridge.createSessionSnapshot().ui, false);
+  assert.deepEqual(bridge.createSessionSnapshot().ui.bookmarkSelectedIds, [
+    "bookmark-a",
+    "bookmark-b",
+  ]);
   assert.equal("bookmarks" in bridge.createSessionSnapshot().ui, false);
   assert.equal("bookmarkSelectedIds" in bridge.createPrefsSnapshot().ui, false);
   assert.equal("bookmarks" in bridge.createPrefsSnapshot().ui, false);
@@ -772,6 +775,8 @@ test("selection output events include semantic payload and refreshed state", asy
           version: 1,
           worldX: 11,
           worldZ: 22,
+          pointKind: "waypoint",
+          pointLabel: "Olvia Academy",
           layerSamples: semanticSelection.layerSamples,
         }),
       );
@@ -781,8 +786,14 @@ test("selection output events include semantic payload and refreshed state", asy
     assert.equal(received.zoneRgb, undefined);
     assert.equal(received.worldX, 11);
     assert.equal(received.worldZ, 22);
+    assert.equal(received.pointKind, "waypoint");
+    assert.equal(received.pointLabel, "Olvia Academy");
     assert.deepEqual(received.layerSamples, semanticSelection.layerSamples);
-    assert.deepEqual(received.state.selection, semanticSelection);
+    assert.deepEqual(received.state.selection, {
+      ...semanticSelection,
+      pointKind: "waypoint",
+      pointLabel: "Olvia Academy",
+    });
     assert.deepEqual(received.inputState.filters.fishIds, [77]);
     assert.deepEqual(received.inputState.filters.zoneRgbs, [0xc17f7f]);
     assert.equal(received.inputState.filters.searchText, "coastal");
@@ -1362,6 +1373,8 @@ test("state patch normalizes selectWorldPoint commands", () => {
       selectWorldPoint: {
         worldX: "12.5",
         worldZ: "-7.25",
+        pointKind: " waypoint ",
+        pointLabel: " Olvia Academy ",
       },
     },
   });
@@ -1369,6 +1382,8 @@ test("state patch normalizes selectWorldPoint commands", () => {
   assert.deepEqual(patch.commands.selectWorldPoint, {
     worldX: 12.5,
     worldZ: -7.25,
+    pointKind: "waypoint",
+    pointLabel: "Olvia Academy",
   });
 });
 
