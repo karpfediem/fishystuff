@@ -12,7 +12,7 @@ use crate::map::spaces::WorldPoint;
 use crate::plugins::api::HoverInfo;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
-pub struct HoverQueryContext<'a> {
+pub struct WorldPointQueryContext<'a> {
     pub layer_registry: &'a LayerRegistry,
     pub layer_runtime: &'a LayerRuntime,
     pub exact_lookups: &'a ExactLookupCache,
@@ -24,7 +24,7 @@ pub struct HoverQueryContext<'a> {
 
 pub fn hover_info_at_world_point(
     world_point: WorldPoint,
-    context: &HoverQueryContext<'_>,
+    context: &WorldPointQueryContext<'_>,
 ) -> Option<HoverInfo> {
     let map = context.map_to_world.world_to_map(world_point);
     let map_x = map.x as f32;
@@ -225,7 +225,7 @@ mod tests {
         let map_to_world = MapToWorld::default();
         let info = hover_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.0, 0.0)),
-            &super::HoverQueryContext {
+            &super::WorldPointQueryContext {
                 layer_registry: &registry,
                 layer_runtime: &runtime,
                 exact_lookups: &ExactLookupCache::default(),

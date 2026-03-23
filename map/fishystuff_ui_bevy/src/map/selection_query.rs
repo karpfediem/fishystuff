@@ -2,7 +2,7 @@ use fishystuff_core::field_metadata::FIELD_HOVER_ROW_KEY_ZONE;
 
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::field_semantics::field_row_value_for_id;
-use crate::map::hover_query::{hover_info_at_world_point, HoverQueryContext};
+use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
 use crate::map::layers::LayerRegistry;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{HoverInfo, SelectedInfo};
@@ -22,7 +22,7 @@ pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
 
 pub fn selected_info_at_world_point(
     world_point: WorldPoint,
-    context: &HoverQueryContext<'_>,
+    context: &WorldPointQueryContext<'_>,
 ) -> Option<SelectedInfo> {
     let hover = hover_info_at_world_point(world_point, context)?;
     selected_info_from_hover(&hover)

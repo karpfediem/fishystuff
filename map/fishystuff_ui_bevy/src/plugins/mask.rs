@@ -6,7 +6,7 @@ use bevy::window::PrimaryWindow;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::hover_query::{hover_info_at_world_point, HoverQueryContext};
+use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::RasterTileCache;
 use crate::map::selection_query::selected_info_from_hover;
@@ -96,7 +96,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
     let world_point = WorldPoint::new(world.x as f64, world.y as f64);
     let Some(next_hover) = hover_info_at_world_point(
         world_point,
-        &HoverQueryContext {
+        &WorldPointQueryContext {
             layer_registry: &context.layer_registry,
             layer_runtime: &context.layer_runtime,
             exact_lookups: &context.exact_lookups,
