@@ -34,6 +34,8 @@ use crate::plugins::bookmarks::BookmarksPlugin;
 #[cfg(target_arch = "wasm32")]
 use crate::plugins::camera::initial_resolution;
 #[cfg(not(target_arch = "wasm32"))]
+use crate::plugins::field_layers::FieldLayersPlugin;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::points::PointsPlugin;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::raster::RasterPlugin;
@@ -118,6 +120,7 @@ pub fn build_native_app(options: &NativeAppOptions) -> App {
         .add_plugins(Terrain3dPlugin)
         .add_plugins(InputPlugin)
         .add_plugins(RasterPlugin)
+        .add_plugins(FieldLayersPlugin)
         .add_plugins(VectorLayersPlugin)
         .add_plugins(BookmarksPlugin)
         .add_plugins(PointsPlugin);
@@ -193,7 +196,6 @@ fn build_headless_native_app(options: &NativeAppOptions) -> App {
 mod tests {
     use super::{build_native_app, NativeAppOptions};
     use crate::map::ui_layers::LayerUiPlugin;
-    use crate::plugins::api::ApiPlugin;
     use crate::plugins::mask::MaskPlugin;
     use crate::plugins::ui::UiPlugin;
 
@@ -203,8 +205,7 @@ mod tests {
             renderless: true,
             ..NativeAppOptions::default()
         });
-        app.add_plugins(ApiPlugin)
-            .add_plugins(MaskPlugin)
+        app.add_plugins(MaskPlugin)
             .add_plugins(UiPlugin)
             .add_plugins(LayerUiPlugin);
 

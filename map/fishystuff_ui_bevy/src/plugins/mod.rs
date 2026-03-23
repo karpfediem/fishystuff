@@ -3,6 +3,7 @@ pub mod bookmarks;
 pub mod camera;
 #[cfg(target_arch = "wasm32")]
 pub mod diagnostics;
+pub mod field_layers;
 pub mod hover_targets;
 pub mod input;
 pub mod mask;
@@ -33,6 +34,7 @@ impl PluginGroup for FishystuffPlugins {
             .add(Terrain3dPlugin)
             .add(input::InputPlugin)
             .add(raster::RasterPlugin)
+            .add(field_layers::FieldLayersPlugin)
             .add(vector_layers::VectorLayersPlugin)
             .add(api::ApiPlugin)
             .add(bookmarks::BookmarksPlugin)

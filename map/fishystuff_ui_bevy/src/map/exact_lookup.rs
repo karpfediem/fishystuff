@@ -31,6 +31,14 @@ struct PendingExactLookupRequest {
     receiver: Receiver<Result<Vec<u8>, String>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExactLookupStatus {
+    Missing,
+    Loading,
+    Ready,
+    Failed,
+}
+
 #[derive(Resource, Default)]
 pub struct ExactLookupCache {
     entries: HashMap<LayerId, ExactLookupEntry>,
@@ -58,6 +66,20 @@ impl ExactLookupCache {
         match &entry.state {
             ExactLookupState::Ready(lookup) => Some(lookup),
             ExactLookupState::Loading | ExactLookupState::Failed => None,
+        }
+    }
+
+    pub fn status(&self, layer: LayerId, url: &str) -> ExactLookupStatus {
+        let Some(entry) = self.entries.get(&layer) else {
+            return ExactLookupStatus::Missing;
+        };
+        if entry.url != url {
+            return ExactLookupStatus::Missing;
+        }
+        match entry.state {
+            ExactLookupState::Loading => ExactLookupStatus::Loading,
+            ExactLookupState::Ready(_) => ExactLookupStatus::Ready,
+            ExactLookupState::Failed => ExactLookupStatus::Failed,
         }
     }
 

@@ -38,7 +38,6 @@ pub(crate) fn build_plugin(app: &mut App) {
         .init_resource::<PendingLayerManifests>()
         .init_resource::<crate::map::streaming::TileStreamer>()
         .init_resource::<RasterTileCache>()
-        .init_resource::<ExactLookupCache>()
         .init_resource::<TileStats>()
         .init_resource::<TileDebugControls>()
         .add_systems(Update, update_tiles);
@@ -223,6 +222,13 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
             continue;
         };
 
+        if layer.exact_lookup_url().is_some() {
+            streamer.clear_layer(layer.id);
+            view_state.per_layer.remove(&layer.id);
+            cache.clear_layer(layer.id, commands, images);
+            continue;
+        }
+
         runtime_state.visible_tile_count = 0;
         runtime_state.current_base_lod = None;
         runtime_state.current_detail_lod = None;
@@ -385,12 +391,10 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         streamer,
         cache,
         asset_server,
-        images,
         layer_registry,
         layer_runtime,
         residency,
         camera_unstable: motion_state.unstable,
-        exact_lookups,
         stats,
     });
 

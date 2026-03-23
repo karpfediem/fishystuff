@@ -1,11 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use bevy::asset::AssetServer;
-use bevy::image::Image;
-use bevy::prelude::Assets;
 use bevy::prelude::Time;
 
-use crate::map::exact_lookup::{render_exact_lookup_tile_image, ExactLookupCache};
 use crate::map::layers::{LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, LayerSpec};
 use crate::map::streaming::{RequestKind, TileRequest, TileStreamer};
 
@@ -49,12 +46,10 @@ pub(crate) struct StartTileRequests<'a> {
     pub(crate) streamer: &'a mut TileStreamer,
     pub(crate) cache: &'a mut RasterTileCache,
     pub(crate) asset_server: &'a AssetServer,
-    pub(crate) images: &'a mut Assets<Image>,
     pub(crate) layer_registry: &'a LayerRegistry,
     pub(crate) layer_runtime: &'a LayerRuntime,
     pub(crate) residency: &'a TileResidencyState,
     pub(crate) camera_unstable: bool,
-    pub(crate) exact_lookups: &'a ExactLookupCache,
     pub(crate) stats: &'a mut crate::map::raster::TileStats,
 }
 
@@ -302,12 +297,10 @@ pub(crate) fn start_tile_requests(input: StartTileRequests<'_>) {
         streamer,
         cache,
         asset_server,
-        images,
         layer_registry,
         layer_runtime,
         residency,
         camera_unstable,
-        exact_lookups,
         stats,
     } = input;
     let mut started = 0;
@@ -348,12 +341,7 @@ pub(crate) fn start_tile_requests(input: StartTileRequests<'_>) {
             .unwrap_or(1.0)
             .clamp(0.0, 1.0);
         let visible = tile_should_render(&req.key, layer_runtime, residency);
-        let handle =
-            if let Some(image) = render_exact_lookup_tile_image(layer, exact_lookups, req.key) {
-                images.add(image)
-            } else {
-                asset_server.load(req.url)
-            };
+        let handle = asset_server.load(req.url);
         cache.insert_loading(req.key, handle, visible, alpha);
         stats.requested_tiles = stats.requested_tiles.saturating_add(1);
         match req.kind {

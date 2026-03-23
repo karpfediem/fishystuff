@@ -7,10 +7,7 @@ use serde_json::{Map, Value};
 use fishystuff_api::Rgb;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
-use crate::map::exact_lookup::{
-    ensure_exact_lookup_request, poll_exact_lookup_requests, sample_exact_lookup_rgb,
-    ExactLookupCache, PendingExactLookups,
-};
+use crate::map::exact_lookup::{sample_exact_lookup_rgb, ExactLookupCache};
 use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
 use crate::map::raster::{map_version_id, RasterTileCache, TileKey};
 use crate::map::spaces::world::MapToWorld;
@@ -30,48 +27,7 @@ pub struct MaskPlugin;
 impl Plugin for MaskPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ExactLookupCache>()
-            .init_resource::<PendingExactLookups>()
-            .add_systems(
-                Update,
-                (update_exact_lookup_cache, update_hover, handle_click).chain(),
-            );
-    }
-}
-
-fn update_exact_lookup_cache(
-    layer_registry: Res<LayerRegistry>,
-    mut exact_lookups: ResMut<ExactLookupCache>,
-    mut pending_lookups: ResMut<PendingExactLookups>,
-) {
-    poll_exact_lookup_requests(&mut exact_lookups, &mut pending_lookups);
-
-    let active_layer_ids = layer_registry
-        .ordered()
-        .iter()
-        .filter(|layer| layer.exact_lookup_url().is_some())
-        .map(|layer| layer.id)
-        .collect::<std::collections::HashSet<_>>();
-
-    for layer in layer_registry.ordered() {
-        ensure_exact_lookup_request(layer, &mut exact_lookups, &mut pending_lookups);
-    }
-
-    let stale_lookup_ids = exact_lookups
-        .layer_ids()
-        .into_iter()
-        .filter(|layer_id| !active_layer_ids.contains(layer_id))
-        .collect::<Vec<_>>();
-    for layer_id in stale_lookup_ids {
-        exact_lookups.remove_layer(layer_id);
-    }
-
-    let stale_pending_ids = pending_lookups
-        .layer_ids()
-        .into_iter()
-        .filter(|layer_id| !active_layer_ids.contains(layer_id))
-        .collect::<Vec<_>>();
-    for layer_id in stale_pending_ids {
-        pending_lookups.remove_layer(layer_id);
+            .add_systems(Update, (update_hover, handle_click).chain());
     }
 }
 

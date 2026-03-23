@@ -67,9 +67,7 @@ impl RasterTileCache {
                 }
                 continue;
             }
-            if !matches!(asset_load_state, Some(LoadState::Loaded))
-                && !images.contains(&entry.handle)
-            {
+            if !matches!(asset_load_state, Some(LoadState::Loaded)) {
                 continue;
             }
 
