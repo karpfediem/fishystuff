@@ -1,7 +1,7 @@
 use super::super::*;
 use super::SetupTextStyles;
 
-pub(super) fn spawn_zone_panel(root: &mut ChildSpawnerCommands, styles: &SetupTextStyles) {
+pub(super) fn spawn_selection_panel(root: &mut ChildSpawnerCommands, styles: &SetupTextStyles) {
     root.spawn((
         PanelRoot,
         UiPointerBlocker,
@@ -37,14 +37,14 @@ pub(super) fn spawn_zone_panel(root: &mut ChildSpawnerCommands, styles: &SetupTe
             .with_children(|header| {
                 header.spawn((
                     PanelTitleText,
-                    UiTextBundle::new("FishyStuff Zones", &styles.title_style),
+                    UiTextBundle::new("FishyStuff Map", &styles.title_style),
                     ClassList::new("panel-title"),
                 ));
             });
 
         panel.spawn((
-            SelectedZoneText,
-            UiTextBundle::new("RGB: (none)", &styles.small_style),
+            SelectionSummaryText,
+            UiTextBundle::new("No selection.", &styles.small_style),
             ClassList::new("label"),
         ));
         panel.spawn((

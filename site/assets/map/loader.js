@@ -1452,6 +1452,27 @@ export function buildSelectionOverviewRows(selection, stateBundle) {
   );
 }
 
+export function buildSelectionSummaryText(selection, stateBundle) {
+  const zoneName = String(selection?.zoneName || "").trim();
+  if (zoneName) {
+    return zoneName;
+  }
+  const overviewRows = buildSelectionOverviewRows(selection, stateBundle);
+  const preferredRow =
+    overviewRows.find((row) => String(row?.label || "").trim() === "Zone") ||
+    overviewRows.find((row) => String(row?.label || "").trim() === "Resources") ||
+    overviewRows.find((row) => String(row?.label || "").trim() === "Origin") ||
+    overviewRows[0] ||
+    null;
+  const preferredValue = String(preferredRow?.value || "").trim();
+  if (preferredValue) {
+    return preferredValue;
+  }
+  return selection?.zoneRgb != null
+    ? `Zone ${formatZone(selection.zoneRgb)}`
+    : "No selection.";
+}
+
 function buildOverviewRowsForLayerSamples(layerSamplesInput, stateBundle) {
   const layerSamples = Array.isArray(layerSamplesInput) ? layerSamplesInput : [];
   const sampleByLayerId = new Map(
@@ -2948,15 +2969,11 @@ function renderPanel(elements, stateBundle, zoneCatalog = []) {
     setBooleanProperty(elements.diagnostics, "open", Boolean(inputState.ui?.diagnosticsOpen));
   }
 
-  const zoneName =
-    state.selection?.zoneName ||
-    (state.selection?.zoneRgb != null ? `Zone ${formatZone(state.selection.zoneRgb)}` : null);
   if (elements.selectionSummary) {
-    if (zoneName) {
-      setTextContent(elements.selectionSummary, zoneName);
-    } else {
-      setTextContent(elements.selectionSummary, "No zone selected.");
-    }
+    setTextContent(
+      elements.selectionSummary,
+      buildSelectionSummaryText(state.selection || null, stateBundle),
+    );
   }
   renderSelectionOverview(elements, state.selection || null, stateBundle);
 

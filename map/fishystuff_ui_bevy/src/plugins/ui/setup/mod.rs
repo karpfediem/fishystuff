@@ -54,7 +54,7 @@ pub(super) fn setup_ui(
             ClassList::new("fs-overlay"),
         ))
         .with_children(|root| {
-            panel_shell::spawn_zone_panel(root, &styles);
+            panel_shell::spawn_selection_panel(root, &styles);
             patch_shell::spawn_patch_panel(root, &styles);
             search_shell::spawn_search_anchor(root, &styles);
         });

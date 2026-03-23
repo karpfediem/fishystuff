@@ -8,12 +8,14 @@ use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{HoverInfo, SelectedInfo};
 
 pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
-    let (rgb, rgb_u32) = (hover.rgb?, hover.rgb_u32?);
+    if hover.rgb.is_none() && hover.layer_samples.is_empty() {
+        return None;
+    }
     Some(SelectedInfo {
         map_px: hover.map_px,
         map_py: hover.map_py,
-        rgb,
-        rgb_u32,
+        rgb: hover.rgb,
+        rgb_u32: hover.rgb_u32,
         zone_name: hover.zone_name.clone(),
         world_x: hover.world_x,
         world_z: hover.world_z,
@@ -38,8 +40,8 @@ pub fn selected_info_for_zone_rgb(
     SelectedInfo {
         map_px: 0,
         map_py: 0,
-        rgb,
-        rgb_u32: zone_rgb,
+        rgb: Some(rgb),
+        rgb_u32: Some(zone_rgb),
         zone_name: resolve_zone_name(layer_registry, field_metadata, zone_rgb),
         world_x: 0.0,
         world_z: 0.0,
@@ -129,10 +131,37 @@ mod tests {
         let selected = selected_info_from_hover(&hover).expect("selected info");
         assert_eq!(selected.map_px, 12);
         assert_eq!(selected.map_py, 34);
-        assert_eq!(selected.rgb_u32, 0x123456);
+        assert_eq!(selected.rgb_u32, Some(0x123456));
         assert_eq!(selected.zone_name.as_deref(), Some("Olvia Coast"));
         assert_eq!(selected.world_x, 1.25);
         assert_eq!(selected.world_z, 2.5);
+        assert_eq!(selected.layer_samples, hover.layer_samples);
+    }
+
+    #[test]
+    fn selected_info_from_hover_keeps_non_zone_field_selection() {
+        let hover = HoverInfo {
+            map_px: 7,
+            map_py: 9,
+            rgb: None,
+            rgb_u32: None,
+            zone_name: None,
+            world_x: 3.5,
+            world_z: 4.5,
+            layer_samples: vec![LayerQuerySample {
+                layer_id: "regions".to_string(),
+                layer_name: "Regions".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x223344),
+                rgb_u32: 0x223344,
+                field_id: Some(76),
+                rows: Vec::new(),
+                targets: Vec::new(),
+            }],
+        };
+
+        let selected = selected_info_from_hover(&hover).expect("selected info");
+        assert_eq!(selected.rgb_u32, None);
         assert_eq!(selected.layer_samples, hover.layer_samples);
     }
 
@@ -196,7 +225,7 @@ mod tests {
         );
 
         let selected = selected_info_for_zone_rgb(&registry, &field_metadata, 0x223344);
-        assert_eq!(selected.rgb_u32, 0x223344);
+        assert_eq!(selected.rgb_u32, Some(0x223344));
         assert_eq!(selected.zone_name.as_deref(), Some("Cron Islands"));
         assert_eq!(selected.world_x, 0.0);
         assert_eq!(selected.world_z, 0.0);

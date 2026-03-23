@@ -1,9 +1,10 @@
 use super::setup::text_style;
 use super::*;
+use crate::map::interaction_summary::{selection_heading, selection_summary_text};
 use bevy::ecs::system::SystemParam;
 pub(super) fn update_selected_text(
     selection: Res<SelectionState>,
-    mut query: Query<&mut Text, With<SelectedZoneText>>,
+    mut query: Query<&mut Text, With<SelectionSummaryText>>,
 ) {
     if !selection.is_changed() {
         return;
@@ -12,9 +13,9 @@ pub(super) fn update_selected_text(
         return;
     };
     if let Some(info) = &selection.info {
-        text.0 = format!("RGB: {},{}, {}", info.rgb.r, info.rgb.g, info.rgb.b);
+        text.0 = selection_summary_text(info);
     } else {
-        text.0 = "RGB: (none)".to_string();
+        text.0 = "No selection.".to_string();
     }
 }
 
@@ -29,13 +30,11 @@ pub(super) fn update_panel_title(
         return;
     };
     text.0 = if let Some(info) = &selection.info {
-        info.zone_name
-            .as_deref()
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or("(unknown zone)")
-            .to_string()
+        selection_heading(info)
+            .map(|heading| heading.value)
+            .unwrap_or_else(|| "Selection".to_string())
     } else {
-        "FishyStuff Zones".to_string()
+        "FishyStuff Map".to_string()
     };
 }
 

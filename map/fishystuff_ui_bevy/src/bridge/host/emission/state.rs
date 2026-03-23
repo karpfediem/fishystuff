@@ -29,7 +29,7 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
     crate::perf_counter_add!("bridge.emit.selection.count", 1);
     let payload = FishyMapOutputEvent::SelectionChanged {
         version: 1,
-        zone_rgb: selection.info.as_ref().map(|info| info.rgb_u32),
+        zone_rgb: selection.info.as_ref().and_then(|info| info.rgb_u32),
     };
     super::super::emit_event(&payload);
 }

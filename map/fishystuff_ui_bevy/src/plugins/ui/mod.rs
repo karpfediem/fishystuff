@@ -66,7 +66,7 @@ struct PanelRoot;
 struct PanelTitleText;
 
 #[derive(Component)]
-struct SelectedZoneText;
+struct SelectionSummaryText;
 
 #[derive(Component)]
 struct ZoneEvidenceScroll;

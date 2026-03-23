@@ -5,6 +5,7 @@ pub mod field_metadata;
 pub mod field_semantics;
 pub mod field_view;
 pub mod hover_query;
+pub mod interaction_summary;
 pub mod layer_query;
 pub mod layers;
 pub mod raster;

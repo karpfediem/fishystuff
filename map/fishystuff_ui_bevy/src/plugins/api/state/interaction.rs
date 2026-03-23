@@ -42,8 +42,8 @@ pub struct HoverInfo {
 pub struct SelectedInfo {
     pub map_px: i32,
     pub map_py: i32,
-    pub rgb: Rgb,
-    pub rgb_u32: u32,
+    pub rgb: Option<Rgb>,
+    pub rgb_u32: Option<u32>,
     pub zone_name: Option<String>,
     pub world_x: f64,
     pub world_z: f64,

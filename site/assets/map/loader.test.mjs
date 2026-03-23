@@ -7,6 +7,7 @@ const {
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
   buildHoverOverviewRows,
+  buildSelectionSummaryText,
   buildSelectionOverviewRows,
   buildZoneEvidenceListMarkup,
   buildMapUiResetMountOptions,
@@ -281,6 +282,27 @@ test("buildSelectionOverviewRows keeps the zone row when no zone summary is avai
         value: "Demi River",
       },
     ],
+  );
+});
+
+test("buildSelectionSummaryText falls back to semantic rows for non-zone selections", () => {
+  assert.equal(
+    buildSelectionSummaryText(
+      {
+        layerSamples: [
+          {
+            layerId: "region_groups",
+            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Olvia" }],
+          },
+          {
+            layerId: "regions",
+            rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Castle Ruins" }],
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    "Olvia",
   );
 });
 

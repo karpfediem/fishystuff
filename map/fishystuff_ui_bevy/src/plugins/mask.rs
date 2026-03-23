@@ -129,10 +129,16 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     let Some(selected_info) = selected_info_from_hover(&hover) else {
         return;
     };
-    let rgb = selected_info.rgb;
-    let rgb_u32 = selected_info.rgb_u32;
+    let zone_rgb = selected_info.rgb;
+    let zone_rgb_u32 = selected_info.rgb_u32;
     context.selection.info = Some(selected_info);
     context.selection.zone_stats = None;
+    context.pending.zone_stats = None;
+
+    let Some(rgb) = zone_rgb else {
+        context.selection.zone_stats_status = "zone stats: unavailable".to_string();
+        return;
+    };
     context.selection.zone_stats_status = "zone stats: loading".to_string();
 
     let Some(request) = build_zone_stats_request(&context.bootstrap, &context.patch_filter, rgb)
@@ -141,6 +147,10 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         return;
     };
 
+    let Some(rgb_u32) = zone_rgb_u32 else {
+        context.selection.zone_stats_status = "zone stats: unavailable".to_string();
+        return;
+    };
     let receiver = spawn_zone_stats_request(request);
     context.pending.zone_stats = Some((rgb_u32, receiver));
 }

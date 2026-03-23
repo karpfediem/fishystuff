@@ -16,11 +16,15 @@ pub(super) fn apply_zone_selection_command(
     zone_rgb: u32,
 ) {
     let selected_info = selected_info_for_zone_rgb(layer_registry, field_metadata, zone_rgb);
-    let rgb = selected_info.rgb;
     selection.info = Some(selected_info);
     selection.zone_stats = None;
+    pending.zone_stats = None;
     selection.zone_stats_status = "zone stats: loading".to_string();
-    if let Some(request) = build_zone_stats_request(bootstrap, patch_filter, rgb) {
+    if let Some(request) = build_zone_stats_request(
+        bootstrap,
+        patch_filter,
+        fishystuff_api::Rgb::from_u32(zone_rgb),
+    ) {
         pending.zone_stats = Some((zone_rgb, spawn_zone_stats_request(request)));
     } else {
         selection.zone_stats_status = "zone stats: missing defaults".to_string();

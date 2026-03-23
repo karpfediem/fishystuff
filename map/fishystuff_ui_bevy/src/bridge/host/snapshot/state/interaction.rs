@@ -5,7 +5,7 @@ pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
     zone_stats: Option<&fishystuff_api::models::zone_stats::ZoneStatsResponse>,
 ) -> FishyMapSelectionSnapshot {
     FishyMapSelectionSnapshot {
-        zone_rgb: info.map(|value| value.rgb_u32),
+        zone_rgb: info.and_then(|value| value.rgb_u32),
         zone_name: info.and_then(|value| value.zone_name.clone()),
         world_x: info.map(|value| value.world_x),
         world_z: info.map(|value| value.world_z),
