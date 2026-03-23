@@ -7,6 +7,7 @@ const {
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
   buildHoverOverviewRows,
+  buildSelectWorldPointCommand,
   buildZoneEvidenceSummary,
   buildSelectionSummaryText,
   buildSelectionOverviewRows,
@@ -892,6 +893,16 @@ test("normalizeBookmarkCoordinate keeps finite floating point coordinates", () =
   assert.equal(normalizeBookmarkCoordinate("123.45678"), 123.457);
   assert.equal(normalizeBookmarkCoordinate("-987.65432"), -987.654);
   assert.equal(normalizeBookmarkCoordinate("nope"), null);
+});
+
+test("buildSelectWorldPointCommand normalizes bookmark coordinates for commands", () => {
+  assert.deepEqual(buildSelectWorldPointCommand("123.45678", "-987.65432"), {
+    selectWorldPoint: {
+      worldX: 123.457,
+      worldZ: -987.654,
+    },
+  });
+  assert.equal(buildSelectWorldPointCommand("bad", 12), null);
 });
 
 test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", () => {

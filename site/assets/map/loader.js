@@ -41,6 +41,20 @@ function dispatchMapCommand(target, command) {
   dispatchMapEvent(target, FISHYMAP_EVENTS.command, command);
 }
 
+export function buildSelectWorldPointCommand(worldX, worldZ) {
+  const normalizedWorldX = normalizeBookmarkCoordinate(worldX);
+  const normalizedWorldZ = normalizeBookmarkCoordinate(worldZ);
+  if (normalizedWorldX == null || normalizedWorldZ == null) {
+    return null;
+  }
+  return {
+    selectWorldPoint: {
+      worldX: normalizedWorldX,
+      worldZ: normalizedWorldZ,
+    },
+  };
+}
+
 function supportsWebgl2(doc = document) {
   const probe = doc?.createElement?.("canvas");
   if (!probe?.getContext) {
@@ -1748,6 +1762,15 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
                 </div>
                 <div class="fishymap-bookmark-actions-rail">
                   <button
+                    class="fishymap-bookmark-activate btn btn-soft btn-sm btn-square"
+                    type="button"
+                    data-bookmark-activate="${escapeHtml(bookmark.id)}"
+                    aria-label="Inspect bookmark"
+                    title="Inspect bookmark"
+                  >
+                    ${spriteIcon("map-view", "size-5")}
+                  </button>
+                  <button
                     class="fishymap-bookmark-copy btn btn-soft btn-primary btn-sm btn-square"
                     type="button"
                     data-bookmark-copy="${escapeHtml(bookmark.id)}"
@@ -3177,6 +3200,18 @@ function bindUi(shell, elements, options = {}) {
     renderCurrentState(applyInputStatePatchLocally(patch));
   }
 
+  function activateBookmarkSelection(bookmark) {
+    if (!bookmark) {
+      return;
+    }
+    setSelectedBookmarkIds([bookmark.id]);
+    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+    const command = buildSelectWorldPointCommand(bookmark.worldX, bookmark.worldZ);
+    if (command) {
+      dispatchMapCommand(shell, command);
+    }
+  }
+
   function setSelectedBookmarkIds(nextSelectedIds) {
     bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds);
     const patch = {
@@ -3528,8 +3563,7 @@ function bindUi(shell, elements, options = {}) {
     if (!bookmarkUi.placing) {
       const hoveredBookmark = resolveHoveredBookmark(hover, latestStateBundle, bookmarks);
       if (hoveredBookmark) {
-        setSelectedBookmarkIds(bookmarkUi.selectedIds.concat(hoveredBookmark.bookmark.id));
-        renderCurrentState(latestStateBundle);
+        activateBookmarkSelection(hoveredBookmark.bookmark);
       }
       return;
     }
@@ -4070,6 +4104,15 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.bookmarksList?.addEventListener("click", async (event) => {
+    const activateButton = event.target.closest("button[data-bookmark-activate]");
+    if (activateButton) {
+      const bookmark = bookmarks.find(
+        (entry) => entry.id === activateButton.getAttribute("data-bookmark-activate"),
+      );
+      activateBookmarkSelection(bookmark);
+      return;
+    }
+
     const renameButton = event.target.closest("button[data-bookmark-rename]");
     if (renameButton) {
       const bookmark = bookmarks.find(
