@@ -2,10 +2,11 @@ use bevy::ecs::system::SystemParam;
 use bevy::input::touch::Touches;
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
-use serde_json::{Map, Value};
 
 use fishystuff_api::Rgb;
-use fishystuff_core::field_metadata::FieldHoverMetadataEntry;
+use fishystuff_core::field_metadata::{
+    FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget, FIELD_HOVER_ROW_KEY_ZONE,
+};
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::{
@@ -247,19 +248,27 @@ fn sample_hover_layer(
     layer: &crate::map::layers::LayerSpec,
     sampling: &mut HoverSamplingContext<'_>,
 ) -> Option<HoverLayerSample> {
-    let (rgb, hover_metadata, kind) = if layer.field_url().is_some() {
+    let (rgb, semantics, kind) = if layer.field_url().is_some() {
+        let rgb = sample_field_layer_rgb(
+            layer,
+            sampling.exact_lookups,
+            sampling.map_px.0,
+            sampling.map_px.1,
+        )?;
+        let field_id = sample_field_layer_id_u32(
+            layer,
+            sampling.exact_lookups,
+            sampling.map_px.0,
+            sampling.map_px.1,
+        );
         (
-            sample_field_layer_rgb(
+            rgb,
+            sample_field_layer_semantics(
                 layer,
-                sampling.exact_lookups,
-                sampling.map_px.0,
-                sampling.map_px.1,
-            )?,
-            sample_field_layer_hover_metadata(
-                layer,
-                sampling.exact_lookups,
+                field_id,
+                rgb.to_u32(),
                 sampling.field_metadata,
-                sampling.map_px,
+                sampling.bootstrap,
             ),
             "field".to_string(),
         )
@@ -274,7 +283,7 @@ fn sample_hover_layer(
                 sampling.map_px,
                 sampling.map_to_world,
             )?,
-            HoverVectorMetadata::default(),
+            HoverLayerSemantics::default(),
             "tiled-raster".to_string(),
         )
     } else if layer.is_vector() {
@@ -285,47 +294,29 @@ fn sample_hover_layer(
                 sampling.registry_map_version_id,
                 sampling.world_point,
             )?,
-            sample_vector_layer_hover_metadata(
-                layer,
-                sampling.vector_runtime,
-                sampling.registry_map_version_id,
-                sampling.world_point,
-            ),
+            HoverLayerSemantics::default(),
             "vector-geojson".to_string(),
         )
     } else {
         return None;
     };
-    let rgb_u32 = rgb.to_u32();
     Some(HoverLayerSample {
         layer_id: layer.key.clone(),
         layer_name: layer.name.clone(),
         kind,
         rgb,
-        rgb_u32,
-        region_id: hover_metadata.region_id,
-        region_group: hover_metadata.region_group,
-        region_name: hover_metadata.region_name,
-        resource_bar_waypoint: hover_metadata.resource_bar_waypoint,
-        resource_bar_world_x: hover_metadata.resource_bar_world_x,
-        resource_bar_world_z: hover_metadata.resource_bar_world_z,
-        origin_waypoint: hover_metadata.origin_waypoint,
-        origin_world_x: hover_metadata.origin_world_x,
-        origin_world_z: hover_metadata.origin_world_z,
+        rgb_u32: rgb.to_u32(),
+        field_id: semantics.field_id,
+        rows: semantics.rows,
+        targets: semantics.targets,
     })
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
-struct HoverVectorMetadata {
-    region_id: Option<u32>,
-    region_group: Option<u32>,
-    region_name: Option<String>,
-    resource_bar_waypoint: Option<u32>,
-    resource_bar_world_x: Option<f64>,
-    resource_bar_world_z: Option<f64>,
-    origin_waypoint: Option<u32>,
-    origin_world_x: Option<f64>,
-    origin_world_z: Option<f64>,
+struct HoverLayerSemantics {
+    field_id: Option<u32>,
+    rows: Vec<FieldHoverRow>,
+    targets: Vec<FieldHoverTarget>,
 }
 
 #[derive(SystemParam)]
@@ -386,41 +377,69 @@ struct HoverSamplingContext<'a> {
 
 fn sample_field_layer_hover_metadata(
     layer: &crate::map::layers::LayerSpec,
-    exact_lookups: &ExactLookupCache,
     field_metadata: &FieldMetadataCache,
-    map_px: (i32, i32),
-) -> HoverVectorMetadata {
-    let Some(metadata_url) = layer.field_metadata_url() else {
-        return HoverVectorMetadata::default();
+    field_id: Option<u32>,
+) -> HoverLayerSemantics {
+    let Some(field_id) = field_id else {
+        return HoverLayerSemantics::default();
     };
-    let Some(field_id) = sample_field_layer_id_u32(layer, exact_lookups, map_px.0, map_px.1) else {
-        return HoverVectorMetadata::default();
+    let Some(metadata_url) = layer.field_metadata_url() else {
+        return HoverLayerSemantics {
+            field_id: Some(field_id),
+            ..HoverLayerSemantics::default()
+        };
     };
     let Some(entry) = field_metadata.entry(layer.id, &metadata_url, field_id) else {
-        return HoverVectorMetadata::default();
+        return HoverLayerSemantics {
+            field_id: Some(field_id),
+            ..HoverLayerSemantics::default()
+        };
     };
-    hover_metadata_from_field_entry(entry)
+    hover_metadata_from_field_entry(field_id, entry)
 }
 
-fn hover_metadata_from_field_entry(entry: &FieldHoverMetadataEntry) -> HoverVectorMetadata {
-    HoverVectorMetadata {
-        region_id: entry.region_id,
-        region_group: entry.region_group,
-        region_name: entry.region_name.clone(),
-        resource_bar_waypoint: entry.resource_bar_waypoint,
-        resource_bar_world_x: entry.resource_bar_world_x,
-        resource_bar_world_z: entry.resource_bar_world_z,
-        origin_waypoint: entry.origin_waypoint,
-        origin_world_x: entry.origin_world_x,
-        origin_world_z: entry.origin_world_z,
+fn sample_field_layer_semantics(
+    layer: &crate::map::layers::LayerSpec,
+    field_id: Option<u32>,
+    rgb_u32: u32,
+    field_metadata: &FieldMetadataCache,
+    bootstrap: &ApiBootstrapState,
+) -> HoverLayerSemantics {
+    let mut semantics = sample_field_layer_hover_metadata(layer, field_metadata, field_id);
+    if layer.key == "zone_mask" && semantics.rows.is_empty() {
+        if let Some(zone_name) = bootstrap.zones.get(&rgb_u32).cloned().unwrap_or(None) {
+            semantics.rows.push(FieldHoverRow {
+                key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
+                icon: "hover-zone".to_string(),
+                label: "Zone".to_string(),
+                value: zone_name,
+                hide_label: false,
+                status_icon: None,
+                status_icon_tone: None,
+            });
+        }
+    }
+    semantics
+}
+
+fn hover_metadata_from_field_entry(
+    field_id: u32,
+    entry: &FieldHoverMetadataEntry,
+) -> HoverLayerSemantics {
+    HoverLayerSemantics {
+        field_id: Some(field_id),
+        rows: entry.rows.clone(),
+        targets: entry.targets.clone(),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{hover_metadata_from_properties, hovered_zone_rgb, HoverVectorMetadata};
+    use super::{hover_metadata_from_field_entry, hovered_zone_rgb, HoverLayerSemantics};
     use crate::plugins::api::HoverInfo;
-    use serde_json::{Map, Value};
+    use fishystuff_core::field_metadata::{
+        FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget,
+    };
 
     #[test]
     fn hovered_zone_rgb_reads_zone_from_hover_info() {
@@ -439,48 +458,33 @@ mod tests {
     }
 
     #[test]
-    fn hover_metadata_extracts_region_details_for_detailed_region_layer() {
-        let mut properties = Map::new();
-        properties.insert("r".to_string(), Value::from(76u32));
-        properties.insert("rg".to_string(), Value::from(118u32));
-        properties.insert(
-            "on".to_string(),
-            Value::String("Solgaji Forest".to_string()),
-        );
-        properties.insert("rgwp".to_string(), Value::from(1785u32));
-        properties.insert("rgx".to_string(), Value::from(-1314259.375f64));
-        properties.insert("rgz".to_string(), Value::from(1142209.625f64));
-        properties.insert("owp".to_string(), Value::from(1437u32));
-        properties.insert("ox".to_string(), Value::from(98484.74786281586f64));
-        properties.insert("oz".to_string(), Value::from(365929.37886714935f64));
-        let metadata = hover_metadata_from_properties("regions", &properties);
+    fn hover_metadata_copies_rows_and_targets_from_field_entries() {
+        let entry = FieldHoverMetadataEntry {
+            rows: vec![FieldHoverRow {
+                key: "origin".to_string(),
+                icon: "hover-origin".to_string(),
+                label: "Origin".to_string(),
+                value: "Tarif".to_string(),
+                hide_label: false,
+                status_icon: None,
+                status_icon_tone: None,
+            }],
+            targets: vec![FieldHoverTarget {
+                key: "origin_node".to_string(),
+                label: "Origin: Tarif".to_string(),
+                world_x: 120.0,
+                world_z: 240.0,
+            }],
+        };
+        let metadata = hover_metadata_from_field_entry(76, &entry);
         assert_eq!(
             metadata,
-            HoverVectorMetadata {
-                region_id: Some(76),
-                region_group: Some(118),
-                region_name: Some("Solgaji Forest".to_string()),
-                resource_bar_waypoint: Some(1785),
-                resource_bar_world_x: Some(-1314259.375),
-                resource_bar_world_z: Some(1142209.625),
-                origin_waypoint: Some(1437),
-                origin_world_x: Some(98484.74786281586),
-                origin_world_z: Some(365929.37886714935),
+            HoverLayerSemantics {
+                field_id: Some(76),
+                rows: entry.rows,
+                targets: entry.targets,
             }
         );
-    }
-
-    #[test]
-    fn hover_metadata_ignores_origin_name_for_region_group_layer() {
-        let mut properties = Map::new();
-        properties.insert("rg".to_string(), Value::from(58u32));
-        properties.insert("on".to_string(), Value::String("Tarif".to_string()));
-        properties.insert("rgwp".to_string(), Value::from(306u32));
-        let metadata = hover_metadata_from_properties("region_groups", &properties);
-        assert_eq!(metadata.region_id, None);
-        assert_eq!(metadata.region_group, Some(58));
-        assert_eq!(metadata.region_name, None);
-        assert_eq!(metadata.resource_bar_waypoint, Some(306));
     }
 }
 
@@ -554,76 +558,6 @@ fn sample_vector_layer_rgb(
     let bundle = vector_runtime.finished.get_ref(&(layer.id, revision))?;
     let rgba = bundle.sample_rgb(world_point.x as f32, world_point.z as f32)?;
     Some(Rgb::new(rgba[0], rgba[1], rgba[2]))
-}
-
-fn sample_vector_layer_hover_metadata(
-    layer: &crate::map::layers::LayerSpec,
-    vector_runtime: &VectorLayerRuntime,
-    registry_map_version_id: Option<&str>,
-    world_point: WorldPoint,
-) -> HoverVectorMetadata {
-    if layer.key != "region_groups" && layer.key != "regions" {
-        return HoverVectorMetadata::default();
-    }
-    let Some(source) = layer.vector_source.as_ref() else {
-        return HoverVectorMetadata::default();
-    };
-    let revision = resolved_vector_revision(source, registry_map_version_id);
-    let Some(bundle) = vector_runtime.finished.get_ref(&(layer.id, revision)) else {
-        return HoverVectorMetadata::default();
-    };
-    let Some(properties) = bundle.sample_properties(world_point.x as f32, world_point.z as f32)
-    else {
-        return HoverVectorMetadata::default();
-    };
-    hover_metadata_from_properties(&layer.key, properties)
-}
-
-fn hover_metadata_from_properties(
-    layer_key: &str,
-    properties: &Map<String, Value>,
-) -> HoverVectorMetadata {
-    HoverVectorMetadata {
-        region_id: json_u32(properties.get("r")),
-        region_group: json_u32(properties.get("rg")),
-        region_name: if layer_key == "regions" {
-            json_string(properties.get("on"))
-        } else {
-            None
-        },
-        resource_bar_waypoint: json_u32(properties.get("rgwp")),
-        resource_bar_world_x: json_f64(properties.get("rgx")),
-        resource_bar_world_z: json_f64(properties.get("rgz")),
-        origin_waypoint: json_u32(properties.get("owp")),
-        origin_world_x: json_f64(properties.get("ox")),
-        origin_world_z: json_f64(properties.get("oz")),
-    }
-}
-
-fn json_u32(value: Option<&Value>) -> Option<u32> {
-    match value {
-        Some(Value::Number(number)) => number.as_u64().and_then(|raw| u32::try_from(raw).ok()),
-        Some(Value::String(text)) => text.trim().parse::<u32>().ok(),
-        _ => None,
-    }
-}
-
-fn json_string(value: Option<&Value>) -> Option<String> {
-    match value {
-        Some(Value::String(text)) => {
-            let trimmed = text.trim();
-            (!trimmed.is_empty()).then(|| trimmed.to_string())
-        }
-        _ => None,
-    }
-}
-
-fn json_f64(value: Option<&Value>) -> Option<f64> {
-    match value {
-        Some(Value::Number(number)) => number.as_f64(),
-        Some(Value::String(text)) => text.trim().parse::<f64>().ok(),
-        _ => None,
-    }
 }
 
 fn resolved_vector_revision(

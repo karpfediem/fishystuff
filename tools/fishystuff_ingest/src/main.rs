@@ -235,6 +235,8 @@ enum Commands {
         #[arg(long)]
         field: PathBuf,
         #[arg(long)]
+        regions_field: PathBuf,
+        #[arg(long)]
         regioninfo_bss: PathBuf,
         #[arg(long)]
         regiongroupinfo_bss: PathBuf,
@@ -519,6 +521,7 @@ fn main() -> Result<()> {
         ),
         Commands::BuildRegionGroupsFieldMetadata {
             field,
+            regions_field,
             regioninfo_bss,
             regiongroupinfo_bss,
             loc,
@@ -526,6 +529,7 @@ fn main() -> Result<()> {
             out,
         } => run_build_region_groups_field_metadata(
             field,
+            regions_field,
             regioninfo_bss,
             regiongroupinfo_bss,
             loc,
@@ -1186,6 +1190,7 @@ fn run_build_regions_field_metadata(
 
 fn run_build_region_groups_field_metadata(
     field: PathBuf,
+    regions_field: PathBuf,
     regioninfo_bss: PathBuf,
     regiongroupinfo_bss: PathBuf,
     loc: PathBuf,
@@ -1194,6 +1199,7 @@ fn run_build_region_groups_field_metadata(
 ) -> Result<()> {
     let summary = region_layers::build_region_groups_field_hover_metadata(
         &field,
+        &regions_field,
         &loc,
         &regioninfo_bss,
         &regiongroupinfo_bss,

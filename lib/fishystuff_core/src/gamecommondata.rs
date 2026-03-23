@@ -4,7 +4,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
-use crate::field_metadata::FieldHoverMetadataEntry;
+use crate::coord::world_to_pixel_f;
+use crate::field::DiscreteFieldRows;
+use crate::field_metadata::{
+    FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget, FIELD_HOVER_ROW_KEY_ORIGIN,
+    FIELD_HOVER_ROW_KEY_RESOURCES, FIELD_HOVER_TARGET_KEY_ORIGIN_NODE,
+    FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
+};
 use crate::loc::load_loc_namespaces_as_string_maps;
 
 const PABR_MAGIC: &[u8; 4] = b"PABR";
@@ -69,7 +75,8 @@ pub struct RegionOriginInfo {
     pub waypoint_id: Option<u32>,
     pub world_x: Option<f64>,
     pub world_z: Option<f64>,
-    pub name: Option<String>,
+    pub region_name: Option<String>,
+    pub waypoint_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -116,7 +123,8 @@ impl OriginalRegionLayerContext {
             waypoint_id,
             world_x: waypoint.map(|waypoint| waypoint.pos_x),
             world_z: waypoint.map(|waypoint| waypoint.pos_z),
-            name: resolve_origin_name(&self.localization, waypoint_id, origin_region_id),
+            region_name: resolve_region_name(&self.localization, origin_region_id),
+            waypoint_name: waypoint_id.and_then(|id| self.resolve_waypoint_name(id)),
         };
         info.has_value().then_some(info)
     }
@@ -135,19 +143,16 @@ impl OriginalRegionLayerContext {
     }
 
     pub fn resolve_region_hover_metadata(&self, region_id: u32) -> Option<FieldHoverMetadataEntry> {
-        let region_group = self.region_group_for_region(region_id);
         let origin = self.resolve_region_origin_info(region_id);
-        let resource = region_group.and_then(|group_id| self.resolve_resource_waypoint(group_id));
         let entry = FieldHoverMetadataEntry {
-            region_id: Some(region_id),
-            region_group,
-            region_name: origin.as_ref().and_then(|value| value.name.clone()),
-            resource_bar_waypoint: resource.and_then(|value| value.waypoint_id),
-            resource_bar_world_x: resource.and_then(|value| value.world_x),
-            resource_bar_world_z: resource.and_then(|value| value.world_z),
-            origin_waypoint: origin.as_ref().and_then(|value| value.waypoint_id),
-            origin_world_x: origin.as_ref().and_then(|value| value.world_x),
-            origin_world_z: origin.as_ref().and_then(|value| value.world_z),
+            rows: vec![build_origin_hover_row(region_id, origin.as_ref())]
+                .into_iter()
+                .flatten()
+                .collect(),
+            targets: vec![build_origin_hover_target(origin.as_ref())]
+                .into_iter()
+                .flatten()
+                .collect(),
         };
         entry.has_value().then_some(entry)
     }
@@ -155,20 +160,58 @@ impl OriginalRegionLayerContext {
     pub fn resolve_region_group_hover_metadata(
         &self,
         region_group_id: u32,
+        regions_field: &DiscreteFieldRows,
     ) -> Option<FieldHoverMetadataEntry> {
         let resource = self.resolve_resource_waypoint(region_group_id);
+        let resource_region_id =
+            resource.and_then(|info| self.resolve_resource_region_id(info, regions_field));
+        let resource_region_name = resource_region_id
+            .and_then(|region_id| self.resolve_region_origin_info(region_id))
+            .and_then(|info| info.region_name);
         let entry = FieldHoverMetadataEntry {
-            region_id: None,
-            region_group: Some(region_group_id),
-            region_name: None,
-            resource_bar_waypoint: resource.and_then(|value| value.waypoint_id),
-            resource_bar_world_x: resource.and_then(|value| value.world_x),
-            resource_bar_world_z: resource.and_then(|value| value.world_z),
-            origin_waypoint: None,
-            origin_world_x: None,
-            origin_world_z: None,
+            rows: vec![build_resource_hover_row(
+                region_group_id,
+                resource,
+                resource_region_id,
+                resource_region_name,
+            )]
+            .into_iter()
+            .flatten()
+            .collect(),
+            targets: vec![build_resource_hover_target(self, resource)]
+                .into_iter()
+                .flatten()
+                .collect(),
         };
         entry.has_value().then_some(entry)
+    }
+
+    pub fn resolve_waypoint_name(&self, waypoint_id: u32) -> Option<String> {
+        localized_name(&self.localization.node, waypoint_id)
+    }
+
+    pub fn resolve_waypoint_position(&self, waypoint_id: u32) -> Option<(f64, f64)> {
+        let waypoint = self.waypoints.get(&waypoint_id)?;
+        Some((waypoint.pos_x, waypoint.pos_z))
+    }
+
+    fn resolve_resource_region_id(
+        &self,
+        resource: RegionGroupWaypointInfo,
+        regions_field: &DiscreteFieldRows,
+    ) -> Option<u32> {
+        resource
+            .waypoint_id
+            .and_then(|waypoint_id| self.resolve_waypoint_position(waypoint_id))
+            .and_then(|(world_x, world_z)| {
+                sample_field_id_at_world(regions_field, world_x, world_z)
+            })
+            .or_else(|| match (resource.world_x, resource.world_z) {
+                (Some(world_x), Some(world_z)) => {
+                    sample_field_id_at_world(regions_field, world_x, world_z)
+                }
+                _ => None,
+            })
     }
 }
 
@@ -178,7 +221,8 @@ impl RegionOriginInfo {
             || self.waypoint_id.is_some()
             || self.world_x.is_some()
             || self.world_z.is_some()
-            || self.name.is_some()
+            || self.region_name.is_some()
+            || self.waypoint_name.is_some()
     }
 }
 
@@ -459,14 +503,137 @@ fn load_localization(path: &Path) -> Result<LocalizationTable> {
     })
 }
 
-fn resolve_origin_name(
-    loc: &LocalizationTable,
-    origin_waypoint_id: Option<u32>,
-    origin_region_id: Option<u32>,
-) -> Option<String> {
-    origin_waypoint_id
-        .and_then(|id| localized_name(&loc.node, id))
-        .or_else(|| origin_region_id.and_then(|id| localized_name(&loc.town, id)))
+fn build_origin_hover_row(
+    region_id: u32,
+    origin: Option<&RegionOriginInfo>,
+) -> Option<FieldHoverRow> {
+    let has_assignment = origin.is_some_and(has_origin_assignment);
+    let name = origin
+        .and_then(|info| info.region_name.as_deref())
+        .map(str::trim);
+    let value = match (has_assignment, name) {
+        (true, Some(name)) if !name.is_empty() => name.to_string(),
+        (_, _) => format!("R{region_id}"),
+    };
+    let status = match (has_assignment, name) {
+        (true, Some(name)) if !name.is_empty() => (None, None),
+        (true, _) => (
+            Some("question-mark".to_string()),
+            Some("subtle".to_string()),
+        ),
+        (false, Some(_)) => (Some("question-mark".to_string()), None),
+        (false, None) => (Some("question-mark".to_string()), None),
+    };
+    Some(FieldHoverRow {
+        key: FIELD_HOVER_ROW_KEY_ORIGIN.to_string(),
+        icon: "hover-origin".to_string(),
+        label: "Origin".to_string(),
+        value,
+        hide_label: false,
+        status_icon: status.0,
+        status_icon_tone: status.1,
+    })
+}
+
+fn build_resource_hover_row(
+    region_group_id: u32,
+    resource: Option<RegionGroupWaypointInfo>,
+    resource_region_id: Option<u32>,
+    resource_region_name: Option<String>,
+) -> Option<FieldHoverRow> {
+    let has_assignment = resource.is_some_and(RegionGroupWaypointInfo::has_value);
+    let value = if let Some(name) = resource_region_name.as_deref().map(str::trim) {
+        if !name.is_empty() {
+            name.to_string()
+        } else if let Some(region_id) = resource_region_id {
+            format!("R{region_id}")
+        } else {
+            format!("RG{region_group_id}")
+        }
+    } else if let Some(region_id) = resource_region_id {
+        format!("R{region_id}")
+    } else {
+        format!("RG{region_group_id}")
+    };
+    let status = if resource_region_name
+        .as_deref()
+        .is_some_and(|name| !name.trim().is_empty())
+    {
+        (None, None)
+    } else if has_assignment {
+        (
+            Some("question-mark".to_string()),
+            Some("subtle".to_string()),
+        )
+    } else {
+        (Some("question-mark".to_string()), None)
+    };
+    Some(FieldHoverRow {
+        key: FIELD_HOVER_ROW_KEY_RESOURCES.to_string(),
+        icon: "hover-resources".to_string(),
+        label: "Resources".to_string(),
+        value,
+        hide_label: false,
+        status_icon: status.0,
+        status_icon_tone: status.1,
+    })
+}
+
+fn build_origin_hover_target(origin: Option<&RegionOriginInfo>) -> Option<FieldHoverTarget> {
+    let origin = origin?;
+    let world_x = origin.world_x?;
+    let world_z = origin.world_z?;
+    let label = origin
+        .waypoint_name
+        .clone()
+        .or_else(|| origin.region_name.clone())
+        .map(|name| format!("Origin: {name}"))
+        .unwrap_or_else(|| "Origin node".to_string());
+    Some(FieldHoverTarget {
+        key: FIELD_HOVER_TARGET_KEY_ORIGIN_NODE.to_string(),
+        label,
+        world_x,
+        world_z,
+    })
+}
+
+fn build_resource_hover_target(
+    context: &OriginalRegionLayerContext,
+    resource: Option<RegionGroupWaypointInfo>,
+) -> Option<FieldHoverTarget> {
+    let resource = resource?;
+    let world_x = resource.world_x?;
+    let world_z = resource.world_z?;
+    let label = resource
+        .waypoint_id
+        .and_then(|waypoint_id| context.resolve_waypoint_name(waypoint_id))
+        .map(|name| format!("Resource node: {name}"))
+        .unwrap_or_else(|| "Resource node".to_string());
+    Some(FieldHoverTarget {
+        key: FIELD_HOVER_TARGET_KEY_RESOURCE_NODE.to_string(),
+        label,
+        world_x,
+        world_z,
+    })
+}
+
+fn has_origin_assignment(origin: &RegionOriginInfo) -> bool {
+    origin.waypoint_id.is_some() || origin.world_x.is_some() || origin.world_z.is_some()
+}
+
+fn sample_field_id_at_world(field: &DiscreteFieldRows, world_x: f64, world_z: f64) -> Option<u32> {
+    let (map_x, map_y) = world_to_pixel_f(world_x, world_z);
+    if !map_x.is_finite() || !map_y.is_finite() {
+        return None;
+    }
+    field
+        .cell_id_u32(map_x.floor() as i32, map_y.floor() as i32)
+        .filter(|id| *id != 0)
+}
+
+fn resolve_region_name(loc: &LocalizationTable, origin_region_id: Option<u32>) -> Option<String> {
+    origin_region_id
+        .and_then(|id| localized_name(&loc.town, id))
         .or_else(|| origin_region_id.and_then(|id| localized_name(&loc.node, id)))
 }
 

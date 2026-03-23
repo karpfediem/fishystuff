@@ -386,6 +386,7 @@ if [ -f "$region_groups_field_output" ] && [ -f "$regioninfo_bss_input" ] && [ -
   [ "${REBUILD_REGION_GROUPS_FIELD_METADATA:-0}" = "1" ] ||
   [ ! -f "$region_groups_field_metadata_output" ] ||
   [ "$region_groups_field_output" -nt "$region_groups_field_metadata_output" ] ||
+  [ "$regions_field_output" -nt "$region_groups_field_metadata_output" ] ||
   [ "$regioninfo_bss_input" -nt "$region_groups_field_metadata_output" ] ||
   [ "$regiongroupinfo_bss_input" -nt "$region_groups_field_metadata_output" ] ||
   [ "$region_loc_input" -nt "$region_groups_field_metadata_output" ];
@@ -393,6 +394,7 @@ if [ -f "$region_groups_field_output" ] && [ -f "$regioninfo_bss_input" ] && [ -
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
     build-region-groups-field-metadata \
     --field "$region_groups_field_output" \
+    --regions-field "$regions_field_output" \
     --regioninfo-bss "$regioninfo_bss_input" \
     --regiongroupinfo-bss "$regiongroupinfo_bss_input" \
     --loc "$region_loc_input" \

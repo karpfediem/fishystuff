@@ -5,6 +5,13 @@ use serde::{Deserialize, Serialize};
 use crate::field::DiscreteFieldRows;
 use crate::gamecommondata::OriginalRegionLayerContext;
 
+pub const FIELD_HOVER_ROW_KEY_ZONE: &str = "zone";
+pub const FIELD_HOVER_ROW_KEY_RESOURCES: &str = "resources";
+pub const FIELD_HOVER_ROW_KEY_ORIGIN: &str = "origin";
+
+pub const FIELD_HOVER_TARGET_KEY_RESOURCE_NODE: &str = "resource_node";
+pub const FIELD_HOVER_TARGET_KEY_ORIGIN_NODE: &str = "origin_node";
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FieldHoverMetadataAsset {
@@ -14,15 +21,29 @@ pub struct FieldHoverMetadataAsset {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FieldHoverMetadataEntry {
-    pub region_id: Option<u32>,
-    pub region_group: Option<u32>,
-    pub region_name: Option<String>,
-    pub resource_bar_waypoint: Option<u32>,
-    pub resource_bar_world_x: Option<f64>,
-    pub resource_bar_world_z: Option<f64>,
-    pub origin_waypoint: Option<u32>,
-    pub origin_world_x: Option<f64>,
-    pub origin_world_z: Option<f64>,
+    pub rows: Vec<FieldHoverRow>,
+    pub targets: Vec<FieldHoverTarget>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FieldHoverRow {
+    pub key: String,
+    pub icon: String,
+    pub label: String,
+    pub value: String,
+    pub hide_label: bool,
+    pub status_icon: Option<String>,
+    pub status_icon_tone: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FieldHoverTarget {
+    pub key: String,
+    pub label: String,
+    pub world_x: f64,
+    pub world_z: f64,
 }
 
 impl FieldHoverMetadataAsset {
@@ -33,15 +54,14 @@ impl FieldHoverMetadataAsset {
 
 impl FieldHoverMetadataEntry {
     pub fn has_value(&self) -> bool {
-        self.region_id.is_some()
-            || self.region_group.is_some()
-            || self.region_name.is_some()
-            || self.resource_bar_waypoint.is_some()
-            || self.resource_bar_world_x.is_some()
-            || self.resource_bar_world_z.is_some()
-            || self.origin_waypoint.is_some()
-            || self.origin_world_x.is_some()
-            || self.origin_world_z.is_some()
+        !self.rows.is_empty() || !self.targets.is_empty()
+    }
+
+    pub fn row_value(&self, key: &str) -> Option<&str> {
+        self.rows
+            .iter()
+            .find(|row| row.key == key)
+            .map(|row| row.value.as_str())
     }
 }
 
@@ -54,9 +74,12 @@ pub fn build_regions_hover_metadata(
 
 pub fn build_region_groups_hover_metadata(
     field: &DiscreteFieldRows,
+    regions_field: &DiscreteFieldRows,
     context: &OriginalRegionLayerContext,
 ) -> FieldHoverMetadataAsset {
-    build_hover_metadata(field, |id| context.resolve_region_group_hover_metadata(id))
+    build_hover_metadata(field, |id| {
+        context.resolve_region_group_hover_metadata(id, regions_field)
+    })
 }
 
 fn build_hover_metadata(

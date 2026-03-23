@@ -39,15 +39,9 @@ pub(in crate::bridge::host) fn hover_layer_samples_snapshot(
                 kind: sample.kind.clone(),
                 rgb: sample.rgb.as_array(),
                 rgb_u32: sample.rgb_u32,
-                region_id: sample.region_id,
-                region_group: sample.region_group,
-                region_name: sample.region_name.clone(),
-                resource_bar_waypoint: sample.resource_bar_waypoint,
-                resource_bar_world_x: sample.resource_bar_world_x,
-                resource_bar_world_z: sample.resource_bar_world_z,
-                origin_waypoint: sample.origin_waypoint,
-                origin_world_x: sample.origin_world_x,
-                origin_world_z: sample.origin_world_z,
+                field_id: sample.field_id,
+                rows: sample.rows.clone(),
+                targets: sample.targets.clone(),
             },
         )
         .collect()

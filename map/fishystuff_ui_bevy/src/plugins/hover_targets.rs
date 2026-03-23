@@ -418,25 +418,11 @@ fn hover_targets_from_info(
         return Vec::new();
     };
 
-    let resource_bar_visible = layer_visible_by_key("region_groups", layer_registry, layer_runtime);
-    let origin_node_visible = layer_visible_by_key("regions", layer_registry, layer_runtime);
-    let resource_bar = resource_bar_visible
-        .then(|| hover_sample_by_layer_id(info, "region_groups"))
-        .flatten()
-        .and_then(hover_target_from_resource_bar);
-    let origin_node = origin_node_visible
-        .then(|| hover_sample_by_layer_id(info, "regions"))
-        .flatten()
-        .and_then(hover_target_from_origin_node);
-
-    let mut targets = Vec::with_capacity(2);
-    if let Some(resource_bar) = resource_bar {
-        targets.push(resource_bar);
-    }
-    if let Some(origin_node) = origin_node {
-        targets.push(origin_node);
-    }
-    targets
+    info.layer_samples
+        .iter()
+        .filter(|sample| layer_visible_by_key(&sample.layer_id, layer_registry, layer_runtime))
+        .flat_map(hover_targets_from_sample)
+        .collect()
 }
 
 fn layer_visible_by_key(
@@ -450,44 +436,44 @@ fn layer_visible_by_key(
         .unwrap_or(true)
 }
 
-fn hover_target_from_resource_bar(
+fn hover_targets_from_sample(
     sample: &crate::plugins::api::HoverLayerSample,
-) -> Option<HoverTargetVisual> {
-    Some(HoverTargetVisual {
-        world_x: sample.resource_bar_world_x? as f32,
-        world_z: sample.resource_bar_world_z? as f32,
-        label: "Resource bar".to_string(),
-        marker_size_screen_px: RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
-        label_offset_screen_px: RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
-        color_rgb: RESOURCE_BAR_MARKER_COLOR,
-    })
-}
-
-fn hover_target_from_origin_node(
-    sample: &crate::plugins::api::HoverLayerSample,
-) -> Option<HoverTargetVisual> {
-    let label = sample
-        .region_name
-        .as_ref()
-        .map(|name| format!("Origin: {name}"))
-        .unwrap_or_else(|| "Origin node".to_string());
-    Some(HoverTargetVisual {
-        world_x: sample.origin_world_x? as f32,
-        world_z: sample.origin_world_z? as f32,
-        label,
-        marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
-        label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
-        color_rgb: ORIGIN_NODE_MARKER_COLOR,
-    })
-}
-
-fn hover_sample_by_layer_id<'a>(
-    info: &'a HoverInfo,
-    layer_id: &str,
-) -> Option<&'a crate::plugins::api::HoverLayerSample> {
-    info.layer_samples
+) -> Vec<HoverTargetVisual> {
+    sample
+        .targets
         .iter()
-        .find(|sample| sample.layer_id == layer_id)
+        .filter_map(hover_target_visual)
+        .collect()
+}
+
+fn hover_target_visual(
+    target: &fishystuff_core::field_metadata::FieldHoverTarget,
+) -> Option<HoverTargetVisual> {
+    let (marker_size_screen_px, label_offset_screen_px, color_rgb) = match target.key.as_str() {
+        "resource_node" => (
+            RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
+            RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
+            RESOURCE_BAR_MARKER_COLOR,
+        ),
+        "origin_node" => (
+            ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
+            ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
+            ORIGIN_NODE_MARKER_COLOR,
+        ),
+        _ => (
+            ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
+            ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
+            ORIGIN_NODE_MARKER_COLOR,
+        ),
+    };
+    Some(HoverTargetVisual {
+        world_x: target.world_x as f32,
+        world_z: target.world_z as f32,
+        label: target.label.clone(),
+        marker_size_screen_px,
+        label_offset_screen_px,
+        color_rgb,
+    })
 }
 
 fn map_2d_viewport_bounds(
@@ -666,6 +652,7 @@ mod tests {
         LayersResponse, LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
     };
     use fishystuff_api::Rgb;
+    use fishystuff_core::field_metadata::FieldHoverTarget;
 
     fn sample(layer_id: &str) -> HoverLayerSample {
         HoverLayerSample {
@@ -674,15 +661,9 @@ mod tests {
             kind: "vector-geojson".to_string(),
             rgb: Rgb::new(0, 0, 0),
             rgb_u32: 0,
-            region_id: None,
-            region_group: None,
-            region_name: None,
-            resource_bar_waypoint: None,
-            resource_bar_world_x: None,
-            resource_bar_world_z: None,
-            origin_waypoint: None,
-            origin_world_x: None,
-            origin_world_z: None,
+            field_id: None,
+            rows: Vec::new(),
+            targets: Vec::new(),
         }
     }
 
@@ -737,13 +718,20 @@ mod tests {
     #[test]
     fn hover_targets_include_resource_bar_and_origin_node() {
         let mut region_group = sample("region_groups");
-        region_group.resource_bar_world_x = Some(123.0);
-        region_group.resource_bar_world_z = Some(456.0);
+        region_group.targets.push(FieldHoverTarget {
+            key: "resource_node".to_string(),
+            label: "Resource node: Tarif".to_string(),
+            world_x: 123.0,
+            world_z: 456.0,
+        });
 
         let mut regions = sample("regions");
-        regions.region_name = Some("Tarif".to_string());
-        regions.origin_world_x = Some(789.0);
-        regions.origin_world_z = Some(321.0);
+        regions.targets.push(FieldHoverTarget {
+            key: "origin_node".to_string(),
+            label: "Origin: Tarif".to_string(),
+            world_x: 789.0,
+            world_z: 321.0,
+        });
 
         let info = HoverInfo {
             map_px: 0,
@@ -764,7 +752,7 @@ mod tests {
                 HoverTargetVisual {
                     world_x: 123.0,
                     world_z: 456.0,
-                    label: "Resource bar".to_string(),
+                    label: "Resource node: Tarif".to_string(),
                     marker_size_screen_px: RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
                     label_offset_screen_px: RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
                     color_rgb: RESOURCE_BAR_MARKER_COLOR,
@@ -784,12 +772,20 @@ mod tests {
     #[test]
     fn hover_targets_fall_back_to_separate_samples() {
         let mut region_group = sample("region_groups");
-        region_group.resource_bar_world_x = Some(10.0);
-        region_group.resource_bar_world_z = Some(20.0);
+        region_group.targets.push(FieldHoverTarget {
+            key: "resource_node".to_string(),
+            label: "Resource node".to_string(),
+            world_x: 10.0,
+            world_z: 20.0,
+        });
 
         let mut region = sample("regions");
-        region.origin_world_x = Some(30.0);
-        region.origin_world_z = Some(40.0);
+        region.targets.push(FieldHoverTarget {
+            key: "origin_node".to_string(),
+            label: "Origin node".to_string(),
+            world_x: 30.0,
+            world_z: 40.0,
+        });
 
         let info = HoverInfo {
             map_px: 0,
@@ -815,13 +811,20 @@ mod tests {
     #[test]
     fn hover_targets_only_show_markers_for_visible_layers() {
         let mut region_group = sample("region_groups");
-        region_group.resource_bar_world_x = Some(10.0);
-        region_group.resource_bar_world_z = Some(20.0);
+        region_group.targets.push(FieldHoverTarget {
+            key: "resource_node".to_string(),
+            label: "Resource node".to_string(),
+            world_x: 10.0,
+            world_z: 20.0,
+        });
 
         let mut region = sample("regions");
-        region.region_name = Some("Tarif".to_string());
-        region.origin_world_x = Some(30.0);
-        region.origin_world_z = Some(40.0);
+        region.targets.push(FieldHoverTarget {
+            key: "origin_node".to_string(),
+            label: "Origin: Tarif".to_string(),
+            world_x: 30.0,
+            world_z: 40.0,
+        });
 
         let info = HoverInfo {
             map_px: 0,
@@ -850,7 +853,7 @@ mod tests {
             vec![HoverTargetVisual {
                 world_x: 10.0,
                 world_z: 20.0,
-                label: "Resource bar".to_string(),
+                label: "Resource node".to_string(),
                 marker_size_screen_px: RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
                 label_offset_screen_px: RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
                 color_rgb: RESOURCE_BAR_MARKER_COLOR,

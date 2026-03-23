@@ -1352,10 +1352,6 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
   `;
 }
 
-function supportedHoverLayerIds() {
-  return ["zone_mask", "region_groups", "regions"];
-}
-
 function hoverSampleByLayerId(hover, layerId) {
   const targetLayerId = String(layerId || "").trim();
   if (!targetLayerId) {
@@ -1365,140 +1361,39 @@ function hoverSampleByLayerId(hover, layerId) {
   return layerSamples.find((sample) => String(sample?.layerId || "").trim() === targetLayerId) || null;
 }
 
-function normalizedMapId(value) {
-  const number = Number.parseInt(value, 10);
-  return Number.isFinite(number) && number > 0 ? number : null;
+function hoverSampleRows(sample) {
+  return (Array.isArray(sample?.rows) ? sample.rows : []).filter((row) => {
+    const icon = String(row?.icon || "").trim();
+    const value = String(row?.value || "").trim();
+    const label = String(row?.label || "").trim();
+    const hideLabel = row?.hideLabel === true;
+    return Boolean(icon && value && (hideLabel || label));
+  });
 }
 
-function sampleHasResourceAssignment(sample) {
-  return (
-    normalizedMapId(sample?.resourceBarWaypoint) != null ||
-    Number.isFinite(sample?.resourceBarWorldX) ||
-    Number.isFinite(sample?.resourceBarWorldZ)
-  );
+function hoverSampleRowValue(sample, rowKey) {
+  const targetKey = String(rowKey || "").trim();
+  if (!targetKey) {
+    return "";
+  }
+  const row = hoverSampleRows(sample).find((entry) => String(entry?.key || "").trim() === targetKey);
+  return String(row?.value || "").trim();
 }
 
-function sampleHasOriginAssignment(sample) {
-  return (
-    normalizedMapId(sample?.originWaypoint) != null ||
-    Number.isFinite(sample?.originWorldX) ||
-    Number.isFinite(sample?.originWorldZ)
-  );
-}
-
-function regionGroupFallbackValue(sample) {
-  const regionGroupId = normalizedMapId(sample?.regionGroup);
-  return regionGroupId != null ? `RG${regionGroupId}` : "";
-}
-
-function regionFallbackValue(sample) {
-  const regionId = normalizedMapId(sample?.regionId);
-  return regionId != null ? `R${regionId}` : "";
-}
-
-function resourceOverviewValue(resourceSample, regionSample) {
-  const regionName = String(regionSample?.regionName || "").trim();
-  if (!sampleHasResourceAssignment(resourceSample)) {
-    return {
-      value: regionGroupFallbackValue(resourceSample),
-      statusIcon: "question-mark",
-    };
-  }
-  if (regionName) {
-    return {
-      value: regionName,
-    };
-  }
-  return {
-    value:
-      regionFallbackValue(regionSample) ||
-      regionFallbackValue(resourceSample) ||
-      regionGroupFallbackValue(resourceSample),
-    statusIcon: "question-mark",
-    statusIconTone: "subtle",
-  };
-}
-
-function originOverviewValue(sample) {
-  const originName = String(sample?.regionName || "").trim();
-  if (sampleHasOriginAssignment(sample) && originName) {
-    return {
-      value: originName,
-    };
-  }
-  if (sampleHasOriginAssignment(sample)) {
-    return {
-      value: regionFallbackValue(sample),
-      statusIcon: "question-mark",
-      statusIconTone: "subtle",
-    };
-  }
-  return {
-    value: regionFallbackValue(sample) || originName,
-    statusIcon: "question-mark",
-  };
-}
-
-function shouldDisplayOriginOverview(sampleByLayerId) {
-  const regionSample = sampleByLayerId.get("regions");
-  if (!regionSample) {
-    return false;
-  }
-  if (sampleHasOriginAssignment(regionSample)) {
-    return true;
-  }
-  return !sampleHasResourceAssignment(sampleByLayerId.get("region_groups"));
-}
-
-function hoverLayerOverviewRow(layerId, hover, sampleByLayerId) {
-  const config = hoverLayerOverviewConfig(layerId);
-  if (!config) {
-    return null;
-  }
-  if (layerId === "zone_mask") {
-    const value = String(hover?.zoneName || (hover?.zoneRgb != null ? formatZone(hover.zoneRgb) : "")).trim();
-    return value
-      ? {
-          layerId,
-          icon: config.icon,
-          label: config.label,
-          value,
-        }
-      : null;
-  }
+function hoverLayerOverviewRows(layerId, sampleByLayerId) {
   const sample = sampleByLayerId.get(layerId);
-  if (layerId === "regions" && !shouldDisplayOriginOverview(sampleByLayerId)) {
-    return null;
+  if (!sample) {
+    return [];
   }
-  const resolved =
-    layerId === "region_groups"
-      ? resourceOverviewValue(sample, sampleByLayerId.get("regions"))
-      : originOverviewValue(sample);
-  const value = String(resolved?.value || "").trim();
-  if (!value) {
-    return null;
-  }
-  return {
+  return hoverSampleRows(sample).map((row) => ({
     layerId,
-    icon: config.icon,
-    label: config.label,
-    value,
-    ...(resolved?.statusIcon ? { statusIcon: resolved.statusIcon } : {}),
-    ...(resolved?.statusIconTone ? { statusIconTone: resolved.statusIconTone } : {}),
-  };
-}
-
-function hoverLayerOverviewConfig(layerId) {
-  if (layerId === "zone_mask") {
-    return { icon: "hover-zone", label: "Zone" };
-  }
-  if (layerId === "region_groups") {
-    return { icon: "hover-resources", label: "Resources" };
-  }
-  if (layerId === "regions") {
-    return { icon: "hover-origin", label: "Origin" };
-  }
-  return null;
+    icon: row.icon,
+    label: row.label,
+    value: row.value,
+    ...(row.hideLabel === true ? { hideLabel: true } : {}),
+    ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
+    ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
+  }));
 }
 
 const BOOKMARK_HIT_RADIUS_SCREEN_PX = 14;
@@ -1552,14 +1447,14 @@ export function buildHoverOverviewRows(hover, stateBundle) {
   const orderedLayerIds = resolveLayerEntries(stateBundle || {})
     .filter((layer) => layer.visible)
     .map((layer) => String(layer?.layerId || "").trim())
-    .filter((layerId) => supportedHoverLayerIds().includes(layerId))
+    .filter((layerId) => sampleByLayerId.has(layerId))
     .reverse();
   const layerIds = orderedLayerIds.length
     ? orderedLayerIds
-    : supportedHoverLayerIds().filter((layerId) => layerId === "zone_mask" || sampleByLayerId.has(layerId));
-  return layerIds
-    .map((layerId) => hoverLayerOverviewRow(layerId, hover, sampleByLayerId))
-    .filter(Boolean);
+    : layerSamples
+        .map((sample) => String(sample?.layerId || "").trim())
+        .filter(Boolean);
+  return layerIds.flatMap((layerId) => hoverLayerOverviewRows(layerId, sampleByLayerId));
 }
 
 function renderHoverTooltip(elements, hover, stateBundle) {
@@ -3579,8 +3474,8 @@ function bindUi(shell, elements, options = {}) {
     const worldZ = normalizeBookmarkCoordinate(hover?.worldZ);
     const regionGroupSample = hoverSampleByLayerId(hover, "region_groups");
     const regionSample = hoverSampleByLayerId(hover, "regions");
-    const regionGroupsName = resourceOverviewValue(regionGroupSample)?.value || null;
-    const regionsName = originOverviewValue(regionSample)?.value || null;
+    const regionGroupsName = hoverSampleRowValue(regionGroupSample, "resources") || null;
+    const regionsName = hoverSampleRowValue(regionSample, "origin") || null;
     if (worldX == null || worldZ == null) {
       showSiteToast("warning", "Move the cursor over the ready 2D map and click again.");
       return;

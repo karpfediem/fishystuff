@@ -1,5 +1,6 @@
 use fishystuff_api::models::zone_stats::ZoneStatsResponse;
 use fishystuff_api::Rgb;
+use fishystuff_core::field_metadata::{FieldHoverRow, FieldHoverTarget};
 
 use crate::prelude::*;
 
@@ -32,15 +33,9 @@ pub struct HoverLayerSample {
     pub kind: String,
     pub rgb: Rgb,
     pub rgb_u32: u32,
-    pub region_id: Option<u32>,
-    pub region_group: Option<u32>,
-    pub region_name: Option<String>,
-    pub resource_bar_waypoint: Option<u32>,
-    pub resource_bar_world_x: Option<f64>,
-    pub resource_bar_world_z: Option<f64>,
-    pub origin_waypoint: Option<u32>,
-    pub origin_world_x: Option<f64>,
-    pub origin_world_z: Option<f64>,
+    pub field_id: Option<u32>,
+    pub rows: Vec<FieldHoverRow>,
+    pub targets: Vec<FieldHoverTarget>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

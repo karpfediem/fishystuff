@@ -195,6 +195,7 @@ pub fn build_regions_field_hover_metadata(
 
 pub fn build_region_groups_field_hover_metadata(
     field_path: &Path,
+    regions_field_path: &Path,
     loc_path: &Path,
     regioninfo_bss_path: &Path,
     regiongroupinfo_bss_path: &Path,
@@ -202,6 +203,7 @@ pub fn build_region_groups_field_hover_metadata(
     out_path: &Path,
 ) -> Result<FieldHoverMetadataBuildSummary> {
     let field = load_field(field_path)?;
+    let regions_field = load_field(regions_field_path)?;
     let context = load_context(
         loc_path,
         regioninfo_bss_path,
@@ -209,7 +211,7 @@ pub fn build_region_groups_field_hover_metadata(
         waypoint_xml_paths,
     )?;
     let field_id_count = field.unique_nonzero_ids().len();
-    let metadata = build_region_groups_hover_metadata(&field, &context);
+    let metadata = build_region_groups_hover_metadata(&field, &regions_field, &context);
     write_field_hover_metadata(out_path, &metadata)?;
     Ok(FieldHoverMetadataBuildSummary {
         field_id_count,
@@ -254,10 +256,10 @@ fn apply_origin_info(
     if let Some(origin_world_z) = origin_info.world_z {
         properties.insert("oz".to_string(), Value::from(origin_world_z));
     }
-    if let Some(origin_name) = origin_info.name.as_ref() {
+    if let Some(origin_name) = origin_info.region_name.as_ref() {
         properties.insert("on".to_string(), Value::String(origin_name.clone()));
     }
-    origin_info.name.is_some()
+    origin_info.region_name.is_some()
 }
 
 fn apply_resource_waypoint_info(

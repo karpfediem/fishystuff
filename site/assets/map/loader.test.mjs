@@ -180,18 +180,18 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
   assert.deepEqual(
     buildHoverOverviewRows(
       {
-        zoneName: "Demi River",
         layerSamples: [
           {
+            layerId: "zone_mask",
+            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          },
+          {
             layerId: "region_groups",
-            regionGroup: 58,
-            resourceBarWaypoint: 306,
+            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
           },
           {
             layerId: "regions",
-            regionId: 76,
-            regionName: "Tarif",
-            originWaypoint: 1437,
+            rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
           },
         ],
       },
@@ -328,17 +328,18 @@ test("buildHoverOverviewRows keeps bookmark info out of the regular hover box", 
       {
         worldX: 100,
         worldZ: 100,
-        zoneName: "Demi River",
         layerSamples: [
           {
+            layerId: "zone_mask",
+            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          },
+          {
             layerId: "region_groups",
-            regionGroup: 58,
-            resourceBarWaypoint: 306,
+            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
           },
           {
             layerId: "regions",
-            regionId: 76,
-            regionName: "Tarif",
+            rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
           },
         ],
       },
@@ -374,6 +375,12 @@ test("buildHoverOverviewRows keeps bookmark info out of the regular hover box", 
         label: "Resources",
         value: "Tarif",
       },
+      {
+        layerId: "regions",
+        icon: "hover-origin",
+        label: "Origin",
+        value: "Tarif",
+      },
     ],
   );
 });
@@ -382,15 +389,34 @@ test("buildHoverOverviewRows falls back to region ids when assignments are missi
   assert.deepEqual(
     buildHoverOverviewRows(
       {
-        zoneName: "Demi River",
         layerSamples: [
           {
+            layerId: "zone_mask",
+            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          },
+          {
             layerId: "region_groups",
-            regionGroup: 16,
+            rows: [
+              {
+                key: "resources",
+                icon: "hover-resources",
+                label: "Resources",
+                value: "RG16",
+                statusIcon: "question-mark",
+              },
+            ],
           },
           {
             layerId: "regions",
-            regionId: 76,
+            rows: [
+              {
+                key: "origin",
+                icon: "hover-origin",
+                label: "Origin",
+                value: "R76",
+                statusIcon: "question-mark",
+              },
+            ],
           },
         ],
       },
@@ -425,17 +451,23 @@ test("buildHoverOverviewRows keeps a soft unknown marker when resource coordinat
   assert.deepEqual(
     buildHoverOverviewRows(
       {
-        zoneName: "Demi River",
         layerSamples: [
           {
-            layerId: "region_groups",
-            regionGroup: 16,
-            resourceBarWorldX: 120,
-            resourceBarWorldZ: 240,
+            layerId: "zone_mask",
+            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
           },
           {
-            layerId: "regions",
-            regionId: 76,
+            layerId: "region_groups",
+            rows: [
+              {
+                key: "resources",
+                icon: "hover-resources",
+                label: "Resources",
+                value: "R76",
+                statusIcon: "question-mark",
+                statusIconTone: "subtle",
+              },
+            ],
           },
         ],
       },
@@ -464,13 +496,23 @@ test("buildHoverOverviewRows keeps a soft unknown marker when origin coordinates
   assert.deepEqual(
     buildHoverOverviewRows(
       {
-        zoneName: "Demi River",
         layerSamples: [
           {
+            layerId: "zone_mask",
+            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          },
+          {
             layerId: "regions",
-            regionId: 76,
-            originWorldX: 120,
-            originWorldZ: 240,
+            rows: [
+              {
+                key: "origin",
+                icon: "hover-origin",
+                label: "Origin",
+                value: "R76",
+                statusIcon: "question-mark",
+                statusIconTone: "subtle",
+              },
+            ],
           },
         ],
       },
