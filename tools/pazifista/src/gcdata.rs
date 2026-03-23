@@ -21,7 +21,7 @@ pub use loc::inspect_loc;
 pub use stringtable::inspect_stringtable_bss;
 pub use waypoint_xml::inspect_waypoint_xml;
 
-const REGIONINFO_ROW_SIGNATURE: [u8; 8] = [0x5A, 0x55, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00];
+const REGIONINFO_ROW_SIGNATURE_PREFIX: [u8; 4] = [0x5A, 0x55, 0x00, 0x00];
 const REGIONINFO_ROW_SIGNATURE_OFFSET: usize = 32;
 const REGIONINFO_ROW_TRADE_ORIGIN_OFFSET: usize = 102;
 const REGIONINFO_ROW_GROUP_OFFSET: usize = 104;
@@ -811,8 +811,8 @@ fn decode_regioninfo_bss_signature_rows(
     let mut rows = BTreeMap::new();
     let mut search_from = 0usize;
     while let Some(relative_hit) = bytes[search_from..]
-        .windows(REGIONINFO_ROW_SIGNATURE.len())
-        .position(|window| window == REGIONINFO_ROW_SIGNATURE)
+        .windows(REGIONINFO_ROW_SIGNATURE_PREFIX.len())
+        .position(|window| window == REGIONINFO_ROW_SIGNATURE_PREFIX)
     {
         let signature_offset = search_from + relative_hit;
         let Some(row_start_offset) = signature_offset.checked_sub(REGIONINFO_ROW_SIGNATURE_OFFSET)

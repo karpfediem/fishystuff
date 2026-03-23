@@ -15,7 +15,7 @@ use gcdata::{
     inspect_regionclientdata, inspect_regiongroupinfo_bss, inspect_regioninfo_bss,
     inspect_stringtable_bss, inspect_waypoint_xml,
 };
-use pabr::{PabrMap, RegionGroupMapping, DEFAULT_ROW_SHIFT};
+use pabr::{load_region_group_mapping, PabrMap, DEFAULT_ROW_SHIFT};
 
 const VERSION_HEADER: &str =
     "pazifista - tool for extracting Black Desert Online archives and decoding PABR region maps.";
@@ -185,8 +185,8 @@ struct PabrExportRegionsGeojsonCli {
 struct PabrExportRegionGroupsGeojsonCli {
     #[arg(value_name = "input file", help = "Either the .rid or .bkd file")]
     input_file: PathBuf,
-    #[arg(long = "regioninfo", value_name = "path")]
-    regioninfo: PathBuf,
+    #[arg(long = "regioninfo-bss", value_name = "path")]
+    regioninfo_bss: PathBuf,
     #[arg(short = 'o', long = "output", value_name = "path")]
     output: PathBuf,
     #[arg(long = "row-shift", value_name = "value", default_value_t = DEFAULT_ROW_SHIFT)]
@@ -612,8 +612,8 @@ fn run_pabr(cli: PabrCli) -> Result<()> {
         PabrCommand::ExportRegionGroupsGeojson(args) => {
             let map = load_pabr_map(&args.input_file)?;
             let output_path = normalize_output_path(&args.output)?;
-            let regioninfo_path = canonical_existing_path(&args.regioninfo)?;
-            let mapping = RegionGroupMapping::from_regioninfo_path(&regioninfo_path)?;
+            let regioninfo_bss_path = canonical_existing_path(&args.regioninfo_bss)?;
+            let mapping = load_region_group_mapping(&regioninfo_bss_path)?;
             let summary =
                 map.export_region_groups_geojson(&output_path, args.row_shift, &mapping)?;
 
@@ -621,7 +621,7 @@ fn run_pabr(cli: PabrCli) -> Result<()> {
                 println!("{VERSION_HEADER}");
                 println!("RID file: {}", map.rid_path.display());
                 println!("BKD file: {}", map.bkd_path.display());
-                println!("Region info: {}", regioninfo_path.display());
+                println!("Region info BSS: {}", regioninfo_bss_path.display());
                 println!("Row shift: {}", args.row_shift);
                 println!(
                     "Exported region-groups GeoJSON: {} (features={}, rectangles={})",

@@ -3,6 +3,7 @@ pub mod constants;
 pub mod coord;
 pub mod field;
 pub mod fish_icons;
+pub mod gamecommondata;
 pub mod gaussian;
 pub mod loc;
 pub mod masks;

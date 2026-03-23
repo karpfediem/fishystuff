@@ -84,6 +84,7 @@ Important:
 Purpose:
 
 - region-level metadata such as:
+  - `is_accessible`
   - `tradeoriginregion`
   - `regiongroup`
   - `waypoint`
@@ -92,7 +93,19 @@ Use it for:
 
 - linking region IDs to their group IDs
 - linking region IDs to waypoint IDs
+- counting accessible regions and region-groups
 - checking whether current external `regioninfo.json` is stale
+
+Validated decode notes:
+
+- the file contains `1515` rows in the current tested build
+- the row family is identified by a marker at `row_start + 32` whose validated
+  stable prefix is `5a 55 00 00`
+- the previously used exact 8-byte marker was too narrow; the live file uses
+  multiple variants under that same 4-byte prefix
+- `tradeoriginregion`, `regiongroup`, and the shifted primary waypoint field
+  remain at the same offsets across the validated family
+- `is_accessible` is currently decoded from `row_start + 27 == 1`
 
 ### `regiongroupinfo.bss`
 
@@ -227,8 +240,17 @@ That means region-group labeling no longer depends on stale external
 Current status:
 
 - the original English chain is now closed for the tested map metadata path
+- raw PABR-derived `regions` now enrich fully from original files
 - canonical waypoint tokens still come from `mapdata_realexplore*.xml`
 - final display labels are resolved numerically from `.loc`, not by token text
+
+Observed current map outputs:
+
+- raw PABR `regions`: `1253` features
+- raw PABR `region_groups`: `241` features
+  - includes new original group `295`
+- current shipped `region_groups/v1.geojson`: `240` features
+  - stops at max group `294`
 
 ### `.loc` Localization Files
 

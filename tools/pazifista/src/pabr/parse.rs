@@ -1,23 +1,15 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File};
+use std::collections::BTreeSet;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
 
 use super::{
     BkdFile, Breakpoint, PabrInspect, PabrMap, RegionGroupMapping, RidFile, BKD_TRAILER_LEN,
     INDEX_SENTINEL, PABR_MAGIC, RID_FOOTER_LEN, RID_FOOTER_SIGNATURE,
 };
 use crate::pabr::util::{read_u16, read_u32};
-
-#[derive(Debug, Deserialize)]
-struct RegionInfoRow {
-    #[serde(default)]
-    key: u32,
-    #[serde(default)]
-    regiongroup: u32,
-}
+use fishystuff_core::gamecommondata::load_region_group_mapping_from_regioninfo_bss;
 
 impl PabrMap {
     pub fn paired_paths(input_path: &Path) -> Result<(PathBuf, PathBuf)> {
@@ -135,52 +127,8 @@ impl PabrMap {
     }
 }
 
-impl RegionGroupMapping {
-    pub fn from_regioninfo_path(path: &Path) -> Result<Self> {
-        let file = File::open(path)
-            .with_context(|| format!("failed to open regioninfo file {}", path.display()))?;
-        let regioninfo: BTreeMap<String, RegionInfoRow> =
-            serde_json::from_reader(file).context("failed to parse regioninfo json")?;
-
-        let mut region_to_group = BTreeMap::new();
-        let mut group_to_regions: BTreeMap<u16, Vec<u16>> = BTreeMap::new();
-        for row in regioninfo.into_values() {
-            if row.key == 0 {
-                continue;
-            }
-
-            let region_id = u16::try_from(row.key)
-                .with_context(|| format!("region id {} exceeds u16", row.key))?;
-            let group_id = u16::try_from(row.regiongroup)
-                .with_context(|| format!("region-group id {} exceeds u16", row.regiongroup))?;
-            region_to_group.insert(region_id, group_id);
-            group_to_regions
-                .entry(group_id)
-                .or_default()
-                .push(region_id);
-        }
-
-        for region_ids in group_to_regions.values_mut() {
-            region_ids.sort_unstable();
-            region_ids.dedup();
-        }
-
-        Ok(Self {
-            region_to_group,
-            group_to_regions,
-        })
-    }
-
-    pub(crate) fn region_group_for_region(&self, region_id: u16) -> Option<u16> {
-        self.region_to_group.get(&region_id).copied()
-    }
-
-    pub(crate) fn region_ids_for_group(&self, group_id: u16) -> &[u16] {
-        self.group_to_regions
-            .get(&group_id)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
-    }
+pub fn load_region_group_mapping(path: &Path) -> Result<RegionGroupMapping> {
+    load_region_group_mapping_from_regioninfo_bss(path)
 }
 
 impl RidFile {

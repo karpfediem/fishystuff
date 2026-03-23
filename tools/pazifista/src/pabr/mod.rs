@@ -4,9 +4,9 @@ mod parse;
 mod render;
 mod util;
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+pub use parse::load_region_group_mapping;
 pub(crate) use util::color_rgb_for_value;
 
 pub const DEFAULT_ROW_SHIFT: u32 = 0x0EF0;
@@ -92,11 +92,7 @@ pub struct RegionMatchSummary {
     pub mutual_best_match_count: usize,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct RegionGroupMapping {
-    pub(crate) region_to_group: BTreeMap<u16, u16>,
-    pub(crate) group_to_regions: BTreeMap<u16, Vec<u16>>,
-}
+pub type RegionGroupMapping = fishystuff_core::gamecommondata::RegionGroupMapping;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct RowSegment {

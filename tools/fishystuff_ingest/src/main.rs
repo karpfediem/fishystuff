@@ -183,23 +183,23 @@ enum Commands {
         #[arg(long)]
         geojson: PathBuf,
         #[arg(long)]
-        regioninfo: PathBuf,
+        regioninfo_bss: PathBuf,
         #[arg(long)]
-        deck_rg_graphs: Option<PathBuf>,
-        #[arg(long, default_value = "shrddr")]
+        regiongroupinfo_bss: PathBuf,
+        #[arg(long, default_value = "original")]
         source: String,
     },
     BuildDetailedRegionsGeojson {
         #[arg(long)]
         regions_geojson: PathBuf,
         #[arg(long)]
-        regioninfo: PathBuf,
+        regioninfo_bss: PathBuf,
+        #[arg(long)]
+        regiongroupinfo_bss: PathBuf,
         #[arg(long, help = "Original localization .loc file")]
         loc: PathBuf,
-        #[arg(long)]
-        deck_r_origins: PathBuf,
-        #[arg(long)]
-        deck_rg_graphs: PathBuf,
+        #[arg(long = "waypoint-xml", required = true)]
+        waypoint_xml: Vec<PathBuf>,
         #[arg(long)]
         out: PathBuf,
     },
@@ -207,13 +207,13 @@ enum Commands {
         #[arg(long)]
         region_groups_geojson: PathBuf,
         #[arg(long)]
-        regioninfo: PathBuf,
+        regioninfo_bss: PathBuf,
+        #[arg(long)]
+        regiongroupinfo_bss: PathBuf,
         #[arg(long, help = "Original localization .loc file")]
         loc: PathBuf,
-        #[arg(long)]
-        deck_r_origins: PathBuf,
-        #[arg(long)]
-        deck_rg_graphs: PathBuf,
+        #[arg(long = "waypoint-xml", required = true)]
+        waypoint_xml: Vec<PathBuf>,
         #[arg(long)]
         out: PathBuf,
     },
@@ -432,46 +432,46 @@ fn main() -> Result<()> {
             database_url,
             map_version,
             geojson,
-            regioninfo,
-            deck_rg_graphs,
+            regioninfo_bss,
+            regiongroupinfo_bss,
             source,
         } => run_import_region_groups_mysql(
             database_url,
             map_version,
             geojson,
-            regioninfo,
-            deck_rg_graphs,
+            regioninfo_bss,
+            regiongroupinfo_bss,
             source,
             config.as_ref(),
         ),
         Commands::BuildDetailedRegionsGeojson {
             regions_geojson,
-            regioninfo,
+            regioninfo_bss,
+            regiongroupinfo_bss,
             loc,
-            deck_r_origins,
-            deck_rg_graphs,
+            waypoint_xml,
             out,
         } => run_build_detailed_regions_geojson(
             regions_geojson,
-            regioninfo,
+            regioninfo_bss,
+            regiongroupinfo_bss,
             loc,
-            deck_r_origins,
-            deck_rg_graphs,
+            waypoint_xml,
             out,
         ),
         Commands::BuildRegionGroupsGeojson {
             region_groups_geojson,
-            regioninfo,
+            regioninfo_bss,
+            regiongroupinfo_bss,
             loc,
-            deck_r_origins,
-            deck_rg_graphs,
+            waypoint_xml,
             out,
         } => run_build_region_groups_geojson(
             region_groups_geojson,
-            regioninfo,
+            regioninfo_bss,
+            regiongroupinfo_bss,
             loc,
-            deck_r_origins,
-            deck_rg_graphs,
+            waypoint_xml,
             out,
         ),
         Commands::DebugWatermapProjection {
@@ -1021,8 +1021,8 @@ fn run_import_region_groups_mysql(
     database_url: Option<String>,
     map_version: Option<String>,
     geojson: PathBuf,
-    regioninfo: PathBuf,
-    deck_rg_graphs: Option<PathBuf>,
+    regioninfo_bss: PathBuf,
+    regiongroupinfo_bss: PathBuf,
     source: String,
     config: Option<&fishystuff_config::Config>,
 ) -> Result<()> {
@@ -1032,8 +1032,8 @@ fn run_import_region_groups_mysql(
 
     let (meta_rows, region_rows) = region_groups::load_region_group_inputs(
         &geojson,
-        &regioninfo,
-        deck_rg_graphs.as_deref(),
+        &regioninfo_bss,
+        &regiongroupinfo_bss,
         &source,
     )?;
     store
@@ -1052,18 +1052,18 @@ fn run_import_region_groups_mysql(
 
 fn run_build_detailed_regions_geojson(
     regions_geojson: PathBuf,
-    regioninfo: PathBuf,
+    regioninfo_bss: PathBuf,
+    regiongroupinfo_bss: PathBuf,
     loc: PathBuf,
-    deck_r_origins: PathBuf,
-    deck_rg_graphs: PathBuf,
+    waypoint_xml: Vec<PathBuf>,
     out: PathBuf,
 ) -> Result<()> {
     let summary = region_layers::build_detailed_regions_geojson(
         &regions_geojson,
-        &regioninfo,
         &loc,
-        &deck_r_origins,
-        &deck_rg_graphs,
+        &regioninfo_bss,
+        &regiongroupinfo_bss,
+        &waypoint_xml,
         &out,
     )?;
     println!(
@@ -1078,18 +1078,18 @@ fn run_build_detailed_regions_geojson(
 
 fn run_build_region_groups_geojson(
     region_groups_geojson: PathBuf,
-    regioninfo: PathBuf,
+    regioninfo_bss: PathBuf,
+    regiongroupinfo_bss: PathBuf,
     loc: PathBuf,
-    deck_r_origins: PathBuf,
-    deck_rg_graphs: PathBuf,
+    waypoint_xml: Vec<PathBuf>,
     out: PathBuf,
 ) -> Result<()> {
     let summary = region_layers::build_region_groups_geojson(
         &region_groups_geojson,
-        &regioninfo,
         &loc,
-        &deck_r_origins,
-        &deck_rg_graphs,
+        &regioninfo_bss,
+        &regiongroupinfo_bss,
+        &waypoint_xml,
         &out,
     )?;
     println!(

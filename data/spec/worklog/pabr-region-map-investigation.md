@@ -766,9 +766,69 @@ Two focus IDs were not found in the currently decoded signature family:
 - `820`
 - `1070`
 
-So there is at least one additional `regioninfo.bss` row layout still to
-decode. That second family is now the main blocker for turning the partial
-decoder into a full replacement for the external `regioninfo.json`.
+At that point there was clearly at least one additional `regioninfo.bss` row
+family still to decode, and it was the main blocker for replacing the external
+`regioninfo.json`.
+
+## Full `regioninfo.bss` Decode
+
+That blocker is now closed.
+
+The missing rows turned out not to use different metadata offsets. The live
+file still uses the same:
+
+- `tradeoriginregion`
+- `regiongroup`
+- shifted `waypoint`
+
+fields at the previously validated offsets.
+
+The real difference was the marker used at `row_start + 32`:
+
+- the first decoder only matched the exact 8-byte form
+  `5a 55 00 00 00 01 00 00`
+- the full file uses multiple variants under the stable 4-byte prefix
+  `5a 55 00 00`
+
+Once the decoder was widened to that prefix, the original table decoded
+cleanly:
+
+- `regioninfo.bss` header count: `1515`
+- decoded rows: `1515`
+- undecoded rows: `0`
+
+Representative alternate-family example:
+
+- region `832`
+  - marker bytes at `+32`: `5a 55 00 00 00 00 bf 06`
+  - decoded values still line up with current semantics:
+    - `tradeoriginregion = 832`
+    - `regiongroup = 218`
+    - `waypoint = 1417`
+    - origin label `Margoria`
+
+The same pass also surfaced a reliable original accessibility flag:
+
+- `is_accessible` is currently decoded as `row_start + 27 == 1`
+
+Against the old external `regioninfo.json`, that rule matched with:
+
+- zero false negatives
+- two false positives
+  - `951` (`Bloody Monastery`)
+  - `1064` (`Shiv Valley Road`)
+
+Those two are now better treated as likely staleness in the external JSON than
+as evidence against the original-file decode.
+
+Practical result:
+
+- raw PABR `regions` now enrich fully from original files
+  - `1253` features
+  - `1253` named
+- raw PABR `region_groups` now export `241` groups from original files
+  - the extra live group is `295`
+  - the current shipped external layer still stops at `294`
 
 Observed `regionclientdata_*.xml` coverage from the extracted game install:
 

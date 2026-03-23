@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
 MAP_VERSION="${MAP_VERSION:-v1}"
-GEOJSON="${1:-/home/carp/code/clones/shrddr.github.io/workerman/data/rg_latest_1_5.geojson}"
+GEOJSON="${1:-$ROOT_DIR/data/cdn/public/region_groups/${MAP_VERSION}.geojson}"
 CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 TILES_OUT_DIR="${2:-$CDN_ROOT/images/tiles/region_groups/${MAP_VERSION}/0}"
 TILESET_JSON="${3:-$CDN_ROOT/images/tiles/region_groups/${MAP_VERSION}/tileset.json}"
