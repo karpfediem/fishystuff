@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
+use crate::field_metadata::FieldHoverMetadataEntry;
 use crate::loc::load_loc_namespaces_as_string_maps;
 
 const PABR_MAGIC: &[u8; 4] = b"PABR";
@@ -131,6 +132,43 @@ impl OriginalRegionLayerContext {
             world_z: Some(row.graphz).filter(|value| *value != 0.0),
         };
         info.has_value().then_some(info)
+    }
+
+    pub fn resolve_region_hover_metadata(&self, region_id: u32) -> Option<FieldHoverMetadataEntry> {
+        let region_group = self.region_group_for_region(region_id);
+        let origin = self.resolve_region_origin_info(region_id);
+        let resource = region_group.and_then(|group_id| self.resolve_resource_waypoint(group_id));
+        let entry = FieldHoverMetadataEntry {
+            region_id: Some(region_id),
+            region_group,
+            region_name: origin.as_ref().and_then(|value| value.name.clone()),
+            resource_bar_waypoint: resource.and_then(|value| value.waypoint_id),
+            resource_bar_world_x: resource.and_then(|value| value.world_x),
+            resource_bar_world_z: resource.and_then(|value| value.world_z),
+            origin_waypoint: origin.as_ref().and_then(|value| value.waypoint_id),
+            origin_world_x: origin.as_ref().and_then(|value| value.world_x),
+            origin_world_z: origin.as_ref().and_then(|value| value.world_z),
+        };
+        entry.has_value().then_some(entry)
+    }
+
+    pub fn resolve_region_group_hover_metadata(
+        &self,
+        region_group_id: u32,
+    ) -> Option<FieldHoverMetadataEntry> {
+        let resource = self.resolve_resource_waypoint(region_group_id);
+        let entry = FieldHoverMetadataEntry {
+            region_id: None,
+            region_group: Some(region_group_id),
+            region_name: None,
+            resource_bar_waypoint: resource.and_then(|value| value.waypoint_id),
+            resource_bar_world_x: resource.and_then(|value| value.world_x),
+            resource_bar_world_z: resource.and_then(|value| value.world_z),
+            origin_waypoint: None,
+            origin_world_x: None,
+            origin_world_z: None,
+        };
+        entry.has_value().then_some(entry)
     }
 }
 
@@ -499,9 +537,10 @@ mod tests {
         load_region_group_mapping_from_regioninfo_bss, parse_attr_f64, parse_attr_u32, PABR_MAGIC,
         REGIONGROUPINFO_ROW_GRAPHX_OFFSET, REGIONGROUPINFO_ROW_GRAPHY_OFFSET,
         REGIONGROUPINFO_ROW_GRAPHZ_OFFSET, REGIONGROUPINFO_ROW_LEN,
-        REGIONGROUPINFO_ROW_WAYPOINT_OFFSET, REGIONINFO_ROW_GROUP_OFFSET,
-        REGIONINFO_ROW_SIGNATURE_OFFSET, REGIONINFO_ROW_SIGNATURE_PREFIX,
-        REGIONINFO_ROW_TRADE_ORIGIN_OFFSET, REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET,
+        REGIONGROUPINFO_ROW_WAYPOINT_OFFSET, REGIONINFO_ROW_ACCESSIBLE_OFFSET,
+        REGIONINFO_ROW_GROUP_OFFSET, REGIONINFO_ROW_SIGNATURE_OFFSET,
+        REGIONINFO_ROW_SIGNATURE_PREFIX, REGIONINFO_ROW_TRADE_ORIGIN_OFFSET,
+        REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET,
     };
     use std::fs;
 
@@ -598,6 +637,7 @@ mod tests {
         let signature_start = row_start + REGIONINFO_ROW_SIGNATURE_OFFSET;
         bytes[signature_start..signature_start + 8]
             .copy_from_slice(&[0x5A, 0x55, 0x00, 0x00, 0x00, 0x00, 0xBF, 0x06]);
+        bytes[row_start + REGIONINFO_ROW_ACCESSIBLE_OFFSET] = 1;
         bytes[row_start + REGIONINFO_ROW_TRADE_ORIGIN_OFFSET
             ..row_start + REGIONINFO_ROW_TRADE_ORIGIN_OFFSET + 2]
             .copy_from_slice(&832u16.to_le_bytes());

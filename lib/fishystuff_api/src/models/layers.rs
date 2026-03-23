@@ -28,6 +28,8 @@ pub struct LayerDescriptor {
     #[serde(default)]
     pub field_source: Option<FieldSourceRef>,
     #[serde(default)]
+    pub field_metadata_source: Option<FieldMetadataSourceRef>,
+    #[serde(default)]
     pub vector_source: Option<VectorSourceRef>,
     #[serde(default)]
     pub lod_policy: LodPolicyDto,
@@ -52,6 +54,7 @@ impl Default for LayerDescriptor {
             max_level: 0,
             y_flip: false,
             field_source: None,
+            field_metadata_source: None,
             vector_source: None,
             lod_policy: LodPolicyDto::default(),
             ui: LayerUiInfo::default(),
@@ -110,6 +113,15 @@ pub struct FieldSourceRef {
     /// Declares how field ids should be visualized when a direct texture is requested.
     #[serde(default)]
     pub color_mode: FieldColorMode,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FieldMetadataSourceRef {
+    /// URL for the hover/semantic metadata asset associated with a field.
+    pub url: String,
+    /// Revision identifier used to invalidate cached metadata state.
+    #[serde(default)]
+    pub revision: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -276,9 +288,9 @@ const fn default_motion_suppresses_refine() -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        FieldColorMode, FieldSourceRef, GeometrySpace, LayerDescriptor, LayerKind,
-        LayerTransformDto, LayerUiInfo, LayersResponse, LodPolicyDto, StyleMode, TilesetRef,
-        VectorSourceRef,
+        FieldColorMode, FieldMetadataSourceRef, FieldSourceRef, GeometrySpace, LayerDescriptor,
+        LayerKind, LayerTransformDto, LayerUiInfo, LayersResponse, LodPolicyDto, StyleMode,
+        TilesetRef, VectorSourceRef,
     };
 
     #[test]
@@ -297,6 +309,7 @@ mod tests {
                 max_level: 0,
                 y_flip: false,
                 field_source: None,
+                field_metadata_source: None,
                 vector_source: Some(VectorSourceRef {
                     url: "/region_groups/v1.geojson".to_string(),
                     revision: "rg-v1".to_string(),
@@ -348,6 +361,10 @@ mod tests {
                     revision: "regions-field-v1".to_string(),
                     color_mode: FieldColorMode::DebugHash,
                 }),
+                field_metadata_source: Some(FieldMetadataSourceRef {
+                    url: "/fields/regions.v1.meta.json".to_string(),
+                    revision: "regions-meta-v1".to_string(),
+                }),
                 vector_source: None,
                 lod_policy: LodPolicyDto::default(),
                 ui: LayerUiInfo::default(),
@@ -364,6 +381,10 @@ mod tests {
         assert_eq!(
             json["layers"][0]["field_source"]["color_mode"],
             "debug_hash"
+        );
+        assert_eq!(
+            json["layers"][0]["field_metadata_source"]["url"],
+            "/fields/regions.v1.meta.json"
         );
     }
 }

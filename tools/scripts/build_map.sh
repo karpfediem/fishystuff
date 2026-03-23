@@ -324,8 +324,25 @@ regions_field_input="${REGIONS_FIELD_INPUT:-$(first_existing_path \
   data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid)}"
 regioninfo_bss_input="${REGIONINFO_BSS_INPUT:-$(first_existing_path \
   data/scratch/gamecommondata/binary/regioninfo.bss)}"
+regiongroupinfo_bss_input="${REGIONGROUPINFO_BSS_INPUT:-$(first_existing_path \
+  data/scratch/gamecommondata/binary/regiongroupinfo.bss)}"
+region_loc_input="${REGION_LOC_INPUT:-$(first_existing_path \
+  data/data/languagedata_en.loc)}"
+waypoint_xml_primary="${WAYPOINT_XML_PRIMARY:-$(first_existing_path \
+  data/scratch/gamecommondata/waypoint/mapdata_realexplore.xml)}"
+waypoint_xml_secondary="${WAYPOINT_XML_SECONDARY:-$(first_existing_path \
+  data/scratch/gamecommondata/waypoint/mapdata_realexplore2.xml)}"
 regions_field_output="$CDN_FIELD_ASSET_DIR/regions.v1.bin"
 region_groups_field_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.bin"
+regions_field_metadata_output="$CDN_FIELD_ASSET_DIR/regions.v1.meta.json"
+region_groups_field_metadata_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.meta.json"
+waypoint_xml_args=()
+if [ -f "$waypoint_xml_primary" ]; then
+  waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_primary")
+fi
+if [ -f "$waypoint_xml_secondary" ]; then
+  waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_secondary")
+fi
 
 if [ -f "$regions_field_input" ] && { [ "${REBUILD_REGIONS_FIELD:-0}" = "1" ] || [ ! -f "$regions_field_output" ] || [ "$regions_field_input" -nt "$regions_field_output" ]; }; then
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p pazifista --bin pazifista -- \
@@ -345,4 +362,40 @@ if [ -f "$regions_field_input" ] && [ -f "$regioninfo_bss_input" ] && {
     "$regions_field_input" \
     --regioninfo-bss "$regioninfo_bss_input" \
     --output "$region_groups_field_output"
+fi
+
+if [ -f "$regions_field_output" ] && [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {
+  [ "${REBUILD_REGIONS_FIELD_METADATA:-0}" = "1" ] ||
+  [ ! -f "$regions_field_metadata_output" ] ||
+  [ "$regions_field_output" -nt "$regions_field_metadata_output" ] ||
+  [ "$regioninfo_bss_input" -nt "$regions_field_metadata_output" ] ||
+  [ "$regiongroupinfo_bss_input" -nt "$regions_field_metadata_output" ] ||
+  [ "$region_loc_input" -nt "$regions_field_metadata_output" ];
+}; then
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
+    build-regions-field-metadata \
+    --field "$regions_field_output" \
+    --regioninfo-bss "$regioninfo_bss_input" \
+    --regiongroupinfo-bss "$regiongroupinfo_bss_input" \
+    --loc "$region_loc_input" \
+    "${waypoint_xml_args[@]}" \
+    --out "$regions_field_metadata_output"
+fi
+
+if [ -f "$region_groups_field_output" ] && [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {
+  [ "${REBUILD_REGION_GROUPS_FIELD_METADATA:-0}" = "1" ] ||
+  [ ! -f "$region_groups_field_metadata_output" ] ||
+  [ "$region_groups_field_output" -nt "$region_groups_field_metadata_output" ] ||
+  [ "$regioninfo_bss_input" -nt "$region_groups_field_metadata_output" ] ||
+  [ "$regiongroupinfo_bss_input" -nt "$region_groups_field_metadata_output" ] ||
+  [ "$region_loc_input" -nt "$region_groups_field_metadata_output" ];
+}; then
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
+    build-region-groups-field-metadata \
+    --field "$region_groups_field_output" \
+    --regioninfo-bss "$regioninfo_bss_input" \
+    --regiongroupinfo-bss "$regiongroupinfo_bss_input" \
+    --loc "$region_loc_input" \
+    "${waypoint_xml_args[@]}" \
+    --out "$region_groups_field_metadata_output"
 fi

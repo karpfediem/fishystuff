@@ -2,6 +2,7 @@ pub mod asset_urls;
 pub mod constants;
 pub mod coord;
 pub mod field;
+pub mod field_metadata;
 pub mod fish_icons;
 pub mod gamecommondata;
 pub mod gaussian;

@@ -161,6 +161,8 @@ pub(super) fn is_layers_schema_error(err: &mysql::Error) -> bool {
         || is_unknown_column(err, "field_source_url")
         || is_unknown_column(err, "field_source_revision")
         || is_unknown_column(err, "field_color_mode")
+        || is_unknown_column(err, "field_metadata_source_url")
+        || is_unknown_column(err, "field_metadata_source_revision")
         || is_unknown_column(err, "vector_source_url")
         || is_unknown_column(err, "vector_source_revision")
         || is_unknown_column(err, "vector_geometry_space")

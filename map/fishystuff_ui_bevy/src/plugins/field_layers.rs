@@ -10,6 +10,10 @@ use crate::map::exact_lookup::{
     ensure_exact_lookup_request, poll_exact_lookup_requests, ExactLookupCache, ExactLookupStatus,
     PendingExactLookups,
 };
+use crate::map::field_metadata::{
+    ensure_field_metadata_request, poll_field_metadata_requests, FieldMetadataCache,
+    PendingFieldMetadata,
+};
 use crate::map::layers::{
     FieldColorMode, LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime,
 };
@@ -30,6 +34,8 @@ impl Plugin for FieldLayersPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ExactLookupCache>()
             .init_resource::<PendingExactLookups>()
+            .init_resource::<FieldMetadataCache>()
+            .init_resource::<PendingFieldMetadata>()
             .init_resource::<FieldLayerRuntime>()
             .add_systems(
                 PostUpdate,
@@ -88,8 +94,11 @@ fn sync_exact_lookup_cache(
     mut layer_runtime: ResMut<LayerRuntime>,
     mut exact_lookups: ResMut<ExactLookupCache>,
     mut pending_lookups: ResMut<PendingExactLookups>,
+    mut field_metadata: ResMut<FieldMetadataCache>,
+    mut pending_field_metadata: ResMut<PendingFieldMetadata>,
 ) {
     poll_exact_lookup_requests(&mut exact_lookups, &mut pending_lookups);
+    poll_field_metadata_requests(&mut field_metadata, &mut pending_field_metadata);
 
     let active_layer_ids = layer_registry
         .ordered()
@@ -100,9 +109,17 @@ fn sync_exact_lookup_cache(
 
     for layer in layer_registry.ordered() {
         let Some(url) = layer.field_url() else {
+            if layer.field_metadata_url().is_some() {
+                ensure_field_metadata_request(
+                    layer,
+                    &mut field_metadata,
+                    &mut pending_field_metadata,
+                );
+            }
             continue;
         };
         ensure_exact_lookup_request(layer, &mut exact_lookups, &mut pending_lookups);
+        ensure_field_metadata_request(layer, &mut field_metadata, &mut pending_field_metadata);
 
         if let Some(runtime_state) = layer_runtime.get_mut(layer.id) {
             match exact_lookups.status(layer.id, &url) {
@@ -150,6 +167,29 @@ fn sync_exact_lookup_cache(
         .collect::<Vec<_>>();
     for layer_id in stale_pending_ids {
         pending_lookups.remove_layer(layer_id);
+    }
+
+    let active_metadata_ids = layer_registry
+        .ordered()
+        .iter()
+        .filter(|layer| layer.field_metadata_url().is_some())
+        .map(|layer| layer.id)
+        .collect::<HashSet<_>>();
+    let stale_metadata_ids = field_metadata
+        .layer_ids()
+        .into_iter()
+        .filter(|layer_id| !active_metadata_ids.contains(layer_id))
+        .collect::<Vec<_>>();
+    for layer_id in stale_metadata_ids {
+        field_metadata.remove_layer(layer_id);
+    }
+    let stale_pending_metadata_ids = pending_field_metadata
+        .layer_ids()
+        .into_iter()
+        .filter(|layer_id| !active_metadata_ids.contains(layer_id))
+        .collect::<Vec<_>>();
+    for layer_id in stale_pending_metadata_ids {
+        pending_field_metadata.remove_layer(layer_id);
     }
 }
 

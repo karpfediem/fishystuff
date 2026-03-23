@@ -132,6 +132,19 @@ pub(super) fn absolutize_layers_response_assets(
             field_source.url =
                 append_cache_key_to_public_asset_url(&field_source.url, Some(cache_key.as_str()));
         }
+        if let Some(field_metadata_source) = layer.field_metadata_source.as_mut() {
+            field_metadata_source.url =
+                resolve_public_asset_url(Some(&field_metadata_source.url), public_base_url)
+                    .unwrap_or_default();
+            let cache_key = normalize_vector_cache_key(
+                Some(field_metadata_source.revision.as_str()),
+                map_asset_cache_key.as_deref(),
+            );
+            field_metadata_source.url = append_cache_key_to_public_asset_url(
+                &field_metadata_source.url,
+                Some(cache_key.as_str()),
+            );
+        }
         if let Some(vector_source) = layer.vector_source.as_mut() {
             vector_source.url = resolve_public_asset_url(Some(&vector_source.url), public_base_url)
                 .unwrap_or_default();
@@ -208,8 +221,8 @@ fn map_asset_cache_key() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use fishystuff_api::models::layers::{
-        FieldColorMode, FieldSourceRef, LayerDescriptor, LayersResponse, TilesetRef,
-        VectorSourceRef,
+        FieldColorMode, FieldMetadataSourceRef, FieldSourceRef, LayerDescriptor, LayersResponse,
+        TilesetRef, VectorSourceRef,
     };
 
     use super::{
@@ -277,6 +290,10 @@ mod tests {
                     revision: "regions-field-v1".to_string(),
                     color_mode: FieldColorMode::DebugHash,
                 }),
+                field_metadata_source: Some(FieldMetadataSourceRef {
+                    url: "/fields/regions.v1.meta.json".to_string(),
+                    revision: "regions-meta-v1".to_string(),
+                }),
                 vector_source: Some(VectorSourceRef {
                     url: "/region_groups/v1.geojson".to_string(),
                     revision: "rg-v1".to_string(),
@@ -306,6 +323,13 @@ mod tests {
                 .as_ref()
                 .map(|source| source.url.as_str()),
             Some("https://cdn.example.com/fields/regions.v1.bin?v=regions-field-v1")
+        );
+        assert_eq!(
+            layer
+                .field_metadata_source
+                .as_ref()
+                .map(|source| source.url.as_str()),
+            Some("https://cdn.example.com/fields/regions.v1.meta.json?v=regions-meta-v1")
         );
         assert_eq!(
             layer

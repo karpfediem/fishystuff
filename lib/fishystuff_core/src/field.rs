@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use anyhow::{bail, Result};
 
 const DISCRETE_FIELD_MAGIC: &[u8; 8] = b"FSZLKP01";
@@ -320,6 +322,10 @@ impl DiscreteFieldRows {
 
     pub fn segment_count(&self) -> usize {
         self.row_end_xs.len()
+    }
+
+    pub fn unique_nonzero_ids(&self) -> BTreeSet<u32> {
+        self.row_ids.iter().copied().filter(|id| *id != 0).collect()
     }
 
     pub fn for_each_span_matching(&self, target_id: u32, mut visit: impl FnMut(u16, u16, u16)) {

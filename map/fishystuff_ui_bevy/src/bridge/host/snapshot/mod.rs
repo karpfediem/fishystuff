@@ -7,6 +7,8 @@ use bevy::ecs::system::SystemParam;
 use self::filters::{bridge_capabilities, current_layer_summaries};
 use self::state::{effective_hover_snapshot, effective_selection_snapshot, effective_ui_state};
 use super::*;
+use crate::map::exact_lookup::ExactLookupCache;
+use crate::map::field_metadata::FieldMetadataCache;
 use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
@@ -34,7 +36,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         || context.display_state.is_changed()
         || context.debug_layers.is_changed()
         || context.bookmarks.is_changed()
-        || context.vector_runtime.is_changed();
+        || context.exact_lookups.is_changed()
+        || context.field_metadata.is_changed();
     let view_changed = context.view_mode.is_changed()
         || context.map_view.is_changed()
         || context.terrain_view.is_changed();
@@ -92,7 +95,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
                 context.debug_layers.enabled,
                 &context.bookmarks,
                 &context.layer_registry,
-                &context.vector_runtime,
+                &context.exact_lookups,
+                &context.field_metadata,
             );
         }
         if view_changed {
@@ -172,6 +176,8 @@ pub(super) struct SnapshotSyncContext<'w, 's> {
     debug_layers: Res<'w, LayerDebugSettings>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
+    exact_lookups: Res<'w, ExactLookupCache>,
+    field_metadata: Res<'w, FieldMetadataCache>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
     view_mode: Res<'w, ViewModeState>,
     map_view: Res<'w, Map2dViewState>,

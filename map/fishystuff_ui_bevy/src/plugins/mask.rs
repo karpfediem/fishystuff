@@ -5,9 +5,13 @@ use bevy::window::PrimaryWindow;
 use serde_json::{Map, Value};
 
 use fishystuff_api::Rgb;
+use fishystuff_core::field_metadata::FieldHoverMetadataEntry;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
-use crate::map::exact_lookup::{sample_exact_lookup_rgb, sample_field_layer_rgb, ExactLookupCache};
+use crate::map::exact_lookup::{
+    sample_exact_lookup_rgb, sample_field_layer_id_u32, sample_field_layer_rgb, ExactLookupCache,
+};
+use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
 use crate::map::raster::{map_version_id, RasterTileCache, TileKey};
 use crate::map::spaces::world::MapToWorld;
@@ -113,6 +117,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
     let hover_layers = current_hover_layers(&context.layer_registry, &context.layer_runtime);
     let mut sampling = HoverSamplingContext {
         exact_lookups: &context.exact_lookups,
+        field_metadata: &context.field_metadata,
         tile_cache: &context.tile_cache,
         vector_runtime: &context.vector_runtime,
         bootstrap: &context.bootstrap,
@@ -121,12 +126,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         map_to_world,
         registry_map_version_id: context.layer_registry.map_version_id(),
     };
-    let mut layer_samples = collect_hover_layer_samples(&hover_layers, &mut sampling);
-    enrich_region_group_samples_with_region_origin(
-        &mut layer_samples,
-        &context.layer_registry,
-        &sampling,
-    );
+    let layer_samples = collect_hover_layer_samples(&hover_layers, &mut sampling);
     let zone_sample = hover_layers
         .iter()
         .find(|layer| layer.pick_mode == PickMode::ExactTilePixel)
@@ -243,148 +243,64 @@ fn collect_hover_layer_samples(
         .collect()
 }
 
-fn enrich_region_group_samples_with_region_origin(
-    layer_samples: &mut Vec<HoverLayerSample>,
-    layer_registry: &LayerRegistry,
-    sampling: &HoverSamplingContext<'_>,
-) {
-    if !layer_samples
-        .iter()
-        .any(|sample| sample.layer_id == "region_groups")
-    {
-        return;
-    }
-    let Some(regions_layer) = layer_registry.get_by_key("regions") else {
-        return;
-    };
-    let metadata = sample_vector_layer_hover_metadata(
-        regions_layer,
-        sampling.vector_runtime,
-        sampling.registry_map_version_id,
-        sampling.world_point,
-    );
-    if metadata.origin_waypoint.is_none()
-        && metadata.origin_world_x.is_none()
-        && metadata.origin_world_z.is_none()
-        && metadata.region_name.is_none()
-    {
-        return;
-    }
-    for sample in layer_samples
-        .iter_mut()
-        .filter(|sample| sample.layer_id == "region_groups")
-    {
-        if sample.region_id.is_none() {
-            sample.region_id = metadata.region_id;
-        }
-        if sample.region_name.is_none() {
-            sample.region_name = metadata.region_name.clone();
-        }
-        if sample.origin_waypoint.is_none() {
-            sample.origin_waypoint = metadata.origin_waypoint;
-        }
-        if sample.origin_world_x.is_none() {
-            sample.origin_world_x = metadata.origin_world_x;
-        }
-        if sample.origin_world_z.is_none() {
-            sample.origin_world_z = metadata.origin_world_z;
-        }
-    }
-    if layer_samples.iter().any(sample_has_origin_details) {
-        return;
-    }
-    let Some(origin_sample) = build_origin_hover_sample(regions_layer, sampling, metadata) else {
-        return;
-    };
-    layer_samples.push(origin_sample);
-}
-
-fn sample_has_origin_details(sample: &HoverLayerSample) -> bool {
-    sample.origin_waypoint.is_some()
-        || sample.origin_world_x.is_some()
-        || sample.origin_world_z.is_some()
-}
-
-fn build_origin_hover_sample(
-    regions_layer: &crate::map::layers::LayerSpec,
-    sampling: &HoverSamplingContext<'_>,
-    metadata: HoverVectorMetadata,
-) -> Option<HoverLayerSample> {
-    if metadata.origin_waypoint.is_none()
-        && metadata.origin_world_x.is_none()
-        && metadata.origin_world_z.is_none()
-        && metadata.region_name.is_none()
-    {
-        return None;
-    }
-    let rgb = sample_vector_layer_rgb(
-        regions_layer,
-        sampling.vector_runtime,
-        sampling.registry_map_version_id,
-        sampling.world_point,
-    )
-    .unwrap_or_else(|| Rgb::new(0, 0, 0));
-    Some(HoverLayerSample {
-        layer_id: "origin_node".to_string(),
-        layer_name: "Origin Node".to_string(),
-        kind: "vector-geojson".to_string(),
-        rgb,
-        rgb_u32: rgb.to_u32(),
-        region_id: metadata.region_id,
-        region_group: metadata.region_group,
-        region_name: metadata.region_name,
-        resource_bar_waypoint: None,
-        resource_bar_world_x: None,
-        resource_bar_world_z: None,
-        origin_waypoint: metadata.origin_waypoint,
-        origin_world_x: metadata.origin_world_x,
-        origin_world_z: metadata.origin_world_z,
-    })
-}
-
 fn sample_hover_layer(
     layer: &crate::map::layers::LayerSpec,
     sampling: &mut HoverSamplingContext<'_>,
 ) -> Option<HoverLayerSample> {
-    let rgb = if layer.is_raster() {
-        sample_raster_layer_rgb(
-            layer,
-            sampling.exact_lookups,
-            sampling.tile_cache,
-            sampling.bootstrap,
-            sampling.world_point,
-            sampling.map_px,
-            sampling.map_to_world,
-        )?
+    let (rgb, hover_metadata, kind) = if layer.field_url().is_some() {
+        (
+            sample_field_layer_rgb(
+                layer,
+                sampling.exact_lookups,
+                sampling.map_px.0,
+                sampling.map_px.1,
+            )?,
+            sample_field_layer_hover_metadata(
+                layer,
+                sampling.exact_lookups,
+                sampling.field_metadata,
+                sampling.map_px,
+            ),
+            "field".to_string(),
+        )
+    } else if layer.is_raster() {
+        (
+            sample_raster_layer_rgb(
+                layer,
+                sampling.exact_lookups,
+                sampling.tile_cache,
+                sampling.bootstrap,
+                sampling.world_point,
+                sampling.map_px,
+                sampling.map_to_world,
+            )?,
+            HoverVectorMetadata::default(),
+            "tiled-raster".to_string(),
+        )
     } else if layer.is_vector() {
-        sample_vector_layer_rgb(
-            layer,
-            sampling.vector_runtime,
-            sampling.registry_map_version_id,
-            sampling.world_point,
-        )?
+        (
+            sample_vector_layer_rgb(
+                layer,
+                sampling.vector_runtime,
+                sampling.registry_map_version_id,
+                sampling.world_point,
+            )?,
+            sample_vector_layer_hover_metadata(
+                layer,
+                sampling.vector_runtime,
+                sampling.registry_map_version_id,
+                sampling.world_point,
+            ),
+            "vector-geojson".to_string(),
+        )
     } else {
         return None;
     };
     let rgb_u32 = rgb.to_u32();
-    let hover_metadata = if layer.is_vector() {
-        sample_vector_layer_hover_metadata(
-            layer,
-            sampling.vector_runtime,
-            sampling.registry_map_version_id,
-            sampling.world_point,
-        )
-    } else {
-        HoverVectorMetadata::default()
-    };
     Some(HoverLayerSample {
         layer_id: layer.key.clone(),
         layer_name: layer.name.clone(),
-        kind: if layer.is_vector() {
-            "vector-geojson".to_string()
-        } else {
-            "tiled-raster".to_string()
-        },
+        kind,
         rgb,
         rgb_u32,
         region_id: hover_metadata.region_id,
@@ -419,6 +335,7 @@ struct HoverUpdateContext<'w, 's> {
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
     exact_lookups: Res<'w, ExactLookupCache>,
+    field_metadata: Res<'w, FieldMetadataCache>,
     tile_cache: Res<'w, RasterTileCache>,
     bootstrap: Res<'w, ApiBootstrapState>,
     display_state: ResMut<'w, MapDisplayState>,
@@ -457,6 +374,7 @@ fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
 
 struct HoverSamplingContext<'a> {
     exact_lookups: &'a ExactLookupCache,
+    field_metadata: &'a FieldMetadataCache,
     tile_cache: &'a RasterTileCache,
     vector_runtime: &'a VectorLayerRuntime,
     bootstrap: &'a ApiBootstrapState,
@@ -464,6 +382,38 @@ struct HoverSamplingContext<'a> {
     map_px: (i32, i32),
     map_to_world: MapToWorld,
     registry_map_version_id: Option<&'a str>,
+}
+
+fn sample_field_layer_hover_metadata(
+    layer: &crate::map::layers::LayerSpec,
+    exact_lookups: &ExactLookupCache,
+    field_metadata: &FieldMetadataCache,
+    map_px: (i32, i32),
+) -> HoverVectorMetadata {
+    let Some(metadata_url) = layer.field_metadata_url() else {
+        return HoverVectorMetadata::default();
+    };
+    let Some(field_id) = sample_field_layer_id_u32(layer, exact_lookups, map_px.0, map_px.1) else {
+        return HoverVectorMetadata::default();
+    };
+    let Some(entry) = field_metadata.entry(layer.id, &metadata_url, field_id) else {
+        return HoverVectorMetadata::default();
+    };
+    hover_metadata_from_field_entry(entry)
+}
+
+fn hover_metadata_from_field_entry(entry: &FieldHoverMetadataEntry) -> HoverVectorMetadata {
+    HoverVectorMetadata {
+        region_id: entry.region_id,
+        region_group: entry.region_group,
+        region_name: entry.region_name.clone(),
+        resource_bar_waypoint: entry.resource_bar_waypoint,
+        resource_bar_world_x: entry.resource_bar_world_x,
+        resource_bar_world_z: entry.resource_bar_world_z,
+        origin_waypoint: entry.origin_waypoint,
+        origin_world_x: entry.origin_world_x,
+        origin_world_z: entry.origin_world_z,
+    }
 }
 
 #[cfg(test)]

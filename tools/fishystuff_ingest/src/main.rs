@@ -217,6 +217,34 @@ enum Commands {
         #[arg(long)]
         out: PathBuf,
     },
+    BuildRegionsFieldMetadata {
+        #[arg(long)]
+        field: PathBuf,
+        #[arg(long)]
+        regioninfo_bss: PathBuf,
+        #[arg(long)]
+        regiongroupinfo_bss: PathBuf,
+        #[arg(long, help = "Original localization .loc file")]
+        loc: PathBuf,
+        #[arg(long = "waypoint-xml", required = true)]
+        waypoint_xml: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    BuildRegionGroupsFieldMetadata {
+        #[arg(long)]
+        field: PathBuf,
+        #[arg(long)]
+        regioninfo_bss: PathBuf,
+        #[arg(long)]
+        regiongroupinfo_bss: PathBuf,
+        #[arg(long, help = "Original localization .loc file")]
+        loc: PathBuf,
+        #[arg(long = "waypoint-xml", required = true)]
+        waypoint_xml: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
     DebugWatermapProjection {
         #[arg(long)]
         watermap: Option<PathBuf>,
@@ -468,6 +496,36 @@ fn main() -> Result<()> {
             out,
         } => run_build_region_groups_geojson(
             region_groups_geojson,
+            regioninfo_bss,
+            regiongroupinfo_bss,
+            loc,
+            waypoint_xml,
+            out,
+        ),
+        Commands::BuildRegionsFieldMetadata {
+            field,
+            regioninfo_bss,
+            regiongroupinfo_bss,
+            loc,
+            waypoint_xml,
+            out,
+        } => run_build_regions_field_metadata(
+            field,
+            regioninfo_bss,
+            regiongroupinfo_bss,
+            loc,
+            waypoint_xml,
+            out,
+        ),
+        Commands::BuildRegionGroupsFieldMetadata {
+            field,
+            regioninfo_bss,
+            regiongroupinfo_bss,
+            loc,
+            waypoint_xml,
+            out,
+        } => run_build_region_groups_field_metadata(
+            field,
             regioninfo_bss,
             regiongroupinfo_bss,
             loc,
@@ -1097,6 +1155,56 @@ fn run_build_region_groups_geojson(
         out.display(),
         summary.feature_count,
         summary.resource_feature_count,
+    );
+    Ok(())
+}
+
+fn run_build_regions_field_metadata(
+    field: PathBuf,
+    regioninfo_bss: PathBuf,
+    regiongroupinfo_bss: PathBuf,
+    loc: PathBuf,
+    waypoint_xml: Vec<PathBuf>,
+    out: PathBuf,
+) -> Result<()> {
+    let summary = region_layers::build_regions_field_hover_metadata(
+        &field,
+        &loc,
+        &regioninfo_bss,
+        &regiongroupinfo_bss,
+        &waypoint_xml,
+        &out,
+    )?;
+    println!(
+        "build-regions-field-metadata: out={} field_ids={} entries={}",
+        out.display(),
+        summary.field_id_count,
+        summary.entry_count,
+    );
+    Ok(())
+}
+
+fn run_build_region_groups_field_metadata(
+    field: PathBuf,
+    regioninfo_bss: PathBuf,
+    regiongroupinfo_bss: PathBuf,
+    loc: PathBuf,
+    waypoint_xml: Vec<PathBuf>,
+    out: PathBuf,
+) -> Result<()> {
+    let summary = region_layers::build_region_groups_field_hover_metadata(
+        &field,
+        &loc,
+        &regioninfo_bss,
+        &regiongroupinfo_bss,
+        &waypoint_xml,
+        &out,
+    )?;
+    println!(
+        "build-region-groups-field-metadata: out={} field_ids={} entries={}",
+        out.display(),
+        summary.field_id_count,
+        summary.entry_count,
     );
     Ok(())
 }

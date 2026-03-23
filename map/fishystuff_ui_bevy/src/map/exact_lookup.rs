@@ -54,6 +54,16 @@ impl ExactLookupCache {
         self.entries.clear();
     }
 
+    pub fn insert_ready(&mut self, layer: LayerId, url: String, lookup: ZoneLookupRows) {
+        self.entries.insert(
+            layer,
+            ExactLookupEntry {
+                url,
+                state: ExactLookupState::Ready(lookup),
+            },
+        );
+    }
+
     pub fn remove_layer(&mut self, layer: LayerId) {
         self.entries.remove(&layer);
     }
@@ -337,6 +347,7 @@ mod tests {
             tile_url_template: "/images/tiles/mask/v1/{level}/{x}_{y}.png".to_string(),
             tileset_version: "v1".to_string(),
             field_source: None,
+            field_metadata_source: None,
             vector_source: None,
             transform: LayerTransform::IdentityMapSpace,
             tile_px: 512,

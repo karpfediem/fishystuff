@@ -20,7 +20,6 @@ use crate::map::vector::build::{
 };
 use crate::map::vector::cache::{VectorFinishedCache, VectorLayerStats};
 use crate::map::vector::render::{spawn_vector_meshes, VECTOR_3D_BASE_Y};
-use crate::plugins::bookmarks::BookmarkState;
 
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct VectorBuildConfig {
@@ -97,13 +96,11 @@ fn vector_layers_need_update(
     vector_runtime: Res<'_, VectorLayerRuntime>,
     cache_config: Res<'_, VectorCacheConfig>,
     view_mode: Res<'_, ViewModeState>,
-    bookmarks: Res<'_, BookmarkState>,
 ) -> bool {
     registry.is_changed()
         || layer_runtime.is_changed()
         || cache_config.is_changed()
         || view_mode.is_changed()
-        || bookmarks.is_changed()
         || vector_runtime.has_pending_work()
 }
 
@@ -130,10 +127,14 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
     let clip_mask_source_ids = layer_runtime.clip_mask_source_ids();
     let has_visible_vector_inputs = registry.ordered().iter().any(|layer| {
         layer.is_vector()
-            && (layer_runtime.visible(layer.id) || clip_mask_source_ids.contains(&layer.id))
+            && should_activate_vector_layer(
+                layer,
+                layer_runtime.visible(layer.id),
+                clip_mask_source_ids.contains(&layer.id),
+                view_mode.mode,
+            )
     });
     if !has_visible_vector_inputs
-        && update.bookmarks.entries.is_empty()
         && vector_runtime.states.is_empty()
         && vector_runtime.finished.is_empty()
     {
@@ -152,21 +153,24 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
     let map_to_world = MapToWorld::default();
     let map_version_id = registry.map_version_id();
     let frame_start = Instant::now();
-    let mut active_by_layer: HashMap<LayerId, bool> = layer_runtime
+    let active_by_layer: HashMap<LayerId, bool> = registry
+        .ordered()
         .iter()
-        .map(|(layer_id, state)| {
+        .map(|layer| {
+            let state = layer_runtime
+                .get(layer.id)
+                .expect("runtime synced to registry before vector update");
             (
-                layer_id,
-                (state.visible || clip_mask_source_ids.contains(&layer_id))
-                    && matches!(view_mode.mode, ViewMode::Map2D | ViewMode::Terrain3D),
+                layer.id,
+                should_activate_vector_layer(
+                    layer,
+                    state.visible,
+                    clip_mask_source_ids.contains(&layer.id),
+                    view_mode.mode,
+                ),
             )
         })
         .collect();
-    if let Some(regions_id) = registry.id_by_key("regions") {
-        if !update.bookmarks.entries.is_empty() {
-            active_by_layer.insert(regions_id, true);
-        }
-    }
     let visible_cache_keys = collect_visible_cache_keys(registry, &active_by_layer, map_version_id);
     for evicted in vector_runtime
         .finished
@@ -180,8 +184,8 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             continue;
         };
         let active = active_by_layer.get(&layer.id).copied().unwrap_or(false);
-        let render_visible = runtime_state.visible
-            && matches!(view_mode.mode, ViewMode::Map2D | ViewMode::Terrain3D);
+        let render_visible =
+            should_render_vector_layer(layer, runtime_state.visible, view_mode.mode);
         let previous_status = runtime_state.vector_status;
 
         if !layer.is_vector() {
@@ -393,6 +397,34 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
     }
 }
 
+fn should_activate_vector_layer(
+    layer: &crate::map::layers::LayerSpec,
+    layer_visible: bool,
+    required_for_clip_mask: bool,
+    view_mode: ViewMode,
+) -> bool {
+    if !matches!(view_mode, ViewMode::Map2D | ViewMode::Terrain3D) {
+        return false;
+    }
+    if required_for_clip_mask {
+        return true;
+    }
+    if !layer_visible {
+        return false;
+    }
+    !matches!(view_mode, ViewMode::Map2D) || layer.field_url().is_none()
+}
+
+fn should_render_vector_layer(
+    layer: &crate::map::layers::LayerSpec,
+    layer_visible: bool,
+    view_mode: ViewMode,
+) -> bool {
+    layer_visible
+        && matches!(view_mode, ViewMode::Map2D | ViewMode::Terrain3D)
+        && (!matches!(view_mode, ViewMode::Map2D) || layer.field_url().is_none())
+}
+
 fn prune_stale_runtime_data(
     registry: &LayerRegistry,
     runtime: &mut VectorLayerRuntime,
@@ -545,7 +577,6 @@ struct VectorLayerUpdate<'w, 's> {
     build_config: Res<'w, VectorBuildConfig>,
     cache_config: Res<'w, VectorCacheConfig>,
     view_mode: Res<'w, ViewModeState>,
-    bookmarks: Res<'w, BookmarkState>,
     _marker: std::marker::PhantomData<&'s ()>,
 }
 

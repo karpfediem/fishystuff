@@ -5,17 +5,15 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::text::{Justify, TextLayout};
 use bevy::window::PrimaryWindow;
-use serde_json::{Map, Value};
 
 use crate::bridge::contract::FishyMapThemeColors;
 use crate::bridge::theme::parse_css_color;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
-use crate::map::layers::{LayerRegistry, LayerRuntime, VectorSourceSpec};
+use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::plugins::api::{HoverInfo, HoverState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::ui::UiFonts;
-use crate::plugins::vector_layers::VectorLayerRuntime;
 
 #[cfg(target_arch = "wasm32")]
 use crate::bridge::host::BrowserBridgeState;
@@ -125,7 +123,6 @@ fn sync_hover_targets(
     fonts: Res<UiFonts>,
     layer_registry: Res<LayerRegistry>,
     layer_runtime: Res<LayerRuntime>,
-    vector_runtime: Res<VectorLayerRuntime>,
     marker_assets: Res<HoverTargetMarkerAssets>,
     mut marker_pool: ResMut<HoverTargetMarkerPool>,
     windows: Query<&Window, With<PrimaryWindow>>,
@@ -169,12 +166,7 @@ fn sync_hover_targets(
     >,
 ) {
     let targets = if view_mode.mode == ViewMode::Map2D {
-        hover_targets_from_info(
-            hover.info.as_ref(),
-            &layer_registry,
-            &layer_runtime,
-            &vector_runtime,
-        )
+        hover_targets_from_info(hover.info.as_ref(), &layer_registry, &layer_runtime)
     } else {
         Vec::new()
     };
@@ -421,7 +413,6 @@ fn hover_targets_from_info(
     info: Option<&HoverInfo>,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
-    vector_runtime: &VectorLayerRuntime,
 ) -> Vec<HoverTargetVisual> {
     let Some(info) = info else {
         return Vec::new();
@@ -429,23 +420,14 @@ fn hover_targets_from_info(
 
     let resource_bar_visible = layer_visible_by_key("region_groups", layer_registry, layer_runtime);
     let origin_node_visible = layer_visible_by_key("regions", layer_registry, layer_runtime);
-    let mut resource_bar = None;
-    let mut origin_node = None;
-
-    for sample in &info.layer_samples {
-        if resource_bar_visible && resource_bar.is_none() {
-            resource_bar = hover_target_from_resource_bar(sample);
-        }
-        if origin_node_visible && origin_node.is_none() {
-            origin_node = hover_target_from_origin_node(sample);
-        }
-        if resource_bar.is_some() && origin_node.is_some() {
-            break;
-        }
-    }
-    if origin_node_visible && origin_node.is_none() {
-        origin_node = hover_target_from_regions_lookup(info, layer_registry, vector_runtime);
-    }
+    let resource_bar = resource_bar_visible
+        .then(|| hover_sample_by_layer_id(info, "region_groups"))
+        .flatten()
+        .and_then(hover_target_from_resource_bar);
+    let origin_node = origin_node_visible
+        .then(|| hover_sample_by_layer_id(info, "regions"))
+        .flatten()
+        .and_then(hover_target_from_origin_node);
 
     let mut targets = Vec::with_capacity(2);
     if let Some(resource_bar) = resource_bar {
@@ -499,69 +481,13 @@ fn hover_target_from_origin_node(
     })
 }
 
-fn hover_target_from_regions_lookup(
-    info: &HoverInfo,
-    layer_registry: &LayerRegistry,
-    vector_runtime: &VectorLayerRuntime,
-) -> Option<HoverTargetVisual> {
-    let regions_layer = layer_registry.get_by_key("regions")?;
-    let source = regions_layer.vector_source.as_ref()?;
-    let revision = resolved_vector_revision(source, layer_registry.map_version_id());
-    let bundle = vector_runtime
-        .finished
-        .get_ref(&(regions_layer.id, revision))?;
-    let properties = bundle.sample_properties(info.world_x as f32, info.world_z as f32)?;
-    hover_target_from_region_properties(properties)
-}
-
-fn hover_target_from_region_properties(
-    properties: &Map<String, Value>,
-) -> Option<HoverTargetVisual> {
-    let label = json_string(properties.get("on"))
-        .map(|name| format!("Origin: {name}"))
-        .unwrap_or_else(|| "Origin node".to_string());
-    Some(HoverTargetVisual {
-        world_x: json_f64(properties.get("ox"))? as f32,
-        world_z: json_f64(properties.get("oz"))? as f32,
-        label,
-        marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
-        label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
-        color_rgb: ORIGIN_NODE_MARKER_COLOR,
-    })
-}
-
-fn resolved_vector_revision(source: &VectorSourceSpec, map_version_id: Option<&str>) -> String {
-    let mut url = source.url.clone();
-    if url.contains("{map_version}") {
-        let version = map_version_id
-            .filter(|value| !value.trim().is_empty() && *value != "0v0")
-            .unwrap_or("v1");
-        url = url.replace("{map_version}", version);
-    }
-    let revision = source.revision.trim();
-    if revision.is_empty() {
-        format!("url:{url}")
-    } else {
-        revision.to_string()
-    }
-}
-
-fn json_string(value: Option<&Value>) -> Option<String> {
-    match value {
-        Some(Value::String(text)) => {
-            let trimmed = text.trim();
-            (!trimmed.is_empty()).then(|| trimmed.to_string())
-        }
-        _ => None,
-    }
-}
-
-fn json_f64(value: Option<&Value>) -> Option<f64> {
-    match value {
-        Some(Value::Number(number)) => number.as_f64(),
-        Some(Value::String(text)) => text.trim().parse::<f64>().ok(),
-        _ => None,
-    }
+fn hover_sample_by_layer_id<'a>(
+    info: &'a HoverInfo,
+    layer_id: &str,
+) -> Option<&'a crate::plugins::api::HoverLayerSample> {
+    info.layer_samples
+        .iter()
+        .find(|sample| sample.layer_id == layer_id)
 }
 
 fn map_2d_viewport_bounds(
@@ -735,7 +661,6 @@ mod tests {
     };
     use crate::map::layers::{LayerRegistry, LayerRuntime};
     use crate::plugins::api::{HoverInfo, HoverLayerSample};
-    use crate::plugins::vector_layers::VectorLayerRuntime;
     use fishystuff_api::models::layers::{
         GeometrySpace, LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo,
         LayersResponse, LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
@@ -773,6 +698,7 @@ mod tests {
             max_level: 0,
             y_flip: false,
             field_source: None,
+            field_metadata_source: None,
             vector_source: Some(VectorSourceRef {
                 url: format!("/{layer_id}/v1.geojson"),
                 revision: format!("{layer_id}-v1"),
@@ -810,10 +736,12 @@ mod tests {
 
     #[test]
     fn hover_targets_include_resource_bar_and_origin_node() {
+        let mut region_group = sample("region_groups");
+        region_group.resource_bar_world_x = Some(123.0);
+        region_group.resource_bar_world_z = Some(456.0);
+
         let mut regions = sample("regions");
         regions.region_name = Some("Tarif".to_string());
-        regions.resource_bar_world_x = Some(123.0);
-        regions.resource_bar_world_z = Some(456.0);
         regions.origin_world_x = Some(789.0);
         regions.origin_world_z = Some(321.0);
 
@@ -825,19 +753,13 @@ mod tests {
             zone_name: None,
             world_x: 0.0,
             world_z: 0.0,
-            layer_samples: vec![regions],
+            layer_samples: vec![region_group, regions],
         };
 
         let layer_registry = LayerRegistry::default();
         let layer_runtime = LayerRuntime::default();
-        let vector_runtime = VectorLayerRuntime::default();
         assert_eq!(
-            hover_targets_from_info(
-                Some(&info),
-                &layer_registry,
-                &layer_runtime,
-                &vector_runtime
-            ),
+            hover_targets_from_info(Some(&info), &layer_registry, &layer_runtime),
             vec![
                 HoverTargetVisual {
                     world_x: 123.0,
@@ -882,13 +804,7 @@ mod tests {
 
         let layer_registry = LayerRegistry::default();
         let layer_runtime = LayerRuntime::default();
-        let vector_runtime = VectorLayerRuntime::default();
-        let targets = hover_targets_from_info(
-            Some(&info),
-            &layer_registry,
-            &layer_runtime,
-            &vector_runtime,
-        );
+        let targets = hover_targets_from_info(Some(&info), &layer_registry, &layer_runtime);
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[0].world_x, 10.0);
         assert_eq!(targets[0].world_z, 20.0);
@@ -927,17 +843,10 @@ mod tests {
             .get_by_key("regions")
             .expect("regions layer")
             .id;
-        let vector_runtime = VectorLayerRuntime::default();
-
         layer_runtime.set_visible(region_groups_id, true);
         layer_runtime.set_visible(regions_id, false);
         assert_eq!(
-            hover_targets_from_info(
-                Some(&info),
-                &layer_registry,
-                &layer_runtime,
-                &vector_runtime
-            ),
+            hover_targets_from_info(Some(&info), &layer_registry, &layer_runtime),
             vec![HoverTargetVisual {
                 world_x: 10.0,
                 world_z: 20.0,
@@ -951,12 +860,7 @@ mod tests {
         layer_runtime.set_visible(region_groups_id, false);
         layer_runtime.set_visible(regions_id, true);
         assert_eq!(
-            hover_targets_from_info(
-                Some(&info),
-                &layer_registry,
-                &layer_runtime,
-                &vector_runtime
-            ),
+            hover_targets_from_info(Some(&info), &layer_registry, &layer_runtime),
             vec![HoverTargetVisual {
                 world_x: 30.0,
                 world_z: 40.0,

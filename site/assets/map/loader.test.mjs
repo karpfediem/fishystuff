@@ -185,9 +185,7 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
           {
             layerId: "region_groups",
             regionGroup: 58,
-            regionName: "Tarif",
             resourceBarWaypoint: 306,
-            originWaypoint: 1437,
           },
           {
             layerId: "regions",
@@ -335,9 +333,12 @@ test("buildHoverOverviewRows keeps bookmark info out of the regular hover box", 
           {
             layerId: "region_groups",
             regionGroup: 58,
-            regionName: "Tarif",
             resourceBarWaypoint: 306,
-            originWaypoint: 1437,
+          },
+          {
+            layerId: "regions",
+            regionId: 76,
+            regionName: "Tarif",
           },
         ],
       },
@@ -429,9 +430,12 @@ test("buildHoverOverviewRows keeps a soft unknown marker when resource coordinat
           {
             layerId: "region_groups",
             regionGroup: 16,
-            regionId: 76,
             resourceBarWorldX: 120,
             resourceBarWorldZ: 240,
+          },
+          {
+            layerId: "regions",
+            regionId: 76,
           },
         ],
       },

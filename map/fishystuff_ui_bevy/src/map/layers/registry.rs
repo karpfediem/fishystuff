@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 use bevy::prelude::Resource;
 use fishystuff_api::models::layers::{
-    FieldColorMode as FieldColorModeDto, FieldSourceRef as FieldSourceRefDto,
-    GeometrySpace as GeometrySpaceDto, LayerDescriptor, LayerKind as LayerKindDto,
-    LayerTransformDto, LayersResponse, StyleMode as StyleModeDto,
+    FieldColorMode as FieldColorModeDto, FieldMetadataSourceRef as FieldMetadataSourceRefDto,
+    FieldSourceRef as FieldSourceRefDto, GeometrySpace as GeometrySpaceDto, LayerDescriptor,
+    LayerKind as LayerKindDto, LayerTransformDto, LayersResponse, StyleMode as StyleModeDto,
     VectorSourceRef as VectorSourceRefDto,
 };
 use fishystuff_core::asset_urls::normalize_site_asset_path;
@@ -15,8 +15,8 @@ use crate::map::spaces::layer_transform::{LayerTransform, WorldTransform};
 use crate::map::spaces::world::MapToWorld;
 
 use super::{
-    FieldColorMode, FieldSourceSpec, GeometrySpace, LayerId, LayerKind, LayerSpec, LodPolicy,
-    PickMode, StyleMode, VectorSourceSpec,
+    FieldColorMode, FieldMetadataSourceSpec, FieldSourceSpec, GeometrySpace, LayerId, LayerKind,
+    LayerSpec, LodPolicy, PickMode, StyleMode, VectorSourceSpec,
 };
 
 const ZONE_MASK_VISUAL_TILE_PX: u32 = 2048;
@@ -145,6 +145,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         max_level,
         y_flip,
         field_source,
+        field_metadata_source,
         vector_source,
         lod_policy,
         ui,
@@ -164,6 +165,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
     let kind = layer_kind_from_dto(kind);
     let pick_mode = parse_pick_mode(&pick_mode);
     let field_source = field_source.and_then(field_source_from_dto);
+    let field_metadata_source = field_metadata_source.and_then(field_metadata_source_from_dto);
     let vector_source = vector_source
         .and_then(vector_source_from_dto)
         .filter(|_| kind == LayerKind::VectorGeoJson);
@@ -262,6 +264,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         tile_url_template,
         tileset_version: tileset.version,
         field_source,
+        field_metadata_source,
         vector_source,
         transform,
         tile_px,
@@ -310,6 +313,19 @@ fn field_source_from_dto(dto: FieldSourceRefDto) -> Option<FieldSourceSpec> {
         url,
         revision: dto.revision.trim().to_string(),
         color_mode: field_color_mode_from_dto(dto.color_mode),
+    })
+}
+
+fn field_metadata_source_from_dto(
+    dto: FieldMetadataSourceRefDto,
+) -> Option<FieldMetadataSourceSpec> {
+    let url = normalize_site_asset_path(&dto.url);
+    if url.is_empty() {
+        return None;
+    }
+    Some(FieldMetadataSourceSpec {
+        url,
+        revision: dto.revision.trim().to_string(),
     })
 }
 

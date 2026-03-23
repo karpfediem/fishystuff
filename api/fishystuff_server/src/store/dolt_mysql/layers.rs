@@ -1,6 +1,6 @@
 use fishystuff_api::models::layers::{
-    FieldColorMode, FieldSourceRef, GeometrySpace, LayerKind, LayerTransformDto, StyleMode,
-    VectorSourceRef,
+    FieldColorMode, FieldMetadataSourceRef, FieldSourceRef, GeometrySpace, LayerKind,
+    LayerTransformDto, StyleMode, VectorSourceRef,
 };
 use fishystuff_core::asset_urls::normalize_site_asset_path;
 
@@ -21,6 +21,11 @@ pub(super) struct FieldSourceFields {
     pub source_url: Option<String>,
     pub source_revision: Option<String>,
     pub color_mode: Option<String>,
+}
+
+pub(super) struct FieldMetadataSourceFields {
+    pub source_url: Option<String>,
+    pub source_revision: Option<String>,
 }
 
 pub(super) fn parse_layer_transform(
@@ -182,6 +187,29 @@ pub(super) fn parse_field_source(
     }))
 }
 
+pub(super) fn parse_field_metadata_source(
+    source: FieldMetadataSourceFields,
+    map_version_id: Option<&str>,
+) -> AppResult<Option<FieldMetadataSourceRef>> {
+    let FieldMetadataSourceFields {
+        source_url,
+        source_revision,
+    } = source;
+    let source_url = resolve_layer_asset_url(&substitute_map_version(
+        source_url.as_deref().unwrap_or(""),
+        map_version_id,
+    ));
+    if source_url.trim().is_empty() {
+        return Ok(None);
+    }
+    let source_revision =
+        substitute_map_version(source_revision.as_deref().unwrap_or(""), map_version_id);
+    Ok(Some(FieldMetadataSourceRef {
+        url: source_url,
+        revision: source_revision,
+    }))
+}
+
 pub(super) fn normalize_pick_mode(value: String) -> String {
     let normalized = value.trim().to_ascii_lowercase();
     match normalized.as_str() {
@@ -210,7 +238,10 @@ pub(super) fn resolve_layer_asset_url(url: &str) -> String {
 mod tests {
     use fishystuff_api::models::layers::FieldColorMode;
 
-    use super::{parse_field_source, resolve_layer_asset_url, FieldSourceFields};
+    use super::{
+        parse_field_metadata_source, parse_field_source, resolve_layer_asset_url,
+        FieldMetadataSourceFields, FieldSourceFields,
+    };
 
     #[test]
     fn resolve_layer_asset_url_normalizes_legacy_site_paths() {
@@ -245,5 +276,21 @@ mod tests {
         assert_eq!(source.url, "/fields/regions.v1.bin");
         assert_eq!(source.revision, "regions-field-v1");
         assert_eq!(source.color_mode, FieldColorMode::DebugHash);
+    }
+
+    #[test]
+    fn parse_field_metadata_source_supports_map_version() {
+        let source = parse_field_metadata_source(
+            FieldMetadataSourceFields {
+                source_url: Some("/fields/regions.{map_version}.meta.json".to_string()),
+                source_revision: Some("regions-meta-{map_version}".to_string()),
+            },
+            Some("v1"),
+        )
+        .expect("field metadata parse")
+        .expect("field metadata source");
+
+        assert_eq!(source.url, "/fields/regions.v1.meta.json");
+        assert_eq!(source.revision, "regions-meta-v1");
     }
 }

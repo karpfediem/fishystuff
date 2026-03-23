@@ -70,6 +70,9 @@ fn normalize_layer_descriptor(layer: &mut LayerDescriptor) {
     if let Some(field_source) = layer.field_source.as_mut() {
         field_source.url = normalize_public_asset_url(&field_source.url);
     }
+    if let Some(field_metadata_source) = layer.field_metadata_source.as_mut() {
+        field_metadata_source.url = normalize_public_asset_url(&field_metadata_source.url);
+    }
     if let Some(vector_source) = layer.vector_source.as_mut() {
         vector_source.url = normalize_public_asset_url(&vector_source.url);
     }
@@ -127,6 +130,7 @@ mod tests {
                     max_level: 0,
                     y_flip: false,
                     field_source: None,
+                    field_metadata_source: None,
                     vector_source: Some(VectorSourceRef {
                         url: "/region_groups/v1.geojson".to_string(),
                         revision: "rg-v1".to_string(),

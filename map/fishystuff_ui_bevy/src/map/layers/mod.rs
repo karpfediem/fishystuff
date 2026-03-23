@@ -84,6 +84,12 @@ pub struct FieldSourceSpec {
 }
 
 #[derive(Debug, Clone)]
+pub struct FieldMetadataSourceSpec {
+    pub url: String,
+    pub revision: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct VectorSourceSpec {
     pub url: String,
     pub revision: String,
@@ -123,6 +129,7 @@ pub struct LayerSpec {
     pub max_level: u8,
     pub y_flip: bool,
     pub field_source: Option<FieldSourceSpec>,
+    pub field_metadata_source: Option<FieldMetadataSourceSpec>,
     pub lod_policy: LodPolicy,
     pub request_weight: f32,
     pub pick_mode: PickMode,
@@ -180,6 +187,13 @@ impl LayerSpec {
             .or_else(|| self.exact_lookup_url().map(|_| FieldColorMode::RgbU24))
     }
 
+    pub fn field_metadata_url(&self) -> Option<String> {
+        self.field_metadata_source.as_ref().and_then(|source| {
+            let url = source.url.trim();
+            (!url.is_empty()).then(|| url.to_string())
+        })
+    }
+
     pub fn exact_lookup_url(&self) -> Option<String> {
         if self.pick_mode != PickMode::ExactTilePixel {
             return None;
@@ -220,6 +234,7 @@ mod tests {
             max_level: 0,
             y_flip: false,
             field_source: None,
+            field_metadata_source: None,
             vector_source: with_source.then_some(VectorSourceRef {
                 url: "/region_groups/v1.geojson".to_string(),
                 revision: "rg-v1".to_string(),
@@ -309,6 +324,7 @@ mod tests {
                 max_level: 0,
                 y_flip: false,
                 field_source: None,
+                field_metadata_source: None,
                 vector_source: None,
                 lod_policy: LodPolicyDto::default(),
                 ui: LayerUiInfo::default(),
@@ -364,6 +380,7 @@ mod tests {
                 max_level: 6,
                 y_flip: true,
                 field_source: None,
+                field_metadata_source: None,
                 vector_source: None,
                 lod_policy: LodPolicyDto::default(),
                 ui: LayerUiInfo::default(),
@@ -416,6 +433,7 @@ mod tests {
                     revision: "custom-v1".to_string(),
                     color_mode: FieldColorModeDto::DebugHash,
                 }),
+                field_metadata_source: None,
                 vector_source: None,
                 lod_policy: LodPolicyDto::default(),
                 ui: LayerUiInfo::default(),
