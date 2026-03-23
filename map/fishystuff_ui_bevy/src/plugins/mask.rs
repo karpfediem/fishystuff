@@ -251,7 +251,6 @@ mod tests {
             map_py: 34,
             rgb: None,
             rgb_u32: Some(0x123456),
-            zone_name: Some("Test Zone".to_string()),
             world_x: 1.0,
             world_z: 2.0,
             layer_samples: Vec::new(),

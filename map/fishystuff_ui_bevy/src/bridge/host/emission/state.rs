@@ -45,7 +45,6 @@ pub(in crate::bridge::host) fn emit_hover_changed_event(hover: Res<HoverState>) 
         world_x: hover.info.as_ref().map(|info| info.world_x),
         world_z: hover.info.as_ref().map(|info| info.world_z),
         zone_rgb: hover.info.as_ref().and_then(|info| info.rgb_u32),
-        zone_name: hover.info.as_ref().and_then(|info| info.zone_name.clone()),
         layer_samples: hover
             .info
             .as_ref()

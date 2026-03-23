@@ -348,8 +348,8 @@ function createBookmarkId() {
   return `bookmark-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function defaultBookmarkLabel(index, zoneName = "") {
-  const normalizedPreferredName = String(zoneName || "").trim();
+function defaultBookmarkLabel(index, preferredName = "") {
+  const normalizedPreferredName = String(preferredName || "").trim();
   if (normalizedPreferredName) {
     return normalizedPreferredName;
   }
@@ -1458,21 +1458,49 @@ export function buildHoverOverviewRows(hover, stateBundle) {
 }
 
 export function buildSelectionOverviewRows(selection, stateBundle) {
-  const zoneName = String(selection?.zoneName || "").trim();
+  const headingRow = preferredLayerSampleRow(selection?.layerSamples, stateBundle);
   const overviewRows = buildOverviewRowsForLayerSamples(selection?.layerSamples, stateBundle);
-  if (!zoneName) {
+  if (!headingRow) {
     return overviewRows;
   }
-  return overviewRows.filter(
-    (row) => !(row.layerId === "zone_mask" && String(row?.value || "").trim() === zoneName),
+  const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
+  const sampleByLayerId = new Map(
+    layerSamples
+      .map((sample) => [String(sample?.layerId || "").trim(), sample])
+      .filter(([layerId]) => Boolean(layerId)),
   );
+  const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
+  let skippedHeading = false;
+  const filteredRows = layerIds.flatMap((layerId) => {
+    const sample = sampleByLayerId.get(layerId);
+    if (!sample) {
+      return [];
+    }
+    return hoverSampleRows(sample).flatMap((row) => {
+      const sameHeadingKey = String(headingRow?.key || "").trim() === String(row?.key || "").trim();
+      const sameHeadingValue =
+        String(headingRow?.value || "").trim() === String(row?.value || "").trim();
+      if (!skippedHeading && sameHeadingKey && sameHeadingValue) {
+        skippedHeading = true;
+        return [];
+      }
+      return [
+        {
+          layerId,
+          icon: row.icon,
+          label: row.label,
+          value: row.value,
+          ...(row.hideLabel === true ? { hideLabel: true } : {}),
+          ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
+          ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
+        },
+      ];
+    });
+  });
+  return filteredRows.length > 0 ? filteredRows : overviewRows;
 }
 
 export function buildSelectionSummaryText(selection, stateBundle) {
-  const zoneName = String(selection?.zoneName || "").trim();
-  if (zoneName) {
-    return zoneName;
-  }
   const preferredValue = String(
     preferredLayerSampleRow(selection?.layerSamples, stateBundle)?.value || "",
   ).trim();
@@ -1584,7 +1612,6 @@ function hoverFromEventDetail(detail) {
     worldX: detail?.worldX ?? null,
     worldZ: detail?.worldZ ?? null,
     zoneRgb: detail?.zoneRgb ?? null,
-    zoneName: detail?.zoneName ?? null,
     layerSamples: Array.isArray(detail?.layerSamples) ? detail.layerSamples : [],
   };
 }

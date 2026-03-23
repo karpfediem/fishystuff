@@ -548,7 +548,6 @@ mod tests {
             map_py: 0,
             rgb: None,
             rgb_u32: None,
-            zone_name: None,
             world_x: 101.0,
             world_z: 101.0,
             layer_samples: Vec::new(),

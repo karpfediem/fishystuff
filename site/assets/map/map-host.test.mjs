@@ -626,7 +626,6 @@ test("hover output events are redispatched without cloning the full map state", 
           worldX: 11,
           worldZ: 22,
           zoneRgb: 1193046,
-          zoneName: "Coastal Shelf",
           layerSamples: [
             {
               layerId: "zones",
@@ -649,7 +648,6 @@ test("hover output events are redispatched without cloning the full map state", 
       worldX: 11,
       worldZ: 22,
       zoneRgb: 1193046,
-      zoneName: "Coastal Shelf",
       layerSamples: [
         {
           layerId: "zones",

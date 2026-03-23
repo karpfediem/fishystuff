@@ -1,8 +1,7 @@
-use fishystuff_core::field_metadata::FIELD_HOVER_ROW_KEY_ZONE;
-
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::field_semantics::field_row_value_for_id;
+use crate::map::field_semantics::semantic_sample_for_field_id;
 use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
+use crate::map::layer_query::LayerQuerySample;
 use crate::map::layers::LayerRegistry;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{HoverInfo, SelectedInfo};
@@ -16,7 +15,6 @@ pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
         map_py: hover.map_py,
         rgb: hover.rgb,
         rgb_u32: hover.rgb_u32,
-        zone_name: hover.zone_name.clone(),
         world_x: hover.world_x,
         world_z: hover.world_z,
         layer_samples: hover.layer_samples.clone(),
@@ -37,30 +35,47 @@ pub fn selected_info_for_zone_rgb(
     zone_rgb: u32,
 ) -> SelectedInfo {
     let rgb = fishystuff_api::Rgb::from_u32(zone_rgb);
+    let layer_samples = zone_mask_layer_sample(layer_registry, field_metadata, zone_rgb)
+        .into_iter()
+        .collect();
     SelectedInfo {
         map_px: 0,
         map_py: 0,
         rgb: Some(rgb),
         rgb_u32: Some(zone_rgb),
-        zone_name: resolve_zone_name(layer_registry, field_metadata, zone_rgb),
         world_x: 0.0,
         world_z: 0.0,
-        layer_samples: Vec::new(),
+        layer_samples,
     }
 }
 
-fn resolve_zone_name(
+fn zone_mask_layer_sample(
     layer_registry: &LayerRegistry,
     field_metadata: &FieldMetadataCache,
     zone_rgb: u32,
-) -> Option<String> {
+) -> Option<LayerQuerySample> {
     let layer = layer_registry.get_by_key("zone_mask")?;
-    field_row_value_for_id(layer, field_metadata, zone_rgb, FIELD_HOVER_ROW_KEY_ZONE)
+    let semantic = semantic_sample_for_field_id(
+        layer,
+        field_metadata,
+        zone_rgb,
+        fishystuff_api::Rgb::from_u32(zone_rgb),
+    );
+    Some(LayerQuerySample {
+        layer_id: layer.key.clone(),
+        layer_name: layer.name.clone(),
+        kind: "field".to_string(),
+        rgb: semantic.rgb,
+        rgb_u32: semantic.rgb_u32,
+        field_id: Some(semantic.field_id),
+        rows: semantic.rows,
+        targets: semantic.targets,
+    })
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_zone_name, selected_info_for_zone_rgb, selected_info_from_hover};
+    use super::{selected_info_for_zone_rgb, selected_info_from_hover, zone_mask_layer_sample};
     use crate::map::field_metadata::FieldMetadataCache;
     use crate::map::layer_query::LayerQuerySample;
     use crate::map::layers::LayerRegistry;
@@ -113,7 +128,6 @@ mod tests {
             map_py: 34,
             rgb: Some(Rgb::from_u32(0x123456)),
             rgb_u32: Some(0x123456),
-            zone_name: Some("Olvia Coast".to_string()),
             world_x: 1.25,
             world_z: 2.5,
             layer_samples: vec![LayerQuerySample {
@@ -132,7 +146,6 @@ mod tests {
         assert_eq!(selected.map_px, 12);
         assert_eq!(selected.map_py, 34);
         assert_eq!(selected.rgb_u32, Some(0x123456));
-        assert_eq!(selected.zone_name.as_deref(), Some("Olvia Coast"));
         assert_eq!(selected.world_x, 1.25);
         assert_eq!(selected.world_z, 2.5);
         assert_eq!(selected.layer_samples, hover.layer_samples);
@@ -145,7 +158,6 @@ mod tests {
             map_py: 9,
             rgb: None,
             rgb_u32: None,
-            zone_name: None,
             world_x: 3.5,
             world_z: 4.5,
             layer_samples: vec![LayerQuerySample {
@@ -166,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_zone_name_reads_zone_row_from_field_metadata() {
+    fn zone_mask_layer_sample_reads_zone_row_from_field_metadata() {
         let registry = zone_registry();
         let zone_layer = registry.get_by_key("zone_mask").expect("zone layer");
         let mut field_metadata = FieldMetadataCache::default();
@@ -191,14 +203,17 @@ mod tests {
                 )]),
             },
         );
-        assert_eq!(
-            resolve_zone_name(&registry, &field_metadata, 0x123456),
-            Some("Velia Bay".to_string())
-        );
+        let sample =
+            zone_mask_layer_sample(&registry, &field_metadata, 0x123456).expect("zone sample");
+        assert_eq!(sample.layer_id, "zone_mask");
+        assert_eq!(sample.rgb_u32, 0x123456);
+        assert_eq!(sample.field_id, Some(0x123456));
+        assert_eq!(sample.rows.len(), 1);
+        assert_eq!(sample.rows[0].value, "Velia Bay");
     }
 
     #[test]
-    fn selected_info_for_zone_rgb_uses_shared_zone_name_lookup() {
+    fn selected_info_for_zone_rgb_uses_shared_zone_mask_layer_sample() {
         let registry = zone_registry();
         let zone_layer = registry.get_by_key("zone_mask").expect("zone layer");
         let mut field_metadata = FieldMetadataCache::default();
@@ -226,9 +241,10 @@ mod tests {
 
         let selected = selected_info_for_zone_rgb(&registry, &field_metadata, 0x223344);
         assert_eq!(selected.rgb_u32, Some(0x223344));
-        assert_eq!(selected.zone_name.as_deref(), Some("Cron Islands"));
         assert_eq!(selected.world_x, 0.0);
         assert_eq!(selected.world_z, 0.0);
-        assert!(selected.layer_samples.is_empty());
+        assert_eq!(selected.layer_samples.len(), 1);
+        assert_eq!(selected.layer_samples[0].layer_id, "zone_mask");
+        assert_eq!(selected.layer_samples[0].rows[0].value, "Cron Islands");
     }
 }

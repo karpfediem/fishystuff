@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-use fishystuff_core::field_metadata::{
-    preferred_hover_row, FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE,
-};
+use fishystuff_core::field_metadata::{preferred_hover_row, FieldHoverRow};
 
 use crate::map::layer_query::LayerQuerySample;
 use crate::plugins::api::SelectedInfo;
@@ -14,17 +12,10 @@ pub struct SelectionHeading {
 }
 
 pub fn selection_heading(info: &SelectedInfo) -> Option<SelectionHeading> {
-    nonempty(info.zone_name.as_deref())
-        .map(|value| SelectionHeading {
-            row_key: Some(FIELD_HOVER_ROW_KEY_ZONE.to_string()),
-            value: value.to_string(),
-        })
-        .or_else(|| {
-            preferred_title_row(&info.layer_samples).map(|row| SelectionHeading {
-                row_key: Some(row.key.clone()),
-                value: row.value.trim().to_string(),
-            })
-        })
+    preferred_title_row(&info.layer_samples).map(|row| SelectionHeading {
+        row_key: Some(row.key.clone()),
+        value: row.value.trim().to_string(),
+    })
 }
 
 pub fn selection_summary_text(info: &SelectedInfo) -> String {
@@ -33,10 +24,15 @@ pub fn selection_summary_text(info: &SelectedInfo) -> String {
     if !lines.is_empty() {
         return lines.into_iter().take(2).collect::<Vec<_>>().join(" · ");
     }
-    format!(
-        "Map {},{} · World {:.0},{:.0}",
-        info.map_px, info.map_py, info.world_x, info.world_z
-    )
+    heading
+        .map(|heading| heading.value)
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| {
+            format!(
+                "Map {},{} · World {:.0},{:.0}",
+                info.map_px, info.map_py, info.world_x, info.world_z
+            )
+        })
 }
 
 pub fn selection_overview_lines(info: &SelectedInfo) -> Vec<String> {
@@ -48,21 +44,11 @@ fn selection_overview_lines_with_heading(
     info: &SelectedInfo,
     heading: Option<&SelectionHeading>,
 ) -> Vec<String> {
-    let mut seen = HashSet::new();
-    let mut skipped_heading = false;
-    let mut lines = Vec::new();
-    for row in flattened_rows(&info.layer_samples) {
-        if should_skip_heading_row(row, heading, &mut skipped_heading) {
-            continue;
-        }
-        let Some(text) = overview_line(row) else {
-            continue;
-        };
-        if seen.insert(text.clone()) {
-            lines.push(text);
-        }
+    let lines = collect_overview_lines(flattened_rows(&info.layer_samples), heading);
+    if !lines.is_empty() || heading.is_none() {
+        return lines;
     }
-    lines
+    collect_overview_lines(flattened_rows(&info.layer_samples), None)
 }
 
 fn preferred_title_row(samples: &[LayerQuerySample]) -> Option<&FieldHoverRow> {
@@ -110,6 +96,27 @@ fn nonempty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
 }
 
+fn collect_overview_lines<'a>(
+    rows: impl IntoIterator<Item = &'a FieldHoverRow>,
+    heading: Option<&SelectionHeading>,
+) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut skipped_heading = false;
+    let mut lines = Vec::new();
+    for row in rows {
+        if should_skip_heading_row(row, heading, &mut skipped_heading) {
+            continue;
+        }
+        let Some(text) = overview_line(row) else {
+            continue;
+        };
+        if seen.insert(text.clone()) {
+            lines.push(text);
+        }
+    }
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::{selection_heading, selection_overview_lines, selection_summary_text};
@@ -133,16 +140,12 @@ mod tests {
         }
     }
 
-    fn selection_info(
-        zone_name: Option<&str>,
-        layer_samples: Vec<LayerQuerySample>,
-    ) -> SelectedInfo {
+    fn selection_info(layer_samples: Vec<LayerQuerySample>) -> SelectedInfo {
         SelectedInfo {
             map_px: 12,
             map_py: 34,
             rgb: Some(Rgb::from_u32(0x112233)),
             rgb_u32: Some(0x112233),
-            zone_name: zone_name.map(ToOwned::to_owned),
             world_x: 100.0,
             world_z: 200.0,
             layer_samples,
@@ -150,10 +153,19 @@ mod tests {
     }
 
     #[test]
-    fn selection_heading_prefers_zone_name_when_available() {
-        let info = selection_info(
-            Some("Olvia Coast"),
-            vec![LayerQuerySample {
+    fn selection_heading_prefers_primary_zone_row_when_available() {
+        let info = selection_info(vec![
+            LayerQuerySample {
+                layer_id: "zone_mask".to_string(),
+                layer_name: "Zone Mask".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x010101),
+                rgb_u32: 0x010101,
+                field_id: Some(0x010101),
+                rows: vec![row(FIELD_HOVER_ROW_KEY_ZONE, "Zone", "Olvia Coast")],
+                targets: Vec::new(),
+            },
+            LayerQuerySample {
                 layer_id: "region_groups".to_string(),
                 layer_name: "Region Groups".to_string(),
                 kind: "field".to_string(),
@@ -162,8 +174,8 @@ mod tests {
                 field_id: Some(295),
                 rows: vec![row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Olvia")],
                 targets: Vec::new(),
-            }],
-        );
+            },
+        ]);
         assert_eq!(
             selection_heading(&info).map(|heading| heading.value),
             Some("Olvia Coast".to_string())
@@ -172,31 +184,28 @@ mod tests {
 
     #[test]
     fn selection_heading_falls_back_to_semantic_rows() {
-        let info = selection_info(
-            None,
-            vec![
-                LayerQuerySample {
-                    layer_id: "regions".to_string(),
-                    layer_name: "Regions".to_string(),
-                    kind: "field".to_string(),
-                    rgb: Rgb::from_u32(0x222222),
-                    rgb_u32: 0x222222,
-                    field_id: Some(76),
-                    rows: vec![row(FIELD_HOVER_ROW_KEY_ORIGIN, "Origin", "Castle Ruins")],
-                    targets: Vec::new(),
-                },
-                LayerQuerySample {
-                    layer_id: "region_groups".to_string(),
-                    layer_name: "Region Groups".to_string(),
-                    kind: "field".to_string(),
-                    rgb: Rgb::from_u32(0x333333),
-                    rgb_u32: 0x333333,
-                    field_id: Some(295),
-                    rows: vec![row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Olvia")],
-                    targets: Vec::new(),
-                },
-            ],
-        );
+        let info = selection_info(vec![
+            LayerQuerySample {
+                layer_id: "regions".to_string(),
+                layer_name: "Regions".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x222222),
+                rgb_u32: 0x222222,
+                field_id: Some(76),
+                rows: vec![row(FIELD_HOVER_ROW_KEY_ORIGIN, "Origin", "Castle Ruins")],
+                targets: Vec::new(),
+            },
+            LayerQuerySample {
+                layer_id: "region_groups".to_string(),
+                layer_name: "Region Groups".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x333333),
+                rgb_u32: 0x333333,
+                field_id: Some(295),
+                rows: vec![row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Olvia")],
+                targets: Vec::new(),
+            },
+        ]);
         assert_eq!(
             selection_heading(&info).map(|heading| heading.value),
             Some("Olvia".to_string())
@@ -205,41 +214,38 @@ mod tests {
 
     #[test]
     fn selection_summary_text_skips_the_heading_row_and_uses_remaining_rows() {
-        let info = selection_info(
-            Some("Demi River"),
-            vec![
-                LayerQuerySample {
-                    layer_id: "zone_mask".to_string(),
-                    layer_name: "Zone Mask".to_string(),
-                    kind: "field".to_string(),
-                    rgb: Rgb::from_u32(0x444444),
-                    rgb_u32: 0x444444,
-                    field_id: Some(0x444444),
-                    rows: vec![row(FIELD_HOVER_ROW_KEY_ZONE, "Zone", "Demi River")],
-                    targets: Vec::new(),
-                },
-                LayerQuerySample {
-                    layer_id: "region_groups".to_string(),
-                    layer_name: "Region Groups".to_string(),
-                    kind: "field".to_string(),
-                    rgb: Rgb::from_u32(0x555555),
-                    rgb_u32: 0x555555,
-                    field_id: Some(16),
-                    rows: vec![row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Tarif")],
-                    targets: Vec::new(),
-                },
-                LayerQuerySample {
-                    layer_id: "regions".to_string(),
-                    layer_name: "Regions".to_string(),
-                    kind: "field".to_string(),
-                    rgb: Rgb::from_u32(0x666666),
-                    rgb_u32: 0x666666,
-                    field_id: Some(76),
-                    rows: vec![row(FIELD_HOVER_ROW_KEY_ORIGIN, "Origin", "Tarif")],
-                    targets: Vec::new(),
-                },
-            ],
-        );
+        let info = selection_info(vec![
+            LayerQuerySample {
+                layer_id: "zone_mask".to_string(),
+                layer_name: "Zone Mask".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x444444),
+                rgb_u32: 0x444444,
+                field_id: Some(0x444444),
+                rows: vec![row(FIELD_HOVER_ROW_KEY_ZONE, "Zone", "Demi River")],
+                targets: Vec::new(),
+            },
+            LayerQuerySample {
+                layer_id: "region_groups".to_string(),
+                layer_name: "Region Groups".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x555555),
+                rgb_u32: 0x555555,
+                field_id: Some(16),
+                rows: vec![row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Tarif")],
+                targets: Vec::new(),
+            },
+            LayerQuerySample {
+                layer_id: "regions".to_string(),
+                layer_name: "Regions".to_string(),
+                kind: "field".to_string(),
+                rgb: Rgb::from_u32(0x666666),
+                rgb_u32: 0x666666,
+                field_id: Some(76),
+                rows: vec![row(FIELD_HOVER_ROW_KEY_ORIGIN, "Origin", "Tarif")],
+                targets: Vec::new(),
+            },
+        ]);
         assert_eq!(
             selection_summary_text(&info),
             "Resources: Tarif · Origin: Tarif".to_string()
@@ -252,7 +258,7 @@ mod tests {
 
     #[test]
     fn selection_summary_text_falls_back_to_coordinates_without_rows() {
-        let info = selection_info(None, Vec::new());
+        let info = selection_info(Vec::new());
         assert_eq!(
             selection_summary_text(&info),
             "Map 12,34 · World 100,200".to_string()

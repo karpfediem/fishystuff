@@ -32,7 +32,6 @@ pub struct FishyMapViewSnapshot {
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapSelectionSnapshot {
     pub zone_rgb: Option<u32>,
-    pub zone_name: Option<String>,
     pub world_x: Option<f64>,
     pub world_z: Option<f64>,
     pub layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
@@ -58,7 +57,6 @@ pub struct FishyMapHoverSnapshot {
     pub world_x: Option<f64>,
     pub world_z: Option<f64>,
     pub zone_rgb: Option<u32>,
-    pub zone_name: Option<String>,
     pub layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
 }
 

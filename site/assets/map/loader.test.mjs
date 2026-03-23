@@ -228,7 +228,6 @@ test("buildSelectionOverviewRows keeps field semantics while omitting a duplicat
   assert.deepEqual(
     buildSelectionOverviewRows(
       {
-        zoneName: "Demi River",
         layerSamples: [
           {
             layerId: "zone_mask",
@@ -305,6 +304,27 @@ test("buildSelectionSummaryText falls back to semantic rows for non-zone selecti
       buildHoverStateBundle(),
     ),
     "Olvia",
+  );
+});
+
+test("buildSelectionSummaryText uses the primary zone row when present", () => {
+  assert.equal(
+    buildSelectionSummaryText(
+      {
+        layerSamples: [
+          {
+            layerId: "zone_mask",
+            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          },
+          {
+            layerId: "region_groups",
+            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    "Demi River",
   );
 });
 

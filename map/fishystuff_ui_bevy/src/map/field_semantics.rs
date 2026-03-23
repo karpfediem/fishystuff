@@ -156,6 +156,24 @@ pub fn field_row_value_for_id(
     (!value.is_empty()).then(|| value.to_string())
 }
 
+pub fn semantic_sample_for_field_id(
+    layer: &LayerSpec,
+    field_metadata: &FieldMetadataCache,
+    field_id: u32,
+    rgb: Rgb,
+) -> FieldSemanticSample {
+    let (rows, targets) = field_metadata_entry_for_id(layer, field_metadata, field_id)
+        .map(|entry| (entry.rows.clone(), entry.targets.clone()))
+        .unwrap_or_else(|| (Vec::new(), Vec::new()));
+    FieldSemanticSample {
+        field_id,
+        rgb,
+        rgb_u32: rgb.to_u32(),
+        rows,
+        targets,
+    }
+}
+
 impl FieldLayerView for LoadedSemanticFieldLayer<'_> {
     fn width(&self) -> u16 {
         self.field.width()

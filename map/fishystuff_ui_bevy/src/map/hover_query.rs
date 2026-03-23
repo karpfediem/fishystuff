@@ -1,5 +1,3 @@
-use fishystuff_core::field_metadata::{FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE};
-
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::layer_query::{
@@ -53,7 +51,6 @@ pub fn hover_info_at_world_point(
         },
     );
     let zone_sample = zone_mask_hover_sample(&layer_samples);
-    let zone_name = zone_sample.and_then(|sample| zone_name_from_hover_rows(&sample.rows));
     let zone_rgb = zone_sample.as_ref().map(|sample| sample.rgb);
     let zone_rgb_u32 = zone_sample.as_ref().map(|sample| sample.rgb_u32);
     Some(HoverInfo {
@@ -61,7 +58,6 @@ pub fn hover_info_at_world_point(
         map_py,
         rgb: zone_rgb,
         rgb_u32: zone_rgb_u32,
-        zone_name,
         world_x: world_point.x,
         world_z: world_point.z,
         layer_samples,
@@ -100,17 +96,9 @@ fn zone_mask_hover_sample(layer_samples: &[LayerQuerySample]) -> Option<&LayerQu
         .find(|sample| sample.layer_id == "zone_mask")
 }
 
-fn zone_name_from_hover_rows(rows: &[FieldHoverRow]) -> Option<String> {
-    rows.iter()
-        .find(|row| row.key == FIELD_HOVER_ROW_KEY_ZONE)
-        .map(|row| row.value.trim())
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{hover_info_at_world_point, zone_mask_hover_sample, zone_name_from_hover_rows};
+    use super::{hover_info_at_world_point, zone_mask_hover_sample};
     use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::field_metadata::FieldMetadataCache;
     use crate::map::layer_query::LayerQuerySample;
@@ -124,24 +112,6 @@ mod tests {
         LodPolicyDto, TilesetRef,
     };
     use fishystuff_api::Rgb;
-    use fishystuff_core::field_metadata::{FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE};
-
-    #[test]
-    fn zone_name_from_hover_rows_reads_zone_row() {
-        let rows = vec![FieldHoverRow {
-            key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
-            icon: "hover-zone".to_string(),
-            label: "Zone".to_string(),
-            value: "Olvia Coast".to_string(),
-            hide_label: false,
-            status_icon: None,
-            status_icon_tone: None,
-        }];
-        assert_eq!(
-            zone_name_from_hover_rows(&rows),
-            Some("Olvia Coast".to_string())
-        );
-    }
 
     #[test]
     fn zone_mask_hover_sample_prefers_zone_mask_layer_id() {

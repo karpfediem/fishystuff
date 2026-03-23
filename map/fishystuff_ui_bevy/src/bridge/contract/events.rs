@@ -28,7 +28,6 @@ pub enum FishyMapOutputEvent {
         world_x: Option<f64>,
         world_z: Option<f64>,
         zone_rgb: Option<u32>,
-        zone_name: Option<String>,
         layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
     },
     Diagnostic {

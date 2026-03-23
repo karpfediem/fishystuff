@@ -7,7 +7,6 @@ pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
     let selected_world_point = info.and_then(selection_world_point);
     FishyMapSelectionSnapshot {
         zone_rgb: info.and_then(|value| value.rgb_u32),
-        zone_name: info.and_then(|value| value.zone_name.clone()),
         world_x: selected_world_point.map(|value| value.0),
         world_z: selected_world_point.map(|value| value.1),
         layer_samples: info
@@ -24,7 +23,6 @@ pub(in crate::bridge::host::snapshot) fn effective_hover_snapshot(
         world_x: info.map(|value| value.world_x),
         world_z: info.map(|value| value.world_z),
         zone_rgb: info.and_then(|value| value.rgb_u32),
-        zone_name: info.and_then(|value| value.zone_name.clone()),
         layer_samples: info
             .map(|value| hover_layer_samples_snapshot(&value.layer_samples))
             .unwrap_or_default(),
@@ -128,7 +126,6 @@ mod tests {
             map_py: 0,
             rgb: Some(Rgb::from_u32(0x123456)),
             rgb_u32: Some(0x123456),
-            zone_name: Some("Velia".to_string()),
             world_x: 0.0,
             world_z: 0.0,
             layer_samples: Vec::new(),
@@ -144,7 +141,6 @@ mod tests {
             map_py: 20,
             rgb: Some(Rgb::from_u32(0x654321)),
             rgb_u32: Some(0x654321),
-            zone_name: Some("Cron Castle".to_string()),
             world_x: 123.0,
             world_z: 456.0,
             layer_samples: vec![crate::map::layer_query::LayerQuerySample {
