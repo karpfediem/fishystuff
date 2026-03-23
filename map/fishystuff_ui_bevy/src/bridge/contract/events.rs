@@ -21,7 +21,10 @@ pub enum FishyMapOutputEvent {
     },
     SelectionChanged {
         version: u8,
+        world_x: Option<f64>,
+        world_z: Option<f64>,
         zone_rgb: Option<u32>,
+        layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
     },
     HoverChanged {
         version: u8,

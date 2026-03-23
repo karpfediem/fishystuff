@@ -667,6 +667,90 @@ test("hover output events are redispatched without cloning the full map state", 
   }
 });
 
+test("selection output events include semantic payload and refreshed state", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const semanticSelection = {
+      zoneRgb: 1193046,
+      worldX: 11,
+      worldZ: 22,
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          layerName: "Zone Mask",
+          kind: "field",
+          rgb: [18, 52, 86],
+          rgbU32: 1193046,
+          fieldId: 1193046,
+          rows: [
+            {
+              key: "zone",
+              icon: "hover-zone",
+              label: "Zone",
+              value: "Coastal Shelf",
+            },
+          ],
+          targets: [],
+        },
+      ],
+    };
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: semanticSelection,
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+        statuses: {},
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+    wasm.calls.stateReads = 0;
+
+    const received = await new Promise((resolve) => {
+      container.addEventListener(
+        FISHYMAP_EVENTS.selectionChanged,
+        (event) => resolve(event.detail),
+        { once: true },
+      );
+      wasm.calls.sink(
+        JSON.stringify({
+          type: "selection-changed",
+          version: 1,
+          zoneRgb: 1193046,
+          worldX: 11,
+          worldZ: 22,
+          layerSamples: semanticSelection.layerSamples,
+        }),
+      );
+    });
+
+    assert.equal(wasm.calls.stateReads, 1);
+    assert.equal(received.zoneRgb, 1193046);
+    assert.equal(received.worldX, 11);
+    assert.equal(received.worldZ, 22);
+    assert.deepEqual(received.layerSamples, semanticSelection.layerSamples);
+    assert.deepEqual(received.state.selection, semanticSelection);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("bootstrap sync replays state changes that happen after mount without wasm push events", async () => {
   const env = installDomGlobals();
   let bridge;

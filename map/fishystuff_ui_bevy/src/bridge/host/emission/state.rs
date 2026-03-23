@@ -1,5 +1,6 @@
 use super::super::snapshot::hover_layer_samples_snapshot;
 use super::super::*;
+use crate::plugins::api::SelectedInfo;
 
 pub(in crate::bridge::host) fn emit_ready_event() {
     crate::perf_scope!("bridge.emit.ready");
@@ -26,10 +27,21 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
         return;
     }
 
+    let selected_world_point = selection
+        .info
+        .as_ref()
+        .and_then(SelectedInfo::effective_world_point);
     crate::perf_counter_add!("bridge.emit.selection.count", 1);
     let payload = FishyMapOutputEvent::SelectionChanged {
         version: 1,
+        world_x: selected_world_point.map(|value| value.0),
+        world_z: selected_world_point.map(|value| value.1),
         zone_rgb: selection.info.as_ref().and_then(|info| info.rgb_u32),
+        layer_samples: selection
+            .info
+            .as_ref()
+            .map(|info| hover_layer_samples_snapshot(&info.layer_samples))
+            .unwrap_or_default(),
     };
     super::super::emit_event(&payload);
 }

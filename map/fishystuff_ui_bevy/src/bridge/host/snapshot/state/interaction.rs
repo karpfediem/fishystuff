@@ -4,7 +4,8 @@ pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
     info: Option<&crate::plugins::api::SelectedInfo>,
     zone_stats: Option<&fishystuff_api::models::zone_stats::ZoneStatsResponse>,
 ) -> FishyMapSelectionSnapshot {
-    let selected_world_point = info.and_then(selection_world_point);
+    let selected_world_point =
+        info.and_then(crate::plugins::api::SelectedInfo::effective_world_point);
     FishyMapSelectionSnapshot {
         zone_rgb: info.and_then(|value| value.rgb_u32),
         world_x: selected_world_point.map(|value| value.0),
@@ -47,16 +48,6 @@ pub(in crate::bridge::host) fn hover_layer_samples_snapshot(
             },
         )
         .collect()
-}
-
-fn selection_world_point(info: &crate::plugins::api::SelectedInfo) -> Option<(f64, f64)> {
-    if !info.world_x.is_finite() || !info.world_z.is_finite() {
-        return None;
-    }
-    if info.layer_samples.is_empty() && info.rgb_u32.is_some() {
-        return None;
-    }
-    Some((info.world_x, info.world_z))
 }
 
 fn zone_stats_snapshot(
@@ -115,7 +106,6 @@ fn zone_stats_snapshot(
 
 #[cfg(test)]
 mod tests {
-    use super::selection_world_point;
     use crate::plugins::api::SelectedInfo;
     use fishystuff_api::Rgb;
 
@@ -131,7 +121,7 @@ mod tests {
             layer_samples: Vec::new(),
         };
 
-        assert_eq!(selection_world_point(&info), None);
+        assert_eq!(info.effective_world_point(), None);
     }
 
     #[test]
@@ -155,6 +145,6 @@ mod tests {
             }],
         };
 
-        assert_eq!(selection_world_point(&info), Some((123.0, 456.0)));
+        assert_eq!(info.effective_world_point(), Some((123.0, 456.0)));
     }
 }

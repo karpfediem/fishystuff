@@ -47,3 +47,15 @@ pub struct SelectedInfo {
     pub world_z: f64,
     pub layer_samples: Vec<LayerQuerySample>,
 }
+
+impl SelectedInfo {
+    pub fn effective_world_point(&self) -> Option<(f64, f64)> {
+        if !self.world_x.is_finite() || !self.world_z.is_finite() {
+            return None;
+        }
+        if self.layer_samples.is_empty() && self.rgb_u32.is_some() {
+            return None;
+        }
+        Some((self.world_x, self.world_z))
+    }
+}
