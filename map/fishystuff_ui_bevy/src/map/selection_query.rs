@@ -17,6 +17,7 @@ pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
         rgb_u32: hover.rgb_u32,
         world_x: hover.world_x,
         world_z: hover.world_z,
+        sampled_world_point: true,
         layer_samples: hover.layer_samples.clone(),
     })
 }
@@ -43,8 +44,9 @@ pub fn selected_info_for_zone_rgb(
         map_py: 0,
         rgb: Some(rgb),
         rgb_u32: Some(zone_rgb),
-        world_x: 0.0,
-        world_z: 0.0,
+        world_x: f64::NAN,
+        world_z: f64::NAN,
+        sampled_world_point: false,
         layer_samples,
     }
 }
@@ -146,6 +148,7 @@ mod tests {
         assert_eq!(selected.map_px, 12);
         assert_eq!(selected.map_py, 34);
         assert_eq!(selected.rgb_u32, Some(0x123456));
+        assert!(selected.sampled_world_point);
         assert_eq!(selected.world_x, 1.25);
         assert_eq!(selected.world_z, 2.5);
         assert_eq!(selected.layer_samples, hover.layer_samples);
@@ -174,6 +177,7 @@ mod tests {
 
         let selected = selected_info_from_hover(&hover).expect("selected info");
         assert_eq!(selected.rgb_u32, None);
+        assert!(selected.sampled_world_point);
         assert_eq!(selected.layer_samples, hover.layer_samples);
     }
 
@@ -241,8 +245,9 @@ mod tests {
 
         let selected = selected_info_for_zone_rgb(&registry, &field_metadata, 0x223344);
         assert_eq!(selected.rgb_u32, Some(0x223344));
-        assert_eq!(selected.world_x, 0.0);
-        assert_eq!(selected.world_z, 0.0);
+        assert!(!selected.sampled_world_point);
+        assert!(!selected.world_x.is_finite());
+        assert!(!selected.world_z.is_finite());
         assert_eq!(selected.layer_samples.len(), 1);
         assert_eq!(selected.layer_samples[0].layer_id, "zone_mask");
         assert_eq!(selected.layer_samples[0].rows[0].value, "Cron Islands");

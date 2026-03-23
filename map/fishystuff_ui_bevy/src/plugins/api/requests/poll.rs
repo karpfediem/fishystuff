@@ -98,7 +98,7 @@ pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
             Ok(result) => {
                 let rgb = *rgb;
                 state.pending.zone_stats = None;
-                if state.selection.info.as_ref().and_then(|s| s.rgb_u32) != Some(rgb) {
+                if state.selection.info.as_ref().and_then(|s| s.zone_rgb_u32()) != Some(rgb) {
                     return;
                 }
                 match result {

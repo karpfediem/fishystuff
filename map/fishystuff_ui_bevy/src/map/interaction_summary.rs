@@ -148,6 +148,7 @@ mod tests {
             rgb_u32: Some(0x112233),
             world_x: 100.0,
             world_z: 200.0,
+            sampled_world_point: true,
             layer_samples,
         }
     }

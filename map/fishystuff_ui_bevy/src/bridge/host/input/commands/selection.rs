@@ -76,11 +76,11 @@ fn apply_selected_info(
         selection.zone_stats_status = "zone stats: unavailable".to_string();
         return;
     };
-    let Some(rgb) = selected_info.rgb else {
+    let Some(rgb) = selected_info.zone_rgb() else {
         selection.zone_stats_status = "zone stats: unavailable".to_string();
         return;
     };
-    let Some(rgb_u32) = selected_info.rgb_u32 else {
+    let Some(rgb_u32) = selected_info.zone_rgb_u32() else {
         selection.zone_stats_status = "zone stats: unavailable".to_string();
         return;
     };
@@ -130,6 +130,7 @@ mod tests {
             rgb_u32: None,
             world_x: 123.0,
             world_z: 456.0,
+            sampled_world_point: true,
             layer_samples: Vec::new(),
         };
 

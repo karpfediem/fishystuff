@@ -157,7 +157,7 @@ pub(super) fn sync_zone_evidence_list(mut sync: ZoneEvidenceListSync<'_, '_>) {
                 .selection
                 .info
                 .as_ref()
-                .and_then(|info| info.rgb_u32)
+                .and_then(crate::plugins::api::SelectedInfo::zone_rgb_u32)
                 .is_some()
             {
                 "No zone evidence loaded."

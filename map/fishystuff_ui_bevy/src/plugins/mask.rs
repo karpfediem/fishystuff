@@ -33,7 +33,7 @@ impl Plugin for MaskPlugin {
 }
 
 fn hovered_zone_rgb(info: Option<&crate::plugins::api::HoverInfo>) -> Option<u32> {
-    info.and_then(|hover| hover.rgb_u32)
+    info.and_then(crate::plugins::api::HoverInfo::zone_rgb_u32)
 }
 
 fn set_hover_state(
@@ -129,8 +129,8 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     let Some(selected_info) = selected_info_from_hover(&hover) else {
         return;
     };
-    let zone_rgb = selected_info.rgb;
-    let zone_rgb_u32 = selected_info.rgb_u32;
+    let zone_rgb = selected_info.zone_rgb();
+    let zone_rgb_u32 = selected_info.zone_rgb_u32();
     context.selection.info = Some(selected_info);
     context.selection.zone_stats = None;
     context.pending.zone_stats = None;
@@ -253,7 +253,16 @@ mod tests {
             rgb_u32: Some(0x123456),
             world_x: 1.0,
             world_z: 2.0,
-            layer_samples: Vec::new(),
+            layer_samples: vec![crate::map::layer_query::LayerQuerySample {
+                layer_id: "zone_mask".to_string(),
+                layer_name: "Zone Mask".to_string(),
+                kind: "field".to_string(),
+                rgb: fishystuff_api::Rgb::from_u32(0x123456),
+                rgb_u32: 0x123456,
+                field_id: Some(0x123456),
+                rows: Vec::new(),
+                targets: Vec::new(),
+            }],
         };
         assert_eq!(hovered_zone_rgb(Some(&info)), Some(0x123456));
         assert_eq!(hovered_zone_rgb(None), None);
