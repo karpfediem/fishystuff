@@ -84,6 +84,12 @@ Repository-level notes for working in this monorepo.
 - Treat `data/` as local developer input/output state, not a serving root.
 - Stage CDN publish payloads under `data/cdn/`.
 
+## Source-of-truth policy
+- Prefer original game/source files over derived, external, or legacy intermediates whenever original files are available.
+- The target end state is that the repo can bootstrap most, and ideally all, derived state from available original files.
+- Do not add or preserve legacy-support code paths when the original-file path is available and sufficient.
+- When replacing an external or legacy input, remove the old dependency instead of keeping dual-path support unless a user explicitly asks for a temporary migration path.
+
 ## Generated artifact policy
 - Hand-edited map host source lives under:
   - `site/assets/map/loader.js`
