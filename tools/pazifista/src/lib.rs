@@ -253,7 +253,11 @@ struct GcdataInspectPabrTableCli {
 struct GcdataInspectRegioninfoBssCli {
     #[arg(value_name = "regioninfo.bss file")]
     input_file: PathBuf,
-    #[arg(long = "loc", value_name = "path")]
+    #[arg(
+        long = "loc",
+        value_name = "path",
+        help = "Original localization .loc file"
+    )]
     loc: Option<PathBuf>,
     #[arg(long = "current-regioninfo", value_name = "path")]
     current_regioninfo: Option<PathBuf>,

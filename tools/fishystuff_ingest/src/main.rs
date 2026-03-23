@@ -194,7 +194,7 @@ enum Commands {
         regions_geojson: PathBuf,
         #[arg(long)]
         regioninfo: PathBuf,
-        #[arg(long)]
+        #[arg(long, help = "Original localization .loc file")]
         loc: PathBuf,
         #[arg(long)]
         deck_r_origins: PathBuf,
@@ -208,7 +208,7 @@ enum Commands {
         region_groups_geojson: PathBuf,
         #[arg(long)]
         regioninfo: PathBuf,
-        #[arg(long)]
+        #[arg(long, help = "Original localization .loc file")]
         loc: PathBuf,
         #[arg(long)]
         deck_r_origins: PathBuf,

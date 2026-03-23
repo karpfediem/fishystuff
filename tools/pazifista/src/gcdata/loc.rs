@@ -1,10 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::io::Read;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, Context, Result};
-use flate2::read::ZlibDecoder;
+use anyhow::Result;
+use fishystuff_core::loc::{scan_loc_records, LocRecord, LocScanSummary};
 use serde::Serialize;
 
 #[derive(Debug, Clone)]
@@ -48,27 +46,6 @@ struct LocInspectReport {
     missing_focus_keys: Vec<u64>,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum LocRecordFormat {
-    A,
-    B,
-}
-
-#[derive(Debug, Clone)]
-struct LocRecord {
-    format: LocRecordFormat,
-    key: u64,
-    namespace: Option<u32>,
-    text: String,
-}
-
-#[derive(Debug, Clone)]
-struct DecompressedLoc {
-    file_size: u64,
-    expected_uncompressed_size: u32,
-    blob: Vec<u8>,
-}
-
 pub fn inspect_loc(
     path: &Path,
     focus_namespaces: &[u32],
@@ -78,7 +55,6 @@ pub fn inspect_loc(
     max_len: usize,
     output_path: Option<&Path>,
 ) -> Result<LocInspectResult> {
-    let loc = decompress_loc(path)?;
     let namespace_filter = focus_namespaces.iter().copied().collect::<BTreeSet<_>>();
     let key_filter = focus_keys.iter().copied().collect::<BTreeSet<_>>();
     let text_filters = text_filters
@@ -95,16 +71,13 @@ pub fn inspect_loc(
     let mut displayed_records = Vec::new();
     let mut matched_keys = BTreeSet::<u64>::new();
 
-    scan_loc_records(&loc.blob, max_len, |record| {
+    let summary = scan_loc_records(path, max_len, |record| {
         total_record_count += 1;
-        match record.format {
-            LocRecordFormat::A => layout_a_count += 1,
-            LocRecordFormat::B => {
-                layout_b_count += 1;
-                if let Some(namespace) = record.namespace {
-                    namespaces.insert(namespace);
-                }
-            }
+        if let Some(namespace) = record.namespace {
+            layout_b_count += 1;
+            namespaces.insert(namespace);
+        } else {
+            layout_a_count += 1;
         }
 
         let namespace_matches = namespace_filter.is_empty()
@@ -112,10 +85,13 @@ pub fn inspect_loc(
                 .namespace
                 .is_some_and(|ns| namespace_filter.contains(&ns));
         let key_matches = key_filter.is_empty() || key_filter.contains(&record.key);
+        let record_text_lower = (!text_filters.is_empty()).then(|| record.text.to_lowercase());
         let text_matches = text_filters.is_empty()
-            || text_filters
-                .iter()
-                .any(|needle| record.text.to_lowercase().contains(needle));
+            || text_filters.iter().any(|needle| {
+                record_text_lower
+                    .as_deref()
+                    .is_some_and(|text| text.contains(needle))
+            });
         let matches = if has_filters {
             namespace_matches && key_matches && text_matches
         } else {
@@ -123,12 +99,7 @@ pub fn inspect_loc(
         };
 
         if matches && displayed_records.len() < limit {
-            displayed_records.push(LocRecordSummary {
-                format: format_name(record.format).to_string(),
-                key: record.key,
-                namespace: record.namespace,
-                text: record.text.clone(),
-            });
+            displayed_records.push(record_summary(record));
         }
         if matches && key_filter.contains(&record.key) {
             matched_keys.insert(record.key);
@@ -144,9 +115,9 @@ pub fn inspect_loc(
     if let Some(output_path) = output_path {
         let report = LocInspectReport {
             path: path.display().to_string(),
-            file_size: loc.file_size,
-            expected_uncompressed_size: loc.expected_uncompressed_size,
-            actual_uncompressed_size: loc.blob.len(),
+            file_size: summary.file_size,
+            expected_uncompressed_size: summary.expected_uncompressed_size,
+            actual_uncompressed_size: summary.actual_uncompressed_size,
             total_record_count,
             layout_a_count,
             layout_b_count,
@@ -158,191 +129,49 @@ pub fn inspect_loc(
     }
 
     Ok(LocInspectResult {
-        summary: LocInspectSummary {
-            output_path: output_path.map(Path::to_path_buf),
-            expected_uncompressed_size: loc.expected_uncompressed_size,
-            actual_uncompressed_size: loc.blob.len(),
+        summary: build_inspect_summary(
+            &summary,
+            output_path,
             total_record_count,
             layout_a_count,
             layout_b_count,
-            namespace_count: namespaces.len(),
-            displayed_record_count: displayed_records.len(),
-            missing_focus_key_count: missing_focus_keys.len(),
-        },
+            namespaces.len(),
+            displayed_records.len(),
+            missing_focus_keys.len(),
+        ),
         displayed_records,
     })
 }
 
-pub fn load_loc_namespaces_as_string_maps(
-    path: &Path,
-    focus_namespaces: &[u32],
-    max_len: usize,
-) -> Result<BTreeMap<u32, BTreeMap<String, String>>> {
-    let loc = decompress_loc(path)?;
-    let namespace_filter = focus_namespaces.iter().copied().collect::<BTreeSet<_>>();
-    let mut maps = focus_namespaces
-        .iter()
-        .copied()
-        .map(|namespace| (namespace, BTreeMap::<String, String>::new()))
-        .collect::<BTreeMap<_, _>>();
-
-    scan_loc_records(&loc.blob, max_len, |record| {
-        let Some(namespace) = record.namespace else {
-            return Ok(());
-        };
-        if !namespace_filter.contains(&namespace) {
-            return Ok(());
-        }
-        let Ok(key) = u32::try_from(record.key) else {
-            return Ok(());
-        };
-        maps.entry(namespace)
-            .or_default()
-            .entry(key.to_string())
-            .or_insert(record.text.clone());
-        Ok(())
-    })?;
-
-    Ok(maps)
+fn build_inspect_summary(
+    summary: &LocScanSummary,
+    output_path: Option<&Path>,
+    total_record_count: usize,
+    layout_a_count: usize,
+    layout_b_count: usize,
+    namespace_count: usize,
+    displayed_record_count: usize,
+    missing_focus_key_count: usize,
+) -> LocInspectSummary {
+    LocInspectSummary {
+        output_path: output_path.map(Path::to_path_buf),
+        expected_uncompressed_size: summary.expected_uncompressed_size,
+        actual_uncompressed_size: summary.actual_uncompressed_size,
+        total_record_count,
+        layout_a_count,
+        layout_b_count,
+        namespace_count,
+        displayed_record_count,
+        missing_focus_key_count,
+    }
 }
 
-fn decompress_loc(path: &Path) -> Result<DecompressedLoc> {
-    let raw =
-        fs::read(path).with_context(|| format!("failed to read .loc file {}", path.display()))?;
-    if raw.len() < 5 {
-        bail!(".loc file {} is too small", path.display());
-    }
-
-    let expected_uncompressed_size = u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
-    let mut decoder = ZlibDecoder::new(&raw[4..]);
-    let mut blob = Vec::new();
-    decoder
-        .read_to_end(&mut blob)
-        .with_context(|| format!("failed to zlib-decompress .loc file {}", path.display()))?;
-
-    Ok(DecompressedLoc {
-        file_size: raw.len() as u64,
-        expected_uncompressed_size,
-        blob,
-    })
-}
-
-fn scan_loc_records<F>(blob: &[u8], max_len: usize, mut visitor: F) -> Result<()>
-where
-    F: FnMut(&LocRecord) -> Result<()>,
-{
-    let mut pos = 0usize;
-    while pos + 16 <= blob.len() {
-        if let Some((next_pos, record)) = try_parse_layout_a(blob, pos, max_len)? {
-            visitor(&record)?;
-            pos = next_pos;
-            continue;
-        }
-        if let Some((next_pos, record)) = try_parse_layout_b(blob, pos, max_len)? {
-            visitor(&record)?;
-            pos = next_pos;
-            continue;
-        }
-        break;
-    }
-
-    Ok(())
-}
-
-fn try_parse_layout_a(
-    blob: &[u8],
-    pos: usize,
-    max_len: usize,
-) -> Result<Option<(usize, LocRecord)>> {
-    let len64 = u64::from_le_bytes(read_array::<8>(blob, pos)?);
-    if len64 == 0 || len64 > max_len as u64 {
-        return Ok(None);
-    }
-
-    let char_len = usize::try_from(len64).context("layout A char length does not fit usize")?;
-    let end = pos
-        .checked_add(16)
-        .and_then(|offset| offset.checked_add(char_len.checked_mul(2)?))
-        .context("layout A end offset overflow")?;
-    if end + 4 > blob.len() || blob[end..end + 4] != [0, 0, 0, 0] {
-        return Ok(None);
-    }
-
-    let key = u64::from_le_bytes(read_array::<8>(blob, pos + 8)?);
-    let text = decode_utf16le(&blob[pos + 16..end])?;
-    Ok(Some((
-        end + 4,
-        LocRecord {
-            format: LocRecordFormat::A,
-            key,
-            namespace: None,
-            text,
-        },
-    )))
-}
-
-fn try_parse_layout_b(
-    blob: &[u8],
-    pos: usize,
-    max_len: usize,
-) -> Result<Option<(usize, LocRecord)>> {
-    let len32 = u32::from_le_bytes(read_array::<4>(blob, pos)?);
-    if len32 == 0 || len32 > max_len as u32 {
-        return Ok(None);
-    }
-
-    let char_len = usize::try_from(len32).context("layout B char length does not fit usize")?;
-    let end = pos
-        .checked_add(16)
-        .and_then(|offset| offset.checked_add(char_len.checked_mul(2)?))
-        .context("layout B end offset overflow")?;
-    if end + 4 > blob.len() || blob[end..end + 4] != [0, 0, 0, 0] {
-        return Ok(None);
-    }
-
-    let namespace = u32::from_le_bytes(read_array::<4>(blob, pos + 4)?);
-    let key = u64::from_le_bytes(read_array::<8>(blob, pos + 8)?);
-    let text = decode_utf16le(&blob[pos + 16..end])?;
-    Ok(Some((
-        end + 4,
-        LocRecord {
-            format: LocRecordFormat::B,
-            key,
-            namespace: Some(namespace),
-            text,
-        },
-    )))
-}
-
-fn decode_utf16le(slice: &[u8]) -> Result<String> {
-    if slice.len() % 2 != 0 {
-        bail!("UTF-16LE slice has odd byte length {}", slice.len());
-    }
-    let units = slice
-        .chunks_exact(2)
-        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-        .collect::<Vec<_>>();
-    Ok(char::decode_utf16(units)
-        .map(|value| value.unwrap_or(char::REPLACEMENT_CHARACTER))
-        .collect())
-}
-
-fn read_array<const N: usize>(blob: &[u8], pos: usize) -> Result<[u8; N]> {
-    let end = pos
-        .checked_add(N)
-        .with_context(|| format!("record offset overflow at {}", pos))?;
-    let slice = blob
-        .get(pos..end)
-        .with_context(|| format!("record slice [{}..{}) is out of bounds", pos, end))?;
-    let mut bytes = [0u8; N];
-    bytes.copy_from_slice(slice);
-    Ok(bytes)
-}
-
-fn format_name(format: LocRecordFormat) -> &'static str {
-    match format {
-        LocRecordFormat::A => "A",
-        LocRecordFormat::B => "B",
+fn record_summary(record: &LocRecord) -> LocRecordSummary {
+    LocRecordSummary {
+        format: record.format.as_str().to_string(),
+        key: record.key,
+        namespace: record.namespace,
+        text: record.text.clone(),
     }
 }
 
@@ -354,7 +183,8 @@ mod tests {
     use flate2::write::ZlibEncoder;
     use flate2::Compression;
 
-    use super::{inspect_loc, load_loc_namespaces_as_string_maps};
+    use super::inspect_loc;
+    use fishystuff_core::loc::load_loc_namespaces_as_string_maps;
 
     fn encode_utf16le(value: &str) -> Vec<u8> {
         value.encode_utf16().flat_map(u16::to_le_bytes).collect()

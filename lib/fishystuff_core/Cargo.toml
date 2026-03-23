@@ -8,5 +8,6 @@ anyhow = { workspace = true }
 image = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 base64 = "0.22"
+flate2 = "1"
 
 [dev-dependencies]

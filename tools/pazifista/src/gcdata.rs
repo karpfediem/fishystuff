@@ -9,6 +9,7 @@ use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
+use fishystuff_core::loc::load_loc_namespaces_as_string_maps;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -268,17 +269,14 @@ struct RegionClientDataVariant {
     region_ids: BTreeSet<u32>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default)]
 struct LocalizationFile {
-    #[serde(default)]
     en: LocalizationTable,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default)]
 struct LocalizationTable {
-    #[serde(default)]
     node: BTreeMap<String, String>,
-    #[serde(default)]
     town: BTreeMap<String, String>,
 }
 
@@ -774,24 +772,29 @@ fn load_current_regiongroup_graph_rows_by_key(
 }
 
 fn load_localization(path: &Path) -> Result<LocalizationFile> {
-    if path
+    if !path
         .extension()
         .and_then(|value| value.to_str())
         .is_some_and(|value| value.eq_ignore_ascii_case("loc"))
     {
-        let maps = loc::load_loc_namespaces_as_string_maps(path, &[17, 29], 10_000)?;
-        return Ok(LocalizationFile {
-            en: LocalizationTable {
-                node: maps.get(&29).cloned().unwrap_or_default(),
-                town: maps.get(&17).cloned().unwrap_or_default(),
-            },
-        });
+        bail!(
+            "expected original localization .loc file, got {}",
+            path.display()
+        );
     }
 
-    let file = File::open(path)
-        .with_context(|| format!("failed to open localization {}", path.display()))?;
-    serde_json::from_reader(file)
-        .with_context(|| format!("failed to parse localization {}", path.display()))
+    let maps = load_loc_namespaces_as_string_maps(path, &[17, 29], 10_000).with_context(|| {
+        format!(
+            "failed to load localization namespaces from {}",
+            path.display()
+        )
+    })?;
+    Ok(LocalizationFile {
+        en: LocalizationTable {
+            node: maps.get(&29).cloned().unwrap_or_default(),
+            town: maps.get(&17).cloned().unwrap_or_default(),
+        },
+    })
 }
 
 fn decode_regioninfo_bss_signature_rows(

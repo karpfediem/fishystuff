@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use fishystuff_core::loc::load_loc_namespaces_as_string_maps;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -58,18 +59,15 @@ struct DeckRegionGroupGraphRow {
     graphz: Option<f64>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default)]
 struct LocalizationFile {
-    #[serde(default)]
     en: LocalizationTable,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default)]
 struct LocalizationTable {
-    #[serde(default)]
-    node: HashMap<String, String>,
-    #[serde(default)]
-    town: HashMap<String, String>,
+    node: BTreeMap<String, String>,
+    town: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -236,10 +234,7 @@ fn load_region_layer_context(
     let regioninfo: HashMap<String, RegionInfoRow> =
         serde_json::from_reader(regioninfo_file).context("parse regioninfo json")?;
 
-    let loc_file =
-        File::open(loc_path).with_context(|| format!("open loc json: {}", loc_path.display()))?;
-    let loc: LocalizationFile =
-        serde_json::from_reader(loc_file).context("parse localization json")?;
+    let loc = load_localization(loc_path)?;
 
     let deck_file = File::open(deck_r_origins_path).with_context(|| {
         format!(
@@ -268,6 +263,28 @@ fn load_region_layer_context(
         loc,
         deck_by_region,
         deck_by_group,
+    })
+}
+
+fn load_localization(path: &Path) -> Result<LocalizationFile> {
+    if !path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("loc"))
+    {
+        bail!(
+            "expected original localization .loc file, got {}",
+            path.display()
+        );
+    }
+
+    let maps = load_loc_namespaces_as_string_maps(path, &[17, 29], 10_000)
+        .with_context(|| format!("load localization namespaces from {}", path.display()))?;
+    Ok(LocalizationFile {
+        en: LocalizationTable {
+            node: maps.get(&29).cloned().unwrap_or_default(),
+            town: maps.get(&17).cloned().unwrap_or_default(),
+        },
     })
 }
 
@@ -408,7 +425,7 @@ fn resolve_origin_name(
         .or_else(|| origin_region_id.and_then(|id| localized_name(&loc.node, id)))
 }
 
-fn localized_name(map: &HashMap<String, String>, key: u32) -> Option<String> {
+fn localized_name(map: &BTreeMap<String, String>, key: u32) -> Option<String> {
     let value = map.get(&key.to_string())?;
     let trimmed = value.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())

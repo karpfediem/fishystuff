@@ -3,6 +3,7 @@ pub mod constants;
 pub mod coord;
 pub mod fish_icons;
 pub mod gaussian;
+pub mod loc;
 pub mod masks;
 pub mod prob;
 pub mod snap;
