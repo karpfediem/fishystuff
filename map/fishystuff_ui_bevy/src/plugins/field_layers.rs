@@ -19,6 +19,7 @@ use crate::map::layers::{LayerId, LayerManifestStatus, LayerRegistry, LayerRunti
 use crate::map::spaces::layer_transform::LayerTransform;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, MapRect, WorldPoint, WorldRect};
+use crate::plugins::api::HoverState;
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::prelude::*;
@@ -67,12 +68,14 @@ struct FieldTextureRequest {
     source_height: u32,
     output_width: u16,
     output_height: u16,
+    highlight_field_id: Option<u32>,
 }
 
 impl FieldTextureRequest {
     fn can_reuse_for(self, next: Self) -> bool {
         self.output_width == next.output_width
             && self.output_height == next.output_height
+            && self.highlight_field_id == next.highlight_field_id
             && rect_contains(
                 self.source_origin_x,
                 self.source_origin_y,
@@ -201,6 +204,7 @@ fn update_field_layer_visuals(
     layer_registry: Res<LayerRegistry>,
     layer_runtime: Res<LayerRuntime>,
     exact_lookups: Res<ExactLookupCache>,
+    hover: Res<HoverState>,
     mut field_runtime: ResMut<FieldLayerRuntime>,
 ) {
     let active_exact_layers = layer_registry
@@ -267,6 +271,7 @@ fn update_field_layer_visuals(
             field.height(),
             focus_output_width,
             focus_output_height,
+            hovered_field_id_for_layer(hover.info.as_ref(), layer.key.as_str()),
         ) else {
             hide_field_layer(&mut commands, field_runtime.entries.get(&layer.id));
             continue;
@@ -386,6 +391,7 @@ fn build_texture_request(
     field_height: u16,
     focus_output_width: u16,
     focus_output_height: u16,
+    highlight_field_id: Option<u32>,
 ) -> Option<FieldTextureRequest> {
     let focus_origin_x = visible_map_rect.min.x.floor().max(0.0) as i32;
     let focus_origin_y = visible_map_rect.min.y.floor().max(0.0) as i32;
@@ -431,6 +437,7 @@ fn build_texture_request(
             .checked_add(u16::try_from(FIELD_OVERSCAN_SCREEN_PX.checked_mul(2)?).ok()?)?,
         output_height: focus_output_height
             .checked_add(u16::try_from(FIELD_OVERSCAN_SCREEN_PX.checked_mul(2)?).ok()?)?,
+        highlight_field_id: highlight_field_id.filter(|field_id| *field_id != 0),
     })
 }
 
@@ -474,13 +481,14 @@ fn request_world_placement(
 }
 
 fn render_lookup_request_image(field: LoadedFieldLayer<'_>, request: FieldTextureRequest) -> Image {
-    let chunk = field.render_rgba_chunk(
+    let chunk = field.render_rgba_chunk_with_highlight(
         request.source_origin_x,
         request.source_origin_y,
         request.source_width,
         request.source_height,
         request.output_width,
         request.output_height,
+        request.highlight_field_id,
     );
     Image::new(
         Extent3d {
@@ -493,6 +501,21 @@ fn render_lookup_request_image(field: LoadedFieldLayer<'_>, request: FieldTextur
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::RENDER_WORLD,
     )
+}
+
+fn hovered_field_id_for_layer(
+    hover: Option<&crate::plugins::api::HoverInfo>,
+    layer_key: &str,
+) -> Option<u32> {
+    hover
+        .and_then(|hover| {
+            hover
+                .layer_samples
+                .iter()
+                .find(|sample| sample.layer_id == layer_key)
+        })
+        .and_then(|sample| sample.field_id)
+        .filter(|field_id| *field_id != 0)
 }
 
 fn world_rect_to_clamped_map_rect(world_rect: WorldRect, map_to_world: MapToWorld) -> MapRect {
@@ -598,6 +621,7 @@ mod tests {
             source_height: 800,
             output_width: 1280,
             output_height: 960,
+            highlight_field_id: Some(16),
         };
         let next = FieldTextureRequest {
             focus_origin_x: 1040,
@@ -610,8 +634,31 @@ mod tests {
             source_height: 790,
             output_width: 1280,
             output_height: 960,
+            highlight_field_id: Some(16),
         };
         assert!(previous.can_reuse_for(next));
+    }
+
+    #[test]
+    fn request_reuse_rejects_hover_highlight_change() {
+        let previous = FieldTextureRequest {
+            focus_origin_x: 1000,
+            focus_origin_y: 2000,
+            focus_width: 800,
+            focus_height: 600,
+            source_origin_x: 900,
+            source_origin_y: 1900,
+            source_width: 1000,
+            source_height: 800,
+            output_width: 1280,
+            output_height: 960,
+            highlight_field_id: Some(16),
+        };
+        let next = FieldTextureRequest {
+            highlight_field_id: Some(17),
+            ..previous
+        };
+        assert!(!previous.can_reuse_for(next));
     }
 
     #[test]
@@ -631,6 +678,7 @@ mod tests {
             10_540,
             1200,
             800,
+            Some(295),
         )
         .expect("request");
         assert_eq!(request.focus_origin_x, 100);
@@ -639,5 +687,6 @@ mod tests {
         assert!(request.source_origin_y < request.focus_origin_y);
         assert!(request.source_width > request.focus_width);
         assert!(request.source_height > request.focus_height);
+        assert_eq!(request.highlight_field_id, Some(295));
     }
 }

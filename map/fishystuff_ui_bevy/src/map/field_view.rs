@@ -109,6 +109,8 @@ pub struct LoadedFieldLayer<'a> {
     color_mode: FieldColorMode,
 }
 
+const FIELD_HOVER_HIGHLIGHT_RGBA: [u8; 4] = [48, 255, 96, 255];
+
 pub fn loaded_field_layer<'a>(
     layer: &'a LayerSpec,
     exact_lookups: &'a ExactLookupCache,
@@ -159,6 +161,29 @@ impl FieldLayerView for LoadedFieldLayer<'_> {
     }
 }
 
+impl LoadedFieldLayer<'_> {
+    pub fn render_rgba_chunk_with_highlight(
+        &self,
+        source_origin_x: i32,
+        source_origin_y: i32,
+        source_width: u32,
+        source_height: u32,
+        output_width: u16,
+        output_height: u16,
+        highlight_field_id: Option<u32>,
+    ) -> FieldRgbaChunk {
+        self.field.render_rgba_resampled_chunk(
+            source_origin_x,
+            source_origin_y,
+            source_width,
+            source_height,
+            output_width,
+            output_height,
+            |id| visual_rgba_for_field_id_with_highlight(id, self.color_mode, highlight_field_id),
+        )
+    }
+}
+
 fn layer_point_to_px(layer_point: LayerPoint) -> Option<(i32, i32)> {
     if !layer_point.x.is_finite() || !layer_point.y.is_finite() {
         return None;
@@ -205,6 +230,17 @@ fn visual_rgba_for_field_id(id: u32, color_mode: FieldColorMode) -> [u8; 4] {
     }
 }
 
+fn visual_rgba_for_field_id_with_highlight(
+    id: u32,
+    color_mode: FieldColorMode,
+    highlight_field_id: Option<u32>,
+) -> [u8; 4] {
+    if id != 0 && highlight_field_id == Some(id) {
+        return FIELD_HOVER_HIGHLIGHT_RGBA;
+    }
+    visual_rgba_for_field_id(id, color_mode)
+}
+
 fn hash_u32(mut value: u32) -> u32 {
     value ^= value >> 16;
     value = value.wrapping_mul(0x7feb_352d);
@@ -215,7 +251,7 @@ fn hash_u32(mut value: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FieldLayerView, LoadedFieldLayer};
+    use super::{FieldLayerView, LoadedFieldLayer, FIELD_HOVER_HIGHLIGHT_RGBA};
     use crate::map::layers::FieldColorMode;
     use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
     use crate::map::spaces::affine::Affine2D;
@@ -297,5 +333,20 @@ mod tests {
             Some(Rgb::from_u32(7))
         );
         assert!(view.contains_at_world_point(&layer, MapToWorld::default(), world_point));
+    }
+
+    #[test]
+    fn render_rgba_chunk_with_highlight_tints_matching_field_id() {
+        let field = DiscreteFieldRows::from_u32_grid(2, 1, &[10, 20]).expect("field");
+        let view = LoadedFieldLayer {
+            field: &field,
+            color_mode: FieldColorMode::DebugHash,
+        };
+
+        let chunk = view.render_rgba_chunk_with_highlight(0, 0, 2, 1, 2, 1, Some(20));
+        let data = chunk.data();
+
+        assert_ne!(&data[0..4], &FIELD_HOVER_HIGHLIGHT_RGBA);
+        assert_eq!(&data[4..8], &FIELD_HOVER_HIGHLIGHT_RGBA);
     }
 }
