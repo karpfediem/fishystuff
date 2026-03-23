@@ -19,7 +19,7 @@ const BOOKMARK_COORDINATE_DECIMALS = 3;
 const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
 const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
-const BOOKMARK_PRIMARY_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
+const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
@@ -385,7 +385,7 @@ function normalizeBookmarkRows(rowsInput) {
 
 function bookmarkPrimaryRowValue(rowsInput) {
   const rows = normalizeBookmarkRows(rowsInput);
-  for (const key of BOOKMARK_PRIMARY_ROW_KEYS) {
+  for (const key of PRIMARY_SEMANTIC_ROW_KEYS) {
     const row = rows.find((entry) => entry.key === key);
     if (row?.value) {
       return row.value;
@@ -1473,14 +1473,9 @@ export function buildSelectionSummaryText(selection, stateBundle) {
   if (zoneName) {
     return zoneName;
   }
-  const overviewRows = buildSelectionOverviewRows(selection, stateBundle);
-  const preferredRow =
-    overviewRows.find((row) => String(row?.label || "").trim() === "Zone") ||
-    overviewRows.find((row) => String(row?.label || "").trim() === "Resources") ||
-    overviewRows.find((row) => String(row?.label || "").trim() === "Origin") ||
-    overviewRows[0] ||
-    null;
-  const preferredValue = String(preferredRow?.value || "").trim();
+  const preferredValue = String(
+    preferredLayerSampleRow(selection?.layerSamples, stateBundle)?.value || "",
+  ).trim();
   if (preferredValue) {
     return preferredValue;
   }
@@ -1522,6 +1517,24 @@ function bookmarkRowsFromLayerSamples(layerSamplesInput, stateBundle) {
   );
   const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
   return layerIds.flatMap((layerId) => hoverSampleRows(sampleByLayerId.get(layerId)));
+}
+
+function preferredLayerSampleRow(layerSamplesInput, stateBundle) {
+  const layerSamples = Array.isArray(layerSamplesInput) ? layerSamplesInput : [];
+  const sampleByLayerId = new Map(
+    layerSamples
+      .map((sample) => [String(sample?.layerId || "").trim(), sample])
+      .filter(([layerId]) => Boolean(layerId)),
+  );
+  const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
+  const rows = layerIds.flatMap((layerId) => hoverSampleRows(sampleByLayerId.get(layerId)));
+  for (const key of PRIMARY_SEMANTIC_ROW_KEYS) {
+    const row = rows.find((entry) => String(entry?.key || "").trim() === key);
+    if (row) {
+      return row;
+    }
+  }
+  return rows[0] || null;
 }
 
 function renderHoverTooltip(elements, hover, stateBundle) {

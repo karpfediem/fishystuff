@@ -308,6 +308,27 @@ test("buildSelectionSummaryText falls back to semantic rows for non-zone selecti
   );
 });
 
+test("buildSelectionSummaryText prefers semantic row keys over display labels", () => {
+  assert.equal(
+    buildSelectionSummaryText(
+      {
+        layerSamples: [
+          {
+            layerId: "region_groups",
+            rows: [{ key: "resources", icon: "hover-resources", label: "Supply", value: "Olvia" }],
+          },
+          {
+            layerId: "regions",
+            rows: [{ key: "origin", icon: "hover-origin", label: "Home", value: "Castle Ruins" }],
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    "Olvia",
+  );
+});
+
 test("buildZoneEvidenceSummary explains that non-zone selections have no zone evidence", () => {
   assert.equal(buildZoneEvidenceSummary({ zoneRgb: null }, null), "Zone evidence is only available for zone selections.");
   assert.equal(buildZoneEvidenceSummary({ zoneRgb: 0xc17f7f }, null), "No zone evidence loaded.");
