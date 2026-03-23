@@ -3072,7 +3072,10 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
   dispatchMapState(shell, patch);
   if (match.kind === "zone") {
     dispatchMapCommand(shell, {
-      selectZoneRgb: match.zoneRgb,
+      selectSemanticField: {
+        layerId: "zone_mask",
+        fieldId: match.zoneRgb,
+      },
     });
   }
   renderCurrentState(projectStateBundleStatePatch(stateBundle, patch));

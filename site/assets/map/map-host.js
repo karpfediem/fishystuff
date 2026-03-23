@@ -96,6 +96,11 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     resetView?: boolean,
  *     setViewMode?: "2d" | "3d",
  *     selectZoneRgb?: number,
+ *     selectSemanticField?: {
+ *       layerId?: string,
+ *       fieldId?: number,
+ *       targetKey?: string | null
+ *     },
  *     selectWorldPoint?: {
  *       worldX?: number,
  *       worldZ?: number
@@ -681,6 +686,23 @@ function normalizeWorldPointCommand(value) {
   return { worldX, worldZ };
 }
 
+function normalizeSemanticFieldCommand(value) {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const layerId = String(value.layerId || "").trim();
+  const fieldId = Number.parseInt(value.fieldId, 10);
+  const targetKey = normalizeNullableString(value.targetKey);
+  if (!layerId || !Number.isFinite(fieldId)) {
+    return undefined;
+  }
+  return {
+    layerId,
+    fieldId,
+    ...(targetKey != null ? { targetKey } : {}),
+  };
+}
+
 function normalizeBookmarksState(values) {
   const entries = Array.isArray(values) ? values : [];
   const normalized = [];
@@ -823,6 +845,12 @@ export function normalizeStatePatch(patch = {}) {
       const selectZoneRgb = Number.parseInt(patch.commands.selectZoneRgb, 10);
       if (Number.isFinite(selectZoneRgb)) {
         normalized.commands.selectZoneRgb = selectZoneRgb;
+      }
+    }
+    if (hasOwn(patch.commands, "selectSemanticField")) {
+      const selectSemanticField = normalizeSemanticFieldCommand(patch.commands.selectSemanticField);
+      if (selectSemanticField) {
+        normalized.commands.selectSemanticField = selectSemanticField;
       }
     }
     if (hasOwn(patch.commands, "selectWorldPoint")) {

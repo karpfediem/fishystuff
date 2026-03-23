@@ -58,6 +58,23 @@ pub(in crate::bridge::host) fn apply_browser_commands(
                 zone_rgb,
             );
         }
+        if let Some(select_semantic_field) = command.select_semantic_field.as_ref() {
+            selection::apply_semantic_field_selection_command(
+                &bootstrap,
+                &patch_filter,
+                &layer_registry,
+                &layer_runtime,
+                &exact_lookups,
+                &field_metadata,
+                &tile_cache,
+                &vector_runtime,
+                &mut selection,
+                &mut pending,
+                &select_semantic_field.layer_id,
+                select_semantic_field.field_id,
+                select_semantic_field.target_key.as_deref(),
+            );
+        }
         if let Some(world_point) = command.select_world_point {
             selection::apply_world_point_selection_command(
                 &bootstrap,

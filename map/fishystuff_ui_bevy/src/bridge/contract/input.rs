@@ -275,10 +275,19 @@ pub struct FishyMapWorldPointCommand {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
+pub struct FishyMapSelectSemanticFieldCommand {
+    pub layer_id: String,
+    pub field_id: u32,
+    pub target_key: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct FishyMapCommands {
     pub reset_view: Option<bool>,
     pub set_view_mode: Option<FishyMapViewMode>,
     pub select_zone_rgb: Option<u32>,
+    pub select_semantic_field: Option<FishyMapSelectSemanticFieldCommand>,
     pub select_world_point: Option<FishyMapWorldPointCommand>,
     pub restore_view: Option<FishyMapViewSnapshot>,
 }

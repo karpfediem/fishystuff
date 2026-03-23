@@ -184,6 +184,11 @@ impl LoadedFieldLayer<'_> {
     }
 }
 
+pub fn sample_rgb_for_field_id(id: u32, color_mode: FieldColorMode) -> Rgb {
+    let [r, g, b] = sample_rgb_bytes_for_field_id(id, color_mode);
+    Rgb::new(r, g, b)
+}
+
 fn layer_point_to_px(layer_point: LayerPoint) -> Option<(i32, i32)> {
     if !layer_point.x.is_finite() || !layer_point.y.is_finite() {
         return None;

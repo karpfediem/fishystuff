@@ -4,7 +4,9 @@ use crate::map::hover_query::WorldPointQueryContext;
 use crate::map::layers::LayerRegistry;
 use crate::map::layers::LayerRuntime;
 use crate::map::raster::RasterTileCache;
-use crate::map::selection_query::{selected_info_at_world_point, selected_info_for_zone_rgb};
+use crate::map::selection_query::{
+    selected_info_at_world_point, selected_info_for_semantic_field, selected_info_for_zone_rgb,
+};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{
@@ -12,6 +14,7 @@ use crate::plugins::api::{
     PendingRequests, SelectedInfo, SelectionState,
 };
 use crate::plugins::vector_layers::VectorLayerRuntime;
+use fishystuff_core::field_metadata::FieldHoverTarget;
 
 pub(super) fn apply_zone_selection_command(
     bootstrap: &ApiBootstrapState,
@@ -30,6 +33,47 @@ pub(super) fn apply_zone_selection_command(
         pending,
         Some(selected_info),
     );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn apply_semantic_field_selection_command(
+    bootstrap: &ApiBootstrapState,
+    patch_filter: &PatchFilterState,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    field_metadata: &FieldMetadataCache,
+    tile_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    selection: &mut SelectionState,
+    pending: &mut PendingRequests,
+    layer_key: &str,
+    field_id: u32,
+    target_key: Option<&str>,
+) {
+    let selected_info =
+        selected_info_for_semantic_field(layer_registry, field_metadata, layer_key, field_id);
+    let target_world_point = selected_info
+        .as_ref()
+        .and_then(|info| preferred_selection_target(info, target_key))
+        .map(|target| WorldPoint::new(target.world_x, target.world_z));
+    let selected_info = target_world_point
+        .and_then(|world_point| {
+            selected_info_at_world_point(
+                world_point,
+                &WorldPointQueryContext {
+                    layer_registry,
+                    layer_runtime,
+                    exact_lookups,
+                    field_metadata,
+                    tile_cache,
+                    vector_runtime,
+                    map_to_world: MapToWorld::default(),
+                },
+            )
+        })
+        .or(selected_info);
+    apply_selected_info(bootstrap, patch_filter, selection, pending, selected_info);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -60,6 +104,23 @@ pub(super) fn apply_world_point_selection_command(
         },
     );
     apply_selected_info(bootstrap, patch_filter, selection, pending, selected_info);
+}
+
+fn preferred_selection_target<'a>(
+    selected_info: &'a SelectedInfo,
+    target_key: Option<&str>,
+) -> Option<&'a FieldHoverTarget> {
+    let layer_sample = selected_info.layer_samples.first()?;
+    if let Some(target_key) = target_key {
+        if let Some(target) = layer_sample
+            .targets
+            .iter()
+            .find(|target| target.key == target_key)
+        {
+            return Some(target);
+        }
+    }
+    layer_sample.targets.first()
 }
 
 fn apply_selected_info(

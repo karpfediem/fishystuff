@@ -1322,6 +1322,24 @@ test("state patch normalizes selectWorldPoint commands", () => {
   });
 });
 
+test("state patch normalizes selectSemanticField commands", () => {
+  const patch = normalizeStatePatch({
+    commands: {
+      selectSemanticField: {
+        layerId: " region_groups ",
+        fieldId: "295",
+        targetKey: " resource_node ",
+      },
+    },
+  });
+
+  assert.deepEqual(patch.commands.selectSemanticField, {
+    layerId: "region_groups",
+    fieldId: 295,
+    targetKey: "resource_node",
+  });
+});
+
 test("legacy empty layer visibility snapshots do not hide every layer on restore", () => {
   const localStorage = new MemoryStorage({
     [FISHYMAP_STORAGE_KEYS.prefs]: JSON.stringify({
