@@ -22,6 +22,7 @@ pub(in crate::bridge::host) fn effective_filters(
     FishyMapFiltersState {
         fish_ids: fish_filter.selected_fish_ids.clone(),
         zone_rgbs: semantic_filter.selected_zone_rgbs().to_vec(),
+        semantic_field_ids_by_layer: semantic_filter.selected_field_ids_by_layer.clone(),
         search_text: bridge_input.filters.search_text.clone(),
         prize_only: bridge_input.filters.prize_only,
         patch_id: match (&from_patch_id, &to_patch_id) {

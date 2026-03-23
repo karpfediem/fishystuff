@@ -28,6 +28,13 @@ pub(super) fn apply_semantic_field_filters(
     input: &FishyMapInputState,
     semantic_filter: &mut SemanticFieldFilterState,
 ) {
+    semantic_filter.selected_field_ids_by_layer.clear();
+    if !input.filters.semantic_field_ids_by_layer.is_empty() {
+        for (layer_id, field_ids) in &input.filters.semantic_field_ids_by_layer {
+            semantic_filter.set_field_ids_for_layer(layer_id.clone(), field_ids.clone());
+        }
+        return;
+    }
     semantic_filter.set_field_ids_for_layer(
         SemanticFieldFilterState::ZONE_MASK_LAYER_ID,
         input.filters.zone_rgbs.clone(),

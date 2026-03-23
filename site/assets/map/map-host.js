@@ -57,6 +57,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *   filters?: {
  *     fishIds?: number[],
  *     zoneRgbs?: number[],
+ *     semanticFieldIdsByLayer?: Record<string, number[]>,
  *     searchText?: string,
  *     patchId?: string | null,
  *     fromPatchId?: string | null,
@@ -133,6 +134,7 @@ export function createEmptyInputState() {
     filters: {
       fishIds: [],
       zoneRgbs: [],
+      semanticFieldIdsByLayer: {},
       searchText: "",
       patchId: null,
       fromPatchId: null,
@@ -166,6 +168,7 @@ export function createEmptySnapshot() {
     filters: {
       fishIds: [],
       zoneRgbs: [],
+      semanticFieldIdsByLayer: {},
       searchText: "",
       patchId: null,
       fromPatchId: null,
@@ -196,6 +199,7 @@ export function createEmptySnapshot() {
       layers: [],
       patches: [],
       fish: [],
+      semanticTerms: [],
     },
     statuses: {
       metaStatus: "",
@@ -218,6 +222,24 @@ export function zoneRgbFromLayerSamples(layerSamples) {
   );
   const zoneRgb = Number(zoneSample?.rgbU32);
   return Number.isFinite(zoneRgb) ? zoneRgb : null;
+}
+
+function semanticFieldSelectionFromLayerSamples(layerSamples) {
+  if (!Array.isArray(layerSamples)) {
+    return null;
+  }
+  const semanticSample = layerSamples.find((sample) => {
+    const layerId = String(sample?.layerId || "").trim();
+    const fieldId = Number.parseInt(sample?.fieldId, 10);
+    return layerId && layerId !== "zone_mask" && Number.isFinite(fieldId);
+  });
+  if (!semanticSample) {
+    return null;
+  }
+  return {
+    layerId: String(semanticSample.layerId).trim(),
+    fieldId: Number.parseInt(semanticSample.fieldId, 10),
+  };
 }
 
 function normalizeWorldCoordinate(value) {
@@ -535,6 +557,25 @@ function normalizeZoneRgbs(values) {
   return out;
 }
 
+function normalizeSemanticFieldIdsByLayer(values) {
+  if (!isPlainObject(values)) {
+    return {};
+  }
+  const out = {};
+  for (const [key, value] of Object.entries(values)) {
+    const layerId = String(key ?? "").trim();
+    if (!layerId) {
+      continue;
+    }
+    const fieldIds = normalizeZoneRgbs(value);
+    if (!fieldIds.length) {
+      continue;
+    }
+    out[layerId] = fieldIds;
+  }
+  return out;
+}
+
 function normalizeNullableString(value) {
   if (value == null) {
     return null;
@@ -760,6 +801,11 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "zoneRgbs")) {
       normalized.filters.zoneRgbs = normalizeZoneRgbs(patch.filters.zoneRgbs);
     }
+    if (hasOwn(patch.filters, "semanticFieldIdsByLayer")) {
+      normalized.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer(
+        patch.filters.semanticFieldIdsByLayer,
+      );
+    }
     if (hasOwn(patch.filters, "searchText")) {
       normalized.filters.searchText = String(patch.filters.searchText ?? "");
     }
@@ -943,6 +989,9 @@ export function applyStatePatch(inputState, patch) {
   next.filters = {
     fishIds: normalizeFishIds(current.filters?.fishIds),
     zoneRgbs: normalizeZoneRgbs(current.filters?.zoneRgbs),
+    semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(
+      current.filters?.semanticFieldIdsByLayer,
+    ),
     searchText: String(current.filters?.searchText || ""),
     patchId: current.filters?.patchId ?? null,
     fromPatchId: current.filters?.fromPatchId ?? null,
@@ -990,6 +1039,18 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.filters, "zoneRgbs")) {
       next.filters.zoneRgbs = normalizeZoneRgbs(normalized.filters.zoneRgbs);
+      next.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer({
+        ...next.filters.semanticFieldIdsByLayer,
+        zone_mask: next.filters.zoneRgbs,
+      });
+    }
+    if (hasOwn(normalized.filters, "semanticFieldIdsByLayer")) {
+      next.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer(
+        normalized.filters.semanticFieldIdsByLayer,
+      );
+      next.filters.zoneRgbs = normalizeZoneRgbs(
+        next.filters.semanticFieldIdsByLayer.zone_mask,
+      );
     }
     if (hasOwn(normalized.filters, "searchText")) {
       next.filters.searchText = normalized.filters.searchText || "";
@@ -1376,6 +1437,8 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     parseLayerSetParam(params.get("layers")) ?? parseLayerSetParam(params.get("layerSet"));
   const viewMode = params.get("view") === "3d" || params.get("mode") === "3d" ? "3d" : undefined;
   const zoneRgb = parseIntegerParam(params.get("zone"));
+  const semanticLayerId = normalizeNullableString(params.get("semanticLayer"));
+  const semanticFieldId = parseIntegerParam(params.get("semanticField"));
   const worldX = normalizeBookmarkCoordinate(params.get("worldX") ?? params.get("x"));
   const worldZ = normalizeBookmarkCoordinate(params.get("worldZ") ?? params.get("z"));
 
@@ -1419,7 +1482,12 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     patch.ui.legendOpen = legendOpen;
   }
 
-  if (viewMode || zoneRgb != null || (worldX !== undefined && worldZ !== undefined)) {
+  if (
+    viewMode
+    || zoneRgb != null
+    || (semanticLayerId && semanticFieldId != null)
+    || (worldX !== undefined && worldZ !== undefined)
+  ) {
     patch.commands = { ...(patch.commands || {}) };
   }
   if (viewMode) {
@@ -1427,6 +1495,11 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   }
   if (worldX !== undefined && worldZ !== undefined) {
     patch.commands.selectWorldPoint = { worldX, worldZ };
+  } else if (semanticLayerId && semanticFieldId != null) {
+    patch.commands.selectSemanticField = {
+      layerId: semanticLayerId,
+      fieldId: semanticFieldId,
+    };
   } else if (zoneRgb != null) {
     patch.commands.selectZoneRgb = zoneRgb;
   }
@@ -1467,6 +1540,11 @@ export function snapshotToRestorePatch(snapshot) {
     }
     if (hasOwn(snapshot.filters, "zoneRgbs")) {
       patch.filters.zoneRgbs = normalizeZoneRgbs(snapshot.filters.zoneRgbs);
+    }
+    if (hasOwn(snapshot.filters, "semanticFieldIdsByLayer")) {
+      patch.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer(
+        snapshot.filters.semanticFieldIdsByLayer,
+      );
     }
     if (hasOwn(snapshot.filters, "searchText")) {
       patch.filters.searchText = String(snapshot.filters.searchText || "");
@@ -1530,12 +1608,15 @@ export function snapshotToRestorePatch(snapshot) {
 
   const selectionFishId = parseIntegerParam(snapshot.selection?.fishId);
   const selectionZoneRgb = parseIntegerParam(snapshot.selection?.zoneRgb);
+  const selectionSemanticLayerId = normalizeNullableString(snapshot.selection?.semanticLayerId);
+  const selectionSemanticFieldId = parseIntegerParam(snapshot.selection?.semanticFieldId);
   const selectionWorldX = normalizeBookmarkCoordinate(snapshot.selection?.worldX);
   const selectionWorldZ = normalizeBookmarkCoordinate(snapshot.selection?.worldZ);
   const restoreView = normalizeRestoreView(snapshot.view);
   if (
     selectionFishId != null ||
     selectionZoneRgb != null ||
+    (selectionSemanticLayerId && selectionSemanticFieldId != null) ||
     (selectionWorldX !== undefined && selectionWorldZ !== undefined) ||
     restoreView
   ) {
@@ -1554,6 +1635,11 @@ export function snapshotToRestorePatch(snapshot) {
     patch.commands.selectWorldPoint = {
       worldX: selectionWorldX,
       worldZ: selectionWorldZ,
+    };
+  } else if (selectionSemanticLayerId && selectionSemanticFieldId != null) {
+    patch.commands.selectSemanticField = {
+      layerId: selectionSemanticLayerId,
+      fieldId: selectionSemanticFieldId,
     };
   } else if (selectionZoneRgb != null) {
     patch.commands.selectZoneRgb = selectionZoneRgb;
@@ -1626,6 +1712,9 @@ function bootstrapStateSignature(state) {
       fromPatchId: filters.fromPatchId ?? null,
       toPatchId: filters.toPatchId ?? null,
       fishIdsCount: Array.isArray(filters.fishIds) ? filters.fishIds.length : 0,
+      semanticLayerCount: isPlainObject(filters.semanticFieldIdsByLayer)
+        ? Object.keys(filters.semanticFieldIdsByLayer).length
+        : 0,
       visibleLayerCount: Array.isArray(filters.layerIdsVisible)
         ? filters.layerIdsVisible.length
         : null,
@@ -1651,6 +1740,7 @@ function bootstrapStateSignature(state) {
       layerCount: Array.isArray(catalog.layers) ? catalog.layers.length : 0,
       patchCount: Array.isArray(catalog.patches) ? catalog.patches.length : 0,
       fishCount: Array.isArray(catalog.fish) ? catalog.fish.length : 0,
+      semanticTermCount: Array.isArray(catalog.semanticTerms) ? catalog.semanticTerms.length : 0,
     },
   });
 }
@@ -2369,6 +2459,9 @@ class FishyMapBridgeImpl {
     const hasExplicitLayerClipMasks =
       isPlainObject(this.inputState.filters.layerClipMasks) &&
       Object.keys(this.inputState.filters.layerClipMasks).length > 0;
+    const semanticSelection = semanticFieldSelectionFromLayerSamples(
+      state.selection?.layerSamples,
+    );
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       savedAt: new Date().toISOString(),
@@ -2376,12 +2469,17 @@ class FishyMapBridgeImpl {
       selection: {
         fishId: state.selection?.fishId ?? state.filters?.fishIds?.[0] ?? null,
         zoneRgb: zoneRgbFromLayerSamples(state.selection?.layerSamples),
+        semanticLayerId: semanticSelection?.layerId ?? null,
+        semanticFieldId: semanticSelection?.fieldId ?? null,
         worldX: state.selection?.worldX ?? null,
         worldZ: state.selection?.worldZ ?? null,
       },
       filters: {
         fishIds: this.inputState.filters.fishIds,
         zoneRgbs: this.inputState.filters.zoneRgbs,
+        semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(
+          this.inputState.filters.semanticFieldIdsByLayer,
+        ),
         searchText: this.inputState.filters.searchText,
         patchId:
           fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,

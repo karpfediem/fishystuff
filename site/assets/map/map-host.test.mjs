@@ -381,6 +381,25 @@ test("search text patches preserve trailing spaces while typing", () => {
   assert.equal(next.filters.searchText, "Zenato Sea ");
 });
 
+test("semantic field filter patches are normalized and keep zone ids in sync", () => {
+  const next = applyStatePatch(undefined, {
+    version: 1,
+    filters: {
+      semanticFieldIdsByLayer: {
+        regions: [76, 76, 92],
+        zone_mask: [0xc17f7f, 0xc17f7f],
+        "": [1],
+      },
+    },
+  });
+
+  assert.deepEqual(next.filters.semanticFieldIdsByLayer, {
+    regions: [76, 92],
+    zone_mask: [0xc17f7f],
+  });
+  assert.deepEqual(next.filters.zoneRgbs, [0xc17f7f]);
+});
+
 test("setState updates cached input state without forcing a wasm state read", async () => {
   const env = installDomGlobals();
   let bridge;
@@ -1306,6 +1325,37 @@ test("session restore preserves selected zone filter terms", () => {
   assert.equal(patch.commands.selectZoneRgb, 0xc17f7f);
 });
 
+test("session restore preserves semantic field selections without world points", () => {
+  const sessionStorage = new MemoryStorage({
+    [FISHYMAP_STORAGE_KEYS.session]: JSON.stringify({
+      version: 1,
+      selection: {
+        semanticLayerId: "regions",
+        semanticFieldId: 76,
+      },
+      filters: {
+        semanticFieldIdsByLayer: {
+          regions: [76, 92],
+        },
+      },
+    }),
+  });
+
+  const patch = buildInitialRestorePatch({
+    locationHref: "https://fishystuff.fish/map/",
+    localStorage: new MemoryStorage(),
+    sessionStorage,
+  });
+
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
+    regions: [76, 92],
+  });
+  assert.deepEqual(patch.commands.selectSemanticField, {
+    layerId: "regions",
+    fieldId: 76,
+  });
+});
+
 test("state patch normalizes selectWorldPoint commands", () => {
   const patch = normalizeStatePatch({
     commands: {
@@ -1405,6 +1455,18 @@ test("query state supports direct world-point selection", () => {
   assert.deepEqual(patch.commands.selectWorldPoint, {
     worldX: 123.4567,
     worldZ: -45.6789,
+  });
+  assert.equal("selectZoneRgb" in patch.commands, false);
+});
+
+test("query state supports direct semantic field selection", () => {
+  const patch = parseQueryState(
+    "https://fishystuff.fish/map/?semanticLayer=region_groups&semanticField=295&zone=16711935",
+  );
+
+  assert.deepEqual(patch.commands.selectSemanticField, {
+    layerId: "region_groups",
+    fieldId: 295,
   });
   assert.equal("selectZoneRgb" in patch.commands, false);
 });

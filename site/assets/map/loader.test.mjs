@@ -59,6 +59,7 @@ function buildStateBundle(selectedFishIds = []) {
     state: {
       catalog: {
         layers: [],
+        semanticTerms: [],
         fish: [
           {
             fishId: 912,
@@ -179,6 +180,43 @@ test("buildSearchMatches keeps fish search working and filters already selected 
   const fishMatches = buildSearchMatches(buildStateBundle(), "Serendia Carp", TEST_ZONE_CATALOG);
   assert.equal(fishMatches[0]?.kind, "fish");
   assert.equal(fishMatches[0]?.fishId, 77);
+});
+
+test("buildSearchMatches returns semantic hits and skips selected semantic fields", () => {
+  const stateBundle = buildStateBundle();
+  stateBundle.state.catalog.semanticTerms = [
+    {
+      layerId: "regions",
+      layerName: "Regions",
+      fieldId: 76,
+      label: "Southern Mountain Range",
+      description: "Castle Ruins",
+      searchText: "Regions Southern Mountain Range Castle Ruins 76",
+    },
+    {
+      layerId: "region_groups",
+      layerName: "Region Groups",
+      fieldId: 295,
+      label: "Olvia",
+      description: "Olvia Academy",
+      searchText: "Region Groups Olvia Olvia Academy 295",
+    },
+  ];
+
+  const semanticMatches = buildSearchMatches(stateBundle, "southern mountain", TEST_ZONE_CATALOG);
+  assert.equal(semanticMatches[0]?.kind, "semantic");
+  assert.equal(semanticMatches[0]?.layerId, "regions");
+  assert.equal(semanticMatches[0]?.fieldId, 76);
+
+  stateBundle.inputState.filters.semanticFieldIdsByLayer = {
+    regions: [76],
+  };
+  const filteredMatches = buildSearchMatches(
+    stateBundle,
+    "southern mountain",
+    TEST_ZONE_CATALOG,
+  );
+  assert.equal(filteredMatches.some((match) => match.kind === "semantic" && match.fieldId === 76), false);
 });
 
 test("buildHoverOverviewRows renders supported hover layers from bottom to top", () => {

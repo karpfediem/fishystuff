@@ -48,6 +48,22 @@ pub fn normalize_u32_list(values: Vec<u32>) -> Vec<u32> {
     out
 }
 
+pub fn normalize_u32_map(values: BTreeMap<String, Vec<u32>>) -> BTreeMap<String, Vec<u32>> {
+    let mut out = BTreeMap::new();
+    for (key, value) in values {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let normalized = normalize_u32_list(value);
+        if normalized.is_empty() {
+            continue;
+        }
+        out.insert(trimmed.to_string(), normalized);
+    }
+    out
+}
+
 pub fn normalize_layer_opacity_map(values: BTreeMap<String, f32>) -> BTreeMap<String, f32> {
     let mut out = BTreeMap::new();
     for (key, value) in values {

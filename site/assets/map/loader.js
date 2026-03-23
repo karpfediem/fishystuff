@@ -1910,14 +1910,61 @@ function resolveSelectedFishIds(stateBundle) {
   return [];
 }
 
-function resolveSelectedZoneRgbs(stateBundle) {
+function normalizeSemanticFieldIdsByLayer(values) {
+  if (!values || typeof values !== "object" || Array.isArray(values)) {
+    return {};
+  }
+  const out = {};
+  for (const [layerIdRaw, fieldIdsRaw] of Object.entries(values)) {
+    const layerId = String(layerIdRaw || "").trim();
+    if (!layerId || !Array.isArray(fieldIdsRaw)) {
+      continue;
+    }
+    const fieldIds = [];
+    const seen = new Set();
+    for (const value of fieldIdsRaw) {
+      const fieldId = Number.parseInt(value, 10);
+      if (!Number.isFinite(fieldId) || seen.has(fieldId)) {
+        continue;
+      }
+      seen.add(fieldId);
+      fieldIds.push(fieldId);
+    }
+    if (fieldIds.length) {
+      out[layerId] = fieldIds;
+    }
+  }
+  return out;
+}
+
+function resolveSelectedSemanticFieldIdsByLayer(stateBundle) {
+  const inputSelected = normalizeSemanticFieldIdsByLayer(
+    stateBundle.inputState?.filters?.semanticFieldIdsByLayer,
+  );
+  if (Object.keys(inputSelected).length) {
+    return inputSelected;
+  }
+  const stateSelected = normalizeSemanticFieldIdsByLayer(
+    stateBundle.state?.filters?.semanticFieldIdsByLayer,
+  );
+  if (Object.keys(stateSelected).length) {
+    return stateSelected;
+  }
   const inputZoneRgbs = stateBundle.inputState?.filters?.zoneRgbs;
-  if (Array.isArray(inputZoneRgbs)) {
-    return inputZoneRgbs;
+  if (Array.isArray(inputZoneRgbs) && inputZoneRgbs.length) {
+    return { zone_mask: inputZoneRgbs };
   }
   const stateZoneRgbs = stateBundle.state?.filters?.zoneRgbs;
-  if (Array.isArray(stateZoneRgbs)) {
-    return stateZoneRgbs;
+  if (Array.isArray(stateZoneRgbs) && stateZoneRgbs.length) {
+    return { zone_mask: stateZoneRgbs };
+  }
+  return {};
+}
+
+function resolveSelectedZoneRgbs(stateBundle) {
+  const selectedByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
+  if (Array.isArray(selectedByLayer.zone_mask)) {
+    return selectedByLayer.zone_mask;
   }
   return [];
 }
@@ -2083,6 +2130,65 @@ export function findZoneMatches(zoneCatalog, searchText) {
       return left.order - right.order;
     }
     return String(left.name || "").localeCompare(String(right.name || ""));
+  });
+  return filtered;
+}
+
+function scoreSemanticMatch(term, queryTerms) {
+  if (!queryTerms.length) {
+    return 0;
+  }
+  const fieldId = String(term.fieldId || "");
+  const label = String(term.label || "").toLowerCase();
+  const description = String(term.description || "").toLowerCase();
+  const layerName = String(term.layerName || "").toLowerCase();
+  const searchText = String(term.searchText || "").toLowerCase();
+  let score = 0;
+  for (const queryTerm of queryTerms) {
+    const best = Math.max(
+      fieldId === queryTerm ? 220 : Number.NEGATIVE_INFINITY,
+      scoreTermMatch(label, queryTerm, 170),
+      scoreTermMatch(description, queryTerm, 130),
+      scoreTermMatch(layerName, queryTerm, 90),
+      scoreTermMatch(searchText, queryTerm, 80),
+    );
+    if (!Number.isFinite(best)) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    score += best;
+  }
+  return score;
+}
+
+export function findSemanticMatches(semanticTerms, searchText) {
+  const query = String(searchText || "").trim().toLowerCase();
+  const terms = query ? query.split(/\s+/g).filter(Boolean) : [];
+  if (!query) {
+    return [];
+  }
+  const filtered = [];
+  for (const term of semanticTerms || []) {
+    if (!term || String(term.layerId || "").trim() === "zone_mask") {
+      continue;
+    }
+    const score = scoreSemanticMatch(term, terms);
+    if (!Number.isFinite(score)) {
+      continue;
+    }
+    filtered.push({
+      kind: "semantic",
+      ...term,
+      _score: score,
+    });
+  }
+  filtered.sort((left, right) => {
+    if (right._score !== left._score) {
+      return right._score - left._score;
+    }
+    if (left.layerName !== right.layerName) {
+      return String(left.layerName || "").localeCompare(String(right.layerName || ""));
+    }
+    return String(left.label || "").localeCompare(String(right.label || ""));
   });
   return filtered;
 }
@@ -2520,9 +2626,35 @@ function removeSelectedZoneRgb(selectedZoneRgbs, zoneRgb) {
   return selectedZoneRgbs.filter((value) => value !== zoneRgb);
 }
 
+function addSelectedSemanticFieldId(selectedFieldIds, fieldId) {
+  return selectedFieldIds.includes(fieldId) ? selectedFieldIds : selectedFieldIds.concat(fieldId);
+}
+
+function removeSelectedSemanticFieldId(selectedFieldIds, fieldId) {
+  return selectedFieldIds.filter((value) => value !== fieldId);
+}
+
+function updateSelectedSemanticFieldIdsByLayer(selectedByLayer, layerId, nextFieldIds) {
+  const next = {
+    ...normalizeSemanticFieldIdsByLayer(selectedByLayer),
+  };
+  const normalizedLayerId = String(layerId || "").trim();
+  if (!normalizedLayerId) {
+    return next;
+  }
+  if (!Array.isArray(nextFieldIds) || !nextFieldIds.length) {
+    delete next[normalizedLayerId];
+    return next;
+  }
+  next[normalizedLayerId] = nextFieldIds;
+  return normalizeSemanticFieldIdsByLayer(next);
+}
+
 export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const catalogFish = stateBundle.state?.catalog?.fish || [];
+  const semanticTerms = stateBundle.state?.catalog?.semanticTerms || [];
   const selectedFishIds = new Set(resolveSelectedFishIds(stateBundle));
+  const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
   const selectedZoneRgbs = new Set(resolveSelectedZoneRgbs(stateBundle));
   const fishMatches = findFishMatches(catalogFish, searchText)
     .filter((fish) => !selectedFishIds.has(fish.fishId))
@@ -2533,27 +2665,70 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const zoneMatches = findZoneMatches(zoneCatalog, searchText).filter(
     (zone) => !selectedZoneRgbs.has(zone.zoneRgb),
   );
-  return fishMatches.concat(zoneMatches).sort((left, right) => {
+  const semanticMatches = findSemanticMatches(semanticTerms, searchText).filter(
+    (term) => !(selectedSemanticFieldIdsByLayer[term.layerId] || []).includes(term.fieldId),
+  );
+  return fishMatches.concat(zoneMatches, semanticMatches).sort((left, right) => {
     if (right._score !== left._score) {
       return right._score - left._score;
     }
     if (left.kind !== right.kind) {
-      return left.kind === "zone" ? -1 : 1;
+      const priority = {
+        zone: 0,
+        semantic: 1,
+        fish: 2,
+      };
+      return (priority[left.kind] ?? 9) - (priority[right.kind] ?? 9);
     }
-    return String(left.name || "").localeCompare(String(right.name || ""));
+    return String(left.name || left.label || "").localeCompare(
+      String(right.name || right.label || ""),
+    );
   });
+}
+
+function semanticTermLookupKey(layerId, fieldId) {
+  return `${String(layerId || "").trim()}:${Number.parseInt(fieldId, 10)}`;
+}
+
+function buildSemanticTermLookup(stateBundle) {
+  return new Map(
+    (stateBundle.state?.catalog?.semanticTerms || []).map((term) => [
+      semanticTermLookupKey(term.layerId, term.fieldId),
+      term,
+    ]),
+  );
 }
 
 export function renderSearchSelection(elements, stateBundle, fishLookup) {
   const selectedFishIds = resolveSelectedFishIds(stateBundle);
+  const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
   const selectedZoneRgbs = resolveSelectedZoneRgbs(stateBundle);
   const hasSelection = selectedFishIds.length > 0 || selectedZoneRgbs.length > 0;
   const zoneLookup = new Map(
     (elements.zoneCatalog || []).map((zone) => [zone.zoneRgb, zone]),
   );
+  const semanticLookup = buildSemanticTermLookup(stateBundle);
+  const selectedSemanticEntries = Object.entries(selectedSemanticFieldIdsByLayer)
+    .filter(([layerId]) => layerId !== "zone_mask")
+    .flatMap(([layerId, fieldIds]) =>
+      fieldIds.map((fieldId) => ({
+        layerId,
+        fieldId,
+        term: semanticLookup.get(semanticTermLookupKey(layerId, fieldId)) || null,
+      })),
+    );
+  const hasSemanticSelection = selectedSemanticEntries.length > 0;
+  const hasAnySelection = hasSelection || hasSemanticSelection;
   const renderKey = JSON.stringify({
     selectedFishIds,
     selectedZoneRgbs,
+    selectedSemantic: selectedSemanticEntries.map(({ layerId, fieldId, term }) => [
+      layerId,
+      fieldId,
+      term?.label || "",
+      term?.description || "",
+      term?.layerName || "",
+    ]),
     selectedFish: selectedFishIds.map((fishId) => {
       const fish = fishLookup.get(fishId);
       return [
@@ -2571,18 +2746,18 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
     }),
   });
   if (elements.searchSelection.dataset.renderKey === renderKey) {
-    elements.searchSelection.hidden = !hasSelection;
+    elements.searchSelection.hidden = !hasAnySelection;
     if (elements.searchSelectionShell) {
-      elements.searchSelectionShell.hidden = !hasSelection;
+      elements.searchSelectionShell.hidden = !hasAnySelection;
     }
     if (elements.searchWindow) {
-      elements.searchWindow.dataset.hasSelection = hasSelection ? "true" : "false";
+      elements.searchWindow.dataset.hasSelection = hasAnySelection ? "true" : "false";
     }
     return;
   }
   elements.searchSelection.dataset.renderKey = renderKey;
 
-  if (!hasSelection) {
+  if (!hasAnySelection) {
     elements.searchSelection.innerHTML = "";
     elements.searchSelection.hidden = true;
     if (elements.searchSelectionShell) {
@@ -2650,6 +2825,35 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
         `;
       }),
     )
+    .concat(
+      selectedSemanticEntries.map(({ layerId, fieldId, term }) => {
+        const name = term?.label || `Field ${fieldId}`;
+        const layerName = term?.layerName || layerId;
+        const description = term?.description || "";
+        return `
+          <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
+            <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
+              <span class="badge badge-outline badge-xs">${escapeHtml(layerName)}</span>
+              <span class="truncate max-w-40">${escapeHtml(name)}</span>
+              ${
+                description
+                  ? `<span class="truncate max-w-40 text-xs text-base-content/55">${escapeHtml(description)}</span>`
+                  : ""
+              }
+            </span>
+            <button
+              class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
+              data-semantic-layer-id="${escapeHtml(layerId)}"
+              data-semantic-field-id="${fieldId}"
+              type="button"
+              aria-label="Remove ${escapeHtml(name)}"
+            >
+              ×
+            </button>
+          </div>
+        `;
+      }),
+    )
     .join("");
 }
 
@@ -2662,6 +2866,15 @@ function renderSearchResults(elements, matches, stateBundle) {
     results: activeMatches.map((match) =>
       match.kind === "zone"
         ? ["zone", match.zoneRgb, match.name, match.rgbKey]
+        : match.kind === "semantic"
+          ? [
+              "semantic",
+              match.layerId,
+              match.fieldId,
+              match.label || "",
+              match.description || "",
+              match.layerName || "",
+            ]
         : [
             "fish",
             match.fishId,
@@ -2717,6 +2930,26 @@ function renderSearchResults(elements, matches, stateBundle) {
           </button>
         </li>
       `;
+      }
+      if (match.kind === "semantic") {
+        return `
+          <li>
+            <button
+              class="items-start gap-3 rounded-box px-3 py-2 text-sm"
+              data-semantic-layer-id="${escapeHtml(match.layerId)}"
+              data-semantic-field-id="${match.fieldId}"
+              type="button"
+            >
+              <span class="mt-0.5 badge badge-outline badge-xs">${escapeHtml(match.layerName || match.layerId)}</span>
+              <span class="min-w-0 flex-1 text-left">
+                <span class="block truncate">${escapeHtml(match.label || `Field ${match.fieldId}`)}</span>
+                <span class="block truncate text-xs text-base-content/60">
+                  ${escapeHtml(match.description || `Field ${match.fieldId}`)}
+                </span>
+              </span>
+            </button>
+          </li>
+        `;
       }
       return `
         <li>
@@ -3060,13 +3293,31 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
     return;
   }
   elements.search.value = "";
+  const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
   const patch = {
     version: 1,
     filters: {
       searchText: "",
       ...(match.kind === "fish"
         ? { fishIds: addSelectedFishId(resolveSelectedFishIds(stateBundle), match.fishId) }
-        : { zoneRgbs: addSelectedZoneRgb(resolveSelectedZoneRgbs(stateBundle), match.zoneRgb) }),
+        : match.kind === "zone"
+          ? {
+              semanticFieldIdsByLayer: updateSelectedSemanticFieldIdsByLayer(
+                selectedSemanticFieldIdsByLayer,
+                "zone_mask",
+                addSelectedZoneRgb(resolveSelectedZoneRgbs(stateBundle), match.zoneRgb),
+              ),
+            }
+          : {
+              semanticFieldIdsByLayer: updateSelectedSemanticFieldIdsByLayer(
+                selectedSemanticFieldIdsByLayer,
+                match.layerId,
+                addSelectedSemanticFieldId(
+                  selectedSemanticFieldIdsByLayer[match.layerId] || [],
+                  match.fieldId,
+                ),
+              ),
+            }),
     },
   };
   dispatchMapState(shell, patch);
@@ -3075,6 +3326,13 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
       selectSemanticField: {
         layerId: "zone_mask",
         fieldId: match.zoneRgb,
+      },
+    });
+  } else if (match.kind === "semantic") {
+    dispatchMapCommand(shell, {
+      selectSemanticField: {
+        layerId: match.layerId,
+        fieldId: match.fieldId,
       },
     });
   }
@@ -3791,7 +4049,9 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.searchResults.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-fish-id], button[data-zone-rgb]");
+    const button = event.target.closest(
+      "button[data-fish-id], button[data-zone-rgb], button[data-semantic-layer-id][data-semantic-field-id]",
+    );
     if (!button) {
       return;
     }
@@ -3801,6 +4061,16 @@ function bindUi(shell, elements, options = {}) {
       applySearchMatchSelection(shell, elements, renderCurrentState, current, {
         kind: "zone",
         zoneRgb,
+      });
+      return;
+    }
+    const semanticLayerId = String(button.getAttribute("data-semantic-layer-id") || "").trim();
+    const semanticFieldId = Number.parseInt(button.getAttribute("data-semantic-field-id"), 10);
+    if (semanticLayerId && Number.isFinite(semanticFieldId)) {
+      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+        kind: "semantic",
+        layerId: semanticLayerId,
+        fieldId: semanticFieldId,
       });
       return;
     }
@@ -3816,7 +4086,7 @@ function bindUi(shell, elements, options = {}) {
 
   elements.searchSelection.addEventListener("click", (event) => {
     const removeButton = event.target.closest(
-      "button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb]",
+      "button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb], button.fishymap-selection-remove[data-semantic-layer-id][data-semantic-field-id]",
     );
     if (!removeButton) {
       return;
@@ -3827,7 +4097,33 @@ function bindUi(shell, elements, options = {}) {
       dispatchStatePatchAndRender({
         version: 1,
         filters: {
-          zoneRgbs: removeSelectedZoneRgb(resolveSelectedZoneRgbs(current), zoneRgb),
+          semanticFieldIdsByLayer: updateSelectedSemanticFieldIdsByLayer(
+            resolveSelectedSemanticFieldIdsByLayer(current),
+            "zone_mask",
+            removeSelectedZoneRgb(resolveSelectedZoneRgbs(current), zoneRgb),
+          ),
+        },
+      });
+      return;
+    }
+    const semanticLayerId = String(removeButton.getAttribute("data-semantic-layer-id") || "").trim();
+    const semanticFieldId = Number.parseInt(
+      removeButton.getAttribute("data-semantic-field-id"),
+      10,
+    );
+    if (semanticLayerId && Number.isFinite(semanticFieldId)) {
+      const selectedByLayer = resolveSelectedSemanticFieldIdsByLayer(current);
+      dispatchStatePatchAndRender({
+        version: 1,
+        filters: {
+          semanticFieldIdsByLayer: updateSelectedSemanticFieldIdsByLayer(
+            selectedByLayer,
+            semanticLayerId,
+            removeSelectedSemanticFieldId(
+              selectedByLayer[semanticLayerId] || [],
+              semanticFieldId,
+            ),
+          ),
         },
       });
       return;

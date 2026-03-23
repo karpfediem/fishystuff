@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::normalize::{
     deserialize_nullable_string_field, normalize_i32_list, normalize_layer_clip_mask_map,
-    normalize_layer_opacity_map, normalize_string_list, normalize_u32_list,
+    normalize_layer_opacity_map, normalize_string_list, normalize_u32_list, normalize_u32_map,
 };
 use super::{
     default_contract_version, FishyMapViewSnapshot, FISHYMAP_CONTRACT_VERSION,
@@ -114,6 +114,7 @@ pub struct FishyMapThemeState {
 pub struct FishyMapFiltersPatch {
     pub fish_ids: Option<Vec<i32>>,
     pub zone_rgbs: Option<Vec<u32>>,
+    pub semantic_field_ids_by_layer: Option<BTreeMap<String, Vec<u32>>>,
     pub search_text: Option<String>,
     pub prize_only: Option<bool>,
     #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
@@ -133,6 +134,7 @@ pub struct FishyMapFiltersPatch {
 pub struct FishyMapFiltersState {
     pub fish_ids: Vec<i32>,
     pub zone_rgbs: Vec<u32>,
+    pub semantic_field_ids_by_layer: BTreeMap<String, Vec<u32>>,
     pub search_text: String,
     pub prize_only: bool,
     pub patch_id: Option<String>,
@@ -354,6 +356,19 @@ impl FishyMapInputState {
             }
             if let Some(zone_rgbs) = filters.zone_rgbs {
                 self.filters.zone_rgbs = normalize_u32_list(zone_rgbs);
+                self.filters
+                    .semantic_field_ids_by_layer
+                    .insert("zone_mask".to_string(), self.filters.zone_rgbs.clone());
+            }
+            if let Some(semantic_field_ids_by_layer) = filters.semantic_field_ids_by_layer {
+                self.filters.semantic_field_ids_by_layer =
+                    normalize_u32_map(semantic_field_ids_by_layer);
+                self.filters.zone_rgbs = self
+                    .filters
+                    .semantic_field_ids_by_layer
+                    .get("zone_mask")
+                    .cloned()
+                    .unwrap_or_default();
             }
             if let Some(search_text) = filters.search_text {
                 self.filters.search_text = search_text;

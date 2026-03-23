@@ -165,6 +165,17 @@ pub struct FishyMapFishSummary {
     pub is_prize: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FishyMapSemanticTermSummary {
+    pub layer_id: String,
+    pub layer_name: String,
+    pub field_id: u32,
+    pub label: String,
+    pub description: Option<String>,
+    pub search_text: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FishyMapCatalogSnapshot {
@@ -172,6 +183,7 @@ pub struct FishyMapCatalogSnapshot {
     pub layers: Vec<FishyMapLayerSummary>,
     pub patches: Vec<FishyMapPatchSummary>,
     pub fish: Vec<FishyMapFishSummary>,
+    pub semantic_terms: Vec<FishyMapSemanticTermSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

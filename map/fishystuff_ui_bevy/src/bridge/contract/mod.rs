@@ -12,14 +12,15 @@ pub use input::{
 };
 pub use normalize::{
     normalize_i32_list, normalize_layer_clip_mask_map, normalize_layer_opacity_map,
-    normalize_string_list, normalize_u32_list,
+    normalize_string_list, normalize_u32_list, normalize_u32_map,
 };
 pub use snapshot::{
     FishyMapCameraSnapshot, FishyMapCatalogSnapshot, FishyMapFishSummary,
     FishyMapHoverLayerSampleSnapshot, FishyMapHoverSnapshot, FishyMapLayerSummary,
-    FishyMapPatchSummary, FishyMapSelectionSnapshot, FishyMapStateSnapshot, FishyMapStatusSnapshot,
-    FishyMapViewSnapshot, FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot,
-    FishyMapZoneEvidenceEntrySnapshot, FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
+    FishyMapPatchSummary, FishyMapSelectionSnapshot, FishyMapSemanticTermSummary,
+    FishyMapStateSnapshot, FishyMapStatusSnapshot, FishyMapViewSnapshot,
+    FishyMapZoneConfidenceSnapshot, FishyMapZoneDriftSnapshot, FishyMapZoneEvidenceEntrySnapshot,
+    FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
 };
 
 pub const FISHYMAP_CONTRACT_VERSION: u8 = 1;

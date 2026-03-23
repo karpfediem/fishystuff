@@ -4,13 +4,14 @@ mod view;
 
 use bevy::ecs::system::SystemParam;
 
-use self::filters::{bridge_capabilities, current_layer_summaries};
+use self::filters::{
+    bridge_capabilities, current_layer_summaries, current_semantic_term_summaries,
+};
 use self::state::{effective_hover_snapshot, effective_selection_snapshot, effective_ui_state};
 use super::*;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::plugins::bookmarks::BookmarkState;
-use crate::plugins::vector_layers::VectorLayerRuntime;
 
 pub(super) use self::filters::{current_layer_order, effective_filters};
 pub(super) use self::state::hover_layer_samples_snapshot;
@@ -47,6 +48,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         context.layer_registry.is_changed() || context.layer_runtime.is_changed();
     let patch_catalog_changed = context.patch_filter.is_changed();
     let fish_catalog_changed = context.fish.is_changed();
+    let semantic_catalog_changed =
+        context.layer_registry.is_changed() || context.field_metadata.is_changed();
     let statuses_changed = context.bootstrap.is_changed()
         || context.points.is_changed()
         || context.fish.is_changed()
@@ -62,6 +65,7 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         && !layer_catalog_changed
         && !patch_catalog_changed
         && !fish_catalog_changed
+        && !semantic_catalog_changed
         && !statuses_changed
     {
         return;
@@ -147,6 +151,10 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
                 })
                 .collect();
         }
+        if semantic_catalog_changed {
+            snapshot.catalog.semantic_terms =
+                current_semantic_term_summaries(&context.layer_registry, &context.field_metadata);
+        }
         if statuses_changed {
             snapshot.statuses = FishyMapStatusSnapshot {
                 meta_status: context.bootstrap.meta_status.clone(),
@@ -178,7 +186,6 @@ pub(super) struct SnapshotSyncContext<'w, 's> {
     layer_runtime: Res<'w, LayerRuntime>,
     exact_lookups: Res<'w, ExactLookupCache>,
     field_metadata: Res<'w, FieldMetadataCache>,
-    vector_runtime: Res<'w, VectorLayerRuntime>,
     view_mode: Res<'w, ViewModeState>,
     map_view: Res<'w, Map2dViewState>,
     terrain_view: Res<'w, Terrain3dViewState>,
