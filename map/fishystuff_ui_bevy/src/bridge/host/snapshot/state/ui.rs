@@ -7,7 +7,7 @@ use crate::map::layers::LayerRegistry;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::bookmarks::BookmarkState;
-use fishystuff_core::field_metadata::{FIELD_HOVER_ROW_KEY_ORIGIN, FIELD_HOVER_ROW_KEY_RESOURCES};
+use fishystuff_core::field_metadata::FieldHoverRow;
 
 pub(in crate::bridge::host::snapshot) fn effective_ui_state(
     bridge_input: &FishyMapInputState,
@@ -54,48 +54,50 @@ fn enrich_bookmark_entry(
     field_metadata: &FieldMetadataCache,
 ) -> FishyMapBookmarkEntry {
     let mut enriched = bookmark.clone();
-    if enriched.resource_name.is_some() && enriched.origin_name.is_some() {
+    if !enriched.rows.is_empty() {
         return enriched;
     }
-    if enriched.resource_name.is_none() {
-        enriched.resource_name = sample_bookmark_layer_row_value(
-            bookmark,
-            "region_groups",
-            FIELD_HOVER_ROW_KEY_RESOURCES,
-            layer_registry,
-            exact_lookups,
-            field_metadata,
-        );
-    }
-    if enriched.origin_name.is_none() {
-        enriched.origin_name = sample_bookmark_layer_row_value(
-            bookmark,
-            "regions",
-            FIELD_HOVER_ROW_KEY_ORIGIN,
-            layer_registry,
-            exact_lookups,
-            field_metadata,
-        );
-    }
+    enriched.rows = collect_bookmark_rows(bookmark, layer_registry, exact_lookups, field_metadata);
     enriched
 }
 
-fn sample_bookmark_layer_row_value(
+fn collect_bookmark_rows(
     bookmark: &FishyMapBookmarkEntry,
-    layer_key: &str,
-    row_key: &str,
     layer_registry: &LayerRegistry,
     exact_lookups: &ExactLookupCache,
     field_metadata: &FieldMetadataCache,
-) -> Option<String> {
-    let layer = layer_registry.get_by_key(layer_key)?;
+) -> Vec<FieldHoverRow> {
+    ["zone_mask", "region_groups", "regions"]
+        .into_iter()
+        .flat_map(|layer_key| {
+            sample_bookmark_layer_rows(
+                bookmark,
+                layer_key,
+                layer_registry,
+                exact_lookups,
+                field_metadata,
+            )
+        })
+        .collect()
+}
+
+fn sample_bookmark_layer_rows(
+    bookmark: &FishyMapBookmarkEntry,
+    layer_key: &str,
+    layer_registry: &LayerRegistry,
+    exact_lookups: &ExactLookupCache,
+    field_metadata: &FieldMetadataCache,
+) -> Vec<FieldHoverRow> {
+    let Some(layer) = layer_registry.get_by_key(layer_key) else {
+        return Vec::new();
+    };
     let world_point = WorldPoint::new(bookmark.world_x, bookmark.world_z);
-    loaded_semantic_field_layer(layer, exact_lookups, field_metadata)?.row_value_at_world_point(
-        layer,
-        MapToWorld::default(),
-        world_point,
-        row_key,
-    )
+    loaded_semantic_field_layer(layer, exact_lookups, field_metadata)
+        .and_then(|field| {
+            field.semantic_sample_at_world_point(layer, MapToWorld::default(), world_point)
+        })
+        .map(|sample| sample.rows)
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -147,6 +149,7 @@ mod tests {
             revision: "rev".to_string(),
             map_version_id: None,
             layers: vec![
+                field_layer_descriptor("zone_mask", "Zone Mask"),
                 field_layer_descriptor("regions", "Regions"),
                 field_layer_descriptor("region_groups", "Region Groups"),
             ],
@@ -155,13 +158,19 @@ mod tests {
     }
 
     #[test]
-    fn bookmark_enrichment_fills_missing_resource_and_origin_names() {
+    fn bookmark_enrichment_fills_missing_semantic_rows() {
         let registry = field_registry();
+        let zone_layer = registry.get_by_key("zone_mask").expect("zone layer");
         let regions_layer = registry.get_by_key("regions").expect("regions layer");
         let region_groups_layer = registry
             .get_by_key("region_groups")
             .expect("region_groups layer");
         let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(10, 10, &[0x123456; 100]).expect("field"),
+        );
         exact_lookups.insert_ready(
             regions_layer.id,
             "/fields/regions.v1.bin".to_string(),
@@ -173,6 +182,27 @@ mod tests {
             DiscreteFieldRows::from_u32_grid(10, 10, &[16; 100]).expect("field"),
         );
         let mut field_metadata = FieldMetadataCache::default();
+        field_metadata.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    0x123456,
+                    FieldHoverMetadataEntry {
+                        rows: vec![FieldHoverRow {
+                            key: "zone".to_string(),
+                            icon: "hover-zone".to_string(),
+                            label: "Zone".to_string(),
+                            value: "Mediah".to_string(),
+                            hide_label: false,
+                            status_icon: None,
+                            status_icon_tone: None,
+                        }],
+                        targets: Vec::new(),
+                    },
+                )]),
+            },
+        );
         field_metadata.insert_ready(
             regions_layer.id,
             "/fields/regions.v1.meta.json".to_string(),
@@ -221,28 +251,37 @@ mod tests {
             label: Some("Test".to_string()),
             world_x: 5.0,
             world_z: 5.0,
-            zone_name: None,
-            resource_name: None,
-            origin_name: None,
+            rows: Vec::new(),
             zone_rgb: None,
             created_at: None,
         };
 
         let enriched = enrich_bookmark_entry(&bookmark, &registry, &exact_lookups, &field_metadata);
 
-        assert_eq!(enriched.resource_name.as_deref(), Some("Tarif"));
-        assert_eq!(enriched.origin_name.as_deref(), Some("Tarif"));
+        assert_eq!(
+            enriched
+                .rows
+                .iter()
+                .map(|row| row.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Mediah", "Tarif", "Tarif"]
+        );
     }
 
     #[test]
-    fn bookmark_enrichment_falls_back_to_region_group_and_region_ids_when_assignments_are_missing()
-    {
+    fn bookmark_enrichment_preserves_fallback_semantic_rows() {
         let registry = field_registry();
+        let zone_layer = registry.get_by_key("zone_mask").expect("zone layer");
         let regions_layer = registry.get_by_key("regions").expect("regions layer");
         let region_groups_layer = registry
             .get_by_key("region_groups")
             .expect("region_groups layer");
         let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(10, 10, &[0x445566; 100]).expect("field"),
+        );
         exact_lookups.insert_ready(
             regions_layer.id,
             "/fields/regions.v1.bin".to_string(),
@@ -254,6 +293,27 @@ mod tests {
             DiscreteFieldRows::from_u32_grid(10, 10, &[16; 100]).expect("field"),
         );
         let mut field_metadata = FieldMetadataCache::default();
+        field_metadata.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    0x445566,
+                    FieldHoverMetadataEntry {
+                        rows: vec![FieldHoverRow {
+                            key: "zone".to_string(),
+                            icon: "hover-zone".to_string(),
+                            label: "Zone".to_string(),
+                            value: "Zone 0x445566".to_string(),
+                            hide_label: false,
+                            status_icon: None,
+                            status_icon_tone: None,
+                        }],
+                        targets: Vec::new(),
+                    },
+                )]),
+            },
+        );
         field_metadata.insert_ready(
             regions_layer.id,
             "/fields/regions.v1.meta.json".to_string(),
@@ -302,16 +362,20 @@ mod tests {
             label: Some("Test".to_string()),
             world_x: 5.0,
             world_z: 5.0,
-            zone_name: None,
-            resource_name: None,
-            origin_name: None,
+            rows: Vec::new(),
             zone_rgb: None,
             created_at: None,
         };
 
         let enriched = enrich_bookmark_entry(&bookmark, &registry, &exact_lookups, &field_metadata);
 
-        assert_eq!(enriched.resource_name.as_deref(), Some("RG16"));
-        assert_eq!(enriched.origin_name.as_deref(), Some("R76"));
+        assert_eq!(
+            enriched
+                .rows
+                .iter()
+                .map(|row| row.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Zone 0x445566", "RG16", "R76"]
+        );
     }
 }

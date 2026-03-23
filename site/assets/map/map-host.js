@@ -79,7 +79,15 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *       label?: string | null,
  *       worldX?: number,
  *       worldZ?: number,
- *       zoneName?: string | null,
+ *       rows?: Array<{
+ *         key?: string,
+ *         icon?: string,
+ *         label?: string,
+ *         value?: string,
+ *         hideLabel?: boolean,
+ *         statusIcon?: string | null,
+ *         statusIconTone?: string | null
+ *       }>,
  *       zoneRgb?: number | null,
  *       createdAt?: string | null
  *     }>
@@ -599,6 +607,33 @@ function normalizeBookmarkCoordinate(value) {
   return Number.isFinite(number) ? number : undefined;
 }
 
+function normalizeBookmarkRowsState(values) {
+  const entries = Array.isArray(values) ? values : [];
+  const normalized = [];
+  for (const row of entries) {
+    const icon = String(row?.icon || "").trim();
+    const value = String(row?.value || "").trim();
+    const label = String(row?.label || "").trim();
+    const hideLabel = row?.hideLabel === true;
+    if (!icon || !value || (!hideLabel && !label)) {
+      continue;
+    }
+    const key = String(row?.key || "").trim();
+    const statusIcon = normalizeNullableString(row?.statusIcon);
+    const statusIconTone = normalizeNullableString(row?.statusIconTone);
+    normalized.push({
+      key,
+      icon,
+      label,
+      value,
+      hideLabel,
+      ...(statusIcon != null ? { statusIcon } : {}),
+      ...(statusIconTone != null ? { statusIconTone } : {}),
+    });
+  }
+  return normalized;
+}
+
 function normalizeWorldPointCommand(value) {
   if (!isPlainObject(value)) {
     return undefined;
@@ -624,9 +659,7 @@ function normalizeBookmarksState(values) {
     }
     seen.add(id);
     const label = normalizeNullableString(entry?.label);
-    const zoneName = normalizeNullableString(entry?.zoneName);
-    const resourceName = normalizeNullableString(entry?.resourceName);
-    const originName = normalizeNullableString(entry?.originName);
+    const rows = normalizeBookmarkRowsState(entry?.rows);
     const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
     const createdAt = normalizeNullableString(entry?.createdAt);
     normalized.push({
@@ -634,9 +667,7 @@ function normalizeBookmarksState(values) {
       ...(label != null ? { label } : {}),
       worldX,
       worldZ,
-      ...(zoneName != null ? { zoneName } : {}),
-      ...(resourceName != null ? { resourceName } : {}),
-      ...(originName != null ? { originName } : {}),
+      ...(rows.length ? { rows } : {}),
       ...(Number.isFinite(zoneRgb) ? { zoneRgb } : {}),
       ...(createdAt != null ? { createdAt } : {}),
     });

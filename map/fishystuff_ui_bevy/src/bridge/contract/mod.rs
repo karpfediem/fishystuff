@@ -157,9 +157,7 @@ mod tests {
                 label: Some("Marker A".to_string()),
                 world_x: 123.5,
                 world_z: -456.25,
-                zone_name: None,
-                resource_name: None,
-                origin_name: None,
+                rows: Vec::new(),
                 zone_rgb: None,
                 created_at: None,
             }]))
@@ -394,9 +392,7 @@ mod tests {
             label: Some("Existing".to_string()),
             world_x: 10.0,
             world_z: 20.0,
-            zone_name: None,
-            resource_name: None,
-            origin_name: None,
+            rows: Vec::new(),
             zone_rgb: None,
             created_at: None,
         }];
@@ -437,9 +433,7 @@ mod tests {
                 label: Some("Marker A".to_string()),
                 world_x: 123.5,
                 world_z: -456.25,
-                zone_name: None,
-                resource_name: None,
-                origin_name: None,
+                rows: Vec::new(),
                 zone_rgb: None,
                 created_at: None,
             }]

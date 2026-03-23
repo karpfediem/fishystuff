@@ -19,8 +19,7 @@ const BOOKMARK_COORDINATE_DECIMALS = 3;
 const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
 const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
-const REGION_GROUP_FALLBACK_RE = /^RG\d+$/;
-const REGION_FALLBACK_RE = /^R\d+$/;
+const BOOKMARK_PRIMARY_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
@@ -350,11 +349,49 @@ function createBookmarkId() {
 }
 
 function defaultBookmarkLabel(index, zoneName = "") {
-  const normalizedZoneName = String(zoneName || "").trim();
-  if (normalizedZoneName) {
-    return normalizedZoneName;
+  const normalizedPreferredName = String(zoneName || "").trim();
+  if (normalizedPreferredName) {
+    return normalizedPreferredName;
   }
   return `Bookmark ${index + 1}`;
+}
+
+function normalizeBookmarkRows(rowsInput) {
+  const rows = Array.isArray(rowsInput) ? rowsInput : [];
+  const normalized = [];
+  for (const row of rows) {
+    const key = String(row?.key || "").trim();
+    const icon = String(row?.icon || "").trim();
+    const label = String(row?.label || "").trim();
+    const value = String(row?.value || "").trim();
+    const hideLabel = row?.hideLabel === true;
+    if (!icon || !value || (!hideLabel && !label)) {
+      continue;
+    }
+    const statusIcon = String(row?.statusIcon || "").trim();
+    const statusIconTone = String(row?.statusIconTone || "").trim();
+    normalized.push({
+      key,
+      icon,
+      label,
+      value,
+      hideLabel,
+      ...(statusIcon ? { statusIcon } : {}),
+      ...(statusIconTone ? { statusIconTone } : {}),
+    });
+  }
+  return normalized;
+}
+
+function bookmarkPrimaryRowValue(rowsInput) {
+  const rows = normalizeBookmarkRows(rowsInput);
+  for (const key of BOOKMARK_PRIMARY_ROW_KEYS) {
+    const row = rows.find((entry) => entry.key === key);
+    if (row?.value) {
+      return row.value;
+    }
+  }
+  return rows[0]?.value || "";
 }
 
 export function normalizeBookmarks(rawBookmarks) {
@@ -373,19 +410,16 @@ export function normalizeBookmarks(rawBookmarks) {
       continue;
     }
     seen.add(id);
-    const zoneName = String(entry?.zoneName || "").trim();
-    const resourceName = String(entry?.resourceName || "").trim();
-    const originName = String(entry?.originName || "").trim();
+    const rows = normalizeBookmarkRows(entry?.rows);
+    const preferredName = bookmarkPrimaryRowValue(rows);
     const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
     const createdAt = String(entry?.createdAt || "").trim();
     normalized.push({
       id,
-      label: String(entry?.label || "").trim() || defaultBookmarkLabel(normalized.length, zoneName),
+      label: String(entry?.label || "").trim() || defaultBookmarkLabel(normalized.length, preferredName),
       worldX,
       worldZ,
-      zoneName: zoneName || null,
-      ...(resourceName ? { resourceName } : {}),
-      ...(originName ? { originName } : {}),
+      ...(rows.length ? { rows } : {}),
       zoneRgb: Number.isFinite(zoneRgb) ? zoneRgb : null,
       createdAt: createdAt || null,
     });
@@ -421,19 +455,15 @@ export function createBookmarkFromPlacement(
   if (worldX == null || worldZ == null) {
     return null;
   }
-  const zoneName = String(placement?.zoneName || "").trim();
-  const resourceName = String(placement?.resourceName || "").trim();
-  const originName = String(placement?.originName || "").trim();
+  const rows = normalizeBookmarkRows(placement?.rows);
   const zoneRgb = Number.parseInt(placement?.zoneRgb, 10);
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   return {
     id: typeof options.idFactory === "function" ? options.idFactory() : createBookmarkId(),
-    label: defaultBookmarkLabel(existingBookmarks.length, zoneName),
+    label: defaultBookmarkLabel(existingBookmarks.length, bookmarkPrimaryRowValue(rows)),
     worldX,
     worldZ,
-    zoneName: zoneName || null,
-    ...(resourceName ? { resourceName } : {}),
-    ...(originName ? { originName } : {}),
+    ...(rows.length ? { rows } : {}),
     zoneRgb: Number.isFinite(zoneRgb) ? zoneRgb : null,
     createdAt: new Date(now).toISOString(),
   };
@@ -452,7 +482,8 @@ export function renameBookmark(bookmarks, bookmarkId, nextLabel) {
     }
     return {
       ...bookmark,
-      label: requestedLabel || defaultBookmarkLabel(index, bookmark.zoneName),
+      label:
+        requestedLabel || defaultBookmarkLabel(index, bookmarkPrimaryRowValue(bookmark?.rows)),
     };
   });
 }
@@ -486,24 +517,19 @@ function formatBookmarkXmlCoordinate(value) {
   return String(normalized);
 }
 
-function isGenericBookmarkCollectionTitle(title) {
-  const normalizedTitle = String(title || "").trim();
-  if (!normalizedTitle) {
-    return true;
-  }
-  return /^\d+\s+FishyStuff Bookmarks$/i.test(normalizedTitle);
-}
-
 function describeBookmarksForExport(bookmarks) {
   const normalizedBookmarks = normalizeBookmarks(bookmarks);
   if (!normalizedBookmarks.length) {
     return "0 FishyStuff Bookmarks";
   }
-  const zoneNames = normalizedBookmarks
-    .map((bookmark) => String(bookmark.zoneName || "").trim())
+  const semanticNames = normalizedBookmarks
+    .map((bookmark) => bookmarkPrimaryRowValue(bookmark?.rows))
     .filter(Boolean);
-  if (zoneNames.length === normalizedBookmarks.length && zoneNames.every((name) => name === zoneNames[0])) {
-    return zoneNames[0];
+  if (
+    semanticNames.length === normalizedBookmarks.length &&
+    semanticNames.every((name) => name === semanticNames[0])
+  ) {
+    return semanticNames[0];
   }
   const labels = normalizedBookmarks
     .map((bookmark) => String(bookmark.label || "").trim())
@@ -512,13 +538,16 @@ function describeBookmarksForExport(bookmarks) {
     return labels[0];
   }
   if (normalizedBookmarks.length === 1) {
-    return labels[0] || zoneNames[0] || "FishyStuff Bookmark";
+    return labels[0] || semanticNames[0] || "FishyStuff Bookmark";
   }
   return `${normalizedBookmarks.length} FishyStuff Bookmarks`;
 }
 
 function bookmarkDisplayLabel(bookmark, fallbackIndex = 0) {
-  return String(bookmark?.label || "").trim() || defaultBookmarkLabel(fallbackIndex, bookmark?.zoneName);
+  return (
+    String(bookmark?.label || "").trim() ||
+    defaultBookmarkLabel(fallbackIndex, bookmarkPrimaryRowValue(bookmark?.rows))
+  );
 }
 
 export function buildBookmarkDeletionPrompt(bookmarks, options = {}) {
@@ -545,11 +574,6 @@ export function buildBookmarkDeletionPrompt(bookmarks, options = {}) {
 
 function formatBookmarkXmlName(bookmark, index) {
   return `${index + 1}: ${bookmarkDisplayLabel(bookmark, index)}`;
-}
-
-function extractBookmarkCommentTitle(serializedBookmarks) {
-  const match = String(serializedBookmarks || "").match(/Waypoints\s+for:\s*([^\r\n]+)/i);
-  return String(match?.[1] || "").trim();
 }
 
 function parseBookmarkXmlAttributes(nodeText) {
@@ -585,17 +609,13 @@ function parseXmlBookmarks(serializedBookmarks, options = {}) {
     return [];
   }
   const idFactory = typeof options.idFactory === "function" ? options.idFactory : createBookmarkId;
-  const commentTitle = extractBookmarkCommentTitle(serializedBookmarks);
-  const normalizedCommentTitle = !isGenericBookmarkCollectionTitle(commentTitle) ? commentTitle : "";
   return normalizeBookmarks(
     nodes.map((match, index) => {
       const attributes = parseBookmarkXmlAttributes(match[0]);
       const label = normalizeBookmarkLabelFromXml(attributes.BookMarkName, index);
-      const zoneName = normalizedCommentTitle || label;
       return {
         id: idFactory(),
         label,
-        zoneName,
         worldX: attributes.PosX,
         worldZ: attributes.PosZ,
       };
@@ -1366,15 +1386,6 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
   `;
 }
 
-function hoverSampleByLayerId(hover, layerId) {
-  const targetLayerId = String(layerId || "").trim();
-  if (!targetLayerId) {
-    return null;
-  }
-  const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
-  return layerSamples.find((sample) => String(sample?.layerId || "").trim() === targetLayerId) || null;
-}
-
 function hoverSampleRows(sample) {
   return (Array.isArray(sample?.rows) ? sample.rows : []).filter((row) => {
     const icon = String(row?.icon || "").trim();
@@ -1383,15 +1394,6 @@ function hoverSampleRows(sample) {
     const hideLabel = row?.hideLabel === true;
     return Boolean(icon && value && (hideLabel || label));
   });
-}
-
-function hoverSampleRowValue(sample, rowKey) {
-  const targetKey = String(rowKey || "").trim();
-  if (!targetKey) {
-    return "";
-  }
-  const row = hoverSampleRows(sample).find((entry) => String(entry?.key || "").trim() === targetKey);
-  return String(row?.value || "").trim();
 }
 
 function hoverLayerOverviewRows(layerId, sampleByLayerId) {
@@ -1494,17 +1496,32 @@ function buildOverviewRowsForLayerSamples(layerSamplesInput, stateBundle) {
       .map((sample) => [String(sample?.layerId || "").trim(), sample])
       .filter(([layerId]) => Boolean(layerId)),
   );
+  const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
+  return layerIds.flatMap((layerId) => hoverLayerOverviewRows(layerId, sampleByLayerId));
+}
+
+function orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle) {
   const orderedLayerIds = resolveLayerEntries(stateBundle || {})
     .filter((layer) => layer.visible)
     .map((layer) => String(layer?.layerId || "").trim())
     .filter((layerId) => sampleByLayerId.has(layerId))
     .reverse();
-  const layerIds = orderedLayerIds.length
+  return orderedLayerIds.length
     ? orderedLayerIds
     : layerSamples
         .map((sample) => String(sample?.layerId || "").trim())
         .filter(Boolean);
-  return layerIds.flatMap((layerId) => hoverLayerOverviewRows(layerId, sampleByLayerId));
+}
+
+function bookmarkRowsFromLayerSamples(layerSamplesInput, stateBundle) {
+  const layerSamples = Array.isArray(layerSamplesInput) ? layerSamplesInput : [];
+  const sampleByLayerId = new Map(
+    layerSamples
+      .map((sample) => [String(sample?.layerId || "").trim(), sample])
+      .filter(([layerId]) => Boolean(layerId)),
+  );
+  const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
+  return layerIds.flatMap((layerId) => hoverSampleRows(sampleByLayerId.get(layerId)));
 }
 
 function renderHoverTooltip(elements, hover, stateBundle) {
@@ -1581,43 +1598,29 @@ function bookmarkClearSelectionLabel(selectedCount) {
 
 export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
   const label = bookmarkDisplayLabel(bookmark, fallbackIndex);
-  const zoneName = String(bookmark?.zoneName || "").trim();
-  const resourceName = String(bookmark?.resourceName || "").trim();
-  const originName = String(bookmark?.originName || "").trim();
-  const rows = [
+  const semanticRows = normalizeBookmarkRows(bookmark?.rows).filter(
+    (row) =>
+      !(
+        String(row?.key || "").trim() === "zone" &&
+        String(row?.value || "").trim() === label
+      ),
+  ).map((row) => ({
+    icon: row.icon,
+    label: row.label,
+    value: row.value,
+    ...(row.hideLabel === true ? { hideLabel: true } : {}),
+    ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
+    ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
+  }));
+  return [
     {
       icon: "bookmark",
       label: "Bookmark",
       value: label,
       hideLabel: true,
     },
+    ...semanticRows,
   ];
-  if (zoneName && zoneName !== label) {
-    rows.push({
-      icon: "hover-zone",
-      label: "Zone",
-      value: zoneName,
-    });
-  }
-  if (resourceName) {
-    rows.push({
-      icon: "hover-resources",
-      label: "Resources",
-      value: resourceName,
-      ...(REGION_GROUP_FALLBACK_RE.test(resourceName) || REGION_FALLBACK_RE.test(resourceName)
-        ? { statusIcon: "question-mark" }
-        : {}),
-    });
-  }
-  if (originName) {
-    rows.push({
-      icon: "hover-origin",
-      label: "Origin",
-      value: originName,
-      ...(REGION_FALLBACK_RE.test(originName) ? { statusIcon: "question-mark" } : {}),
-    });
-  }
-  return rows;
 }
 
 function bookmarkListSignature(bookmarks) {
@@ -1638,9 +1641,7 @@ export function resolveDisplayBookmarks(stateBundle, bookmarks) {
     }
     return {
       ...bookmark,
-      zoneName: bookmark.zoneName || snapshotBookmark.zoneName || null,
-      resourceName: bookmark.resourceName || snapshotBookmark.resourceName || null,
-      originName: bookmark.originName || snapshotBookmark.originName || null,
+      rows: bookmark.rows?.length ? bookmark.rows : snapshotBookmark.rows || [],
     };
   });
 }
@@ -1659,11 +1660,7 @@ function persistResolvedBookmarksFromStateBundle(stateBundle, bookmarks, bookmar
 }
 
 function bookmarksNeedDerivedMetadata(bookmarks) {
-  return normalizeBookmarks(bookmarks).some((bookmark) => {
-    const resourceName = String(bookmark?.resourceName || "").trim();
-    const originName = String(bookmark?.originName || "").trim();
-    return !resourceName || !originName;
-  });
+  return normalizeBookmarks(bookmarks).some((bookmark) => normalizeBookmarkRows(bookmark?.rows).length === 0);
 }
 
 function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
@@ -3569,10 +3566,6 @@ function bindUi(shell, elements, options = {}) {
     }
     const worldX = normalizeBookmarkCoordinate(hover?.worldX);
     const worldZ = normalizeBookmarkCoordinate(hover?.worldZ);
-    const regionGroupSample = hoverSampleByLayerId(hover, "region_groups");
-    const regionSample = hoverSampleByLayerId(hover, "regions");
-    const regionGroupsName = hoverSampleRowValue(regionGroupSample, "resources") || null;
-    const regionsName = hoverSampleRowValue(regionSample, "origin") || null;
     if (worldX == null || worldZ == null) {
       showSiteToast("warning", "Move the cursor over the ready 2D map and click again.");
       return;
@@ -3581,9 +3574,7 @@ function bindUi(shell, elements, options = {}) {
       {
         worldX,
         worldZ,
-        zoneName: hover?.zoneName,
-        resourceName: regionGroupsName,
-        originName: regionsName,
+        rows: bookmarkRowsFromLayerSamples(hover?.layerSamples, latestStateBundle),
         zoneRgb: hover?.zoneRgb,
       },
       bookmarks,

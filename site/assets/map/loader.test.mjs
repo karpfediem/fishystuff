@@ -635,9 +635,11 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
     buildBookmarkOverviewRows(
       {
         label: "Tarif hotspot",
-        zoneName: "Tarif",
-        resourceName: "Tarif",
-        originName: "Tarif",
+        rows: [
+          { key: "zone", icon: "hover-zone", label: "Zone", value: "Tarif" },
+          { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" },
+          { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" },
+        ],
       },
       0,
     ),
@@ -670,9 +672,11 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
     buildBookmarkOverviewRows(
       {
         label: "Tarif",
-        zoneName: "Tarif",
-        resourceName: "Tarif",
-        originName: "Tarif",
+        rows: [
+          { key: "zone", icon: "hover-zone", label: "Zone", value: "Tarif" },
+          { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" },
+          { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" },
+        ],
       },
       0,
     ),
@@ -700,8 +704,22 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
     buildBookmarkOverviewRows(
       {
         label: "Unknown route",
-        resourceName: "RG16",
-        originName: "R76",
+        rows: [
+          {
+            key: "resources",
+            icon: "hover-resources",
+            label: "Resources",
+            value: "RG16",
+            statusIcon: "question-mark",
+          },
+          {
+            key: "origin",
+            icon: "hover-origin",
+            label: "Origin",
+            value: "R76",
+            statusIcon: "question-mark",
+          },
+        ],
       },
       0,
     ),
@@ -912,9 +930,11 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
         {
           id: "a",
           label: "",
-          zoneName: "Velia Coast",
-          resourceName: "Velia",
-          originName: "Velia",
+          rows: [
+            { key: "zone", icon: "hover-zone", label: "Zone", value: "Velia Coast" },
+            { key: "resources", icon: "hover-resources", label: "Resources", value: "Velia" },
+            { key: "origin", icon: "hover-origin", label: "Origin", value: "Velia" },
+          ],
           worldX: 123.4567,
           worldZ: -45.6789,
         },
@@ -927,9 +947,11 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
       {
         id: "a",
         label: "Velia Coast",
-        zoneName: "Velia Coast",
-        resourceName: "Velia",
-        originName: "Velia",
+        rows: [
+          { key: "zone", icon: "hover-zone", label: "Zone", value: "Velia Coast", hideLabel: false },
+          { key: "resources", icon: "hover-resources", label: "Resources", value: "Velia", hideLabel: false },
+          { key: "origin", icon: "hover-origin", label: "Origin", value: "Velia", hideLabel: false },
+        ],
         zoneRgb: null,
         worldX: 123.457,
         worldZ: -45.679,
@@ -938,7 +960,6 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
       {
         id: "c",
         label: "Manual",
-        zoneName: null,
         zoneRgb: 255,
         worldX: 12.5,
         worldZ: 8.25,
@@ -965,9 +986,11 @@ test("resolveDisplayBookmarks fills imported bookmark metadata from the snapshot
           {
             id: "bookmark-a",
             label: "Tarif",
-            zoneName: "Mediah",
-            resourceName: "Tarif",
-            originName: "Tarif",
+            rows: [
+              { key: "zone", icon: "hover-zone", label: "Zone", value: "Mediah" },
+              { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" },
+              { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" },
+            ],
             worldX: 12.5,
             worldZ: 8.25,
           },
@@ -980,9 +1003,11 @@ test("resolveDisplayBookmarks fills imported bookmark metadata from the snapshot
     {
       id: "bookmark-a",
       label: "Tarif",
-      zoneName: "Mediah",
-      resourceName: "Tarif",
-      originName: "Tarif",
+      rows: [
+        { key: "zone", icon: "hover-zone", label: "Zone", value: "Mediah", hideLabel: false },
+        { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif", hideLabel: false },
+        { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif", hideLabel: false },
+      ],
       zoneRgb: null,
       worldX: 12.5,
       worldZ: 8.25,
@@ -991,15 +1016,17 @@ test("resolveDisplayBookmarks fills imported bookmark metadata from the snapshot
   ]);
 });
 
-test("createBookmarkFromPlacement uses zone name as the default label", () => {
+test("createBookmarkFromPlacement uses semantic rows as the default label", () => {
   assert.deepEqual(
     createBookmarkFromPlacement(
       {
         worldX: 123.4567,
         worldZ: -45.6789,
-        zoneName: "Cron Islands - Depth 2",
-        resourceName: "Tarif",
-        originName: "Tarif",
+        rows: [
+          { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" },
+          { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" },
+          { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" },
+        ],
         zoneRgb: 12345,
       },
       [],
@@ -1011,9 +1038,11 @@ test("createBookmarkFromPlacement uses zone name as the default label", () => {
     {
       id: "bookmark-1",
       label: "Cron Islands - Depth 2",
-      zoneName: "Cron Islands - Depth 2",
-      resourceName: "Tarif",
-      originName: "Tarif",
+      rows: [
+        { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2", hideLabel: false },
+        { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif", hideLabel: false },
+        { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif", hideLabel: false },
+      ],
       zoneRgb: 12345,
       worldX: 123.457,
       worldZ: -45.679,
@@ -1022,12 +1051,12 @@ test("createBookmarkFromPlacement uses zone name as the default label", () => {
   );
 });
 
-test("renameBookmark updates the label and falls back to the zone name when cleared", () => {
+test("renameBookmark updates the label and falls back to semantic rows when cleared", () => {
   const bookmarks = normalizeBookmarks([
     {
       id: "bookmark-1",
       label: "Cron Islands - Depth 2",
-      zoneName: "Cron Islands - Depth 2",
+      rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" }],
       worldX: 123.4567,
       worldZ: -45.6789,
     },
@@ -1037,7 +1066,9 @@ test("renameBookmark updates the label and falls back to the zone name when clea
     {
       id: "bookmark-1",
       label: "Shipwreck Route",
-      zoneName: "Cron Islands - Depth 2",
+      rows: [
+        { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2", hideLabel: false },
+      ],
       zoneRgb: null,
       worldX: 123.457,
       worldZ: -45.679,
@@ -1049,7 +1080,9 @@ test("renameBookmark updates the label and falls back to the zone name when clea
     {
       id: "bookmark-1",
       label: "Cron Islands - Depth 2",
-      zoneName: "Cron Islands - Depth 2",
+      rows: [
+        { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2", hideLabel: false },
+      ],
       zoneRgb: null,
       worldX: 123.457,
       worldZ: -45.679,
@@ -1064,14 +1097,14 @@ test("serializeBookmarksForExport writes WorldmapBookMark XML with comments", ()
       {
         id: "bookmark-1",
         label: "Shipwreck Route",
-        zoneName: "Cron Islands - Depth 2",
+        rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" }],
         worldX: 123.4567,
         worldZ: -45.6789,
       },
       {
         id: "bookmark-2",
         label: "Harbor Loop",
-        zoneName: "Cron Islands - Depth 2",
+        rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" }],
         worldX: 14.25,
         worldZ: 80.5,
       },
@@ -1114,7 +1147,6 @@ test("parseImportedBookmarks accepts wrapped WorldmapBookMark XML", () => {
     {
       id: "bookmark-1",
       label: "Shipwreck Route",
-      zoneName: "Cron Islands - Depth 2",
       zoneRgb: null,
       worldX: 123.457,
       worldZ: -45.679,
@@ -1123,7 +1155,6 @@ test("parseImportedBookmarks accepts wrapped WorldmapBookMark XML", () => {
     {
       id: "bookmark-2",
       label: "Harbor Loop",
-      zoneName: "Cron Islands - Depth 2",
       zoneRgb: null,
       worldX: 14.25,
       worldZ: 80.5,
@@ -1152,7 +1183,7 @@ test("parseImportedBookmarks accepts bare BookMark nodes and mergeImportedBookma
         {
           id: "bookmark-1",
           label: "Shipwreck Route",
-          zoneName: "Cron Islands - Depth 2",
+          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" }],
           worldX: 123.4567,
           worldZ: -45.6789,
         },
@@ -1163,7 +1194,9 @@ test("parseImportedBookmarks accepts bare BookMark nodes and mergeImportedBookma
       {
         id: "bookmark-1",
         label: "Shipwreck Route",
-        zoneName: "Cron Islands - Depth 2",
+        rows: [
+          { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2", hideLabel: false },
+        ],
         zoneRgb: null,
         worldX: 123.457,
         worldZ: -45.679,
@@ -1172,7 +1205,6 @@ test("parseImportedBookmarks accepts bare BookMark nodes and mergeImportedBookma
       {
         id: "bookmark-12",
         label: "Harbor Loop",
-        zoneName: "Harbor Loop",
         zoneRgb: null,
         worldX: 14.25,
         worldZ: 80.5,
