@@ -7,6 +7,7 @@ const {
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
   buildHoverOverviewRows,
+  buildSelectionOverviewRows,
   buildZoneEvidenceListMarkup,
   buildMapUiResetMountOptions,
   buildSearchMatches,
@@ -215,6 +216,69 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
         icon: "hover-origin",
         label: "Origin",
         value: "Tarif",
+      },
+    ],
+  );
+});
+
+test("buildSelectionOverviewRows keeps field semantics while omitting a duplicate zone row", () => {
+  assert.deepEqual(
+    buildSelectionOverviewRows(
+      {
+        zoneName: "Demi River",
+        layerSamples: [
+          {
+            layerId: "zone_mask",
+            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          },
+          {
+            layerId: "region_groups",
+            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
+          },
+          {
+            layerId: "regions",
+            rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    [
+      {
+        layerId: "region_groups",
+        icon: "hover-resources",
+        label: "Resources",
+        value: "Tarif",
+      },
+      {
+        layerId: "regions",
+        icon: "hover-origin",
+        label: "Origin",
+        value: "Tarif",
+      },
+    ],
+  );
+});
+
+test("buildSelectionOverviewRows keeps the zone row when no zone summary is available", () => {
+  assert.deepEqual(
+    buildSelectionOverviewRows(
+      {
+        layerSamples: [
+          {
+            layerId: "zone_mask",
+            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          },
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    [
+      {
+        layerId: "zone_mask",
+        icon: "hover-zone",
+        label: "Zone",
+        value: "Demi River",
       },
     ],
   );

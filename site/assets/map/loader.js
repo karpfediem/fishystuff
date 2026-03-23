@@ -1438,7 +1438,22 @@ export function resolveHoveredBookmark(hover, stateBundle, bookmarks) {
 }
 
 export function buildHoverOverviewRows(hover, stateBundle) {
-  const layerSamples = Array.isArray(hover?.layerSamples) ? hover.layerSamples : [];
+  return buildOverviewRowsForLayerSamples(hover?.layerSamples, stateBundle);
+}
+
+export function buildSelectionOverviewRows(selection, stateBundle) {
+  const zoneName = String(selection?.zoneName || "").trim();
+  const overviewRows = buildOverviewRowsForLayerSamples(selection?.layerSamples, stateBundle);
+  if (!zoneName) {
+    return overviewRows;
+  }
+  return overviewRows.filter(
+    (row) => !(row.layerId === "zone_mask" && String(row?.value || "").trim() === zoneName),
+  );
+}
+
+function buildOverviewRowsForLayerSamples(layerSamplesInput, stateBundle) {
+  const layerSamples = Array.isArray(layerSamplesInput) ? layerSamplesInput : [];
   const sampleByLayerId = new Map(
     layerSamples
       .map((sample) => [String(sample?.layerId || "").trim(), sample])
@@ -1473,6 +1488,24 @@ function renderHoverTooltip(elements, hover, stateBundle) {
   );
   setBooleanProperty(elements.hoverLayers, "hidden", overviewRows.length === 0);
   setBooleanProperty(elements.hoverTooltip, "hidden", false);
+}
+
+function renderSelectionOverview(elements, selection, stateBundle) {
+  if (!elements.selectionOverview) {
+    return;
+  }
+  const overviewRows = buildSelectionOverviewRows(selection, stateBundle);
+  if (overviewRows.length === 0) {
+    setMarkup(elements.selectionOverview, "[]", "");
+    setBooleanProperty(elements.selectionOverview, "hidden", true);
+    return;
+  }
+  setMarkup(
+    elements.selectionOverview,
+    JSON.stringify(overviewRows),
+    overviewRows.map((row) => overviewRowMarkup(row)).join(""),
+  );
+  setBooleanProperty(elements.selectionOverview, "hidden", false);
 }
 
 function hoverFromEventDetail(detail) {
@@ -2093,7 +2126,12 @@ export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()
 }
 
 function ensureZoneEvidenceElements(elements) {
-  if (elements.zoneEvidenceStatus && elements.zoneEvidenceSummary && elements.zoneEvidenceList) {
+  if (
+    elements.zoneEvidenceStatus &&
+    elements.zoneEvidenceSummary &&
+    elements.selectionOverview &&
+    elements.zoneEvidenceList
+  ) {
     return elements;
   }
   if (!elements.panelBody) {
@@ -2108,6 +2146,7 @@ function ensureZoneEvidenceElements(elements) {
       <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
     </div>
     <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
+    <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
     <div class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
       <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
         <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
@@ -2131,6 +2170,7 @@ function ensureZoneEvidenceElements(elements) {
 
   elements.zoneEvidenceStatus = section.querySelector("#fishymap-zone-evidence-status");
   elements.zoneEvidenceSummary = section.querySelector("#fishymap-zone-evidence-summary");
+  elements.selectionOverview = section.querySelector("#fishymap-selection-overview");
   elements.zoneEvidenceList = section.querySelector("#fishymap-zone-evidence-list");
   return elements;
 }
@@ -2918,6 +2958,7 @@ function renderPanel(elements, stateBundle, zoneCatalog = []) {
       setTextContent(elements.selectionSummary, "No zone selected.");
     }
   }
+  renderSelectionOverview(elements, state.selection || null, stateBundle);
 
   renderHoverTooltip(elements, state.hover || null, stateBundle);
 
@@ -4523,6 +4564,7 @@ async function main() {
     statusLines: document.getElementById("fishymap-status-lines"),
     diagnosticJson: document.getElementById("fishymap-diagnostic-json"),
     selectionSummary: document.getElementById("fishymap-selection-summary"),
+    selectionOverview: document.getElementById("fishymap-selection-overview"),
     zoneEvidenceWindow: document.getElementById("fishymap-zone-evidence-window"),
     zoneEvidenceTitlebar: document.getElementById("fishymap-zone-evidence-titlebar"),
     zoneEvidenceBody: document.getElementById("fishymap-zone-evidence-body"),
