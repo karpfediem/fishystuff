@@ -227,6 +227,18 @@ impl ArchiveIndex {
         counter
     }
 
+    pub fn matching_entries(&self, masks: &[String]) -> Vec<FileEntry> {
+        self.entries
+            .iter()
+            .filter(|entry| wild_match_any(masks, &entry.file_path))
+            .cloned()
+            .collect()
+    }
+
+    pub fn is_mobile(&self) -> bool {
+        self.mobile
+    }
+
     pub fn extract(
         &mut self,
         masks: &[String],
@@ -297,6 +309,21 @@ impl ArchiveIndex {
         Ok(counter)
     }
 
+    pub fn read_raw_payload(&mut self, entry: &FileEntry) -> Result<Vec<u8>> {
+        if entry.compressed_size == 0 {
+            return Ok(Vec::new());
+        }
+
+        let paz_path = self.resolve_paz_name(entry.paz_num)?;
+        let mut file = File::open(&paz_path)
+            .with_context(|| format!("failed to open {}", paz_path.display()))?;
+        file.seek(SeekFrom::Start(entry.offset as u64))
+            .with_context(|| format!("failed to seek {}", paz_path.display()))?;
+
+        read_exact_vec(&mut file, entry.compressed_size as usize)
+            .with_context(|| format!("failed to read raw payload from {}", paz_path.display()))
+    }
+
     fn extract_entry(
         &mut self,
         entry: &FileEntry,
@@ -355,6 +382,10 @@ impl ArchiveIndex {
     fn read_payload(&mut self, entry: &FileEntry) -> Result<Vec<u8>> {
         if entry.compressed_size == 0 {
             return Ok(Vec::new());
+        }
+
+        if is_passthrough_dbss(&entry.file_path) {
+            return self.read_raw_payload(entry);
         }
 
         if !self.mobile && entry.compressed_size % 8 != 0 {
@@ -561,6 +592,13 @@ fn has_valid_bdo_header(buffer: &[u8], original_size: u32) -> bool {
         .unwrap_or(false)
 }
 
+fn is_passthrough_dbss(path: &str) -> bool {
+    path.rsplit('.')
+        .next()
+        .map(|ext| ext.eq_ignore_ascii_case("dbss"))
+        .unwrap_or(false)
+}
+
 fn paz_name(paz_num: u32) -> String {
     format!("pad{paz_num:05}.paz")
 }
@@ -588,6 +626,18 @@ fn auto_rename_path(path: &Path) -> PathBuf {
             return candidate;
         }
         index += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_passthrough_dbss;
+
+    #[test]
+    fn recognizes_dbss_passthrough_paths_case_insensitively() {
+        assert!(is_passthrough_dbss("gamecommondata/binary/textbind.dbss"));
+        assert!(is_passthrough_dbss("gamecommondata/binary/TEXTOFFSET.DBSS"));
+        assert!(!is_passthrough_dbss("gamecommondata/binary/regioninfo.bss"));
     }
 }
 

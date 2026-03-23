@@ -4998,7 +4998,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "fishystuff_core",
  "flate2",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

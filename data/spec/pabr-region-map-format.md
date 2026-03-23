@@ -1,261 +1,442 @@
-# PABR Region Map Format
+# PABR and World-Map Metadata Guide
 
-This note documents the `PABR`-family `*.bmp.rid` and `*.bmp.bkd` files used
-for Black Desert minimap region maps.
+This guide documents how to work with the original Black Desert world-map
+files that `pazifista` currently understands.
 
-Status:
+Use this file as the stable reference.
 
-- this is a reverse-engineered format note, not an official vendor spec
-- the geometry and reconstruction path below are validated against the current
-  `pazifista` implementation
-- some trailer fields are still unidentified
+Use the investigation log in
+[worklog/pabr-region-map-investigation.md](/home/carp/code/fishystuff/data/spec/worklog/pabr-region-map-investigation.md)
+for the step-by-step reverse-engineering history, dead ends, and narrower
+findings that are not yet polished into a final spec.
 
-Current implementation:
+Related reference:
 
-- parser and renderer: [tools/pazifista/src/pabr.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr.rs)
-- CLI entrypoint: [tools/pazifista/src/lib.rs](/home/carp/code/fishystuff/tools/pazifista/src/lib.rs)
+- [world-map-sector-model.md](/home/carp/code/fishystuff/data/spec/world-map-sector-model.md)
 
-## Scope
+## Purpose
 
-These files are not generic Elasticsearch/CrateDB `BKD` files and not generic
-`RID` image payloads.
+The project is moving away from stale community-derived map artifacts and
+toward original-game sources.
 
-They encode original region-map geometry:
+In practice that means:
 
-- `*.rid` stores the region-ID dictionary and footer metadata
-- `*.bkd` stores the run/breakpoint data used to reconstruct the raster map
+- replacing smoothed external GeoJSON for `regions` and `region_groups`
+- replacing stale external waypoint metadata where original waypoint XML exists
+- understanding whether the current `zone mask` can also be replaced with an
+  original source
 
-The colors shown by `pazifista pabr render` are synthetic and carry no game
-data. The meaningful information is the region geometry and the region numbers.
+## Source of Truth
 
-## Samples Used
+Current recommended source-of-truth chain:
 
-The current decoding was validated primarily against:
+- region geometry
+  - `*.bmp.rid` + `*.bmp.bkd`
+- region ID metadata
+  - `regioninfo.bss`
+  - `regionclientdata_*.xml`
+- region-group metadata
+  - `regiongroupinfo.bss`
+  - `mapdata_realexplore.xml` / `mapdata_realexplore2.xml`
+- waypoint names and positions
+  - `mapdata_realexplore.xml` / `mapdata_realexplore2.xml`
 
-- `regionmap_new.bmp.rid` + `regionmap_new.bmp.bkd`
-- `regionmap_morning.bmp.rid` + `regionmap_morning.bmp.bkd`
-- `siegemap.bmp.rid` + `siegemap.bmp.bkd`
+Files that are useful for investigation but are not the preferred naming source:
 
-Observed from `regionmap_new`:
+- `exploration.bss`
+- `stringtable.bss`
+- `mapdata_arraywaypoint.bin`
 
-- native size: `11560 x 10540`
-- wrapped bands: `6`
-- dictionary entries: `1264`
-- BKD rows: `1860`
-- max BKD x: `65535`
+## File Families
 
-`regionmap_new.bmp.rid` contains all `1252` region IDs from the current
-smoothed `regions.v1.geojson` plus `12` additional IDs, which is a strong
-sanity check that the RID dictionary is a region-ID table rather than a color
-palette.
+### `*.bmp.rid`
 
-## RID Layout
+Purpose:
 
-High-level structure:
+- region-ID dictionary
+- native map dimensions in the validated footer
 
-```text
-offset  size  meaning
-0x00    4     magic = "PABR"
-0x04    4     u32 dictionary_entry_count
-0x08    ...   dictionary_entry_count * u16 region IDs
-...     var   small per-file trailer prefix
-EOF-47  47    fixed footer block
+Use it for:
+
+- region ID lookup
+- native raster size
+- pairing with the matching `*.bmp.bkd`
+
+### `*.bmp.bkd`
+
+Purpose:
+
+- wrapped and sheared breakpoint rows that reconstruct the original region-map
+  raster
+
+Use it for:
+
+- rendering original unsmoothed region geometry
+- exporting exact region and region-group polygons
+
+Important:
+
+- these are not generic Elasticsearch or Lucene BKD trees
+
+### `regioninfo.bss`
+
+Purpose:
+
+- region-level metadata such as:
+  - `tradeoriginregion`
+  - `regiongroup`
+  - `waypoint`
+
+Use it for:
+
+- linking region IDs to their group IDs
+- linking region IDs to waypoint IDs
+- checking whether current external `regioninfo.json` is stale
+
+### `regiongroupinfo.bss`
+
+Purpose:
+
+- region-group table with:
+  - `key`
+  - `waypoint`
+  - graph position
+
+Use it for:
+
+- linking a region-group ID to a waypoint ID
+- locating the group on the world map
+
+### `mapdata_realexplore.xml`
+
+Purpose:
+
+- original large waypoint graph
+- canonical internal waypoint names and positions
+
+Observed characteristics:
+
+- `179203` waypoints
+- `412122` links
+- includes many hidden and road sub-waypoints
+
+Use it for:
+
+- authoritative waypoint naming
+- direct lookup of world-map waypoint IDs
+- validating graph-point alignment from `regiongroupinfo.bss`
+
+### `mapdata_realexplore2.xml`
+
+Purpose:
+
+- second, smaller waypoint graph in the same schema
+
+Observed characteristics:
+
+- `1022` waypoints
+- `2338` links
+
+Use it for:
+
+- cross-checking names and a smaller high-level graph
+- comparing alternate waypoint placements
+
+Important:
+
+- `mapdata_realexplore.xml` and `mapdata_realexplore2.xml` share waypoint keys
+  but can disagree on position, links, and `IsSubWaypoint`
+
+### `exploration.bss`
+
+Purpose:
+
+- original binary table that contains live waypoint IDs and related fields
+
+Current status:
+
+- useful for reverse-engineering
+- not the preferred naming source
+- the previously explored `exploration.bss -> stringtable.bss` path turned out
+  to lead to unrelated UI strings for the tested focus rows
+
+### `stringtable.bss`
+
+Purpose:
+
+- general string index plus trailing UTF-16LE text entries
+
+Current status:
+
+- partially decoded
+- useful for broader client text work
+- not currently needed to name world-map waypoints when
+  `mapdata_realexplore*.xml` is available
+
+### `mapdata_arraywaypoint.bin`
+
+Purpose:
+
+- sector-native semantic raster
+
+Current status:
+
+- decoded as a sector-aligned `u16` grid
+- not a direct `waypoint_id -> name/position` table
+- not yet a drop-in replacement for the current zone-mask assets
+
+## Core Decode Model
+
+### Region Raster Reconstruction
+
+The validated region-map pipeline is:
+
+1. read native width and height from `*.bmp.rid`
+2. read breakpoint rows from `*.bmp.bkd`
+3. undo the wrapped-band storage model
+4. undo the fixed per-row shear
+5. map dictionary indices through the RID dictionary
+6. reconstruct the unsmoothed raster by majority vote across wrapped bands
+
+For the currently validated family:
+
+- native size example: `11560 x 10540`
+- row shear: `3824`
+- wrapped bands derived from `max_bkd_x / native_width`
+
+Implementation:
+
+- [parse.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr/parse.rs)
+- [render.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr/render.rs)
+- [geojson.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr/geojson.rs)
+
+### Region and Region-Group Metadata
+
+Current reliable metadata chain:
+
+- region geometry comes from `rid+bkd`
+- region ID to group ID comes from `regioninfo.bss`
+- group ID to waypoint comes from `regiongroupinfo.bss`
+- waypoint name and position come from `mapdata_realexplore*.xml`
+
+That means region-group labeling no longer depends on stale external
+`deck_rg_graphs.json` or `waypoints.json`.
+
+### Waypoint XML Schema
+
+The validated `mapdata_realexplore*.xml` rows look like:
+
+```xml
+<Waypoint
+  Key="2052"
+  Name="town(olvia_academy)"
+  PosX="-114942"
+  PosY="-2674.33"
+  PosZ="157114"
+  Property="ground"
+  IsSubWaypoint="True"
+  IsEscape="False"/>
 ```
 
-### RID Dictionary
+And graph edges look like:
 
-The dictionary is a flat array of little-endian `u16` values.
-
-For `regionmap_new`, the dictionary values are region IDs such as:
-
-- min: `4`
-- max: `1688`
-- count: `1264`
-
-For other maps the values may represent a smaller map-specific ID space, but
-the decoding model is the same: BKD entries reference RID dictionary indices.
-
-### RID Footer
-
-The last `47` bytes form a stable footer signature.
-
-Known bytes:
-
-```text
-00 00 60 FF FF FF 78 87 00 00 28 2D 00 00 2C 29 ...
+```xml
+<Link SourceWaypoint="205741" TargetWaypoint="2052"/>
 ```
 
-Known fields inside that footer:
+So the XML is already sufficient to recover:
 
-- width at footer offset `10`: little-endian `u16`
-- height at footer offset `14`: little-endian `u16`
+- waypoint key
+- canonical internal name token
+- world position
+- local graph connectivity
 
-For the known region maps:
+## The `2052` Example
 
-- width = `0x2D28 = 11560`
-- height = `0x292C = 10540`
+The Olvia redesign chain is the clean reference example.
 
-Unknown fields:
+From original data:
 
-- the small trailer prefix immediately before the fixed 47-byte footer
-- the remaining footer fields after width/height
+- `regiongroupinfo.bss`
+  - `group 295`
+  - `waypoint = 2052`
+  - graph point `(-114535, -2674, 157512)`
+- `mapdata_realexplore.xml`
+  - `Waypoint Key="2052"`
+  - `Name="town(olvia_academy)"`
+  - `Pos=(-114942, -2674.33, 157114)`
+- `mapdata_realexplore2.xml`
+  - `Waypoint Key="2052"`
+  - `Name="town(olvia_academy)"`
+  - `Pos=(-125229, -2883.02, 146801)`
 
-The current parser treats only the validated signature and the width/height
-fields as format requirements.
+Important interpretation:
 
-## BKD Layout
+- the missing external waypoint was a stale downstream-data problem
+- the original files do contain the live waypoint and its canonical internal
+  name
+- the `regiongroupinfo.bss` graph point is much closer to the
+  `mapdata_realexplore.xml` position than to the `realexplore2` position, so
+  `mapdata_realexplore.xml` is the better match for group linkage
 
-High-level structure:
+## `pazifista` Commands
 
-```text
-offset  size  meaning
-0x00    4     magic = "PABR"
-0x04    4     u32 row_count
-0x08    ...   repeated row payloads
-EOF-12  12    footer/trailer words
-```
-
-Row payloads:
-
-```text
-u32 breakpoint_count
-breakpoint_count * (
-    u16 x
-    u16 dictionary_index
-)
-```
-
-Observed invariants:
-
-- x values are sorted within each row
-- `dictionary_index == 65535` acts as a transparent/sentinel value
-- trailing footer is three `u32`s
-- for all validated samples the BKD footer is:
-  - first word: `0`
-  - second word: byte offset of the parsed row payload end
-  - third word: `0`
-
-Example:
-
-```text
-BKD trailer words: [0, payload_end_offset, 0]
-```
-
-## Decoding Model
-
-The naive interpretation, "each BKD row is a direct scanline with x normalized
-into 0..65535", is wrong and produces repeated diagonal artifacts.
-
-The currently validated model is:
-
-1. The native map width comes from the RID footer: `11560`
-2. BKD x coordinates are stored in wrapped width-sized bands
-3. For the validated samples, the number of bands is:
-
-```text
-wrapped_bands = floor(max_x / native_width) + 1
-```
-
-For `regionmap_new`:
-
-```text
-floor(65535 / 11560) + 1 = 6
-```
-
-4. Each BKD row is sheared horizontally by a constant per-row shift
-5. For the validated samples, the shear step is:
-
-```text
-row_shift = 3824 = 0x0EF0
-```
-
-6. To reconstruct a pixel at local output x:
-
-```text
-row_offset = (row_index * row_shift) % native_width
-global_x(band) = local_x + row_offset + band * native_width
-```
-
-7. Evaluate the BKD breakpoint state at each valid `global_x`
-8. Map each non-sentinel dictionary index through the RID dictionary to get a
-   region ID
-9. Fold the bands back together by majority vote on region ID
-
-This produces a plausible unsmoothed region map for all currently tested
-samples.
-
-### Why Majority Vote Works
-
-On sampled nonempty pixels, band agreement is very high:
-
-- `regionmap_new`: `98.46%`
-- `regionmap_morning`: `99.86%`
-- `siegemap`: `99.97%`
-
-When bands disagree, they are almost always split across only two region IDs,
-which typically happens near true region boundaries.
-
-## Rendering Notes
-
-The current `pazifista` renderer:
-
-- uses the original geometry from `rid+bkd`
-- uses synthetic stable colors derived from region ID
-- fills missing/transparent pixels with a fixed blue background
-
-That means `render` is suitable for:
-
-- validating the decoded geometry
-- generating debug previews
-- comparing original unsmoothed region boundaries against smoothed GeoJSON
-
-It is not yet intended as a canonical in-game color reproduction.
-
-## CLI
-
-Inspect a pair:
+### Inspect a region map pair
 
 ```bash
-devenv shell -- cargo run -q -p pazifista --bin pazifista -- \
+devenv shell -- cargo run -q -p pazifista -- \
   pabr inspect data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid
 ```
 
-Render a preview:
+### Render a debug BMP
 
 ```bash
-devenv shell -- cargo run -q -p pazifista --bin pazifista -- \
-  pabr render data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid \
-  --width 2048 \
-  -o data/scratch/ui_texture/minimap/area/regionmap_new.tool.preview.bmp
+devenv shell -- cargo run -q -p pazifista -- \
+  pabr render \
+  data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid \
+  -o /tmp/regionmap_new.bmp
 ```
 
-Override the inferred row shear if needed for future variants:
+### Export exact unsmoothed regions GeoJSON
 
 ```bash
-... pabr render ... --row-shift 3824
+devenv shell -- cargo run -q -p pazifista -- \
+  pabr export-regions-geojson \
+  data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid \
+  -o /tmp/regions.geojson
 ```
+
+### Export exact unsmoothed region-groups GeoJSON
+
+```bash
+devenv shell -- cargo run -q -p pazifista -- \
+  pabr export-region-groups-geojson \
+  data/scratch/ui_texture/minimap/area/regionmap_new.bmp.rid \
+  --regioninfo data/scratch/gamecommondata/binary/regioninfo.bss \
+  -o /tmp/region-groups.geojson
+```
+
+### Inspect `regioninfo.bss`
+
+```bash
+devenv shell -- cargo run -q -p pazifista -- \
+  gcdata inspect-regioninfo-bss \
+  data/scratch/gamecommondata/binary/regioninfo.bss \
+  --id 1677 --id 1688 -o /tmp/regioninfo-focus.json
+```
+
+### Inspect `regiongroupinfo.bss`
+
+```bash
+devenv shell -- cargo run -q -p pazifista -- \
+  gcdata inspect-regiongroupinfo-bss \
+  data/scratch/gamecommondata/binary/regiongroupinfo.bss \
+  --id 295 -o /tmp/regiongroup-focus.json
+```
+
+### Inspect original waypoint XML
+
+```bash
+devenv shell -- cargo run -q -p pazifista -- \
+  gcdata inspect-waypoint-xml \
+  data/scratch/gamecommondata/waypoint/mapdata_realexplore.xml \
+  --id 1739 --id 1746 --id 2052 \
+  -o /tmp/realexplore-focus.json
+```
+
+### Inspect `mapdata_arraywaypoint.bin`
+
+```bash
+devenv shell -- cargo run -q -p pazifista -- \
+  gcdata inspect-arraywaypoint-bin \
+  data/scratch/gamecommondata/waypoint_binary/mapdata_arraywaypoint.bin \
+  --preview-bmp /tmp/arraywaypoint.bmp \
+  -o /tmp/arraywaypoint.json
+```
+
+## Recommended Workflow
+
+When adding or rebuilding map layers, use this order:
+
+1. geometry
+   - derive from `rid+bkd`
+2. region-to-group linkage
+   - derive from `regioninfo.bss`
+3. group-to-waypoint linkage
+   - derive from `regiongroupinfo.bss`
+4. waypoint naming and placement
+   - derive from `mapdata_realexplore*.xml`
+5. only then compare against external JSON or GeoJSON
+   - treat external artifacts as compatibility outputs, not authoritative
+
+## Replacement Status
+
+### `regions`
+
+Status:
+
+- geometry: original source is available and decoded
+- metadata: mostly original-source backed
+- remaining work: reconcile the last ID mismatches and wire the original chain
+  cleanly into the production layer build
+
+### `region_groups`
+
+Status:
+
+- geometry: original source is available and decoded
+- metadata: original-source backed
+- naming path: `regiongroupinfo.bss -> waypoint -> mapdata_realexplore*.xml`
+
+This is the cleanest layer to move fully off external GeoJSON.
+
+### `waypoints`
+
+Status:
+
+- original source exists
+- `mapdata_realexplore*.xml` should be preferred over stale external
+  `waypoints.json`
+
+Open design decision:
+
+- whether the production output should favor the denser `realexplore` graph,
+  the smaller `realexplore2` graph, or a derived merged view
+
+### `zone mask`
+
+Status:
+
+- not replaced yet
+- `mapdata_arraywaypoint.bin` is original and decoded
+- but it is a coarse sector-native semantic raster, not yet a proven
+  substitute for the current PNG-plus-bin pair
 
 ## Known Unknowns
 
-Still not fully identified:
+Still not fully resolved:
 
-- the exact semantics of the unknown RID footer fields
-- the exact meaning of the variable RID trailer prefix before the fixed footer
-- why the source BKD row count is `1860` while the rendered native height is
-  `10540`
-- whether `3824` is universal for all PABR region-map assets or only for the
-  currently validated family
-- whether a reconstruction stricter than majority vote exists at band
-  disagreement boundaries
+- the exact meaning of the remaining RID trailer fields
+- the full structure of every `regioninfo.bss` row family
+- the exact relationship between `mapdata_realexplore.xml` and
+  `mapdata_realexplore2.xml`
+- whether there is a fully original source for the current zone-mask semantics
+- whether `exploration.bss` still carries useful metadata that is not already
+  easier to recover from the waypoint XML
 
-## Practical Conclusion
+## Implementation Pointers
 
-For the validated region-map files, the current working interpretation is:
+Region-map decode modules:
 
-- RID = dictionary of region IDs plus native map dimensions
-- BKD = sheared, wrapped breakpoint rows referencing that dictionary
-- original region geometry can be reconstructed directly from `rid+bkd`
+- [tools/pazifista/src/pabr/mod.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr/mod.rs)
+- [tools/pazifista/src/pabr/parse.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr/parse.rs)
+- [tools/pazifista/src/pabr/render.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr/render.rs)
+- [tools/pazifista/src/pabr/geojson.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr/geojson.rs)
+- [tools/pazifista/src/pabr/matching.rs](/home/carp/code/fishystuff/tools/pazifista/src/pabr/matching.rs)
 
-That is enough to replace GeoJSON as the source of truth for raster
-reconstruction and to continue toward direct polygon extraction from the
-original files.
+Metadata and waypoint inspection:
+
+- [tools/pazifista/src/gcdata.rs](/home/carp/code/fishystuff/tools/pazifista/src/gcdata.rs)
+- [tools/pazifista/src/gcdata/array_waypoint.rs](/home/carp/code/fishystuff/tools/pazifista/src/gcdata/array_waypoint.rs)
+- [tools/pazifista/src/gcdata/stringtable.rs](/home/carp/code/fishystuff/tools/pazifista/src/gcdata/stringtable.rs)
+- [tools/pazifista/src/gcdata/waypoint_xml.rs](/home/carp/code/fishystuff/tools/pazifista/src/gcdata/waypoint_xml.rs)

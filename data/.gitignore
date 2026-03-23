@@ -14,3 +14,5 @@
 !landmarks/*.csv
 !spec/
 !spec/*.md
+!spec/worklog/
+!spec/worklog/*.md
