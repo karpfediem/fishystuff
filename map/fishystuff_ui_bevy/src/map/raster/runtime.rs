@@ -385,10 +385,12 @@ fn update_tiles(mut ctx: RasterUpdateContext<'_, '_>) {
         streamer,
         cache,
         asset_server,
+        images,
         layer_registry,
         layer_runtime,
         residency,
         camera_unstable: motion_state.unstable,
+        exact_lookups,
         stats,
     });
 

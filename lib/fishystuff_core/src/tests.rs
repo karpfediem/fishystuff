@@ -192,7 +192,7 @@ fn zone_lookup_rows_roundtrip_and_sample() {
         7, 8, 9, 7, 8, 9, 4, 5, 6, 4, 5, 6,
     ];
     let mask = ZoneMask::from_rgb(4, 2, data).expect("mask");
-    let lookup = ZoneLookupRows::from_zone_mask(&mask).expect("lookup");
+    let lookup = mask.to_lookup_rows().expect("lookup");
     assert_eq!(lookup.segment_count(), 4);
     assert_eq!(lookup.rgb_u32(0, 0), Some(pack_rgb_u32(1, 2, 3)));
     assert_eq!(lookup.rgb_u32(2, 0), Some(pack_rgb_u32(4, 5, 6)));
@@ -216,7 +216,7 @@ fn zone_lookup_rows_from_rgba_matches_zone_mask_rows() {
         7, 8, 9, 255, 7, 8, 9, 255, 4, 5, 6, 255, 4, 5, 6, 255,
     ];
     let mask = ZoneMask::from_rgb(4, 2, rgb_data).expect("mask");
-    let from_mask = ZoneLookupRows::from_zone_mask(&mask).expect("mask rows");
+    let from_mask = mask.to_lookup_rows().expect("mask rows");
     let from_rgba = ZoneLookupRows::from_rgba(4, 2, &rgba_data).expect("rgba rows");
 
     assert_eq!(from_rgba, from_mask);

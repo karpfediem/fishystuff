@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use fishystuff_core::masks::{ZoneLookupRows, ZoneMask};
+use fishystuff_core::masks::ZoneMask;
 
 #[derive(Parser, Debug)]
 #[command(name = "fishystuff_zone_lookup")]
@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let mask = ZoneMask::load_png(&args.input)
         .with_context(|| format!("load zone mask {}", args.input.display()))?;
-    let lookup = ZoneLookupRows::from_zone_mask(&mask).context("build zone lookup rows")?;
+    let lookup = mask.to_lookup_rows().context("build zone lookup rows")?;
     let bytes = lookup.to_bytes();
     if let Some(parent) = args.output.parent() {
         fs::create_dir_all(parent)

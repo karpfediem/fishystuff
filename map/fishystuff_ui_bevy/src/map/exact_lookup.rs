@@ -1,11 +1,16 @@
 use std::collections::HashMap;
 
 use async_channel::Receiver;
+use bevy::asset::RenderAssetUsages;
+use bevy::image::Image;
 use bevy::prelude::Resource;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use fishystuff_api::Rgb;
 use fishystuff_core::masks::ZoneLookupRows;
 
 use crate::map::layers::{LayerId, LayerSpec};
+use crate::map::raster::TileKey;
+use crate::map::spaces::layer_transform::LayerTransform;
 use crate::runtime_io;
 
 #[derive(Debug, Clone)]
@@ -182,10 +187,71 @@ pub fn sample_exact_lookup_rgb(
     Some(Rgb::new(r, g, b))
 }
 
+pub fn render_exact_lookup_tile_image(
+    layer: &LayerSpec,
+    lookups: &ExactLookupCache,
+    key: TileKey,
+) -> Option<Image> {
+    if !matches!(layer.transform, LayerTransform::IdentityMapSpace) {
+        return None;
+    }
+    if layer.y_flip || key.z < 0 {
+        return None;
+    }
+    let url = layer.exact_lookup_url()?;
+    let lookup = lookups.get(layer.id, &url)?;
+    let scale = 1_u32.checked_shl(key.z as u32)?;
+    let source_span = layer.tile_px.checked_mul(scale)?;
+    if source_span == 0 {
+        return None;
+    }
+    let source_origin_x = key.tx.checked_mul(source_span as i32)?;
+    let source_origin_y = key.ty.checked_mul(source_span as i32)?;
+    let visible_source_width =
+        (i32::from(lookup.width()) - source_origin_x).clamp(0, source_span as i32) as u32;
+    let visible_source_height =
+        (i32::from(lookup.height()) - source_origin_y).clamp(0, source_span as i32) as u32;
+    if visible_source_width == 0 || visible_source_height == 0 {
+        return None;
+    }
+
+    let output_width = visible_source_width.div_ceil(scale) as u16;
+    let output_height = visible_source_height.div_ceil(scale) as u16;
+    let chunk = lookup.render_rgba_resampled_chunk(
+        source_origin_x,
+        source_origin_y,
+        visible_source_width,
+        visible_source_height,
+        output_width,
+        output_height,
+        |rgb| {
+            [
+                ((rgb >> 16) & 0xff) as u8,
+                ((rgb >> 8) & 0xff) as u8,
+                (rgb & 0xff) as u8,
+                255,
+            ]
+        },
+    );
+
+    Some(Image::new(
+        Extent3d {
+            width: u32::from(chunk.width()),
+            height: u32::from(chunk.height()),
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        chunk.into_data(),
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::map::layers::{LayerKind, LayerSpec, LodPolicy, PickMode};
+    use crate::map::raster::TileKey;
     use crate::map::spaces::layer_transform::LayerTransform;
     use fishystuff_core::masks::ZoneMask;
 
@@ -241,7 +307,7 @@ mod tests {
             ],
         )
         .expect("mask");
-        let lookup = ZoneLookupRows::from_zone_mask(&mask).expect("lookup");
+        let lookup = mask.to_lookup_rows().expect("lookup");
         let url = layer.exact_lookup_url().expect("lookup url");
         let mut cache = ExactLookupCache::default();
         cache.entries.insert(
@@ -261,5 +327,53 @@ mod tests {
             Some(Rgb::new(10, 11, 12))
         );
         assert_eq!(sample_exact_lookup_rgb(&layer, &cache, 2, 0), None);
+    }
+
+    #[test]
+    fn render_exact_lookup_tile_image_uses_exact_lookup_pixels() {
+        let layer = test_layer();
+        let mask = ZoneMask::from_rgb(
+            2,
+            2,
+            vec![
+                1, 2, 3, 4, 5, 6, //
+                7, 8, 9, 10, 11, 12,
+            ],
+        )
+        .expect("mask");
+        let lookup = mask.to_lookup_rows().expect("lookup");
+        let url = layer.exact_lookup_url().expect("lookup url");
+        let mut cache = ExactLookupCache::default();
+        cache.entries.insert(
+            layer.id,
+            ExactLookupEntry {
+                url,
+                state: ExactLookupState::Ready(lookup),
+            },
+        );
+
+        let image = render_exact_lookup_tile_image(
+            &layer,
+            &cache,
+            TileKey {
+                layer: layer.id,
+                map_version: 0,
+                z: 0,
+                tx: 0,
+                ty: 0,
+            },
+        )
+        .expect("image");
+
+        assert_eq!(image.texture_descriptor.size.width, 2);
+        assert_eq!(image.texture_descriptor.size.height, 2);
+        let data = image.data.as_ref().expect("image data");
+        assert_eq!(
+            data,
+            &[
+                1, 2, 3, 255, 4, 5, 6, 255, //
+                7, 8, 9, 255, 10, 11, 12, 255,
+            ]
+        );
     }
 }
