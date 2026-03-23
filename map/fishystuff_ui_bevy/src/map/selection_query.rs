@@ -17,6 +17,7 @@ pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
         zone_name: hover.zone_name.clone(),
         world_x: hover.world_x,
         world_z: hover.world_z,
+        layer_samples: hover.layer_samples.clone(),
     })
 }
 
@@ -42,6 +43,7 @@ pub fn selected_info_for_zone_rgb(
         zone_name: resolve_zone_name(layer_registry, field_metadata, zone_rgb),
         world_x: 0.0,
         world_z: 0.0,
+        layer_samples: Vec::new(),
     }
 }
 
@@ -131,6 +133,7 @@ mod tests {
         assert_eq!(selected.zone_name.as_deref(), Some("Olvia Coast"));
         assert_eq!(selected.world_x, 1.25);
         assert_eq!(selected.world_z, 2.5);
+        assert_eq!(selected.layer_samples, hover.layer_samples);
     }
 
     #[test]
@@ -197,5 +200,6 @@ mod tests {
         assert_eq!(selected.zone_name.as_deref(), Some("Cron Islands"));
         assert_eq!(selected.world_x, 0.0);
         assert_eq!(selected.world_z, 0.0);
+        assert!(selected.layer_samples.is_empty());
     }
 }

@@ -47,4 +47,5 @@ pub struct SelectedInfo {
     pub zone_name: Option<String>,
     pub world_x: f64,
     pub world_z: f64,
+    pub layer_samples: Vec<LayerQuerySample>,
 }

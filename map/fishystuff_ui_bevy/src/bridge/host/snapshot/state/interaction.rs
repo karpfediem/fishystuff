@@ -9,6 +9,9 @@ pub(in crate::bridge::host::snapshot) fn effective_selection_snapshot(
         zone_name: info.and_then(|value| value.zone_name.clone()),
         world_x: info.map(|value| value.world_x),
         world_z: info.map(|value| value.world_z),
+        layer_samples: info
+            .map(|value| hover_layer_samples_snapshot(&value.layer_samples))
+            .unwrap_or_default(),
         zone_stats: zone_stats.map(zone_stats_snapshot),
     }
 }
