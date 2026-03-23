@@ -1,8 +1,7 @@
 use fishystuff_core::masks::pack_rgb_u32;
 
-use crate::map::exact_lookup::{
-    sample_exact_lookup_rgb, sample_field_layer_id_u32, ExactLookupCache,
-};
+use crate::map::exact_lookup::ExactLookupCache;
+use crate::map::field_view::{loaded_field_layer, FieldLayerView};
 use crate::map::layers::{LayerSpec, PickMode};
 use crate::map::raster::{layer_map_version, TileKey};
 use crate::map::spaces::world::MapToWorld;
@@ -23,10 +22,8 @@ pub(in crate::map::raster::cache::filters) fn clip_mask_allows_world_point(
     map_version: Option<&str>,
 ) -> Option<bool> {
     let mask_layer = layer_registry.get(mask_layer_id)?;
-    if mask_layer.field_url().is_some() {
-        sample_field_clip_mask(mask_layer, world_point, exact_lookups, filter)
-    } else if mask_layer.pick_mode == PickMode::ExactTilePixel {
-        sample_exact_clip_mask(mask_layer, world_point, exact_lookups, filter)
+    if let Some(field) = loaded_field_layer(mask_layer, exact_lookups) {
+        sample_field_clip_mask(mask_layer, field, world_point, filter)
     } else if mask_layer.is_raster() {
         sample_raster_clip_mask(mask_layer, world_point, tile_cache, filter, map_version)
     } else if mask_layer.is_vector() {
@@ -41,49 +38,24 @@ pub(in crate::map::raster::cache::filters) fn clip_mask_allows_world_point(
     }
 }
 
-fn sample_exact_clip_mask(
-    layer: &LayerSpec,
-    world_point: WorldPoint,
-    exact_lookups: &ExactLookupCache,
-    filter: &EvidenceZoneFilter,
-) -> Option<bool> {
-    let map_point = MapToWorld::default().world_to_map(world_point);
-    if map_point.x < 0.0 || map_point.y < 0.0 {
-        return Some(false);
-    }
-    let rgb = sample_exact_lookup_rgb(
-        layer,
-        exact_lookups,
-        map_point.x.floor() as i32,
-        map_point.y.floor() as i32,
-    )?;
-    if !filter.active {
-        return Some(true);
-    }
-    Some(filter.zone_rgbs.contains(&rgb.to_u32()))
-}
-
 fn sample_field_clip_mask(
     layer: &LayerSpec,
+    field: impl FieldLayerView,
     world_point: WorldPoint,
-    exact_lookups: &ExactLookupCache,
     filter: &EvidenceZoneFilter,
 ) -> Option<bool> {
     let map_point = MapToWorld::default().world_to_map(world_point);
     if map_point.x < 0.0 || map_point.y < 0.0 {
         return Some(false);
     }
-    let field_id = sample_field_layer_id_u32(
-        layer,
-        exact_lookups,
-        map_point.x.floor() as i32,
-        map_point.y.floor() as i32,
-    )?;
-    if field_id == 0 {
+    let map_px_x = map_point.x.floor() as i32;
+    let map_px_y = map_point.y.floor() as i32;
+    if !field.contains_at_map_px(map_px_x, map_px_y) {
         return Some(false);
     }
     if layer.pick_mode == PickMode::ExactTilePixel && filter.active {
-        return Some(filter.zone_rgbs.contains(&field_id));
+        let rgb = field.rgb_at_map_px(map_px_x, map_px_y)?;
+        return Some(filter.zone_rgbs.contains(&rgb.to_u32()));
     }
     Some(true)
 }
@@ -194,6 +166,9 @@ fn resolved_vector_revision_for_clip_mask(
 
 #[cfg(test)]
 mod tests {
+    use fishystuff_api::Rgb;
+
+    use crate::map::field_view::FieldLayerView;
     use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
     use crate::map::raster::cache::{RasterTileEntry, TilePixelData, TileState};
     use crate::map::spaces::layer_transform::LayerTransform;
@@ -269,6 +244,42 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Copy)]
+    struct FakeFieldView {
+        id: u32,
+        present: bool,
+    }
+
+    impl FieldLayerView for FakeFieldView {
+        fn width(&self) -> u16 {
+            1
+        }
+
+        fn height(&self) -> u16 {
+            1
+        }
+
+        fn field_id_at_map_px(&self, _map_px_x: i32, _map_px_y: i32) -> Option<u32> {
+            self.present.then_some(self.id)
+        }
+
+        fn rgb_at_map_px(&self, _map_px_x: i32, _map_px_y: i32) -> Option<Rgb> {
+            self.present.then_some(Rgb::from_u32(self.id))
+        }
+
+        fn render_rgba_chunk(
+            &self,
+            _source_origin_x: i32,
+            _source_origin_y: i32,
+            _source_width: u32,
+            _source_height: u32,
+            _output_width: u16,
+            _output_height: u16,
+        ) -> fishystuff_core::field::FieldRgbaChunk {
+            unreachable!("not used in clip mask tests")
+        }
+    }
+
     #[test]
     fn raster_clip_mask_sampling_uses_loaded_ancestor_tiles() {
         let mut layer = test_layer(1);
@@ -296,5 +307,54 @@ mod tests {
 
         let rgba = sample_ready_raster_rgba(&layer, 1, 2, 2, &cache);
         assert_eq!(rgba, Some([10, 20, 30, 255]));
+    }
+
+    #[test]
+    fn field_clip_mask_uses_shared_field_view_contract() {
+        let mut layer = test_layer(0);
+        layer.pick_mode = PickMode::ExactTilePixel;
+        let filter = EvidenceZoneFilter {
+            active: true,
+            zone_rgbs: std::collections::HashSet::from([0x123456]),
+            revision: 1,
+        };
+        let world_point = WorldPoint::new(10.0, 10.0);
+
+        assert_eq!(
+            sample_field_clip_mask(
+                &layer,
+                FakeFieldView {
+                    id: 0,
+                    present: true
+                },
+                world_point,
+                &filter
+            ),
+            Some(false)
+        );
+        assert_eq!(
+            sample_field_clip_mask(
+                &layer,
+                FakeFieldView {
+                    id: 0x123456,
+                    present: true,
+                },
+                world_point,
+                &filter,
+            ),
+            Some(true)
+        );
+        assert_eq!(
+            sample_field_clip_mask(
+                &layer,
+                FakeFieldView {
+                    id: 0x654321,
+                    present: true,
+                },
+                world_point,
+                &filter,
+            ),
+            Some(false)
+        );
     }
 }

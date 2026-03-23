@@ -1,7 +1,8 @@
 use super::super::super::*;
 use crate::bridge::contract::FishyMapBookmarkEntry;
-use crate::map::exact_lookup::{sample_field_layer_id_u32, ExactLookupCache};
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
+use crate::map::field_view::{loaded_field_layer, FieldLayerView};
 use crate::map::layers::LayerRegistry;
 use crate::map::spaces::world::MapToWorld;
 use crate::plugins::bookmarks::BookmarkState;
@@ -92,7 +93,8 @@ fn sample_bookmark_layer_row_value(
         MapToWorld::default().world_to_map(WorldPoint::new(bookmark.world_x, bookmark.world_z));
     let map_px_x = map.x.floor() as i32;
     let map_px_y = map.y.floor() as i32;
-    let field_id = sample_field_layer_id_u32(layer, exact_lookups, map_px_x, map_px_y)?;
+    let field = loaded_field_layer(layer, exact_lookups)?;
+    let field_id = field.field_id_at_map_px(map_px_x, map_px_y)?;
     let entry = field_metadata.entry(layer.id, &metadata_url, field_id)?;
     entry.row_value(row_key).map(ToString::to_string)
 }

@@ -9,11 +9,10 @@ use fishystuff_core::field_metadata::{
 };
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
-use crate::map::exact_lookup::{
-    sample_exact_lookup_rgb, sample_field_layer_id_u32, sample_field_layer_rgb, ExactLookupCache,
-};
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::layers::{LayerRegistry, LayerRuntime, PickMode};
+use crate::map::field_view::{loaded_field_layer, FieldLayerView};
+use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::{map_version_id, RasterTileCache, TileKey};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
@@ -233,18 +232,9 @@ fn sample_hover_layer(
     sampling: &mut HoverSamplingContext<'_>,
 ) -> Option<HoverLayerSample> {
     let (rgb, semantics, kind) = if layer.field_url().is_some() {
-        let rgb = sample_field_layer_rgb(
-            layer,
-            sampling.exact_lookups,
-            sampling.map_px.0,
-            sampling.map_px.1,
-        )?;
-        let field_id = sample_field_layer_id_u32(
-            layer,
-            sampling.exact_lookups,
-            sampling.map_px.0,
-            sampling.map_px.1,
-        );
+        let field = loaded_field_layer(layer, sampling.exact_lookups)?;
+        let rgb = field.rgb_at_map_px(sampling.map_px.0, sampling.map_px.1)?;
+        let field_id = field.field_id_at_map_px(sampling.map_px.0, sampling.map_px.1);
         (
             rgb,
             sample_field_layer_semantics(layer, field_id, sampling.field_metadata),
@@ -524,12 +514,8 @@ fn sample_raster_layer_rgb(
     map_px: (i32, i32),
     map_to_world: MapToWorld,
 ) -> Option<Rgb> {
-    if layer.field_url().is_some() {
-        return sample_field_layer_rgb(layer, exact_lookups, map_px.0, map_px.1);
-    }
-
-    if layer.pick_mode == PickMode::ExactTilePixel {
-        return sample_exact_lookup_rgb(layer, exact_lookups, map_px.0, map_px.1);
+    if let Some(field) = loaded_field_layer(layer, exact_lookups) {
+        return field.rgb_at_map_px(map_px.0, map_px.1);
     }
 
     let world_transform = layer.world_transform(map_to_world)?;

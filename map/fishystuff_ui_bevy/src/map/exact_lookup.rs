@@ -8,6 +8,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use fishystuff_api::Rgb;
 use fishystuff_core::masks::ZoneLookupRows;
 
+use crate::map::field_view::{loaded_field_layer, FieldLayerView};
 use crate::map::layers::{FieldColorMode, LayerId, LayerSpec};
 use crate::map::raster::TileKey;
 use crate::map::spaces::layer_transform::LayerTransform;
@@ -211,7 +212,7 @@ pub fn sample_exact_lookup_rgb(
     if layer.field_color_mode() != Some(FieldColorMode::RgbU24) {
         return None;
     }
-    sample_field_layer_rgb(layer, lookups, map_px_x, map_px_y)
+    loaded_field_layer(layer, lookups)?.rgb_at_map_px(map_px_x, map_px_y)
 }
 
 pub fn sample_field_layer_rgb(
@@ -220,10 +221,7 @@ pub fn sample_field_layer_rgb(
     map_px_x: i32,
     map_px_y: i32,
 ) -> Option<Rgb> {
-    let color_mode = layer.field_color_mode()?;
-    let id = sample_field_layer_id_u32(layer, lookups, map_px_x, map_px_y)?;
-    let [r, g, b] = rgb_bytes_for_field_id(id, color_mode);
-    Some(Rgb::new(r, g, b))
+    loaded_field_layer(layer, lookups)?.rgb_at_map_px(map_px_x, map_px_y)
 }
 
 pub fn sample_field_layer_id_u32(
@@ -232,9 +230,7 @@ pub fn sample_field_layer_id_u32(
     map_px_x: i32,
     map_px_y: i32,
 ) -> Option<u32> {
-    let url = layer.field_url()?;
-    let lookup = lookups.get(layer.id, &url)?;
-    lookup.cell_id_u32(map_px_x, map_px_y)
+    loaded_field_layer(layer, lookups)?.field_id_at_map_px(map_px_x, map_px_y)
 }
 
 pub fn render_exact_lookup_tile_image(
@@ -248,11 +244,10 @@ pub fn render_exact_lookup_tile_image(
     if layer.y_flip || key.z < 0 {
         return None;
     }
-    let url = layer.field_url()?;
     if layer.field_color_mode() != Some(FieldColorMode::RgbU24) {
         return None;
     }
-    let lookup = lookups.get(layer.id, &url)?;
+    let field = loaded_field_layer(layer, lookups)?;
     let scale = 1_u32.checked_shl(key.z as u32)?;
     let source_span = layer.tile_px.checked_mul(scale)?;
     if source_span == 0 {
@@ -261,30 +256,22 @@ pub fn render_exact_lookup_tile_image(
     let source_origin_x = key.tx.checked_mul(source_span as i32)?;
     let source_origin_y = key.ty.checked_mul(source_span as i32)?;
     let visible_source_width =
-        (i32::from(lookup.width()) - source_origin_x).clamp(0, source_span as i32) as u32;
+        (i32::from(field.width()) - source_origin_x).clamp(0, source_span as i32) as u32;
     let visible_source_height =
-        (i32::from(lookup.height()) - source_origin_y).clamp(0, source_span as i32) as u32;
+        (i32::from(field.height()) - source_origin_y).clamp(0, source_span as i32) as u32;
     if visible_source_width == 0 || visible_source_height == 0 {
         return None;
     }
 
     let output_width = visible_source_width.div_ceil(scale) as u16;
     let output_height = visible_source_height.div_ceil(scale) as u16;
-    let chunk = lookup.render_rgba_resampled_chunk(
+    let chunk = field.render_rgba_chunk(
         source_origin_x,
         source_origin_y,
         visible_source_width,
         visible_source_height,
         output_width,
         output_height,
-        |rgb| {
-            [
-                ((rgb >> 16) & 0xff) as u8,
-                ((rgb >> 8) & 0xff) as u8,
-                (rgb & 0xff) as u8,
-                255,
-            ]
-        },
     );
 
     Some(Image::new(
@@ -298,32 +285,6 @@ pub fn render_exact_lookup_tile_image(
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::RENDER_WORLD,
     ))
-}
-
-fn rgb_bytes_for_field_id(id: u32, color_mode: FieldColorMode) -> [u8; 3] {
-    match color_mode {
-        FieldColorMode::RgbU24 => [
-            ((id >> 16) & 0xff) as u8,
-            ((id >> 8) & 0xff) as u8,
-            (id & 0xff) as u8,
-        ],
-        FieldColorMode::DebugHash => {
-            let hash = hash_u32(id);
-            [
-                ((hash >> 16) & 0xff) as u8,
-                ((hash >> 8) & 0xff) as u8,
-                (hash & 0xff) as u8,
-            ]
-        }
-    }
-}
-
-fn hash_u32(mut value: u32) -> u32 {
-    value ^= value >> 16;
-    value = value.wrapping_mul(0x7feb_352d);
-    value ^= value >> 15;
-    value = value.wrapping_mul(0x846c_a68b);
-    value ^ (value >> 16)
 }
 
 #[cfg(test)]

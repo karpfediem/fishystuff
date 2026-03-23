@@ -14,9 +14,8 @@ use crate::map::field_metadata::{
     ensure_field_metadata_request, poll_field_metadata_requests, FieldMetadataCache,
     PendingFieldMetadata,
 };
-use crate::map::layers::{
-    FieldColorMode, LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime,
-};
+use crate::map::field_view::{loaded_field_layer, FieldLayerView, LoadedFieldLayer};
+use crate::map::layers::{LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime};
 use crate::map::spaces::layer_transform::LayerTransform;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, MapRect, WorldPoint, WorldRect};
@@ -247,13 +246,14 @@ fn update_field_layer_visuals(
         let Some(url) = layer.field_url() else {
             continue;
         };
-        let Some(color_mode) = layer.field_color_mode() else {
-            continue;
-        };
         let Some(runtime_state) = layer_runtime.get(layer.id) else {
             continue;
         };
-        let Some(lookup) = exact_lookups.get(layer.id, &url) else {
+        if exact_lookups.get(layer.id, &url).is_none() {
+            hide_field_layer(&mut commands, field_runtime.entries.get(&layer.id));
+            continue;
+        }
+        let Some(field) = loaded_field_layer(layer, &exact_lookups) else {
             hide_field_layer(&mut commands, field_runtime.entries.get(&layer.id));
             continue;
         };
@@ -263,8 +263,8 @@ fn update_field_layer_visuals(
         }
         let Some(next_request) = build_texture_request(
             visible_map_rect,
-            lookup.width(),
-            lookup.height(),
+            field.width(),
+            field.height(),
             focus_output_width,
             focus_output_height,
         ) else {
@@ -278,8 +278,7 @@ fn update_field_layer_visuals(
             &mut field_runtime,
             layer.id,
             next_request,
-            lookup,
-            color_mode,
+            field,
         );
 
         let Some(entry) = field_runtime.entries.get(&layer.id) else {
@@ -306,8 +305,7 @@ fn ensure_field_layer_image(
     field_runtime: &mut FieldLayerRuntime,
     layer_id: LayerId,
     next_request: FieldTextureRequest,
-    lookup: &fishystuff_core::field::DiscreteFieldRows,
-    color_mode: FieldColorMode,
+    field: LoadedFieldLayer<'_>,
 ) {
     let should_rerender = field_runtime
         .entries
@@ -318,7 +316,7 @@ fn ensure_field_layer_image(
         return;
     }
 
-    let image = render_lookup_request_image(lookup, next_request, color_mode);
+    let image = render_lookup_request_image(field, next_request);
     if let Some(entry) = field_runtime.entries.get_mut(&layer_id) {
         images.remove(entry.image.id());
         entry.image = images.add(image);
@@ -475,19 +473,14 @@ fn request_world_placement(
     )
 }
 
-fn render_lookup_request_image(
-    lookup: &fishystuff_core::field::DiscreteFieldRows,
-    request: FieldTextureRequest,
-    color_mode: FieldColorMode,
-) -> Image {
-    let chunk = lookup.render_rgba_resampled_chunk(
+fn render_lookup_request_image(field: LoadedFieldLayer<'_>, request: FieldTextureRequest) -> Image {
+    let chunk = field.render_rgba_chunk(
         request.source_origin_x,
         request.source_origin_y,
         request.source_width,
         request.source_height,
         request.output_width,
         request.output_height,
-        |id| render_field_id_rgba(id, color_mode),
     );
     Image::new(
         Extent3d {
@@ -500,32 +493,6 @@ fn render_lookup_request_image(
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::RENDER_WORLD,
     )
-}
-
-fn render_field_id_rgba(id: u32, color_mode: FieldColorMode) -> [u8; 4] {
-    match color_mode {
-        FieldColorMode::RgbU24 => [
-            ((id >> 16) & 0xff) as u8,
-            ((id >> 8) & 0xff) as u8,
-            (id & 0xff) as u8,
-            255,
-        ],
-        FieldColorMode::DebugHash => {
-            let hash = hash_u32(id);
-            let r = ((hash >> 16) & 0xff) as u8;
-            let g = ((hash >> 8) & 0xff) as u8;
-            let b = (hash & 0xff) as u8;
-            [r.max(32), g.max(32), b.max(32), 255]
-        }
-    }
-}
-
-fn hash_u32(mut value: u32) -> u32 {
-    value ^= value >> 16;
-    value = value.wrapping_mul(0x7feb_352d);
-    value ^= value >> 15;
-    value = value.wrapping_mul(0x846c_a68b);
-    value ^ (value >> 16)
 }
 
 fn world_rect_to_clamped_map_rect(world_rect: WorldRect, map_to_world: MapToWorld) -> MapRect {
