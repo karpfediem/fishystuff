@@ -233,7 +233,11 @@ fn sample_hover_layer(
     let (rgb, field_id, rows, targets, kind) = if layer.field_url().is_some() {
         let semantics =
             loaded_semantic_field_layer(layer, sampling.exact_lookups, sampling.field_metadata)?
-                .semantic_sample_at_map_px(sampling.map_px.0, sampling.map_px.1)?;
+                .semantic_sample_at_world_point(
+                    layer,
+                    sampling.map_to_world,
+                    sampling.world_point,
+                )?;
         (
             semantics.rgb,
             Some(semantics.field_id),
@@ -432,11 +436,11 @@ fn sample_raster_layer_rgb(
     tile_cache: &RasterTileCache,
     bootstrap: &ApiBootstrapState,
     world_point: WorldPoint,
-    map_px: (i32, i32),
+    _map_px: (i32, i32),
     map_to_world: MapToWorld,
 ) -> Option<Rgb> {
     if let Some(field) = loaded_field_layer(layer, exact_lookups) {
-        return field.rgb_at_map_px(map_px.0, map_px.1);
+        return field.rgb_at_world_point(layer, map_to_world, world_point);
     }
 
     let world_transform = layer.world_transform(map_to_world)?;

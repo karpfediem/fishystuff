@@ -7,6 +7,9 @@ use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::field_view::{loaded_field_layer, FieldLayerView, LoadedFieldLayer};
 use crate::map::layers::LayerSpec;
+use crate::map::spaces::layer_transform::WorldTransform;
+use crate::map::spaces::world::MapToWorld;
+use crate::map::spaces::{LayerPoint, WorldPoint};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct FieldSemanticSample {
@@ -30,13 +33,12 @@ impl FieldSemanticSample {
 pub trait SemanticFieldLayerView: FieldLayerView {
     fn metadata_entry_for_field_id(&self, field_id: u32) -> Option<&FieldHoverMetadataEntry>;
 
-    fn semantic_sample_at_map_px(
+    fn semantic_sample_at_layer_point(
         &self,
-        map_px_x: i32,
-        map_px_y: i32,
+        layer_point: LayerPoint,
     ) -> Option<FieldSemanticSample> {
-        let field_id = self.field_id_at_map_px(map_px_x, map_px_y)?;
-        let rgb = self.rgb_at_map_px(map_px_x, map_px_y)?;
+        let field_id = self.field_id_at_layer_point(layer_point)?;
+        let rgb = self.rgb_at_layer_point(layer_point)?;
         let (rows, targets) = self
             .metadata_entry_for_field_id(field_id)
             .map(|entry| (entry.rows.clone(), entry.targets.clone()))
@@ -50,8 +52,46 @@ pub trait SemanticFieldLayerView: FieldLayerView {
         })
     }
 
+    fn semantic_sample_at_map_px(
+        &self,
+        map_px_x: i32,
+        map_px_y: i32,
+    ) -> Option<FieldSemanticSample> {
+        self.semantic_sample_at_layer_point(LayerPoint::new(map_px_x as f64, map_px_y as f64))
+    }
+
+    fn semantic_sample_at_world_point(
+        &self,
+        layer: &LayerSpec,
+        map_to_world: MapToWorld,
+        world_point: WorldPoint,
+    ) -> Option<FieldSemanticSample> {
+        let world_transform = layer.world_transform(map_to_world)?;
+        self.semantic_sample_at_world_point_with_transform(world_transform, world_point)
+    }
+
+    fn semantic_sample_at_world_point_with_transform(
+        &self,
+        world_transform: WorldTransform,
+        world_point: WorldPoint,
+    ) -> Option<FieldSemanticSample> {
+        self.semantic_sample_at_layer_point(world_transform.world_to_layer(world_point))
+    }
+
     fn row_value_at_map_px(&self, map_px_x: i32, map_px_y: i32, key: &str) -> Option<String> {
         self.semantic_sample_at_map_px(map_px_x, map_px_y)?
+            .row_value(key)
+            .map(ToOwned::to_owned)
+    }
+
+    fn row_value_at_world_point(
+        &self,
+        layer: &LayerSpec,
+        map_to_world: MapToWorld,
+        world_point: WorldPoint,
+        key: &str,
+    ) -> Option<String> {
+        self.semantic_sample_at_world_point(layer, map_to_world, world_point)?
             .row_value(key)
             .map(ToOwned::to_owned)
     }
@@ -157,18 +197,25 @@ mod tests {
     use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::field_metadata::FieldMetadataCache;
     use crate::map::layers::LayerRegistry;
+    use crate::map::spaces::affine::Affine2D;
+    use crate::map::spaces::layer_transform::LayerTransform;
+    use crate::map::spaces::world::MapToWorld;
+    use crate::map::spaces::WorldPoint;
     use fishystuff_core::field::DiscreteFieldRows;
     use fishystuff_core::field_metadata::{
         FieldHoverMetadataAsset, FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget,
     };
 
-    fn field_layer_descriptor(layer_id: &str) -> fishystuff_api::models::layers::LayerDescriptor {
+    fn field_layer_descriptor(
+        layer_id: &str,
+        transform: fishystuff_api::models::layers::LayerTransformDto,
+    ) -> fishystuff_api::models::layers::LayerDescriptor {
         fishystuff_api::models::layers::LayerDescriptor {
             layer_id: layer_id.to_string(),
             name: layer_id.to_string(),
             enabled: true,
             kind: fishystuff_api::models::layers::LayerKind::TiledRaster,
-            transform: fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace,
+            transform,
             tileset: fishystuff_api::models::layers::TilesetRef::default(),
             tile_px: 512,
             max_level: 0,
@@ -195,7 +242,45 @@ mod tests {
         registry.apply_layers_response(fishystuff_api::models::layers::LayersResponse {
             revision: "rev".to_string(),
             map_version_id: None,
-            layers: vec![field_layer_descriptor("regions")],
+            layers: vec![field_layer_descriptor(
+                "regions",
+                fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace,
+            )],
+        });
+        registry
+    }
+
+    fn transformed_registry(transform: LayerTransform) -> LayerRegistry {
+        let mut registry = LayerRegistry::default();
+        let transform = match transform {
+            LayerTransform::IdentityMapSpace => {
+                fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace
+            }
+            LayerTransform::AffineToMap(affine) => {
+                fishystuff_api::models::layers::LayerTransformDto::AffineToMap {
+                    a: affine.a,
+                    b: affine.b,
+                    tx: affine.tx,
+                    c: affine.c,
+                    d: affine.d,
+                    ty: affine.ty,
+                }
+            }
+            LayerTransform::AffineToWorld(affine) => {
+                fishystuff_api::models::layers::LayerTransformDto::AffineToWorld {
+                    a: affine.a,
+                    b: affine.b,
+                    tx: affine.tx,
+                    c: affine.c,
+                    d: affine.d,
+                    ty: affine.ty,
+                }
+            }
+        };
+        registry.apply_layers_response(fishystuff_api::models::layers::LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![field_layer_descriptor("regions", transform)],
         });
         registry
     }
@@ -265,6 +350,51 @@ mod tests {
                 world_z: 2.0,
             }]
         );
+    }
+
+    #[test]
+    fn semantic_sample_at_world_point_uses_layer_transform() {
+        let registry = transformed_registry(LayerTransform::AffineToWorld(Affine2D::IDENTITY));
+        let layer = registry.get_by_key("regions").expect("regions layer");
+        let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            layer.id,
+            "/fields/regions.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(2, 2, &[0, 76, 11, 13]).expect("field"),
+        );
+        let mut field_metadata = FieldMetadataCache::default();
+        field_metadata.insert_ready(
+            layer.id,
+            "/fields/regions.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    76,
+                    FieldHoverMetadataEntry {
+                        rows: vec![FieldHoverRow {
+                            key: "origin".to_string(),
+                            icon: "hover-origin".to_string(),
+                            label: "Origin".to_string(),
+                            value: "Tarif".to_string(),
+                            hide_label: false,
+                            status_icon: None,
+                            status_icon_tone: None,
+                        }],
+                        targets: Vec::new(),
+                    },
+                )]),
+            },
+        );
+
+        let semantic = loaded_semantic_field_layer(layer, &exact_lookups, &field_metadata)
+            .expect("semantic layer")
+            .semantic_sample_at_world_point(
+                layer,
+                MapToWorld::default(),
+                WorldPoint::new(1.25, 0.25),
+            )
+            .expect("semantic sample");
+        assert_eq!(semantic.field_id, 76);
+        assert_eq!(semantic.row_value("origin"), Some("Tarif"));
     }
 
     #[test]

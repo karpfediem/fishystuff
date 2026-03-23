@@ -88,12 +88,13 @@ fn sample_bookmark_layer_row_value(
     field_metadata: &FieldMetadataCache,
 ) -> Option<String> {
     let layer = layer_registry.get_by_key(layer_key)?;
-    let map =
-        MapToWorld::default().world_to_map(WorldPoint::new(bookmark.world_x, bookmark.world_z));
-    let map_px_x = map.x.floor() as i32;
-    let map_px_y = map.y.floor() as i32;
-    loaded_semantic_field_layer(layer, exact_lookups, field_metadata)?
-        .row_value_at_map_px(map_px_x, map_px_y, row_key)
+    let world_point = WorldPoint::new(bookmark.world_x, bookmark.world_z);
+    loaded_semantic_field_layer(layer, exact_lookups, field_metadata)?.row_value_at_world_point(
+        layer,
+        MapToWorld::default(),
+        world_point,
+        row_key,
+    )
 }
 
 #[cfg(test)]

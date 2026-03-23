@@ -44,17 +44,12 @@ fn sample_field_clip_mask(
     world_point: WorldPoint,
     filter: &EvidenceZoneFilter,
 ) -> Option<bool> {
-    let map_point = MapToWorld::default().world_to_map(world_point);
-    if map_point.x < 0.0 || map_point.y < 0.0 {
-        return Some(false);
-    }
-    let map_px_x = map_point.x.floor() as i32;
-    let map_px_y = map_point.y.floor() as i32;
-    if !field.contains_at_map_px(map_px_x, map_px_y) {
+    let map_to_world = MapToWorld::default();
+    if !field.contains_at_world_point(layer, map_to_world, world_point) {
         return Some(false);
     }
     if layer.pick_mode == PickMode::ExactTilePixel && filter.active {
-        let rgb = field.rgb_at_map_px(map_px_x, map_px_y)?;
+        let rgb = field.rgb_at_world_point(layer, map_to_world, world_point)?;
         return Some(filter.zone_rgbs.contains(&rgb.to_u32()));
     }
     Some(true)
