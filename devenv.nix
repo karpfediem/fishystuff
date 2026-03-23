@@ -55,6 +55,7 @@ in {
       xauth
       xvfb
       xvfb-run
+      xxd
       linuxPackages.perf
       (inputs.zine.packages.${pkgs.system}.default.override { zigPreferMusl = true; })
     ];
