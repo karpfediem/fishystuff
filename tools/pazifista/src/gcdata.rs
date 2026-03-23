@@ -1,4 +1,5 @@
 mod array_waypoint;
+mod loc;
 mod stringtable;
 mod waypoint_xml;
 
@@ -15,6 +16,7 @@ use crate::pabr::{PabrMap, RidFile, PABR_MAGIC};
 
 #[allow(unused_imports)]
 pub use array_waypoint::{inspect_arraywaypoint_bin, ArrayWaypointInspectSummary};
+pub use loc::inspect_loc;
 pub use stringtable::inspect_stringtable_bss;
 pub use waypoint_xml::inspect_waypoint_xml;
 
@@ -772,6 +774,20 @@ fn load_current_regiongroup_graph_rows_by_key(
 }
 
 fn load_localization(path: &Path) -> Result<LocalizationFile> {
+    if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| value.eq_ignore_ascii_case("loc"))
+    {
+        let maps = loc::load_loc_namespaces_as_string_maps(path, &[17, 29], 10_000)?;
+        return Ok(LocalizationFile {
+            en: LocalizationTable {
+                node: maps.get(&29).cloned().unwrap_or_default(),
+                town: maps.get(&17).cloned().unwrap_or_default(),
+            },
+        });
+    }
+
     let file = File::open(path)
         .with_context(|| format!("failed to open localization {}", path.display()))?;
     serde_json::from_reader(file)

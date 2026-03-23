@@ -1061,3 +1061,102 @@ What has been ruled out so far:
 - `textbind*.dbss`
 - `dialogtext*.dbss`
 - `teleport*.dbss` as a direct carrier of waypoint IDs
+
+## Localization Boundary Findings
+
+The remaining gap is no longer structural linkage. It is only the last
+human-facing localization hop from the original waypoint token to the final
+display label.
+
+Validated additional findings:
+
+- `regionclientdata_en_.xml` and `regionclientdata_kr_.xml` do contain the new
+  region IDs `1677..1688`, but the rows are just:
+  - `<RegionInfo Key="...">`
+  - repeated `<SpawnInfo ... dialogIndex="..." position="..."/>`
+  - no region-name or town-name attribute was found in those files
+- `regionmapinfo.bss` is a tiny `PABR` table with only `13` top-level rows and
+  does not look like a region-name table
+- `tooltiptable.dbss` and `tooltiptableoffset.dbss` were extracted as another
+  original `PABR` family, but a quick scan did not reveal plain UTF-16
+  occurrences of `Olvia`, `Papua`, or `Crow`
+- `textbindoffset.dbss` is exactly `4 + count * 12` bytes and behaves like
+  `hash, offset, length`, but sampled `textbind.dbss` chunks did not decode as
+  zlib, raw-deflate, or gzip streams
+- archive-name searches did not reveal any obvious original
+  `*waypoint*name*`, `*region*name*`, `*town*name*`, or `*node*name*` table
+
+One useful positive signal from original files:
+
+- `gamecommondata/dialogscene/wharf/62500_wharf_olviaacademy.xml` starts with
+  a Korean comment `올비아 아카데미 나루터 화면구성`
+- so original assets do contain human-facing localized labels for the new
+  content, but not yet through one decoded generic table that can replace the
+  external localization JSONs end-to-end
+
+Practical conclusion at this stage:
+
+- original-file linkage is closed through
+  `region -> regiongroup -> waypoint -> canonical token -> graph position`
+- original-file localization is not yet fully closed through
+  `canonical token -> final localized display label`
+
+## `.loc` Breakthrough
+
+The existing Python reader at
+[read_loc.py](/home/carp/code/fishystuff/data/data/read_loc.py) was correct and
+turned out to be the missing last hop for English display labels.
+
+Validated `.loc` structure:
+
+- `u32 expected_uncompressed_size`
+- zlib-compressed payload
+- repeated UTF-16LE records
+- layout `A`
+  - `u64 char_len`
+  - `u64 key`
+  - `utf16le text`
+  - `u32 zero`
+- layout `B`
+  - `u32 char_len`
+  - `u32 namespace`
+  - `u64 key`
+  - `utf16le text`
+  - `u32 zero`
+
+The reader is now ported into
+[loc.rs](/home/carp/code/fishystuff/tools/pazifista/src/gcdata/loc.rs) and
+available through:
+
+```bash
+devenv shell -- cargo run -q -p pazifista -- \
+  gcdata inspect-loc data/data/languagedata_en.loc
+```
+
+Focused validated mappings from the real file:
+
+- namespace `29`
+  - `2052 -> Olvia Academy`
+  - `1739 -> Papua Crinea`
+  - `1746 -> Crow's Nest`
+- namespace `17`
+  - `88 -> Olvia`
+  - `92 -> Olvia Coast`
+
+That means the tested English original-data chain is now fully closed:
+
+- region geometry
+  - `rid+bkd`
+- containing region or origin region linkage
+  - `regioninfo.bss`
+- region-group resource bar waypoint and graph position
+  - `regiongroupinfo.bss`
+- canonical waypoint token and position
+  - `mapdata_realexplore*.xml`
+- final English display label
+  - `.loc`
+
+This also explains why the canonical token strings such as
+`town(olvia_academy)` or `field(papuacriny_island)` do not need to appear in
+`.loc`: the `.loc` file is keyed numerically by namespace and ID, not by the
+raw token text.

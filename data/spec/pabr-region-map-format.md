@@ -218,9 +218,55 @@ Current reliable metadata chain:
 - region ID to group ID comes from `regioninfo.bss`
 - group ID to waypoint comes from `regiongroupinfo.bss`
 - waypoint name and position come from `mapdata_realexplore*.xml`
+- final English display labels come from `languagedata_en.loc`
 
 That means region-group labeling no longer depends on stale external
 `deck_rg_graphs.json` or `waypoints.json`.
+
+Current status:
+
+- the original English chain is now closed for the tested map metadata path
+- canonical waypoint tokens still come from `mapdata_realexplore*.xml`
+- final display labels are resolved numerically from `.loc`, not by token text
+
+### `.loc` Localization Files
+
+Purpose:
+
+- original localized display strings keyed by numeric namespace and ID
+
+Validated decode model:
+
+- `u32 expected_uncompressed_size`
+- zlib-compressed payload
+- repeated UTF-16LE records in one of two layouts
+- layout `A`
+  - `u64 char_len`
+  - `u64 key`
+  - `utf16le text`
+  - `u32 zero`
+- layout `B`
+  - `u32 char_len`
+  - `u32 namespace`
+  - `u64 key`
+  - `utf16le text`
+  - `u32 zero`
+
+Validated namespaces in `languagedata_en.loc`:
+
+- namespace `29`
+  - waypoint display labels
+  - `2052 -> Olvia Academy`
+  - `1739 -> Papua Crinea`
+  - `1746 -> Crow's Nest`
+- namespace `17`
+  - region or town labels
+  - `88 -> Olvia`
+  - `92 -> Olvia Coast`
+
+Implementation:
+
+- [loc.rs](/home/carp/code/fishystuff/tools/pazifista/src/gcdata/loc.rs)
 
 ### Waypoint XML Schema
 
@@ -269,12 +315,19 @@ From original data:
   - `Waypoint Key="2052"`
   - `Name="town(olvia_academy)"`
   - `Pos=(-125229, -2883.02, 146801)`
+- `languagedata_en.loc`
+  - namespace `29`
+  - `2052 -> Olvia Academy`
+- `languagedata_en.loc`
+  - namespace `17`
+  - `88 -> Olvia`
 
 Important interpretation:
 
 - the missing external waypoint was a stale downstream-data problem
 - the original files do contain the live waypoint and its canonical internal
   name
+- the original files also contain the final English display labels
 - the `regiongroupinfo.bss` graph point is much closer to the
   `mapdata_realexplore.xml` position than to the `realexplore2` position, so
   `mapdata_realexplore.xml` is the better match for group linkage
@@ -322,6 +375,7 @@ devenv shell -- cargo run -q -p pazifista -- \
 devenv shell -- cargo run -q -p pazifista -- \
   gcdata inspect-regioninfo-bss \
   data/scratch/gamecommondata/binary/regioninfo.bss \
+  --loc data/data/languagedata_en.loc \
   --id 1677 --id 1688 -o /tmp/regioninfo-focus.json
 ```
 
@@ -344,6 +398,16 @@ devenv shell -- cargo run -q -p pazifista -- \
   -o /tmp/realexplore-focus.json
 ```
 
+### Inspect `.loc` directly
+
+```bash
+devenv shell -- cargo run -q -p pazifista -- \
+  gcdata inspect-loc \
+  data/data/languagedata_en.loc \
+  --namespace 29 \
+  --id 2052 --id 1739 --id 1746
+```
+
 ### Inspect `mapdata_arraywaypoint.bin`
 
 ```bash
@@ -364,9 +428,11 @@ When adding or rebuilding map layers, use this order:
    - derive from `regioninfo.bss`
 3. group-to-waypoint linkage
    - derive from `regiongroupinfo.bss`
-4. waypoint naming and placement
+4. waypoint canonical token and placement
    - derive from `mapdata_realexplore*.xml`
-5. only then compare against external JSON or GeoJSON
+5. human-facing localization
+   - derive from `.loc`
+6. only then compare against external JSON or GeoJSON
    - treat external artifacts as compatibility outputs, not authoritative
 
 ## Replacement Status
@@ -386,7 +452,8 @@ Status:
 
 - geometry: original source is available and decoded
 - metadata: original-source backed
-- naming path: `regiongroupinfo.bss -> waypoint -> mapdata_realexplore*.xml`
+- naming path:
+  `regiongroupinfo.bss -> waypoint -> mapdata_realexplore*.xml -> .loc namespace 29`
 
 This is the cleanest layer to move fully off external GeoJSON.
 
@@ -395,8 +462,9 @@ This is the cleanest layer to move fully off external GeoJSON.
 Status:
 
 - original source exists
-- `mapdata_realexplore*.xml` should be preferred over stale external
-  `waypoints.json`
+- canonical token and placement come from `mapdata_realexplore*.xml`
+- display labels come from `.loc namespace 29`
+- this should be preferred over stale external `waypoints.json`
 
 Open design decision:
 

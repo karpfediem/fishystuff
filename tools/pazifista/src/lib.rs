@@ -11,7 +11,7 @@ use anyhow::{bail, Context, Result};
 use archive::{ArchiveIndex, ExtractOptions};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand};
 use gcdata::{
-    compare_region_sources, inspect_arraywaypoint_bin, inspect_pabr_table,
+    compare_region_sources, inspect_arraywaypoint_bin, inspect_loc, inspect_pabr_table,
     inspect_regionclientdata, inspect_regiongroupinfo_bss, inspect_regioninfo_bss,
     inspect_stringtable_bss, inspect_waypoint_xml,
 };
@@ -135,6 +135,10 @@ enum GcdataCommand {
         about = "Decode stringtable.bss index sections and trailing text entries, then inspect focus string IDs"
     )]
     InspectStringtableBss(GcdataInspectStringtableBssCli),
+    #[command(
+        about = "Decode original .loc localization files and inspect namespace/key-backed text entries"
+    )]
+    InspectLoc(GcdataInspectLocCli),
     #[command(
         about = "Inspect original gamecommondata waypoint XML rows and links, including mapdata_realexplore*.xml"
     )]
@@ -291,6 +295,24 @@ struct GcdataInspectStringtableBssCli {
     input_file: PathBuf,
     #[arg(long = "id", value_name = "string-id", action = ArgAction::Append)]
     focus_string_ids: Vec<u32>,
+    #[arg(short = 'o', long = "output", value_name = "path")]
+    output: Option<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+struct GcdataInspectLocCli {
+    #[arg(value_name = "loc file")]
+    input_file: PathBuf,
+    #[arg(long = "namespace", value_name = "namespace", action = ArgAction::Append)]
+    focus_namespaces: Vec<u32>,
+    #[arg(long = "id", value_name = "key", action = ArgAction::Append)]
+    focus_keys: Vec<u64>,
+    #[arg(long = "text", value_name = "needle", action = ArgAction::Append)]
+    text_filters: Vec<String>,
+    #[arg(long = "limit", value_name = "count", default_value_t = 20)]
+    limit: usize,
+    #[arg(long = "max-len", value_name = "chars", default_value_t = 10_000)]
+    max_len: usize,
     #[arg(short = 'o', long = "output", value_name = "path")]
     output: Option<PathBuf>,
 }
@@ -930,6 +952,59 @@ fn run_gcdata(cli: GcdataCli) -> Result<()> {
                 summary.missing_focus_entry_count
             );
             if let Some(path) = summary.output_path.as_ref() {
+                println!("Report: {}", path.display());
+            }
+            Ok(())
+        }
+        GcdataCommand::InspectLoc(args) => {
+            let input_path = canonical_existing_path(&args.input_file)?;
+            let output_path = args
+                .output
+                .as_ref()
+                .map(normalize_output_path)
+                .transpose()?;
+            let result = inspect_loc(
+                &input_path,
+                &args.focus_namespaces,
+                &args.focus_keys,
+                &args.text_filters,
+                args.limit,
+                args.max_len,
+                output_path.as_deref(),
+            )?;
+
+            println!("{VERSION_HEADER}");
+            println!("LOC: {}", input_path.display());
+            println!(
+                "Expected uncompressed size: {}",
+                result.summary.expected_uncompressed_size
+            );
+            println!(
+                "Actual uncompressed size: {}",
+                result.summary.actual_uncompressed_size
+            );
+            println!("Total records: {}", result.summary.total_record_count);
+            println!("Layout A records: {}", result.summary.layout_a_count);
+            println!("Layout B records: {}", result.summary.layout_b_count);
+            println!("Distinct namespaces: {}", result.summary.namespace_count);
+            println!(
+                "Displayed records: {}",
+                result.summary.displayed_record_count
+            );
+            println!(
+                "Missing focus keys: {}",
+                result.summary.missing_focus_key_count
+            );
+            for record in &result.displayed_records {
+                match record.namespace {
+                    Some(namespace) => println!(
+                        "{} namespace={} key={} text={}",
+                        record.format, namespace, record.key, record.text
+                    ),
+                    None => println!("{} key={} text={}", record.format, record.key, record.text),
+                }
+            }
+            if let Some(path) = result.summary.output_path.as_ref() {
                 println!("Report: {}", path.display());
             }
             Ok(())
