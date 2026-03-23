@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use fishystuff_api::models::events::EventPointCompact;
 
 use crate::map::events::EventsSnapshotState;
-use crate::plugins::api::{FishFilterState, PatchFilterState, ZoneFilterState};
+use crate::plugins::api::{FishFilterState, PatchFilterState, SemanticFieldFilterState};
 
 use super::{normalized_time_and_fish_filters, EvidenceZoneFilter};
 
@@ -64,12 +64,12 @@ pub(super) fn collect_evidence_zone_rgbs(
 pub(in crate::plugins::points) fn sync_evidence_zone_filter(
     patch_filter: Res<PatchFilterState>,
     fish_filter: Res<FishFilterState>,
-    zone_filter: Res<ZoneFilterState>,
+    semantic_filter: Res<SemanticFieldFilterState>,
     snapshot: Res<EventsSnapshotState>,
     mut filter: ResMut<EvidenceZoneFilter>,
 ) {
-    let explicit_zones = zone_filter
-        .selected_zone_rgbs
+    let explicit_zones = semantic_filter
+        .selected_zone_rgbs()
         .iter()
         .copied()
         .collect::<HashSet<_>>();

@@ -29,7 +29,7 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
     let filters_changed = context.bridge.is_changed()
         || context.patch_filter.is_changed()
         || context.fish_filter.is_changed()
-        || context.zone_filter.is_changed()
+        || context.semantic_filter.is_changed()
         || context.layer_registry.is_changed()
         || context.layer_runtime.is_changed();
     let ui_changed = context.bridge.is_changed()
@@ -83,7 +83,7 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
                 &context.bridge.input,
                 &context.patch_filter,
                 &context.fish_filter,
-                &context.zone_filter,
+                &context.semantic_filter,
                 &context.layer_registry,
                 &context.layer_runtime,
             );
@@ -166,7 +166,7 @@ pub(super) struct SnapshotSyncContext<'w, 's> {
     bootstrap: Res<'w, ApiBootstrapState>,
     patch_filter: Res<'w, PatchFilterState>,
     fish_filter: Res<'w, FishFilterState>,
-    zone_filter: Res<'w, ZoneFilterState>,
+    semantic_filter: Res<'w, SemanticFieldFilterState>,
     display_state: Res<'w, MapDisplayState>,
     fish: Res<'w, FishCatalog>,
     points: Res<'w, PointsState>,

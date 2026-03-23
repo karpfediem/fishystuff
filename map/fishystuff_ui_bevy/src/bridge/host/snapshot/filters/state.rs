@@ -8,7 +8,7 @@ pub(in crate::bridge::host) fn effective_filters(
     bridge_input: &FishyMapInputState,
     patch_filter: &PatchFilterState,
     fish_filter: &FishFilterState,
-    zone_filter: &ZoneFilterState,
+    semantic_filter: &SemanticFieldFilterState,
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
 ) -> FishyMapFiltersState {
@@ -21,7 +21,7 @@ pub(in crate::bridge::host) fn effective_filters(
         .or_else(|| bridge_input.filters.patch_id.clone());
     FishyMapFiltersState {
         fish_ids: fish_filter.selected_fish_ids.clone(),
-        zone_rgbs: zone_filter.selected_zone_rgbs.clone(),
+        zone_rgbs: semantic_filter.selected_zone_rgbs().to_vec(),
         search_text: bridge_input.filters.search_text.clone(),
         prize_only: bridge_input.filters.prize_only,
         patch_id: match (&from_patch_id, &to_patch_id) {

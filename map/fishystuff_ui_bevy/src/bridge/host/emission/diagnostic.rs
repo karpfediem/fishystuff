@@ -7,7 +7,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
     bootstrap: Res<ApiBootstrapState>,
     patch_filter: Res<PatchFilterState>,
     fish_filter: Res<FishFilterState>,
-    zone_filter: Res<ZoneFilterState>,
+    semantic_filter: Res<SemanticFieldFilterState>,
     points: Res<PointsState>,
     point_icons: Res<PointIconCache>,
     selection: Res<SelectionState>,
@@ -24,7 +24,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         && !bootstrap.is_changed()
         && !patch_filter.is_changed()
         && !fish_filter.is_changed()
-        && !zone_filter.is_changed()
+        && !semantic_filter.is_changed()
         && !points.is_changed()
         && !point_icons.is_changed()
         && !selection.is_changed()
@@ -40,7 +40,7 @@ pub(in crate::bridge::host) fn emit_diagnostic_event(
         &bridge.input,
         &patch_filter,
         &fish_filter,
-        &zone_filter,
+        &semantic_filter,
         &layer_registry,
         &layer_runtime,
     );
