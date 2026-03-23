@@ -28,7 +28,7 @@ pub(in crate::bridge::host::snapshot) fn effective_hover_snapshot(
 }
 
 pub(in crate::bridge::host) fn hover_layer_samples_snapshot(
-    samples: &[HoverLayerSample],
+    samples: &[LayerQuerySample],
 ) -> Vec<crate::bridge::contract::FishyMapHoverLayerSampleSnapshot> {
     samples
         .iter()

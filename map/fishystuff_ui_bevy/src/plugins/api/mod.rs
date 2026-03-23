@@ -14,9 +14,9 @@ pub use requests::{
     pick_map_version, spawn_zone_stats_request,
 };
 pub use state::{
-    ApiBootstrapState, FishCatalog, FishEntry, FishFilterState, HoverInfo, HoverLayerSample,
-    HoverState, MapDisplayState, Patch, PatchFilterState, PendingRequests, SelectedInfo,
-    SelectionState, ZoneFilterState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    ApiBootstrapState, FishCatalog, FishEntry, FishFilterState, HoverInfo, HoverState,
+    MapDisplayState, Patch, PatchFilterState, PendingRequests, SelectedInfo, SelectionState,
+    ZoneFilterState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 
 pub struct ApiPlugin;

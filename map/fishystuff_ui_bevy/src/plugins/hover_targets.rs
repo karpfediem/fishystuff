@@ -437,7 +437,7 @@ fn layer_visible_by_key(
 }
 
 fn hover_targets_from_sample(
-    sample: &crate::plugins::api::HoverLayerSample,
+    sample: &crate::map::layer_query::LayerQuerySample,
 ) -> Vec<HoverTargetVisual> {
     sample
         .targets
@@ -645,8 +645,9 @@ mod tests {
         ORIGIN_NODE_MARKER_SIZE_SCREEN_PX, RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
         RESOURCE_BAR_MARKER_COLOR, RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
     };
+    use crate::map::layer_query::LayerQuerySample;
     use crate::map::layers::{LayerRegistry, LayerRuntime};
-    use crate::plugins::api::{HoverInfo, HoverLayerSample};
+    use crate::plugins::api::HoverInfo;
     use fishystuff_api::models::layers::{
         GeometrySpace, LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo,
         LayersResponse, LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
@@ -654,8 +655,8 @@ mod tests {
     use fishystuff_api::Rgb;
     use fishystuff_core::field_metadata::FieldHoverTarget;
 
-    fn sample(layer_id: &str) -> HoverLayerSample {
-        HoverLayerSample {
+    fn sample(layer_id: &str) -> LayerQuerySample {
+        LayerQuerySample {
             layer_id: layer_id.to_string(),
             layer_name: layer_id.to_string(),
             kind: "vector-geojson".to_string(),

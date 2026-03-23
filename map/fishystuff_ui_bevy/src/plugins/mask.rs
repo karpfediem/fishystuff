@@ -3,21 +3,21 @@ use bevy::input::touch::Touches;
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
-use fishystuff_api::Rgb;
 use fishystuff_core::field_metadata::{FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE};
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::field_semantics::{loaded_semantic_field_layer, SemanticFieldLayerView};
-use crate::map::field_view::{loaded_field_layer, FieldLayerView};
+use crate::map::layer_query::{
+    sample_layers_at_world_point, LayerQuerySample, LayerSamplingContext,
+};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
-use crate::map::raster::{map_version_id, RasterTileCache, TileKey};
+use crate::map::raster::RasterTileCache;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{
-    build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, HoverLayerSample,
-    HoverState, MapDisplayState, PatchFilterState, PendingRequests, SelectionState,
+    build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, HoverState,
+    MapDisplayState, PatchFilterState, PendingRequests, SelectionState,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
@@ -114,18 +114,16 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
     let map_py = map_y.floor() as i32;
     let world_point = WorldPoint::new(world.x as f64, world.y as f64);
     let hover_layers = current_hover_layers(&context.layer_registry, &context.layer_runtime);
-    let mut sampling = HoverSamplingContext {
+    let sampling = LayerSamplingContext {
         exact_lookups: &context.exact_lookups,
         field_metadata: &context.field_metadata,
         tile_cache: &context.tile_cache,
         vector_runtime: &context.vector_runtime,
-        bootstrap: &context.bootstrap,
         world_point,
-        map_px: (map_px, map_py),
         map_to_world,
-        registry_map_version_id: context.layer_registry.map_version_id(),
+        map_version_id: context.layer_registry.map_version_id(),
     };
-    let layer_samples = collect_hover_layer_samples(&hover_layers, &mut sampling);
+    let layer_samples = sample_layers_at_world_point(&hover_layers, &sampling);
     let zone_sample = zone_mask_hover_sample(&layer_samples);
     let zone_name = zone_sample.and_then(|sample| zone_name_from_hover_rows(&sample.rows));
     let zone_rgb = zone_sample.as_ref().map(|sample| sample.rgb);
@@ -216,79 +214,6 @@ fn current_hover_layers<'a>(
     layers
 }
 
-fn collect_hover_layer_samples(
-    hover_layers: &[&crate::map::layers::LayerSpec],
-    sampling: &mut HoverSamplingContext<'_>,
-) -> Vec<HoverLayerSample> {
-    hover_layers
-        .iter()
-        .filter_map(|layer| sample_hover_layer(layer, sampling))
-        .collect()
-}
-
-fn sample_hover_layer(
-    layer: &crate::map::layers::LayerSpec,
-    sampling: &mut HoverSamplingContext<'_>,
-) -> Option<HoverLayerSample> {
-    let (rgb, field_id, rows, targets, kind) = if layer.field_url().is_some() {
-        let semantics =
-            loaded_semantic_field_layer(layer, sampling.exact_lookups, sampling.field_metadata)?
-                .semantic_sample_at_world_point(
-                    layer,
-                    sampling.map_to_world,
-                    sampling.world_point,
-                )?;
-        (
-            semantics.rgb,
-            Some(semantics.field_id),
-            semantics.rows,
-            semantics.targets,
-            "field".to_string(),
-        )
-    } else if layer.is_raster() {
-        (
-            sample_raster_layer_rgb(
-                layer,
-                sampling.exact_lookups,
-                sampling.tile_cache,
-                sampling.bootstrap,
-                sampling.world_point,
-                sampling.map_px,
-                sampling.map_to_world,
-            )?,
-            None,
-            Vec::new(),
-            Vec::new(),
-            "tiled-raster".to_string(),
-        )
-    } else if layer.is_vector() {
-        (
-            sample_vector_layer_rgb(
-                layer,
-                sampling.vector_runtime,
-                sampling.registry_map_version_id,
-                sampling.world_point,
-            )?,
-            None,
-            Vec::new(),
-            Vec::new(),
-            "vector-geojson".to_string(),
-        )
-    } else {
-        return None;
-    };
-    Some(HoverLayerSample {
-        layer_id: layer.key.clone(),
-        layer_name: layer.name.clone(),
-        kind,
-        rgb,
-        rgb_u32: rgb.to_u32(),
-        field_id,
-        rows,
-        targets,
-    })
-}
-
 #[derive(SystemParam)]
 struct HoverUpdateContext<'w, 's> {
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
@@ -298,7 +223,6 @@ struct HoverUpdateContext<'w, 's> {
     exact_lookups: Res<'w, ExactLookupCache>,
     field_metadata: Res<'w, FieldMetadataCache>,
     tile_cache: Res<'w, RasterTileCache>,
-    bootstrap: Res<'w, ApiBootstrapState>,
     display_state: ResMut<'w, MapDisplayState>,
     ui_capture: Res<'w, UiPointerCapture>,
     hover: ResMut<'w, HoverState>,
@@ -333,19 +257,7 @@ fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
     })
 }
 
-struct HoverSamplingContext<'a> {
-    exact_lookups: &'a ExactLookupCache,
-    field_metadata: &'a FieldMetadataCache,
-    tile_cache: &'a RasterTileCache,
-    vector_runtime: &'a VectorLayerRuntime,
-    bootstrap: &'a ApiBootstrapState,
-    world_point: WorldPoint,
-    map_px: (i32, i32),
-    map_to_world: MapToWorld,
-    registry_map_version_id: Option<&'a str>,
-}
-
-fn zone_mask_hover_sample(layer_samples: &[HoverLayerSample]) -> Option<&HoverLayerSample> {
+fn zone_mask_hover_sample(layer_samples: &[LayerQuerySample]) -> Option<&LayerQuerySample> {
     layer_samples
         .iter()
         .find(|sample| sample.layer_id == "zone_mask")
@@ -362,7 +274,8 @@ fn zone_name_from_hover_rows(rows: &[FieldHoverRow]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{hovered_zone_rgb, zone_mask_hover_sample, zone_name_from_hover_rows};
-    use crate::plugins::api::{HoverInfo, HoverLayerSample};
+    use crate::map::layer_query::LayerQuerySample;
+    use crate::plugins::api::HoverInfo;
     use fishystuff_api::Rgb;
     use fishystuff_core::field_metadata::{FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE};
 
@@ -402,7 +315,7 @@ mod tests {
     #[test]
     fn zone_mask_hover_sample_prefers_zone_mask_layer_id() {
         let samples = vec![
-            HoverLayerSample {
+            LayerQuerySample {
                 layer_id: "regions".to_string(),
                 layer_name: "Regions".to_string(),
                 kind: "field".to_string(),
@@ -412,7 +325,7 @@ mod tests {
                 rows: Vec::new(),
                 targets: Vec::new(),
             },
-            HoverLayerSample {
+            LayerQuerySample {
                 layer_id: "zone_mask".to_string(),
                 layer_name: "Zone Mask".to_string(),
                 kind: "field".to_string(),
@@ -427,92 +340,5 @@ mod tests {
             zone_mask_hover_sample(&samples).map(|sample| sample.rgb_u32),
             Some(0x445566)
         );
-    }
-}
-
-fn sample_raster_layer_rgb(
-    layer: &crate::map::layers::LayerSpec,
-    exact_lookups: &ExactLookupCache,
-    tile_cache: &RasterTileCache,
-    bootstrap: &ApiBootstrapState,
-    world_point: WorldPoint,
-    _map_px: (i32, i32),
-    map_to_world: MapToWorld,
-) -> Option<Rgb> {
-    if let Some(field) = loaded_field_layer(layer, exact_lookups) {
-        return field.rgb_at_world_point(layer, map_to_world, world_point);
-    }
-
-    let world_transform = layer.world_transform(map_to_world)?;
-    let layer_px = world_transform.world_to_layer(world_point);
-    if layer_px.x < 0.0 || layer_px.y < 0.0 {
-        return None;
-    }
-    let map_version = if layer.tile_url_template.contains("{map_version}") {
-        bootstrap.map_version.as_deref()
-    } else {
-        None
-    };
-    if layer.tile_url_template.contains("{map_version}") && map_version.is_none() {
-        return None;
-    }
-    let tile_px = layer.tile_px.max(1);
-    let layer_ix = layer_px.x.floor() as u32;
-    let layer_iy = layer_px.y.floor() as u32;
-    let tx = layer_ix / tile_px;
-    let ty = layer_iy / tile_px;
-    let key = TileKey {
-        layer: layer.id,
-        map_version: map_version.map(map_version_id).unwrap_or(0),
-        z: 0,
-        tx: tx as i32,
-        ty: ty as i32,
-    };
-    let tile = tile_cache.get_ready_pixel_data(&key)?;
-    let local_x = layer_ix - tx * tile_px;
-    let local_y = layer_iy - ty * tile_px;
-    if local_x >= tile.width || local_y >= tile.height {
-        return None;
-    }
-    let idx = ((local_y * tile.width + local_x) * 4) as usize;
-    if idx + 3 >= tile.data.len() || tile.data[idx + 3] == 0 {
-        return None;
-    }
-    Some(Rgb::new(
-        tile.data[idx],
-        tile.data[idx + 1],
-        tile.data[idx + 2],
-    ))
-}
-
-fn sample_vector_layer_rgb(
-    layer: &crate::map::layers::LayerSpec,
-    vector_runtime: &VectorLayerRuntime,
-    registry_map_version_id: Option<&str>,
-    world_point: WorldPoint,
-) -> Option<Rgb> {
-    let source = layer.vector_source.as_ref()?;
-    let revision = resolved_vector_revision(source, registry_map_version_id);
-    let bundle = vector_runtime.finished.get_ref(&(layer.id, revision))?;
-    let rgba = bundle.sample_rgb(world_point.x as f32, world_point.z as f32)?;
-    Some(Rgb::new(rgba[0], rgba[1], rgba[2]))
-}
-
-fn resolved_vector_revision(
-    source: &crate::map::layers::VectorSourceSpec,
-    map_version_id: Option<&str>,
-) -> String {
-    let mut url = source.url.clone();
-    if url.contains("{map_version}") {
-        let version = map_version_id
-            .filter(|value| !value.trim().is_empty() && *value != "0v0")
-            .unwrap_or("v1");
-        url = url.replace("{map_version}", version);
-    }
-    let revision = source.revision.trim();
-    if revision.is_empty() {
-        format!("url:{url}")
-    } else {
-        revision.to_string()
     }
 }

@@ -1,7 +1,7 @@
 use fishystuff_api::models::zone_stats::ZoneStatsResponse;
 use fishystuff_api::Rgb;
-use fishystuff_core::field_metadata::{FieldHoverRow, FieldHoverTarget};
 
+use crate::map::layer_query::LayerQuerySample;
 use crate::prelude::*;
 
 #[derive(Resource, Default)]
@@ -27,18 +27,6 @@ impl Default for SelectionState {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct HoverLayerSample {
-    pub layer_id: String,
-    pub layer_name: String,
-    pub kind: String,
-    pub rgb: Rgb,
-    pub rgb_u32: u32,
-    pub field_id: Option<u32>,
-    pub rows: Vec<FieldHoverRow>,
-    pub targets: Vec<FieldHoverTarget>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct HoverInfo {
     pub map_px: i32,
     pub map_py: i32,
@@ -47,7 +35,7 @@ pub struct HoverInfo {
     pub zone_name: Option<String>,
     pub world_x: f64,
     pub world_z: f64,
-    pub layer_samples: Vec<HoverLayerSample>,
+    pub layer_samples: Vec<LayerQuerySample>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
