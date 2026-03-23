@@ -6,6 +6,7 @@ import FishyMapBridge, {
   FISHYMAP_STORAGE_KEYS,
   applyStatePatch,
   resolveCdnBaseUrl,
+  zoneRgbFromLayerSamples,
 } from "./map-host.js";
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
@@ -1507,8 +1508,9 @@ export function buildSelectionSummaryText(selection, stateBundle) {
   if (preferredValue) {
     return preferredValue;
   }
-  return selection?.zoneRgb != null
-    ? `Zone ${formatZone(selection.zoneRgb)}`
+  const zoneRgb = selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples);
+  return zoneRgb != null
+    ? `Zone ${formatZone(zoneRgb)}`
     : "No selection.";
 }
 
@@ -1603,16 +1605,19 @@ function renderSelectionOverview(elements, selection, stateBundle) {
 
 function hoverFromEventDetail(detail) {
   if (detail?.hover && typeof detail.hover === "object") {
+    const layerSamples = Array.isArray(detail.hover.layerSamples) ? detail.hover.layerSamples : [];
     return {
       ...detail.hover,
-      layerSamples: Array.isArray(detail.hover.layerSamples) ? detail.hover.layerSamples : [],
+      zoneRgb: detail.hover.zoneRgb ?? zoneRgbFromLayerSamples(layerSamples),
+      layerSamples,
     };
   }
+  const layerSamples = Array.isArray(detail?.layerSamples) ? detail.layerSamples : [];
   return {
     worldX: detail?.worldX ?? null,
     worldZ: detail?.worldZ ?? null,
-    zoneRgb: detail?.zoneRgb ?? null,
-    layerSamples: Array.isArray(detail?.layerSamples) ? detail.layerSamples : [],
+    zoneRgb: detail?.zoneRgb ?? zoneRgbFromLayerSamples(layerSamples),
+    layerSamples,
   };
 }
 
@@ -2139,8 +2144,9 @@ function formatZoneStatus(status) {
 }
 
 export function buildZoneEvidenceSummary(selection, zoneStats) {
+  const zoneRgb = selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples);
   if (!zoneStats) {
-    return selection?.zoneRgb != null
+    return zoneRgb != null
       ? "No zone evidence loaded."
       : "Zone evidence is only available for zone selections.";
   }
@@ -2770,7 +2776,7 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
 
   if (!zoneStats) {
     elements.zoneEvidenceList.innerHTML =
-      selection?.zoneRgb != null
+      (selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples)) != null
         ? '<div class="px-2 py-3 text-xs text-base-content/60">No zone evidence loaded.</div>'
         : '<div class="px-2 py-3 text-xs text-base-content/60">Zone evidence is only available for zone selections.</div>';
     return;
@@ -3615,7 +3621,7 @@ function bindUi(shell, elements, options = {}) {
         worldX,
         worldZ,
         rows: bookmarkRowsFromLayerSamples(hover?.layerSamples, latestStateBundle),
-        zoneRgb: hover?.zoneRgb,
+        zoneRgb: hover?.zoneRgb ?? zoneRgbFromLayerSamples(hover?.layerSamples),
       },
       bookmarks,
     );

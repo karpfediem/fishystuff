@@ -625,16 +625,22 @@ test("hover output events are redispatched without cloning the full map state", 
           version: 1,
           worldX: 11,
           worldZ: 22,
-          zoneRgb: 1193046,
           layerSamples: [
             {
-              layerId: "zones",
-              layerName: "Zones",
-              kind: "tiled-raster",
+              layerId: "zone_mask",
+              layerName: "Zone Mask",
+              kind: "field",
               rgb: [18, 52, 86],
               rgbU32: 1193046,
               fieldId: 1193046,
-              rows: [],
+              rows: [
+                {
+                  key: "zone",
+                  icon: "hover-zone",
+                  label: "Zone",
+                  value: "Coastal Shelf",
+                },
+              ],
               targets: [],
             },
           ],
@@ -650,13 +656,20 @@ test("hover output events are redispatched without cloning the full map state", 
       zoneRgb: 1193046,
       layerSamples: [
         {
-          layerId: "zones",
-          layerName: "Zones",
-          kind: "tiled-raster",
+          layerId: "zone_mask",
+          layerName: "Zone Mask",
+          kind: "field",
           rgb: [18, 52, 86],
           rgbU32: 1193046,
           fieldId: 1193046,
-          rows: [],
+          rows: [
+            {
+              key: "zone",
+              icon: "hover-zone",
+              label: "Zone",
+              value: "Coastal Shelf",
+            },
+          ],
           targets: [],
         },
       ],
@@ -674,7 +687,6 @@ test("selection output events include semantic payload and refreshed state", asy
     const canvas = new FakeCanvas();
     const container = new FakeContainer(canvas);
     const semanticSelection = {
-      zoneRgb: 1193046,
       worldX: 11,
       worldZ: 22,
       layerSamples: [
@@ -740,7 +752,6 @@ test("selection output events include semantic payload and refreshed state", asy
         JSON.stringify({
           type: "selection-changed",
           version: 1,
-          zoneRgb: 1193046,
           worldX: 11,
           worldZ: 22,
           layerSamples: semanticSelection.layerSamples,
@@ -749,11 +760,14 @@ test("selection output events include semantic payload and refreshed state", asy
     });
 
     assert.equal(wasm.calls.stateReads, 1);
-    assert.equal(received.zoneRgb, 1193046);
+    assert.equal(received.zoneRgb, undefined);
     assert.equal(received.worldX, 11);
     assert.equal(received.worldZ, 22);
     assert.deepEqual(received.layerSamples, semanticSelection.layerSamples);
-    assert.deepEqual(received.state.selection, semanticSelection);
+    assert.deepEqual(received.state.selection, {
+      ...semanticSelection,
+      zoneRgb: 1193046,
+    });
     assert.deepEqual(received.inputState.filters.fishIds, [77]);
     assert.deepEqual(received.inputState.filters.zoneRgbs, [0xc17f7f]);
     assert.equal(received.inputState.filters.searchText, "coastal");

@@ -204,6 +204,43 @@ export function createEmptySnapshot() {
   };
 }
 
+export function zoneRgbFromLayerSamples(layerSamples) {
+  if (!Array.isArray(layerSamples)) {
+    return null;
+  }
+  const zoneSample = layerSamples.find(
+    (sample) => String(sample?.layerId || "").trim() === "zone_mask",
+  );
+  const zoneRgb = Number(zoneSample?.rgbU32);
+  return Number.isFinite(zoneRgb) ? zoneRgb : null;
+}
+
+function normalizeWorldCoordinate(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeHoverSnapshotValue(value) {
+  const layerSamples = Array.isArray(value?.layerSamples) ? cloneJson(value.layerSamples) : [];
+  return {
+    worldX: normalizeWorldCoordinate(value?.worldX),
+    worldZ: normalizeWorldCoordinate(value?.worldZ),
+    zoneRgb: zoneRgbFromLayerSamples(layerSamples),
+    layerSamples,
+  };
+}
+
+function normalizeSelectionSnapshotValue(value) {
+  const layerSamples = Array.isArray(value?.layerSamples) ? cloneJson(value.layerSamples) : [];
+  return {
+    ...(isPlainObject(value) ? cloneJson(value) : {}),
+    worldX: normalizeWorldCoordinate(value?.worldX),
+    worldZ: normalizeWorldCoordinate(value?.worldZ),
+    zoneRgb: zoneRgbFromLayerSamples(layerSamples),
+    layerSamples,
+  };
+}
+
 function performanceNowMs() {
   if (typeof globalThis.performance?.now === "function") {
     return globalThis.performance.now();
@@ -2174,9 +2211,14 @@ class FishyMapBridgeImpl {
       this.addPerformanceCounter("host.wasm.state_reads");
       try {
         const parsed = JSON.parse(this.wasmModule.fishymap_get_current_state_json());
-        this.currentState = {
+        const nextState = {
           ...createEmptySnapshot(),
           ...parsed,
+        };
+        this.currentState = {
+          ...nextState,
+          selection: normalizeSelectionSnapshotValue(nextState.selection),
+          hover: normalizeHoverSnapshotValue(nextState.hover),
         };
       } catch (_) {
         this.currentState = createEmptySnapshot();
@@ -2227,14 +2269,14 @@ class FishyMapBridgeImpl {
       const suffix = normalizePerfCounterSuffix(type) || "unknown";
       this.addPerformanceCounter(`host.events.handled.${suffix}`);
       if (type === "hover-changed") {
+        const hover = normalizeHoverSnapshotValue({
+          worldX: payload.worldX,
+          worldZ: payload.worldZ,
+          layerSamples: Array.isArray(payload.layerSamples) ? payload.layerSamples : [],
+        });
         this.currentState = {
           ...this.currentState,
-          hover: {
-            worldX: payload.worldX ?? null,
-            worldZ: payload.worldZ ?? null,
-            zoneRgb: payload.zoneRgb ?? null,
-            layerSamples: Array.isArray(payload.layerSamples) ? cloneJson(payload.layerSamples) : [],
-          },
+          hover,
         };
         this.emit(FISHYMAP_EVENTS.hoverChanged, {
           ...payload,
