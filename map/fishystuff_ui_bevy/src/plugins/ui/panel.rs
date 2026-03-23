@@ -153,7 +153,17 @@ pub(super) fn sync_zone_evidence_list(mut sync: ZoneEvidenceListSync<'_, '_>) {
 
     let placeholder = if sync.selection.zone_stats.is_none() {
         if sync.selection.info.is_some() {
-            "No zone evidence loaded for this selection."
+            if sync
+                .selection
+                .info
+                .as_ref()
+                .and_then(|info| info.rgb_u32)
+                .is_some()
+            {
+                "No zone evidence loaded."
+            } else {
+                "Zone evidence is only available for zone selections."
+            }
         } else {
             "Click a zone on the map to load evidence."
         }

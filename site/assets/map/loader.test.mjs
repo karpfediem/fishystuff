@@ -7,6 +7,7 @@ const {
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
   buildHoverOverviewRows,
+  buildZoneEvidenceSummary,
   buildSelectionSummaryText,
   buildSelectionOverviewRows,
   buildZoneEvidenceListMarkup,
@@ -304,6 +305,11 @@ test("buildSelectionSummaryText falls back to semantic rows for non-zone selecti
     ),
     "Olvia",
   );
+});
+
+test("buildZoneEvidenceSummary explains that non-zone selections have no zone evidence", () => {
+  assert.equal(buildZoneEvidenceSummary({ zoneRgb: null }, null), "Zone evidence is only available for zone selections.");
+  assert.equal(buildZoneEvidenceSummary({ zoneRgb: 0xc17f7f }, null), "No zone evidence loaded.");
 });
 
 test("buildBookmarkDeletionPrompt uses the bookmark label for single deletions", () => {

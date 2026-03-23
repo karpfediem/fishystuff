@@ -2078,9 +2078,11 @@ function formatZoneStatus(status) {
     .join(" ");
 }
 
-function buildZoneEvidenceSummary(zoneStats) {
+export function buildZoneEvidenceSummary(selection, zoneStats) {
   if (!zoneStats) {
-    return "Click a zone on the map to load evidence.";
+    return selection?.zoneRgb != null
+      ? "No zone evidence loaded."
+      : "Zone evidence is only available for zone selections.";
   }
   const parts = [];
   const confidence = zoneStats.confidence || {};
@@ -2166,7 +2168,7 @@ function ensureZoneEvidenceElements(elements) {
       <span class="text-sm font-semibold">Selection</span>
       <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">zone stats: idle</span>
     </div>
-    <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Click a zone on the map to load evidence.</p>
+    <p id="fishymap-zone-evidence-summary" class="text-xs text-base-content/70">Select a zone to load evidence.</p>
     <div id="fishymap-selection-overview" class="fishymap-overview-list" hidden></div>
     <div class="rounded-box border border-warning/35 bg-warning/10 p-3 text-sm text-base-content/85 shadow-sm">
       <p class="mb-2 flex items-center gap-2 font-semibold uppercase tracking-widest text-warning">
@@ -2672,9 +2674,10 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
   if (!elements.zoneEvidenceStatus || !elements.zoneEvidenceSummary || !elements.zoneEvidenceList) {
     return;
   }
+  const selection = stateBundle.state?.selection || null;
   const zoneStats = stateBundle.state?.selection?.zoneStats || null;
   const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone stats: idle";
-  const summary = buildZoneEvidenceSummary(zoneStats);
+  const summary = buildZoneEvidenceSummary(selection, zoneStats);
 
   setTextContent(elements.zoneEvidenceStatus, zoneStatsStatus);
   setTextContent(elements.zoneEvidenceSummary, summary);
@@ -2707,7 +2710,9 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
 
   if (!zoneStats) {
     elements.zoneEvidenceList.innerHTML =
-      '<div class="px-2 py-3 text-xs text-base-content/60">Click a zone on the map to load evidence.</div>';
+      selection?.zoneRgb != null
+        ? '<div class="px-2 py-3 text-xs text-base-content/60">No zone evidence loaded.</div>'
+        : '<div class="px-2 py-3 text-xs text-base-content/60">Zone evidence is only available for zone selections.</div>';
     return;
   }
   if (!distribution.length) {
