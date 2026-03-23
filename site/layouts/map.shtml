@@ -1041,7 +1041,7 @@
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-8#fishy-information-circle"></use></svg>
-            <span class="fishymap-window-title text-lg leading-tight">Selection</span>
+            <span class="fishymap-window-title text-lg leading-tight">Zone Info</span>
           </div>
           <span id="fishymap-zone-evidence-status" class="text-xs text-base-content/60">no selection</span>
         </div>

@@ -6,6 +6,7 @@ const {
   buildBookmarkDeletionPrompt,
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
+  selectionDetailWindowMode,
   buildZoneEvidenceStatusText,
   buildHoverOverviewRows,
   buildSelectWorldPointCommand,
@@ -422,6 +423,17 @@ test("buildZoneEvidenceSummary explains that non-zone selections have no zone ev
 });
 
 test("selectionHasZoneEvidence and buildZoneEvidenceStatusText distinguish generic selections", () => {
+  assert.equal(selectionDetailWindowMode(null, null), "empty");
+  assert.equal(selectionDetailWindowMode({ layerSamples: [] }, null), "generic");
+  assert.equal(
+    selectionDetailWindowMode(
+      {
+        layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }],
+      },
+      null,
+    ),
+    "zone",
+  );
   assert.equal(selectionHasZoneEvidence(null, null), false);
   assert.equal(selectionHasZoneEvidence({ layerSamples: [] }, null), false);
   assert.equal(

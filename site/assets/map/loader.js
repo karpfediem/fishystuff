@@ -2282,6 +2282,13 @@ export function buildZoneEvidenceSummary(selection, zoneStats) {
   return parts.join(" · ") || "No confidence data.";
 }
 
+export function selectionDetailWindowMode(selection, zoneStats = null) {
+  if (!selection) {
+    return "empty";
+  }
+  return selectionHasZoneEvidence(selection, zoneStats) ? "zone" : "generic";
+}
+
 export function selectionHasZoneEvidence(selection, zoneStats = null) {
   const zoneRgb =
     zoneStats?.zoneRgb ?? selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples);
@@ -2289,11 +2296,12 @@ export function selectionHasZoneEvidence(selection, zoneStats = null) {
 }
 
 export function buildZoneEvidenceStatusText(selection, zoneStatsStatus, zoneStats = null) {
-  if (selectionHasZoneEvidence(selection, zoneStats)) {
+  const mode = selectionDetailWindowMode(selection, zoneStats);
+  if (mode === "zone") {
     const normalized = String(zoneStatsStatus || "").trim();
     return normalized || "zone evidence: idle";
   }
-  if (selection) {
+  if (mode === "generic") {
     return "selection details";
   }
   return "no selection";
@@ -2998,8 +3006,16 @@ function renderZoneEvidence(elements, stateBundle, fishLookup) {
   const selection = stateBundle.state?.selection || null;
   const zoneStats = stateBundle.state?.selection?.zoneStats || null;
   const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone evidence: idle";
-  const hasZoneEvidence = selectionHasZoneEvidence(selection, zoneStats);
+  const detailMode = selectionDetailWindowMode(selection, zoneStats);
+  const hasZoneEvidence = detailMode === "zone";
   const summary = buildZoneEvidenceSummary(selection, zoneStats);
+
+  if (elements.zoneEvidenceWindow) {
+    elements.zoneEvidenceWindow.dataset.detailMode = detailMode;
+  }
+  if (elements.zoneEvidenceBody) {
+    elements.zoneEvidenceBody.dataset.detailMode = detailMode;
+  }
 
   setTextContent(
     elements.zoneEvidenceStatus,
@@ -3151,7 +3167,7 @@ function applyWindowVisibility(elements, windowUiState) {
       body: elements.zoneEvidenceBody,
       titlebar: elements.zoneEvidenceTitlebar,
       toggle: elements.zoneInfoWindowToggle,
-      label: "Selection",
+      label: "Zone Info",
     },
     {
       state: windowUiState.layers,
