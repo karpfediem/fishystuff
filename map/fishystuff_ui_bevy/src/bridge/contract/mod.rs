@@ -478,13 +478,11 @@ mod tests {
             version: 1,
             world_x: Some(10.0),
             world_z: Some(20.0),
-            zone_rgb: Some(0x123456),
             layer_samples: Vec::new(),
         })
         .expect("serialize");
 
         assert!(json.contains(r#""type":"selection-changed""#));
-        assert!(json.contains(r#""zoneRgb":1193046"#));
         assert!(json.contains(r#""worldX":10.0"#));
         assert!(json.contains(r#""worldZ":20.0"#));
     }

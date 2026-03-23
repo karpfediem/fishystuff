@@ -36,10 +36,6 @@ pub(in crate::bridge::host) fn emit_selection_changed_event(selection: Res<Selec
         version: 1,
         world_x: selected_world_point.map(|value| value.0),
         world_z: selected_world_point.map(|value| value.1),
-        zone_rgb: selection
-            .info
-            .as_ref()
-            .and_then(crate::plugins::api::SelectedInfo::zone_rgb_u32),
         layer_samples: selection
             .info
             .as_ref()
@@ -59,10 +55,6 @@ pub(in crate::bridge::host) fn emit_hover_changed_event(hover: Res<HoverState>) 
         version: 1,
         world_x: hover.info.as_ref().map(|info| info.world_x),
         world_z: hover.info.as_ref().map(|info| info.world_z),
-        zone_rgb: hover
-            .info
-            .as_ref()
-            .and_then(crate::plugins::api::HoverInfo::zone_rgb_u32),
         layer_samples: hover
             .info
             .as_ref()
