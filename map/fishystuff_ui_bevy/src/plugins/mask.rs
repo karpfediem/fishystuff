@@ -3,14 +3,10 @@ use bevy::input::touch::Touches;
 use bevy::input::ButtonInput;
 use bevy::window::PrimaryWindow;
 
-use fishystuff_core::field_metadata::{FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE};
-
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::layer_query::{
-    sample_layers_at_world_point, LayerQuerySample, LayerSamplingContext,
-};
+use crate::map::hover_query::{hover_info_at_world_point, HoverQueryContext};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::RasterTileCache;
 use crate::map::spaces::world::MapToWorld;
@@ -96,47 +92,21 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
         clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
     };
-    let map_to_world = MapToWorld::default();
-    let map = map_to_world.world_to_map(WorldPoint::new(world.x as f64, world.y as f64));
-    let map_x = map.x as f32;
-    let map_y = map.y as f32;
-
-    if map_x < 0.0
-        || map_y < 0.0
-        || map_x >= map_to_world.image_size_x as f32
-        || map_y >= map_to_world.image_size_y as f32
-    {
+    let world_point = WorldPoint::new(world.x as f64, world.y as f64);
+    let Some(next_hover) = hover_info_at_world_point(
+        world_point,
+        &HoverQueryContext {
+            layer_registry: &context.layer_registry,
+            layer_runtime: &context.layer_runtime,
+            exact_lookups: &context.exact_lookups,
+            field_metadata: &context.field_metadata,
+            tile_cache: &context.tile_cache,
+            vector_runtime: &context.vector_runtime,
+            map_to_world: MapToWorld::default(),
+        },
+    ) else {
         clear_hover_state(&mut context.hover, &mut context.display_state);
         return;
-    }
-
-    let map_px = map_x.floor() as i32;
-    let map_py = map_y.floor() as i32;
-    let world_point = WorldPoint::new(world.x as f64, world.y as f64);
-    let hover_layers = current_hover_layers(&context.layer_registry, &context.layer_runtime);
-    let sampling = LayerSamplingContext {
-        exact_lookups: &context.exact_lookups,
-        field_metadata: &context.field_metadata,
-        tile_cache: &context.tile_cache,
-        vector_runtime: &context.vector_runtime,
-        world_point,
-        map_to_world,
-        map_version_id: context.layer_registry.map_version_id(),
-    };
-    let layer_samples = sample_layers_at_world_point(&hover_layers, &sampling);
-    let zone_sample = zone_mask_hover_sample(&layer_samples);
-    let zone_name = zone_sample.and_then(|sample| zone_name_from_hover_rows(&sample.rows));
-    let zone_rgb = zone_sample.as_ref().map(|sample| sample.rgb);
-    let zone_rgb_u32 = zone_sample.as_ref().map(|sample| sample.rgb_u32);
-    let next_hover = crate::plugins::api::HoverInfo {
-        map_px,
-        map_py,
-        rgb: zone_rgb,
-        rgb_u32: zone_rgb_u32,
-        zone_name,
-        world_x: world_point.x,
-        world_z: world_point.z,
-        layer_samples,
     };
     set_hover_state(
         &mut context.hover,
@@ -188,32 +158,6 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     context.pending.zone_stats = Some((rgb_u32, receiver));
 }
 
-fn current_hover_layers<'a>(
-    layer_registry: &'a LayerRegistry,
-    layer_runtime: &LayerRuntime,
-) -> Vec<&'a crate::map::layers::LayerSpec> {
-    let mut layers = layer_registry
-        .ordered()
-        .iter()
-        .filter(|layer| layer.key != "minimap" && layer_runtime.visible(layer.id))
-        .collect::<Vec<_>>();
-    layers.sort_by(|lhs, rhs| {
-        layer_runtime
-            .get(rhs.id)
-            .map(|state| state.display_order)
-            .unwrap_or(rhs.display_order)
-            .cmp(
-                &layer_runtime
-                    .get(lhs.id)
-                    .map(|state| state.display_order)
-                    .unwrap_or(lhs.display_order),
-            )
-            .then_with(|| rhs.display_order.cmp(&lhs.display_order))
-            .then_with(|| lhs.key.cmp(&rhs.key))
-    });
-    layers
-}
-
 #[derive(SystemParam)]
 struct HoverUpdateContext<'w, 's> {
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
@@ -257,27 +201,10 @@ fn touch_hover_position(touches: &Touches) -> Option<Vec2> {
     })
 }
 
-fn zone_mask_hover_sample(layer_samples: &[LayerQuerySample]) -> Option<&LayerQuerySample> {
-    layer_samples
-        .iter()
-        .find(|sample| sample.layer_id == "zone_mask")
-}
-
-fn zone_name_from_hover_rows(rows: &[FieldHoverRow]) -> Option<String> {
-    rows.iter()
-        .find(|row| row.key == FIELD_HOVER_ROW_KEY_ZONE)
-        .map(|row| row.value.trim())
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{hovered_zone_rgb, zone_mask_hover_sample, zone_name_from_hover_rows};
-    use crate::map::layer_query::LayerQuerySample;
+    use super::hovered_zone_rgb;
     use crate::plugins::api::HoverInfo;
-    use fishystuff_api::Rgb;
-    use fishystuff_core::field_metadata::{FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE};
 
     #[test]
     fn hovered_zone_rgb_reads_zone_from_hover_info() {
@@ -293,52 +220,5 @@ mod tests {
         };
         assert_eq!(hovered_zone_rgb(Some(&info)), Some(0x123456));
         assert_eq!(hovered_zone_rgb(None), None);
-    }
-
-    #[test]
-    fn zone_name_from_hover_rows_reads_zone_row() {
-        let rows = vec![FieldHoverRow {
-            key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
-            icon: "hover-zone".to_string(),
-            label: "Zone".to_string(),
-            value: "Olvia Coast".to_string(),
-            hide_label: false,
-            status_icon: None,
-            status_icon_tone: None,
-        }];
-        assert_eq!(
-            zone_name_from_hover_rows(&rows),
-            Some("Olvia Coast".to_string())
-        );
-    }
-
-    #[test]
-    fn zone_mask_hover_sample_prefers_zone_mask_layer_id() {
-        let samples = vec![
-            LayerQuerySample {
-                layer_id: "regions".to_string(),
-                layer_name: "Regions".to_string(),
-                kind: "field".to_string(),
-                rgb: Rgb::from_u32(0x112233),
-                rgb_u32: 0x112233,
-                field_id: Some(88),
-                rows: Vec::new(),
-                targets: Vec::new(),
-            },
-            LayerQuerySample {
-                layer_id: "zone_mask".to_string(),
-                layer_name: "Zone Mask".to_string(),
-                kind: "field".to_string(),
-                rgb: Rgb::from_u32(0x445566),
-                rgb_u32: 0x445566,
-                field_id: Some(0x445566),
-                rows: Vec::new(),
-                targets: Vec::new(),
-            },
-        ];
-        assert_eq!(
-            zone_mask_hover_sample(&samples).map(|sample| sample.rgb_u32),
-            Some(0x445566)
-        );
     }
 }
