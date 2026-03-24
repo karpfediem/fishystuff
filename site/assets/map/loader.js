@@ -351,6 +351,14 @@ export function normalizeBookmarkCoordinate(value) {
   return Number(number.toFixed(BOOKMARK_COORDINATE_DECIMALS));
 }
 
+function normalizeNullableString(value) {
+  if (value == null) {
+    return null;
+  }
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
 function normalizeSelectionPointKind(value) {
   const normalized = String(value || "").trim().toLowerCase();
   return ["clicked", "waypoint", "bookmark"].includes(normalized) ? normalized : "";
