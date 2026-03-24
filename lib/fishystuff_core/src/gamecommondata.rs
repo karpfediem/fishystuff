@@ -752,7 +752,7 @@ fn build_resource_hover_target_from_resource(
     let world_x = resource.world_x?;
     let world_z = resource.world_z?;
     let label = format!(
-        "Resource bar: {}",
+        "Resources: {}",
         format_resource_group_value(region_group_id, resource_region_id, resource_region_info)
     );
     Some(FieldHoverTarget {

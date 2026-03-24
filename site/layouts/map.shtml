@@ -830,14 +830,13 @@
         max-width: 100%;
         border-radius: 999px;
         border: 1px solid color-mix(in srgb, var(--color-base-content) 18%, transparent);
-        background: color-mix(in srgb, var(--color-base-200) 88%, transparent);
+        background: transparent;
         box-shadow: inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
         overflow: hidden;
       }
 
       .fishymap-semantic-chip[data-semantic-kind="region-group"] {
         border-color: color-mix(in srgb, var(--color-info, #22d3ee) 64%, transparent);
-        background: color-mix(in srgb, var(--color-info, #22d3ee) 18%, var(--color-base-200) 82%);
         box-shadow:
           inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
           0 0 0 1px color-mix(in srgb, var(--color-info, #22d3ee) 14%, transparent);
@@ -845,7 +844,6 @@
 
       .fishymap-semantic-chip[data-semantic-kind="region"] {
         border-color: color-mix(in srgb, var(--color-warning, #fbbf24) 66%, transparent);
-        background: color-mix(in srgb, var(--color-warning, #fbbf24) 18%, var(--color-base-200) 82%);
         box-shadow:
           inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
           0 0 0 1px color-mix(in srgb, var(--color-warning, #fbbf24) 14%, transparent);
@@ -863,11 +861,13 @@
         letter-spacing: 0.04em;
         color: color-mix(in srgb, var(--color-base-content) 88%, transparent);
         background: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+        border-top-left-radius: 999px;
+        border-bottom-left-radius: 999px;
       }
 
       .fishymap-semantic-chip[data-semantic-kind="region-group"] .fishymap-semantic-chip-code {
         color: color-mix(in srgb, white 96%, transparent);
-        background: color-mix(in srgb, var(--color-info, #22d3ee) 72%, black 10%);
+        background: color-mix(in srgb, var(--color-info, #22d3ee) 78%, white 6%);
       }
 
       .fishymap-semantic-chip[data-semantic-kind="region"] .fishymap-semantic-chip-code {
@@ -886,13 +886,17 @@
         white-space: nowrap;
         line-height: 1;
         color: color-mix(in srgb, var(--color-base-content) 80%, transparent);
+        border-top-right-radius: 999px;
+        border-bottom-right-radius: 999px;
       }
 
       .fishymap-semantic-chip[data-semantic-kind="region-group"] .fishymap-semantic-chip-name {
+        background: color-mix(in srgb, var(--color-info, #22d3ee) 18%, var(--color-base-200) 82%);
         color: color-mix(in srgb, var(--color-base-content) 92%, var(--color-info, #22d3ee) 8%);
       }
 
       .fishymap-semantic-chip[data-semantic-kind="region"] .fishymap-semantic-chip-name {
+        background: color-mix(in srgb, var(--color-warning, #fbbf24) 18%, var(--color-base-200) 82%);
         color: color-mix(in srgb, var(--color-base-content) 92%, var(--color-warning, #fbbf24) 10%);
       }
 

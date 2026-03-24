@@ -5,6 +5,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::text::{Justify, TextLayout};
 use bevy::window::PrimaryWindow;
+use bevy_flair::prelude::{ClassList, NodeStyleSheet};
 
 use crate::bridge::contract::FishyMapThemeColors;
 use crate::bridge::theme::parse_css_color;
@@ -21,15 +22,32 @@ use crate::bridge::host::BrowserBridgeState;
 const HOVER_MARKER_Z: f32 = 40.6;
 const HOVER_LABEL_SIZE_PX: f32 = 12.0;
 const HOVER_LABEL_COLOR: Color = Color::srgb(0.98, 0.97, 0.94);
-const HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX: f32 = 96.0;
+const HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX: f32 = 56.0;
 const HOVER_CALLOUT_HEIGHT_SCREEN_PX: f32 = 28.0;
-const HOVER_CALLOUT_PADDING_X_SCREEN_PX: f32 = 12.0;
+const HOVER_CALLOUT_PADDING_X_SCREEN_PX: f32 = 6.0;
 const HOVER_CALLOUT_BORDER_SCREEN_PX: f32 = 2.0;
 const HOVER_CALLOUT_CORNER_RADIUS_SCREEN_PX: f32 = 10.0;
-const HOVER_TEXT_WIDTH_FACTOR: f32 = 0.72;
-const HOVER_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 10.0;
+const HOVER_PLAIN_TEXT_WIDTH_FACTOR: f32 = 0.62;
+const HOVER_PLAIN_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 4.0;
+const HOVER_PREFIX_TEXT_WIDTH_FACTOR: f32 = 0.54;
+const HOVER_CODE_TEXT_WIDTH_FACTOR: f32 = 0.60;
+const HOVER_NAME_TEXT_WIDTH_FACTOR: f32 = 0.56;
+const HOVER_SEMANTIC_GAP_SCREEN_PX: f32 = 5.0;
+const HOVER_CHIP_CODE_PADDING_X_SCREEN_PX: f32 = 7.0;
+const HOVER_CHIP_NAME_PADDING_X_SCREEN_PX: f32 = 9.0;
+const HOVER_SEMANTIC_WIDTH_SLACK_SCREEN_PX: f32 = 2.0;
 const HOVER_CALLOUT_BORDER_COLOR: Color = Color::srgba(0.74, 0.78, 0.86, 0.96);
 const HOVER_CALLOUT_PANEL_COLOR: Color = Color::srgba(0.07, 0.09, 0.12, 0.95);
+const HOVER_CHIP_REGION_GROUP_BORDER_COLOR: Color = Color::srgba(0.30, 0.83, 1.0, 0.70);
+const HOVER_CHIP_REGION_GROUP_PANEL_COLOR: Color = Color::srgba(0.16, 0.38, 0.46, 0.62);
+const HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR: Color = Color::srgba(0.24, 0.66, 0.84, 0.96);
+const HOVER_CHIP_REGION_GROUP_CODE_TEXT_COLOR: Color = Color::srgb(0.97, 0.99, 1.0);
+const HOVER_CHIP_REGION_GROUP_NAME_TEXT_COLOR: Color = Color::srgb(0.91, 0.97, 1.0);
+const HOVER_CHIP_REGION_BORDER_COLOR: Color = Color::srgba(1.0, 0.77, 0.26, 0.74);
+const HOVER_CHIP_REGION_PANEL_COLOR: Color = Color::srgba(0.40, 0.29, 0.10, 0.64);
+const HOVER_CHIP_REGION_CODE_BG_COLOR: Color = Color::srgba(0.98, 0.78, 0.30, 0.96);
+const HOVER_CHIP_REGION_CODE_TEXT_COLOR: Color = Color::srgb(0.18, 0.11, 0.0);
+const HOVER_CHIP_REGION_NAME_TEXT_COLOR: Color = Color::srgb(0.98, 0.94, 0.86);
 
 const HOVER_TEXTURE_WIDTH_PX: usize = 32;
 const HOVER_TEXTURE_HEIGHT_PX: usize = 32;
@@ -70,11 +88,39 @@ struct HoverTargetLabelRoot;
 #[derive(Component)]
 struct HoverTargetLabelText;
 
+#[derive(Component)]
+struct HoverTargetSemanticInline;
+
+#[derive(Component)]
+struct HoverTargetSemanticPrefixText;
+
+#[derive(Component)]
+struct HoverTargetSemanticChip;
+
+#[derive(Component)]
+struct HoverTargetSemanticChipCodeBox;
+
+#[derive(Component)]
+struct HoverTargetSemanticChipCodeText;
+
+#[derive(Component)]
+struct HoverTargetSemanticChipNameBox;
+
+#[derive(Component)]
+struct HoverTargetSemanticChipNameText;
+
 #[derive(Clone, Copy, Debug)]
 struct HoverTargetVisualPair {
     marker: Entity,
     label_root: Entity,
-    label_text: Entity,
+    plain_text: Entity,
+    semantic_inline: Entity,
+    semantic_prefix: Entity,
+    semantic_chip: Entity,
+    semantic_chip_code_box: Entity,
+    semantic_chip_code_text: Entity,
+    semantic_chip_name_box: Entity,
+    semantic_chip_name_text: Entity,
 }
 
 #[derive(Resource, Default)]
@@ -92,9 +138,24 @@ struct HoverTargetVisual {
     world_x: f32,
     world_z: f32,
     label: String,
+    offscreen: bool,
     marker_size_screen_px: f32,
     label_offset_screen_px: f32,
     color_rgb: [u8; 3],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SemanticIdentityKind {
+    Region,
+    RegionGroup,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SemanticIdentityLabel {
+    prefix: String,
+    code: String,
+    name: String,
+    kind: SemanticIdentityKind,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -122,6 +183,7 @@ fn sync_hover_targets(
     selection: Res<SelectionState>,
     view_mode: Res<ViewModeState>,
     #[cfg(target_arch = "wasm32")] bridge: Res<BrowserBridgeState>,
+    asset_server: Res<AssetServer>,
     fonts: Res<UiFonts>,
     layer_registry: Res<LayerRegistry>,
     layer_runtime: Res<LayerRuntime>,
@@ -151,6 +213,7 @@ fn sync_hover_targets(
             &mut Visibility,
             &mut BackgroundColor,
             &mut BorderColor,
+            &ComputedNode,
         ),
         (
             With<HoverTargetLabelRoot>,
@@ -158,14 +221,109 @@ fn sync_hover_targets(
             Without<HoverTargetLabelText>,
         ),
     >,
-    mut label_texts: Query<
-        (&mut Text, &mut TextFont, &mut TextColor),
-        (
-            With<HoverTargetLabelText>,
-            Without<HoverTargetMarker>,
-            Without<HoverTargetLabelRoot>,
-        ),
-    >,
+    mut label_parts: ParamSet<(
+        Query<
+            'static,
+            'static,
+            (
+                &'static mut Text,
+                &'static mut TextFont,
+                &'static mut TextColor,
+            ),
+            (
+                With<HoverTargetLabelText>,
+                Without<HoverTargetMarker>,
+                Without<HoverTargetLabelRoot>,
+            ),
+        >,
+        Query<
+            'static,
+            'static,
+            &'static mut Visibility,
+            (
+                With<HoverTargetSemanticInline>,
+                Without<HoverTargetMarker>,
+                Without<HoverTargetLabelRoot>,
+            ),
+        >,
+        Query<
+            'static,
+            'static,
+            (
+                &'static mut Text,
+                &'static mut TextFont,
+                &'static mut TextColor,
+                &'static mut Visibility,
+            ),
+            (
+                With<HoverTargetSemanticPrefixText>,
+                Without<HoverTargetMarker>,
+                Without<HoverTargetLabelRoot>,
+            ),
+        >,
+        Query<
+            'static,
+            'static,
+            (
+                &'static mut BackgroundColor,
+                &'static mut BorderColor,
+                &'static mut Visibility,
+            ),
+            (
+                With<HoverTargetSemanticChip>,
+                Without<HoverTargetMarker>,
+                Without<HoverTargetLabelRoot>,
+            ),
+        >,
+        Query<
+            'static,
+            'static,
+            (&'static mut BackgroundColor, &'static mut Visibility),
+            (
+                With<HoverTargetSemanticChipCodeBox>,
+                Without<HoverTargetMarker>,
+                Without<HoverTargetLabelRoot>,
+            ),
+        >,
+        Query<
+            'static,
+            'static,
+            (
+                &'static mut Text,
+                &'static mut TextFont,
+                &'static mut TextColor,
+            ),
+            (
+                With<HoverTargetSemanticChipCodeText>,
+                Without<HoverTargetMarker>,
+                Without<HoverTargetLabelRoot>,
+            ),
+        >,
+        Query<
+            'static,
+            'static,
+            (&'static mut BackgroundColor, &'static mut Visibility),
+            (
+                With<HoverTargetSemanticChipNameBox>,
+                Without<HoverTargetMarker>,
+                Without<HoverTargetLabelRoot>,
+            ),
+        >,
+        Query<
+            'static,
+            'static,
+            (
+                &'static mut Text,
+                &'static mut TextFont,
+                &'static mut TextColor,
+            ),
+            (
+                With<HoverTargetSemanticChipNameText>,
+                Without<HoverTargetMarker>,
+                Without<HoverTargetLabelRoot>,
+            ),
+        >,
+    )>,
 ) {
     #[cfg(target_arch = "wasm32")]
     let active_detail_pane_id = bridge
@@ -228,7 +386,14 @@ fn sync_hover_targets(
                 Visibility::Hidden,
             ))
             .id();
-        let mut label_text = Entity::PLACEHOLDER;
+        let mut plain_text = Entity::PLACEHOLDER;
+        let mut semantic_inline = Entity::PLACEHOLDER;
+        let mut semantic_prefix = Entity::PLACEHOLDER;
+        let mut semantic_chip = Entity::PLACEHOLDER;
+        let mut semantic_chip_code_box = Entity::PLACEHOLDER;
+        let mut semantic_chip_code_text = Entity::PLACEHOLDER;
+        let mut semantic_chip_name_box = Entity::PLACEHOLDER;
+        let mut semantic_chip_name_text = Entity::PLACEHOLDER;
         let label_root = commands
             .spawn((
                 HoverTargetLabelRoot,
@@ -236,7 +401,6 @@ fn sync_hover_targets(
                     position_type: PositionType::Absolute,
                     left: Val::Px(0.0),
                     top: Val::Px(0.0),
-                    width: Val::Px(HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX),
                     height: Val::Px(HOVER_CALLOUT_HEIGHT_SCREEN_PX),
                     padding: UiRect::axes(Val::Px(HOVER_CALLOUT_PADDING_X_SCREEN_PX), Val::Px(0.0)),
                     border: UiRect::all(Val::Px(HOVER_CALLOUT_BORDER_SCREEN_PX)),
@@ -250,9 +414,11 @@ fn sync_hover_targets(
                 BackgroundColor(callout_panel_color),
                 BorderColor::all(callout_border_color),
                 Visibility::Hidden,
+                NodeStyleSheet::new(asset_server.load("/map/ui/fishystuff.css")),
+                ClassList::new("marker-callout"),
             ))
             .with_children(|parent| {
-                label_text = parent
+                plain_text = parent
                     .spawn((
                         HoverTargetLabelText,
                         Text::new(""),
@@ -263,14 +429,144 @@ fn sync_hover_targets(
                         },
                         TextLayout::new_with_no_wrap().with_justify(Justify::Center),
                         TextColor(label_color),
+                        ClassList::new("marker-callout-text"),
                     ))
+                    .id();
+                semantic_inline = parent
+                    .spawn((
+                        HoverTargetSemanticInline,
+                        Node {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: Val::Px(5.0),
+                            ..default()
+                        },
+                        Visibility::Hidden,
+                        ClassList::new("marker-callout-inline"),
+                    ))
+                    .with_children(|inline| {
+                        semantic_prefix = inline
+                            .spawn((
+                                HoverTargetSemanticPrefixText,
+                                Text::new(""),
+                                TextFont {
+                                    font: fonts.regular.clone(),
+                                    font_size: HOVER_LABEL_SIZE_PX,
+                                    ..default()
+                                },
+                                TextLayout::new_with_no_wrap(),
+                                TextColor(label_color),
+                                Visibility::Hidden,
+                                ClassList::new("marker-callout-prefix"),
+                            ))
+                            .id();
+                        semantic_chip = inline
+                            .spawn((
+                                HoverTargetSemanticChip,
+                                Node {
+                                    display: Display::Flex,
+                                    flex_direction: FlexDirection::Row,
+                                    align_items: AlignItems::Stretch,
+                                    overflow: Overflow::clip(),
+                                    border: UiRect::all(Val::Px(1.0)),
+                                    border_radius: BorderRadius::all(Val::Px(999.0)),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::NONE),
+                                BorderColor::all(HOVER_CHIP_REGION_GROUP_BORDER_COLOR),
+                                Visibility::Visible,
+                                ClassList::new("marker-callout-chip"),
+                            ))
+                            .with_children(|chip| {
+                                semantic_chip_code_box = chip
+                                    .spawn((
+                                        HoverTargetSemanticChipCodeBox,
+                                        Node {
+                                            display: Display::Flex,
+                                            align_items: AlignItems::Center,
+                                            justify_content: JustifyContent::Center,
+                                            padding: UiRect::axes(Val::Px(7.0), Val::Px(1.0)),
+                                            border_radius: BorderRadius {
+                                                top_left: Val::Px(999.0),
+                                                bottom_left: Val::Px(999.0),
+                                                ..default()
+                                            },
+                                            ..default()
+                                        },
+                                        BackgroundColor(HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR),
+                                        Visibility::Visible,
+                                        ClassList::new("marker-callout-chip-code-box"),
+                                    ))
+                                    .with_children(|code_box| {
+                                        semantic_chip_code_text = code_box
+                                            .spawn((
+                                                HoverTargetSemanticChipCodeText,
+                                                Text::new(""),
+                                                TextFont {
+                                                    font: fonts.regular.clone(),
+                                                    font_size: 10.0,
+                                                    ..default()
+                                                },
+                                                TextLayout::new_with_no_wrap(),
+                                                TextColor(HOVER_CHIP_REGION_GROUP_CODE_TEXT_COLOR),
+                                                ClassList::new("marker-callout-chip-code"),
+                                            ))
+                                            .id();
+                                    })
+                                    .id();
+                                semantic_chip_name_box = chip
+                                    .spawn((
+                                        HoverTargetSemanticChipNameBox,
+                                        Node {
+                                            display: Display::Flex,
+                                            align_items: AlignItems::Center,
+                                            padding: UiRect::axes(Val::Px(9.0), Val::Px(1.0)),
+                                            border_radius: BorderRadius {
+                                                top_right: Val::Px(999.0),
+                                                bottom_right: Val::Px(999.0),
+                                                ..default()
+                                            },
+                                            ..default()
+                                        },
+                                        BackgroundColor(HOVER_CHIP_REGION_GROUP_PANEL_COLOR),
+                                        Visibility::Visible,
+                                        ClassList::new("marker-callout-chip-name-box"),
+                                    ))
+                                    .with_children(|name_box| {
+                                        semantic_chip_name_text = name_box
+                                            .spawn((
+                                                HoverTargetSemanticChipNameText,
+                                                Text::new(""),
+                                                TextFont {
+                                                    font: fonts.regular.clone(),
+                                                    font_size: HOVER_LABEL_SIZE_PX,
+                                                    ..default()
+                                                },
+                                                TextLayout::new_with_no_wrap(),
+                                                TextColor(label_color),
+                                                ClassList::new("marker-callout-chip-name"),
+                                            ))
+                                            .id();
+                                    })
+                                    .id();
+                            })
+                            .id();
+                    })
                     .id();
             })
             .id();
         marker_pool.markers.push(HoverTargetVisualPair {
             marker,
             label_root,
-            label_text,
+            plain_text,
+            semantic_inline,
+            semantic_prefix,
+            semantic_chip,
+            semantic_chip_code_box,
+            semantic_chip_code_text,
+            semantic_chip_name_box,
+            semantic_chip_name_text,
         });
     }
 
@@ -300,7 +596,15 @@ fn sync_hover_targets(
             hide_hover_target_label(pair, &mut label_roots);
             continue;
         };
-        let panel_size_px = hover_callout_size_px(&target.label);
+        let panel_size_px = label_roots
+            .get(pair.label_root)
+            .ok()
+            .map(|(_, _, _, _, computed)| {
+                let inv = computed.inverse_scale_factor();
+                computed.size() * inv
+            })
+            .filter(|size| size.x > 1.0 && size.y > 1.0)
+            .unwrap_or_else(|| hover_callout_size_px(&target.label));
         let (left_px, top_px) = if let Ok(window) = windows.single() {
             let max_left = (window.width() - panel_size_px.x).max(0.0);
             let max_top = (window.height() - panel_size_px.y).max(0.0);
@@ -315,12 +619,11 @@ fn sync_hover_targets(
                 viewport_position.y - target.label_offset_screen_px - panel_size_px.y,
             )
         };
-        if let Ok((mut node, mut visibility, mut background, mut border)) =
+        if let Ok((mut node, mut visibility, mut background, mut border, _)) =
             label_roots.get_mut(pair.label_root)
         {
             node.left = Val::Px(left_px);
             node.top = Val::Px(top_px);
-            node.width = Val::Px(panel_size_px.x);
             node.height = Val::Px(panel_size_px.y);
             node.border = UiRect::all(Val::Px(HOVER_CALLOUT_BORDER_SCREEN_PX));
             node.border_radius = BorderRadius::all(Val::Px(HOVER_CALLOUT_CORNER_RADIUS_SCREEN_PX));
@@ -328,12 +631,87 @@ fn sync_hover_targets(
             *border = BorderColor::all(callout_border_color);
             *visibility = Visibility::Visible;
         }
-        if let Ok((mut text, mut text_font, mut text_color)) = label_texts.get_mut(pair.label_text)
+        let semantic_identity = parse_semantic_identity_label(&target.label);
+        if let Ok((mut text, mut text_font, mut text_color)) =
+            label_parts.p0().get_mut(pair.plain_text)
         {
             text.0 = target.label.clone();
             text_font.font = fonts.regular.clone();
             text_font.font_size = HOVER_LABEL_SIZE_PX;
             text_color.0 = label_color;
+        }
+        if let Some(identity) = semantic_identity.as_ref() {
+            if let Ok(mut visibility) = label_parts.p1().get_mut(pair.semantic_inline) {
+                *visibility = Visibility::Visible;
+            }
+            if let Ok((mut text, mut text_font, mut text_color, mut visibility)) =
+                label_parts.p2().get_mut(pair.semantic_prefix)
+            {
+                text.0 = identity.prefix.clone();
+                text_font.font = fonts.regular.clone();
+                text_font.font_size = HOVER_LABEL_SIZE_PX;
+                text_color.0 = label_color;
+                *visibility = if identity.prefix.is_empty() {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Visible
+                };
+            }
+            if let Ok((mut background, mut border, mut visibility)) =
+                label_parts.p3().get_mut(pair.semantic_chip)
+            {
+                *background = BackgroundColor(Color::NONE);
+                *border = BorderColor::all(chip_border_color(identity.kind));
+                *visibility = Visibility::Visible;
+            }
+            if let Ok((mut background, mut visibility)) =
+                label_parts.p4().get_mut(pair.semantic_chip_code_box)
+            {
+                *background = BackgroundColor(chip_code_box_color(identity.kind));
+                *visibility = Visibility::Visible;
+            }
+            if let Ok((mut text, mut text_font, mut text_color)) =
+                label_parts.p5().get_mut(pair.semantic_chip_code_text)
+            {
+                text.0 = identity.code.clone();
+                text_font.font = fonts.regular.clone();
+                text_font.font_size = 10.0;
+                text_color.0 = chip_code_text_color(identity.kind);
+            }
+            if let Ok((mut background, mut visibility)) =
+                label_parts.p6().get_mut(pair.semantic_chip_name_box)
+            {
+                *background = BackgroundColor(chip_name_box_color(identity.kind));
+                *visibility = if identity.name.is_empty() {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Visible
+                };
+            }
+            if let Ok((mut text, mut text_font, mut text_color)) =
+                label_parts.p7().get_mut(pair.semantic_chip_name_text)
+            {
+                text.0 = identity.name.clone();
+                text_font.font = fonts.regular.clone();
+                text_font.font_size = HOVER_LABEL_SIZE_PX;
+                text_color.0 = chip_name_text_color(identity.kind);
+            }
+            if let Ok((mut text, _, mut text_color)) = label_parts.p0().get_mut(pair.plain_text) {
+                text.0.clear();
+                text_color.0 = label_color;
+            }
+        } else {
+            if let Ok(mut visibility) = label_parts.p1().get_mut(pair.semantic_inline) {
+                *visibility = Visibility::Hidden;
+            }
+            if let Ok((mut text, mut text_font, mut text_color)) =
+                label_parts.p0().get_mut(pair.plain_text)
+            {
+                text.0 = target.label.clone();
+                text_font.font = fonts.regular.clone();
+                text_font.font_size = HOVER_LABEL_SIZE_PX;
+                text_color.0 = label_color;
+            }
         }
     }
 
@@ -361,6 +739,7 @@ fn hide_hover_targets(
             &mut Visibility,
             &mut BackgroundColor,
             &mut BorderColor,
+            &ComputedNode,
         ),
         (
             With<HoverTargetLabelRoot>,
@@ -385,6 +764,7 @@ fn hide_hover_target_label(
             &mut Visibility,
             &mut BackgroundColor,
             &mut BorderColor,
+            &ComputedNode,
         ),
         (
             With<HoverTargetLabelRoot>,
@@ -393,7 +773,7 @@ fn hide_hover_target_label(
         ),
     >,
 ) {
-    if let Ok((_, mut visibility, _, _)) = label_roots.get_mut(pair.label_root) {
+    if let Ok((_, mut visibility, _, _, _)) = label_roots.get_mut(pair.label_root) {
         *visibility = Visibility::Hidden;
     }
 }
@@ -510,6 +890,7 @@ fn hover_target_visual(
         world_x: target.world_x as f32,
         world_z: target.world_z as f32,
         label: target.label.clone(),
+        offscreen: false,
         marker_size_screen_px,
         label_offset_screen_px,
         color_rgb,
@@ -559,11 +940,8 @@ fn clamp_hover_target_to_viewport(
         .world_z
         .clamp(viewport.min_z + margin_world, viewport.max_z - margin_world);
     let mut next = target.clone();
-    if (clamped_x - target.world_x).abs() > f32::EPSILON
-        || (clamped_z - target.world_z).abs() > f32::EPSILON
-    {
-        next.label = format!("{} (offscreen)", next.label);
-    }
+    next.offscreen = (clamped_x - target.world_x).abs() > f32::EPSILON
+        || (clamped_z - target.world_z).abs() > f32::EPSILON;
     next.world_x = clamped_x;
     next.world_z = clamped_z;
     next
@@ -602,16 +980,109 @@ fn world_to_viewport(
 }
 
 fn hover_callout_size_px(display_text: &str) -> Vec2 {
-    let text_width_px =
-        display_text.chars().count() as f32 * HOVER_LABEL_SIZE_PX * HOVER_TEXT_WIDTH_FACTOR
-            + HOVER_TEXT_WIDTH_SLACK_SCREEN_PX;
-    let width_px = (text_width_px + HOVER_CALLOUT_PADDING_X_SCREEN_PX * 2.0)
+    let content_width_px = parse_semantic_identity_label(display_text)
+        .map(semantic_identity_width_px)
+        .unwrap_or_else(|| plain_label_width_px(display_text.trim()));
+    let width_px = (content_width_px
+        + HOVER_CALLOUT_PADDING_X_SCREEN_PX * 2.0
+        + HOVER_CALLOUT_BORDER_SCREEN_PX * 2.0)
         .max(HOVER_CALLOUT_MIN_WIDTH_SCREEN_PX);
     Vec2::new(width_px, HOVER_CALLOUT_HEIGHT_SCREEN_PX)
 }
 
+fn plain_label_width_px(text: &str) -> f32 {
+    text.chars().count() as f32 * HOVER_LABEL_SIZE_PX * HOVER_PLAIN_TEXT_WIDTH_FACTOR
+        + HOVER_PLAIN_TEXT_WIDTH_SLACK_SCREEN_PX
+}
+
+fn semantic_identity_width_px(identity: SemanticIdentityLabel) -> f32 {
+    let prefix_width = if identity.prefix.is_empty() {
+        0.0
+    } else {
+        identity.prefix.chars().count() as f32
+            * HOVER_LABEL_SIZE_PX
+            * HOVER_PREFIX_TEXT_WIDTH_FACTOR
+    };
+    let code_width = identity.code.chars().count() as f32 * 10.0 * HOVER_CODE_TEXT_WIDTH_FACTOR
+        + HOVER_CHIP_CODE_PADDING_X_SCREEN_PX * 2.0;
+    let name_width = if identity.name.is_empty() {
+        0.0
+    } else {
+        identity.name.chars().count() as f32 * HOVER_LABEL_SIZE_PX * HOVER_NAME_TEXT_WIDTH_FACTOR
+            + HOVER_CHIP_NAME_PADDING_X_SCREEN_PX * 2.0
+    };
+    let gap_width = if prefix_width > 0.0 {
+        HOVER_SEMANTIC_GAP_SCREEN_PX
+    } else {
+        0.0
+    };
+    prefix_width + gap_width + code_width + name_width + 2.0 + HOVER_SEMANTIC_WIDTH_SLACK_SCREEN_PX
+}
+
 fn color_from_rgb([red, green, blue]: [u8; 3]) -> Color {
     Color::srgb_u8(red, green, blue)
+}
+
+fn parse_semantic_identity_label(value: &str) -> Option<SemanticIdentityLabel> {
+    let trimmed = value.trim();
+    let (head, raw_code) = trimmed.rsplit_once(" (")?;
+    let code = raw_code.strip_suffix(')')?.trim();
+    let kind = if code.starts_with("RG") {
+        SemanticIdentityKind::RegionGroup
+    } else if code.starts_with('R') {
+        SemanticIdentityKind::Region
+    } else {
+        return None;
+    };
+    let (prefix, raw_name) = head
+        .split_once(':')
+        .map(|(prefix, name)| (prefix.trim(), name.trim()))
+        .unwrap_or(("", head.trim()));
+    Some(SemanticIdentityLabel {
+        prefix: prefix.to_string(),
+        code: code.to_string(),
+        name: raw_name.to_string(),
+        kind,
+    })
+}
+
+fn chip_border_color(kind: SemanticIdentityKind) -> Color {
+    match kind {
+        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_BORDER_COLOR,
+        SemanticIdentityKind::Region => HOVER_CHIP_REGION_BORDER_COLOR,
+    }
+}
+
+fn chip_panel_color(kind: SemanticIdentityKind) -> Color {
+    match kind {
+        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_PANEL_COLOR,
+        SemanticIdentityKind::Region => HOVER_CHIP_REGION_PANEL_COLOR,
+    }
+}
+
+fn chip_code_box_color(kind: SemanticIdentityKind) -> Color {
+    match kind {
+        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR,
+        SemanticIdentityKind::Region => HOVER_CHIP_REGION_CODE_BG_COLOR,
+    }
+}
+
+fn chip_code_text_color(kind: SemanticIdentityKind) -> Color {
+    match kind {
+        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_CODE_TEXT_COLOR,
+        SemanticIdentityKind::Region => HOVER_CHIP_REGION_CODE_TEXT_COLOR,
+    }
+}
+
+fn chip_name_box_color(kind: SemanticIdentityKind) -> Color {
+    chip_panel_color(kind)
+}
+
+fn chip_name_text_color(kind: SemanticIdentityKind) -> Color {
+    match kind {
+        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_NAME_TEXT_COLOR,
+        SemanticIdentityKind::Region => HOVER_CHIP_REGION_NAME_TEXT_COLOR,
+    }
 }
 
 fn build_hover_marker_texture() -> Image {
@@ -680,11 +1151,11 @@ fn circle_alpha(distance: f32, radius: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        clamp_hover_target_to_viewport, hover_targets_from_info, selection_targets_from_info,
-        HoverTargetVisual, Map2dViewportBounds, ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
-        ORIGIN_NODE_MARKER_COLOR, ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
-        RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX, RESOURCE_BAR_MARKER_COLOR,
-        RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
+        clamp_hover_target_to_viewport, hover_targets_from_info, parse_semantic_identity_label,
+        selection_targets_from_info, HoverTargetVisual, Map2dViewportBounds, SemanticIdentityKind,
+        ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX, ORIGIN_NODE_MARKER_COLOR,
+        ORIGIN_NODE_MARKER_SIZE_SCREEN_PX, RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
+        RESOURCE_BAR_MARKER_COLOR, RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
     };
     use crate::map::layer_query::LayerQuerySample;
     use crate::map::layers::{LayerRegistry, LayerRuntime};
@@ -793,6 +1264,7 @@ mod tests {
                     world_x: 123.0,
                     world_z: 456.0,
                     label: "Resource node: Tarif".to_string(),
+                    offscreen: false,
                     marker_size_screen_px: RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
                     label_offset_screen_px: RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
                     color_rgb: RESOURCE_BAR_MARKER_COLOR,
@@ -801,6 +1273,7 @@ mod tests {
                     world_x: 789.0,
                     world_z: 321.0,
                     label: "Origin: Tarif".to_string(),
+                    offscreen: false,
                     marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
                     label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
                     color_rgb: ORIGIN_NODE_MARKER_COLOR,
@@ -927,6 +1400,7 @@ mod tests {
                 world_x: 10.0,
                 world_z: 20.0,
                 label: "Resource node".to_string(),
+                offscreen: false,
                 marker_size_screen_px: RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
                 label_offset_screen_px: RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
                 color_rgb: RESOURCE_BAR_MARKER_COLOR,
@@ -941,6 +1415,7 @@ mod tests {
                 world_x: 30.0,
                 world_z: 40.0,
                 label: "Origin: Tarif".to_string(),
+                offscreen: false,
                 marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
                 label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
                 color_rgb: ORIGIN_NODE_MARKER_COLOR,
@@ -1001,6 +1476,7 @@ mod tests {
             world_x: 500.0,
             world_z: 800.0,
             label: "Origin: Tarif".to_string(),
+            offscreen: false,
             marker_size_screen_px: ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
             label_offset_screen_px: ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
             color_rgb: ORIGIN_NODE_MARKER_COLOR,
@@ -1017,6 +1493,23 @@ mod tests {
         );
         assert!(clamped.world_x <= 100.0);
         assert!(clamped.world_z <= 100.0);
-        assert_eq!(clamped.label, "Origin: Tarif (offscreen)");
+        assert_eq!(clamped.label, "Origin: Tarif");
+        assert!(clamped.offscreen);
+    }
+
+    #[test]
+    fn parse_semantic_identity_label_reads_prefix_kind_and_name() {
+        let parsed = parse_semantic_identity_label("Origin: Tarif (R216)").expect("semantic chip");
+        assert_eq!(parsed.prefix, "Origin");
+        assert_eq!(parsed.code, "R216");
+        assert_eq!(parsed.name, "Tarif");
+        assert_eq!(parsed.kind, SemanticIdentityKind::Region);
+
+        let parsed = parse_semantic_identity_label("Resources: Tarif (RG58)")
+            .expect("resource semantic chip");
+        assert_eq!(parsed.prefix, "Resources");
+        assert_eq!(parsed.code, "RG58");
+        assert_eq!(parsed.name, "Tarif");
+        assert_eq!(parsed.kind, SemanticIdentityKind::RegionGroup);
     }
 }
