@@ -24,6 +24,12 @@ const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"])
 const DEFAULT_ZONE_INFO_TAB = "";
 const ZONE_INFO_TAB_BUTTON_CLASS =
   "tab shrink-0 gap-2 whitespace-nowrap text-xs font-semibold sm:text-sm";
+const POINT_DETAIL_PANE_BUILDERS = Object.freeze([buildLayerSamplePointDetailPanes]);
+const POINT_DETAIL_SECTION_BUILDERS = Object.freeze([
+  buildLayerSampleRowsSection,
+  buildLayerSampleTargetsSection,
+  buildZoneEvidencePointDetailSection,
+]);
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
@@ -2460,7 +2466,13 @@ function ensureZoneInfoElements(elements) {
   return elements;
 }
 
-function layerSampleTabs(selection, stateBundle) {
+export function buildPointDetailPanes(selection, stateBundle) {
+  return POINT_DETAIL_PANE_BUILDERS.flatMap((builder) => builder(selection, stateBundle)).filter(
+    Boolean,
+  );
+}
+
+function buildLayerSamplePointDetailPanes(selection, stateBundle) {
   const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
   const sampleByLayerId = new Map(
     layerSamples
@@ -2482,13 +2494,71 @@ function layerSampleTabs(selection, stateBundle) {
         label,
         icon: String(preferredRow?.icon || "").trim() || "information-circle",
         summary: String(preferredRow?.value || "").trim(),
+        sections: buildPointDetailPaneSections(
+          {
+            id: layerId,
+            sample,
+            label,
+          },
+          selection,
+          stateBundle,
+        ),
       };
     })
     .filter(Boolean);
 }
 
+function buildPointDetailPaneSections(pane, selection, stateBundle) {
+  const context = { pane, selection, stateBundle };
+  return POINT_DETAIL_SECTION_BUILDERS.flatMap((builder) => builder(context)).filter(Boolean);
+}
+
+function buildLayerSampleRowsSection({ pane }) {
+  return [
+    {
+      id: "semantic-rows",
+      kind: "rows",
+      rows: hoverSampleRows(pane?.sample),
+      emptyMessage: "No semantic rows available for this layer at the selected point.",
+    },
+  ];
+}
+
+function buildLayerSampleTargetsSection({ pane }) {
+  const targets = Array.isArray(pane?.sample?.targets) ? pane.sample.targets : [];
+  if (!targets.length) {
+    return [];
+  }
+  return [
+    {
+      id: "targets",
+      kind: "targets",
+      targets,
+    },
+  ];
+}
+
+function buildZoneEvidencePointDetailSection({ pane, selection, stateBundle }) {
+  if (pane?.id !== "zone_mask") {
+    return [];
+  }
+  const zoneStats = stateBundle?.state?.selection?.zoneStats || null;
+  if (!selectionHasZoneEvidence(selection, zoneStats)) {
+    return [];
+  }
+  return [
+    {
+      id: "zone-evidence",
+      kind: "zoneEvidence",
+      selection,
+      zoneStats,
+      zoneStatsStatus: stateBundle?.state?.statuses?.zoneStatsStatus || "zone evidence: idle",
+    },
+  ];
+}
+
 export function resolveZoneInfoActiveTab(windowUiState, selection, stateBundle) {
-  const tabs = layerSampleTabs(selection, stateBundle);
+  const tabs = buildPointDetailPanes(selection, stateBundle);
   const requestedTab = normalizeZoneInfoTab(windowUiState?.zoneInfo?.tab);
   if (requestedTab && tabs.some((tab) => tab.id === requestedTab)) {
     return requestedTab;
@@ -2608,47 +2678,64 @@ function zoneInfoZoneEvidenceMarkup(selection, zoneStats, zoneStatsStatus, fishL
   `;
 }
 
-function zoneInfoLayerPanelMarkup(tab, selection, stateBundle, fishLookup) {
-  const rows = hoverSampleRows(tab.sample);
-  const targets = Array.isArray(tab.sample?.targets) ? tab.sample.targets : [];
-  const zoneStats = stateBundle.state?.selection?.zoneStats || null;
-  const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone evidence: idle";
+function pointDetailRowsSectionMarkup(section, pane) {
+  const rows = Array.isArray(section?.rows) ? section.rows : [];
+  if (!rows.length) {
+    return `<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">${escapeHtml(String(section?.emptyMessage || "No semantic rows available."))}</div>`;
+  }
+  return `<div class="fishymap-overview-list">${rows
+    .map((row) =>
+      overviewRowMarkup({
+        layerId: pane.id,
+        icon: row.icon,
+        label: row.label,
+        value: row.value,
+        ...(row.hideLabel === true ? { hideLabel: true } : {}),
+        ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
+        ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
+      }),
+    )
+    .join("")}</div>`;
+}
+
+function pointDetailTargetsSectionMarkup(section) {
+  const targets = Array.isArray(section?.targets) ? section.targets : [];
+  if (!targets.length) {
+    return "";
+  }
   return `
-    <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(tab.id)}">
-      ${
-        rows.length
-          ? `<div class="fishymap-overview-list">${rows
-              .map((row) =>
-                overviewRowMarkup({
-                  layerId: tab.id,
-                  icon: row.icon,
-                  label: row.label,
-                  value: row.value,
-                  ...(row.hideLabel === true ? { hideLabel: true } : {}),
-                  ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
-                  ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
-                }),
-              )
-              .join("")}</div>`
-          : '<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">No semantic rows available for this layer at the selected point.</div>'
-      }
-      ${
-        targets.length
-          ? `
-            <section class="space-y-2">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Targets</p>
-              <div class="flex flex-wrap gap-2">
-                ${targets.map((target) => zoneInfoTargetMarkup(target)).join("")}
-              </div>
-            </section>
-          `
-          : ""
-      }
-      ${
-        tab.id === "zone_mask" && selectionHasZoneEvidence(selection, zoneStats)
-          ? zoneInfoZoneEvidenceMarkup(selection, zoneStats, zoneStatsStatus, fishLookup)
-          : ""
-      }
+    <section class="space-y-2">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Targets</p>
+      <div class="flex flex-wrap gap-2">
+        ${targets.map((target) => zoneInfoTargetMarkup(target)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function pointDetailSectionMarkup(section, pane, fishLookup) {
+  switch (String(section?.kind || "").trim()) {
+    case "rows":
+      return pointDetailRowsSectionMarkup(section, pane);
+    case "targets":
+      return pointDetailTargetsSectionMarkup(section);
+    case "zoneEvidence":
+      return zoneInfoZoneEvidenceMarkup(
+        section.selection,
+        section.zoneStats,
+        section.zoneStatsStatus,
+        fishLookup,
+      );
+    default:
+      return "";
+  }
+}
+
+function pointDetailPaneMarkup(pane, fishLookup) {
+  const sections = Array.isArray(pane?.sections) ? pane.sections : [];
+  return `
+    <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(pane.id)}">
+      ${sections.map((section) => pointDetailSectionMarkup(section, pane, fishLookup)).join("")}
     </section>
   `;
 }
@@ -3265,7 +3352,7 @@ function renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup) 
   }
   const selection = stateBundle.state?.selection || null;
   const descriptor = zoneInfoTitleDescriptor(selection, stateBundle);
-  const tabs = layerSampleTabs(selection, stateBundle);
+  const tabs = buildPointDetailPanes(selection, stateBundle);
   const activeTab = resolveZoneInfoActiveTab(windowUiState, selection, stateBundle);
   const activeLayerTab = tabs.find((tab) => tab.id === activeTab) || null;
 
@@ -3338,12 +3425,11 @@ function renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup) 
     JSON.stringify({
       activeTab,
       summary: activeLayerTab.summary,
-      rows: activeLayerTab.sample?.rows || [],
-      targets: activeLayerTab.sample?.targets || [],
-      zoneStats: stateBundle.state?.selection?.zoneStats || null,
-      zoneStatsStatus: stateBundle.state?.statuses?.zoneStatsStatus || "",
+      sections: Array.isArray(activeLayerTab.sections)
+        ? activeLayerTab.sections.map((section) => section.id)
+        : [],
     }),
-    zoneInfoLayerPanelMarkup(activeLayerTab, selection, stateBundle, fishLookup),
+    pointDetailPaneMarkup(activeLayerTab, fishLookup),
   );
 }
 
@@ -4048,7 +4134,7 @@ function bindUi(shell, elements, options = {}) {
     const requestedTab = normalizeZoneInfoTab(nextTab);
     const current = getLatestStateBundle();
     const selection = current.state?.selection || null;
-    const availableTabs = layerSampleTabs(selection, current).map((tab) => tab.id);
+    const availableTabs = buildPointDetailPanes(selection, current).map((tab) => tab.id);
     if (!requestedTab || !availableTabs.includes(requestedTab)) {
       return false;
     }

@@ -13,6 +13,7 @@ const {
   buildSelectionOverviewRows,
   buildZoneEvidenceListMarkup,
   buildMapUiResetMountOptions,
+  buildPointDetailPanes,
   buildSearchMatches,
   computeDragAutoScrollDelta,
   createBookmarkFromPlacement,
@@ -467,6 +468,80 @@ test("resolveZoneInfoActiveTab falls back to the first sampled layer", () => {
       buildStateBundle(),
     ),
     "zone_mask",
+  );
+});
+
+test("buildPointDetailPanes preserves layer order and summaries", () => {
+  const panes = buildPointDetailPanes(
+    {
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          layerName: "Zone Mask",
+          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+        },
+        {
+          layerId: "region_groups",
+          layerName: "Region Groups",
+          rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
+        },
+        {
+          layerId: "regions",
+          layerName: "Regions",
+          rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
+        },
+      ],
+    },
+    buildHoverStateBundle(),
+  );
+
+  assert.deepEqual(
+    panes.map((pane) => [pane.id, pane.label, pane.summary]),
+    [
+      ["zone_mask", "Zone Mask", "Demi River"],
+      ["region_groups", "Region Groups", "Tarif"],
+      ["regions", "Regions", "Tarif"],
+    ],
+  );
+});
+
+test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
+  const stateBundle = buildHoverStateBundle();
+  stateBundle.state.selection = {
+    zoneStats: {
+      zoneRgb: 0xc17f7f,
+      distribution: [],
+    },
+  };
+  stateBundle.state.statuses = {
+    zoneStatsStatus: "zone evidence: ready",
+  };
+  const panes = buildPointDetailPanes(
+    {
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          layerName: "Zone Mask",
+          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          targets: [{ label: "Tarif", worldX: 10, worldZ: 20 }],
+        },
+        {
+          layerId: "region_groups",
+          layerName: "Region Groups",
+          rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
+          targets: [{ label: "Resource node", worldX: 30, worldZ: 40 }],
+        },
+      ],
+    },
+    stateBundle,
+  );
+
+  assert.deepEqual(
+    panes.map((pane) => [pane.id, pane.sections.map((section) => section.id)]),
+    [
+      ["zone_mask", ["semantic-rows", "targets", "zone-evidence"]],
+      ["region_groups", ["semantic-rows", "targets"]],
+    ],
   );
 });
 
