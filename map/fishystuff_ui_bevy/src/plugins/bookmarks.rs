@@ -30,7 +30,7 @@ const BOOKMARK_CALLOUT_GAP_SCREEN_PX: f32 = 10.0;
 const BOOKMARK_CALLOUT_BORDER_SCREEN_PX: f32 = 2.0;
 const BOOKMARK_CALLOUT_CORNER_RADIUS_SCREEN_PX: f32 = 10.0;
 const BOOKMARK_TEXT_WIDTH_FACTOR: f32 = 0.72;
-const BOOKMARK_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 10.0;
+const BOOKMARK_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 2.0;
 const BOOKMARK_TEXTURE_WIDTH_PX: usize = 32;
 const BOOKMARK_TEXTURE_HEIGHT_PX: usize = 32;
 const BOOKMARK_RING_RADIUS_PX: f32 = 12.0;
@@ -38,9 +38,9 @@ const BOOKMARK_RING_THICKNESS_PX: f32 = 4.0;
 const BOOKMARK_CORE_RADIUS_PX: f32 = 5.0;
 const BOOKMARK_COLOR: [u8; 3] = [239, 92, 31];
 const BOOKMARK_CORE_COLOR: [u8; 3] = [255, 242, 214];
-const BOOKMARK_CALLOUT_BORDER_COLOR: Color = Color::srgba(0.94, 0.56, 0.27, 0.98);
-const BOOKMARK_CALLOUT_PANEL_COLOR: Color = Color::srgba(0.07, 0.09, 0.12, 0.95);
 const BOOKMARK_CALLOUT_LABEL_COLOR: Color = Color::srgb(0.98, 0.97, 0.94);
+const BOOKMARK_CALLOUT_BORDER_COLOR: Color = Color::srgb(0.14, 0.15, 0.19);
+const BOOKMARK_CALLOUT_PANEL_COLOR: Color = Color::srgb(0.17, 0.18, 0.22);
 const EDGE_FEATHER_PX: f32 = 1.2;
 
 pub struct BookmarksPlugin;
@@ -164,15 +164,15 @@ fn sync_bookmark_markers(
     let theme_colors = Some(&bridge.input.theme.colors);
     #[cfg(not(target_arch = "wasm32"))]
     let theme_colors: Option<&FishyMapThemeColors> = None;
+    let callout_label_color = theme_colors
+        .and_then(bookmark_callout_label_color)
+        .unwrap_or(BOOKMARK_CALLOUT_LABEL_COLOR);
     let callout_border_color = theme_colors
         .and_then(bookmark_callout_border_color)
         .unwrap_or(BOOKMARK_CALLOUT_BORDER_COLOR);
     let callout_panel_color = theme_colors
         .and_then(bookmark_callout_panel_color)
         .unwrap_or(BOOKMARK_CALLOUT_PANEL_COLOR);
-    let callout_label_color = theme_colors
-        .and_then(bookmark_callout_label_color)
-        .unwrap_or(BOOKMARK_CALLOUT_LABEL_COLOR);
 
     while marker_pool.markers.len() < bookmarks.entries.len() {
         let marker = commands
@@ -365,25 +365,6 @@ fn world_to_viewport(
         .ok()
 }
 
-fn bookmark_callout_border_color(colors: &FishyMapThemeColors) -> Option<Color> {
-    colors
-        .primary
-        .as_deref()
-        .or(colors.base300.as_deref())
-        .or(colors.base200.as_deref())
-        .and_then(parse_css_color)
-        .map(|color| color.with_alpha(0.96))
-}
-
-fn bookmark_callout_panel_color(colors: &FishyMapThemeColors) -> Option<Color> {
-    colors
-        .base200
-        .as_deref()
-        .or(colors.base100.as_deref())
-        .and_then(parse_css_color)
-        .map(|color| color.with_alpha(0.95))
-}
-
 fn bookmark_callout_label_color(colors: &FishyMapThemeColors) -> Option<Color> {
     colors
         .base_content
@@ -391,6 +372,22 @@ fn bookmark_callout_label_color(colors: &FishyMapThemeColors) -> Option<Color> {
         .or(colors.primary_content.as_deref())
         .and_then(parse_css_color)
         .map(|color| color.with_alpha(0.98))
+}
+
+fn bookmark_callout_border_color(colors: &FishyMapThemeColors) -> Option<Color> {
+    colors
+        .base200
+        .as_deref()
+        .or(colors.base300.as_deref())
+        .and_then(parse_css_color)
+}
+
+fn bookmark_callout_panel_color(colors: &FishyMapThemeColors) -> Option<Color> {
+    colors
+        .base100
+        .as_deref()
+        .or(colors.base200.as_deref())
+        .and_then(parse_css_color)
 }
 
 fn hovered_bookmark_index(
