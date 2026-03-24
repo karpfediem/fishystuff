@@ -5,9 +5,11 @@ use fishystuff_core::field_metadata::{
 
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::field_semantics::{loaded_semantic_field_layer, SemanticFieldLayerView};
+use crate::map::field_semantics::{
+    loaded_semantic_field_layer, ordered_semantic_layers, SemanticFieldLayerView,
+};
 use crate::map::field_view::{loaded_field_layer, FieldLayerView};
-use crate::map::layers::LayerSpec;
+use crate::map::layers::{LayerRegistry, LayerSpec};
 use crate::map::raster::{map_version_id, RasterTileCache, TileKey};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
@@ -44,6 +46,27 @@ pub fn sample_layers_at_world_point(
     layers
         .iter()
         .filter_map(|layer| sample_layer_at_world_point(layer, sampling))
+        .collect()
+}
+
+pub fn sample_semantic_layers_at_world_point(
+    layer_registry: &LayerRegistry,
+    exact_lookups: &ExactLookupCache,
+    field_metadata: &FieldMetadataCache,
+    world_point: WorldPoint,
+    map_to_world: MapToWorld,
+) -> Vec<LayerQuerySample> {
+    ordered_semantic_layers(layer_registry)
+        .into_iter()
+        .filter_map(|layer| {
+            sample_semantic_layer_at_world_point(
+                layer,
+                exact_lookups,
+                field_metadata,
+                world_point,
+                map_to_world,
+            )
+        })
         .collect()
 }
 
@@ -105,6 +128,29 @@ pub fn sample_layer_at_world_point(
         targets,
         detail_pane,
         detail_sections,
+    })
+}
+
+pub fn sample_semantic_layer_at_world_point(
+    layer: &LayerSpec,
+    exact_lookups: &ExactLookupCache,
+    field_metadata: &FieldMetadataCache,
+    world_point: WorldPoint,
+    map_to_world: MapToWorld,
+) -> Option<LayerQuerySample> {
+    let semantics = loaded_semantic_field_layer(layer, exact_lookups, field_metadata)?
+        .semantic_sample_at_world_point(layer, map_to_world, world_point)?;
+    Some(LayerQuerySample {
+        layer_id: layer.key.clone(),
+        layer_name: layer.name.clone(),
+        kind: "field".to_string(),
+        rgb: semantics.rgb,
+        rgb_u32: semantics.rgb.to_u32(),
+        field_id: Some(semantics.field_id),
+        rows: semantics.rows,
+        targets: semantics.targets,
+        detail_pane: semantics.detail_pane,
+        detail_sections: semantics.detail_sections,
     })
 }
 

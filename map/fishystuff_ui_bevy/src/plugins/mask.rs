@@ -9,7 +9,7 @@ use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::RasterTileCache;
-use crate::map::selection_query::selected_info_from_hover;
+use crate::map::selection_query::selected_info_at_world_point;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::map::terrain::runtime::TerrainViewEstimate;
@@ -123,10 +123,29 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
     if context.pan.drag_distance > DRAG_THRESHOLD {
         return;
     }
-    let Some(hover) = context.hover.info.clone() else {
+    let Some(world_point) = interaction_world_point(
+        context.view_mode.mode,
+        &context.windows,
+        &context.camera_q,
+        &context.touches,
+        &context.terrain_view,
+    ) else {
         return;
     };
-    let Some(selected_info) = selected_info_from_hover(&hover) else {
+    let Some(selected_info) = selected_info_at_world_point(
+        world_point,
+        &WorldPointQueryContext {
+            layer_registry: &context.layer_registry,
+            layer_runtime: &context.layer_runtime,
+            exact_lookups: &context.exact_lookups,
+            field_metadata: &context.field_metadata,
+            tile_cache: &context.tile_cache,
+            vector_runtime: &context.vector_runtime,
+            map_to_world: MapToWorld::default(),
+        },
+        crate::bridge::contract::FishyMapSelectionPointKind::Clicked,
+        None,
+    ) else {
         return;
     };
     let zone_rgb = selected_info.zone_rgb();
@@ -156,23 +175,39 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
 }
 
 fn hover_world_point(context: &HoverUpdateContext<'_, '_>) -> Option<WorldPoint> {
-    match context.view_mode.mode {
+    interaction_world_point(
+        context.view_mode.mode,
+        &context.windows,
+        &context.camera_q,
+        &context.touches,
+        &context.terrain_view,
+    )
+}
+
+fn interaction_world_point(
+    view_mode: ViewMode,
+    windows: &Query<&Window, With<PrimaryWindow>>,
+    camera_q: &Query<(&Camera, &Transform), With<Map2dCamera>>,
+    touches: &Touches,
+    terrain_view: &TerrainViewEstimate,
+) -> Option<WorldPoint> {
+    match view_mode {
         ViewMode::Map2D => {
-            let Ok(window) = context.windows.single() else {
+            let Ok(window) = windows.single() else {
                 return None;
             };
-            let Ok((camera, camera_transform)) = context.camera_q.single() else {
+            let Ok((camera, camera_transform)) = camera_q.single() else {
                 return None;
             };
             let cursor = window
                 .cursor_position()
-                .or_else(|| touch_hover_position(&context.touches))?;
+                .or_else(|| touch_hover_position(touches))?;
             let world = camera
                 .viewport_to_world_2d(&GlobalTransform::from(*camera_transform), cursor)
                 .ok()?;
             Some(WorldPoint::new(world.x as f64, world.y as f64))
         }
-        ViewMode::Terrain3D => context.terrain_view.cursor_world,
+        ViewMode::Terrain3D => terrain_view.cursor_world,
     }
 }
 
@@ -219,9 +254,17 @@ struct MaskClickContext<'w, 's> {
     mouse_buttons: Res<'w, ButtonInput<MouseButton>>,
     key_buttons: Res<'w, ButtonInput<KeyCode>>,
     touches: Res<'w, Touches>,
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
+    exact_lookups: Res<'w, ExactLookupCache>,
+    field_metadata: Res<'w, FieldMetadataCache>,
+    tile_cache: Res<'w, RasterTileCache>,
+    terrain_view: Res<'w, TerrainViewEstimate>,
+    layer_registry: Res<'w, LayerRegistry>,
+    layer_runtime: Res<'w, LayerRuntime>,
+    vector_runtime: Res<'w, VectorLayerRuntime>,
     pending: ResMut<'w, PendingRequests>,
     selection: ResMut<'w, SelectionState>,
-    hover: Res<'w, HoverState>,
     pan: Res<'w, PanState>,
     bootstrap: Res<'w, ApiBootstrapState>,
     patch_filter: Res<'w, PatchFilterState>,

@@ -532,6 +532,56 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
   );
 });
 
+test("buildPointDetailPanes keeps territory panes when source layers are hidden", () => {
+  const stateBundle = buildHoverStateBundle();
+  stateBundle.state.catalog.layers = stateBundle.state.catalog.layers.map((layer) =>
+    layer.layerId === "regions" || layer.layerId === "region_groups"
+      ? { ...layer, visible: false }
+      : layer,
+  );
+
+  const panes = buildPointDetailPanes(
+    {
+      layerSamples: [
+        {
+          layerId: "region_groups",
+          layerName: "Region Groups",
+          rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
+          detailPane: { id: "territory", label: "Territory", icon: "hover-resources", order: 200 },
+          detailSections: [
+            {
+              id: "resource-bar",
+              kind: "facts",
+              title: "Resource Bar",
+              facts: [{ label: "Containing region", value: "Tarif", icon: "hover-zone" }],
+            },
+          ],
+        },
+        {
+          layerId: "regions",
+          layerName: "Regions",
+          rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
+          detailPane: { id: "territory", label: "Territory", icon: "hover-origin", order: 200 },
+          detailSections: [
+            {
+              id: "trade-origin",
+              kind: "facts",
+              title: "Trade Origin",
+              facts: [{ label: "Region", value: "Tarif", icon: "hover-origin" }],
+            },
+          ],
+        },
+      ],
+    },
+    stateBundle,
+  );
+
+  assert.deepEqual(
+    panes.map((pane) => [pane.id, pane.sections.map((section) => section.id)]),
+    [["territory", ["resource-bar", "trade-origin"]]],
+  );
+});
+
 test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
   const stateBundle = buildHoverStateBundle();
   stateBundle.state.selection = {

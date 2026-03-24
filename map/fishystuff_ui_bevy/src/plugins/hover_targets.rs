@@ -440,14 +440,17 @@ fn hover_targets_from_info(
 
 fn selection_targets_from_info(
     info: Option<&SelectedInfo>,
-    layer_registry: &LayerRegistry,
-    layer_runtime: &LayerRuntime,
+    _layer_registry: &LayerRegistry,
+    _layer_runtime: &LayerRuntime,
 ) -> Vec<HoverTargetVisual> {
     let Some(info) = info else {
         return Vec::new();
     };
 
-    targets_from_samples(&info.layer_samples, layer_registry, layer_runtime)
+    info.layer_samples
+        .iter()
+        .flat_map(hover_targets_from_sample)
+        .collect()
 }
 
 fn targets_from_samples(
@@ -944,6 +947,53 @@ mod tests {
                 color_rgb: ORIGIN_NODE_MARKER_COLOR,
             }]
         );
+    }
+
+    #[test]
+    fn selection_targets_ignore_layer_visibility() {
+        let mut region_group = sample("region_groups");
+        region_group.targets.push(FieldHoverTarget {
+            key: "resource_node".to_string(),
+            label: "Resource node".to_string(),
+            world_x: 10.0,
+            world_z: 20.0,
+        });
+
+        let mut region = sample("regions");
+        region.targets.push(FieldHoverTarget {
+            key: "origin_node".to_string(),
+            label: "Origin: Tarif".to_string(),
+            world_x: 30.0,
+            world_z: 40.0,
+        });
+
+        let info = SelectedInfo {
+            map_px: 0,
+            map_py: 0,
+            world_x: 0.0,
+            world_z: 0.0,
+            sampled_world_point: true,
+            point_kind: None,
+            point_label: None,
+            layer_samples: vec![region_group, region],
+        };
+
+        let (layer_registry, mut layer_runtime) = hover_layer_state();
+        let region_groups_id = layer_registry
+            .get_by_key("region_groups")
+            .expect("region_groups layer")
+            .id;
+        let regions_id = layer_registry
+            .get_by_key("regions")
+            .expect("regions layer")
+            .id;
+        layer_runtime.set_visible(region_groups_id, false);
+        layer_runtime.set_visible(regions_id, false);
+
+        let targets = selection_targets_from_info(Some(&info), &layer_registry, &layer_runtime);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].world_x, 10.0);
+        assert_eq!(targets[1].world_x, 30.0);
     }
 
     #[test]

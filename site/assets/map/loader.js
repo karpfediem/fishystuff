@@ -1620,7 +1620,6 @@ function buildOverviewRowsForLayerSamples(layerSamplesInput, stateBundle) {
 
 function orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle) {
   const orderedLayerIds = resolveLayerEntries(stateBundle || {})
-    .filter((layer) => layer.visible)
     .map((layer) => String(layer?.layerId || "").trim())
     .filter((layerId) => sampleByLayerId.has(layerId))
     .reverse();

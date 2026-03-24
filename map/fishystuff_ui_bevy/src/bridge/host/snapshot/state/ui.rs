@@ -2,9 +2,7 @@ use super::super::super::*;
 use crate::bridge::contract::FishyMapBookmarkEntry;
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::field_semantics::{
-    loaded_semantic_field_layer, ordered_semantic_layers, SemanticFieldLayerView,
-};
+use crate::map::layer_query::sample_semantic_layers_at_world_point;
 use crate::map::layers::LayerRegistry;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
@@ -70,27 +68,16 @@ fn collect_bookmark_rows(
     exact_lookups: &ExactLookupCache,
     field_metadata: &FieldMetadataCache,
 ) -> Vec<FieldHoverRow> {
-    ordered_semantic_layers(layer_registry)
-        .into_iter()
-        .flat_map(|layer| {
-            sample_bookmark_layer_rows(bookmark, layer, exact_lookups, field_metadata)
-        })
-        .collect()
-}
-
-fn sample_bookmark_layer_rows(
-    bookmark: &FishyMapBookmarkEntry,
-    layer: &crate::map::layers::LayerSpec,
-    exact_lookups: &ExactLookupCache,
-    field_metadata: &FieldMetadataCache,
-) -> Vec<FieldHoverRow> {
-    let world_point = WorldPoint::new(bookmark.world_x, bookmark.world_z);
-    loaded_semantic_field_layer(layer, exact_lookups, field_metadata)
-        .and_then(|field| {
-            field.semantic_sample_at_world_point(layer, MapToWorld::default(), world_point)
-        })
-        .map(|sample| sample.rows)
-        .unwrap_or_default()
+    sample_semantic_layers_at_world_point(
+        layer_registry,
+        exact_lookups,
+        field_metadata,
+        WorldPoint::new(bookmark.world_x, bookmark.world_z),
+        MapToWorld::default(),
+    )
+    .into_iter()
+    .flat_map(|sample| sample.rows)
+    .collect()
 }
 
 #[cfg(test)]

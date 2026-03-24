@@ -2,8 +2,8 @@ use crate::bridge::contract::FishyMapSelectionPointKind;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::field_semantics::semantic_sample_for_field_id;
 use crate::map::field_view::sample_rgb_for_field_id;
-use crate::map::hover_query::{hover_info_at_world_point, WorldPointQueryContext};
-use crate::map::layer_query::LayerQuerySample;
+use crate::map::hover_query::WorldPointQueryContext;
+use crate::map::layer_query::{sample_semantic_layers_at_world_point, LayerQuerySample};
 use crate::map::layers::LayerRegistry;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{HoverInfo, SelectedInfo};
@@ -30,14 +30,39 @@ pub fn selected_info_at_world_point(
     point_kind: FishyMapSelectionPointKind,
     point_label: Option<&str>,
 ) -> Option<SelectedInfo> {
-    let hover = hover_info_at_world_point(world_point, context)?;
-    let mut selected = selected_info_from_hover(&hover)?;
-    selected.point_kind = Some(point_kind);
-    selected.point_label = point_label
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
-    Some(selected)
+    let map = context.map_to_world.world_to_map(world_point);
+    let map_x = map.x as f32;
+    let map_y = map.y as f32;
+    if map_x < 0.0
+        || map_y < 0.0
+        || map_x >= context.map_to_world.image_size_x as f32
+        || map_y >= context.map_to_world.image_size_y as f32
+    {
+        return None;
+    }
+    let layer_samples = sample_semantic_layers_at_world_point(
+        context.layer_registry,
+        context.exact_lookups,
+        context.field_metadata,
+        world_point,
+        context.map_to_world,
+    );
+    if layer_samples.is_empty() {
+        return None;
+    }
+    Some(SelectedInfo {
+        map_px: map_x.floor() as i32,
+        map_py: map_y.floor() as i32,
+        world_x: world_point.x,
+        world_z: world_point.z,
+        sampled_world_point: true,
+        point_kind: Some(point_kind),
+        point_label: point_label
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned),
+        layer_samples,
+    })
 }
 
 pub fn selected_info_for_zone_rgb(
@@ -107,15 +132,22 @@ pub fn semantic_layer_sample_for_field_id(
 #[cfg(test)]
 mod tests {
     use super::{
-        selected_info_for_semantic_field, selected_info_for_zone_rgb, selected_info_from_hover,
-        semantic_layer_sample_for_field_id,
+        selected_info_at_world_point, selected_info_for_semantic_field, selected_info_for_zone_rgb,
+        selected_info_from_hover, semantic_layer_sample_for_field_id,
     };
     use crate::bridge::contract::FishyMapSelectionPointKind;
+    use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::field_metadata::FieldMetadataCache;
+    use crate::map::hover_query::WorldPointQueryContext;
     use crate::map::layer_query::LayerQuerySample;
-    use crate::map::layers::LayerRegistry;
+    use crate::map::layers::{LayerRegistry, LayerRuntime};
+    use crate::map::raster::RasterTileCache;
+    use crate::map::spaces::world::MapToWorld;
+    use crate::map::spaces::MapPoint;
     use crate::plugins::api::HoverInfo;
+    use crate::plugins::vector_layers::VectorLayerRuntime;
     use fishystuff_api::Rgb;
+    use fishystuff_core::field::DiscreteFieldRows;
     use fishystuff_core::field_metadata::{
         FieldHoverMetadataAsset, FieldHoverMetadataEntry, FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE,
     };
@@ -152,6 +184,77 @@ mod tests {
                 request_weight: 1.0,
                 pick_mode: "exact_tile_pixel".to_string(),
             }],
+        });
+        registry
+    }
+
+    fn semantic_registry() -> LayerRegistry {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(fishystuff_api::models::layers::LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![
+                fishystuff_api::models::layers::LayerDescriptor {
+                    layer_id: "zone_mask".to_string(),
+                    name: "Zone Mask".to_string(),
+                    enabled: true,
+                    kind: fishystuff_api::models::layers::LayerKind::TiledRaster,
+                    transform: fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace,
+                    tileset: fishystuff_api::models::layers::TilesetRef::default(),
+                    tile_px: 512,
+                    max_level: 0,
+                    y_flip: false,
+                    field_source: Some(fishystuff_api::models::layers::FieldSourceRef {
+                        url: "/fields/zone_mask.v1.bin".to_string(),
+                        revision: "zone-field-v1".to_string(),
+                        color_mode: fishystuff_api::models::layers::FieldColorMode::RgbU24,
+                    }),
+                    field_metadata_source: Some(
+                        fishystuff_api::models::layers::FieldMetadataSourceRef {
+                            url: "/fields/zone_mask.v1.meta.json".to_string(),
+                            revision: "zone-meta-v1".to_string(),
+                        },
+                    ),
+                    vector_source: None,
+                    lod_policy: fishystuff_api::models::layers::LodPolicyDto::default(),
+                    ui: fishystuff_api::models::layers::LayerUiInfo {
+                        display_order: 20,
+                        ..Default::default()
+                    },
+                    request_weight: 1.0,
+                    pick_mode: "exact_tile_pixel".to_string(),
+                },
+                fishystuff_api::models::layers::LayerDescriptor {
+                    layer_id: "regions".to_string(),
+                    name: "Regions".to_string(),
+                    enabled: true,
+                    kind: fishystuff_api::models::layers::LayerKind::TiledRaster,
+                    transform: fishystuff_api::models::layers::LayerTransformDto::IdentityMapSpace,
+                    tileset: fishystuff_api::models::layers::TilesetRef::default(),
+                    tile_px: 512,
+                    max_level: 0,
+                    y_flip: false,
+                    field_source: Some(fishystuff_api::models::layers::FieldSourceRef {
+                        url: "/fields/regions.v1.bin".to_string(),
+                        revision: "regions-field-v1".to_string(),
+                        color_mode: fishystuff_api::models::layers::FieldColorMode::DebugHash,
+                    }),
+                    field_metadata_source: Some(
+                        fishystuff_api::models::layers::FieldMetadataSourceRef {
+                            url: "/fields/regions.v1.meta.json".to_string(),
+                            revision: "regions-meta-v1".to_string(),
+                        },
+                    ),
+                    vector_source: None,
+                    lod_policy: fishystuff_api::models::layers::LodPolicyDto::default(),
+                    ui: fishystuff_api::models::layers::LayerUiInfo {
+                        display_order: 40,
+                        ..Default::default()
+                    },
+                    request_weight: 1.0,
+                    pick_mode: "none".to_string(),
+                },
+            ],
         });
         registry
     }
@@ -221,6 +324,105 @@ mod tests {
             Some(FishyMapSelectionPointKind::Clicked)
         );
         assert_eq!(selected.layer_samples, hover.layer_samples);
+    }
+
+    #[test]
+    fn selected_info_at_world_point_uses_semantic_layers_even_when_hidden() {
+        let registry = semantic_registry();
+        let zone_layer = registry.get_by_key("zone_mask").expect("zone layer");
+        let regions_layer = registry.get_by_key("regions").expect("regions layer");
+        let mut runtime = LayerRuntime::default();
+        runtime.sync_to_registry(&registry);
+        runtime.set_visible(zone_layer.id, false);
+        runtime.set_visible(regions_layer.id, false);
+
+        let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(2, 2, &[0x123456; 4]).expect("zone field"),
+        );
+        exact_lookups.insert_ready(
+            regions_layer.id,
+            "/fields/regions.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(2, 2, &[76; 4]).expect("region field"),
+        );
+
+        let mut field_metadata = FieldMetadataCache::default();
+        field_metadata.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    0x123456,
+                    FieldHoverMetadataEntry {
+                        rows: vec![FieldHoverRow {
+                            key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
+                            icon: "hover-zone".to_string(),
+                            label: "Zone".to_string(),
+                            value: "Velia Bay".to_string(),
+                            hide_label: false,
+                            status_icon: None,
+                            status_icon_tone: None,
+                        }],
+                        targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
+                    },
+                )]),
+            },
+        );
+        field_metadata.insert_ready(
+            regions_layer.id,
+            "/fields/regions.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    76,
+                    FieldHoverMetadataEntry {
+                        rows: vec![FieldHoverRow {
+                            key: "origin".to_string(),
+                            icon: "hover-origin".to_string(),
+                            label: "Origin".to_string(),
+                            value: "Tarif".to_string(),
+                            hide_label: false,
+                            status_icon: None,
+                            status_icon_tone: None,
+                        }],
+                        targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
+                    },
+                )]),
+            },
+        );
+
+        let map_to_world = MapToWorld::default();
+        let selected = selected_info_at_world_point(
+            map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),
+            &WorldPointQueryContext {
+                layer_registry: &registry,
+                layer_runtime: &runtime,
+                exact_lookups: &exact_lookups,
+                field_metadata: &field_metadata,
+                tile_cache: &RasterTileCache::default(),
+                vector_runtime: &VectorLayerRuntime::default(),
+                map_to_world,
+            },
+            FishyMapSelectionPointKind::Clicked,
+            None,
+        )
+        .expect("selected info");
+
+        assert_eq!(selected.zone_rgb_u32(), Some(0x123456));
+        assert_eq!(selected.layer_samples.len(), 2);
+        assert!(selected
+            .layer_samples
+            .iter()
+            .any(|sample| sample.layer_id == "zone_mask"));
+        assert!(selected
+            .layer_samples
+            .iter()
+            .any(|sample| sample.layer_id == "regions"));
     }
 
     #[test]
