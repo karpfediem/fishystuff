@@ -64,7 +64,11 @@ fn current_hover_layers<'a>(
     let mut layers = layer_registry
         .ordered()
         .iter()
-        .filter(|layer| layer.key != "minimap" && layer_runtime.visible(layer.id))
+        .filter(|layer| {
+            layer.key != "minimap"
+                && ((layer.field_url().is_some() && layer.field_metadata_url().is_some())
+                    || layer_runtime.visible(layer.id))
+        })
         .collect::<Vec<_>>();
     layers.sort_by(|lhs, rhs| {
         layer_runtime
@@ -155,8 +159,15 @@ mod tests {
             tile_px: 512,
             max_level: 0,
             y_flip: false,
-            field_source: None,
-            field_metadata_source: None,
+            field_source: Some(fishystuff_api::models::layers::FieldSourceRef {
+                url: format!("/fields/{layer_id}.v1.bin"),
+                revision: format!("{layer_id}-field-v1"),
+                color_mode: fishystuff_api::models::layers::FieldColorMode::DebugHash,
+            }),
+            field_metadata_source: Some(fishystuff_api::models::layers::FieldMetadataSourceRef {
+                url: format!("/fields/{layer_id}.v1.meta.json"),
+                revision: format!("{layer_id}-meta-v1"),
+            }),
             vector_source: None,
             lod_policy: LodPolicyDto::default(),
             ui: LayerUiInfo {
@@ -171,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    fn hover_info_at_world_point_ignores_minimap_and_hidden_layers() {
+    fn hover_info_at_world_point_keeps_hidden_semantic_layers() {
         let mut registry = LayerRegistry::default();
         registry.apply_layers_response(LayersResponse {
             revision: "rev".to_string(),
@@ -187,7 +198,68 @@ mod tests {
         let region_groups = registry
             .get_by_key("region_groups")
             .expect("region_groups layer");
+        let regions = registry.get_by_key("regions").expect("regions layer");
         runtime.set_visible(region_groups.id, false);
+        runtime.set_visible(regions.id, false);
+
+        let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            region_groups.id,
+            "/fields/region_groups.v1.bin".to_string(),
+            fishystuff_core::field::DiscreteFieldRows::from_u32_grid(1, 1, &[16]).expect("field"),
+        );
+        exact_lookups.insert_ready(
+            regions.id,
+            "/fields/regions.v1.bin".to_string(),
+            fishystuff_core::field::DiscreteFieldRows::from_u32_grid(1, 1, &[76]).expect("field"),
+        );
+        let mut field_metadata = FieldMetadataCache::default();
+        field_metadata.insert_ready(
+            region_groups.id,
+            "/fields/region_groups.v1.meta.json".to_string(),
+            fishystuff_core::field_metadata::FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    16,
+                    fishystuff_core::field_metadata::FieldHoverMetadataEntry {
+                        rows: vec![fishystuff_core::field_metadata::FieldHoverRow {
+                            key: "resources".to_string(),
+                            icon: "hover-resources".to_string(),
+                            label: "Resources".to_string(),
+                            value: "Tarif".to_string(),
+                            hide_label: false,
+                            status_icon: None,
+                            status_icon_tone: None,
+                        }],
+                        targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
+                    },
+                )]),
+            },
+        );
+        field_metadata.insert_ready(
+            regions.id,
+            "/fields/regions.v1.meta.json".to_string(),
+            fishystuff_core::field_metadata::FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    76,
+                    fishystuff_core::field_metadata::FieldHoverMetadataEntry {
+                        rows: vec![fishystuff_core::field_metadata::FieldHoverRow {
+                            key: "origin".to_string(),
+                            icon: "hover-origin".to_string(),
+                            label: "Origin".to_string(),
+                            value: "Tarif".to_string(),
+                            hide_label: false,
+                            status_icon: None,
+                            status_icon_tone: None,
+                        }],
+                        targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
+                    },
+                )]),
+            },
+        );
 
         let map_to_world = MapToWorld::default();
         let info = hover_info_at_world_point(
@@ -195,8 +267,8 @@ mod tests {
             &super::WorldPointQueryContext {
                 layer_registry: &registry,
                 layer_runtime: &runtime,
-                exact_lookups: &ExactLookupCache::default(),
-                field_metadata: &FieldMetadataCache::default(),
+                exact_lookups: &exact_lookups,
+                field_metadata: &field_metadata,
                 tile_cache: &RasterTileCache::default(),
                 vector_runtime: &VectorLayerRuntime::default(),
                 map_to_world,
@@ -204,7 +276,7 @@ mod tests {
         )
         .expect("hover info");
 
-        assert!(info.layer_samples.is_empty());
+        assert_eq!(info.layer_samples.len(), 2);
         assert_eq!(info.zone_rgb_u32(), None);
         assert_eq!(info.map_px, 0);
         assert_eq!(info.map_py, 0);

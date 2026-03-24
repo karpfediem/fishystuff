@@ -84,6 +84,8 @@ pub struct FieldDetailFact {
     pub label: String,
     pub value: String,
     pub icon: Option<String>,
+    pub status_icon: Option<String>,
+    pub status_icon_tone: Option<String>,
 }
 
 impl FieldHoverMetadataAsset {

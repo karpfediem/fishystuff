@@ -3,6 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use fishystuff_core::field_metadata::FieldHoverRow;
 use serde::{Deserialize, Serialize};
 
+use super::snapshot::FishyMapHoverLayerSampleSnapshot;
+
 use super::normalize::{
     deserialize_nullable_string_field, normalize_i32_list, normalize_layer_clip_mask_map,
     normalize_layer_opacity_map, normalize_string_list, normalize_u32_list, normalize_u32_map,
@@ -154,6 +156,7 @@ pub struct FishyMapBookmarkEntry {
     pub label: Option<String>,
     pub world_x: f64,
     pub world_z: f64,
+    pub layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
     pub rows: Vec<FieldHoverRow>,
     pub zone_rgb: Option<u32>,
     pub created_at: Option<String>,
@@ -176,6 +179,7 @@ impl FishyMapBookmarkEntry {
             label: normalize_optional(self.label),
             world_x: self.world_x,
             world_z: self.world_z,
+            layer_samples: self.layer_samples,
             rows: normalize_hover_rows(self.rows),
             zone_rgb: self.zone_rgb,
             created_at: normalize_optional(self.created_at),

@@ -478,6 +478,8 @@ mod tests {
                                 label: "Region".to_string(),
                                 value: "Tarif".to_string(),
                                 icon: Some("hover-origin".to_string()),
+                                status_icon: None,
+                                status_icon_tone: None,
                             }],
                             targets: vec![FieldHoverTarget {
                                 key: "origin_node".to_string(),

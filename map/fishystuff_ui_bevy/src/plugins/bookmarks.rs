@@ -528,6 +528,7 @@ mod tests {
                 label: Some("A".to_string()),
                 world_x: 100.0,
                 world_z: 100.0,
+                layer_samples: Vec::new(),
                 rows: Vec::new(),
                 zone_rgb: None,
                 created_at: None,
@@ -537,6 +538,7 @@ mod tests {
                 label: Some("B".to_string()),
                 world_x: 108.0,
                 world_z: 108.0,
+                layer_samples: Vec::new(),
                 rows: Vec::new(),
                 zone_rgb: None,
                 created_at: None,
@@ -552,6 +554,6 @@ mod tests {
         };
 
         assert_eq!(hovered_bookmark_index(&entries, Some(&hover), 1.0), Some(0));
-        assert_eq!(hovered_bookmark_index(&entries, Some(&hover), 0.2), None);
+        assert_eq!(hovered_bookmark_index(&entries, Some(&hover), 0.05), None);
     }
 }

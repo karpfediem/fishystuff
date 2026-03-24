@@ -80,15 +80,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *       label?: string | null,
  *       worldX?: number,
  *       worldZ?: number,
- *       rows?: Array<{
- *         key?: string,
- *         icon?: string,
- *         label?: string,
- *         value?: string,
- *         hideLabel?: boolean,
- *         statusIcon?: string | null,
- *         statusIconTone?: string | null
- *       }>,
+ *       layerSamples?: Array<object>,
  *       zoneRgb?: number | null,
  *       createdAt?: string | null
  *     }>
@@ -729,6 +721,10 @@ function normalizeBookmarkRowsState(values) {
   return normalized;
 }
 
+function normalizeBookmarkLayerSamplesState(values) {
+  return Array.isArray(values) ? cloneJson(values) : [];
+}
+
 function normalizeWorldPointCommand(value) {
   if (!isPlainObject(value)) {
     return undefined;
@@ -778,7 +774,7 @@ function normalizeBookmarksState(values) {
     }
     seen.add(id);
     const label = normalizeNullableString(entry?.label);
-    const rows = normalizeBookmarkRowsState(entry?.rows);
+    const layerSamples = normalizeBookmarkLayerSamplesState(entry?.layerSamples);
     const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
     const createdAt = normalizeNullableString(entry?.createdAt);
     normalized.push({
@@ -786,7 +782,7 @@ function normalizeBookmarksState(values) {
       ...(label != null ? { label } : {}),
       worldX,
       worldZ,
-      ...(rows.length ? { rows } : {}),
+      ...(layerSamples.length ? { layerSamples } : {}),
       ...(Number.isFinite(zoneRgb) ? { zoneRgb } : {}),
       ...(createdAt != null ? { createdAt } : {}),
     });

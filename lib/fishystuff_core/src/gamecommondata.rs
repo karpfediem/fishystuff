@@ -579,6 +579,31 @@ fn build_region_origin_detail_section(
         label: "Region".to_string(),
         value: region_value,
         icon: Some("hover-origin".to_string()),
+        status_icon: origin.and_then(|info| {
+            let has_assignment = info.has_value();
+            let has_name = info
+                .region_name
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty());
+            match (has_assignment, has_name) {
+                (true, true) => None,
+                (true, false) => Some("question-mark".to_string()),
+                (false, _) => Some("question-mark".to_string()),
+            }
+        }),
+        status_icon_tone: origin.and_then(|info| {
+            let has_assignment = info.has_value();
+            let has_name = info
+                .region_name
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty());
+            match (has_assignment, has_name) {
+                (true, false) => Some("subtle".to_string()),
+                _ => None,
+            }
+        }),
     });
 
     if let Some(node_name) = origin
@@ -591,6 +616,8 @@ fn build_region_origin_detail_section(
             label: "Node".to_string(),
             value: node_name.to_string(),
             icon: Some("map-pin".to_string()),
+            status_icon: None,
+            status_icon_tone: None,
         });
     }
 
@@ -677,6 +704,8 @@ fn build_region_group_resource_detail_section(
         label: "Node".to_string(),
         value: resource_node_value,
         icon: Some("map-pin".to_string()),
+        status_icon: None,
+        status_icon_tone: None,
     });
 
     let containing_region_value = resource_region_info
@@ -691,6 +720,29 @@ fn build_region_group_resource_detail_section(
         label: "Containing region".to_string(),
         value: containing_region_value,
         icon: Some("hover-zone".to_string()),
+        status_icon: resource.as_ref().and_then(|info| {
+            let has_assignment = info.has_value();
+            let has_name = resource_region_info
+                .and_then(|origin| origin.region_name.as_deref())
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty());
+            match (has_assignment, has_name) {
+                (true, true) => None,
+                (true, false) => Some("question-mark".to_string()),
+                (false, _) => Some("question-mark".to_string()),
+            }
+        }),
+        status_icon_tone: resource.as_ref().and_then(|info| {
+            let has_assignment = info.has_value();
+            let has_name = resource_region_info
+                .and_then(|origin| origin.region_name.as_deref())
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty());
+            match (has_assignment, has_name) {
+                (true, false) => Some("subtle".to_string()),
+                _ => None,
+            }
+        }),
     });
 
     if let Some(region_node_name) = resource_region_info
@@ -703,6 +755,8 @@ fn build_region_group_resource_detail_section(
             label: "Origin node".to_string(),
             value: region_node_name.to_string(),
             icon: Some("hover-origin".to_string()),
+            status_icon: None,
+            status_icon_tone: None,
         });
     }
 

@@ -7,7 +7,8 @@ use crate::map::layers::LayerRegistry;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::bookmarks::BookmarkState;
-use fishystuff_core::field_metadata::FieldHoverRow;
+
+use super::hover_layer_samples_snapshot;
 
 pub(in crate::bridge::host::snapshot) fn effective_ui_state(
     bridge_input: &FishyMapInputState,
@@ -55,29 +56,28 @@ fn enrich_bookmark_entry(
     field_metadata: &FieldMetadataCache,
 ) -> FishyMapBookmarkEntry {
     let mut enriched = bookmark.clone();
-    if !enriched.rows.is_empty() {
+    if !enriched.layer_samples.is_empty() {
         return enriched;
     }
-    enriched.rows = collect_bookmark_rows(bookmark, layer_registry, exact_lookups, field_metadata);
+    enriched.layer_samples =
+        collect_bookmark_layer_samples(bookmark, layer_registry, exact_lookups, field_metadata);
     enriched
 }
 
-fn collect_bookmark_rows(
+fn collect_bookmark_layer_samples(
     bookmark: &FishyMapBookmarkEntry,
     layer_registry: &LayerRegistry,
     exact_lookups: &ExactLookupCache,
     field_metadata: &FieldMetadataCache,
-) -> Vec<FieldHoverRow> {
-    sample_semantic_layers_at_world_point(
+) -> Vec<crate::bridge::contract::FishyMapHoverLayerSampleSnapshot> {
+    let samples = sample_semantic_layers_at_world_point(
         layer_registry,
         exact_lookups,
         field_metadata,
         WorldPoint::new(bookmark.world_x, bookmark.world_z),
         MapToWorld::default(),
-    )
-    .into_iter()
-    .flat_map(|sample| sample.rows)
-    .collect()
+    );
+    hover_layer_samples_snapshot(&samples)
 }
 
 #[cfg(test)]
@@ -88,9 +88,7 @@ mod tests {
     use crate::map::field_metadata::FieldMetadataCache;
     use crate::map::layers::LayerRegistry;
     use fishystuff_core::field::DiscreteFieldRows;
-    use fishystuff_core::field_metadata::{
-        FieldHoverMetadataAsset, FieldHoverMetadataEntry, FieldHoverRow,
-    };
+    use fishystuff_core::field_metadata::{FieldHoverMetadataAsset, FieldHoverMetadataEntry};
 
     fn field_layer_descriptor(
         layer_id: &str,
@@ -142,7 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn bookmark_enrichment_fills_missing_semantic_rows() {
+    fn bookmark_enrichment_fills_missing_semantic_layer_samples() {
         let registry = field_registry();
         let zone_layer = registry.get_by_key("zone_mask").expect("zone layer");
         let regions_layer = registry.get_by_key("regions").expect("regions layer");
@@ -241,6 +239,7 @@ mod tests {
             label: Some("Test".to_string()),
             world_x: 5.0,
             world_z: 5.0,
+            layer_samples: Vec::new(),
             rows: Vec::new(),
             zone_rgb: None,
             created_at: None,
@@ -250,11 +249,11 @@ mod tests {
 
         assert_eq!(
             enriched
-                .rows
+                .layer_samples
                 .iter()
-                .map(|row| row.value.as_str())
+                .map(|sample| sample.layer_id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["Mediah", "Tarif", "Tarif"]
+            vec!["zone_mask", "region_groups", "regions"]
         );
     }
 
@@ -358,6 +357,7 @@ mod tests {
             label: Some("Test".to_string()),
             world_x: 5.0,
             world_z: 5.0,
+            layer_samples: Vec::new(),
             rows: Vec::new(),
             zone_rgb: None,
             created_at: None,

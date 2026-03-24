@@ -122,6 +122,8 @@ pub fn build_zone_mask_field_hover_metadata(
                             }),
                         ),
                         icon: Some("hover-zone".to_string()),
+                        status_icon: None,
+                        status_icon_tone: None,
                     }],
                     targets: Vec::new(),
                 }],

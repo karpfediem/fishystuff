@@ -144,6 +144,94 @@ function buildHoverStateBundle() {
   };
 }
 
+function factEntry(key, value, icon, extra = {}) {
+  return {
+    key,
+    label: key,
+    value,
+    icon,
+    ...extra,
+  };
+}
+
+function detailSection(id, title, facts) {
+  return {
+    id,
+    kind: "facts",
+    title,
+    facts,
+  };
+}
+
+function zoneLayerSample(zoneName = "Demi River") {
+  return {
+    layerId: "zone_mask",
+    detailSections: [
+      detailSection("zone", "Zone", [factEntry("zone", zoneName, "hover-zone", { label: "Zone" })]),
+    ],
+  };
+}
+
+function regionGroupLayerSample({
+  resourceBarNode = null,
+  containingRegion = null,
+  originNode = null,
+  containingRegionStatusIcon = null,
+  containingRegionStatusIconTone = null,
+} = {}) {
+  const facts = [];
+  if (resourceBarNode) {
+    facts.push(factEntry("resource_bar_node", resourceBarNode, "map-pin", { label: "Node" }));
+  }
+  if (containingRegion) {
+    facts.push(
+      factEntry("resource_region", containingRegion, "hover-zone", {
+        label: "Containing region",
+        ...(containingRegionStatusIcon ? { statusIcon: containingRegionStatusIcon } : {}),
+        ...(containingRegionStatusIconTone
+          ? { statusIconTone: containingRegionStatusIconTone }
+          : {}),
+      }),
+    );
+  }
+  if (originNode) {
+    facts.push(
+      factEntry("resource_region_node", originNode, "hover-origin", {
+        label: "Origin node",
+      }),
+    );
+  }
+  return {
+    layerId: "region_groups",
+    detailSections: [detailSection("resource-bar", "Resource Bar", facts)],
+  };
+}
+
+function regionLayerSample({
+  tradeOrigin = null,
+  originNode = null,
+  tradeOriginStatusIcon = null,
+  tradeOriginStatusIconTone = null,
+} = {}) {
+  const facts = [];
+  if (tradeOrigin) {
+    facts.push(
+      factEntry("origin_region", tradeOrigin, "hover-origin", {
+        label: "Region",
+        ...(tradeOriginStatusIcon ? { statusIcon: tradeOriginStatusIcon } : {}),
+        ...(tradeOriginStatusIconTone ? { statusIconTone: tradeOriginStatusIconTone } : {}),
+      }),
+    );
+  }
+  if (originNode) {
+    facts.push(factEntry("origin_node", originNode, "map-pin", { label: "Node" }));
+  }
+  return {
+    layerId: "regions",
+    detailSections: [detailSection("trade-origin", "Trade Origin", facts)],
+  };
+}
+
 test("parseZoneRgbSearch handles hex, byte triplets, and normalized triplets", () => {
   assert.equal(parseZoneRgbSearch("193,127,127"), 0xc17f7f);
   assert.equal(parseZoneRgbSearch("193 127 127"), 0xc17f7f);
@@ -229,18 +317,9 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
     buildHoverOverviewRows(
       {
         layerSamples: [
-          {
-            layerId: "zone_mask",
-            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          },
-          {
-            layerId: "region_groups",
-            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
-          },
-          {
-            layerId: "regions",
-            rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
-          },
+          zoneLayerSample("Demi River"),
+          regionGroupLayerSample({ resourceBarNode: "Tarif" }),
+          regionLayerSample({ originNode: "Tarif" }),
         ],
       },
       buildHoverStateBundle(),
@@ -254,14 +333,14 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
       },
       {
         layerId: "region_groups",
-        icon: "hover-resources",
-        label: "Resources",
+        icon: "map-pin",
+        label: "Resource Bar",
         value: "Tarif",
       },
       {
         layerId: "regions",
-        icon: "hover-origin",
-        label: "Origin",
+        icon: "map-pin",
+        label: "Origin node",
         value: "Tarif",
       },
     ],
@@ -273,18 +352,9 @@ test("buildSelectionOverviewRows keeps field semantics while omitting a duplicat
     buildSelectionOverviewRows(
       {
         layerSamples: [
-          {
-            layerId: "zone_mask",
-            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          },
-          {
-            layerId: "region_groups",
-            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
-          },
-          {
-            layerId: "regions",
-            rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
-          },
+          zoneLayerSample("Demi River"),
+          regionGroupLayerSample({ resourceBarNode: "Tarif" }),
+          regionLayerSample({ originNode: "Tarif" }),
         ],
       },
       buildHoverStateBundle(),
@@ -292,14 +362,14 @@ test("buildSelectionOverviewRows keeps field semantics while omitting a duplicat
     [
       {
         layerId: "region_groups",
-        icon: "hover-resources",
-        label: "Resources",
+        icon: "map-pin",
+        label: "Resource Bar",
         value: "Tarif",
       },
       {
         layerId: "regions",
-        icon: "hover-origin",
-        label: "Origin",
+        icon: "map-pin",
+        label: "Origin node",
         value: "Tarif",
       },
     ],
@@ -310,12 +380,7 @@ test("buildSelectionOverviewRows keeps the zone row when no zone summary is avai
   assert.deepEqual(
     buildSelectionOverviewRows(
       {
-        layerSamples: [
-          {
-            layerId: "zone_mask",
-            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          },
-        ],
+        layerSamples: [zoneLayerSample("Demi River")],
       },
       buildHoverStateBundle(),
     ),
@@ -335,14 +400,8 @@ test("buildSelectionSummaryText falls back to semantic rows for non-zone selecti
     buildSelectionSummaryText(
       {
         layerSamples: [
-          {
-            layerId: "region_groups",
-            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Olvia" }],
-          },
-          {
-            layerId: "regions",
-            rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Castle Ruins" }],
-          },
+          regionGroupLayerSample({ resourceBarNode: "Olvia" }),
+          regionLayerSample({ originNode: "Castle Ruins" }),
         ],
       },
       buildHoverStateBundle(),
@@ -356,14 +415,8 @@ test("buildSelectionSummaryText uses the primary zone row when present", () => {
     buildSelectionSummaryText(
       {
         layerSamples: [
-          {
-            layerId: "zone_mask",
-            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          },
-          {
-            layerId: "region_groups",
-            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
-          },
+          zoneLayerSample("Demi River"),
+          regionGroupLayerSample({ resourceBarNode: "Tarif" }),
         ],
       },
       buildHoverStateBundle(),
@@ -377,14 +430,8 @@ test("buildSelectionSummaryText prefers semantic row keys over display labels", 
     buildSelectionSummaryText(
       {
         layerSamples: [
-          {
-            layerId: "region_groups",
-            rows: [{ key: "resources", icon: "hover-resources", label: "Supply", value: "Olvia" }],
-          },
-          {
-            layerId: "regions",
-            rows: [{ key: "origin", icon: "hover-origin", label: "Home", value: "Castle Ruins" }],
-          },
+          regionGroupLayerSample({ resourceBarNode: "Olvia" }),
+          regionLayerSample({ originNode: "Castle Ruins" }),
         ],
       },
       buildHoverStateBundle(),
@@ -845,18 +892,9 @@ test("buildHoverOverviewRows keeps bookmark info out of the regular hover box", 
         worldX: 100,
         worldZ: 100,
         layerSamples: [
-          {
-            layerId: "zone_mask",
-            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          },
-          {
-            layerId: "region_groups",
-            rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
-          },
-          {
-            layerId: "regions",
-            rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
-          },
+          zoneLayerSample("Demi River"),
+          regionGroupLayerSample({ resourceBarNode: "Tarif" }),
+          regionLayerSample({ originNode: "Tarif" }),
         ],
       },
       buildHoverStateBundle(),
@@ -887,14 +925,14 @@ test("buildHoverOverviewRows keeps bookmark info out of the regular hover box", 
       },
       {
         layerId: "region_groups",
-        icon: "hover-resources",
-        label: "Resources",
+        icon: "map-pin",
+        label: "Resource Bar",
         value: "Tarif",
       },
       {
         layerId: "regions",
-        icon: "hover-origin",
-        label: "Origin",
+        icon: "map-pin",
+        label: "Origin node",
         value: "Tarif",
       },
     ],
@@ -906,34 +944,15 @@ test("buildHoverOverviewRows falls back to region ids when assignments are missi
     buildHoverOverviewRows(
       {
         layerSamples: [
-          {
-            layerId: "zone_mask",
-            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          },
-          {
-            layerId: "region_groups",
-            rows: [
-              {
-                key: "resources",
-                icon: "hover-resources",
-                label: "Resources",
-                value: "RG16",
-                statusIcon: "question-mark",
-              },
-            ],
-          },
-          {
-            layerId: "regions",
-            rows: [
-              {
-                key: "origin",
-                icon: "hover-origin",
-                label: "Origin",
-                value: "R76",
-                statusIcon: "question-mark",
-              },
-            ],
-          },
+          zoneLayerSample("Demi River"),
+          regionGroupLayerSample({
+            containingRegion: "RG16",
+            containingRegionStatusIcon: "question-mark",
+          }),
+          regionLayerSample({
+            tradeOrigin: "R76",
+            tradeOriginStatusIcon: "question-mark",
+          }),
         ],
       },
       buildHoverStateBundle(),
@@ -947,15 +966,15 @@ test("buildHoverOverviewRows falls back to region ids when assignments are missi
       },
       {
         layerId: "region_groups",
-        icon: "hover-resources",
-        label: "Resources",
+        icon: "hover-zone",
+        label: "Containing region",
         value: "RG16",
         statusIcon: "question-mark",
       },
       {
         layerId: "regions",
         icon: "hover-origin",
-        label: "Origin",
+        label: "Trade Origin",
         value: "R76",
         statusIcon: "question-mark",
       },
@@ -968,23 +987,12 @@ test("buildHoverOverviewRows keeps a soft unknown marker when resource coordinat
     buildHoverOverviewRows(
       {
         layerSamples: [
-          {
-            layerId: "zone_mask",
-            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          },
-          {
-            layerId: "region_groups",
-            rows: [
-              {
-                key: "resources",
-                icon: "hover-resources",
-                label: "Resources",
-                value: "R76",
-                statusIcon: "question-mark",
-                statusIconTone: "subtle",
-              },
-            ],
-          },
+          zoneLayerSample("Demi River"),
+          regionGroupLayerSample({
+            containingRegion: "R76",
+            containingRegionStatusIcon: "question-mark",
+            containingRegionStatusIconTone: "subtle",
+          }),
         ],
       },
       buildHoverStateBundle(),
@@ -998,8 +1006,8 @@ test("buildHoverOverviewRows keeps a soft unknown marker when resource coordinat
       },
       {
         layerId: "region_groups",
-        icon: "hover-resources",
-        label: "Resources",
+        icon: "hover-zone",
+        label: "Containing region",
         value: "R76",
         statusIcon: "question-mark",
         statusIconTone: "subtle",
@@ -1013,23 +1021,12 @@ test("buildHoverOverviewRows keeps a soft unknown marker when origin coordinates
     buildHoverOverviewRows(
       {
         layerSamples: [
-          {
-            layerId: "zone_mask",
-            rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          },
-          {
-            layerId: "regions",
-            rows: [
-              {
-                key: "origin",
-                icon: "hover-origin",
-                label: "Origin",
-                value: "R76",
-                statusIcon: "question-mark",
-                statusIconTone: "subtle",
-              },
-            ],
-          },
+          zoneLayerSample("Demi River"),
+          regionLayerSample({
+            tradeOrigin: "R76",
+            tradeOriginStatusIcon: "question-mark",
+            tradeOriginStatusIconTone: "subtle",
+          }),
         ],
       },
       buildHoverStateBundle(),
@@ -1044,7 +1041,7 @@ test("buildHoverOverviewRows keeps a soft unknown marker when origin coordinates
       {
         layerId: "regions",
         icon: "hover-origin",
-        label: "Origin",
+        label: "Trade Origin",
         value: "R76",
         statusIcon: "question-mark",
         statusIconTone: "subtle",
@@ -1058,10 +1055,10 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
     buildBookmarkOverviewRows(
       {
         label: "Tarif hotspot",
-        rows: [
-          { key: "zone", icon: "hover-zone", label: "Zone", value: "Tarif" },
-          { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" },
-          { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" },
+        layerSamples: [
+          zoneLayerSample("Tarif"),
+          regionGroupLayerSample({ resourceBarNode: "Tarif" }),
+          regionLayerSample({ originNode: "Tarif" }),
         ],
       },
       0,
@@ -1079,13 +1076,13 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         value: "Tarif",
       },
       {
-        icon: "hover-resources",
-        label: "Resources",
+        icon: "map-pin",
+        label: "Resource Bar",
         value: "Tarif",
       },
       {
-        icon: "hover-origin",
-        label: "Origin",
+        icon: "map-pin",
+        label: "Origin node",
         value: "Tarif",
       },
     ],
@@ -1095,10 +1092,10 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
     buildBookmarkOverviewRows(
       {
         label: "Tarif",
-        rows: [
-          { key: "zone", icon: "hover-zone", label: "Zone", value: "Tarif" },
-          { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" },
-          { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" },
+        layerSamples: [
+          zoneLayerSample("Tarif"),
+          regionGroupLayerSample({ resourceBarNode: "Tarif" }),
+          regionLayerSample({ originNode: "Tarif" }),
         ],
       },
       0,
@@ -1111,13 +1108,13 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         hideLabel: true,
       },
       {
-        icon: "hover-resources",
-        label: "Resources",
+        icon: "map-pin",
+        label: "Resource Bar",
         value: "Tarif",
       },
       {
-        icon: "hover-origin",
-        label: "Origin",
+        icon: "map-pin",
+        label: "Origin node",
         value: "Tarif",
       },
     ],
@@ -1127,21 +1124,15 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
     buildBookmarkOverviewRows(
       {
         label: "Unknown route",
-        rows: [
-          {
-            key: "resources",
-            icon: "hover-resources",
-            label: "Resources",
-            value: "RG16",
-            statusIcon: "question-mark",
-          },
-          {
-            key: "origin",
-            icon: "hover-origin",
-            label: "Origin",
-            value: "R76",
-            statusIcon: "question-mark",
-          },
+        layerSamples: [
+          regionGroupLayerSample({
+            containingRegion: "RG16",
+            containingRegionStatusIcon: "question-mark",
+          }),
+          regionLayerSample({
+            tradeOrigin: "R76",
+            tradeOriginStatusIcon: "question-mark",
+          }),
         ],
       },
       0,
@@ -1154,14 +1145,14 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         hideLabel: true,
       },
       {
-        icon: "hover-resources",
-        label: "Resources",
+        icon: "hover-zone",
+        label: "Containing region",
         value: "RG16",
         statusIcon: "question-mark",
       },
       {
         icon: "hover-origin",
-        label: "Origin",
+        label: "Trade Origin",
         value: "R76",
         statusIcon: "question-mark",
       },
@@ -1353,11 +1344,7 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
         {
           id: "a",
           label: "",
-          rows: [
-            { key: "zone", icon: "hover-zone", label: "Zone", value: "Velia Coast" },
-            { key: "resources", icon: "hover-resources", label: "Resources", value: "Velia" },
-            { key: "origin", icon: "hover-origin", label: "Origin", value: "Velia" },
-          ],
+          layerSamples: [zoneLayerSample("Velia Coast")],
           worldX: 123.4567,
           worldZ: -45.6789,
         },
@@ -1370,11 +1357,7 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
       {
         id: "a",
         label: "Velia Coast",
-        rows: [
-          { key: "zone", icon: "hover-zone", label: "Zone", value: "Velia Coast", hideLabel: false },
-          { key: "resources", icon: "hover-resources", label: "Resources", value: "Velia", hideLabel: false },
-          { key: "origin", icon: "hover-origin", label: "Origin", value: "Velia", hideLabel: false },
-        ],
+        layerSamples: [zoneLayerSample("Velia Coast")],
         zoneRgb: null,
         worldX: 123.457,
         worldZ: -45.679,
@@ -1409,11 +1392,7 @@ test("resolveDisplayBookmarks fills imported bookmark metadata from the snapshot
           {
             id: "bookmark-a",
             label: "Tarif",
-            rows: [
-              { key: "zone", icon: "hover-zone", label: "Zone", value: "Mediah" },
-              { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" },
-              { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" },
-            ],
+            layerSamples: [zoneLayerSample("Mediah"), regionGroupLayerSample({ resourceBarNode: "Tarif" })],
             worldX: 12.5,
             worldZ: 8.25,
           },
@@ -1426,11 +1405,7 @@ test("resolveDisplayBookmarks fills imported bookmark metadata from the snapshot
     {
       id: "bookmark-a",
       label: "Tarif",
-      rows: [
-        { key: "zone", icon: "hover-zone", label: "Zone", value: "Mediah", hideLabel: false },
-        { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif", hideLabel: false },
-        { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif", hideLabel: false },
-      ],
+      layerSamples: [zoneLayerSample("Mediah"), regionGroupLayerSample({ resourceBarNode: "Tarif" })],
       zoneRgb: null,
       worldX: 12.5,
       worldZ: 8.25,
@@ -1445,11 +1420,7 @@ test("createBookmarkFromPlacement uses semantic rows as the default label", () =
       {
         worldX: 123.4567,
         worldZ: -45.6789,
-        rows: [
-          { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" },
-          { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" },
-          { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" },
-        ],
+        layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
         zoneRgb: 12345,
       },
       [],
@@ -1461,11 +1432,7 @@ test("createBookmarkFromPlacement uses semantic rows as the default label", () =
     {
       id: "bookmark-1",
       label: "Cron Islands - Depth 2",
-      rows: [
-        { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2", hideLabel: false },
-        { key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif", hideLabel: false },
-        { key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif", hideLabel: false },
-      ],
+      layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
       zoneRgb: 12345,
       worldX: 123.457,
       worldZ: -45.679,
@@ -1479,7 +1446,7 @@ test("renameBookmark updates the label and falls back to semantic rows when clea
     {
       id: "bookmark-1",
       label: "Cron Islands - Depth 2",
-      rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" }],
+      layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
       worldX: 123.4567,
       worldZ: -45.6789,
     },
@@ -1489,9 +1456,7 @@ test("renameBookmark updates the label and falls back to semantic rows when clea
     {
       id: "bookmark-1",
       label: "Shipwreck Route",
-      rows: [
-        { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2", hideLabel: false },
-      ],
+      layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
       zoneRgb: null,
       worldX: 123.457,
       worldZ: -45.679,
@@ -1503,9 +1468,7 @@ test("renameBookmark updates the label and falls back to semantic rows when clea
     {
       id: "bookmark-1",
       label: "Cron Islands - Depth 2",
-      rows: [
-        { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2", hideLabel: false },
-      ],
+      layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
       zoneRgb: null,
       worldX: 123.457,
       worldZ: -45.679,
@@ -1520,14 +1483,14 @@ test("serializeBookmarksForExport writes WorldmapBookMark XML with comments", ()
       {
         id: "bookmark-1",
         label: "Shipwreck Route",
-        rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" }],
+        layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
         worldX: 123.4567,
         worldZ: -45.6789,
       },
       {
         id: "bookmark-2",
         label: "Harbor Loop",
-        rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" }],
+        layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
         worldX: 14.25,
         worldZ: 80.5,
       },
@@ -1606,7 +1569,7 @@ test("parseImportedBookmarks accepts bare BookMark nodes and mergeImportedBookma
         {
           id: "bookmark-1",
           label: "Shipwreck Route",
-          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2" }],
+          layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
           worldX: 123.4567,
           worldZ: -45.6789,
         },
@@ -1617,9 +1580,7 @@ test("parseImportedBookmarks accepts bare BookMark nodes and mergeImportedBookma
       {
         id: "bookmark-1",
         label: "Shipwreck Route",
-        rows: [
-          { key: "zone", icon: "hover-zone", label: "Zone", value: "Cron Islands - Depth 2", hideLabel: false },
-        ],
+        layerSamples: [zoneLayerSample("Cron Islands - Depth 2")],
         zoneRgb: null,
         worldX: 123.457,
         worldZ: -45.679,
