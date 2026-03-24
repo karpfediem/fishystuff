@@ -382,9 +382,10 @@
         top: 6rem;
         right: 1rem;
         z-index: 18;
-        width: min(24rem, calc(100vw - 2rem));
-        height: min(30rem, calc(100% - 12rem));
-        max-height: calc(100% - 12rem);
+        width: min(30rem, calc(100vw - 2rem));
+        height: min(40rem, calc(100% - 10rem));
+        max-height: calc(100% - 10rem);
+        min-height: min(35rem, calc(100% - 10rem));
       }
 
       #fishymap-zone-info-body {
@@ -394,9 +395,30 @@
         overscroll-behavior: contain;
       }
 
-      #fishymap-zone-info-overview-panel[hidden],
-      #fishymap-zone-info-evidence-panel[hidden] {
-        display: none !important;
+      #fishymap-zone-info-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        flex: 0 0 auto;
+        height: auto;
+        align-items: flex-start;
+        align-content: flex-start;
+        justify-content: flex-start;
+        gap: 0.35rem;
+        overflow: visible;
+        min-height: 2.75rem;
+        padding: 0.35rem;
+      }
+
+      #fishymap-zone-info-tabs .tab {
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 100%;
+        min-height: 2.35rem;
+        padding-inline: 0.8rem;
+      }
+
+      #fishymap-zone-info-tabs .tab .truncate {
+        min-width: 0;
       }
 
       #fishymap-zone-evidence-list {
@@ -1061,7 +1083,7 @@
           <div
             id="fishymap-zone-info-tabs"
             role="tablist"
-            class="tabs tabs-box flex-nowrap overflow-x-auto bg-base-200/80 p-1"
+            class="tabs tabs-box bg-base-200/80 p-1"
             aria-label="Point layer tabs"
             hidden
           ></div>

@@ -23,7 +23,7 @@ const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
 const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
 const DEFAULT_ZONE_INFO_TAB = "";
 const ZONE_INFO_TAB_BUTTON_CLASS =
-  "tab flex-1 gap-2 text-xs font-semibold sm:text-sm";
+  "tab shrink-0 gap-2 whitespace-nowrap text-xs font-semibold sm:text-sm";
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
@@ -2440,7 +2440,7 @@ function ensureZoneInfoElements(elements) {
         <span id="fishymap-zone-info-status-text" class="truncate">no selection</span>
       </span>
     </div>
-    <div id="fishymap-zone-info-tabs" role="tablist" class="tabs tabs-box flex-nowrap overflow-x-auto bg-base-200/80 p-1" aria-label="Point layer tabs" hidden></div>
+    <div id="fishymap-zone-info-tabs" role="tablist" class="tabs tabs-box bg-base-200/80 p-1" aria-label="Point layer tabs" hidden></div>
     <div id="fishymap-zone-info-panel" class="space-y-3"></div>
   `;
 
@@ -2603,7 +2603,7 @@ function zoneInfoZoneEvidenceMarkup(selection, zoneStats, zoneStatsStatus, fishL
           <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
         </div>
       </div>
-      <div class="max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-2">${listMarkup}</div>
+      <div class="list max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-1">${listMarkup}</div>
     </section>
   `;
 }
@@ -2613,14 +2613,8 @@ function zoneInfoLayerPanelMarkup(tab, selection, stateBundle, fishLookup) {
   const targets = Array.isArray(tab.sample?.targets) ? tab.sample.targets : [];
   const zoneStats = stateBundle.state?.selection?.zoneStats || null;
   const zoneStatsStatus = stateBundle.state?.statuses?.zoneStatsStatus || "zone evidence: idle";
-  const summary = tab.summary || buildSelectionSummaryText(selection, stateBundle);
   return `
     <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(tab.id)}">
-      ${
-        summary
-          ? `<p class="text-sm font-semibold text-base-content/80">${escapeHtml(summary)}</p>`
-          : ""
-      }
       ${
         rows.length
           ? `<div class="fishymap-overview-list">${rows
@@ -3321,7 +3315,14 @@ function renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup) 
       `;
     })
     .join("");
-  setMarkup(elements.zoneInfoTabs, JSON.stringify(tabs.map((tab) => [tab.id, tab.label, tab.summary])), tabMarkup);
+  setMarkup(
+    elements.zoneInfoTabs,
+    JSON.stringify({
+      activeTab,
+      tabs: tabs.map((tab) => [tab.id, tab.label, tab.summary]),
+    }),
+    tabMarkup,
+  );
 
   if (!selection || !activeLayerTab) {
     setMarkup(
