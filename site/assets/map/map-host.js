@@ -44,8 +44,10 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *   neutral?: string,
  *   neutralContent?: string,
  *   info?: string,
+ *   infoContent?: string,
  *   success?: string,
  *   warning?: string,
+ *   warningContent?: string,
  *   error?: string
  * }} FishyMapThemeColors
  */
@@ -1325,9 +1327,9 @@ function ensureThemeProbe(doc) {
     '<div data-role="secondary" class="bg-secondary text-secondary-content"></div>',
     '<div data-role="accent" class="bg-accent text-accent-content"></div>',
     '<div data-role="neutral" class="bg-neutral text-neutral-content"></div>',
-    '<div data-role="info" class="bg-info"></div>',
+    '<div data-role="info" class="bg-info text-info-content"></div>',
     '<div data-role="success" class="bg-success"></div>',
-    '<div data-role="warning" class="bg-warning"></div>',
+    '<div data-role="warning" class="bg-warning text-warning-content"></div>',
     '<div data-role="error" class="bg-error"></div>',
   ].join("");
   doc.body.appendChild(probe);
@@ -1389,8 +1391,10 @@ export function extractThemeSnapshot({
       neutral: readComputedColor(win, neutral, "background-color"),
       neutralContent: readComputedColor(win, neutral, "color"),
       info: readComputedColor(win, info, "background-color"),
+      infoContent: readComputedColor(win, info, "color"),
       success: readComputedColor(win, success, "background-color"),
       warning: readComputedColor(win, warning, "background-color"),
+      warningContent: readComputedColor(win, warning, "color"),
       error: readComputedColor(win, error, "background-color"),
     }, doc) || {},
   };

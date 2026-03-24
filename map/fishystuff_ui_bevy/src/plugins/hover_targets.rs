@@ -38,16 +38,14 @@ const HOVER_CHIP_NAME_PADDING_X_SCREEN_PX: f32 = 9.0;
 const HOVER_SEMANTIC_WIDTH_SLACK_SCREEN_PX: f32 = 2.0;
 const HOVER_CALLOUT_BORDER_COLOR: Color = Color::srgb(0.14, 0.15, 0.19);
 const HOVER_CALLOUT_PANEL_COLOR: Color = Color::srgb(0.17, 0.18, 0.22);
-const HOVER_CHIP_REGION_GROUP_BORDER_COLOR: Color = Color::srgba(0.30, 0.83, 1.0, 0.70);
-const HOVER_CHIP_REGION_GROUP_PANEL_COLOR: Color = Color::srgba(0.16, 0.38, 0.46, 0.62);
-const HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR: Color = Color::srgba(0.24, 0.66, 0.84, 0.96);
+const HOVER_CHIP_REGION_GROUP_BORDER_COLOR: Color = Color::srgb(0.24, 0.66, 0.84);
+const HOVER_CHIP_REGION_GROUP_PANEL_COLOR: Color = Color::srgb(0.17, 0.18, 0.22);
+const HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR: Color = Color::srgb(0.24, 0.66, 0.84);
 const HOVER_CHIP_REGION_GROUP_CODE_TEXT_COLOR: Color = Color::srgb(0.97, 0.99, 1.0);
-const HOVER_CHIP_REGION_GROUP_NAME_TEXT_COLOR: Color = Color::srgb(0.91, 0.97, 1.0);
-const HOVER_CHIP_REGION_BORDER_COLOR: Color = Color::srgba(1.0, 0.77, 0.26, 0.74);
-const HOVER_CHIP_REGION_PANEL_COLOR: Color = Color::srgba(0.40, 0.29, 0.10, 0.64);
-const HOVER_CHIP_REGION_CODE_BG_COLOR: Color = Color::srgba(0.98, 0.78, 0.30, 0.96);
+const HOVER_CHIP_REGION_GROUP_NAME_TEXT_COLOR: Color = Color::srgb(0.98, 0.97, 0.94);
+const HOVER_CHIP_REGION_BORDER_COLOR: Color = Color::srgb(0.98, 0.78, 0.30);
+const HOVER_CHIP_REGION_CODE_BG_COLOR: Color = Color::srgb(0.98, 0.78, 0.30);
 const HOVER_CHIP_REGION_CODE_TEXT_COLOR: Color = Color::srgb(0.18, 0.11, 0.0);
-const HOVER_CHIP_REGION_NAME_TEXT_COLOR: Color = Color::srgb(0.98, 0.94, 0.86);
 
 const HOVER_TEXTURE_WIDTH_PX: usize = 32;
 const HOVER_TEXTURE_HEIGHT_PX: usize = 32;
@@ -661,13 +659,13 @@ fn sync_hover_targets(
                 label_parts.p3().get_mut(pair.semantic_chip)
             {
                 *background = BackgroundColor(Color::NONE);
-                *border = BorderColor::all(chip_border_color(identity.kind));
+                *border = BorderColor::all(chip_border_color(identity.kind, theme_colors));
                 *visibility = Visibility::Visible;
             }
             if let Ok((mut background, mut visibility)) =
                 label_parts.p4().get_mut(pair.semantic_chip_code_box)
             {
-                *background = BackgroundColor(chip_code_box_color(identity.kind));
+                *background = BackgroundColor(chip_code_box_color(identity.kind, theme_colors));
                 *visibility = Visibility::Visible;
             }
             if let Ok((mut text, mut text_font, mut text_color)) =
@@ -676,12 +674,12 @@ fn sync_hover_targets(
                 text.0 = identity.code.clone();
                 text_font.font = fonts.regular.clone();
                 text_font.font_size = 10.0;
-                text_color.0 = chip_code_text_color(identity.kind);
+                text_color.0 = chip_code_text_color(identity.kind, theme_colors);
             }
             if let Ok((mut background, mut visibility)) =
                 label_parts.p6().get_mut(pair.semantic_chip_name_box)
             {
-                *background = BackgroundColor(chip_name_box_color(identity.kind));
+                *background = BackgroundColor(chip_name_box_color(theme_colors));
                 *visibility = if identity.name.is_empty() {
                     Visibility::Hidden
                 } else {
@@ -694,7 +692,7 @@ fn sync_hover_targets(
                 text.0 = identity.name.clone();
                 text_font.font = fonts.regular.clone();
                 text_font.font_size = HOVER_LABEL_SIZE_PX;
-                text_color.0 = chip_name_text_color(identity.kind);
+                text_color.0 = chip_name_text_color(theme_colors);
             }
             if let Ok((mut text, _, mut text_color)) = label_parts.p0().get_mut(pair.plain_text) {
                 text.0.clear();
@@ -1043,39 +1041,57 @@ fn parse_semantic_identity_label(value: &str) -> Option<SemanticIdentityLabel> {
     })
 }
 
-fn chip_border_color(kind: SemanticIdentityKind) -> Color {
+fn chip_border_color(kind: SemanticIdentityKind, colors: Option<&FishyMapThemeColors>) -> Color {
     match kind {
-        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_BORDER_COLOR,
-        SemanticIdentityKind::Region => HOVER_CHIP_REGION_BORDER_COLOR,
+        SemanticIdentityKind::RegionGroup => colors
+            .and_then(|colors| colors.info.as_deref())
+            .and_then(parse_css_color)
+            .unwrap_or(HOVER_CHIP_REGION_GROUP_BORDER_COLOR),
+        SemanticIdentityKind::Region => colors
+            .and_then(|colors| colors.warning.as_deref())
+            .and_then(parse_css_color)
+            .unwrap_or(HOVER_CHIP_REGION_BORDER_COLOR),
     }
 }
 
-fn chip_code_box_color(kind: SemanticIdentityKind) -> Color {
+fn chip_code_box_color(kind: SemanticIdentityKind, colors: Option<&FishyMapThemeColors>) -> Color {
     match kind {
-        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR,
-        SemanticIdentityKind::Region => HOVER_CHIP_REGION_CODE_BG_COLOR,
+        SemanticIdentityKind::RegionGroup => colors
+            .and_then(|colors| colors.info.as_deref())
+            .and_then(parse_css_color)
+            .unwrap_or(HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR),
+        SemanticIdentityKind::Region => colors
+            .and_then(|colors| colors.warning.as_deref())
+            .and_then(parse_css_color)
+            .unwrap_or(HOVER_CHIP_REGION_CODE_BG_COLOR),
     }
 }
 
-fn chip_code_text_color(kind: SemanticIdentityKind) -> Color {
+fn chip_code_text_color(kind: SemanticIdentityKind, colors: Option<&FishyMapThemeColors>) -> Color {
     match kind {
-        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_CODE_TEXT_COLOR,
-        SemanticIdentityKind::Region => HOVER_CHIP_REGION_CODE_TEXT_COLOR,
+        SemanticIdentityKind::RegionGroup => colors
+            .and_then(|colors| colors.info_content.as_deref())
+            .and_then(parse_css_color)
+            .unwrap_or(HOVER_CHIP_REGION_GROUP_CODE_TEXT_COLOR),
+        SemanticIdentityKind::Region => colors
+            .and_then(|colors| colors.warning_content.as_deref())
+            .and_then(parse_css_color)
+            .unwrap_or(HOVER_CHIP_REGION_CODE_TEXT_COLOR),
     }
 }
 
-fn chip_name_box_color(kind: SemanticIdentityKind) -> Color {
-    match kind {
-        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_PANEL_COLOR,
-        SemanticIdentityKind::Region => HOVER_CHIP_REGION_PANEL_COLOR,
-    }
+fn chip_name_box_color(colors: Option<&FishyMapThemeColors>) -> Color {
+    colors
+        .and_then(|colors| colors.base100.as_deref())
+        .and_then(parse_css_color)
+        .unwrap_or(HOVER_CHIP_REGION_GROUP_PANEL_COLOR)
 }
 
-fn chip_name_text_color(kind: SemanticIdentityKind) -> Color {
-    match kind {
-        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_NAME_TEXT_COLOR,
-        SemanticIdentityKind::Region => HOVER_CHIP_REGION_NAME_TEXT_COLOR,
-    }
+fn chip_name_text_color(colors: Option<&FishyMapThemeColors>) -> Color {
+    colors
+        .and_then(|colors| colors.base_content.as_deref())
+        .and_then(parse_css_color)
+        .unwrap_or(HOVER_CHIP_REGION_GROUP_NAME_TEXT_COLOR)
 }
 
 fn build_hover_marker_texture() -> Image {

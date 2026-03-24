@@ -39,8 +39,10 @@ pub struct FishyMapThemeColors {
     pub neutral: Option<String>,
     pub neutral_content: Option<String>,
     pub info: Option<String>,
+    pub info_content: Option<String>,
     pub success: Option<String>,
     pub warning: Option<String>,
+    pub warning_content: Option<String>,
     pub error: Option<String>,
 }
 
@@ -85,11 +87,17 @@ impl FishyMapThemeColors {
         if patch.info.is_some() {
             self.info = patch.info;
         }
+        if patch.info_content.is_some() {
+            self.info_content = patch.info_content;
+        }
         if patch.success.is_some() {
             self.success = patch.success;
         }
         if patch.warning.is_some() {
             self.warning = patch.warning;
+        }
+        if patch.warning_content.is_some() {
+            self.warning_content = patch.warning_content;
         }
         if patch.error.is_some() {
             self.error = patch.error;

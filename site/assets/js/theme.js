@@ -20,7 +20,14 @@
         probe.innerHTML = [
             '<div data-role="base" class="bg-base-100 text-base-content"></div>',
             '<div data-role="surface" class="bg-base-200 border border-base-300"></div>',
-            '<div data-role="primary" class="bg-primary text-primary-content"></div>'
+            '<div data-role="primary" class="bg-primary text-primary-content"></div>',
+            '<div data-role="secondary" class="bg-secondary text-secondary-content"></div>',
+            '<div data-role="accent" class="bg-accent text-accent-content"></div>',
+            '<div data-role="neutral" class="bg-neutral text-neutral-content"></div>',
+            '<div data-role="info" class="bg-info text-info-content"></div>',
+            '<div data-role="success" class="bg-success text-success-content"></div>',
+            '<div data-role="warning" class="bg-warning text-warning-content"></div>',
+            '<div data-role="error" class="bg-error text-error-content"></div>'
         ].join('');
         document.body.appendChild(probe);
         return probe;
@@ -44,7 +51,21 @@
                 base200: readColor(probe, '[data-role="surface"]', 'background-color'),
                 base300: readColor(probe, '[data-role="surface"]', 'border-top-color'),
                 primary: readColor(probe, '[data-role="primary"]', 'background-color'),
-                primaryContent: readColor(probe, '[data-role="primary"]', 'color')
+                primaryContent: readColor(probe, '[data-role="primary"]', 'color'),
+                secondary: readColor(probe, '[data-role="secondary"]', 'background-color'),
+                secondaryContent: readColor(probe, '[data-role="secondary"]', 'color'),
+                accent: readColor(probe, '[data-role="accent"]', 'background-color'),
+                accentContent: readColor(probe, '[data-role="accent"]', 'color'),
+                neutral: readColor(probe, '[data-role="neutral"]', 'background-color'),
+                neutralContent: readColor(probe, '[data-role="neutral"]', 'color'),
+                info: readColor(probe, '[data-role="info"]', 'background-color'),
+                infoContent: readColor(probe, '[data-role="info"]', 'color'),
+                success: readColor(probe, '[data-role="success"]', 'background-color'),
+                successContent: readColor(probe, '[data-role="success"]', 'color'),
+                warning: readColor(probe, '[data-role="warning"]', 'background-color'),
+                warningContent: readColor(probe, '[data-role="warning"]', 'color'),
+                error: readColor(probe, '[data-role="error"]', 'background-color'),
+                errorContent: readColor(probe, '[data-role="error"]', 'color')
             }
         };
     }
