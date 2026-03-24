@@ -162,7 +162,7 @@ impl FieldLayerView for LoadedFieldLayer<'_> {
 }
 
 impl LoadedFieldLayer<'_> {
-    pub fn render_rgba_chunk_with_highlight(
+    pub fn render_highlight_rgba_chunk(
         &self,
         source_origin_x: i32,
         source_origin_y: i32,
@@ -179,7 +179,7 @@ impl LoadedFieldLayer<'_> {
             source_height,
             output_width,
             output_height,
-            |id| visual_rgba_for_field_id_with_highlight(id, self.color_mode, highlight_field_id),
+            |id| highlight_rgba_for_field_id(id, highlight_field_id),
         )
     }
 }
@@ -235,15 +235,11 @@ fn visual_rgba_for_field_id(id: u32, color_mode: FieldColorMode) -> [u8; 4] {
     }
 }
 
-fn visual_rgba_for_field_id_with_highlight(
-    id: u32,
-    color_mode: FieldColorMode,
-    highlight_field_id: Option<u32>,
-) -> [u8; 4] {
+fn highlight_rgba_for_field_id(id: u32, highlight_field_id: Option<u32>) -> [u8; 4] {
     if id != 0 && highlight_field_id == Some(id) {
         return FIELD_HOVER_HIGHLIGHT_RGBA;
     }
-    visual_rgba_for_field_id(id, color_mode)
+    [0, 0, 0, 0]
 }
 
 fn hash_u32(mut value: u32) -> u32 {
@@ -341,17 +337,17 @@ mod tests {
     }
 
     #[test]
-    fn render_rgba_chunk_with_highlight_tints_matching_field_id() {
+    fn render_highlight_rgba_chunk_marks_only_matching_field_id() {
         let field = DiscreteFieldRows::from_u32_grid(2, 1, &[10, 20]).expect("field");
         let view = LoadedFieldLayer {
             field: &field,
             color_mode: FieldColorMode::DebugHash,
         };
 
-        let chunk = view.render_rgba_chunk_with_highlight(0, 0, 2, 1, 2, 1, Some(20));
+        let chunk = view.render_highlight_rgba_chunk(0, 0, 2, 1, 2, 1, Some(20));
         let data = chunk.data();
 
-        assert_ne!(&data[0..4], &FIELD_HOVER_HIGHLIGHT_RGBA);
+        assert_eq!(&data[0..4], &[0, 0, 0, 0]);
         assert_eq!(&data[4..8], &FIELD_HOVER_HIGHLIGHT_RGBA);
     }
 }

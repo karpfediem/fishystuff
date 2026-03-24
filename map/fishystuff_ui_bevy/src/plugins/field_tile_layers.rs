@@ -1,0 +1,940 @@
+use std::collections::{HashMap, HashSet};
+
+use bevy::asset::RenderAssetUsages;
+use bevy::image::Image;
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::window::PrimaryWindow;
+
+use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::exact_lookup::{
+    ensure_exact_lookup_request, poll_exact_lookup_requests, ExactLookupCache, ExactLookupStatus,
+    PendingExactLookups,
+};
+use crate::map::field_metadata::{
+    ensure_field_metadata_request, poll_field_metadata_requests, FieldMetadataCache,
+    PendingFieldMetadata,
+};
+use crate::map::field_view::{loaded_field_layer, FieldLayerView, LoadedFieldLayer};
+use crate::map::layers::{LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, LodPolicy};
+use crate::map::raster::TileKey;
+use crate::map::render::tile_z;
+use crate::map::spaces::layer_transform::{LayerTransform, TileSpace};
+use crate::map::spaces::world::MapToWorld;
+use crate::map::spaces::{MapPoint, MapRect, WorldPoint, WorldRect};
+use crate::plugins::api::HoverState;
+use crate::plugins::camera::Map2dCamera;
+use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
+use crate::prelude::*;
+
+const FIELD_LAYER_MAP_VERSION: u64 = 0;
+const FIELD_TILE_MARGIN: i32 = 1;
+const FIELD_HIGHLIGHT_Z_BIAS: f32 = 0.0005;
+
+pub struct FieldTileLayersPlugin;
+
+impl Plugin for FieldTileLayersPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<ExactLookupCache>()
+            .init_resource::<PendingExactLookups>()
+            .init_resource::<FieldMetadataCache>()
+            .init_resource::<PendingFieldMetadata>()
+            .init_resource::<FieldTileRuntime>()
+            .add_systems(
+                PostUpdate,
+                (sync_exact_lookup_cache, update_field_tile_layer_visuals).chain(),
+            );
+    }
+}
+
+#[derive(Resource, Default)]
+struct FieldTileRuntime {
+    layers: HashMap<LayerId, FieldTileLayerCache>,
+}
+
+#[derive(Default)]
+struct FieldTileLayerCache {
+    current_z: Option<i32>,
+    use_counter: u64,
+    tiles: HashMap<TileKey, FieldTileEntry>,
+}
+
+struct FieldTileEntry {
+    base_entity: Entity,
+    base_image: Handle<Image>,
+    highlight_entity: Entity,
+    highlight_image: Handle<Image>,
+    highlight_field_id: Option<u32>,
+    last_used: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FieldTileBounds {
+    min_tx: i32,
+    max_tx: i32,
+    min_ty: i32,
+    max_ty: i32,
+    z: i32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FieldLevelCandidate {
+    z: i32,
+    visible_count: usize,
+}
+
+fn sync_exact_lookup_cache(
+    layer_registry: Res<LayerRegistry>,
+    mut layer_runtime: ResMut<LayerRuntime>,
+    mut exact_lookups: ResMut<ExactLookupCache>,
+    mut pending_lookups: ResMut<PendingExactLookups>,
+    mut field_metadata: ResMut<FieldMetadataCache>,
+    mut pending_field_metadata: ResMut<PendingFieldMetadata>,
+) {
+    poll_exact_lookup_requests(&mut exact_lookups, &mut pending_lookups);
+    poll_field_metadata_requests(&mut field_metadata, &mut pending_field_metadata);
+
+    let active_layer_ids = layer_registry
+        .ordered()
+        .iter()
+        .filter(|layer| layer.field_url().is_some())
+        .map(|layer| layer.id)
+        .collect::<HashSet<_>>();
+
+    for layer in layer_registry.ordered() {
+        let Some(url) = layer.field_url() else {
+            if layer.field_metadata_url().is_some() {
+                ensure_field_metadata_request(
+                    layer,
+                    &mut field_metadata,
+                    &mut pending_field_metadata,
+                );
+            }
+            continue;
+        };
+        ensure_exact_lookup_request(layer, &mut exact_lookups, &mut pending_lookups);
+        ensure_field_metadata_request(layer, &mut field_metadata, &mut pending_field_metadata);
+
+        if let Some(runtime_state) = layer_runtime.get_mut(layer.id) {
+            match exact_lookups.status(layer.id, &url) {
+                ExactLookupStatus::Missing => {
+                    runtime_state.manifest_status = LayerManifestStatus::Missing;
+                    runtime_state.resident_tile_count = 0;
+                    runtime_state.pending_count = 0;
+                    runtime_state.inflight_count = 0;
+                }
+                ExactLookupStatus::Loading => {
+                    runtime_state.manifest_status = LayerManifestStatus::Loading;
+                    runtime_state.resident_tile_count = 0;
+                    runtime_state.pending_count = 1;
+                    runtime_state.inflight_count = 1;
+                }
+                ExactLookupStatus::Ready => {
+                    runtime_state.manifest_status = LayerManifestStatus::Ready;
+                    runtime_state.pending_count = 0;
+                    runtime_state.inflight_count = 0;
+                }
+                ExactLookupStatus::Failed => {
+                    runtime_state.manifest_status = LayerManifestStatus::Failed;
+                    runtime_state.resident_tile_count = 0;
+                    runtime_state.pending_count = 0;
+                    runtime_state.inflight_count = 0;
+                }
+            }
+        }
+    }
+
+    let stale_lookup_ids = exact_lookups
+        .layer_ids()
+        .into_iter()
+        .filter(|layer_id| !active_layer_ids.contains(layer_id))
+        .collect::<Vec<_>>();
+    for layer_id in stale_lookup_ids {
+        exact_lookups.remove_layer(layer_id);
+    }
+
+    let stale_pending_ids = pending_lookups
+        .layer_ids()
+        .into_iter()
+        .filter(|layer_id| !active_layer_ids.contains(layer_id))
+        .collect::<Vec<_>>();
+    for layer_id in stale_pending_ids {
+        pending_lookups.remove_layer(layer_id);
+    }
+
+    let active_metadata_ids = layer_registry
+        .ordered()
+        .iter()
+        .filter(|layer| layer.field_metadata_url().is_some())
+        .map(|layer| layer.id)
+        .collect::<HashSet<_>>();
+    let stale_metadata_ids = field_metadata
+        .layer_ids()
+        .into_iter()
+        .filter(|layer_id| !active_metadata_ids.contains(layer_id))
+        .collect::<Vec<_>>();
+    for layer_id in stale_metadata_ids {
+        field_metadata.remove_layer(layer_id);
+    }
+    let stale_pending_metadata_ids = pending_field_metadata
+        .layer_ids()
+        .into_iter()
+        .filter(|layer_id| !active_metadata_ids.contains(layer_id))
+        .collect::<Vec<_>>();
+    for layer_id in stale_pending_metadata_ids {
+        pending_field_metadata.remove_layer(layer_id);
+    }
+}
+
+fn update_field_tile_layer_visuals(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    windows: Query<&Window, With<PrimaryWindow>>,
+    camera_q: Query<(&Camera, &Transform), With<Map2dCamera>>,
+    view_mode: Res<ViewModeState>,
+    layer_registry: Res<LayerRegistry>,
+    mut layer_runtime: ResMut<LayerRuntime>,
+    exact_lookups: Res<ExactLookupCache>,
+    hover: Res<HoverState>,
+    mut field_runtime: ResMut<FieldTileRuntime>,
+) {
+    let active_exact_layers = layer_registry
+        .ordered()
+        .iter()
+        .filter(|layer| layer.field_url().is_some())
+        .map(|layer| layer.id)
+        .collect::<HashSet<_>>();
+    cleanup_stale_field_layers(
+        &mut commands,
+        &mut images,
+        &mut field_runtime,
+        &active_exact_layers,
+    );
+
+    if view_mode.mode != ViewMode::Map2D {
+        hide_all_field_layers(&mut commands, &field_runtime);
+        return;
+    }
+
+    let Ok(window) = windows.single() else {
+        hide_all_field_layers(&mut commands, &field_runtime);
+        return;
+    };
+    let Ok((camera, camera_transform)) = camera_q.single() else {
+        hide_all_field_layers(&mut commands, &field_runtime);
+        return;
+    };
+    let Some(view_world) = view_rect(camera, camera_transform, window) else {
+        hide_all_field_layers(&mut commands, &field_runtime);
+        return;
+    };
+    let map_to_world = MapToWorld::default();
+    let visible_map_rect = world_rect_to_clamped_map_rect(view_world, map_to_world);
+
+    for layer in layer_registry.ordered() {
+        let Some(runtime_state) = layer_runtime.get_mut(layer.id) else {
+            continue;
+        };
+        let Some(url) = layer.field_url() else {
+            hide_field_layer(&mut commands, field_runtime.layers.get(&layer.id));
+            continue;
+        };
+        let Some(field) = loaded_field_layer(layer, &exact_lookups) else {
+            hide_field_layer(&mut commands, field_runtime.layers.get(&layer.id));
+            runtime_state.visible_tile_count = 0;
+            runtime_state.resident_tile_count = 0;
+            continue;
+        };
+        if exact_lookups.get(layer.id, &url).is_none()
+            || !runtime_state.visible
+            || !matches!(layer.transform, LayerTransform::IdentityMapSpace)
+        {
+            hide_field_layer(&mut commands, field_runtime.layers.get(&layer.id));
+            runtime_state.visible_tile_count = 0;
+            continue;
+        }
+
+        let generated_max_level =
+            generated_field_max_level(field.width(), field.height(), layer.tile_px.max(1));
+        let layer_cache = field_runtime.layers.entry(layer.id).or_default();
+        let z = choose_field_tile_level(
+            visible_map_rect,
+            layer.tile_px.max(1),
+            generated_max_level,
+            layer_cache.current_z,
+            &layer.lod_policy,
+        );
+        layer_cache.current_z = Some(z);
+        let Some(bounds) = visible_tile_bounds(
+            visible_map_rect,
+            field.width(),
+            field.height(),
+            layer.tile_px.max(1),
+            z,
+            FIELD_TILE_MARGIN,
+        ) else {
+            hide_field_layer(&mut commands, Some(layer_cache));
+            runtime_state.visible_tile_count = 0;
+            continue;
+        };
+        let hovered_field_id = hovered_field_id_for_layer(hover.info.as_ref(), layer.key.as_str());
+        let tile_space = TileSpace::new(layer.tile_px.max(1), layer.y_flip);
+        let max_level_u8 = generated_max_level.min(i32::from(u8::MAX)) as u8;
+        let mut active_keys = HashSet::new();
+        let mut visible_count = 0_u32;
+
+        for ty in bounds.min_ty..=bounds.max_ty {
+            for tx in bounds.min_tx..=bounds.max_tx {
+                let key = TileKey {
+                    layer: layer.id,
+                    map_version: FIELD_LAYER_MAP_VERSION,
+                    z: bounds.z,
+                    tx,
+                    ty,
+                };
+                active_keys.insert(key);
+                if !ensure_field_tile_entry(
+                    &mut commands,
+                    &mut images,
+                    layer_cache,
+                    key,
+                    layer,
+                    field,
+                ) {
+                    continue;
+                }
+                let Some(entry) = layer_cache.tiles.get_mut(&key) else {
+                    continue;
+                };
+                layer_cache.use_counter = layer_cache.use_counter.wrapping_add(1);
+                entry.last_used = layer_cache.use_counter;
+                let Some((x0, y0, w, h)) = field_tile_world_rect(&key, tile_space, map_to_world)
+                else {
+                    continue;
+                };
+                let depth = tile_z(runtime_state.z_base, max_level_u8, bounds.z);
+                commands.entity(entry.base_entity).insert((
+                    Visibility::Visible,
+                    Sprite {
+                        image: entry.base_image.clone(),
+                        custom_size: Some(Vec2::new(w, h)),
+                        color: Color::srgba(1.0, 1.0, 1.0, runtime_state.opacity.clamp(0.0, 1.0)),
+                        ..default()
+                    },
+                    Transform::from_translation(Vec3::new(x0 + w * 0.5, y0 + h * 0.5, depth)),
+                ));
+                update_field_tile_highlight(
+                    &mut commands,
+                    &mut images,
+                    entry,
+                    key,
+                    layer,
+                    field,
+                    hovered_field_id,
+                    w,
+                    h,
+                    x0,
+                    y0,
+                    depth + FIELD_HIGHLIGHT_Z_BIAS,
+                    runtime_state.opacity.clamp(0.0, 1.0),
+                );
+                visible_count = visible_count.saturating_add(1);
+            }
+        }
+
+        hide_inactive_tiles(&mut commands, layer_cache, &active_keys);
+        evict_excess_tiles(
+            &mut commands,
+            &mut images,
+            layer_cache,
+            &active_keys,
+            layer.lod_policy.max_resident_tiles.max(active_keys.len()),
+        );
+        runtime_state.current_base_lod = u8::try_from(bounds.z).ok();
+        runtime_state.current_detail_lod = None;
+        runtime_state.visible_tile_count = visible_count;
+        runtime_state.resident_tile_count = layer_cache.tiles.len() as u32;
+        runtime_state.pending_count = 0;
+        runtime_state.inflight_count = 0;
+        runtime_state.manifest_status = LayerManifestStatus::Ready;
+    }
+}
+
+fn ensure_field_tile_entry(
+    commands: &mut Commands,
+    images: &mut Assets<Image>,
+    layer_cache: &mut FieldTileLayerCache,
+    key: TileKey,
+    layer: &crate::map::layers::LayerSpec,
+    field: LoadedFieldLayer<'_>,
+) -> bool {
+    if layer_cache.tiles.contains_key(&key) {
+        return true;
+    }
+    let Some(base_image) = render_field_tile_image(field, layer, key) else {
+        return false;
+    };
+    let base_handle = images.add(base_image);
+    let base_entity = commands
+        .spawn((
+            World2dRenderEntity,
+            world_2d_layers(),
+            Sprite {
+                image: base_handle.clone(),
+                ..default()
+            },
+            Transform::default(),
+            Visibility::Hidden,
+        ))
+        .id();
+    let highlight_handle = images.add(empty_field_tile_image());
+    let highlight_entity = commands
+        .spawn((
+            World2dRenderEntity,
+            world_2d_layers(),
+            Sprite {
+                image: highlight_handle.clone(),
+                ..default()
+            },
+            Transform::default(),
+            Visibility::Hidden,
+        ))
+        .id();
+    layer_cache.tiles.insert(
+        key,
+        FieldTileEntry {
+            base_entity,
+            base_image: base_handle,
+            highlight_entity,
+            highlight_image: highlight_handle,
+            highlight_field_id: None,
+            last_used: 0,
+        },
+    );
+    true
+}
+
+#[allow(clippy::too_many_arguments)]
+fn update_field_tile_highlight(
+    commands: &mut Commands,
+    images: &mut Assets<Image>,
+    entry: &mut FieldTileEntry,
+    key: TileKey,
+    layer: &crate::map::layers::LayerSpec,
+    field: LoadedFieldLayer<'_>,
+    hovered_field_id: Option<u32>,
+    width: f32,
+    height: f32,
+    x0: f32,
+    y0: f32,
+    depth: f32,
+    opacity: f32,
+) {
+    let Some(highlight_field_id) = hovered_field_id.filter(|field_id| *field_id != 0) else {
+        entry.highlight_field_id = None;
+        commands
+            .entity(entry.highlight_entity)
+            .insert(Visibility::Hidden);
+        return;
+    };
+    if entry.highlight_field_id != Some(highlight_field_id) {
+        let image = render_field_highlight_tile_image(field, layer, key, highlight_field_id)
+            .unwrap_or_else(empty_field_tile_image);
+        replace_field_tile_image(images, &mut entry.highlight_image, image);
+        entry.highlight_field_id = Some(highlight_field_id);
+    }
+    commands.entity(entry.highlight_entity).insert((
+        Visibility::Visible,
+        Sprite {
+            image: entry.highlight_image.clone(),
+            custom_size: Some(Vec2::new(width, height)),
+            color: Color::srgba(1.0, 1.0, 1.0, opacity),
+            ..default()
+        },
+        Transform::from_translation(Vec3::new(x0 + width * 0.5, y0 + height * 0.5, depth)),
+    ));
+}
+
+fn cleanup_stale_field_layers(
+    commands: &mut Commands,
+    images: &mut Assets<Image>,
+    field_runtime: &mut FieldTileRuntime,
+    active_layer_ids: &HashSet<LayerId>,
+) {
+    let stale_ids = field_runtime
+        .layers
+        .keys()
+        .filter(|layer_id| !active_layer_ids.contains(layer_id))
+        .copied()
+        .collect::<Vec<_>>();
+    for layer_id in stale_ids {
+        if let Some(layer_cache) = field_runtime.layers.remove(&layer_id) {
+            despawn_field_tile_layer(commands, images, layer_cache);
+        }
+    }
+}
+
+fn hide_inactive_tiles(
+    commands: &mut Commands,
+    layer_cache: &mut FieldTileLayerCache,
+    active_keys: &HashSet<TileKey>,
+) {
+    for (key, entry) in &layer_cache.tiles {
+        if active_keys.contains(key) {
+            continue;
+        }
+        commands
+            .entity(entry.base_entity)
+            .insert(Visibility::Hidden);
+        commands
+            .entity(entry.highlight_entity)
+            .insert(Visibility::Hidden);
+    }
+}
+
+fn evict_excess_tiles(
+    commands: &mut Commands,
+    images: &mut Assets<Image>,
+    layer_cache: &mut FieldTileLayerCache,
+    active_keys: &HashSet<TileKey>,
+    max_resident_tiles: usize,
+) {
+    if layer_cache.tiles.len() <= max_resident_tiles {
+        return;
+    }
+    let mut inactive = layer_cache
+        .tiles
+        .iter()
+        .filter(|(key, _)| !active_keys.contains(key))
+        .map(|(key, entry)| (*key, entry.last_used))
+        .collect::<Vec<_>>();
+    inactive.sort_by_key(|(_, last_used)| *last_used);
+    let excess = layer_cache.tiles.len().saturating_sub(max_resident_tiles);
+    for (key, _) in inactive.into_iter().take(excess) {
+        if let Some(entry) = layer_cache.tiles.remove(&key) {
+            despawn_field_tile_entry(commands, images, entry);
+        }
+    }
+}
+
+fn hide_all_field_layers(commands: &mut Commands, field_runtime: &FieldTileRuntime) {
+    for layer_cache in field_runtime.layers.values() {
+        hide_field_layer(commands, Some(layer_cache));
+    }
+}
+
+fn hide_field_layer(commands: &mut Commands, layer_cache: Option<&FieldTileLayerCache>) {
+    let Some(layer_cache) = layer_cache else {
+        return;
+    };
+    for entry in layer_cache.tiles.values() {
+        commands
+            .entity(entry.base_entity)
+            .insert(Visibility::Hidden);
+        commands
+            .entity(entry.highlight_entity)
+            .insert(Visibility::Hidden);
+    }
+}
+
+fn despawn_field_tile_layer(
+    commands: &mut Commands,
+    images: &mut Assets<Image>,
+    layer_cache: FieldTileLayerCache,
+) {
+    for entry in layer_cache.tiles.into_values() {
+        despawn_field_tile_entry(commands, images, entry);
+    }
+}
+
+fn despawn_field_tile_entry(
+    commands: &mut Commands,
+    images: &mut Assets<Image>,
+    entry: FieldTileEntry,
+) {
+    commands.entity(entry.base_entity).despawn();
+    commands.entity(entry.highlight_entity).despawn();
+    images.remove(entry.base_image.id());
+    images.remove(entry.highlight_image.id());
+}
+
+fn replace_field_tile_image(images: &mut Assets<Image>, handle: &mut Handle<Image>, image: Image) {
+    if let Some(existing) = images.get_mut(handle.id()) {
+        *existing = image;
+        return;
+    }
+    *handle = images.add(image);
+}
+
+fn generated_field_max_level(width: u16, height: u16, tile_px: u32) -> i32 {
+    let tile_px = tile_px.max(1);
+    let max_dim = u32::from(width.max(height));
+    let mut span = tile_px;
+    let mut z = 0_i32;
+    while span < max_dim {
+        span = span.saturating_mul(2);
+        z += 1;
+        if z >= 30 {
+            break;
+        }
+    }
+    z
+}
+
+fn choose_field_tile_level(
+    visible_map_rect: MapRect,
+    tile_px: u32,
+    max_level: i32,
+    current_z: Option<i32>,
+    policy: &LodPolicy,
+) -> i32 {
+    let mut candidates = Vec::new();
+    for z in 0..=max_level.max(0) {
+        let span = f64::from(tile_px.max(1)) * f64::from(1_u32 << z as u32);
+        if span <= 0.0 {
+            continue;
+        }
+        let width = (visible_map_rect.max.x - visible_map_rect.min.x).max(1.0);
+        let height = (visible_map_rect.max.y - visible_map_rect.min.y).max(1.0);
+        let count_x = (width / span).ceil().max(1.0) as usize;
+        let count_y = (height / span).ceil().max(1.0) as usize;
+        candidates.push(FieldLevelCandidate {
+            z,
+            visible_count: count_x.saturating_mul(count_y),
+        });
+    }
+    if candidates.is_empty() {
+        return 0;
+    }
+
+    let target = policy.target_tiles.max(1);
+    let hi = policy.hysteresis_hi.max(target as f32) as usize;
+    let lo = policy.hysteresis_lo.min(target as f32) as usize;
+    let ideal = candidates
+        .iter()
+        .find(|candidate| candidate.visible_count <= target)
+        .copied()
+        .unwrap_or_else(|| *candidates.last().expect("non-empty"));
+
+    let Some(current_z) = current_z else {
+        return ideal.z;
+    };
+    let Some(current) = candidates
+        .iter()
+        .find(|candidate| candidate.z == current_z)
+        .copied()
+    else {
+        return ideal.z;
+    };
+    if current.visible_count > hi {
+        return candidates
+            .iter()
+            .filter(|candidate| candidate.z >= current_z)
+            .find(|candidate| candidate.visible_count <= target)
+            .copied()
+            .or_else(|| {
+                candidates
+                    .iter()
+                    .rfind(|candidate| candidate.z >= current_z)
+                    .copied()
+            })
+            .unwrap_or(ideal)
+            .z;
+    }
+    if current.visible_count < lo {
+        return candidates
+            .iter()
+            .filter(|candidate| candidate.z <= current_z)
+            .find(|candidate| candidate.visible_count <= target)
+            .copied()
+            .unwrap_or(current)
+            .z;
+    }
+    current.z
+}
+
+fn visible_tile_bounds(
+    visible_map_rect: MapRect,
+    field_width: u16,
+    field_height: u16,
+    tile_px: u32,
+    z: i32,
+    margin_tiles: i32,
+) -> Option<FieldTileBounds> {
+    let tile_space = TileSpace::new(tile_px.max(1), false);
+    let span = tile_space.tile_span_px(z)?;
+    if span <= 0.0 {
+        return None;
+    }
+    let max_tx = ((f64::from(field_width) / span).ceil() as i32 - 1).max(0);
+    let max_ty = ((f64::from(field_height) / span).ceil() as i32 - 1).max(0);
+    let mut min_tx = (visible_map_rect.min.x / span).floor() as i32 - margin_tiles;
+    let mut max_tx_visible = (visible_map_rect.max.x / span).floor() as i32 + margin_tiles;
+    let mut min_ty = (visible_map_rect.min.y / span).floor() as i32 - margin_tiles;
+    let mut max_ty_visible = (visible_map_rect.max.y / span).floor() as i32 + margin_tiles;
+    min_tx = min_tx.clamp(0, max_tx);
+    max_tx_visible = max_tx_visible.clamp(0, max_tx);
+    min_ty = min_ty.clamp(0, max_ty);
+    max_ty_visible = max_ty_visible.clamp(0, max_ty);
+    (min_tx <= max_tx_visible && min_ty <= max_ty_visible).then_some(FieldTileBounds {
+        min_tx,
+        max_tx: max_tx_visible,
+        min_ty,
+        max_ty: max_ty_visible,
+        z,
+    })
+}
+
+fn render_field_tile_image(
+    field: LoadedFieldLayer<'_>,
+    layer: &crate::map::layers::LayerSpec,
+    key: TileKey,
+) -> Option<Image> {
+    let (
+        source_origin_x,
+        source_origin_y,
+        source_width,
+        source_height,
+        output_width,
+        output_height,
+    ) = tile_render_dims(field, layer, key)?;
+    let chunk = field.render_rgba_chunk(
+        source_origin_x,
+        source_origin_y,
+        source_width,
+        source_height,
+        output_width,
+        output_height,
+    );
+    Some(image_from_chunk(
+        chunk.width(),
+        chunk.height(),
+        chunk.into_data(),
+    ))
+}
+
+fn render_field_highlight_tile_image(
+    field: LoadedFieldLayer<'_>,
+    layer: &crate::map::layers::LayerSpec,
+    key: TileKey,
+    highlight_field_id: u32,
+) -> Option<Image> {
+    let (
+        source_origin_x,
+        source_origin_y,
+        source_width,
+        source_height,
+        output_width,
+        output_height,
+    ) = tile_render_dims(field, layer, key)?;
+    let chunk = field.render_highlight_rgba_chunk(
+        source_origin_x,
+        source_origin_y,
+        source_width,
+        source_height,
+        output_width,
+        output_height,
+        Some(highlight_field_id),
+    );
+    Some(image_from_chunk(
+        chunk.width(),
+        chunk.height(),
+        chunk.into_data(),
+    ))
+}
+
+fn tile_render_dims(
+    field: LoadedFieldLayer<'_>,
+    layer: &crate::map::layers::LayerSpec,
+    key: TileKey,
+) -> Option<(i32, i32, u32, u32, u16, u16)> {
+    if !matches!(layer.transform, LayerTransform::IdentityMapSpace) || key.z < 0 {
+        return None;
+    }
+    let scale = 1_u32.checked_shl(key.z as u32)?;
+    let source_span = layer.tile_px.checked_mul(scale)?;
+    if source_span == 0 {
+        return None;
+    }
+    let source_origin_x = key.tx.checked_mul(source_span as i32)?;
+    let source_origin_y = key.ty.checked_mul(source_span as i32)?;
+    let visible_source_width =
+        (i32::from(field.width()) - source_origin_x).clamp(0, source_span as i32) as u32;
+    let visible_source_height =
+        (i32::from(field.height()) - source_origin_y).clamp(0, source_span as i32) as u32;
+    if visible_source_width == 0 || visible_source_height == 0 {
+        return None;
+    }
+    let output_width = visible_source_width.div_ceil(scale) as u16;
+    let output_height = visible_source_height.div_ceil(scale) as u16;
+    Some((
+        source_origin_x,
+        source_origin_y,
+        visible_source_width,
+        visible_source_height,
+        output_width,
+        output_height,
+    ))
+}
+
+fn field_tile_world_rect(
+    key: &TileKey,
+    tile_space: TileSpace,
+    map_to_world: MapToWorld,
+) -> Option<(f32, f32, f32, f32)> {
+    let span = tile_space.tile_span_px(key.z)?;
+    let x0 = (key.tx as f64 * span).clamp(0.0, f64::from(map_to_world.image_size_x));
+    let y0 = (key.ty as f64 * span).clamp(0.0, f64::from(map_to_world.image_size_y));
+    let x1 = (x0 + span).clamp(0.0, f64::from(map_to_world.image_size_x));
+    let y1 = (y0 + span).clamp(0.0, f64::from(map_to_world.image_size_y));
+    if x1 <= x0 || y1 <= y0 {
+        return None;
+    }
+    let min = map_to_world.map_to_world(MapPoint::new(x0, y0));
+    let max = map_to_world.map_to_world(MapPoint::new(x1, y1));
+    let min_x = min.x.min(max.x) as f32;
+    let max_x = min.x.max(max.x) as f32;
+    let min_z = min.z.min(max.z) as f32;
+    let max_z = min.z.max(max.z) as f32;
+    Some((min_x, min_z, max_x - min_x, max_z - min_z))
+}
+
+fn image_from_chunk(width: u16, height: u16, data: Vec<u8>) -> Image {
+    let mut image = Image::new(
+        Extent3d {
+            width: u32::from(width),
+            height: u32::from(height),
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    image.sampler = bevy::image::ImageSampler::nearest();
+    image
+}
+
+fn empty_field_tile_image() -> Image {
+    image_from_chunk(1, 1, vec![0, 0, 0, 0])
+}
+
+fn hovered_field_id_for_layer(
+    hover: Option<&crate::plugins::api::HoverInfo>,
+    layer_key: &str,
+) -> Option<u32> {
+    hover
+        .and_then(|hover| {
+            hover
+                .layer_samples
+                .iter()
+                .find(|sample| sample.layer_id == layer_key)
+        })
+        .and_then(|sample| sample.field_id)
+        .filter(|field_id| *field_id != 0)
+}
+
+fn world_rect_to_clamped_map_rect(world_rect: WorldRect, map_to_world: MapToWorld) -> MapRect {
+    let map_min = map_to_world.world_to_map(WorldPoint::new(world_rect.min.x, world_rect.max.z));
+    let map_max = map_to_world.world_to_map(WorldPoint::new(world_rect.max.x, world_rect.min.z));
+    MapRect {
+        min: MapPoint::new(
+            map_min
+                .x
+                .min(map_max.x)
+                .clamp(0.0, f64::from(map_to_world.image_size_x)),
+            map_min
+                .y
+                .min(map_max.y)
+                .clamp(0.0, f64::from(map_to_world.image_size_y)),
+        ),
+        max: MapPoint::new(
+            map_min
+                .x
+                .max(map_max.x)
+                .clamp(0.0, f64::from(map_to_world.image_size_x)),
+            map_min
+                .y
+                .max(map_max.y)
+                .clamp(0.0, f64::from(map_to_world.image_size_y)),
+        ),
+    }
+}
+
+fn view_rect(camera: &Camera, camera_transform: &Transform, window: &Window) -> Option<WorldRect> {
+    let global = GlobalTransform::from(*camera_transform);
+    let min = camera
+        .viewport_to_world_2d(&global, Vec2::new(0.0, 0.0))
+        .ok()?;
+    let max = camera
+        .viewport_to_world_2d(&global, Vec2::new(window.width(), window.height()))
+        .ok()?;
+    Some(WorldRect {
+        min: WorldPoint::new(min.x.min(max.x) as f64, min.y.min(max.y) as f64),
+        max: WorldPoint::new(min.x.max(max.x) as f64, min.y.max(max.y) as f64),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{choose_field_tile_level, generated_field_max_level, visible_tile_bounds};
+    use crate::map::layers::LodPolicy;
+    use crate::map::spaces::{MapPoint, MapRect};
+
+    fn test_policy() -> LodPolicy {
+        LodPolicy {
+            target_tiles: 64,
+            hysteresis_hi: 80.0,
+            hysteresis_lo: 40.0,
+            margin_tiles: 0,
+            enable_refine: false,
+            refine_debounce_ms: 0,
+            max_detail_tiles: 0,
+            max_resident_tiles: 256,
+            pinned_coarse_levels: 0,
+            coarse_pin_min_level: None,
+            warm_margin_tiles: 1,
+            protected_margin_tiles: 0,
+            detail_eviction_weight: 4.0,
+            max_detail_requests_while_camera_moving: 1,
+            motion_suppresses_refine: true,
+        }
+    }
+
+    #[test]
+    fn generated_field_max_level_covers_full_map() {
+        assert_eq!(generated_field_max_level(11_560, 10_540, 512), 5);
+    }
+
+    #[test]
+    fn choose_field_tile_level_prefers_coarser_level_for_full_map() {
+        let z = choose_field_tile_level(
+            MapRect {
+                min: MapPoint::new(0.0, 0.0),
+                max: MapPoint::new(11_560.0, 10_540.0),
+            },
+            512,
+            5,
+            None,
+            &test_policy(),
+        );
+        assert_eq!(z, 2);
+    }
+
+    #[test]
+    fn visible_tile_bounds_clamp_to_edge_tiles() {
+        let bounds = visible_tile_bounds(
+            MapRect {
+                min: MapPoint::new(11_200.0, 10_200.0),
+                max: MapPoint::new(11_560.0, 10_540.0),
+            },
+            11_560,
+            10_540,
+            512,
+            0,
+            1,
+        )
+        .expect("bounds");
+        assert_eq!(bounds.max_tx, 22);
+        assert_eq!(bounds.max_ty, 20);
+    }
+}

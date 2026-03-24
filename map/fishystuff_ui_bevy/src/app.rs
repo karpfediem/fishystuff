@@ -34,7 +34,7 @@ use crate::plugins::bookmarks::BookmarksPlugin;
 #[cfg(target_arch = "wasm32")]
 use crate::plugins::camera::initial_resolution;
 #[cfg(not(target_arch = "wasm32"))]
-use crate::plugins::field_layers::FieldLayersPlugin;
+use crate::plugins::field_tile_layers::FieldTileLayersPlugin;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::points::PointsPlugin;
 #[cfg(not(target_arch = "wasm32"))]
@@ -120,7 +120,7 @@ pub fn build_native_app(options: &NativeAppOptions) -> App {
         .add_plugins(Terrain3dPlugin)
         .add_plugins(InputPlugin)
         .add_plugins(RasterPlugin)
-        .add_plugins(FieldLayersPlugin)
+        .add_plugins(FieldTileLayersPlugin)
         .add_plugins(VectorLayersPlugin)
         .add_plugins(BookmarksPlugin)
         .add_plugins(PointsPlugin);
