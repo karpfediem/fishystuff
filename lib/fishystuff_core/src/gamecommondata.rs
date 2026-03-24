@@ -10,10 +10,10 @@ use crate::field_metadata::{
     FieldDetailFact, FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataEntry,
     FieldHoverTarget, FIELD_DETAIL_FACT_KEY_ORIGIN_NODE, FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
     FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP, FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
-    FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE, FIELD_DETAIL_FACT_KEY_RESOURCE_WAYPOINT,
-    FIELD_DETAIL_PANE_ID_TERRITORY, FIELD_DETAIL_PANE_ID_ZONE_MASK,
-    FIELD_DETAIL_SECTION_KIND_FACTS, FIELD_HOVER_TARGET_KEY_ORIGIN_NODE,
-    FIELD_HOVER_TARGET_KEY_REGION_NODE, FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
+    FIELD_DETAIL_FACT_KEY_RESOURCE_WAYPOINT, FIELD_DETAIL_PANE_ID_TERRITORY,
+    FIELD_DETAIL_PANE_ID_ZONE_MASK, FIELD_DETAIL_SECTION_KIND_FACTS,
+    FIELD_HOVER_TARGET_KEY_ORIGIN_NODE, FIELD_HOVER_TARGET_KEY_REGION_NODE,
+    FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
 };
 use crate::loc::load_loc_namespaces_as_string_maps;
 
@@ -607,7 +607,7 @@ fn build_region_group_resource_detail_section(
         format_resource_group_value(region_group_id, resource_region_id, resource_region_info);
     facts.push(FieldDetailFact {
         key: FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP.to_string(),
-        label: "Resource group".to_string(),
+        label: "Region Group".to_string(),
         value: resource_group_value,
         icon: Some("hover-resources".to_string()),
         status_icon: None,
@@ -668,21 +668,6 @@ fn build_region_group_resource_detail_section(
         }),
     });
 
-    if let Some(region_node_name) = resource_region_info
-        .and_then(|info| info.waypoint_name.as_deref())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        facts.push(FieldDetailFact {
-            key: FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE.to_string(),
-            label: "Region node".to_string(),
-            value: region_node_name.to_string(),
-            icon: Some("map-pin".to_string()),
-            status_icon: None,
-            status_icon_tone: None,
-        });
-    }
-
     let mut targets = Vec::new();
     if let Some(target) = build_resource_hover_target_from_resource(
         region_group_id,
@@ -699,7 +684,7 @@ fn build_region_group_resource_detail_section(
     (!facts.is_empty()).then_some(FieldDetailSection {
         id: "resource-bar".to_string(),
         kind: FIELD_DETAIL_SECTION_KIND_FACTS.to_string(),
-        title: Some("Resource Bar".to_string()),
+        title: Some("Resources".to_string()),
         facts,
         targets,
     })

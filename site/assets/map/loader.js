@@ -2743,6 +2743,101 @@ function normalizePointDetailTargets(targetsInput) {
   });
 }
 
+function pointDetailFactsRenderKeyData(section) {
+  return {
+    id: String(section?.id || "").trim(),
+    kind: "facts",
+    title: String(section?.title || "").trim(),
+    facts: normalizePointDetailFacts(section?.facts).map((fact) => [
+      String(fact?.key || "").trim(),
+      String(fact?.label || "").trim(),
+      String(fact?.value || "").trim(),
+      String(fact?.icon || "").trim(),
+      String(fact?.statusIcon || "").trim(),
+      String(fact?.statusIconTone || "").trim(),
+    ]),
+    targets: normalizePointDetailTargets(section?.targets).map((target) => [
+      String(target?.key || "").trim(),
+      String(target?.label || "").trim(),
+      normalizeBookmarkCoordinate(target?.worldX),
+      normalizeBookmarkCoordinate(target?.worldZ),
+    ]),
+  };
+}
+
+function pointDetailTargetsRenderKeyData(section) {
+  return {
+    id: String(section?.id || "").trim(),
+    kind: "targets",
+    title: String(section?.title || "").trim(),
+    targets: normalizePointDetailTargets(section?.targets).map((target) => [
+      String(target?.key || "").trim(),
+      String(target?.label || "").trim(),
+      normalizeBookmarkCoordinate(target?.worldX),
+      normalizeBookmarkCoordinate(target?.worldZ),
+    ]),
+  };
+}
+
+function pointDetailZoneEvidenceRenderKeyData(section) {
+  const zoneStats = section?.zoneStats || null;
+  const confidence = zoneStats?.confidence || {};
+  const distribution = Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : [];
+  return {
+    id: String(section?.id || "").trim(),
+    kind: "zoneEvidence",
+    zoneStatsStatus: String(section?.zoneStatsStatus || "").trim(),
+    zoneRgb:
+      zoneStats?.zoneRgb ??
+      section?.selection?.zoneRgb ??
+      zoneRgbFromLayerSamples(section?.selection?.layerSamples) ??
+      null,
+    confidence: [
+      String(confidence?.status || "").trim(),
+      Number.isFinite(confidence?.ess) ? confidence.ess : null,
+      Number.isFinite(confidence?.totalWeight) ? confidence.totalWeight : null,
+      Number.isFinite(confidence?.lastSeenTsUtc) ? confidence.lastSeenTsUtc : null,
+      Number.isFinite(confidence?.ageDaysLast) ? confidence.ageDaysLast : null,
+      Array.isArray(confidence?.notes)
+        ? confidence.notes.map((note) => String(note || "").trim())
+        : [],
+    ],
+    distribution: distribution.map((entry) => [
+      Number.isFinite(entry?.fishId) ? entry.fishId : null,
+      Number.isFinite(entry?.pMean) ? entry.pMean : null,
+      Number.isFinite(entry?.evidenceWeight) ? entry.evidenceWeight : null,
+      Number.isFinite(entry?.ciLow) ? entry.ciLow : null,
+      Number.isFinite(entry?.ciHigh) ? entry.ciHigh : null,
+    ]),
+  };
+}
+
+function pointDetailSectionRenderKeyData(section) {
+  switch (String(section?.kind || "").trim()) {
+    case "facts":
+      return pointDetailFactsRenderKeyData(section);
+    case "targets":
+      return pointDetailTargetsRenderKeyData(section);
+    case "zoneEvidence":
+      return pointDetailZoneEvidenceRenderKeyData(section);
+    default:
+      return {
+        id: String(section?.id || "").trim(),
+        kind: String(section?.kind || "").trim(),
+      };
+  }
+}
+
+export function pointDetailPaneMarkupKey(pane) {
+  return JSON.stringify({
+    id: String(pane?.id || "").trim(),
+    summary: String(pane?.summary || "").trim(),
+    sections: (Array.isArray(pane?.sections) ? pane.sections : []).map((section) =>
+      pointDetailSectionRenderKeyData(section),
+    ),
+  });
+}
+
 function buildZoneEvidencePointDetailSection({ pane, selection, stateBundle }) {
   if (pane?.id !== "zone_mask") {
     return [];
@@ -2979,35 +3074,22 @@ function pointDetailPaneMarkup(pane, fishLookup) {
 
 export function territoryPointDetailPaneMarkup(pane) {
   const sections = Array.isArray(pane?.sections) ? pane.sections : [];
-  const rows = territoryOverviewRowsFromSections(sections);
-  const resourceSection = territorySectionById(sections, "resource-bar");
-  const tradeOriginSection = territorySectionById(sections, "trade-origin");
   return `
     <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(pane.id)}">
-      ${
-        rows.length
-          ? `<div class="fishymap-overview-list">${rows
-              .map((row) =>
-                overviewRowMarkup({
-                  icon: String(row?.icon || "").trim() || "information-circle",
-                  label: row.label,
-                  value: row.value,
-                  ...(row?.statusIcon ? { statusIcon: row.statusIcon } : {}),
-                  ...(row?.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
-                }),
-              )
-              .join("")}</div>`
-          : ""
-      }
-      ${territoryPathSectionMarkup("Resources path", resourceSection)}
-      ${territoryPathSectionMarkup("Trade origin path", tradeOriginSection)}
+      ${sections
+        .map((section) => {
+          switch (String(section?.kind || "").trim()) {
+            case "facts":
+              return pointDetailFactsSectionMarkup(section);
+            case "targets":
+              return pointDetailTargetsSectionMarkup(section);
+            default:
+              return "";
+          }
+        })
+        .join("")}
     </section>
   `;
-}
-
-function territorySectionById(sectionsInput, sectionId) {
-  const sections = normalizePointDetailSections(sectionsInput);
-  return sections.find((section) => section.id === sectionId) || null;
 }
 
 function territoryOverviewRowsFromSections(sectionsInput) {
@@ -3054,41 +3136,6 @@ function territoryOverviewRowsFromSections(sectionsInput) {
       ...(fact?.statusIconTone ? { statusIconTone: String(fact.statusIconTone).trim() } : {}),
     }))
     .filter((row) => Boolean(row.icon && row.label && row.value));
-}
-
-function territoryPathSectionMarkup(title, section) {
-  const facts = Array.isArray(section?.facts) ? section.facts : [];
-  const targets = Array.isArray(section?.targets) ? section.targets : [];
-  if (facts.length === 0 && targets.length === 0) {
-    return "";
-  }
-  return `
-    <section class="space-y-2">
-      <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(title)}</p>
-      ${
-        facts.length
-          ? `<div class="fishymap-overview-list">${facts
-              .map((fact) =>
-                overviewRowMarkup({
-                  icon: String(fact?.icon || "").trim() || "information-circle",
-                  label: String(fact?.label || "").trim(),
-                  value: String(fact?.value || "").trim(),
-                  ...(fact?.statusIcon ? { statusIcon: String(fact.statusIcon).trim() } : {}),
-                  ...(fact?.statusIconTone ? { statusIconTone: String(fact.statusIconTone).trim() } : {}),
-                }),
-              )
-              .join("")}</div>`
-          : ""
-      }
-      ${
-        targets.length
-          ? `<div class="flex flex-wrap gap-2">${targets
-              .map((target) => zoneInfoTargetMarkup(target))
-              .join("")}</div>`
-          : ""
-      }
-    </section>
-  `;
 }
 
 function pointDetailTabTitle(tab) {
@@ -3783,13 +3830,7 @@ function renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup) 
 
   setMarkup(
     elements.zoneInfoPanel,
-    JSON.stringify({
-      activeTab,
-      summary: activeLayerTab.summary,
-      sections: Array.isArray(activeLayerTab.sections)
-        ? activeLayerTab.sections.map((section) => section.id)
-        : [],
-    }),
+    pointDetailPaneMarkupKey(activeLayerTab),
     pointDetailPaneMarkup(activeLayerTab, fishLookup),
   );
 }

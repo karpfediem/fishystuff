@@ -15,6 +15,7 @@ const {
   buildMapUiResetMountOptions,
   buildPointDetailPanes,
   buildPointDetailViewModel,
+  pointDetailPaneMarkupKey,
   territoryPointDetailPaneMarkup,
   buildSearchMatches,
   computeDragAutoScrollDelta,
@@ -176,7 +177,6 @@ function zoneLayerSample(zoneName = "Demi River") {
 function regionGroupLayerSample({
   resourceBarNode = null,
   containingRegion = null,
-  originNode = null,
   containingRegionStatusIcon = null,
   containingRegionStatusIconTone = null,
 } = {}) {
@@ -200,16 +200,9 @@ function regionGroupLayerSample({
       }),
     );
   }
-  if (originNode) {
-    facts.push(
-      factEntry("resource_region_node", originNode, "hover-origin", {
-        label: "Region node",
-      }),
-    );
-  }
   return {
     layerId: "region_groups",
-    detailSections: [detailSection("resource-bar", "Resource Bar", facts)],
+    detailSections: [detailSection("resource-bar", "Resources", facts)],
   };
 }
 
@@ -550,7 +543,7 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
             {
               id: "resource-bar",
               kind: "facts",
-              title: "Resource Bar",
+              title: "Resources",
               facts: [{ key: "resource_region", label: "Containing region", value: "Tarif", icon: "hover-zone" }],
             },
           ],
@@ -601,7 +594,7 @@ test("buildPointDetailPanes keeps territory panes when source layers are hidden"
             {
               id: "resource-bar",
               kind: "facts",
-              title: "Resource Bar",
+              title: "Resources",
               facts: [{ key: "resource_region", label: "Containing region", value: "Tarif", icon: "hover-zone" }],
             },
           ],
@@ -666,7 +659,7 @@ test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
             {
               id: "resource-bar",
               kind: "facts",
-              title: "Resource Bar",
+              title: "Resources",
               facts: [{ key: "resource_region", label: "Containing region", value: "Tarif", icon: "hover-zone" }],
               targets: [{ label: "Resource node", worldX: 30, worldZ: 40 }],
             },
@@ -711,7 +704,7 @@ test("buildPointDetailViewModel resolves the requested active pane when availabl
             {
               id: "resource-bar",
               kind: "facts",
-              title: "Resource Bar",
+              title: "Resources",
               facts: [{ key: "resource_region", label: "Containing region", value: "Tarif", icon: "hover-zone" }],
             },
           ],
@@ -786,8 +779,9 @@ test("territoryPointDetailPaneMarkup keeps waypoint buttons in the compact pane"
       {
         id: "resource-bar",
         kind: "facts",
+        title: "Resources",
         facts: [
-          { key: "resource_group", label: "Resource group", value: "Tarif (RG58)", icon: "hover-resources" },
+          { key: "resource_group", label: "Region Group", value: "Tarif (RG58)", icon: "hover-resources" },
           { key: "resource_waypoint", label: "Waypoint", value: "Hasrah Cliff", icon: "map-pin" },
           { key: "resource_region", label: "Region", value: "Tarif (R216)", icon: "hover-zone" },
         ],
@@ -798,6 +792,7 @@ test("territoryPointDetailPaneMarkup keeps waypoint buttons in the compact pane"
       {
         id: "trade-origin",
         kind: "facts",
+        title: "Trade Origin",
         facts: [
           { key: "origin_region", label: "Region", value: "Tarif (R216)", icon: "hover-origin" },
         ],
@@ -810,8 +805,6 @@ test("territoryPointDetailPaneMarkup keeps waypoint buttons in the compact pane"
 
   assert.match(markup, /Resources/);
   assert.match(markup, /Origin/);
-  assert.match(markup, /Resources path/);
-  assert.match(markup, /Trade origin path/);
   assert.match(markup, /Waypoint/);
   assert.match(markup, /Hasrah Cliff/);
   assert.match(markup, /fishymap-semantic-chip-code">RG58</);
@@ -821,6 +814,61 @@ test("territoryPointDetailPaneMarkup keeps waypoint buttons in the compact pane"
   assert.match(markup, /Resource bar: Tarif \(RG58\)/);
   assert.match(markup, /data-zone-info-target-world-x="226814"/);
   assert.match(markup, /Origin: Tarif \(R216\)/);
+});
+
+test("pointDetailPaneMarkupKey changes when territory facts change with same section ids", () => {
+  const firstKey = pointDetailPaneMarkupKey({
+    id: "territory",
+    summary: "Tarif",
+    sections: [
+      {
+        id: "resource-bar",
+        kind: "facts",
+        title: "Resources",
+        facts: [
+          { key: "resource_group", label: "Region Group", value: "Tarif (RG54)", icon: "hover-resources" },
+          { key: "resource_region", label: "Region", value: "Tarif (R213)", icon: "hover-zone" },
+        ],
+        targets: [
+          { key: "resource_node", label: "Resources: Tarif (RG54)", worldX: 100, worldZ: 200 },
+        ],
+      },
+      {
+        id: "trade-origin",
+        kind: "facts",
+        title: "Trade Origin",
+        facts: [{ key: "origin_region", label: "Region", value: "Tarif (R213)", icon: "trade-origin" }],
+        targets: [{ key: "origin_node", label: "Origin: Tarif (R213)", worldX: 300, worldZ: 400 }],
+      },
+    ],
+  });
+  const secondKey = pointDetailPaneMarkupKey({
+    id: "territory",
+    summary: "Tarif",
+    sections: [
+      {
+        id: "resource-bar",
+        kind: "facts",
+        title: "Resources",
+        facts: [
+          { key: "resource_group", label: "Region Group", value: "Tarif (RG54)", icon: "hover-resources" },
+          { key: "resource_region", label: "Region", value: "Tarif (R209)", icon: "hover-zone" },
+        ],
+        targets: [
+          { key: "resource_node", label: "Resources: Tarif (RG54)", worldX: 100, worldZ: 200 },
+        ],
+      },
+      {
+        id: "trade-origin",
+        kind: "facts",
+        title: "Trade Origin",
+        facts: [{ key: "origin_region", label: "Region", value: "Tarif (R209)", icon: "trade-origin" }],
+        targets: [{ key: "origin_node", label: "Origin: Tarif (R209)", worldX: 300, worldZ: 400 }],
+      },
+    ],
+  });
+
+  assert.notEqual(firstKey, secondKey);
 });
 
 test("buildBookmarkDeletionPrompt uses the bookmark label for single deletions", () => {
