@@ -22,6 +22,7 @@ impl Plugin for UiSvgIconsPlugin {
 #[derive(Resource, Default)]
 pub struct UiSvgIconAssets {
     map_pin: Option<Handle<Image>>,
+    crosshair: Option<Handle<Image>>,
     hover_resources: Option<Handle<Image>>,
     trade_origin: Option<Handle<Image>>,
     bookmark: Option<Handle<Image>>,
@@ -30,6 +31,7 @@ pub struct UiSvgIconAssets {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiSvgIconKind {
     MapPin,
+    Crosshair,
     HoverResources,
     TradeOrigin,
     Bookmark,
@@ -39,6 +41,7 @@ impl UiSvgIconAssets {
     pub fn handle(&self, kind: UiSvgIconKind) -> Option<Handle<Image>> {
         match kind {
             UiSvgIconKind::MapPin => self.map_pin.clone(),
+            UiSvgIconKind::Crosshair => self.crosshair.clone(),
             UiSvgIconKind::HoverResources => self.hover_resources.clone(),
             UiSvgIconKind::TradeOrigin => self.trade_origin.clone(),
             UiSvgIconKind::Bookmark => self.bookmark.clone(),
@@ -51,6 +54,7 @@ fn ensure_ui_svg_icon_assets(
     mut images: ResMut<Assets<Image>>,
 ) {
     if icon_assets.map_pin.is_some()
+        && icon_assets.crosshair.is_some()
         && icon_assets.hover_resources.is_some()
         && icon_assets.trade_origin.is_some()
         && icon_assets.bookmark.is_some()
@@ -62,6 +66,12 @@ fn ensure_ui_svg_icon_assets(
         &mut images,
         "fishy-map-pin",
         "map-pin",
+        "#ffffff",
+    ));
+    icon_assets.crosshair = Some(add_sprite_icon_asset(
+        &mut images,
+        "fishy-crosshair",
+        "crosshair",
         "#ffffff",
     ));
     icon_assets.hover_resources = Some(add_sprite_icon_asset(

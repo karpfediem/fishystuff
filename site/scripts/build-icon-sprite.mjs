@@ -40,6 +40,7 @@ const iconSources = {
   "map-view": { type: "mingcute", name: "map-fill" },
   "cube-view": { type: "mingcute", name: "cube-3d-fill" },
   "hover-zone": { type: "mingcute", name: "fullscreen-line" },
+  crosshair: { type: "mingcute", name: "aiming-2-line" },
   "hover-origin": { type: "mingcute", name: "map-pin-fill" },
   "trade-origin": { type: "mingcute", name: "wheel-fill" },
   "hover-resources": { type: "mingcute", name: "chart-bar-fill" },

@@ -8,6 +8,7 @@ use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::plugins::api::SelectionState;
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
+use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
 
 const SELECTION_POINT_Z: f32 = 40.5;
 const CLICKED_MARKER_SIZE_SCREEN_PX: f32 = 24.0;
@@ -17,8 +18,7 @@ const MARKER_TEXTURE_WIDTH_PX: usize = 48;
 const MARKER_TEXTURE_HEIGHT_PX: usize = 48;
 const EDGE_FEATHER_PX: f32 = 1.4;
 
-const CLICKED_MARKER_COLOR: [u8; 3] = [255, 244, 214];
-const CLICKED_ACCENT_COLOR: [u8; 3] = [70, 200, 255];
+const CLICKED_ACCENT_COLOR: [u8; 3] = [239, 92, 31];
 const WAYPOINT_MARKER_COLOR: [u8; 3] = [255, 196, 66];
 const WAYPOINT_CORE_COLOR: [u8; 3] = [255, 244, 214];
 
@@ -35,7 +35,6 @@ impl Plugin for SelectionPointPlugin {
 
 #[derive(Resource, Default)]
 struct SelectionPointAssets {
-    clicked_texture: Option<Handle<Image>>,
     waypoint_texture: Option<Handle<Image>>,
     marker_entity: Option<Entity>,
 }
@@ -48,14 +47,11 @@ fn ensure_selection_point_assets(
     mut assets: ResMut<SelectionPointAssets>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    if assets.clicked_texture.is_none() {
-        assets.clicked_texture = Some(images.add(build_clicked_marker_texture()));
-    }
     if assets.waypoint_texture.is_none() {
         assets.waypoint_texture = Some(images.add(build_waypoint_marker_texture()));
     }
     if assets.marker_entity.is_none() {
-        let Some(clicked_texture) = assets.clicked_texture.clone() else {
+        let Some(default_texture) = assets.waypoint_texture.clone() else {
             return;
         };
         let entity = commands
@@ -64,7 +60,7 @@ fn ensure_selection_point_assets(
                 World2dRenderEntity,
                 world_2d_layers(),
                 Sprite {
-                    image: clicked_texture,
+                    image: default_texture,
                     custom_size: Some(Vec2::splat(CLICKED_MARKER_SIZE_SCREEN_PX)),
                     ..default()
                 },
@@ -80,6 +76,7 @@ fn sync_selection_point_marker(
     selection: Res<SelectionState>,
     view_mode: Res<ViewModeState>,
     assets: Res<SelectionPointAssets>,
+    svg_icon_assets: Res<UiSvgIconAssets>,
     camera_q: Query<&Projection, With<Map2dCamera>>,
     mut marker_q: Query<(&mut Transform, &mut Visibility, &mut Sprite), With<SelectionPointMarker>>,
 ) {
@@ -124,9 +121,18 @@ fn sync_selection_point_marker(
                 info.point_kind
                     .unwrap_or(FishyMapSelectionPointKind::Clicked),
                 &assets,
+                &svg_icon_assets,
             );
+            let Some(texture) = texture else {
+                *visibility = Visibility::Hidden;
+                return;
+            };
             transform.translation = Vec3::new(world_x as f32, world_z as f32, SELECTION_POINT_Z);
             sprite.image = texture;
+            sprite.color = marker_color(
+                info.point_kind
+                    .unwrap_or(FishyMapSelectionPointKind::Clicked),
+            );
             sprite.custom_size = Some(Vec2::splat(size_px * scale));
             *visibility = Visibility::Visible;
         }
@@ -136,76 +142,32 @@ fn sync_selection_point_marker(
 fn marker_visual(
     point_kind: FishyMapSelectionPointKind,
     assets: &SelectionPointAssets,
-) -> (Handle<Image>, f32) {
+    svg_icon_assets: &UiSvgIconAssets,
+) -> (Option<Handle<Image>>, f32) {
     match point_kind {
         FishyMapSelectionPointKind::Waypoint => (
             assets
                 .waypoint_texture
                 .clone()
-                .or_else(|| assets.clicked_texture.clone())
-                .expect("selection point waypoint texture"),
+                .or_else(|| svg_icon_assets.handle(UiSvgIconKind::Crosshair)),
             WAYPOINT_MARKER_SIZE_SCREEN_PX,
         ),
         _ => (
-            assets
-                .clicked_texture
-                .clone()
-                .expect("selection point clicked texture"),
+            svg_icon_assets.handle(UiSvgIconKind::Crosshair),
             CLICKED_MARKER_SIZE_SCREEN_PX,
         ),
     }
 }
 
-fn build_clicked_marker_texture() -> Image {
-    let width = MARKER_TEXTURE_WIDTH_PX;
-    let height = MARKER_TEXTURE_HEIGHT_PX;
-    let center_x = (width as f32 - 1.0) * 0.5;
-    let center_y = (height as f32 - 1.0) * 0.5;
-    let outer_radius = 14.0;
-    let ring_thickness = 2.6;
-    let gap_radius = 6.0;
-    let crosshair_thickness = 1.8;
-    let line_extent = 18.0;
-    let mut data = vec![0u8; width * height * 4];
-
-    for y in 0..height {
-        for x in 0..width {
-            let dx = x as f32 - center_x;
-            let dy = y as f32 - center_y;
-            let distance = dx.hypot(dy);
-            let ring_distance = (distance - outer_radius).abs();
-            let on_ring = smooth_alpha(ring_distance, ring_thickness * 0.5, EDGE_FEATHER_PX);
-            let on_vertical = if dx.abs() <= crosshair_thickness
-                && dy.abs() >= gap_radius
-                && dy.abs() <= line_extent
-            {
-                smooth_alpha(dx.abs(), crosshair_thickness, EDGE_FEATHER_PX)
-            } else {
-                0.0
-            };
-            let on_horizontal = if dy.abs() <= crosshair_thickness
-                && dx.abs() >= gap_radius
-                && dx.abs() <= line_extent
-            {
-                smooth_alpha(dy.abs(), crosshair_thickness, EDGE_FEATHER_PX)
-            } else {
-                0.0
-            };
-            let accent_alpha = on_vertical.max(on_horizontal);
-            let alpha = on_ring.max(accent_alpha);
-            if alpha <= 0.0 {
-                continue;
-            }
-            let color = if accent_alpha > on_ring {
-                CLICKED_ACCENT_COLOR
-            } else {
-                CLICKED_MARKER_COLOR
-            };
-            write_pixel(&mut data, width, x, y, color, alpha);
-        }
+fn marker_color(point_kind: FishyMapSelectionPointKind) -> Color {
+    match point_kind {
+        FishyMapSelectionPointKind::Waypoint => Color::WHITE,
+        _ => color_from_rgb(CLICKED_ACCENT_COLOR),
     }
+}
 
-    build_image(width as u32, height as u32, data)
+fn color_from_rgb(rgb: [u8; 3]) -> Color {
+    Color::srgb_u8(rgb[0], rgb[1], rgb[2])
 }
 
 fn build_waypoint_marker_texture() -> Image {
