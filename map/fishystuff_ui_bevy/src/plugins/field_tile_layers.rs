@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use bevy::mesh::Indices;
+use bevy::prelude::{ColorMaterial, Mesh, Mesh2d, MeshMaterial2d};
+use bevy::render::render_resource::{Extent3d, PrimitiveTopology, TextureDimension, TextureFormat};
 use bevy::window::PrimaryWindow;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
@@ -29,6 +31,7 @@ use crate::prelude::*;
 const FIELD_LAYER_MAP_VERSION: u64 = 0;
 const FIELD_TILE_MARGIN: i32 = 1;
 const FIELD_HIGHLIGHT_Z_BIAS: f32 = 0.0005;
+const FIELD_HOVER_HIGHLIGHT_RGB: [u8; 3] = [48, 255, 96];
 
 pub struct FieldTileLayersPlugin;
 
@@ -56,15 +59,21 @@ struct FieldTileLayerCache {
     current_z: Option<i32>,
     use_counter: u64,
     tiles: HashMap<TileKey, FieldTileEntry>,
+    highlight_overlay: Option<FieldHighlightOverlayEntry>,
 }
 
 struct FieldTileEntry {
     base_entity: Entity,
     base_image: Handle<Image>,
-    highlight_entity: Entity,
-    highlight_image: Handle<Image>,
-    highlight_field_id: Option<u32>,
     last_used: u64,
+}
+
+struct FieldHighlightOverlayEntry {
+    entity_2d: Entity,
+    mesh: Handle<Mesh>,
+    material: Handle<ColorMaterial>,
+    highlighted_field_id: Option<u32>,
+    opacity: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -188,6 +197,8 @@ fn sync_exact_lookup_cache(
 fn update_field_tile_layer_visuals(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials_2d: ResMut<Assets<ColorMaterial>>,
     windows: Query<&Window, With<PrimaryWindow>>,
     camera_q: Query<(&Camera, &Transform), With<Map2dCamera>>,
     view_mode: Res<ViewModeState>,
@@ -206,6 +217,8 @@ fn update_field_tile_layer_visuals(
     cleanup_stale_field_layers(
         &mut commands,
         &mut images,
+        &mut meshes,
+        &mut materials_2d,
         &mut field_runtime,
         &active_exact_layers,
     );
@@ -322,25 +335,21 @@ fn update_field_tile_layer_visuals(
                     },
                     Transform::from_translation(Vec3::new(x0 + w * 0.5, y0 + h * 0.5, depth)),
                 ));
-                update_field_tile_highlight(
-                    &mut commands,
-                    &mut images,
-                    entry,
-                    key,
-                    layer,
-                    field,
-                    hovered_field_id,
-                    w,
-                    h,
-                    x0,
-                    y0,
-                    depth + FIELD_HIGHLIGHT_Z_BIAS,
-                    runtime_state.opacity.clamp(0.0, 1.0),
-                );
                 visible_count = visible_count.saturating_add(1);
             }
         }
 
+        update_field_layer_highlight_overlay(
+            &mut commands,
+            &mut meshes,
+            &mut materials_2d,
+            layer_cache,
+            field,
+            map_to_world,
+            hovered_field_id,
+            tile_z(runtime_state.z_base, max_level_u8, bounds.z) + FIELD_HIGHLIGHT_Z_BIAS,
+            runtime_state.opacity.clamp(0.0, 1.0),
+        );
         hide_inactive_tiles(&mut commands, layer_cache, &active_keys);
         evict_excess_tiles(
             &mut commands,
@@ -386,77 +395,22 @@ fn ensure_field_tile_entry(
             Visibility::Hidden,
         ))
         .id();
-    let highlight_handle = images.add(empty_field_tile_image());
-    let highlight_entity = commands
-        .spawn((
-            World2dRenderEntity,
-            world_2d_layers(),
-            Sprite {
-                image: highlight_handle.clone(),
-                ..default()
-            },
-            Transform::default(),
-            Visibility::Hidden,
-        ))
-        .id();
     layer_cache.tiles.insert(
         key,
         FieldTileEntry {
             base_entity,
             base_image: base_handle,
-            highlight_entity,
-            highlight_image: highlight_handle,
-            highlight_field_id: None,
             last_used: 0,
         },
     );
     true
 }
 
-#[allow(clippy::too_many_arguments)]
-fn update_field_tile_highlight(
-    commands: &mut Commands,
-    images: &mut Assets<Image>,
-    entry: &mut FieldTileEntry,
-    key: TileKey,
-    layer: &crate::map::layers::LayerSpec,
-    field: LoadedFieldLayer<'_>,
-    hovered_field_id: Option<u32>,
-    width: f32,
-    height: f32,
-    x0: f32,
-    y0: f32,
-    depth: f32,
-    opacity: f32,
-) {
-    let Some(highlight_field_id) = hovered_field_id.filter(|field_id| *field_id != 0) else {
-        entry.highlight_field_id = None;
-        commands
-            .entity(entry.highlight_entity)
-            .insert(Visibility::Hidden);
-        return;
-    };
-    if entry.highlight_field_id != Some(highlight_field_id) {
-        let image = render_field_highlight_tile_image(field, layer, key, highlight_field_id)
-            .unwrap_or_else(empty_field_tile_image);
-        replace_field_tile_image(images, &mut entry.highlight_image, image);
-        entry.highlight_field_id = Some(highlight_field_id);
-    }
-    commands.entity(entry.highlight_entity).insert((
-        Visibility::Visible,
-        Sprite {
-            image: entry.highlight_image.clone(),
-            custom_size: Some(Vec2::new(width, height)),
-            color: Color::srgba(1.0, 1.0, 1.0, opacity),
-            ..default()
-        },
-        Transform::from_translation(Vec3::new(x0 + width * 0.5, y0 + height * 0.5, depth)),
-    ));
-}
-
 fn cleanup_stale_field_layers(
     commands: &mut Commands,
     images: &mut Assets<Image>,
+    meshes: &mut Assets<Mesh>,
+    materials_2d: &mut Assets<ColorMaterial>,
     field_runtime: &mut FieldTileRuntime,
     active_layer_ids: &HashSet<LayerId>,
 ) {
@@ -468,7 +422,7 @@ fn cleanup_stale_field_layers(
         .collect::<Vec<_>>();
     for layer_id in stale_ids {
         if let Some(layer_cache) = field_runtime.layers.remove(&layer_id) {
-            despawn_field_tile_layer(commands, images, layer_cache);
+            despawn_field_tile_layer(commands, images, meshes, materials_2d, layer_cache);
         }
     }
 }
@@ -484,9 +438,6 @@ fn hide_inactive_tiles(
         }
         commands
             .entity(entry.base_entity)
-            .insert(Visibility::Hidden);
-        commands
-            .entity(entry.highlight_entity)
             .insert(Visibility::Hidden);
     }
 }
@@ -530,8 +481,10 @@ fn hide_field_layer(commands: &mut Commands, layer_cache: Option<&FieldTileLayer
         commands
             .entity(entry.base_entity)
             .insert(Visibility::Hidden);
+    }
+    if let Some(overlay) = &layer_cache.highlight_overlay {
         commands
-            .entity(entry.highlight_entity)
+            .entity(overlay.entity_2d)
             .insert(Visibility::Hidden);
     }
 }
@@ -539,10 +492,17 @@ fn hide_field_layer(commands: &mut Commands, layer_cache: Option<&FieldTileLayer
 fn despawn_field_tile_layer(
     commands: &mut Commands,
     images: &mut Assets<Image>,
+    meshes: &mut Assets<Mesh>,
+    materials_2d: &mut Assets<ColorMaterial>,
     layer_cache: FieldTileLayerCache,
 ) {
     for entry in layer_cache.tiles.into_values() {
         despawn_field_tile_entry(commands, images, entry);
+    }
+    if let Some(overlay) = layer_cache.highlight_overlay {
+        commands.entity(overlay.entity_2d).despawn();
+        meshes.remove(overlay.mesh.id());
+        materials_2d.remove(overlay.material.id());
     }
 }
 
@@ -552,17 +512,7 @@ fn despawn_field_tile_entry(
     entry: FieldTileEntry,
 ) {
     commands.entity(entry.base_entity).despawn();
-    commands.entity(entry.highlight_entity).despawn();
     images.remove(entry.base_image.id());
-    images.remove(entry.highlight_image.id());
-}
-
-fn replace_field_tile_image(images: &mut Assets<Image>, handle: &mut Handle<Image>, image: Image) {
-    if let Some(existing) = images.get_mut(handle.id()) {
-        *existing = image;
-        return;
-    }
-    *handle = images.add(image);
 }
 
 fn generated_field_max_level(width: u16, height: u16, tile_px: u32) -> i32 {
@@ -712,36 +662,6 @@ fn render_field_tile_image(
     ))
 }
 
-fn render_field_highlight_tile_image(
-    field: LoadedFieldLayer<'_>,
-    layer: &crate::map::layers::LayerSpec,
-    key: TileKey,
-    highlight_field_id: u32,
-) -> Option<Image> {
-    let (
-        source_origin_x,
-        source_origin_y,
-        source_width,
-        source_height,
-        output_width,
-        output_height,
-    ) = tile_render_dims(field, layer, key)?;
-    let chunk = field.render_highlight_rgba_chunk(
-        source_origin_x,
-        source_origin_y,
-        source_width,
-        source_height,
-        output_width,
-        output_height,
-        Some(highlight_field_id),
-    );
-    Some(image_from_chunk(
-        chunk.width(),
-        chunk.height(),
-        chunk.into_data(),
-    ))
-}
-
 fn tile_render_dims(
     field: LoadedFieldLayer<'_>,
     layer: &crate::map::layers::LayerSpec,
@@ -814,8 +734,199 @@ fn image_from_chunk(width: u16, height: u16, data: Vec<u8>) -> Image {
     image
 }
 
-fn empty_field_tile_image() -> Image {
-    image_from_chunk(1, 1, vec![0, 0, 0, 0])
+fn update_field_layer_highlight_overlay(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials_2d: &mut Assets<ColorMaterial>,
+    layer_cache: &mut FieldTileLayerCache,
+    field: LoadedFieldLayer<'_>,
+    map_to_world: MapToWorld,
+    hovered_field_id: Option<u32>,
+    depth: f32,
+    opacity: f32,
+) {
+    let Some(highlight_field_id) = hovered_field_id.filter(|field_id| *field_id != 0) else {
+        if let Some(overlay) = &mut layer_cache.highlight_overlay {
+            overlay.highlighted_field_id = None;
+            commands
+                .entity(overlay.entity_2d)
+                .insert(Visibility::Hidden);
+        }
+        return;
+    };
+
+    let Some(overlay) =
+        ensure_field_highlight_overlay_entry(commands, meshes, materials_2d, layer_cache, opacity)
+    else {
+        return;
+    };
+
+    if overlay.highlighted_field_id != Some(highlight_field_id) {
+        let Some(mesh) = build_field_highlight_mesh(field, map_to_world, highlight_field_id) else {
+            overlay.highlighted_field_id = None;
+            commands
+                .entity(overlay.entity_2d)
+                .insert(Visibility::Hidden);
+            return;
+        };
+        replace_highlight_mesh(meshes, &mut overlay.mesh, mesh);
+        overlay.highlighted_field_id = Some(highlight_field_id);
+    }
+
+    if (overlay.opacity - opacity).abs() > f32::EPSILON {
+        replace_highlight_material_color(materials_2d, &mut overlay.material, opacity);
+        overlay.opacity = opacity;
+    }
+
+    commands.entity(overlay.entity_2d).insert((
+        Visibility::Visible,
+        Transform::from_translation(Vec3::new(0.0, 0.0, depth)),
+    ));
+}
+
+fn ensure_field_highlight_overlay_entry<'a>(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials_2d: &mut Assets<ColorMaterial>,
+    layer_cache: &'a mut FieldTileLayerCache,
+    opacity: f32,
+) -> Option<&'a mut FieldHighlightOverlayEntry> {
+    if layer_cache.highlight_overlay.is_none() {
+        let mesh = meshes.add(empty_highlight_mesh());
+        let material = materials_2d.add(ColorMaterial {
+            color: highlight_material_color(opacity),
+            ..default()
+        });
+        let entity_2d = commands
+            .spawn((
+                World2dRenderEntity,
+                world_2d_layers(),
+                Mesh2d(mesh.clone()),
+                MeshMaterial2d(material.clone()),
+                Transform::default(),
+                Visibility::Hidden,
+            ))
+            .id();
+        layer_cache.highlight_overlay = Some(FieldHighlightOverlayEntry {
+            entity_2d,
+            mesh,
+            material,
+            highlighted_field_id: None,
+            opacity,
+        });
+    }
+    layer_cache.highlight_overlay.as_mut()
+}
+
+fn build_field_highlight_mesh(
+    field: LoadedFieldLayer<'_>,
+    map_to_world: MapToWorld,
+    highlight_field_id: u32,
+) -> Option<Mesh> {
+    let mut positions = Vec::<[f32; 3]>::new();
+    let mut vertex_colors = Vec::<[f32; 4]>::new();
+    let mut indices = Vec::<u32>::new();
+
+    field.for_each_merged_rect_matching(highlight_field_id, |start_y, end_y, start_x, end_x| {
+        if start_x >= end_x || start_y >= end_y {
+            return;
+        }
+        let min = map_to_world.map_to_world(MapPoint::new(start_x as f64, start_y as f64));
+        let max = map_to_world.map_to_world(MapPoint::new(end_x as f64, end_y as f64));
+        let min_x = min.x.min(max.x) as f32;
+        let max_x = min.x.max(max.x) as f32;
+        let min_z = min.z.min(max.z) as f32;
+        let max_z = min.z.max(max.z) as f32;
+        if max_x <= min_x || max_z <= min_z {
+            return;
+        }
+        push_highlight_rect(
+            &mut positions,
+            &mut vertex_colors,
+            &mut indices,
+            min_x,
+            max_x,
+            min_z,
+            max_z,
+        );
+    });
+
+    if positions.is_empty() {
+        return None;
+    }
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vertex_colors);
+    mesh.insert_indices(Indices::U32(indices));
+    Some(mesh)
+}
+
+fn push_highlight_rect(
+    positions: &mut Vec<[f32; 3]>,
+    vertex_colors: &mut Vec<[f32; 4]>,
+    indices: &mut Vec<u32>,
+    min_x: f32,
+    max_x: f32,
+    min_z: f32,
+    max_z: f32,
+) {
+    let base = positions.len() as u32;
+    positions.extend_from_slice(&[
+        [min_x, min_z, 0.0],
+        [max_x, min_z, 0.0],
+        [max_x, max_z, 0.0],
+        [min_x, max_z, 0.0],
+    ]);
+    vertex_colors.extend_from_slice(&[[1.0, 1.0, 1.0, 1.0]; 4]);
+    indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+}
+
+fn empty_highlight_mesh() -> Mesh {
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, Vec::<[f32; 4]>::new());
+    mesh.insert_indices(Indices::U32(Vec::new()));
+    mesh
+}
+
+fn replace_highlight_mesh(meshes: &mut Assets<Mesh>, handle: &mut Handle<Mesh>, mesh: Mesh) {
+    if let Some(existing) = meshes.get_mut(handle.id()) {
+        *existing = mesh;
+        return;
+    }
+    *handle = meshes.add(mesh);
+}
+
+fn replace_highlight_material_color(
+    materials_2d: &mut Assets<ColorMaterial>,
+    handle: &mut Handle<ColorMaterial>,
+    opacity: f32,
+) {
+    let material = ColorMaterial {
+        color: highlight_material_color(opacity),
+        ..default()
+    };
+    if let Some(existing) = materials_2d.get_mut(handle.id()) {
+        *existing = material;
+        return;
+    }
+    *handle = materials_2d.add(material);
+}
+
+fn highlight_material_color(opacity: f32) -> Color {
+    Color::srgba(
+        f32::from(FIELD_HOVER_HIGHLIGHT_RGB[0]) / 255.0,
+        f32::from(FIELD_HOVER_HIGHLIGHT_RGB[1]) / 255.0,
+        f32::from(FIELD_HOVER_HIGHLIGHT_RGB[2]) / 255.0,
+        opacity.clamp(0.0, 1.0),
+    )
 }
 
 fn hovered_field_id_for_layer(
@@ -876,9 +987,18 @@ fn view_rect(camera: &Camera, camera_transform: &Transform, window: &Window) -> 
 
 #[cfg(test)]
 mod tests {
-    use super::{choose_field_tile_level, generated_field_max_level, visible_tile_bounds};
+    use super::{
+        build_field_highlight_mesh, choose_field_tile_level, generated_field_max_level,
+        visible_tile_bounds,
+    };
+    use crate::map::field_view::LoadedFieldLayer;
+    use crate::map::layers::FieldColorMode;
     use crate::map::layers::LodPolicy;
+    use crate::map::spaces::world::MapToWorld;
     use crate::map::spaces::{MapPoint, MapRect};
+    use bevy::mesh::{Indices, VertexAttributeValues};
+    use bevy::prelude::Mesh;
+    use fishystuff_core::field::DiscreteFieldRows;
 
     fn test_policy() -> LodPolicy {
         LodPolicy {
@@ -936,5 +1056,34 @@ mod tests {
         .expect("bounds");
         assert_eq!(bounds.max_tx, 22);
         assert_eq!(bounds.max_ty, 20);
+    }
+
+    #[test]
+    fn highlight_mesh_merges_rectangles_from_field_rows() {
+        let field = DiscreteFieldRows::from_u32_grid(
+            4,
+            4,
+            &[
+                0, 7, 7, 0, //
+                0, 7, 7, 0, //
+                0, 7, 0, 0, //
+                0, 7, 0, 0,
+            ],
+        )
+        .expect("field");
+        let view = LoadedFieldLayer::from_parts(&field, FieldColorMode::DebugHash);
+
+        let mesh = build_field_highlight_mesh(view, MapToWorld::default(), 7).expect("mesh");
+        let Some(VertexAttributeValues::Float32x3(positions)) =
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        else {
+            panic!("expected float32x3 positions");
+        };
+        let Some(Indices::U32(indices)) = mesh.indices() else {
+            panic!("expected u32 indices");
+        };
+
+        assert_eq!(positions.len(), 8);
+        assert_eq!(indices.len(), 12);
     }
 }

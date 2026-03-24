@@ -109,8 +109,6 @@ pub struct LoadedFieldLayer<'a> {
     color_mode: FieldColorMode,
 }
 
-const FIELD_HOVER_HIGHLIGHT_RGBA: [u8; 4] = [48, 255, 96, 255];
-
 pub fn loaded_field_layer<'a>(
     layer: &'a LayerSpec,
     exact_lookups: &'a ExactLookupCache,
@@ -161,26 +159,18 @@ impl FieldLayerView for LoadedFieldLayer<'_> {
     }
 }
 
-impl LoadedFieldLayer<'_> {
-    pub fn render_highlight_rgba_chunk(
+impl<'a> LoadedFieldLayer<'a> {
+    #[cfg(test)]
+    pub(crate) fn from_parts(field: &'a DiscreteFieldRows, color_mode: FieldColorMode) -> Self {
+        Self { field, color_mode }
+    }
+
+    pub fn for_each_merged_rect_matching(
         &self,
-        source_origin_x: i32,
-        source_origin_y: i32,
-        source_width: u32,
-        source_height: u32,
-        output_width: u16,
-        output_height: u16,
-        highlight_field_id: Option<u32>,
-    ) -> FieldRgbaChunk {
-        self.field.render_rgba_resampled_chunk(
-            source_origin_x,
-            source_origin_y,
-            source_width,
-            source_height,
-            output_width,
-            output_height,
-            |id| highlight_rgba_for_field_id(id, highlight_field_id),
-        )
+        target_id: u32,
+        visit: impl FnMut(u16, u16, u16, u16),
+    ) {
+        self.field.for_each_merged_rect_matching(target_id, visit);
     }
 }
 
@@ -235,13 +225,6 @@ fn visual_rgba_for_field_id(id: u32, color_mode: FieldColorMode) -> [u8; 4] {
     }
 }
 
-fn highlight_rgba_for_field_id(id: u32, highlight_field_id: Option<u32>) -> [u8; 4] {
-    if id != 0 && highlight_field_id == Some(id) {
-        return FIELD_HOVER_HIGHLIGHT_RGBA;
-    }
-    [0, 0, 0, 0]
-}
-
 fn hash_u32(mut value: u32) -> u32 {
     value ^= value >> 16;
     value = value.wrapping_mul(0x7feb_352d);
@@ -252,7 +235,7 @@ fn hash_u32(mut value: u32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FieldLayerView, LoadedFieldLayer, FIELD_HOVER_HIGHLIGHT_RGBA};
+    use super::{FieldLayerView, LoadedFieldLayer};
     use crate::map::layers::FieldColorMode;
     use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
     use crate::map::spaces::affine::Affine2D;
@@ -337,17 +320,27 @@ mod tests {
     }
 
     #[test]
-    fn render_highlight_rgba_chunk_marks_only_matching_field_id() {
-        let field = DiscreteFieldRows::from_u32_grid(2, 1, &[10, 20]).expect("field");
+    fn merged_rect_iteration_passes_through_from_core_field() {
+        let field = DiscreteFieldRows::from_u32_grid(
+            4,
+            3,
+            &[
+                0, 10, 10, 0, //
+                0, 10, 10, 0, //
+                0, 10, 0, 0,
+            ],
+        )
+        .expect("field");
         let view = LoadedFieldLayer {
             field: &field,
             color_mode: FieldColorMode::DebugHash,
         };
 
-        let chunk = view.render_highlight_rgba_chunk(0, 0, 2, 1, 2, 1, Some(20));
-        let data = chunk.data();
+        let mut rects = Vec::new();
+        view.for_each_merged_rect_matching(10, |start_y, end_y, start_x, end_x| {
+            rects.push((start_y, end_y, start_x, end_x));
+        });
 
-        assert_eq!(&data[0..4], &[0, 0, 0, 0]);
-        assert_eq!(&data[4..8], &FIELD_HOVER_HIGHLIGHT_RGBA);
+        assert_eq!(rects, vec![(0, 2, 1, 3), (2, 3, 1, 2)]);
     }
 }

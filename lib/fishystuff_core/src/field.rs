@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{bail, Result};
 
@@ -343,6 +343,37 @@ impl DiscreteFieldRows {
         }
     }
 
+    pub fn for_each_merged_rect_matching(
+        &self,
+        target_id: u32,
+        mut visit: impl FnMut(u16, u16, u16, u16),
+    ) {
+        let mut active = BTreeMap::<(u16, u16), u16>::new();
+
+        for y in 0..self.height {
+            let mut current = Vec::<(u16, u16)>::new();
+            self.for_each_row_span_matching(y, target_id, |start_x, end_x| {
+                current.push((start_x, end_x));
+            });
+
+            let mut next_active = BTreeMap::<(u16, u16), u16>::new();
+            for span in current {
+                let start_y = active.remove(&span).unwrap_or(y);
+                next_active.insert(span, start_y);
+            }
+
+            for ((start_x, end_x), start_y) in active {
+                visit(start_y, y, start_x, end_x);
+            }
+
+            active = next_active;
+        }
+
+        for ((start_x, end_x), start_y) in active {
+            visit(start_y, self.height, start_x, end_x);
+        }
+    }
+
     pub fn cell_id_u32(&self, px: i32, py: i32) -> Option<u32> {
         if px < 0 || py < 0 {
             return None;
@@ -469,6 +500,19 @@ impl DiscreteFieldRows {
             width: output_width,
             height: output_height,
             data,
+        }
+    }
+
+    fn for_each_row_span_matching(&self, y: u16, target_id: u32, mut visit: impl FnMut(u16, u16)) {
+        let start = self.row_offsets[y as usize] as usize;
+        let end = self.row_offsets[y as usize + 1] as usize;
+        let mut span_start = 0_u16;
+        for idx in start..end {
+            let span_end = self.row_end_xs[idx];
+            if self.row_ids[idx] == target_id {
+                visit(span_start, span_end);
+            }
+            span_start = span_end;
         }
     }
 }
@@ -636,5 +680,27 @@ mod tests {
                 30, 0, 0, 255, 40, 0, 0, 255,
             ]
         );
+    }
+
+    #[test]
+    fn merged_rects_coalesce_identical_spans_across_rows() {
+        let field = DiscreteFieldRows::from_u32_grid(
+            4,
+            4,
+            &[
+                0, 7, 7, 0, //
+                0, 7, 7, 0, //
+                0, 7, 0, 0, //
+                0, 7, 0, 0,
+            ],
+        )
+        .expect("field");
+
+        let mut rects = Vec::new();
+        field.for_each_merged_rect_matching(7, |start_y, end_y, start_x, end_x| {
+            rects.push((start_y, end_y, start_x, end_x));
+        });
+
+        assert_eq!(rects, vec![(0, 2, 1, 3), (2, 4, 1, 2)]);
     }
 }
