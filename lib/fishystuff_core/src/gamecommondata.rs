@@ -121,7 +121,9 @@ impl OriginalRegionLayerContext {
     pub fn resolve_region_origin_info(&self, region_id: u32) -> Option<RegionOriginInfo> {
         let row = self.regioninfo.get(&region_id)?;
         let origin_region_id = non_zero_u32(row.tradeoriginregion);
-        let waypoint_id = row.waypoint;
+        let waypoint_id = origin_region_id
+            .and_then(|origin_region_id| self.regioninfo.get(&origin_region_id))
+            .and_then(|origin_row| origin_row.waypoint);
         let waypoint = waypoint_id.and_then(|id| self.waypoints.get(&id));
         let info = RegionOriginInfo {
             region_id: origin_region_id,
@@ -859,14 +861,16 @@ fn non_zero_u32(value: u32) -> Option<u32> {
 mod tests {
     use super::{
         decode_regiongroupinfo_bss_rows, decode_regioninfo_bss_rows,
-        load_region_group_mapping_from_regioninfo_bss, parse_attr_f64, parse_attr_u32, PABR_MAGIC,
-        REGIONGROUPINFO_ROW_GRAPHX_OFFSET, REGIONGROUPINFO_ROW_GRAPHY_OFFSET,
+        load_region_group_mapping_from_regioninfo_bss, parse_attr_f64, parse_attr_u32,
+        LocalizationTable, OriginalRegionInfoRow, OriginalRegionLayerContext, OriginalWaypointRow,
+        PABR_MAGIC, REGIONGROUPINFO_ROW_GRAPHX_OFFSET, REGIONGROUPINFO_ROW_GRAPHY_OFFSET,
         REGIONGROUPINFO_ROW_GRAPHZ_OFFSET, REGIONGROUPINFO_ROW_LEN,
         REGIONGROUPINFO_ROW_WAYPOINT_OFFSET, REGIONINFO_ROW_ACCESSIBLE_OFFSET,
         REGIONINFO_ROW_GROUP_OFFSET, REGIONINFO_ROW_SIGNATURE_OFFSET,
         REGIONINFO_ROW_SIGNATURE_PREFIX, REGIONINFO_ROW_TRADE_ORIGIN_OFFSET,
         REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET,
     };
+    use std::collections::HashMap;
     use std::fs;
 
     #[test]
@@ -980,5 +984,79 @@ mod tests {
         assert_eq!(rows[0].tradeoriginregion, 832);
         assert_eq!(rows[0].regiongroup, 218);
         assert_eq!(rows[0].waypoint, Some(1417));
+    }
+
+    #[test]
+    fn resolve_region_origin_info_uses_origin_region_waypoint() {
+        let context = OriginalRegionLayerContext {
+            regioninfo: [
+                (
+                    216,
+                    OriginalRegionInfoRow {
+                        key: 216,
+                        is_accessible: true,
+                        tradeoriginregion: 221,
+                        regiongroup: 58,
+                        waypoint: Some(1172),
+                    },
+                ),
+                (
+                    221,
+                    OriginalRegionInfoRow {
+                        key: 221,
+                        is_accessible: true,
+                        tradeoriginregion: 221,
+                        regiongroup: 58,
+                        waypoint: Some(1141),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            regiongroupinfo: HashMap::new(),
+            waypoints: [
+                (
+                    1141,
+                    OriginalWaypointRow {
+                        key: 1141,
+                        raw_name: "town(tarifcamp)".to_string(),
+                        pos_x: 224771.0,
+                        pos_y: -4721.17,
+                        pos_z: -77283.2,
+                    },
+                ),
+                (
+                    1172,
+                    OriginalWaypointRow {
+                        key: 1172,
+                        raw_name: "field(hathracliff)".to_string(),
+                        pos_x: 189607.0,
+                        pos_y: 16927.1,
+                        pos_z: -160661.0,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            localization: LocalizationTable {
+                node: [
+                    ("1141".to_string(), "Tarif".to_string()),
+                    ("1172".to_string(), "Hasrah Cliff".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                town: [("221".to_string(), "Tarif".to_string())]
+                    .into_iter()
+                    .collect(),
+            },
+        };
+
+        let origin = context.resolve_region_origin_info(216).unwrap();
+        assert_eq!(origin.region_id, Some(221));
+        assert_eq!(origin.region_name.as_deref(), Some("Tarif"));
+        assert_eq!(origin.waypoint_id, Some(1141));
+        assert_eq!(origin.waypoint_name.as_deref(), Some("Tarif"));
+        assert_eq!(origin.world_x, Some(224771.0));
+        assert_eq!(origin.world_z, Some(-77283.2));
     }
 }
