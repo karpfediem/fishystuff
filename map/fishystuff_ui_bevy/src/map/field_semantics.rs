@@ -1,7 +1,7 @@
 use fishystuff_api::Rgb;
 use fishystuff_core::field_metadata::{
-    FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataAsset, FieldHoverMetadataEntry,
-    FieldHoverRow, FieldHoverTarget,
+    detail_fact_value, FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataAsset,
+    FieldHoverMetadataEntry, FieldHoverTarget,
 };
 
 use crate::map::exact_lookup::ExactLookupCache;
@@ -17,19 +17,19 @@ pub struct FieldSemanticSample {
     pub field_id: u32,
     pub rgb: Rgb,
     pub rgb_u32: u32,
-    pub rows: Vec<FieldHoverRow>,
     pub targets: Vec<FieldHoverTarget>,
     pub detail_pane: Option<FieldDetailPaneRef>,
     pub detail_sections: Vec<FieldDetailSection>,
 }
 
 impl FieldSemanticSample {
-    pub fn row_value(&self, key: &str) -> Option<&str> {
-        self.rows
-            .iter()
-            .find(|row| row.key == key)
-            .map(|row| row.value.trim())
-            .filter(|value| !value.is_empty())
+    pub fn fact_value(&self, key: &str) -> Option<&str> {
+        detail_fact_value(
+            self.detail_sections
+                .iter()
+                .flat_map(|section| section.facts.iter()),
+            key,
+        )
     }
 }
 
@@ -42,22 +42,20 @@ pub trait SemanticFieldLayerView: FieldLayerView {
     ) -> Option<FieldSemanticSample> {
         let field_id = self.field_id_at_layer_point(layer_point)?;
         let rgb = self.rgb_at_layer_point(layer_point)?;
-        let (rows, targets, detail_pane, detail_sections) = self
+        let (targets, detail_pane, detail_sections) = self
             .metadata_entry_for_field_id(field_id)
             .map(|entry| {
                 (
-                    entry.rows.clone(),
                     entry.targets.clone(),
                     entry.detail_pane.clone(),
                     entry.detail_sections.clone(),
                 )
             })
-            .unwrap_or_else(|| (Vec::new(), Vec::new(), None, Vec::new()));
+            .unwrap_or_else(|| (Vec::new(), None, Vec::new()));
         Some(FieldSemanticSample {
             field_id,
             rgb,
             rgb_u32: rgb.to_u32(),
-            rows,
             targets,
             detail_pane,
             detail_sections,
@@ -90,13 +88,13 @@ pub trait SemanticFieldLayerView: FieldLayerView {
         self.semantic_sample_at_layer_point(world_transform.world_to_layer(world_point))
     }
 
-    fn row_value_at_map_px(&self, map_px_x: i32, map_px_y: i32, key: &str) -> Option<String> {
+    fn fact_value_at_map_px(&self, map_px_x: i32, map_px_y: i32, key: &str) -> Option<String> {
         self.semantic_sample_at_map_px(map_px_x, map_px_y)?
-            .row_value(key)
+            .fact_value(key)
             .map(ToOwned::to_owned)
     }
 
-    fn row_value_at_world_point(
+    fn fact_value_at_world_point(
         &self,
         layer: &LayerSpec,
         map_to_world: MapToWorld,
@@ -104,14 +102,14 @@ pub trait SemanticFieldLayerView: FieldLayerView {
         key: &str,
     ) -> Option<String> {
         self.semantic_sample_at_world_point(layer, map_to_world, world_point)?
-            .row_value(key)
+            .fact_value(key)
             .map(ToOwned::to_owned)
     }
 
-    fn row_value_for_field_id(&self, field_id: u32, key: &str) -> Option<String> {
+    fn fact_value_for_field_id(&self, field_id: u32, key: &str) -> Option<String> {
         let value = self
             .metadata_entry_for_field_id(field_id)?
-            .row_value(key)?
+            .fact_value(key)?
             .trim();
         (!value.is_empty()).then(|| value.to_string())
     }
@@ -156,14 +154,14 @@ pub fn field_metadata_entry_for_id<'a>(
     field_metadata.entry(layer.id, &metadata_url, field_id)
 }
 
-pub fn field_row_value_for_id(
+pub fn field_fact_value_for_id(
     layer: &LayerSpec,
     field_metadata: &FieldMetadataCache,
     field_id: u32,
     key: &str,
 ) -> Option<String> {
     let value = field_metadata_entry_for_id(layer, field_metadata, field_id)?
-        .row_value(key)?
+        .fact_value(key)?
         .trim();
     (!value.is_empty()).then(|| value.to_string())
 }
@@ -174,22 +172,20 @@ pub fn semantic_sample_for_field_id(
     field_id: u32,
     rgb: Rgb,
 ) -> FieldSemanticSample {
-    let (rows, targets, detail_pane, detail_sections) =
+    let (targets, detail_pane, detail_sections) =
         field_metadata_entry_for_id(layer, field_metadata, field_id)
             .map(|entry| {
                 (
-                    entry.rows.clone(),
                     entry.targets.clone(),
                     entry.detail_pane.clone(),
                     entry.detail_sections.clone(),
                 )
             })
-            .unwrap_or_else(|| (Vec::new(), Vec::new(), None, Vec::new()));
+            .unwrap_or_else(|| (Vec::new(), None, Vec::new()));
     FieldSemanticSample {
         field_id,
         rgb,
         rgb_u32: rgb.to_u32(),
-        rows,
         targets,
         detail_pane,
         detail_sections,
@@ -246,7 +242,7 @@ impl SemanticFieldLayerView for LoadedSemanticFieldLayer<'_> {
 #[cfg(test)]
 mod tests {
     use super::{
-        field_row_value_for_id, loaded_semantic_field_layer, ordered_semantic_layers,
+        field_fact_value_for_id, loaded_semantic_field_layer, ordered_semantic_layers,
         SemanticFieldLayerView,
     };
     use crate::map::exact_lookup::ExactLookupCache;
@@ -259,8 +255,55 @@ mod tests {
     use fishystuff_core::field::DiscreteFieldRows;
     use fishystuff_core::field_metadata::{
         FieldDetailFact, FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataAsset,
-        FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget,
+        FieldHoverMetadataEntry, FieldHoverTarget, FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
     };
+
+    fn origin_metadata_entry(
+        with_targets: bool,
+        with_detail_pane: bool,
+    ) -> FieldHoverMetadataEntry {
+        FieldHoverMetadataEntry {
+            targets: if with_targets {
+                vec![FieldHoverTarget {
+                    key: "origin_node".to_string(),
+                    label: "Origin: Tarif".to_string(),
+                    world_x: 1.0,
+                    world_z: 2.0,
+                }]
+            } else {
+                Vec::new()
+            },
+            detail_pane: with_detail_pane.then(|| FieldDetailPaneRef {
+                id: "territory".to_string(),
+                label: "Territory".to_string(),
+                icon: "hover-origin".to_string(),
+                order: 200,
+            }),
+            detail_sections: vec![FieldDetailSection {
+                id: "trade-origin".to_string(),
+                kind: "facts".to_string(),
+                title: Some("Trade Origin".to_string()),
+                facts: vec![FieldDetailFact {
+                    key: FIELD_DETAIL_FACT_KEY_ORIGIN_REGION.to_string(),
+                    label: "Region".to_string(),
+                    value: "Tarif".to_string(),
+                    icon: Some("hover-origin".to_string()),
+                    status_icon: None,
+                    status_icon_tone: None,
+                }],
+                targets: if with_targets {
+                    vec![FieldHoverTarget {
+                        key: "origin_node".to_string(),
+                        label: "Origin: Tarif".to_string(),
+                        world_x: 1.0,
+                        world_z: 2.0,
+                    }]
+                } else {
+                    Vec::new()
+                },
+            }],
+        }
+    }
 
     fn field_layer_descriptor(
         layer_id: &str,
@@ -431,7 +474,7 @@ mod tests {
     }
 
     #[test]
-    fn semantic_sample_collects_rgb_rows_and_targets() {
+    fn semantic_sample_collects_rgb_facts_and_targets() {
         let registry = test_registry();
         let layer = registry.get_by_key("regions").expect("regions layer");
         let mut exact_lookups = ExactLookupCache::default();
@@ -447,48 +490,7 @@ mod tests {
             FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     76,
-                    FieldHoverMetadataEntry {
-                        rows: vec![FieldHoverRow {
-                            key: "origin".to_string(),
-                            icon: "hover-origin".to_string(),
-                            label: "Origin".to_string(),
-                            value: "Tarif".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: vec![FieldHoverTarget {
-                            key: "origin_node".to_string(),
-                            label: "Origin: Tarif".to_string(),
-                            world_x: 1.0,
-                            world_z: 2.0,
-                        }],
-                        detail_pane: Some(FieldDetailPaneRef {
-                            id: "territory".to_string(),
-                            label: "Territory".to_string(),
-                            icon: "hover-origin".to_string(),
-                            order: 200,
-                        }),
-                        detail_sections: vec![FieldDetailSection {
-                            id: "trade-origin".to_string(),
-                            kind: "facts".to_string(),
-                            title: Some("Trade Origin".to_string()),
-                            facts: vec![FieldDetailFact {
-                                key: "origin_region".to_string(),
-                                label: "Region".to_string(),
-                                value: "Tarif".to_string(),
-                                icon: Some("hover-origin".to_string()),
-                                status_icon: None,
-                                status_icon_tone: None,
-                            }],
-                            targets: vec![FieldHoverTarget {
-                                key: "origin_node".to_string(),
-                                label: "Origin: Tarif".to_string(),
-                                world_x: 1.0,
-                                world_z: 2.0,
-                            }],
-                        }],
-                    },
+                    origin_metadata_entry(true, true),
                 )]),
             },
         );
@@ -499,18 +501,6 @@ mod tests {
             .expect("semantic sample");
         assert_eq!(semantic.field_id, 76);
         assert_eq!(semantic.rgb_u32, semantic.rgb.to_u32());
-        assert_eq!(
-            semantic.rows,
-            vec![FieldHoverRow {
-                key: "origin".to_string(),
-                icon: "hover-origin".to_string(),
-                label: "Origin".to_string(),
-                value: "Tarif".to_string(),
-                hide_label: false,
-                status_icon: None,
-                status_icon_tone: None,
-            }]
-        );
         assert_eq!(
             semantic.targets,
             vec![FieldHoverTarget {
@@ -550,20 +540,7 @@ mod tests {
             FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     76,
-                    FieldHoverMetadataEntry {
-                        rows: vec![FieldHoverRow {
-                            key: "origin".to_string(),
-                            icon: "hover-origin".to_string(),
-                            label: "Origin".to_string(),
-                            value: "Tarif".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    origin_metadata_entry(false, false),
                 )]),
             },
         );
@@ -577,11 +554,14 @@ mod tests {
             )
             .expect("semantic sample");
         assert_eq!(semantic.field_id, 76);
-        assert_eq!(semantic.row_value("origin"), Some("Tarif"));
+        assert_eq!(
+            semantic.fact_value(FIELD_DETAIL_FACT_KEY_ORIGIN_REGION),
+            Some("Tarif")
+        );
     }
 
     #[test]
-    fn row_value_for_id_reads_metadata_without_field_lookup() {
+    fn fact_value_for_id_reads_metadata_without_field_lookup() {
         let registry = test_registry();
         let layer = registry.get_by_key("regions").expect("regions layer");
         let mut field_metadata = FieldMetadataCache::default();
@@ -591,25 +571,17 @@ mod tests {
             FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     76,
-                    FieldHoverMetadataEntry {
-                        rows: vec![FieldHoverRow {
-                            key: "origin".to_string(),
-                            icon: "hover-origin".to_string(),
-                            label: "Origin".to_string(),
-                            value: "Tarif".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    origin_metadata_entry(false, false),
                 )]),
             },
         );
         assert_eq!(
-            field_row_value_for_id(layer, &field_metadata, 76, "origin"),
+            field_fact_value_for_id(
+                layer,
+                &field_metadata,
+                76,
+                FIELD_DETAIL_FACT_KEY_ORIGIN_REGION
+            ),
             Some("Tarif".to_string())
         );
     }

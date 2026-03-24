@@ -301,7 +301,6 @@ mod tests {
                 rgb: fishystuff_api::Rgb::from_u32(0x123456),
                 rgb_u32: 0x123456,
                 field_id: Some(0x123456),
-                rows: Vec::new(),
                 targets: Vec::new(),
                 detail_pane: None,
                 detail_sections: Vec::new(),

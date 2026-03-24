@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use fishystuff_core::field::DiscreteFieldRows;
 use fishystuff_core::field_metadata::{
     build_region_groups_hover_metadata, build_regions_hover_metadata, FieldDetailFact,
-    FieldDetailSection, FieldHoverMetadataAsset, FieldHoverMetadataEntry, FieldHoverRow,
-    FIELD_DETAIL_SECTION_KIND_FACTS, FIELD_HOVER_ROW_KEY_ZONE,
+    FieldDetailSection, FieldHoverMetadataAsset, FieldHoverMetadataEntry,
+    FIELD_DETAIL_FACT_KEY_ZONE, FIELD_DETAIL_SECTION_KIND_FACTS,
 };
 use fishystuff_core::gamecommondata::{
     load_original_region_layer_context, zone_mask_detail_pane_ref, OriginalRegionLayerContext,
@@ -86,23 +86,6 @@ pub fn build_zone_mask_field_hover_metadata(
         entries.insert(
             rgb_u32,
             FieldHoverMetadataEntry {
-                rows: vec![FieldHoverRow {
-                    key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
-                    icon: "hover-zone".to_string(),
-                    label: "Zone".to_string(),
-                    value: zone_display_name(
-                        rgb_u32,
-                        zones.get(&rgb_u32).and_then(|meta| {
-                            meta.name
-                                .as_deref()
-                                .map(str::trim)
-                                .filter(|value| !value.is_empty())
-                        }),
-                    ),
-                    hide_label: false,
-                    status_icon: None,
-                    status_icon_tone: None,
-                }],
                 targets: Vec::new(),
                 detail_pane: Some(zone_mask_detail_pane_ref()),
                 detail_sections: vec![FieldDetailSection {
@@ -110,7 +93,7 @@ pub fn build_zone_mask_field_hover_metadata(
                     kind: FIELD_DETAIL_SECTION_KIND_FACTS.to_string(),
                     title: Some("Zone".to_string()),
                     facts: vec![FieldDetailFact {
-                        key: "zone".to_string(),
+                        key: FIELD_DETAIL_FACT_KEY_ZONE.to_string(),
                         label: "Zone".to_string(),
                         value: zone_display_name(
                             rgb_u32,

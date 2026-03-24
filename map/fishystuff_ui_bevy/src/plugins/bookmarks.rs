@@ -14,7 +14,7 @@ use crate::plugins::api::{HoverInfo, HoverState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::ui::UiFonts;
-use fishystuff_core::field_metadata::{preferred_hover_row_value, FieldHoverRow};
+use fishystuff_core::field_metadata::{preferred_detail_fact_value, FieldDetailSection};
 
 #[cfg(target_arch = "wasm32")]
 use crate::bridge::host::BrowserBridgeState;
@@ -422,12 +422,23 @@ fn bookmark_display_label(bookmark: &FishyMapBookmarkEntry, index: usize) -> Str
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
-        .or_else(|| bookmark_primary_row_value(&bookmark.rows))
+        .or_else(|| bookmark_primary_fact_value(&bookmark.layer_samples))
         .unwrap_or_else(|| format!("Bookmark {}", index + 1))
 }
 
-fn bookmark_primary_row_value(rows: &[FieldHoverRow]) -> Option<String> {
-    preferred_hover_row_value(rows.iter()).map(ToOwned::to_owned)
+fn bookmark_primary_fact_value(
+    samples: &[crate::bridge::contract::FishyMapHoverLayerSampleSnapshot],
+) -> Option<String> {
+    preferred_detail_fact_value(samples.iter().flat_map(detail_sections)).map(ToOwned::to_owned)
+}
+
+fn detail_sections(
+    sample: &crate::bridge::contract::FishyMapHoverLayerSampleSnapshot,
+) -> impl Iterator<Item = &fishystuff_core::field_metadata::FieldDetailFact> {
+    sample
+        .detail_sections
+        .iter()
+        .flat_map(|section: &FieldDetailSection| section.facts.iter())
 }
 
 fn bookmark_callout_size_px(display_text: &str) -> Vec2 {
@@ -529,7 +540,6 @@ mod tests {
                 world_x: 100.0,
                 world_z: 100.0,
                 layer_samples: Vec::new(),
-                rows: Vec::new(),
                 zone_rgb: None,
                 created_at: None,
             },
@@ -539,7 +549,6 @@ mod tests {
                 world_x: 108.0,
                 world_z: 108.0,
                 layer_samples: Vec::new(),
-                rows: Vec::new(),
                 zone_rgb: None,
                 created_at: None,
             },

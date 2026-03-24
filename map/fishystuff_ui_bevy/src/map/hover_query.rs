@@ -103,6 +103,33 @@ mod tests {
         LodPolicyDto, TilesetRef,
     };
     use fishystuff_api::Rgb;
+    use fishystuff_core::field_metadata::{FieldDetailFact, FieldDetailSection};
+
+    fn metadata_entry(
+        key: &str,
+        label: &str,
+        value: &str,
+        icon: &str,
+    ) -> fishystuff_core::field_metadata::FieldHoverMetadataEntry {
+        fishystuff_core::field_metadata::FieldHoverMetadataEntry {
+            targets: Vec::new(),
+            detail_pane: None,
+            detail_sections: vec![FieldDetailSection {
+                id: key.to_string(),
+                kind: "facts".to_string(),
+                title: Some(label.to_string()),
+                facts: vec![FieldDetailFact {
+                    key: key.to_string(),
+                    label: label.to_string(),
+                    value: value.to_string(),
+                    icon: Some(icon.to_string()),
+                    status_icon: None,
+                    status_icon_tone: None,
+                }],
+                targets: Vec::new(),
+            }],
+        }
+    }
 
     fn zone_mask_hover_sample(layer_samples: &[LayerQuerySample]) -> Option<&LayerQuerySample> {
         layer_samples
@@ -120,7 +147,6 @@ mod tests {
                 rgb: Rgb::from_u32(0x112233),
                 rgb_u32: 0x112233,
                 field_id: Some(88),
-                rows: Vec::new(),
                 targets: Vec::new(),
                 detail_pane: None,
                 detail_sections: Vec::new(),
@@ -132,7 +158,6 @@ mod tests {
                 rgb: Rgb::from_u32(0x445566),
                 rgb_u32: 0x445566,
                 field_id: Some(0x445566),
-                rows: Vec::new(),
                 targets: Vec::new(),
                 detail_pane: None,
                 detail_sections: Vec::new(),
@@ -220,20 +245,12 @@ mod tests {
             fishystuff_core::field_metadata::FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     16,
-                    fishystuff_core::field_metadata::FieldHoverMetadataEntry {
-                        rows: vec![fishystuff_core::field_metadata::FieldHoverRow {
-                            key: "resources".to_string(),
-                            icon: "hover-resources".to_string(),
-                            label: "Resources".to_string(),
-                            value: "Tarif".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    metadata_entry(
+                        "resource_region",
+                        "Containing region",
+                        "Tarif",
+                        "hover-resources",
+                    ),
                 )]),
             },
         );
@@ -243,20 +260,7 @@ mod tests {
             fishystuff_core::field_metadata::FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     76,
-                    fishystuff_core::field_metadata::FieldHoverMetadataEntry {
-                        rows: vec![fishystuff_core::field_metadata::FieldHoverRow {
-                            key: "origin".to_string(),
-                            icon: "hover-origin".to_string(),
-                            label: "Origin".to_string(),
-                            value: "Tarif".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    metadata_entry("origin_region", "Region", "Tarif", "hover-origin"),
                 )]),
             },
         );

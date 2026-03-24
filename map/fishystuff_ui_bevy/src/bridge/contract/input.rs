@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use fishystuff_core::field_metadata::FieldHoverRow;
 use serde::{Deserialize, Serialize};
 
 use super::snapshot::FishyMapHoverLayerSampleSnapshot;
@@ -157,7 +156,6 @@ pub struct FishyMapBookmarkEntry {
     pub world_x: f64,
     pub world_z: f64,
     pub layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
-    pub rows: Vec<FieldHoverRow>,
     pub zone_rgb: Option<u32>,
     pub created_at: Option<String>,
 }
@@ -180,41 +178,10 @@ impl FishyMapBookmarkEntry {
             world_x: self.world_x,
             world_z: self.world_z,
             layer_samples: self.layer_samples,
-            rows: normalize_hover_rows(self.rows),
             zone_rgb: self.zone_rgb,
             created_at: normalize_optional(self.created_at),
         })
     }
-}
-
-fn normalize_hover_rows(rows: Vec<FieldHoverRow>) -> Vec<FieldHoverRow> {
-    rows.into_iter()
-        .filter_map(|row| {
-            let key = row.key.trim().to_string();
-            let icon = row.icon.trim().to_string();
-            let label = row.label.trim().to_string();
-            let value = row.value.trim().to_string();
-            let hide_label = row.hide_label;
-            if icon.is_empty() || value.is_empty() || (!hide_label && label.is_empty()) {
-                return None;
-            }
-            let normalize_optional = |value: Option<String>| {
-                value.and_then(|value| {
-                    let trimmed = value.trim().to_string();
-                    (!trimmed.is_empty()).then_some(trimmed)
-                })
-            };
-            Some(FieldHoverRow {
-                key,
-                icon,
-                label,
-                value,
-                hide_label,
-                status_icon: normalize_optional(row.status_icon),
-                status_icon_tone: normalize_optional(row.status_icon_tone),
-            })
-        })
-        .collect()
 }
 
 fn normalize_bookmarks(bookmarks: Vec<FishyMapBookmarkEntry>) -> Vec<FishyMapBookmarkEntry> {

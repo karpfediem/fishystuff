@@ -704,7 +704,6 @@ mod tests {
             rgb: Rgb::new(0, 0, 0),
             rgb_u32: 0,
             field_id: None,
-            rows: Vec::new(),
             targets: Vec::new(),
             detail_pane: None,
             detail_sections: Vec::new(),

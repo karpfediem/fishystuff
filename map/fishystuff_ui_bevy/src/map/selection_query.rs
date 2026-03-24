@@ -122,7 +122,6 @@ pub fn semantic_layer_sample_for_field_id(
         rgb: semantic.rgb,
         rgb_u32: semantic.rgb_u32,
         field_id: Some(semantic.field_id),
-        rows: semantic.rows,
         targets: semantic.targets,
         detail_pane: semantic.detail_pane,
         detail_sections: semantic.detail_sections,
@@ -149,8 +148,30 @@ mod tests {
     use fishystuff_api::Rgb;
     use fishystuff_core::field::DiscreteFieldRows;
     use fishystuff_core::field_metadata::{
-        FieldHoverMetadataAsset, FieldHoverMetadataEntry, FieldHoverRow, FIELD_HOVER_ROW_KEY_ZONE,
+        FieldDetailFact, FieldDetailSection, FieldHoverMetadataAsset, FieldHoverMetadataEntry,
+        FIELD_DETAIL_FACT_KEY_ORIGIN_REGION, FIELD_DETAIL_FACT_KEY_ZONE,
     };
+
+    fn metadata_entry(key: &str, label: &str, value: &str, icon: &str) -> FieldHoverMetadataEntry {
+        FieldHoverMetadataEntry {
+            targets: Vec::new(),
+            detail_pane: None,
+            detail_sections: vec![FieldDetailSection {
+                id: key.to_string(),
+                kind: "facts".to_string(),
+                title: Some(label.to_string()),
+                facts: vec![FieldDetailFact {
+                    key: key.to_string(),
+                    label: label.to_string(),
+                    value: value.to_string(),
+                    icon: Some(icon.to_string()),
+                    status_icon: None,
+                    status_icon_tone: None,
+                }],
+                targets: Vec::new(),
+            }],
+        }
+    }
 
     fn zone_registry() -> LayerRegistry {
         let mut registry = LayerRegistry::default();
@@ -273,7 +294,6 @@ mod tests {
                 rgb: Rgb::from_u32(0x123456),
                 rgb_u32: 0x123456,
                 field_id: Some(0x123456),
-                rows: Vec::new(),
                 targets: Vec::new(),
                 detail_pane: None,
                 detail_sections: Vec::new(),
@@ -309,7 +329,6 @@ mod tests {
                 rgb: Rgb::from_u32(0x223344),
                 rgb_u32: 0x223344,
                 field_id: Some(76),
-                rows: Vec::new(),
                 targets: Vec::new(),
                 detail_pane: None,
                 detail_sections: Vec::new(),
@@ -355,20 +374,12 @@ mod tests {
             FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     0x123456,
-                    FieldHoverMetadataEntry {
-                        rows: vec![FieldHoverRow {
-                            key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
-                            icon: "hover-zone".to_string(),
-                            label: "Zone".to_string(),
-                            value: "Velia Bay".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ZONE,
+                        "Zone",
+                        "Velia Bay",
+                        "hover-zone",
+                    ),
                 )]),
             },
         );
@@ -378,20 +389,12 @@ mod tests {
             FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     76,
-                    FieldHoverMetadataEntry {
-                        rows: vec![FieldHoverRow {
-                            key: "origin".to_string(),
-                            icon: "hover-origin".to_string(),
-                            label: "Origin".to_string(),
-                            value: "Tarif".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+                        "Region",
+                        "Tarif",
+                        "hover-origin",
+                    ),
                 )]),
             },
         );
@@ -436,20 +439,12 @@ mod tests {
             FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     0x123456,
-                    FieldHoverMetadataEntry {
-                        rows: vec![FieldHoverRow {
-                            key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
-                            icon: "hover-zone".to_string(),
-                            label: "Zone".to_string(),
-                            value: "Velia Bay".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ZONE,
+                        "Zone",
+                        "Velia Bay",
+                        "hover-zone",
+                    ),
                 )]),
             },
         );
@@ -459,8 +454,7 @@ mod tests {
         assert_eq!(sample.layer_id, "zone_mask");
         assert_eq!(sample.rgb_u32, 0x123456);
         assert_eq!(sample.field_id, Some(0x123456));
-        assert_eq!(sample.rows.len(), 1);
-        assert_eq!(sample.rows[0].value, "Velia Bay");
+        assert_eq!(sample.detail_sections[0].facts[0].value, "Velia Bay");
     }
 
     #[test]
@@ -474,20 +468,12 @@ mod tests {
             FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     0x223344,
-                    FieldHoverMetadataEntry {
-                        rows: vec![FieldHoverRow {
-                            key: FIELD_HOVER_ROW_KEY_ZONE.to_string(),
-                            icon: "hover-zone".to_string(),
-                            label: "Zone".to_string(),
-                            value: "Cron Islands".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ZONE,
+                        "Zone",
+                        "Cron Islands",
+                        "hover-zone",
+                    ),
                 )]),
             },
         );
@@ -501,7 +487,10 @@ mod tests {
         assert!(!selected.world_z.is_finite());
         assert_eq!(selected.layer_samples.len(), 1);
         assert_eq!(selected.layer_samples[0].layer_id, "zone_mask");
-        assert_eq!(selected.layer_samples[0].rows[0].value, "Cron Islands");
+        assert_eq!(
+            selected.layer_samples[0].detail_sections[0].facts[0].value,
+            "Cron Islands"
+        );
     }
 
     #[test]
@@ -546,20 +535,12 @@ mod tests {
             FieldHoverMetadataAsset {
                 entries: std::collections::BTreeMap::from([(
                     76,
-                    FieldHoverMetadataEntry {
-                        rows: vec![FieldHoverRow {
-                            key: "origin".to_string(),
-                            icon: "hover-origin".to_string(),
-                            label: "Origin".to_string(),
-                            value: "Grana".to_string(),
-                            hide_label: false,
-                            status_icon: None,
-                            status_icon_tone: None,
-                        }],
-                        targets: Vec::new(),
-                        detail_pane: None,
-                        detail_sections: Vec::new(),
-                    },
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+                        "Region",
+                        "Grana",
+                        "hover-origin",
+                    ),
                 )]),
             },
         );
@@ -570,6 +551,9 @@ mod tests {
         assert_eq!(selected.layer_samples.len(), 1);
         assert_eq!(selected.layer_samples[0].layer_id, "regions");
         assert_eq!(selected.layer_samples[0].field_id, Some(76));
-        assert_eq!(selected.layer_samples[0].rows[0].value, "Grana");
+        assert_eq!(
+            selected.layer_samples[0].detail_sections[0].facts[0].value,
+            "Grana"
+        );
     }
 }

@@ -8,10 +8,12 @@ use crate::coord::world_to_pixel_f;
 use crate::field::DiscreteFieldRows;
 use crate::field_metadata::{
     FieldDetailFact, FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataEntry,
-    FieldHoverRow, FieldHoverTarget, FIELD_DETAIL_PANE_ID_TERRITORY,
-    FIELD_DETAIL_PANE_ID_ZONE_MASK, FIELD_DETAIL_SECTION_KIND_FACTS, FIELD_HOVER_ROW_KEY_ORIGIN,
-    FIELD_HOVER_ROW_KEY_RESOURCES, FIELD_HOVER_TARGET_KEY_ORIGIN_NODE,
-    FIELD_HOVER_TARGET_KEY_REGION_NODE, FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
+    FieldHoverTarget, FIELD_DETAIL_FACT_KEY_ORIGIN_NODE, FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+    FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE, FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
+    FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE, FIELD_DETAIL_PANE_ID_TERRITORY,
+    FIELD_DETAIL_PANE_ID_ZONE_MASK, FIELD_DETAIL_SECTION_KIND_FACTS,
+    FIELD_HOVER_TARGET_KEY_ORIGIN_NODE, FIELD_HOVER_TARGET_KEY_REGION_NODE,
+    FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
 };
 use crate::loc::load_loc_namespaces_as_string_maps;
 
@@ -149,10 +151,6 @@ impl OriginalRegionLayerContext {
     pub fn resolve_region_hover_metadata(&self, region_id: u32) -> Option<FieldHoverMetadataEntry> {
         let origin = self.resolve_region_origin_info(region_id);
         let entry = FieldHoverMetadataEntry {
-            rows: vec![build_origin_hover_row(region_id, origin.as_ref())]
-                .into_iter()
-                .flatten()
-                .collect(),
             targets: vec![build_origin_hover_target(origin.as_ref())]
                 .into_iter()
                 .flatten()
@@ -180,19 +178,7 @@ impl OriginalRegionLayerContext {
             .and_then(|info| self.resolve_resource_region_id(info, regions_field));
         let resource_region_info =
             resource_region_id.and_then(|region_id| self.resolve_region_origin_info(region_id));
-        let resource_region_name = resource_region_info
-            .as_ref()
-            .and_then(|info| info.region_name.clone());
         let entry = FieldHoverMetadataEntry {
-            rows: vec![build_resource_hover_row(
-                region_group_id,
-                resource.as_ref(),
-                resource_region_id,
-                resource_region_name,
-            )]
-            .into_iter()
-            .flatten()
-            .collect(),
             targets: vec![build_resource_hover_target(self, resource.as_ref())]
                 .into_iter()
                 .flatten()
@@ -531,38 +517,6 @@ fn load_localization(path: &Path) -> Result<LocalizationTable> {
     })
 }
 
-fn build_origin_hover_row(
-    region_id: u32,
-    origin: Option<&RegionOriginInfo>,
-) -> Option<FieldHoverRow> {
-    let has_assignment = origin.is_some_and(has_origin_assignment);
-    let name = origin
-        .and_then(|info| info.region_name.as_deref())
-        .map(str::trim);
-    let value = match (has_assignment, name) {
-        (true, Some(name)) if !name.is_empty() => name.to_string(),
-        (_, _) => format!("R{region_id}"),
-    };
-    let status = match (has_assignment, name) {
-        (true, Some(name)) if !name.is_empty() => (None, None),
-        (true, _) => (
-            Some("question-mark".to_string()),
-            Some("subtle".to_string()),
-        ),
-        (false, Some(_)) => (Some("question-mark".to_string()), None),
-        (false, None) => (Some("question-mark".to_string()), None),
-    };
-    Some(FieldHoverRow {
-        key: FIELD_HOVER_ROW_KEY_ORIGIN.to_string(),
-        icon: "hover-origin".to_string(),
-        label: "Origin".to_string(),
-        value,
-        hide_label: false,
-        status_icon: status.0,
-        status_icon_tone: status.1,
-    })
-}
-
 fn build_region_origin_detail_section(
     region_id: u32,
     origin: Option<&RegionOriginInfo>,
@@ -575,7 +529,7 @@ fn build_region_origin_detail_section(
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| format!("R{region_id}"));
     facts.push(FieldDetailFact {
-        key: "origin_region".to_string(),
+        key: FIELD_DETAIL_FACT_KEY_ORIGIN_REGION.to_string(),
         label: "Region".to_string(),
         value: region_value,
         icon: Some("hover-origin".to_string()),
@@ -612,8 +566,8 @@ fn build_region_origin_detail_section(
         .filter(|value| !value.is_empty())
     {
         facts.push(FieldDetailFact {
-            key: "origin_node".to_string(),
-            label: "Node".to_string(),
+            key: FIELD_DETAIL_FACT_KEY_ORIGIN_NODE.to_string(),
+            label: "Origin node".to_string(),
             value: node_name.to_string(),
             icon: Some("map-pin".to_string()),
             status_icon: None,
@@ -631,50 +585,6 @@ fn build_region_origin_detail_section(
         title: Some("Trade Origin".to_string()),
         facts,
         targets,
-    })
-}
-
-fn build_resource_hover_row(
-    region_group_id: u32,
-    resource: Option<&RegionGroupWaypointInfo>,
-    resource_region_id: Option<u32>,
-    resource_region_name: Option<String>,
-) -> Option<FieldHoverRow> {
-    let has_assignment = resource.is_some_and(RegionGroupWaypointInfo::has_value);
-    let value = if let Some(name) = resource_region_name.as_deref().map(str::trim) {
-        if !name.is_empty() {
-            name.to_string()
-        } else if let Some(region_id) = resource_region_id {
-            format!("R{region_id}")
-        } else {
-            format!("RG{region_group_id}")
-        }
-    } else if let Some(region_id) = resource_region_id {
-        format!("R{region_id}")
-    } else {
-        format!("RG{region_group_id}")
-    };
-    let status = if resource_region_name
-        .as_deref()
-        .is_some_and(|name| !name.trim().is_empty())
-    {
-        (None, None)
-    } else if has_assignment {
-        (
-            Some("question-mark".to_string()),
-            Some("subtle".to_string()),
-        )
-    } else {
-        (Some("question-mark".to_string()), None)
-    };
-    Some(FieldHoverRow {
-        key: FIELD_HOVER_ROW_KEY_RESOURCES.to_string(),
-        icon: "hover-resources".to_string(),
-        label: "Resources".to_string(),
-        value,
-        hide_label: false,
-        status_icon: status.0,
-        status_icon_tone: status.1,
     })
 }
 
@@ -700,7 +610,7 @@ fn build_region_group_resource_detail_section(
         })
         .unwrap_or_else(|| format!("RG{region_group_id}"));
     facts.push(FieldDetailFact {
-        key: "resource_bar_node".to_string(),
+        key: FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE.to_string(),
         label: "Node".to_string(),
         value: resource_node_value,
         icon: Some("map-pin".to_string()),
@@ -716,7 +626,7 @@ fn build_region_group_resource_detail_section(
         .or_else(|| resource_region_id.map(|region_id| format!("R{region_id}")))
         .unwrap_or_else(|| format!("RG{region_group_id}"));
     facts.push(FieldDetailFact {
-        key: "resource_region".to_string(),
+        key: FIELD_DETAIL_FACT_KEY_RESOURCE_REGION.to_string(),
         label: "Containing region".to_string(),
         value: containing_region_value,
         icon: Some("hover-zone".to_string()),
@@ -751,7 +661,7 @@ fn build_region_group_resource_detail_section(
         .filter(|value| !value.is_empty())
     {
         facts.push(FieldDetailFact {
-            key: "resource_region_node".to_string(),
+            key: FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE.to_string(),
             label: "Origin node".to_string(),
             value: region_node_name.to_string(),
             icon: Some("hover-origin".to_string()),
@@ -867,10 +777,6 @@ pub fn zone_mask_detail_pane_ref() -> FieldDetailPaneRef {
         icon: "hover-zone".to_string(),
         order: 100,
     }
-}
-
-fn has_origin_assignment(origin: &RegionOriginInfo) -> bool {
-    origin.waypoint_id.is_some() || origin.world_x.is_some() || origin.world_z.is_some()
 }
 
 fn sample_field_id_at_world(field: &DiscreteFieldRows, world_x: f64, world_z: f64) -> Option<u32> {

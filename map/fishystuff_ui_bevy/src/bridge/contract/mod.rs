@@ -159,7 +159,6 @@ mod tests {
                 world_x: 123.5,
                 world_z: -456.25,
                 layer_samples: Vec::new(),
-                rows: Vec::new(),
                 zone_rgb: None,
                 created_at: None,
             }]))
@@ -395,7 +394,6 @@ mod tests {
             world_x: 10.0,
             world_z: 20.0,
             layer_samples: Vec::new(),
-            rows: Vec::new(),
             zone_rgb: None,
             created_at: None,
         }];
@@ -437,7 +435,6 @@ mod tests {
                 world_x: 123.5,
                 world_z: -456.25,
                 layer_samples: Vec::new(),
-                rows: Vec::new(),
                 zone_rgb: None,
                 created_at: None,
             }]

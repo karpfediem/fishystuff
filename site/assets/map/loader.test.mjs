@@ -526,7 +526,6 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
         {
           layerId: "zone_mask",
           layerName: "Zone Mask",
-          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
           detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
           detailSections: [
             {
@@ -540,7 +539,6 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
         {
           layerId: "region_groups",
           layerName: "Region Groups",
-          rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
           detailPane: { id: "territory", label: "Territory", icon: "hover-resources", order: 200 },
           detailSections: [
             {
@@ -554,7 +552,6 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
         {
           layerId: "regions",
           layerName: "Regions",
-          rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
           detailPane: { id: "territory", label: "Territory", icon: "hover-origin", order: 200 },
           detailSections: [
             {
@@ -593,7 +590,6 @@ test("buildPointDetailPanes keeps territory panes when source layers are hidden"
         {
           layerId: "region_groups",
           layerName: "Region Groups",
-          rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
           detailPane: { id: "territory", label: "Territory", icon: "hover-resources", order: 200 },
           detailSections: [
             {
@@ -607,7 +603,6 @@ test("buildPointDetailPanes keeps territory panes when source layers are hidden"
         {
           layerId: "regions",
           layerName: "Regions",
-          rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
           detailPane: { id: "territory", label: "Territory", icon: "hover-origin", order: 200 },
           detailSections: [
             {
@@ -646,7 +641,6 @@ test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
         {
           layerId: "zone_mask",
           layerName: "Zone Mask",
-          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
           detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
           detailSections: [
             {
@@ -661,7 +655,6 @@ test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
         {
           layerId: "region_groups",
           layerName: "Region Groups",
-          rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
           detailPane: { id: "territory", label: "Territory", icon: "hover-resources", order: 200 },
           detailSections: [
             {
@@ -694,7 +687,6 @@ test("buildPointDetailViewModel resolves the requested active pane when availabl
         {
           layerId: "zone_mask",
           layerName: "Zone Mask",
-          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
           detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
           detailSections: [
             {
@@ -708,7 +700,6 @@ test("buildPointDetailViewModel resolves the requested active pane when availabl
         {
           layerId: "region_groups",
           layerName: "Region Groups",
-          rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
           detailPane: { id: "territory", label: "Territory", icon: "hover-resources", order: 200 },
           detailSections: [
             {
@@ -759,7 +750,6 @@ test("buildPointDetailViewModel uses bookmark titles over semantic summaries", (
         {
           layerId: "zone_mask",
           layerName: "Zone Mask",
-          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
           detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
           detailSections: [
             {

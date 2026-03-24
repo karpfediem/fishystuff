@@ -5,13 +5,19 @@ use serde::{Deserialize, Serialize};
 use crate::field::DiscreteFieldRows;
 use crate::gamecommondata::OriginalRegionLayerContext;
 
-pub const FIELD_HOVER_ROW_KEY_ZONE: &str = "zone";
-pub const FIELD_HOVER_ROW_KEY_RESOURCES: &str = "resources";
-pub const FIELD_HOVER_ROW_KEY_ORIGIN: &str = "origin";
-pub const FIELD_HOVER_PRIMARY_ROW_KEYS: [&str; 3] = [
-    FIELD_HOVER_ROW_KEY_ZONE,
-    FIELD_HOVER_ROW_KEY_RESOURCES,
-    FIELD_HOVER_ROW_KEY_ORIGIN,
+pub const FIELD_DETAIL_FACT_KEY_ZONE: &str = "zone";
+pub const FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE: &str = "resource_bar_node";
+pub const FIELD_DETAIL_FACT_KEY_RESOURCE_REGION: &str = "resource_region";
+pub const FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE: &str = "resource_region_node";
+pub const FIELD_DETAIL_FACT_KEY_ORIGIN_REGION: &str = "origin_region";
+pub const FIELD_DETAIL_FACT_KEY_ORIGIN_NODE: &str = "origin_node";
+pub const FIELD_DETAIL_PRIMARY_FACT_KEYS: [&str; 6] = [
+    FIELD_DETAIL_FACT_KEY_ZONE,
+    FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE,
+    FIELD_DETAIL_FACT_KEY_ORIGIN_NODE,
+    FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE,
+    FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
+    FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
 ];
 
 pub const FIELD_HOVER_TARGET_KEY_RESOURCE_NODE: &str = "resource_node";
@@ -31,22 +37,9 @@ pub struct FieldHoverMetadataAsset {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FieldHoverMetadataEntry {
-    pub rows: Vec<FieldHoverRow>,
     pub targets: Vec<FieldHoverTarget>,
     pub detail_pane: Option<FieldDetailPaneRef>,
     pub detail_sections: Vec<FieldDetailSection>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", default)]
-pub struct FieldHoverRow {
-    pub key: String,
-    pub icon: String,
-    pub label: String,
-    pub value: String,
-    pub hide_label: bool,
-    pub status_icon: Option<String>,
-    pub status_icon_tone: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -96,43 +89,56 @@ impl FieldHoverMetadataAsset {
 
 impl FieldHoverMetadataEntry {
     pub fn has_value(&self) -> bool {
-        !self.rows.is_empty() || !self.targets.is_empty() || !self.detail_sections.is_empty()
+        !self.targets.is_empty() || !self.detail_sections.is_empty()
     }
 
-    pub fn row_value(&self, key: &str) -> Option<&str> {
-        self.rows
-            .iter()
-            .find(|row| row.key == key)
-            .map(|row| row.value.as_str())
+    pub fn fact_value(&self, key: &str) -> Option<&str> {
+        detail_fact_value(detail_facts(&self.detail_sections), key)
     }
 }
 
-pub fn hover_row_is_visible(row: &FieldHoverRow) -> bool {
-    let value = row.value.trim();
-    !value.is_empty() && (row.hide_label || !row.label.trim().is_empty())
+pub fn detail_fact_is_visible(fact: &FieldDetailFact) -> bool {
+    !fact.value.trim().is_empty() && !fact.label.trim().is_empty()
 }
 
-pub fn preferred_hover_row<'a>(
-    rows: impl IntoIterator<Item = &'a FieldHoverRow>,
-) -> Option<&'a FieldHoverRow> {
-    let rows = rows.into_iter().collect::<Vec<_>>();
-    for key in FIELD_HOVER_PRIMARY_ROW_KEYS {
-        if let Some(row) = rows
+pub fn detail_facts<'a>(
+    sections: &'a [FieldDetailSection],
+) -> impl Iterator<Item = &'a FieldDetailFact> + 'a {
+    sections.iter().flat_map(|section| section.facts.iter())
+}
+
+pub fn preferred_detail_fact<'a>(
+    facts: impl IntoIterator<Item = &'a FieldDetailFact>,
+) -> Option<&'a FieldDetailFact> {
+    let facts = facts.into_iter().collect::<Vec<_>>();
+    for key in FIELD_DETAIL_PRIMARY_FACT_KEYS {
+        if let Some(fact) = facts
             .iter()
             .copied()
-            .find(|row| row.key == key && hover_row_is_visible(row))
+            .find(|fact| fact.key == key && detail_fact_is_visible(fact))
         {
-            return Some(row);
+            return Some(fact);
         }
     }
-    rows.into_iter().find(|row| hover_row_is_visible(row))
+    facts.into_iter().find(|fact| detail_fact_is_visible(fact))
 }
 
-pub fn preferred_hover_row_value<'a>(
-    rows: impl IntoIterator<Item = &'a FieldHoverRow>,
+pub fn preferred_detail_fact_value<'a>(
+    facts: impl IntoIterator<Item = &'a FieldDetailFact>,
 ) -> Option<&'a str> {
-    preferred_hover_row(rows)
-        .map(|row| row.value.trim())
+    preferred_detail_fact(facts)
+        .map(|fact| fact.value.trim())
+        .filter(|value| !value.is_empty())
+}
+
+pub fn detail_fact_value<'a>(
+    facts: impl IntoIterator<Item = &'a FieldDetailFact>,
+    key: &str,
+) -> Option<&'a str> {
+    facts
+        .into_iter()
+        .find(|fact| fact.key == key && detail_fact_is_visible(fact))
+        .map(|fact| fact.value.trim())
         .filter(|value| !value.is_empty())
 }
 
@@ -172,60 +178,68 @@ fn build_hover_metadata(
 #[cfg(test)]
 mod tests {
     use super::{
-        hover_row_is_visible, preferred_hover_row, preferred_hover_row_value, FieldHoverRow,
-        FIELD_HOVER_ROW_KEY_ORIGIN, FIELD_HOVER_ROW_KEY_RESOURCES, FIELD_HOVER_ROW_KEY_ZONE,
+        detail_fact_is_visible, preferred_detail_fact, preferred_detail_fact_value,
+        FieldDetailFact, FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+        FIELD_DETAIL_FACT_KEY_RESOURCE_REGION, FIELD_DETAIL_FACT_KEY_ZONE,
     };
 
-    fn row(key: &str, label: &str, value: &str) -> FieldHoverRow {
-        FieldHoverRow {
+    fn fact(key: &str, label: &str, value: &str) -> FieldDetailFact {
+        FieldDetailFact {
             key: key.to_string(),
-            icon: "hover".to_string(),
             label: label.to_string(),
             value: value.to_string(),
-            hide_label: false,
+            icon: Some("hover".to_string()),
             status_icon: None,
             status_icon_tone: None,
         }
     }
 
     #[test]
-    fn hover_row_visibility_requires_value_and_visible_label() {
-        assert!(hover_row_is_visible(&row(
-            FIELD_HOVER_ROW_KEY_ZONE,
+    fn detail_fact_visibility_requires_value_and_visible_label() {
+        assert!(detail_fact_is_visible(&fact(
+            FIELD_DETAIL_FACT_KEY_ZONE,
             "Zone",
             "Olvia"
         )));
-        assert!(!hover_row_is_visible(&row(
-            FIELD_HOVER_ROW_KEY_ZONE,
+        assert!(!detail_fact_is_visible(&fact(
+            FIELD_DETAIL_FACT_KEY_ZONE,
             "Zone",
             ""
         )));
-        assert!(!hover_row_is_visible(&row(
-            FIELD_HOVER_ROW_KEY_ZONE,
+        assert!(!detail_fact_is_visible(&fact(
+            FIELD_DETAIL_FACT_KEY_ZONE,
             "",
             "Olvia"
         )));
     }
 
     #[test]
-    fn preferred_hover_row_uses_primary_keys_before_first_visible_row() {
-        let rows = vec![
-            row("custom", "Custom", "Alpha"),
-            row(FIELD_HOVER_ROW_KEY_ORIGIN, "Origin", "Castle Ruins"),
-            row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Olvia"),
+    fn preferred_detail_fact_uses_primary_keys_before_first_visible_row() {
+        let facts = vec![
+            fact("custom", "Custom", "Alpha"),
+            fact(
+                FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+                "Origin region",
+                "Castle Ruins",
+            ),
+            fact(
+                FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
+                "Containing region",
+                "Olvia",
+            ),
         ];
         assert_eq!(
-            preferred_hover_row(rows.iter()).map(|row| row.key.as_str()),
-            Some(FIELD_HOVER_ROW_KEY_RESOURCES)
+            preferred_detail_fact(facts.iter()).map(|fact| fact.key.as_str()),
+            Some(FIELD_DETAIL_FACT_KEY_RESOURCE_REGION)
         );
     }
 
     #[test]
-    fn preferred_hover_row_value_falls_back_to_first_visible_row() {
-        let rows = vec![
-            row("custom", "Custom", "Alpha"),
-            row("other", "Other", "Beta"),
+    fn preferred_detail_fact_value_falls_back_to_first_visible_fact() {
+        let facts = vec![
+            fact("custom", "Custom", "Alpha"),
+            fact("other", "Other", "Beta"),
         ];
-        assert_eq!(preferred_hover_row_value(rows.iter()), Some("Alpha"));
+        assert_eq!(preferred_detail_fact_value(facts.iter()), Some("Alpha"));
     }
 }

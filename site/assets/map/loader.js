@@ -425,8 +425,8 @@ function normalizeBookmarkLayerSamples(layerSamplesInput) {
   );
 }
 
-function bookmarkPrimaryRowValue(layerSamplesInput, stateBundle) {
-  const rows = displayRowsForLayerSamples(layerSamplesInput, stateBundle);
+function bookmarkPrimaryFactValue(layerSamplesInput, stateBundle) {
+  const rows = overviewRowsForLayerSamples(layerSamplesInput, stateBundle);
   for (const key of PRIMARY_SEMANTIC_ROW_KEYS) {
     const row = rows.find((entry) => entry.key === key);
     if (row?.value) {
@@ -453,7 +453,7 @@ export function normalizeBookmarks(rawBookmarks) {
     }
     seen.add(id);
     const layerSamples = normalizeBookmarkLayerSamples(entry?.layerSamples);
-    const preferredName = bookmarkPrimaryRowValue(layerSamples);
+    const preferredName = bookmarkPrimaryFactValue(layerSamples);
     const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
     const createdAt = String(entry?.createdAt || "").trim();
     normalized.push({
@@ -502,7 +502,7 @@ export function createBookmarkFromPlacement(
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   return {
     id: typeof options.idFactory === "function" ? options.idFactory() : createBookmarkId(),
-    label: defaultBookmarkLabel(existingBookmarks.length, bookmarkPrimaryRowValue(layerSamples)),
+    label: defaultBookmarkLabel(existingBookmarks.length, bookmarkPrimaryFactValue(layerSamples)),
     worldX,
     worldZ,
     ...(layerSamples.length ? { layerSamples } : {}),
@@ -525,7 +525,7 @@ export function renameBookmark(bookmarks, bookmarkId, nextLabel) {
     return {
       ...bookmark,
       label:
-        requestedLabel || defaultBookmarkLabel(index, bookmarkPrimaryRowValue(bookmark?.layerSamples)),
+        requestedLabel || defaultBookmarkLabel(index, bookmarkPrimaryFactValue(bookmark?.layerSamples)),
     };
   });
 }
@@ -565,7 +565,7 @@ function describeBookmarksForExport(bookmarks) {
     return "0 FishyStuff Bookmarks";
   }
   const semanticNames = normalizedBookmarks
-    .map((bookmark) => bookmarkPrimaryRowValue(bookmark?.layerSamples))
+    .map((bookmark) => bookmarkPrimaryFactValue(bookmark?.layerSamples))
     .filter(Boolean);
   if (
     semanticNames.length === normalizedBookmarks.length &&
@@ -588,7 +588,7 @@ function describeBookmarksForExport(bookmarks) {
 function bookmarkDisplayLabel(bookmark, fallbackIndex = 0) {
   return (
     String(bookmark?.label || "").trim() ||
-    defaultBookmarkLabel(fallbackIndex, bookmarkPrimaryRowValue(bookmark?.layerSamples))
+    defaultBookmarkLabel(fallbackIndex, bookmarkPrimaryFactValue(bookmark?.layerSamples))
   );
 }
 
@@ -1428,7 +1428,7 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
   `;
 }
 
-function displayRowsForSample(sample) {
+function overviewRowsForSample(sample) {
   const sections = normalizePointDetailSections(sample?.detailSections);
   const rows = [];
   for (const section of sections) {
@@ -1480,11 +1480,7 @@ function displayLabelForDetailFact(section, fact) {
   }
 }
 
-function hoverSampleRows(sample) {
-  return displayRowsForSample(sample);
-}
-
-function displayRowsForLayerSamples(layerSamplesInput, stateBundle) {
+function overviewRowsForLayerSamples(layerSamplesInput, stateBundle) {
   const layerSamples = Array.isArray(layerSamplesInput) ? layerSamplesInput : [];
   const sampleByLayerId = new Map(
     layerSamples
@@ -1492,7 +1488,7 @@ function displayRowsForLayerSamples(layerSamplesInput, stateBundle) {
       .filter(([layerId]) => Boolean(layerId)),
   );
   const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
-  return layerIds.flatMap((layerId) => hoverSampleRows(sampleByLayerId.get(layerId)));
+  return layerIds.flatMap((layerId) => overviewRowsForSample(sampleByLayerId.get(layerId)));
 }
 
 function hoverLayerOverviewRows(layerId, sampleByLayerId) {
@@ -1500,7 +1496,7 @@ function hoverLayerOverviewRows(layerId, sampleByLayerId) {
   if (!sample) {
     return [];
   }
-  return hoverSampleRows(sample).map((row) => ({
+  return overviewRowsForSample(sample).map((row) => ({
     layerId,
     icon: row.icon,
     label: row.label,
@@ -1557,7 +1553,7 @@ export function buildHoverOverviewRows(hover, stateBundle) {
 }
 
 export function buildSelectionOverviewRows(selection, stateBundle) {
-  const headingRow = preferredLayerSampleRow(selection?.layerSamples, stateBundle);
+  const headingRow = preferredLayerSampleOverviewRow(selection?.layerSamples, stateBundle);
   const overviewRows = buildOverviewRowsForLayerSamples(selection?.layerSamples, stateBundle);
   if (!headingRow) {
     return overviewRows;
@@ -1575,7 +1571,7 @@ export function buildSelectionOverviewRows(selection, stateBundle) {
     if (!sample) {
       return [];
     }
-    return hoverSampleRows(sample).flatMap((row) => {
+    return overviewRowsForSample(sample).flatMap((row) => {
       const sameHeadingKey = String(headingRow?.key || "").trim() === String(row?.key || "").trim();
       const sameHeadingValue =
         String(headingRow?.value || "").trim() === String(row?.value || "").trim();
@@ -1635,7 +1631,7 @@ export function buildSelectionSummaryText(selection, stateBundle) {
     return bookmarkDisplayLabel(selectedBookmark);
   }
   const preferredValue = String(
-    preferredLayerSampleRow(selection?.layerSamples, stateBundle)?.value || "",
+    preferredLayerSampleOverviewRow(selection?.layerSamples, stateBundle)?.value || "",
   ).trim();
   if (preferredValue) {
     return preferredValue;
@@ -1673,12 +1669,8 @@ function orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBund
         .filter(Boolean);
 }
 
-function bookmarkRowsFromLayerSamples(layerSamplesInput, stateBundle) {
-  return displayRowsForLayerSamples(layerSamplesInput, stateBundle);
-}
-
-function preferredLayerSampleRow(layerSamplesInput, stateBundle) {
-  const rows = displayRowsForLayerSamples(layerSamplesInput, stateBundle);
+function preferredLayerSampleOverviewRow(layerSamplesInput, stateBundle) {
+  const rows = overviewRowsForLayerSamples(layerSamplesInput, stateBundle);
   for (const key of PRIMARY_SEMANTIC_ROW_KEYS) {
     const row = rows.find((entry) => String(entry?.key || "").trim() === key);
     if (row) {
@@ -1762,7 +1754,7 @@ function bookmarkClearSelectionLabel(selectedCount) {
 
 export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
   const label = bookmarkDisplayLabel(bookmark, fallbackIndex);
-  const semanticRows = displayRowsForLayerSamples(bookmark?.layerSamples, null).filter(
+  const semanticRows = overviewRowsForLayerSamples(bookmark?.layerSamples, null).filter(
     (row) =>
       !(
         String(row?.key || "").trim() === "zone" &&
@@ -2518,7 +2510,7 @@ function buildLayerSamplePointDetailPanes(selection, stateBundle) {
       return;
     }
     const existing = panes.get(paneId);
-    const preferredRow = preferredLayerSampleRow([sample], stateBundle);
+    const preferredRow = preferredLayerSampleOverviewRow([sample], stateBundle);
     const staticSections = buildLayerSampleStaticPointDetailSections(sample);
     if (existing) {
       existing.samples.push(sample);
@@ -2588,7 +2580,7 @@ function resolvePointDetailPaneDescriptor(sample, stateBundle, fallbackOrder = 0
   if (!layerId) {
     return null;
   }
-  const preferredRow = preferredLayerSampleRow([sample], stateBundle);
+  const preferredRow = preferredLayerSampleOverviewRow([sample], stateBundle);
   return {
     id: layerId,
     label: String(sample?.layerName || layerId).trim() || layerId,
@@ -2830,32 +2822,6 @@ function zoneInfoZoneEvidenceMarkup(selection, zoneStats, zoneStatsStatus, fishL
   `;
 }
 
-function pointDetailRowsSectionMarkup(section, pane) {
-  const rows = Array.isArray(section?.rows) ? section.rows : [];
-  const title = String(section?.title || "").trim();
-  if (!rows.length) {
-    return `<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">${escapeHtml(String(section?.emptyMessage || "No semantic rows available."))}</div>`;
-  }
-  return `
-    <section class="space-y-2">
-      ${title ? `<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(title)}</p>` : ""}
-      <div class="fishymap-overview-list">${rows
-        .map((row) =>
-          overviewRowMarkup({
-            layerId: pane.id,
-            icon: row.icon,
-            label: row.label,
-            value: row.value,
-            ...(row.hideLabel === true ? { hideLabel: true } : {}),
-            ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
-            ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
-          }),
-        )
-        .join("")}</div>
-    </section>
-  `;
-}
-
 function pointDetailFactsSectionMarkup(section) {
   const title = String(section?.title || "").trim();
   const facts = Array.isArray(section?.facts) ? section.facts : [];
@@ -2908,8 +2874,6 @@ function pointDetailSectionMarkup(section, pane, fishLookup) {
   switch (String(section?.kind || "").trim()) {
     case "facts":
       return pointDetailFactsSectionMarkup(section);
-    case "rows":
-      return pointDetailRowsSectionMarkup(section, pane);
     case "targets":
       return pointDetailTargetsSectionMarkup(section);
     case "zoneEvidence":
