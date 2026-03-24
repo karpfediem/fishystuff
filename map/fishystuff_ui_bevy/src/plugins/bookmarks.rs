@@ -6,6 +6,7 @@ use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::text::{Justify, TextLayout};
+use bevy_flair::prelude::{ClassList, NodeStyleSheet};
 
 use crate::bridge::contract::{FishyMapBookmarkEntry, FishyMapThemeColors};
 use crate::bridge::theme::parse_css_color;
@@ -116,6 +117,7 @@ fn sync_bookmark_markers(
     hover: Res<HoverState>,
     view_mode: Res<ViewModeState>,
     #[cfg(target_arch = "wasm32")] bridge: Res<BrowserBridgeState>,
+    asset_server: Res<AssetServer>,
     fonts: Res<UiFonts>,
     render_assets: Res<BookmarkRenderAssets>,
     svg_icon_assets: Res<UiSvgIconAssets>,
@@ -141,6 +143,7 @@ fn sync_bookmark_markers(
             &mut Visibility,
             &mut BackgroundColor,
             &mut BorderColor,
+            &ComputedNode,
         ),
         (
             With<BookmarkCalloutRoot>,
@@ -228,7 +231,7 @@ fn sync_bookmark_markers(
                 position_type: PositionType::Absolute,
                 left: Val::Px(0.0),
                 top: Val::Px(0.0),
-                width: Val::Px(BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX),
+                min_width: Val::Px(BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX),
                 height: Val::Px(BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX),
                 padding: UiRect {
                     left: Val::Px(BOOKMARK_CALLOUT_PADDING_LEFT_SCREEN_PX),
@@ -246,6 +249,8 @@ fn sync_bookmark_markers(
             BorderColor::all(callout_border_color),
             GlobalZIndex(1400),
             Visibility::Hidden,
+            NodeStyleSheet::new(asset_server.load("/map/ui/fishystuff.css")),
+            ClassList::new("marker-callout"),
         ));
         let callout_root = callout_root_entity
             .with_children(|parent| {
@@ -274,6 +279,7 @@ fn sync_bookmark_markers(
                         },
                         TextLayout::new_with_no_wrap().with_justify(Justify::Center),
                         TextColor(callout_label_color),
+                        ClassList::new("marker-callout-text"),
                     ))
                     .id();
             })
@@ -315,7 +321,15 @@ fn sync_bookmark_markers(
         };
 
         let display_text = format!("{}: {}", index + 1, bookmark_display_label(bookmark, index));
-        let panel_size_px = bookmark_callout_size_px(&display_text);
+        let panel_size_px = callout_roots
+            .get(visual.callout_root)
+            .ok()
+            .map(|(_, _, _, _, computed)| {
+                let inv = computed.inverse_scale_factor();
+                computed.size() * inv
+            })
+            .filter(|size| size.x > 1.0 && size.y > 1.0)
+            .unwrap_or_else(|| bookmark_callout_size_px(&display_text));
         let top_px = viewport_position.y
             - BOOKMARK_MARKER_SIZE_SCREEN_PX * 0.5
             - BOOKMARK_CALLOUT_GAP_SCREEN_PX
@@ -326,12 +340,11 @@ fn sync_bookmark_markers(
             image_node.color = callout_label_color;
         }
 
-        if let Ok((mut node, mut visibility, mut background, mut border)) =
+        if let Ok((mut node, mut visibility, mut background, mut border, _)) =
             callout_roots.get_mut(visual.callout_root)
         {
             node.left = Val::Px(left_px);
             node.top = Val::Px(top_px);
-            node.width = Val::Px(panel_size_px.x);
             node.height = Val::Px(panel_size_px.y);
             node.border = UiRect::all(Val::Px(BOOKMARK_CALLOUT_BORDER_SCREEN_PX));
             node.border_radius =
@@ -370,6 +383,7 @@ fn hide_bookmark_visuals(
             &mut Visibility,
             &mut BackgroundColor,
             &mut BorderColor,
+            &ComputedNode,
         ),
         (
             With<BookmarkCalloutRoot>,
@@ -394,6 +408,7 @@ fn hide_bookmark_callout(
             &mut Visibility,
             &mut BackgroundColor,
             &mut BorderColor,
+            &ComputedNode,
         ),
         (
             With<BookmarkCalloutRoot>,
@@ -402,7 +417,7 @@ fn hide_bookmark_callout(
         ),
     >,
 ) {
-    if let Ok((_, mut visibility, _, _)) = callout_roots.get_mut(visual.callout_root) {
+    if let Ok((_, mut visibility, _, _, _)) = callout_roots.get_mut(visual.callout_root) {
         *visibility = Visibility::Hidden;
     }
 }
