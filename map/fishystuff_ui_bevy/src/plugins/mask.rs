@@ -260,6 +260,8 @@ mod tests {
                 field_id: Some(0x123456),
                 rows: Vec::new(),
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             }],
         };
         assert_eq!(hovered_zone_rgb(Some(&info)), Some(0x123456));

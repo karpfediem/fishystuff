@@ -25,11 +25,7 @@ const DEFAULT_ZONE_INFO_TAB = "";
 const ZONE_INFO_TAB_BUTTON_CLASS =
   "tab shrink-0 gap-2 whitespace-nowrap text-xs font-semibold sm:text-sm";
 const POINT_DETAIL_PANE_BUILDERS = Object.freeze([buildLayerSamplePointDetailPanes]);
-const POINT_DETAIL_SECTION_BUILDERS = Object.freeze([
-  buildLayerSampleRowsSection,
-  buildLayerSampleTargetsSection,
-  buildZoneEvidencePointDetailSection,
-]);
+const POINT_DETAIL_SECTION_BUILDERS = Object.freeze([buildZoneEvidencePointDetailSection]);
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
@@ -2473,6 +2469,61 @@ export function buildPointDetailPanes(selection, stateBundle) {
 }
 
 function buildLayerSamplePointDetailPanes(selection, stateBundle) {
+  const orderedSamples = orderedLayerSamplesForPointDetails(selection, stateBundle);
+  const panes = new Map();
+
+  orderedSamples.forEach((sample, index) => {
+    const descriptor = resolvePointDetailPaneDescriptor(sample, stateBundle, index);
+    const paneId = String(descriptor?.id || "").trim();
+    if (!paneId) {
+      return;
+    }
+    const existing = panes.get(paneId);
+    const preferredRow = preferredLayerSampleRow([sample], stateBundle);
+    const staticSections = buildLayerSampleStaticPointDetailSections(sample);
+    if (existing) {
+      existing.samples.push(sample);
+      existing.sections.push(...staticSections);
+      if (!existing.summary) {
+        existing.summary = String(preferredRow?.value || "").trim();
+      }
+      return;
+    }
+    panes.set(paneId, {
+      id: paneId,
+      label: String(descriptor?.label || paneId).trim() || paneId,
+      icon: String(descriptor?.icon || "").trim() || "information-circle",
+      order: Number.isFinite(Number(descriptor?.order)) ? Number(descriptor.order) : index,
+      summary: String(preferredRow?.value || "").trim(),
+      samples: [sample],
+      sections: staticSections,
+    });
+  });
+
+  return [...panes.values()]
+    .sort((left, right) => {
+      const orderDelta = Number(left?.order || 0) - Number(right?.order || 0);
+      if (orderDelta !== 0) {
+        return orderDelta;
+      }
+      return String(left?.label || "").localeCompare(String(right?.label || ""));
+    })
+    .map((pane) => ({
+      ...pane,
+      sections: buildPointDetailPaneSections(pane, selection, stateBundle),
+    }));
+}
+
+function buildPointDetailPaneSections(pane, selection, stateBundle) {
+  const context = { pane, selection, stateBundle };
+  const baseSections = Array.isArray(pane?.sections) ? pane.sections : [];
+  const dynamicSections = POINT_DETAIL_SECTION_BUILDERS.flatMap((builder) => builder(context)).filter(
+    Boolean,
+  );
+  return [...baseSections, ...dynamicSections];
+}
+
+function orderedLayerSamplesForPointDetails(selection, stateBundle) {
   const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
   const sampleByLayerId = new Map(
     layerSamples
@@ -2480,62 +2531,119 @@ function buildLayerSamplePointDetailPanes(selection, stateBundle) {
       .filter(([layerId]) => Boolean(layerId)),
   );
   const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
-  return layerIds
-    .map((layerId) => {
-      const sample = sampleByLayerId.get(layerId);
-      if (!sample) {
-        return null;
-      }
-      const preferredRow = preferredLayerSampleRow([sample], stateBundle);
-      const label = String(sample?.layerName || layerId).trim() || layerId;
-      return {
-        id: layerId,
-        sample,
-        label,
-        icon: String(preferredRow?.icon || "").trim() || "information-circle",
-        summary: String(preferredRow?.value || "").trim(),
-        sections: buildPointDetailPaneSections(
-          {
-            id: layerId,
-            sample,
-            label,
-          },
-          selection,
-          stateBundle,
-        ),
-      };
-    })
-    .filter(Boolean);
+  return layerIds.map((layerId) => sampleByLayerId.get(layerId)).filter(Boolean);
 }
 
-function buildPointDetailPaneSections(pane, selection, stateBundle) {
-  const context = { pane, selection, stateBundle };
-  return POINT_DETAIL_SECTION_BUILDERS.flatMap((builder) => builder(context)).filter(Boolean);
-}
-
-function buildLayerSampleRowsSection({ pane }) {
-  return [
-    {
-      id: "semantic-rows",
-      kind: "rows",
-      rows: hoverSampleRows(pane?.sample),
-      emptyMessage: "No semantic rows available for this layer at the selected point.",
-    },
-  ];
-}
-
-function buildLayerSampleTargetsSection({ pane }) {
-  const targets = Array.isArray(pane?.sample?.targets) ? pane.sample.targets : [];
-  if (!targets.length) {
-    return [];
+function resolvePointDetailPaneDescriptor(sample, stateBundle, fallbackOrder = 0) {
+  const detailPane = sample?.detailPane;
+  const detailPaneId = String(detailPane?.id || "").trim();
+  if (detailPaneId) {
+    return {
+      id: detailPaneId,
+      label: String(detailPane?.label || detailPaneId).trim() || detailPaneId,
+      icon: String(detailPane?.icon || "").trim() || "information-circle",
+      order: Number.isFinite(Number(detailPane?.order)) ? Number(detailPane.order) : fallbackOrder,
+    };
   }
-  return [
-    {
-      id: "targets",
+  const layerId = String(sample?.layerId || "").trim();
+  if (!layerId) {
+    return null;
+  }
+  const preferredRow = preferredLayerSampleRow([sample], stateBundle);
+  return {
+    id: layerId,
+    label: String(sample?.layerName || layerId).trim() || layerId,
+    icon: String(preferredRow?.icon || "").trim() || "information-circle",
+    order: fallbackOrder + 1000,
+  };
+}
+
+function buildLayerSampleStaticPointDetailSections(sample) {
+  const detailSections = normalizePointDetailSections(sample?.detailSections);
+  if (detailSections.length > 0) {
+    return detailSections;
+  }
+
+  const sections = [];
+  const rows = hoverSampleRows(sample);
+  if (rows.length > 0) {
+    sections.push({
+      id: `${String(sample?.layerId || "layer").trim() || "layer"}-semantic-rows`,
+      kind: "rows",
+      title: String(sample?.layerName || "").trim() || null,
+      rows,
+      emptyMessage: "No semantic rows available for this layer at the selected point.",
+    });
+  }
+
+  const targets = normalizePointDetailTargets(sample?.targets);
+  if (targets.length > 0) {
+    sections.push({
+      id: `${String(sample?.layerId || "layer").trim() || "layer"}-targets`,
       kind: "targets",
+      title: "Targets",
       targets,
-    },
-  ];
+    });
+  }
+  return sections;
+}
+
+function normalizePointDetailSections(sectionsInput) {
+  const sections = Array.isArray(sectionsInput) ? sectionsInput : [];
+  const normalized = [];
+  for (const section of sections) {
+    const id = String(section?.id || "").trim();
+    const kind = String(section?.kind || "").trim();
+    if (!id || !kind) {
+      continue;
+    }
+    const title = String(section?.title || "").trim();
+    const facts = normalizePointDetailFacts(section?.facts);
+    const targets = normalizePointDetailTargets(section?.targets);
+    if (kind === "facts" && facts.length === 0 && targets.length === 0) {
+      continue;
+    }
+    normalized.push({
+      id,
+      kind,
+      ...(title ? { title } : {}),
+      ...(facts.length ? { facts } : {}),
+      ...(targets.length ? { targets } : {}),
+    });
+  }
+  return normalized;
+}
+
+function normalizePointDetailFacts(factsInput) {
+  const facts = Array.isArray(factsInput) ? factsInput : [];
+  const normalized = [];
+  for (const fact of facts) {
+    const label = String(fact?.label || "").trim();
+    const value = String(fact?.value || "").trim();
+    if (!label || !value) {
+      continue;
+    }
+    const key = String(fact?.key || "").trim();
+    const icon = String(fact?.icon || "").trim();
+    normalized.push({
+      ...(key ? { key } : {}),
+      ...(icon ? { icon } : {}),
+      label,
+      value,
+    });
+  }
+  return normalized;
+}
+
+function normalizePointDetailTargets(targetsInput) {
+  return (Array.isArray(targetsInput) ? targetsInput : []).filter((target) => {
+    const label = String(target?.label || "").trim();
+    return (
+      label &&
+      normalizeBookmarkCoordinate(target?.worldX) != null &&
+      normalizeBookmarkCoordinate(target?.worldZ) != null
+    );
+  });
 }
 
 function buildZoneEvidencePointDetailSection({ pane, selection, stateBundle }) {
@@ -2691,32 +2799,71 @@ function zoneInfoZoneEvidenceMarkup(selection, zoneStats, zoneStatsStatus, fishL
 
 function pointDetailRowsSectionMarkup(section, pane) {
   const rows = Array.isArray(section?.rows) ? section.rows : [];
+  const title = String(section?.title || "").trim();
   if (!rows.length) {
     return `<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">${escapeHtml(String(section?.emptyMessage || "No semantic rows available."))}</div>`;
   }
-  return `<div class="fishymap-overview-list">${rows
-    .map((row) =>
-      overviewRowMarkup({
-        layerId: pane.id,
-        icon: row.icon,
-        label: row.label,
-        value: row.value,
-        ...(row.hideLabel === true ? { hideLabel: true } : {}),
-        ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
-        ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
-      }),
-    )
-    .join("")}</div>`;
+  return `
+    <section class="space-y-2">
+      ${title ? `<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(title)}</p>` : ""}
+      <div class="fishymap-overview-list">${rows
+        .map((row) =>
+          overviewRowMarkup({
+            layerId: pane.id,
+            icon: row.icon,
+            label: row.label,
+            value: row.value,
+            ...(row.hideLabel === true ? { hideLabel: true } : {}),
+            ...(row.statusIcon ? { statusIcon: row.statusIcon } : {}),
+            ...(row.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
+          }),
+        )
+        .join("")}</div>
+    </section>
+  `;
+}
+
+function pointDetailFactsSectionMarkup(section) {
+  const title = String(section?.title || "").trim();
+  const facts = Array.isArray(section?.facts) ? section.facts : [];
+  const targets = Array.isArray(section?.targets) ? section.targets : [];
+  if (facts.length === 0 && targets.length === 0) {
+    return "";
+  }
+  return `
+    <section class="space-y-2">
+      ${title ? `<p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(title)}</p>` : ""}
+      ${
+        facts.length
+          ? `<div class="fishymap-overview-list">${facts
+              .map((fact) =>
+                overviewRowMarkup({
+                  icon: String(fact?.icon || "").trim() || "information-circle",
+                  label: fact.label,
+                  value: fact.value,
+                }),
+              )
+              .join("")}</div>`
+          : ""
+      }
+      ${
+        targets.length
+          ? `<div class="flex flex-wrap gap-2">${targets.map((target) => zoneInfoTargetMarkup(target)).join("")}</div>`
+          : ""
+      }
+    </section>
+  `;
 }
 
 function pointDetailTargetsSectionMarkup(section) {
   const targets = Array.isArray(section?.targets) ? section.targets : [];
+  const title = String(section?.title || "").trim() || "Targets";
   if (!targets.length) {
     return "";
   }
   return `
     <section class="space-y-2">
-      <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Targets</p>
+      <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(title)}</p>
       <div class="flex flex-wrap gap-2">
         ${targets.map((target) => zoneInfoTargetMarkup(target)).join("")}
       </div>
@@ -2726,6 +2873,8 @@ function pointDetailTargetsSectionMarkup(section) {
 
 function pointDetailSectionMarkup(section, pane, fishLookup) {
   switch (String(section?.kind || "").trim()) {
+    case "facts":
+      return pointDetailFactsSectionMarkup(section);
     case "rows":
       return pointDetailRowsSectionMarkup(section, pane);
     case "targets":
@@ -3921,6 +4070,24 @@ function bindUi(shell, elements, options = {}) {
     renderCurrentState(applyInputStatePatchLocally(patch));
   }
 
+  function syncActiveDetailPaneState(activePaneId) {
+    const normalizedActivePaneId = normalizeNullableString(activePaneId);
+    const currentActivePaneId = normalizeNullableString(
+      getLatestStateBundle().inputState?.ui?.activeDetailPaneId,
+    );
+    if (normalizedActivePaneId === currentActivePaneId) {
+      return;
+    }
+    const patch = {
+      version: 1,
+      ui: {
+        activeDetailPaneId: normalizedActivePaneId,
+      },
+    };
+    dispatchMapState(shell, patch);
+    applyInputStatePatchLocally(patch);
+  }
+
   function activateBookmarkSelection(bookmark) {
     if (!bookmark) {
       return;
@@ -4219,6 +4386,9 @@ function bindUi(shell, elements, options = {}) {
     isRendering = true;
     try {
       renderPanel(elements, stateBundle, zoneCatalog, windowUiState);
+      syncActiveDetailPaneState(
+        resolveZoneInfoActiveTab(windowUiState, stateBundle.state?.selection || null, stateBundle),
+      );
       renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi);
       applyManagedWindows();
     } finally {

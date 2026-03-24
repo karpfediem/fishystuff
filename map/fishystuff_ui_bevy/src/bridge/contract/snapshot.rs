@@ -1,4 +1,6 @@
-use fishystuff_core::field_metadata::{FieldHoverRow, FieldHoverTarget};
+use fishystuff_core::field_metadata::{
+    FieldDetailPaneRef, FieldDetailSection, FieldHoverRow, FieldHoverTarget,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -62,6 +64,8 @@ pub struct FishyMapHoverLayerSampleSnapshot {
     pub field_id: Option<u32>,
     pub rows: Vec<FieldHoverRow>,
     pub targets: Vec<FieldHoverTarget>,
+    pub detail_pane: Option<FieldDetailPaneRef>,
+    pub detail_sections: Vec<FieldDetailSection>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]

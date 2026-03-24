@@ -165,6 +165,8 @@ mod tests {
                 field_id: Some(0x010101),
                 rows: vec![row(FIELD_HOVER_ROW_KEY_ZONE, "Zone", "Olvia Coast")],
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
             LayerQuerySample {
                 layer_id: "region_groups".to_string(),
@@ -175,6 +177,8 @@ mod tests {
                 field_id: Some(295),
                 rows: vec![row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Olvia")],
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
         ]);
         assert_eq!(
@@ -195,6 +199,8 @@ mod tests {
                 field_id: Some(76),
                 rows: vec![row(FIELD_HOVER_ROW_KEY_ORIGIN, "Origin", "Castle Ruins")],
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
             LayerQuerySample {
                 layer_id: "region_groups".to_string(),
@@ -205,6 +211,8 @@ mod tests {
                 field_id: Some(295),
                 rows: vec![row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Olvia")],
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
         ]);
         assert_eq!(
@@ -225,6 +233,8 @@ mod tests {
                 field_id: Some(0x444444),
                 rows: vec![row(FIELD_HOVER_ROW_KEY_ZONE, "Zone", "Demi River")],
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
             LayerQuerySample {
                 layer_id: "region_groups".to_string(),
@@ -235,6 +245,8 @@ mod tests {
                 field_id: Some(16),
                 rows: vec![row(FIELD_HOVER_ROW_KEY_RESOURCES, "Resources", "Tarif")],
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
             LayerQuerySample {
                 layer_id: "regions".to_string(),
@@ -245,6 +257,8 @@ mod tests {
                 field_id: Some(76),
                 rows: vec![row(FIELD_HOVER_ROW_KEY_ORIGIN, "Origin", "Tarif")],
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
         ]);
         assert_eq!(

@@ -99,6 +99,8 @@ pub fn semantic_layer_sample_for_field_id(
         field_id: Some(semantic.field_id),
         rows: semantic.rows,
         targets: semantic.targets,
+        detail_pane: semantic.detail_pane,
+        detail_sections: semantic.detail_sections,
     })
 }
 
@@ -170,6 +172,8 @@ mod tests {
                 field_id: Some(0x123456),
                 rows: Vec::new(),
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             }],
         };
 
@@ -204,6 +208,8 @@ mod tests {
                 field_id: Some(76),
                 rows: Vec::new(),
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             }],
         };
 
@@ -239,6 +245,8 @@ mod tests {
                             status_icon_tone: None,
                         }],
                         targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
                     },
                 )]),
             },
@@ -275,6 +283,8 @@ mod tests {
                             status_icon_tone: None,
                         }],
                         targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
                     },
                 )]),
             },
@@ -345,6 +355,8 @@ mod tests {
                             status_icon_tone: None,
                         }],
                         targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
                     },
                 )]),
             },

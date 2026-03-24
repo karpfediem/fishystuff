@@ -10,7 +10,7 @@ use crate::bridge::contract::FishyMapThemeColors;
 use crate::bridge::theme::parse_css_color;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::layers::{LayerRegistry, LayerRuntime};
-use crate::plugins::api::{HoverInfo, HoverState};
+use crate::plugins::api::{HoverInfo, HoverState, SelectedInfo, SelectionState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::ui::UiFonts;
@@ -46,6 +46,7 @@ const VIEW_EDGE_PADDING_SCREEN_PX: f32 = 12.0;
 
 const RESOURCE_BAR_MARKER_COLOR: [u8; 3] = [77, 211, 255];
 const ORIGIN_NODE_MARKER_COLOR: [u8; 3] = [255, 196, 66];
+const TERRITORY_DETAIL_PANE_ID: &str = "territory";
 
 pub struct HoverTargetsPlugin;
 
@@ -118,6 +119,7 @@ fn ensure_hover_target_marker_assets(
 fn sync_hover_targets(
     mut commands: Commands,
     hover: Res<HoverState>,
+    selection: Res<SelectionState>,
     view_mode: Res<ViewModeState>,
     #[cfg(target_arch = "wasm32")] bridge: Res<BrowserBridgeState>,
     fonts: Res<UiFonts>,
@@ -165,8 +167,23 @@ fn sync_hover_targets(
         ),
     >,
 ) {
+    #[cfg(target_arch = "wasm32")]
+    let active_detail_pane_id = bridge
+        .input
+        .ui
+        .active_detail_pane_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    #[cfg(not(target_arch = "wasm32"))]
+    let active_detail_pane_id: Option<&str> = None;
+
     let targets = if view_mode.mode == ViewMode::Map2D {
-        hover_targets_from_info(hover.info.as_ref(), &layer_registry, &layer_runtime)
+        if active_detail_pane_id == Some(TERRITORY_DETAIL_PANE_ID) {
+            selection_targets_from_info(selection.info.as_ref(), &layer_registry, &layer_runtime)
+        } else {
+            hover_targets_from_info(hover.info.as_ref(), &layer_registry, &layer_runtime)
+        }
     } else {
         Vec::new()
     };
@@ -418,7 +435,27 @@ fn hover_targets_from_info(
         return Vec::new();
     };
 
-    info.layer_samples
+    targets_from_samples(&info.layer_samples, layer_registry, layer_runtime)
+}
+
+fn selection_targets_from_info(
+    info: Option<&SelectedInfo>,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+) -> Vec<HoverTargetVisual> {
+    let Some(info) = info else {
+        return Vec::new();
+    };
+
+    targets_from_samples(&info.layer_samples, layer_registry, layer_runtime)
+}
+
+fn targets_from_samples(
+    samples: &[crate::map::layer_query::LayerQuerySample],
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+) -> Vec<HoverTargetVisual> {
+    samples
         .iter()
         .filter(|sample| layer_visible_by_key(&sample.layer_id, layer_registry, layer_runtime))
         .flat_map(hover_targets_from_sample)
@@ -640,14 +677,15 @@ fn circle_alpha(distance: f32, radius: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        clamp_hover_target_to_viewport, hover_targets_from_info, HoverTargetVisual,
-        Map2dViewportBounds, ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX, ORIGIN_NODE_MARKER_COLOR,
-        ORIGIN_NODE_MARKER_SIZE_SCREEN_PX, RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
-        RESOURCE_BAR_MARKER_COLOR, RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
+        clamp_hover_target_to_viewport, hover_targets_from_info, selection_targets_from_info,
+        HoverTargetVisual, Map2dViewportBounds, ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
+        ORIGIN_NODE_MARKER_COLOR, ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
+        RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX, RESOURCE_BAR_MARKER_COLOR,
+        RESOURCE_BAR_MARKER_SIZE_SCREEN_PX,
     };
     use crate::map::layer_query::LayerQuerySample;
     use crate::map::layers::{LayerRegistry, LayerRuntime};
-    use crate::plugins::api::HoverInfo;
+    use crate::plugins::api::{HoverInfo, SelectedInfo};
     use fishystuff_api::models::layers::{
         GeometrySpace, LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo,
         LayersResponse, LodPolicyDto, StyleMode, TilesetRef, VectorSourceRef,
@@ -665,6 +703,8 @@ mod tests {
             field_id: None,
             rows: Vec::new(),
             targets: Vec::new(),
+            detail_pane: None,
+            detail_sections: Vec::new(),
         }
     }
 
@@ -796,6 +836,45 @@ mod tests {
         let layer_registry = LayerRegistry::default();
         let layer_runtime = LayerRuntime::default();
         let targets = hover_targets_from_info(Some(&info), &layer_registry, &layer_runtime);
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].world_x, 10.0);
+        assert_eq!(targets[0].world_z, 20.0);
+        assert_eq!(targets[1].world_x, 30.0);
+        assert_eq!(targets[1].world_z, 40.0);
+    }
+
+    #[test]
+    fn selection_targets_follow_selected_layer_samples() {
+        let mut region_group = sample("region_groups");
+        region_group.targets.push(FieldHoverTarget {
+            key: "resource_node".to_string(),
+            label: "Resource node".to_string(),
+            world_x: 10.0,
+            world_z: 20.0,
+        });
+
+        let mut region = sample("regions");
+        region.targets.push(FieldHoverTarget {
+            key: "origin_node".to_string(),
+            label: "Origin node".to_string(),
+            world_x: 30.0,
+            world_z: 40.0,
+        });
+
+        let info = SelectedInfo {
+            map_px: 0,
+            map_py: 0,
+            world_x: 0.0,
+            world_z: 0.0,
+            layer_samples: vec![region_group, region],
+            sampled_world_point: true,
+            point_kind: None,
+            point_label: None,
+        };
+
+        let layer_registry = LayerRegistry::default();
+        let layer_runtime = LayerRuntime::default();
+        let targets = selection_targets_from_info(Some(&info), &layer_registry, &layer_runtime);
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[0].world_x, 10.0);
         assert_eq!(targets[0].world_z, 20.0);

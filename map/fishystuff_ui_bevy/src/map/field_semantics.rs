@@ -1,6 +1,7 @@
 use fishystuff_api::Rgb;
 use fishystuff_core::field_metadata::{
-    FieldHoverMetadataAsset, FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget,
+    FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataAsset, FieldHoverMetadataEntry,
+    FieldHoverRow, FieldHoverTarget,
 };
 
 use crate::map::exact_lookup::ExactLookupCache;
@@ -18,6 +19,8 @@ pub struct FieldSemanticSample {
     pub rgb_u32: u32,
     pub rows: Vec<FieldHoverRow>,
     pub targets: Vec<FieldHoverTarget>,
+    pub detail_pane: Option<FieldDetailPaneRef>,
+    pub detail_sections: Vec<FieldDetailSection>,
 }
 
 impl FieldSemanticSample {
@@ -39,16 +42,25 @@ pub trait SemanticFieldLayerView: FieldLayerView {
     ) -> Option<FieldSemanticSample> {
         let field_id = self.field_id_at_layer_point(layer_point)?;
         let rgb = self.rgb_at_layer_point(layer_point)?;
-        let (rows, targets) = self
+        let (rows, targets, detail_pane, detail_sections) = self
             .metadata_entry_for_field_id(field_id)
-            .map(|entry| (entry.rows.clone(), entry.targets.clone()))
-            .unwrap_or_else(|| (Vec::new(), Vec::new()));
+            .map(|entry| {
+                (
+                    entry.rows.clone(),
+                    entry.targets.clone(),
+                    entry.detail_pane.clone(),
+                    entry.detail_sections.clone(),
+                )
+            })
+            .unwrap_or_else(|| (Vec::new(), Vec::new(), None, Vec::new()));
         Some(FieldSemanticSample {
             field_id,
             rgb,
             rgb_u32: rgb.to_u32(),
             rows,
             targets,
+            detail_pane,
+            detail_sections,
         })
     }
 
@@ -162,15 +174,25 @@ pub fn semantic_sample_for_field_id(
     field_id: u32,
     rgb: Rgb,
 ) -> FieldSemanticSample {
-    let (rows, targets) = field_metadata_entry_for_id(layer, field_metadata, field_id)
-        .map(|entry| (entry.rows.clone(), entry.targets.clone()))
-        .unwrap_or_else(|| (Vec::new(), Vec::new()));
+    let (rows, targets, detail_pane, detail_sections) =
+        field_metadata_entry_for_id(layer, field_metadata, field_id)
+            .map(|entry| {
+                (
+                    entry.rows.clone(),
+                    entry.targets.clone(),
+                    entry.detail_pane.clone(),
+                    entry.detail_sections.clone(),
+                )
+            })
+            .unwrap_or_else(|| (Vec::new(), Vec::new(), None, Vec::new()));
     FieldSemanticSample {
         field_id,
         rgb,
         rgb_u32: rgb.to_u32(),
         rows,
         targets,
+        detail_pane,
+        detail_sections,
     }
 }
 
@@ -236,7 +258,8 @@ mod tests {
     use crate::map::spaces::WorldPoint;
     use fishystuff_core::field::DiscreteFieldRows;
     use fishystuff_core::field_metadata::{
-        FieldHoverMetadataAsset, FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget,
+        FieldDetailFact, FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataAsset,
+        FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget,
     };
 
     fn field_layer_descriptor(
@@ -440,6 +463,29 @@ mod tests {
                             world_x: 1.0,
                             world_z: 2.0,
                         }],
+                        detail_pane: Some(FieldDetailPaneRef {
+                            id: "territory".to_string(),
+                            label: "Territory".to_string(),
+                            icon: "hover-origin".to_string(),
+                            order: 200,
+                        }),
+                        detail_sections: vec![FieldDetailSection {
+                            id: "trade-origin".to_string(),
+                            kind: "facts".to_string(),
+                            title: Some("Trade Origin".to_string()),
+                            facts: vec![FieldDetailFact {
+                                key: "origin_region".to_string(),
+                                label: "Region".to_string(),
+                                value: "Tarif".to_string(),
+                                icon: Some("hover-origin".to_string()),
+                            }],
+                            targets: vec![FieldHoverTarget {
+                                key: "origin_node".to_string(),
+                                label: "Origin: Tarif".to_string(),
+                                world_x: 1.0,
+                                world_z: 2.0,
+                            }],
+                        }],
                     },
                 )]),
             },
@@ -472,6 +518,17 @@ mod tests {
                 world_z: 2.0,
             }]
         );
+        assert_eq!(
+            semantic.detail_pane,
+            Some(FieldDetailPaneRef {
+                id: "territory".to_string(),
+                label: "Territory".to_string(),
+                icon: "hover-origin".to_string(),
+                order: 200,
+            })
+        );
+        assert_eq!(semantic.detail_sections.len(), 1);
+        assert_eq!(semantic.detail_sections[0].id, "trade-origin");
     }
 
     #[test]
@@ -502,6 +559,8 @@ mod tests {
                             status_icon_tone: None,
                         }],
                         targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
                     },
                 )]),
             },
@@ -541,6 +600,8 @@ mod tests {
                             status_icon_tone: None,
                         }],
                         targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
                     },
                 )]),
             },

@@ -153,6 +153,7 @@ export function createEmptyInputState() {
       showPoints: true,
       showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+      activeDetailPaneId: null,
       bookmarkSelectedIds: [],
       bookmarks: [],
     },
@@ -187,6 +188,7 @@ export function createEmptySnapshot() {
       showPoints: true,
       showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+      activeDetailPaneId: null,
       bookmarkSelectedIds: [],
       bookmarks: [],
     },
@@ -887,6 +889,9 @@ export function normalizeStatePatch(patch = {}) {
         normalized.ui.pointIconScale = pointIconScale;
       }
     }
+    if (hasOwn(patch.ui, "activeDetailPaneId")) {
+      normalized.ui.activeDetailPaneId = normalizeNullableString(patch.ui.activeDetailPaneId);
+    }
     if (hasOwn(patch.ui, "bookmarkSelectedIds")) {
       normalized.ui.bookmarkSelectedIds = normalizeStringList(patch.ui.bookmarkSelectedIds);
     }
@@ -1036,6 +1041,7 @@ export function applyStatePatch(inputState, patch) {
     showPointIcons: current.ui?.showPointIcons !== false,
     pointIconScale:
       normalizePointIconScale(current.ui?.pointIconScale) ?? FISHYMAP_POINT_ICON_SCALE_MIN,
+    activeDetailPaneId: normalizeNullableString(current.ui?.activeDetailPaneId),
     bookmarkSelectedIds: normalizeStringList(current.ui?.bookmarkSelectedIds),
     bookmarks: normalizeBookmarksState(current.ui?.bookmarks),
   };
@@ -1128,6 +1134,9 @@ export function applyStatePatch(inputState, patch) {
     if (hasOwn(normalized.ui, "pointIconScale")) {
       next.ui.pointIconScale =
         normalizePointIconScale(normalized.ui.pointIconScale) ?? next.ui.pointIconScale;
+    }
+    if (hasOwn(normalized.ui, "activeDetailPaneId")) {
+      next.ui.activeDetailPaneId = normalizeNullableString(normalized.ui.activeDetailPaneId);
     }
     if (hasOwn(normalized.ui, "bookmarkSelectedIds")) {
       next.ui.bookmarkSelectedIds = normalizeStringList(normalized.ui.bookmarkSelectedIds);
@@ -1622,6 +1631,9 @@ export function snapshotToRestorePatch(snapshot) {
       if (pointIconScale !== undefined) {
         patch.ui.pointIconScale = pointIconScale;
       }
+    }
+    if (hasOwn(snapshot.ui, "activeDetailPaneId")) {
+      patch.ui.activeDetailPaneId = normalizeNullableString(snapshot.ui.activeDetailPaneId);
     }
     if (hasOwn(snapshot.ui, "bookmarkSelectedIds")) {
       patch.ui.bookmarkSelectedIds = normalizeStringList(snapshot.ui.bookmarkSelectedIds);
@@ -2562,6 +2574,7 @@ class FishyMapBridgeImpl {
         showPoints: this.inputState.ui.showPoints,
         showPointIcons: this.inputState.ui.showPointIcons,
         pointIconScale: this.inputState.ui.pointIconScale,
+        activeDetailPaneId: normalizeNullableString(this.inputState.ui.activeDetailPaneId),
         bookmarkSelectedIds: normalizeStringList(this.inputState.ui.bookmarkSelectedIds),
       },
     };
@@ -2616,6 +2629,7 @@ class FishyMapBridgeImpl {
         showPoints: this.inputState.ui.showPoints,
         showPointIcons: this.inputState.ui.showPointIcons,
         pointIconScale: this.inputState.ui.pointIconScale,
+        activeDetailPaneId: normalizeNullableString(this.inputState.ui.activeDetailPaneId),
       },
     };
   }

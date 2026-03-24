@@ -45,6 +45,8 @@ pub(in crate::bridge::host) fn hover_layer_samples_snapshot(
                 field_id: sample.field_id,
                 rows: sample.rows.clone(),
                 targets: sample.targets.clone(),
+                detail_pane: sample.detail_pane.clone(),
+                detail_sections: sample.detail_sections.clone(),
             },
         )
         .collect()
@@ -128,6 +130,8 @@ mod tests {
                 field_id: Some(0x123456),
                 rows: Vec::new(),
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             }],
         };
 
@@ -153,6 +157,8 @@ mod tests {
                 field_id: Some(0x654321),
                 rows: Vec::new(),
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             }],
         };
 

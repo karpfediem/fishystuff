@@ -7,9 +7,11 @@ use anyhow::{bail, Context, Result};
 use crate::coord::world_to_pixel_f;
 use crate::field::DiscreteFieldRows;
 use crate::field_metadata::{
-    FieldHoverMetadataEntry, FieldHoverRow, FieldHoverTarget, FIELD_HOVER_ROW_KEY_ORIGIN,
+    FieldDetailFact, FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataEntry,
+    FieldHoverRow, FieldHoverTarget, FIELD_DETAIL_PANE_ID_TERRITORY,
+    FIELD_DETAIL_PANE_ID_ZONE_MASK, FIELD_DETAIL_SECTION_KIND_FACTS, FIELD_HOVER_ROW_KEY_ORIGIN,
     FIELD_HOVER_ROW_KEY_RESOURCES, FIELD_HOVER_TARGET_KEY_ORIGIN_NODE,
-    FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
+    FIELD_HOVER_TARGET_KEY_REGION_NODE, FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
 };
 use crate::loc::load_loc_namespaces_as_string_maps;
 
@@ -62,9 +64,10 @@ pub struct OriginalWaypointRow {
     pub pos_z: f64,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct RegionGroupWaypointInfo {
     pub waypoint_id: Option<u32>,
+    pub waypoint_name: Option<String>,
     pub world_x: Option<f64>,
     pub world_z: Option<f64>,
 }
@@ -136,6 +139,7 @@ impl OriginalRegionLayerContext {
         let row = self.regiongroupinfo.get(&region_group_id)?;
         let info = RegionGroupWaypointInfo {
             waypoint_id: row.waypoint,
+            waypoint_name: row.waypoint.and_then(|id| self.resolve_waypoint_name(id)),
             world_x: Some(row.graphx).filter(|value| *value != 0.0),
             world_z: Some(row.graphz).filter(|value| *value != 0.0),
         };
@@ -153,6 +157,14 @@ impl OriginalRegionLayerContext {
                 .into_iter()
                 .flatten()
                 .collect(),
+            detail_pane: Some(territory_detail_pane_ref("hover-origin")),
+            detail_sections: vec![build_region_origin_detail_section(
+                region_id,
+                origin.as_ref(),
+            )]
+            .into_iter()
+            .flatten()
+            .collect(),
         };
         entry.has_value().then_some(entry)
     }
@@ -163,25 +175,38 @@ impl OriginalRegionLayerContext {
         regions_field: &DiscreteFieldRows,
     ) -> Option<FieldHoverMetadataEntry> {
         let resource = self.resolve_resource_waypoint(region_group_id);
-        let resource_region_id =
-            resource.and_then(|info| self.resolve_resource_region_id(info, regions_field));
-        let resource_region_name = resource_region_id
-            .and_then(|region_id| self.resolve_region_origin_info(region_id))
-            .and_then(|info| info.region_name);
+        let resource_region_id = resource
+            .as_ref()
+            .and_then(|info| self.resolve_resource_region_id(info, regions_field));
+        let resource_region_info =
+            resource_region_id.and_then(|region_id| self.resolve_region_origin_info(region_id));
+        let resource_region_name = resource_region_info
+            .as_ref()
+            .and_then(|info| info.region_name.clone());
         let entry = FieldHoverMetadataEntry {
             rows: vec![build_resource_hover_row(
                 region_group_id,
-                resource,
+                resource.as_ref(),
                 resource_region_id,
                 resource_region_name,
             )]
             .into_iter()
             .flatten()
             .collect(),
-            targets: vec![build_resource_hover_target(self, resource)]
+            targets: vec![build_resource_hover_target(self, resource.as_ref())]
                 .into_iter()
                 .flatten()
                 .collect(),
+            detail_pane: Some(territory_detail_pane_ref("hover-resources")),
+            detail_sections: vec![build_region_group_resource_detail_section(
+                region_group_id,
+                resource.as_ref(),
+                resource_region_id,
+                resource_region_info.as_ref(),
+            )]
+            .into_iter()
+            .flatten()
+            .collect(),
         };
         entry.has_value().then_some(entry)
     }
@@ -197,7 +222,7 @@ impl OriginalRegionLayerContext {
 
     fn resolve_resource_region_id(
         &self,
-        resource: RegionGroupWaypointInfo,
+        resource: &RegionGroupWaypointInfo,
         regions_field: &DiscreteFieldRows,
     ) -> Option<u32> {
         resource
@@ -227,8 +252,11 @@ impl RegionOriginInfo {
 }
 
 impl RegionGroupWaypointInfo {
-    pub fn has_value(self) -> bool {
-        self.waypoint_id.is_some() || self.world_x.is_some() || self.world_z.is_some()
+    pub fn has_value(&self) -> bool {
+        self.waypoint_id.is_some()
+            || self.waypoint_name.is_some()
+            || self.world_x.is_some()
+            || self.world_z.is_some()
     }
 }
 
@@ -535,9 +563,53 @@ fn build_origin_hover_row(
     })
 }
 
+fn build_region_origin_detail_section(
+    region_id: u32,
+    origin: Option<&RegionOriginInfo>,
+) -> Option<FieldDetailSection> {
+    let mut facts = Vec::new();
+    let region_value = origin
+        .and_then(|info| info.region_name.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| format!("R{region_id}"));
+    facts.push(FieldDetailFact {
+        key: "origin_region".to_string(),
+        label: "Region".to_string(),
+        value: region_value,
+        icon: Some("hover-origin".to_string()),
+    });
+
+    if let Some(node_name) = origin
+        .and_then(|info| info.waypoint_name.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        facts.push(FieldDetailFact {
+            key: "origin_node".to_string(),
+            label: "Node".to_string(),
+            value: node_name.to_string(),
+            icon: Some("map-pin".to_string()),
+        });
+    }
+
+    let targets = vec![build_origin_hover_target(origin)]
+        .into_iter()
+        .flatten()
+        .collect();
+    (!facts.is_empty()).then_some(FieldDetailSection {
+        id: "trade-origin".to_string(),
+        kind: FIELD_DETAIL_SECTION_KIND_FACTS.to_string(),
+        title: Some("Trade Origin".to_string()),
+        facts,
+        targets,
+    })
+}
+
 fn build_resource_hover_row(
     region_group_id: u32,
-    resource: Option<RegionGroupWaypointInfo>,
+    resource: Option<&RegionGroupWaypointInfo>,
     resource_region_id: Option<u32>,
     resource_region_name: Option<String>,
 ) -> Option<FieldHoverRow> {
@@ -579,6 +651,78 @@ fn build_resource_hover_row(
     })
 }
 
+fn build_region_group_resource_detail_section(
+    region_group_id: u32,
+    resource: Option<&RegionGroupWaypointInfo>,
+    resource_region_id: Option<u32>,
+    resource_region_info: Option<&RegionOriginInfo>,
+) -> Option<FieldDetailSection> {
+    let mut facts = Vec::new();
+
+    let resource_node_value = resource
+        .as_ref()
+        .and_then(|info| info.waypoint_name.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            resource
+                .as_ref()
+                .and_then(|info| info.waypoint_id)
+                .map(|waypoint_id| format!("Waypoint {waypoint_id}"))
+        })
+        .unwrap_or_else(|| format!("RG{region_group_id}"));
+    facts.push(FieldDetailFact {
+        key: "resource_bar_node".to_string(),
+        label: "Node".to_string(),
+        value: resource_node_value,
+        icon: Some("map-pin".to_string()),
+    });
+
+    let containing_region_value = resource_region_info
+        .and_then(|info| info.region_name.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| resource_region_id.map(|region_id| format!("R{region_id}")))
+        .unwrap_or_else(|| format!("RG{region_group_id}"));
+    facts.push(FieldDetailFact {
+        key: "resource_region".to_string(),
+        label: "Containing region".to_string(),
+        value: containing_region_value,
+        icon: Some("hover-zone".to_string()),
+    });
+
+    if let Some(region_node_name) = resource_region_info
+        .and_then(|info| info.waypoint_name.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        facts.push(FieldDetailFact {
+            key: "resource_region_node".to_string(),
+            label: "Origin node".to_string(),
+            value: region_node_name.to_string(),
+            icon: Some("hover-origin".to_string()),
+        });
+    }
+
+    let mut targets = Vec::new();
+    if let Some(target) = build_resource_hover_target_from_resource(resource) {
+        targets.push(target);
+    }
+    if let Some(target) = build_region_node_hover_target(resource_region_info) {
+        targets.push(target);
+    }
+
+    (!facts.is_empty()).then_some(FieldDetailSection {
+        id: "resource-bar".to_string(),
+        kind: FIELD_DETAIL_SECTION_KIND_FACTS.to_string(),
+        title: Some("Resource Bar".to_string()),
+        facts,
+        targets,
+    })
+}
+
 fn build_origin_hover_target(origin: Option<&RegionOriginInfo>) -> Option<FieldHoverTarget> {
     let origin = origin?;
     let world_x = origin.world_x?;
@@ -599,22 +743,76 @@ fn build_origin_hover_target(origin: Option<&RegionOriginInfo>) -> Option<FieldH
 
 fn build_resource_hover_target(
     context: &OriginalRegionLayerContext,
-    resource: Option<RegionGroupWaypointInfo>,
+    resource: Option<&RegionGroupWaypointInfo>,
+) -> Option<FieldHoverTarget> {
+    let resource = resource?;
+    let resource = RegionGroupWaypointInfo {
+        waypoint_name: resource
+            .waypoint_id
+            .and_then(|waypoint_id| context.resolve_waypoint_name(waypoint_id)),
+        waypoint_id: resource.waypoint_id,
+        world_x: resource.world_x,
+        world_z: resource.world_z,
+    };
+    build_resource_hover_target_from_resource(Some(&resource))
+}
+
+fn build_resource_hover_target_from_resource(
+    resource: Option<&RegionGroupWaypointInfo>,
 ) -> Option<FieldHoverTarget> {
     let resource = resource?;
     let world_x = resource.world_x?;
     let world_z = resource.world_z?;
     let label = resource
-        .waypoint_id
-        .and_then(|waypoint_id| context.resolve_waypoint_name(waypoint_id))
-        .map(|name| format!("Resource node: {name}"))
-        .unwrap_or_else(|| "Resource node".to_string());
+        .waypoint_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|name| format!("Resource bar: {name}"))
+        .unwrap_or_else(|| "Resource bar".to_string());
     Some(FieldHoverTarget {
         key: FIELD_HOVER_TARGET_KEY_RESOURCE_NODE.to_string(),
         label,
         world_x,
         world_z,
     })
+}
+
+fn build_region_node_hover_target(origin: Option<&RegionOriginInfo>) -> Option<FieldHoverTarget> {
+    let origin = origin?;
+    let world_x = origin.world_x?;
+    let world_z = origin.world_z?;
+    let label = origin
+        .waypoint_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|name| format!("Origin node: {name}"))
+        .unwrap_or_else(|| "Origin node".to_string());
+    Some(FieldHoverTarget {
+        key: FIELD_HOVER_TARGET_KEY_REGION_NODE.to_string(),
+        label,
+        world_x,
+        world_z,
+    })
+}
+
+fn territory_detail_pane_ref(icon: &str) -> FieldDetailPaneRef {
+    FieldDetailPaneRef {
+        id: FIELD_DETAIL_PANE_ID_TERRITORY.to_string(),
+        label: "Territory".to_string(),
+        icon: icon.to_string(),
+        order: 200,
+    }
+}
+
+pub fn zone_mask_detail_pane_ref() -> FieldDetailPaneRef {
+    FieldDetailPaneRef {
+        id: FIELD_DETAIL_PANE_ID_ZONE_MASK.to_string(),
+        label: "Zone".to_string(),
+        icon: "hover-zone".to_string(),
+        order: 100,
+    }
 }
 
 fn has_origin_assignment(origin: &RegionOriginInfo) -> bool {

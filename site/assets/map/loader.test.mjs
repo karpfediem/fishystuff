@@ -480,16 +480,43 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
           layerId: "zone_mask",
           layerName: "Zone Mask",
           rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
+          detailSections: [
+            {
+              id: "zone",
+              kind: "facts",
+              title: "Zone",
+              facts: [{ label: "Zone", value: "Demi River", icon: "hover-zone" }],
+            },
+          ],
         },
         {
           layerId: "region_groups",
           layerName: "Region Groups",
           rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
+          detailPane: { id: "territory", label: "Territory", icon: "hover-resources", order: 200 },
+          detailSections: [
+            {
+              id: "resource-bar",
+              kind: "facts",
+              title: "Resource Bar",
+              facts: [{ label: "Containing region", value: "Tarif", icon: "hover-zone" }],
+            },
+          ],
         },
         {
           layerId: "regions",
           layerName: "Regions",
           rows: [{ key: "origin", icon: "hover-origin", label: "Origin", value: "Tarif" }],
+          detailPane: { id: "territory", label: "Territory", icon: "hover-origin", order: 200 },
+          detailSections: [
+            {
+              id: "trade-origin",
+              kind: "facts",
+              title: "Trade Origin",
+              facts: [{ label: "Region", value: "Tarif", icon: "hover-origin" }],
+            },
+          ],
         },
       ],
     },
@@ -499,9 +526,8 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
   assert.deepEqual(
     panes.map((pane) => [pane.id, pane.label, pane.summary]),
     [
-      ["zone_mask", "Zone Mask", "Demi River"],
-      ["region_groups", "Region Groups", "Tarif"],
-      ["regions", "Regions", "Tarif"],
+      ["zone_mask", "Zone", "Demi River"],
+      ["territory", "Territory", "Tarif"],
     ],
   );
 });
@@ -524,13 +550,31 @@ test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
           layerId: "zone_mask",
           layerName: "Zone Mask",
           rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
-          targets: [{ label: "Tarif", worldX: 10, worldZ: 20 }],
+          detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
+          detailSections: [
+            {
+              id: "zone",
+              kind: "facts",
+              title: "Zone",
+              facts: [{ label: "Zone", value: "Demi River", icon: "hover-zone" }],
+              targets: [{ label: "Tarif", worldX: 10, worldZ: 20 }],
+            },
+          ],
         },
         {
           layerId: "region_groups",
           layerName: "Region Groups",
           rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
-          targets: [{ label: "Resource node", worldX: 30, worldZ: 40 }],
+          detailPane: { id: "territory", label: "Territory", icon: "hover-resources", order: 200 },
+          detailSections: [
+            {
+              id: "resource-bar",
+              kind: "facts",
+              title: "Resource Bar",
+              facts: [{ label: "Containing region", value: "Tarif", icon: "hover-zone" }],
+              targets: [{ label: "Resource node", worldX: 30, worldZ: 40 }],
+            },
+          ],
         },
       ],
     },
@@ -540,8 +584,8 @@ test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
   assert.deepEqual(
     panes.map((pane) => [pane.id, pane.sections.map((section) => section.id)]),
     [
-      ["zone_mask", ["semantic-rows", "targets", "zone-evidence"]],
-      ["region_groups", ["semantic-rows", "targets"]],
+      ["zone_mask", ["zone", "zone-evidence"]],
+      ["territory", ["resource-bar"]],
     ],
   );
 });
@@ -554,22 +598,40 @@ test("buildPointDetailViewModel resolves the requested active pane when availabl
           layerId: "zone_mask",
           layerName: "Zone Mask",
           rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
+          detailSections: [
+            {
+              id: "zone",
+              kind: "facts",
+              title: "Zone",
+              facts: [{ label: "Zone", value: "Demi River", icon: "hover-zone" }],
+            },
+          ],
         },
         {
           layerId: "region_groups",
           layerName: "Region Groups",
           rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
+          detailPane: { id: "territory", label: "Territory", icon: "hover-resources", order: 200 },
+          detailSections: [
+            {
+              id: "resource-bar",
+              kind: "facts",
+              title: "Resource Bar",
+              facts: [{ label: "Containing region", value: "Tarif", icon: "hover-zone" }],
+            },
+          ],
         },
       ],
     },
     buildHoverStateBundle(),
     {
-      zoneInfo: { tab: "region_groups" },
+      zoneInfo: { tab: "territory" },
     },
   );
 
-  assert.equal(viewModel.activePaneId, "region_groups");
-  assert.equal(viewModel.activePane?.id, "region_groups");
+  assert.equal(viewModel.activePaneId, "territory");
+  assert.equal(viewModel.activePane?.id, "territory");
   assert.equal(viewModel.descriptor.title, "Demi River");
   assert.equal(viewModel.activePane?.summary, "Tarif");
 });
@@ -601,6 +663,15 @@ test("buildPointDetailViewModel uses bookmark titles over semantic summaries", (
           layerId: "zone_mask",
           layerName: "Zone Mask",
           rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+          detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
+          detailSections: [
+            {
+              id: "zone",
+              kind: "facts",
+              title: "Zone",
+              facts: [{ label: "Zone", value: "Demi River", icon: "hover-zone" }],
+            },
+          ],
         },
       ],
     },

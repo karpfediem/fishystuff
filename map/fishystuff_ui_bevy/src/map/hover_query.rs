@@ -118,6 +118,8 @@ mod tests {
                 field_id: Some(88),
                 rows: Vec::new(),
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
             LayerQuerySample {
                 layer_id: "zone_mask".to_string(),
@@ -128,6 +130,8 @@ mod tests {
                 field_id: Some(0x445566),
                 rows: Vec::new(),
                 targets: Vec::new(),
+                detail_pane: None,
+                detail_sections: Vec::new(),
             },
         ];
         assert_eq!(

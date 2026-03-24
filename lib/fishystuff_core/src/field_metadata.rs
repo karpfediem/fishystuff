@@ -16,6 +16,11 @@ pub const FIELD_HOVER_PRIMARY_ROW_KEYS: [&str; 3] = [
 
 pub const FIELD_HOVER_TARGET_KEY_RESOURCE_NODE: &str = "resource_node";
 pub const FIELD_HOVER_TARGET_KEY_ORIGIN_NODE: &str = "origin_node";
+pub const FIELD_HOVER_TARGET_KEY_REGION_NODE: &str = "region_node";
+
+pub const FIELD_DETAIL_PANE_ID_ZONE_MASK: &str = "zone_mask";
+pub const FIELD_DETAIL_PANE_ID_TERRITORY: &str = "territory";
+pub const FIELD_DETAIL_SECTION_KIND_FACTS: &str = "facts";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
@@ -28,6 +33,8 @@ pub struct FieldHoverMetadataAsset {
 pub struct FieldHoverMetadataEntry {
     pub rows: Vec<FieldHoverRow>,
     pub targets: Vec<FieldHoverTarget>,
+    pub detail_pane: Option<FieldDetailPaneRef>,
+    pub detail_sections: Vec<FieldDetailSection>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -51,6 +58,34 @@ pub struct FieldHoverTarget {
     pub world_z: f64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FieldDetailPaneRef {
+    pub id: String,
+    pub label: String,
+    pub icon: String,
+    pub order: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FieldDetailSection {
+    pub id: String,
+    pub kind: String,
+    pub title: Option<String>,
+    pub facts: Vec<FieldDetailFact>,
+    pub targets: Vec<FieldHoverTarget>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FieldDetailFact {
+    pub key: String,
+    pub label: String,
+    pub value: String,
+    pub icon: Option<String>,
+}
+
 impl FieldHoverMetadataAsset {
     pub fn entry(&self, id: u32) -> Option<&FieldHoverMetadataEntry> {
         self.entries.get(&id)
@@ -59,7 +94,7 @@ impl FieldHoverMetadataAsset {
 
 impl FieldHoverMetadataEntry {
     pub fn has_value(&self) -> bool {
-        !self.rows.is_empty() || !self.targets.is_empty()
+        !self.rows.is_empty() || !self.targets.is_empty() || !self.detail_sections.is_empty()
     }
 
     pub fn row_value(&self, key: &str) -> Option<&str> {

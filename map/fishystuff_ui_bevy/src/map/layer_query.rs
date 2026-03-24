@@ -1,5 +1,7 @@
 use fishystuff_api::Rgb;
-use fishystuff_core::field_metadata::{FieldHoverRow, FieldHoverTarget};
+use fishystuff_core::field_metadata::{
+    FieldDetailPaneRef, FieldDetailSection, FieldHoverRow, FieldHoverTarget,
+};
 
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
@@ -21,6 +23,8 @@ pub struct LayerQuerySample {
     pub field_id: Option<u32>,
     pub rows: Vec<FieldHoverRow>,
     pub targets: Vec<FieldHoverTarget>,
+    pub detail_pane: Option<FieldDetailPaneRef>,
+    pub detail_sections: Vec<FieldDetailSection>,
 }
 
 pub struct LayerSamplingContext<'a> {
@@ -47,7 +51,10 @@ pub fn sample_layer_at_world_point(
     layer: &LayerSpec,
     sampling: &LayerSamplingContext<'_>,
 ) -> Option<LayerQuerySample> {
-    let (rgb, field_id, rows, targets, kind) = if layer.field_url().is_some() {
+    let (rgb, field_id, rows, targets, detail_pane, detail_sections, kind) = if layer
+        .field_url()
+        .is_some()
+    {
         let semantics =
             loaded_semantic_field_layer(layer, sampling.exact_lookups, sampling.field_metadata)?
                 .semantic_sample_at_world_point(
@@ -60,6 +67,8 @@ pub fn sample_layer_at_world_point(
             Some(semantics.field_id),
             semantics.rows,
             semantics.targets,
+            semantics.detail_pane,
+            semantics.detail_sections,
             "field".to_string(),
         )
     } else if layer.is_raster() {
@@ -68,6 +77,8 @@ pub fn sample_layer_at_world_point(
             None,
             Vec::new(),
             Vec::new(),
+            None,
+            Vec::new(),
             "tiled-raster".to_string(),
         )
     } else if layer.is_vector() {
@@ -75,6 +86,8 @@ pub fn sample_layer_at_world_point(
             sample_vector_layer_rgb(layer, sampling)?,
             None,
             Vec::new(),
+            Vec::new(),
+            None,
             Vec::new(),
             "vector-geojson".to_string(),
         )
@@ -90,6 +103,8 @@ pub fn sample_layer_at_world_point(
         field_id,
         rows,
         targets,
+        detail_pane,
+        detail_sections,
     })
 }
 
@@ -281,6 +296,8 @@ mod tests {
                             status_icon_tone: None,
                         }],
                         targets: Vec::new(),
+                        detail_pane: None,
+                        detail_sections: Vec::new(),
                     },
                 )]),
             },

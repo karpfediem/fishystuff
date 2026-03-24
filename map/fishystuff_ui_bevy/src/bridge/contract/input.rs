@@ -237,6 +237,7 @@ pub struct FishyMapUiState {
     pub show_points: bool,
     pub show_point_icons: bool,
     pub point_icon_scale: f32,
+    pub active_detail_pane_id: Option<String>,
     pub bookmark_selected_ids: Vec<String>,
     pub bookmarks: Vec<FishyMapBookmarkEntry>,
 }
@@ -250,6 +251,7 @@ impl Default for FishyMapUiState {
             show_points: true,
             show_point_icons: true,
             point_icon_scale: FISHYMAP_POINT_ICON_SCALE_MIN,
+            active_detail_pane_id: None,
             bookmark_selected_ids: Vec::new(),
             bookmarks: Vec::new(),
         }
@@ -265,6 +267,8 @@ pub struct FishyMapUiPatch {
     pub show_points: Option<bool>,
     pub show_point_icons: Option<bool>,
     pub point_icon_scale: Option<f32>,
+    #[serde(default, deserialize_with = "deserialize_nullable_string_field")]
+    pub active_detail_pane_id: Option<Option<String>>,
     pub bookmark_selected_ids: Option<Vec<String>>,
     pub bookmarks: Option<Vec<FishyMapBookmarkEntry>>,
 }
@@ -442,6 +446,12 @@ impl FishyMapInputState {
                 self.ui.point_icon_scale =
                     value.clamp(FISHYMAP_POINT_ICON_SCALE_MIN, FISHYMAP_POINT_ICON_SCALE_MAX);
             }
+            if let Some(active_detail_pane_id) = ui.active_detail_pane_id {
+                self.ui.active_detail_pane_id = active_detail_pane_id.and_then(|value| {
+                    let trimmed = value.trim().to_string();
+                    (!trimmed.is_empty()).then_some(trimmed)
+                });
+            }
             if let Some(bookmark_selected_ids) = ui.bookmark_selected_ids {
                 self.ui.bookmark_selected_ids = normalize_string_list(bookmark_selected_ids);
             }
@@ -451,5 +461,32 @@ impl FishyMapInputState {
         }
 
         patch.commands.unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FishyMapInputState, FishyMapStatePatch, FishyMapUiPatch};
+
+    #[test]
+    fn ui_patch_can_set_and_clear_active_detail_pane_id() {
+        let mut state = FishyMapInputState::default();
+        state.apply_patch(FishyMapStatePatch {
+            ui: Some(FishyMapUiPatch {
+                active_detail_pane_id: Some(Some("territory".to_string())),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        assert_eq!(state.ui.active_detail_pane_id.as_deref(), Some("territory"));
+
+        state.apply_patch(FishyMapStatePatch {
+            ui: Some(FishyMapUiPatch {
+                active_detail_pane_id: Some(None),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        assert_eq!(state.ui.active_detail_pane_id, None);
     }
 }
