@@ -36,8 +36,8 @@ const HOVER_SEMANTIC_GAP_SCREEN_PX: f32 = 5.0;
 const HOVER_CHIP_CODE_PADDING_X_SCREEN_PX: f32 = 7.0;
 const HOVER_CHIP_NAME_PADDING_X_SCREEN_PX: f32 = 9.0;
 const HOVER_SEMANTIC_WIDTH_SLACK_SCREEN_PX: f32 = 2.0;
-const HOVER_CALLOUT_BORDER_COLOR: Color = Color::srgba(0.74, 0.78, 0.86, 0.96);
-const HOVER_CALLOUT_PANEL_COLOR: Color = Color::srgba(0.07, 0.09, 0.12, 0.95);
+const HOVER_CALLOUT_BORDER_COLOR: Color = Color::srgb(0.14, 0.15, 0.19);
+const HOVER_CALLOUT_PANEL_COLOR: Color = Color::srgb(0.17, 0.18, 0.22);
 const HOVER_CHIP_REGION_GROUP_BORDER_COLOR: Color = Color::srgba(0.30, 0.83, 1.0, 0.70);
 const HOVER_CHIP_REGION_GROUP_PANEL_COLOR: Color = Color::srgba(0.16, 0.38, 0.46, 0.62);
 const HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR: Color = Color::srgba(0.24, 0.66, 0.84, 0.96);
@@ -780,21 +780,18 @@ fn hide_hover_target_label(
 
 fn hover_target_border_color(colors: &FishyMapThemeColors) -> Option<Color> {
     colors
-        .base300
+        .base200
         .as_deref()
-        .or(colors.primary.as_deref())
-        .or(colors.base200.as_deref())
+        .or(colors.base300.as_deref())
         .and_then(parse_css_color)
-        .map(|color| color.with_alpha(0.96))
 }
 
 fn hover_target_panel_color(colors: &FishyMapThemeColors) -> Option<Color> {
     colors
-        .base200
+        .base100
         .as_deref()
-        .or(colors.base100.as_deref())
+        .or(colors.base200.as_deref())
         .and_then(parse_css_color)
-        .map(|color| color.with_alpha(0.95))
 }
 
 fn hover_target_label_color(colors: &FishyMapThemeColors) -> Option<Color> {
@@ -1053,13 +1050,6 @@ fn chip_border_color(kind: SemanticIdentityKind) -> Color {
     }
 }
 
-fn chip_panel_color(kind: SemanticIdentityKind) -> Color {
-    match kind {
-        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_PANEL_COLOR,
-        SemanticIdentityKind::Region => HOVER_CHIP_REGION_PANEL_COLOR,
-    }
-}
-
 fn chip_code_box_color(kind: SemanticIdentityKind) -> Color {
     match kind {
         SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_CODE_BG_COLOR,
@@ -1075,7 +1065,10 @@ fn chip_code_text_color(kind: SemanticIdentityKind) -> Color {
 }
 
 fn chip_name_box_color(kind: SemanticIdentityKind) -> Color {
-    chip_panel_color(kind)
+    match kind {
+        SemanticIdentityKind::RegionGroup => HOVER_CHIP_REGION_GROUP_PANEL_COLOR,
+        SemanticIdentityKind::Region => HOVER_CHIP_REGION_PANEL_COLOR,
+    }
 }
 
 fn chip_name_text_color(kind: SemanticIdentityKind) -> Color {
