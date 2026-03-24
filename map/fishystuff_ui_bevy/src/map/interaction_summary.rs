@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use fishystuff_core::field_metadata::{
     detail_fact_is_visible, preferred_detail_fact, FieldDetailFact,
+    FIELD_DETAIL_FACT_KEY_ORIGIN_REGION, FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
+    FIELD_DETAIL_FACT_KEY_ZONE,
 };
 
 use crate::map::layer_query::LayerQuerySample;
@@ -54,7 +56,7 @@ fn selection_overview_lines_with_heading(
 }
 
 fn preferred_title_fact(samples: &[LayerQuerySample]) -> Option<&FieldDetailFact> {
-    preferred_detail_fact(flattened_facts(samples))
+    preferred_detail_fact(flattened_facts(samples).filter(|fact| summary_fact_is_visible(fact)))
 }
 
 fn flattened_facts<'a>(
@@ -92,8 +94,29 @@ fn should_skip_heading_row(
 
 fn overview_line(fact: &FieldDetailFact) -> Option<String> {
     let value = nonempty(Some(fact.value.as_str()))?;
-    let label = nonempty(Some(fact.label.as_str()))?;
+    let label = nonempty(summary_label_for_fact(fact))?;
     Some(format!("{label}: {value}"))
+}
+
+fn summary_fact_is_visible(fact: &FieldDetailFact) -> bool {
+    if !detail_fact_is_visible(fact) {
+        return false;
+    }
+    matches!(
+        fact.key.as_str(),
+        FIELD_DETAIL_FACT_KEY_ZONE
+            | FIELD_DETAIL_FACT_KEY_RESOURCE_REGION
+            | FIELD_DETAIL_FACT_KEY_ORIGIN_REGION
+    )
+}
+
+fn summary_label_for_fact(fact: &FieldDetailFact) -> Option<&str> {
+    match fact.key.as_str() {
+        FIELD_DETAIL_FACT_KEY_ZONE => Some("Zone"),
+        FIELD_DETAIL_FACT_KEY_RESOURCE_REGION => Some("Resources"),
+        FIELD_DETAIL_FACT_KEY_ORIGIN_REGION => Some("Origin"),
+        _ => None,
+    }
 }
 
 fn nonempty(value: Option<&str>) -> Option<&str> {
@@ -108,7 +131,7 @@ fn collect_overview_lines<'a>(
     let mut skipped_heading = false;
     let mut lines = Vec::new();
     for fact in facts {
-        if !detail_fact_is_visible(fact) {
+        if !summary_fact_is_visible(fact) {
             continue;
         }
         if should_skip_heading_row(fact, heading, &mut skipped_heading) {
@@ -320,14 +343,11 @@ mod tests {
         ]);
         assert_eq!(
             selection_summary_text(&info),
-            "Containing region: Tarif · Region: Tarif".to_string()
+            "Resources: Tarif · Origin: Tarif".to_string()
         );
         assert_eq!(
             selection_overview_lines(&info),
-            vec![
-                "Containing region: Tarif".to_string(),
-                "Region: Tarif".to_string()
-            ]
+            vec!["Resources: Tarif".to_string(), "Origin: Tarif".to_string()]
         );
     }
 

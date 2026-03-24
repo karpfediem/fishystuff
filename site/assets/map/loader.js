@@ -20,14 +20,8 @@ const BOOKMARK_COORDINATE_DECIMALS = 3;
 const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
 const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
-const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze([
-  "zone",
-  "resource_bar_node",
-  "origin_node",
-  "resource_region_node",
-  "resource_region",
-  "origin_region",
-]);
+const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resource_region", "origin_region"]);
+const TERRITORY_SUMMARY_FACT_KEYS = Object.freeze(["resource_region", "origin_region"]);
 const DEFAULT_ZONE_INFO_TAB = "";
 const ZONE_INFO_TAB_BUTTON_CLASS =
   "tab shrink-0 gap-2 whitespace-nowrap text-xs font-semibold sm:text-sm";
@@ -1436,11 +1430,14 @@ function overviewRowsForSample(sample) {
       continue;
     }
     for (const fact of normalizePointDetailFacts(section?.facts)) {
-      const icon = String(fact?.icon || "").trim();
+      const factKey = String(fact?.key || "").trim();
+      if (!PRIMARY_SEMANTIC_ROW_KEYS.includes(factKey)) {
+        continue;
+      }
+      const icon = displayIconForDetailFact(fact);
       if (!icon) {
         continue;
       }
-      const factKey = String(fact?.key || "").trim();
       const displayLabel = displayLabelForDetailFact(section, fact);
       rows.push({
         key:
@@ -1461,22 +1458,25 @@ function displayLabelForDetailFact(section, fact) {
   switch (String(fact?.key || "").trim()) {
     case "zone":
       return "Zone";
-    case "resource_bar_node":
-      return "Resource Bar";
     case "resource_region":
-      return "Containing region";
-    case "resource_region_node":
-      return "Origin node";
+      return "Resources";
     case "origin_region":
-      return "Trade Origin";
-    case "origin_node":
-      return "Origin node";
+      return "Origin";
     default:
       return (
         String(fact?.label || "").trim() ||
         String(section?.title || "").trim() ||
         "Details"
       );
+  }
+}
+
+function displayIconForDetailFact(fact) {
+  switch (String(fact?.key || "").trim()) {
+    case "resource_region":
+      return "hover-resources";
+    default:
+      return String(fact?.icon || "").trim();
   }
 }
 
@@ -2889,12 +2889,56 @@ function pointDetailSectionMarkup(section, pane, fishLookup) {
 }
 
 function pointDetailPaneMarkup(pane, fishLookup) {
+  if (pane?.id === "territory") {
+    return territoryPointDetailPaneMarkup(pane);
+  }
   const sections = Array.isArray(pane?.sections) ? pane.sections : [];
   return `
     <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(pane.id)}">
       ${sections.map((section) => pointDetailSectionMarkup(section, pane, fishLookup)).join("")}
     </section>
   `;
+}
+
+function territoryPointDetailPaneMarkup(pane) {
+  const facts = collectTerritorySummaryFacts(pane);
+  return `
+    <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(pane.id)}">
+      ${
+        facts.length
+          ? `<div class="fishymap-overview-list">${facts
+              .map((fact) =>
+                overviewRowMarkup({
+                  icon: displayIconForDetailFact(fact) || "information-circle",
+                  label: displayLabelForDetailFact(null, fact),
+                  value: fact.value,
+                  ...(fact?.statusIcon ? { statusIcon: fact.statusIcon } : {}),
+                  ...(fact?.statusIconTone ? { statusIconTone: fact.statusIconTone } : {}),
+                }),
+              )
+              .join("")}</div>`
+          : ""
+      }
+    </section>
+  `;
+}
+
+function collectTerritorySummaryFacts(pane) {
+  const sections = Array.isArray(pane?.sections) ? pane.sections : [];
+  const selectedFacts = new Map();
+  for (const section of sections) {
+    for (const fact of normalizePointDetailFacts(section?.facts)) {
+      const factKey = String(fact?.key || "").trim();
+      if (!TERRITORY_SUMMARY_FACT_KEYS.includes(factKey)) {
+        continue;
+      }
+      if (selectedFacts.has(factKey)) {
+        continue;
+      }
+      selectedFacts.set(factKey, fact);
+    }
+  }
+  return TERRITORY_SUMMARY_FACT_KEYS.map((key) => selectedFacts.get(key)).filter(Boolean);
 }
 
 function pointDetailTabTitle(tab) {
