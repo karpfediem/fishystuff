@@ -14,6 +14,7 @@ const {
   buildZoneEvidenceListMarkup,
   buildMapUiResetMountOptions,
   buildPointDetailPanes,
+  buildPointDetailViewModel,
   buildSearchMatches,
   computeDragAutoScrollDelta,
   createBookmarkFromPlacement,
@@ -543,6 +544,75 @@ test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
       ["region_groups", ["semantic-rows", "targets"]],
     ],
   );
+});
+
+test("buildPointDetailViewModel resolves the requested active pane when available", () => {
+  const viewModel = buildPointDetailViewModel(
+    {
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          layerName: "Zone Mask",
+          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+        },
+        {
+          layerId: "region_groups",
+          layerName: "Region Groups",
+          rows: [{ key: "resources", icon: "hover-resources", label: "Resources", value: "Tarif" }],
+        },
+      ],
+    },
+    buildHoverStateBundle(),
+    {
+      zoneInfo: { tab: "region_groups" },
+    },
+  );
+
+  assert.equal(viewModel.activePaneId, "region_groups");
+  assert.equal(viewModel.activePane?.id, "region_groups");
+  assert.equal(viewModel.descriptor.title, "Demi River");
+  assert.equal(viewModel.activePane?.summary, "Tarif");
+});
+
+test("buildPointDetailViewModel uses bookmark titles over semantic summaries", () => {
+  const stateBundle = buildHoverStateBundle();
+  stateBundle.state.ui = {
+    bookmarks: [
+      {
+        id: "bookmark-a",
+        label: "Olvia Academy",
+        worldX: 10,
+        worldZ: 20,
+      },
+    ],
+  };
+  stateBundle.inputState.ui = {
+    bookmarkSelectedIds: ["bookmark-a"],
+  };
+
+  const viewModel = buildPointDetailViewModel(
+    {
+      worldX: 10,
+      worldZ: 20,
+      pointKind: "bookmark",
+      pointLabel: "Olvia Academy",
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          layerName: "Zone Mask",
+          rows: [{ key: "zone", icon: "hover-zone", label: "Zone", value: "Demi River" }],
+        },
+      ],
+    },
+    stateBundle,
+    {
+      zoneInfo: { tab: "zone_mask" },
+    },
+  );
+
+  assert.equal(viewModel.descriptor.title, "Olvia Academy");
+  assert.equal(viewModel.descriptor.pointKind, "bookmark");
+  assert.equal(viewModel.activePaneId, "zone_mask");
 });
 
 test("buildBookmarkDeletionPrompt uses the bookmark label for single deletions", () => {

@@ -2558,12 +2558,7 @@ function buildZoneEvidencePointDetailSection({ pane, selection, stateBundle }) {
 }
 
 export function resolveZoneInfoActiveTab(windowUiState, selection, stateBundle) {
-  const tabs = buildPointDetailPanes(selection, stateBundle);
-  const requestedTab = normalizeZoneInfoTab(windowUiState?.zoneInfo?.tab);
-  if (requestedTab && tabs.some((tab) => tab.id === requestedTab)) {
-    return requestedTab;
-  }
-  return tabs[0]?.id || DEFAULT_ZONE_INFO_TAB;
+  return buildPointDetailViewModel(selection, stateBundle, windowUiState).activePaneId;
 }
 
 function pointKindIcon(pointKind) {
@@ -2622,6 +2617,22 @@ function zoneInfoTitleDescriptor(selection, stateBundle) {
     statusIcon: pointKindIcon(pointKind),
     statusText: pointKindStatusText(pointKind, pointLabel),
     pointKind,
+  };
+}
+
+export function buildPointDetailViewModel(selection, stateBundle, windowUiState) {
+  const panes = buildPointDetailPanes(selection, stateBundle);
+  const requestedPaneId = normalizeZoneInfoTab(windowUiState?.zoneInfo?.tab);
+  const activePaneId =
+    requestedPaneId && panes.some((pane) => pane.id === requestedPaneId)
+      ? requestedPaneId
+      : panes[0]?.id || DEFAULT_ZONE_INFO_TAB;
+  const activePane = panes.find((pane) => pane.id === activePaneId) || null;
+  return {
+    descriptor: zoneInfoTitleDescriptor(selection, stateBundle),
+    panes,
+    activePaneId,
+    activePane,
   };
 }
 
@@ -2738,6 +2749,38 @@ function pointDetailPaneMarkup(pane, fishLookup) {
       ${sections.map((section) => pointDetailSectionMarkup(section, pane, fishLookup)).join("")}
     </section>
   `;
+}
+
+function pointDetailTabTitle(tab) {
+  return tab.summary ? `${tab.label}: ${tab.summary}` : `Show ${tab.label} details.`;
+}
+
+function pointDetailTabButtonMarkup(tab, activeTabId) {
+  const isActive = tab.id === activeTabId;
+  return `
+    <button
+      id="fishymap-zone-info-tab-${escapeHtml(tab.id)}"
+      class="${zoneInfoTabButtonClass(isActive)}"
+      type="button"
+      role="tab"
+      aria-selected="${isActive ? "true" : "false"}"
+      data-zone-info-tab="${escapeHtml(tab.id)}"
+      title="${escapeHtml(pointDetailTabTitle(tab))}"
+      tabindex="${isActive ? "0" : "-1"}"
+    >
+      ${spriteIcon(tab.icon || "information-circle", "size-4")}
+      <span class="truncate">${escapeHtml(tab.label)}</span>
+    </button>
+  `;
+}
+
+function pointDetailTabsMarkup(pointDetail) {
+  const tabs = Array.isArray(pointDetail?.panes) ? pointDetail.panes : [];
+  return tabs.map((tab) => pointDetailTabButtonMarkup(tab, pointDetail?.activePaneId)).join("");
+}
+
+function emptyPointDetailPanelMarkup() {
+  return '<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">Click the map, use a waypoint target, or select a bookmark to inspect layers at a world point.</div>';
 }
 
 function orderPatchesByStart(patches) {
@@ -3351,10 +3394,11 @@ function renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup) 
     return;
   }
   const selection = stateBundle.state?.selection || null;
-  const descriptor = zoneInfoTitleDescriptor(selection, stateBundle);
-  const tabs = buildPointDetailPanes(selection, stateBundle);
-  const activeTab = resolveZoneInfoActiveTab(windowUiState, selection, stateBundle);
-  const activeLayerTab = tabs.find((tab) => tab.id === activeTab) || null;
+  const pointDetail = buildPointDetailViewModel(selection, stateBundle, windowUiState);
+  const descriptor = pointDetail.descriptor;
+  const tabs = pointDetail.panes;
+  const activeTab = pointDetail.activePaneId;
+  const activeLayerTab = pointDetail.activePane;
 
   if (elements.zoneInfoWindow) {
     elements.zoneInfoWindow.dataset.activeTab = activeTab || "";
@@ -3379,43 +3423,20 @@ function renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup) 
   setTextContent(elements.zoneInfoStatusText, descriptor.statusText);
 
   setBooleanProperty(elements.zoneInfoTabs, "hidden", tabs.length === 0);
-  const tabMarkup = tabs
-    .map((tab) => {
-      const isActive = tab.id === activeTab;
-      const titleText = tab.summary
-        ? `${tab.label}: ${tab.summary}`
-        : `Show ${tab.label} details.`;
-      return `
-        <button
-          id="fishymap-zone-info-tab-${escapeHtml(tab.id)}"
-          class="${zoneInfoTabButtonClass(isActive)}"
-          type="button"
-          role="tab"
-          aria-selected="${isActive ? "true" : "false"}"
-          data-zone-info-tab="${escapeHtml(tab.id)}"
-          title="${escapeHtml(titleText)}"
-          tabindex="${isActive ? "0" : "-1"}"
-        >
-          ${spriteIcon(tab.icon || "information-circle", "size-4")}
-          <span class="truncate">${escapeHtml(tab.label)}</span>
-        </button>
-      `;
-    })
-    .join("");
   setMarkup(
     elements.zoneInfoTabs,
     JSON.stringify({
       activeTab,
       tabs: tabs.map((tab) => [tab.id, tab.label, tab.summary]),
     }),
-    tabMarkup,
+    pointDetailTabsMarkup(pointDetail),
   );
 
   if (!selection || !activeLayerTab) {
     setMarkup(
       elements.zoneInfoPanel,
       JSON.stringify({ empty: true, title: descriptor.title }),
-      '<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">Click the map, use a waypoint target, or select a bookmark to inspect layers at a world point.</div>',
+      emptyPointDetailPanelMarkup(),
     );
     return;
   }
@@ -4134,7 +4155,11 @@ function bindUi(shell, elements, options = {}) {
     const requestedTab = normalizeZoneInfoTab(nextTab);
     const current = getLatestStateBundle();
     const selection = current.state?.selection || null;
-    const availableTabs = buildPointDetailPanes(selection, current).map((tab) => tab.id);
+    const availableTabs = buildPointDetailViewModel(
+      selection,
+      current,
+      windowUiState,
+    ).panes.map((tab) => tab.id);
     if (!requestedTab || !availableTabs.includes(requestedTab)) {
       return false;
     }
