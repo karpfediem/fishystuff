@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use fishystuff_core::field_metadata::{
     detail_fact_is_visible, preferred_detail_fact, FieldDetailFact,
-    FIELD_DETAIL_FACT_KEY_ORIGIN_REGION, FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE,
+    FIELD_DETAIL_FACT_KEY_ORIGIN_REGION, FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP,
     FIELD_DETAIL_FACT_KEY_RESOURCE_REGION, FIELD_DETAIL_FACT_KEY_ZONE,
 };
 
@@ -105,7 +105,7 @@ fn summary_fact_is_visible(fact: &FieldDetailFact) -> bool {
     matches!(
         fact.key.as_str(),
         FIELD_DETAIL_FACT_KEY_ZONE
-            | FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE
+            | FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP
             | FIELD_DETAIL_FACT_KEY_RESOURCE_REGION
             | FIELD_DETAIL_FACT_KEY_ORIGIN_REGION
     )
@@ -114,7 +114,7 @@ fn summary_fact_is_visible(fact: &FieldDetailFact) -> bool {
 fn summary_label_for_fact(fact: &FieldDetailFact) -> Option<&str> {
     match fact.key.as_str() {
         FIELD_DETAIL_FACT_KEY_ZONE => Some("Zone"),
-        FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE => Some("Resources"),
+        FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP => Some("Resources"),
         FIELD_DETAIL_FACT_KEY_RESOURCE_REGION => Some("Resources"),
         FIELD_DETAIL_FACT_KEY_ORIGIN_REGION => Some("Origin"),
         _ => None,

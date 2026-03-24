@@ -182,12 +182,17 @@ function regionGroupLayerSample({
 } = {}) {
   const facts = [];
   if (resourceBarNode) {
-    facts.push(factEntry("resource_bar_node", resourceBarNode, "map-pin", { label: "Node" }));
+    facts.push(
+      factEntry("resource_group", resourceBarNode, "hover-resources", { label: "Resource group" }),
+    );
+  }
+  if (resourceBarNode) {
+    facts.push(factEntry("resource_waypoint", resourceBarNode, "map-pin", { label: "Waypoint" }));
   }
   if (containingRegion) {
     facts.push(
       factEntry("resource_region", containingRegion, "hover-zone", {
-        label: "Containing region",
+        label: "Region",
         ...(containingRegionStatusIcon ? { statusIcon: containingRegionStatusIcon } : {}),
         ...(containingRegionStatusIconTone
           ? { statusIconTone: containingRegionStatusIconTone }
@@ -198,7 +203,7 @@ function regionGroupLayerSample({
   if (originNode) {
     facts.push(
       factEntry("resource_region_node", originNode, "hover-origin", {
-        label: "Origin node",
+        label: "Region node",
       }),
     );
   }
@@ -782,20 +787,22 @@ test("territoryPointDetailPaneMarkup keeps waypoint buttons in the compact pane"
         id: "resource-bar",
         kind: "facts",
         facts: [
-          { key: "resource_region", label: "Containing region", value: "Tarif", icon: "hover-zone" },
+          { key: "resource_group", label: "Resource group", value: "Tarif (RG58)", icon: "hover-resources" },
+          { key: "resource_waypoint", label: "Waypoint", value: "Hasrah Cliff", icon: "map-pin" },
+          { key: "resource_region", label: "Region", value: "Tarif (R216)", icon: "hover-zone" },
         ],
         targets: [
-          { key: "resource_node", label: "Resource bar: Hasrah Cliff", worldX: 189607, worldZ: -160661 },
+          { key: "resource_node", label: "Resource bar: Tarif (RG58)", worldX: 189607, worldZ: -160661 },
         ],
       },
       {
         id: "trade-origin",
         kind: "facts",
         facts: [
-          { key: "origin_region", label: "Region", value: "Tarif", icon: "hover-origin" },
+          { key: "origin_region", label: "Region", value: "Tarif (R216)", icon: "hover-origin" },
         ],
         targets: [
-          { key: "origin_node", label: "Origin: Tarif", worldX: 226814, worldZ: -73831.4 },
+          { key: "origin_node", label: "Origin: Tarif (R216)", worldX: 226814, worldZ: -73831.4 },
         ],
       },
     ],
@@ -803,10 +810,14 @@ test("territoryPointDetailPaneMarkup keeps waypoint buttons in the compact pane"
 
   assert.match(markup, /Resources/);
   assert.match(markup, /Origin/);
+  assert.match(markup, /Resources path/);
+  assert.match(markup, /Trade origin path/);
+  assert.match(markup, /Waypoint/);
+  assert.match(markup, /Hasrah Cliff/);
   assert.match(markup, /data-zone-info-target-world-x="189607"/);
-  assert.match(markup, /Resource bar: Hasrah Cliff/);
+  assert.match(markup, /Resource bar: Tarif \(RG58\)/);
   assert.match(markup, /data-zone-info-target-world-x="226814"/);
-  assert.match(markup, /Origin: Tarif/);
+  assert.match(markup, /Origin: Tarif \(R216\)/);
 });
 
 test("buildBookmarkDeletionPrompt uses the bookmark label for single deletions", () => {

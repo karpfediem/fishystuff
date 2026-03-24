@@ -6,18 +6,20 @@ use crate::field::DiscreteFieldRows;
 use crate::gamecommondata::OriginalRegionLayerContext;
 
 pub const FIELD_DETAIL_FACT_KEY_ZONE: &str = "zone";
-pub const FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE: &str = "resource_bar_node";
+pub const FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP: &str = "resource_group";
+pub const FIELD_DETAIL_FACT_KEY_RESOURCE_WAYPOINT: &str = "resource_waypoint";
 pub const FIELD_DETAIL_FACT_KEY_RESOURCE_REGION: &str = "resource_region";
 pub const FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE: &str = "resource_region_node";
 pub const FIELD_DETAIL_FACT_KEY_ORIGIN_REGION: &str = "origin_region";
 pub const FIELD_DETAIL_FACT_KEY_ORIGIN_NODE: &str = "origin_node";
-pub const FIELD_DETAIL_PRIMARY_FACT_KEYS: [&str; 6] = [
+pub const FIELD_DETAIL_PRIMARY_FACT_KEYS: [&str; 7] = [
     FIELD_DETAIL_FACT_KEY_ZONE,
-    FIELD_DETAIL_FACT_KEY_RESOURCE_BAR_NODE,
+    FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP,
     FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
     FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
     FIELD_DETAIL_FACT_KEY_ORIGIN_NODE,
     FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE,
+    FIELD_DETAIL_FACT_KEY_RESOURCE_WAYPOINT,
 ];
 
 pub const FIELD_HOVER_TARGET_KEY_RESOURCE_NODE: &str = "resource_node";
@@ -179,7 +181,7 @@ fn build_hover_metadata(
 mod tests {
     use super::{
         detail_fact_is_visible, preferred_detail_fact, preferred_detail_fact_value,
-        FieldDetailFact, FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+        FieldDetailFact, FIELD_DETAIL_FACT_KEY_ORIGIN_REGION, FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP,
         FIELD_DETAIL_FACT_KEY_RESOURCE_REGION, FIELD_DETAIL_FACT_KEY_ZONE,
     };
 
@@ -223,14 +225,19 @@ mod tests {
                 "Castle Ruins",
             ),
             fact(
+                FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP,
+                "Resource group",
+                "Olvia (RG12)",
+            ),
+            fact(
                 FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
-                "Containing region",
-                "Olvia",
+                "Region",
+                "Olvia (R76)",
             ),
         ];
         assert_eq!(
             preferred_detail_fact(facts.iter()).map(|fact| fact.key.as_str()),
-            Some(FIELD_DETAIL_FACT_KEY_RESOURCE_REGION)
+            Some(FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP)
         );
     }
 

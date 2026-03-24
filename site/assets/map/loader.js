@@ -1465,7 +1465,7 @@ function displayLabelForDetailFact(section, fact) {
     case "zone":
       return "Zone";
     case "resources":
-    case "resource_bar_node":
+    case "resource_group":
     case "resource_region":
       return "Resources";
     case "origin":
@@ -1483,7 +1483,7 @@ function displayLabelForDetailFact(section, fact) {
 function displayIconForDetailFact(fact) {
   switch (String(fact?.key || "").trim()) {
     case "resources":
-    case "resource_bar_node":
+    case "resource_group":
     case "resource_region":
       return "hover-resources";
     case "origin":
@@ -2915,8 +2915,10 @@ function pointDetailPaneMarkup(pane, fishLookup) {
 }
 
 export function territoryPointDetailPaneMarkup(pane) {
-  const rows = territoryOverviewRowsFromSections(Array.isArray(pane?.sections) ? pane.sections : []);
-  const { resourceTargets, originTargets } = collectTerritoryTargetsByGroup(pane);
+  const sections = Array.isArray(pane?.sections) ? pane.sections : [];
+  const rows = territoryOverviewRowsFromSections(sections);
+  const resourceSection = territorySectionById(sections, "resource-bar");
+  const tradeOriginSection = territorySectionById(sections, "trade-origin");
   return `
     <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(pane.id)}">
       ${
@@ -2934,28 +2936,15 @@ export function territoryPointDetailPaneMarkup(pane) {
               .join("")}</div>`
           : ""
       }
-      ${
-        resourceTargets.length
-          ? `<section class="space-y-2">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Resources</p>
-              <div class="flex flex-wrap gap-2">${resourceTargets
-                .map((target) => zoneInfoTargetMarkup(target))
-                .join("")}</div>
-            </section>`
-          : ""
-      }
-      ${
-        originTargets.length
-          ? `<section class="space-y-2">
-              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Origin</p>
-              <div class="flex flex-wrap gap-2">${originTargets
-                .map((target) => zoneInfoTargetMarkup(target))
-                .join("")}</div>
-            </section>`
-          : ""
-      }
+      ${territoryPathSectionMarkup("Resources path", resourceSection)}
+      ${territoryPathSectionMarkup("Trade origin path", tradeOriginSection)}
     </section>
   `;
+}
+
+function territorySectionById(sectionsInput, sectionId) {
+  const sections = normalizePointDetailSections(sectionsInput);
+  return sections.find((section) => section.id === sectionId) || null;
 }
 
 function territoryOverviewRowsFromSections(sectionsInput) {
@@ -2965,7 +2954,7 @@ function territoryOverviewRowsFromSections(sectionsInput) {
     for (const fact of normalizePointDetailFacts(section?.facts)) {
       const factKey = String(fact?.key || "").trim();
       if (
-        factKey === "resource_bar_node" &&
+        factKey === "resource_group" &&
         !selectedFacts.has("resources")
       ) {
         selectedFacts.set("resources", {
@@ -3004,26 +2993,39 @@ function territoryOverviewRowsFromSections(sectionsInput) {
     .filter((row) => Boolean(row.icon && row.label && row.value));
 }
 
-function collectTerritoryTargetsByGroup(pane) {
-  const sections = Array.isArray(pane?.sections) ? pane.sections : [];
-  const resourceTargets = [];
-  const originTargets = [];
-  const seen = new Set();
-  for (const section of sections) {
-    for (const target of normalizePointDetailTargets(section?.targets)) {
-      const key = `${String(target?.key || "").trim()}:${String(target?.label || "").trim()}:${normalizeBookmarkCoordinate(target?.worldX)}:${normalizeBookmarkCoordinate(target?.worldZ)}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      if (String(target?.key || "").trim() === "origin_node") {
-        originTargets.push(target);
-      } else {
-        resourceTargets.push(target);
-      }
-    }
+function territoryPathSectionMarkup(title, section) {
+  const facts = Array.isArray(section?.facts) ? section.facts : [];
+  const targets = Array.isArray(section?.targets) ? section.targets : [];
+  if (facts.length === 0 && targets.length === 0) {
+    return "";
   }
-  return { resourceTargets, originTargets };
+  return `
+    <section class="space-y-2">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(title)}</p>
+      ${
+        facts.length
+          ? `<div class="fishymap-overview-list">${facts
+              .map((fact) =>
+                overviewRowMarkup({
+                  icon: String(fact?.icon || "").trim() || "information-circle",
+                  label: String(fact?.label || "").trim(),
+                  value: String(fact?.value || "").trim(),
+                  ...(fact?.statusIcon ? { statusIcon: String(fact.statusIcon).trim() } : {}),
+                  ...(fact?.statusIconTone ? { statusIconTone: String(fact.statusIconTone).trim() } : {}),
+                }),
+              )
+              .join("")}</div>`
+          : ""
+      }
+      ${
+        targets.length
+          ? `<div class="flex flex-wrap gap-2">${targets
+              .map((target) => zoneInfoTargetMarkup(target))
+              .join("")}</div>`
+          : ""
+      }
+    </section>
+  `;
 }
 
 function pointDetailTabTitle(tab) {
