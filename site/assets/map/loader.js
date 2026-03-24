@@ -1404,12 +1404,15 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
   if ((!label && !hideLabel) || !value || !icon) {
     return "";
   }
+  const valueMarkup =
+    semanticIdentityMarkup(value) ||
+    `<span class="fishymap-overview-value-text">${escapeHtml(value)}</span>`;
   return `
     <div class="fishymap-overview-row${hideLabel ? " fishymap-overview-row--label-less" : ""}">
       <span class="fishymap-overview-icon" aria-hidden="true">${spriteIcon(icon, iconSizeClass)}</span>
       ${hideLabel ? "" : `<span class="fishymap-overview-label">${escapeHtml(label)}</span>`}
       <span class="fishymap-overview-value">
-        <span class="fishymap-overview-value-text">${escapeHtml(value)}</span>
+        ${valueMarkup}
         ${
           statusIcon
             ? `<span class="fishymap-overview-status${
@@ -1419,6 +1422,61 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
         }
       </span>
     </div>
+  `;
+}
+
+function parseSemanticIdentityText(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) {
+    return null;
+  }
+  const namedMatch = trimmed.match(/^(?:(.+?):\s+)?(.+?)\s+\((RG|R)(\d+)\)$/);
+  if (namedMatch) {
+    const [, rawPrefix = "", rawName = "", kind = "", id = ""] = namedMatch;
+    const prefix = String(rawPrefix).trim();
+    const name = String(rawName).trim();
+    const code = `${kind}${id}`;
+    if (!code || !name) {
+      return null;
+    }
+    return { prefix, code, name, kind };
+  }
+  const idOnlyMatch = trimmed.match(/^(?:(.+?):\s+)?((?:RG|R)\d+)$/);
+  if (!idOnlyMatch) {
+    return null;
+  }
+  const [, rawPrefix = "", code = ""] = idOnlyMatch;
+  const prefix = String(rawPrefix).trim();
+  const normalizedCode = String(code).trim();
+  const kind = normalizedCode.startsWith("RG") ? "RG" : normalizedCode.startsWith("R") ? "R" : "";
+  if (!kind) {
+    return null;
+  }
+  return { prefix, code: normalizedCode, name: "", kind };
+}
+
+function semanticIdentityMarkup(text) {
+  const parsed = parseSemanticIdentityText(text);
+  if (!parsed) {
+    return "";
+  }
+  const semanticKind = parsed.kind === "RG" ? "region-group" : "region";
+  const prefixMarkup = parsed.prefix
+    ? `<span class="fishymap-semantic-prefix">${escapeHtml(parsed.prefix)}</span>`
+    : "";
+  const chipLabel = parsed.name ? `${parsed.code} ${parsed.name}` : parsed.code;
+  return `
+    <span class="fishymap-semantic-inline">
+      ${prefixMarkup}
+      <span class="fishymap-semantic-chip" data-semantic-kind="${semanticKind}" aria-label="${escapeHtml(chipLabel)}">
+        <span class="fishymap-semantic-chip-code">${escapeHtml(parsed.code)}</span>
+        ${
+          parsed.name
+            ? `<span class="fishymap-semantic-chip-name">${escapeHtml(parsed.name)}</span>`
+            : ""
+        }
+      </span>
+    </span>
   `;
 }
 
@@ -2790,16 +2848,21 @@ function zoneInfoTargetMarkup(target) {
   if (!label || worldX == null || worldZ == null) {
     return "";
   }
+  const labelMarkup =
+    semanticIdentityMarkup(label) ||
+    `<span class="truncate">${escapeHtml(label)}</span>`;
   return `
     <button
       class="btn btn-soft btn-sm justify-start"
       type="button"
+      aria-label="${escapeHtml(label)}"
+      title="${escapeHtml(label)}"
       data-zone-info-target-world-x="${worldX}"
       data-zone-info-target-world-z="${worldZ}"
       data-zone-info-target-label="${escapeHtml(label)}"
     >
       ${spriteIcon("map-pin", "size-4")}
-      <span class="truncate">${escapeHtml(label)}</span>
+      <span class="fishymap-target-label">${labelMarkup}</span>
     </button>
   `;
 }

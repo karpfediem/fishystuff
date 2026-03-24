@@ -814,6 +814,9 @@ test("territoryPointDetailPaneMarkup keeps waypoint buttons in the compact pane"
   assert.match(markup, /Trade origin path/);
   assert.match(markup, /Waypoint/);
   assert.match(markup, /Hasrah Cliff/);
+  assert.match(markup, /fishymap-semantic-chip-code">RG58</);
+  assert.match(markup, /fishymap-semantic-chip-name">Tarif</);
+  assert.match(markup, /fishymap-semantic-chip-code">R216</);
   assert.match(markup, /data-zone-info-target-world-x="189607"/);
   assert.match(markup, /Resource bar: Tarif \(RG58\)/);
   assert.match(markup, /data-zone-info-target-world-x="226814"/);
