@@ -57,7 +57,7 @@ const POINT_ICON_SIZE_SLIDER_MIN_THUMB: f32 = 14.0;
 const LEGACY_PATCH_UI_ENABLED: bool = false;
 
 #[derive(Component)]
-struct UiRoot;
+pub(crate) struct UiRoot;
 
 #[derive(Component)]
 struct PanelRoot;

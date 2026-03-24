@@ -10,6 +10,7 @@ async-channel = "2"
 base64 = "0.22"
 bevy_asset = { version = "0.18", default-features = false }
 bevy_flair = "0.7"
+bevy_resvg = "2.3.3"
 bevy_image = { version = "0.18", default-features = false }
 bevy_render = { version = "0.18", default-features = false }
 clap = { workspace = true, features = ["derive"] }

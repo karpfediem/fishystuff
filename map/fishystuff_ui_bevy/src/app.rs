@@ -24,6 +24,7 @@ use bevy::transform::TransformPlugin;
 use bevy::window::ExitCondition;
 use bevy::window::{Window, WindowPlugin};
 use bevy_flair::prelude::FlairPlugin;
+use bevy_resvg::prelude::SvgPlugin as BevyResvgPlugin;
 
 #[cfg(target_arch = "wasm32")]
 use crate::bridge::host::BrowserBridgePlugin;
@@ -39,6 +40,8 @@ use crate::plugins::field_tile_layers::FieldTileLayersPlugin;
 use crate::plugins::points::PointsPlugin;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::raster::RasterPlugin;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::plugins::svg_icons::UiSvgIconsPlugin;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::plugins::ui::{UiFonts, UiPointerCapture};
 #[cfg(not(target_arch = "wasm32"))]
@@ -99,6 +102,7 @@ pub fn run_browser() {
                     ..default()
                 }),
         )
+        .add_plugins(BevyResvgPlugin)
         .add_plugins(FlairPlugin)
         .add_plugins(BrowserProfilingPlugin)
         .add_plugins(BrowserBridgePlugin)
@@ -122,6 +126,7 @@ pub fn build_native_app(options: &NativeAppOptions) -> App {
         .add_plugins(RasterPlugin)
         .add_plugins(FieldTileLayersPlugin)
         .add_plugins(VectorLayersPlugin)
+        .add_plugins(UiSvgIconsPlugin)
         .add_plugins(BookmarksPlugin)
         .add_plugins(PointsPlugin);
     app
@@ -148,6 +153,7 @@ fn build_windowed_native_app(options: &NativeAppOptions) -> App {
                 ..default()
             }),
     )
+    .add_plugins(BevyResvgPlugin)
     .add_plugins(FlairPlugin);
     app
 }
@@ -184,6 +190,7 @@ fn build_headless_native_app(options: &NativeAppOptions) -> App {
         ImagePlugin::default(),
         MeshPlugin,
     ))
+    .add_plugins(BevyResvgPlugin)
     .add_plugins(FlairPlugin)
     .init_resource::<GlobalAmbientLight>()
     .init_asset::<Font>()

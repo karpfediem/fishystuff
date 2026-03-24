@@ -11,6 +11,7 @@ pub mod points;
 pub mod raster;
 pub mod render_domain;
 pub mod selection_point;
+pub mod svg_icons;
 pub mod ui;
 pub mod vector_layers;
 
@@ -42,6 +43,7 @@ impl PluginGroup for FishystuffPlugins {
             .add(points::PointsPlugin)
             .add(mask::MaskPlugin)
             .add(selection_point::SelectionPointPlugin)
+            .add(svg_icons::UiSvgIconsPlugin)
             .add(hover_targets::HoverTargetsPlugin)
             .add(ui::UiPlugin)
             .add(LayerUiPlugin)

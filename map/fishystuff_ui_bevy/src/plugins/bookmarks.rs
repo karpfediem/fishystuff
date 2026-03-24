@@ -13,7 +13,8 @@ use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::plugins::api::{HoverInfo, HoverState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
-use crate::plugins::ui::UiFonts;
+use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
+use crate::plugins::ui::{UiFonts, UiRoot};
 use fishystuff_core::field_metadata::{preferred_detail_fact_value, FieldDetailSection};
 
 #[cfg(target_arch = "wasm32")]
@@ -26,9 +27,16 @@ const BOOKMARK_CALLOUT_LABEL_SIZE_PX: f32 = 12.0;
 const BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX: f32 = 76.0;
 const BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX: f32 = 28.0;
 const BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX: f32 = 12.0;
+const BOOKMARK_CALLOUT_PADDING_LEFT_SCREEN_PX: f32 =
+    BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX + BOOKMARK_ICON_SIZE_SCREEN_PX + 8.0;
+const BOOKMARK_CALLOUT_PADDING_RIGHT_SCREEN_PX: f32 = BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX;
 const BOOKMARK_CALLOUT_GAP_SCREEN_PX: f32 = 10.0;
 const BOOKMARK_CALLOUT_BORDER_SCREEN_PX: f32 = 2.0;
 const BOOKMARK_CALLOUT_CORNER_RADIUS_SCREEN_PX: f32 = 10.0;
+const BOOKMARK_ICON_SIZE_SCREEN_PX: f32 = 14.0;
+const BOOKMARK_ICON_INSET_LEFT_SCREEN_PX: f32 = BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX;
+const BOOKMARK_ICON_TOP_SCREEN_PX: f32 =
+    (BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX - BOOKMARK_ICON_SIZE_SCREEN_PX) * 0.5 - 2.5;
 const BOOKMARK_TEXT_WIDTH_FACTOR: f32 = 0.72;
 const BOOKMARK_TEXT_WIDTH_SLACK_SCREEN_PX: f32 = 2.0;
 const BOOKMARK_TEXTURE_WIDTH_PX: usize = 32;
@@ -72,9 +80,13 @@ struct BookmarkCalloutRoot;
 #[derive(Component)]
 struct BookmarkCalloutText;
 
+#[derive(Component)]
+struct BookmarkCalloutIcon;
+
 #[derive(Clone, Copy, Debug)]
 struct BookmarkVisualSet {
     marker: Entity,
+    callout_icon: Entity,
     callout_root: Entity,
     callout_text: Entity,
 }
@@ -106,11 +118,22 @@ fn sync_bookmark_markers(
     #[cfg(target_arch = "wasm32")] bridge: Res<BrowserBridgeState>,
     fonts: Res<UiFonts>,
     render_assets: Res<BookmarkRenderAssets>,
+    svg_icon_assets: Res<UiSvgIconAssets>,
     mut marker_pool: ResMut<BookmarkMarkerPool>,
+    ui_root_q: Query<Entity, With<UiRoot>>,
     camera_q: Query<(&Camera, &GlobalTransform, &Projection), With<Map2dCamera>>,
     mut markers: Query<
         (&mut Transform, &mut Visibility, &mut Sprite),
         (With<BookmarkMarker>, Without<BookmarkCalloutRoot>),
+    >,
+    mut callout_icons: Query<
+        &mut ImageNode,
+        (
+            With<BookmarkCalloutIcon>,
+            Without<BookmarkMarker>,
+            Without<BookmarkCalloutRoot>,
+            Without<BookmarkCalloutText>,
+        ),
     >,
     mut callout_roots: Query<
         (
@@ -140,6 +163,13 @@ fn sync_bookmark_markers(
     }
 
     let Some(marker_texture) = render_assets.marker_texture.as_ref() else {
+        return;
+    };
+    let Some(bookmark_icon_handle) = svg_icon_assets.handle(UiSvgIconKind::Bookmark) else {
+        return;
+    };
+    let Ok(ui_root) = ui_root_q.single() else {
+        hide_bookmark_visuals(&marker_pool, &mut markers, &mut callout_roots);
         return;
     };
     let Ok((camera, camera_transform, projection)) = camera_q.single() else {
@@ -190,33 +220,49 @@ fn sync_bookmark_markers(
             ))
             .id();
 
+        let mut callout_icon = Entity::PLACEHOLDER;
         let mut callout_text = Entity::PLACEHOLDER;
-        let callout_root = commands
-            .spawn((
-                BookmarkCalloutRoot,
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(0.0),
+        let mut callout_root_entity = commands.spawn((
+            BookmarkCalloutRoot,
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.0),
+                top: Val::Px(0.0),
+                width: Val::Px(BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX),
+                height: Val::Px(BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX),
+                padding: UiRect {
+                    left: Val::Px(BOOKMARK_CALLOUT_PADDING_LEFT_SCREEN_PX),
+                    right: Val::Px(BOOKMARK_CALLOUT_PADDING_RIGHT_SCREEN_PX),
                     top: Val::Px(0.0),
-                    width: Val::Px(BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX),
-                    height: Val::Px(BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX),
-                    padding: UiRect::axes(
-                        Val::Px(BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX),
-                        Val::Px(0.0),
-                    ),
-                    border: UiRect::all(Val::Px(BOOKMARK_CALLOUT_BORDER_SCREEN_PX)),
-                    border_radius: BorderRadius::all(Val::Px(
-                        BOOKMARK_CALLOUT_CORNER_RADIUS_SCREEN_PX,
-                    )),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    ..default()
+                    bottom: Val::Px(0.0),
                 },
-                BackgroundColor(callout_panel_color),
-                BorderColor::all(callout_border_color),
-                Visibility::Hidden,
-            ))
+                border: UiRect::all(Val::Px(BOOKMARK_CALLOUT_BORDER_SCREEN_PX)),
+                border_radius: BorderRadius::all(Val::Px(BOOKMARK_CALLOUT_CORNER_RADIUS_SCREEN_PX)),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(callout_panel_color),
+            BorderColor::all(callout_border_color),
+            GlobalZIndex(1400),
+            Visibility::Hidden,
+        ));
+        let callout_root = callout_root_entity
             .with_children(|parent| {
+                callout_icon = parent
+                    .spawn((
+                        BookmarkCalloutIcon,
+                        ImageNode::new(bookmark_icon_handle.clone()),
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(BOOKMARK_ICON_INSET_LEFT_SCREEN_PX),
+                            top: Val::Px(BOOKMARK_ICON_TOP_SCREEN_PX),
+                            width: Val::Px(BOOKMARK_ICON_SIZE_SCREEN_PX),
+                            height: Val::Px(BOOKMARK_ICON_SIZE_SCREEN_PX),
+                            ..default()
+                        },
+                    ))
+                    .id();
                 callout_text = parent
                     .spawn((
                         BookmarkCalloutText,
@@ -232,9 +278,11 @@ fn sync_bookmark_markers(
                     .id();
             })
             .id();
+        commands.entity(ui_root).add_child(callout_root);
 
         marker_pool.markers.push(BookmarkVisualSet {
             marker,
+            callout_icon,
             callout_root,
             callout_text,
         });
@@ -273,6 +321,10 @@ fn sync_bookmark_markers(
             - BOOKMARK_CALLOUT_GAP_SCREEN_PX
             - panel_size_px.y;
         let left_px = viewport_position.x - panel_size_px.x * 0.5;
+        if let Ok(mut image_node) = callout_icons.get_mut(visual.callout_icon) {
+            image_node.image = bookmark_icon_handle.clone();
+            image_node.color = callout_label_color;
+        }
 
         if let Ok((mut node, mut visibility, mut background, mut border)) =
             callout_roots.get_mut(visual.callout_root)
@@ -443,7 +495,9 @@ fn bookmark_callout_size_px(display_text: &str) -> Vec2 {
         * BOOKMARK_CALLOUT_LABEL_SIZE_PX
         * BOOKMARK_TEXT_WIDTH_FACTOR
         + BOOKMARK_TEXT_WIDTH_SLACK_SCREEN_PX;
-    let width_px = (text_width_px + BOOKMARK_CALLOUT_PADDING_X_SCREEN_PX * 2.0)
+    let width_px = (text_width_px
+        + BOOKMARK_CALLOUT_PADDING_LEFT_SCREEN_PX
+        + BOOKMARK_CALLOUT_PADDING_RIGHT_SCREEN_PX)
         .max(BOOKMARK_CALLOUT_MIN_WIDTH_SCREEN_PX);
     Vec2::new(width_px, BOOKMARK_CALLOUT_HEIGHT_SCREEN_PX)
 }
