@@ -15,6 +15,7 @@ const {
   buildMapUiResetMountOptions,
   buildPointDetailPanes,
   buildPointDetailViewModel,
+  territoryPointDetailPaneMarkup,
   buildSearchMatches,
   computeDragAutoScrollDelta,
   createBookmarkFromPlacement,
@@ -339,7 +340,7 @@ test("buildHoverOverviewRows renders supported hover layers from bottom to top",
       },
       {
         layerId: "regions",
-        icon: "hover-origin",
+        icon: "trade-origin",
         label: "Origin",
         value: "Tarif",
       },
@@ -368,7 +369,7 @@ test("buildSelectionOverviewRows keeps field semantics while omitting a duplicat
       },
       {
         layerId: "regions",
-        icon: "hover-origin",
+        icon: "trade-origin",
         label: "Origin",
         value: "Tarif",
       },
@@ -773,6 +774,41 @@ test("buildPointDetailViewModel uses bookmark titles over semantic summaries", (
   assert.equal(viewModel.activePaneId, "zone_mask");
 });
 
+test("territoryPointDetailPaneMarkup keeps waypoint buttons in the compact pane", () => {
+  const markup = territoryPointDetailPaneMarkup({
+    id: "territory",
+    sections: [
+      {
+        id: "resource-bar",
+        kind: "facts",
+        facts: [
+          { key: "resource_region", label: "Containing region", value: "Tarif", icon: "hover-zone" },
+        ],
+        targets: [
+          { key: "resource_node", label: "Resource bar: Hasrah Cliff", worldX: 189607, worldZ: -160661 },
+        ],
+      },
+      {
+        id: "trade-origin",
+        kind: "facts",
+        facts: [
+          { key: "origin_region", label: "Region", value: "Tarif", icon: "hover-origin" },
+        ],
+        targets: [
+          { key: "origin_node", label: "Origin: Tarif", worldX: 226814, worldZ: -73831.4 },
+        ],
+      },
+    ],
+  });
+
+  assert.match(markup, /Resources/);
+  assert.match(markup, /Origin/);
+  assert.match(markup, /data-zone-info-target-world-x="189607"/);
+  assert.match(markup, /Resource bar: Hasrah Cliff/);
+  assert.match(markup, /data-zone-info-target-world-x="226814"/);
+  assert.match(markup, /Origin: Tarif/);
+});
+
 test("buildBookmarkDeletionPrompt uses the bookmark label for single deletions", () => {
   assert.equal(
     buildBookmarkDeletionPrompt([
@@ -921,7 +957,7 @@ test("buildHoverOverviewRows keeps bookmark info out of the regular hover box", 
       },
       {
         layerId: "regions",
-        icon: "hover-origin",
+        icon: "trade-origin",
         label: "Origin",
         value: "Tarif",
       },
@@ -963,7 +999,7 @@ test("buildHoverOverviewRows falls back to region ids when assignments are missi
       },
       {
         layerId: "regions",
-        icon: "hover-origin",
+        icon: "trade-origin",
         label: "Origin",
         value: "R76",
         statusIcon: "question-mark",
@@ -1030,7 +1066,7 @@ test("buildHoverOverviewRows keeps a soft unknown marker when origin coordinates
       },
       {
         layerId: "regions",
-        icon: "hover-origin",
+        icon: "trade-origin",
         label: "Origin",
         value: "R76",
         statusIcon: "question-mark",
@@ -1071,7 +1107,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         value: "Tarif",
       },
       {
-        icon: "hover-origin",
+        icon: "trade-origin",
         label: "Origin",
         value: "Tarif",
       },
@@ -1103,7 +1139,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         value: "Tarif",
       },
       {
-        icon: "hover-origin",
+        icon: "trade-origin",
         label: "Origin",
         value: "Tarif",
       },
@@ -1141,7 +1177,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         statusIcon: "question-mark",
       },
       {
-        icon: "hover-origin",
+        icon: "trade-origin",
         label: "Origin",
         value: "R76",
         statusIcon: "question-mark",

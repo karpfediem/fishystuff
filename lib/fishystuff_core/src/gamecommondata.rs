@@ -534,7 +534,7 @@ fn build_region_origin_detail_section(
         key: FIELD_DETAIL_FACT_KEY_ORIGIN_REGION.to_string(),
         label: "Region".to_string(),
         value: region_value,
-        icon: Some("hover-origin".to_string()),
+        icon: Some("trade-origin".to_string()),
         status_icon: origin.and_then(|info| {
             let has_assignment = info.has_value();
             let has_name = info
@@ -664,7 +664,7 @@ fn build_region_group_resource_detail_section(
     {
         facts.push(FieldDetailFact {
             key: FIELD_DETAIL_FACT_KEY_RESOURCE_REGION_NODE.to_string(),
-            label: "Origin node".to_string(),
+            label: "Containing node".to_string(),
             value: region_node_name.to_string(),
             icon: Some("hover-origin".to_string()),
             status_icon: None,
@@ -753,8 +753,8 @@ fn build_region_node_hover_target(origin: Option<&RegionOriginInfo>) -> Option<F
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(|name| format!("Origin node: {name}"))
-        .unwrap_or_else(|| "Origin node".to_string());
+        .map(|name| format!("Containing node: {name}"))
+        .unwrap_or_else(|| "Containing node".to_string());
     Some(FieldHoverTarget {
         key: FIELD_HOVER_TARGET_KEY_REGION_NODE.to_string(),
         label,

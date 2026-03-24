@@ -11,7 +11,7 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260320-8";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260324-9";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
 const DRAG_AUTOSCROLL_EDGE_PX = 56;
@@ -20,8 +20,8 @@ const BOOKMARK_COORDINATE_DECIMALS = 3;
 const BOOKMARK_XML_POS_Y = "-8175.0";
 const BOOKMARK_XML_GENERATED_BY = "FishyStuff";
 const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
-const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resource_region", "origin_region"]);
-const TERRITORY_SUMMARY_FACT_KEYS = Object.freeze(["resource_region", "origin_region"]);
+const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
+const TERRITORY_SUMMARY_FACT_KEYS = Object.freeze(["resources", "origin"]);
 const DEFAULT_ZONE_INFO_TAB = "";
 const ZONE_INFO_TAB_BUTTON_CLASS =
   "tab shrink-0 gap-2 whitespace-nowrap text-xs font-semibold sm:text-sm";
@@ -1423,6 +1423,12 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
 }
 
 function overviewRowsForSample(sample) {
+  const territoryRows = territoryOverviewRowsFromSections(
+    normalizePointDetailSections(sample?.detailSections),
+  );
+  if (territoryRows.length > 0) {
+    return territoryRows;
+  }
   const sections = normalizePointDetailSections(sample?.detailSections);
   const rows = [];
   for (const section of sections) {
@@ -1458,8 +1464,11 @@ function displayLabelForDetailFact(section, fact) {
   switch (String(fact?.key || "").trim()) {
     case "zone":
       return "Zone";
+    case "resources":
+    case "resource_bar_node":
     case "resource_region":
       return "Resources";
+    case "origin":
     case "origin_region":
       return "Origin";
     default:
@@ -1473,8 +1482,13 @@ function displayLabelForDetailFact(section, fact) {
 
 function displayIconForDetailFact(fact) {
   switch (String(fact?.key || "").trim()) {
+    case "resources":
+    case "resource_bar_node":
     case "resource_region":
       return "hover-resources";
+    case "origin":
+    case "origin_region":
+      return "trade-origin";
     default:
       return String(fact?.icon || "").trim();
   }
@@ -2900,45 +2914,116 @@ function pointDetailPaneMarkup(pane, fishLookup) {
   `;
 }
 
-function territoryPointDetailPaneMarkup(pane) {
-  const facts = collectTerritorySummaryFacts(pane);
+export function territoryPointDetailPaneMarkup(pane) {
+  const rows = territoryOverviewRowsFromSections(Array.isArray(pane?.sections) ? pane.sections : []);
+  const { resourceTargets, originTargets } = collectTerritoryTargetsByGroup(pane);
   return `
     <section class="space-y-3" data-zone-info-layer-panel="${escapeHtml(pane.id)}">
       ${
-        facts.length
-          ? `<div class="fishymap-overview-list">${facts
-              .map((fact) =>
+        rows.length
+          ? `<div class="fishymap-overview-list">${rows
+              .map((row) =>
                 overviewRowMarkup({
-                  icon: displayIconForDetailFact(fact) || "information-circle",
-                  label: displayLabelForDetailFact(null, fact),
-                  value: fact.value,
-                  ...(fact?.statusIcon ? { statusIcon: fact.statusIcon } : {}),
-                  ...(fact?.statusIconTone ? { statusIconTone: fact.statusIconTone } : {}),
+                  icon: String(row?.icon || "").trim() || "information-circle",
+                  label: row.label,
+                  value: row.value,
+                  ...(row?.statusIcon ? { statusIcon: row.statusIcon } : {}),
+                  ...(row?.statusIconTone ? { statusIconTone: row.statusIconTone } : {}),
                 }),
               )
               .join("")}</div>`
+          : ""
+      }
+      ${
+        resourceTargets.length
+          ? `<section class="space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Resources</p>
+              <div class="flex flex-wrap gap-2">${resourceTargets
+                .map((target) => zoneInfoTargetMarkup(target))
+                .join("")}</div>
+            </section>`
+          : ""
+      }
+      ${
+        originTargets.length
+          ? `<section class="space-y-2">
+              <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">Origin</p>
+              <div class="flex flex-wrap gap-2">${originTargets
+                .map((target) => zoneInfoTargetMarkup(target))
+                .join("")}</div>
+            </section>`
           : ""
       }
     </section>
   `;
 }
 
-function collectTerritorySummaryFacts(pane) {
-  const sections = Array.isArray(pane?.sections) ? pane.sections : [];
+function territoryOverviewRowsFromSections(sectionsInput) {
+  const sections = Array.isArray(sectionsInput) ? sectionsInput : [];
   const selectedFacts = new Map();
   for (const section of sections) {
     for (const fact of normalizePointDetailFacts(section?.facts)) {
       const factKey = String(fact?.key || "").trim();
-      if (!TERRITORY_SUMMARY_FACT_KEYS.includes(factKey)) {
-        continue;
+      if (
+        factKey === "resource_bar_node" &&
+        !selectedFacts.has("resources")
+      ) {
+        selectedFacts.set("resources", {
+          ...fact,
+          key: "resources",
+        });
+      } else if (
+        factKey === "resource_region" &&
+        !selectedFacts.has("resources")
+      ) {
+        selectedFacts.set("resources", {
+          ...fact,
+          key: "resources",
+        });
+      } else if (
+        factKey === "origin_region" &&
+        !selectedFacts.has("origin")
+      ) {
+        selectedFacts.set("origin", {
+          ...fact,
+          key: "origin",
+        });
       }
-      if (selectedFacts.has(factKey)) {
-        continue;
-      }
-      selectedFacts.set(factKey, fact);
     }
   }
-  return TERRITORY_SUMMARY_FACT_KEYS.map((key) => selectedFacts.get(key)).filter(Boolean);
+  return TERRITORY_SUMMARY_FACT_KEYS.map((key) => selectedFacts.get(key))
+    .filter(Boolean)
+    .map((fact) => ({
+      key: String(fact?.key || "").trim(),
+      icon: displayIconForDetailFact(fact),
+      label: displayLabelForDetailFact(null, fact),
+      value: String(fact?.value || "").trim(),
+      ...(fact?.statusIcon ? { statusIcon: String(fact.statusIcon).trim() } : {}),
+      ...(fact?.statusIconTone ? { statusIconTone: String(fact.statusIconTone).trim() } : {}),
+    }))
+    .filter((row) => Boolean(row.icon && row.label && row.value));
+}
+
+function collectTerritoryTargetsByGroup(pane) {
+  const sections = Array.isArray(pane?.sections) ? pane.sections : [];
+  const resourceTargets = [];
+  const originTargets = [];
+  const seen = new Set();
+  for (const section of sections) {
+    for (const target of normalizePointDetailTargets(section?.targets)) {
+      const key = `${String(target?.key || "").trim()}:${String(target?.label || "").trim()}:${normalizeBookmarkCoordinate(target?.worldX)}:${normalizeBookmarkCoordinate(target?.worldZ)}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      if (String(target?.key || "").trim() === "origin_node") {
+        originTargets.push(target);
+      } else {
+        resourceTargets.push(target);
+      }
+    }
+  }
+  return { resourceTargets, originTargets };
 }
 
 function pointDetailTabTitle(tab) {

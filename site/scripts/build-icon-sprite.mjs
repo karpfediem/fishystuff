@@ -41,6 +41,7 @@ const iconSources = {
   "cube-view": { type: "mingcute", name: "cube-3d-fill" },
   "hover-zone": { type: "mingcute", name: "fullscreen-line" },
   "hover-origin": { type: "mingcute", name: "map-pin-fill" },
+  "trade-origin": { type: "mingcute", name: "wheel-fill" },
   "hover-resources": { type: "mingcute", name: "chart-bar-fill" },
   "question-mark": { type: "mingcute", name: "question-2-fill" },
   bookmark: { type: "mingcute", name: "bookmark-fill" },
