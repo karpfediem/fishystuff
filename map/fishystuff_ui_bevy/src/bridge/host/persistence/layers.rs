@@ -94,3 +94,75 @@ pub(in crate::bridge::host) fn apply_layer_clip_mask_override(
         layer_runtime.set_clip_mask(layer.id, Some(mask_layer.id));
     }
 }
+
+pub(in crate::bridge::host) fn apply_layer_waypoint_connections_override(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &mut LayerRuntime,
+    overrides: &BTreeMap<String, bool>,
+) {
+    for (layer_id, visible) in overrides {
+        let trimmed = layer_id.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some(layer) = layer_registry.get_by_key(trimmed) else {
+            continue;
+        };
+        let Some(source) = layer.waypoint_source.as_ref() else {
+            continue;
+        };
+        if !source.supports_connections {
+            continue;
+        }
+        layer_runtime.set_waypoint_connections_visible(layer.id, *visible);
+    }
+}
+
+pub(in crate::bridge::host) fn reset_layer_waypoint_connections_override(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &mut LayerRuntime,
+) {
+    for layer in layer_registry.ordered() {
+        let visible = layer
+            .waypoint_source
+            .as_ref()
+            .is_some_and(|source| source.supports_connections && source.show_connections_default);
+        layer_runtime.set_waypoint_connections_visible(layer.id, visible);
+    }
+}
+
+pub(in crate::bridge::host) fn apply_layer_waypoint_labels_override(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &mut LayerRuntime,
+    overrides: &BTreeMap<String, bool>,
+) {
+    for (layer_id, visible) in overrides {
+        let trimmed = layer_id.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some(layer) = layer_registry.get_by_key(trimmed) else {
+            continue;
+        };
+        let Some(source) = layer.waypoint_source.as_ref() else {
+            continue;
+        };
+        if !source.supports_labels {
+            continue;
+        }
+        layer_runtime.set_waypoint_labels_visible(layer.id, *visible);
+    }
+}
+
+pub(in crate::bridge::host) fn reset_layer_waypoint_labels_override(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &mut LayerRuntime,
+) {
+    for layer in layer_registry.ordered() {
+        let visible = layer
+            .waypoint_source
+            .as_ref()
+            .is_some_and(|source| source.supports_labels && source.show_labels_default);
+        layer_runtime.set_waypoint_labels_visible(layer.id, visible);
+    }
+}

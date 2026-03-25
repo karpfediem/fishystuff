@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use fishystuff_core::gamecommondata::{
     load_original_region_layer_context, OriginalRegionLayerContext, RegionGroupWaypointInfo,
-    RegionOriginInfo,
+    RegionOriginInfo, WaypointDisplayInfo, WaypointNodeType,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -48,6 +48,7 @@ pub struct RegionGroupsBuildSummary {
 pub struct RegionNodesBuildSummary {
     pub feature_count: usize,
     pub named_feature_count: usize,
+    pub connection_feature_count: usize,
 }
 
 pub fn build_region_groups_geojson(
@@ -180,7 +181,7 @@ pub fn build_region_nodes_geojson(
     )?;
 
     let mut named_feature_count = 0usize;
-    let mut features = Vec::new();
+    let mut node_infos = Vec::new();
     for region_id in context.region_ids() {
         let Some(info) = context.resolve_region_waypoint_info(region_id) else {
             continue;
@@ -188,12 +189,59 @@ pub fn build_region_nodes_geojson(
         let (Some(world_x), Some(world_z)) = (info.world_x, info.world_z) else {
             continue;
         };
+        let node_type = context.resolve_region_waypoint_node_type(region_id);
+        let display_info = info
+            .waypoint_id
+            .and_then(|waypoint_id| context.resolve_waypoint_display_info(waypoint_id));
         if info.region_name.is_some() {
             named_feature_count = named_feature_count.saturating_add(1);
         }
+        node_infos.push((region_id, info, world_x, world_z, node_type, display_info));
+    }
+
+    let mut features = Vec::with_capacity(node_infos.len());
+    for (region_id, info, world_x, world_z, node_type, display_info) in &node_infos {
         features.push(build_region_node_feature(
-            region_id, &info, world_x, world_z,
+            *region_id,
+            info,
+            *world_x,
+            *world_z,
+            *node_type,
+            *display_info,
         ));
+    }
+
+    let node_info_by_region = node_infos
+        .iter()
+        .map(|(region_id, info, world_x, world_z, _, display_info)| {
+            (*region_id, (info, *world_x, *world_z, *display_info))
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let mut connection_feature_count = 0usize;
+    for (from_region_id, to_region_id) in context.region_node_connection_pairs() {
+        let Some((from_info, from_world_x, from_world_z, from_display_info)) =
+            node_info_by_region.get(&from_region_id)
+        else {
+            continue;
+        };
+        let Some((to_info, to_world_x, to_world_z, to_display_info)) =
+            node_info_by_region.get(&to_region_id)
+        else {
+            continue;
+        };
+        features.push(build_region_node_connection_feature(
+            from_region_id,
+            from_info,
+            *from_world_x,
+            *from_world_z,
+            *from_display_info,
+            to_region_id,
+            to_info,
+            *to_world_x,
+            *to_world_z,
+            *to_display_info,
+        ));
+        connection_feature_count = connection_feature_count.saturating_add(1);
     }
 
     let feature_count = features.len();
@@ -202,6 +250,7 @@ pub fn build_region_nodes_geojson(
     Ok(RegionNodesBuildSummary {
         feature_count,
         named_feature_count,
+        connection_feature_count,
     })
 }
 
@@ -214,6 +263,8 @@ fn build_region_node_feature(
     info: &RegionOriginInfo,
     world_x: f64,
     world_z: f64,
+    node_type: Option<WaypointNodeType>,
+    display_info: Option<WaypointDisplayInfo>,
 ) -> Feature {
     let mut properties = Map::new();
     let region_name = info
@@ -233,12 +284,103 @@ fn build_region_node_feature(
     if let Some(waypoint_id) = info.waypoint_id {
         properties.insert("wp".to_string(), Value::from(waypoint_id));
     }
+    if let Some(node_type) = node_type {
+        properties.insert(
+            "node_type".to_string(),
+            Value::String(node_type.key().to_string()),
+        );
+        properties.insert(
+            "node_type_label".to_string(),
+            Value::String(node_type.label().to_string()),
+        );
+    }
+    if let Some(display_info) = display_info {
+        properties.insert(
+            "display_class".to_string(),
+            Value::String(display_info.display_class.key().to_string()),
+        );
+        properties.insert(
+            "display_class_label".to_string(),
+            Value::String(display_info.display_class.label().to_string()),
+        );
+        properties.insert(
+            "referenced_by_region".to_string(),
+            Value::Bool(display_info.referenced_by_region),
+        );
+        properties.insert(
+            "referenced_by_region_group".to_string(),
+            Value::Bool(display_info.referenced_by_region_group),
+        );
+        properties.insert(
+            "default_visible".to_string(),
+            Value::Bool(display_info.default_visible),
+        );
+    }
     Feature {
         feature_type: default_feature_type(),
         properties,
         geometry: serde_json::json!({
             "type": "Point",
             "coordinates": [world_x, world_z],
+        }),
+    }
+}
+
+fn build_region_node_connection_feature(
+    from_region_id: u32,
+    from_info: &RegionOriginInfo,
+    from_world_x: f64,
+    from_world_z: f64,
+    from_display_info: Option<WaypointDisplayInfo>,
+    to_region_id: u32,
+    to_info: &RegionOriginInfo,
+    to_world_x: f64,
+    to_world_z: f64,
+    to_display_info: Option<WaypointDisplayInfo>,
+) -> Feature {
+    let mut properties = Map::new();
+    properties.insert(
+        "kind".to_string(),
+        Value::String("region_node_connection".to_string()),
+    );
+    properties.insert("from_r".to_string(), Value::from(from_region_id));
+    properties.insert("to_r".to_string(), Value::from(to_region_id));
+    if let Some(from_waypoint_id) = from_info.waypoint_id {
+        properties.insert("from_wp".to_string(), Value::from(from_waypoint_id));
+    }
+    if let Some(to_waypoint_id) = to_info.waypoint_id {
+        properties.insert("to_wp".to_string(), Value::from(to_waypoint_id));
+    }
+    if let Some(from_name) = from_info
+        .region_name
+        .clone()
+        .or_else(|| from_info.waypoint_name.clone())
+    {
+        properties.insert("from_name".to_string(), Value::String(from_name));
+    }
+    if let Some(to_name) = to_info
+        .region_name
+        .clone()
+        .or_else(|| to_info.waypoint_name.clone())
+    {
+        properties.insert("to_name".to_string(), Value::String(to_name));
+    }
+    let default_visible = from_display_info
+        .map(|info| info.default_visible)
+        .unwrap_or(true)
+        && to_display_info
+            .map(|info| info.default_visible)
+            .unwrap_or(true);
+    properties.insert("default_visible".to_string(), Value::Bool(default_visible));
+    Feature {
+        feature_type: default_feature_type(),
+        properties,
+        geometry: serde_json::json!({
+            "type": "LineString",
+            "coordinates": [
+                [from_world_x, from_world_z],
+                [to_world_x, to_world_z],
+            ],
         }),
     }
 }

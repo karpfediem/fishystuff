@@ -1217,10 +1217,11 @@ fn run_build_region_nodes_geojson(
         &out,
     )?;
     println!(
-        "build-region-nodes-geojson: out={} features={} named={}",
+        "build-region-nodes-geojson: out={} features={} named={} connections={}",
         out.display(),
         summary.feature_count,
         summary.named_feature_count,
+        summary.connection_feature_count,
     );
     Ok(())
 }

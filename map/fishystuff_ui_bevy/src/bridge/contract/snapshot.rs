@@ -158,6 +158,12 @@ pub struct FishyMapLayerSummary {
     pub vector_build_ms: f32,
     pub vector_last_frame_build_ms: f32,
     pub vector_cache_entries: u32,
+    pub supports_waypoint_connections: bool,
+    pub waypoint_connections_visible: bool,
+    pub waypoint_connections_default: bool,
+    pub supports_waypoint_labels: bool,
+    pub waypoint_labels_visible: bool,
+    pub waypoint_labels_default: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

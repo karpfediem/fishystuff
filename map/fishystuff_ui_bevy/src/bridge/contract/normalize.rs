@@ -88,3 +88,15 @@ pub fn normalize_layer_clip_mask_map(values: BTreeMap<String, String>) -> BTreeM
     }
     out
 }
+
+pub fn normalize_layer_bool_map(values: BTreeMap<String, bool>) -> BTreeMap<String, bool> {
+    let mut out = BTreeMap::new();
+    for (key, value) in values {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        out.insert(trimmed.to_string(), value);
+    }
+    out
+}

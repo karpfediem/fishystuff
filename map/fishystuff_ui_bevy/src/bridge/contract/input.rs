@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use super::snapshot::FishyMapHoverLayerSampleSnapshot;
 
 use super::normalize::{
-    deserialize_nullable_string_field, normalize_i32_list, normalize_layer_clip_mask_map,
-    normalize_layer_opacity_map, normalize_string_list, normalize_u32_list, normalize_u32_map,
+    deserialize_nullable_string_field, normalize_i32_list, normalize_layer_bool_map,
+    normalize_layer_clip_mask_map, normalize_layer_opacity_map, normalize_string_list,
+    normalize_u32_list, normalize_u32_map,
 };
 use super::snapshot::FishyMapSelectionPointKind;
 use super::{
@@ -137,6 +138,8 @@ pub struct FishyMapFiltersPatch {
     pub layer_ids_ordered: Option<Vec<String>>,
     pub layer_opacities: Option<BTreeMap<String, f32>>,
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
+    pub layer_waypoint_connections_visible: Option<BTreeMap<String, bool>>,
+    pub layer_waypoint_labels_visible: Option<BTreeMap<String, bool>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -154,6 +157,8 @@ pub struct FishyMapFiltersState {
     pub layer_ids_ordered: Option<Vec<String>>,
     pub layer_opacities: Option<BTreeMap<String, f32>>,
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
+    pub layer_waypoint_connections_visible: Option<BTreeMap<String, bool>>,
+    pub layer_waypoint_labels_visible: Option<BTreeMap<String, bool>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -402,6 +407,18 @@ impl FishyMapInputState {
             if let Some(layer_clip_masks) = filters.layer_clip_masks {
                 let normalized = normalize_layer_clip_mask_map(layer_clip_masks);
                 self.filters.layer_clip_masks = (!normalized.is_empty()).then_some(normalized);
+            }
+            if let Some(layer_waypoint_connections_visible) =
+                filters.layer_waypoint_connections_visible
+            {
+                let normalized = normalize_layer_bool_map(layer_waypoint_connections_visible);
+                self.filters.layer_waypoint_connections_visible =
+                    (!normalized.is_empty()).then_some(normalized);
+            }
+            if let Some(layer_waypoint_labels_visible) = filters.layer_waypoint_labels_visible {
+                let normalized = normalize_layer_bool_map(layer_waypoint_labels_visible);
+                self.filters.layer_waypoint_labels_visible =
+                    (!normalized.is_empty()).then_some(normalized);
             }
         }
 

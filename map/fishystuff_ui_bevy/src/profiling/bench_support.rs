@@ -428,6 +428,8 @@ fn runtime_state_for(layer: &LayerSpec) -> LayerRuntimeState {
         visible: true,
         opacity: 1.0,
         clip_mask_layer: None,
+        waypoint_connections_visible: false,
+        waypoint_labels_visible: false,
         z_base: layer.z_base,
         display_order: layer.display_order,
         current_base_lod: None,

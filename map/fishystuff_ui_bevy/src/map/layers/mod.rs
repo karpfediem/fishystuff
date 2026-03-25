@@ -113,6 +113,11 @@ pub struct WaypointSourceSpec {
     pub geometry_space: GeometrySpace,
     pub feature_id_property: Option<String>,
     pub label_property: Option<String>,
+    pub name_property: Option<String>,
+    pub supports_connections: bool,
+    pub supports_labels: bool,
+    pub show_connections_default: bool,
+    pub show_labels_default: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

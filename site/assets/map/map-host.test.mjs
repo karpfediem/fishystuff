@@ -1273,6 +1273,55 @@ test("layer clip mask overrides replace the previous map instead of merging stal
   assert.deepEqual(patch.filters.layerClipMasks, { terrain: "region_groups" });
 });
 
+test("waypoint layer override maps replace the previous map instead of merging stale entries", () => {
+  const patch = mergeStatePatch(
+    {
+      filters: {
+        layerWaypointConnectionsVisible: {
+          region_nodes: false,
+          bookmarks: true,
+        },
+        layerWaypointLabelsVisible: {
+          region_nodes: false,
+          bookmarks: true,
+        },
+      },
+    },
+    {
+      filters: {
+        layerWaypointConnectionsVisible: {
+          region_nodes: true,
+        },
+        layerWaypointLabelsVisible: {
+          region_nodes: false,
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(patch.filters.layerWaypointConnectionsVisible, { region_nodes: true });
+  assert.deepEqual(patch.filters.layerWaypointLabelsVisible, { region_nodes: false });
+});
+
+test("applyStatePatch keeps waypoint layer override maps in host input state", () => {
+  const next = applyStatePatch(
+    {},
+    {
+      filters: {
+        layerWaypointConnectionsVisible: {
+          region_nodes: false,
+        },
+        layerWaypointLabelsVisible: {
+          region_nodes: false,
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(next.filters.layerWaypointConnectionsVisible, { region_nodes: false });
+  assert.deepEqual(next.filters.layerWaypointLabelsVisible, { region_nodes: false });
+});
+
 test("layer clip mask normalization flattens nested attachments to a single root", () => {
   const patch = mergeStatePatch(
     {},

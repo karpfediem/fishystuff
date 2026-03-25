@@ -94,6 +94,35 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
                 vector_cache_entries: runtime_state
                     .map(|state| state.vector_cache_entries)
                     .unwrap_or_default(),
+                supports_waypoint_connections: layer
+                    .waypoint_source
+                    .as_ref()
+                    .is_some_and(|source| source.supports_connections),
+                waypoint_connections_visible: runtime_state
+                    .map(|state| state.waypoint_connections_visible)
+                    .unwrap_or_else(|| {
+                        layer.waypoint_source.as_ref().is_some_and(|source| {
+                            source.supports_connections && source.show_connections_default
+                        })
+                    }),
+                waypoint_connections_default: layer.waypoint_source.as_ref().is_some_and(
+                    |source| source.supports_connections && source.show_connections_default,
+                ),
+                supports_waypoint_labels: layer
+                    .waypoint_source
+                    .as_ref()
+                    .is_some_and(|source| source.supports_labels),
+                waypoint_labels_visible: runtime_state
+                    .map(|state| state.waypoint_labels_visible)
+                    .unwrap_or_else(|| {
+                        layer.waypoint_source.as_ref().is_some_and(|source| {
+                            source.supports_labels && source.show_labels_default
+                        })
+                    }),
+                waypoint_labels_default: layer
+                    .waypoint_source
+                    .as_ref()
+                    .is_some_and(|source| source.supports_labels && source.show_labels_default),
             }
         })
         .collect()
@@ -157,6 +186,48 @@ pub(in crate::bridge::host::snapshot::filters) fn current_layer_clip_mask_overri
             continue;
         }
         overrides.insert(layer.key.clone(), mask_layer.key.clone());
+    }
+    (!overrides.is_empty()).then_some(overrides)
+}
+
+pub(in crate::bridge::host::snapshot::filters) fn current_layer_waypoint_connection_overrides(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+) -> Option<BTreeMap<String, bool>> {
+    let mut overrides = BTreeMap::new();
+    for layer in current_layer_order(layer_registry, layer_runtime) {
+        let Some(source) = layer.waypoint_source.as_ref() else {
+            continue;
+        };
+        if !source.supports_connections {
+            continue;
+        }
+        let visible = layer_runtime.waypoint_connections_visible(layer.id);
+        if visible == source.show_connections_default {
+            continue;
+        }
+        overrides.insert(layer.key.clone(), visible);
+    }
+    (!overrides.is_empty()).then_some(overrides)
+}
+
+pub(in crate::bridge::host::snapshot::filters) fn current_layer_waypoint_label_overrides(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+) -> Option<BTreeMap<String, bool>> {
+    let mut overrides = BTreeMap::new();
+    for layer in current_layer_order(layer_registry, layer_runtime) {
+        let Some(source) = layer.waypoint_source.as_ref() else {
+            continue;
+        };
+        if !source.supports_labels {
+            continue;
+        }
+        let visible = layer_runtime.waypoint_labels_visible(layer.id);
+        if visible == source.show_labels_default {
+            continue;
+        }
+        overrides.insert(layer.key.clone(), visible);
     }
     (!overrides.is_empty()).then_some(overrides)
 }

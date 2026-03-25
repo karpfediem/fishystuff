@@ -67,7 +67,9 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     layerIdsVisible?: string[],
  *     layerIdsOrdered?: string[],
  *     layerOpacities?: Record<string, number>,
- *     layerClipMasks?: Record<string, string>
+ *     layerClipMasks?: Record<string, string>,
+ *     layerWaypointConnectionsVisible?: Record<string, boolean>,
+ *     layerWaypointLabelsVisible?: Record<string, boolean>
  *   },
  *   ui?: {
  *     diagnosticsOpen?: boolean,
@@ -139,6 +141,8 @@ export function createEmptyInputState() {
       layerIdsOrdered: undefined,
       layerOpacities: undefined,
       layerClipMasks: undefined,
+      layerWaypointConnectionsVisible: undefined,
+      layerWaypointLabelsVisible: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -174,6 +178,8 @@ export function createEmptySnapshot() {
       layerIdsOrdered: undefined,
       layerOpacities: undefined,
       layerClipMasks: undefined,
+      layerWaypointConnectionsVisible: undefined,
+      layerWaypointLabelsVisible: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -523,6 +529,29 @@ function readPersistedLayerClipMasks(filters) {
   return Object.keys(layerClipMasks).length ? layerClipMasks : undefined;
 }
 
+function normalizeLayerBoolMap(values) {
+  if (!isPlainObject(values)) {
+    return {};
+  }
+  const out = {};
+  for (const [key, value] of Object.entries(values)) {
+    const layerId = String(key ?? "").trim();
+    if (!layerId || typeof value !== "boolean") {
+      continue;
+    }
+    out[layerId] = value;
+  }
+  return out;
+}
+
+function readPersistedLayerBoolMap(filters, key) {
+  if (!isPlainObject(filters) || !hasOwn(filters, key)) {
+    return undefined;
+  }
+  const values = normalizeLayerBoolMap(filters[key]);
+  return Object.keys(values).length ? values : undefined;
+}
+
 function normalizeFishIds(values) {
   if (!Array.isArray(values)) {
     return [];
@@ -863,6 +892,16 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "layerClipMasks")) {
       normalized.filters.layerClipMasks = normalizeLayerClipMaskMap(patch.filters.layerClipMasks);
     }
+    if (hasOwn(patch.filters, "layerWaypointConnectionsVisible")) {
+      normalized.filters.layerWaypointConnectionsVisible = normalizeLayerBoolMap(
+        patch.filters.layerWaypointConnectionsVisible,
+      );
+    }
+    if (hasOwn(patch.filters, "layerWaypointLabelsVisible")) {
+      normalized.filters.layerWaypointLabelsVisible = normalizeLayerBoolMap(
+        patch.filters.layerWaypointLabelsVisible,
+      );
+    }
     if (!Object.keys(normalized.filters).length) {
       delete normalized.filters;
     }
@@ -990,6 +1029,24 @@ export function mergeStatePatch(left, right) {
     } else if (base.filters && hasOwn(base.filters, "layerClipMasks")) {
       out.filters.layerClipMasks = normalizeLayerClipMaskMap(base.filters.layerClipMasks);
     }
+    if (patch.filters && hasOwn(patch.filters, "layerWaypointConnectionsVisible")) {
+      out.filters.layerWaypointConnectionsVisible = normalizeLayerBoolMap(
+        patch.filters.layerWaypointConnectionsVisible,
+      );
+    } else if (base.filters && hasOwn(base.filters, "layerWaypointConnectionsVisible")) {
+      out.filters.layerWaypointConnectionsVisible = normalizeLayerBoolMap(
+        base.filters.layerWaypointConnectionsVisible,
+      );
+    }
+    if (patch.filters && hasOwn(patch.filters, "layerWaypointLabelsVisible")) {
+      out.filters.layerWaypointLabelsVisible = normalizeLayerBoolMap(
+        patch.filters.layerWaypointLabelsVisible,
+      );
+    } else if (base.filters && hasOwn(base.filters, "layerWaypointLabelsVisible")) {
+      out.filters.layerWaypointLabelsVisible = normalizeLayerBoolMap(
+        base.filters.layerWaypointLabelsVisible,
+      );
+    }
   }
   if (base.ui || patch.ui) {
     out.ui = mergePatchBranch(base.ui, patch.ui);
@@ -1029,6 +1086,12 @@ export function applyStatePatch(inputState, patch) {
       : undefined,
     layerClipMasks: isPlainObject(current.filters?.layerClipMasks)
       ? normalizeLayerClipMaskMap(current.filters.layerClipMasks)
+      : undefined,
+    layerWaypointConnectionsVisible: isPlainObject(current.filters?.layerWaypointConnectionsVisible)
+      ? normalizeLayerBoolMap(current.filters.layerWaypointConnectionsVisible)
+      : undefined,
+    layerWaypointLabelsVisible: isPlainObject(current.filters?.layerWaypointLabelsVisible)
+      ? normalizeLayerBoolMap(current.filters.layerWaypointLabelsVisible)
       : undefined,
   };
   next.ui = {
@@ -1098,6 +1161,16 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.filters, "layerClipMasks")) {
       next.filters.layerClipMasks = normalizeLayerClipMaskMap(normalized.filters.layerClipMasks);
+    }
+    if (hasOwn(normalized.filters, "layerWaypointConnectionsVisible")) {
+      next.filters.layerWaypointConnectionsVisible = normalizeLayerBoolMap(
+        normalized.filters.layerWaypointConnectionsVisible,
+      );
+    }
+    if (hasOwn(normalized.filters, "layerWaypointLabelsVisible")) {
+      next.filters.layerWaypointLabelsVisible = normalizeLayerBoolMap(
+        normalized.filters.layerWaypointLabelsVisible,
+      );
     }
     if (
       hasOwn(normalized.filters, "patchId") ||
@@ -1608,6 +1681,20 @@ export function snapshotToRestorePatch(snapshot) {
     const layerClipMasks = readPersistedLayerClipMasks(snapshot.filters);
     if (layerClipMasks !== undefined) {
       patch.filters.layerClipMasks = layerClipMasks;
+    }
+    const layerWaypointConnectionsVisible = readPersistedLayerBoolMap(
+      snapshot.filters,
+      "layerWaypointConnectionsVisible",
+    );
+    if (layerWaypointConnectionsVisible !== undefined) {
+      patch.filters.layerWaypointConnectionsVisible = layerWaypointConnectionsVisible;
+    }
+    const layerWaypointLabelsVisible = readPersistedLayerBoolMap(
+      snapshot.filters,
+      "layerWaypointLabelsVisible",
+    );
+    if (layerWaypointLabelsVisible !== undefined) {
+      patch.filters.layerWaypointLabelsVisible = layerWaypointLabelsVisible;
     }
   }
   if (isPlainObject(snapshot.ui)) {
@@ -2517,6 +2604,12 @@ class FishyMapBridgeImpl {
     const hasExplicitLayerClipMasks =
       isPlainObject(this.inputState.filters.layerClipMasks) &&
       Object.keys(this.inputState.filters.layerClipMasks).length > 0;
+    const hasExplicitWaypointConnections =
+      isPlainObject(this.inputState.filters.layerWaypointConnectionsVisible) &&
+      Object.keys(this.inputState.filters.layerWaypointConnectionsVisible).length > 0;
+    const hasExplicitWaypointLabels =
+      isPlainObject(this.inputState.filters.layerWaypointLabelsVisible) &&
+      Object.keys(this.inputState.filters.layerWaypointLabelsVisible).length > 0;
     const semanticSelection = semanticFieldSelectionFromLayerSamples(
       state.selection?.layerSamples,
     );
@@ -2566,6 +2659,20 @@ class FishyMapBridgeImpl {
               layerClipMasks: normalizeLayerClipMaskMap(this.inputState.filters.layerClipMasks),
             }
           : {}),
+        ...(hasExplicitWaypointConnections
+          ? {
+              layerWaypointConnectionsVisible: normalizeLayerBoolMap(
+                this.inputState.filters.layerWaypointConnectionsVisible,
+              ),
+            }
+          : {}),
+        ...(hasExplicitWaypointLabels
+          ? {
+              layerWaypointLabelsVisible: normalizeLayerBoolMap(
+                this.inputState.filters.layerWaypointLabelsVisible,
+              ),
+            }
+          : {}),
       },
       ui: {
         diagnosticsOpen: this.inputState.ui.diagnosticsOpen,
@@ -2594,6 +2701,12 @@ class FishyMapBridgeImpl {
     const hasExplicitLayerClipMasks =
       isPlainObject(this.inputState.filters.layerClipMasks) &&
       Object.keys(this.inputState.filters.layerClipMasks).length > 0;
+    const hasExplicitWaypointConnections =
+      isPlainObject(this.inputState.filters.layerWaypointConnectionsVisible) &&
+      Object.keys(this.inputState.filters.layerWaypointConnectionsVisible).length > 0;
+    const hasExplicitWaypointLabels =
+      isPlainObject(this.inputState.filters.layerWaypointLabelsVisible) &&
+      Object.keys(this.inputState.filters.layerWaypointLabelsVisible).length > 0;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
@@ -2620,6 +2733,20 @@ class FishyMapBridgeImpl {
         ...(hasExplicitLayerClipMasks
           ? {
               layerClipMasks: normalizeLayerClipMaskMap(this.inputState.filters.layerClipMasks),
+            }
+          : {}),
+        ...(hasExplicitWaypointConnections
+          ? {
+              layerWaypointConnectionsVisible: normalizeLayerBoolMap(
+                this.inputState.filters.layerWaypointConnectionsVisible,
+              ),
+            }
+          : {}),
+        ...(hasExplicitWaypointLabels
+          ? {
+              layerWaypointLabelsVisible: normalizeLayerBoolMap(
+                this.inputState.filters.layerWaypointLabelsVisible,
+              ),
             }
           : {}),
       },

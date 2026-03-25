@@ -2,6 +2,7 @@ use super::super::super::persistence::current_patch_range_ids;
 use super::super::super::*;
 use super::layers::{
     current_layer_clip_mask_overrides, current_layer_opacity_overrides, current_layer_order,
+    current_layer_waypoint_connection_overrides, current_layer_waypoint_label_overrides,
 };
 
 pub(in crate::bridge::host) fn effective_filters(
@@ -50,5 +51,13 @@ pub(in crate::bridge::host) fn effective_filters(
         }),
         layer_opacities: current_layer_opacity_overrides(layer_registry, layer_runtime),
         layer_clip_masks: current_layer_clip_mask_overrides(layer_registry, layer_runtime),
+        layer_waypoint_connections_visible: current_layer_waypoint_connection_overrides(
+            layer_registry,
+            layer_runtime,
+        ),
+        layer_waypoint_labels_visible: current_layer_waypoint_label_overrides(
+            layer_registry,
+            layer_runtime,
+        ),
     }
 }

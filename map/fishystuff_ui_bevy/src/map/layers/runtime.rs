@@ -18,6 +18,8 @@ pub struct LayerRuntimeState {
     pub visible: bool,
     pub opacity: f32,
     pub clip_mask_layer: Option<LayerId>,
+    pub waypoint_connections_visible: bool,
+    pub waypoint_labels_visible: bool,
     pub z_base: f32,
     pub display_order: i32,
     pub current_base_lod: Option<u8>,
@@ -83,6 +85,17 @@ impl LayerRuntime {
             } else {
                 state.vector_status = LayerVectorStatus::Inactive;
             }
+            if let Some(source) = spec.waypoint_source.as_ref() {
+                if !source.supports_connections {
+                    state.waypoint_connections_visible = false;
+                }
+                if !source.supports_labels {
+                    state.waypoint_labels_visible = false;
+                }
+            } else {
+                state.waypoint_connections_visible = false;
+                state.waypoint_labels_visible = false;
+            }
             state.z_base = spec.z_base;
             state.display_order = spec.display_order;
         }
@@ -143,6 +156,30 @@ impl LayerRuntime {
         self.get(id).map(|s| s.z_base).unwrap_or(0.0)
     }
 
+    pub fn waypoint_connections_visible(&self, id: LayerId) -> bool {
+        self.get(id)
+            .map(|state| state.waypoint_connections_visible)
+            .unwrap_or(false)
+    }
+
+    pub fn set_waypoint_connections_visible(&mut self, id: LayerId, visible: bool) {
+        if let Some(value) = self.states.get_mut(&id) {
+            value.waypoint_connections_visible = visible;
+        }
+    }
+
+    pub fn waypoint_labels_visible(&self, id: LayerId) -> bool {
+        self.get(id)
+            .map(|state| state.waypoint_labels_visible)
+            .unwrap_or(false)
+    }
+
+    pub fn set_waypoint_labels_visible(&mut self, id: LayerId, visible: bool) {
+        if let Some(value) = self.states.get_mut(&id) {
+            value.waypoint_labels_visible = visible;
+        }
+    }
+
     pub fn display_order(&self, id: LayerId) -> i32 {
         self.get(id).map(|s| s.display_order).unwrap_or_default()
     }
@@ -176,6 +213,14 @@ fn default_state_for_spec(spec: &LayerSpec) -> LayerRuntimeState {
         visible: spec.visible_default,
         opacity: spec.opacity_default,
         clip_mask_layer: None,
+        waypoint_connections_visible: spec
+            .waypoint_source
+            .as_ref()
+            .is_some_and(|source| source.supports_connections && source.show_connections_default),
+        waypoint_labels_visible: spec
+            .waypoint_source
+            .as_ref()
+            .is_some_and(|source| source.supports_labels && source.show_labels_default),
         z_base: spec.z_base,
         display_order: spec.display_order,
         current_base_lod: None,
