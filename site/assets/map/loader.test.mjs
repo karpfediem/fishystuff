@@ -6,8 +6,12 @@ const {
   buildBookmarkDeletionPrompt,
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
+  buildFocusWorldRect,
   buildHoverOverviewRows,
+  buildRestoreViewForWorldRect,
+  buildSemanticIdentityCommand,
   buildSelectWorldPointCommand,
+  buildWaypointFocusIndex,
   buildZoneEvidenceSummary,
   buildSelectionSummaryText,
   buildSelectionOverviewRows,
@@ -1357,7 +1361,7 @@ test("parseWindowUiState falls back to defaults for invalid persisted state", ()
 test("serializeWindowUiState normalizes persisted window geometry and flags", () => {
   const serialized = serializeWindowUiState({
     search: { open: false, collapsed: "yes", x: 42.8, y: "13" },
-    settings: { open: true, collapsed: false, x: null, y: null },
+    settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: false },
     zoneInfo: { open: true, collapsed: false, x: undefined, y: 5.2, tab: "zoneEvidence" },
     layers: { open: false, collapsed: 0, x: "bad", y: 99.9 },
     bookmarks: { open: true, collapsed: true, x: "14", y: 7.8 },
@@ -1365,7 +1369,7 @@ test("serializeWindowUiState normalizes persisted window geometry and flags", ()
 
   assert.deepEqual(JSON.parse(serialized), {
     search: { open: false, collapsed: false, x: 43, y: 13 },
-    settings: { open: true, collapsed: false, x: null, y: null },
+    settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: false },
     zoneInfo: { open: true, collapsed: false, x: null, y: 5, tab: "zoneEvidence" },
     layers: { open: false, collapsed: false, x: null, y: 100 },
     bookmarks: { open: true, collapsed: true, x: 14, y: 8 },
@@ -1377,6 +1381,134 @@ test("buildDefaultWindowUiStateSerialized matches the default managed window lay
     JSON.parse(buildDefaultWindowUiStateSerialized()),
     normalizeWindowUiState(null),
   );
+});
+
+test("territoryPointDetailPaneMarkup renders semantic focus buttons for region, region group, and node facts", () => {
+  const markup = territoryPointDetailPaneMarkup({
+    id: "territory",
+    sections: [
+      {
+        id: "resource-bar",
+        kind: "facts",
+        title: "Resources",
+        facts: [
+          { key: "resource_group", label: "Region Group", value: "Velia (RG1)", icon: "hover-resources" },
+          { key: "resource_waypoint", label: "Waypoint", value: "Velia (N1)", icon: "map-pin" },
+        ],
+        targets: [
+          { key: "resource_node", label: "Resources: Velia (RG1)", worldX: 100, worldZ: 120 },
+        ],
+      },
+      {
+        id: "trade-origin",
+        kind: "facts",
+        title: "Trade Origin",
+        facts: [
+          { key: "origin_region", label: "Origin", value: "Velia (R5)", icon: "trade-origin" },
+          { key: "origin_node", label: "Node", value: "Velia (N1)", icon: "map-pin" },
+        ],
+      },
+    ],
+  });
+
+  assert.match(markup, /data-semantic-focus-code="RG1"/);
+  assert.match(markup, /data-semantic-focus-code="R5"/);
+  assert.match(markup, /data-semantic-focus-code="N1"/);
+});
+
+test("buildWaypointFocusIndex and semantic commands resolve focus bounds from waypoint data", () => {
+  const focusIndex = buildWaypointFocusIndex({
+    regionNodes: {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { r: 5, wp: 1 },
+          geometry: { type: "Point", coordinates: [100, 100] },
+        },
+        {
+          type: "Feature",
+          properties: { r: 7, wp: 7 },
+          geometry: { type: "Point", coordinates: [260, 110] },
+        },
+        {
+          type: "Feature",
+          properties: { r: 9, wp: 9 },
+          geometry: { type: "Point", coordinates: [180, 260] },
+        },
+      ],
+    },
+    regions: {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { r: 5, rg: 1, o: 9, owp: 9, ox: 180, oz: 260, rgwp: 11, rgx: 220, rgz: 210 },
+          geometry: { type: "Polygon", coordinates: [] },
+        },
+      ],
+    },
+    regionGroups: {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { rg: 1, rgwp: 11, rgx: 220, rgz: 210, rs: [5, 7, 9] },
+          geometry: { type: "Polygon", coordinates: [] },
+        },
+      ],
+    },
+  });
+
+  const regionGroupCommand = buildSemanticIdentityCommand(
+    "Velia (RG1)",
+    focusIndex,
+    { state: { view: { viewMode: "2d" } } },
+    { width: 1000, height: 600 },
+    { autoAdjustView: true },
+  );
+  assert.deepEqual(regionGroupCommand.selectSemanticField, {
+    layerId: "region_groups",
+    fieldId: 1,
+  });
+  assert.equal(regionGroupCommand.restoreView.viewMode, "2d");
+  assert.equal(regionGroupCommand.restoreView.camera.centerWorldX, 180);
+  assert.equal(regionGroupCommand.restoreView.camera.centerWorldZ, 180);
+  assert.ok(regionGroupCommand.restoreView.camera.zoom > 0);
+
+  const nodeCommand = buildSemanticIdentityCommand(
+    "Velia (N1)",
+    focusIndex,
+    { state: { view: { viewMode: "2d" } } },
+    { width: 1000, height: 600 },
+    { autoAdjustView: false },
+  );
+  assert.deepEqual(nodeCommand, {
+    selectWorldPoint: {
+      worldX: 100,
+      worldZ: 100,
+      pointKind: "waypoint",
+      pointLabel: "Velia (N1)",
+    },
+  });
+});
+
+test("buildFocusWorldRect keeps waypoint focus padded away from full-screen fit", () => {
+  const rect = buildFocusWorldRect(
+    [
+      { worldX: 100, worldZ: 100 },
+      { worldX: 300, worldZ: 180 },
+    ],
+    { width: 1000, height: 600 },
+  );
+  assert.ok(rect.spanX > 200);
+  assert.ok(rect.spanZ > 80);
+
+  const restoreView = buildRestoreViewForWorldRect(rect, { width: 1000, height: 600 }, {
+    state: { view: { viewMode: "2d" } },
+  });
+  assert.equal(restoreView.viewMode, "2d");
+  assert.ok(restoreView.camera.zoom > 0);
 });
 
 test("buildMapUiResetMountOptions preserves the current view while clearing UI state", () => {

@@ -812,15 +812,17 @@ fn build_region_detail_section(
         }),
     });
 
-    if let Some(node_name) = region
-        .and_then(|info| info.waypoint_name.as_deref())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
+    if let Some(node_value) = format_waypoint_name_with_id(
+        region
+            .and_then(|info| info.waypoint_name.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty()),
+        region.and_then(|info| info.waypoint_id),
+    ) {
         facts.push(FieldDetailFact {
             key: FIELD_DETAIL_FACT_KEY_REGION_NODE.to_string(),
             label: "Node".to_string(),
-            value: node_name.to_string(),
+            value: node_value,
             icon: Some("map-pin".to_string()),
             status_icon: None,
             status_icon_tone: None,
@@ -881,15 +883,17 @@ fn build_region_origin_detail_section(
         }),
     });
 
-    if let Some(node_name) = origin
-        .and_then(|info| info.waypoint_name.as_deref())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
+    if let Some(node_value) = format_waypoint_name_with_id(
+        origin
+            .and_then(|info| info.waypoint_name.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty()),
+        origin.and_then(|info| info.waypoint_id),
+    ) {
         facts.push(FieldDetailFact {
             key: FIELD_DETAIL_FACT_KEY_ORIGIN_NODE.to_string(),
             label: "Node".to_string(),
-            value: node_name.to_string(),
+            value: node_value,
             icon: Some("map-pin".to_string()),
             status_icon: None,
             status_icon_tone: None,
@@ -928,16 +932,18 @@ fn build_region_group_resource_detail_section(
         status_icon_tone: None,
     });
 
-    if let Some(resource_waypoint_name) = resource
-        .as_ref()
-        .and_then(|info| info.waypoint_name.as_deref())
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
+    if let Some(node_value) = format_waypoint_name_with_id(
+        resource
+            .as_ref()
+            .and_then(|info| info.waypoint_name.as_deref())
+            .map(str::trim)
+            .filter(|value| !value.is_empty()),
+        resource.as_ref().and_then(|info| info.waypoint_id),
+    ) {
         facts.push(FieldDetailFact {
             key: FIELD_DETAIL_FACT_KEY_RESOURCE_WAYPOINT.to_string(),
             label: "Waypoint".to_string(),
-            value: resource_waypoint_name.to_string(),
+            value: node_value,
             icon: Some("map-pin".to_string()),
             status_icon: None,
             status_icon_tone: None,
@@ -1065,6 +1071,15 @@ fn format_region_name_with_id(name: &str, region_id: u32) -> String {
 
 fn format_region_group_name_with_id(name: &str, region_group_id: u32) -> String {
     format!("{name} (RG{region_group_id})")
+}
+
+fn format_waypoint_name_with_id(name: Option<&str>, waypoint_id: Option<u32>) -> Option<String> {
+    match (name, waypoint_id) {
+        (Some(name), Some(waypoint_id)) => Some(format!("{name} (N{waypoint_id})")),
+        (Some(name), None) => Some(name.to_string()),
+        (None, Some(waypoint_id)) => Some(format!("N{waypoint_id}")),
+        (None, None) => None,
+    }
 }
 
 fn format_resource_group_value(
@@ -1793,7 +1808,7 @@ mod tests {
         assert!(region_section
             .facts
             .iter()
-            .any(|fact| fact.key == "region_node" && fact.value == "Stonebeak Shore"));
+            .any(|fact| fact.key == "region_node" && fact.value == "Stonebeak Shore (N1147)"));
         assert!(region_section.targets.is_empty());
         assert_eq!(entry.targets.len(), 1);
         assert_eq!(entry.targets[0].key, "origin_node");
@@ -1813,7 +1828,7 @@ mod tests {
         assert!(origin_section
             .facts
             .iter()
-            .any(|fact| fact.key == "origin_node" && fact.value == "Tarif"));
+            .any(|fact| fact.key == "origin_node" && fact.value == "Tarif (N1141)"));
         assert!(origin_section.targets.iter().any(|target| {
             target.key == "origin_node"
                 && target.label == "Origin: Tarif (R221)"

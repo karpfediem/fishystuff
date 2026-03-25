@@ -824,6 +824,29 @@
         opacity: 0.72;
       }
 
+      .fishymap-semantic-button {
+        display: inline-flex;
+        min-width: 0;
+        max-width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      .fishymap-semantic-button:focus-visible {
+        outline: none;
+      }
+
+      .fishymap-semantic-button:focus-visible .fishymap-semantic-chip {
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 34%, transparent);
+      }
+
+      .fishymap-semantic-button:hover .fishymap-semantic-chip {
+        transform: translateY(-1px);
+      }
+
       .fishymap-semantic-chip {
         display: inline-flex;
         align-items: stretch;
@@ -833,6 +856,7 @@
         border: 1px solid var(--color-base-200);
         background: var(--color-base-100);
         overflow: hidden;
+        transition: transform 120ms ease, box-shadow 120ms ease;
       }
 
       .fishymap-semantic-chip[data-semantic-kind="region-group"] {
@@ -841,6 +865,10 @@
 
       .fishymap-semantic-chip[data-semantic-kind="region"] {
         border-color: var(--color-warning, #fbbf24);
+      }
+
+      .fishymap-semantic-chip[data-semantic-kind="node"] {
+        border-color: var(--color-primary, #2563eb);
       }
 
       .fishymap-semantic-chip-code {
@@ -869,6 +897,11 @@
         background: var(--color-warning, #fbbf24);
       }
 
+      .fishymap-semantic-chip[data-semantic-kind="node"] .fishymap-semantic-chip-code {
+        color: var(--color-primary-content, white);
+        background: var(--color-primary, #2563eb);
+      }
+
       .fishymap-semantic-chip-name {
         display: inline-flex;
         align-items: center;
@@ -890,6 +923,11 @@
       }
 
       .fishymap-semantic-chip[data-semantic-kind="region"] .fishymap-semantic-chip-name {
+        background: var(--color-base-100);
+        color: var(--color-base-content);
+      }
+
+      .fishymap-semantic-chip[data-semantic-kind="node"] .fishymap-semantic-chip-name {
         background: var(--color-base-100);
         color: var(--color-base-content);
       }
@@ -1277,6 +1315,10 @@
                 <label class="flex items-center justify-between gap-3 text-sm">
                   <span class="font-semibold">Show fish icons</span>
                   <input id="fishymap-show-point-icons" class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked>
+                </label>
+                <label class="flex items-center justify-between gap-3 text-sm">
+                  <span class="font-semibold">Auto-adjust view</span>
+                  <input id="fishymap-auto-adjust-view" class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked>
                 </label>
                 <div class="space-y-2">
                   <div class="flex items-center justify-between gap-3">

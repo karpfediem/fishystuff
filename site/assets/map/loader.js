@@ -23,13 +23,34 @@ const BOOKMARK_XML_PREVIEW_URL = "https://fishystuff.fish/map/";
 const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
 const TERRITORY_SUMMARY_FACT_KEYS = Object.freeze(["resources", "origin"]);
 const DEFAULT_ZONE_INFO_TAB = "";
+const DEFAULT_AUTO_ADJUST_VIEW = true;
 const ZONE_INFO_TAB_BUTTON_CLASS =
   "tab shrink-0 gap-2 whitespace-nowrap text-xs font-semibold sm:text-sm";
 const POINT_DETAIL_PANE_BUILDERS = Object.freeze([buildLayerSamplePointDetailPanes]);
 const POINT_DETAIL_SECTION_BUILDERS = Object.freeze([buildZoneEvidencePointDetailSection]);
+const MAP_WORLD_BOUNDS = Object.freeze({
+  minX: -2048000,
+  maxX: 1433600,
+  minZ: -1126400,
+  maxZ: 2048000,
+});
+const MAP_CAMERA_ZOOM_MIN_FACTOR_OF_FIT = 0.0025;
+const FOCUS_RECT_PADDING_FACTOR = 1.35;
+const FOCUS_MIN_SPAN_HEADROOM_FACTOR = 1.2;
+const FOCUS_TERRAIN_DEFAULT_YAW = 0.0;
+const FOCUS_TERRAIN_DEFAULT_PITCH = -0.58;
+const FOCUS_TERRAIN_DISTANCE_FACTOR = 1.35;
+const FOCUS_TERRAIN_MIN_DISTANCE = 2000.0;
+const FOCUS_TERRAIN_MAX_DISTANCE = 900000.0;
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
-  settings: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
+  settings: Object.freeze({
+    open: true,
+    collapsed: false,
+    x: null,
+    y: null,
+    autoAdjustView: DEFAULT_AUTO_ADJUST_VIEW,
+  }),
   zoneInfo: Object.freeze({
     open: true,
     collapsed: false,
@@ -285,6 +306,16 @@ function normalizeZoneInfoWindowUiEntry(rawEntry, fallbackEntry) {
   };
 }
 
+function normalizeSettingsWindowUiEntry(rawEntry, fallbackEntry) {
+  const baseEntry = isPlainObject(rawEntry) ? rawEntry : {};
+  return {
+    ...normalizeWindowUiEntry(baseEntry, fallbackEntry),
+    autoAdjustView: hasOwnKey(baseEntry, "autoAdjustView")
+      ? baseEntry.autoAdjustView !== false
+      : fallbackEntry?.autoAdjustView !== false,
+  };
+}
+
 export function normalizeWindowUiState(rawState) {
   const source = isPlainObject(rawState) ? rawState : {};
   return {
@@ -292,7 +323,7 @@ export function normalizeWindowUiState(rawState) {
       ...normalizeWindowUiEntry(source.search, DEFAULT_WINDOW_UI_STATE.search),
       collapsed: false,
     },
-    settings: normalizeWindowUiEntry(source.settings, DEFAULT_WINDOW_UI_STATE.settings),
+    settings: normalizeSettingsWindowUiEntry(source.settings, DEFAULT_WINDOW_UI_STATE.settings),
     zoneInfo: normalizeZoneInfoWindowUiEntry(source.zoneInfo, DEFAULT_WINDOW_UI_STATE.zoneInfo),
     layers: normalizeWindowUiEntry(source.layers, DEFAULT_WINDOW_UI_STATE.layers),
     bookmarks: normalizeWindowUiEntry(source.bookmarks, DEFAULT_WINDOW_UI_STATE.bookmarks),
@@ -324,7 +355,8 @@ function windowUiEntriesEqual(left, right) {
     Boolean(left?.collapsed) === Boolean(right?.collapsed) &&
     normalizeWindowCoordinate(left?.x) === normalizeWindowCoordinate(right?.x) &&
     normalizeWindowCoordinate(left?.y) === normalizeWindowCoordinate(right?.y) &&
-    String(left?.tab || "") === String(right?.tab || "")
+    String(left?.tab || "") === String(right?.tab || "") &&
+    Boolean(left?.autoAdjustView !== false) === Boolean(right?.autoAdjustView !== false)
   );
 }
 
@@ -373,6 +405,408 @@ function formatBookmarkCoordinate(value) {
   return normalized
     .toFixed(BOOKMARK_COORDINATE_DECIMALS)
     .replace(/\.?0+$/, "");
+}
+
+function normalizeViewportSize(viewportInput) {
+  const width = Number(viewportInput?.width);
+  const height = Number(viewportInput?.height);
+  return {
+    width: Number.isFinite(width) && width > 1 ? width : 1280,
+    height: Number.isFinite(height) && height > 1 ? height : 720,
+  };
+}
+
+function measureMapViewportSize(elements) {
+  const target = elements?.canvas || elements?.shell || null;
+  if (!target) {
+    return normalizeViewportSize(null);
+  }
+  const rect = target.getBoundingClientRect?.() || {};
+  return normalizeViewportSize({
+    width:
+      rect.width ||
+      target.clientWidth ||
+      target.parentElement?.clientWidth ||
+      globalThis.window?.innerWidth,
+    height:
+      rect.height ||
+      target.clientHeight ||
+      target.parentElement?.clientHeight ||
+      globalThis.window?.innerHeight,
+  });
+}
+
+function normalizeWorldPoint(pointInput) {
+  const worldX = normalizeBookmarkCoordinate(pointInput?.worldX);
+  const worldZ = normalizeBookmarkCoordinate(pointInput?.worldZ);
+  if (worldX == null || worldZ == null) {
+    return null;
+  }
+  return { worldX, worldZ };
+}
+
+function dedupeWorldPoints(pointsInput) {
+  const seen = new Set();
+  const points = [];
+  for (const pointInput of Array.isArray(pointsInput) ? pointsInput : []) {
+    const point = normalizeWorldPoint(pointInput);
+    if (!point) {
+      continue;
+    }
+    const key = `${point.worldX}:${point.worldZ}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    points.push(point);
+  }
+  return points;
+}
+
+function focusFitScale(viewportSize) {
+  const boundsWidth = MAP_WORLD_BOUNDS.maxX - MAP_WORLD_BOUNDS.minX;
+  const boundsHeight = MAP_WORLD_BOUNDS.maxZ - MAP_WORLD_BOUNDS.minZ;
+  return Math.max(boundsWidth / viewportSize.width, boundsHeight / viewportSize.height);
+}
+
+export function buildFocusWorldRect(pointsInput, viewportInput, options = {}) {
+  const points = dedupeWorldPoints(pointsInput);
+  if (!points.length) {
+    return null;
+  }
+  const viewportSize = normalizeViewportSize(viewportInput);
+  let minX = points[0].worldX;
+  let maxX = points[0].worldX;
+  let minZ = points[0].worldZ;
+  let maxZ = points[0].worldZ;
+  for (const point of points) {
+    minX = Math.min(minX, point.worldX);
+    maxX = Math.max(maxX, point.worldX);
+    minZ = Math.min(minZ, point.worldZ);
+    maxZ = Math.max(maxZ, point.worldZ);
+  }
+  const centerX = (minX + maxX) * 0.5;
+  const centerZ = (minZ + maxZ) * 0.5;
+  const fitScale = focusFitScale(viewportSize);
+  const minScale = fitScale * MAP_CAMERA_ZOOM_MIN_FACTOR_OF_FIT;
+  const minSpanX = viewportSize.width * minScale * FOCUS_MIN_SPAN_HEADROOM_FACTOR;
+  const minSpanZ = viewportSize.height * minScale * FOCUS_MIN_SPAN_HEADROOM_FACTOR;
+  const spanX = Math.max((maxX - minX) * FOCUS_RECT_PADDING_FACTOR, minSpanX);
+  const spanZ = Math.max((maxZ - minZ) * FOCUS_RECT_PADDING_FACTOR, minSpanZ);
+  return {
+    minX: centerX - spanX * 0.5,
+    maxX: centerX + spanX * 0.5,
+    minZ: centerZ - spanZ * 0.5,
+    maxZ: centerZ + spanZ * 0.5,
+    centerX,
+    centerZ,
+    spanX,
+    spanZ,
+  };
+}
+
+export function buildRestoreViewForWorldRect(rectInput, viewportInput, stateBundle) {
+  const rect = isPlainObject(rectInput) ? rectInput : null;
+  if (!rect) {
+    return null;
+  }
+  const centerWorldX = Number(rect.centerX);
+  const centerWorldZ = Number(rect.centerZ);
+  const spanX = Number(rect.spanX);
+  const spanZ = Number(rect.spanZ);
+  if (
+    !Number.isFinite(centerWorldX) ||
+    !Number.isFinite(centerWorldZ) ||
+    !Number.isFinite(spanX) ||
+    !Number.isFinite(spanZ)
+  ) {
+    return null;
+  }
+  const viewMode = stateBundle?.state?.view?.viewMode === "3d" ? "3d" : "2d";
+  if (viewMode === "3d") {
+    const distance = clamp(
+      Math.max(spanX, spanZ, 1) * FOCUS_TERRAIN_DISTANCE_FACTOR,
+      FOCUS_TERRAIN_MIN_DISTANCE,
+      FOCUS_TERRAIN_MAX_DISTANCE,
+    );
+    return {
+      viewMode: "3d",
+      camera: {
+        pivotWorldX: centerWorldX,
+        pivotWorldY: 0,
+        pivotWorldZ: centerWorldZ,
+        yaw: FOCUS_TERRAIN_DEFAULT_YAW,
+        pitch: FOCUS_TERRAIN_DEFAULT_PITCH,
+        distance,
+      },
+    };
+  }
+  const viewportSize = normalizeViewportSize(viewportInput);
+  const zoom = Math.max(spanX / viewportSize.width, spanZ / viewportSize.height, 1e-5);
+  return {
+    viewMode: "2d",
+    camera: {
+      centerWorldX,
+      centerWorldZ,
+      zoom,
+    },
+  };
+}
+
+function normalizeFeatureCollectionFeatures(collection) {
+  return Array.isArray(collection?.features) ? collection.features : [];
+}
+
+function normalizeIntegerId(value) {
+  const number = Number.parseInt(value, 10);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function addWaypointIndexEntry(waypointById, waypointId, pointInput) {
+  if (!Number.isFinite(waypointId) || waypointId <= 0) {
+    return;
+  }
+  const point = normalizeWorldPoint(pointInput);
+  if (!point) {
+    return;
+  }
+  waypointById.set(waypointId, point);
+}
+
+export function buildWaypointFocusIndex(sources = {}) {
+  const waypointById = new Map();
+  const regionNodeByRegionId = new Map();
+  const regionById = new Map();
+  const regionGroupById = new Map();
+
+  for (const feature of normalizeFeatureCollectionFeatures(sources.regionNodes)) {
+    if (String(feature?.geometry?.type || "").trim() !== "Point") {
+      continue;
+    }
+    const coordinates = Array.isArray(feature?.geometry?.coordinates)
+      ? feature.geometry.coordinates
+      : [];
+    const point = normalizeWorldPoint({
+      worldX: coordinates[0],
+      worldZ: coordinates[1],
+    });
+    if (!point) {
+      continue;
+    }
+    const regionId = normalizeIntegerId(feature?.properties?.r);
+    const waypointId = normalizeIntegerId(feature?.properties?.wp);
+    if (regionId != null) {
+      regionNodeByRegionId.set(regionId, point);
+    }
+    if (waypointId != null) {
+      addWaypointIndexEntry(waypointById, waypointId, point);
+    }
+  }
+
+  for (const feature of normalizeFeatureCollectionFeatures(sources.regions)) {
+    const regionId = normalizeIntegerId(feature?.properties?.r);
+    if (regionId == null) {
+      continue;
+    }
+    const originWaypointId = normalizeIntegerId(feature?.properties?.owp);
+    const resourceWaypointId = normalizeIntegerId(feature?.properties?.rgwp);
+    const regionEntry = {
+      regionId,
+      regionGroupId: normalizeIntegerId(feature?.properties?.rg),
+      originRegionId: normalizeIntegerId(feature?.properties?.o),
+      originWaypointId,
+      resourceWaypointId,
+      originPoint: normalizeWorldPoint({
+        worldX: feature?.properties?.ox,
+        worldZ: feature?.properties?.oz,
+      }),
+      resourcePoint: normalizeWorldPoint({
+        worldX: feature?.properties?.rgx,
+        worldZ: feature?.properties?.rgz,
+      }),
+    };
+    regionById.set(regionId, regionEntry);
+    addWaypointIndexEntry(waypointById, originWaypointId, regionEntry.originPoint);
+    addWaypointIndexEntry(waypointById, resourceWaypointId, regionEntry.resourcePoint);
+  }
+
+  for (const feature of normalizeFeatureCollectionFeatures(sources.regionGroups)) {
+    const regionGroupId = normalizeIntegerId(feature?.properties?.rg);
+    if (regionGroupId == null) {
+      continue;
+    }
+    const waypointId = normalizeIntegerId(feature?.properties?.rgwp);
+    const point = normalizeWorldPoint({
+      worldX: feature?.properties?.rgx,
+      worldZ: feature?.properties?.rgz,
+    });
+    regionGroupById.set(regionGroupId, {
+      regionGroupId,
+      waypointId,
+      point,
+      memberRegionIds: (Array.isArray(feature?.properties?.rs) ? feature.properties.rs : [])
+        .map((value) => normalizeIntegerId(value))
+        .filter((value) => value != null),
+    });
+    addWaypointIndexEntry(waypointById, waypointId, point);
+  }
+
+  return {
+    waypointById,
+    regionNodeByRegionId,
+    regionById,
+    regionGroupById,
+  };
+}
+
+let waypointFocusIndexPromise = null;
+
+async function loadWaypointFocusIndex(locationLike = globalThis.window?.location) {
+  if (waypointFocusIndexPromise) {
+    return waypointFocusIndexPromise;
+  }
+  if (typeof globalThis.fetch !== "function") {
+    throw new Error("fetch() is unavailable for waypoint focus data.");
+  }
+  const cdnBaseUrl = resolveCdnBaseUrl(locationLike);
+  const urls = {
+    regionNodes: `${cdnBaseUrl}/waypoints/region_nodes.v1.geojson`,
+    regions: `${cdnBaseUrl}/region_groups/regions.v1.geojson`,
+    regionGroups: `${cdnBaseUrl}/region_groups/v1.geojson`,
+  };
+  waypointFocusIndexPromise = Promise.all(
+    Object.values(urls).map(async (url) => {
+      const response = await globalThis.fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to load waypoint focus data: ${url}`);
+      }
+      return response.json();
+    }),
+  )
+    .then(([regionNodes, regions, regionGroups]) =>
+      buildWaypointFocusIndex({ regionNodes, regions, regionGroups }),
+    )
+    .catch((error) => {
+      waypointFocusIndexPromise = null;
+      throw error;
+    });
+  return waypointFocusIndexPromise;
+}
+
+export function resolveSemanticIdentityFocusPoints(identityInput, focusIndex) {
+  const identity =
+    typeof identityInput === "string" ? parseSemanticIdentityText(identityInput) : identityInput;
+  if (!identity || !focusIndex) {
+    return [];
+  }
+  const numericId = Number.parseInt(String(identity.code || "").replace(/^(?:RG|R|N)/, ""), 10);
+  if (!Number.isFinite(numericId)) {
+    return [];
+  }
+  if (identity.kind === "N") {
+    return dedupeWorldPoints([focusIndex.waypointById?.get(numericId)]);
+  }
+  if (identity.kind === "R") {
+    const region = focusIndex.regionById?.get(numericId);
+    return dedupeWorldPoints([
+      focusIndex.regionNodeByRegionId?.get(numericId),
+      region?.originPoint,
+      region?.resourcePoint,
+    ]);
+  }
+  if (identity.kind === "RG") {
+    const regionGroup = focusIndex.regionGroupById?.get(numericId);
+    const memberPoints = Array.isArray(regionGroup?.memberRegionIds)
+      ? regionGroup.memberRegionIds.map((regionId) =>
+          focusIndex.regionNodeByRegionId?.get(regionId),
+        )
+      : [];
+    return dedupeWorldPoints([regionGroup?.point, ...memberPoints]);
+  }
+  return [];
+}
+
+export function buildSemanticIdentityCommand(
+  identityInput,
+  focusIndex,
+  stateBundle,
+  viewportInput,
+  options = {},
+) {
+  const identity =
+    typeof identityInput === "string" ? parseSemanticIdentityText(identityInput) : identityInput;
+  if (!identity) {
+    return null;
+  }
+  const numericId = Number.parseInt(String(identity.code || "").replace(/^(?:RG|R|N)/, ""), 10);
+  if (!Number.isFinite(numericId)) {
+    return null;
+  }
+  const autoAdjustView = options.autoAdjustView !== false;
+  const focusPoints = resolveSemanticIdentityFocusPoints(identity, focusIndex);
+  let command = null;
+  if (identity.kind === "R") {
+    command = {
+      selectSemanticField: {
+        layerId: "regions",
+        fieldId: numericId,
+      },
+    };
+  } else if (identity.kind === "RG") {
+    command = {
+      selectSemanticField: {
+        layerId: "region_groups",
+        fieldId: numericId,
+      },
+    };
+  } else if (identity.kind === "N") {
+    const point = focusPoints[0];
+    if (!point) {
+      return null;
+    }
+    command = buildSelectWorldPointCommand(point.worldX, point.worldZ, {
+      pointKind: "waypoint",
+      pointLabel: identity.name ? `${identity.name} (${identity.code})` : identity.code,
+    });
+  }
+  if (!command) {
+    return null;
+  }
+  if (!autoAdjustView) {
+    return command;
+  }
+  const rect = buildFocusWorldRect(focusPoints, viewportInput);
+  const restoreView = buildRestoreViewForWorldRect(rect, viewportInput, stateBundle);
+  return restoreView
+    ? {
+        ...command,
+        restoreView,
+      }
+    : command;
+}
+
+function buildFocusCommandForWorldPoint(
+  worldX,
+  worldZ,
+  stateBundle,
+  viewportInput,
+  options = {},
+) {
+  const command = buildSelectWorldPointCommand(worldX, worldZ, options);
+  if (!command) {
+    return null;
+  }
+  if (options.autoAdjustView === false) {
+    return command;
+  }
+  const rect = buildFocusWorldRect([{ worldX, worldZ }], viewportInput);
+  const restoreView = buildRestoreViewForWorldRect(rect, viewportInput, stateBundle);
+  return restoreView
+    ? {
+        ...command,
+        restoreView,
+      }
+    : command;
 }
 
 function formatBookmarkClipboardText(bookmarks, options = {}) {
@@ -1154,6 +1588,26 @@ function resolveLayerEntries(stateBundle) {
   const stateClipMaskOverride = isPlainObject(stateBundle.state?.filters?.layerClipMasks)
     ? stateBundle.state.filters.layerClipMasks
     : null;
+  const inputWaypointConnectionsOverride = isPlainObject(
+    stateBundle.inputState?.filters?.layerWaypointConnectionsVisible,
+  )
+    ? stateBundle.inputState.filters.layerWaypointConnectionsVisible
+    : null;
+  const stateWaypointConnectionsOverride = isPlainObject(
+    stateBundle.state?.filters?.layerWaypointConnectionsVisible,
+  )
+    ? stateBundle.state.filters.layerWaypointConnectionsVisible
+    : null;
+  const inputWaypointLabelsOverride = isPlainObject(
+    stateBundle.inputState?.filters?.layerWaypointLabelsVisible,
+  )
+    ? stateBundle.inputState.filters.layerWaypointLabelsVisible
+    : null;
+  const stateWaypointLabelsOverride = isPlainObject(
+    stateBundle.state?.filters?.layerWaypointLabelsVisible,
+  )
+    ? stateBundle.state.filters.layerWaypointLabelsVisible
+    : null;
   const byId = new Map(layers.map((layer) => [layer.layerId, layer]));
   const seen = new Set();
   const movable = [];
@@ -1182,12 +1636,54 @@ function resolveLayerEntries(stateBundle) {
     } else if (stateClipMaskOverride && hasOwnKey(stateClipMaskOverride, layer.layerId)) {
       clipMaskLayerId = String(stateClipMaskOverride[layer.layerId] || "").trim() || null;
     }
+    const supportsWaypointConnections = layer.supportsWaypointConnections === true;
+    const waypointConnectionsDefault = supportsWaypointConnections
+      ? layer.waypointConnectionsDefault !== false
+      : false;
+    let waypointConnectionsVisible = supportsWaypointConnections
+      ? layer.waypointConnectionsVisible !== false
+      : false;
+    if (supportsWaypointConnections && inputWaypointConnectionsOverride) {
+      waypointConnectionsVisible = hasOwnKey(inputWaypointConnectionsOverride, layer.layerId)
+        ? inputWaypointConnectionsOverride[layer.layerId] !== false
+        : waypointConnectionsDefault;
+    } else if (
+      supportsWaypointConnections &&
+      stateWaypointConnectionsOverride &&
+      hasOwnKey(stateWaypointConnectionsOverride, layer.layerId)
+    ) {
+      waypointConnectionsVisible = stateWaypointConnectionsOverride[layer.layerId] !== false;
+    }
+    const supportsWaypointLabels = layer.supportsWaypointLabels === true;
+    const waypointLabelsDefault = supportsWaypointLabels
+      ? layer.waypointLabelsDefault !== false
+      : false;
+    let waypointLabelsVisible = supportsWaypointLabels
+      ? layer.waypointLabelsVisible !== false
+      : false;
+    if (supportsWaypointLabels && inputWaypointLabelsOverride) {
+      waypointLabelsVisible = hasOwnKey(inputWaypointLabelsOverride, layer.layerId)
+        ? inputWaypointLabelsOverride[layer.layerId] !== false
+        : waypointLabelsDefault;
+    } else if (
+      supportsWaypointLabels &&
+      stateWaypointLabelsOverride &&
+      hasOwnKey(stateWaypointLabelsOverride, layer.layerId)
+    ) {
+      waypointLabelsVisible = stateWaypointLabelsOverride[layer.layerId] !== false;
+    }
     const entry = {
       ...layer,
       visible,
       opacity,
       opacityDefault,
       clipMaskLayerId,
+      supportsWaypointConnections,
+      waypointConnectionsVisible,
+      waypointConnectionsDefault,
+      supportsWaypointLabels,
+      waypointLabelsVisible,
+      waypointLabelsDefault,
       locked: isFixedGroundLayer(layer.layerId),
     };
     if (entry.locked) {
@@ -1368,6 +1864,38 @@ function buildLayerClipMaskPatch(stateBundle, targetLayerId, maskLayerId) {
   return flattenLayerClipMasks(nextClipMasks);
 }
 
+function buildLayerWaypointConnectionsPatch(stateBundle, targetLayerId, visible) {
+  const next = {};
+  for (const layer of resolveLayerEntries(stateBundle)) {
+    if (!layer.supportsWaypointConnections) {
+      continue;
+    }
+    const effectiveVisible =
+      layer.layerId === targetLayerId ? visible !== false : layer.waypointConnectionsVisible !== false;
+    if (effectiveVisible === (layer.waypointConnectionsDefault !== false)) {
+      continue;
+    }
+    next[layer.layerId] = effectiveVisible;
+  }
+  return next;
+}
+
+function buildLayerWaypointLabelsPatch(stateBundle, targetLayerId, visible) {
+  const next = {};
+  for (const layer of resolveLayerEntries(stateBundle)) {
+    if (!layer.supportsWaypointLabels) {
+      continue;
+    }
+    const effectiveVisible =
+      layer.layerId === targetLayerId ? visible !== false : layer.waypointLabelsVisible !== false;
+    if (effectiveVisible === (layer.waypointLabelsDefault !== false)) {
+      continue;
+    }
+    next[layer.layerId] = effectiveVisible;
+  }
+  return next;
+}
+
 function renderViewState(elements, state) {
   const viewMode = state?.view?.viewMode === "3d" ? "3d" : "2d";
   if (elements.viewReadout) {
@@ -1408,7 +1936,7 @@ function overviewRowMarkup(row, iconSizeClass = "size-4") {
     return "";
   }
   const valueMarkup =
-    semanticIdentityMarkup(value) ||
+    semanticIdentityMarkup(value, { interactive: true }) ||
     `<span class="fishymap-overview-value-text">${escapeHtml(value)}</span>`;
   return `
     <div class="fishymap-overview-row${hideLabel ? " fishymap-overview-row--label-less" : ""}">
@@ -1433,7 +1961,7 @@ function parseSemanticIdentityText(text) {
   if (!trimmed) {
     return null;
   }
-  const namedMatch = trimmed.match(/^(?:(.+?):\s+)?(.+?)\s+\((RG|R)(\d+)\)$/);
+  const namedMatch = trimmed.match(/^(?:(.+?):\s+)?(.+?)\s+\((N|RG|R)(\d+)\)$/);
   if (namedMatch) {
     const [, rawPrefix = "", rawName = "", kind = "", id = ""] = namedMatch;
     const prefix = String(rawPrefix).trim();
@@ -1444,41 +1972,91 @@ function parseSemanticIdentityText(text) {
     }
     return { prefix, code, name, kind };
   }
-  const idOnlyMatch = trimmed.match(/^(?:(.+?):\s+)?((?:RG|R)\d+)$/);
+  const idOnlyMatch = trimmed.match(/^(?:(.+?):\s+)?((?:N|RG|R)\d+)$/);
   if (!idOnlyMatch) {
     return null;
   }
   const [, rawPrefix = "", code = ""] = idOnlyMatch;
   const prefix = String(rawPrefix).trim();
   const normalizedCode = String(code).trim();
-  const kind = normalizedCode.startsWith("RG") ? "RG" : normalizedCode.startsWith("R") ? "R" : "";
+  const kind = normalizedCode.startsWith("RG")
+    ? "RG"
+    : normalizedCode.startsWith("R")
+      ? "R"
+      : normalizedCode.startsWith("N")
+        ? "N"
+        : "";
   if (!kind) {
     return null;
   }
   return { prefix, code: normalizedCode, name: "", kind };
 }
 
-function semanticIdentityMarkup(text) {
+function semanticKindFromIdentityKind(kind) {
+  if (kind === "RG") {
+    return "region-group";
+  }
+  if (kind === "R") {
+    return "region";
+  }
+  if (kind === "N") {
+    return "node";
+  }
+  return "";
+}
+
+function semanticIdentityChipMarkup(parsed, semanticKind) {
+  const chipLabel = parsed.name ? `${parsed.code} ${parsed.name}` : parsed.code;
+  return `
+    <span class="fishymap-semantic-chip" data-semantic-kind="${semanticKind}" aria-label="${escapeHtml(chipLabel)}">
+      <span class="fishymap-semantic-chip-code">${escapeHtml(parsed.code)}</span>
+      ${
+        parsed.name
+          ? `<span class="fishymap-semantic-chip-name">${escapeHtml(parsed.name)}</span>`
+          : ""
+      }
+    </span>
+  `;
+}
+
+function semanticIdentityMarkup(text, options = {}) {
   const parsed = parseSemanticIdentityText(text);
   if (!parsed) {
     return "";
   }
-  const semanticKind = parsed.kind === "RG" ? "region-group" : "region";
+  const semanticKind = semanticKindFromIdentityKind(parsed.kind);
+  if (!semanticKind) {
+    return "";
+  }
   const prefixMarkup = parsed.prefix
     ? `<span class="fishymap-semantic-prefix">${escapeHtml(parsed.prefix)}</span>`
     : "";
-  const chipLabel = parsed.name ? `${parsed.code} ${parsed.name}` : parsed.code;
+  const chipMarkup = semanticIdentityChipMarkup(parsed, semanticKind);
+  if (options?.interactive !== true) {
+    return `
+      <span class="fishymap-semantic-inline">
+        ${prefixMarkup}
+        ${chipMarkup}
+      </span>
+    `;
+  }
+  const buttonLabel = parsed.prefix
+    ? `${parsed.prefix}: ${parsed.name ? `${parsed.code} ${parsed.name}` : parsed.code}`
+    : parsed.name
+      ? `${parsed.code} ${parsed.name}`
+      : parsed.code;
   return `
     <span class="fishymap-semantic-inline">
       ${prefixMarkup}
-      <span class="fishymap-semantic-chip" data-semantic-kind="${semanticKind}" aria-label="${escapeHtml(chipLabel)}">
-        <span class="fishymap-semantic-chip-code">${escapeHtml(parsed.code)}</span>
-        ${
-          parsed.name
-            ? `<span class="fishymap-semantic-chip-name">${escapeHtml(parsed.name)}</span>`
-            : ""
-        }
-      </span>
+      <button
+        class="fishymap-semantic-button"
+        type="button"
+        data-semantic-focus-code="${escapeHtml(parsed.code)}"
+        aria-label="${escapeHtml(buttonLabel)}"
+        title="${escapeHtml(buttonLabel)}"
+      >
+        ${chipMarkup}
+      </button>
     </span>
   `;
 }
@@ -3338,6 +3916,33 @@ function renderLayerStack(container, stateBundle) {
           `<span class="badge badge-soft badge-xs">Masks ${clippedLayers.length}</span>`,
         );
       }
+      const waypointControls = [];
+      if (layer.supportsWaypointConnections) {
+        waypointControls.push(`
+          <label class="label cursor-pointer justify-start gap-3 py-0">
+            <input
+              class="toggle toggle-xs toggle-primary"
+              data-layer-waypoint-connections="${layer.layerId.replace(/"/g, "&quot;")}"
+              type="checkbox"
+              ${layer.waypointConnectionsVisible ? "checked" : ""}
+            >
+            <span class="label-text text-xs text-base-content/70">Connections</span>
+          </label>
+        `);
+      }
+      if (layer.supportsWaypointLabels) {
+        waypointControls.push(`
+          <label class="label cursor-pointer justify-start gap-3 py-0">
+            <input
+              class="toggle toggle-xs toggle-primary"
+              data-layer-waypoint-labels="${layer.layerId.replace(/"/g, "&quot;")}"
+              type="checkbox"
+              ${layer.waypointLabelsVisible ? "checked" : ""}
+            >
+            <span class="label-text text-xs text-base-content/70">Names</span>
+          </label>
+        `);
+      }
       return `
         <article
           class="fishymap-layer-card card card-border bg-base-200"
@@ -3395,6 +4000,18 @@ function renderLayerStack(container, stateBundle) {
                     >
                   </fieldset>
                 `
+            }
+            ${
+              waypointControls.length
+                ? `
+                  <fieldset class="fieldset">
+                    <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Waypoints</span>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      ${waypointControls.join("")}
+                    </div>
+                  </fieldset>
+                `
+                : ""
             }
           </div>
           <button
@@ -4011,6 +4628,7 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
   const pointIconScale = clampPointIconScale(
     inputState.ui?.pointIconScale ?? state.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN,
   );
+  const autoAdjustView = windowUiState?.settings?.autoAdjustView !== false;
   const fishLookup = mergeZoneEvidenceIntoFishLookup(buildFishLookup(catalogFish), isReady ? state.selection?.zoneStats || null : null);
   elements.zoneCatalog = zoneCatalog;
 
@@ -4037,6 +4655,9 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
   }
   if (elements.showPointIcons) {
     setBooleanProperty(elements.showPointIcons, "checked", showPointIcons);
+  }
+  if (elements.autoAdjustView) {
+    setBooleanProperty(elements.autoAdjustView, "checked", autoAdjustView);
   }
 
   if (elements.search.value !== searchText) {
@@ -4225,6 +4846,33 @@ function bindUi(shell, elements, options = {}) {
   };
   elements.layerOpacityInteraction = layerOpacityInteraction;
 
+  function autoAdjustViewEnabled() {
+    return windowUiState?.settings?.autoAdjustView !== false;
+  }
+
+  function currentViewportSize() {
+    return measureMapViewportSize(elements);
+  }
+
+  async function buildSemanticFocusCommandFromCode(code) {
+    const identity = parseSemanticIdentityText(code);
+    if (!identity) {
+      return null;
+    }
+    const latest = getLatestStateBundle();
+    let focusIndex = null;
+    if (autoAdjustViewEnabled() || identity.kind === "N") {
+      focusIndex = await loadWaypointFocusIndex(globalThis.window?.location);
+    }
+    return buildSemanticIdentityCommand(
+      identity,
+      focusIndex,
+      latest,
+      currentViewportSize(),
+      { autoAdjustView: autoAdjustViewEnabled() },
+    );
+  }
+
   function stopDragAutoScroll() {
     if (dragAutoScrollState.frameId && typeof window.cancelAnimationFrame === "function") {
       window.cancelAnimationFrame(dragAutoScrollState.frameId);
@@ -4329,10 +4977,17 @@ function bindUi(shell, elements, options = {}) {
     }
     setSelectedBookmarkIds([bookmark.id]);
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
-    const command = buildSelectWorldPointCommand(bookmark.worldX, bookmark.worldZ, {
+    const command = buildFocusCommandForWorldPoint(
+      bookmark.worldX,
+      bookmark.worldZ,
+      getLatestStateBundle(),
+      currentViewportSize(),
+      {
       pointKind: "bookmark",
       pointLabel: bookmarkDisplayLabel(bookmark),
-    });
+        autoAdjustView: autoAdjustViewEnabled(),
+      },
+    );
     if (command) {
       dispatchMapCommand(shell, command);
     }
@@ -4444,6 +5099,11 @@ function bindUi(shell, elements, options = {}) {
             { ...currentEntry, ...patch },
             DEFAULT_WINDOW_UI_STATE.zoneInfo,
           )
+        : windowId === "settings"
+          ? normalizeSettingsWindowUiEntry(
+              { ...currentEntry, ...patch },
+              DEFAULT_WINDOW_UI_STATE.settings,
+            )
         : normalizeWindowUiEntry(
             { ...currentEntry, ...patch },
             DEFAULT_WINDOW_UI_STATE[windowId],
@@ -5016,15 +5676,44 @@ function bindUi(shell, elements, options = {}) {
           return;
         }
         const pointLabel = button.getAttribute("data-zone-info-target-label") || "";
-        const command = buildSelectWorldPointCommand(worldX, worldZ, {
+        const command = buildFocusCommandForWorldPoint(
+          worldX,
+          worldZ,
+          getLatestStateBundle(),
+          currentViewportSize(),
+          {
           pointKind: "waypoint",
           pointLabel,
-        });
+            autoAdjustView: autoAdjustViewEnabled(),
+          },
+        );
         if (command) {
           dispatchMapCommand(shell, command);
         }
         return;
       }
+    }
+  });
+
+  shell.addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-semantic-focus-code]");
+    if (!button) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const code = String(button.getAttribute("data-semantic-focus-code") || "").trim();
+    if (!code) {
+      return;
+    }
+    try {
+      const command = await buildSemanticFocusCommandFromCode(code);
+      if (command) {
+        dispatchMapCommand(shell, command);
+      }
+    } catch (error) {
+      console.error("Failed to resolve semantic focus command", error);
+      showSiteToast("error", "Unable to load waypoint focus data.");
     }
   });
 
@@ -5467,6 +6156,19 @@ function bindUi(shell, elements, options = {}) {
     });
   }
 
+  if (elements.autoAdjustView) {
+    elements.autoAdjustView.addEventListener("change", () => {
+      if (isRendering) {
+        return;
+      }
+      if (!updateWindowUiEntry("settings", { autoAdjustView: elements.autoAdjustView.checked })) {
+        return;
+      }
+      persistWindowUiState();
+      renderCurrentState(getLatestStateBundle());
+    });
+  }
+
   elements.layers.addEventListener("click", (event) => {
     const button = event.target.closest("button[data-layer-visibility]");
     if (isRendering || !button) {
@@ -5489,6 +6191,48 @@ function bindUi(shell, elements, options = {}) {
         layerIdsVisible: resolveLayerEntries(current)
           .map((layer) => layer.layerId)
           .filter((candidateId) => visibleIds.has(candidateId)),
+      },
+    });
+  });
+
+  elements.layers.addEventListener("change", (event) => {
+    const connectionToggle = event.target.closest("input[data-layer-waypoint-connections]");
+    if (!isRendering && connectionToggle) {
+      const layerId = connectionToggle.getAttribute("data-layer-waypoint-connections");
+      if (!layerId) {
+        return;
+      }
+      const current = getLatestStateBundle();
+      dispatchStatePatchAndRender({
+        version: 1,
+        filters: {
+          layerWaypointConnectionsVisible: buildLayerWaypointConnectionsPatch(
+            current,
+            layerId,
+            connectionToggle.checked,
+          ),
+        },
+      });
+      return;
+    }
+
+    const labelToggle = event.target.closest("input[data-layer-waypoint-labels]");
+    if (isRendering || !labelToggle) {
+      return;
+    }
+    const layerId = labelToggle.getAttribute("data-layer-waypoint-labels");
+    if (!layerId) {
+      return;
+    }
+    const current = getLatestStateBundle();
+    dispatchStatePatchAndRender({
+      version: 1,
+      filters: {
+        layerWaypointLabelsVisible: buildLayerWaypointLabelsPatch(
+          current,
+          layerId,
+          labelToggle.checked,
+        ),
       },
     });
   });
@@ -5856,6 +6600,7 @@ async function main() {
     viewToggleIcon: document.getElementById("fishymap-view-toggle-icon"),
     showPoints: document.getElementById("fishymap-show-points"),
     showPointIcons: document.getElementById("fishymap-show-point-icons"),
+    autoAdjustView: document.getElementById("fishymap-auto-adjust-view"),
     pointIconScale: document.getElementById("fishymap-point-icon-scale"),
     pointIconScaleValue: document.getElementById("fishymap-point-icon-scale-value"),
     layers: document.getElementById("fishymap-layers"),
