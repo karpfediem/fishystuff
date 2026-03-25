@@ -594,9 +594,9 @@
         bottom: 1rem;
         z-index: 19;
         width: min(25rem, calc(100vw - 2rem));
-        height: min(28rem, calc(100% - 22rem));
-        max-height: calc(100% - 22rem);
-        min-height: 16rem;
+        height: min(40rem, calc(100% - 10rem));
+        max-height: calc(100% - 10rem);
+        min-height: min(35rem, calc(100% - 10rem));
       }
 
       #fishymap-view-toggle {
@@ -643,9 +643,9 @@
       .fishymap-layer-card {
         position: relative;
         display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
         align-items: start;
-        gap: 0.75rem;
+        gap: 0.65rem;
         margin-left: calc(var(--fishymap-layer-indent, 0) * 1.4rem);
         padding: 0.8rem 0.9rem;
         transition:
@@ -700,12 +700,26 @@
       }
 
       .fishymap-layer-visibility .fishy-icon,
-      .fishymap-layer-drag .fishy-icon {
+      .fishymap-layer-drag .fishy-icon,
+      .fishymap-layer-settings .fishy-icon {
         width: 1.3rem;
         height: 1.3rem;
       }
 
       .fishymap-layer-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        padding-top: 0.15rem;
+      }
+
+      .fishymap-layer-header {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+      }
+
+      .fishymap-layer-controls {
         display: flex;
         flex-direction: column;
         gap: 0.55rem;
@@ -1039,9 +1053,9 @@
           bottom: auto;
           left: 0.75rem;
           width: auto;
-          height: min(22dvh, 14rem);
-          max-height: min(22dvh, 14rem);
-          min-height: 10rem;
+          height: min(28rem, calc(100dvh - 15rem));
+          max-height: calc(100dvh - 15rem);
+          min-height: min(20rem, calc(100dvh - 15rem));
         }
 
         #fishymap-bookmarks-window {

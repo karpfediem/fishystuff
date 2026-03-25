@@ -12,7 +12,7 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260324-9";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260325-1";
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
 const DRAG_AUTOSCROLL_EDGE_PX = 56;
@@ -2053,6 +2053,10 @@ function spriteIcon(name, sizeClass = "size-5") {
 
 function dragHandleIcon() {
   return spriteIcon("drag-handle");
+}
+
+function layerSettingsIcon() {
+  return spriteIcon("settings-1");
 }
 
 function eyeIcon(visible) {
@@ -4455,8 +4459,10 @@ function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel)
   }
 }
 
-function renderLayerStack(container, stateBundle) {
+function renderLayerStack(container, stateBundle, options = {}) {
   const layers = resolveLayerEntries(stateBundle);
+  const expandedLayerIds =
+    options.expandedLayerIds instanceof Set ? options.expandedLayerIds : new Set();
   if (!layers.length) {
     const loadingKey = "__loading__";
     if (container.dataset.renderKey !== loadingKey) {
@@ -4485,6 +4491,7 @@ function renderLayerStack(container, stateBundle) {
       Math.round(clampPointIconScale(layer.pointIconScaleDefault) * 1000),
       Number.isFinite(layer.displayOrder) ? layer.displayOrder : 0,
       layer.locked ? 1 : 0,
+      expandedLayerIds.has(layer.layerId) ? 1 : 0,
     ]),
   );
   if (container.dataset.renderKey === renderKey) {
@@ -4542,6 +4549,7 @@ function renderLayerStack(container, stateBundle) {
     .map(({ layer, indentLevel }) => {
       const visible = Boolean(layer.visible);
       const locked = Boolean(layer.locked);
+      const settingsExpanded = expandedLayerIds.has(layer.layerId);
       const kind = layerKindLabel(layer.kind);
       const visibilityLabel = visible ? "Hide" : "Show";
       const clipMaskValue = String(flatClipMasks[layer.layerId] || "").trim();
@@ -4606,6 +4614,7 @@ function renderLayerStack(container, stateBundle) {
           data-layer-id="${layer.layerId.replace(/"/g, "&quot;")}"
           data-indent-level="${indentLevel > 0 ? "1" : "0"}"
           data-locked="${locked ? "true" : "false"}"
+          data-settings-expanded="${settingsExpanded ? "true" : "false"}"
           data-clip-mask-source="${locked ? "false" : "true"}"
           style="--fishymap-layer-indent:${indentLevel};"
         >
@@ -4621,86 +4630,108 @@ function renderLayerStack(container, stateBundle) {
             ${dragHandleIcon()}
           </button>
           <div class="fishymap-layer-body min-w-0">
-            <div class="flex items-center gap-2">
+            <div class="fishymap-layer-header">
               <span class="truncate text-sm font-semibold">${escapeHtml(layer.name)}</span>
-              <span class="badge badge-ghost badge-xs">${kind}</span>
-              ${locked ? '<span class="badge badge-outline badge-xs">Ground</span>' : ""}
             </div>
-            ${relationBadges.length ? `<div class="fishymap-layer-relations">${relationBadges.join("")}</div>` : ""}
             ${
-              clippedLayerNames.length
+              settingsExpanded
                 ? `
-                  <p class="text-[11px] text-base-content/45">
-                    Masking ${escapeHtml(clippedLayerNames.join(", "))}
-                  </p>
-                `
-                : ""
-            }
-            ${
-              locked
-                ? ""
-                : `
-                  <fieldset class="fishymap-layer-opacity-control fieldset">
-                    <div class="flex items-center justify-between gap-3">
-                      <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Opacity</span>
-                      <span class="text-xs font-semibold text-base-content/60" data-layer-opacity-value>${layerOpacityLabel(layer.opacity)}</span>
+                  <div class="fishymap-layer-controls">
+                    <div class="fishymap-layer-relations">
+                      <span class="badge badge-ghost badge-xs">${kind}</span>
+                      ${locked ? '<span class="badge badge-outline badge-xs">Ground</span>' : ""}
+                      ${relationBadges.join("")}
                     </div>
-                    <input
-                      class="fishymap-layer-opacity-range range range-primary range-xs"
-                      data-layer-opacity="${layer.layerId.replace(/"/g, "&quot;")}"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value="${layerOpacityValue(layer.opacity)}"
-                      aria-label="Opacity for ${escapeHtml(layer.name)}"
-                    >
-                  </fieldset>
-                `
-            }
-            ${
-              waypointControls.length
-                ? `
-                  <fieldset class="fieldset">
-                    <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Waypoints</span>
-                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-                      ${waypointControls.join("")}
-                    </div>
-                  </fieldset>
-                `
-                : ""
-            }
-            ${
-              pointControls.length
-                ? `
-                  <fieldset class="fieldset">
-                    <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Fish Evidence</span>
-                    <div class="space-y-2">
-                      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-                        ${pointControls.join("")}
-                      </div>
-                      <div class="space-y-2">
-                        <div class="flex items-center justify-between gap-3">
-                          <span class="text-xs font-semibold text-base-content/70">Fish icon size</span>
-                          <span class="text-xs font-semibold text-base-content/60" data-layer-point-icon-scale-value>${pointIconScaleLabel(layer.pointIconScale)}</span>
-                        </div>
-                        <input
-                          class="range range-primary range-xs"
-                          data-layer-point-icon-scale="${layer.layerId.replace(/"/g, "&quot;")}"
-                          type="range"
-                          min="${FISHYMAP_POINT_ICON_SCALE_MIN}"
-                          max="${FISHYMAP_POINT_ICON_SCALE_MAX}"
-                          step="0.05"
-                          value="${pointIconScaleValue(layer.pointIconScale)}"
-                          aria-label="Fish icon size for ${escapeHtml(layer.name)}"
-                        >
-                      </div>
-                    </div>
-                  </fieldset>
+                    ${
+                      clippedLayerNames.length
+                        ? `
+                          <p class="text-[11px] text-base-content/45">
+                            Masking ${escapeHtml(clippedLayerNames.join(", "))}
+                          </p>
+                        `
+                        : ""
+                    }
+                    ${
+                      locked
+                        ? ""
+                        : `
+                          <fieldset class="fishymap-layer-opacity-control fieldset">
+                            <div class="flex items-center justify-between gap-3">
+                              <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Opacity</span>
+                              <span class="text-xs font-semibold text-base-content/60" data-layer-opacity-value>${layerOpacityLabel(layer.opacity)}</span>
+                            </div>
+                            <input
+                              class="fishymap-layer-opacity-range range range-primary range-xs"
+                              data-layer-opacity="${layer.layerId.replace(/"/g, "&quot;")}"
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value="${layerOpacityValue(layer.opacity)}"
+                              aria-label="Opacity for ${escapeHtml(layer.name)}"
+                            >
+                          </fieldset>
+                        `
+                    }
+                    ${
+                      waypointControls.length
+                        ? `
+                          <fieldset class="fieldset">
+                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Waypoints</span>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                              ${waypointControls.join("")}
+                            </div>
+                          </fieldset>
+                        `
+                        : ""
+                    }
+                    ${
+                      pointControls.length
+                        ? `
+                          <fieldset class="fieldset">
+                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Fish Evidence</span>
+                            <div class="space-y-2">
+                              <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                ${pointControls.join("")}
+                              </div>
+                              <div class="space-y-2">
+                                <div class="flex items-center justify-between gap-3">
+                                  <span class="text-xs font-semibold text-base-content/70">Fish icon size</span>
+                                  <span class="text-xs font-semibold text-base-content/60" data-layer-point-icon-scale-value>${pointIconScaleLabel(layer.pointIconScale)}</span>
+                                </div>
+                                <input
+                                  class="range range-primary range-xs"
+                                  data-layer-point-icon-scale="${layer.layerId.replace(/"/g, "&quot;")}"
+                                  type="range"
+                                  min="${FISHYMAP_POINT_ICON_SCALE_MIN}"
+                                  max="${FISHYMAP_POINT_ICON_SCALE_MAX}"
+                                  step="0.05"
+                                  value="${pointIconScaleValue(layer.pointIconScale)}"
+                                  aria-label="Fish icon size for ${escapeHtml(layer.name)}"
+                                >
+                              </div>
+                            </div>
+                          </fieldset>
+                        `
+                        : ""
+                    }
+                  </div>
                 `
                 : ""
             }
           </div>
+          <button
+            class="fishymap-layer-settings btn btn-sm btn-circle ${
+              visible ? "btn-soft btn-primary" : "btn-ghost"
+            }"
+            data-layer-settings-toggle="${layer.layerId.replace(/"/g, "&quot;")}"
+            type="button"
+            aria-label="${settingsExpanded ? "Hide" : "Show"} settings for ${escapeHtml(layer.name)}"
+            aria-expanded="${settingsExpanded ? "true" : "false"}"
+            title="${settingsExpanded ? "Hide" : "Show"} settings for ${escapeHtml(layer.name)}"
+          >
+            ${layerSettingsIcon()}
+          </button>
           <button
             class="fishymap-layer-visibility btn btn-sm btn-circle ${
               visible ? "btn-soft btn-primary" : "btn-ghost"
@@ -5429,6 +5460,7 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
     renderLayerStack(
       elements.layers,
       isReady ? stateBundle : { state: { catalog: { layers: [] } }, inputState: {} },
+      { expandedLayerIds: elements.layerSettingsExpanded || new Set() },
     );
   }
   if (elements.layersCount) {
@@ -5586,8 +5618,10 @@ function bindUi(shell, elements, options = {}) {
     activeLayerId: null,
     activeValue: null,
   };
+  const layerSettingsExpanded = new Set();
   elements.layerOpacityInteraction = layerOpacityInteraction;
   elements.layerPointIconScaleInteraction = layerPointIconScaleInteraction;
+  elements.layerSettingsExpanded = layerSettingsExpanded;
 
   function autoAdjustViewEnabled() {
     return windowUiState?.settings?.autoAdjustView !== false;
@@ -6206,6 +6240,26 @@ function bindUi(shell, elements, options = {}) {
     }
     layerPointIconScaleInteraction.activeLayerId = null;
     layerPointIconScaleInteraction.activeValue = null;
+    renderCurrentState(getLatestStateBundle());
+  }
+
+  function toggleLayerSettings(layerId) {
+    if (!layerId) {
+      return;
+    }
+    if (layerSettingsExpanded.has(layerId)) {
+      layerSettingsExpanded.delete(layerId);
+      if (layerOpacityInteraction.activeLayerId === layerId) {
+        layerOpacityInteraction.activeLayerId = null;
+        layerOpacityInteraction.activeValue = null;
+      }
+      if (layerPointIconScaleInteraction.activeLayerId === layerId) {
+        layerPointIconScaleInteraction.activeLayerId = null;
+        layerPointIconScaleInteraction.activeValue = null;
+      }
+    } else {
+      layerSettingsExpanded.add(layerId);
+    }
     renderCurrentState(getLatestStateBundle());
   }
 
@@ -7089,6 +7143,11 @@ function bindUi(shell, elements, options = {}) {
   }
 
   elements.layers.addEventListener("click", (event) => {
+    const settingsButton = event.target.closest("button[data-layer-settings-toggle]");
+    if (!isRendering && settingsButton) {
+      toggleLayerSettings(settingsButton.getAttribute("data-layer-settings-toggle"));
+      return;
+    }
     const button = event.target.closest("button[data-layer-visibility]");
     if (isRendering || !button) {
       return;
