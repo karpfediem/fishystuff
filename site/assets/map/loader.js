@@ -4537,29 +4537,28 @@ export function renderSearchResults(elements, matches, stateBundle) {
       `;
       }
       if (match.kind === "semantic") {
+        const semanticLabel = match.label || `Field ${match.fieldId}`;
         const semanticMarkup =
-          semanticIdentityMarkup(match.label || `Field ${match.fieldId}`, { interactive: true }) ||
-          `<span class="truncate">${escapeHtml(match.label || `Field ${match.fieldId}`)}</span>`;
+          semanticIdentityMarkup(semanticLabel, { interactive: true }) ||
+          `<span class="truncate">${escapeHtml(semanticLabel)}</span>`;
         return `
           <li>
-            <div class="flex items-start gap-3 rounded-box px-3 py-2 text-sm">
+            <div
+              class="flex cursor-pointer items-start gap-3 rounded-box px-3 py-2 text-sm"
+              data-semantic-layer-id="${escapeHtml(match.layerId)}"
+              data-semantic-field-id="${match.fieldId}"
+              data-semantic-label="${escapeHtml(semanticLabel)}"
+              role="button"
+              tabindex="0"
+              aria-label="Add ${escapeHtml(semanticLabel)}"
+              title="Add ${escapeHtml(semanticLabel)}"
+            >
               <span class="min-w-0 flex-1 text-left">
                 <span class="block">${semanticMarkup}</span>
                 <span class="mt-1 block truncate text-xs text-base-content/60">
                   ${escapeHtml(match.description || `Field ${match.fieldId}`)}
                 </span>
               </span>
-              <button
-                class="btn btn-ghost btn-xs shrink-0"
-                data-semantic-layer-id="${escapeHtml(match.layerId)}"
-                data-semantic-field-id="${match.fieldId}"
-                data-semantic-label="${escapeHtml(match.label || `Field ${match.fieldId}`)}"
-                type="button"
-                aria-label="Add ${escapeHtml(match.label || `Field ${match.fieldId}`)}"
-                title="Add ${escapeHtml(match.label || `Field ${match.fieldId}`)}"
-              >
-                Add
-              </button>
             </div>
           </li>
         `;
@@ -5062,20 +5061,6 @@ function bindUi(shell, elements, options = {}) {
       currentViewportSize(),
       { autoAdjustView: autoAdjustViewEnabled() },
     );
-  }
-
-  async function maybeDispatchSearchSemanticFocus(match) {
-    if (!match || match.kind !== "semantic") {
-      return;
-    }
-    const parsed = parseSemanticIdentityText(match.label || "");
-    if (!parsed || !autoAdjustViewEnabled()) {
-      return;
-    }
-    const command = await buildSemanticFocusCommandFromCode(parsed.code);
-    if (command) {
-      dispatchMapCommand(shell, command);
-    }
   }
 
   function stopDragAutoScroll() {
@@ -5759,17 +5744,14 @@ function bindUi(shell, elements, options = {}) {
     }
     event.preventDefault();
     applySearchMatchSelection(shell, elements, renderCurrentState, current, top);
-    if (top.kind === "semantic") {
-      void maybeDispatchSearchSemanticFocus(top).catch((error) => {
-        console.error("Failed to focus semantic search match", error);
-        showSiteToast("error", "Unable to load waypoint focus data.");
-      });
-    }
   });
 
   elements.searchResults.addEventListener("click", (event) => {
+    if (event.target.closest("button[data-semantic-focus-code]")) {
+      return;
+    }
     const button = event.target.closest(
-      "button[data-fish-id], button[data-zone-rgb], button[data-semantic-layer-id][data-semantic-field-id]",
+      "button[data-fish-id], button[data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
     );
     if (!button) {
       return;
@@ -5786,16 +5768,11 @@ function bindUi(shell, elements, options = {}) {
     const semanticLayerId = String(button.getAttribute("data-semantic-layer-id") || "").trim();
     const semanticFieldId = Number.parseInt(button.getAttribute("data-semantic-field-id"), 10);
     if (semanticLayerId && Number.isFinite(semanticFieldId)) {
-      const match = {
+      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
         kind: "semantic",
         layerId: semanticLayerId,
         fieldId: semanticFieldId,
         label: button.getAttribute("data-semantic-label") || "",
-      };
-      applySearchMatchSelection(shell, elements, renderCurrentState, current, match);
-      void maybeDispatchSearchSemanticFocus(match).catch((error) => {
-        console.error("Failed to focus semantic search match", error);
-        showSiteToast("error", "Unable to load waypoint focus data.");
       });
       return;
     }
@@ -5806,6 +5783,32 @@ function bindUi(shell, elements, options = {}) {
     applySearchMatchSelection(shell, elements, renderCurrentState, current, {
       kind: "fish",
       fishId,
+    });
+  });
+
+  elements.searchResults.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    if (event.target.closest("button[data-semantic-focus-code]")) {
+      return;
+    }
+    const row = event.target.closest("[data-semantic-layer-id][data-semantic-field-id]");
+    if (!row) {
+      return;
+    }
+    const semanticLayerId = String(row.getAttribute("data-semantic-layer-id") || "").trim();
+    const semanticFieldId = Number.parseInt(row.getAttribute("data-semantic-field-id"), 10);
+    if (!semanticLayerId || !Number.isFinite(semanticFieldId)) {
+      return;
+    }
+    event.preventDefault();
+    const current = getLatestStateBundle();
+    applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+      kind: "semantic",
+      layerId: semanticLayerId,
+      fieldId: semanticFieldId,
+      label: row.getAttribute("data-semantic-label") || "",
     });
   });
 

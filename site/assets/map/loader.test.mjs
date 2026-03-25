@@ -1445,7 +1445,7 @@ test("renderSearchSelection uses semantic focus chips for selected semantic term
   assert.equal(searchSelection.innerHTML.includes("badge badge-outline"), false);
 });
 
-test("renderSearchResults uses semantic focus chips and add buttons for semantic matches", () => {
+test("renderSearchResults uses semantic focus chips and clickable rows for semantic matches", () => {
   const elements = {
     searchResults: {
       dataset: {},
@@ -1480,7 +1480,8 @@ test("renderSearchResults uses semantic focus chips and add buttons for semantic
   assert.match(elements.searchResults.innerHTML, /data-semantic-focus-code="R5"/);
   assert.match(elements.searchResults.innerHTML, /data-semantic-layer-id="regions"/);
   assert.match(elements.searchResults.innerHTML, /data-semantic-label="Velia \(R5\)"/);
-  assert.match(elements.searchResults.innerHTML, />\s*Add\s*</);
+  assert.match(elements.searchResults.innerHTML, /role="button"/);
+  assert.equal(elements.searchResults.innerHTML.includes(">Add<"), false);
   assert.equal(elements.searchResults.innerHTML.includes("badge badge-outline"), false);
 });
 
