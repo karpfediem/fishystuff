@@ -1,7 +1,9 @@
 use super::super::super::persistence::{
     apply_layer_clip_mask_override, apply_layer_opacity_override, apply_layer_order_override,
+    apply_layer_point_icon_scale_override, apply_layer_point_icon_visibility_override,
     apply_layer_waypoint_connections_override, apply_layer_waypoint_labels_override,
-    reset_layer_opacity_override, reset_layer_waypoint_connections_override,
+    reset_layer_opacity_override, reset_layer_point_icon_scale_override,
+    reset_layer_point_icon_visibility_override, reset_layer_waypoint_connections_override,
     reset_layer_waypoint_labels_override,
 };
 use crate::bridge::contract::FishyMapInputState;
@@ -36,5 +38,13 @@ pub(super) fn apply_layer_filters(
     reset_layer_waypoint_labels_override(layer_registry, layer_runtime);
     if let Some(overrides) = input.filters.layer_waypoint_labels_visible.as_ref() {
         apply_layer_waypoint_labels_override(layer_registry, layer_runtime, overrides);
+    }
+    reset_layer_point_icon_visibility_override(layer_registry, layer_runtime);
+    if let Some(overrides) = input.filters.layer_point_icons_visible.as_ref() {
+        apply_layer_point_icon_visibility_override(layer_registry, layer_runtime, overrides);
+    }
+    reset_layer_point_icon_scale_override(layer_registry, layer_runtime);
+    if let Some(overrides) = input.filters.layer_point_icon_scales.as_ref() {
+        apply_layer_point_icon_scale_override(layer_registry, layer_runtime, overrides);
     }
 }

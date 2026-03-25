@@ -13,6 +13,8 @@ pub use catalog::{
 pub use registry::LayerRegistry;
 pub use runtime::{LayerManifestStatus, LayerRuntime, LayerRuntimeState, LayerSettings};
 
+pub const FISH_EVIDENCE_LAYER_KEY: &str = "fish_evidence";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct LayerId(u16);
 

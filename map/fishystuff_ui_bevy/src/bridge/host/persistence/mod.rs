@@ -4,8 +4,10 @@ mod view;
 
 pub(in crate::bridge::host) use self::layers::{
     apply_layer_clip_mask_override, apply_layer_opacity_override, apply_layer_order_override,
+    apply_layer_point_icon_scale_override, apply_layer_point_icon_visibility_override,
     apply_layer_waypoint_connections_override, apply_layer_waypoint_labels_override,
-    reset_layer_opacity_override, reset_layer_waypoint_connections_override,
+    reset_layer_opacity_override, reset_layer_point_icon_scale_override,
+    reset_layer_point_icon_visibility_override, reset_layer_waypoint_connections_override,
     reset_layer_waypoint_labels_override,
 };
 pub(in crate::bridge::host) use self::patches::{

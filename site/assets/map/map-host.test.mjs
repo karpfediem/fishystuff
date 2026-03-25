@@ -1322,6 +1322,55 @@ test("applyStatePatch keeps waypoint layer override maps in host input state", (
   assert.deepEqual(next.filters.layerWaypointLabelsVisible, { region_nodes: false });
 });
 
+test("fish evidence layer icon override maps replace the previous map instead of merging stale entries", () => {
+  const patch = mergeStatePatch(
+    {
+      filters: {
+        layerPointIconsVisible: {
+          fish_evidence: false,
+          region_nodes: true,
+        },
+        layerPointIconScales: {
+          fish_evidence: 1.5,
+          region_nodes: 2.5,
+        },
+      },
+    },
+    {
+      filters: {
+        layerPointIconsVisible: {
+          fish_evidence: true,
+        },
+        layerPointIconScales: {
+          fish_evidence: 2.25,
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(patch.filters.layerPointIconsVisible, { fish_evidence: true });
+  assert.deepEqual(patch.filters.layerPointIconScales, { fish_evidence: 2.25 });
+});
+
+test("applyStatePatch keeps fish evidence icon override maps in host input state", () => {
+  const next = applyStatePatch(
+    {},
+    {
+      filters: {
+        layerPointIconsVisible: {
+          fish_evidence: false,
+        },
+        layerPointIconScales: {
+          fish_evidence: 2.4,
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(next.filters.layerPointIconsVisible, { fish_evidence: false });
+  assert.deepEqual(next.filters.layerPointIconScales, { fish_evidence: 2.4 });
+});
+
 test("layer clip mask normalization flattens nested attachments to a single root", () => {
   const patch = mergeStatePatch(
     {},

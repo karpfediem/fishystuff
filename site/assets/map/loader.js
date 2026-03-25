@@ -1977,6 +1977,40 @@ function pointIconScaleLabel(scale) {
   return `${Math.round(clampPointIconScale(scale) * 100)}%`;
 }
 
+function buildLayerPointIconsPatch(stateBundle, targetLayerId, visible) {
+  const next = {};
+  for (const layer of resolveLayerEntries(stateBundle)) {
+    if (!layer.supportsPointIcons) {
+      continue;
+    }
+    const effectiveVisible =
+      layer.layerId === targetLayerId ? visible !== false : layer.pointIconsVisible !== false;
+    if (effectiveVisible === (layer.pointIconsDefault !== false)) {
+      continue;
+    }
+    next[layer.layerId] = effectiveVisible;
+  }
+  return next;
+}
+
+function buildLayerPointIconScalePatch(stateBundle, targetLayerId, scale) {
+  const next = {};
+  for (const layer of resolveLayerEntries(stateBundle)) {
+    if (!layer.supportsPointIcons) {
+      continue;
+    }
+    const effectiveScale =
+      layer.layerId === targetLayerId
+        ? clampPointIconScale(scale)
+        : clampPointIconScale(layer.pointIconScale);
+    if (Math.abs(effectiveScale - clampPointIconScale(layer.pointIconScaleDefault)) <= 0.0001) {
+      continue;
+    }
+    next[layer.layerId] = effectiveScale;
+  }
+  return next;
+}
+
 function clampLayerOpacity(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) {
@@ -1998,6 +2032,9 @@ function isFixedGroundLayer(layerId) {
 }
 
 function layerKindLabel(kind) {
+  if (kind === "fish-evidence") {
+    return "Evidence";
+  }
   if (kind === "vector-geojson") {
     return "Vector";
   }
@@ -2077,6 +2114,26 @@ function resolveLayerEntries(stateBundle) {
   )
     ? stateBundle.state.filters.layerWaypointLabelsVisible
     : null;
+  const inputPointIconsOverride = isPlainObject(
+    stateBundle.inputState?.filters?.layerPointIconsVisible,
+  )
+    ? stateBundle.inputState.filters.layerPointIconsVisible
+    : null;
+  const statePointIconsOverride = isPlainObject(
+    stateBundle.state?.filters?.layerPointIconsVisible,
+  )
+    ? stateBundle.state.filters.layerPointIconsVisible
+    : null;
+  const inputPointIconScaleOverride = isPlainObject(
+    stateBundle.inputState?.filters?.layerPointIconScales,
+  )
+    ? stateBundle.inputState.filters.layerPointIconScales
+    : null;
+  const statePointIconScaleOverride = isPlainObject(
+    stateBundle.state?.filters?.layerPointIconScales,
+  )
+    ? stateBundle.state.filters.layerPointIconScales
+    : null;
   const byId = new Map(layers.map((layer) => [layer.layerId, layer]));
   const seen = new Set();
   const movable = [];
@@ -2141,6 +2198,37 @@ function resolveLayerEntries(stateBundle) {
     ) {
       waypointLabelsVisible = stateWaypointLabelsOverride[layer.layerId] !== false;
     }
+    const supportsPointIcons = layer.supportsPointIcons === true;
+    const pointIconsDefault = supportsPointIcons ? layer.pointIconsDefault !== false : false;
+    let pointIconsVisible = supportsPointIcons ? layer.pointIconsVisible !== false : false;
+    if (supportsPointIcons && inputPointIconsOverride) {
+      pointIconsVisible = hasOwnKey(inputPointIconsOverride, layer.layerId)
+        ? inputPointIconsOverride[layer.layerId] !== false
+        : pointIconsDefault;
+    } else if (
+      supportsPointIcons &&
+      statePointIconsOverride &&
+      hasOwnKey(statePointIconsOverride, layer.layerId)
+    ) {
+      pointIconsVisible = statePointIconsOverride[layer.layerId] !== false;
+    }
+    const pointIconScaleDefault = supportsPointIcons
+      ? clampPointIconScale(layer.pointIconScaleDefault ?? FISHYMAP_POINT_ICON_SCALE_MIN)
+      : FISHYMAP_POINT_ICON_SCALE_MIN;
+    let pointIconScale = supportsPointIcons
+      ? clampPointIconScale(layer.pointIconScale ?? pointIconScaleDefault)
+      : FISHYMAP_POINT_ICON_SCALE_MIN;
+    if (supportsPointIcons && inputPointIconScaleOverride) {
+      pointIconScale = hasOwnKey(inputPointIconScaleOverride, layer.layerId)
+        ? clampPointIconScale(inputPointIconScaleOverride[layer.layerId])
+        : pointIconScaleDefault;
+    } else if (
+      supportsPointIcons &&
+      statePointIconScaleOverride &&
+      hasOwnKey(statePointIconScaleOverride, layer.layerId)
+    ) {
+      pointIconScale = clampPointIconScale(statePointIconScaleOverride[layer.layerId]);
+    }
     const entry = {
       ...layer,
       visible,
@@ -2153,6 +2241,11 @@ function resolveLayerEntries(stateBundle) {
       supportsWaypointLabels,
       waypointLabelsVisible,
       waypointLabelsDefault,
+      supportsPointIcons,
+      pointIconsVisible,
+      pointIconsDefault,
+      pointIconScale,
+      pointIconScaleDefault,
       locked: isFixedGroundLayer(layer.layerId),
     };
     if (entry.locked) {
@@ -4108,7 +4201,7 @@ function zoneInfoZoneEvidenceMarkup(selection, zoneStats, zoneStatsStatus, fishL
         <div class="space-y-2 leading-5">
           <p>The fish displayed here are all available evidence samples that might belong to this zone.</p>
           <p>Some fish might have been close to the zone border and may actually belong to a neighbouring zone instead.</p>
-          <p>You can see the exact sample locations in Settings by enabling "Show points / rings" and "Show fish icons".</p>
+          <p>You can see the exact sample locations in Layers by enabling the Fish Evidence layer and its icon toggle.</p>
           <p>Keep this in mind and verify with other sources such as BDOlytics for now.</p>
         </div>
       </div>
@@ -4382,6 +4475,14 @@ function renderLayerStack(container, stateBundle) {
       Math.round(clampLayerOpacity(layer.opacity) * 1000),
       Math.round(clampLayerOpacity(layer.opacityDefault) * 1000),
       layer.clipMaskLayerId || "",
+      layer.supportsWaypointConnections ? 1 : 0,
+      layer.waypointConnectionsVisible ? 1 : 0,
+      layer.supportsWaypointLabels ? 1 : 0,
+      layer.waypointLabelsVisible ? 1 : 0,
+      layer.supportsPointIcons ? 1 : 0,
+      layer.pointIconsVisible ? 1 : 0,
+      Math.round(clampPointIconScale(layer.pointIconScale) * 1000),
+      Math.round(clampPointIconScale(layer.pointIconScaleDefault) * 1000),
       Number.isFinite(layer.displayOrder) ? layer.displayOrder : 0,
       layer.locked ? 1 : 0,
     ]),
@@ -4485,6 +4586,20 @@ function renderLayerStack(container, stateBundle) {
           </label>
         `);
       }
+      const pointControls = [];
+      if (layer.supportsPointIcons) {
+        pointControls.push(`
+          <label class="label cursor-pointer justify-start gap-3 py-0">
+            <input
+              class="toggle toggle-xs toggle-primary"
+              data-layer-point-icons="${layer.layerId.replace(/"/g, "&quot;")}"
+              type="checkbox"
+              ${layer.pointIconsVisible ? "checked" : ""}
+            >
+            <span class="label-text text-xs text-base-content/70">Icons</span>
+          </label>
+        `);
+      }
       return `
         <article
           class="fishymap-layer-card card card-border bg-base-200"
@@ -4550,6 +4665,36 @@ function renderLayerStack(container, stateBundle) {
                     <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Waypoints</span>
                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                       ${waypointControls.join("")}
+                    </div>
+                  </fieldset>
+                `
+                : ""
+            }
+            ${
+              pointControls.length
+                ? `
+                  <fieldset class="fieldset">
+                    <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Fish Evidence</span>
+                    <div class="space-y-2">
+                      <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                        ${pointControls.join("")}
+                      </div>
+                      <div class="space-y-2">
+                        <div class="flex items-center justify-between gap-3">
+                          <span class="text-xs font-semibold text-base-content/70">Fish icon size</span>
+                          <span class="text-xs font-semibold text-base-content/60" data-layer-point-icon-scale-value>${pointIconScaleLabel(layer.pointIconScale)}</span>
+                        </div>
+                        <input
+                          class="range range-primary range-xs"
+                          data-layer-point-icon-scale="${layer.layerId.replace(/"/g, "&quot;")}"
+                          type="range"
+                          min="${FISHYMAP_POINT_ICON_SCALE_MIN}"
+                          max="${FISHYMAP_POINT_ICON_SCALE_MAX}"
+                          step="0.05"
+                          value="${pointIconScaleValue(layer.pointIconScale)}"
+                          aria-label="Fish icon size for ${escapeHtml(layer.name)}"
+                        >
+                      </div>
                     </div>
                   </fieldset>
                 `
@@ -5186,6 +5331,30 @@ function syncLayerOpacityControl(container, layerId, opacity) {
   return true;
 }
 
+function syncLayerPointIconScaleControl(container, layerId, scale) {
+  if (!container || !layerId) {
+    return false;
+  }
+  const slider = Array.from(container.querySelectorAll("input[data-layer-point-icon-scale]")).find(
+    (candidate) => candidate.getAttribute("data-layer-point-icon-scale") === layerId,
+  );
+  if (!slider) {
+    return false;
+  }
+  const normalized = clampPointIconScale(scale);
+  const value = pointIconScaleValue(normalized);
+  if (slider.value !== value) {
+    slider.value = value;
+  }
+  const label = slider
+    .closest(".fieldset")
+    ?.querySelector?.("[data-layer-point-icon-scale-value]");
+  if (label) {
+    setTextContent(label, pointIconScaleLabel(normalized));
+  }
+  return true;
+}
+
 function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DEFAULT_WINDOW_UI_STATE) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
@@ -5205,12 +5374,6 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
       null,
   );
   const searchText = inputState.filters?.searchText || "";
-  const showPoints = (inputState.ui?.showPoints ?? state.ui?.showPoints) !== false;
-  const showPointIcons =
-    (inputState.ui?.showPointIcons ?? state.ui?.showPointIcons) !== false;
-  const pointIconScale = clampPointIconScale(
-    inputState.ui?.pointIconScale ?? state.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN,
-  );
   const autoAdjustView = windowUiState?.settings?.autoAdjustView !== false;
   const fishLookup = mergeZoneEvidenceIntoFishLookup(buildFishLookup(catalogFish), isReady ? state.selection?.zoneStats || null : null);
   elements.zoneCatalog = zoneCatalog;
@@ -5223,22 +5386,6 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
     `badge badge-sm ${state.ready ? "badge-success" : "badge-outline"}`,
   );
   renderViewState(elements, state);
-  if (elements.pointIconScale) {
-    const sliderValue = pointIconScaleValue(pointIconScale);
-    if (elements.pointIconScale.value !== sliderValue) {
-      elements.pointIconScale.value = sliderValue;
-    }
-    setBooleanProperty(elements.pointIconScale, "disabled", !showPoints || !showPointIcons);
-  }
-  if (elements.pointIconScaleValue) {
-    setTextContent(elements.pointIconScaleValue, pointIconScaleLabel(pointIconScale));
-  }
-  if (elements.showPoints) {
-    setBooleanProperty(elements.showPoints, "checked", showPoints);
-  }
-  if (elements.showPointIcons) {
-    setBooleanProperty(elements.showPointIcons, "checked", showPointIcons);
-  }
   if (elements.autoAdjustView) {
     setBooleanProperty(elements.autoAdjustView, "checked", autoAdjustView);
   }
@@ -5259,7 +5406,7 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
     patchRange.toPatchId,
     "Loading patches…",
   );
-  if (
+  const activeOpacityInteraction =
     isReady &&
     elements.layerOpacityInteraction?.activeLayerId &&
     Number.isFinite(elements.layerOpacityInteraction?.activeValue) &&
@@ -5267,10 +5414,18 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
       elements.layers,
       elements.layerOpacityInteraction.activeLayerId,
       elements.layerOpacityInteraction.activeValue,
-    )
-  ) {
-    // Keep the active slider mounted while the user is dragging it.
-  } else {
+    );
+  const activePointIconScaleInteraction =
+    !activeOpacityInteraction &&
+    isReady &&
+    elements.layerPointIconScaleInteraction?.activeLayerId &&
+    Number.isFinite(elements.layerPointIconScaleInteraction?.activeValue) &&
+    syncLayerPointIconScaleControl(
+      elements.layers,
+      elements.layerPointIconScaleInteraction.activeLayerId,
+      elements.layerPointIconScaleInteraction.activeValue,
+    );
+  if (!activeOpacityInteraction && !activePointIconScaleInteraction) {
     renderLayerStack(
       elements.layers,
       isReady ? stateBundle : { state: { catalog: { layers: [] } }, inputState: {} },
@@ -5427,7 +5582,12 @@ function bindUi(shell, elements, options = {}) {
     activeLayerId: null,
     activeValue: null,
   };
+  const layerPointIconScaleInteraction = {
+    activeLayerId: null,
+    activeValue: null,
+  };
   elements.layerOpacityInteraction = layerOpacityInteraction;
+  elements.layerPointIconScaleInteraction = layerPointIconScaleInteraction;
 
   function autoAdjustViewEnabled() {
     return windowUiState?.settings?.autoAdjustView !== false;
@@ -6020,6 +6180,32 @@ function bindUi(shell, elements, options = {}) {
     }
     layerOpacityInteraction.activeLayerId = null;
     layerOpacityInteraction.activeValue = null;
+    renderCurrentState(getLatestStateBundle());
+  }
+
+  function setActiveLayerPointIconScale(slider) {
+    if (!slider) {
+      return;
+    }
+    const layerId = slider.getAttribute("data-layer-point-icon-scale");
+    if (!layerId) {
+      return;
+    }
+    layerPointIconScaleInteraction.activeLayerId = layerId;
+    layerPointIconScaleInteraction.activeValue = clampPointIconScale(slider.value);
+    syncLayerPointIconScaleControl(
+      elements.layers,
+      layerId,
+      layerPointIconScaleInteraction.activeValue,
+    );
+  }
+
+  function clearActiveLayerPointIconScale() {
+    if (!layerPointIconScaleInteraction.activeLayerId) {
+      return;
+    }
+    layerPointIconScaleInteraction.activeLayerId = null;
+    layerPointIconScaleInteraction.activeValue = null;
     renderCurrentState(getLatestStateBundle());
   }
 
@@ -6889,52 +7075,6 @@ function bindUi(shell, elements, options = {}) {
     );
   });
 
-  if (elements.pointIconScale) {
-    elements.pointIconScale.addEventListener("input", () => {
-      if (isRendering) {
-        return;
-      }
-      const pointIconScale = clampPointIconScale(elements.pointIconScale.value);
-      if (elements.pointIconScaleValue) {
-        elements.pointIconScaleValue.textContent = pointIconScaleLabel(pointIconScale);
-      }
-      dispatchStatePatchAndRender({
-        version: 1,
-        ui: {
-          pointIconScale,
-        },
-      });
-    });
-  }
-
-  if (elements.showPoints) {
-    elements.showPoints.addEventListener("change", () => {
-      if (isRendering) {
-        return;
-      }
-      dispatchStatePatchAndRender({
-        version: 1,
-        ui: {
-          showPoints: elements.showPoints.checked,
-        },
-      });
-    });
-  }
-
-  if (elements.showPointIcons) {
-    elements.showPointIcons.addEventListener("change", () => {
-      if (isRendering) {
-        return;
-      }
-      dispatchStatePatchAndRender({
-        version: 1,
-        ui: {
-          showPointIcons: elements.showPointIcons.checked,
-        },
-      });
-    });
-  }
-
   if (elements.autoAdjustView) {
     elements.autoAdjustView.addEventListener("change", () => {
       if (isRendering) {
@@ -6996,10 +7136,30 @@ function bindUi(shell, elements, options = {}) {
     }
 
     const labelToggle = event.target.closest("input[data-layer-waypoint-labels]");
-    if (isRendering || !labelToggle) {
+    if (!isRendering && labelToggle) {
+      const layerId = labelToggle.getAttribute("data-layer-waypoint-labels");
+      if (!layerId) {
+        return;
+      }
+      const current = getLatestStateBundle();
+      dispatchStatePatchAndRender({
+        version: 1,
+        filters: {
+          layerWaypointLabelsVisible: buildLayerWaypointLabelsPatch(
+            current,
+            layerId,
+            labelToggle.checked,
+          ),
+        },
+      });
       return;
     }
-    const layerId = labelToggle.getAttribute("data-layer-waypoint-labels");
+
+    const pointIconsToggle = event.target.closest("input[data-layer-point-icons]");
+    if (isRendering || !pointIconsToggle) {
+      return;
+    }
+    const layerId = pointIconsToggle.getAttribute("data-layer-point-icons");
     if (!layerId) {
       return;
     }
@@ -7007,16 +7167,34 @@ function bindUi(shell, elements, options = {}) {
     dispatchStatePatchAndRender({
       version: 1,
       filters: {
-        layerWaypointLabelsVisible: buildLayerWaypointLabelsPatch(
-          current,
-          layerId,
-          labelToggle.checked,
-        ),
+        layerPointIconsVisible: buildLayerPointIconsPatch(current, layerId, pointIconsToggle.checked),
       },
     });
   });
 
   elements.layers.addEventListener("input", (event) => {
+    const pointIconScaleSlider = event.target.closest("input[data-layer-point-icon-scale]");
+    if (!isRendering && pointIconScaleSlider) {
+      setActiveLayerPointIconScale(pointIconScaleSlider);
+      const layerId = pointIconScaleSlider.getAttribute("data-layer-point-icon-scale");
+      if (!layerId) {
+        return;
+      }
+      const patch = {
+        version: 1,
+        filters: {
+          layerPointIconScales: buildLayerPointIconScalePatch(
+            getLatestStateBundle(),
+            layerId,
+            pointIconScaleSlider.value,
+          ),
+        },
+      };
+      dispatchMapState(shell, patch);
+      applyInputStatePatchLocally(patch);
+      return;
+    }
+
     const slider = event.target.closest("input[data-layer-opacity]");
     if (isRendering || !slider) {
       return;
@@ -7038,6 +7216,11 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.layers.addEventListener("pointerdown", (event) => {
+    const pointIconScaleSlider = event.target.closest("input[data-layer-point-icon-scale]");
+    if (pointIconScaleSlider) {
+      setActiveLayerPointIconScale(pointIconScaleSlider);
+      return;
+    }
     const slider = event.target.closest("input[data-layer-opacity]");
     if (!slider) {
       return;
@@ -7046,6 +7229,11 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.layers.addEventListener("focusin", (event) => {
+    const pointIconScaleSlider = event.target.closest("input[data-layer-point-icon-scale]");
+    if (pointIconScaleSlider) {
+      setActiveLayerPointIconScale(pointIconScaleSlider);
+      return;
+    }
     const slider = event.target.closest("input[data-layer-opacity]");
     if (!slider) {
       return;
@@ -7054,6 +7242,12 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.layers.addEventListener("change", (event) => {
+    const pointIconScaleSlider = event.target.closest("input[data-layer-point-icon-scale]");
+    if (pointIconScaleSlider) {
+      setActiveLayerPointIconScale(pointIconScaleSlider);
+      clearActiveLayerPointIconScale();
+      return;
+    }
     const slider = event.target.closest("input[data-layer-opacity]");
     if (slider) {
       setActiveLayerOpacity(slider);
@@ -7063,6 +7257,13 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.layers.addEventListener("focusout", (event) => {
+    const pointIconScaleSlider = event.target.closest("input[data-layer-point-icon-scale]");
+    if (pointIconScaleSlider) {
+      queueMicrotask(() => {
+        clearActiveLayerPointIconScale();
+      });
+      return;
+    }
     const slider = event.target.closest("input[data-layer-opacity]");
     if (!slider) {
       return;
@@ -7377,11 +7578,7 @@ async function main() {
     patchTo: document.getElementById("fishymap-patch-to"),
     viewToggle: document.getElementById("fishymap-view-toggle"),
     viewToggleIcon: document.getElementById("fishymap-view-toggle-icon"),
-    showPoints: document.getElementById("fishymap-show-points"),
-    showPointIcons: document.getElementById("fishymap-show-point-icons"),
     autoAdjustView: document.getElementById("fishymap-auto-adjust-view"),
-    pointIconScale: document.getElementById("fishymap-point-icon-scale"),
-    pointIconScaleValue: document.getElementById("fishymap-point-icon-scale-value"),
     layers: document.getElementById("fishymap-layers"),
     layersWindow: document.getElementById("fishymap-layers-window"),
     layersTitlebar: document.getElementById("fishymap-layers-titlebar"),

@@ -2,7 +2,10 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::Resource;
 
-use super::{LayerId, LayerRegistry, LayerSpec, LayerVectorStatus};
+use super::{LayerId, LayerRegistry, LayerSpec, LayerVectorStatus, FISH_EVIDENCE_LAYER_KEY};
+
+const POINT_ICON_SCALE_MIN: f32 = 1.0;
+const POINT_ICON_SCALE_MAX: f32 = 3.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LayerManifestStatus {
@@ -20,6 +23,8 @@ pub struct LayerRuntimeState {
     pub clip_mask_layer: Option<LayerId>,
     pub waypoint_connections_visible: bool,
     pub waypoint_labels_visible: bool,
+    pub point_icons_visible: bool,
+    pub point_icon_scale: f32,
     pub z_base: f32,
     pub display_order: i32,
     pub current_base_lod: Option<u8>,
@@ -95,6 +100,14 @@ impl LayerRuntime {
             } else {
                 state.waypoint_connections_visible = false;
                 state.waypoint_labels_visible = false;
+            }
+            if !supports_point_icons(spec) {
+                state.point_icons_visible = false;
+                state.point_icon_scale = POINT_ICON_SCALE_MIN;
+            } else {
+                state.point_icon_scale = state
+                    .point_icon_scale
+                    .clamp(POINT_ICON_SCALE_MIN, POINT_ICON_SCALE_MAX);
             }
             state.z_base = spec.z_base;
             state.display_order = spec.display_order;
@@ -180,6 +193,30 @@ impl LayerRuntime {
         }
     }
 
+    pub fn point_icons_visible(&self, id: LayerId) -> bool {
+        self.get(id)
+            .map(|state| state.point_icons_visible)
+            .unwrap_or(false)
+    }
+
+    pub fn set_point_icons_visible(&mut self, id: LayerId, visible: bool) {
+        if let Some(value) = self.states.get_mut(&id) {
+            value.point_icons_visible = visible;
+        }
+    }
+
+    pub fn point_icon_scale(&self, id: LayerId) -> f32 {
+        self.get(id)
+            .map(|state| state.point_icon_scale)
+            .unwrap_or(POINT_ICON_SCALE_MIN)
+    }
+
+    pub fn set_point_icon_scale(&mut self, id: LayerId, scale: f32) {
+        if let Some(value) = self.states.get_mut(&id) {
+            value.point_icon_scale = scale.clamp(POINT_ICON_SCALE_MIN, POINT_ICON_SCALE_MAX);
+        }
+    }
+
     pub fn display_order(&self, id: LayerId) -> i32 {
         self.get(id).map(|s| s.display_order).unwrap_or_default()
     }
@@ -221,6 +258,8 @@ fn default_state_for_spec(spec: &LayerSpec) -> LayerRuntimeState {
             .waypoint_source
             .as_ref()
             .is_some_and(|source| source.supports_labels && source.show_labels_default),
+        point_icons_visible: supports_point_icons(spec),
+        point_icon_scale: POINT_ICON_SCALE_MIN,
         z_base: spec.z_base,
         display_order: spec.display_order,
         current_base_lod: None,
@@ -258,6 +297,10 @@ fn default_state_for_spec(spec: &LayerSpec) -> LayerRuntimeState {
         vector_cache_last_hit: false,
         vector_cache_entries: 0,
     }
+}
+
+fn supports_point_icons(spec: &LayerSpec) -> bool {
+    spec.key == FISH_EVIDENCE_LAYER_KEY
 }
 
 pub type LayerSettings = LayerRuntime;

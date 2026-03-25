@@ -1,6 +1,10 @@
 use super::super::super::*;
 use crate::map::layers::LayerManifestStatus;
 
+fn is_fish_evidence_layer(layer: &crate::map::layers::LayerSpec) -> bool {
+    layer.key == crate::map::layers::FISH_EVIDENCE_LAYER_KEY
+}
+
 pub(in crate::bridge::host) fn current_layer_order<'a>(
     layer_registry: &'a LayerRegistry,
     layer_runtime: &LayerRuntime,
@@ -31,6 +35,7 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
         .into_iter()
         .map(|layer| {
             let runtime_state = layer_runtime.get(layer.id);
+            let is_fish_evidence = is_fish_evidence_layer(layer);
             FishyMapLayerSummary {
                 layer_id: layer.key.clone(),
                 name: layer.name.clone(),
@@ -44,10 +49,14 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
                 display_order: runtime_state
                     .map(|state| state.display_order)
                     .unwrap_or(layer.display_order),
-                kind: match layer.kind {
-                    LayerKind::TiledRaster => "tiled-raster".to_string(),
-                    LayerKind::VectorGeoJson => "vector-geojson".to_string(),
-                    LayerKind::Waypoints => "waypoints".to_string(),
+                kind: if is_fish_evidence {
+                    "fish-evidence".to_string()
+                } else {
+                    match layer.kind {
+                        LayerKind::TiledRaster => "tiled-raster".to_string(),
+                        LayerKind::VectorGeoJson => "vector-geojson".to_string(),
+                        LayerKind::Waypoints => "waypoints".to_string(),
+                    }
                 },
                 visible_tile_count: runtime_state
                     .map(|state| state.visible_tile_count)
@@ -123,6 +132,15 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
                     .waypoint_source
                     .as_ref()
                     .is_some_and(|source| source.supports_labels && source.show_labels_default),
+                supports_point_icons: is_fish_evidence,
+                point_icons_visible: runtime_state
+                    .map(|state| state.point_icons_visible)
+                    .unwrap_or(is_fish_evidence),
+                point_icons_default: is_fish_evidence,
+                point_icon_scale: runtime_state
+                    .map(|state| state.point_icon_scale)
+                    .unwrap_or(crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN),
+                point_icon_scale_default: crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN,
             }
         })
         .collect()
@@ -228,6 +246,42 @@ pub(in crate::bridge::host::snapshot::filters) fn current_layer_waypoint_label_o
             continue;
         }
         overrides.insert(layer.key.clone(), visible);
+    }
+    (!overrides.is_empty()).then_some(overrides)
+}
+
+pub(in crate::bridge::host::snapshot::filters) fn current_layer_point_icon_visibility_overrides(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+) -> Option<BTreeMap<String, bool>> {
+    let mut overrides = BTreeMap::new();
+    for layer in current_layer_order(layer_registry, layer_runtime) {
+        if !is_fish_evidence_layer(layer) {
+            continue;
+        }
+        let visible = layer_runtime.point_icons_visible(layer.id);
+        if visible {
+            continue;
+        }
+        overrides.insert(layer.key.clone(), visible);
+    }
+    (!overrides.is_empty()).then_some(overrides)
+}
+
+pub(in crate::bridge::host::snapshot::filters) fn current_layer_point_icon_scale_overrides(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+) -> Option<BTreeMap<String, f32>> {
+    let mut overrides = BTreeMap::new();
+    for layer in current_layer_order(layer_registry, layer_runtime) {
+        if !is_fish_evidence_layer(layer) {
+            continue;
+        }
+        let scale = layer_runtime.point_icon_scale(layer.id);
+        if (scale - crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN).abs() <= f32::EPSILON {
+            continue;
+        }
+        overrides.insert(layer.key.clone(), scale);
     }
     (!overrides.is_empty()).then_some(overrides)
 }

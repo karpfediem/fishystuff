@@ -3,15 +3,17 @@ use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 use super::{
     FieldColorMode, FieldMetadataSourceSpec, FieldSourceSpec, GeometrySpace, LayerKind, LayerSpec,
     LayerTransform, LodPolicy, PickMode, VectorSourceSpec, WaypointSourceSpec,
+    FISH_EVIDENCE_LAYER_KEY,
 };
 
-const LOCAL_LAYER_CATALOG_REVISION: &str = "local-layer-catalog-v1";
+const LOCAL_LAYER_CATALOG_REVISION: &str = "local-layer-catalog-v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AvailableLayerTemplate {
     Bookmarks,
     Minimap,
     ZoneMask,
+    FishEvidence,
     RegionGroups,
     Regions,
     RegionNodes,
@@ -85,6 +87,15 @@ impl Default for AvailableLayerCatalog {
                     opacity_default: 0.35,
                     z_base: 10.0,
                     display_order: 10,
+                },
+                AvailableLayerDefinition {
+                    layer_id: FISH_EVIDENCE_LAYER_KEY.to_string(),
+                    name: "Fish Evidence".to_string(),
+                    template: AvailableLayerTemplate::FishEvidence,
+                    visible_default: true,
+                    opacity_default: 1.0,
+                    z_base: 40.0,
+                    display_order: 39,
                 },
                 AvailableLayerDefinition {
                     layer_id: "region_groups".to_string(),
@@ -275,6 +286,30 @@ fn build_local_layer_spec(
             },
             request_weight: 1.0,
             pick_mode: PickMode::ExactTilePixel,
+            display_order: entry.display_order,
+        },
+        AvailableLayerTemplate::FishEvidence => LayerSpec {
+            id: super::LayerId::from_raw(raw_id),
+            key: entry.layer_id.clone(),
+            name: entry.name.clone(),
+            visible_default: entry.visible_default,
+            opacity_default: entry.opacity_default,
+            z_base: entry.z_base,
+            kind: LayerKind::Waypoints,
+            tileset_url: String::new(),
+            tile_url_template: String::new(),
+            tileset_version: String::new(),
+            vector_source: None,
+            waypoint_source: None,
+            transform: LayerTransform::IdentityMapSpace,
+            tile_px: 0,
+            max_level: 0,
+            y_flip: false,
+            field_source: None,
+            field_metadata_source: None,
+            lod_policy: default_lod_policy(),
+            request_weight: 1.0,
+            pick_mode: PickMode::None,
             display_order: entry.display_order,
         },
         AvailableLayerTemplate::RegionGroups => build_vector_field_layer(

@@ -6,8 +6,9 @@ use super::snapshot::FishyMapHoverLayerSampleSnapshot;
 
 use super::normalize::{
     deserialize_nullable_string_field, normalize_i32_list, normalize_layer_bool_map,
-    normalize_layer_clip_mask_map, normalize_layer_opacity_map, normalize_string_list,
-    normalize_u32_list, normalize_u32_map,
+    normalize_layer_clip_mask_map, normalize_layer_opacity_map,
+    normalize_layer_point_icon_scale_map, normalize_string_list, normalize_u32_list,
+    normalize_u32_map,
 };
 use super::snapshot::FishyMapSelectionPointKind;
 use super::{
@@ -140,6 +141,8 @@ pub struct FishyMapFiltersPatch {
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
     pub layer_waypoint_connections_visible: Option<BTreeMap<String, bool>>,
     pub layer_waypoint_labels_visible: Option<BTreeMap<String, bool>>,
+    pub layer_point_icons_visible: Option<BTreeMap<String, bool>>,
+    pub layer_point_icon_scales: Option<BTreeMap<String, f32>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -159,6 +162,8 @@ pub struct FishyMapFiltersState {
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
     pub layer_waypoint_connections_visible: Option<BTreeMap<String, bool>>,
     pub layer_waypoint_labels_visible: Option<BTreeMap<String, bool>>,
+    pub layer_point_icons_visible: Option<BTreeMap<String, bool>>,
+    pub layer_point_icon_scales: Option<BTreeMap<String, f32>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -418,6 +423,20 @@ impl FishyMapInputState {
             if let Some(layer_waypoint_labels_visible) = filters.layer_waypoint_labels_visible {
                 let normalized = normalize_layer_bool_map(layer_waypoint_labels_visible);
                 self.filters.layer_waypoint_labels_visible =
+                    (!normalized.is_empty()).then_some(normalized);
+            }
+            if let Some(layer_point_icons_visible) = filters.layer_point_icons_visible {
+                let normalized = normalize_layer_bool_map(layer_point_icons_visible);
+                self.filters.layer_point_icons_visible =
+                    (!normalized.is_empty()).then_some(normalized);
+            }
+            if let Some(layer_point_icon_scales) = filters.layer_point_icon_scales {
+                let normalized = normalize_layer_point_icon_scale_map(
+                    layer_point_icon_scales,
+                    FISHYMAP_POINT_ICON_SCALE_MIN,
+                    FISHYMAP_POINT_ICON_SCALE_MAX,
+                );
+                self.filters.layer_point_icon_scales =
                     (!normalized.is_empty()).then_some(normalized);
             }
         }

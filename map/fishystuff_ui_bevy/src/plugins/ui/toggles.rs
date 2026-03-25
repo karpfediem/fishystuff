@@ -1,4 +1,5 @@
 use super::*;
+use crate::map::layers::FISH_EVIDENCE_LAYER_KEY;
 
 pub(super) type ToggleButtonInteractionQuery<'w, 's> = Query<
     'w,
@@ -49,7 +50,11 @@ pub(super) fn handle_toggle_buttons(
                 &mut text_q,
             );
         } else if points.is_some() {
-            display_state.show_points = !display_state.show_points;
+            let next = !display_state.show_points;
+            display_state.show_points = next;
+            if let Some(points_layer_id) = layer_registry.id_by_key(FISH_EVIDENCE_LAYER_KEY) {
+                layer_settings.set_visible(points_layer_id, next);
+            }
             apply_toggle_visuals(
                 display_state.show_points,
                 "Points",

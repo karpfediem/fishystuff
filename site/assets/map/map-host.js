@@ -69,7 +69,9 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     layerOpacities?: Record<string, number>,
  *     layerClipMasks?: Record<string, string>,
  *     layerWaypointConnectionsVisible?: Record<string, boolean>,
- *     layerWaypointLabelsVisible?: Record<string, boolean>
+ *     layerWaypointLabelsVisible?: Record<string, boolean>,
+ *     layerPointIconsVisible?: Record<string, boolean>,
+ *     layerPointIconScales?: Record<string, number>
  *   },
  *   ui?: {
  *     diagnosticsOpen?: boolean,
@@ -143,6 +145,8 @@ export function createEmptyInputState() {
       layerClipMasks: undefined,
       layerWaypointConnectionsVisible: undefined,
       layerWaypointLabelsVisible: undefined,
+      layerPointIconsVisible: undefined,
+      layerPointIconScales: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -180,6 +184,8 @@ export function createEmptySnapshot() {
       layerClipMasks: undefined,
       layerWaypointConnectionsVisible: undefined,
       layerWaypointLabelsVisible: undefined,
+      layerPointIconsVisible: undefined,
+      layerPointIconScales: undefined,
     },
     ui: {
       diagnosticsOpen: false,
@@ -552,6 +558,33 @@ function readPersistedLayerBoolMap(filters, key) {
   return Object.keys(values).length ? values : undefined;
 }
 
+function normalizeLayerPointIconScaleMap(values) {
+  if (!isPlainObject(values)) {
+    return {};
+  }
+  const out = {};
+  for (const [key, value] of Object.entries(values)) {
+    const layerId = String(key ?? "").trim();
+    if (!layerId) {
+      continue;
+    }
+    const scale = normalizePointIconScale(value);
+    if (scale === undefined) {
+      continue;
+    }
+    out[layerId] = scale;
+  }
+  return out;
+}
+
+function readPersistedLayerPointIconScales(filters) {
+  if (!isPlainObject(filters) || !hasOwn(filters, "layerPointIconScales")) {
+    return undefined;
+  }
+  const values = normalizeLayerPointIconScaleMap(filters.layerPointIconScales);
+  return Object.keys(values).length ? values : undefined;
+}
+
 function normalizeFishIds(values) {
   if (!Array.isArray(values)) {
     return [];
@@ -902,6 +935,16 @@ export function normalizeStatePatch(patch = {}) {
         patch.filters.layerWaypointLabelsVisible,
       );
     }
+    if (hasOwn(patch.filters, "layerPointIconsVisible")) {
+      normalized.filters.layerPointIconsVisible = normalizeLayerBoolMap(
+        patch.filters.layerPointIconsVisible,
+      );
+    }
+    if (hasOwn(patch.filters, "layerPointIconScales")) {
+      normalized.filters.layerPointIconScales = normalizeLayerPointIconScaleMap(
+        patch.filters.layerPointIconScales,
+      );
+    }
     if (!Object.keys(normalized.filters).length) {
       delete normalized.filters;
     }
@@ -1047,6 +1090,24 @@ export function mergeStatePatch(left, right) {
         base.filters.layerWaypointLabelsVisible,
       );
     }
+    if (patch.filters && hasOwn(patch.filters, "layerPointIconsVisible")) {
+      out.filters.layerPointIconsVisible = normalizeLayerBoolMap(
+        patch.filters.layerPointIconsVisible,
+      );
+    } else if (base.filters && hasOwn(base.filters, "layerPointIconsVisible")) {
+      out.filters.layerPointIconsVisible = normalizeLayerBoolMap(
+        base.filters.layerPointIconsVisible,
+      );
+    }
+    if (patch.filters && hasOwn(patch.filters, "layerPointIconScales")) {
+      out.filters.layerPointIconScales = normalizeLayerPointIconScaleMap(
+        patch.filters.layerPointIconScales,
+      );
+    } else if (base.filters && hasOwn(base.filters, "layerPointIconScales")) {
+      out.filters.layerPointIconScales = normalizeLayerPointIconScaleMap(
+        base.filters.layerPointIconScales,
+      );
+    }
   }
   if (base.ui || patch.ui) {
     out.ui = mergePatchBranch(base.ui, patch.ui);
@@ -1092,6 +1153,12 @@ export function applyStatePatch(inputState, patch) {
       : undefined,
     layerWaypointLabelsVisible: isPlainObject(current.filters?.layerWaypointLabelsVisible)
       ? normalizeLayerBoolMap(current.filters.layerWaypointLabelsVisible)
+      : undefined,
+    layerPointIconsVisible: isPlainObject(current.filters?.layerPointIconsVisible)
+      ? normalizeLayerBoolMap(current.filters.layerPointIconsVisible)
+      : undefined,
+    layerPointIconScales: isPlainObject(current.filters?.layerPointIconScales)
+      ? normalizeLayerPointIconScaleMap(current.filters.layerPointIconScales)
       : undefined,
   };
   next.ui = {
@@ -1170,6 +1237,16 @@ export function applyStatePatch(inputState, patch) {
     if (hasOwn(normalized.filters, "layerWaypointLabelsVisible")) {
       next.filters.layerWaypointLabelsVisible = normalizeLayerBoolMap(
         normalized.filters.layerWaypointLabelsVisible,
+      );
+    }
+    if (hasOwn(normalized.filters, "layerPointIconsVisible")) {
+      next.filters.layerPointIconsVisible = normalizeLayerBoolMap(
+        normalized.filters.layerPointIconsVisible,
+      );
+    }
+    if (hasOwn(normalized.filters, "layerPointIconScales")) {
+      next.filters.layerPointIconScales = normalizeLayerPointIconScaleMap(
+        normalized.filters.layerPointIconScales,
       );
     }
     if (
@@ -1695,6 +1772,17 @@ export function snapshotToRestorePatch(snapshot) {
     );
     if (layerWaypointLabelsVisible !== undefined) {
       patch.filters.layerWaypointLabelsVisible = layerWaypointLabelsVisible;
+    }
+    const layerPointIconsVisible = readPersistedLayerBoolMap(
+      snapshot.filters,
+      "layerPointIconsVisible",
+    );
+    if (layerPointIconsVisible !== undefined) {
+      patch.filters.layerPointIconsVisible = layerPointIconsVisible;
+    }
+    const layerPointIconScales = readPersistedLayerPointIconScales(snapshot.filters);
+    if (layerPointIconScales !== undefined) {
+      patch.filters.layerPointIconScales = layerPointIconScales;
     }
   }
   if (isPlainObject(snapshot.ui)) {
@@ -2610,6 +2698,12 @@ class FishyMapBridgeImpl {
     const hasExplicitWaypointLabels =
       isPlainObject(this.inputState.filters.layerWaypointLabelsVisible) &&
       Object.keys(this.inputState.filters.layerWaypointLabelsVisible).length > 0;
+    const hasExplicitPointIcons =
+      isPlainObject(this.inputState.filters.layerPointIconsVisible) &&
+      Object.keys(this.inputState.filters.layerPointIconsVisible).length > 0;
+    const hasExplicitPointIconScales =
+      isPlainObject(this.inputState.filters.layerPointIconScales) &&
+      Object.keys(this.inputState.filters.layerPointIconScales).length > 0;
     const semanticSelection = semanticFieldSelectionFromLayerSamples(
       state.selection?.layerSamples,
     );
@@ -2673,6 +2767,20 @@ class FishyMapBridgeImpl {
               ),
             }
           : {}),
+        ...(hasExplicitPointIcons
+          ? {
+              layerPointIconsVisible: normalizeLayerBoolMap(
+                this.inputState.filters.layerPointIconsVisible,
+              ),
+            }
+          : {}),
+        ...(hasExplicitPointIconScales
+          ? {
+              layerPointIconScales: normalizeLayerPointIconScaleMap(
+                this.inputState.filters.layerPointIconScales,
+              ),
+            }
+          : {}),
       },
       ui: {
         diagnosticsOpen: this.inputState.ui.diagnosticsOpen,
@@ -2707,6 +2815,12 @@ class FishyMapBridgeImpl {
     const hasExplicitWaypointLabels =
       isPlainObject(this.inputState.filters.layerWaypointLabelsVisible) &&
       Object.keys(this.inputState.filters.layerWaypointLabelsVisible).length > 0;
+    const hasExplicitPointIcons =
+      isPlainObject(this.inputState.filters.layerPointIconsVisible) &&
+      Object.keys(this.inputState.filters.layerPointIconsVisible).length > 0;
+    const hasExplicitPointIconScales =
+      isPlainObject(this.inputState.filters.layerPointIconScales) &&
+      Object.keys(this.inputState.filters.layerPointIconScales).length > 0;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
@@ -2746,6 +2860,20 @@ class FishyMapBridgeImpl {
           ? {
               layerWaypointLabelsVisible: normalizeLayerBoolMap(
                 this.inputState.filters.layerWaypointLabelsVisible,
+              ),
+            }
+          : {}),
+        ...(hasExplicitPointIcons
+          ? {
+              layerPointIconsVisible: normalizeLayerBoolMap(
+                this.inputState.filters.layerPointIconsVisible,
+              ),
+            }
+          : {}),
+        ...(hasExplicitPointIconScales
+          ? {
+              layerPointIconScales: normalizeLayerPointIconScaleMap(
+                this.inputState.filters.layerPointIconScales,
               ),
             }
           : {}),

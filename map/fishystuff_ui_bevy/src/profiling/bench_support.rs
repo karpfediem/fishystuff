@@ -430,6 +430,8 @@ fn runtime_state_for(layer: &LayerSpec) -> LayerRuntimeState {
         clip_mask_layer: None,
         waypoint_connections_visible: false,
         waypoint_labels_visible: false,
+        point_icons_visible: false,
+        point_icon_scale: crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN,
         z_base: layer.z_base,
         display_order: layer.display_order,
         current_base_lod: None,

@@ -1,4 +1,5 @@
 use super::super::*;
+use crate::map::layers::FISH_EVIDENCE_LAYER_KEY;
 
 type ViewToggleInteractionQuery<'w, 's> = Query<
     'w,
@@ -34,6 +35,8 @@ type ShowDrapeInteractionQuery<'w, 's> = Query<
 
 pub(in crate::map::ui_layers) fn handle_view_toggle_clicks(
     mut display_state: ResMut<MapDisplayState>,
+    layer_registry: Res<LayerRegistry>,
+    mut layer_settings: ResMut<LayerSettings>,
     mut interaction_q: ViewToggleInteractionQuery<'_, '_>,
 ) {
     for (button, interaction) in &mut interaction_q {
@@ -42,9 +45,19 @@ pub(in crate::map::ui_layers) fn handle_view_toggle_clicks(
         }
         match button.kind {
             ViewToggleKind::Effort => display_state.show_effort = !display_state.show_effort,
-            ViewToggleKind::Points => display_state.show_points = !display_state.show_points,
+            ViewToggleKind::Points => {
+                let next = !display_state.show_points;
+                display_state.show_points = next;
+                if let Some(points_layer_id) = layer_registry.id_by_key(FISH_EVIDENCE_LAYER_KEY) {
+                    layer_settings.set_visible(points_layer_id, next);
+                }
+            }
             ViewToggleKind::PointIcons => {
-                display_state.show_point_icons = !display_state.show_point_icons
+                let next = !display_state.show_point_icons;
+                display_state.show_point_icons = next;
+                if let Some(points_layer_id) = layer_registry.id_by_key(FISH_EVIDENCE_LAYER_KEY) {
+                    layer_settings.set_point_icons_visible(points_layer_id, next);
+                }
             }
             ViewToggleKind::Drift => display_state.show_drift = !display_state.show_drift,
         }

@@ -166,3 +166,65 @@ pub(in crate::bridge::host) fn reset_layer_waypoint_labels_override(
         layer_runtime.set_waypoint_labels_visible(layer.id, visible);
     }
 }
+
+pub(in crate::bridge::host) fn apply_layer_point_icon_visibility_override(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &mut LayerRuntime,
+    overrides: &BTreeMap<String, bool>,
+) {
+    for (layer_id, visible) in overrides {
+        let trimmed = layer_id.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some(layer) = layer_registry.get_by_key(trimmed) else {
+            continue;
+        };
+        if layer.key != crate::map::layers::FISH_EVIDENCE_LAYER_KEY {
+            continue;
+        }
+        layer_runtime.set_point_icons_visible(layer.id, *visible);
+    }
+}
+
+pub(in crate::bridge::host) fn reset_layer_point_icon_visibility_override(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &mut LayerRuntime,
+) {
+    for layer in layer_registry.ordered() {
+        let visible = layer.key == crate::map::layers::FISH_EVIDENCE_LAYER_KEY;
+        layer_runtime.set_point_icons_visible(layer.id, visible);
+    }
+}
+
+pub(in crate::bridge::host) fn apply_layer_point_icon_scale_override(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &mut LayerRuntime,
+    overrides: &BTreeMap<String, f32>,
+) {
+    for (layer_id, scale) in overrides {
+        let trimmed = layer_id.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let Some(layer) = layer_registry.get_by_key(trimmed) else {
+            continue;
+        };
+        if layer.key != crate::map::layers::FISH_EVIDENCE_LAYER_KEY {
+            continue;
+        }
+        layer_runtime.set_point_icon_scale(layer.id, *scale);
+    }
+}
+
+pub(in crate::bridge::host) fn reset_layer_point_icon_scale_override(
+    layer_registry: &LayerRegistry,
+    layer_runtime: &mut LayerRuntime,
+) {
+    for layer in layer_registry.ordered() {
+        layer_runtime.set_point_icon_scale(
+            layer.id,
+            crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN,
+        );
+    }
+}

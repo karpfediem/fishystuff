@@ -42,8 +42,8 @@ type PointIconQuery<'w, 's> = Query<
 >;
 
 pub(super) const RING_RADIUS_GAME_UNITS: f32 = 500.0;
-const RING_Z: f32 = 40.0;
-const ICON_Z: f32 = 40.2;
+const RING_Z_OFFSET: f32 = 0.0;
+const ICON_Z_OFFSET: f32 = 0.2;
 const ICON_SIZE_SCREEN_PX: f32 = 12.0;
 const RING_TEXTURE_SIZE_PX: usize = 32;
 const RING_TEXTURE_THICKNESS_PX: f32 = 3.5;
@@ -208,7 +208,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
                     custom_size: Some(Vec2::splat(context.ring_assets.diameter_map_px)),
                     ..default()
                 },
-                Transform::from_xyz(0.0, 0.0, RING_Z),
+                Transform::from_xyz(0.0, 0.0, context.display_state.point_z_base + RING_Z_OFFSET),
                 Visibility::Hidden,
             ))
             .id();
@@ -222,7 +222,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
                     custom_size: Some(Vec2::splat(icon_size_world_units)),
                     ..default()
                 },
-                Transform::from_xyz(0.0, 0.0, ICON_Z),
+                Transform::from_xyz(0.0, 0.0, context.display_state.point_z_base + ICON_Z_OFFSET),
                 Visibility::Hidden,
             ))
             .id();
@@ -231,6 +231,9 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
 
     let mut visible_icon_count = 0usize;
     let mut visible_fish_ids = Vec::new();
+    let point_opacity = context.display_state.point_opacity.clamp(0.0, 1.0);
+    let ring_z = context.display_state.point_z_base + RING_Z_OFFSET;
+    let icon_z = context.display_state.point_z_base + ICON_Z_OFFSET;
     for (idx, point) in context.points.points.iter().enumerate() {
         let world = map_point_to_world(point);
         let pair = context.pool.markers[idx];
@@ -240,16 +243,16 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
         if let Ok((mut transform, mut visibility, mut sprite)) = context.rings.get_mut(pair.ring) {
             transform.translation.x = world.x as f32;
             transform.translation.y = world.z as f32;
-            transform.translation.z = RING_Z;
+            transform.translation.z = ring_z;
             sprite.custom_size = Some(Vec2::splat(ring_diameter_world));
-            sprite.color = Color::srgba(1.0, 1.0, 1.0, ring_alpha);
+            sprite.color = Color::srgba(1.0, 1.0, 1.0, ring_alpha * point_opacity);
             *visibility = Visibility::Visible;
         }
 
         if let Ok((mut transform, mut visibility, mut sprite)) = context.icons.get_mut(pair.icon) {
             transform.translation.x = world.x as f32;
             transform.translation.y = world.z as f32;
-            transform.translation.z = ICON_Z;
+            transform.translation.z = icon_z;
 
             if context.points.icons_enabled {
                 if let Some(handle) = icon_handle_for_point(
@@ -261,7 +264,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
                     if sprite.image != handle {
                         sprite.image = handle;
                     }
-                    sprite.color = Color::WHITE;
+                    sprite.color = Color::srgba(1.0, 1.0, 1.0, point_opacity);
                     sprite.custom_size = Some(Vec2::splat(icon_diameter_world));
                     *visibility = Visibility::Visible;
                     visible_icon_count += 1;

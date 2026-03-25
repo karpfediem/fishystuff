@@ -2,11 +2,14 @@ use super::super::scroll::{
     cursor_x_in_track, point_icon_scale_from_ratio, point_icon_scale_to_ratio, val_to_px,
 };
 use super::super::*;
+use crate::map::layers::FISH_EVIDENCE_LAYER_KEY;
 
 pub(in crate::plugins::ui) fn handle_point_icon_size_slider_drag(
     windows: Query<&Window, With<PrimaryWindow>>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut display_state: ResMut<MapDisplayState>,
+    layer_registry: Res<LayerRegistry>,
+    mut layer_settings: ResMut<LayerSettings>,
     mut drag_state: ResMut<PointIconSizeSliderDragState>,
     track_q: Query<
         (
@@ -70,6 +73,9 @@ pub(in crate::plugins::ui) fn handle_point_icon_size_slider_drag(
     let travel_w = (track_w - thumb_w).max(0.0);
     if travel_w <= f32::EPSILON {
         display_state.point_icon_scale = POINT_ICON_SCALE_MAX;
+        if let Some(points_layer_id) = layer_registry.id_by_key(FISH_EVIDENCE_LAYER_KEY) {
+            layer_settings.set_point_icon_scale(points_layer_id, display_state.point_icon_scale);
+        }
         drag_state.active = false;
         return;
     }
@@ -103,6 +109,9 @@ pub(in crate::plugins::ui) fn handle_point_icon_size_slider_drag(
     let desired_thumb_left = (cursor_track_x - drag_state.grab_offset_px).clamp(0.0, travel_w);
     let ratio = (desired_thumb_left / travel_w).clamp(0.0, 1.0);
     display_state.point_icon_scale = point_icon_scale_from_ratio(ratio);
+    if let Some(points_layer_id) = layer_registry.id_by_key(FISH_EVIDENCE_LAYER_KEY) {
+        layer_settings.set_point_icon_scale(points_layer_id, display_state.point_icon_scale);
+    }
 }
 
 pub(in crate::plugins::ui) fn sync_point_icon_size_slider(

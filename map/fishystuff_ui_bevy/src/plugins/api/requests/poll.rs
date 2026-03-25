@@ -11,7 +11,7 @@ use super::super::state::{
     SelectionState,
 };
 use super::apply::apply_meta_response;
-use crate::plugins::local_layers::sync_zone_mask_controls;
+use crate::plugins::local_layers::sync_display_layer_controls;
 
 pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
     if let Some(receiver) = state.pending.meta.as_ref() {
@@ -117,7 +117,7 @@ pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
         }
     }
 
-    sync_zone_mask_controls(
+    sync_display_layer_controls(
         &mut state.display_state,
         &state.layer_registry,
         &state.layer_runtime,

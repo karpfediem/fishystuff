@@ -11,6 +11,7 @@ use crate::plugins::api::{
 };
 use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::{Map2dCamera, Terrain3dCamera};
+use crate::plugins::local_layers::sync_display_layer_controls;
 use crate::prelude::*;
 
 pub(in crate::bridge::host) fn apply_browser_input_state(
@@ -40,6 +41,7 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
     filters::apply_semantic_field_filters(&bridge.input, &mut semantic_filter);
     filters::apply_patch_filters(&bridge.input, &mut patch_filter);
     layers::apply_layer_filters(&bridge.input, &layer_registry, &mut layer_runtime);
+    sync_display_layer_controls(&mut display_state, &layer_registry, &layer_runtime);
     theme::apply_theme_background(
         &bridge.input,
         &mut clear_color,

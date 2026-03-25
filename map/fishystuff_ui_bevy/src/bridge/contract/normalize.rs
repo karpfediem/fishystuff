@@ -100,3 +100,19 @@ pub fn normalize_layer_bool_map(values: BTreeMap<String, bool>) -> BTreeMap<Stri
     }
     out
 }
+
+pub fn normalize_layer_point_icon_scale_map(
+    values: BTreeMap<String, f32>,
+    min: f32,
+    max: f32,
+) -> BTreeMap<String, f32> {
+    let mut out = BTreeMap::new();
+    for (key, value) in values {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        out.insert(trimmed.to_string(), value.clamp(min, max));
+    }
+    out
+}

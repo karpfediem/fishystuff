@@ -164,6 +164,11 @@ pub struct FishyMapLayerSummary {
     pub supports_waypoint_labels: bool,
     pub waypoint_labels_visible: bool,
     pub waypoint_labels_default: bool,
+    pub supports_point_icons: bool,
+    pub point_icons_visible: bool,
+    pub point_icons_default: bool,
+    pub point_icon_scale: f32,
+    pub point_icon_scale_default: f32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
