@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -25,7 +25,6 @@ const REGIONINFO_ROW_ACCESSIBLE_OFFSET: usize = 27;
 const REGIONINFO_ROW_TRADE_ORIGIN_OFFSET: usize = 102;
 const REGIONINFO_ROW_GROUP_OFFSET: usize = 104;
 const REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET: usize = 106;
-const REGIONINFO_ROW_WAYPOINT_SECONDARY_OFFSET: usize = 110;
 const REGIONINFO_ROW_MIN_LEN: usize = 193;
 const REGIONGROUPINFO_ROW_LEN: usize = 51;
 const REGIONGROUPINFO_ROW_WAYPOINT_OFFSET: usize = 5;
@@ -87,6 +86,88 @@ pub struct RegionOriginInfo {
     pub waypoint_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaypointNodeType {
+    City,
+    Town,
+    Village,
+    TradingPost,
+    WorkerNode,
+    Gateway,
+    Castle,
+    Connection,
+    Island,
+    Sea,
+    Danger,
+}
+
+impl WaypointNodeType {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::City => "city",
+            Self::Town => "town",
+            Self::Village => "village",
+            Self::TradingPost => "trading_post",
+            Self::WorkerNode => "worker_node",
+            Self::Gateway => "gateway",
+            Self::Castle => "castle",
+            Self::Connection => "connection",
+            Self::Island => "island",
+            Self::Sea => "sea",
+            Self::Danger => "danger",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::City => "City",
+            Self::Town => "Town",
+            Self::Village => "Village",
+            Self::TradingPost => "Trading Post",
+            Self::WorkerNode => "Worker Node",
+            Self::Gateway => "Gateway",
+            Self::Castle => "Castle",
+            Self::Connection => "Connection",
+            Self::Island => "Island",
+            Self::Sea => "Sea",
+            Self::Danger => "Danger",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaypointDisplayClass {
+    Main,
+    Hidden,
+    SubWaypoint,
+}
+
+impl WaypointDisplayClass {
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Main => "main",
+            Self::Hidden => "hidden",
+            Self::SubWaypoint => "subwaypoint",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Main => "Main",
+            Self::Hidden => "Hidden",
+            Self::SubWaypoint => "Sub-Waypoint",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WaypointDisplayInfo {
+    pub display_class: WaypointDisplayClass,
+    pub referenced_by_region: bool,
+    pub referenced_by_region_group: bool,
+    pub default_visible: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct RegionGroupMapping {
     region_to_group: BTreeMap<u16, u16>,
@@ -111,7 +192,14 @@ pub struct OriginalRegionLayerContext {
     regioninfo: HashMap<u32, OriginalRegionInfoRow>,
     regiongroupinfo: HashMap<u32, OriginalRegionGroupInfoRow>,
     waypoints: HashMap<u32, OriginalWaypointRow>,
+    waypoint_links: HashMap<u32, Vec<u32>>,
     localization: LocalizationTable,
+}
+
+#[derive(Debug, Clone)]
+struct OriginalWaypointGraph {
+    rows: HashMap<u32, OriginalWaypointRow>,
+    links: HashMap<u32, Vec<u32>>,
 }
 
 impl OriginalRegionLayerContext {
@@ -127,6 +215,58 @@ impl OriginalRegionLayerContext {
             .and_then(|row| non_zero_u32(row.regiongroup))
     }
 
+    pub fn region_node_connection_pairs(&self) -> Vec<(u32, u32)> {
+        let mut waypoint_to_regions = BTreeMap::<u32, Vec<u32>>::new();
+        for region_id in self.region_ids() {
+            let Some(waypoint_id) = self
+                .regioninfo
+                .get(&region_id)
+                .and_then(|row| row.waypoint)
+                .filter(|waypoint_id| self.waypoints.contains_key(waypoint_id))
+            else {
+                continue;
+            };
+            waypoint_to_regions
+                .entry(waypoint_id)
+                .or_default()
+                .push(region_id);
+        }
+
+        let main_waypoints = waypoint_to_regions.keys().copied().collect::<BTreeSet<_>>();
+        let mut pairs = BTreeSet::new();
+        for (waypoint_id, neighbors) in &self.waypoint_links {
+            if !main_waypoints.contains(waypoint_id) {
+                continue;
+            }
+            let Some(from_regions) = waypoint_to_regions.get(waypoint_id) else {
+                continue;
+            };
+            for neighbor in neighbors {
+                if !main_waypoints.contains(neighbor) || *waypoint_id >= *neighbor {
+                    continue;
+                }
+                let Some(to_regions) = waypoint_to_regions.get(neighbor) else {
+                    continue;
+                };
+                for from_region_id in from_regions {
+                    for to_region_id in to_regions {
+                        if from_region_id == to_region_id {
+                            continue;
+                        }
+                        let pair = if from_region_id < to_region_id {
+                            (*from_region_id, *to_region_id)
+                        } else {
+                            (*to_region_id, *from_region_id)
+                        };
+                        pairs.insert(pair);
+                    }
+                }
+            }
+        }
+
+        pairs.into_iter().collect()
+    }
+
     pub fn resolve_region_waypoint_info(&self, region_id: u32) -> Option<RegionOriginInfo> {
         let row = self.regioninfo.get(&region_id)?;
         let waypoint_id = row.waypoint;
@@ -140,6 +280,11 @@ impl OriginalRegionLayerContext {
             waypoint_name: waypoint_id.and_then(|id| self.resolve_waypoint_name(id)),
         };
         info.has_value().then_some(info)
+    }
+
+    pub fn resolve_region_waypoint_node_type(&self, region_id: u32) -> Option<WaypointNodeType> {
+        let waypoint_id = self.regioninfo.get(&region_id)?.waypoint?;
+        self.resolve_waypoint_node_type(waypoint_id)
     }
 
     pub fn resolve_region_origin_info(&self, region_id: u32) -> Option<RegionOriginInfo> {
@@ -236,6 +381,38 @@ impl OriginalRegionLayerContext {
         Some((waypoint.pos_x, waypoint.pos_z))
     }
 
+    pub fn resolve_waypoint_node_type(&self, waypoint_id: u32) -> Option<WaypointNodeType> {
+        let waypoint = self.waypoints.get(&waypoint_id)?;
+        classify_waypoint_node_type(&waypoint.raw_name)
+    }
+
+    pub fn resolve_waypoint_display_info(&self, waypoint_id: u32) -> Option<WaypointDisplayInfo> {
+        let waypoint = self.waypoints.get(&waypoint_id)?;
+        let referenced_by_region = self
+            .regioninfo
+            .values()
+            .any(|row| row.waypoint == Some(waypoint_id));
+        let referenced_by_region_group = self
+            .regiongroupinfo
+            .values()
+            .any(|row| row.waypoint == Some(waypoint_id));
+        let display_class = if waypoint.is_sub_waypoint {
+            WaypointDisplayClass::SubWaypoint
+        } else if is_hidden_waypoint_name(&waypoint.raw_name) {
+            WaypointDisplayClass::Hidden
+        } else {
+            WaypointDisplayClass::Main
+        };
+        Some(WaypointDisplayInfo {
+            display_class,
+            referenced_by_region,
+            referenced_by_region_group,
+            default_visible: display_class == WaypointDisplayClass::Main
+                || referenced_by_region
+                || referenced_by_region_group,
+        })
+    }
+
     fn resolve_resource_region_id(
         &self,
         resource: &RegionGroupWaypointInfo,
@@ -294,13 +471,14 @@ pub fn load_original_region_layer_context(
         .into_iter()
         .map(|row| (row.key, row))
         .collect();
-    let waypoints = load_waypoint_rows(waypoint_xml_paths)?;
+    let waypoint_graph = load_waypoint_graph(waypoint_xml_paths)?;
     let localization = load_localization(loc_path)?;
 
     Ok(OriginalRegionLayerContext {
         regioninfo,
         regiongroupinfo,
-        waypoints,
+        waypoints: waypoint_graph.rows,
+        waypoint_links: waypoint_graph.links,
         localization,
     })
 }
@@ -399,11 +577,7 @@ fn decode_regioninfo_bss_rows(bytes: &[u8]) -> Result<Vec<OriginalRegionInfoRow>
         let waypoint = decode_shifted_u32_field(
             bytes,
             row_start_offset + REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET,
-        )?
-        .or(decode_shifted_u32_field(
-            bytes,
-            row_start_offset + REGIONINFO_ROW_WAYPOINT_SECONDARY_OFFSET,
-        )?);
+        )?;
 
         rows.entry(key).or_insert(OriginalRegionInfoRow {
             key,
@@ -493,52 +667,79 @@ fn decode_regiongroupinfo_bss_rows(bytes: &[u8]) -> Result<Vec<OriginalRegionGro
     Ok(rows)
 }
 
-fn load_waypoint_rows(paths: &[PathBuf]) -> Result<HashMap<u32, OriginalWaypointRow>> {
+fn load_waypoint_graph(paths: &[PathBuf]) -> Result<OriginalWaypointGraph> {
     let mut rows = HashMap::new();
+    let mut links = HashMap::<u32, BTreeSet<u32>>::new();
     for (source_index, path) in paths.iter().enumerate() {
         let bytes = fs::read(path)
             .with_context(|| format!("failed to read waypoint XML {}", path.display()))?;
         let contents = String::from_utf8_lossy(&bytes);
         for raw_line in contents.lines() {
             let line = raw_line.trim();
-            if !line.starts_with("<Waypoint ") {
+            if line.starts_with("<Waypoint ") {
+                let key = parse_attr_u32(line, "Key").with_context(|| {
+                    format!("failed to parse waypoint key in {}", path.display())
+                })?;
+                let candidate = OriginalWaypointRow {
+                    key,
+                    raw_name: parse_attr_string(line, "Name").with_context(|| {
+                        format!("failed to parse waypoint name in {}", path.display())
+                    })?,
+                    pos_x: parse_attr_f64(line, "PosX").with_context(|| {
+                        format!("failed to parse waypoint PosX in {}", path.display())
+                    })?,
+                    pos_y: parse_attr_f64(line, "PosY").with_context(|| {
+                        format!("failed to parse waypoint PosY in {}", path.display())
+                    })?,
+                    pos_z: parse_attr_f64(line, "PosZ").with_context(|| {
+                        format!("failed to parse waypoint PosZ in {}", path.display())
+                    })?,
+                    is_sub_waypoint: parse_attr_bool(line, "IsSubWaypoint").with_context(|| {
+                        format!(
+                            "failed to parse waypoint IsSubWaypoint in {}",
+                            path.display()
+                        )
+                    })?,
+                    source_index,
+                };
+                rows.entry(key)
+                    .and_modify(|existing| {
+                        if should_replace_waypoint_row(existing, &candidate) {
+                            *existing = candidate.clone();
+                        }
+                    })
+                    .or_insert(candidate);
                 continue;
             }
-
-            let key = parse_attr_u32(line, "Key")
-                .with_context(|| format!("failed to parse waypoint key in {}", path.display()))?;
-            let candidate = OriginalWaypointRow {
-                key,
-                raw_name: parse_attr_string(line, "Name").with_context(|| {
-                    format!("failed to parse waypoint name in {}", path.display())
-                })?,
-                pos_x: parse_attr_f64(line, "PosX").with_context(|| {
-                    format!("failed to parse waypoint PosX in {}", path.display())
-                })?,
-                pos_y: parse_attr_f64(line, "PosY").with_context(|| {
-                    format!("failed to parse waypoint PosY in {}", path.display())
-                })?,
-                pos_z: parse_attr_f64(line, "PosZ").with_context(|| {
-                    format!("failed to parse waypoint PosZ in {}", path.display())
-                })?,
-                is_sub_waypoint: parse_attr_bool(line, "IsSubWaypoint").with_context(|| {
-                    format!(
-                        "failed to parse waypoint IsSubWaypoint in {}",
-                        path.display()
-                    )
-                })?,
-                source_index,
-            };
-            rows.entry(key)
-                .and_modify(|existing| {
-                    if should_replace_waypoint_row(existing, &candidate) {
-                        *existing = candidate.clone();
-                    }
-                })
-                .or_insert(candidate);
+            if !line.starts_with("<Link ") {
+                continue;
+            }
+            let source_waypoint = parse_attr_u32(line, "SourceWaypoint").with_context(|| {
+                format!("failed to parse link SourceWaypoint in {}", path.display())
+            })?;
+            let target_waypoint = parse_attr_u32(line, "TargetWaypoint").with_context(|| {
+                format!("failed to parse link TargetWaypoint in {}", path.display())
+            })?;
+            if source_waypoint == 0 || target_waypoint == 0 || source_waypoint == target_waypoint {
+                continue;
+            }
+            links
+                .entry(source_waypoint)
+                .or_default()
+                .insert(target_waypoint);
+            links
+                .entry(target_waypoint)
+                .or_default()
+                .insert(source_waypoint);
         }
     }
-    Ok(rows)
+    Ok(OriginalWaypointGraph {
+        rows,
+        links: links
+            .into_iter()
+            .map(|(key, neighbors)| (key, neighbors.into_iter().collect()))
+            .collect(),
+    })
 }
 
 fn should_replace_waypoint_row(
@@ -949,6 +1150,66 @@ fn resolve_region_name(loc: &LocalizationTable, origin_region_id: Option<u32>) -
         .or_else(|| origin_region_id.and_then(|id| localized_name(&loc.node, id)))
 }
 
+fn classify_waypoint_node_type(raw_name: &str) -> Option<WaypointNodeType> {
+    let normalized = raw_name.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return None;
+    }
+    if normalized.contains("danger") {
+        return Some(WaypointNodeType::Danger);
+    }
+    if normalized.starts_with("hidden_town_") {
+        if normalized.contains("(trade)") || normalized.contains("post") {
+            return Some(WaypointNodeType::TradingPost);
+        }
+        if normalized.contains("(worker)") {
+            return Some(WaypointNodeType::WorkerNode);
+        }
+        return Some(WaypointNodeType::Town);
+    }
+    if let Some(token) = normalized
+        .strip_prefix("town(")
+        .and_then(|value| value.strip_suffix(')'))
+    {
+        if token.contains("city") {
+            return Some(WaypointNodeType::City);
+        }
+        if token.contains("village") {
+            return Some(WaypointNodeType::Village);
+        }
+        if token.contains("post") || token.contains("trade") || token.contains("specialty") {
+            return Some(WaypointNodeType::TradingPost);
+        }
+        return Some(WaypointNodeType::Town);
+    }
+    if normalized.starts_with("gateway(") {
+        return Some(WaypointNodeType::Gateway);
+    }
+    if normalized.starts_with("castle(") {
+        return Some(WaypointNodeType::Castle);
+    }
+    if normalized.starts_with("island(") {
+        return Some(WaypointNodeType::Island);
+    }
+    if normalized.starts_with("ocean(") || normalized.starts_with("seas(") {
+        return Some(WaypointNodeType::Sea);
+    }
+    if normalized.starts_with("field(")
+        || normalized.starts_with("filed(")
+        || normalized.starts_with("hidden_field_")
+        || normalized.starts_with("safe_field")
+        || normalized.starts_with("workplace")
+    {
+        return Some(WaypointNodeType::Connection);
+    }
+    None
+}
+
+fn is_hidden_waypoint_name(raw_name: &str) -> bool {
+    let normalized = raw_name.trim().to_ascii_lowercase();
+    normalized.starts_with("hidden_")
+}
+
 fn localized_name(map: &BTreeMap<String, String>, key: u32) -> Option<String> {
     let value = map.get(&key.to_string())?;
     let trimmed = value.trim();
@@ -1021,15 +1282,16 @@ fn non_zero_u32(value: u32) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_regiongroupinfo_bss_rows, decode_regioninfo_bss_rows,
-        load_region_group_mapping_from_regioninfo_bss, load_waypoint_rows, parse_attr_f64,
-        parse_attr_u32, LocalizationTable, OriginalRegionInfoRow, OriginalRegionLayerContext,
-        OriginalWaypointRow, PABR_MAGIC, REGIONGROUPINFO_ROW_GRAPHX_OFFSET,
-        REGIONGROUPINFO_ROW_GRAPHY_OFFSET, REGIONGROUPINFO_ROW_GRAPHZ_OFFSET,
-        REGIONGROUPINFO_ROW_LEN, REGIONGROUPINFO_ROW_WAYPOINT_OFFSET,
-        REGIONINFO_ROW_ACCESSIBLE_OFFSET, REGIONINFO_ROW_GROUP_OFFSET,
-        REGIONINFO_ROW_SIGNATURE_OFFSET, REGIONINFO_ROW_SIGNATURE_PREFIX,
-        REGIONINFO_ROW_TRADE_ORIGIN_OFFSET, REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET,
+        classify_waypoint_node_type, decode_regiongroupinfo_bss_rows, decode_regioninfo_bss_rows,
+        load_region_group_mapping_from_regioninfo_bss, load_waypoint_graph, parse_attr_f64,
+        parse_attr_u32, LocalizationTable, OriginalRegionGroupInfoRow, OriginalRegionInfoRow,
+        OriginalRegionLayerContext, OriginalWaypointRow, WaypointDisplayClass, WaypointNodeType,
+        PABR_MAGIC, REGIONGROUPINFO_ROW_GRAPHX_OFFSET, REGIONGROUPINFO_ROW_GRAPHY_OFFSET,
+        REGIONGROUPINFO_ROW_GRAPHZ_OFFSET, REGIONGROUPINFO_ROW_LEN,
+        REGIONGROUPINFO_ROW_WAYPOINT_OFFSET, REGIONINFO_ROW_ACCESSIBLE_OFFSET,
+        REGIONINFO_ROW_GROUP_OFFSET, REGIONINFO_ROW_SIGNATURE_OFFSET,
+        REGIONINFO_ROW_SIGNATURE_PREFIX, REGIONINFO_ROW_TRADE_ORIGIN_OFFSET,
+        REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET,
     };
     use std::collections::HashMap;
     use std::fs;
@@ -1094,7 +1356,7 @@ mod tests {
     }
 
     #[test]
-    fn load_waypoint_rows_prefers_non_subwaypoint_and_later_source() {
+    fn load_waypoint_graph_prefers_non_subwaypoint_and_later_source() {
         let temp_dir = std::env::temp_dir().join("fishystuff_waypoint_xml_test");
         fs::create_dir_all(&temp_dir).unwrap();
         let primary = temp_dir.join("mapdata_realexplore.xml");
@@ -1103,7 +1365,8 @@ mod tests {
             &primary,
             concat!(
                 "<Waypoint Key=\"1147\" Name=\"field(stonebeakshore)\" PosX=\"305927\" PosY=\"-414.348\" PosZ=\"-37179.1\" Property=\"ground\" IsSubWaypoint=\"True\" IsEscape=\"False\"/>\n",
-                "<Waypoint Key=\"45\" Name=\"field(toscani's_farm)\" PosX=\"-29592.9\" PosY=\"-2909.08\" PosZ=\"26244.2\" Property=\"all\" IsSubWaypoint=\"False\" IsEscape=\"False\"/>\n"
+                "<Waypoint Key=\"45\" Name=\"field(toscani's_farm)\" PosX=\"-29592.9\" PosY=\"-2909.08\" PosZ=\"26244.2\" Property=\"all\" IsSubWaypoint=\"False\" IsEscape=\"False\"/>\n",
+                "<Link SourceWaypoint=\"1147\" TargetWaypoint=\"45\"/>\n"
             ),
         )
         .unwrap();
@@ -1116,17 +1379,155 @@ mod tests {
         )
         .unwrap();
 
-        let rows = load_waypoint_rows(&[primary.clone(), secondary.clone()]).unwrap();
-        let stonebeak = rows.get(&1147).unwrap();
+        let graph = load_waypoint_graph(&[primary.clone(), secondary.clone()]).unwrap();
+        let stonebeak = graph.rows.get(&1147).unwrap();
         assert_eq!(stonebeak.pos_x, 303191.0);
         assert_eq!(stonebeak.pos_z, -1694.35);
-        let toscani = rows.get(&45).unwrap();
+        let toscani = graph.rows.get(&45).unwrap();
         assert_eq!(toscani.pos_x, -30432.3);
         assert_eq!(toscani.pos_z, 28481.4);
+        assert_eq!(graph.links.get(&1147), Some(&vec![45]));
+        assert_eq!(graph.links.get(&45), Some(&vec![1147]));
 
         fs::remove_file(primary).ok();
         fs::remove_file(secondary).ok();
         fs::remove_dir(temp_dir).ok();
+    }
+
+    #[test]
+    fn classify_waypoint_node_type_uses_internal_waypoint_name_patterns() {
+        assert_eq!(
+            classify_waypoint_node_type("town(calpheoncity)"),
+            Some(WaypointNodeType::City)
+        );
+        assert_eq!(
+            classify_waypoint_node_type("town(trentvillage)"),
+            Some(WaypointNodeType::Village)
+        );
+        assert_eq!(
+            classify_waypoint_node_type("town(barhan_post)"),
+            Some(WaypointNodeType::TradingPost)
+        );
+        assert_eq!(
+            classify_waypoint_node_type("gateway(west_velia_gateway)"),
+            Some(WaypointNodeType::Gateway)
+        );
+        assert_eq!(
+            classify_waypoint_node_type("field(stonebeakshore)"),
+            Some(WaypointNodeType::Connection)
+        );
+    }
+
+    #[test]
+    fn resolve_waypoint_display_info_combines_hidden_subwaypoint_and_reference_signals() {
+        let context = OriginalRegionLayerContext {
+            regioninfo: [(
+                204,
+                OriginalRegionInfoRow {
+                    key: 204,
+                    is_accessible: true,
+                    tradeoriginregion: 204,
+                    regiongroup: 55,
+                    waypoint: Some(45),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            regiongroupinfo: [(
+                58,
+                OriginalRegionGroupInfoRow {
+                    key: 58,
+                    waypoint: Some(46),
+                    graphx: 0.0,
+                    graphy: 0.0,
+                    graphz: 0.0,
+                },
+            )]
+            .into_iter()
+            .collect(),
+            waypoints: [
+                (
+                    45,
+                    OriginalWaypointRow {
+                        key: 45,
+                        raw_name: "town(velia)".to_string(),
+                        pos_x: 0.0,
+                        pos_y: 0.0,
+                        pos_z: 0.0,
+                        is_sub_waypoint: false,
+                        source_index: 0,
+                    },
+                ),
+                (
+                    46,
+                    OriginalWaypointRow {
+                        key: 46,
+                        raw_name: "hidden_field_test".to_string(),
+                        pos_x: 0.0,
+                        pos_y: 0.0,
+                        pos_z: 0.0,
+                        is_sub_waypoint: false,
+                        source_index: 0,
+                    },
+                ),
+                (
+                    47,
+                    OriginalWaypointRow {
+                        key: 47,
+                        raw_name: "hidden_field_unreferenced".to_string(),
+                        pos_x: 0.0,
+                        pos_y: 0.0,
+                        pos_z: 0.0,
+                        is_sub_waypoint: false,
+                        source_index: 0,
+                    },
+                ),
+                (
+                    48,
+                    OriginalWaypointRow {
+                        key: 48,
+                        raw_name: "road(subwaypoint)".to_string(),
+                        pos_x: 0.0,
+                        pos_y: 0.0,
+                        pos_z: 0.0,
+                        is_sub_waypoint: true,
+                        source_index: 0,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            waypoint_links: HashMap::new(),
+            localization: LocalizationTable::default(),
+        };
+
+        let region_ref = context.resolve_waypoint_display_info(45).unwrap();
+        assert_eq!(region_ref.display_class, WaypointDisplayClass::Main);
+        assert!(region_ref.referenced_by_region);
+        assert!(!region_ref.referenced_by_region_group);
+        assert!(region_ref.default_visible);
+
+        let hidden_group_ref = context.resolve_waypoint_display_info(46).unwrap();
+        assert_eq!(hidden_group_ref.display_class, WaypointDisplayClass::Hidden);
+        assert!(!hidden_group_ref.referenced_by_region);
+        assert!(hidden_group_ref.referenced_by_region_group);
+        assert!(hidden_group_ref.default_visible);
+
+        let hidden_unreferenced = context.resolve_waypoint_display_info(47).unwrap();
+        assert_eq!(
+            hidden_unreferenced.display_class,
+            WaypointDisplayClass::Hidden
+        );
+        assert!(!hidden_unreferenced.referenced_by_region);
+        assert!(!hidden_unreferenced.referenced_by_region_group);
+        assert!(!hidden_unreferenced.default_visible);
+
+        let sub_waypoint = context.resolve_waypoint_display_info(48).unwrap();
+        assert_eq!(
+            sub_waypoint.display_class,
+            WaypointDisplayClass::SubWaypoint
+        );
+        assert!(!sub_waypoint.default_visible);
     }
 
     #[test]
@@ -1181,6 +1582,31 @@ mod tests {
         assert_eq!(rows[0].tradeoriginregion, 832);
         assert_eq!(rows[0].regiongroup, 218);
         assert_eq!(rows[0].waypoint, Some(1417));
+    }
+
+    #[test]
+    fn regioninfo_bss_decoder_ignores_secondary_waypoint_only_rows() {
+        let mut bytes = vec![0u8; 256];
+        bytes[0..4].copy_from_slice(PABR_MAGIC);
+        let row_start = 8usize;
+        bytes[row_start..row_start + 2].copy_from_slice(&5u16.to_le_bytes());
+        let signature_start = row_start + REGIONINFO_ROW_SIGNATURE_OFFSET;
+        bytes[signature_start..signature_start + REGIONINFO_ROW_SIGNATURE_PREFIX.len()]
+            .copy_from_slice(&REGIONINFO_ROW_SIGNATURE_PREFIX);
+        bytes[row_start + REGIONINFO_ROW_ACCESSIBLE_OFFSET] = 1;
+        bytes[row_start + REGIONINFO_ROW_TRADE_ORIGIN_OFFSET
+            ..row_start + REGIONINFO_ROW_TRADE_ORIGIN_OFFSET + 2]
+            .copy_from_slice(&5u16.to_le_bytes());
+        bytes[row_start + REGIONINFO_ROW_GROUP_OFFSET..row_start + REGIONINFO_ROW_GROUP_OFFSET + 2]
+            .copy_from_slice(&1u16.to_le_bytes());
+        let encoded_secondary_waypoint = 1u32 << 8;
+        bytes[row_start + 110..row_start + 114]
+            .copy_from_slice(&encoded_secondary_waypoint.to_le_bytes());
+
+        let rows = decode_regioninfo_bss_rows(&bytes).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].key, 5);
+        assert_eq!(rows[0].waypoint, None);
     }
 
     #[test]
@@ -1239,6 +1665,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
+            waypoint_links: HashMap::new(),
             localization: LocalizationTable {
                 node: [
                     ("1141".to_string(), "Tarif".to_string()),
@@ -1291,6 +1718,7 @@ mod tests {
             )]
             .into_iter()
             .collect(),
+            waypoint_links: HashMap::new(),
             localization: LocalizationTable {
                 node: [("1147".to_string(), "Stonebeak Shore".to_string())]
                     .into_iter()
@@ -1366,6 +1794,7 @@ mod tests {
             ]
             .into_iter()
             .collect(),
+            waypoint_links: HashMap::new(),
             localization: LocalizationTable {
                 node: [
                     ("1141".to_string(), "Tarif".to_string()),
@@ -1426,5 +1855,167 @@ mod tests {
                 && (target.world_x - 226814.0).abs() < f64::EPSILON
                 && (target.world_z - (-73831.4)).abs() < f64::EPSILON
         }));
+    }
+
+    #[test]
+    fn region_node_connection_pairs_use_direct_main_node_links() {
+        let context = OriginalRegionLayerContext {
+            regioninfo: [
+                (
+                    204,
+                    OriginalRegionInfoRow {
+                        key: 204,
+                        is_accessible: true,
+                        tradeoriginregion: 204,
+                        regiongroup: 55,
+                        waypoint: Some(1147),
+                    },
+                ),
+                (
+                    205,
+                    OriginalRegionInfoRow {
+                        key: 205,
+                        is_accessible: true,
+                        tradeoriginregion: 205,
+                        regiongroup: 55,
+                        waypoint: Some(1148),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            regiongroupinfo: HashMap::new(),
+            waypoints: [
+                (
+                    1147,
+                    OriginalWaypointRow {
+                        key: 1147,
+                        raw_name: "field(stonebeakshore)".to_string(),
+                        pos_x: 303191.0,
+                        pos_y: -322.014,
+                        pos_z: -1694.35,
+                        is_sub_waypoint: false,
+                        source_index: 1,
+                    },
+                ),
+                (
+                    1148,
+                    OriginalWaypointRow {
+                        key: 1148,
+                        raw_name: "field(alejandrofarm)".to_string(),
+                        pos_x: 301000.0,
+                        pos_y: -320.0,
+                        pos_z: 1200.0,
+                        is_sub_waypoint: false,
+                        source_index: 1,
+                    },
+                ),
+                (
+                    900001,
+                    OriginalWaypointRow {
+                        key: 900001,
+                        raw_name: "road(tmp)".to_string(),
+                        pos_x: 302200.0,
+                        pos_y: -321.0,
+                        pos_z: -300.0,
+                        is_sub_waypoint: true,
+                        source_index: 0,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            waypoint_links: [
+                (1147, vec![1148, 900001]),
+                (900001, vec![1147, 1148]),
+                (1148, vec![1147, 900001]),
+            ]
+            .into_iter()
+            .collect(),
+            localization: LocalizationTable::default(),
+        };
+
+        assert_eq!(context.region_node_connection_pairs(), vec![(204, 205)]);
+    }
+
+    #[test]
+    fn region_node_connection_pairs_ignore_subwaypoint_bridge_only() {
+        let context = OriginalRegionLayerContext {
+            regioninfo: [
+                (
+                    204,
+                    OriginalRegionInfoRow {
+                        key: 204,
+                        is_accessible: true,
+                        tradeoriginregion: 204,
+                        regiongroup: 55,
+                        waypoint: Some(1147),
+                    },
+                ),
+                (
+                    205,
+                    OriginalRegionInfoRow {
+                        key: 205,
+                        is_accessible: true,
+                        tradeoriginregion: 205,
+                        regiongroup: 55,
+                        waypoint: Some(1148),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            regiongroupinfo: HashMap::new(),
+            waypoints: [
+                (
+                    1147,
+                    OriginalWaypointRow {
+                        key: 1147,
+                        raw_name: "field(stonebeakshore)".to_string(),
+                        pos_x: 303191.0,
+                        pos_y: -322.014,
+                        pos_z: -1694.35,
+                        is_sub_waypoint: false,
+                        source_index: 1,
+                    },
+                ),
+                (
+                    1148,
+                    OriginalWaypointRow {
+                        key: 1148,
+                        raw_name: "field(alejandrofarm)".to_string(),
+                        pos_x: 301000.0,
+                        pos_y: -320.0,
+                        pos_z: 1200.0,
+                        is_sub_waypoint: false,
+                        source_index: 1,
+                    },
+                ),
+                (
+                    900001,
+                    OriginalWaypointRow {
+                        key: 900001,
+                        raw_name: "road(tmp)".to_string(),
+                        pos_x: 302200.0,
+                        pos_y: -321.0,
+                        pos_z: -300.0,
+                        is_sub_waypoint: true,
+                        source_index: 0,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            waypoint_links: [
+                (1147, vec![900001]),
+                (900001, vec![1147, 1148]),
+                (1148, vec![900001]),
+            ]
+            .into_iter()
+            .collect(),
+            localization: LocalizationTable::default(),
+        };
+
+        assert!(context.region_node_connection_pairs().is_empty());
     }
 }
