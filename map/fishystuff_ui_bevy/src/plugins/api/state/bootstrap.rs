@@ -15,7 +15,6 @@ pub struct ApiBootstrapState {
     pub zones: HashMap<u32, Option<String>>,
     pub map_version_dirty: bool,
     pub layers_loaded_map_version: Option<String>,
-    pub layers_next_retry_at_utc: i64,
 }
 
 impl Default for ApiBootstrapState {
@@ -30,7 +29,6 @@ impl Default for ApiBootstrapState {
             zones: HashMap::new(),
             map_version_dirty: false,
             layers_loaded_map_version: None,
-            layers_next_retry_at_utc: 0,
         }
     }
 }

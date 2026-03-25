@@ -15,7 +15,6 @@ pub fn build_router(state: SharedState) -> Router {
     let cors = build_cors_layer(&state.config.cors_allowed_origins);
     let api = Router::new()
         .route("/meta", get(routes::meta::get_meta))
-        .route("/layers", get(routes::layers::get_layers))
         .route(
             "/region_groups",
             get(routes::region_groups::get_region_groups),
@@ -72,7 +71,6 @@ mod tests {
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
     use fishystuff_api::models::fish::FishListResponse;
-    use fishystuff_api::models::layers::LayersResponse;
     use fishystuff_api::models::meta::MetaResponse;
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
     use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
@@ -94,12 +92,6 @@ mod tests {
     impl Store for MockStore {
         async fn get_meta(&self) -> crate::error::AppResult<MetaResponse> {
             Ok(MetaResponse::default())
-        }
-        async fn get_layers(
-            &self,
-            _map_version_id: Option<String>,
-        ) -> crate::error::AppResult<LayersResponse> {
-            Ok(LayersResponse::default())
         }
         async fn get_region_groups(
             &self,
@@ -160,12 +152,6 @@ mod tests {
     impl Store for HealthcheckStore {
         async fn get_meta(&self) -> crate::error::AppResult<MetaResponse> {
             Ok(MetaResponse::default())
-        }
-        async fn get_layers(
-            &self,
-            _map_version_id: Option<String>,
-        ) -> crate::error::AppResult<LayersResponse> {
-            Ok(LayersResponse::default())
         }
         async fn get_region_groups(
             &self,

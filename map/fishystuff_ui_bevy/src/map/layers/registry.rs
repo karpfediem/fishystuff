@@ -112,6 +112,29 @@ impl LayerRegistry {
         self.map_version_id = response.map_version_id.map(|id| id.0);
     }
 
+    pub fn apply_layer_specs(
+        &mut self,
+        revision: impl Into<String>,
+        map_version_id: Option<String>,
+        layers: Vec<LayerSpec>,
+    ) {
+        let mut ordered = Vec::with_capacity(layers.len());
+        let mut index = HashMap::new();
+        let mut id_by_key = HashMap::new();
+
+        for layer in layers {
+            id_by_key.insert(layer.key.clone(), layer.id);
+            index.insert(layer.id, ordered.len());
+            ordered.push(layer);
+        }
+
+        self.ordered = ordered;
+        self.index = index;
+        self.id_by_key = id_by_key;
+        self.revision = Some(revision.into());
+        self.map_version_id = map_version_id;
+    }
+
     pub fn set_transform(&mut self, id: LayerId, transform: LayerTransform) -> bool {
         let Some(idx) = self.index.get(&id).copied() else {
             return false;
@@ -266,6 +289,7 @@ fn layer_spec_from_descriptor(id: LayerId, descriptor: LayerDescriptor) -> Optio
         field_source,
         field_metadata_source,
         vector_source,
+        waypoint_source: None,
         transform,
         tile_px,
         max_level,

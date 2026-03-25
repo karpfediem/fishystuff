@@ -1,3 +1,4 @@
+mod catalog;
 mod registry;
 mod runtime;
 
@@ -5,6 +6,10 @@ use crate::map::spaces::layer_transform::{LayerTransform, WorldTransform};
 use crate::map::spaces::world::MapToWorld;
 use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 
+pub use catalog::{
+    build_local_layer_specs, AvailableLayerCatalog, AvailableLayerDefinition,
+    AvailableLayerTemplate,
+};
 pub use registry::LayerRegistry;
 pub use runtime::{LayerManifestStatus, LayerRuntime, LayerRuntimeState, LayerSettings};
 
@@ -51,12 +56,14 @@ pub enum LayerRenderKind {
     IdentitySprite,
     AffineQuad,
     VectorGeoJson,
+    Waypoints,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerKind {
     TiledRaster,
     VectorGeoJson,
+    Waypoints,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,6 +106,15 @@ pub struct VectorSourceSpec {
     pub color_property: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct WaypointSourceSpec {
+    pub url: String,
+    pub revision: String,
+    pub geometry_space: GeometrySpace,
+    pub feature_id_property: Option<String>,
+    pub label_property: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LayerVectorStatus {
     #[default]
@@ -124,6 +140,7 @@ pub struct LayerSpec {
     pub tile_url_template: String,
     pub tileset_version: String,
     pub vector_source: Option<VectorSourceSpec>,
+    pub waypoint_source: Option<WaypointSourceSpec>,
     pub transform: LayerTransform,
     pub tile_px: u32,
     pub max_level: u8,
@@ -145,6 +162,9 @@ impl LayerSpec {
         if self.kind == LayerKind::VectorGeoJson {
             return LayerRenderKind::VectorGeoJson;
         }
+        if self.kind == LayerKind::Waypoints {
+            return LayerRenderKind::Waypoints;
+        }
         match self.transform {
             LayerTransform::IdentityMapSpace => LayerRenderKind::IdentitySprite,
             LayerTransform::AffineToMap(_) | LayerTransform::AffineToWorld(_) => {
@@ -159,6 +179,10 @@ impl LayerSpec {
 
     pub fn is_vector(&self) -> bool {
         self.kind == LayerKind::VectorGeoJson
+    }
+
+    pub fn is_waypoints(&self) -> bool {
+        self.kind == LayerKind::Waypoints
     }
 
     pub fn is_zone_mask_visual_layer(&self) -> bool {

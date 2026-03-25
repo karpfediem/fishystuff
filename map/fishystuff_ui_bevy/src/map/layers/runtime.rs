@@ -185,7 +185,11 @@ fn default_state_for_spec(spec: &LayerSpec) -> LayerRuntimeState {
         resident_tile_count: 0,
         pending_count: 0,
         inflight_count: 0,
-        manifest_status: LayerManifestStatus::Missing,
+        manifest_status: if spec.is_waypoints() && spec.waypoint_source.is_none() {
+            LayerManifestStatus::Ready
+        } else {
+            LayerManifestStatus::Missing
+        },
         vector_status: if spec.is_vector() {
             LayerVectorStatus::NotRequested
         } else {

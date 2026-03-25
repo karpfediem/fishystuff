@@ -20,13 +20,6 @@ pub(super) fn ensure_meta_request(
     ensure::ensure_meta_request(pending, bootstrap);
 }
 
-pub(super) fn ensure_layers_request(
-    pending: ResMut<PendingRequests>,
-    bootstrap: ResMut<ApiBootstrapState>,
-) {
-    ensure::ensure_layers_request(pending, bootstrap);
-}
-
 pub(super) fn ensure_zones_request(
     pending: ResMut<PendingRequests>,
     bootstrap: Res<ApiBootstrapState>,

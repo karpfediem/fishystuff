@@ -218,6 +218,18 @@ enum Commands {
         #[arg(long)]
         out: PathBuf,
     },
+    BuildRegionNodesGeojson {
+        #[arg(long)]
+        regioninfo_bss: PathBuf,
+        #[arg(long)]
+        regiongroupinfo_bss: PathBuf,
+        #[arg(long, help = "Original localization .loc file")]
+        loc: PathBuf,
+        #[arg(long = "waypoint-xml", required = true)]
+        waypoint_xml: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
     BuildRegionsFieldMetadata {
         #[arg(long)]
         field: PathBuf,
@@ -507,6 +519,19 @@ fn main() -> Result<()> {
             out,
         } => run_build_region_groups_geojson(
             region_groups_geojson,
+            regioninfo_bss,
+            regiongroupinfo_bss,
+            loc,
+            waypoint_xml,
+            out,
+        ),
+        Commands::BuildRegionNodesGeojson {
+            regioninfo_bss,
+            regiongroupinfo_bss,
+            loc,
+            waypoint_xml,
+            out,
+        } => run_build_region_nodes_geojson(
             regioninfo_bss,
             regiongroupinfo_bss,
             loc,
@@ -1173,6 +1198,29 @@ fn run_build_region_groups_geojson(
         out.display(),
         summary.feature_count,
         summary.resource_feature_count,
+    );
+    Ok(())
+}
+
+fn run_build_region_nodes_geojson(
+    regioninfo_bss: PathBuf,
+    regiongroupinfo_bss: PathBuf,
+    loc: PathBuf,
+    waypoint_xml: Vec<PathBuf>,
+    out: PathBuf,
+) -> Result<()> {
+    let summary = region_layers::build_region_nodes_geojson(
+        &loc,
+        &regioninfo_bss,
+        &regiongroupinfo_bss,
+        &waypoint_xml,
+        &out,
+    )?;
+    println!(
+        "build-region-nodes-geojson: out={} features={} named={}",
+        out.display(),
+        summary.feature_count,
+        summary.named_feature_count,
     );
     Ok(())
 }

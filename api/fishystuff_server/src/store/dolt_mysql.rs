@@ -1,8 +1,10 @@
 mod catalog;
-mod layers;
 mod stats;
 mod util;
 mod zone_profile_v2;
+
+#[cfg(test)]
+mod layers;
 
 use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
@@ -15,9 +17,6 @@ use fishystuff_api::models::events::{
     EventPointCompact, EventSourceKind, EventsSnapshotMetaResponse, EventsSnapshotResponse,
 };
 use fishystuff_api::models::fish::{FishEntry, FishListResponse};
-use fishystuff_api::models::layers::{
-    LayerDescriptor, LayerUiInfo, LayersResponse, LodPolicyDto, TilesetRef,
-};
 use fishystuff_api::models::meta::{
     CanonicalMapInfo, MapVersionInfo, MetaDefaults, MetaResponse, PatchInfo,
 };
@@ -44,21 +43,17 @@ use catalog::{
     encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_grade_from_db,
     fish_is_dried, merge_fish_catalog_row, parse_positive_i64,
 };
-use layers::{
-    normalize_pick_mode, parse_field_metadata_source, parse_field_source, parse_layer_kind,
-    parse_layer_transform, parse_vector_source, resolve_layer_asset_url, substitute_map_version,
-    FieldMetadataSourceFields, FieldSourceFields, VectorSourceFields,
-};
+#[cfg(test)]
+use layers::{parse_layer_kind, parse_vector_source, resolve_layer_asset_url, VectorSourceFields};
 use stats::{
     align_alpha, align_probs, beta_ci, compute_status, gaussian_blur_grid, pixel_to_tile_index,
     sample_dirichlet, seed_from_drift, seed_from_params, time_weight, XorShift64,
 };
 use util::{
-    clamp_i64_to_i32, clamp_i64_to_u32, clamp_i64_to_u8, clamp_i64_to_usize, db_unavailable,
-    epoch_to_mysql_datetime, event_source_kind_from_db, events_schema_or_db_unavailable,
-    is_layers_schema_error, is_missing_table, normalize_optional_string, row_f64, row_i64,
+    clamp_i64_to_u32, db_unavailable, epoch_to_mysql_datetime, event_source_kind_from_db,
+    events_schema_or_db_unavailable, is_missing_table, normalize_optional_string, row_i64,
     row_opt_f64, row_string, row_u32_opt, synthetic_events_snapshot_revision,
-    synthetic_fish_revision, synthetic_layers_revision, synthetic_region_groups_revision,
+    synthetic_fish_revision, synthetic_region_groups_revision,
 };
 
 const EPS: f64 = 1e-9;
@@ -307,182 +302,6 @@ impl DoltMySqlStore {
         }
 
         Ok(versions)
-    }
-
-    fn query_layer_descriptors(
-        &self,
-        map_version_id: Option<&str>,
-    ) -> AppResult<Vec<LayerDescriptor>> {
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<Row> = if let Some(map_version_id) = map_version_id {
-            match conn.exec(queries::LAYERS_WITH_CONFIG_SQL, (map_version_id,)) {
-                Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "layer_configs") => {
-                    return Err(AppError::not_found(
-                        "layer_configs table is missing; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
-                    ));
-                }
-                Err(err) if is_missing_table(&err, "layers") => {
-                    return Err(AppError::not_found(
-                        "layers table is missing; apply api/sql/migrations/20260228_layers.sql",
-                    ));
-                }
-                Err(err) if is_layers_schema_error(&err) => {
-                    return Err(AppError::not_found(
-                        "layers schema is outdated; apply the latest layer migrations including api/sql/migrations/20260323_add_field_metadata_sources.sql",
-                    ));
-                }
-                Err(err) => return Err(db_unavailable(err)),
-            }
-        } else {
-            match conn.query(queries::LAYERS_SQL) {
-                Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "layers") => {
-                    return Err(AppError::not_found(
-                        "layers table is missing; apply api/sql/migrations/20260228_layers.sql",
-                    ));
-                }
-                Err(err) if is_layers_schema_error(&err) => {
-                    return Err(AppError::not_found(
-                        "layers schema is outdated; apply the latest layer migrations including api/sql/migrations/20260323_add_field_metadata_sources.sql",
-                    ));
-                }
-                Err(err) => return Err(db_unavailable(err)),
-            }
-        };
-
-        let mut descriptors = Vec::with_capacity(rows.len());
-        for row in rows {
-            let layer_id = row_string(&row, 0).unwrap_or_default();
-            let name = row_string(&row, 1).unwrap_or_else(|| layer_id.clone());
-            let enabled = row_i64(&row, 2, 0);
-            if enabled == 0 {
-                continue;
-            }
-            let transform_kind =
-                row_string(&row, 3).unwrap_or_else(|| "identity_map_space".to_string());
-            let affine_a = row_opt_f64(&row, 4);
-            let affine_b = row_opt_f64(&row, 5);
-            let affine_tx = row_opt_f64(&row, 6);
-            let affine_c = row_opt_f64(&row, 7);
-            let affine_d = row_opt_f64(&row, 8);
-            let affine_ty = row_opt_f64(&row, 9);
-            let manifest_url = row_string(&row, 10).unwrap_or_default();
-            let tile_url_template = row_string(&row, 11).unwrap_or_default();
-            let tileset_version = row_string(&row, 12).unwrap_or_default();
-            let tile_px = row_i64(&row, 13, 512);
-            let max_level = row_i64(&row, 14, 0);
-            let y_flip = row_i64(&row, 15, 0);
-            let lod_target_tiles = row_i64(&row, 16, 220);
-            let lod_hysteresis_hi = row_f64(&row, 17, 280.0);
-            let lod_hysteresis_lo = row_f64(&row, 18, 160.0);
-            let lod_margin_tiles = row_i64(&row, 19, 1);
-            let lod_enable_refine = row_i64(&row, 20, 0);
-            let lod_refine_debounce_ms = row_i64(&row, 21, 0);
-            let lod_max_detail_tiles = row_i64(&row, 22, 0);
-            let visible_default = row_i64(&row, 23, 1);
-            let opacity_default = row_f64(&row, 24, 1.0);
-            let z_base = row_f64(&row, 25, 0.0);
-            let display_order = row_i64(&row, 26, 0);
-            let request_weight = row_f64(&row, 27, 1.0);
-            let pick_mode = row_string(&row, 28).unwrap_or_else(|| "none".to_string());
-            let layer_kind = row_string(&row, 29).unwrap_or_else(|| "tiled_raster".to_string());
-            let field_source_url = row_string(&row, 30);
-            let field_source_revision = row_string(&row, 31);
-            let field_color_mode = row_string(&row, 32);
-            let field_metadata_source_url = row_string(&row, 33);
-            let field_metadata_source_revision = row_string(&row, 34);
-            let vector_source_url = row_string(&row, 35);
-            let vector_source_revision = row_string(&row, 36);
-            let vector_geometry_space = row_string(&row, 37);
-            let vector_style_mode = row_string(&row, 38);
-            let vector_feature_id_property = row_string(&row, 39);
-            let vector_color_property = row_string(&row, 40);
-
-            let transform = parse_layer_transform(
-                &transform_kind,
-                affine_a,
-                affine_b,
-                affine_tx,
-                affine_c,
-                affine_d,
-                affine_ty,
-            );
-            let manifest_url =
-                resolve_layer_asset_url(&substitute_map_version(&manifest_url, map_version_id));
-            let tile_url_template = resolve_layer_asset_url(&substitute_map_version(
-                &tile_url_template,
-                map_version_id,
-            ));
-            let kind = parse_layer_kind(&layer_id, &layer_kind)?;
-            let field_source = parse_field_source(
-                &layer_id,
-                FieldSourceFields {
-                    source_url: field_source_url,
-                    source_revision: field_source_revision,
-                    color_mode: field_color_mode,
-                },
-                map_version_id,
-            )?;
-            let field_metadata_source = parse_field_metadata_source(
-                FieldMetadataSourceFields {
-                    source_url: field_metadata_source_url,
-                    source_revision: field_metadata_source_revision,
-                },
-                map_version_id,
-            )?;
-            let vector_source = parse_vector_source(
-                &layer_id,
-                kind,
-                VectorSourceFields {
-                    source_url: vector_source_url,
-                    source_revision: vector_source_revision,
-                    geometry_space: vector_geometry_space,
-                    style_mode: vector_style_mode,
-                    feature_id_property: vector_feature_id_property,
-                    color_property: vector_color_property,
-                },
-                map_version_id,
-            )?;
-            descriptors.push(LayerDescriptor {
-                layer_id,
-                name,
-                enabled: true,
-                kind,
-                transform,
-                tileset: TilesetRef {
-                    manifest_url,
-                    tile_url_template,
-                    version: tileset_version,
-                },
-                tile_px: clamp_i64_to_u32(tile_px, 1).max(1),
-                max_level: clamp_i64_to_u8(max_level, 0),
-                y_flip: y_flip != 0,
-                field_source,
-                field_metadata_source,
-                vector_source,
-                lod_policy: LodPolicyDto {
-                    target_tiles: clamp_i64_to_usize(lod_target_tiles, 1),
-                    hysteresis_hi: lod_hysteresis_hi as f32,
-                    hysteresis_lo: lod_hysteresis_lo as f32,
-                    margin_tiles: clamp_i64_to_i32(lod_margin_tiles, 0),
-                    enable_refine: lod_enable_refine != 0,
-                    refine_debounce_ms: clamp_i64_to_u32(lod_refine_debounce_ms, 0),
-                    max_detail_tiles: clamp_i64_to_usize(lod_max_detail_tiles, 0),
-                    ..LodPolicyDto::default()
-                },
-                ui: LayerUiInfo {
-                    visible_default: visible_default != 0,
-                    opacity_default: opacity_default as f32,
-                    z_base: z_base as f32,
-                    display_order: clamp_i64_to_i32(display_order, 0),
-                },
-                request_weight: request_weight as f32,
-                pick_mode: normalize_pick_mode(pick_mode),
-            });
-        }
-
-        Ok(descriptors)
     }
 
     fn query_region_groups(&self, map_version_id: &str) -> AppResult<Vec<RegionGroupDescriptor>> {
@@ -1588,25 +1407,6 @@ impl Store for DoltMySqlStore {
                 default_patch,
                 map_versions,
                 defaults: this.defaults.clone(),
-            })
-        })
-        .await
-        .map_err(|err| AppError::internal(err.to_string()))?
-    }
-
-    async fn get_layers(&self, map_version_id: Option<String>) -> AppResult<LayersResponse> {
-        let this = self.clone();
-        tokio::task::spawn_blocking(move || {
-            let selected_map_version =
-                map_version_id.or_else(|| this.defaults.map_version_id.clone().map(|id| id.0));
-            let layers = this.query_layer_descriptors(selected_map_version.as_deref())?;
-            let revision = this.query_dolt_head_revision().unwrap_or_else(|| {
-                synthetic_layers_revision(selected_map_version.as_deref(), &layers)
-            });
-            Ok(LayersResponse {
-                revision,
-                map_version_id: selected_map_version.map(MapVersionId),
-                layers,
             })
         })
         .await

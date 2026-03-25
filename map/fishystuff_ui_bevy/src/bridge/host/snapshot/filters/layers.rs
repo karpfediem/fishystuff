@@ -47,6 +47,7 @@ pub(in crate::bridge::host::snapshot) fn current_layer_summaries(
                 kind: match layer.kind {
                     LayerKind::TiledRaster => "tiled-raster".to_string(),
                     LayerKind::VectorGeoJson => "vector-geojson".to_string(),
+                    LayerKind::Waypoints => "waypoints".to_string(),
                 },
                 visible_tile_count: runtime_state
                     .map(|state| state.visible_tile_count)

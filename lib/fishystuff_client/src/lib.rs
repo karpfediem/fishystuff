@@ -4,7 +4,6 @@ use fishystuff_api::error::ApiErrorEnvelope;
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
 use fishystuff_api::models::fish::FishListResponse;
-use fishystuff_api::models::layers::LayersResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::region_groups::RegionGroupsResponse;
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
@@ -39,15 +38,6 @@ impl FishyClient {
 
     pub async fn meta(&self) -> Result<MetaResponse, ClientError> {
         self.get_json("/api/v1/meta").await
-    }
-
-    pub async fn layers(&self, map_version: Option<&str>) -> Result<LayersResponse, ClientError> {
-        let path = if let Some(map_version) = map_version {
-            format!("/api/v1/layers?map_version={map_version}")
-        } else {
-            "/api/v1/layers".to_string()
-        };
-        self.get_json(&path).await
     }
 
     pub async fn region_groups(

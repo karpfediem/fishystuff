@@ -6,6 +6,7 @@ pub mod diagnostics;
 pub mod field_tile_layers;
 pub mod hover_targets;
 pub mod input;
+pub mod local_layers;
 pub mod mask;
 pub mod points;
 pub mod raster;
@@ -14,6 +15,7 @@ pub mod selection_point;
 pub mod svg_icons;
 pub mod ui;
 pub mod vector_layers;
+pub mod waypoint_layers;
 
 #[cfg(target_arch = "wasm32")]
 use bevy::app::PluginGroupBuilder;
@@ -38,6 +40,7 @@ impl PluginGroup for FishystuffPlugins {
             .add(raster::RasterPlugin)
             .add(field_tile_layers::FieldTileLayersPlugin)
             .add(vector_layers::VectorLayersPlugin)
+            .add(waypoint_layers::WaypointLayersPlugin)
             .add(api::ApiPlugin)
             .add(bookmarks::BookmarksPlugin)
             .add(points::PointsPlugin)

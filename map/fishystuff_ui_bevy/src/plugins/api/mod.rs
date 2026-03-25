@@ -3,6 +3,8 @@ mod remote_images;
 mod requests;
 mod state;
 
+use crate::map::layers::AvailableLayerCatalog;
+use crate::plugins::local_layers;
 use crate::prelude::*;
 
 pub(crate) use fish::fish_item_icon_url;
@@ -28,6 +30,7 @@ impl Plugin for ApiPlugin {
             .init_resource::<FishFilterState>()
             .init_resource::<SemanticFieldFilterState>()
             .init_resource::<MapDisplayState>()
+            .init_resource::<AvailableLayerCatalog>()
             .init_resource::<PendingRequests>()
             .init_resource::<HoverState>()
             .init_resource::<SelectionState>()
@@ -38,10 +41,10 @@ impl Plugin for ApiPlugin {
                 Update,
                 (
                     requests::ensure_meta_request,
-                    requests::ensure_layers_request,
                     requests::ensure_zones_request,
                     requests::ensure_fish_catalog_request,
                     requests::poll_requests,
+                    local_layers::sync_local_layers,
                     remote_images::poll_remote_image_requests,
                 )
                     .chain(),

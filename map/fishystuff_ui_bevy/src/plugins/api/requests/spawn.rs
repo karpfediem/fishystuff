@@ -2,7 +2,6 @@ use async_channel::Receiver;
 use bevy::tasks::IoTaskPool;
 #[cfg(target_arch = "wasm32")]
 use fishystuff_api::models::fish::FishListResponse;
-use fishystuff_api::models::layers::LayersResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
 use fishystuff_api::models::zones::ZonesResponse;
@@ -37,23 +36,6 @@ pub(super) fn spawn_meta_request() -> Receiver<Result<MetaResponse, String>> {
         .spawn_local(async move {
             let client = FishyClient::new("");
             let result = client.meta().await.map_err(client_error_to_string);
-            let _ = sender.send(result).await;
-        })
-        .detach();
-    receiver
-}
-
-pub(super) fn spawn_layers_request(
-    map_version: Option<String>,
-) -> Receiver<Result<LayersResponse, String>> {
-    let (sender, receiver) = async_channel::bounded(1);
-    IoTaskPool::get()
-        .spawn_local(async move {
-            let client = FishyClient::new("");
-            let result = client
-                .layers(map_version.as_deref())
-                .await
-                .map_err(client_error_to_string);
             let _ = sender.send(result).await;
         })
         .detach();

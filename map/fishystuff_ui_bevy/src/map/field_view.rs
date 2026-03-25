@@ -258,6 +258,7 @@ mod tests {
             tile_url_template: String::new(),
             tileset_version: "v1".to_string(),
             vector_source: None,
+            waypoint_source: None,
             transform,
             tile_px: 512,
             max_level: 0,

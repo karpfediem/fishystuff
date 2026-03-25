@@ -1,6 +1,6 @@
 use fishystuff_api::models::layers::{
-    FieldColorMode, FieldMetadataSourceRef, FieldSourceRef, GeometrySpace, LayerKind,
-    LayerTransformDto, StyleMode, VectorSourceRef,
+    FieldColorMode, FieldMetadataSourceRef, FieldSourceRef, GeometrySpace, LayerKind, StyleMode,
+    VectorSourceRef,
 };
 use fishystuff_core::asset_urls::normalize_site_asset_path;
 
@@ -26,37 +26,6 @@ pub(super) struct FieldSourceFields {
 pub(super) struct FieldMetadataSourceFields {
     pub source_url: Option<String>,
     pub source_revision: Option<String>,
-}
-
-pub(super) fn parse_layer_transform(
-    kind: &str,
-    a: Option<f64>,
-    b: Option<f64>,
-    tx: Option<f64>,
-    c: Option<f64>,
-    d: Option<f64>,
-    ty: Option<f64>,
-) -> LayerTransformDto {
-    match kind.trim().to_ascii_lowercase().as_str() {
-        "identity_map_space" => LayerTransformDto::IdentityMapSpace,
-        "affine_to_map" => LayerTransformDto::AffineToMap {
-            a: a.unwrap_or(1.0),
-            b: b.unwrap_or(0.0),
-            tx: tx.unwrap_or(0.0),
-            c: c.unwrap_or(0.0),
-            d: d.unwrap_or(1.0),
-            ty: ty.unwrap_or(0.0),
-        },
-        "affine_to_world" => LayerTransformDto::AffineToWorld {
-            a: a.unwrap_or(1.0),
-            b: b.unwrap_or(0.0),
-            tx: tx.unwrap_or(0.0),
-            c: c.unwrap_or(0.0),
-            d: d.unwrap_or(1.0),
-            ty: ty.unwrap_or(0.0),
-        },
-        _ => LayerTransformDto::IdentityMapSpace,
-    }
 }
 
 pub(super) fn parse_layer_kind(layer_id: &str, value: &str) -> AppResult<LayerKind> {
@@ -208,14 +177,6 @@ pub(super) fn parse_field_metadata_source(
         url: source_url,
         revision: source_revision,
     }))
-}
-
-pub(super) fn normalize_pick_mode(value: String) -> String {
-    let normalized = value.trim().to_ascii_lowercase();
-    match normalized.as_str() {
-        "none" | "exact_tile_pixel" => normalized,
-        _ => "none".to_string(),
-    }
 }
 
 pub(super) fn substitute_map_version(url: &str, map_version_id: Option<&str>) -> String {

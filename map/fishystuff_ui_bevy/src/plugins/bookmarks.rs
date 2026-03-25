@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::color::Alpha;
+use bevy::ecs::system::SystemParam;
 use bevy::image::Image;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
@@ -11,6 +12,7 @@ use bevy_flair::prelude::{ClassList, NodeStyleSheet};
 use crate::bridge::contract::{FishyMapBookmarkEntry, FishyMapThemeColors};
 use crate::bridge::theme::parse_css_color;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::plugins::api::{HoverInfo, HoverState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
@@ -102,6 +104,19 @@ struct BookmarkMarkerPool {
     markers: Vec<BookmarkVisualSet>,
 }
 
+#[derive(SystemParam)]
+struct BookmarkRenderContext<'w, 's> {
+    layer_registry: Res<'w, LayerRegistry>,
+    layer_runtime: Res<'w, LayerRuntime>,
+    asset_server: Res<'w, AssetServer>,
+    fonts: Res<'w, UiFonts>,
+    render_assets: Res<'w, BookmarkRenderAssets>,
+    svg_icon_assets: Res<'w, UiSvgIconAssets>,
+    #[cfg(target_arch = "wasm32")]
+    bridge: Res<'w, BrowserBridgeState>,
+    _marker: std::marker::PhantomData<&'s ()>,
+}
+
 fn ensure_bookmark_render_assets(
     mut render_assets: ResMut<BookmarkRenderAssets>,
     mut images: ResMut<Assets<Image>>,
@@ -116,11 +131,7 @@ fn sync_bookmark_markers(
     bookmarks: Res<BookmarkState>,
     hover: Res<HoverState>,
     view_mode: Res<ViewModeState>,
-    #[cfg(target_arch = "wasm32")] bridge: Res<BrowserBridgeState>,
-    asset_server: Res<AssetServer>,
-    fonts: Res<UiFonts>,
-    render_assets: Res<BookmarkRenderAssets>,
-    svg_icon_assets: Res<UiSvgIconAssets>,
+    render_context: BookmarkRenderContext<'_, '_>,
     mut marker_pool: ResMut<BookmarkMarkerPool>,
     ui_root_q: Query<Entity, With<UiRoot>>,
     camera_q: Query<(&Camera, &GlobalTransform, &Projection), With<Map2dCamera>>,
@@ -160,15 +171,33 @@ fn sync_bookmark_markers(
         ),
     >,
 ) {
-    if view_mode.mode != ViewMode::Map2D || bookmarks.entries.is_empty() {
+    let bookmark_layer_state = render_context
+        .layer_registry
+        .get_by_key("bookmarks")
+        .and_then(|layer| render_context.layer_runtime.get(layer.id));
+    let bookmark_layer_visible = bookmark_layer_state
+        .map(|state| state.visible)
+        .unwrap_or(true);
+    let bookmark_layer_opacity = bookmark_layer_state
+        .map(|state| state.opacity.clamp(0.0, 1.0))
+        .unwrap_or(1.0);
+    let bookmark_layer_z = bookmark_layer_state
+        .map(|state| state.z_base)
+        .unwrap_or(BOOKMARK_MARKER_Z);
+
+    if view_mode.mode != ViewMode::Map2D || bookmarks.entries.is_empty() || !bookmark_layer_visible
+    {
         hide_bookmark_visuals(&marker_pool, &mut markers, &mut callout_roots);
         return;
     }
 
-    let Some(marker_texture) = render_assets.marker_texture.as_ref() else {
+    let Some(marker_texture) = render_context.render_assets.marker_texture.as_ref() else {
         return;
     };
-    let Some(bookmark_icon_handle) = svg_icon_assets.handle(UiSvgIconKind::Bookmark) else {
+    let Some(bookmark_icon_handle) = render_context
+        .svg_icon_assets
+        .handle(UiSvgIconKind::Bookmark)
+    else {
         return;
     };
     let Ok(ui_root) = ui_root_q.single() else {
@@ -194,7 +223,7 @@ fn sync_bookmark_markers(
         .map(String::as_str)
         .collect::<HashSet<_>>();
     #[cfg(target_arch = "wasm32")]
-    let theme_colors = Some(&bridge.input.theme.colors);
+    let theme_colors = Some(&render_context.bridge.input.theme.colors);
     #[cfg(not(target_arch = "wasm32"))]
     let theme_colors: Option<&FishyMapThemeColors> = None;
     let callout_label_color = theme_colors
@@ -206,6 +235,12 @@ fn sync_bookmark_markers(
     let callout_panel_color = theme_colors
         .and_then(bookmark_callout_panel_color)
         .unwrap_or(BOOKMARK_CALLOUT_PANEL_COLOR);
+    let callout_label_color =
+        callout_label_color.with_alpha(callout_label_color.alpha() * bookmark_layer_opacity);
+    let callout_border_color =
+        callout_border_color.with_alpha(callout_border_color.alpha() * bookmark_layer_opacity);
+    let callout_panel_color =
+        callout_panel_color.with_alpha(callout_panel_color.alpha() * bookmark_layer_opacity);
 
     while marker_pool.markers.len() < bookmarks.entries.len() {
         let marker = commands
@@ -249,7 +284,7 @@ fn sync_bookmark_markers(
             BorderColor::all(callout_border_color),
             GlobalZIndex(1400),
             Visibility::Hidden,
-            NodeStyleSheet::new(asset_server.load("/map/ui/fishystuff.css")),
+            NodeStyleSheet::new(render_context.asset_server.load("/map/ui/fishystuff.css")),
             ClassList::new("marker-callout"),
         ));
         let callout_root = callout_root_entity
@@ -273,7 +308,7 @@ fn sync_bookmark_markers(
                         BookmarkCalloutText,
                         Text::new(""),
                         TextFont {
-                            font: fonts.regular.clone(),
+                            font: render_context.fonts.regular.clone(),
                             font_size: BOOKMARK_CALLOUT_LABEL_SIZE_PX,
                             ..default()
                         },
@@ -300,9 +335,10 @@ fn sync_bookmark_markers(
         let world_z = bookmark.world_z as f32;
 
         if let Ok((mut transform, mut visibility, mut sprite)) = markers.get_mut(visual.marker) {
-            transform.translation = Vec3::new(world_x, world_z, BOOKMARK_MARKER_Z);
+            transform.translation = Vec3::new(world_x, world_z, bookmark_layer_z);
             sprite.image = marker_texture.clone();
             sprite.custom_size = Some(Vec2::splat(marker_size_world));
+            sprite.color = Color::WHITE.with_alpha(bookmark_layer_opacity);
             *visibility = Visibility::Visible;
         }
 
@@ -357,7 +393,7 @@ fn sync_bookmark_markers(
             callout_texts.get_mut(visual.callout_text)
         {
             text.0 = display_text;
-            text_font.font = fonts.regular.clone();
+            text_font.font = render_context.fonts.regular.clone();
             text_font.font_size = BOOKMARK_CALLOUT_LABEL_SIZE_PX;
             text_color.0 = callout_label_color;
         }

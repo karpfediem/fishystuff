@@ -1098,6 +1098,9 @@ function layerKindLabel(kind) {
   if (kind === "vector-geojson") {
     return "Vector";
   }
+  if (kind === "waypoints") {
+    return "Waypoints";
+  }
   if (kind === "tiled-raster") {
     return "Raster";
   }

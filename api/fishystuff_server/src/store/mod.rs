@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
 use fishystuff_api::models::fish::FishListResponse;
-use fishystuff_api::models::layers::LayersResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::region_groups::RegionGroupsResponse;
 use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
@@ -38,7 +37,6 @@ impl FishLang {
 #[async_trait]
 pub trait Store: Send + Sync {
     async fn get_meta(&self) -> AppResult<MetaResponse>;
-    async fn get_layers(&self, map_version_id: Option<String>) -> AppResult<LayersResponse>;
     async fn get_region_groups(
         &self,
         map_version_id: Option<String>,

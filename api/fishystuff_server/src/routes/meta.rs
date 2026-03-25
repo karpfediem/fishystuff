@@ -50,7 +50,6 @@ pub async fn openapi_json() -> Json<serde_json::Value> {
       },
       "paths": {
         "/api/v1/meta": { "get": { "summary": "Get metadata" } },
-        "/api/v1/layers": { "get": { "summary": "Get layer descriptors" } },
         "/api/v1/region_groups": { "get": { "summary": "Get region-group metadata" } },
         "/api/v1/zones": { "get": { "summary": "List zones" } },
         "/api/v1/fish": { "get": { "summary": "List fish metadata" } },

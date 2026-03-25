@@ -44,10 +44,12 @@ CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 CDN_MAP_ASSET_DIR="$CDN_ROOT/map"
 CDN_IMAGE_ASSET_DIR="$CDN_ROOT/images"
 CDN_FIELD_ASSET_DIR="$CDN_ROOT/fields"
+CDN_WAYPOINT_ASSET_DIR="$CDN_ROOT/waypoints"
 mkdir -p "$SITE_MAP_ASSET_DIR/ui"
 mkdir -p "$CDN_MAP_ASSET_DIR"
 mkdir -p "$CDN_IMAGE_ASSET_DIR"
 mkdir -p "$CDN_FIELD_ASSET_DIR"
+mkdir -p "$CDN_WAYPOINT_ASSET_DIR"
 
 cp -f map/fishystuff_ui_bevy/assets/ui/fishystuff.css "$SITE_MAP_ASSET_DIR/ui/fishystuff.css"
 rm -f \
@@ -352,6 +354,7 @@ regions_field_output="$CDN_FIELD_ASSET_DIR/regions.v1.bin"
 region_groups_field_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.bin"
 regions_field_metadata_output="$CDN_FIELD_ASSET_DIR/regions.v1.meta.json"
 region_groups_field_metadata_output="$CDN_FIELD_ASSET_DIR/region_groups.v1.meta.json"
+region_nodes_output="$CDN_WAYPOINT_ASSET_DIR/region_nodes.v1.geojson"
 waypoint_xml_args=()
 if [ -f "$waypoint_xml_primary" ]; then
   waypoint_xml_args+=(--waypoint-xml "$waypoint_xml_primary")
@@ -416,4 +419,20 @@ if [ -f "$region_groups_field_output" ] && [ -f "$regioninfo_bss_input" ] && [ -
     --loc "$region_loc_input" \
     "${waypoint_xml_args[@]}" \
     --out "$region_groups_field_metadata_output"
+fi
+
+if [ -f "$regioninfo_bss_input" ] && [ -f "$regiongroupinfo_bss_input" ] && [ -f "$region_loc_input" ] && [ "${#waypoint_xml_args[@]}" -gt 0 ] && {
+  [ "${REBUILD_REGION_NODE_WAYPOINTS:-0}" = "1" ] ||
+  [ ! -f "$region_nodes_output" ] ||
+  [ "$regioninfo_bss_input" -nt "$region_nodes_output" ] ||
+  [ "$regiongroupinfo_bss_input" -nt "$region_nodes_output" ] ||
+  [ "$region_loc_input" -nt "$region_nodes_output" ];
+}; then
+  cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_ingest -- \
+    build-region-nodes-geojson \
+    --regioninfo-bss "$regioninfo_bss_input" \
+    --regiongroupinfo-bss "$regiongroupinfo_bss_input" \
+    --loc "$region_loc_input" \
+    "${waypoint_xml_args[@]}" \
+    --out "$region_nodes_output"
 fi

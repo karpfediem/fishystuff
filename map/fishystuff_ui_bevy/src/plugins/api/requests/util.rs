@@ -1,5 +1,4 @@
 use fishystuff_api::ids::MapVersionId;
-use fishystuff_api::models::layers::LayersResponse;
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::zone_stats::ZoneStatsRequest;
 use fishystuff_api::Rgb;
@@ -110,75 +109,6 @@ pub(super) fn resolve_api_request_url(path: &str) -> String {
     }
 }
 
-pub(super) fn absolutize_layers_response_assets(
-    response: &mut LayersResponse,
-    public_base_url: Option<&str>,
-) {
-    let map_asset_cache_key = map_asset_cache_key();
-    for layer in &mut response.layers {
-        layer.tileset.manifest_url =
-            resolve_public_asset_url(Some(&layer.tileset.manifest_url), public_base_url)
-                .unwrap_or_default();
-        layer.tileset.tile_url_template =
-            resolve_public_asset_url(Some(&layer.tileset.tile_url_template), public_base_url)
-                .unwrap_or_default();
-        if let Some(field_source) = layer.field_source.as_mut() {
-            field_source.url = resolve_public_asset_url(Some(&field_source.url), public_base_url)
-                .unwrap_or_default();
-            let cache_key = normalize_vector_cache_key(
-                Some(field_source.revision.as_str()),
-                map_asset_cache_key.as_deref(),
-            );
-            field_source.url =
-                append_cache_key_to_public_asset_url(&field_source.url, Some(cache_key.as_str()));
-        }
-        if let Some(field_metadata_source) = layer.field_metadata_source.as_mut() {
-            field_metadata_source.url =
-                resolve_public_asset_url(Some(&field_metadata_source.url), public_base_url)
-                    .unwrap_or_default();
-            let cache_key = normalize_vector_cache_key(
-                Some(field_metadata_source.revision.as_str()),
-                map_asset_cache_key.as_deref(),
-            );
-            field_metadata_source.url = append_cache_key_to_public_asset_url(
-                &field_metadata_source.url,
-                Some(cache_key.as_str()),
-            );
-        }
-        if let Some(vector_source) = layer.vector_source.as_mut() {
-            vector_source.url = resolve_public_asset_url(Some(&vector_source.url), public_base_url)
-                .unwrap_or_default();
-            let cache_key = normalize_vector_cache_key(
-                Some(vector_source.revision.as_str()),
-                map_asset_cache_key.as_deref(),
-            );
-            vector_source.url =
-                append_cache_key_to_public_asset_url(&vector_source.url, Some(cache_key.as_str()));
-        }
-    }
-}
-
-fn append_cache_key_to_public_asset_url(url: &str, cache_key: Option<&str>) -> String {
-    let cache_key = cache_key.map(str::trim).unwrap_or("");
-    if cache_key.is_empty() {
-        return url.to_string();
-    }
-    let separator = if url.contains('?') { '&' } else { '?' };
-    format!("{url}{separator}v={cache_key}")
-}
-
-fn normalize_vector_cache_key(revision: Option<&str>, map_asset_cache_key: Option<&str>) -> String {
-    let map_asset_cache_key = map_asset_cache_key.map(str::trim).unwrap_or("");
-    if !map_asset_cache_key.is_empty() {
-        return map_asset_cache_key.to_string();
-    }
-    let revision = revision.map(str::trim).unwrap_or("");
-    if !revision.is_empty() {
-        return revision.to_string();
-    }
-    String::new()
-}
-
 #[cfg(target_arch = "wasm32")]
 fn browser_global_base_url(name: &str) -> Option<String> {
     use wasm_bindgen::JsValue;
@@ -189,49 +119,10 @@ fn browser_global_base_url(name: &str) -> Option<String> {
     normalize_public_base_url(Some(value.as_str()))
 }
 
-#[cfg(target_arch = "wasm32")]
-fn map_asset_cache_key() -> Option<String> {
-    use wasm_bindgen::JsValue;
-
-    let window = web_sys::window()?;
-    let runtime_config = js_sys::Reflect::get(
-        window.as_ref(),
-        &JsValue::from_str("__fishystuffRuntimeConfig"),
-    )
-    .ok()?;
-    if runtime_config.is_null() || runtime_config.is_undefined() {
-        return None;
-    }
-    let value = js_sys::Reflect::get(&runtime_config, &JsValue::from_str("mapAssetCacheKey"))
-        .ok()?
-        .as_string()?;
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn map_asset_cache_key() -> Option<String> {
-    None
-}
-
 #[cfg(test)]
 mod tests {
-    use fishystuff_api::models::layers::{
-        FieldColorMode, FieldMetadataSourceRef, FieldSourceRef, LayerDescriptor, LayersResponse,
-        TilesetRef, VectorSourceRef,
-    };
-
-    use super::{
-        absolutize_layers_response_assets, append_cache_key_to_public_asset_url,
-        default_from_patch_id, default_from_ts, normalize_vector_cache_key,
-        resolve_public_asset_url,
-    };
+    use super::{default_from_patch_id, default_from_ts, resolve_public_asset_url};
     use fishystuff_api::ids::PatchId;
-    use fishystuff_api::models::layers::{GeometrySpace, StyleMode};
     use fishystuff_api::models::meta::{MetaResponse, PatchInfo};
 
     fn patch(id: &str, start_ts_utc: i64) -> PatchInfo {
@@ -272,99 +163,5 @@ mod tests {
             .as_deref(),
             Some("https://cdn.example.com/images/terrain_drape/minimap/v1/manifest.json")
         );
-    }
-
-    #[test]
-    fn absolutize_layers_response_assets_uses_single_public_base_url() {
-        let mut response = LayersResponse {
-            revision: "test".to_string(),
-            map_version_id: None,
-            layers: vec![LayerDescriptor {
-                tileset: TilesetRef {
-                    manifest_url: "/images/tiles/minimap/v1/tileset.json".to_string(),
-                    tile_url_template: "/tiles/mask/v1/{level}/{x}_{y}.png".to_string(),
-                    version: "v1".to_string(),
-                },
-                field_source: Some(FieldSourceRef {
-                    url: "/fields/regions.v1.bin".to_string(),
-                    revision: "regions-field-v1".to_string(),
-                    color_mode: FieldColorMode::DebugHash,
-                }),
-                field_metadata_source: Some(FieldMetadataSourceRef {
-                    url: "/fields/regions.v1.meta.json".to_string(),
-                    revision: "regions-meta-v1".to_string(),
-                }),
-                vector_source: Some(VectorSourceRef {
-                    url: "/region_groups/v1.geojson".to_string(),
-                    revision: "rg-v1".to_string(),
-                    geometry_space: GeometrySpace::MapPixels,
-                    style_mode: StyleMode::FeaturePropertyPalette,
-                    feature_id_property: Some("id".to_string()),
-                    color_property: Some("c".to_string()),
-                }),
-                ..LayerDescriptor::default()
-            }],
-        };
-
-        absolutize_layers_response_assets(&mut response, Some("https://cdn.example.com"));
-
-        let layer = &response.layers[0];
-        assert_eq!(
-            layer.tileset.manifest_url,
-            "https://cdn.example.com/images/tiles/minimap/v1/tileset.json"
-        );
-        assert_eq!(
-            layer.tileset.tile_url_template,
-            "https://cdn.example.com/images/tiles/mask/v1/{level}/{x}_{y}.png"
-        );
-        assert_eq!(
-            layer
-                .field_source
-                .as_ref()
-                .map(|source| source.url.as_str()),
-            Some("https://cdn.example.com/fields/regions.v1.bin?v=regions-field-v1")
-        );
-        assert_eq!(
-            layer
-                .field_metadata_source
-                .as_ref()
-                .map(|source| source.url.as_str()),
-            Some("https://cdn.example.com/fields/regions.v1.meta.json?v=regions-meta-v1")
-        );
-        assert_eq!(
-            layer
-                .vector_source
-                .as_ref()
-                .map(|source| source.url.as_str()),
-            Some("https://cdn.example.com/region_groups/v1.geojson?v=rg-v1")
-        );
-    }
-
-    #[test]
-    fn append_cache_key_adds_query_parameter() {
-        assert_eq!(
-            append_cache_key_to_public_asset_url("/region_groups/v1.geojson", Some("deploy-123")),
-            "/region_groups/v1.geojson?v=deploy-123"
-        );
-        assert_eq!(
-            append_cache_key_to_public_asset_url(
-                "https://cdn.example.com/region_groups/v1.geojson?lang=en",
-                Some("deploy-123"),
-            ),
-            "https://cdn.example.com/region_groups/v1.geojson?lang=en&v=deploy-123"
-        );
-    }
-
-    #[test]
-    fn normalize_vector_cache_key_prefers_vector_revision() {
-        assert_eq!(
-            normalize_vector_cache_key(Some("rg-v1"), Some("deploy-123")),
-            "deploy-123"
-        );
-        assert_eq!(
-            normalize_vector_cache_key(Some(""), Some("deploy-123")),
-            "deploy-123"
-        );
-        assert_eq!(normalize_vector_cache_key(Some("rg-v1"), None), "rg-v1");
     }
 }

@@ -81,7 +81,6 @@ mod tests {
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
     use fishystuff_api::models::fish::{FishEntry, FishListResponse};
-    use fishystuff_api::models::layers::LayersResponse;
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
     use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
@@ -101,10 +100,6 @@ mod tests {
     #[async_trait]
     impl Store for MockStore {
         async fn get_meta(&self) -> AppResult<MetaResponse> {
-            panic!("unused in test")
-        }
-
-        async fn get_layers(&self, _map_version_id: Option<String>) -> AppResult<LayersResponse> {
             panic!("unused in test")
         }
 

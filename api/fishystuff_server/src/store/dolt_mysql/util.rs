@@ -2,7 +2,6 @@ use std::hash::{Hash, Hasher};
 
 use chrono::TimeZone;
 use fishystuff_api::models::events::EventSourceKind;
-use fishystuff_api::models::layers::LayerDescriptor;
 use fishystuff_api::models::region_groups::RegionGroupDescriptor;
 use mysql::Row;
 
@@ -12,34 +11,6 @@ use super::FishCatalogRow;
 
 pub(super) fn clamp_i64_to_u32(value: i64, fallback: u32) -> u32 {
     u32::try_from(value.max(0)).unwrap_or(fallback)
-}
-
-pub(super) fn clamp_i64_to_u8(value: i64, fallback: u8) -> u8 {
-    u8::try_from(value.max(0)).unwrap_or(fallback)
-}
-
-pub(super) fn clamp_i64_to_usize(value: i64, fallback: usize) -> usize {
-    usize::try_from(value.max(0)).unwrap_or(fallback)
-}
-
-pub(super) fn clamp_i64_to_i32(value: i64, fallback: i32) -> i32 {
-    i32::try_from(value).unwrap_or(fallback)
-}
-
-pub(super) fn synthetic_layers_revision(
-    map_version_id: Option<&str>,
-    layers: &[LayerDescriptor],
-) -> String {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    map_version_id.unwrap_or("").hash(&mut hasher);
-    for layer in layers {
-        if let Ok(serialized) = serde_json::to_string(layer) {
-            serialized.hash(&mut hasher);
-        } else {
-            layer.layer_id.hash(&mut hasher);
-        }
-    }
-    format!("synthetic:{:016x}", hasher.finish())
 }
 
 pub(super) fn synthetic_events_snapshot_revision(
@@ -115,10 +86,6 @@ pub(super) fn row_opt_f64(row: &Row, idx: usize) -> Option<f64> {
     row.get::<Option<f64>, _>(idx).flatten()
 }
 
-pub(super) fn row_f64(row: &Row, idx: usize, fallback: f64) -> f64 {
-    row_opt_f64(row, idx).unwrap_or(fallback)
-}
-
 pub(super) fn row_i64(row: &Row, idx: usize, fallback: i64) -> i64 {
     row.get::<Option<i64>, _>(idx).flatten().unwrap_or(fallback)
 }
@@ -154,23 +121,6 @@ fn is_unknown_column(err: &mysql::Error, column: &str) -> bool {
         }
         _ => false,
     }
-}
-
-pub(super) fn is_layers_schema_error(err: &mysql::Error) -> bool {
-    is_unknown_column(err, "layer_kind")
-        || is_unknown_column(err, "field_source_url")
-        || is_unknown_column(err, "field_source_revision")
-        || is_unknown_column(err, "field_color_mode")
-        || is_unknown_column(err, "field_metadata_source_url")
-        || is_unknown_column(err, "field_metadata_source_revision")
-        || is_unknown_column(err, "vector_source_url")
-        || is_unknown_column(err, "vector_source_revision")
-        || is_unknown_column(err, "vector_geometry_space")
-        || is_unknown_column(err, "vector_style_mode")
-        || is_unknown_column(err, "vector_feature_id_property")
-        || is_unknown_column(err, "vector_color_property")
-        || is_unknown_column(err, "vector_source_url_override")
-        || is_unknown_column(err, "vector_source_revision_override")
 }
 
 fn is_events_schema_error(err: &mysql::Error) -> bool {

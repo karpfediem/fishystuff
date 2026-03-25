@@ -115,6 +115,12 @@ pub struct OriginalRegionLayerContext {
 }
 
 impl OriginalRegionLayerContext {
+    pub fn region_ids(&self) -> Vec<u32> {
+        let mut ids: Vec<u32> = self.regioninfo.keys().copied().collect();
+        ids.sort_unstable();
+        ids
+    }
+
     pub fn region_group_for_region(&self, region_id: u32) -> Option<u32> {
         self.regioninfo
             .get(&region_id)

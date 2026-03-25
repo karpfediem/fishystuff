@@ -310,6 +310,7 @@ mod tests {
             field_source: None,
             field_metadata_source: None,
             vector_source: None,
+            waypoint_source: None,
             transform: LayerTransform::IdentityMapSpace,
             tile_px: 512,
             max_level: 0,

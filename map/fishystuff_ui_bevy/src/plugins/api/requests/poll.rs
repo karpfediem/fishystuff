@@ -10,8 +10,8 @@ use super::super::state::{
     ApiBootstrapState, FishCatalog, MapDisplayState, PatchFilterState, PendingRequests,
     SelectionState,
 };
-use super::apply::{apply_layers_response, apply_meta_response, sync_zone_mask_controls};
-use super::util::now_utc_seconds;
+use super::apply::apply_meta_response;
+use crate::plugins::local_layers::sync_zone_mask_controls;
 
 pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
     if let Some(receiver) = state.pending.meta.as_ref() {
@@ -35,33 +35,6 @@ pub(super) fn poll_requests(mut state: RequestPollState<'_, '_>) {
                 state.pending.meta = None;
                 state.bootstrap.meta_status = "meta: request closed".to_string();
                 state.bootstrap.layers_status = "layers: blocked".to_string();
-            }
-            Err(TryRecvError::Empty) => {}
-        }
-    }
-
-    if let Some(receiver) = state.pending.layers.as_ref() {
-        match receiver.try_recv() {
-            Ok(result) => {
-                state.pending.layers = None;
-                match result {
-                    Ok(response) => apply_layers_response(
-                        &mut state.bootstrap,
-                        &mut state.display_state,
-                        &mut state.layer_registry,
-                        &mut state.layer_runtime,
-                        response,
-                    ),
-                    Err(err) => {
-                        state.bootstrap.layers_status = format!("layers: {err}");
-                        state.bootstrap.layers_next_retry_at_utc = now_utc_seconds() + 2;
-                    }
-                }
-            }
-            Err(TryRecvError::Closed) => {
-                state.pending.layers = None;
-                state.bootstrap.layers_status = "layers: request closed".to_string();
-                state.bootstrap.layers_next_retry_at_utc = now_utc_seconds() + 2;
             }
             Err(TryRecvError::Empty) => {}
         }

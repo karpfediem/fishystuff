@@ -44,6 +44,12 @@ pub struct RegionGroupsBuildSummary {
     pub resource_feature_count: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct RegionNodesBuildSummary {
+    pub feature_count: usize,
+    pub named_feature_count: usize,
+}
+
 pub fn build_region_groups_geojson(
     region_groups_geojson_path: &Path,
     loc_path: &Path,
@@ -159,8 +165,82 @@ pub fn build_detailed_regions_geojson(
     })
 }
 
+pub fn build_region_nodes_geojson(
+    loc_path: &Path,
+    regioninfo_bss_path: &Path,
+    regiongroupinfo_bss_path: &Path,
+    waypoint_xml_paths: &[PathBuf],
+    out_path: &Path,
+) -> Result<RegionNodesBuildSummary> {
+    let context = load_context(
+        loc_path,
+        regioninfo_bss_path,
+        regiongroupinfo_bss_path,
+        waypoint_xml_paths,
+    )?;
+
+    let mut named_feature_count = 0usize;
+    let mut features = Vec::new();
+    for region_id in context.region_ids() {
+        let Some(info) = context.resolve_region_waypoint_info(region_id) else {
+            continue;
+        };
+        let (Some(world_x), Some(world_z)) = (info.world_x, info.world_z) else {
+            continue;
+        };
+        if info.region_name.is_some() {
+            named_feature_count = named_feature_count.saturating_add(1);
+        }
+        features.push(build_region_node_feature(
+            region_id, &info, world_x, world_z,
+        ));
+    }
+
+    let feature_count = features.len();
+    write_output_geojson(out_path, features)?;
+
+    Ok(RegionNodesBuildSummary {
+        feature_count,
+        named_feature_count,
+    })
+}
+
 fn default_feature_type() -> String {
     "Feature".to_string()
+}
+
+fn build_region_node_feature(
+    region_id: u32,
+    info: &RegionOriginInfo,
+    world_x: f64,
+    world_z: f64,
+) -> Feature {
+    let mut properties = Map::new();
+    let region_name = info
+        .region_name
+        .clone()
+        .or_else(|| info.waypoint_name.clone());
+    let label = region_name
+        .as_ref()
+        .map(|name| format!("{name} (R{region_id})"))
+        .unwrap_or_else(|| format!("R{region_id}"));
+    properties.insert("kind".to_string(), Value::String("region_node".to_string()));
+    properties.insert("r".to_string(), Value::from(region_id));
+    properties.insert("label".to_string(), Value::String(label));
+    if let Some(region_name) = region_name {
+        properties.insert("name".to_string(), Value::String(region_name));
+    }
+    if let Some(waypoint_id) = info.waypoint_id {
+        properties.insert("wp".to_string(), Value::from(waypoint_id));
+    }
+    Feature {
+        feature_type: default_feature_type(),
+        properties,
+        geometry: serde_json::json!({
+            "type": "Point",
+            "coordinates": [world_x, world_z],
+        }),
+    }
 }
 
 fn load_context(
