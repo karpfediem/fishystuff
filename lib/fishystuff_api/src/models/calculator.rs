@@ -27,11 +27,29 @@ pub struct CalculatorLifeskillLevelEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct CalculatorCatalogResponse {
+pub struct CalculatorOptionEntry {
+    pub key: String,
+    pub label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalculatorSessionPresetEntry {
+    pub label: String,
+    pub amount: f64,
+    pub unit: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalculatorPetCatalog {
+    pub slots: usize,
     #[serde(default)]
-    pub items: Vec<CalculatorItemEntry>,
+    pub tiers: Vec<CalculatorOptionEntry>,
     #[serde(default)]
-    pub lifeskill_levels: Vec<CalculatorLifeskillLevelEntry>,
+    pub specials: Vec<CalculatorOptionEntry>,
+    #[serde(default)]
+    pub talents: Vec<CalculatorOptionEntry>,
+    #[serde(default)]
+    pub skills: Vec<CalculatorOptionEntry>,
 }
 
 fn default_level() -> i32 {
@@ -209,4 +227,22 @@ impl Default for CalculatorSignals {
             debug: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalculatorCatalogResponse {
+    #[serde(default)]
+    pub items: Vec<CalculatorItemEntry>,
+    #[serde(default)]
+    pub lifeskill_levels: Vec<CalculatorLifeskillLevelEntry>,
+    #[serde(default)]
+    pub fishing_levels: Vec<CalculatorOptionEntry>,
+    #[serde(default)]
+    pub session_units: Vec<CalculatorOptionEntry>,
+    #[serde(default)]
+    pub session_presets: Vec<CalculatorSessionPresetEntry>,
+    #[serde(default)]
+    pub pets: CalculatorPetCatalog,
+    #[serde(default)]
+    pub defaults: CalculatorSignals,
 }

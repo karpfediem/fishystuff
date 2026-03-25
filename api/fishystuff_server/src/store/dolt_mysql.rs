@@ -14,6 +14,7 @@ use fishystuff_api::error::ApiError;
 use fishystuff_api::ids::{MapVersionId, Rgb};
 use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
+    CalculatorOptionEntry, CalculatorPetCatalog, CalculatorSessionPresetEntry, CalculatorSignals,
 };
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{
@@ -699,6 +700,11 @@ impl DoltMySqlStore {
         Ok(CalculatorCatalogResponse {
             items: self.query_calculator_items(lang, ref_id)?,
             lifeskill_levels: build_calculator_lifeskill_levels(),
+            fishing_levels: build_calculator_fishing_levels(lang),
+            session_units: build_calculator_session_units(lang),
+            session_presets: build_calculator_session_presets(lang),
+            pets: build_calculator_pet_catalog(lang),
+            defaults: CalculatorSignals::default(),
         })
     }
 
@@ -1576,6 +1582,109 @@ impl DoltMySqlStore {
             jsd_threshold: cfg.drift_jsd_threshold,
         };
         Ok((Some(info), drifting, note))
+    }
+}
+
+fn localized_label(lang: FishLang, en: &'static str, ko: &'static str) -> String {
+    match lang {
+        FishLang::En => en.to_string(),
+        FishLang::Ko => ko.to_string(),
+    }
+}
+
+fn build_calculator_fishing_levels(lang: FishLang) -> Vec<CalculatorOptionEntry> {
+    (0..=5)
+        .map(|level| CalculatorOptionEntry {
+            key: level.to_string(),
+            label: match lang {
+                FishLang::En => format!("Level {level}"),
+                FishLang::Ko => format!("낚시 {level}단계"),
+            },
+        })
+        .collect()
+}
+
+fn build_calculator_session_units(lang: FishLang) -> Vec<CalculatorOptionEntry> {
+    [
+        ("minutes", "Minutes", "분"),
+        ("hours", "Hours", "시간"),
+        ("days", "Days", "일"),
+        ("weeks", "Weeks", "주"),
+    ]
+    .into_iter()
+    .map(|(key, en, ko)| CalculatorOptionEntry {
+        key: key.to_string(),
+        label: localized_label(lang, en, ko),
+    })
+    .collect()
+}
+
+fn build_calculator_session_presets(lang: FishLang) -> Vec<CalculatorSessionPresetEntry> {
+    [
+        ("1 hour", "1시간", 1.0, "hours"),
+        ("8 hours", "8시간", 8.0, "hours"),
+        ("10 hours", "10시간", 10.0, "hours"),
+        ("12 hours", "12시간", 12.0, "hours"),
+        ("1 day", "1일", 1.0, "days"),
+    ]
+    .into_iter()
+    .map(|(en, ko, amount, unit)| CalculatorSessionPresetEntry {
+        label: localized_label(lang, en, ko),
+        amount,
+        unit: unit.to_string(),
+    })
+    .collect()
+}
+
+fn build_calculator_pet_catalog(lang: FishLang) -> CalculatorPetCatalog {
+    let tiers = (1..=5)
+        .map(|tier| CalculatorOptionEntry {
+            key: tier.to_string(),
+            label: match lang {
+                FishLang::En => format!("Tier {tier}"),
+                FishLang::Ko => format!("{tier}세대"),
+            },
+        })
+        .collect();
+    let specials = vec![
+        CalculatorOptionEntry {
+            key: String::new(),
+            label: localized_label(lang, "None", "없음"),
+        },
+        CalculatorOptionEntry {
+            key: "auto_fishing_time_reduction".to_string(),
+            label: localized_label(lang, "Auto-Fishing Time Reduction", "자동 낚시 시간 감소"),
+        },
+    ];
+    let talents = vec![
+        CalculatorOptionEntry {
+            key: String::new(),
+            label: localized_label(lang, "None", "없음"),
+        },
+        CalculatorOptionEntry {
+            key: "durability_reduction_resistance".to_string(),
+            label: localized_label(
+                lang,
+                "Durability Reduction Resistance",
+                "내구도 소모 감소 저항",
+            ),
+        },
+        CalculatorOptionEntry {
+            key: "life_exp".to_string(),
+            label: localized_label(lang, "Life EXP", "생활 경험치"),
+        },
+    ];
+    let skills = vec![CalculatorOptionEntry {
+        key: "fishing_exp".to_string(),
+        label: localized_label(lang, "Fishing EXP", "낚시 경험치"),
+    }];
+
+    CalculatorPetCatalog {
+        slots: 5,
+        tiers,
+        specials,
+        talents,
+        skills,
     }
 }
 

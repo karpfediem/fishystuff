@@ -20,7 +20,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     const presetQueryParam = urlParams.get("preset");
 
-    const createDefaultSignals = () => ({
+    const createEmptySignals = () => ({
         level: 5,
         lifeskill_level: "100",
         zone: "240,74,74",
@@ -105,6 +105,8 @@
         },
     });
 
+    const cloneSignals = (signals) => JSON.parse(JSON.stringify(signals));
+
     const publicCalculatorSignals = (signals) =>
         Object.fromEntries(
             Object.entries(signals ?? {}).filter(([key]) => !key.startsWith("_"))
@@ -139,15 +141,14 @@
         }
     };
 
-    const initialSignals = () => {
-        const defaults = createDefaultSignals();
-        const stored = loadStoredSignals();
-        if (!stored) {
+    const mergeWithEmptySignals = (source) => {
+        const defaults = createEmptySignals();
+        if (!source || typeof source !== "object") {
             return defaults;
         }
         const merged = { ...defaults };
         for (const key of Object.keys(defaults)) {
-            if (!(key in stored)) {
+            if (!(key in source)) {
                 continue;
             }
             if (key === "_calc" || key === "_loading") {
@@ -156,14 +157,18 @@
             if (key.startsWith("pet")) {
                 merged[key] = {
                     ...defaults[key],
-                    ...(stored[key] && typeof stored[key] === "object" ? stored[key] : {}),
+                    ...(source[key] && typeof source[key] === "object" ? source[key] : {}),
                 };
                 continue;
             }
-            merged[key] = stored[key];
+            merged[key] = source[key];
         }
         return merged;
     };
+
+    const bootstrapSignals = loadStoredSignals();
+    const initialSignals = () => mergeWithEmptySignals(bootstrapSignals);
+    const initialCalculatorSignals = initialSignals();
 
     if (presetQueryParam) {
         try {
@@ -187,9 +192,17 @@
         iconSpriteUrl: ICON_SPRITE_URL,
         lang: calculatorLang,
         initUrl() {
-            return window.__fishystuffResolveApiUrl(
-                `/api/v1/calculator/datastar/init?lang=${this.lang}`,
+            const url = new URL(
+                window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/init?lang=${this.lang}`),
+                window.location.origin,
             );
+            if (bootstrapSignals && typeof bootstrapSignals === "object") {
+                url.searchParams.set(
+                    "datastar",
+                    JSON.stringify(publicCalculatorSignals(bootstrapSignals)),
+                );
+            }
+            return url.toString();
         },
         evalUrl() {
             return window.__fishystuffResolveApiUrl(
@@ -215,7 +228,7 @@
             clearSignals();
         },
         initialSignals() {
-            return initialSignals();
+            return cloneSignals(initialCalculatorSignals);
         },
         persist(signals) {
             const payload = publicCalculatorSignals(signals);
@@ -368,12 +381,6 @@
                         <legend class="fieldset-legend">Fishing Level</legend>
                         <select class="select w-full" id="level" data-bind-level>
                             <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                            <option value="0">0</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
                         </select>
                     </fieldset>
                     <fieldset class="fieldset">
@@ -428,21 +435,11 @@
                             <legend class="fieldset-legend">Unit</legend>
                             <select class="select select-sm w-full" id="timespan_unit" data-bind="timespanUnit">
                                 <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                <option value="minutes">Minutes</option>
-                                <option value="hours">Hours</option>
-                                <option value="days">Days</option>
-                                <option value="weeks">Weeks</option>
                             </select>
                         </fieldset>
                     </div>
 
-                    <div class="join join-vertical sm:join-horizontal">
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'hours'; window.__fishystuffCalculator.sync(ctx)">1 hour</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 8; $timespanUnit = 'hours'; window.__fishystuffCalculator.sync(ctx)">8 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 10; $timespanUnit = 'hours'; window.__fishystuffCalculator.sync(ctx)">10 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 12; $timespanUnit = 'hours'; window.__fishystuffCalculator.sync(ctx)">12 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'days'; window.__fishystuffCalculator.sync(ctx)">1 day</button>
-                    </div>
+                    <div id="session_presets" class="join join-vertical sm:join-horizontal"></div>
                 </div>
             </div>
         </fieldset>
@@ -512,172 +509,7 @@
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             <legend class="fieldset-legend ml-6 px-2">Pets</legend>
             <div class="card-body pt-0">
-                <div id="pets" class="grid gap-4 md:grid-cols-2">
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
-                        <div class="grid gap-3">
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm w-full" data-bind-pet1.tier>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm w-full" data-bind-pet1.special>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm w-full" data-bind-pet1.talent>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
-                                    <option value="life_exp">Life EXP</option>
-                                </select>
-                            </fieldset>
-                        </div>
-                        <fieldset class="fieldset mt-3 gap-2">
-                            <legend class="fieldset-legend">Skills</legend>
-                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet1.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
-                        </fieldset>
-                    </div>
-
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
-                        <div class="grid gap-3">
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm w-full" data-bind-pet2.tier>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm w-full" data-bind-pet2.special>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm w-full" data-bind-pet2.talent>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
-                                    <option value="life_exp">Life EXP</option>
-                                </select>
-                            </fieldset>
-                        </div>
-                        <fieldset class="fieldset mt-3 gap-2">
-                            <legend class="fieldset-legend">Skills</legend>
-                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet2.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
-                        </fieldset>
-                    </div>
-
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
-                        <div class="grid gap-3">
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm w-full" data-bind-pet3.tier>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm w-full" data-bind-pet3.special>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm w-full" data-bind-pet3.talent>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
-                                    <option value="life_exp">Life EXP</option>
-                                </select>
-                            </fieldset>
-                        </div>
-                        <fieldset class="fieldset mt-3 gap-2">
-                            <legend class="fieldset-legend">Skills</legend>
-                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet3.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
-                        </fieldset>
-                    </div>
-
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
-                        <div class="grid gap-3">
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm w-full" data-bind-pet4.tier>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm w-full" data-bind-pet4.special>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm w-full" data-bind-pet4.talent>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
-                                    <option value="life_exp">Life EXP</option>
-                                </select>
-                            </fieldset>
-                        </div>
-                        <fieldset class="fieldset mt-3 gap-2">
-                            <legend class="fieldset-legend">Skills</legend>
-                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet4.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
-                        </fieldset>
-                    </div>
-
-                    <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
-                        <div class="grid gap-3">
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm w-full" data-bind-pet5.tier>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm w-full" data-bind-pet5.special>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
-                                </select>
-                            </fieldset>
-                            <fieldset class="fieldset">
-                                <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm w-full" data-bind-pet5.talent>
-                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                                    <option value="">None</option>
-                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
-                                    <option value="life_exp">Life EXP</option>
-                                </select>
-                            </fieldset>
-                        </div>
-                        <fieldset class="fieldset mt-3 gap-2">
-                            <legend class="fieldset-legend">Skills</legend>
-                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet5.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
-                        </fieldset>
-                    </div>
-                </div>
+                <div id="pets" class="grid gap-4 md:grid-cols-2"></div>
             </div>
         </fieldset>
     </div>

@@ -11,7 +11,8 @@ use serde_json::{json, Value};
 
 use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
-    CalculatorPetSignals, CalculatorSignals,
+    CalculatorOptionEntry, CalculatorPetCatalog, CalculatorPetSignals,
+    CalculatorSessionPresetEntry, CalculatorSignals,
 };
 use fishystuff_api::models::zones::ZoneEntry;
 
@@ -86,16 +87,11 @@ pub async fn get_calculator_catalog(
     })?;
 
     let lang = FishLang::from_param(query.lang.as_deref());
-    let response = with_timeout(
-        state.config.request_timeout_secs,
-        state.store.calculator_catalog(lang, query.r#ref),
-    )
-    .await
-    .map_err(|err| map_request_id(err, &request_id))?;
+    let data = load_calculator_data(&state, lang, query.r#ref, &request_id).await?;
 
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    Ok((headers, Json(response)))
+    Ok((headers, Json(data.catalog)))
 }
 
 pub async fn get_calculator_datastar_init(
@@ -111,25 +107,18 @@ pub async fn get_calculator_datastar_init(
     let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
     let raw_signals = match query.datastar.as_deref() {
         Some(payload) if !payload.trim().is_empty() => {
-            serde_json::from_str(payload).map_err(|err| {
+            let value = serde_json::from_str::<Value>(payload).map_err(|err| {
                 AppError::invalid_argument(format!("invalid datastar query payload: {err}"))
                     .with_request_id(request_id.0.clone())
-            })?
+            })?;
+            parse_calculator_signals_value(value, &request_id)?
         }
-        _ => CalculatorSignals::default(),
+        _ => data.catalog.defaults.clone(),
     };
 
     let (normalized_signals, derived) = normalize_and_derive(raw_signals.clone(), &data);
     let fragments = render_calculator_controls(&data, &normalized_signals);
-    let mut patch = serde_json::Map::new();
-    if normalized_signals != raw_signals {
-        let value = serde_json::to_value(&normalized_signals).map_err(|err| {
-            AppError::internal(format!("serialize normalized calculator signals: {err}"))
-        })?;
-        if let Value::Object(obj) = value {
-            patch.extend(obj);
-        }
-    }
+    let mut patch = signals_patch_map(&normalized_signals)?;
     patch.insert(
         "_calc".to_string(),
         serde_json::to_value(&derived).map_err(|err| {
@@ -157,12 +146,7 @@ pub async fn post_calculator_datastar_eval(
 
     let mut patch = serde_json::Map::new();
     if normalized_signals != raw_signals {
-        let value = serde_json::to_value(&normalized_signals).map_err(|err| {
-            AppError::internal(format!("serialize normalized calculator signals: {err}"))
-        })?;
-        if let Value::Object(obj) = value {
-            patch.extend(obj);
-        }
+        patch.extend(signals_patch_map(&normalized_signals)?);
     }
     patch.insert(
         "_calc".to_string(),
@@ -216,10 +200,126 @@ fn parse_calculator_signals_body(
     if body.is_empty() {
         return Ok(CalculatorSignals::default());
     }
-    serde_json::from_slice(body).map_err(|err| {
+    let value = serde_json::from_slice::<Value>(body).map_err(|err| {
         AppError::invalid_argument(format!("invalid calculator request body: {err}"))
             .with_request_id(request_id.0.clone())
+    })?;
+    parse_calculator_signals_value(value, request_id)
+}
+
+fn parse_calculator_signals_value(
+    value: Value,
+    request_id: &RequestId,
+) -> AppResult<CalculatorSignals> {
+    let mut object = match value {
+        Value::Object(object) => object,
+        _ => {
+            return Err(
+                AppError::invalid_argument("calculator payload must be a JSON object")
+                    .with_request_id(request_id.0.clone()),
+            );
+        }
+    };
+
+    coerce_object_i64(&mut object, "level");
+    coerce_object_f64(&mut object, "resources");
+    coerce_object_f64(&mut object, "catchTimeActive");
+    coerce_object_f64(&mut object, "catchTimeAfk");
+    coerce_object_f64(&mut object, "timespanAmount");
+    coerce_object_bool(&mut object, "brand");
+    coerce_object_bool(&mut object, "active");
+    coerce_object_bool(&mut object, "debug");
+
+    for key in ["pet1", "pet2", "pet3", "pet4", "pet5"] {
+        if let Some(Value::Object(pet)) = object.get_mut(key) {
+            coerce_nested_string(pet, "tier");
+            coerce_nested_string(pet, "special");
+            coerce_nested_string(pet, "talent");
+            coerce_nested_string_array(pet, "skills");
+        }
+    }
+
+    serde_json::from_value(Value::Object(object)).map_err(|err| {
+        AppError::invalid_argument(format!("invalid calculator payload after coercion: {err}"))
+            .with_request_id(request_id.0.clone())
     })
+}
+
+fn coerce_object_i64(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(value) = object.get_mut(key) {
+        coerce_value_i64(value);
+    }
+}
+
+fn coerce_object_f64(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(value) = object.get_mut(key) {
+        coerce_value_f64(value);
+    }
+}
+
+fn coerce_object_bool(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(value) = object.get_mut(key) {
+        coerce_value_bool(value);
+    }
+}
+
+fn coerce_nested_string(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(value) = object.get_mut(key) {
+        if let Some(string) = value.as_str() {
+            *value = Value::String(string.to_string());
+        } else if let Some(number) = value.as_i64() {
+            *value = Value::String(number.to_string());
+        }
+    }
+}
+
+fn coerce_nested_string_array(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(value) = object.get_mut(key) {
+        match value {
+            Value::String(string) => {
+                *value = Value::Array(vec![Value::String(string.clone())]);
+            }
+            Value::Array(values) => {
+                *values = values
+                    .iter()
+                    .filter_map(|value| match value {
+                        Value::String(string) => Some(Value::String(string.clone())),
+                        Value::Number(number) => Some(Value::String(number.to_string())),
+                        _ => None,
+                    })
+                    .collect();
+            }
+            _ => {}
+        }
+    }
+}
+
+fn coerce_value_i64(value: &mut Value) {
+    if let Value::String(string) = value {
+        if let Ok(parsed) = string.trim().parse::<i64>() {
+            *value = Value::Number(parsed.into());
+        }
+    }
+}
+
+fn coerce_value_f64(value: &mut Value) {
+    if let Value::String(string) = value {
+        if let Ok(parsed) = string.trim().parse::<f64>() {
+            if let Some(number) = serde_json::Number::from_f64(parsed) {
+                *value = Value::Number(number);
+            }
+        }
+    }
+}
+
+fn coerce_value_bool(value: &mut Value) {
+    if let Value::String(string) = value {
+        match string.trim().to_ascii_lowercase().as_str() {
+            "true" => *value = Value::Bool(true),
+            "false" => *value = Value::Bool(false),
+            _ => {}
+        }
+    }
 }
 
 async fn load_calculator_data(
@@ -254,7 +354,7 @@ fn normalize_and_derive(
 }
 
 fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
-    let defaults = CalculatorSignals::default();
+    let defaults = data.catalog.defaults.clone();
     let item_name_to_key = data
         .catalog
         .items
@@ -409,6 +509,18 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         "minutes" | "hours" | "days" | "weeks"
     ) {
         signals.timespan_unit = defaults.timespan_unit;
+    }
+}
+
+fn signals_patch_map(signals: &CalculatorSignals) -> AppResult<serde_json::Map<String, Value>> {
+    let value = serde_json::to_value(signals).map_err(|err| {
+        AppError::internal(format!("serialize normalized calculator signals: {err}"))
+    })?;
+    match value {
+        Value::Object(obj) => Ok(obj),
+        _ => Err(AppError::internal(
+            "calculator signals serialization did not produce an object",
+        )),
     }
 }
 
@@ -880,6 +992,16 @@ fn trim_float(value: f64) -> String {
 fn render_calculator_controls(data: &CalculatorData, signals: &CalculatorSignals) -> String {
     let mut fragments = String::new();
 
+    let fishing_levels = select_options_from_catalog(&data.catalog.fishing_levels);
+    fragments.push_str(&render_select(
+        "level",
+        "select w-full",
+        "data-bind-level",
+        &signals.level.to_string(),
+        &fishing_levels,
+        false,
+    ));
+
     let zones = sorted_zone_options(&data.zones);
     fragments.push_str(&render_select(
         "zone",
@@ -898,6 +1020,20 @@ fn render_calculator_controls(data: &CalculatorData, signals: &CalculatorSignals
         &signals.lifeskill_level,
         &lifeskill_levels,
         false,
+    ));
+
+    let session_units = select_options_from_catalog(&data.catalog.session_units);
+    fragments.push_str(&render_select(
+        "timespan_unit",
+        "select select-sm w-full",
+        "data-bind=\"timespanUnit\"",
+        &signals.timespan_unit,
+        &session_units,
+        false,
+    ));
+    fragments.push_str(&render_session_presets(
+        &data.catalog.session_presets,
+        "session_presets",
     ));
 
     let rods = item_options_by_type(&data.catalog.items, "rod");
@@ -974,7 +1110,20 @@ fn render_calculator_controls(data: &CalculatorData, signals: &CalculatorSignals
         &buffs,
     ));
 
+    fragments.push_str(&render_pet_cards(&data.catalog.pets, signals));
+
     fragments
+}
+
+fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectOption<'_>> {
+    options
+        .iter()
+        .map(|option| SelectOption {
+            value: option.key.as_str(),
+            label: option.label.as_str(),
+            icon: None,
+        })
+        .collect()
 }
 
 fn sorted_zone_options(zones: &[ZoneEntry]) -> Vec<SelectOption<'_>> {
@@ -1030,14 +1179,24 @@ fn render_select(
     include_none: bool,
 ) -> String {
     let mut html = String::new();
-    write!(
-        html,
-        "<select id=\"{}\" class=\"{}\" {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
-        escape_html(id),
-        escape_html(class_name),
-        bind_attr,
-    )
-    .unwrap();
+    if id.is_empty() {
+        write!(
+            html,
+            "<select class=\"{}\" {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
+            escape_html(class_name),
+            bind_attr,
+        )
+        .unwrap();
+    } else {
+        write!(
+            html,
+            "<select id=\"{}\" class=\"{}\" {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
+            escape_html(id),
+            escape_html(class_name),
+            bind_attr,
+        )
+        .unwrap();
+    }
     if include_none {
         html.push_str("<option value=\"\"><span>None</span></option>");
     }
@@ -1110,6 +1269,100 @@ fn render_checkbox_group(
             .unwrap();
         }
         write!(html, "<span>{}</span></label>", escape_html(option.label)).unwrap();
+    }
+    html.push_str("</div>");
+    html
+}
+
+fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) -> String {
+    let mut html = String::new();
+    write!(
+        html,
+        "<div id=\"{}\" class=\"join join-vertical sm:join-horizontal\">",
+        escape_html(id)
+    )
+    .unwrap();
+    for preset in presets {
+        write!(
+            html,
+            "<button type=\"button\" class=\"btn btn-soft btn-sm join-item\" data-on-click=\"$timespanAmount = {}; $timespanUnit = '{}'; window.__fishystuffCalculator.sync(ctx)\">{}</button>",
+            trim_float(preset.amount),
+            escape_html(&preset.unit),
+            escape_html(&preset.label)
+        )
+        .unwrap();
+    }
+    html.push_str("</div>");
+    html
+}
+
+fn render_pet_cards(catalog: &CalculatorPetCatalog, signals: &CalculatorSignals) -> String {
+    let tier_options = select_options_from_catalog(&catalog.tiers);
+    let special_options = select_options_from_catalog(&catalog.specials);
+    let talent_options = select_options_from_catalog(&catalog.talents);
+
+    let mut html = String::new();
+    html.push_str("<div id=\"pets\" class=\"grid gap-4 md:grid-cols-2\">");
+    for slot in 1..=catalog.slots.max(1) {
+        let pet = match slot {
+            1 => &signals.pet1,
+            2 => &signals.pet2,
+            3 => &signals.pet3,
+            4 => &signals.pet4,
+            _ => &signals.pet5,
+        };
+        let bind_prefix = format!("pet{slot}");
+        let skill_bind = format!("{}.skills", bind_prefix);
+        let skills_id = format!("pet{slot}_skills");
+        write!(
+            html,
+            "<div class=\"pet rounded-box border border-base-300 bg-base-200 p-3\"><div class=\"grid gap-3\">"
+        )
+        .unwrap();
+        html.push_str(
+            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Tier</legend>",
+        );
+        html.push_str(&render_select(
+            "",
+            "select select-sm w-full",
+            &format!("data-bind-{}.tier", bind_prefix),
+            &pet.tier,
+            &tier_options,
+            false,
+        ));
+        html.push_str("</fieldset>");
+        html.push_str(
+            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Special</legend>",
+        );
+        html.push_str(&render_select(
+            "",
+            "select select-sm w-full",
+            &format!("data-bind-{}.special", bind_prefix),
+            &pet.special,
+            &special_options,
+            false,
+        ));
+        html.push_str("</fieldset>");
+        html.push_str(
+            "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Talent</legend>",
+        );
+        html.push_str(&render_select(
+            "",
+            "select select-sm w-full",
+            &format!("data-bind-{}.talent", bind_prefix),
+            &pet.talent,
+            &talent_options,
+            false,
+        ));
+        html.push_str("</fieldset></div>");
+        html.push_str("<fieldset class=\"fieldset mt-3 gap-2\"><legend class=\"fieldset-legend\">Skills</legend>");
+        html.push_str(&render_checkbox_group(
+            &skills_id,
+            &skill_bind,
+            &pet.skills,
+            &select_options_from_catalog(&catalog.skills),
+        ));
+        html.push_str("</fieldset></div>");
     }
     html.push_str("</div>");
     html
@@ -1196,10 +1449,9 @@ mod tests {
                     },
                     CalculatorItemEntry {
                         key: "item:705539".to_string(),
-                        name: "Karki Suit".to_string(),
+                        name: "Manos Fishing Chair".to_string(),
                         r#type: "chair".to_string(),
                         afr: Some(0.1),
-                        drr: Some(0.1),
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
@@ -1219,17 +1471,16 @@ mod tests {
                     },
                     CalculatorItemEntry {
                         key: "item:9359".to_string(),
-                        name: "Sute Tea".to_string(),
+                        name: "Balacs Lunchbox".to_string(),
                         r#type: "food".to_string(),
                         afr: Some(0.05),
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
                         key: "item:721092".to_string(),
-                        name: "Verdure Draught".to_string(),
+                        name: "Treant's Tear".to_string(),
                         r#type: "buff".to_string(),
-                        afr: Some(0.05),
-                        drr: Some(0.05),
+                        exp_life: Some(0.3),
                         ..CalculatorItemEntry::default()
                     },
                 ],
@@ -1239,6 +1490,7 @@ mod tests {
                     index: 100,
                     order: 100,
                 }],
+                ..CalculatorCatalogResponse::default()
             })
         }
 
@@ -1338,6 +1590,9 @@ mod tests {
         assert!(text.contains("event: datastar-merge-fragments"));
         assert!(text.contains("<select id=\"zone\""));
         assert!(text.contains("event: datastar-merge-signals"));
+        assert!(text.contains("\"catchTimeActive\":17.5"));
+        assert!(text.contains("\"timespanAmount\":8.0"));
+        assert!(text.contains("\"chair\":\"item:705539\""));
         assert!(text.contains("\"zone_name\":\"Velia Beach\""));
     }
 
