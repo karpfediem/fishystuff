@@ -36,6 +36,7 @@ mod tests {
     use axum::extract::{Extension, State};
     use axum::Json;
     use fishystuff_api::ids::{MapVersionId, RgbKey};
+    use fishystuff_api::models::calculator::CalculatorCatalogResponse;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
     use fishystuff_api::models::fish::FishListResponse;
@@ -77,6 +78,14 @@ mod tests {
             _lang: FishLang,
             _ref_id: Option<String>,
         ) -> AppResult<FishListResponse> {
+            panic!("unused in test")
+        }
+
+        async fn calculator_catalog(
+            &self,
+            _lang: FishLang,
+            _ref_id: Option<String>,
+        ) -> AppResult<CalculatorCatalogResponse> {
             panic!("unused in test")
         }
 

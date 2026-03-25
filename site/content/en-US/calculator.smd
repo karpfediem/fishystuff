@@ -11,333 +11,232 @@
 
 ```=html
 <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const presetQueryParam = urlParams.get('preset');
+    const ICON_SPRITE_URL = "/img/icons.svg?v=20260325-2";
+    const CALCULATOR_STORAGE_KEY = "calculator";
+    const calculatorLang = document.documentElement.lang?.trim().toLowerCase().startsWith("ko")
+        ? "ko"
+        : "en";
 
-    const presetURL = (json) => {
-        return window.location.origin + window.location.pathname + "?preset=" + LZString.compressToEncodedURIComponent(json)
-    }
+    const urlParams = new URLSearchParams(window.location.search);
+    const presetQueryParam = urlParams.get("preset");
+
+    const createDefaultSignals = () => ({
+        level: 5,
+        lifeskill_level: "100",
+        zone: "240,74,74",
+        resources: 0,
+        rod: "item:16162",
+        float: "",
+        chair: "item:705539",
+        lightstone_set: "effect:blacksmith-s-blessing",
+        backpack: "item:830150",
+        outfit: [
+            "effect:8-piece-outfit-set-effect",
+            "effect:awakening-weapon-outfit",
+            "effect:mainhand-weapon-outfit",
+        ],
+        food: ["item:9359"],
+        buff: ["", "item:721092"],
+        pet1: {
+            tier: "5",
+            special: "auto_fishing_time_reduction",
+            talent: "durability_reduction_resistance",
+            skills: ["fishing_exp"],
+        },
+        pet2: {
+            tier: "4",
+            special: "",
+            talent: "durability_reduction_resistance",
+            skills: ["fishing_exp"],
+        },
+        pet3: {
+            tier: "4",
+            special: "",
+            talent: "durability_reduction_resistance",
+            skills: ["fishing_exp"],
+        },
+        pet4: {
+            tier: "4",
+            special: "",
+            talent: "durability_reduction_resistance",
+            skills: ["fishing_exp"],
+        },
+        pet5: {
+            tier: "4",
+            special: "",
+            talent: "durability_reduction_resistance",
+            skills: ["fishing_exp"],
+        },
+        catchTimeActive: 17.5,
+        catchTimeAfk: 6.5,
+        timespanAmount: 8,
+        timespanUnit: "hours",
+        brand: true,
+        active: false,
+        debug: false,
+        _loading: false,
+        _calc: {
+            zone_name: "",
+            abundance_label: "",
+            zone_bite_min: "",
+            zone_bite_max: "",
+            effective_bite_min: "",
+            effective_bite_max: "",
+            total_time: "",
+            bite_time: "",
+            auto_fish_time: "",
+            auto_fish_time_reduction_text: "",
+            casts_title: "",
+            casts_average: "",
+            durability_reduction_resistance_text: "",
+            chance_to_consume_durability_text: "",
+            durability_loss_title: "",
+            durability_loss_average: "",
+            timespan_text: "",
+            bite_time_title: "",
+            auto_fish_time_title: "",
+            catch_time_title: "",
+            unoptimized_time_title: "",
+            show_auto_fishing: false,
+            percent_bite: "0.00",
+            percent_af: "0.00",
+            percent_catch: "0.00",
+            debug_json: "",
+        },
+    });
+
+    const publicCalculatorSignals = (signals) =>
+        Object.fromEntries(
+            Object.entries(signals ?? {}).filter(([key]) => !key.startsWith("_"))
+        );
+
+    const presetURL = (signals) => {
+        const payload = JSON.stringify(publicCalculatorSignals(signals));
+        return (
+            window.location.origin +
+            window.location.pathname +
+            "?preset=" +
+            LZString.compressToEncodedURIComponent(payload)
+        );
+    };
+
     const clearSignals = () => {
-        localStorage.removeItem('calculator');
+        localStorage.removeItem(CALCULATOR_STORAGE_KEY);
         window.location.reload();
-    }
+    };
+
+    const loadStoredSignals = () => {
+        const raw = localStorage.getItem(CALCULATOR_STORAGE_KEY);
+        if (!raw) {
+            return null;
+        }
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === "object" ? parsed : null;
+        } catch (error) {
+            console.error("Error parsing stored calculator state:", error);
+            return null;
+        }
+    };
+
+    const initialSignals = () => {
+        const defaults = createDefaultSignals();
+        const stored = loadStoredSignals();
+        if (!stored) {
+            return defaults;
+        }
+        const merged = { ...defaults };
+        for (const key of Object.keys(defaults)) {
+            if (!(key in stored)) {
+                continue;
+            }
+            if (key === "_calc" || key === "_loading") {
+                continue;
+            }
+            if (key.startsWith("pet")) {
+                merged[key] = {
+                    ...defaults[key],
+                    ...(stored[key] && typeof stored[key] === "object" ? stored[key] : {}),
+                };
+                continue;
+            }
+            merged[key] = stored[key];
+        }
+        return merged;
+    };
 
     if (presetQueryParam) {
         try {
             const jsonString = LZString.decompressFromEncodedURIComponent(presetQueryParam);
-            parsed = JSON.parse(jsonString) // see if it is at least valid JSON...
-            localStorage.setItem('calculator', jsonString);
+            JSON.parse(jsonString);
+            localStorage.setItem(CALCULATOR_STORAGE_KEY, jsonString);
 
-            // Remove the query parameter from the URL
-            urlParams.delete('preset');
+            urlParams.delete("preset");
             const newQueryString = urlParams.toString();
-            const newUrl = window.location.origin + window.location.pathname +
-                (newQueryString ? '?' + newQueryString : '');
-
-            // Replace the current URL with the new one, effectively reloading the page without the parameter
+            const newUrl =
+                window.location.origin +
+                window.location.pathname +
+                (newQueryString ? "?" + newQueryString : "");
             window.location.replace(newUrl);
         } catch (error) {
-            console.error('Error importing preset:', error);
+            console.error("Error importing preset:", error);
         }
     }
 
-    function loadJSONSync(url) {
-        const request = new XMLHttpRequest();
-        request.open('GET', url, false); // false makes it synchronous
-        request.send(null);
-
-        if (request.status === 200) {
-            return JSON.parse(request.responseText);
-        } else {
-            throw new Error(`HTTP error! Status: ${request.status}`);
-        }
-    }
-
-    const items = loadJSONSync('/data/items.json');
-    const zones = loadJSONSync('/data/zones.json');
-    const lifeskill_levels = loadJSONSync('/data/lifeskill_levels.json');
-
-    lifeskill_levels.sort((a, b) => (a.order > b.order) ? 1 : ((b.order > a.order) ? -1 : 0))
-    zones.sort((a, b) => (a.name > b.name) ? 1 : ((b.name > a.name) ? -1 : 0))
-    const zonesWithBiteTimes = zones.filter(z => z.bite_time_min && z.bite_time_max)
-
-    const searchList = (list, search, type) => list.filter(item =>
-        item.name.toLowerCase().includes(search.toLowerCase()) && (item.type && item.type.includes(type) || !item.type)
-    );
-    const searchListBy = (list, key, search) => list.filter(item => item[key].toLowerCase() === search.toLowerCase());
-
-    const rods = searchList(items, '', 'rod')
-    const floats = searchList(items, '', 'float')
-    const chairs = searchList(items, '', 'chair')
-    const backpacks = searchList(items, '', 'backpack')
-    const buffs = searchList(items, '', 'buff')
-    const foods = searchList(items, '', 'food')
-    const outfits = searchList(items, '', 'outfit')
-    const lightstone_sets = searchList(items, '', 'lightstone_set')
-
-
-    const selectedOption = `<button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>`
-    const noneOption = '<option value=""><span>None</span></option>\n'
-    const mapOption = (list) => list.map(i => {
-            let html = `<option value="${i.name}">`
-            if (i.icon) {
-                html += `
-<img aria-hidden="true" src="${i.icon}" class="item-icon" alt="${i.name} icon"/>
-`
-            }
-            html += `<span>${i.name}</span>
-        </option>`
-            return html
-        }
-    ).join('\n')
-    const mapCheckbox = (list) => list.map(i => {
-            let html = `<label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium">
-<input data-bind-${i.type} type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="${i.name}">`
-            if (i.icon) {
-                html += `
-<img aria-hidden="true" src="${i.icon}" class="item-icon" alt="${i.name} icon"/>
-`
-            }
-            html += `<span>${i.name}</span>
-        </label>`
-            return html
-        }
-    ).join('\n')
-
-    const pet_stats = {
-        //tier: [special, talent]
-        1: [0.2, 0.01],
-        2: [0.2, 0.02],
-        3: [0.25, 0.03],
-        4: [0.3, 0.04],
-        5: [0.3, 0.05],
-    }
-    const tAFR = "Auto-Fishing Time Reduction"
-    const tDRR = "Durability Reduction Resistance"
-    const tLEXP = "Life EXP"
-    const tFEXP = "Fishing EXP"
-    const calcPetStats = (tier, special, talent, skills) => {
-        // special
-        const afr = (special === tAFR) ? pet_stats[tier][0] : 0
-        // talent (singular)
-        let drr = (talent === tDRR) ? pet_stats[tier][1] : 0
-        let fishing_exp = (talent === tFEXP) ? pet_stats[tier][1] : 0
-        let life_exp = (talent === tLEXP) ? pet_stats[tier][1] : 0
-        // skills (plural)
-        if (Array.isArray(skills)) {
-            skills.map(s => {
-                if (s === tFEXP) {
-                    fishing_exp += 0.05 // fixed value, regardless of tier
-                }
-            })
-        }
-        return {afr: afr, drr: drr, fishing_exp: fishing_exp, life_exp: life_exp,}
-    }
-
-    const pet_tier_html = selectedOption + [1, 2, 3, 4, 5].map(i => `<option value="${i}">Tier ${i}</option>`).join('\n')
-    const pet_special_html = selectedOption + noneOption + [tAFR].map(i => `<option value="${i}">${i}</option>`).join('\n')
-    const pet_talents_html = selectedOption + noneOption + [tDRR, tLEXP].map(i => `<option value="${i}">${i}</option>`).join('\n')
-    const pet_skills_html_list = [1, 2, 3, 4, 5].map(i => [tFEXP].map(skill => `<label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet${i}.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="${skill}">${skill}</label>`).join('\n'))
-    const zones_html = selectedOption + mapOption(zonesWithBiteTimes)
-    const level_html = selectedOption + [0, 1, 2, 3, 4, 5].map(i => `<option value="${i}">${i}</option>`).join('\n')
-    const lifeskill_level_html = selectedOption + mapOption(lifeskill_levels)
-    const rods_html = selectedOption + mapOption(rods)
-    const chairs_html = selectedOption + noneOption + mapOption(chairs)
-    const lightstone_sets_html = selectedOption + noneOption + mapOption(lightstone_sets)
-    const floats_html = selectedOption + noneOption + mapOption(floats)
-    const backpacks_html = selectedOption + noneOption + mapOption(backpacks)
-    const buffs_html = mapCheckbox(buffs)
-    const foods_html = mapCheckbox(foods)
-    const outfits_html = mapCheckbox(outfits)
-
-    const calcAFR = (gear, petAFRs) => {
-        const petAFR = Math.max(...petAFRs)
-        return petAFR + calcItemProperty(gear, 'afr')
-    }
-    const calcDRR = (gear, petsDRR) => {
-        const petDRRSum = petsDRR.reduce((acc, d) => acc + d, 0)
-        return petDRRSum + calcItemProperty(gear, 'drr')
-    }
-    const calcItemProperty = (list, key) => {
-        return list.reduce((acc, name) => {
-            if (Array.isArray(name)) {
-                acc += name.reduce((inner_acc, inner_name) => {
-                    let obj = searchListBy(items, 'name', inner_name)
-                    if (obj.length === 1 && obj[0][key]) {
-                        inner_acc += Number.parseFloat(obj[0][key])
-                    }
-                    return inner_acc
-                }, 0.0)
-            } else if (name.length) {
-                let obj = searchListBy(items, 'name', name)
-                if (obj.length === 1 && obj[0][key]) {
-                    acc += Number.parseFloat(obj[0][key])
-                }
-            }
-            return acc;
-        }, 0.0)
-    }
-    const MAX_AUTOFISHING_TIME = 180
-    const MIN_AUTOFISHING_TIME = 60
-    const ROD_CAST_DELAY = 1.5
-    const AVERAGE_MINIGAME_TIME = 16
-    const CATCH_TIME_ACTIVE = ROD_CAST_DELAY + AVERAGE_MINIGAME_TIME
-    const CATCH_TIME_AFK = ROD_CAST_DELAY + 5
-
-
-    const getBiteTimes = (zone) => {
-        const zoneData = searchListBy(zonesWithBiteTimes, 'name', zone)[0]
-        return {
-            min: zoneData.bite_time_min,
-            avg: (zoneData.bite_time_min + zoneData.bite_time_max) / 2,
-            max: zoneData.bite_time_max
-        }
-    }
-    const getAverageBiteTime = (zone) => getBiteTimes(zone).avg
-    const calcAfTime = (afr) => Math.max(MIN_AUTOFISHING_TIME, MAX_AUTOFISHING_TIME * (1 - afr))
-    const getBiteTimeFactor = (level, resources) => {
-        let reductions = [ 0.15, 0.3, 0.35, 0.4, 0.45, 0.5 ]
-        let factor_level = 1 - (reductions[level] ?? 0)
-        let factor_resources = 2 - resources / 100
-        return factor_level * factor_resources
-    }
-    const getEffectiveBiteTimes = (zone, level, resources) => {
-        const {min, avg, max} = getBiteTimes(zone)
-        const factor = getBiteTimeFactor(level, resources)
-        return {
-            min: min * factor,
-            avg: avg * factor,
-            max: max * factor,
-        }
-    }
-    const calcBiteTime = (zone, level, resources) => {
-        return getEffectiveBiteTimes(zone, level, resources).avg
-    }
-
-    const calcUnoptimizedTime = (zone, active, catchTimeActive, catchTimeAfk) => {
-      return calcBiteTime(zone, 0, 0) + (active ? catchTimeActive : catchTimeAfk + MAX_AUTOFISHING_TIME)
-    }
-    const calcPercentageOfAverageTime = (time, zone, active, catchTimeActive, catchTimeAfk) => (
-        time / calcUnoptimizedTime(zone, active, catchTimeActive, catchTimeAfk)
-    ) * 100
-
-    const calcAbundancyLabel = (percentage) => {
-        if (percentage <= 14) {
-            return "Exhausted"
-        } else if (percentage <= 45) {
-            return "Low"
-        } else if (percentage <= 70) {
-            return "Average"
-        } else if (percentage > 70) {
-            return "Abundant"
-        } else {
-            return "invalid"
-        }
-    }
-
-    const calcChanceToReduce = (drr, lifeskill_level, brand) => (brand ? 0.5 : 1) * (1 - drr) *
-        (Math.max(0.9 - 0.005 * searchListBy(lifeskill_levels, 'name', lifeskill_level)[0]["index"], 0.4))
-
-    const calcCastsPerTime = (bitetime, aftime, time) => time / (parseFloat(bitetime) + parseFloat(aftime))
-
+    window.__fishystuffCalculator = {
+        iconSpriteUrl: ICON_SPRITE_URL,
+        lang: calculatorLang,
+        initUrl() {
+            return window.__fishystuffResolveApiUrl(
+                `/api/v1/calculator/datastar/init?lang=${this.lang}`,
+            );
+        },
+        evalUrl() {
+            return window.__fishystuffResolveApiUrl(
+                `/api/v1/calculator/datastar/eval?lang=${this.lang}`,
+            );
+        },
+        presetUrl(signals) {
+            return presetURL(signals);
+        },
+        shareText(signals) {
+            const current = signals ?? {};
+            const calc = current._calc ?? {};
+            const lead = current.active
+                ? "Active | "
+                : `${calc.auto_fish_time_reduction_text ?? "0%"} AFR | `;
+            return (
+                `[FishyStuff Calculator Preset | ${lead}${calc.durability_reduction_resistance_text ?? "0%"} DRR | ${calc.zone_name ?? current.zone}](` +
+                this.presetUrl(current) +
+                ")"
+            );
+        },
+        clear() {
+            clearSignals();
+        },
+        initialSignals() {
+            return initialSignals();
+        },
+        persist(signals) {
+            const payload = publicCalculatorSignals(signals);
+            localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(payload));
+        },
+        sync(runtimeCtx) {
+            this.persist(runtimeCtx.signals.values());
+            return runtimeCtx.actions.post.fn(runtimeCtx, this.evalUrl());
+        },
+    };
 </script>
 
 <div id="calculator"
      class="not-prose grid gap-6"
-     data-signals="{
-       level: 5,
-       lifeskill_level: 'Guru 20',
-       zone: 'Velia Beach (Balenos Event Spot)',
-       resources: 0,
-       rod: 'Balenos Fishing Rod',
-       float: '',
-       chair: 'Manos Fishing Chair',
-       lightstone_set: 'Blacksmith\'s Blessing',
-       backpack: 'Lil\' Otter Fishing Carrier 🦦',
-       outfit: [
-         '8-Piece Outfit Set Effect',
-         'Awakening Weapon Outfit',
-         'Mainhand Weapon Outfit'
-       ],
-       food: ['Balacs Lunchbox'],
-       buff: ['','Treant\'s Tear'],
-       fishing_exp: 0,
-       life_exp: 0,
-       pet1: {
-         tier: '5',
-         special: 'Auto-Fishing Time Reduction',
-         talent: 'Durability Reduction Resistance',
-         skills: ['Fishing EXP'],
-       },
-       pet2: {
-         tier: '4',
-         special: '',
-         talent: 'Durability Reduction Resistance',
-         skills: ['Fishing EXP'],
-       },
-       pet3: {
-         tier: '4',
-         special: '',
-         talent: 'Durability Reduction Resistance',
-         skills: ['Fishing EXP'],
-       },
-       pet4: {
-         tier: '4',
-         special: '',
-         talent: 'Durability Reduction Resistance',
-         skills: ['Fishing EXP'],
-       },
-       pet5: {
-         tier: '4',
-         special: '',
-         talent: 'Durability Reduction Resistance',
-         skills: ['Fishing EXP'],
-       },
-       catchTimeActive: 17.5,
-       catchTimeAfk: 6.5,
-       timespanAmount: 8,
-       timespanUnit: 'hours',
-       timespan: 28800,
-       timespanText: '8 hours',
-       brand: true,
-       active: false,
-     }"
-     data-persist-calculator>
+     data-signals="window.__fishystuffCalculator.initialSignals()"
+     data-on-input__debounce.150ms="window.__fishystuffCalculator.sync(ctx)"
+     data-on-change__debounce.150ms="window.__fishystuffCalculator.sync(ctx)">
 
-    <div class="hidden" data-computed-afr_uncapped="calcAFR([$rod, $chair, $buff, $food, $lightstone_set], [
-          calcPetStats($pet1.tier, $pet1.special,'',[]).afr,
-          calcPetStats($pet2.tier, $pet2.special,'',[]).afr,
-          calcPetStats($pet3.tier, $pet3.special,'',[]).afr,
-          calcPetStats($pet4.tier, $pet4.special,'',[]).afr,
-          calcPetStats($pet5.tier, $pet5.special,'',[]).afr,
-        ]).toFixed(2)"></div>
-    <div class="hidden" data-computed-afr="Math.min(2/3, $afr_uncapped).toFixed(2)"></div>
-    <div class="hidden" data-computed-drr="calcDRR([$rod, $chair, $buff, $outfit, $backpack, $lightstone_set], [
-          calcPetStats($pet1.tier, '',$pet1.talent,[]).drr,
-          calcPetStats($pet2.tier, '',$pet2.talent,[]).drr,
-          calcPetStats($pet3.tier, '',$pet3.talent,[]).drr,
-          calcPetStats($pet4.tier, '',$pet4.talent,[]).drr,
-          calcPetStats($pet5.tier, '',$pet5.talent,[]).drr,
-        ]).toFixed(2)"></div>
-    <div class="hidden" data-computed-aftime="$active ? 0 : calcAfTime($afr).toFixed(2)"></div>
-    <div class="hidden" data-computed-bitetime="calcBiteTime($zone, $level, $resources).toFixed(2)"></div>
-    <div class="hidden" data-computed-catch-time-active-normalized="Math.max(0, Number($catchTimeActive) || 0)"></div>
-    <div class="hidden" data-computed-catch-time-afk-normalized="Math.max(0, Number($catchTimeAfk) || 0)"></div>
-    <div class="hidden" data-computed-catchtime="($active ? $catchTimeActiveNormalized : $catchTimeAfkNormalized).toFixed(2)"></div>
-    <div class="hidden" data-computed-total_time="(calcBiteTime($zone, $level, $resources) + ($active ? $catchTimeActiveNormalized : calcAfTime($afr) + $catchTimeAfkNormalized)).toFixed(2)"></div>
-    <div class="hidden" data-computed-percent_bite="calcPercentageOfAverageTime($bitetime, $zone, $active, $catchTimeActiveNormalized, $catchTimeAfkNormalized)"></div>
-    <div class="hidden" data-computed-percent_catch="calcPercentageOfAverageTime($catchtime, $zone, $active, $catchTimeActiveNormalized, $catchTimeAfkNormalized)"></div>
-    <div class="hidden" data-computed-percent_af="calcPercentageOfAverageTime($aftime, $zone, $active, $catchTimeActiveNormalized, $catchTimeAfkNormalized)"></div>
-    <div class="hidden" data-computed-percent_improvement="1 - calcPercentageOfAverageTime($total_time, $zone, $active, $catchTimeActiveNormalized, $catchTimeAfkNormalized)"></div>
-    <div class="hidden" data-computed-zone_bite_min="getBiteTimes($zone).min.toFixed(2)"></div>
-    <div class="hidden" data-computed-zone_bite_max="getBiteTimes($zone).max.toFixed(2)"></div>
-    <div class="hidden" data-computed-effective_bite_min="getEffectiveBiteTimes($zone, $level, $resources).min.toFixed(2)"></div>
-    <div class="hidden" data-computed-effective_bite_max="getEffectiveBiteTimes($zone, $level, $resources).max.toFixed(2)"></div>
-    <div class="hidden" data-computed-timespan-amount-normalized="Math.max(0, Number($timespanAmount) || 0)"></div>
-    <div class="hidden" data-computed-timespan-unit-seconds="$timespanUnit === 'minutes' ? 60 : $timespanUnit === 'hours' ? 3600 : $timespanUnit === 'days' ? 86400 : 604800"></div>
-    <div class="hidden" data-computed-timespan-unit-label="$timespanUnit === 'minutes' ? ($timespanAmountNormalized === 1 ? 'minute' : 'minutes') : $timespanUnit === 'hours' ? ($timespanAmountNormalized === 1 ? 'hour' : 'hours') : $timespanUnit === 'days' ? ($timespanAmountNormalized === 1 ? 'day' : 'days') : ($timespanAmountNormalized === 1 ? 'week' : 'weeks')"></div>
-    <div class="hidden" data-computed-timespan="$timespanAmountNormalized * $timespanUnitSeconds"></div>
-    <div class="hidden" data-computed-timespan-text="Number($timespanAmountNormalized.toFixed(2)).toString() + ' ' + $timespanUnitLabel"></div>
+    <div class="hidden"
+         data-indicator-_loading
+         data-on-load="@get(window.__fishystuffCalculator.initUrl())"></div>
 
     <section class="card card-border bg-base-100">
         <div class="card-body gap-5">
@@ -354,16 +253,19 @@
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    <button class="btn btn-soft btn-secondary" data-on-click="window.__fishystuffToast.copyText(presetURL(ctx.signals.JSON()), { success: 'Preset URL copied.' })">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-link"></use></svg>
+                    <button class="btn btn-soft btn-secondary"
+                            data-on-click="window.__fishystuffToast.copyText(window.__fishystuffCalculator.presetUrl(ctx.signals.values()), { success: 'Preset URL copied.' })">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-link"></use></svg>
                         Copy URL
                     </button>
-                    <button class="btn btn-soft btn-secondary" data-on-click="window.__fishystuffToast.copyText('[FishyStuff Calculator Preset | ' + ($active ? 'Active | ' : $afr * 100 +'% AFR | ') + $drr * 100 +'% DRR | '+ $zone +'](' + presetURL(ctx.signals.JSON())+ ')', { success: 'Share text copied.' })">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-share-nodes"></use></svg>
+                    <button class="btn btn-soft btn-secondary"
+                            data-on-click="window.__fishystuffToast.copyText(window.__fishystuffCalculator.shareText(ctx.signals.values()), { success: 'Share text copied.' })">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-share-nodes"></use></svg>
                         Copy Share
                     </button>
-                    <button class="btn btn-dash btn-error" data-on-click="clearSignals(); window.__fishystuffToast.info('Calculator cleared.')">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-x-circle"></use></svg>
+                    <button class="btn btn-dash btn-error"
+                            data-on-click="window.__fishystuffCalculator.clear(); window.__fishystuffToast.info('Calculator cleared.')">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-x-circle"></use></svg>
                         Clear
                     </button>
                 </div>
@@ -371,18 +273,17 @@
 
             <div class="rounded-box border border-base-300 bg-base-200 p-4">
                 <div id="fishing-timeline">
-                    <div data-attr-title="'Bitetime: ' + $bitetime + 's (' + $percent_bite.toFixed(2) + '%)'"
-                         data-attr="{style: 'flex-basis:' + $percent_bite.toFixed(2) + '%;'}"
+                    <div data-attr-title="$_calc.bite_time_title"
+                         data-attr="{style: 'flex-basis:' + ($_calc.percent_bite || '0.00') + '%;'}"
                          class="slider slider-bitetime"></div>
-                    <div data-show="!$active"
-                         data-attr-title="'Auto-Fishing Time: ' + $aftime + 's (' + $percent_af.toFixed(2) + '%)'"
-                         data-attr="{style: 'flex-basis:' + $percent_af.toFixed(2) + '%;'}"
+                    <div data-show="$_calc.show_auto_fishing"
+                         data-attr-title="$_calc.auto_fish_time_title"
+                         data-attr="{style: 'flex-basis:' + ($_calc.percent_af || '0.00') + '%;'}"
                          class="slider slider-aftime"></div>
-                    <div data-attr-title="'Catch Time: ' + $catchtime + 's (' + $percent_catch.toFixed(2) + '%)'"
-                         data-attr="{style: 'flex-basis:' + $percent_catch.toFixed(2) + '%;'}"
+                    <div data-attr-title="$_calc.catch_time_title"
+                         data-attr="{style: 'flex-basis:' + ($_calc.percent_catch || '0.00') + '%;'}"
                          class="slider slider-catchtime"></div>
-                    <div data-attr-title="'Average Unoptimized Time: '+ calcUnoptimizedTime($zone, $active, $catchTimeActiveNormalized, $catchTimeAfkNormalized).toFixed(2) + 's (' + $percent_improvement.toFixed(2) + '%)'"
-                         class="slider slider-empty"></div>
+                    <div data-attr-title="$_calc.unoptimized_time_title" class="slider slider-empty"></div>
                 </div>
             </div>
 
@@ -390,47 +291,47 @@
                 <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
                     <div class="stat">
                         <div class="stat-title">Average Total Fishing Time</div>
-                        <div class="stat-value text-2xl" data-text="$total_time"></div>
+                        <div class="stat-value text-2xl" data-text="$_calc.total_time"></div>
                         <div class="stat-desc">seconds</div>
                     </div>
                     <div class="stat">
                         <div class="stat-title">Average Bite Time</div>
-                        <div class="stat-value text-2xl" data-text="$bitetime"></div>
+                        <div class="stat-value text-2xl" data-text="$_calc.bite_time"></div>
                         <div class="stat-desc">seconds</div>
                     </div>
-                    <div data-show="!$active" class="stat">
+                    <div data-show="$_calc.show_auto_fishing" class="stat">
                         <div class="stat-title">Auto-Fishing Time (AFT)</div>
-                        <div class="stat-value text-2xl" data-text="$aftime"></div>
+                        <div class="stat-value text-2xl" data-text="$_calc.auto_fish_time"></div>
                         <div class="stat-desc">seconds</div>
                     </div>
-                    <div data-show="!$active" class="stat">
+                    <div data-show="$_calc.show_auto_fishing" class="stat">
                         <div class="stat-title">Auto-Fishing Time Reduction (AFR)</div>
-                        <div class="stat-value text-2xl" data-text="($afr_uncapped * 100).toFixed(0) + '%'"></div>
+                        <div class="stat-value text-2xl" data-text="$_calc.auto_fish_time_reduction_text"></div>
                     </div>
                 </div>
 
                 <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
                     <div class="stat">
-                        <div class="stat-title whitespace-normal leading-snug" data-text="'Average Casts (' + $timespanText + ')'"></div>
-                        <div class="stat-value text-2xl" data-text="($timespan/$total_time).toFixed(2)"></div>
+                        <div class="stat-title whitespace-normal leading-snug" data-text="$_calc.casts_title"></div>
+                        <div class="stat-value text-2xl" data-text="$_calc.casts_average"></div>
                     </div>
                     <div class="stat">
                         <div class="stat-title">Durability Reduction Resistance (DRR)</div>
-                        <div class="stat-value text-2xl" data-text="($drr * 100).toFixed(0) + '%'"></div>
+                        <div class="stat-value text-2xl" data-text="$_calc.durability_reduction_resistance_text"></div>
                     </div>
                     <div class="stat">
                         <div class="stat-title">Chance to consume Durability</div>
-                        <div class="stat-value text-2xl" data-text="(calcChanceToReduce($drr, $lifeskill_level, $brand) * 100).toFixed(2) + '%'"></div>
+                        <div class="stat-value text-2xl" data-text="$_calc.chance_to_consume_durability_text"></div>
                     </div>
                     <div class="stat">
-                        <div class="stat-title whitespace-normal leading-snug" data-text="'Average Durability Loss (' + $timespanText + ')'"></div>
-                        <div class="stat-value text-2xl" data-text="(($timespan/$total_time) * calcChanceToReduce($drr, $lifeskill_level, $brand)).toFixed(2)"></div>
+                        <div class="stat-title whitespace-normal leading-snug" data-text="$_calc.durability_loss_title"></div>
+                        <div class="stat-value text-2xl" data-text="$_calc.durability_loss_average"></div>
                     </div>
                 </div>
             </div>
 
-            <code data-show=$debug class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
-                <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="ctx.signals.JSON()"></pre>
+            <code data-show="$debug" class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
+                <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="$_calc.debug_json"></pre>
             </code>
         </div>
     </section>
@@ -440,16 +341,18 @@
             <legend class="fieldset-legend ml-6 px-2">Zone</legend>
             <div class="card-body gap-4 pt-0">
                 <div class="grid gap-4">
-                    <select class="select w-full" id="zone" data-bind-zone></select>
+                    <select class="select w-full" id="zone" data-bind-zone>
+                        <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                    </select>
                     <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
                         <div class="stat px-4 py-3">
                             <div class="stat-title">Min</div>
-                            <div class="stat-value text-lg" data-text="$zone_bite_min"></div>
+                            <div class="stat-value text-lg" data-text="$_calc.zone_bite_min"></div>
                             <div class="stat-desc">raw seconds</div>
                         </div>
                         <div class="stat px-4 py-3">
                             <div class="stat-title">Max</div>
-                            <div class="stat-value text-lg" data-text="$zone_bite_max"></div>
+                            <div class="stat-value text-lg" data-text="$_calc.zone_bite_max"></div>
                             <div class="stat-desc">raw seconds</div>
                         </div>
                     </div>
@@ -463,22 +366,30 @@
                 <div class="grid gap-4">
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Fishing Level</legend>
-                        <select class="select w-full" id="level" data-bind-level></select>
+                        <select class="select w-full" id="level" data-bind-level>
+                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                        </select>
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Fishing Resources</legend>
                         <input data-bind-resources type="range" class="range-xs range-secondary w-full" min="0" max="100">
-                        <span class="label text-sm font-medium" data-text="$resources + '% (' + calcAbundancyLabel($resources) + ')'"></span>
+                        <span class="label text-sm font-medium" data-text="$resources + '% (' + ($_calc.abundance_label || 'Exhausted') + ')'"></span>
                     </fieldset>
                     <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
                         <div class="stat px-4 py-3">
                             <div class="stat-title">Effective Min</div>
-                            <div class="stat-value text-lg" data-text="$effective_bite_min"></div>
+                            <div class="stat-value text-lg" data-text="$_calc.effective_bite_min"></div>
                             <div class="stat-desc">seconds</div>
                         </div>
                         <div class="stat px-4 py-3">
                             <div class="stat-title">Effective Max</div>
-                            <div class="stat-value text-lg" data-text="$effective_bite_max"></div>
+                            <div class="stat-value text-lg" data-text="$_calc.effective_bite_max"></div>
                             <div class="stat-desc">seconds</div>
                         </div>
                     </div>
@@ -492,20 +403,12 @@
                 <div class="grid gap-3 sm:grid-cols-2">
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Active</legend>
-                        <input type="number"
-                               min="0"
-                               step="any"
-                               class="input input-sm w-full"
-                               data-bind="catchTimeActive">
+                        <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeActive">
                         <span class="label text-xs">seconds</span>
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">AFK</legend>
-                        <input type="number"
-                               min="0"
-                               step="any"
-                               class="input input-sm w-full"
-                               data-bind="catchTimeAfk">
+                        <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeAfk">
                         <span class="label text-xs">seconds</span>
                     </fieldset>
                 </div>
@@ -513,23 +416,18 @@
         </fieldset>
 
         <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Session (<span data-text="$timespanText"></span>)</legend>
+            <legend class="fieldset-legend ml-6 px-2">Session (<span data-text="$_calc.timespan_text || '8 hours'"></span>)</legend>
             <div class="card-body gap-3 pt-0">
                 <div class="grid gap-3">
                     <div class="grid grid-cols-2 gap-3">
                         <fieldset class="fieldset">
                             <legend class="fieldset-legend">Amount</legend>
-                            <input type="number"
-                                   min="0"
-                                   step="any"
-                                   class="input input-sm w-full"
-                                   id="timespan_amount"
-                                   data-bind="timespanAmount"
-                                   name="timespan_amount">
+                            <input type="number" min="0" step="any" class="input input-sm w-full" id="timespan_amount" data-bind="timespanAmount" name="timespan_amount">
                         </fieldset>
                         <fieldset class="fieldset">
                             <legend class="fieldset-legend">Unit</legend>
                             <select class="select select-sm w-full" id="timespan_unit" data-bind="timespanUnit">
+                                <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
                                 <option value="minutes">Minutes</option>
                                 <option value="hours">Hours</option>
                                 <option value="days">Days</option>
@@ -539,11 +437,11 @@
                     </div>
 
                     <div class="join join-vertical sm:join-horizontal">
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'hours'">1 hour</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 8; $timespanUnit = 'hours'">8 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 10; $timespanUnit = 'hours'">10 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 12; $timespanUnit = 'hours'">12 hours</button>
-                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'days'">1 day</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'hours'; window.__fishystuffCalculator.sync(ctx)">1 hour</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 8; $timespanUnit = 'hours'; window.__fishystuffCalculator.sync(ctx)">8 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 10; $timespanUnit = 'hours'; window.__fishystuffCalculator.sync(ctx)">10 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 12; $timespanUnit = 'hours'; window.__fishystuffCalculator.sync(ctx)">12 hours</button>
+                        <button type="button" class="btn btn-soft btn-sm join-item" data-on-click="$timespanAmount = 1; $timespanUnit = 'days'; window.__fishystuffCalculator.sync(ctx)">1 day</button>
                     </div>
                 </div>
             </div>
@@ -555,11 +453,15 @@
                 <div id="items" class="grid gap-4 md:grid-cols-2">
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Lifeskill Level</legend>
-                        <select class="select w-full" id="lifeskill_level" data-bind-lifeskill_level></select>
+                        <select class="select w-full" id="lifeskill_level" data-bind-lifeskill_level>
+                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                        </select>
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Fishing Rod</legend>
-                        <select class="select w-full" id="rods" data-bind-rod></select>
+                        <select class="select w-full" id="rods" data-bind-rod>
+                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                        </select>
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Brand</legend>
@@ -569,19 +471,27 @@
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Float</legend>
-                        <select class="select w-full" id="floats" data-bind-float></select>
+                        <select class="select w-full" id="floats" data-bind-float>
+                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                        </select>
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Chair</legend>
-                        <select class="select w-full" id="chairs" data-bind-chair></select>
+                        <select class="select w-full" id="chairs" data-bind-chair>
+                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                        </select>
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Lightstone Set</legend>
-                        <select class="select w-full" id="lightstone_sets" data-bind-lightstone_set></select>
+                        <select class="select w-full" id="lightstone_sets" data-bind-lightstone_set>
+                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                        </select>
                     </fieldset>
                     <fieldset class="fieldset">
                         <legend class="fieldset-legend">Backpack</legend>
-                        <select class="select w-full" id="backpacks" data-bind-backpack></select>
+                        <select class="select w-full" id="backpacks" data-bind-backpack>
+                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                        </select>
                     </fieldset>
                     <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
                         <legend class="fieldset-legend">Outfit</legend>
@@ -607,163 +517,184 @@
                         <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm pet_tier w-full" id="pet1.tier" data-bind-pet1.tier></select>
+                                <select class="select select-sm w-full" data-bind-pet1.tier>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm pet_special w-full" id="pet1.special" data-bind-pet1.special></select>
+                                <select class="select select-sm w-full" data-bind-pet1.special>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm pet_talent w-full" id="pet1.talent" data-bind-pet1.talent></select>
+                                <select class="select select-sm w-full" data-bind-pet1.talent>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
+                                    <option value="life_exp">Life EXP</option>
+                                </select>
                             </fieldset>
                         </div>
                         <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
-                            <div id="pet1.skills" class="grid gap-2"></div>
+                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet1.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
                         </fieldset>
                     </div>
+
                     <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
                         <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm pet_tier w-full" id="pet2.tier" data-bind-pet2.tier></select>
+                                <select class="select select-sm w-full" data-bind-pet2.tier>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm pet_special w-full" id="pet2.special" data-bind-pet2.special></select>
+                                <select class="select select-sm w-full" data-bind-pet2.special>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm pet_talent w-full" id="pet2.talent" data-bind-pet2.talent></select>
+                                <select class="select select-sm w-full" data-bind-pet2.talent>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
+                                    <option value="life_exp">Life EXP</option>
+                                </select>
                             </fieldset>
                         </div>
                         <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
-                            <div id="pet2.skills" class="grid gap-2"></div>
+                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet2.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
                         </fieldset>
                     </div>
+
                     <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
                         <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm pet_tier w-full" id="pet3.tier" data-bind-pet3.tier></select>
+                                <select class="select select-sm w-full" data-bind-pet3.tier>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm pet_special w-full" id="pet3.special" data-bind-pet3.special></select>
+                                <select class="select select-sm w-full" data-bind-pet3.special>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm pet_talent w-full" id="pet3.talent" data-bind-pet3.talent></select>
+                                <select class="select select-sm w-full" data-bind-pet3.talent>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
+                                    <option value="life_exp">Life EXP</option>
+                                </select>
                             </fieldset>
                         </div>
                         <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
-                            <div id="pet3.skills" class="grid gap-2"></div>
+                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet3.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
                         </fieldset>
                     </div>
+
                     <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
                         <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm pet_tier w-full" id="pet4.tier" data-bind-pet4.tier></select>
+                                <select class="select select-sm w-full" data-bind-pet4.tier>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm pet_special w-full" id="pet4.special" data-bind-pet4.special></select>
+                                <select class="select select-sm w-full" data-bind-pet4.special>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm pet_talent w-full" id="pet4.talent" data-bind-pet4.talent></select>
+                                <select class="select select-sm w-full" data-bind-pet4.talent>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
+                                    <option value="life_exp">Life EXP</option>
+                                </select>
                             </fieldset>
                         </div>
                         <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
-                            <div id="pet4.skills" class="grid gap-2"></div>
+                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet4.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
                         </fieldset>
                     </div>
+
                     <div class="pet rounded-box border border-base-300 bg-base-200 p-3">
                         <div class="grid gap-3">
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Tier</legend>
-                                <select class="select select-sm pet_tier w-full" id="pet5.tier" data-bind-pet5.tier></select>
+                                <select class="select select-sm w-full" data-bind-pet5.tier>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option><option value="4">Tier 4</option><option value="5">Tier 5</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Special</legend>
-                                <select class="select select-sm pet_special w-full" id="pet5.special" data-bind-pet5.special></select>
+                                <select class="select select-sm w-full" data-bind-pet5.special>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="auto_fishing_time_reduction">Auto-Fishing Time Reduction</option>
+                                </select>
                             </fieldset>
                             <fieldset class="fieldset">
                                 <legend class="fieldset-legend">Talent</legend>
-                                <select class="select select-sm pet_talent w-full" id="pet5.talent" data-bind-pet5.talent></select>
+                                <select class="select select-sm w-full" data-bind-pet5.talent>
+                                    <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
+                                    <option value="">None</option>
+                                    <option value="durability_reduction_resistance">Durability Reduction Resistance</option>
+                                    <option value="life_exp">Life EXP</option>
+                                </select>
                             </fieldset>
                         </div>
                         <fieldset class="fieldset mt-3 gap-2">
                             <legend class="fieldset-legend">Skills</legend>
-                            <div id="pet5.skills" class="grid gap-2"></div>
+                            <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium"><input data-bind-pet5.skills type="checkbox" class="checkbox checkbox-primary checkbox-sm shrink-0" value="fishing_exp">Fishing EXP</label>
                         </fieldset>
                     </div>
-                    <div class="hidden" data-computed-fishing_exp="(
-          calcPetStats($pet1.tier, '','', $pet1.skills).fishing_exp +
-          calcPetStats($pet2.tier, '','', $pet2.skills).fishing_exp +
-          calcPetStats($pet3.tier, '','', $pet3.skills).fishing_exp +
-          calcPetStats($pet4.tier, '','', $pet4.skills).fishing_exp +
-          calcPetStats($pet5.tier, '','', $pet5.skills).fishing_exp
-        ).toFixed(2)"></div>
-                    <div class="hidden" data-computed-life_exp="(
-          calcPetStats($pet1.tier, '', $pet1.talent, []).life_exp +
-          calcPetStats($pet2.tier, '', $pet2.talent, []).life_exp +
-          calcPetStats($pet3.tier, '', $pet3.talent, []).life_exp +
-          calcPetStats($pet4.tier, '', $pet4.talent, []).life_exp +
-          calcPetStats($pet5.tier, '', $pet5.talent, []).life_exp
-        ).toFixed(2)"></div>
                 </div>
             </div>
         </fieldset>
     </div>
 </div>
 
-<script>
-    [1, 2, 3, 4, 5].forEach(i => {
-        document.getElementById(`pet${i}.tier`).innerHTML = pet_tier_html
-        document.getElementById(`pet${i}.special`).innerHTML = pet_special_html
-        document.getElementById(`pet${i}.talent`).innerHTML = pet_talents_html
-        document.getElementById(`pet${i}.skills`).innerHTML = pet_skills_html_list[i - 1]
-    })
-    document.getElementById('zone').innerHTML = zones_html
-    document.getElementById('level').innerHTML = level_html
-    document.getElementById('lifeskill_level').innerHTML = lifeskill_level_html
-    document.getElementById('rods').innerHTML = rods_html
-    document.getElementById('chairs').innerHTML = chairs_html
-    document.getElementById('buffs').innerHTML = buffs_html
-    document.getElementById('lightstone_sets').innerHTML = lightstone_sets_html
-    document.getElementById('floats').innerHTML = floats_html
-    document.getElementById('backpacks').innerHTML = backpacks_html
-    document.getElementById('foods').innerHTML = foods_html
-    document.getElementById('outfits').innerHTML = outfits_html
-</script>
 <style>
     @supports (appearance: base-select) {
         select {
-            /*
-              new customizable appearance assignment.
-              this changes what can go inside <select> and
-              exposes parts you can target and style
-            */
-
             &, &::picker(select) {
                 appearance: base-select;
             }
-
-            /* nice layout for the selected state */
 
             selectedcontent {
                 display: flex;
                 align-items: center;
                 gap: .5ch;
             }
-
-            /* icon at the end with grid */
 
             option {
                 display: grid;
@@ -812,7 +743,6 @@
         .slider-bitetime {
             background-color: #46d2a7;
         }
-
 
         .slider-catchtime {
             background-color: #d27746;

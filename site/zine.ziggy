@@ -60,11 +60,6 @@ Multilingual {
     "img/logo-32.png",
     "img/logo-64.png",
 
-    // data files that need to be fetchable or linked
-    "data/items.json",
-    "data/lifeskill_levels.json",
-    "data/zones.json",
-
     "jsonld/webpage.json",
     "jsonld/article.json",
 

@@ -6,6 +6,7 @@ build-release-no-tailwind:
     mkdir -p .out-builds; \
     build_dir=$(mktemp -d .out-builds/build.XXXXXX); \
     trap 'rm -rf "$build_dir" .out.next' EXIT; \
+    bun run datastar:build; \
     bun run images:build; \
     bun run fonts:build; \
     zine release --output "$build_dir"; \

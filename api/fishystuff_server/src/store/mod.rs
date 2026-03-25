@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 
+use fishystuff_api::models::calculator::CalculatorCatalogResponse;
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
 use fishystuff_api::models::fish::FishListResponse;
@@ -46,6 +47,11 @@ pub trait Store: Send + Sync {
         lang: FishLang,
         ref_id: Option<String>,
     ) -> AppResult<FishListResponse>;
+    async fn calculator_catalog(
+        &self,
+        lang: FishLang,
+        ref_id: Option<String>,
+    ) -> AppResult<CalculatorCatalogResponse>;
     async fn list_zones(&self, ref_id: Option<String>) -> AppResult<Vec<ZoneEntry>>;
     async fn zone_stats(
         &self,

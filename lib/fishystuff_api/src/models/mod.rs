@@ -1,3 +1,4 @@
+pub mod calculator;
 pub mod effort;
 pub mod events;
 pub mod fish;

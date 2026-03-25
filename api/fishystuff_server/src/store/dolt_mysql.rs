@@ -12,6 +12,9 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fishystuff_api::error::ApiError;
 use fishystuff_api::ids::{MapVersionId, Rgb};
+use fishystuff_api::models::calculator::{
+    CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
+};
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{
     EventPointCompact, EventSourceKind, EventsSnapshotMetaResponse, EventsSnapshotResponse,
@@ -177,6 +180,21 @@ struct FishCatalogRow {
     catch_methods: Vec<String>,
     vendor_price: Option<i64>,
 }
+
+type CalculatorItemDbRow = (
+    Option<String>,
+    Option<String>,
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+    Option<i32>,
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+    Option<f32>,
+    Option<i32>,
+    Option<i32>,
+);
 
 impl QueryParams {
     fn validate(&self) -> AppResult<()> {
@@ -534,6 +552,154 @@ impl DoltMySqlStore {
         }
 
         Ok(out)
+    }
+
+    fn query_calculator_names_ko(
+        &self,
+        ref_id: Option<&str>,
+        item_ids: &[i32],
+    ) -> AppResult<HashMap<i32, String>> {
+        if item_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let id_list = item_ids
+            .iter()
+            .map(i32::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "SELECT it.`Index`, it.`ItemName` \
+             FROM item_table{as_of} it \
+             WHERE it.`Index` IN ({id_list}) \
+               AND NULLIF(TRIM(it.`ItemName`), '') IS NOT NULL"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(i64, Option<String>)> = conn.query(query).map_err(db_unavailable)?;
+        let mut out = HashMap::new();
+        for (item_id, name) in rows {
+            let Ok(item_id) = i32::try_from(item_id) else {
+                continue;
+            };
+            let Some(name) = normalize_optional_string(name) else {
+                continue;
+            };
+            out.insert(item_id, name);
+        }
+        Ok(out)
+    }
+
+    fn query_calculator_items(
+        &self,
+        lang: FishLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<Vec<CalculatorItemEntry>> {
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let query = format!(
+            "SELECT \
+                name, \
+                type, \
+                afr, \
+                bonus_rare, \
+                bonus_big, \
+                durability, \
+                drr, \
+                fish_multiplier, \
+                exp_fish, \
+                exp_life, \
+                id, \
+                icon_id \
+             FROM items{as_of}"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<CalculatorItemDbRow> = conn.query(query).map_err(db_unavailable)?;
+
+        let item_ids = rows.iter().filter_map(|row| row.10).collect::<Vec<_>>();
+        let names_ko = if matches!(lang, FishLang::Ko) {
+            self.query_calculator_names_ko(ref_id, &item_ids)?
+        } else {
+            HashMap::new()
+        };
+
+        let mut items = Vec::with_capacity(rows.len());
+        for (
+            name,
+            item_type,
+            afr,
+            bonus_rare,
+            bonus_big,
+            durability,
+            drr,
+            fish_multiplier,
+            exp_fish,
+            exp_life,
+            item_id,
+            icon_id,
+        ) in rows
+        {
+            let Some(legacy_name) = normalize_optional_string(name) else {
+                continue;
+            };
+            let display_name = item_id
+                .and_then(|item_id| names_ko.get(&item_id).cloned())
+                .unwrap_or_else(|| legacy_name.clone());
+            let item_type = normalize_optional_string(item_type).unwrap_or_default();
+            let key = if let Some(item_id) = item_id {
+                format!("item:{item_id}")
+            } else {
+                format!("effect:{}", slugify_calculator_effect_key(&legacy_name))
+            };
+            let icon_id = icon_id.or(item_id);
+            let icon = icon_id.map(calculator_item_icon_path);
+            items.push(CalculatorItemEntry {
+                key,
+                name: display_name,
+                r#type: item_type,
+                afr,
+                bonus_rare,
+                bonus_big,
+                durability,
+                drr,
+                fish_multiplier,
+                exp_fish,
+                exp_life,
+                item_id,
+                icon_id,
+                icon,
+            });
+        }
+
+        items.sort_by(|left, right| {
+            left.r#type
+                .cmp(&right.r#type)
+                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+                .then_with(|| left.key.cmp(&right.key))
+        });
+
+        Ok(items)
+    }
+
+    fn query_calculator_catalog(
+        &self,
+        lang: FishLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<CalculatorCatalogResponse> {
+        Ok(CalculatorCatalogResponse {
+            items: self.query_calculator_items(lang, ref_id)?,
+            lifeskill_levels: build_calculator_lifeskill_levels(),
+        })
     }
 
     fn query_fish_catalog(
@@ -1519,6 +1685,17 @@ impl Store for DoltMySqlStore {
         .map_err(|err| AppError::internal(err.to_string()))?
     }
 
+    async fn calculator_catalog(
+        &self,
+        lang: FishLang,
+        ref_id: Option<String>,
+    ) -> AppResult<CalculatorCatalogResponse> {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || this.query_calculator_catalog(lang, ref_id.as_deref()))
+            .await
+            .map_err(|err| AppError::internal(err.to_string()))?
+    }
+
     async fn list_zones(&self, ref_id: Option<String>) -> AppResult<Vec<ZoneEntry>> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || this.query_zones(ref_id.as_deref()))
@@ -1658,6 +1835,52 @@ impl Store for DoltMySqlStore {
         .await
         .map_err(|err| AppError::internal(err.to_string()))?
     }
+}
+
+fn calculator_item_icon_path(icon_id: i32) -> String {
+    format!("/img/items/{icon_id:08}.webp")
+}
+
+fn slugify_calculator_effect_key(name: &str) -> String {
+    let mut slug = String::with_capacity(name.len());
+    let mut last_was_dash = false;
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+            last_was_dash = false;
+        } else if !last_was_dash {
+            slug.push('-');
+            last_was_dash = true;
+        }
+    }
+    slug.trim_matches('-').to_string()
+}
+
+fn build_calculator_lifeskill_levels() -> Vec<CalculatorLifeskillLevelEntry> {
+    const TIERS: [(&str, i32); 7] = [
+        ("Beginner", 10),
+        ("Apprentice", 10),
+        ("Skilled", 10),
+        ("Professional", 10),
+        ("Artisan", 10),
+        ("Master", 30),
+        ("Guru", 100),
+    ];
+
+    let mut levels = Vec::new();
+    let mut order = 0i32;
+    for (tier_name, max_level) in TIERS {
+        for level in 1..=max_level {
+            order += 1;
+            levels.push(CalculatorLifeskillLevelEntry {
+                key: order.to_string(),
+                name: format!("{tier_name} {level}"),
+                index: order.min(130),
+                order,
+            });
+        }
+    }
+    levels
 }
 
 #[cfg(test)]

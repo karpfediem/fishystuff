@@ -78,6 +78,7 @@ mod tests {
     use axum::http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode};
     use axum::response::IntoResponse;
     use fishystuff_api::ids::MapVersionId;
+    use fishystuff_api::models::calculator::CalculatorCatalogResponse;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
     use fishystuff_api::models::fish::{FishEntry, FishListResponse};
@@ -143,6 +144,14 @@ mod tests {
                     },
                 ],
             })
+        }
+
+        async fn calculator_catalog(
+            &self,
+            _lang: FishLang,
+            _ref_id: Option<String>,
+        ) -> AppResult<CalculatorCatalogResponse> {
+            panic!("unused in test")
         }
 
         async fn list_zones(&self, _ref_id: Option<String>) -> AppResult<Vec<ZoneEntry>> {

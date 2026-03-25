@@ -28,6 +28,7 @@ target
 
 # zine
 public
+site/assets/js/datastar.js
 
 .env
 config.yaml

@@ -23,6 +23,18 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/fish", get(routes::fish::list_fish))
         .route("/fish/", get(routes::fish::list_fish))
         .route(
+            "/calculator",
+            get(routes::calculator::get_calculator_catalog),
+        )
+        .route(
+            "/calculator/datastar/init",
+            get(routes::calculator::get_calculator_datastar_init),
+        )
+        .route(
+            "/calculator/datastar/eval",
+            post(routes::calculator::post_calculator_datastar_eval),
+        )
+        .route(
             "/zone_profile_v2",
             post(routes::zone_profile_v2::zone_profile_v2),
         )
@@ -68,6 +80,7 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use tower::util::ServiceExt;
 
+    use fishystuff_api::models::calculator::CalculatorCatalogResponse;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
     use fishystuff_api::models::fish::FishListResponse;
@@ -105,6 +118,13 @@ mod tests {
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<FishListResponse> {
             Ok(FishListResponse::default())
+        }
+        async fn calculator_catalog(
+            &self,
+            _lang: FishLang,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<CalculatorCatalogResponse> {
+            Ok(CalculatorCatalogResponse::default())
         }
         async fn list_zones(
             &self,
@@ -165,6 +185,13 @@ mod tests {
             _ref_id: Option<String>,
         ) -> crate::error::AppResult<FishListResponse> {
             Ok(FishListResponse::default())
+        }
+        async fn calculator_catalog(
+            &self,
+            _lang: FishLang,
+            _ref_id: Option<String>,
+        ) -> crate::error::AppResult<CalculatorCatalogResponse> {
+            Ok(CalculatorCatalogResponse::default())
         }
         async fn list_zones(
             &self,
