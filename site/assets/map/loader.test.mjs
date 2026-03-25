@@ -12,6 +12,8 @@ const {
   buildSemanticIdentityCommand,
   buildSelectWorldPointCommand,
   buildWaypointFocusIndex,
+  buildZoneFocusIndexFromLookupBytes,
+  buildZoneIdentityCommand,
   buildZoneEvidenceSummary,
   buildSelectionSummaryText,
   buildSelectionOverviewRows,
@@ -65,6 +67,46 @@ const TEST_ZONE_CATALOG = normalizeZoneCatalog([
     order: 3,
   },
 ]);
+
+function buildDiscreteFieldLookupBytes(width, height, rows) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  const rowOffsets = [];
+  const rowEndXs = [];
+  const rowIds = [];
+  for (let rowIndex = 0; rowIndex < height; rowIndex += 1) {
+    const spans = Array.isArray(normalizedRows[rowIndex]) ? normalizedRows[rowIndex] : [];
+    rowOffsets.push(rowEndXs.length);
+    for (const span of spans) {
+      rowEndXs.push(span.endX);
+      rowIds.push(span.id);
+    }
+  }
+  rowOffsets.push(rowEndXs.length);
+  const buffer = new ArrayBuffer(20 + rowOffsets.length * 4 + rowEndXs.length * 2 + rowIds.length * 4);
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  for (const [index, char] of [..."FSZLKP01"].entries()) {
+    bytes[index] = char.charCodeAt(0);
+  }
+  view.setUint16(8, width, true);
+  view.setUint16(10, height, true);
+  view.setUint32(12, rowOffsets.length, true);
+  view.setUint32(16, rowEndXs.length, true);
+  let cursor = 20;
+  for (const offset of rowOffsets) {
+    view.setUint32(cursor, offset, true);
+    cursor += 4;
+  }
+  for (const endX of rowEndXs) {
+    view.setUint16(cursor, endX, true);
+    cursor += 2;
+  }
+  for (const id of rowIds) {
+    view.setUint32(cursor, id, true);
+    cursor += 4;
+  }
+  return bytes;
+}
 
 function buildStateBundle(selectedFishIds = []) {
   return {
@@ -1410,6 +1452,27 @@ test("renderSearchSelection restores visible chips after the search window is re
   assert.equal(searchSelectionShell.hidden, false);
 });
 
+test("renderSearchSelection makes selected zones focusable", () => {
+  const searchSelection = {
+    dataset: {},
+    hidden: true,
+    innerHTML: "",
+  };
+  const elements = {
+    searchSelection,
+    searchSelectionShell: { hidden: true },
+    searchWindow: { dataset: {} },
+    zoneCatalog: TEST_ZONE_CATALOG,
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.inputState.filters.zoneRgbs = [0xc17f7f];
+
+  renderSearchSelection(elements, stateBundle, new Map());
+
+  assert.match(searchSelection.innerHTML, /data-zone-focus-rgb="12681087"/);
+  assert.match(searchSelection.innerHTML, /Cron Islands - Depth 2/);
+});
+
 test("renderSearchSelection uses semantic focus chips for selected semantic terms", () => {
   const searchSelection = {
     dataset: {},
@@ -1483,6 +1546,34 @@ test("renderSearchResults uses semantic focus chips and clickable rows for seman
   assert.match(elements.searchResults.innerHTML, /role="button"/);
   assert.equal(elements.searchResults.innerHTML.includes(">Add<"), false);
   assert.equal(elements.searchResults.innerHTML.includes("badge badge-outline"), false);
+});
+
+test("renderSearchResults makes zone matches focusable while keeping row selection", () => {
+  const elements = {
+    searchResults: {
+      dataset: {},
+      innerHTML: "",
+    },
+    searchResultsShell: { hidden: true },
+    searchCount: { hidden: true, textContent: "" },
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.inputState.filters.searchText = "cron";
+
+  renderSearchResults(
+    elements,
+    [
+      {
+        kind: "zone",
+        ...TEST_ZONE_CATALOG[0],
+      },
+    ],
+    stateBundle,
+  );
+
+  assert.match(elements.searchResults.innerHTML, /data-zone-rgb="12681087"/);
+  assert.match(elements.searchResults.innerHTML, /data-zone-focus-rgb="12681087"/);
+  assert.match(elements.searchResults.innerHTML, /badge badge-outline badge-xs">Zone</);
 });
 
 test("buildZoneEvidenceListMarkup hides stability percentages while keeping the detail tooltip", () => {
@@ -1714,6 +1805,40 @@ test("buildWaypointFocusIndex and semantic commands resolve focus bounds from wa
       pointLabel: "Velia (N1)",
     },
   });
+});
+
+test("buildZoneFocusIndexFromLookupBytes and zone commands resolve focus bounds", () => {
+  const lookupBytes = buildDiscreteFieldLookupBytes(4, 4, [
+    [
+      { endX: 1, id: 0 },
+      { endX: 3, id: 0xc17f7f },
+      { endX: 4, id: 0 },
+    ],
+    [
+      { endX: 1, id: 0 },
+      { endX: 3, id: 0xc17f7f },
+      { endX: 4, id: 0 },
+    ],
+    [{ endX: 4, id: 0 }],
+    [{ endX: 4, id: 0 }],
+  ]);
+
+  const focusIndex = buildZoneFocusIndexFromLookupBytes(lookupBytes);
+  const zoneRect = focusIndex.zoneRectByRgb.get(0xc17f7f);
+  assert.ok(zoneRect);
+  assert.ok(zoneRect.spanX > 0);
+  assert.ok(zoneRect.spanZ > 0);
+
+  const command = buildZoneIdentityCommand(
+    0xc17f7f,
+    focusIndex,
+    { state: { view: { viewMode: "2d" } } },
+    { width: 1000, height: 600 },
+    { autoAdjustView: true },
+  );
+  assert.equal(command.selectZoneRgb, 0xc17f7f);
+  assert.equal(command.restoreView.viewMode, "2d");
+  assert.ok(command.restoreView.camera.zoom > 0);
 });
 
 test("buildFocusWorldRect keeps waypoint focus padded away from full-screen fit", () => {

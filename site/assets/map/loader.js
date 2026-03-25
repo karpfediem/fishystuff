@@ -779,6 +779,110 @@ export function buildWaypointFocusIndex(sources = {}) {
 
 let waypointFocusIndexPromise = null;
 let waypointFocusPreloadScheduled = false;
+let zoneFocusIndexPromise = null;
+
+function zoneRgbTriplet(zoneRgb) {
+  const value = Number.parseInt(zoneRgb, 10);
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+  return {
+    r: (value >> 16) & 0xff,
+    g: (value >> 8) & 0xff,
+    b: value & 0xff,
+  };
+}
+
+export function buildZoneFocusIndexFromLookupBytes(bytesInput) {
+  const bytes =
+    bytesInput instanceof Uint8Array
+      ? bytesInput
+      : bytesInput instanceof ArrayBuffer
+        ? new Uint8Array(bytesInput)
+        : null;
+  if (!bytes || bytes.byteLength < 20) {
+    return { zoneRectByRgb: new Map() };
+  }
+  const magic = "FSZLKP01";
+  for (let index = 0; index < magic.length; index += 1) {
+    if (bytes[index] !== magic.charCodeAt(index)) {
+      return { zoneRectByRgb: new Map() };
+    }
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint16(8, true);
+  const height = view.getUint16(10, true);
+  const rowOffsetCount = view.getUint32(12, true);
+  const segmentCount = view.getUint32(16, true);
+  const expectedLength = 20 + rowOffsetCount * 4 + segmentCount * 2 + segmentCount * 4;
+  if (bytes.byteLength !== expectedLength || rowOffsetCount !== height + 1) {
+    return { zoneRectByRgb: new Map() };
+  }
+
+  let cursor = 20;
+  const rowOffsets = new Uint32Array(rowOffsetCount);
+  for (let index = 0; index < rowOffsetCount; index += 1) {
+    rowOffsets[index] = view.getUint32(cursor, true);
+    cursor += 4;
+  }
+  const rowEndXs = new Uint16Array(segmentCount);
+  for (let index = 0; index < segmentCount; index += 1) {
+    rowEndXs[index] = view.getUint16(cursor, true);
+    cursor += 2;
+  }
+  const rowIds = new Uint32Array(segmentCount);
+  for (let index = 0; index < segmentCount; index += 1) {
+    rowIds[index] = view.getUint32(cursor, true);
+    cursor += 4;
+  }
+
+  const pixelBoundsByRgb = new Map();
+  for (let row = 0; row < height; row += 1) {
+    const start = rowOffsets[row];
+    const end = rowOffsets[row + 1];
+    let spanStart = 0;
+    for (let index = start; index < end; index += 1) {
+      const spanEnd = rowEndXs[index];
+      const zoneRgb = rowIds[index];
+      if (zoneRgb !== 0 && spanEnd > spanStart) {
+        const current = pixelBoundsByRgb.get(zoneRgb);
+        if (current) {
+          current.minX = Math.min(current.minX, spanStart);
+          current.maxX = Math.max(current.maxX, spanEnd);
+          current.minY = Math.min(current.minY, row);
+          current.maxY = Math.max(current.maxY, row + 1);
+        } else {
+          pixelBoundsByRgb.set(zoneRgb, {
+            minX: spanStart,
+            maxX: spanEnd,
+            minY: row,
+            maxY: row + 1,
+          });
+        }
+      }
+      spanStart = spanEnd;
+    }
+  }
+
+  const zoneRectByRgb = new Map();
+  for (const [zoneRgb, bounds] of pixelBoundsByRgb) {
+    const topLeft = pixelToWorldPoint(bounds.minX, bounds.minY, 0);
+    const bottomRight = pixelToWorldPoint(bounds.maxX, bounds.maxY, 0);
+    const rect =
+      topLeft && bottomRight
+        ? normalizeWorldRect({
+            minX: topLeft.worldX,
+            maxX: bottomRight.worldX,
+            minZ: bottomRight.worldZ,
+            maxZ: topLeft.worldZ,
+          })
+        : null;
+    if (rect) {
+      zoneRectByRgb.set(zoneRgb, rect);
+    }
+  }
+  return { zoneRectByRgb };
+}
 
 async function loadWaypointFocusIndex(locationLike = globalThis.window?.location) {
   if (waypointFocusIndexPromise) {
@@ -812,6 +916,29 @@ async function loadWaypointFocusIndex(locationLike = globalThis.window?.location
   return waypointFocusIndexPromise;
 }
 
+async function loadZoneFocusIndex(locationLike = globalThis.window?.location) {
+  if (zoneFocusIndexPromise) {
+    return zoneFocusIndexPromise;
+  }
+  if (typeof globalThis.fetch !== "function") {
+    throw new Error("fetch() is unavailable for zone focus data.");
+  }
+  const cdnBaseUrl = resolveCdnBaseUrl(locationLike);
+  const url = `${cdnBaseUrl}/images/exact_lookup/zone_mask.v1.bin`;
+  zoneFocusIndexPromise = globalThis.fetch(url)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load zone focus data: ${url}`);
+      }
+      return buildZoneFocusIndexFromLookupBytes(await response.arrayBuffer());
+    })
+    .catch((error) => {
+      zoneFocusIndexPromise = null;
+      throw error;
+    });
+  return zoneFocusIndexPromise;
+}
+
 function scheduleWaypointFocusIndexPreload(locationLike = globalThis.window?.location) {
   if (waypointFocusIndexPromise || waypointFocusPreloadScheduled) {
     return;
@@ -819,8 +946,11 @@ function scheduleWaypointFocusIndexPreload(locationLike = globalThis.window?.loc
   waypointFocusPreloadScheduled = true;
   const run = () => {
     waypointFocusPreloadScheduled = false;
-    void loadWaypointFocusIndex(locationLike).catch((error) => {
-      console.warn("Failed to preload waypoint focus data", error);
+    void Promise.all([
+      loadWaypointFocusIndex(locationLike),
+      loadZoneFocusIndex(locationLike),
+    ]).catch((error) => {
+      console.warn("Failed to preload focus data", error);
     });
   };
   if (typeof globalThis.queueMicrotask === "function") {
@@ -951,6 +1081,26 @@ export function buildSemanticIdentityCommand(
         restoreView,
       }
     : command;
+}
+
+export function buildZoneIdentityCommand(
+  zoneRgbInput,
+  zoneFocusIndex,
+  stateBundle,
+  viewportInput,
+  options = {},
+) {
+  const zoneRgb = Number.parseInt(zoneRgbInput, 10);
+  if (!Number.isFinite(zoneRgb)) {
+    return null;
+  }
+  const command = { selectZoneRgb: zoneRgb };
+  if (options.autoAdjustView === false) {
+    return command;
+  }
+  const rect = zoneFocusIndex?.zoneRectByRgb?.get(zoneRgb) || null;
+  const restoreView = buildRestoreViewForWorldRect(rect, viewportInput, stateBundle);
+  return restoreView ? { ...command, restoreView } : command;
 }
 
 function buildFocusCommandForWorldPoint(
@@ -2158,6 +2308,41 @@ function parseSemanticIdentityText(text) {
     return null;
   }
   return { prefix, code: normalizedCode, name: "", kind };
+}
+
+function zoneIdentityMarkup(zoneInput, options = {}) {
+  const zoneRgb = Number.parseInt(zoneInput?.zoneRgb ?? zoneInput, 10);
+  if (!Number.isFinite(zoneRgb)) {
+    return "";
+  }
+  const name = String(zoneInput?.name || "").trim() || `Zone ${formatZone(zoneRgb)}`;
+  const rgb = zoneRgbTriplet(zoneRgb);
+  if (!rgb) {
+    return "";
+  }
+  const swatch = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+  const body = `
+    <span
+      class="inline-flex size-5 shrink-0 rounded-full border border-base-300 shadow-sm"
+      style="background-color: ${escapeHtml(swatch)};"
+      aria-hidden="true"
+    ></span>
+    <span class="truncate">${escapeHtml(name)}</span>
+  `;
+  if (options?.interactive !== true) {
+    return `<span class="inline-flex min-w-0 items-center gap-2">${body}</span>`;
+  }
+  return `
+    <button
+      class="inline-flex min-w-0 items-center gap-2 rounded-full border border-base-300/80 bg-base-100 px-2 py-1 text-sm text-left text-base-content shadow-sm transition-colors hover:bg-base-200/70"
+      type="button"
+      data-zone-focus-rgb="${zoneRgb}"
+      aria-label="Focus ${escapeHtml(name)}"
+      title="Focus ${escapeHtml(name)}"
+    >
+      ${body}
+    </button>
+  `;
 }
 
 function semanticKindFromIdentityKind(kind) {
@@ -4429,17 +4614,20 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
       selectedZoneRgbs.map((zoneRgb) => {
         const zone = zoneLookup.get(zoneRgb);
         const name = zone?.name || `Zone ${formatZone(zoneRgb)}`;
-        const swatch = `rgb(${zone?.r ?? 0}, ${zone?.g ?? 0}, ${zone?.b ?? 0})`;
+        const zoneMarkup =
+          zoneIdentityMarkup(
+            {
+              zoneRgb,
+              name,
+              r: zone?.r,
+              g: zone?.g,
+              b: zone?.b,
+            },
+            { interactive: true },
+          ) || `<span class="truncate max-w-40">${escapeHtml(name)}</span>`;
         return `
           <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
-            <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
-              <span
-                class="inline-flex size-5 shrink-0 rounded-full border border-base-300 shadow-sm"
-                style="background-color: ${escapeHtml(swatch)};"
-                aria-hidden="true"
-              ></span>
-              <span class="truncate max-w-40">${escapeHtml(name)}</span>
-            </span>
+            <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">${zoneMarkup}</span>
             <button
               class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
               data-zone-rgb="${zoneRgb}"
@@ -4532,22 +4720,22 @@ export function renderSearchResults(elements, matches, stateBundle) {
   elements.searchResults.innerHTML = activeMatches
     .map((match) => {
       if (match.kind === "zone") {
-        const swatch = `rgb(${match.r}, ${match.g}, ${match.b})`;
+        const zoneMarkup =
+          zoneIdentityMarkup(match, { interactive: true }) ||
+          `<span class="truncate">${escapeHtml(match.name)}</span>`;
         return `
         <li>
-          <button
-            class="items-start gap-3 rounded-box px-3 py-2 text-sm"
+          <div
+            class="flex cursor-pointer items-start gap-3 rounded-box px-3 py-2 text-sm"
             data-zone-rgb="${match.zoneRgb}"
-            type="button"
+            role="button"
+            tabindex="0"
+            aria-label="Add ${escapeHtml(match.name)}"
+            title="Add ${escapeHtml(match.name)}"
           >
-            <span
-              class="mt-0.5 inline-flex size-6 shrink-0 rounded-full border border-base-300 shadow-sm"
-              style="background-color: ${escapeHtml(swatch)};"
-              aria-hidden="true"
-            ></span>
             <span class="min-w-0 flex-1 text-left">
               <span class="flex items-center gap-2">
-                <span class="truncate">${escapeHtml(match.name)}</span>
+                ${zoneMarkup}
                 <span class="badge badge-outline badge-xs">Zone</span>
               </span>
               <span class="block truncate text-xs text-base-content/60">
@@ -4555,7 +4743,7 @@ export function renderSearchResults(elements, matches, stateBundle) {
                 <span class="ml-2">${escapeHtml(formatZone(match.zoneRgb))}</span>
               </span>
             </span>
-          </button>
+          </div>
         </li>
       `;
       }
@@ -5086,6 +5274,25 @@ function bindUi(shell, elements, options = {}) {
     );
   }
 
+  async function buildZoneFocusCommandFromRgb(zoneRgb) {
+    const numericZoneRgb = Number.parseInt(zoneRgb, 10);
+    if (!Number.isFinite(numericZoneRgb)) {
+      return null;
+    }
+    const latest = getLatestStateBundle();
+    let zoneFocusIndex = null;
+    if (autoAdjustViewEnabled()) {
+      zoneFocusIndex = await loadZoneFocusIndex(globalThis.window?.location);
+    }
+    return buildZoneIdentityCommand(
+      numericZoneRgb,
+      zoneFocusIndex,
+      latest,
+      currentViewportSize(),
+      { autoAdjustView: autoAdjustViewEnabled() },
+    );
+  }
+
   async function dispatchSemanticFocusFromCode(code) {
     if (!code) {
       return;
@@ -5098,6 +5305,21 @@ function bindUi(shell, elements, options = {}) {
     } catch (error) {
       console.error("Failed to resolve semantic focus command", error);
       showSiteToast("error", "Unable to load waypoint focus data.");
+    }
+  }
+
+  async function dispatchZoneFocusFromRgb(zoneRgb) {
+    if (!Number.isFinite(Number.parseInt(zoneRgb, 10))) {
+      return;
+    }
+    try {
+      const command = await buildZoneFocusCommandFromRgb(zoneRgb);
+      if (command) {
+        dispatchMapCommand(shell, command);
+      }
+    } catch (error) {
+      console.error("Failed to resolve zone focus command", error);
+      showSiteToast("error", "Unable to load zone focus data.");
     }
   }
 
@@ -5788,11 +6010,14 @@ function bindUi(shell, elements, options = {}) {
   });
 
   elements.searchResults.addEventListener("click", (event) => {
-    if (event.target.closest("button[data-semantic-focus-code]")) {
+    if (
+      event.target.closest("button[data-semantic-focus-code]") ||
+      event.target.closest("button[data-zone-focus-rgb]")
+    ) {
       return;
     }
     const button = event.target.closest(
-      "button[data-fish-id], button[data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+      "button[data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
     );
     if (!button) {
       return;
@@ -5831,11 +6056,26 @@ function bindUi(shell, elements, options = {}) {
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
-    if (event.target.closest("button[data-semantic-focus-code]")) {
+    if (
+      event.target.closest("button[data-semantic-focus-code]") ||
+      event.target.closest("button[data-zone-focus-rgb]")
+    ) {
       return;
     }
-    const row = event.target.closest("[data-semantic-layer-id][data-semantic-field-id]");
+    const row = event.target.closest(
+      "[data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+    );
     if (!row) {
+      return;
+    }
+    const current = getLatestStateBundle();
+    const zoneRgb = Number.parseInt(row.getAttribute("data-zone-rgb"), 10);
+    if (Number.isFinite(zoneRgb)) {
+      event.preventDefault();
+      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+        kind: "zone",
+        zoneRgb,
+      });
       return;
     }
     const semanticLayerId = String(row.getAttribute("data-semantic-layer-id") || "").trim();
@@ -5844,7 +6084,6 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     event.preventDefault();
-    const current = getLatestStateBundle();
     applySearchMatchSelection(shell, elements, renderCurrentState, current, {
       kind: "semantic",
       layerId: semanticLayerId,
@@ -5957,20 +6196,27 @@ function bindUi(shell, elements, options = {}) {
   });
 
   shell.addEventListener("pointerdown", (event) => {
-    const button = event.target.closest("button[data-semantic-focus-code]");
+    const button = event.target.closest(
+      "button[data-semantic-focus-code], button[data-zone-focus-rgb]",
+    );
     if (!button) {
       return;
     }
     button.dataset.semanticFocusPointerHandled = "true";
     event.preventDefault();
     event.stopPropagation();
-    void dispatchSemanticFocusFromCode(
-      String(button.getAttribute("data-semantic-focus-code") || "").trim(),
-    );
+    const semanticCode = String(button.getAttribute("data-semantic-focus-code") || "").trim();
+    if (semanticCode) {
+      void dispatchSemanticFocusFromCode(semanticCode);
+      return;
+    }
+    void dispatchZoneFocusFromRgb(String(button.getAttribute("data-zone-focus-rgb") || "").trim());
   });
 
   shell.addEventListener("click", async (event) => {
-    const button = event.target.closest("button[data-semantic-focus-code]");
+    const button = event.target.closest(
+      "button[data-semantic-focus-code], button[data-zone-focus-rgb]",
+    );
     if (!button) {
       return;
     }
@@ -5980,9 +6226,12 @@ function bindUi(shell, elements, options = {}) {
     }
     event.preventDefault();
     event.stopPropagation();
-    await dispatchSemanticFocusFromCode(
-      String(button.getAttribute("data-semantic-focus-code") || "").trim(),
-    );
+    const semanticCode = String(button.getAttribute("data-semantic-focus-code") || "").trim();
+    if (semanticCode) {
+      await dispatchSemanticFocusFromCode(semanticCode);
+      return;
+    }
+    await dispatchZoneFocusFromRgb(String(button.getAttribute("data-zone-focus-rgb") || "").trim());
   });
 
   elements.zoneInfoTabs?.addEventListener("click", (event) => {
