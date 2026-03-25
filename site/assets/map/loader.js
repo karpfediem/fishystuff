@@ -4722,7 +4722,7 @@ function renderLayerStack(container, stateBundle, options = {}) {
           </div>
           <button
             class="fishymap-layer-settings btn btn-sm btn-circle ${
-              visible ? "btn-soft btn-primary" : "btn-ghost"
+              settingsExpanded ? "btn-soft btn-primary" : "btn-ghost"
             }"
             data-layer-settings-toggle="${layer.layerId.replace(/"/g, "&quot;")}"
             type="button"
