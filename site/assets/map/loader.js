@@ -4247,21 +4247,47 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
     (term) => !(selectedSemanticFieldIdsByLayer[term.layerId] || []).includes(term.fieldId),
   );
   return fishMatches.concat(zoneMatches, semanticMatches).sort((left, right) => {
+    const leftPriority = searchMatchPriority(left);
+    const rightPriority = searchMatchPriority(right);
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
     if (right._score !== left._score) {
       return right._score - left._score;
-    }
-    if (left.kind !== right.kind) {
-      const priority = {
-        zone: 0,
-        semantic: 1,
-        fish: 2,
-      };
-      return (priority[left.kind] ?? 9) - (priority[right.kind] ?? 9);
     }
     return String(left.name || left.label || "").localeCompare(
       String(right.name || right.label || ""),
     );
   });
+}
+
+function searchMatchPriority(match) {
+  if (match?.kind === "fish") {
+    return 0;
+  }
+  if (match?.kind === "zone") {
+    return 1;
+  }
+  if (match?.kind === "semantic") {
+    const parsed = parseSemanticIdentityText(match.label || "");
+    if (parsed?.kind === "N") {
+      return 2;
+    }
+    if (parsed?.kind === "R") {
+      return 3;
+    }
+    if (parsed?.kind === "RG") {
+      return 4;
+    }
+    if (String(match.layerId || "").trim() === "regions") {
+      return 3;
+    }
+    if (String(match.layerId || "").trim() === "region_groups") {
+      return 4;
+    }
+    return 5;
+  }
+  return 9;
 }
 
 function semanticTermLookupKey(layerId, fieldId) {

@@ -366,6 +366,57 @@ test("buildSearchMatches deduplicates semantic results for the same field", () =
   );
 });
 
+test("buildSearchMatches prefers fish then zones then regions then region groups", () => {
+  const stateBundle = buildStateBundle();
+  stateBundle.state.catalog.fish = [
+    {
+      fishId: 1,
+      itemId: 3001,
+      encyclopediaId: 4001,
+      name: "Velia Fish",
+      grade: "General",
+      isPrize: false,
+    },
+  ];
+  stateBundle.state.catalog.semanticTerms = [
+    {
+      layerId: "regions",
+      layerName: "Regions",
+      fieldId: 5,
+      label: "Velia (R5)",
+      description: "Town",
+      searchText: "Velia region town",
+    },
+    {
+      layerId: "region_groups",
+      layerName: "Region Groups",
+      fieldId: 1,
+      label: "Velia (RG1)",
+      description: "Resources",
+      searchText: "Velia resource group",
+    },
+  ];
+  const zoneCatalog = normalizeZoneCatalog([
+    {
+      r: 10,
+      g: 20,
+      b: 30,
+      name: "Velia Coast",
+      confirmed: 1,
+      order: 1,
+    },
+  ]);
+
+  const matches = buildSearchMatches(stateBundle, "velia", zoneCatalog);
+
+  assert.equal(matches[0]?.kind, "fish");
+  assert.equal(matches[1]?.kind, "zone");
+  assert.equal(matches[2]?.kind, "semantic");
+  assert.equal(matches[2]?.layerId, "regions");
+  assert.equal(matches[3]?.kind, "semantic");
+  assert.equal(matches[3]?.layerId, "region_groups");
+});
+
 test("buildHoverOverviewRows renders supported hover layers from bottom to top", () => {
   assert.deepEqual(
     buildHoverOverviewRows(
