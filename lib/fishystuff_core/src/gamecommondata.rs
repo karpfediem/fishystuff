@@ -13,8 +13,7 @@ use crate::field_metadata::{
     FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP, FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
     FIELD_DETAIL_FACT_KEY_RESOURCE_WAYPOINT, FIELD_DETAIL_PANE_ID_TERRITORY,
     FIELD_DETAIL_PANE_ID_ZONE_MASK, FIELD_DETAIL_SECTION_KIND_FACTS,
-    FIELD_HOVER_TARGET_KEY_ORIGIN_NODE, FIELD_HOVER_TARGET_KEY_REGION_NODE,
-    FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
+    FIELD_HOVER_TARGET_KEY_ORIGIN_NODE, FIELD_HOVER_TARGET_KEY_RESOURCE_NODE,
 };
 use crate::loc::load_loc_namespaces_as_string_maps;
 
@@ -312,13 +311,10 @@ impl OriginalRegionLayerContext {
         let region = self.resolve_region_waypoint_info(region_id);
         let origin = self.resolve_region_origin_info(region_id);
         let entry = FieldHoverMetadataEntry {
-            targets: vec![
-                build_region_node_hover_target(region.as_ref()),
-                build_origin_hover_target(origin.as_ref()),
-            ]
-            .into_iter()
-            .flatten()
-            .collect(),
+            targets: vec![build_origin_hover_target(origin.as_ref())]
+                .into_iter()
+                .flatten()
+                .collect(),
             detail_pane: Some(territory_detail_pane_ref("hover-zone")),
             detail_sections: vec![
                 build_region_detail_section(region_id, region.as_ref()),
@@ -831,16 +827,12 @@ fn build_region_detail_section(
         });
     }
 
-    let targets = vec![build_region_node_hover_target(region)]
-        .into_iter()
-        .flatten()
-        .collect();
     (!facts.is_empty()).then_some(FieldDetailSection {
         id: "region".to_string(),
         kind: FIELD_DETAIL_SECTION_KIND_FACTS.to_string(),
         title: Some("Region".to_string()),
         facts,
-        targets,
+        targets: Vec::new(),
     })
 }
 
@@ -1061,31 +1053,6 @@ fn build_resource_hover_target_from_resource(
     );
     Some(FieldHoverTarget {
         key: FIELD_HOVER_TARGET_KEY_RESOURCE_NODE.to_string(),
-        label,
-        world_x,
-        world_z,
-    })
-}
-
-fn build_region_node_hover_target(origin: Option<&RegionOriginInfo>) -> Option<FieldHoverTarget> {
-    let origin = origin?;
-    let world_x = origin.world_x?;
-    let world_z = origin.world_z?;
-    let label = origin
-        .waypoint_name
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|name| {
-            let region_suffix = origin
-                .region_id
-                .map(|region_id| format!(" (R{region_id})"))
-                .unwrap_or_default();
-            format!("Node: {name}{region_suffix}")
-        })
-        .unwrap_or_else(|| "Node".to_string());
-    Some(FieldHoverTarget {
-        key: FIELD_HOVER_TARGET_KEY_REGION_NODE.to_string(),
         label,
         world_x,
         world_z,
@@ -1739,7 +1706,7 @@ mod tests {
     }
 
     #[test]
-    fn region_hover_metadata_keeps_region_node_and_trade_origin_node_distinct() {
+    fn region_hover_metadata_keeps_region_node_fact_and_only_targets_trade_origin() {
         let context = OriginalRegionLayerContext {
             regioninfo: [
                 (
@@ -1827,12 +1794,10 @@ mod tests {
             .facts
             .iter()
             .any(|fact| fact.key == "region_node" && fact.value == "Stonebeak Shore"));
-        assert!(region_section.targets.iter().any(|target| {
-            target.key == "region_node"
-                && target.label == "Node: Stonebeak Shore (R204)"
-                && (target.world_x - 303191.0).abs() < f64::EPSILON
-                && (target.world_z - (-1694.35)).abs() < f64::EPSILON
-        }));
+        assert!(region_section.targets.is_empty());
+        assert_eq!(entry.targets.len(), 1);
+        assert_eq!(entry.targets[0].key, "origin_node");
+        assert_eq!(entry.targets[0].label, "Origin: Tarif (R221)");
 
         let origin_section = entry
             .detail_sections
