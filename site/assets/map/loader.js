@@ -4270,22 +4270,22 @@ function searchMatchPriority(match) {
   }
   if (match?.kind === "semantic") {
     const parsed = parseSemanticIdentityText(match.label || "");
-    if (parsed?.kind === "N") {
+    if (parsed?.kind === "RG") {
       return 2;
+    }
+    if (parsed?.kind === "N") {
+      return 3;
     }
     if (parsed?.kind === "R") {
       return 3;
     }
-    if (parsed?.kind === "RG") {
-      return 4;
+    if (String(match.layerId || "").trim() === "region_groups") {
+      return 2;
     }
     if (String(match.layerId || "").trim() === "regions") {
       return 3;
     }
-    if (String(match.layerId || "").trim() === "region_groups") {
-      return 4;
-    }
-    return 5;
+    return 4;
   }
   return 9;
 }

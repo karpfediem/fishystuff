@@ -366,7 +366,7 @@ test("buildSearchMatches deduplicates semantic results for the same field", () =
   );
 });
 
-test("buildSearchMatches prefers fish then zones then regions then region groups", () => {
+test("buildSearchMatches prefers fish then zones then region groups then regions and nodes", () => {
   const stateBundle = buildStateBundle();
   stateBundle.state.catalog.fish = [
     {
@@ -395,6 +395,14 @@ test("buildSearchMatches prefers fish then zones then regions then region groups
       description: "Resources",
       searchText: "Velia resource group",
     },
+    {
+      layerId: "regions",
+      layerName: "Regions",
+      fieldId: 1,
+      label: "Velia (N1)",
+      description: "Node",
+      searchText: "Velia node waypoint",
+    },
   ];
   const zoneCatalog = normalizeZoneCatalog([
     {
@@ -412,9 +420,11 @@ test("buildSearchMatches prefers fish then zones then regions then region groups
   assert.equal(matches[0]?.kind, "fish");
   assert.equal(matches[1]?.kind, "zone");
   assert.equal(matches[2]?.kind, "semantic");
-  assert.equal(matches[2]?.layerId, "regions");
+  assert.equal(matches[2]?.layerId, "region_groups");
   assert.equal(matches[3]?.kind, "semantic");
-  assert.equal(matches[3]?.layerId, "region_groups");
+  assert.notEqual(matches[3]?.layerId, "region_groups");
+  assert.equal(matches[4]?.kind, "semantic");
+  assert.notEqual(matches[4]?.layerId, "region_groups");
 });
 
 test("buildHoverOverviewRows renders supported hover layers from bottom to top", () => {
