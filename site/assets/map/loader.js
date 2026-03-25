@@ -778,6 +778,7 @@ export function buildWaypointFocusIndex(sources = {}) {
 }
 
 let waypointFocusIndexPromise = null;
+let waypointFocusPreloadScheduled = false;
 
 async function loadWaypointFocusIndex(locationLike = globalThis.window?.location) {
   if (waypointFocusIndexPromise) {
@@ -809,6 +810,28 @@ async function loadWaypointFocusIndex(locationLike = globalThis.window?.location
       throw error;
     });
   return waypointFocusIndexPromise;
+}
+
+function scheduleWaypointFocusIndexPreload(locationLike = globalThis.window?.location) {
+  if (waypointFocusIndexPromise || waypointFocusPreloadScheduled) {
+    return;
+  }
+  waypointFocusPreloadScheduled = true;
+  const run = () => {
+    waypointFocusPreloadScheduled = false;
+    void loadWaypointFocusIndex(locationLike).catch((error) => {
+      console.warn("Failed to preload waypoint focus data", error);
+    });
+  };
+  if (typeof globalThis.queueMicrotask === "function") {
+    globalThis.queueMicrotask(run);
+    return;
+  }
+  if (typeof globalThis.setTimeout === "function") {
+    globalThis.setTimeout(run, 0);
+    return;
+  }
+  run();
 }
 
 export function resolveSemanticIdentityFocusPoints(identityInput, focusIndex) {
@@ -5063,6 +5086,21 @@ function bindUi(shell, elements, options = {}) {
     );
   }
 
+  async function dispatchSemanticFocusFromCode(code) {
+    if (!code) {
+      return;
+    }
+    try {
+      const command = await buildSemanticFocusCommandFromCode(code);
+      if (command) {
+        dispatchMapCommand(shell, command);
+      }
+    } catch (error) {
+      console.error("Failed to resolve semantic focus command", error);
+      showSiteToast("error", "Unable to load waypoint focus data.");
+    }
+  }
+
   function stopDragAutoScroll() {
     if (dragAutoScrollState.frameId && typeof window.cancelAnimationFrame === "function") {
       window.cancelAnimationFrame(dragAutoScrollState.frameId);
@@ -5478,6 +5516,9 @@ function bindUi(shell, elements, options = {}) {
       applyManagedWindows();
     } finally {
       isRendering = false;
+    }
+    if (stateBundle?.state?.ready === true) {
+      scheduleWaypointFocusIndexPreload(globalThis.window?.location);
     }
   }
 
@@ -5915,26 +5956,33 @@ function bindUi(shell, elements, options = {}) {
     }
   });
 
+  shell.addEventListener("pointerdown", (event) => {
+    const button = event.target.closest("button[data-semantic-focus-code]");
+    if (!button) {
+      return;
+    }
+    button.dataset.semanticFocusPointerHandled = "true";
+    event.preventDefault();
+    event.stopPropagation();
+    void dispatchSemanticFocusFromCode(
+      String(button.getAttribute("data-semantic-focus-code") || "").trim(),
+    );
+  });
+
   shell.addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-semantic-focus-code]");
     if (!button) {
       return;
     }
-    event.preventDefault();
-    event.stopPropagation();
-    const code = String(button.getAttribute("data-semantic-focus-code") || "").trim();
-    if (!code) {
+    if (button.dataset.semanticFocusPointerHandled === "true") {
+      delete button.dataset.semanticFocusPointerHandled;
       return;
     }
-    try {
-      const command = await buildSemanticFocusCommandFromCode(code);
-      if (command) {
-        dispatchMapCommand(shell, command);
-      }
-    } catch (error) {
-      console.error("Failed to resolve semantic focus command", error);
-      showSiteToast("error", "Unable to load waypoint focus data.");
-    }
+    event.preventDefault();
+    event.stopPropagation();
+    await dispatchSemanticFocusFromCode(
+      String(button.getAttribute("data-semantic-focus-code") || "").trim(),
+    );
   });
 
   elements.zoneInfoTabs?.addEventListener("click", (event) => {
