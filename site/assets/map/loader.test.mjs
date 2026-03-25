@@ -1444,7 +1444,18 @@ test("buildWaypointFocusIndex and semantic commands resolve focus bounds from wa
         {
           type: "Feature",
           properties: { r: 5, rg: 1, o: 9, owp: 9, ox: 180, oz: 260, rgwp: 11, rgx: 220, rgz: 210 },
-          geometry: { type: "Polygon", coordinates: [] },
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [2000, 3000],
+                [3000, 3000],
+                [3000, 4000],
+                [2000, 4000],
+                [2000, 3000],
+              ],
+            ],
+          },
         },
       ],
     },
@@ -1454,11 +1465,36 @@ test("buildWaypointFocusIndex and semantic commands resolve focus bounds from wa
         {
           type: "Feature",
           properties: { rg: 1, rgwp: 11, rgx: 220, rgz: 210, rs: [5, 7, 9] },
-          geometry: { type: "Polygon", coordinates: [] },
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [5000, 5000],
+                [6000, 5000],
+                [6000, 6000],
+                [5000, 6000],
+                [5000, 5000],
+              ],
+            ],
+          },
         },
       ],
     },
   });
+
+  const regionCommand = buildSemanticIdentityCommand(
+    "Velia (R5)",
+    focusIndex,
+    { state: { view: { viewMode: "2d" } } },
+    { width: 1000, height: 600 },
+    { autoAdjustView: true },
+  );
+  assert.deepEqual(regionCommand.selectSemanticField, {
+    layerId: "regions",
+    fieldId: 5,
+  });
+  assert.ok(Math.abs(regionCommand.restoreView.camera.centerWorldX - -1295058.816) < 1);
+  assert.ok(Math.abs(regionCommand.restoreView.camera.centerWorldZ - 993882.35) < 1);
 
   const regionGroupCommand = buildSemanticIdentityCommand(
     "Velia (RG1)",
@@ -1472,8 +1508,8 @@ test("buildWaypointFocusIndex and semantic commands resolve focus bounds from wa
     fieldId: 1,
   });
   assert.equal(regionGroupCommand.restoreView.viewMode, "2d");
-  assert.equal(regionGroupCommand.restoreView.camera.centerWorldX, 180);
-  assert.equal(regionGroupCommand.restoreView.camera.centerWorldZ, 180);
+  assert.ok(Math.abs(regionGroupCommand.restoreView.camera.centerWorldX - -391529.413) < 1);
+  assert.ok(Math.abs(regionGroupCommand.restoreView.camera.centerWorldZ - 391529.413) < 1);
   assert.ok(regionGroupCommand.restoreView.camera.zoom > 0);
 
   const nodeCommand = buildSemanticIdentityCommand(

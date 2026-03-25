@@ -42,6 +42,10 @@ const FOCUS_TERRAIN_DEFAULT_PITCH = -0.58;
 const FOCUS_TERRAIN_DISTANCE_FACTOR = 1.35;
 const FOCUS_TERRAIN_MIN_DISTANCE = 2000.0;
 const FOCUS_TERRAIN_MAX_DISTANCE = 900000.0;
+const MAP_LEFT = -160.0;
+const MAP_TOP = 160.0;
+const MAP_SECTOR_PER_PIXEL = 0.0235294122248888;
+const MAP_SECTOR_SCALE = 12800.0;
 const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   search: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   settings: Object.freeze({
@@ -445,6 +449,94 @@ function normalizeWorldPoint(pointInput) {
   return { worldX, worldZ };
 }
 
+function pixelToWorldPoint(pixelX, pixelY, pixelCenterOffset = 1) {
+  const x = Number(pixelX);
+  const y = Number(pixelY);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  return normalizeWorldPoint({
+    worldX: (x * MAP_SECTOR_PER_PIXEL + MAP_LEFT) * MAP_SECTOR_SCALE,
+    worldZ: (-(y + pixelCenterOffset) * MAP_SECTOR_PER_PIXEL + MAP_TOP) * MAP_SECTOR_SCALE,
+  });
+}
+
+function normalizeWorldRect(rectInput) {
+  const minX = Number(rectInput?.minX);
+  const maxX = Number(rectInput?.maxX);
+  const minZ = Number(rectInput?.minZ);
+  const maxZ = Number(rectInput?.maxZ);
+  if (
+    !Number.isFinite(minX) ||
+    !Number.isFinite(maxX) ||
+    !Number.isFinite(minZ) ||
+    !Number.isFinite(maxZ)
+  ) {
+    return null;
+  }
+  const normalizedMinX = Math.min(minX, maxX);
+  const normalizedMaxX = Math.max(minX, maxX);
+  const normalizedMinZ = Math.min(minZ, maxZ);
+  const normalizedMaxZ = Math.max(minZ, maxZ);
+  return {
+    minX: normalizedMinX,
+    maxX: normalizedMaxX,
+    minZ: normalizedMinZ,
+    maxZ: normalizedMaxZ,
+    centerX: (normalizedMinX + normalizedMaxX) * 0.5,
+    centerZ: (normalizedMinZ + normalizedMaxZ) * 0.5,
+    spanX: normalizedMaxX - normalizedMinX,
+    spanZ: normalizedMaxZ - normalizedMinZ,
+  };
+}
+
+function geometryPixelBounds(geometry) {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  function visitCoordinates(value) {
+    if (!Array.isArray(value)) {
+      return;
+    }
+    if (value.length >= 2 && Number.isFinite(value[0]) && Number.isFinite(value[1])) {
+      minX = Math.min(minX, value[0]);
+      maxX = Math.max(maxX, value[0]);
+      minY = Math.min(minY, value[1]);
+      maxY = Math.max(maxY, value[1]);
+      return;
+    }
+    for (const child of value) {
+      visitCoordinates(child);
+    }
+  }
+
+  visitCoordinates(geometry?.coordinates);
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+    return null;
+  }
+  return { minX, maxX, minY, maxY };
+}
+
+function worldRectFromGeometry(geometry) {
+  const pixelBounds = geometryPixelBounds(geometry);
+  if (!pixelBounds) {
+    return null;
+  }
+  const topLeft = pixelToWorldPoint(pixelBounds.minX, pixelBounds.minY, 0);
+  const bottomRight = pixelToWorldPoint(pixelBounds.maxX, pixelBounds.maxY, 0);
+  if (!topLeft || !bottomRight) {
+    return null;
+  }
+  return normalizeWorldRect({
+    minX: topLeft.worldX,
+    maxX: bottomRight.worldX,
+    minZ: bottomRight.worldZ,
+    maxZ: topLeft.worldZ,
+  });
+}
+
 function dedupeWorldPoints(pointsInput) {
   const seen = new Set();
   const points = [];
@@ -500,6 +592,30 @@ export function buildFocusWorldRect(pointsInput, viewportInput, options = {}) {
     maxZ: centerZ + spanZ * 0.5,
     centerX,
     centerZ,
+    spanX,
+    spanZ,
+  };
+}
+
+function buildFocusWorldRectFromBaseRect(rectInput, viewportInput) {
+  const rect = normalizeWorldRect(rectInput);
+  if (!rect) {
+    return null;
+  }
+  const viewportSize = normalizeViewportSize(viewportInput);
+  const fitScale = focusFitScale(viewportSize);
+  const minScale = fitScale * MAP_CAMERA_ZOOM_MIN_FACTOR_OF_FIT;
+  const minSpanX = viewportSize.width * minScale * FOCUS_MIN_SPAN_HEADROOM_FACTOR;
+  const minSpanZ = viewportSize.height * minScale * FOCUS_MIN_SPAN_HEADROOM_FACTOR;
+  const spanX = Math.max(rect.spanX * FOCUS_RECT_PADDING_FACTOR, minSpanX);
+  const spanZ = Math.max(rect.spanZ * FOCUS_RECT_PADDING_FACTOR, minSpanZ);
+  return {
+    minX: rect.centerX - spanX * 0.5,
+    maxX: rect.centerX + spanX * 0.5,
+    minZ: rect.centerZ - spanZ * 0.5,
+    maxZ: rect.centerZ + spanZ * 0.5,
+    centerX: rect.centerX,
+    centerZ: rect.centerZ,
     spanX,
     spanZ,
   };
@@ -616,6 +732,7 @@ export function buildWaypointFocusIndex(sources = {}) {
       originRegionId: normalizeIntegerId(feature?.properties?.o),
       originWaypointId,
       resourceWaypointId,
+      bounds: worldRectFromGeometry(feature?.geometry),
       originPoint: normalizeWorldPoint({
         worldX: feature?.properties?.ox,
         worldZ: feature?.properties?.oz,
@@ -643,6 +760,7 @@ export function buildWaypointFocusIndex(sources = {}) {
     regionGroupById.set(regionGroupId, {
       regionGroupId,
       waypointId,
+      bounds: worldRectFromGeometry(feature?.geometry),
       point,
       memberRegionIds: (Array.isArray(feature?.properties?.rs) ? feature.properties.rs : [])
         .map((value) => normalizeIntegerId(value))
@@ -726,6 +844,31 @@ export function resolveSemanticIdentityFocusPoints(identityInput, focusIndex) {
   return [];
 }
 
+function resolveSemanticIdentityFocusRect(identityInput, focusIndex, viewportInput) {
+  const identity =
+    typeof identityInput === "string" ? parseSemanticIdentityText(identityInput) : identityInput;
+  if (!identity || !focusIndex) {
+    return null;
+  }
+  const numericId = Number.parseInt(String(identity.code || "").replace(/^(?:RG|R|N)/, ""), 10);
+  if (!Number.isFinite(numericId)) {
+    return null;
+  }
+  if (identity.kind === "R") {
+    return buildFocusWorldRectFromBaseRect(
+      focusIndex.regionById?.get(numericId)?.bounds,
+      viewportInput,
+    );
+  }
+  if (identity.kind === "RG") {
+    return buildFocusWorldRectFromBaseRect(
+      focusIndex.regionGroupById?.get(numericId)?.bounds,
+      viewportInput,
+    );
+  }
+  return null;
+}
+
 export function buildSemanticIdentityCommand(
   identityInput,
   focusIndex,
@@ -775,7 +918,9 @@ export function buildSemanticIdentityCommand(
   if (!autoAdjustView) {
     return command;
   }
-  const rect = buildFocusWorldRect(focusPoints, viewportInput);
+  const rect =
+    resolveSemanticIdentityFocusRect(identity, focusIndex, viewportInput) ||
+    buildFocusWorldRect(focusPoints, viewportInput);
   const restoreView = buildRestoreViewForWorldRect(rect, viewportInput, stateBundle);
   return restoreView
     ? {
@@ -3525,7 +3670,7 @@ function zoneInfoTargetMarkup(target) {
     return "";
   }
   const labelMarkup =
-    semanticIdentityMarkup(label) ||
+    semanticIdentityMarkup(label, { interactive: false }) ||
     `<span class="truncate">${escapeHtml(label)}</span>`;
   return `
     <button
