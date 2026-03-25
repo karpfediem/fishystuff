@@ -60,14 +60,44 @@ const TEST_ZONE_CATALOG = normalizeZoneCatalog([
     order: 21,
   },
   {
-    r: 60,
-    g: 150,
-    b: 60,
-    name: "Serendia - Terrain",
+    r: 12,
+    g: 34,
+    b: 56,
+    name: "Demi River",
     confirmed: 1,
     order: 3,
+    bite_time_min: 8,
+    bite_time_max: 12,
+  },
+  {
+    r: 44,
+    g: 120,
+    b: 200,
+    name: "Mediah",
+    confirmed: 1,
+    order: 4,
+  },
+  {
+    r: 91,
+    g: 101,
+    b: 111,
+    name: "Tarif",
+    confirmed: 1,
+    order: 5,
+  },
+  {
+    r: 10,
+    g: 20,
+    b: 30,
+    name: "Velia Coast",
+    confirmed: 1,
+    order: 6,
   },
 ]);
+
+function testZoneCatalogEntry(zoneName) {
+  return TEST_ZONE_CATALOG.find((zone) => zone.name === zoneName) || null;
+}
 
 function buildDiscreteFieldLookupBytes(width, height, rows) {
   const normalizedRows = Array.isArray(rows) ? rows : [];
@@ -111,6 +141,7 @@ function buildDiscreteFieldLookupBytes(width, height, rows) {
 
 function buildStateBundle(selectedFishIds = []) {
   return {
+    zoneCatalog: TEST_ZONE_CATALOG,
     state: {
       catalog: {
         layers: [],
@@ -146,6 +177,7 @@ function buildStateBundle(selectedFishIds = []) {
 
 function buildHoverStateBundle() {
   return {
+    zoneCatalog: TEST_ZONE_CATALOG,
     state: {
       view: {
         viewMode: "2d",
@@ -213,12 +245,28 @@ function detailSection(id, title, facts) {
   };
 }
 
-function zoneLayerSample(zoneName = "Demi River") {
+function zoneLayerSample(zoneName = "Demi River", options = {}) {
+  const zone = testZoneCatalogEntry(zoneName);
+  const detailName = options.detailName ?? zoneName;
   return {
     layerId: "zone_mask",
+    rgbU32: zone?.zoneRgb ?? options.zoneRgb ?? null,
+    ...(zone
+      ? {
+          rgb: {
+            r: zone.r,
+            g: zone.g,
+            b: zone.b,
+          },
+        }
+      : {}),
     detailSections: [
-      detailSection("zone", "Zone", [factEntry("zone", zoneName, "hover-zone", { label: "Zone" })]),
+      detailSection("zone", "Zone", [
+        factEntry("zone", detailName, "hover-zone", { label: "Zone" }),
+      ]),
     ],
+    ...(options.detailPane ? { detailPane: options.detailPane } : {}),
+    ...(options.layerName ? { layerName: options.layerName } : {}),
   };
 }
 
@@ -553,6 +601,27 @@ test("buildSelectionOverviewRows keeps the zone row when no zone summary is avai
   );
 });
 
+test("buildSelectionOverviewRows prefers the API zone catalog over baked zone text", () => {
+  assert.deepEqual(
+    buildSelectionOverviewRows(
+      {
+        layerSamples: [
+          zoneLayerSample("Demi River", { detailName: "Unknown Zone 0x0C2238" }),
+        ],
+      },
+      buildHoverStateBundle(),
+    ),
+    [
+      {
+        layerId: "zone_mask",
+        icon: "hover-zone",
+        label: "Zone",
+        value: "Demi River",
+      },
+    ],
+  );
+});
+
 test("buildSelectionSummaryText falls back to semantic rows for non-zone selections", () => {
   assert.equal(
     buildSelectionSummaryText(
@@ -681,19 +750,10 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
   const panes = buildPointDetailPanes(
     {
       layerSamples: [
-        {
-          layerId: "zone_mask",
+        zoneLayerSample("Demi River", {
           layerName: "Zone Mask",
           detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
-          detailSections: [
-            {
-              id: "zone",
-              kind: "facts",
-              title: "Zone",
-              facts: [{ key: "zone", label: "Zone", value: "Demi River", icon: "hover-zone" }],
-            },
-          ],
-        },
+        }),
         {
           layerId: "region_groups",
           layerName: "Region Groups",
@@ -730,6 +790,29 @@ test("buildPointDetailPanes preserves layer order and summaries", () => {
     [
       ["zone_mask", "Zone", "Demi River"],
       ["territory", "Territory", "Tarif"],
+    ],
+  );
+});
+
+test("buildPointDetailPanes sources zone details from the API catalog", () => {
+  const panes = buildPointDetailPanes(
+    {
+      layerSamples: [
+        zoneLayerSample("Demi River", {
+          detailName: "Unknown Zone 0x0C2238",
+          layerName: "Zone Mask",
+          detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
+        }),
+      ],
+    },
+    buildHoverStateBundle(),
+  );
+
+  assert.deepEqual(
+    panes[0]?.sections?.[0]?.facts?.map((fact) => [fact.key, fact.value]),
+    [
+      ["zone", "Demi River"],
+      ["bite_time", "8-12 s"],
     ],
   );
 });
@@ -796,20 +879,10 @@ test("buildPointDetailPanes keeps zone evidence as a zone-only section", () => {
   const panes = buildPointDetailPanes(
     {
       layerSamples: [
-        {
-          layerId: "zone_mask",
+        zoneLayerSample("Demi River", {
           layerName: "Zone Mask",
           detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
-          detailSections: [
-            {
-              id: "zone",
-              kind: "facts",
-              title: "Zone",
-              facts: [{ key: "zone", label: "Zone", value: "Demi River", icon: "hover-zone" }],
-              targets: [{ label: "Tarif", worldX: 10, worldZ: 20 }],
-            },
-          ],
-        },
+        }),
         {
           layerId: "region_groups",
           layerName: "Region Groups",
@@ -842,19 +915,10 @@ test("buildPointDetailViewModel resolves the requested active pane when availabl
   const viewModel = buildPointDetailViewModel(
     {
       layerSamples: [
-        {
-          layerId: "zone_mask",
+        zoneLayerSample("Demi River", {
           layerName: "Zone Mask",
           detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
-          detailSections: [
-            {
-              id: "zone",
-              kind: "facts",
-              title: "Zone",
-              facts: [{ key: "zone", label: "Zone", value: "Demi River", icon: "hover-zone" }],
-            },
-          ],
-        },
+        }),
         {
           layerId: "region_groups",
           layerName: "Region Groups",
@@ -905,19 +969,10 @@ test("buildPointDetailViewModel uses bookmark titles over semantic summaries", (
       pointKind: "bookmark",
       pointLabel: "Olvia Academy",
       layerSamples: [
-        {
-          layerId: "zone_mask",
+        zoneLayerSample("Demi River", {
           layerName: "Zone Mask",
           detailPane: { id: "zone_mask", label: "Zone", icon: "hover-zone", order: 100 },
-          detailSections: [
-            {
-              id: "zone",
-              kind: "facts",
-              title: "Zone",
-              facts: [{ key: "zone", label: "Zone", value: "Demi River", icon: "hover-zone" }],
-            },
-          ],
-        },
+        }),
       ],
     },
     stateBundle,
@@ -1309,6 +1364,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         ],
       },
       0,
+      buildHoverStateBundle(),
     ),
     [
       {
@@ -1346,6 +1402,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         ],
       },
       0,
+      buildHoverStateBundle(),
     ),
     [
       {
@@ -1383,6 +1440,7 @@ test("buildBookmarkOverviewRows mirrors the hover row style without duplicating 
         ],
       },
       0,
+      buildHoverStateBundle(),
     ),
     [
       {
@@ -2046,7 +2104,7 @@ test("normalizeBookmarks filters invalid entries and keeps bookmark metadata", (
         { id: "b", label: "Manual", worldX: "bad", worldZ: 12 },
         { id: "c", label: "Manual", zoneRgb: "255", worldX: "12.5", worldZ: "8.25" },
       ],
-    }),
+    }, buildHoverStateBundle()),
     [
       {
         id: "a",
@@ -2121,6 +2179,7 @@ test("createBookmarkFromPlacement uses semantic rows as the default label", () =
       {
         idFactory: () => "bookmark-1",
         now: Date.UTC(2026, 2, 20, 12, 0, 0),
+        stateBundle: buildHoverStateBundle(),
       },
     ),
     {
@@ -2144,9 +2203,11 @@ test("renameBookmark updates the label and falls back to semantic rows when clea
       worldX: 123.4567,
       worldZ: -45.6789,
     },
-  ]);
+  ], buildHoverStateBundle());
 
-  assert.deepEqual(renameBookmark(bookmarks, "bookmark-1", "Shipwreck Route"), [
+  assert.deepEqual(renameBookmark(bookmarks, "bookmark-1", "Shipwreck Route", {
+    stateBundle: buildHoverStateBundle(),
+  }), [
     {
       id: "bookmark-1",
       label: "Shipwreck Route",
@@ -2158,7 +2219,9 @@ test("renameBookmark updates the label and falls back to semantic rows when clea
     },
   ]);
 
-  assert.deepEqual(renameBookmark(bookmarks, "bookmark-1", "   "), [
+  assert.deepEqual(renameBookmark(bookmarks, "bookmark-1", "   ", {
+    stateBundle: buildHoverStateBundle(),
+  }), [
     {
       id: "bookmark-1",
       label: "Cron Islands - Depth 2",
@@ -2188,7 +2251,7 @@ test("serializeBookmarksForExport writes WorldmapBookMark XML with comments", ()
         worldX: 14.25,
         worldZ: 80.5,
       },
-    ]),
+    ], { stateBundle: buildHoverStateBundle() }),
     [
       "<!--",
       "\tWaypoints for: Cron Islands - Depth 2",

@@ -11,8 +11,9 @@ import FishyMapBridge, {
 } from "./map-host.js";
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
-const DEFAULT_ZONE_CATALOG_URL = new URL("../data/zones.json", import.meta.url).toString();
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260325-1";
+const DEFAULT_ZONE_CATALOG_PATH = "/api/v1/zones";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260325-2";
+let currentZoneCatalog = [];
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
 const DRAG_AUTOSCROLL_EDGE_PX = 56;
@@ -1322,7 +1323,11 @@ function normalizeBookmarkLayerSamples(layerSamplesInput) {
   );
 }
 
-function bookmarkPrimaryFactValue(layerSamplesInput, stateBundle) {
+function resolveZoneCatalog(stateBundle) {
+  return Array.isArray(stateBundle?.zoneCatalog) ? stateBundle.zoneCatalog : currentZoneCatalog;
+}
+
+function bookmarkPrimaryFactValue(layerSamplesInput, stateBundle = null) {
   const rows = overviewRowsForLayerSamples(layerSamplesInput, stateBundle);
   for (const key of PRIMARY_SEMANTIC_ROW_KEYS) {
     const row = rows.find((entry) => entry.key === key);
@@ -1333,7 +1338,7 @@ function bookmarkPrimaryFactValue(layerSamplesInput, stateBundle) {
   return rows[0]?.value || "";
 }
 
-export function normalizeBookmarks(rawBookmarks) {
+export function normalizeBookmarks(rawBookmarks, stateBundle = null) {
   const entries = Array.isArray(rawBookmarks)
     ? rawBookmarks
     : Array.isArray(rawBookmarks?.bookmarks)
@@ -1350,7 +1355,7 @@ export function normalizeBookmarks(rawBookmarks) {
     }
     seen.add(id);
     const layerSamples = normalizeBookmarkLayerSamples(entry?.layerSamples);
-    const preferredName = bookmarkPrimaryFactValue(layerSamples);
+    const preferredName = bookmarkPrimaryFactValue(layerSamples, stateBundle);
     const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
     const createdAt = String(entry?.createdAt || "").trim();
     normalized.push({
@@ -1399,7 +1404,10 @@ export function createBookmarkFromPlacement(
   const now = Number.isFinite(options.now) ? options.now : Date.now();
   return {
     id: typeof options.idFactory === "function" ? options.idFactory() : createBookmarkId(),
-    label: defaultBookmarkLabel(existingBookmarks.length, bookmarkPrimaryFactValue(layerSamples)),
+    label: defaultBookmarkLabel(
+      existingBookmarks.length,
+      bookmarkPrimaryFactValue(layerSamples, options.stateBundle || null),
+    ),
     worldX,
     worldZ,
     ...(layerSamples.length ? { layerSamples } : {}),
@@ -1408,7 +1416,7 @@ export function createBookmarkFromPlacement(
   };
 }
 
-export function renameBookmark(bookmarks, bookmarkId, nextLabel) {
+export function renameBookmark(bookmarks, bookmarkId, nextLabel, options = {}) {
   const targetId = String(bookmarkId || "").trim();
   if (!targetId) {
     return normalizeBookmarks(bookmarks);
@@ -1422,7 +1430,11 @@ export function renameBookmark(bookmarks, bookmarkId, nextLabel) {
     return {
       ...bookmark,
       label:
-        requestedLabel || defaultBookmarkLabel(index, bookmarkPrimaryFactValue(bookmark?.layerSamples)),
+        requestedLabel ||
+        defaultBookmarkLabel(
+          index,
+          bookmarkPrimaryFactValue(bookmark?.layerSamples, options.stateBundle || null),
+        ),
     };
   });
 }
@@ -1456,13 +1468,13 @@ function formatBookmarkXmlCoordinate(value) {
   return String(normalized);
 }
 
-function describeBookmarksForExport(bookmarks) {
+function describeBookmarksForExport(bookmarks, stateBundle = null) {
   const normalizedBookmarks = normalizeBookmarks(bookmarks);
   if (!normalizedBookmarks.length) {
     return "0 FishyStuff Bookmarks";
   }
   const semanticNames = normalizedBookmarks
-    .map((bookmark) => bookmarkPrimaryFactValue(bookmark?.layerSamples))
+    .map((bookmark) => bookmarkPrimaryFactValue(bookmark?.layerSamples, stateBundle))
     .filter(Boolean);
   if (
     semanticNames.length === normalizedBookmarks.length &&
@@ -1482,10 +1494,13 @@ function describeBookmarksForExport(bookmarks) {
   return `${normalizedBookmarks.length} FishyStuff Bookmarks`;
 }
 
-function bookmarkDisplayLabel(bookmark, fallbackIndex = 0) {
+function bookmarkDisplayLabel(bookmark, fallbackIndex = 0, stateBundle = null) {
   return (
     String(bookmark?.label || "").trim() ||
-    defaultBookmarkLabel(fallbackIndex, bookmarkPrimaryFactValue(bookmark?.layerSamples))
+    defaultBookmarkLabel(
+      fallbackIndex,
+      bookmarkPrimaryFactValue(bookmark?.layerSamples, stateBundle),
+    )
   );
 }
 
@@ -1511,8 +1526,8 @@ export function buildBookmarkDeletionPrompt(bookmarks, options = {}) {
     .join("\n");
 }
 
-function formatBookmarkXmlName(bookmark, index) {
-  return `${index + 1}: ${bookmarkDisplayLabel(bookmark, index)}`;
+function formatBookmarkXmlName(bookmark, index, stateBundle = null) {
+  return `${index + 1}: ${bookmarkDisplayLabel(bookmark, index, stateBundle)}`;
 }
 
 function parseBookmarkXmlAttributes(nodeText) {
@@ -1564,7 +1579,9 @@ function parseXmlBookmarks(serializedBookmarks, options = {}) {
 
 export function serializeBookmarksForExport(bookmarks, options = {}) {
   const normalizedBookmarks = normalizeBookmarks(bookmarks);
-  const title = String(options.title || "").trim() || describeBookmarksForExport(normalizedBookmarks);
+  const title =
+    String(options.title || "").trim() ||
+    describeBookmarksForExport(normalizedBookmarks, options.stateBundle || null);
   const generatedBy = String(options.generatedBy || "").trim() || BOOKMARK_XML_GENERATED_BY;
   const previewUrl = String(options.previewUrl || "").trim() || BOOKMARK_XML_PREVIEW_URL;
   const posY = String(options.posY || "").trim() || BOOKMARK_XML_POS_Y;
@@ -1577,7 +1594,7 @@ export function serializeBookmarksForExport(bookmarks, options = {}) {
     "<WorldmapBookMark>",
     ...normalizedBookmarks.map(
       (bookmark, index) =>
-        `\t<BookMark BookMarkName="${escapeXml(formatBookmarkXmlName(bookmark, index))}" PosX="${escapeXml(formatBookmarkXmlCoordinate(bookmark.worldX))}" PosY="${escapeXml(posY)}" PosZ="${escapeXml(formatBookmarkXmlCoordinate(bookmark.worldZ))}" />`,
+        `\t<BookMark BookMarkName="${escapeXml(formatBookmarkXmlName(bookmark, index, options.stateBundle || null))}" PosX="${escapeXml(formatBookmarkXmlCoordinate(bookmark.worldX))}" PosY="${escapeXml(posY)}" PosZ="${escapeXml(formatBookmarkXmlCoordinate(bookmark.worldZ))}" />`,
     ),
     "</WorldmapBookMark>",
   ];
@@ -1672,7 +1689,7 @@ function downloadBookmarkExport(bookmarks, options = {}) {
   const timestamp = Number.isFinite(options.now) ? options.now : Date.now();
   const anchor = doc.createElement("a");
   const href = urlApi.createObjectURL(
-    new blobCtor([serializeBookmarksForExport(bookmarks, { now: timestamp })], {
+    new blobCtor([serializeBookmarksForExport(bookmarks, { now: timestamp, stateBundle: options.stateBundle || null })], {
       type: "application/xml",
     }),
   );
@@ -1802,6 +1819,28 @@ function parseCatalogRgbByte(value) {
   return null;
 }
 
+function parseCatalogInteger(value) {
+  const number = Number.parseInt(value, 10);
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseCatalogBoolean(value) {
+  if (value === true || value === false) {
+    return value;
+  }
+  if (value === 1 || value === 0) {
+    return value === 1;
+  }
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "0") {
+    return false;
+  }
+  return null;
+}
+
 function formatRgbKey(r, g, b, separator = ",") {
   return `${r}${separator}${g}${separator}${b}`;
 }
@@ -1833,13 +1872,11 @@ export function normalizeZoneCatalog(rawCatalog) {
     ];
     const hex = Number(zoneRgb).toString(16).padStart(6, "0");
     const name = String(entry?.name || "").trim() || `Zone ${rgbKey}`;
-    const confirmedRaw = entry?.confirmed;
-    const confirmed =
-      confirmedRaw === true ||
-      confirmedRaw === 1 ||
-      String(confirmedRaw || "").trim() === "1" ||
-      String(confirmedRaw || "").trim().toLowerCase() === "true";
-    const order = Number.parseInt(entry?.order, 10);
+    const confirmed = parseCatalogBoolean(entry?.confirmed);
+    const active = parseCatalogBoolean(entry?.active);
+    const order = parseCatalogInteger(entry?.order ?? entry?.index);
+    const biteTimeMin = parseCatalogInteger(entry?.biteTimeMin ?? entry?.bite_time_min);
+    const biteTimeMax = parseCatalogInteger(entry?.biteTimeMax ?? entry?.bite_time_max);
     normalized.push({
       kind: "zone",
       zoneRgb,
@@ -1847,8 +1884,11 @@ export function normalizeZoneCatalog(rawCatalog) {
       g,
       b,
       name,
-      confirmed,
+      confirmed: confirmed === true,
+      active,
       order: Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER,
+      biteTimeMin,
+      biteTimeMax,
       rgbKey,
       rgbSpaced: formatRgbKey(r, g, b, " "),
       normalizedKey: normalizedParts.join(","),
@@ -1859,13 +1899,19 @@ export function normalizeZoneCatalog(rawCatalog) {
       _nameSearch: name.toLowerCase(),
     });
   }
+  currentZoneCatalog = normalized;
   return normalized;
 }
 
-async function loadZoneCatalog(fetchImpl = globalThis.fetch, url = DEFAULT_ZONE_CATALOG_URL) {
+async function loadZoneCatalog(
+  fetchImpl = globalThis.fetch,
+  locationLike = globalThis.window?.location,
+) {
   if (typeof fetchImpl !== "function") {
     return [];
   }
+  const apiBaseUrl = resolveApiBaseUrl(locationLike);
+  const url = `${apiBaseUrl}${DEFAULT_ZONE_CATALOG_PATH}`;
   try {
     const response = await fetchImpl(url);
     if (!response?.ok) {
@@ -2593,6 +2639,96 @@ function zoneIdentityMarkup(zoneInput, options = {}) {
   `;
 }
 
+function zoneCatalogEntryForRgb(zoneCatalog, zoneRgbInput) {
+  const zoneRgb = Number.parseInt(zoneRgbInput, 10);
+  if (!Number.isFinite(zoneRgb)) {
+    return null;
+  }
+  return (Array.isArray(zoneCatalog) ? zoneCatalog : []).find((zone) => zone.zoneRgb === zoneRgb) || null;
+}
+
+function zoneDisplayNameFromCatalog(zoneCatalog, zoneRgbInput) {
+  const zoneRgb = Number.parseInt(zoneRgbInput, 10);
+  if (!Number.isFinite(zoneRgb)) {
+    return "";
+  }
+  const zone = zoneCatalogEntryForRgb(zoneCatalog, zoneRgb);
+  return String(zone?.name || "").trim() || `Zone ${formatZone(zoneRgb)}`;
+}
+
+function formatZoneBiteTimeRange(zone) {
+  const min = parseCatalogInteger(zone?.biteTimeMin);
+  const max = parseCatalogInteger(zone?.biteTimeMax);
+  if (min == null && max == null) {
+    return "";
+  }
+  if (min != null && max != null) {
+    return `${min}-${max} s`;
+  }
+  return `${min ?? max} s`;
+}
+
+function zoneRgbFromSample(sample) {
+  if (Number.isFinite(sample?.rgbU32)) {
+    return sample.rgbU32;
+  }
+  const rgb = sample?.rgb;
+  if (rgb && Number.isFinite(rgb?.r) && Number.isFinite(rgb?.g) && Number.isFinite(rgb?.b)) {
+    return rgbTripletToU32(rgb.r, rgb.g, rgb.b);
+  }
+  return null;
+}
+
+function buildZoneCatalogDetailSection(sample, zoneCatalog) {
+  const zoneRgb = zoneRgbFromSample(sample);
+  if (!Number.isFinite(zoneRgb)) {
+    return null;
+  }
+  const zone = zoneCatalogEntryForRgb(zoneCatalog, zoneRgb);
+  const facts = [
+    {
+      key: "zone",
+      label: "Zone",
+      value: zoneDisplayNameFromCatalog(zoneCatalog, zoneRgb),
+      icon: "hover-zone",
+    },
+  ];
+  const biteTimeRange = formatZoneBiteTimeRange(zone);
+  if (biteTimeRange) {
+    facts.push({
+      key: "bite_time",
+      label: "Bite Time",
+      value: biteTimeRange,
+      icon: "stopwatch",
+    });
+  }
+  return {
+    id: "zone",
+    kind: "facts",
+    title: "Zone",
+    facts,
+    targets: [],
+  };
+}
+
+function buildZoneCatalogOverviewRows(sample, stateBundle = null) {
+  const zoneSection = buildZoneCatalogDetailSection(sample, resolveZoneCatalog(stateBundle));
+  if (!zoneSection) {
+    return [];
+  }
+  return normalizePointDetailFacts(zoneSection.facts)
+    .filter((fact) => String(fact?.key || "").trim() === "zone")
+    .map((fact) => ({
+      key: String(fact?.key || "").trim() || "zone",
+      icon: displayIconForDetailFact(fact),
+      label: displayLabelForDetailFact(zoneSection, fact),
+      value: String(fact?.value || "").trim(),
+      ...(fact?.statusIcon ? { statusIcon: String(fact.statusIcon).trim() } : {}),
+      ...(fact?.statusIconTone ? { statusIconTone: String(fact.statusIconTone).trim() } : {}),
+    }))
+    .filter((row) => Boolean(row.icon && row.label && row.value));
+}
+
 function fishIdentityMarkup(fishInput, options = {}) {
   const fishId = Number.parseInt(fishInput?.fishId ?? fishInput, 10);
   if (!Number.isFinite(fishId)) {
@@ -2689,7 +2825,10 @@ function semanticIdentityMarkup(text, options = {}) {
   `;
 }
 
-function overviewRowsForSample(sample) {
+function overviewRowsForSample(sample, stateBundle = null) {
+  if (String(sample?.layerId || "").trim() === "zone_mask") {
+    return buildZoneCatalogOverviewRows(sample, stateBundle);
+  }
   const territoryRows = territoryOverviewRowsFromSections(
     normalizePointDetailSections(sample?.detailSections),
   );
@@ -2769,15 +2908,15 @@ function overviewRowsForLayerSamples(layerSamplesInput, stateBundle) {
       .filter(([layerId]) => Boolean(layerId)),
   );
   const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
-  return layerIds.flatMap((layerId) => overviewRowsForSample(sampleByLayerId.get(layerId)));
+  return layerIds.flatMap((layerId) => overviewRowsForSample(sampleByLayerId.get(layerId), stateBundle));
 }
 
-function hoverLayerOverviewRows(layerId, sampleByLayerId) {
+function hoverLayerOverviewRows(layerId, sampleByLayerId, stateBundle) {
   const sample = sampleByLayerId.get(layerId);
   if (!sample) {
     return [];
   }
-  return overviewRowsForSample(sample).map((row) => ({
+  return overviewRowsForSample(sample, stateBundle).map((row) => ({
     layerId,
     icon: row.icon,
     label: row.label,
@@ -2852,7 +2991,7 @@ export function buildSelectionOverviewRows(selection, stateBundle) {
     if (!sample) {
       return [];
     }
-    return overviewRowsForSample(sample).flatMap((row) => {
+    return overviewRowsForSample(sample, stateBundle).flatMap((row) => {
       const sameHeadingKey = String(headingRow?.key || "").trim() === String(row?.key || "").trim();
       const sameHeadingValue =
         String(headingRow?.value || "").trim() === String(row?.value || "").trim();
@@ -2909,7 +3048,7 @@ function selectedBookmarkForSelection(selection, stateBundle) {
 export function buildSelectionSummaryText(selection, stateBundle) {
   const selectedBookmark = selectedBookmarkForSelection(selection, stateBundle);
   if (selectedBookmark) {
-    return bookmarkDisplayLabel(selectedBookmark);
+    return bookmarkDisplayLabel(selectedBookmark, 0, stateBundle);
   }
   const preferredValue = String(
     preferredLayerSampleOverviewRow(selection?.layerSamples, stateBundle)?.value || "",
@@ -2922,9 +3061,10 @@ export function buildSelectionSummaryText(selection, stateBundle) {
     return pointLabel;
   }
   const zoneRgb = selection?.zoneRgb ?? zoneRgbFromLayerSamples(selection?.layerSamples);
-  return zoneRgb != null
-    ? `Zone ${formatZone(zoneRgb)}`
-    : "No selection.";
+  if (zoneRgb != null) {
+    return zoneDisplayNameFromCatalog(resolveZoneCatalog(stateBundle), zoneRgb);
+  }
+  return "No selection.";
 }
 
 function buildOverviewRowsForLayerSamples(layerSamplesInput, stateBundle) {
@@ -2935,7 +3075,7 @@ function buildOverviewRowsForLayerSamples(layerSamplesInput, stateBundle) {
       .filter(([layerId]) => Boolean(layerId)),
   );
   const layerIds = orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle);
-  return layerIds.flatMap((layerId) => hoverLayerOverviewRows(layerId, sampleByLayerId));
+  return layerIds.flatMap((layerId) => hoverLayerOverviewRows(layerId, sampleByLayerId, stateBundle));
 }
 
 function orderedLayerIdsForLayerSamples(layerSamples, sampleByLayerId, stateBundle) {
@@ -3033,9 +3173,9 @@ function bookmarkClearSelectionLabel(selectedCount) {
   return selectedCount > 0 ? `Clear (${selectedCount})` : "Clear";
 }
 
-export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
-  const label = bookmarkDisplayLabel(bookmark, fallbackIndex);
-  const semanticRows = overviewRowsForLayerSamples(bookmark?.layerSamples, null).filter(
+export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0, stateBundle = null) {
+  const label = bookmarkDisplayLabel(bookmark, fallbackIndex, stateBundle);
+  const semanticRows = overviewRowsForLayerSamples(bookmark?.layerSamples, stateBundle).filter(
     (row) =>
       !(
         String(row?.key || "").trim() === "zone" &&
@@ -3146,9 +3286,9 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
     normalizedBookmarks.length
       ? normalizedBookmarks
           .map((bookmark, index) => {
-            const overviewRows = buildBookmarkOverviewRows(bookmark, index);
+            const overviewRows = buildBookmarkOverviewRows(bookmark, index, stateBundle);
             const [titleRow, ...detailRows] = overviewRows;
-            const displayLabel = bookmarkDisplayLabel(bookmark, index);
+            const displayLabel = bookmarkDisplayLabel(bookmark, index, stateBundle);
             return `
               <div class="fishymap-bookmark-card rounded-box border border-base-300/70 bg-base-100" data-bookmark-id="${escapeHtml(bookmark.id)}">
                 <div class="fishymap-bookmark-rail">
@@ -3803,7 +3943,7 @@ function buildLayerSamplePointDetailPanes(selection, stateBundle) {
     }
     const existing = panes.get(paneId);
     const preferredRow = preferredLayerSampleOverviewRow([sample], stateBundle);
-    const staticSections = buildLayerSampleStaticPointDetailSections(sample);
+    const staticSections = buildLayerSampleStaticPointDetailSections(sample, stateBundle);
     if (existing) {
       existing.samples.push(sample);
       existing.sections.push(...staticSections);
@@ -3881,7 +4021,11 @@ function resolvePointDetailPaneDescriptor(sample, stateBundle, fallbackOrder = 0
   };
 }
 
-function buildLayerSampleStaticPointDetailSections(sample) {
+function buildLayerSampleStaticPointDetailSections(sample, stateBundle) {
+  if (String(sample?.layerId || "").trim() === "zone_mask") {
+    const zoneSection = buildZoneCatalogDetailSection(sample, resolveZoneCatalog(stateBundle));
+    return zoneSection ? [zoneSection] : [];
+  }
   const detailSections = normalizePointDetailSections(sample?.detailSections);
   if (detailSections.length > 0) {
     return detailSections;
@@ -5389,6 +5533,10 @@ function syncLayerPointIconScaleControl(container, layerId, scale) {
 function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DEFAULT_WINDOW_UI_STATE) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
+  const renderStateBundle = {
+    ...stateBundle,
+    zoneCatalog,
+  };
   const isReady = state.ready === true;
   const catalogFish = isReady ? state.catalog?.fish || [] : [];
   const patchRange = normalizePatchRangeSelection(
@@ -5467,9 +5615,9 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
     setTextContent(elements.layersCount, String(isReady ? (state.catalog?.layers || []).length : 0));
   }
 
-  const matches = isReady ? buildSearchMatches(stateBundle, searchText, zoneCatalog) : [];
-  renderSearchSelection(elements, stateBundle, fishLookup);
-  renderSearchResults(elements, matches, stateBundle);
+  const matches = isReady ? buildSearchMatches(renderStateBundle, searchText, zoneCatalog) : [];
+  renderSearchSelection(elements, renderStateBundle, fishLookup);
+  renderSearchResults(elements, matches, renderStateBundle);
 
   if (elements.legend) {
     setBooleanProperty(elements.legend, "open", Boolean(inputState.ui?.legendOpen));
@@ -5478,9 +5626,9 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
     setBooleanProperty(elements.diagnostics, "open", Boolean(inputState.ui?.diagnosticsOpen));
   }
 
-  renderZoneInfoWindow(elements, stateBundle, windowUiState, fishLookup);
+  renderZoneInfoWindow(elements, renderStateBundle, windowUiState, fishLookup);
 
-  renderHoverTooltip(elements, state.hover || null, stateBundle);
+  renderHoverTooltip(elements, state.hover || null, renderStateBundle);
 
   renderStatusLines(elements.statusLines, state.statuses || {});
   setTextContent(
@@ -6132,21 +6280,28 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function renderCurrentState(stateBundle = latestStateBundle || requestBridgeState(shell)) {
-    latestStateBundle = stateBundle;
-    bookmarks = persistResolvedBookmarksFromStateBundle(stateBundle, bookmarks, bookmarkUi);
+    latestStateBundle = {
+      ...(stateBundle || {}),
+      zoneCatalog,
+    };
+    bookmarks = persistResolvedBookmarksFromStateBundle(latestStateBundle, bookmarks, bookmarkUi);
     scheduleBookmarkMetadataRefresh();
     isRendering = true;
     try {
-      renderPanel(elements, stateBundle, zoneCatalog, windowUiState);
+      renderPanel(elements, latestStateBundle, zoneCatalog, windowUiState);
       syncActiveDetailPaneState(
-        resolveZoneInfoActiveTab(windowUiState, stateBundle.state?.selection || null, stateBundle),
+        resolveZoneInfoActiveTab(
+          windowUiState,
+          latestStateBundle.state?.selection || null,
+          latestStateBundle,
+        ),
       );
-      renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi);
+      renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
       applyManagedWindows();
     } finally {
       isRendering = false;
     }
-    if (stateBundle?.state?.ready === true) {
+    if (latestStateBundle?.state?.ready === true) {
       scheduleWaypointFocusIndexPreload(globalThis.window?.location);
     }
   }
@@ -6297,6 +6452,7 @@ function bindUi(shell, elements, options = {}) {
         zoneRgb: hover?.zoneRgb ?? zoneRgbFromLayerSamples(hover?.layerSamples),
       },
       bookmarks,
+      { stateBundle: latestStateBundle },
     );
     if (!bookmark) {
       showSiteToast("error", "Could not read world coordinates for that click.");
@@ -6890,7 +7046,7 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     try {
-      downloadBookmarkExport(exportBookmarks);
+      downloadBookmarkExport(exportBookmarks, { stateBundle: latestStateBundle });
       const message =
         selectedCount
           ? `Exported ${exportBookmarks.length} selected ${pluralizeBookmarks(exportBookmarks.length)}.`
@@ -7078,7 +7234,9 @@ function bindUi(shell, elements, options = {}) {
       if (requestedLabel == null) {
         return;
       }
-      const nextBookmarks = renameBookmark(bookmarks, bookmark.id, requestedLabel);
+      const nextBookmarks = renameBookmark(bookmarks, bookmark.id, requestedLabel, {
+        stateBundle: latestStateBundle,
+      });
       const renamedBookmark =
         nextBookmarks.find((entry) => entry.id === bookmark.id) || bookmark;
       persistBookmarksAndRender(nextBookmarks, `Renamed bookmark to ${renamedBookmark.label}.`, {

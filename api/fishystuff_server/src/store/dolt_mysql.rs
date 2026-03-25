@@ -653,11 +653,20 @@ impl DoltMySqlStore {
         }
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, i64, i64, Option<String>)> =
-            conn.query(query).map_err(db_unavailable)?;
+        let rows: Vec<(
+            i64,
+            i64,
+            i64,
+            Option<String>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+            Option<i64>,
+        )> = conn.query(query).map_err(db_unavailable)?;
 
         let mut zones = Vec::with_capacity(rows.len());
-        for (r, g, b, name) in rows {
+        for (r, g, b, name, active, confirmed, index, bite_time_min, bite_time_max) in rows {
             let r =
                 u8::try_from(r).map_err(|_| AppError::internal("zones_merged R out of range"))?;
             let g =
@@ -670,6 +679,28 @@ impl DoltMySqlStore {
                 rgb,
                 rgb_key: rgb.key(),
                 name: normalize_optional_string(name),
+                active: active.map(|value| value != 0),
+                confirmed: confirmed.map(|value| value != 0),
+                index: index
+                    .map(|value| {
+                        u32::try_from(value)
+                            .map_err(|_| AppError::internal("zones_merged index out of range"))
+                    })
+                    .transpose()?,
+                bite_time_min: bite_time_min
+                    .map(|value| {
+                        u32::try_from(value).map_err(|_| {
+                            AppError::internal("zones_merged bite_time_min out of range")
+                        })
+                    })
+                    .transpose()?,
+                bite_time_max: bite_time_max
+                    .map(|value| {
+                        u32::try_from(value).map_err(|_| {
+                            AppError::internal("zones_merged bite_time_max out of range")
+                        })
+                    })
+                    .transpose()?,
             });
         }
         zones.sort_by_key(|zone| zone.rgb_u32);

@@ -31,7 +31,8 @@ FROM region_group_regions
 WHERE map_version_id = ?
 ORDER BY region_group_id, region_id";
 
-pub const ZONES_SQL: &str = "SELECT R, G, B, name FROM `zones_merged`";
+pub const ZONES_SQL: &str =
+    "SELECT R, G, B, name, active, confirmed, `index`, bite_time_min, bite_time_max FROM `zones_merged`";
 
 pub const EVENT_ZONE_ASSIGNMENT_COUNT_SQL: &str =
     "SELECT COUNT(1) FROM event_zone_assignment WHERE layer_revision_id = ?";
