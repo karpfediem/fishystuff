@@ -5,6 +5,7 @@ import FishyMapBridge, {
   FISHYMAP_POINT_ICON_SCALE_MIN,
   FISHYMAP_STORAGE_KEYS,
   applyStatePatch,
+  resolveApiBaseUrl,
   resolveCdnBaseUrl,
   zoneRgbFromLayerSamples,
 } from "./map-host.js";
@@ -780,6 +781,7 @@ export function buildWaypointFocusIndex(sources = {}) {
 let waypointFocusIndexPromise = null;
 let waypointFocusPreloadScheduled = false;
 let zoneFocusIndexPromise = null;
+let fishEvidenceSnapshotPromise = null;
 
 function zoneRgbTriplet(zoneRgb) {
   const value = Number.parseInt(zoneRgb, 10);
@@ -939,6 +941,40 @@ async function loadZoneFocusIndex(locationLike = globalThis.window?.location) {
   return zoneFocusIndexPromise;
 }
 
+async function loadFishEvidenceSnapshot(locationLike = globalThis.window?.location) {
+  if (fishEvidenceSnapshotPromise) {
+    return fishEvidenceSnapshotPromise;
+  }
+  if (typeof globalThis.fetch !== "function") {
+    throw new Error("fetch() is unavailable for fish evidence focus data.");
+  }
+  const apiBaseUrl = resolveApiBaseUrl(locationLike);
+  const metaUrl = `${apiBaseUrl}/api/v1/events_snapshot_meta`;
+  fishEvidenceSnapshotPromise = globalThis.fetch(metaUrl)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Failed to load fish evidence focus meta: ${metaUrl}`);
+      }
+      return response.json();
+    })
+    .then(async (meta) => {
+      const snapshotUrl = new URL(
+        String(meta?.snapshot_url || `/api/v1/events_snapshot?revision=${encodeURIComponent(String(meta?.revision || ""))}`),
+        apiBaseUrl,
+      ).toString();
+      const response = await globalThis.fetch(snapshotUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to load fish evidence focus data: ${snapshotUrl}`);
+      }
+      return response.json();
+    })
+    .catch((error) => {
+      fishEvidenceSnapshotPromise = null;
+      throw error;
+    });
+  return fishEvidenceSnapshotPromise;
+}
+
 function scheduleWaypointFocusIndexPreload(locationLike = globalThis.window?.location) {
   if (waypointFocusIndexPromise || waypointFocusPreloadScheduled) {
     return;
@@ -949,6 +985,7 @@ function scheduleWaypointFocusIndexPreload(locationLike = globalThis.window?.loc
     void Promise.all([
       loadWaypointFocusIndex(locationLike),
       loadZoneFocusIndex(locationLike),
+      loadFishEvidenceSnapshot(locationLike),
     ]).catch((error) => {
       console.warn("Failed to preload focus data", error);
     });
@@ -1101,6 +1138,120 @@ export function buildZoneIdentityCommand(
   const rect = zoneFocusIndex?.zoneRectByRgb?.get(zoneRgb) || null;
   const restoreView = buildRestoreViewForWorldRect(rect, viewportInput, stateBundle);
   return restoreView ? { ...command, restoreView } : command;
+}
+
+function resolvePatchRangeEventTimeBounds(stateBundle) {
+  const patchRange = normalizePatchRangeSelection(
+    stateBundle?.state?.catalog?.patches || [],
+    stateBundle?.inputState?.filters?.fromPatchId ??
+      stateBundle?.state?.filters?.fromPatchId ??
+      stateBundle?.inputState?.filters?.patchId ??
+      stateBundle?.state?.filters?.patchId ??
+      null,
+    stateBundle?.inputState?.filters?.toPatchId ??
+      stateBundle?.state?.filters?.toPatchId ??
+      stateBundle?.inputState?.filters?.patchId ??
+      stateBundle?.state?.filters?.patchId ??
+      null,
+  );
+  const ordered = Array.isArray(patchRange?.ordered) ? patchRange.ordered : [];
+  if (!ordered.length) {
+    return { minTsUtc: -Infinity, maxTsUtc: Infinity };
+  }
+  const fromIndex = ordered.findIndex((patch) => patch?.patchId === patchRange.fromPatchId);
+  const toIndex = ordered.findIndex((patch) => patch?.patchId === patchRange.toPatchId);
+  const startIndex = fromIndex >= 0 ? fromIndex : 0;
+  const endIndex = toIndex >= 0 ? toIndex : ordered.length - 1;
+  const minTsUtc = Number(ordered[startIndex]?.startTsUtc);
+  const nextPatch = ordered[endIndex + 1] || null;
+  const nextStartTsUtc = Number(nextPatch?.startTsUtc);
+  return {
+    minTsUtc: Number.isFinite(minTsUtc) ? minTsUtc : -Infinity,
+    maxTsUtc: Number.isFinite(nextStartTsUtc) ? nextStartTsUtc - 1 : Infinity,
+  };
+}
+
+function fishEvidencePointFromEvent(event) {
+  const worldPoint = normalizeWorldPoint({
+    worldX: event?.world_x ?? event?.worldX,
+    worldZ: event?.world_z ?? event?.worldZ,
+  });
+  if (worldPoint) {
+    return worldPoint;
+  }
+  return pixelToWorldPoint(event?.map_px_x ?? event?.mapPxX, event?.map_px_y ?? event?.mapPxY);
+}
+
+function fishEvidenceBucketKey(event, bucketPx = 96) {
+  const pxX = Number(event?.map_px_x ?? event?.mapPxX);
+  const pxY = Number(event?.map_px_y ?? event?.mapPxY);
+  if (!Number.isFinite(pxX) || !Number.isFinite(pxY)) {
+    return "";
+  }
+  const bucketX = Math.floor(pxX / bucketPx);
+  const bucketY = Math.floor(pxY / bucketPx);
+  return `${bucketX}:${bucketY}`;
+}
+
+export function buildFishEvidenceFocusCommand(
+  fishIdInput,
+  snapshot,
+  stateBundle,
+  viewportInput,
+  options = {},
+) {
+  if (options.autoAdjustView === false) {
+    return null;
+  }
+  const fishId = Number.parseInt(fishIdInput, 10);
+  if (!Number.isFinite(fishId)) {
+    return null;
+  }
+  const events = Array.isArray(snapshot?.events) ? snapshot.events : [];
+  if (!events.length) {
+    return null;
+  }
+  const timeBounds = resolvePatchRangeEventTimeBounds(stateBundle);
+  const buckets = new Map();
+  for (const event of events) {
+    if (Number.parseInt(event?.fish_id ?? event?.fishId, 10) !== fishId) {
+      continue;
+    }
+    const tsUtc = Number(event?.ts_utc ?? event?.tsUtc);
+    if (Number.isFinite(timeBounds.minTsUtc) && tsUtc < timeBounds.minTsUtc) {
+      continue;
+    }
+    if (Number.isFinite(timeBounds.maxTsUtc) && tsUtc > timeBounds.maxTsUtc) {
+      continue;
+    }
+    const point = fishEvidencePointFromEvent(event);
+    if (!point) {
+      continue;
+    }
+    const bucketKey = fishEvidenceBucketKey(event);
+    if (!bucketKey) {
+      continue;
+    }
+    let bucket = buckets.get(bucketKey);
+    if (!bucket) {
+      bucket = { count: 0, points: [] };
+      buckets.set(bucketKey, bucket);
+    }
+    bucket.count += 1;
+    bucket.points.push(point);
+  }
+  let bestBucket = null;
+  for (const bucket of buckets.values()) {
+    if (!bestBucket || bucket.count > bestBucket.count) {
+      bestBucket = bucket;
+    }
+  }
+  if (!bestBucket || !bestBucket.points.length) {
+    return null;
+  }
+  const rect = buildFocusWorldRect(bestBucket.points, viewportInput);
+  const restoreView = buildRestoreViewForWorldRect(rect, viewportInput, stateBundle);
+  return restoreView ? { restoreView } : null;
 }
 
 function buildFocusCommandForWorldPoint(
@@ -2345,6 +2496,33 @@ function zoneIdentityMarkup(zoneInput, options = {}) {
   `;
 }
 
+function fishIdentityMarkup(fishInput, options = {}) {
+  const fishId = Number.parseInt(fishInput?.fishId ?? fishInput, 10);
+  if (!Number.isFinite(fishId)) {
+    return "";
+  }
+  const fish = isPlainObject(fishInput) ? fishInput : { fishId };
+  const name = String(fish?.name || "").trim() || `Fish ${fishId}`;
+  const body = `
+    ${renderFishAvatar(fish, "size-5", { gradeFrame: true })}
+    <span class="truncate max-w-40">${escapeHtml(name)}</span>
+  `;
+  if (options?.interactive !== true) {
+    return `<span class="inline-flex min-w-0 items-center gap-2">${body}</span>`;
+  }
+  return `
+    <button
+      class="inline-flex min-w-0 items-center gap-2 rounded-full border border-base-300/80 bg-base-100 px-2 py-1 text-sm text-left text-base-content shadow-sm transition-colors hover:bg-base-200/70"
+      type="button"
+      data-fish-focus-id="${fishId}"
+      aria-label="Focus ${escapeHtml(name)}"
+      title="Focus ${escapeHtml(name)}"
+    >
+      ${body}
+    </button>
+  `;
+}
+
 function semanticKindFromIdentityKind(kind) {
   if (kind === "RG") {
     return "region-group";
@@ -3440,18 +3618,18 @@ export function buildZoneEvidenceListMarkup(distribution, fishLookup = new Map()
           : "n/a";
       const detailLabel = `p ${formatDecimal(entry.pMean)} · weight ${formatDecimal(entry.evidenceWeight)} · CI ${ci}`;
       return `
-        <button
+        <div
           class="list-row w-full rounded-box border border-transparent bg-base-100 px-2.5 py-2 text-left hover:border-base-300"
           data-zone-evidence-fish-id="${evidenceFish.fishId}"
           title="${escapeHtml(detailLabel)}"
           aria-description="${escapeHtml(detailLabel)}"
-          type="button"
+          role="button"
+          tabindex="0"
         >
-          <div>${renderFishItemIcon(evidenceFish, "size-6")}</div>
           <div class="min-w-0">
-            <div class="truncate font-semibold">${escapeHtml(evidenceFish.name)}</div>
+            ${fishIdentityMarkup(evidenceFish, { interactive: true })}
           </div>
-        </button>
+        </div>
       `;
     })
     .join("");
@@ -4593,12 +4771,12 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
     .map((fishId) => {
       const fish = fishLookup.get(fishId);
       const name = fish?.name || `Fish ${fishId}`;
+      const fishMarkup =
+        fishIdentityMarkup({ ...fish, fishId, name }, { interactive: true }) ||
+        `<span class="truncate max-w-36">${escapeHtml(name)}</span>`;
       return `
         <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
-          <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
-            ${renderFishAvatar(fish, "size-5", { gradeFrame: true })}
-            <span class="truncate max-w-36">${escapeHtml(name)}</span>
-          </span>
+          <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">${fishMarkup}</span>
           <button
             class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
             data-fish-id="${fishId}"
@@ -4776,14 +4954,18 @@ export function renderSearchResults(elements, matches, stateBundle) {
       }
       return `
         <li>
-          <button
-            class="gap-3 rounded-box px-3 py-2 text-sm"
+          <div
+            class="flex cursor-pointer items-start gap-3 rounded-box px-3 py-2 text-sm"
             data-fish-id="${match.fishId}"
-            type="button"
+            role="button"
+            tabindex="0"
+            aria-label="Add ${escapeHtml(match.name)}"
+            title="Add ${escapeHtml(match.name)}"
           >
-            ${renderFishAvatar(match, "size-6", { gradeFrame: true })}
-            <span class="truncate">${escapeHtml(match.name)}</span>
-          </button>
+            <span class="min-w-0 flex-1 text-left">
+              ${fishIdentityMarkup(match, { interactive: true })}
+            </span>
+          </div>
         </li>
       `;
     })
@@ -5293,6 +5475,22 @@ function bindUi(shell, elements, options = {}) {
     );
   }
 
+  async function buildFishFocusCommandFromId(fishId) {
+    const numericFishId = Number.parseInt(fishId, 10);
+    if (!Number.isFinite(numericFishId)) {
+      return null;
+    }
+    const latest = getLatestStateBundle();
+    const snapshot = await loadFishEvidenceSnapshot(globalThis.window?.location);
+    return buildFishEvidenceFocusCommand(
+      numericFishId,
+      snapshot,
+      latest,
+      currentViewportSize(),
+      { autoAdjustView: autoAdjustViewEnabled() },
+    );
+  }
+
   async function dispatchSemanticFocusFromCode(code) {
     if (!code) {
       return;
@@ -5320,6 +5518,21 @@ function bindUi(shell, elements, options = {}) {
     } catch (error) {
       console.error("Failed to resolve zone focus command", error);
       showSiteToast("error", "Unable to load zone focus data.");
+    }
+  }
+
+  async function dispatchFishFocusFromId(fishId) {
+    if (!Number.isFinite(Number.parseInt(fishId, 10))) {
+      return;
+    }
+    try {
+      const command = await buildFishFocusCommandFromId(fishId);
+      if (command) {
+        dispatchMapCommand(shell, command);
+      }
+    } catch (error) {
+      console.error("Failed to resolve fish focus command", error);
+      showSiteToast("error", "Unable to load fish evidence focus data.");
     }
   }
 
@@ -6011,13 +6224,14 @@ function bindUi(shell, elements, options = {}) {
 
   elements.searchResults.addEventListener("click", (event) => {
     if (
+      event.target.closest("button[data-fish-focus-id]") ||
       event.target.closest("button[data-semantic-focus-code]") ||
       event.target.closest("button[data-zone-focus-rgb]")
     ) {
       return;
     }
     const button = event.target.closest(
-      "button[data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+      "[data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
     );
     if (!button) {
       return;
@@ -6057,18 +6271,28 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     if (
+      event.target.closest("button[data-fish-focus-id]") ||
       event.target.closest("button[data-semantic-focus-code]") ||
       event.target.closest("button[data-zone-focus-rgb]")
     ) {
       return;
     }
     const row = event.target.closest(
-      "[data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+      "[data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
     );
     if (!row) {
       return;
     }
     const current = getLatestStateBundle();
+    const fishId = Number.parseInt(row.getAttribute("data-fish-id"), 10);
+    if (Number.isFinite(fishId)) {
+      event.preventDefault();
+      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+        kind: "fish",
+        fishId,
+      });
+      return;
+    }
     const zoneRgb = Number.parseInt(row.getAttribute("data-zone-rgb"), 10);
     if (Number.isFinite(zoneRgb)) {
       event.preventDefault();
@@ -6147,9 +6371,12 @@ function bindUi(shell, elements, options = {}) {
 
   elements.zoneInfoBody?.addEventListener("click", (event) => {
     {
-      const button = event.target.closest("button[data-zone-evidence-fish-id]");
-      if (button) {
-        const fishId = Number.parseInt(button.getAttribute("data-zone-evidence-fish-id"), 10);
+      if (event.target.closest("button[data-fish-focus-id]")) {
+        return;
+      }
+      const row = event.target.closest("[data-zone-evidence-fish-id]");
+      if (row) {
+        const fishId = Number.parseInt(row.getAttribute("data-zone-evidence-fish-id"), 10);
         if (!Number.isFinite(fishId)) {
           return;
         }
@@ -6195,9 +6422,34 @@ function bindUi(shell, elements, options = {}) {
     }
   });
 
+  elements.zoneInfoBody?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    if (event.target.closest("button[data-fish-focus-id]")) {
+      return;
+    }
+    const row = event.target.closest("[data-zone-evidence-fish-id]");
+    if (!row) {
+      return;
+    }
+    const fishId = Number.parseInt(row.getAttribute("data-zone-evidence-fish-id"), 10);
+    if (!Number.isFinite(fishId)) {
+      return;
+    }
+    event.preventDefault();
+    const current = getLatestStateBundle();
+    dispatchStatePatchAndRender({
+      version: 1,
+      filters: {
+        fishIds: moveFishIdToCurrent(resolveSelectedFishIds(current), fishId),
+      },
+    });
+  });
+
   shell.addEventListener("pointerdown", (event) => {
     const button = event.target.closest(
-      "button[data-semantic-focus-code], button[data-zone-focus-rgb]",
+      "button[data-fish-focus-id], button[data-semantic-focus-code], button[data-zone-focus-rgb]",
     );
     if (!button) {
       return;
@@ -6205,6 +6457,11 @@ function bindUi(shell, elements, options = {}) {
     button.dataset.semanticFocusPointerHandled = "true";
     event.preventDefault();
     event.stopPropagation();
+    const fishId = String(button.getAttribute("data-fish-focus-id") || "").trim();
+    if (fishId) {
+      void dispatchFishFocusFromId(fishId);
+      return;
+    }
     const semanticCode = String(button.getAttribute("data-semantic-focus-code") || "").trim();
     if (semanticCode) {
       void dispatchSemanticFocusFromCode(semanticCode);
@@ -6215,7 +6472,7 @@ function bindUi(shell, elements, options = {}) {
 
   shell.addEventListener("click", async (event) => {
     const button = event.target.closest(
-      "button[data-semantic-focus-code], button[data-zone-focus-rgb]",
+      "button[data-fish-focus-id], button[data-semantic-focus-code], button[data-zone-focus-rgb]",
     );
     if (!button) {
       return;
@@ -6226,6 +6483,11 @@ function bindUi(shell, elements, options = {}) {
     }
     event.preventDefault();
     event.stopPropagation();
+    const fishId = String(button.getAttribute("data-fish-focus-id") || "").trim();
+    if (fishId) {
+      await dispatchFishFocusFromId(fishId);
+      return;
+    }
     const semanticCode = String(button.getAttribute("data-semantic-focus-code") || "").trim();
     if (semanticCode) {
       await dispatchSemanticFocusFromCode(semanticCode);

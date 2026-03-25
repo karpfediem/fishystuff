@@ -6,6 +6,7 @@ const {
   buildBookmarkDeletionPrompt,
   buildBookmarkOverviewRows,
   buildDefaultWindowUiStateSerialized,
+  buildFishEvidenceFocusCommand,
   buildFocusWorldRect,
   buildHoverOverviewRows,
   buildRestoreViewForWorldRect,
@@ -1473,6 +1474,42 @@ test("renderSearchSelection makes selected zones focusable", () => {
   assert.match(searchSelection.innerHTML, /Cron Islands - Depth 2/);
 });
 
+test("renderSearchSelection makes selected fish focusable", () => {
+  const originalWindow = globalThis.window;
+  const originalLocation = globalThis.location;
+  globalThis.window = {
+    location: {
+      href: "https://fishystuff.fish/map/",
+      hostname: "fishystuff.fish",
+    },
+  };
+  globalThis.location = globalThis.window.location;
+  const searchSelection = {
+    dataset: {},
+    hidden: true,
+    innerHTML: "",
+  };
+  const elements = {
+    searchSelection,
+    searchSelectionShell: { hidden: true },
+    searchWindow: { dataset: {} },
+    zoneCatalog: TEST_ZONE_CATALOG,
+  };
+  const stateBundle = buildStateBundle([912]);
+  const fishLookup = new Map(
+    stateBundle.state.catalog.fish.map((fish) => [fish.fishId, fish]),
+  );
+  try {
+    renderSearchSelection(elements, stateBundle, fishLookup);
+
+    assert.match(searchSelection.innerHTML, /data-fish-focus-id="912"/);
+    assert.match(searchSelection.innerHTML, /Cron Dart/);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.location = originalLocation;
+  }
+});
+
 test("renderSearchSelection uses semantic focus chips for selected semantic terms", () => {
   const searchSelection = {
     dataset: {},
@@ -1576,6 +1613,52 @@ test("renderSearchResults makes zone matches focusable while keeping row selecti
   assert.match(elements.searchResults.innerHTML, /badge badge-outline badge-xs">Zone</);
 });
 
+test("renderSearchResults makes fish matches focusable while keeping row selection", () => {
+  const originalWindow = globalThis.window;
+  const originalLocation = globalThis.location;
+  globalThis.window = {
+    location: {
+      href: "https://fishystuff.fish/map/",
+      hostname: "fishystuff.fish",
+    },
+  };
+  globalThis.location = globalThis.window.location;
+  const elements = {
+    searchResults: {
+      dataset: {},
+      innerHTML: "",
+    },
+    searchResultsShell: { hidden: true },
+    searchCount: { hidden: true, textContent: "" },
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.inputState.filters.searchText = "cron";
+  try {
+    renderSearchResults(
+      elements,
+      [
+        {
+          kind: "fish",
+          fishId: 912,
+          itemId: 3012,
+          encyclopediaId: 4012,
+          name: "Cron Dart",
+          grade: "Rare",
+          isPrize: false,
+        },
+      ],
+      stateBundle,
+    );
+
+    assert.match(elements.searchResults.innerHTML, /data-fish-id="912"/);
+    assert.match(elements.searchResults.innerHTML, /data-fish-focus-id="912"/);
+    assert.match(elements.searchResults.innerHTML, /Cron Dart/);
+  } finally {
+    globalThis.window = originalWindow;
+    globalThis.location = originalLocation;
+  }
+});
+
 test("buildZoneEvidenceListMarkup hides stability percentages while keeping the detail tooltip", () => {
   const originalWindow = globalThis.window;
   const originalLocation = globalThis.location;
@@ -1617,6 +1700,7 @@ test("buildZoneEvidenceListMarkup hides stability percentages while keeping the 
     );
 
     assert.equal(markup.includes('data-zone-evidence-fish-id="912"'), true);
+    assert.equal(markup.includes('data-fish-focus-id="912"'), true);
     assert.equal(markup.includes('title="p 0.027 · weight 0.031 · CI 0.000-0.184"'), true);
     assert.equal(
       markup.includes('aria-description="p 0.027 · weight 0.031 · CI 0.000-0.184"'),
@@ -1629,6 +1713,48 @@ test("buildZoneEvidenceListMarkup hides stability percentages while keeping the 
     globalThis.window = originalWindow;
     globalThis.location = originalLocation;
   }
+});
+
+test("buildFishEvidenceFocusCommand returns a focus view for the densest bucket", () => {
+  const stateBundle = buildStateBundle();
+  const command = buildFishEvidenceFocusCommand(
+    912,
+    {
+      events: [
+        { fish_id: 912, ts_utc: 1000, map_px_x: 120, map_px_y: 120, world_x: 1000, world_z: 2000 },
+        { fish_id: 912, ts_utc: 1001, map_px_x: 140, map_px_y: 140, world_x: 1100, world_z: 2100 },
+        { fish_id: 912, ts_utc: 1002, map_px_x: 900, map_px_y: 900, world_x: 9000, world_z: 9000 },
+        { fish_id: 77, ts_utc: 1000, map_px_x: 130, map_px_y: 130, world_x: 1050, world_z: 2050 },
+      ],
+    },
+    stateBundle,
+    { width: 1280, height: 720 },
+    { autoAdjustView: true },
+  );
+
+  assert.ok(command?.restoreView);
+  assert.equal(command.restoreView.viewMode, "2d");
+  assert.equal(Number.isFinite(command.restoreView.camera.centerWorldX), true);
+  assert.equal(Number.isFinite(command.restoreView.camera.centerWorldZ), true);
+  assert.equal(command.restoreView.camera.centerWorldX < 3000, true);
+  assert.equal(command.restoreView.camera.centerWorldZ < 4000, true);
+});
+
+test("buildFishEvidenceFocusCommand respects disabled auto-adjust", () => {
+  const stateBundle = buildStateBundle();
+  const command = buildFishEvidenceFocusCommand(
+    912,
+    {
+      events: [
+        { fish_id: 912, ts_utc: 1000, map_px_x: 120, map_px_y: 120, world_x: 1000, world_z: 2000 },
+      ],
+    },
+    stateBundle,
+    { width: 1280, height: 720 },
+    { autoAdjustView: false },
+  );
+
+  assert.equal(command, null);
 });
 
 test("parseWindowUiState falls back to defaults for invalid persisted state", () => {
