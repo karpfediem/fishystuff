@@ -3080,7 +3080,7 @@ export function findSemanticMatches(semanticTerms, searchText) {
   if (!query) {
     return [];
   }
-  const filtered = [];
+  const filteredByKey = new Map();
   for (const term of semanticTerms || []) {
     if (!term || String(term.layerId || "").trim() === "zone_mask") {
       continue;
@@ -3089,12 +3089,23 @@ export function findSemanticMatches(semanticTerms, searchText) {
     if (!Number.isFinite(score)) {
       continue;
     }
-    filtered.push({
+    const candidate = {
       kind: "semantic",
       ...term,
       _score: score,
-    });
+    };
+    const key = semanticTermLookupKey(term.layerId, term.fieldId);
+    const existing = filteredByKey.get(key);
+    if (
+      !existing ||
+      candidate._score > existing._score ||
+      (candidate._score === existing._score &&
+        String(candidate.label || "").length < String(existing.label || "").length)
+    ) {
+      filteredByKey.set(key, candidate);
+    }
   }
+  const filtered = Array.from(filteredByKey.values());
   filtered.sort((left, right) => {
     if (right._score !== left._score) {
       return right._score - left._score;

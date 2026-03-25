@@ -316,6 +316,56 @@ test("buildSearchMatches returns semantic hits and skips selected semantic field
   assert.equal(filteredMatches.some((match) => match.kind === "semantic" && match.fieldId === 76), false);
 });
 
+test("buildSearchMatches deduplicates semantic results for the same field", () => {
+  const stateBundle = buildStateBundle();
+  stateBundle.state.catalog.semanticTerms = [
+    {
+      layerId: "regions",
+      layerName: "Regions",
+      fieldId: 5,
+      label: "Velia (R5)",
+      description: "Town",
+      searchText: "Regions Velia R5 Town",
+    },
+    {
+      layerId: "regions",
+      layerName: "Regions",
+      fieldId: 5,
+      label: "Velia (R5)",
+      description: "Coastal Town",
+      searchText: "Velia Balenos starter town region 5",
+    },
+    {
+      layerId: "regions",
+      layerName: "Regions",
+      fieldId: 5,
+      label: "Velia (R5)",
+      description: "Node",
+      searchText: "Velia node region",
+    },
+    {
+      layerId: "region_groups",
+      layerName: "Region Groups",
+      fieldId: 1,
+      label: "Velia (RG1)",
+      description: "Resources",
+      searchText: "Velia resource group 1",
+    },
+  ];
+
+  const matches = buildSearchMatches(stateBundle, "velia", TEST_ZONE_CATALOG);
+  const semanticMatches = matches.filter((match) => match.kind === "semantic");
+  const regionVeliaMatches = semanticMatches.filter(
+    (match) => match.layerId === "regions" && match.fieldId === 5,
+  );
+
+  assert.equal(regionVeliaMatches.length, 1);
+  assert.equal(
+    semanticMatches.some((match) => match.layerId === "region_groups" && match.fieldId === 1),
+    true,
+  );
+});
+
 test("buildHoverOverviewRows renders supported hover layers from bottom to top", () => {
   assert.deepEqual(
     buildHoverOverviewRows(
