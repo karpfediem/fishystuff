@@ -40,6 +40,7 @@ const {
   resolveDisplayBookmarks,
   resolveZoneInfoActiveTab,
   renderSearchSelection,
+  renderSearchResults,
   selectionHasZoneEvidence,
   serializeBookmarksForExport,
   serializeWindowUiState,
@@ -1296,6 +1297,80 @@ test("renderSearchSelection restores visible chips after the search window is re
   renderSearchSelection(elements, stateBundle, fishLookup);
   assert.equal(searchSelection.hidden, false);
   assert.equal(searchSelectionShell.hidden, false);
+});
+
+test("renderSearchSelection uses semantic focus chips for selected semantic terms", () => {
+  const searchSelection = {
+    dataset: {},
+    hidden: true,
+    innerHTML: "",
+  };
+  const elements = {
+    searchSelection,
+    searchSelectionShell: { hidden: true },
+    searchWindow: { dataset: {} },
+    zoneCatalog: TEST_ZONE_CATALOG,
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.state.catalog.semanticTerms = [
+    {
+      layerId: "regions",
+      layerName: "Regions",
+      fieldId: 5,
+      label: "Velia (R5)",
+      description: "Town",
+      searchText: "Regions Velia R5 Town",
+    },
+  ];
+  stateBundle.inputState.filters.semanticFieldIdsByLayer = {
+    regions: [5],
+  };
+
+  renderSearchSelection(elements, stateBundle, new Map());
+
+  assert.match(searchSelection.innerHTML, /data-semantic-focus-code="R5"/);
+  assert.match(searchSelection.innerHTML, /fishymap-semantic-chip-code">R5</);
+  assert.match(searchSelection.innerHTML, /fishymap-semantic-chip-name">Velia</);
+  assert.equal(searchSelection.innerHTML.includes("badge badge-outline"), false);
+});
+
+test("renderSearchResults uses semantic focus chips and add buttons for semantic matches", () => {
+  const elements = {
+    searchResults: {
+      dataset: {},
+      innerHTML: "",
+    },
+    searchResultsShell: {
+      hidden: true,
+    },
+    searchCount: {
+      hidden: true,
+      textContent: "",
+    },
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.inputState.filters.searchText = "velia";
+
+  renderSearchResults(
+    elements,
+    [
+      {
+        kind: "semantic",
+        layerId: "regions",
+        layerName: "Regions",
+        fieldId: 5,
+        label: "Velia (R5)",
+        description: "Town",
+      },
+    ],
+    stateBundle,
+  );
+
+  assert.match(elements.searchResults.innerHTML, /data-semantic-focus-code="R5"/);
+  assert.match(elements.searchResults.innerHTML, /data-semantic-layer-id="regions"/);
+  assert.match(elements.searchResults.innerHTML, /data-semantic-label="Velia \(R5\)"/);
+  assert.match(elements.searchResults.innerHTML, />\s*Add\s*</);
+  assert.equal(elements.searchResults.innerHTML.includes("badge badge-outline"), false);
 });
 
 test("buildZoneEvidenceListMarkup hides stability percentages while keeping the detail tooltip", () => {
