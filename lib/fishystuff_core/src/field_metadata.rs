@@ -6,6 +6,8 @@ use crate::field::DiscreteFieldRows;
 use crate::gamecommondata::OriginalRegionLayerContext;
 
 pub const FIELD_DETAIL_FACT_KEY_ZONE: &str = "zone";
+pub const FIELD_DETAIL_FACT_KEY_REGION: &str = "region";
+pub const FIELD_DETAIL_FACT_KEY_REGION_NODE: &str = "region_node";
 pub const FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP: &str = "resource_group";
 pub const FIELD_DETAIL_FACT_KEY_RESOURCE_WAYPOINT: &str = "resource_waypoint";
 pub const FIELD_DETAIL_FACT_KEY_RESOURCE_REGION: &str = "resource_region";

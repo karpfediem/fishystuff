@@ -66,12 +66,15 @@ const EDGE_FEATHER_PX: f32 = 1.2;
 
 const RESOURCE_BAR_MARKER_SIZE_SCREEN_PX: f32 = 28.0;
 const ORIGIN_NODE_MARKER_SIZE_SCREEN_PX: f32 = 20.0;
+const REGION_NODE_MARKER_SIZE_SCREEN_PX: f32 = 20.0;
 const RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX: f32 = 20.0;
 const ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX: f32 = 36.0;
+const REGION_NODE_LABEL_OFFSET_SCREEN_PX: f32 = 28.0;
 const VIEW_EDGE_PADDING_SCREEN_PX: f32 = 12.0;
 
 const RESOURCE_BAR_MARKER_COLOR: [u8; 3] = [77, 211, 255];
 const ORIGIN_NODE_MARKER_COLOR: [u8; 3] = [255, 196, 66];
+const REGION_NODE_MARKER_COLOR: [u8; 3] = [244, 240, 232];
 const TERRITORY_DETAIL_PANE_ID: &str = "territory";
 
 pub struct HoverTargetsPlugin;
@@ -215,7 +218,7 @@ struct HoverTargetSyncQueries<'w, 's> {
     label_icons: Query<
         'w,
         's,
-        (&'static mut ImageNode, &'static mut Visibility),
+        &'static mut ImageNode,
         (
             With<HoverTargetLabelIcon>,
             Without<HoverTargetMarker>,
@@ -265,20 +268,9 @@ struct HoverTargetSyncQueries<'w, 's> {
                     &'static mut Text,
                     &'static mut TextFont,
                     &'static mut TextColor,
-                    &'static mut Visibility,
                 ),
                 (
                     With<HoverTargetLabelText>,
-                    Without<HoverTargetMarker>,
-                    Without<HoverTargetLabelRoot>,
-                ),
-            >,
-            Query<
-                'w,
-                's,
-                &'static mut Visibility,
-                (
-                    With<HoverTargetSemanticInline>,
                     Without<HoverTargetMarker>,
                     Without<HoverTargetLabelRoot>,
                 ),
@@ -290,7 +282,6 @@ struct HoverTargetSyncQueries<'w, 's> {
                     &'static mut Text,
                     &'static mut TextFont,
                     &'static mut TextColor,
-                    &'static mut Visibility,
                 ),
                 (
                     With<HoverTargetSemanticPrefixText>,
@@ -301,11 +292,7 @@ struct HoverTargetSyncQueries<'w, 's> {
             Query<
                 'w,
                 's,
-                (
-                    &'static mut BackgroundColor,
-                    &'static mut BorderColor,
-                    &'static mut Visibility,
-                ),
+                (&'static mut BackgroundColor, &'static mut BorderColor),
                 (
                     With<HoverTargetSemanticChip>,
                     Without<HoverTargetMarker>,
@@ -315,7 +302,7 @@ struct HoverTargetSyncQueries<'w, 's> {
             Query<
                 'w,
                 's,
-                (&'static mut BackgroundColor, &'static mut Visibility),
+                &'static mut BackgroundColor,
                 (
                     With<HoverTargetSemanticChipCodeBox>,
                     Without<HoverTargetMarker>,
@@ -329,7 +316,6 @@ struct HoverTargetSyncQueries<'w, 's> {
                     &'static mut Text,
                     &'static mut TextFont,
                     &'static mut TextColor,
-                    &'static mut Visibility,
                 ),
                 (
                     With<HoverTargetSemanticChipCodeText>,
@@ -340,7 +326,7 @@ struct HoverTargetSyncQueries<'w, 's> {
             Query<
                 'w,
                 's,
-                (&'static mut BackgroundColor, &'static mut Visibility),
+                &'static mut BackgroundColor,
                 (
                     With<HoverTargetSemanticChipNameBox>,
                     Without<HoverTargetMarker>,
@@ -354,7 +340,6 @@ struct HoverTargetSyncQueries<'w, 's> {
                     &'static mut Text,
                     &'static mut TextFont,
                     &'static mut TextColor,
-                    &'static mut Visibility,
                 ),
                 (
                     With<HoverTargetSemanticChipNameText>,
@@ -363,6 +348,12 @@ struct HoverTargetSyncQueries<'w, 's> {
                 ),
             >,
         ),
+    >,
+    child_visibility: Query<
+        'w,
+        's,
+        &'static mut Visibility,
+        (Without<HoverTargetMarker>, Without<HoverTargetLabelRoot>),
     >,
 }
 
@@ -719,10 +710,11 @@ fn sync_hover_targets(
             )
         };
         if let Some(icon_handle) = icon_assets.1.handle(target.icon_kind) {
-            if let Ok((mut image_node, mut visibility)) = sync.label_icons.get_mut(pair.label_icon)
-            {
+            if let Ok(mut image_node) = sync.label_icons.get_mut(pair.label_icon) {
                 image_node.image = icon_handle;
                 image_node.color = label_color;
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.label_icon) {
                 *visibility = Visibility::Visible;
             }
         }
@@ -740,7 +732,7 @@ fn sync_hover_targets(
             *visibility = Visibility::Visible;
         }
         let semantic_identity = parse_semantic_identity_label(&target.label);
-        if let Ok((mut text, mut text_font, mut text_color, _)) =
+        if let Ok((mut text, mut text_font, mut text_color)) =
             sync.label_parts.p0().get_mut(pair.plain_text)
         {
             text.0 = target.label.clone();
@@ -749,114 +741,118 @@ fn sync_hover_targets(
             text_color.0 = label_color;
         }
         if let Some(identity) = semantic_identity.as_ref() {
-            if let Ok((_, _, _, mut visibility)) = sync.label_parts.p0().get_mut(pair.plain_text) {
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.plain_text) {
                 *visibility = Visibility::Hidden;
             }
-            if let Ok(mut visibility) = sync.label_parts.p1().get_mut(pair.semantic_inline) {
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_inline) {
                 *visibility = Visibility::Visible;
             }
-            if let Ok((mut text, mut text_font, mut text_color, mut visibility)) =
-                sync.label_parts.p2().get_mut(pair.semantic_prefix)
+            if let Ok((mut text, mut text_font, mut text_color)) =
+                sync.label_parts.p1().get_mut(pair.semantic_prefix)
             {
                 text.0 = identity.prefix.clone();
                 text_font.font = ui_assets.1.regular.clone();
                 text_font.font_size = HOVER_LABEL_SIZE_PX;
                 text_color.0 = label_color;
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_prefix) {
                 *visibility = if identity.prefix.is_empty() {
                     Visibility::Hidden
                 } else {
                     Visibility::Visible
                 };
             }
-            if let Ok((mut background, mut border, mut visibility)) =
-                sync.label_parts.p3().get_mut(pair.semantic_chip)
+            if let Ok((mut background, mut border)) =
+                sync.label_parts.p2().get_mut(pair.semantic_chip)
             {
                 *background = BackgroundColor(Color::NONE);
                 *border = BorderColor::all(chip_border_color(identity.kind, theme_colors));
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip) {
                 *visibility = Visibility::Visible;
             }
-            if let Ok((mut background, mut visibility)) =
-                sync.label_parts.p4().get_mut(pair.semantic_chip_code_box)
-            {
+            if let Ok(mut background) = sync.label_parts.p3().get_mut(pair.semantic_chip_code_box) {
                 *background = BackgroundColor(chip_code_box_color(identity.kind, theme_colors));
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_code_box) {
                 *visibility = Visibility::Visible;
             }
-            if let Ok((mut text, mut text_font, mut text_color, mut visibility)) =
-                sync.label_parts.p5().get_mut(pair.semantic_chip_code_text)
+            if let Ok((mut text, mut text_font, mut text_color)) =
+                sync.label_parts.p4().get_mut(pair.semantic_chip_code_text)
             {
                 text.0 = identity.code.clone();
                 text_font.font = ui_assets.1.regular.clone();
                 text_font.font_size = 10.0;
                 text_color.0 = chip_code_text_color(identity.kind, theme_colors);
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_code_text)
+            {
                 *visibility = Visibility::Visible;
             }
-            if let Ok((mut background, mut visibility)) =
-                sync.label_parts.p6().get_mut(pair.semantic_chip_name_box)
-            {
+            if let Ok(mut background) = sync.label_parts.p5().get_mut(pair.semantic_chip_name_box) {
                 *background = BackgroundColor(chip_name_box_color(theme_colors));
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_name_box) {
                 *visibility = if identity.name.is_empty() {
                     Visibility::Hidden
                 } else {
                     Visibility::Visible
                 };
             }
-            if let Ok((mut text, mut text_font, mut text_color, mut visibility)) =
-                sync.label_parts.p7().get_mut(pair.semantic_chip_name_text)
+            if let Ok((mut text, mut text_font, mut text_color)) =
+                sync.label_parts.p6().get_mut(pair.semantic_chip_name_text)
             {
                 text.0 = identity.name.clone();
                 text_font.font = ui_assets.1.regular.clone();
                 text_font.font_size = HOVER_LABEL_SIZE_PX;
                 text_color.0 = chip_name_text_color(theme_colors);
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_name_text)
+            {
                 *visibility = if identity.name.is_empty() {
                     Visibility::Hidden
                 } else {
                     Visibility::Visible
                 };
             }
-            if let Ok((mut text, _, mut text_color, _)) =
+            if let Ok((mut text, _, mut text_color)) =
                 sync.label_parts.p0().get_mut(pair.plain_text)
             {
                 text.0.clear();
                 text_color.0 = label_color;
             }
         } else {
-            if let Ok(mut visibility) = sync.label_parts.p1().get_mut(pair.semantic_inline) {
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_inline) {
                 *visibility = Visibility::Hidden;
             }
-            if let Ok((mut text, mut text_font, mut text_color, mut visibility)) =
+            if let Ok((mut text, mut text_font, mut text_color)) =
                 sync.label_parts.p0().get_mut(pair.plain_text)
             {
                 text.0 = target.label.clone();
                 text_font.font = ui_assets.1.regular.clone();
                 text_font.font_size = HOVER_LABEL_SIZE_PX;
                 text_color.0 = label_color;
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.plain_text) {
                 *visibility = Visibility::Visible;
             }
-            if let Ok((_, _, _, mut visibility)) =
-                sync.label_parts.p2().get_mut(pair.semantic_prefix)
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_prefix) {
+                *visibility = Visibility::Hidden;
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip) {
+                *visibility = Visibility::Hidden;
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_code_box) {
+                *visibility = Visibility::Hidden;
+            }
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_code_text)
             {
                 *visibility = Visibility::Hidden;
             }
-            if let Ok((_, _, mut visibility)) = sync.label_parts.p3().get_mut(pair.semantic_chip) {
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_name_box) {
                 *visibility = Visibility::Hidden;
             }
-            if let Ok((_, mut visibility)) =
-                sync.label_parts.p4().get_mut(pair.semantic_chip_code_box)
-            {
-                *visibility = Visibility::Hidden;
-            }
-            if let Ok((_, _, _, mut visibility)) =
-                sync.label_parts.p5().get_mut(pair.semantic_chip_code_text)
-            {
-                *visibility = Visibility::Hidden;
-            }
-            if let Ok((_, mut visibility)) =
-                sync.label_parts.p6().get_mut(pair.semantic_chip_name_box)
-            {
-                *visibility = Visibility::Hidden;
-            }
-            if let Ok((_, _, _, mut visibility)) =
-                sync.label_parts.p7().get_mut(pair.semantic_chip_name_text)
+            if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_name_text)
             {
                 *visibility = Visibility::Hidden;
             }
@@ -885,35 +881,31 @@ fn hide_hover_target_label(pair: HoverTargetVisualPair, sync: &mut HoverTargetSy
         node.display = Display::None;
         *visibility = Visibility::Hidden;
     }
-    if let Ok((_, mut visibility)) = sync.label_icons.get_mut(pair.label_icon) {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.label_icon) {
         *visibility = Visibility::Hidden;
     }
-    if let Ok((_, _, _, mut visibility)) = sync.label_parts.p0().get_mut(pair.plain_text) {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.plain_text) {
         *visibility = Visibility::Hidden;
     }
-    if let Ok(mut visibility) = sync.label_parts.p1().get_mut(pair.semantic_inline) {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_inline) {
         *visibility = Visibility::Hidden;
     }
-    if let Ok((_, _, _, mut visibility)) = sync.label_parts.p2().get_mut(pair.semantic_prefix) {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_prefix) {
         *visibility = Visibility::Hidden;
     }
-    if let Ok((_, _, mut visibility)) = sync.label_parts.p3().get_mut(pair.semantic_chip) {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip) {
         *visibility = Visibility::Hidden;
     }
-    if let Ok((_, mut visibility)) = sync.label_parts.p4().get_mut(pair.semantic_chip_code_box) {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_code_box) {
         *visibility = Visibility::Hidden;
     }
-    if let Ok((_, _, _, mut visibility)) =
-        sync.label_parts.p5().get_mut(pair.semantic_chip_code_text)
-    {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_code_text) {
         *visibility = Visibility::Hidden;
     }
-    if let Ok((_, mut visibility)) = sync.label_parts.p6().get_mut(pair.semantic_chip_name_box) {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_name_box) {
         *visibility = Visibility::Hidden;
     }
-    if let Ok((_, _, _, mut visibility)) =
-        sync.label_parts.p7().get_mut(pair.semantic_chip_name_text)
-    {
+    if let Ok(mut visibility) = sync.child_visibility.get_mut(pair.semantic_chip_name_text) {
         *visibility = Visibility::Hidden;
     }
 }
@@ -1034,6 +1026,12 @@ fn hover_target_visual(
                 RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
                 RESOURCE_BAR_MARKER_COLOR,
                 UiSvgIconKind::HoverResources,
+            ),
+            "region_node" => (
+                REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                REGION_NODE_MARKER_COLOR,
+                UiSvgIconKind::MapPin,
             ),
             "origin_node" => (
                 ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
@@ -1328,8 +1326,9 @@ mod tests {
         parse_semantic_identity_label, selection_targets_from_info, HoverTargetVisual,
         Map2dViewportBounds, SemanticIdentityKind, ORIGIN_NODE_LABEL_OFFSET_SCREEN_PX,
         ORIGIN_NODE_MARKER_COLOR, ORIGIN_NODE_MARKER_SIZE_SCREEN_PX,
-        RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX, RESOURCE_BAR_MARKER_COLOR,
-        RESOURCE_BAR_MARKER_SIZE_SCREEN_PX, TERRITORY_DETAIL_PANE_ID,
+        REGION_NODE_LABEL_OFFSET_SCREEN_PX, REGION_NODE_MARKER_COLOR,
+        REGION_NODE_MARKER_SIZE_SCREEN_PX, RESOURCE_BAR_LABEL_OFFSET_SCREEN_PX,
+        RESOURCE_BAR_MARKER_COLOR, RESOURCE_BAR_MARKER_SIZE_SCREEN_PX, TERRITORY_DETAIL_PANE_ID,
     };
     use crate::map::camera::mode::ViewMode;
     use crate::map::layer_query::LayerQuerySample;
@@ -1750,7 +1749,7 @@ mod tests {
     }
 
     #[test]
-    fn hover_targets_ignore_non_marker_targets() {
+    fn hover_targets_include_region_node_targets() {
         let sample = crate::map::layer_query::LayerQuerySample {
             layer_id: "region_groups".to_string(),
             layer_name: "Region Groups".to_string(),
@@ -1762,12 +1761,24 @@ mod tests {
             detail_sections: Vec::new(),
             targets: vec![FieldHoverTarget {
                 key: "region_node".to_string(),
-                label: "Region node: Kasula Farm (R213)".to_string(),
+                label: "Node: Kasula Farm (R213)".to_string(),
                 world_x: 1.0,
                 world_z: 2.0,
             }],
         };
 
-        assert!(super::hover_targets_from_sample(&sample).is_empty());
+        assert_eq!(
+            super::hover_targets_from_sample(&sample),
+            vec![HoverTargetVisual {
+                world_x: 1.0,
+                world_z: 2.0,
+                label: "Node: Kasula Farm (R213)".to_string(),
+                offscreen: false,
+                marker_size_screen_px: REGION_NODE_MARKER_SIZE_SCREEN_PX,
+                label_offset_screen_px: REGION_NODE_LABEL_OFFSET_SCREEN_PX,
+                color_rgb: REGION_NODE_MARKER_COLOR,
+                icon_kind: UiSvgIconKind::MapPin,
+            }]
+        );
     }
 }

@@ -9,6 +9,7 @@ use crate::field::DiscreteFieldRows;
 use crate::field_metadata::{
     FieldDetailFact, FieldDetailPaneRef, FieldDetailSection, FieldHoverMetadataEntry,
     FieldHoverTarget, FIELD_DETAIL_FACT_KEY_ORIGIN_NODE, FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+    FIELD_DETAIL_FACT_KEY_REGION, FIELD_DETAIL_FACT_KEY_REGION_NODE,
     FIELD_DETAIL_FACT_KEY_RESOURCE_GROUP, FIELD_DETAIL_FACT_KEY_RESOURCE_REGION,
     FIELD_DETAIL_FACT_KEY_RESOURCE_WAYPOINT, FIELD_DETAIL_PANE_ID_TERRITORY,
     FIELD_DETAIL_PANE_ID_ZONE_MASK, FIELD_DETAIL_SECTION_KIND_FACTS,
@@ -64,6 +65,8 @@ pub struct OriginalWaypointRow {
     pub pos_x: f64,
     pub pos_y: f64,
     pub pos_z: f64,
+    is_sub_waypoint: bool,
+    source_index: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -118,22 +121,26 @@ impl OriginalRegionLayerContext {
             .and_then(|row| non_zero_u32(row.regiongroup))
     }
 
-    pub fn resolve_region_origin_info(&self, region_id: u32) -> Option<RegionOriginInfo> {
+    pub fn resolve_region_waypoint_info(&self, region_id: u32) -> Option<RegionOriginInfo> {
         let row = self.regioninfo.get(&region_id)?;
-        let origin_region_id = non_zero_u32(row.tradeoriginregion);
-        let waypoint_id = origin_region_id
-            .and_then(|origin_region_id| self.regioninfo.get(&origin_region_id))
-            .and_then(|origin_row| origin_row.waypoint);
+        let waypoint_id = row.waypoint;
         let waypoint = waypoint_id.and_then(|id| self.waypoints.get(&id));
         let info = RegionOriginInfo {
-            region_id: origin_region_id,
+            region_id: Some(region_id),
             waypoint_id,
             world_x: waypoint.map(|waypoint| waypoint.pos_x),
             world_z: waypoint.map(|waypoint| waypoint.pos_z),
-            region_name: resolve_region_name(&self.localization, origin_region_id),
+            region_name: resolve_region_name(&self.localization, Some(region_id)),
             waypoint_name: waypoint_id.and_then(|id| self.resolve_waypoint_name(id)),
         };
         info.has_value().then_some(info)
+    }
+
+    pub fn resolve_region_origin_info(&self, region_id: u32) -> Option<RegionOriginInfo> {
+        let row = self.regioninfo.get(&region_id)?;
+        let origin_region_id = non_zero_u32(row.tradeoriginregion);
+        origin_region_id
+            .and_then(|origin_region_id| self.resolve_region_waypoint_info(origin_region_id))
     }
 
     pub fn resolve_resource_waypoint(
@@ -151,17 +158,21 @@ impl OriginalRegionLayerContext {
     }
 
     pub fn resolve_region_hover_metadata(&self, region_id: u32) -> Option<FieldHoverMetadataEntry> {
+        let region = self.resolve_region_waypoint_info(region_id);
         let origin = self.resolve_region_origin_info(region_id);
         let entry = FieldHoverMetadataEntry {
-            targets: vec![build_origin_hover_target(origin.as_ref())]
-                .into_iter()
-                .flatten()
-                .collect(),
-            detail_pane: Some(territory_detail_pane_ref("hover-origin")),
-            detail_sections: vec![build_region_origin_detail_section(
-                region_id,
-                origin.as_ref(),
-            )]
+            targets: vec![
+                build_region_node_hover_target(region.as_ref()),
+                build_origin_hover_target(origin.as_ref()),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+            detail_pane: Some(territory_detail_pane_ref("hover-zone")),
+            detail_sections: vec![
+                build_region_detail_section(region_id, region.as_ref()),
+                build_region_origin_detail_section(origin.as_ref()),
+            ]
             .into_iter()
             .flatten()
             .collect(),
@@ -179,7 +190,7 @@ impl OriginalRegionLayerContext {
             .as_ref()
             .and_then(|info| self.resolve_resource_region_id(info, regions_field));
         let resource_region_info =
-            resource_region_id.and_then(|region_id| self.resolve_region_origin_info(region_id));
+            resource_region_id.and_then(|region_id| self.resolve_region_waypoint_info(region_id));
         let entry = FieldHoverMetadataEntry {
             targets: vec![build_resource_hover_target(
                 region_group_id,
@@ -205,7 +216,13 @@ impl OriginalRegionLayerContext {
     }
 
     pub fn resolve_waypoint_name(&self, waypoint_id: u32) -> Option<String> {
-        localized_name(&self.localization.node, waypoint_id)
+        localized_name(&self.localization.node, waypoint_id).or_else(|| {
+            self.waypoints
+                .get(&waypoint_id)
+                .map(|row| row.raw_name.trim())
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned)
+        })
     }
 
     pub fn resolve_waypoint_position(&self, waypoint_id: u32) -> Option<(f64, f64)> {
@@ -472,7 +489,7 @@ fn decode_regiongroupinfo_bss_rows(bytes: &[u8]) -> Result<Vec<OriginalRegionGro
 
 fn load_waypoint_rows(paths: &[PathBuf]) -> Result<HashMap<u32, OriginalWaypointRow>> {
     let mut rows = HashMap::new();
-    for path in paths {
+    for (source_index, path) in paths.iter().enumerate() {
         let bytes = fs::read(path)
             .with_context(|| format!("failed to read waypoint XML {}", path.display()))?;
         let contents = String::from_utf8_lossy(&bytes);
@@ -484,7 +501,7 @@ fn load_waypoint_rows(paths: &[PathBuf]) -> Result<HashMap<u32, OriginalWaypoint
 
             let key = parse_attr_u32(line, "Key")
                 .with_context(|| format!("failed to parse waypoint key in {}", path.display()))?;
-            rows.entry(key).or_insert(OriginalWaypointRow {
+            let candidate = OriginalWaypointRow {
                 key,
                 raw_name: parse_attr_string(line, "Name").with_context(|| {
                     format!("failed to parse waypoint name in {}", path.display())
@@ -498,10 +515,35 @@ fn load_waypoint_rows(paths: &[PathBuf]) -> Result<HashMap<u32, OriginalWaypoint
                 pos_z: parse_attr_f64(line, "PosZ").with_context(|| {
                     format!("failed to parse waypoint PosZ in {}", path.display())
                 })?,
-            });
+                is_sub_waypoint: parse_attr_bool(line, "IsSubWaypoint").with_context(|| {
+                    format!(
+                        "failed to parse waypoint IsSubWaypoint in {}",
+                        path.display()
+                    )
+                })?,
+                source_index,
+            };
+            rows.entry(key)
+                .and_modify(|existing| {
+                    if should_replace_waypoint_row(existing, &candidate) {
+                        *existing = candidate.clone();
+                    }
+                })
+                .or_insert(candidate);
         }
     }
     Ok(rows)
+}
+
+fn should_replace_waypoint_row(
+    existing: &OriginalWaypointRow,
+    candidate: &OriginalWaypointRow,
+) -> bool {
+    match (existing.is_sub_waypoint, candidate.is_sub_waypoint) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => candidate.source_index >= existing.source_index,
+    }
 }
 
 fn load_localization(path: &Path) -> Result<LocalizationTable> {
@@ -524,21 +566,94 @@ fn load_localization(path: &Path) -> Result<LocalizationTable> {
     })
 }
 
-fn build_region_origin_detail_section(
+fn build_region_detail_section(
     region_id: u32,
-    origin: Option<&RegionOriginInfo>,
+    region: Option<&RegionOriginInfo>,
 ) -> Option<FieldDetailSection> {
     let mut facts = Vec::new();
-    let region_value = origin
+    let region_value = region
         .and_then(|info| info.region_name.as_deref())
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(|name| format_region_name_with_id(name, region_id))
         .unwrap_or_else(|| format!("R{region_id}"));
     facts.push(FieldDetailFact {
-        key: FIELD_DETAIL_FACT_KEY_ORIGIN_REGION.to_string(),
+        key: FIELD_DETAIL_FACT_KEY_REGION.to_string(),
         label: "Region".to_string(),
         value: region_value,
+        icon: Some("hover-zone".to_string()),
+        status_icon: region.and_then(|info| {
+            let has_assignment = info.has_value();
+            let has_name = info
+                .region_name
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty());
+            match (has_assignment, has_name) {
+                (true, true) => None,
+                (true, false) => Some("question-mark".to_string()),
+                (false, _) => Some("question-mark".to_string()),
+            }
+        }),
+        status_icon_tone: region.and_then(|info| {
+            let has_assignment = info.has_value();
+            let has_name = info
+                .region_name
+                .as_deref()
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty());
+            match (has_assignment, has_name) {
+                (true, false) => Some("subtle".to_string()),
+                _ => None,
+            }
+        }),
+    });
+
+    if let Some(node_name) = region
+        .and_then(|info| info.waypoint_name.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        facts.push(FieldDetailFact {
+            key: FIELD_DETAIL_FACT_KEY_REGION_NODE.to_string(),
+            label: "Node".to_string(),
+            value: node_name.to_string(),
+            icon: Some("map-pin".to_string()),
+            status_icon: None,
+            status_icon_tone: None,
+        });
+    }
+
+    let targets = vec![build_region_node_hover_target(region)]
+        .into_iter()
+        .flatten()
+        .collect();
+    (!facts.is_empty()).then_some(FieldDetailSection {
+        id: "region".to_string(),
+        kind: FIELD_DETAIL_SECTION_KIND_FACTS.to_string(),
+        title: Some("Region".to_string()),
+        facts,
+        targets,
+    })
+}
+
+fn build_region_origin_detail_section(
+    origin: Option<&RegionOriginInfo>,
+) -> Option<FieldDetailSection> {
+    let mut facts = Vec::new();
+    let origin_region_id = origin.and_then(|info| info.region_id);
+    let origin_value = origin
+        .and_then(|info| info.region_name.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .zip(origin_region_id)
+        .map(|(name, region_id)| format_region_name_with_id(name, region_id))
+        .or_else(|| origin_region_id.map(|region_id| format!("R{region_id}")))
+        .unwrap_or_else(|| "Origin".to_string());
+    facts.push(FieldDetailFact {
+        key: FIELD_DETAIL_FACT_KEY_ORIGIN_REGION.to_string(),
+        label: "Origin".to_string(),
+        value: origin_value,
         icon: Some("trade-origin".to_string()),
         status_icon: origin.and_then(|info| {
             let has_assignment = info.has_value();
@@ -677,9 +792,6 @@ fn build_region_group_resource_detail_section(
     ) {
         targets.push(target);
     }
-    if let Some(target) = build_region_node_hover_target(resource_region_info) {
-        targets.push(target);
-    }
 
     (!facts.is_empty()).then_some(FieldDetailSection {
         id: "resource-bar".to_string(),
@@ -762,9 +874,9 @@ fn build_region_node_hover_target(origin: Option<&RegionOriginInfo>) -> Option<F
                 .region_id
                 .map(|region_id| format!(" (R{region_id})"))
                 .unwrap_or_default();
-            format!("Region node: {name}{region_suffix}")
+            format!("Node: {name}{region_suffix}")
         })
-        .unwrap_or_else(|| "Region node".to_string());
+        .unwrap_or_else(|| "Node".to_string());
     Some(FieldHoverTarget {
         key: FIELD_HOVER_TARGET_KEY_REGION_NODE.to_string(),
         label,
@@ -874,6 +986,15 @@ fn parse_attr_string(line: &str, attr: &str) -> Result<String> {
     Ok(parse_attr(line, attr)?.to_string())
 }
 
+fn parse_attr_bool(line: &str, attr: &str) -> Result<bool> {
+    let raw = parse_attr(line, attr)?;
+    match raw {
+        "True" => Ok(true),
+        "False" => Ok(false),
+        _ => bail!("failed to parse `{raw}` as bool for attribute {attr}"),
+    }
+}
+
 fn parse_attr<'a>(line: &'a str, attr: &str) -> Result<&'a str> {
     let needle = format!(r#"{attr}=""#);
     let start = line
@@ -895,14 +1016,14 @@ fn non_zero_u32(value: u32) -> Option<u32> {
 mod tests {
     use super::{
         decode_regiongroupinfo_bss_rows, decode_regioninfo_bss_rows,
-        load_region_group_mapping_from_regioninfo_bss, parse_attr_f64, parse_attr_u32,
-        LocalizationTable, OriginalRegionInfoRow, OriginalRegionLayerContext, OriginalWaypointRow,
-        PABR_MAGIC, REGIONGROUPINFO_ROW_GRAPHX_OFFSET, REGIONGROUPINFO_ROW_GRAPHY_OFFSET,
-        REGIONGROUPINFO_ROW_GRAPHZ_OFFSET, REGIONGROUPINFO_ROW_LEN,
-        REGIONGROUPINFO_ROW_WAYPOINT_OFFSET, REGIONINFO_ROW_ACCESSIBLE_OFFSET,
-        REGIONINFO_ROW_GROUP_OFFSET, REGIONINFO_ROW_SIGNATURE_OFFSET,
-        REGIONINFO_ROW_SIGNATURE_PREFIX, REGIONINFO_ROW_TRADE_ORIGIN_OFFSET,
-        REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET,
+        load_region_group_mapping_from_regioninfo_bss, load_waypoint_rows, parse_attr_f64,
+        parse_attr_u32, LocalizationTable, OriginalRegionInfoRow, OriginalRegionLayerContext,
+        OriginalWaypointRow, PABR_MAGIC, REGIONGROUPINFO_ROW_GRAPHX_OFFSET,
+        REGIONGROUPINFO_ROW_GRAPHY_OFFSET, REGIONGROUPINFO_ROW_GRAPHZ_OFFSET,
+        REGIONGROUPINFO_ROW_LEN, REGIONGROUPINFO_ROW_WAYPOINT_OFFSET,
+        REGIONINFO_ROW_ACCESSIBLE_OFFSET, REGIONINFO_ROW_GROUP_OFFSET,
+        REGIONINFO_ROW_SIGNATURE_OFFSET, REGIONINFO_ROW_SIGNATURE_PREFIX,
+        REGIONINFO_ROW_TRADE_ORIGIN_OFFSET, REGIONINFO_ROW_WAYPOINT_PRIMARY_OFFSET,
     };
     use std::collections::HashMap;
     use std::fs;
@@ -964,6 +1085,42 @@ mod tests {
         assert_eq!(rows[0].waypoint, Some(2052));
         assert_eq!(rows[0].graphx, -114535.0);
         assert_eq!(rows[0].graphz, 157512.0);
+    }
+
+    #[test]
+    fn load_waypoint_rows_prefers_non_subwaypoint_and_later_source() {
+        let temp_dir = std::env::temp_dir().join("fishystuff_waypoint_xml_test");
+        fs::create_dir_all(&temp_dir).unwrap();
+        let primary = temp_dir.join("mapdata_realexplore.xml");
+        let secondary = temp_dir.join("mapdata_realexplore2.xml");
+        fs::write(
+            &primary,
+            concat!(
+                "<Waypoint Key=\"1147\" Name=\"field(stonebeakshore)\" PosX=\"305927\" PosY=\"-414.348\" PosZ=\"-37179.1\" Property=\"ground\" IsSubWaypoint=\"True\" IsEscape=\"False\"/>\n",
+                "<Waypoint Key=\"45\" Name=\"field(toscani's_farm)\" PosX=\"-29592.9\" PosY=\"-2909.08\" PosZ=\"26244.2\" Property=\"all\" IsSubWaypoint=\"False\" IsEscape=\"False\"/>\n"
+            ),
+        )
+        .unwrap();
+        fs::write(
+            &secondary,
+            concat!(
+                "<Waypoint Key=\"1147\" Name=\"field(stonebeakshore)\" PosX=\"303191\" PosY=\"-322.014\" PosZ=\"-1694.35\" Property=\"none\" IsSubWaypoint=\"False\" IsEscape=\"False\"/>\n",
+                "<Waypoint Key=\"45\" Name=\"field(toscani's_farm)\" PosX=\"-30432.3\" PosY=\"-3017.58\" PosZ=\"28481.4\" Property=\"ground\" IsSubWaypoint=\"False\" IsEscape=\"False\"/>\n"
+            ),
+        )
+        .unwrap();
+
+        let rows = load_waypoint_rows(&[primary.clone(), secondary.clone()]).unwrap();
+        let stonebeak = rows.get(&1147).unwrap();
+        assert_eq!(stonebeak.pos_x, 303191.0);
+        assert_eq!(stonebeak.pos_z, -1694.35);
+        let toscani = rows.get(&45).unwrap();
+        assert_eq!(toscani.pos_x, -30432.3);
+        assert_eq!(toscani.pos_z, 28481.4);
+
+        fs::remove_file(primary).ok();
+        fs::remove_file(secondary).ok();
+        fs::remove_dir(temp_dir).ok();
     }
 
     #[test]
@@ -1054,9 +1211,11 @@ mod tests {
                     OriginalWaypointRow {
                         key: 1141,
                         raw_name: "town(tarifcamp)".to_string(),
-                        pos_x: 224771.0,
-                        pos_y: -4721.17,
-                        pos_z: -77283.2,
+                        pos_x: 226814.0,
+                        pos_y: -338.0,
+                        pos_z: -73831.4,
+                        is_sub_waypoint: false,
+                        source_index: 1,
                     },
                 ),
                 (
@@ -1067,6 +1226,8 @@ mod tests {
                         pos_x: 189607.0,
                         pos_y: 16927.1,
                         pos_z: -160661.0,
+                        is_sub_waypoint: false,
+                        source_index: 1,
                     },
                 ),
             ]
@@ -1090,7 +1251,174 @@ mod tests {
         assert_eq!(origin.region_name.as_deref(), Some("Tarif"));
         assert_eq!(origin.waypoint_id, Some(1141));
         assert_eq!(origin.waypoint_name.as_deref(), Some("Tarif"));
-        assert_eq!(origin.world_x, Some(224771.0));
-        assert_eq!(origin.world_z, Some(-77283.2));
+        assert_eq!(origin.world_x, Some(226814.0));
+        assert_eq!(origin.world_z, Some(-73831.4));
+    }
+
+    #[test]
+    fn resolve_region_waypoint_info_uses_selected_waypoint_xml_position() {
+        let context = OriginalRegionLayerContext {
+            regioninfo: [(
+                204,
+                OriginalRegionInfoRow {
+                    key: 204,
+                    is_accessible: true,
+                    tradeoriginregion: 204,
+                    regiongroup: 55,
+                    waypoint: Some(1147),
+                },
+            )]
+            .into_iter()
+            .collect(),
+            regiongroupinfo: HashMap::new(),
+            waypoints: [(
+                1147,
+                OriginalWaypointRow {
+                    key: 1147,
+                    raw_name: "field(stonebeakshore)".to_string(),
+                    pos_x: 303191.0,
+                    pos_y: -322.014,
+                    pos_z: -1694.35,
+                    is_sub_waypoint: false,
+                    source_index: 1,
+                },
+            )]
+            .into_iter()
+            .collect(),
+            localization: LocalizationTable {
+                node: [("1147".to_string(), "Stonebeak Shore".to_string())]
+                    .into_iter()
+                    .collect(),
+                town: [("204".to_string(), "Stonebeak Shore".to_string())]
+                    .into_iter()
+                    .collect(),
+            },
+        };
+
+        let region = context.resolve_region_waypoint_info(204).unwrap();
+        assert_eq!(region.region_id, Some(204));
+        assert_eq!(region.region_name.as_deref(), Some("Stonebeak Shore"));
+        assert_eq!(region.waypoint_id, Some(1147));
+        assert_eq!(region.waypoint_name.as_deref(), Some("Stonebeak Shore"));
+        assert_eq!(region.world_x, Some(303191.0));
+        assert_eq!(region.world_z, Some(-1694.35));
+    }
+
+    #[test]
+    fn region_hover_metadata_keeps_region_node_and_trade_origin_node_distinct() {
+        let context = OriginalRegionLayerContext {
+            regioninfo: [
+                (
+                    204,
+                    OriginalRegionInfoRow {
+                        key: 204,
+                        is_accessible: true,
+                        tradeoriginregion: 221,
+                        regiongroup: 58,
+                        waypoint: Some(1147),
+                    },
+                ),
+                (
+                    221,
+                    OriginalRegionInfoRow {
+                        key: 221,
+                        is_accessible: true,
+                        tradeoriginregion: 221,
+                        regiongroup: 58,
+                        waypoint: Some(1141),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            regiongroupinfo: HashMap::new(),
+            waypoints: [
+                (
+                    1141,
+                    OriginalWaypointRow {
+                        key: 1141,
+                        raw_name: "town(tarifcamp)".to_string(),
+                        pos_x: 226814.0,
+                        pos_y: -338.0,
+                        pos_z: -73831.4,
+                        is_sub_waypoint: false,
+                        source_index: 1,
+                    },
+                ),
+                (
+                    1147,
+                    OriginalWaypointRow {
+                        key: 1147,
+                        raw_name: "field(stonebeakshore)".to_string(),
+                        pos_x: 303191.0,
+                        pos_y: -322.014,
+                        pos_z: -1694.35,
+                        is_sub_waypoint: false,
+                        source_index: 1,
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            localization: LocalizationTable {
+                node: [
+                    ("1141".to_string(), "Tarif".to_string()),
+                    ("1147".to_string(), "Stonebeak Shore".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+                town: [
+                    ("204".to_string(), "Stonebeak Shore".to_string()),
+                    ("221".to_string(), "Tarif".to_string()),
+                ]
+                .into_iter()
+                .collect(),
+            },
+        };
+
+        let entry = context.resolve_region_hover_metadata(204).unwrap();
+        assert_eq!(entry.detail_sections.len(), 2);
+
+        let region_section = entry
+            .detail_sections
+            .iter()
+            .find(|section| section.id == "region")
+            .unwrap();
+        assert!(region_section
+            .facts
+            .iter()
+            .any(|fact| fact.key == "region" && fact.value == "Stonebeak Shore (R204)"));
+        assert!(region_section
+            .facts
+            .iter()
+            .any(|fact| fact.key == "region_node" && fact.value == "Stonebeak Shore"));
+        assert!(region_section.targets.iter().any(|target| {
+            target.key == "region_node"
+                && target.label == "Node: Stonebeak Shore (R204)"
+                && (target.world_x - 303191.0).abs() < f64::EPSILON
+                && (target.world_z - (-1694.35)).abs() < f64::EPSILON
+        }));
+
+        let origin_section = entry
+            .detail_sections
+            .iter()
+            .find(|section| section.id == "trade-origin")
+            .unwrap();
+        assert!(origin_section
+            .facts
+            .iter()
+            .any(|fact| fact.key == "origin_region"
+                && fact.label == "Origin"
+                && fact.value == "Tarif (R221)"));
+        assert!(origin_section
+            .facts
+            .iter()
+            .any(|fact| fact.key == "origin_node" && fact.value == "Tarif"));
+        assert!(origin_section.targets.iter().any(|target| {
+            target.key == "origin_node"
+                && target.label == "Origin: Tarif (R221)"
+                && (target.world_x - 226814.0).abs() < f64::EPSILON
+                && (target.world_z - (-73831.4)).abs() < f64::EPSILON
+        }));
     }
 }
