@@ -1617,6 +1617,28 @@ test("renderSearchSelection makes selected fish focusable", () => {
   }
 });
 
+test("renderSearchSelection uses fish filter icons instead of filter badges", () => {
+  const searchSelection = {
+    dataset: {},
+    hidden: true,
+    innerHTML: "",
+  };
+  const elements = {
+    searchSelection,
+    searchSelectionShell: { hidden: true },
+    searchWindow: { dataset: {} },
+    zoneCatalog: TEST_ZONE_CATALOG,
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.inputState.filters.fishFilterTerms = ["favourite", "missing"];
+
+  renderSearchSelection(elements, stateBundle, new Map());
+
+  assert.match(searchSelection.innerHTML, /#fishy-heart-fill/);
+  assert.match(searchSelection.innerHTML, /#fishy-check-circle-dash-fill/);
+  assert.equal(searchSelection.innerHTML.includes("badge-soft badge-secondary"), false);
+});
+
 test("renderSearchSelection uses semantic focus chips for selected semantic terms", () => {
   const searchSelection = {
     dataset: {},
@@ -1800,9 +1822,12 @@ test("renderSearchResults shows filter term suggestions on empty-query focus wit
   assert.equal(elements.searchResultsShell.hidden, false);
   assert.equal(elements.searchCount.hidden, true);
   assert.match(elements.searchResults.innerHTML, /data-fish-filter-term="favourite"/);
+  assert.match(elements.searchResults.innerHTML, /#fishy-heart-fill/);
   assert.match(elements.searchResults.innerHTML, /Favourite/);
   assert.match(elements.searchResults.innerHTML, /data-fish-filter-term="missing"/);
+  assert.match(elements.searchResults.innerHTML, /#fishy-check-circle-dash-fill/);
   assert.match(elements.searchResults.innerHTML, /Missing/);
+  assert.equal(elements.searchResults.innerHTML.includes("badge badge-outline badge-xs"), false);
 });
 
 test("renderSearchResults hides and clears the results shell when closed or unmatched", () => {

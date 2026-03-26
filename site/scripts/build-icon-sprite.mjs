@@ -62,6 +62,7 @@ const iconSources = {
   stopwatch: { type: "mingcute", name: "stopwatch-2-fill" },
   "check-badge-outline": { type: "custom", name: "check-badge-outline" },
   "check-badge-solid": { type: "custom", name: "check-badge-solid" },
+  "check-circle-dash-fill": { type: "mingcute", name: "check-circle-dash-fill" },
   "heart-fill": { type: "mingcute", name: "heart-fill" },
   "coin-stack": { type: "mingcute", name: "coin-2-fill" },
 };

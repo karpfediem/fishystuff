@@ -12,7 +12,7 @@ import FishyMapBridge, {
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_PATH = "/api/v1/zones";
-const ICON_SPRITE_URL = "/img/icons.svg?v=20260325-2";
+const ICON_SPRITE_URL = "/img/icons.svg?v=20260326-2";
 let currentZoneCatalog = [];
 const WINDOW_DRAG_THRESHOLD_PX = 8;
 const WINDOW_TITLEBAR_FALLBACK_HEIGHT_PX = 52;
@@ -33,11 +33,15 @@ const FISH_FILTER_TERM_METADATA = Object.freeze({
     label: "Favourite",
     description: "Fish marked with a heart in Fishydex.",
     searchText: "favourite favourites favorite favorites heart liked",
+    icon: "heart-fill",
+    iconClass: "text-error",
   }),
   missing: Object.freeze({
     label: "Missing",
     description: "Fish not marked caught in Fishydex.",
     searchText: "missing uncaught not caught not yet caught",
+    icon: "check-circle-dash-fill",
+    iconClass: "text-warning",
   }),
 });
 const ZONE_INFO_TAB_BUTTON_CLASS =
@@ -2207,6 +2211,14 @@ function layerKindLabel(kind) {
 
 function spriteIcon(name, sizeClass = "size-5") {
   return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${ICON_SPRITE_URL}#fishy-${name}"></use></svg>`;
+}
+
+function fishFilterTermIconMarkup(term, sizeClass = "size-4") {
+  const metadata = FISH_FILTER_TERM_METADATA[normalizeFishFilterTerm(term)] || null;
+  return spriteIcon(
+    metadata?.icon || "question-mark",
+    `${sizeClass} shrink-0 ${metadata?.iconClass || "text-base-content/60"}`.trim(),
+  );
 }
 
 function dragHandleIcon() {
@@ -5438,7 +5450,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
       return `
         <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
           <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
-            <span class="badge badge-soft badge-secondary badge-sm">Filter</span>
+            ${fishFilterTermIconMarkup(fishFilterTerm)}
             <span class="font-medium">${escapeHtml(label)}</span>
           </span>
           <button
@@ -5597,8 +5609,8 @@ export function renderSearchResults(elements, matches, stateBundle) {
             >
               <span class="min-w-0 flex-1 text-left">
                 <span class="flex items-center gap-2">
+                  ${fishFilterTermIconMarkup(match.term)}
                   <span class="font-semibold">${escapeHtml(match.label || match.term)}</span>
-                  <span class="badge badge-outline badge-xs">Filter</span>
                 </span>
                 <span class="mt-1 block truncate text-xs text-base-content/60">
                   ${escapeHtml(match.description || "")}
