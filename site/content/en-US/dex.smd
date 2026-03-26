@@ -1141,6 +1141,7 @@
       renderKey: "",
       gridBound: false,
       persistedUiJson: "",
+      uiStateRestored: false,
       pendingViewportRestore: null,
       pendingViewportFrame: 0,
       suppressCardAnimation: false,
@@ -1229,6 +1230,9 @@
     }
 
     function persistUiSignals(signals) {
+      if (!state.uiStateRestored) {
+        return;
+      }
       try {
         const json = JSON.stringify(storedUiSignals(signals));
         if (json === state.persistedUiJson) {
@@ -1381,6 +1385,7 @@
           || favouriteState.statusMessage
           || "",
       });
+      state.uiStateRestored = true;
     }
 
     function syncPanelUi(progressCollapsed, filterCollapsed) {
