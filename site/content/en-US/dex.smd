@@ -951,9 +951,9 @@
 
   <script>
   (() => {
+    const DEX_UI_STORAGE_KEY = "fishystuff.fishydex.ui.v1";
     const CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
     const FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
-    const DATASTAR_PATCH_SIGNALS_EVENT = "datastar-patch-signals";
     const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
     const GRADE_FILTER_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash"];
     const GRADE_LABELS = {
@@ -999,10 +999,12 @@
       currentSortField: "name",
       currentSortDirection: "asc",
       fishById: new Map(),
+      signals: null,
       detailsFishId: null,
       detailsBound: false,
       renderKey: "",
       gridBound: false,
+      persistedUiJson: "",
       pendingViewportRestore: null,
       pendingViewportFrame: 0,
       suppressCardAnimation: false,
@@ -1010,121 +1012,41 @@
       pendingCaughtStampTimer: 0,
     };
 
-    function mergeSignals(patch) {
-      const patchElement = document.getElementById("fishydex-signal-patch");
-      if (!(patchElement instanceof HTMLElement)) {
-        return;
-      }
-      patchElement.setAttribute("data-signals", JSON.stringify(patch));
+    function connect(signals) {
+      state.signals = signals && typeof signals === "object" ? signals : null;
     }
 
-    function normalizeFishPayload(payload) {
-      const fish = Array.isArray(payload && payload.fish) ? payload.fish : [];
-      const count = Number(payload && payload.count);
+    function mergeSignals(patch) {
+      if (!state.signals || !patch || typeof patch !== "object") {
+        return;
+      }
+      Object.assign(state.signals, patch);
+    }
+
+    function storedUiSignals(signals) {
+      const searchQuery = String(signals && (signals.search_query ?? signals.search_draft) || "").trim();
       return {
-        revision: typeof (payload && payload.revision) === "string" ? payload.revision : "",
-        count: Number.isFinite(count) ? count : fish.length,
-        fish,
-        loading: false,
-        status_message: typeof (payload && payload.status_message) === "string" ? payload.status_message : "",
-        api_error_message: typeof (payload && payload.api_error_message) === "string" ? payload.api_error_message : "",
-        api_error_hint: typeof (payload && payload.api_error_hint) === "string" ? payload.api_error_hint : "",
+        search_draft: searchQuery,
+        search_query: searchQuery,
+        caught_filter: normalizeCaughtFilter(signals && signals.caught_filter),
+        grade_filters: normalizeGradeFilters(signals && signals.grade_filters),
+        method_filters: normalizeMethodFilters(signals && signals.method_filters),
+        show_dried: normalizeBooleanFlag(signals && signals.show_dried),
+        sort_field: normalizeSortField(signals && signals.sort_field),
+        sort_direction: normalizeSortDirection(signals && signals.sort_direction),
       };
     }
 
-    function parseDatastarSignalsStream(streamText) {
-      const lines = streamText.split(/\r?\n/);
-      let eventType = "";
-      let dataLines = [];
-
-      function decodePatch() {
-        if (eventType !== DATASTAR_PATCH_SIGNALS_EVENT) {
-          return null;
-        }
-        for (const rawLine of dataLines) {
-          const line = rawLine.trim();
-          if (!line.startsWith("signals ")) {
-            continue;
-          }
-          return normalizeFishPayload(JSON.parse(line.slice("signals ".length)));
-        }
-        return null;
-      }
-
-      for (const line of lines) {
-        if (line.startsWith("event:")) {
-          eventType = line.slice("event:".length).trim();
-          continue;
-        }
-        if (line.startsWith("data:")) {
-          dataLines.push(line.slice("data:".length).trimStart());
-          continue;
-        }
-        if (line.trim() === "") {
-          const patch = decodePatch();
-          if (patch) {
-            return patch;
-          }
-          eventType = "";
-          dataLines = [];
-        }
-      }
-
-      const patch = decodePatch();
-      if (patch) {
-        return patch;
-      }
-      throw new Error("Fish API did not return a Datastar signal patch.");
-    }
-
-    async function loadFish() {
-      mergeSignals({
-        loading: true,
-        api_error_message: "",
-        api_error_hint: "",
-        status_message: "",
-      });
-
-      let response;
+    function persistUiSignals(signals) {
       try {
-        response = await fetch(fishApiUrl(), {
-          headers: {
-            Accept: "text/event-stream, application/json",
-            "Datastar-Request": "true",
-          },
-          credentials: "same-origin",
-        });
-      } catch (_error) {
-        mergeSignals({
-          loading: false,
-          api_error_message: "Fish API request failed.",
-          api_error_hint: "If this page is on a different origin than the API, confirm the API CORS allowlist includes this site.",
-        });
-        return;
-      }
-
-      if (!response.ok) {
-        mergeSignals({
-          loading: false,
-          api_error_message: `Fish API request failed (HTTP ${response.status}).`,
-          api_error_hint: "If this page is on a different origin than the API, confirm the API CORS allowlist includes this site.",
-        });
-        return;
-      }
-
-      try {
-        const contentType = response.headers.get("content-type") || "";
-        if (contentType.includes("text/event-stream")) {
-          mergeSignals(parseDatastarSignalsStream(await response.text()));
+        const json = JSON.stringify(storedUiSignals(signals));
+        if (json === state.persistedUiJson) {
           return;
         }
-        mergeSignals(normalizeFishPayload(await response.json()));
+        localStorage.setItem(DEX_UI_STORAGE_KEY, json);
+        state.persistedUiJson = json;
       } catch (_error) {
-        mergeSignals({
-          loading: false,
-          api_error_message: "Fish API response could not be parsed.",
-          api_error_hint: "Confirm the API is serving either Datastar SSE or JSON fish data.",
-        });
+        mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
       }
     }
 
@@ -1164,6 +1086,64 @@
       return normalizeFavouriteIds(JSON.parse(raw));
     }
 
+    function loadUiStateFromStorage() {
+      let patch = storedUiSignals({});
+      let statusMessage = "";
+      try {
+        const raw = localStorage.getItem(DEX_UI_STORAGE_KEY);
+        if (raw) {
+          try {
+            patch = storedUiSignals(JSON.parse(raw));
+          } catch (_error) {
+            localStorage.removeItem(DEX_UI_STORAGE_KEY);
+            statusMessage = "Reset corrupted local fishydex filters.";
+          }
+        }
+      } catch (_error) {
+        statusMessage = "localStorage is unavailable; progress is not persisted.";
+      }
+      state.persistedUiJson = JSON.stringify(patch);
+      return { patch, statusMessage };
+    }
+
+    function loadCaughtIdsFromStorage() {
+      let caughtIds = [];
+      let statusMessage = "";
+      try {
+        const raw = localStorage.getItem(CAUGHT_STORAGE_KEY);
+        if (raw) {
+          try {
+            caughtIds = parseCaughtJson(raw);
+          } catch (_error) {
+            localStorage.removeItem(CAUGHT_STORAGE_KEY);
+            statusMessage = "Reset corrupted local fishydex progress.";
+          }
+        }
+      } catch (_error) {
+        statusMessage = "localStorage is unavailable; progress is not persisted.";
+      }
+      return { caughtIds, statusMessage };
+    }
+
+    function loadFavouriteIdsFromStorage() {
+      let favouriteIds = [];
+      let statusMessage = "";
+      try {
+        const raw = localStorage.getItem(FAVOURITES_STORAGE_KEY);
+        if (raw) {
+          try {
+            favouriteIds = parseFavouriteJson(raw);
+          } catch (_error) {
+            localStorage.removeItem(FAVOURITES_STORAGE_KEY);
+            statusMessage = "Reset corrupted local fishydex favourites.";
+          }
+        }
+      } catch (_error) {
+        statusMessage = "localStorage is unavailable; progress is not persisted.";
+      }
+      return { favouriteIds, statusMessage };
+    }
+
     function persistCaughtIds(caughtIds) {
       try {
         localStorage.setItem(CAUGHT_STORAGE_KEY, JSON.stringify(caughtIds));
@@ -1191,42 +1171,22 @@
       });
     }
 
-    function restoreCaught() {
-      let caughtIds = [];
-      try {
-        const raw = localStorage.getItem(CAUGHT_STORAGE_KEY);
-        if (raw) {
-          try {
-            caughtIds = parseCaughtJson(raw);
-          } catch (_error) {
-            localStorage.removeItem(CAUGHT_STORAGE_KEY);
-            mergeSignals({ status_message: "Reset corrupted local fishydex progress." });
-          }
-        }
-      } catch (_error) {
-        mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
-      }
-      state.currentCaughtIds = caughtIds;
-      mergeSignals({ caught_ids: caughtIds });
-    }
-
-    function restoreFavourites() {
-      let favouriteIds = [];
-      try {
-        const raw = localStorage.getItem(FAVOURITES_STORAGE_KEY);
-        if (raw) {
-          try {
-            favouriteIds = parseFavouriteJson(raw);
-          } catch (_error) {
-            localStorage.removeItem(FAVOURITES_STORAGE_KEY);
-            mergeSignals({ status_message: "Reset corrupted local fishydex favourites." });
-          }
-        }
-      } catch (_error) {
-        mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
-      }
-      state.currentFavouriteIds = favouriteIds;
-      mergeSignals({ favourite_ids: favouriteIds });
+    function restore(signals) {
+      connect(signals);
+      const uiState = loadUiStateFromStorage();
+      const caughtState = loadCaughtIdsFromStorage();
+      const favouriteState = loadFavouriteIdsFromStorage();
+      state.currentCaughtIds = caughtState.caughtIds;
+      state.currentFavouriteIds = favouriteState.favouriteIds;
+      Object.assign(signals, uiState.patch, {
+        caught_ids: caughtState.caughtIds,
+        favourite_ids: favouriteState.favouriteIds,
+        status_message:
+          uiState.statusMessage
+          || caughtState.statusMessage
+          || favouriteState.statusMessage
+          || "",
+      });
     }
 
     function queueCaughtStamp(fishId, isCaught) {
@@ -2237,6 +2197,7 @@
     function sync(snapshot) {
       bindGridClicks();
       bindDetailsControls();
+      persistUiSignals(snapshot);
 
       const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
       const caughtIds = normalizeCaughtIds(snapshot.caught_ids);
@@ -2424,12 +2385,14 @@
           ? `Fish API request failed (HTTP ${status}).`
           : "Fish API request failed.";
         mergeSignals({
+          loading: false,
           api_error_message: message,
           api_error_hint: "If this page is on a different origin than the API, confirm the API CORS allowlist includes this site.",
         });
       }
       if (detail.type === "retrying") {
         mergeSignals({
+          loading: true,
           api_error_message: "Fish API request is retrying.",
           api_error_hint: detail.argsRaw && detail.argsRaw.message
             ? String(detail.argsRaw.message)
@@ -2460,10 +2423,9 @@
     document.addEventListener("datastar-fetch", handleDatastarEvent);
 
     window.Fishydex = {
+      connect,
+      restore,
       resetFilters,
-      restoreCaught,
-      restoreFavourites,
-      loadFish,
       sync,
       setCaughtFilter,
       clearMethodFilters,
@@ -2519,11 +2481,9 @@
        status_message: '',
        api_error_message: '',
        api_error_hint: '',
-     }">
-
-  <div id="fishydex-signal-patch" class="hidden" hidden></div>
+     }"
+     data-init__delay.50ms="window.Fishydex.restore($); @get(window.Fishydex.fishApiUrl())">
   <div
-       data-init="window.Fishydex.resetFilters(); window.Fishydex.restoreCaught(); window.Fishydex.restoreFavourites(); window.Fishydex.loadFish()"
        data-effect="window.Fishydex.sync({
          fish: $fish || [],
          revision: $revision || '',
