@@ -1281,6 +1281,8 @@
       const anchorElement = anchor instanceof HTMLElement ? anchor : card;
       const restoreFocusSelector = anchorElement.closest("[data-action='toggle-caught']")
         ? "[data-action='toggle-caught']"
+        : anchorElement.closest("[data-action='toggle-favourite']")
+          ? "[data-action='toggle-favourite']"
         : anchorElement.closest("[data-action='open-details']")
           ? "[data-action='open-details']"
           : "";
