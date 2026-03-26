@@ -6,10 +6,10 @@
       "devDependencies": {
         "@iconify-json/mingcute": "^1.2.7",
         "@iconify/utils": "^3.1.0",
+        "@starfederation/datastar": "github:starfederation/datastar#v1.0.0-RC.8",
         "@tailwindcss/cli": "^4.1.14",
         "@tailwindcss/typography": "^0.5.19",
         "daisyui": "^5.5.19",
-        "datastar-rc": "github:starfederation/datastar#v1.0.0-RC.6",
         "tailwindcss": "^4.1.14",
       },
     },
@@ -63,6 +63,8 @@
 
     "@parcel/watcher-win32-x64": ["@parcel/watcher-win32-x64@2.5.1", "", { "os": "win32", "cpu": "x64" }, "sha512-9lHBdJITeNR++EvSQVUcaZoWupyHfXe1jZvGZ06O/5MflPcuPLtEphScIBL+AiCWBO46tDSHzWyD0uDmmZqsgA=="],
 
+    "@starfederation/datastar": ["datastar@github:starfederation/datastar#f46ece2", {}, "starfederation-datastar-f46ece2", "sha512-80qgznlMr/GsDLwbd1aD1foneGx7odJmPoaMol5bnc85KuitrJenOtlw/VcLMt4rubpetVqKY8BYO0dxP1BlSA=="],
+
     "@tailwindcss/cli": ["@tailwindcss/cli@4.1.14", "", { "dependencies": { "@parcel/watcher": "^2.5.1", "@tailwindcss/node": "4.1.14", "@tailwindcss/oxide": "4.1.14", "enhanced-resolve": "^5.18.3", "mri": "^1.2.0", "picocolors": "^1.1.1", "tailwindcss": "4.1.14" }, "bin": { "tailwindcss": "dist/index.mjs" } }, "sha512-2cErQRcsI8jIObUMVwcd1H2AWgGxwzozHJk7AKM2KB1taOp7L15xQ8kEsZrvVbOjNrb8yXtnSvNtJ+mhCB7EBg=="],
 
     "@tailwindcss/node": ["@tailwindcss/node@4.1.14", "", { "dependencies": { "@jridgewell/remapping": "^2.3.4", "enhanced-resolve": "^5.18.3", "jiti": "^2.6.0", "lightningcss": "1.30.1", "magic-string": "^0.30.19", "source-map-js": "^1.2.1", "tailwindcss": "4.1.14" } }, "sha512-hpz+8vFk3Ic2xssIA3e01R6jkmsAhvkQdXlEbRTk6S10xDAtiQiM3FyvZVGsucefq764euO/b8WUW9ysLdThHw=="],
@@ -106,8 +108,6 @@
     "cssesc": ["cssesc@3.0.0", "", { "bin": { "cssesc": "bin/cssesc" } }, "sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg=="],
 
     "daisyui": ["daisyui@5.5.19", "", {}, "sha512-pbFAkl1VCEh/MPCeclKL61I/MqRIFFhNU7yiXoDDRapXN4/qNCoMxeCCswyxEEhqL5eiTTfwHvucFtOE71C9sA=="],
-
-    "datastar-rc": ["datastar@github:starfederation/datastar#1a6f989", {}, "starfederation-datastar-1a6f989", "sha512-QbD02yMSCqahaKOmFgHn58krbHRqtFlEXVoSgdCKRbHJ82xKY5OO3OEdm4jQjkabKe8u4uOGWSbZ5zMW9adAMw=="],
 
     "detect-libc": ["detect-libc@1.0.3", "", { "bin": { "detect-libc": "./bin/detect-libc.js" } }, "sha512-pGjwhsmsp4kL2RTz08wcOlGN83otlqHeD/Z5T8GXZB+/YcpQ/dgo+lbU8ZsGxV0HIvqqxo9l7mqYwyYMD9bKDg=="],
 

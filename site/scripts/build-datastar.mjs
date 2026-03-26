@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const siteDir = path.resolve(scriptDir, "..");
-const sourceDir = path.join(siteDir, "node_modules", "datastar-rc");
+const DATASTAR_PACKAGE_NAME = "@starfederation/datastar";
+const DATASTAR_VERSION = "v1.0.0-RC.8";
+const sourceDir = path.join(siteDir, "node_modules", "@starfederation", "datastar");
 const sourcePath = path.join(sourceDir, "bundles", "datastar.js");
 const targetPaths = [
   path.join(siteDir, "assets", "js", "datastar.js"),
@@ -25,5 +27,5 @@ for (const targetPath of targetPaths) {
 }
 
 console.log(
-  "Wrote assets/js/datastar.js and public/js/datastar.js from datastar-rc v1.0.0-RC.6 (classic script)",
+  `Wrote assets/js/datastar.js and public/js/datastar.js from ${DATASTAR_PACKAGE_NAME} ${DATASTAR_VERSION} (classic script)`,
 );
