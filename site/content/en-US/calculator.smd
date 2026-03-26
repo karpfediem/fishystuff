@@ -18,7 +18,7 @@
         : "en";
     const urlParams = new URLSearchParams(window.location.search);
     const presetQueryParam = urlParams.get("preset");
-    const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_live(\.|$)|_calc(\.|$)|_resources)$/;
+    const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_live(\.|$)|_calc(\.|$))$/;
 
     const loadStoredSignals = () => {
         const raw = localStorage.getItem(CALCULATOR_STORAGE_KEY);
@@ -57,7 +57,9 @@
 
     const persistedCalculatorSignals = (signals) =>
         Object.fromEntries(
-            Object.entries(signals ?? {}).filter(([key]) => !key.startsWith("_"))
+            Object.entries(canonicalizeStoredSignals(signals)).filter(
+                ([key]) => !key.startsWith("_"),
+            )
         );
 
     const presetURL = (signals) => {
