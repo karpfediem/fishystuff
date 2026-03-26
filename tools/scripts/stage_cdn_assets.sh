@@ -14,6 +14,14 @@ require_path() {
   fi
 }
 
+has_matching_file() {
+  local search_dir="$1"
+  local pattern="$2"
+  local first_match=""
+  first_match="$(find "$search_dir" -maxdepth 1 -type f -name "$pattern" -print -quit)"
+  [ -n "$first_match" ]
+}
+
 require_path "$SITE_MAP_ASSETS_DIR/loader.js"
 require_path "$SITE_MAP_ASSETS_DIR/map-host.js"
 require_path "$SITE_MAP_ASSETS_DIR/ui/fishystuff.css"
@@ -21,17 +29,17 @@ require_path "$CDN_ROOT/images"
 require_path "$CDN_ROOT/region_groups"
 require_path "$CDN_MAP_ASSETS_DIR/runtime-manifest.json"
 
-if ! find "$CDN_MAP_ASSETS_DIR" -maxdepth 1 -type f -name 'runtime-manifest.*.json' | grep -q .; then
+if ! has_matching_file "$CDN_MAP_ASSETS_DIR" 'runtime-manifest.*.json'; then
   echo "required cache-busted CDN map runtime manifest missing under $CDN_MAP_ASSETS_DIR" >&2
   echo "Run tools/scripts/build_map.sh first." >&2
   exit 1
 fi
-if ! find "$CDN_MAP_ASSETS_DIR" -maxdepth 1 -type f -name 'fishystuff_ui_bevy.*.js' | grep -q .; then
+if ! has_matching_file "$CDN_MAP_ASSETS_DIR" 'fishystuff_ui_bevy.*.js'; then
   echo "required CDN map runtime bundle missing under $CDN_MAP_ASSETS_DIR" >&2
   echo "Run tools/scripts/build_map.sh first." >&2
   exit 1
 fi
-if ! find "$CDN_MAP_ASSETS_DIR" -maxdepth 1 -type f -name 'fishystuff_ui_bevy_bg.*.wasm' | grep -q .; then
+if ! has_matching_file "$CDN_MAP_ASSETS_DIR" 'fishystuff_ui_bevy_bg.*.wasm'; then
   echo "required CDN map wasm bundle missing under $CDN_MAP_ASSETS_DIR" >&2
   echo "Run tools/scripts/build_map.sh first." >&2
   exit 1
