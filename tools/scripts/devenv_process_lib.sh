@@ -47,14 +47,14 @@ devenv_run_with_tcp_ready() {
   forward_terminate() {
     kill -TERM "$child_pid" >/dev/null 2>&1 || true
   }
-  trap forward_terminate TERM INT
+  trap forward_terminate TERM INT HUP EXIT
 
   while kill -0 "$child_pid" >/dev/null 2>&1; do
     if (echo >"/dev/tcp/$host/$port") >/dev/null 2>&1; then
       devenv_notify_ready "$ready_message"
       wait "$child_pid"
       child_status=$?
-      trap - TERM INT
+      trap - TERM INT HUP EXIT
       return "$child_status"
     fi
     sleep 0.25
@@ -62,7 +62,7 @@ devenv_run_with_tcp_ready() {
 
   wait "$child_pid"
   child_status=$?
-  trap - TERM INT
+  trap - TERM INT HUP EXIT
   return "$child_status"
 }
 
@@ -96,14 +96,14 @@ devenv_run_with_http_ready() {
   forward_terminate() {
     kill -TERM "$child_pid" >/dev/null 2>&1 || true
   }
-  trap forward_terminate TERM INT
+  trap forward_terminate TERM INT HUP EXIT
 
   while kill -0 "$child_pid" >/dev/null 2>&1; do
     if curl --silent --show-error --fail "$url" >/dev/null 2>&1; then
       devenv_notify_ready "$ready_message"
       wait "$child_pid"
       child_status=$?
-      trap - TERM INT
+      trap - TERM INT HUP EXIT
       return "$child_status"
     fi
     sleep 0.25
@@ -111,6 +111,23 @@ devenv_run_with_http_ready() {
 
   wait "$child_pid"
   child_status=$?
-  trap - TERM INT
+  trap - TERM INT HUP EXIT
+  return "$child_status"
+}
+
+devenv_run_forever() {
+  "$@" &
+  local child_pid=$!
+  local child_status=0
+
+  forward_terminate() {
+    kill -TERM "$child_pid" >/dev/null 2>&1 || true
+  }
+  trap forward_terminate TERM INT HUP EXIT
+
+  wait "$child_pid"
+  child_status=$?
+
+  trap - TERM INT HUP EXIT
   return "$child_status"
 }

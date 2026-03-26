@@ -9,18 +9,22 @@ cd "$ROOT_DIR/site"
   "site tailwind watcher" \
   "$ROOT_DIR/tools/scripts/watch_site_tailwind.sh" \
   "./tools/scripts/watch_site_tailwind.sh" \
-  "watchexec -r -w content -w layouts -w assets -w scripts -w tailwind.input.css"
+  "watchexec -r -w content -w layouts -w assets/js -w assets/map -w assets/css/style.css -w scripts -w tailwind.input.css" \
+  "-- bun run tailwind:build"
 
 devenv_notify_status "building initial Tailwind output"
 bun run tailwind:build
 devenv_notify_ready "Tailwind CSS built; watching for changes"
-exec watchexec -r --postpone \
+devenv_run_forever watchexec -r --postpone \
   -w content \
   -w layouts \
-  -w assets \
+  -w assets/js \
+  -w assets/map \
+  -w assets/css/style.css \
   -w scripts \
   -w tailwind.input.css \
   --ignore assets/css/site.css \
+  --ignore assets/js/datastar.js \
   --ignore .tailwind \
   --exts smd,md,shtml,html,css,js,mjs,ts \
   -- bun run tailwind:build
