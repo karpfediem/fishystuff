@@ -974,12 +974,13 @@
       if (className) {
         classes.push(className);
       }
-      return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-1#fishy-${name}"></use></svg>`;
+      return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-3#fishy-${name}"></use></svg>`;
     }
 
-    const ICON_CHECK_BADGE_OUTLINE = spriteIconMarkup("check-badge-outline", "size-7");
+    const ICON_CHECK_CIRCLE_DASH_LINE = spriteIconMarkup("check-circle-dash-line", "size-7");
     const ICON_CHECK_BADGE_SOLID = spriteIconMarkup("check-badge-solid", "size-7");
     const ICON_HEART_FILL = spriteIconMarkup("heart-fill", "size-6");
+    const ICON_HEART_LINE = spriteIconMarkup("heart-line", "size-6");
     const ICON_COIN_STACK = spriteIconMarkup("coin-stack");
     const CAUGHT_FILTER_ORDER = ["all", "caught", "missing"];
     const METHOD_ORDER = ["rod", "harpoon"];
@@ -1791,7 +1792,7 @@
         "aria-label",
         `${isFavourite ? "Remove" : "Add"} ${fish.name || `Fish ${itemId}`} ${isFavourite ? "from" : "to"} favourites`
       );
-      favouriteButton.innerHTML = ICON_HEART_FILL;
+      favouriteButton.innerHTML = isFavourite ? ICON_HEART_FILL : ICON_HEART_LINE;
       const caughtButton = createElement(
         "button",
         `fishydex-caught-button btn btn-sm btn-circle btn-ghost${isCaught ? " is-caught" : ""}${stampCaught ? " is-stamping" : ""}`
@@ -1804,7 +1805,7 @@
         "aria-label",
         `Mark ${fish.name || `Fish ${itemId}`} as ${isCaught ? "not caught" : "caught"}`
       );
-      caughtButton.innerHTML = isCaught ? ICON_CHECK_BADGE_SOLID : ICON_CHECK_BADGE_OUTLINE;
+      caughtButton.innerHTML = isCaught ? ICON_CHECK_BADGE_SOLID : ICON_CHECK_CIRCLE_DASH_LINE;
       actions.appendChild(favouriteButton);
       actions.appendChild(caughtButton);
       top.appendChild(actions);
@@ -2110,7 +2111,7 @@
           "aria-label",
           `${meta.favourite ? "Remove" : "Add"} ${meta.name} ${meta.favourite ? "from" : "to"} favourites`
         );
-        titleFavouriteToggle.innerHTML = ICON_HEART_FILL;
+        titleFavouriteToggle.innerHTML = meta.favourite ? ICON_HEART_FILL : ICON_HEART_LINE;
       }
       if (titleToggle instanceof HTMLButtonElement) {
         titleToggle.className = `fishydex-caught-button btn btn-sm btn-circle btn-ghost${meta.caught ? " is-caught" : ""}${shouldStampCaughtToggle(meta.fishId, meta.caught) ? " is-stamping" : ""}`;
@@ -2120,7 +2121,7 @@
           "aria-label",
           `Mark ${meta.name} as ${meta.caught ? "not caught" : "caught"}`
         );
-        titleToggle.innerHTML = meta.caught ? ICON_CHECK_BADGE_SOLID : ICON_CHECK_BADGE_OUTLINE;
+        titleToggle.innerHTML = meta.caught ? ICON_CHECK_BADGE_SOLID : ICON_CHECK_CIRCLE_DASH_LINE;
       }
       setElementLink(itemKey, String(meta.itemId), bdolyticsItemUrl(meta.itemId));
       if (vendorPrice instanceof HTMLElement) {
@@ -2604,7 +2605,7 @@
           <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
             <legend class="fieldset-legend">Search</legend>
             <label class="fishydex-search-field input input-bordered">
-              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-1#fishy-search-field"></use></svg>
+              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-3#fishy-search-field"></use></svg>
               <span class="sr-only">Search fish</span>
               <input class="fishydex-search"
                      type="search"
