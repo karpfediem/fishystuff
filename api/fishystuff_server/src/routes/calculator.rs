@@ -43,8 +43,10 @@ struct CalculatorDerivedSignals {
     abundance_label: String,
     zone_bite_min: String,
     zone_bite_max: String,
+    zone_bite_avg: String,
     effective_bite_min: String,
     effective_bite_max: String,
+    effective_bite_avg: String,
     total_time: String,
     bite_time: String,
     auto_fish_time: String,
@@ -905,8 +907,10 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         abundance_label: calc_abundance_label(signals.resources),
         zone_bite_min: fmt2(zone_bite_min_raw),
         zone_bite_max: fmt2(zone_bite_max_raw),
+        zone_bite_avg: fmt2(zone_bite_avg_raw),
         effective_bite_min: fmt2(effective_bite_min_raw),
         effective_bite_max: fmt2(effective_bite_max_raw),
+        effective_bite_avg: fmt2(bite_time_raw),
         total_time: fmt2(total_time_raw),
         bite_time: fmt2(bite_time_raw),
         auto_fish_time: fmt2(auto_fish_time_raw),
@@ -1228,12 +1232,17 @@ fn render_calculator_app(
                         <div class="stat px-4 py-3">
                             <div class="stat-title">Min</div>
                             <div class="stat-value text-lg" data-text="$_live.zone_bite_min"></div>
-                            <div class="stat-desc">raw seconds</div>
+                            <div class="stat-desc">seconds</div>
+                        </div>
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Average</div>
+                            <div class="stat-value text-lg" data-text="$_live.zone_bite_avg"></div>
+                            <div class="stat-desc">seconds</div>
                         </div>
                         <div class="stat px-4 py-3">
                             <div class="stat-title">Max</div>
                             <div class="stat-value text-lg" data-text="$_live.zone_bite_max"></div>
-                            <div class="stat-desc">raw seconds</div>
+                            <div class="stat-desc">seconds</div>
                         </div>
                     </div>
                 </div>
@@ -1257,6 +1266,11 @@ fn render_calculator_app(
                         <div class="stat px-4 py-3">
                             <div class="stat-title">Effective Min</div>
                             <div class="stat-value text-lg" data-text="$_live.effective_bite_min"></div>
+                            <div class="stat-desc">seconds</div>
+                        </div>
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Effective Average</div>
+                            <div class="stat-value text-lg" data-text="$_live.effective_bite_avg"></div>
                             <div class="stat-desc">seconds</div>
                         </div>
                         <div class="stat px-4 py-3">
