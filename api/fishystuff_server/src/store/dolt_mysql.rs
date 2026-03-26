@@ -14,7 +14,8 @@ use fishystuff_api::error::ApiError;
 use fishystuff_api::ids::{MapVersionId, Rgb};
 use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
-    CalculatorOptionEntry, CalculatorPetCatalog, CalculatorSessionPresetEntry, CalculatorSignals,
+    CalculatorOptionEntry, CalculatorPetCatalog, CalculatorPetSignals,
+    CalculatorSessionPresetEntry, CalculatorSignals,
 };
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{
@@ -75,6 +76,48 @@ const DOLT_TCP_KEEPALIVE_PROBE_INTERVAL_SECS: u32 = 5;
 const DOLT_TCP_KEEPALIVE_PROBE_COUNT: u32 = 3;
 #[cfg(target_os = "linux")]
 const DOLT_TCP_USER_TIMEOUT_MS: u32 = 10_000;
+
+fn build_calculator_default_pet(tier: &str, special: &str) -> CalculatorPetSignals {
+    CalculatorPetSignals {
+        tier: tier.to_string(),
+        special: special.to_string(),
+        talent: "durability_reduction_resistance".to_string(),
+        skills: vec!["fishing_exp".to_string()],
+    }
+}
+
+fn build_calculator_default_signals() -> CalculatorSignals {
+    CalculatorSignals {
+        level: 5,
+        lifeskill_level: "100".to_string(),
+        zone: "240,74,74".to_string(),
+        resources: 0.0,
+        rod: "item:16162".to_string(),
+        float: String::new(),
+        chair: "item:705539".to_string(),
+        lightstone_set: "effect:blacksmith-s-blessing".to_string(),
+        backpack: "item:830150".to_string(),
+        outfit: vec![
+            "effect:8-piece-outfit-set-effect".to_string(),
+            "effect:awakening-weapon-outfit".to_string(),
+            "effect:mainhand-weapon-outfit".to_string(),
+        ],
+        food: vec!["item:9359".to_string()],
+        buff: vec!["".to_string(), "item:721092".to_string()],
+        pet1: build_calculator_default_pet("5", "auto_fishing_time_reduction"),
+        pet2: build_calculator_default_pet("4", ""),
+        pet3: build_calculator_default_pet("4", ""),
+        pet4: build_calculator_default_pet("4", ""),
+        pet5: build_calculator_default_pet("4", ""),
+        catch_time_active: 17.5,
+        catch_time_afk: 6.5,
+        timespan_amount: 8.0,
+        timespan_unit: "hours".to_string(),
+        brand: true,
+        active: false,
+        debug: false,
+    }
+}
 
 #[derive(Clone)]
 pub struct DoltMySqlStore {
@@ -704,7 +747,7 @@ impl DoltMySqlStore {
             session_units: build_calculator_session_units(lang),
             session_presets: build_calculator_session_presets(lang),
             pets: build_calculator_pet_catalog(lang),
-            defaults: CalculatorSignals::default(),
+            defaults: build_calculator_default_signals(),
         })
     }
 

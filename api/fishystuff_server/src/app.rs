@@ -28,7 +28,8 @@ pub fn build_router(state: SharedState) -> Router {
         )
         .route(
             "/calculator/datastar/init",
-            get(routes::calculator::get_calculator_datastar_init),
+            get(routes::calculator::get_calculator_datastar_init)
+                .post(routes::calculator::post_calculator_datastar_init),
         )
         .route(
             "/calculator/datastar/eval",

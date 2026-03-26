@@ -11,6 +11,7 @@ const ROOTS = [
   { dir: "content", exts: new Set([".smd", ".md"]) },
   { dir: "assets", exts: new Set([".js", ".mjs", ".ts"]) },
   { dir: "scripts", exts: new Set([".js", ".mjs", ".ts"]) },
+  { dir: "../api/fishystuff_server/src/routes", exts: new Set([".rs"]) },
 ];
 
 const CAPTURE_PATTERNS = [

@@ -1,11 +1,14 @@
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::fmt::Write as _;
 
+use async_stream::stream;
 use axum::body::Bytes;
 use axum::extract::{rejection::QueryRejection, Extension, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue};
-use axum::response::IntoResponse;
+use axum::response::{sse::Event, IntoResponse, Sse};
 use axum::Json;
+use datastar::prelude::{DatastarEvent, ElementPatchMode, PatchElements, PatchSignals};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -111,22 +114,29 @@ pub async fn get_calculator_datastar_init(
                 AppError::invalid_argument(format!("invalid datastar query payload: {err}"))
                     .with_request_id(request_id.0.clone())
             })?;
-            parse_calculator_signals_value(value, &request_id)?
+            parse_calculator_signals_value(value, &data.catalog.defaults, &request_id)?
         }
         _ => data.catalog.defaults.clone(),
     };
 
-    let (normalized_signals, derived) = normalize_and_derive(raw_signals.clone(), &data);
-    let fragments = render_calculator_controls(&data, &normalized_signals);
-    let mut patch = signals_patch_map(&normalized_signals)?;
-    patch.insert(
-        "_calc".to_string(),
-        serde_json::to_value(&derived).map_err(|err| {
-            AppError::internal(format!("serialize calculator derived signals: {err}"))
-        })?,
-    );
-    let sse = datastar_sse_response(Some(fragments), Some(Value::Object(patch)))?;
-    Ok(datastar_response(sse))
+    calculator_datastar_init_response(&data, raw_signals)
+}
+
+pub async fn post_calculator_datastar_init(
+    State(state): State<SharedState>,
+    query: Result<Query<CalculatorQuery>, QueryRejection>,
+    Extension(request_id): Extension<RequestId>,
+    body: Bytes,
+) -> AppResult<impl IntoResponse> {
+    let Query(query) = query.map_err(|err| {
+        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
+    })?;
+
+    let lang = FishLang::from_param(query.lang.as_deref());
+    let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
+
+    calculator_datastar_init_response(&data, raw_signals)
 }
 
 pub async fn post_calculator_datastar_eval(
@@ -141,76 +151,118 @@ pub async fn post_calculator_datastar_eval(
 
     let lang = FishLang::from_param(query.lang.as_deref());
     let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
-    let raw_signals = parse_calculator_signals_body(&body, &request_id)?;
-    let (normalized_signals, derived) = normalize_and_derive(raw_signals.clone(), &data);
-
-    let mut patch = serde_json::Map::new();
-    if normalized_signals != raw_signals {
-        patch.extend(signals_patch_map(&normalized_signals)?);
-    }
-    patch.insert(
-        "_calc".to_string(),
-        serde_json::to_value(&derived).map_err(|err| {
-            AppError::internal(format!("serialize calculator derived signals: {err}"))
-        })?,
-    );
-
-    let sse = datastar_sse_response(None, Some(Value::Object(patch)))?;
-    Ok(datastar_response(sse))
+    let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
+    let (normalized_signals, derived) = normalize_and_derive(raw_signals, &data);
+    let events =
+        vec![
+            calculator_signals_event(&normalized_signals, &derived, CalculatorPatchMode::Eval)?
+                .into_datastar_event(),
+        ];
+    Ok(calculator_datastar_response(events))
 }
 
-fn datastar_response(body: String) -> (HeaderMap, String) {
+fn calculator_datastar_init_response(
+    data: &CalculatorData,
+    raw_signals: CalculatorSignals,
+) -> AppResult<impl IntoResponse> {
+    let (normalized_signals, derived) = normalize_and_derive(raw_signals, data);
+    let app = render_calculator_app(data, &normalized_signals, &derived)?;
+    let events = vec![
+        calculator_signals_event(&normalized_signals, &derived, CalculatorPatchMode::Init)?
+            .into_datastar_event(),
+        PatchElements::new(app)
+            .selector("#calculator-app")
+            .mode(ElementPatchMode::Outer)
+            .into_datastar_event(),
+    ];
+    Ok(calculator_datastar_response(events))
+}
+
+fn calculator_datastar_response(events: Vec<DatastarEvent>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("text/event-stream"),
-    );
-    (headers, body)
+    let stream = stream! {
+        for event in events {
+            yield Ok::<Event, Infallible>(datastar_event_to_axum_event(event));
+        }
+    };
+    (headers, Sse::new(stream))
 }
 
-fn datastar_sse_response(fragments: Option<String>, signals: Option<Value>) -> AppResult<String> {
-    let mut body = String::new();
-    if let Some(fragments) = fragments {
-        write!(
-            body,
-            "event: datastar-merge-fragments\ndata: fragments {}\n\n",
-            fragments
-        )
-        .map_err(|err| AppError::internal(format!("write datastar fragments payload: {err}")))?;
-    }
-    if let Some(signals) = signals {
-        let serialized = serde_json::to_string(&signals).map_err(|err| {
-            AppError::internal(format!("serialize datastar signals payload: {err}"))
-        })?;
-        write!(
-            body,
-            "event: datastar-merge-signals\ndata: signals {}\n\n",
-            serialized
-        )
-        .map_err(|err| AppError::internal(format!("write datastar signals payload: {err}")))?;
-    }
-    Ok(body)
+fn datastar_event_to_axum_event(event: DatastarEvent) -> Event {
+    let event_name = match event.event {
+        datastar::consts::EventType::PatchElements => "datastar-patch-elements",
+        datastar::consts::EventType::PatchSignals => "datastar-patch-signals",
+    };
+    let event_builder = Event::default().event(event_name);
+    let event_builder =
+        if event.retry.as_millis() != datastar::consts::DEFAULT_SSE_RETRY_DURATION as u128 {
+            event_builder.retry(event.retry)
+        } else {
+            event_builder
+        };
+    let event_builder = match event.id.as_deref() {
+        Some(id) => event_builder.id(id),
+        None => event_builder,
+    };
+    event_builder.data(event.data.join("\n"))
 }
 
 fn parse_calculator_signals_body(
     body: &Bytes,
+    defaults: &CalculatorSignals,
     request_id: &RequestId,
 ) -> AppResult<CalculatorSignals> {
     if body.is_empty() {
-        return Ok(CalculatorSignals::default());
+        return Ok(defaults.clone());
     }
     let value = serde_json::from_slice::<Value>(body).map_err(|err| {
         AppError::invalid_argument(format!("invalid calculator request body: {err}"))
             .with_request_id(request_id.0.clone())
     })?;
-    parse_calculator_signals_value(value, request_id)
+    parse_calculator_signals_value(value, defaults, request_id)
+}
+
+fn calculator_signals_event(
+    signals: &CalculatorSignals,
+    derived: &CalculatorDerivedSignals,
+    mode: CalculatorPatchMode,
+) -> AppResult<PatchSignals> {
+    let mut patch = match mode {
+        CalculatorPatchMode::Init => init_signals_patch_map(signals)?,
+        CalculatorPatchMode::Eval => serde_json::Map::new(),
+    };
+    if matches!(mode, CalculatorPatchMode::Init) {
+        patch.insert("_loading".to_string(), Value::Bool(false));
+    }
+    patch.insert(
+        "_calc".to_string(),
+        serde_json::to_value(derived).map_err(|err| {
+            AppError::internal(format!("serialize calculator derived signals: {err}"))
+        })?,
+    );
+    let signals = serde_json::to_string(&Value::Object(patch))
+        .map_err(|err| AppError::internal(format!("serialize calculator patch signals: {err}")))?;
+    Ok(PatchSignals::new(signals))
+}
+
+#[derive(Clone, Copy)]
+enum CalculatorPatchMode {
+    Init,
+    Eval,
 }
 
 fn parse_calculator_signals_value(
-    value: Value,
+    mut value: Value,
+    defaults: &CalculatorSignals,
     request_id: &RequestId,
 ) -> AppResult<CalculatorSignals> {
+    merge_missing_signal_values(
+        &mut value,
+        &serde_json::to_value(defaults)
+            .map_err(|err| AppError::internal(format!("serialize calculator defaults: {err}")))?,
+    );
+
     let mut object = match value {
         Value::Object(object) => object,
         _ => {
@@ -220,6 +272,8 @@ fn parse_calculator_signals_value(
             );
         }
     };
+
+    apply_local_signal_aliases(&mut object);
 
     coerce_object_i64(&mut object, "level");
     coerce_object_f64(&mut object, "resources");
@@ -243,6 +297,37 @@ fn parse_calculator_signals_value(
         AppError::invalid_argument(format!("invalid calculator payload after coercion: {err}"))
             .with_request_id(request_id.0.clone())
     })
+}
+
+fn apply_local_signal_aliases(object: &mut serde_json::Map<String, Value>) {
+    alias_local_signal(object, "_resources", "resources");
+}
+
+fn alias_local_signal(object: &mut serde_json::Map<String, Value>, alias: &str, key: &str) {
+    if object.contains_key(key) {
+        object.remove(alias);
+        return;
+    }
+    if let Some(value) = object.remove(alias) {
+        object.insert(key.to_string(), value);
+    }
+}
+
+fn merge_missing_signal_values(value: &mut Value, defaults: &Value) {
+    if let (Value::Object(object), Value::Object(default_object)) = (&mut *value, defaults) {
+        for (key, default_value) in default_object {
+            if let Some(current_value) = object.get_mut(key) {
+                merge_missing_signal_values(current_value, default_value);
+            } else {
+                object.insert(key.clone(), default_value.clone());
+            }
+        }
+        return;
+    }
+
+    if matches!(value, Value::Null) {
+        *value = defaults.clone();
+    }
 }
 
 fn coerce_object_i64(object: &mut serde_json::Map<String, Value>, key: &str) {
@@ -524,6 +609,20 @@ fn signals_patch_map(signals: &CalculatorSignals) -> AppResult<serde_json::Map<S
     }
 }
 
+fn init_signals_patch_map(
+    signals: &CalculatorSignals,
+) -> AppResult<serde_json::Map<String, Value>> {
+    let mut patch = signals_patch_map(signals)?;
+    mirror_resources_signal(&mut patch);
+    Ok(patch)
+}
+
+fn mirror_resources_signal(patch: &mut serde_json::Map<String, Value>) {
+    if let Some(value) = patch.get("resources").cloned() {
+        patch.insert("_resources".to_string(), value);
+    }
+}
+
 fn normalize_pet(
     pet: &mut CalculatorPetSignals,
     defaults: CalculatorPetSignals,
@@ -608,6 +707,9 @@ fn normalize_named_array(
     aliases: Option<&HashMap<String, String>>,
     default_values: Vec<String>,
 ) -> Vec<String> {
+    if values.is_empty() {
+        return Vec::new();
+    }
     let normalized = values
         .iter()
         .map(|value| {
@@ -720,11 +822,10 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
             |item| item.afr.map(f64::from),
         );
     let afr_raw = afr_uncapped_raw.min(2.0 / 3.0);
-    let auto_fish_time_raw = if signals.active {
-        0.0
-    } else {
-        (180.0 * (1.0 - afr_raw)).max(60.0)
-    };
+    // Keep the passive AFT baseline in backend-derived state even when the local
+    // active-fishing toggle is enabled. The frontend switches between `0` and
+    // this baseline locally, so server-backed control changes must not poison it.
+    let auto_fish_time_raw = (180.0 * (1.0 - afr_raw)).max(60.0);
 
     let drr_raw = pet_drr_sum
         + sum_item_property(
@@ -989,130 +1090,418 @@ fn trim_float(value: f64) -> String {
         .to_string()
 }
 
-fn render_calculator_controls(data: &CalculatorData, signals: &CalculatorSignals) -> String {
-    let mut fragments = String::new();
-
+fn render_calculator_app(
+    data: &CalculatorData,
+    signals: &CalculatorSignals,
+    _derived: &CalculatorDerivedSignals,
+) -> AppResult<String> {
     let fishing_levels = select_options_from_catalog(&data.catalog.fishing_levels);
-    fragments.push_str(&render_select(
-        "level",
-        "select w-full",
-        "data-bind-level",
-        &signals.level.to_string(),
-        &fishing_levels,
-        false,
-    ));
-
     let zones = sorted_zone_options(&data.zones);
-    fragments.push_str(&render_select(
-        "zone",
-        "select w-full",
-        "data-bind-zone",
-        &signals.zone,
-        &zones,
-        false,
-    ));
-
     let lifeskill_levels = sorted_lifeskill_options(&data.catalog.lifeskill_levels);
-    fragments.push_str(&render_select(
-        "lifeskill_level",
-        "select w-full",
-        "data-bind-lifeskill_level",
-        &signals.lifeskill_level,
-        &lifeskill_levels,
-        false,
-    ));
-
     let session_units = select_options_from_catalog(&data.catalog.session_units);
-    fragments.push_str(&render_select(
-        "timespan_unit",
-        "select select-sm w-full",
-        "data-bind=\"timespanUnit\"",
-        &signals.timespan_unit,
-        &session_units,
-        false,
-    ));
-    fragments.push_str(&render_session_presets(
-        &data.catalog.session_presets,
-        "session_presets",
-    ));
-
     let rods = item_options_by_type(&data.catalog.items, "rod");
-    fragments.push_str(&render_select(
-        "rods",
-        "select w-full",
-        "data-bind-rod",
-        &signals.rod,
-        &rods,
-        false,
-    ));
-
     let floats = item_options_by_type(&data.catalog.items, "float");
-    fragments.push_str(&render_select(
-        "floats",
-        "select w-full",
-        "data-bind-float",
-        &signals.float,
-        &floats,
-        true,
-    ));
-
     let chairs = item_options_by_type(&data.catalog.items, "chair");
-    fragments.push_str(&render_select(
-        "chairs",
-        "select w-full",
-        "data-bind-chair",
-        &signals.chair,
-        &chairs,
-        true,
-    ));
-
     let lightstone_sets = item_options_by_type(&data.catalog.items, "lightstone_set");
-    fragments.push_str(&render_select(
-        "lightstone_sets",
-        "select w-full",
-        "data-bind-lightstone_set",
-        &signals.lightstone_set,
-        &lightstone_sets,
-        true,
-    ));
-
     let backpacks = item_options_by_type(&data.catalog.items, "backpack");
-    fragments.push_str(&render_select(
-        "backpacks",
-        "select w-full",
-        "data-bind-backpack",
-        &signals.backpack,
-        &backpacks,
-        true,
-    ));
-
     let outfits = item_options_by_type(&data.catalog.items, "outfit");
-    fragments.push_str(&render_checkbox_group(
-        "outfits",
-        "outfit",
-        &signals.outfit,
-        &outfits,
-    ));
-
     let foods = item_options_by_type(&data.catalog.items, "food");
-    fragments.push_str(&render_checkbox_group(
-        "foods",
-        "food",
-        &signals.food,
-        &foods,
-    ));
-
     let buffs = item_options_by_type(&data.catalog.items, "buff");
-    fragments.push_str(&render_checkbox_group(
-        "buffs",
-        "buff",
-        &signals.buff,
-        &buffs,
-    ));
+    let active_checked = if signals.active { " checked" } else { "" };
+    let debug_checked = if signals.debug { " checked" } else { "" };
+    let mut html = r####"
+<div id="calculator-app" class="grid gap-6">
+    <div class="hidden"
+         data-computed:resources="$_resources"
+         data-computed:_live="window.__fishystuffCalculator.liveCalc($level, $_resources, $active, $catchTimeActive, $catchTimeAfk, $timespanAmount, $timespanUnit, $_calc)"></div>
+    <div class="hidden"
+         data-on-signal-patch__debounce.150ms="window.__fishystuffCalculator.persist($)"
+         data-on-signal-patch-filter="window.__fishystuffCalculator.persistSignalPatchFilter()"></div>
+    <div class="hidden"
+         data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl())"
+         data-on-signal-patch-filter="window.__fishystuffCalculator.serverSignalPatchFilter()"></div>
 
-    fragments.push_str(&render_pet_cards(&data.catalog.pets, signals));
+    <section class="card card-border bg-base-100">
+        <div class="card-body gap-5">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div class="flex flex-wrap gap-3">
+                    <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
+                        <input type="checkbox" class="checkbox checkbox-primary" data-bind="active"__ACTIVE_CHECKED__>
+                        <span>Active Fishing</span>
+                    </label>
+                    <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
+                        <input type="checkbox" class="checkbox checkbox-primary" data-bind="debug"__DEBUG_CHECKED__>
+                        <span>Debug</span>
+                    </label>
+                </div>
 
-    fragments
+                <div class="flex flex-wrap gap-2">
+                    <button class="btn btn-soft btn-secondary"
+                            data-on:click="window.__fishystuffToast.copyText(window.__fishystuffCalculator.presetUrl($), { success: 'Preset URL copied.' })">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-link"></use></svg>
+                        Copy URL
+                    </button>
+                    <button class="btn btn-soft btn-secondary"
+                            data-on:click="window.__fishystuffToast.copyText(window.__fishystuffCalculator.shareText($), { success: 'Share text copied.' })">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-share-nodes"></use></svg>
+                        Copy Share
+                    </button>
+                    <button class="btn btn-dash btn-error"
+                            data-on:click="window.__fishystuffCalculator.clear(); window.__fishystuffToast.info('Calculator cleared.')">
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-x-circle"></use></svg>
+                        Clear
+                    </button>
+                </div>
+            </div>
+
+            <div class="rounded-box border border-base-300 bg-base-200 p-4">
+                <div id="fishing-timeline">
+                    <div data-attr:title="$_live.bite_time_title"
+                         data-attr="{style: 'flex-basis:' + ($_live.percent_bite || '0.00') + '%;'}"
+                         class="slider slider-bitetime"></div>
+                    <div data-attr:title="$_live.auto_fish_time_title"
+                         data-attr="{style: 'flex-basis:' + ($_live.percent_af || '0.00') + '%;'}"
+                         class="slider slider-aftime"></div>
+                    <div data-attr:title="$_live.catch_time_title"
+                         data-attr="{style: 'flex-basis:' + ($_live.percent_catch || '0.00') + '%;'}"
+                         class="slider slider-catchtime"></div>
+                    <div data-attr:title="$_live.unoptimized_time_title" class="slider slider-empty"></div>
+                </div>
+            </div>
+
+            <div class="grid gap-4">
+                <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
+                    <div class="stat">
+                        <div class="stat-title">Average Total Fishing Time</div>
+                        <div class="stat-value text-2xl" data-text="$_live.total_time"></div>
+                        <div class="stat-desc">seconds</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">Average Bite Time</div>
+                        <div class="stat-value text-2xl" data-text="$_live.bite_time"></div>
+                        <div class="stat-desc">seconds</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">Auto-Fishing Time (AFT)</div>
+                        <div class="stat-value text-2xl" data-text="$_live.auto_fish_time"></div>
+                        <div class="stat-desc">seconds</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">Auto-Fishing Time Reduction (AFR)</div>
+                        <div class="stat-value text-2xl" data-text="$_live.auto_fish_time_reduction_text"></div>
+                    </div>
+                </div>
+
+                <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
+                    <div class="stat">
+                        <div class="stat-title whitespace-normal leading-snug" data-text="$_live.casts_title"></div>
+                        <div class="stat-value text-2xl" data-text="$_live.casts_average"></div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">Durability Reduction Resistance (DRR)</div>
+                        <div class="stat-value text-2xl" data-text="$_live.durability_reduction_resistance_text"></div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title">Chance to consume Durability</div>
+                        <div class="stat-value text-2xl" data-text="$_live.chance_to_consume_durability_text"></div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-title whitespace-normal leading-snug" data-text="$_live.durability_loss_title"></div>
+                        <div class="stat-value text-2xl" data-text="$_live.durability_loss_average"></div>
+                    </div>
+                </div>
+            </div>
+
+            <code data-show="$debug" class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
+                <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="$_calc.debug_json"></pre>
+            </code>
+        </div>
+    </section>
+
+    <div class="grid gap-6 lg:grid-cols-2">
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fieldset-legend ml-6 px-2">Zone</legend>
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-4">
+                    __ZONE_SELECT__
+                    <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Min</div>
+                            <div class="stat-value text-lg" data-text="$_live.zone_bite_min"></div>
+                            <div class="stat-desc">raw seconds</div>
+                        </div>
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Max</div>
+                            <div class="stat-value text-lg" data-text="$_live.zone_bite_max"></div>
+                            <div class="stat-desc">raw seconds</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fieldset-legend ml-6 px-2">Bite Time</legend>
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-4">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Fishing Level</legend>
+                        __LEVEL_SELECT__
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Fishing Resources</legend>
+                        <input data-bind="_resources" type="range" class="range-xs range-secondary w-full" min="0" max="100">
+                        <span class="label text-sm font-medium" data-text="$_resources + '% (' + ($_live.abundance_label || 'Exhausted') + ')'"></span>
+                    </fieldset>
+                    <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Effective Min</div>
+                            <div class="stat-value text-lg" data-text="$_live.effective_bite_min"></div>
+                            <div class="stat-desc">seconds</div>
+                        </div>
+                        <div class="stat px-4 py-3">
+                            <div class="stat-title">Effective Max</div>
+                            <div class="stat-value text-lg" data-text="$_live.effective_bite_max"></div>
+                            <div class="stat-desc">seconds</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fieldset-legend ml-6 px-2">Catch Time</legend>
+            <div class="card-body gap-4 pt-0">
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Active</legend>
+                        <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeActive">
+                        <span class="label text-xs">seconds</span>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">AFK</legend>
+                        <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeAfk">
+                        <span class="label text-xs">seconds</span>
+                    </fieldset>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="card card-border bg-base-100">
+            <legend class="fieldset-legend ml-6 px-2">Session (<span data-text="$_live.timespan_text || '8 hours'"></span>)</legend>
+            <div class="card-body gap-3 pt-0">
+                <div class="grid gap-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Amount</legend>
+                            <input type="number" min="0" step="any" class="input input-sm w-full" id="timespan_amount" data-bind="timespanAmount" name="timespan_amount">
+                        </fieldset>
+                        <fieldset class="fieldset">
+                            <legend class="fieldset-legend">Unit</legend>
+                            __TIMESPAN_UNIT_SELECT__
+                        </fieldset>
+                    </div>
+
+                    __SESSION_PRESETS__
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="card card-border bg-base-100 xl:col-span-2">
+            <legend class="fieldset-legend ml-6 px-2">Gear</legend>
+            <div class="card-body pt-0">
+                <div id="items" class="grid gap-4 md:grid-cols-2">
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Lifeskill Level</legend>
+                        __LIFESKILL_LEVEL_SELECT__
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Fishing Rod</legend>
+                        __ROD_SELECT__
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Brand</legend>
+                        <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-3 py-3 font-medium">
+                            <input data-bind="brand" type="checkbox" class="checkbox checkbox-primary">
+                        </label>
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Float</legend>
+                        __FLOAT_SELECT__
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Chair</legend>
+                        __CHAIR_SELECT__
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Lightstone Set</legend>
+                        __LIGHTSTONE_SET_SELECT__
+                    </fieldset>
+                    <fieldset class="fieldset">
+                        <legend class="fieldset-legend">Backpack</legend>
+                        __BACKPACK_SELECT__
+                    </fieldset>
+                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
+                        <legend class="fieldset-legend">Outfit</legend>
+                        __OUTFITS__
+                    </fieldset>
+                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
+                        <legend class="fieldset-legend">Food</legend>
+                        __FOODS__
+                    </fieldset>
+                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
+                        <legend class="fieldset-legend">Buffs</legend>
+                        __BUFFS__
+                    </fieldset>
+                </div>
+            </div>
+        </fieldset>
+
+        <fieldset class="card card-border bg-base-100 xl:col-span-2">
+            <legend class="fieldset-legend ml-6 px-2">Pets</legend>
+            <div class="card-body pt-0">
+                __PETS__
+            </div>
+        </fieldset>
+    </div>
+</div>
+"####
+    .to_string();
+
+    let replacements = [
+        (
+            "__ZONE_SELECT__",
+            render_select(
+                "zone",
+                "select w-full",
+                "data-bind=\"zone\"",
+                &signals.zone,
+                &zones,
+                false,
+                None,
+            ),
+        ),
+        (
+            "__LEVEL_SELECT__",
+            render_select(
+                "level",
+                "select w-full",
+                "data-bind=\"level\"",
+                &signals.level.to_string(),
+                &fishing_levels,
+                false,
+                None,
+            ),
+        ),
+        (
+            "__TIMESPAN_UNIT_SELECT__",
+            render_select(
+                "timespan_unit",
+                "select select-sm w-full",
+                "data-bind=\"timespanUnit\"",
+                &signals.timespan_unit,
+                &session_units,
+                false,
+                None,
+            ),
+        ),
+        (
+            "__SESSION_PRESETS__",
+            render_session_presets(&data.catalog.session_presets, "session_presets"),
+        ),
+        (
+            "__LIFESKILL_LEVEL_SELECT__",
+            render_select(
+                "lifeskill_level",
+                "select w-full",
+                "data-bind=\"lifeskill_level\"",
+                &signals.lifeskill_level,
+                &lifeskill_levels,
+                false,
+                None,
+            ),
+        ),
+        (
+            "__ROD_SELECT__",
+            render_select(
+                "rods",
+                "select w-full",
+                "data-bind=\"rod\"",
+                &signals.rod,
+                &rods,
+                false,
+                None,
+            ),
+        ),
+        (
+            "__FLOAT_SELECT__",
+            render_select(
+                "floats",
+                "select w-full",
+                "data-bind=\"float\"",
+                &signals.float,
+                &floats,
+                true,
+                None,
+            ),
+        ),
+        (
+            "__CHAIR_SELECT__",
+            render_select(
+                "chairs",
+                "select w-full",
+                "data-bind=\"chair\"",
+                &signals.chair,
+                &chairs,
+                true,
+                None,
+            ),
+        ),
+        (
+            "__LIGHTSTONE_SET_SELECT__",
+            render_select(
+                "lightstone_sets",
+                "select w-full",
+                "data-bind=\"lightstone_set\"",
+                &signals.lightstone_set,
+                &lightstone_sets,
+                true,
+                None,
+            ),
+        ),
+        (
+            "__BACKPACK_SELECT__",
+            render_select(
+                "backpacks",
+                "select w-full",
+                "data-bind=\"backpack\"",
+                &signals.backpack,
+                &backpacks,
+                true,
+                None,
+            ),
+        ),
+        (
+            "__OUTFITS__",
+            render_checkbox_group("outfits", "outfit", &signals.outfit, &outfits, None),
+        ),
+        (
+            "__FOODS__",
+            render_checkbox_group("foods", "food", &signals.food, &foods, None),
+        ),
+        (
+            "__BUFFS__",
+            render_checkbox_group("buffs", "buff", &signals.buff, &buffs, None),
+        ),
+        ("__PETS__", render_pet_cards(&data.catalog.pets, signals)),
+    ];
+
+    for (token, replacement) in replacements {
+        html = html.replace(token, &replacement);
+    }
+    html = html.replace("__ACTIVE_CHECKED__", active_checked);
+    html = html.replace("__DEBUG_CHECKED__", debug_checked);
+    Ok(html)
 }
 
 fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectOption<'_>> {
@@ -1177,23 +1566,27 @@ fn render_select(
     selected_value: &str,
     options: &[SelectOption<'_>],
     include_none: bool,
+    change_attr: Option<&str>,
 ) -> String {
     let mut html = String::new();
+    let change_attr = change_attr.unwrap_or("");
     if id.is_empty() {
         write!(
             html,
-            "<select class=\"{}\" {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
+            "<select class=\"{}\" {} {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
             escape_html(class_name),
             bind_attr,
+            change_attr,
         )
         .unwrap();
     } else {
         write!(
             html,
-            "<select id=\"{}\" class=\"{}\" {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
+            "<select id=\"{}\" class=\"{}\" {} {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
             escape_html(id),
             escape_html(class_name),
             bind_attr,
+            change_attr,
         )
         .unwrap();
     }
@@ -1233,16 +1626,19 @@ fn render_checkbox_group(
     bind_key: &str,
     selected_values: &[String],
     options: &[SelectOption<'_>],
+    change_attr: Option<&str>,
 ) -> String {
     let selected = selected_values
         .iter()
         .map(|value| value.as_str())
         .collect::<std::collections::HashSet<_>>();
     let mut html = String::new();
+    let change_attr = change_attr.unwrap_or("");
     write!(
         html,
-        "<div id=\"{}\" class=\"grid gap-2 sm:grid-cols-2\">",
-        escape_html(id)
+        "<div id=\"{}\" class=\"grid gap-2 sm:grid-cols-2\" {}>",
+        escape_html(id),
+        change_attr,
     )
     .unwrap();
     for option in options {
@@ -1253,7 +1649,7 @@ fn render_checkbox_group(
         };
         write!(
             html,
-            "<label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium\"><input data-bind-{} type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm shrink-0\" value=\"{}\"{}>",
+            "<label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium\"><input data-bind=\"{}\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm shrink-0\" value=\"{}\"{}>",
             escape_html(bind_key),
             escape_html(option.value),
             checked
@@ -1285,7 +1681,7 @@ fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) ->
     for preset in presets {
         write!(
             html,
-            "<button type=\"button\" class=\"btn btn-soft btn-sm join-item\" data-on-click=\"$timespanAmount = {}; $timespanUnit = '{}'; window.__fishystuffCalculator.sync(ctx)\">{}</button>",
+            "<button type=\"button\" class=\"btn btn-soft btn-sm join-item\" data-on:click=\"$timespanAmount = {}; $timespanUnit = '{}'; window.__fishystuffCalculator.persist($)\">{}</button>",
             trim_float(preset.amount),
             escape_html(&preset.unit),
             escape_html(&preset.label)
@@ -1325,10 +1721,11 @@ fn render_pet_cards(catalog: &CalculatorPetCatalog, signals: &CalculatorSignals)
         html.push_str(&render_select(
             "",
             "select select-sm w-full",
-            &format!("data-bind-{}.tier", bind_prefix),
+            &format!("data-bind=\"{}.tier\"", bind_prefix),
             &pet.tier,
             &tier_options,
             false,
+            None,
         ));
         html.push_str("</fieldset>");
         html.push_str(
@@ -1337,10 +1734,11 @@ fn render_pet_cards(catalog: &CalculatorPetCatalog, signals: &CalculatorSignals)
         html.push_str(&render_select(
             "",
             "select select-sm w-full",
-            &format!("data-bind-{}.special", bind_prefix),
+            &format!("data-bind=\"{}.special\"", bind_prefix),
             &pet.special,
             &special_options,
             false,
+            None,
         ));
         html.push_str("</fieldset>");
         html.push_str(
@@ -1349,10 +1747,11 @@ fn render_pet_cards(catalog: &CalculatorPetCatalog, signals: &CalculatorSignals)
         html.push_str(&render_select(
             "",
             "select select-sm w-full",
-            &format!("data-bind-{}.talent", bind_prefix),
+            &format!("data-bind=\"{}.talent\"", bind_prefix),
             &pet.talent,
             &talent_options,
             false,
+            None,
         ));
         html.push_str("</fieldset></div>");
         html.push_str("<fieldset class=\"fieldset mt-3 gap-2\"><legend class=\"fieldset-legend\">Skills</legend>");
@@ -1361,6 +1760,7 @@ fn render_pet_cards(catalog: &CalculatorPetCatalog, signals: &CalculatorSignals)
             &skill_bind,
             &pet.skills,
             &select_options_from_catalog(&catalog.skills),
+            None,
         ));
         html.push_str("</fieldset></div>");
     }
@@ -1379,6 +1779,7 @@ fn escape_html(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     use async_trait::async_trait;
@@ -1389,6 +1790,7 @@ mod tests {
     use fishystuff_api::ids::{Rgb, RgbKey};
     use fishystuff_api::models::calculator::{
         CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
+        CalculatorPetSignals, CalculatorSignals,
     };
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
@@ -1406,8 +1808,8 @@ mod tests {
     use crate::store::{FishLang, Store};
 
     use super::{
-        get_calculator_datastar_init, post_calculator_datastar_eval, CalculatorDatastarQuery,
-        CalculatorQuery,
+        get_calculator_datastar_init, normalize_lookup_value, normalize_named_array,
+        post_calculator_datastar_eval, CalculatorDatastarQuery, CalculatorQuery,
     };
 
     struct MockStore;
@@ -1490,6 +1892,61 @@ mod tests {
                     index: 100,
                     order: 100,
                 }],
+                defaults: CalculatorSignals {
+                    level: 5,
+                    lifeskill_level: "100".to_string(),
+                    zone: "240,74,74".to_string(),
+                    resources: 0.0,
+                    rod: "item:16162".to_string(),
+                    float: String::new(),
+                    chair: "item:705539".to_string(),
+                    lightstone_set: "effect:blacksmith-s-blessing".to_string(),
+                    backpack: "item:830150".to_string(),
+                    outfit: vec![
+                        "effect:8-piece-outfit-set-effect".to_string(),
+                        "effect:awakening-weapon-outfit".to_string(),
+                        "effect:mainhand-weapon-outfit".to_string(),
+                    ],
+                    food: vec!["item:9359".to_string()],
+                    buff: vec!["".to_string(), "item:721092".to_string()],
+                    pet1: CalculatorPetSignals {
+                        tier: "5".to_string(),
+                        special: "auto_fishing_time_reduction".to_string(),
+                        talent: "durability_reduction_resistance".to_string(),
+                        skills: vec!["fishing_exp".to_string()],
+                    },
+                    pet2: CalculatorPetSignals {
+                        tier: "4".to_string(),
+                        special: String::new(),
+                        talent: "durability_reduction_resistance".to_string(),
+                        skills: vec!["fishing_exp".to_string()],
+                    },
+                    pet3: CalculatorPetSignals {
+                        tier: "4".to_string(),
+                        special: String::new(),
+                        talent: "durability_reduction_resistance".to_string(),
+                        skills: vec!["fishing_exp".to_string()],
+                    },
+                    pet4: CalculatorPetSignals {
+                        tier: "4".to_string(),
+                        special: String::new(),
+                        talent: "durability_reduction_resistance".to_string(),
+                        skills: vec!["fishing_exp".to_string()],
+                    },
+                    pet5: CalculatorPetSignals {
+                        tier: "4".to_string(),
+                        special: String::new(),
+                        talent: "durability_reduction_resistance".to_string(),
+                        skills: vec!["fishing_exp".to_string()],
+                    },
+                    catch_time_active: 17.5,
+                    catch_time_afk: 6.5,
+                    timespan_amount: 8.0,
+                    timespan_unit: "hours".to_string(),
+                    brand: true,
+                    active: false,
+                    debug: false,
+                },
                 ..CalculatorCatalogResponse::default()
             })
         }
@@ -1563,13 +2020,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn init_returns_datastar_fragments_and_calc_signals() {
+    async fn init_returns_html_fragment_with_initial_signals() {
         let response = get_calculator_datastar_init(
             State(test_state()),
             Ok(Query(CalculatorDatastarQuery {
                 lang: Some("en".to_string()),
                 r#ref: None,
-                datastar: None,
+                datastar: Some("{}".to_string()),
             })),
             Extension(RequestId("req-test".to_string())),
         )
@@ -1587,17 +2044,22 @@ mod tests {
         );
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(text.contains("event: datastar-merge-fragments"));
-        assert!(text.contains("<select id=\"zone\""));
-        assert!(text.contains("event: datastar-merge-signals"));
+        assert!(text.contains("event:datastar-patch-signals"));
+        assert!(text.contains("data:signals {"));
         assert!(text.contains("\"catchTimeActive\":17.5"));
         assert!(text.contains("\"timespanAmount\":8.0"));
+        assert!(text.contains("\"active\":false"));
+        assert!(text.contains("\"_resources\":0.0"));
         assert!(text.contains("\"chair\":\"item:705539\""));
-        assert!(text.contains("\"zone_name\":\"Velia Beach\""));
+        assert!(text.contains("\"zone_name\":\"Velia Beach"));
+        assert!(text.contains("event:datastar-patch-elements"));
+        assert!(text.contains("data:selector #calculator-app"));
+        assert!(text.contains("<div id=\"calculator-app\""));
+        assert!(text.contains("<select id=\"zone\""));
     }
 
     #[tokio::test]
-    async fn eval_normalizes_legacy_values_and_returns_calc_signals() {
+    async fn eval_normalizes_legacy_values_and_returns_calc_signals_sse() {
         let response = post_calculator_datastar_eval(
             State(test_state()),
             Ok(Query(CalculatorQuery {
@@ -1613,12 +2075,52 @@ mod tests {
         .unwrap()
         .into_response();
 
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("text/event-stream")
+        );
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(text.contains("event: datastar-merge-signals"));
-        assert!(text.contains("\"zone\":\"240,74,74\""));
-        assert!(text.contains("\"rod\":\"item:16162\""));
-        assert!(text.contains("\"special\":\"auto_fishing_time_reduction\""));
+        assert!(text.contains("event:datastar-patch-signals"));
         assert!(text.contains("\"zone_name\":\"Velia Beach\""));
+        assert!(!text.contains("\"zone\":\"240,74,74\""));
+        assert!(!text.contains("\"rod\":\"item:16162\""));
+        assert!(!text.contains("\"_resources\":0.0"));
+    }
+
+    #[tokio::test]
+    async fn eval_keeps_passive_auto_fish_time_when_active_is_true() {
+        let response = post_calculator_datastar_eval(
+            State(test_state()),
+            Ok(Query(CalculatorQuery {
+                lang: Some("en".to_string()),
+                r#ref: None,
+            })),
+            Extension(RequestId("req-test".to_string())),
+            Bytes::from_static(br#"{"active":true,"rod":"item:16162"}"#),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("\"auto_fish_time\":\"63.00\""));
+        assert!(!text.contains("\"active\":true"));
+    }
+
+    #[test]
+    fn normalize_named_array_keeps_explicit_empty_selection() {
+        let valid_keys = std::collections::HashSet::from(["item:1".to_string()]);
+        let lookup = HashMap::from([(normalize_lookup_value("Item One"), "item:1".to_string())]);
+
+        let normalized =
+            normalize_named_array(&[], &valid_keys, &lookup, None, vec!["item:1".to_string()]);
+
+        assert!(normalized.is_empty());
     }
 }

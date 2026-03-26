@@ -16,116 +16,9 @@
     const calculatorLang = document.documentElement.lang?.trim().toLowerCase().startsWith("ko")
         ? "ko"
         : "en";
-
     const urlParams = new URLSearchParams(window.location.search);
     const presetQueryParam = urlParams.get("preset");
-
-    const createEmptySignals = () => ({
-        level: 5,
-        lifeskill_level: "100",
-        zone: "240,74,74",
-        resources: 0,
-        rod: "item:16162",
-        float: "",
-        chair: "item:705539",
-        lightstone_set: "effect:blacksmith-s-blessing",
-        backpack: "item:830150",
-        outfit: [
-            "effect:8-piece-outfit-set-effect",
-            "effect:awakening-weapon-outfit",
-            "effect:mainhand-weapon-outfit",
-        ],
-        food: ["item:9359"],
-        buff: ["", "item:721092"],
-        pet1: {
-            tier: "5",
-            special: "auto_fishing_time_reduction",
-            talent: "durability_reduction_resistance",
-            skills: ["fishing_exp"],
-        },
-        pet2: {
-            tier: "4",
-            special: "",
-            talent: "durability_reduction_resistance",
-            skills: ["fishing_exp"],
-        },
-        pet3: {
-            tier: "4",
-            special: "",
-            talent: "durability_reduction_resistance",
-            skills: ["fishing_exp"],
-        },
-        pet4: {
-            tier: "4",
-            special: "",
-            talent: "durability_reduction_resistance",
-            skills: ["fishing_exp"],
-        },
-        pet5: {
-            tier: "4",
-            special: "",
-            talent: "durability_reduction_resistance",
-            skills: ["fishing_exp"],
-        },
-        catchTimeActive: 17.5,
-        catchTimeAfk: 6.5,
-        timespanAmount: 8,
-        timespanUnit: "hours",
-        brand: true,
-        active: false,
-        debug: false,
-        _loading: false,
-        _calc: {
-            zone_name: "",
-            abundance_label: "",
-            zone_bite_min: "",
-            zone_bite_max: "",
-            effective_bite_min: "",
-            effective_bite_max: "",
-            total_time: "",
-            bite_time: "",
-            auto_fish_time: "",
-            auto_fish_time_reduction_text: "",
-            casts_title: "",
-            casts_average: "",
-            durability_reduction_resistance_text: "",
-            chance_to_consume_durability_text: "",
-            durability_loss_title: "",
-            durability_loss_average: "",
-            timespan_text: "",
-            bite_time_title: "",
-            auto_fish_time_title: "",
-            catch_time_title: "",
-            unoptimized_time_title: "",
-            show_auto_fishing: false,
-            percent_bite: "0.00",
-            percent_af: "0.00",
-            percent_catch: "0.00",
-            debug_json: "",
-        },
-    });
-
-    const cloneSignals = (signals) => JSON.parse(JSON.stringify(signals));
-
-    const publicCalculatorSignals = (signals) =>
-        Object.fromEntries(
-            Object.entries(signals ?? {}).filter(([key]) => !key.startsWith("_"))
-        );
-
-    const presetURL = (signals) => {
-        const payload = JSON.stringify(publicCalculatorSignals(signals));
-        return (
-            window.location.origin +
-            window.location.pathname +
-            "?preset=" +
-            LZString.compressToEncodedURIComponent(payload)
-        );
-    };
-
-    const clearSignals = () => {
-        localStorage.removeItem(CALCULATOR_STORAGE_KEY);
-        window.location.reload();
-    };
+    const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_live(\.|$)|_calc(\.|$)|_resources)$/;
 
     const loadStoredSignals = () => {
         const raw = localStorage.getItem(CALCULATOR_STORAGE_KEY);
@@ -141,34 +34,46 @@
         }
     };
 
-    const mergeWithEmptySignals = (source) => {
-        const defaults = createEmptySignals();
-        if (!source || typeof source !== "object") {
-            return defaults;
+    const canonicalizeStoredSignals = (signals) => {
+        const current = { ...(signals ?? {}) };
+        const aliases = {
+            _active: "active",
+            _debug: "debug",
+            _level: "level",
+            _resources: "resources",
+            _catchTimeActive: "catchTimeActive",
+            _catchTimeAfk: "catchTimeAfk",
+            _timespanAmount: "timespanAmount",
+            _timespanUnit: "timespanUnit",
+        };
+        for (const [legacyKey, canonicalKey] of Object.entries(aliases)) {
+            if (!(canonicalKey in current) && legacyKey in current) {
+                current[canonicalKey] = current[legacyKey];
+            }
+            delete current[legacyKey];
         }
-        const merged = { ...defaults };
-        for (const key of Object.keys(defaults)) {
-            if (!(key in source)) {
-                continue;
-            }
-            if (key === "_calc" || key === "_loading") {
-                continue;
-            }
-            if (key.startsWith("pet")) {
-                merged[key] = {
-                    ...defaults[key],
-                    ...(source[key] && typeof source[key] === "object" ? source[key] : {}),
-                };
-                continue;
-            }
-            merged[key] = source[key];
-        }
-        return merged;
+        return current;
     };
 
-    const bootstrapSignals = loadStoredSignals();
-    const initialSignals = () => mergeWithEmptySignals(bootstrapSignals);
-    const initialCalculatorSignals = initialSignals();
+    const persistedCalculatorSignals = (signals) =>
+        Object.fromEntries(
+            Object.entries(signals ?? {}).filter(([key]) => !key.startsWith("_"))
+        );
+
+    const presetURL = (signals) => {
+        const payload = JSON.stringify(persistedCalculatorSignals(signals));
+        return (
+            window.location.origin +
+            window.location.pathname +
+            "?preset=" +
+            LZString.compressToEncodedURIComponent(payload)
+        );
+    };
+
+    const clearSignals = () => {
+        localStorage.removeItem(CALCULATOR_STORAGE_KEY);
+        window.location.reload();
+    };
 
     if (presetQueryParam) {
         try {
@@ -188,26 +93,83 @@
         }
     }
 
+    const calculatorNumber = (value) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    const calculatorFmt2 = (value) => calculatorNumber(value).toFixed(2);
+
+    const calculatorTrimFloat = (value) =>
+        calculatorFmt2(value).replace(/\.?0+$/, "");
+
+    const calculatorPercentage = (value, total) => {
+        const safeTotal = calculatorNumber(total);
+        if (safeTotal <= 0) {
+            return 0;
+        }
+        return (calculatorNumber(value) / safeTotal) * 100;
+    };
+
+    const calculatorTimespanSeconds = (amount, unit) => {
+        const unitSeconds = unit === "minutes"
+            ? 60
+            : unit === "hours"
+              ? 3600
+              : unit === "days"
+                ? 86400
+                : 604800;
+        return Math.max(0, calculatorNumber(amount)) * unitSeconds;
+    };
+
+    const calculatorTimespanText = (amount, unit) => {
+        const normalized = Math.max(0, calculatorNumber(amount));
+        const label = unit === "minutes"
+            ? (normalized === 1 ? "minute" : "minutes")
+            : unit === "hours"
+              ? (normalized === 1 ? "hour" : "hours")
+              : unit === "days"
+                ? (normalized === 1 ? "day" : "days")
+                : (normalized === 1 ? "week" : "weeks");
+        return `${calculatorTrimFloat(normalized)} ${label}`;
+    };
+
+    const calculatorAbundanceLabel = (resources) => {
+        const value = calculatorNumber(resources);
+        if (value <= 14) {
+            return "Exhausted";
+        }
+        if (value <= 45) {
+            return "Low";
+        }
+        if (value <= 70) {
+            return "Average";
+        }
+        return "Abundant";
+    };
+
     window.__fishystuffCalculator = {
         iconSpriteUrl: ICON_SPRITE_URL,
         lang: calculatorLang,
         initUrl() {
-            const url = new URL(
-                window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/init?lang=${this.lang}`),
-                window.location.origin,
+            return window.__fishystuffResolveApiUrl(
+                `/api/v1/calculator/datastar/init?lang=${this.lang}`,
             );
-            if (bootstrapSignals && typeof bootstrapSignals === "object") {
-                url.searchParams.set(
-                    "datastar",
-                    JSON.stringify(publicCalculatorSignals(bootstrapSignals)),
-                );
-            }
-            return url.toString();
         },
         evalUrl() {
             return window.__fishystuffResolveApiUrl(
                 `/api/v1/calculator/datastar/eval?lang=${this.lang}`,
             );
+        },
+        persistSignalPatchFilter() {
+            return {
+                exclude: CALCULATOR_EPHEMERAL_SIGNAL_PATTERN,
+            };
+        },
+        serverSignalPatchFilter() {
+            return {
+                include: /^(zone|lifeskill_level|rod|float|chair|lightstone_set|backpack|brand|outfit($|\\.)|food($|\\.)|buff($|\\.)|pet[1-5]($|\\.))/,
+            };
         },
         presetUrl(signals) {
             return presetURL(signals);
@@ -227,292 +189,104 @@
         clear() {
             clearSignals();
         },
-        initialSignals() {
-            return cloneSignals(initialCalculatorSignals);
+        restore(signals) {
+            Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
         },
         persist(signals) {
-            const payload = publicCalculatorSignals(signals);
+            const payload = persistedCalculatorSignals(signals);
             localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(payload));
         },
-        sync(runtimeCtx) {
-            this.persist(runtimeCtx.signals.values());
-            return runtimeCtx.actions.post.fn(runtimeCtx, this.evalUrl());
+        syncInput(signals) {
+            this.persist(signals);
+        },
+        liveCalc(level, resources, active, catchTimeActive, catchTimeAfk, timespanAmount, timespanUnit, calc) {
+            const current = calc ?? {};
+            const zoneBiteMinRaw = calculatorNumber(current.zone_bite_min);
+            const zoneBiteMaxRaw = calculatorNumber(current.zone_bite_max);
+            const currentTimespanText = calculatorTimespanText(timespanAmount, timespanUnit);
+            const zoneBiteAvgRaw = (zoneBiteMinRaw + zoneBiteMaxRaw) / 2;
+            const normalizedLevel = Math.max(0, Math.min(5, calculatorNumber(level)));
+            const normalizedResources = Math.max(0, Math.min(100, calculatorNumber(resources)));
+            if (!String(current.zone_bite_min ?? "").trim() && !String(current.zone_bite_max ?? "").trim()) {
+                return {
+                    ...current,
+                    abundance_label: calculatorAbundanceLabel(normalizedResources),
+                    timespan_text: currentTimespanText,
+                    casts_title: `Average Casts (${currentTimespanText})`,
+                    durability_loss_title: `Average Durability Loss (${currentTimespanText})`,
+                    show_auto_fishing: !active,
+                    percent_bite: current.percent_bite ?? "0.00",
+                    percent_af: current.percent_af ?? "0.00",
+                    percent_catch: current.percent_catch ?? "0.00",
+                };
+            }
+            const factorLevel = 1 - [0.15, 0.30, 0.35, 0.40, 0.45, 0.50][normalizedLevel];
+            const factorResources = 2 - (normalizedResources / 100);
+            const biteFactor = factorLevel * factorResources;
+            const effectiveBiteMinRaw = zoneBiteMinRaw * biteFactor;
+            const effectiveBiteMaxRaw = zoneBiteMaxRaw * biteFactor;
+            const biteTimeRaw = zoneBiteAvgRaw * biteFactor;
+            const activeCatchTimeRaw = Math.max(0, calculatorNumber(catchTimeActive));
+            const afkCatchTimeRaw = Math.max(0, calculatorNumber(catchTimeAfk));
+            const autoFishTimeRaw = active ? 0 : calculatorNumber(current.auto_fish_time);
+            const catchTimeRaw = active ? activeCatchTimeRaw : afkCatchTimeRaw;
+            const totalTimeRaw = active
+                ? biteTimeRaw + activeCatchTimeRaw
+                : biteTimeRaw + autoFishTimeRaw + afkCatchTimeRaw;
+            const unoptimizedTimeRaw = zoneBiteAvgRaw + (active ? activeCatchTimeRaw : afkCatchTimeRaw + 180);
+            const percentBite = calculatorPercentage(biteTimeRaw, unoptimizedTimeRaw);
+            const percentAF = calculatorPercentage(autoFishTimeRaw, unoptimizedTimeRaw);
+            const percentCatch = calculatorPercentage(catchTimeRaw, unoptimizedTimeRaw);
+            const percentImprovement = 100 - calculatorPercentage(totalTimeRaw, unoptimizedTimeRaw);
+            const castsAverageRaw = totalTimeRaw > 0
+                ? calculatorTimespanSeconds(timespanAmount, timespanUnit) / totalTimeRaw
+                : 0;
+            const chanceToReduceRaw = calculatorNumber(
+                String(current.chance_to_consume_durability_text ?? "").replace("%", ""),
+            ) / 100;
+            const durabilityLossAverageRaw = castsAverageRaw * chanceToReduceRaw;
+
+            return {
+                ...current,
+                abundance_label: calculatorAbundanceLabel(normalizedResources),
+                zone_bite_min: calculatorFmt2(zoneBiteMinRaw),
+                zone_bite_max: calculatorFmt2(zoneBiteMaxRaw),
+                effective_bite_min: calculatorFmt2(effectiveBiteMinRaw),
+                effective_bite_max: calculatorFmt2(effectiveBiteMaxRaw),
+                total_time: calculatorFmt2(totalTimeRaw),
+                bite_time: calculatorFmt2(biteTimeRaw),
+                auto_fish_time: calculatorFmt2(autoFishTimeRaw),
+                casts_title: `Average Casts (${currentTimespanText})`,
+                casts_average: calculatorFmt2(castsAverageRaw),
+                durability_loss_title: `Average Durability Loss (${currentTimespanText})`,
+                durability_loss_average: calculatorFmt2(durabilityLossAverageRaw),
+                timespan_text: currentTimespanText,
+                bite_time_title: `Bitetime: ${calculatorFmt2(biteTimeRaw)}s (${calculatorFmt2(percentBite)}%)`,
+                auto_fish_time_title: `Auto-Fishing Time: ${calculatorFmt2(autoFishTimeRaw)}s (${calculatorFmt2(percentAF)}%)`,
+                catch_time_title: `Catch Time: ${calculatorFmt2(catchTimeRaw)}s (${calculatorFmt2(percentCatch)}%)`,
+                unoptimized_time_title: `Average Unoptimized Time: ${calculatorFmt2(unoptimizedTimeRaw)}s (${calculatorFmt2(percentImprovement)}%)`,
+                show_auto_fishing: !active,
+                percent_bite: calculatorFmt2(percentBite),
+                percent_af: calculatorFmt2(percentAF),
+                percent_catch: calculatorFmt2(percentCatch),
+            };
         },
     };
+
 </script>
 
 <div id="calculator"
      class="not-prose grid gap-6"
-     data-signals="window.__fishystuffCalculator.initialSignals()"
-     data-on-input__debounce.150ms="window.__fishystuffCalculator.sync(ctx)"
-     data-on-change__debounce.150ms="window.__fishystuffCalculator.sync(ctx)">
-
-    <div class="hidden"
-         data-indicator-_loading
-         data-on-load="@get(window.__fishystuffCalculator.initUrl())"></div>
-
-    <section class="card card-border bg-base-100">
-        <div class="card-body gap-5">
-            <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                <div class="flex flex-wrap gap-3">
-                    <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
-                        <input data-bind-active type="checkbox" class="checkbox checkbox-primary">
-                        <span>Active Fishing</span>
-                    </label>
-                    <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3 font-medium">
-                        <input data-bind-debug type="checkbox" class="checkbox checkbox-primary">
-                        <span>Debug</span>
-                    </label>
-                </div>
-
-                <div class="flex flex-wrap gap-2">
-                    <button class="btn btn-soft btn-secondary"
-                            data-on-click="window.__fishystuffToast.copyText(window.__fishystuffCalculator.presetUrl(ctx.signals.values()), { success: 'Preset URL copied.' })">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-link"></use></svg>
-                        Copy URL
-                    </button>
-                    <button class="btn btn-soft btn-secondary"
-                            data-on-click="window.__fishystuffToast.copyText(window.__fishystuffCalculator.shareText(ctx.signals.values()), { success: 'Share text copied.' })">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-share-nodes"></use></svg>
-                        Copy Share
-                    </button>
-                    <button class="btn btn-dash btn-error"
-                            data-on-click="window.__fishystuffCalculator.clear(); window.__fishystuffToast.info('Calculator cleared.')">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-x-circle"></use></svg>
-                        Clear
-                    </button>
-                </div>
-            </div>
-
-            <div class="rounded-box border border-base-300 bg-base-200 p-4">
-                <div id="fishing-timeline">
-                    <div data-attr-title="$_calc.bite_time_title"
-                         data-attr="{style: 'flex-basis:' + ($_calc.percent_bite || '0.00') + '%;'}"
-                         class="slider slider-bitetime"></div>
-                    <div data-show="$_calc.show_auto_fishing"
-                         data-attr-title="$_calc.auto_fish_time_title"
-                         data-attr="{style: 'flex-basis:' + ($_calc.percent_af || '0.00') + '%;'}"
-                         class="slider slider-aftime"></div>
-                    <div data-attr-title="$_calc.catch_time_title"
-                         data-attr="{style: 'flex-basis:' + ($_calc.percent_catch || '0.00') + '%;'}"
-                         class="slider slider-catchtime"></div>
-                    <div data-attr-title="$_calc.unoptimized_time_title" class="slider slider-empty"></div>
-                </div>
-            </div>
-
-            <div class="grid gap-4">
-                <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
-                    <div class="stat">
-                        <div class="stat-title">Average Total Fishing Time</div>
-                        <div class="stat-value text-2xl" data-text="$_calc.total_time"></div>
-                        <div class="stat-desc">seconds</div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-title">Average Bite Time</div>
-                        <div class="stat-value text-2xl" data-text="$_calc.bite_time"></div>
-                        <div class="stat-desc">seconds</div>
-                    </div>
-                    <div data-show="$_calc.show_auto_fishing" class="stat">
-                        <div class="stat-title">Auto-Fishing Time (AFT)</div>
-                        <div class="stat-value text-2xl" data-text="$_calc.auto_fish_time"></div>
-                        <div class="stat-desc">seconds</div>
-                    </div>
-                    <div data-show="$_calc.show_auto_fishing" class="stat">
-                        <div class="stat-title">Auto-Fishing Time Reduction (AFR)</div>
-                        <div class="stat-value text-2xl" data-text="$_calc.auto_fish_time_reduction_text"></div>
-                    </div>
-                </div>
-
-                <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
-                    <div class="stat">
-                        <div class="stat-title whitespace-normal leading-snug" data-text="$_calc.casts_title"></div>
-                        <div class="stat-value text-2xl" data-text="$_calc.casts_average"></div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-title">Durability Reduction Resistance (DRR)</div>
-                        <div class="stat-value text-2xl" data-text="$_calc.durability_reduction_resistance_text"></div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-title">Chance to consume Durability</div>
-                        <div class="stat-value text-2xl" data-text="$_calc.chance_to_consume_durability_text"></div>
-                    </div>
-                    <div class="stat">
-                        <div class="stat-title whitespace-normal leading-snug" data-text="$_calc.durability_loss_title"></div>
-                        <div class="stat-value text-2xl" data-text="$_calc.durability_loss_average"></div>
-                    </div>
-                </div>
-            </div>
-
-            <code data-show="$debug" class="rounded-box border border-base-300 bg-base-200 p-4 text-sm">
-                <pre class="overflow-x-auto whitespace-pre-wrap break-all" data-text="$_calc.debug_json"></pre>
-            </code>
+     data-signals="{ _loading: true }"
+     data-init__delay.50ms="window.__fishystuffCalculator.restore($); @get(window.__fishystuffCalculator.initUrl())">
+    <section data-show="$_loading" class="card card-border bg-base-100">
+        <div class="card-body">
+            <span class="loading loading-spinner loading-md"></span>
+            <p class="text-sm text-base-content/70">Loading calculator...</p>
         </div>
     </section>
 
-    <div class="grid gap-6 xl:grid-cols-2">
-        <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Zone</legend>
-            <div class="card-body gap-4 pt-0">
-                <div class="grid gap-4">
-                    <select class="select w-full" id="zone" data-bind-zone>
-                        <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                    </select>
-                    <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
-                        <div class="stat px-4 py-3">
-                            <div class="stat-title">Min</div>
-                            <div class="stat-value text-lg" data-text="$_calc.zone_bite_min"></div>
-                            <div class="stat-desc">raw seconds</div>
-                        </div>
-                        <div class="stat px-4 py-3">
-                            <div class="stat-title">Max</div>
-                            <div class="stat-value text-lg" data-text="$_calc.zone_bite_max"></div>
-                            <div class="stat-desc">raw seconds</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </fieldset>
-
-        <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Bite Time</legend>
-            <div class="card-body gap-4 pt-0">
-                <div class="grid gap-4">
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Fishing Level</legend>
-                        <select class="select w-full" id="level" data-bind-level>
-                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                        </select>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Fishing Resources</legend>
-                        <input data-bind-resources type="range" class="range-xs range-secondary w-full" min="0" max="100">
-                        <span class="label text-sm font-medium" data-text="$resources + '% (' + ($_calc.abundance_label || 'Exhausted') + ')'"></span>
-                    </fieldset>
-                    <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
-                        <div class="stat px-4 py-3">
-                            <div class="stat-title">Effective Min</div>
-                            <div class="stat-value text-lg" data-text="$_calc.effective_bite_min"></div>
-                            <div class="stat-desc">seconds</div>
-                        </div>
-                        <div class="stat px-4 py-3">
-                            <div class="stat-title">Effective Max</div>
-                            <div class="stat-value text-lg" data-text="$_calc.effective_bite_max"></div>
-                            <div class="stat-desc">seconds</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </fieldset>
-
-        <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Catch Time</legend>
-            <div class="card-body gap-4 pt-0">
-                <div class="grid gap-3 sm:grid-cols-2">
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Active</legend>
-                        <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeActive">
-                        <span class="label text-xs">seconds</span>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">AFK</legend>
-                        <input type="number" min="0" step="any" class="input input-sm w-full" data-bind="catchTimeAfk">
-                        <span class="label text-xs">seconds</span>
-                    </fieldset>
-                </div>
-            </div>
-        </fieldset>
-
-        <fieldset class="card card-border bg-base-100">
-            <legend class="fieldset-legend ml-6 px-2">Session (<span data-text="$_calc.timespan_text || '8 hours'"></span>)</legend>
-            <div class="card-body gap-3 pt-0">
-                <div class="grid gap-3">
-                    <div class="grid grid-cols-2 gap-3">
-                        <fieldset class="fieldset">
-                            <legend class="fieldset-legend">Amount</legend>
-                            <input type="number" min="0" step="any" class="input input-sm w-full" id="timespan_amount" data-bind="timespanAmount" name="timespan_amount">
-                        </fieldset>
-                        <fieldset class="fieldset">
-                            <legend class="fieldset-legend">Unit</legend>
-                            <select class="select select-sm w-full" id="timespan_unit" data-bind="timespanUnit">
-                                <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                            </select>
-                        </fieldset>
-                    </div>
-
-                    <div id="session_presets" class="join join-vertical sm:join-horizontal"></div>
-                </div>
-            </div>
-        </fieldset>
-
-        <fieldset class="card card-border bg-base-100 xl:col-span-2">
-            <legend class="fieldset-legend ml-6 px-2">Gear</legend>
-            <div class="card-body pt-0">
-                <div id="items" class="grid gap-4 md:grid-cols-2">
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Lifeskill Level</legend>
-                        <select class="select w-full" id="lifeskill_level" data-bind-lifeskill_level>
-                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                        </select>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Fishing Rod</legend>
-                        <select class="select w-full" id="rods" data-bind-rod>
-                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                        </select>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Brand</legend>
-                        <label class="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-3 py-3 font-medium">
-                            <input data-bind-brand type="checkbox" class="checkbox checkbox-primary">
-                        </label>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Float</legend>
-                        <select class="select w-full" id="floats" data-bind-float>
-                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                        </select>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Chair</legend>
-                        <select class="select w-full" id="chairs" data-bind-chair>
-                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                        </select>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Lightstone Set</legend>
-                        <select class="select w-full" id="lightstone_sets" data-bind-lightstone_set>
-                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                        </select>
-                    </fieldset>
-                    <fieldset class="fieldset">
-                        <legend class="fieldset-legend">Backpack</legend>
-                        <select class="select w-full" id="backpacks" data-bind-backpack>
-                            <button class="w-full justify-between"><div><selectedcontent></selectedcontent></div></button>
-                        </select>
-                    </fieldset>
-                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
-                        <legend class="fieldset-legend">Outfit</legend>
-                        <div id="outfits" class="grid gap-2 sm:grid-cols-2"></div>
-                    </fieldset>
-                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
-                        <legend class="fieldset-legend">Food</legend>
-                        <div id="foods" class="grid gap-2 sm:grid-cols-2"></div>
-                    </fieldset>
-                    <fieldset class="fieldset rounded-box border border-base-300 bg-base-200 p-4 md:col-span-2">
-                        <legend class="fieldset-legend">Buffs</legend>
-                        <div id="buffs" class="grid gap-2 sm:grid-cols-2"></div>
-                    </fieldset>
-                </div>
-            </div>
-        </fieldset>
-
-        <fieldset class="card card-border bg-base-100 xl:col-span-2">
-            <legend class="fieldset-legend ml-6 px-2">Pets</legend>
-            <div class="card-body pt-0">
-                <div id="pets" class="grid gap-4 md:grid-cols-2"></div>
-            </div>
-        </fieldset>
-    </div>
+    <div id="calculator-app"></div>
 </div>
 
 <style>

@@ -10,6 +10,5 @@
   <!-- Page content (SuperMD can include the form / markup you need) -->
   <div id="page" :html="$page.content()"></div>
 
-  <!-- Your main module -->
-  <script type="module" src="$site.asset('js/datastar.js').link()"></script>
+  <script src="$site.asset('js/datastar.js').link()"></script>
   </div>

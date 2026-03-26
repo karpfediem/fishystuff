@@ -9,9 +9,11 @@ docs = []
 
 [dependencies]
 anyhow = { workspace = true }
+async-stream = "0.3"
 async-trait = "0.1"
 axum = { version = "0.6", features = ["json"] }
 chrono = { workspace = true }
+datastar = "0.3.1"
 fishystuff_api = { path = "../../lib/fishystuff_api" }
 fishystuff_config = { path = "../../lib/fishystuff_config" }
 fishystuff_core = { path = "../../lib/fishystuff_core" }

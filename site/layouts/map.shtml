@@ -1357,7 +1357,7 @@
         </div>
       </div>
     </div>
-    <script type="module" src="$site.asset('js/datastar.js').link()"></script>
+    <script src="$site.asset('js/datastar.js').link()"></script>
     <script type="module" src="$site.asset('map/loader.js').link()"></script>
     </div>
   </div>
