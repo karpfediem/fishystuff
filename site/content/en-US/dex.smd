@@ -1111,7 +1111,7 @@
     const ICON_SORT_PRICE_DESC = spriteIconMarkup("arrow-down-fill");
     const CAUGHT_FILTER_ORDER = ["all", "caught", "missing"];
     const METHOD_ORDER = ["rod", "harpoon"];
-    const SORT_FIELD_ORDER = ["name", "price"];
+    const SORT_FIELD_ORDER = ["price", "name"];
     const SORT_DIRECTION_ORDER = ["asc", "desc"];
     const SORT_FIELD_LABELS = Object.freeze({
       name: "Name",
@@ -1131,8 +1131,8 @@
       currentGradeFilters: [],
       currentMethodFilters: [],
       currentShowDried: false,
-      currentSortField: "name",
-      currentSortDirection: "asc",
+      currentSortField: "price",
+      currentSortDirection: "desc",
       fishById: new Map(),
       signals: null,
       uiSettingsUnsubscribe: null,
@@ -1688,13 +1688,13 @@
     }
 
     function normalizeSortField(value) {
-      const normalized = String(value || "name").trim().toLowerCase();
-      return SORT_FIELD_ORDER.includes(normalized) ? normalized : "name";
+      const normalized = String(value || "price").trim().toLowerCase();
+      return SORT_FIELD_ORDER.includes(normalized) ? normalized : "price";
     }
 
     function normalizeSortDirection(value) {
-      const normalized = String(value || "asc").trim().toLowerCase();
-      return SORT_DIRECTION_ORDER.includes(normalized) ? normalized : "asc";
+      const normalized = String(value || "desc").trim().toLowerCase();
+      return SORT_DIRECTION_ORDER.includes(normalized) ? normalized : "desc";
     }
 
     function sortFieldIconMarkup(sortField, sortDirection) {
@@ -2759,8 +2759,8 @@
        grade_filters: [],
        method_filters: [],
        show_dried: false,
-       sort_field: 'name',
-       sort_direction: 'asc',
+       sort_field: 'price',
+       sort_direction: 'desc',
        caught_ids: [],
        favourite_ids: [],
        progress_panel_collapsed: false,
@@ -2798,8 +2798,8 @@
          grade_filters: $grade_filters || [],
          method_filters: $method_filters || [],
          show_dried: $show_dried === true,
-         sort_field: $sort_field || 'name',
-         sort_direction: $sort_direction || 'asc',
+         sort_field: $sort_field || 'price',
+         sort_direction: $sort_direction || 'desc',
          caught_ids: $caught_ids || [],
          favourite_ids: $favourite_ids || [],
          progress_panel_collapsed: $progress_panel_collapsed === true,
@@ -3016,16 +3016,16 @@
         <span class="fishydex-panel-controls" role="group" aria-label="Catalog sort controls">
           <button type="button"
                   class="btn btn-sm btn-ghost fishydex-sort-button"
-                  data-sort-field-value="name"
+                  data-sort-field-value="price"
                   aria-pressed="true"
-                  aria-label="Toggle name sort direction. Current: ascending."
-                  data-on:click="window.Fishydex.activateSortField('name')"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg><span>Name</span></button>
+                  aria-label="Toggle price sort direction. Current: descending."
+                  data-on:click="window.Fishydex.activateSortField('price')"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-down-fill"></use></svg></span></span><span>Price</span></button>
           <button type="button"
                   class="btn btn-sm btn-ghost fishydex-sort-button"
-                  data-sort-field-value="price"
+                  data-sort-field-value="name"
                   aria-pressed="false"
-                  aria-label="Sort catalog by price ascending."
-                  data-on:click="window.Fishydex.activateSortField('price')"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-up-fill"></use></svg></span></span><span>Price</span></button>
+                  aria-label="Sort catalog by name ascending."
+                  data-on:click="window.Fishydex.activateSortField('name')"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg><span>Name</span></button>
         </span>
       </legend>
       <div class="card-body fishydex-grid-body">
