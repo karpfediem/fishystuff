@@ -34,6 +34,10 @@ function dispatchValueEvents(element) {
     element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function cloneChildNodes(source) {
+    return Array.from(source.childNodes, (node) => node.cloneNode(true));
+}
+
 function resolveScopedUrl(rawUrl, scope) {
     const normalizedUrl = String(rawUrl ?? "").trim();
     if (!normalizedUrl) {
@@ -324,6 +328,10 @@ export class FishySearchableDropdown extends HTMLElement {
         return this.querySelector('[data-role="selected-label"]');
     }
 
+    selectedContentElement() {
+        return this.querySelector('[data-role="selected-content"]');
+    }
+
     triggerElement() {
         return this.querySelector('[data-role="trigger"]');
     }
@@ -411,10 +419,10 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         event.preventDefault();
-        this.select(
-            String(option.getAttribute("data-value") ?? ""),
-            String(option.getAttribute("data-label") ?? option.textContent ?? "").trim(),
-        );
+        const value = String(option.getAttribute("data-value") ?? "");
+        const label = String(option.getAttribute("data-label") ?? option.textContent ?? "").trim();
+        this._syncSelectedContentFromOption(option, label);
+        this.select(value, label);
     }
 
     _handleDocumentPointerDown(event) {
@@ -492,6 +500,31 @@ export class FishySearchableDropdown extends HTMLElement {
         }
     }
 
+    _syncSelectedContentFromOption(option, fallbackLabel) {
+        const container = this.selectedContentElement();
+        if (!(container instanceof HTMLElement)) {
+            const labelNode = this.selectedLabelElement();
+            if (labelNode instanceof HTMLElement) {
+                labelNode.textContent = fallbackLabel;
+            }
+            return;
+        }
+
+        const selectedTemplate = option.querySelector('template[data-role="selected-content"]');
+        if (selectedTemplate instanceof HTMLTemplateElement) {
+            container.replaceChildren(...cloneChildNodes(selectedTemplate.content));
+            return;
+        }
+
+        const optionContent = option.querySelector('[data-role="option-content"]');
+        if (optionContent instanceof HTMLElement) {
+            container.replaceChildren(...cloneChildNodes(optionContent));
+            return;
+        }
+
+        container.textContent = fallbackLabel;
+    }
+
     _syncBoundInputValue(value, emitEvents) {
         const input = this.boundInputElement();
         if (!(input instanceof HTMLInputElement)) {
@@ -505,6 +538,15 @@ export class FishySearchableDropdown extends HTMLElement {
     }
 
     _syncUi() {
+        const selectedContent = this.selectedContentElement();
+        if (
+            selectedContent instanceof HTMLElement
+            && !selectedContent.childNodes.length
+            && this.hasAttribute("label")
+        ) {
+            selectedContent.textContent = this.label;
+        }
+
         const labelNode = this.selectedLabelElement();
         if (labelNode instanceof HTMLElement && this.hasAttribute("label")) {
             labelNode.textContent = this.label;

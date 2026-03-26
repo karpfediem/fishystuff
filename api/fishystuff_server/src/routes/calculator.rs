@@ -98,6 +98,7 @@ struct SearchableDropdownConfig<'a> {
     root_id: &'a str,
     input_id: &'a str,
     label: &'a str,
+    selected_content_html: &'a str,
     value: &'a str,
     search_url: &'a str,
     search_url_root: Option<&'a str>,
@@ -1226,6 +1227,7 @@ fn render_calculator_app(
         "/api/v1/calculator/datastar/zone-search?lang={}",
         lang_param(data.lang)
     );
+    let zone_selected_content = render_searchable_dropdown_text_content(&derived.zone_name);
     let zone_results = render_zone_search_results(
         "calculator-zone-search-results",
         &data.zones,
@@ -1237,6 +1239,7 @@ fn render_calculator_app(
             root_id: "calculator-zone-picker",
             input_id: "calculator-zone-value",
             label: &derived.zone_name,
+            selected_content_html: &zone_selected_content,
             value: &signals.zone,
             search_url: &zone_search_url,
             search_url_root: Some("api"),
@@ -1697,6 +1700,13 @@ fn fuzzy_zone_matches<'a>(
     scored.into_iter().map(|(zone, _)| zone).collect()
 }
 
+fn render_searchable_dropdown_text_content(label: &str) -> String {
+    format!(
+        "<span class=\"truncate font-medium\">{}</span>",
+        escape_html(label)
+    )
+}
+
 fn render_zone_search_results(
     results_list_id: &str,
     zones: &[ZoneEntry],
@@ -1718,13 +1728,14 @@ fn render_zone_search_results(
             let label = zone_name(zone);
             let is_selected = zone.rgb_key.0 == current_zone;
             let active_class = if is_selected { " menu-active" } else { "" };
+            let option_content = render_searchable_dropdown_text_content(label);
             write!(
                 html,
-                "<li><button type=\"button\" class=\"justify-between text-left{}\" data-searchable-dropdown-option data-value=\"{}\" data-label=\"{}\"><span>{}</span>{}</button></li>",
+                "<li><button type=\"button\" class=\"justify-between gap-3 text-left{}\" data-searchable-dropdown-option data-value=\"{}\" data-label=\"{}\"><span data-role=\"option-content\" class=\"flex min-w-0 flex-1 items-center gap-3\">{}</span>{}</button></li>",
                 active_class,
                 escape_html(&zone.rgb_key.0),
                 escape_html(label),
-                escape_html(label),
+                option_content,
                 if is_selected {
                     "<span class=\"badge badge-soft badge-primary badge-xs\">Selected</span>"
                 } else {
@@ -1761,7 +1772,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
             aria-haspopup="listbox"
             aria-expanded="false"
             aria-controls="{panel_id}">
-        <span data-role="selected-label" class="truncate font-medium">{label}</span>
+        <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3">{selected_content_html}</span>
         <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
     </button>
 
@@ -1787,6 +1798,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         root_id = escape_html(config.root_id),
         input_id = escape_html(config.input_id),
         label = escape_html(config.label),
+        selected_content_html = config.selected_content_html,
         value = escape_html(config.value),
         search_url = escape_html(config.search_url),
         search_url_root_attr = search_url_root_attr,
@@ -2329,6 +2341,7 @@ mod tests {
         assert!(text.contains("input-id=\"calculator-zone-value\""));
         assert!(text.contains("search-url=\"/api/v1/calculator/datastar/zone-search?lang=en\""));
         assert!(text.contains("search-url-root=\"api\""));
+        assert!(text.contains("data-role=\"selected-content\""));
     }
 
     #[tokio::test]
@@ -2437,6 +2450,7 @@ mod tests {
         assert!(text.contains("id=\"calculator-zone-search-results\""));
         assert!(text.contains("data-role=\"results\""));
         assert!(text.contains("data-searchable-dropdown-option"));
+        assert!(text.contains("data-role=\"option-content\""));
         assert!(text.contains("data-value=\"240,74,74\""));
         assert!(text.contains("Velia Beach"));
         assert!(text.contains("Selected"));
