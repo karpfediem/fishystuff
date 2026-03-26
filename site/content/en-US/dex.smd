@@ -16,17 +16,16 @@
     --dex-screen-border: color-mix(in srgb, var(--color-base-content, #1f2937) 14%, transparent);
     --dex-line: color-mix(in srgb, var(--color-base-content, #1f2937) 14%, transparent);
     --dex-highlight: var(--color-primary, #e07a5f);
-    --dex-prize: var(--color-error, #d64545);
-    --dex-prize-surface: color-mix(in srgb, var(--color-error, #d64545) 10%, var(--color-base-100, #fffdf4));
-    --dex-prize-surface-hover: color-mix(in srgb, var(--color-error, #d64545) 14%, var(--color-base-100, #fffdf4));
-    --dex-grade-rare: var(--color-warning, #f59e0b);
-    --dex-grade-rare-surface: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, var(--color-base-100, #fffdf4));
-    --dex-grade-highquality: var(--color-info, #6b8afd);
-    --dex-grade-highquality-surface: color-mix(in srgb, var(--color-info, #6b8afd) 12%, var(--color-base-100, #fffdf4));
-    --dex-grade-general: var(--color-success, #2f855a);
-    --dex-grade-general-surface: color-mix(in srgb, var(--color-success, #2f855a) 12%, var(--color-base-100, #fffdf4));
-    --dex-grade-trash: var(--color-base-content, #1f2937);
-    --dex-grade-trash-surface: var(--color-base-200, #efe7d6);
+    --dex-grade-red: var(--color-error, #d64545);
+    --dex-grade-red-surface: color-mix(in srgb, var(--color-error, #d64545) 10%, var(--color-base-100, #fffdf4));
+    --dex-grade-yellow: var(--color-warning, #f59e0b);
+    --dex-grade-yellow-surface: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, var(--color-base-100, #fffdf4));
+    --dex-grade-blue: var(--color-info, #6b8afd);
+    --dex-grade-blue-surface: color-mix(in srgb, var(--color-info, #6b8afd) 12%, var(--color-base-100, #fffdf4));
+    --dex-grade-green: var(--color-success, #2f855a);
+    --dex-grade-green-surface: color-mix(in srgb, var(--color-success, #2f855a) 12%, var(--color-base-100, #fffdf4));
+    --dex-grade-white: var(--color-base-content, #1f2937);
+    --dex-grade-white-surface: var(--color-base-200, #efe7d6);
     --dex-grade-unknown: var(--color-neutral, #1f2937);
     --dex-grade-unknown-surface: var(--color-base-200, #efe7d6);
     --dex-caught: var(--color-success, #2f855a);
@@ -164,34 +163,34 @@
     color: color-mix(in oklab, var(--color-warning, #c77d19) 76%, var(--color-base-content, #1f2937) 24%);
   }
 
-  .fishydex-filter-chip.grade-prize.is-active {
-    border-color: color-mix(in oklab, var(--dex-prize) 56%, var(--dex-line) 44%);
-    background: var(--dex-prize-surface);
+  .fishydex-filter-chip.grade-red.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-red) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-red-surface);
     color: color-mix(in oklab, var(--color-error, #d64545) 62%, var(--color-base-content, #1f2937) 38%);
   }
 
-  .fishydex-filter-chip.grade-rare.is-active {
-    border-color: color-mix(in oklab, var(--dex-grade-rare) 56%, var(--dex-line) 44%);
-    background: var(--dex-grade-rare-surface);
-    color: color-mix(in oklab, var(--dex-grade-rare) 72%, var(--color-base-content, #1f2937) 28%);
+  .fishydex-filter-chip.grade-yellow.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-yellow) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-yellow-surface);
+    color: color-mix(in oklab, var(--dex-grade-yellow) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
-  .fishydex-filter-chip.grade-highquality.is-active {
-    border-color: color-mix(in oklab, var(--dex-grade-highquality) 56%, var(--dex-line) 44%);
-    background: var(--dex-grade-highquality-surface);
-    color: color-mix(in oklab, var(--dex-grade-highquality) 72%, var(--color-base-content, #1f2937) 28%);
+  .fishydex-filter-chip.grade-blue.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-blue) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-blue-surface);
+    color: color-mix(in oklab, var(--dex-grade-blue) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
-  .fishydex-filter-chip.grade-general.is-active {
-    border-color: color-mix(in oklab, var(--dex-grade-general) 56%, var(--dex-line) 44%);
-    background: var(--dex-grade-general-surface);
-    color: color-mix(in oklab, var(--dex-grade-general) 72%, var(--color-base-content, #1f2937) 28%);
+  .fishydex-filter-chip.grade-green.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-green) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-green-surface);
+    color: color-mix(in oklab, var(--dex-grade-green) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
-  .fishydex-filter-chip.grade-trash.is-active {
-    border-color: color-mix(in oklab, var(--dex-grade-trash) 56%, var(--dex-line) 44%);
-    background: var(--dex-grade-trash-surface);
-    color: color-mix(in oklab, var(--dex-grade-trash) 72%, var(--color-base-content, #1f2937) 28%);
+  .fishydex-filter-chip.grade-white.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-white) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-white-surface);
+    color: color-mix(in oklab, var(--dex-grade-white) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
   .fishydex-filter-chip.grade-unknown.is-active {
@@ -283,23 +282,23 @@
     font-weight: 600;
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-prize {
-    color: color-mix(in oklab, var(--dex-prize) 78%, var(--color-base-content, #1f2937) 22%);
+  .fishydex-grade-stat .fieldset-legend.grade-red {
+    color: color-mix(in oklab, var(--dex-grade-red) 78%, var(--color-base-content, #1f2937) 22%);
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-rare {
-    color: color-mix(in oklab, var(--dex-grade-rare) 78%, var(--color-base-content, #1f2937) 22%);
+  .fishydex-grade-stat .fieldset-legend.grade-yellow {
+    color: color-mix(in oklab, var(--dex-grade-yellow) 78%, var(--color-base-content, #1f2937) 22%);
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-highquality {
-    color: color-mix(in oklab, var(--dex-grade-highquality) 78%, var(--color-base-content, #1f2937) 22%);
+  .fishydex-grade-stat .fieldset-legend.grade-blue {
+    color: color-mix(in oklab, var(--dex-grade-blue) 78%, var(--color-base-content, #1f2937) 22%);
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-general {
-    color: color-mix(in oklab, var(--dex-grade-general) 78%, var(--color-base-content, #1f2937) 22%);
+  .fishydex-grade-stat .fieldset-legend.grade-green {
+    color: color-mix(in oklab, var(--dex-grade-green) 78%, var(--color-base-content, #1f2937) 22%);
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-trash {
+  .fishydex-grade-stat .fieldset-legend.grade-white {
     color: color-mix(in oklab, var(--color-base-content, #1f2937) 82%, transparent);
   }
 
@@ -559,29 +558,29 @@
     color: var(--color-base-content, #1f2937);
   }
 
-  .fishydex-grade.grade-prize {
-    background: color-mix(in oklab, var(--dex-prize) 38%, var(--dex-surface-strong) 62%);
+  .fishydex-grade.grade-red {
+    background: color-mix(in oklab, var(--dex-grade-red) 38%, var(--dex-surface-strong) 62%);
     color: color-mix(in oklab, var(--color-error, #d64545) 62%, var(--color-base-content, #1f2937) 38%);
   }
 
-  .fishydex-grade.grade-rare {
-    background: var(--dex-grade-rare-surface);
-    color: color-mix(in oklab, var(--dex-grade-rare) 72%, var(--color-base-content, #1f2937) 28%);
+  .fishydex-grade.grade-yellow {
+    background: var(--dex-grade-yellow-surface);
+    color: color-mix(in oklab, var(--dex-grade-yellow) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
-  .fishydex-grade.grade-highquality {
-    background: var(--dex-grade-highquality-surface);
-    color: color-mix(in oklab, var(--dex-grade-highquality) 72%, var(--color-base-content, #1f2937) 28%);
+  .fishydex-grade.grade-blue {
+    background: var(--dex-grade-blue-surface);
+    color: color-mix(in oklab, var(--dex-grade-blue) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
-  .fishydex-grade.grade-general {
-    background: var(--dex-grade-general-surface);
-    color: color-mix(in oklab, var(--dex-grade-general) 72%, var(--color-base-content, #1f2937) 28%);
+  .fishydex-grade.grade-green {
+    background: var(--dex-grade-green-surface);
+    color: color-mix(in oklab, var(--dex-grade-green) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
-  .fishydex-grade.grade-trash {
-    background: var(--dex-grade-trash-surface);
-    color: color-mix(in oklab, var(--dex-grade-trash) 72%, var(--color-base-content, #1f2937) 28%);
+  .fishydex-grade.grade-white {
+    background: var(--dex-grade-white-surface);
+    color: color-mix(in oklab, var(--dex-grade-white) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
   .fishydex-grade.grade-unknown {
@@ -652,29 +651,29 @@
     background: var(--dex-surface-strong);
   }
 
-  .fishydex-icon-wrap.grade-prize,
-  .fishydex-details-icon-wrap.grade-prize {
-    border-color: color-mix(in oklab, var(--dex-prize) 28%, var(--dex-line) 72%);
+  .fishydex-icon-wrap.grade-red,
+  .fishydex-details-icon-wrap.grade-red {
+    border-color: color-mix(in oklab, var(--dex-grade-red) 28%, var(--dex-line) 72%);
   }
 
-  .fishydex-icon-wrap.grade-rare,
-  .fishydex-details-icon-wrap.grade-rare {
-    border-color: color-mix(in oklab, var(--dex-grade-rare) 28%, var(--dex-line) 72%);
+  .fishydex-icon-wrap.grade-yellow,
+  .fishydex-details-icon-wrap.grade-yellow {
+    border-color: color-mix(in oklab, var(--dex-grade-yellow) 28%, var(--dex-line) 72%);
   }
 
-  .fishydex-icon-wrap.grade-highquality,
-  .fishydex-details-icon-wrap.grade-highquality {
-    border-color: color-mix(in oklab, var(--dex-grade-highquality) 28%, var(--dex-line) 72%);
+  .fishydex-icon-wrap.grade-blue,
+  .fishydex-details-icon-wrap.grade-blue {
+    border-color: color-mix(in oklab, var(--dex-grade-blue) 28%, var(--dex-line) 72%);
   }
 
-  .fishydex-icon-wrap.grade-general,
-  .fishydex-details-icon-wrap.grade-general {
-    border-color: color-mix(in oklab, var(--dex-grade-general) 28%, var(--dex-line) 72%);
+  .fishydex-icon-wrap.grade-green,
+  .fishydex-details-icon-wrap.grade-green {
+    border-color: color-mix(in oklab, var(--dex-grade-green) 28%, var(--dex-line) 72%);
   }
 
-  .fishydex-icon-wrap.grade-trash,
-  .fishydex-details-icon-wrap.grade-trash {
-    border-color: color-mix(in oklab, var(--dex-grade-trash) 22%, var(--dex-line) 78%);
+  .fishydex-icon-wrap.grade-white,
+  .fishydex-details-icon-wrap.grade-white {
+    border-color: color-mix(in oklab, var(--dex-grade-white) 22%, var(--dex-line) 78%);
   }
 
   .fishydex-icon-wrap.grade-unknown,
@@ -1005,16 +1004,24 @@
     const DEX_FILTER_PANEL_UI_KEY = "dex.panels.filter.collapsed";
     const CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
     const FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
-    const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
-    const GRADE_FILTER_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash"];
-    const GRADE_LABELS = {
-      Prize: "Red",
-      Rare: "Yellow",
-      HighQuality: "Blue",
-      General: "Green",
-      Trash: "White",
-      Unknown: "Unknown",
-    };
+    const GRADE_FILTER_COLOR_ORDER = ["red", "yellow", "blue", "green", "white"];
+    const GRADE_COLOR_ORDER = [...GRADE_FILTER_COLOR_ORDER, "unknown"];
+    const GRADE_CODE_TO_COLOR = Object.freeze({
+      Prize: "red",
+      Rare: "yellow",
+      HighQuality: "blue",
+      General: "green",
+      Trash: "white",
+      Unknown: "unknown",
+    });
+    const GRADE_COLOR_LABELS = Object.freeze({
+      red: "Red",
+      yellow: "Yellow",
+      blue: "Blue",
+      green: "Green",
+      white: "White",
+      unknown: "Unknown",
+    });
     function spriteIconMarkup(name, className = "", inline = false) {
       const classes = ["fishy-icon"];
       if (inline) {
@@ -1529,13 +1536,13 @@
       }
     }
 
-    function slugifyGrade(value) {
-      return String(value || "unknown").toLowerCase();
+    function gradeColorKey(value) {
+      const code = String(value || "Unknown");
+      return GRADE_CODE_TO_COLOR[code] || "unknown";
     }
 
     function gradeLabel(value) {
-      const grade = GRADE_ORDER.find((candidate) => candidate === String(value));
-      return grade ? GRADE_LABELS[grade] : GRADE_LABELS.Unknown;
+      return GRADE_COLOR_LABELS[gradeColorKey(value)] || GRADE_COLOR_LABELS.unknown;
     }
 
     function normalizeMethod(value) {
@@ -1640,22 +1647,24 @@
       const rawValues = Array.isArray(value) ? value : [];
       const selected = [];
       for (const raw of rawValues) {
-        const grade = GRADE_FILTER_ORDER.find((candidate) => candidate === String(raw));
-        if (grade && !selected.includes(grade)) {
+        const normalized = String(raw || "").trim();
+        const grade = GRADE_FILTER_COLOR_ORDER.find((candidate) => candidate === normalized)
+          || (normalized ? gradeColorKey(normalized) : "");
+        if (GRADE_FILTER_COLOR_ORDER.includes(grade) && !selected.includes(grade)) {
           selected.push(grade);
         }
       }
-      return selected;
+      return GRADE_FILTER_COLOR_ORDER.filter((candidate) => selected.includes(candidate));
     }
 
     function filterGradeForEntry(entry) {
       if (!entry) {
-        return "Unknown";
+        return "unknown";
       }
       if (entry.is_prize === true || entry.grade === "Prize") {
-        return "Prize";
+        return "red";
       }
-      return GRADE_ORDER.includes(entry.grade) ? entry.grade : "Unknown";
+      return gradeColorKey(entry.grade);
     }
 
     function filterMethodsForEntry(entry) {
@@ -1806,7 +1815,7 @@
     }
 
     function toggleGradeFilter(value) {
-      const grade = GRADE_FILTER_ORDER.find((candidate) => candidate === value);
+      const grade = GRADE_FILTER_COLOR_ORDER.find((candidate) => candidate === String(value));
       if (!grade) {
         return;
       }
@@ -1816,7 +1825,7 @@
       } else {
         next.add(grade);
       }
-      const selected = GRADE_FILTER_ORDER.filter((candidate) => next.has(candidate));
+      const selected = GRADE_FILTER_COLOR_ORDER.filter((candidate) => next.has(candidate));
       state.currentGradeFilters = selected;
       mergeSignals({ grade_filters: selected });
     }
@@ -1964,7 +1973,7 @@
       const main = createElement("div", "fishydex-card-main");
       const iconWrap = createElement(
         "div",
-        `fishydex-icon-wrap grade-${fish.is_prize || fish.grade === "Prize" ? "prize" : slugifyGrade(fish.grade)}`
+        `fishydex-icon-wrap grade-${filterGradeForEntry(fish)}`
       );
       const iconUrl = fishItemIconUrl(itemId);
       const iconPlaceholder = createElement("div", "fishydex-placeholder", "?");
@@ -2066,7 +2075,6 @@
         encyclopediaId: fishEncyclopediaId(fish),
         name: fish.name || `Fish ${fishId}`,
         grade: fish.grade || "Unknown",
-        isPrize: fish.is_prize === true || fish.grade === "Prize",
         isDried: entryIsDried(fish),
         catchMethods: entryCatchMethods(fish),
         vendorPrice: Number.isFinite(Number(fish.vendor_price)) && Number(fish.vendor_price) > 0
@@ -2249,7 +2257,7 @@
       const placeholder = document.getElementById("fishydex-details-placeholder");
       const guideImage = document.getElementById("fishydex-details-guide-image");
       const guidePlaceholder = document.getElementById("fishydex-details-guide-placeholder");
-      const iconFrameGrade = meta.isPrize ? "prize" : slugifyGrade(meta.grade);
+      const iconFrameGrade = gradeColorKey(meta.grade);
       const itemIconUrl = fishItemIconUrl(meta.itemId);
       const guideIconUrl = fishEncyclopediaIconUrl(meta.encyclopediaId);
 
@@ -2292,7 +2300,7 @@
         favourite.hidden = !meta.favourite;
       }
       if (grade instanceof HTMLElement) {
-        grade.className = `fishydex-grade badge badge-soft grade-${slugifyGrade(meta.grade)}`;
+        grade.className = `fishydex-grade badge badge-soft grade-${gradeColorKey(meta.grade)}`;
         grade.textContent = gradeLabel(meta.grade);
       }
       if (methodRod instanceof HTMLElement) {
@@ -2486,11 +2494,11 @@
         return count + (caughtSet.has(fishItemId(entry)) ? 1 : 0);
       }, 0);
       const gradeProgress = {
-        Prize: { total: 0, caught: 0 },
-        Rare: { total: 0, caught: 0 },
-        HighQuality: { total: 0, caught: 0 },
-        General: { total: 0, caught: 0 },
-        Trash: { total: 0, caught: 0 },
+        red: { total: 0, caught: 0 },
+        yellow: { total: 0, caught: 0 },
+        blue: { total: 0, caught: 0 },
+        green: { total: 0, caught: 0 },
+        white: { total: 0, caught: 0 },
       };
       for (const entry of catalogEntries) {
         const grade = filterGradeForEntry(entry);
@@ -2504,7 +2512,7 @@
       }
 
       const groups = new Map();
-      for (const grade of GRADE_ORDER) {
+      for (const grade of GRADE_COLOR_ORDER) {
         groups.set(grade, []);
       }
       for (const entry of sorted) {
@@ -2517,7 +2525,7 @@
         const fragment = document.createDocumentFragment();
         const animateCards = !state.suppressCardAnimation;
         let animationIndex = 0;
-        for (const grade of GRADE_ORDER) {
+        for (const grade of GRADE_COLOR_ORDER) {
           const rendered = renderGroup(
             grade,
             groups.get(grade) || [],
@@ -2543,16 +2551,16 @@
         total_count: fish.length,
         visible_count: filtered.length,
         caught_count: catalogCaughtCount,
-        prize_total_count: gradeProgress.Prize.total,
-        prize_caught_count: gradeProgress.Prize.caught,
-        rare_total_count: gradeProgress.Rare.total,
-        rare_caught_count: gradeProgress.Rare.caught,
-        highquality_total_count: gradeProgress.HighQuality.total,
-        highquality_caught_count: gradeProgress.HighQuality.caught,
-        general_total_count: gradeProgress.General.total,
-        general_caught_count: gradeProgress.General.caught,
-        trash_total_count: gradeProgress.Trash.total,
-        trash_caught_count: gradeProgress.Trash.caught,
+        red_total_count: gradeProgress.red.total,
+        red_caught_count: gradeProgress.red.caught,
+        yellow_total_count: gradeProgress.yellow.total,
+        yellow_caught_count: gradeProgress.yellow.caught,
+        blue_total_count: gradeProgress.blue.total,
+        blue_caught_count: gradeProgress.blue.caught,
+        green_total_count: gradeProgress.green.total,
+        green_caught_count: gradeProgress.green.caught,
+        white_total_count: gradeProgress.white.total,
+        white_caught_count: gradeProgress.white.caught,
         supports_grade_filter: supportsGradeFilter,
         supports_method_filter: supportsMethodFilter,
         supports_dried_filter: supportsDriedFilter,
@@ -2662,16 +2670,16 @@
        total_count: 0,
        visible_count: 0,
        caught_count: 0,
-       prize_total_count: 0,
-       prize_caught_count: 0,
-       rare_total_count: 0,
-       rare_caught_count: 0,
-       highquality_total_count: 0,
-       highquality_caught_count: 0,
-       general_total_count: 0,
-       general_caught_count: 0,
-       trash_total_count: 0,
-       trash_caught_count: 0,
+       red_total_count: 0,
+       red_caught_count: 0,
+       yellow_total_count: 0,
+       yellow_caught_count: 0,
+       blue_total_count: 0,
+       blue_caught_count: 0,
+       green_total_count: 0,
+       green_caught_count: 0,
+       white_total_count: 0,
+       white_caught_count: 0,
        supports_grade_filter: false,
        supports_method_filter: false,
        supports_dried_filter: false,
@@ -2721,37 +2729,37 @@
           <div class="fishydex-grade-stats" data-show="$supports_grade_filter">
             <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
               <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-prize">Red</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$prize_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($prize_total_count || 0) + ' catalog'"></div>
+                <div class="stat-title fieldset-legend grade-red">Red</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$red_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($red_total_count || 0) + ' catalog'"></div>
               </div>
             </div>
             <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
               <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-rare">Yellow</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$rare_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($rare_total_count || 0) + ' catalog'"></div>
+                <div class="stat-title fieldset-legend grade-yellow">Yellow</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$yellow_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($yellow_total_count || 0) + ' catalog'"></div>
               </div>
             </div>
             <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
               <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-highquality">Blue</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$highquality_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($highquality_total_count || 0) + ' catalog'"></div>
+                <div class="stat-title fieldset-legend grade-blue">Blue</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$blue_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($blue_total_count || 0) + ' catalog'"></div>
               </div>
             </div>
             <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
               <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-general">Green</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$general_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($general_total_count || 0) + ' catalog'"></div>
+                <div class="stat-title fieldset-legend grade-green">Green</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$green_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($green_total_count || 0) + ' catalog'"></div>
               </div>
             </div>
             <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
               <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-trash">White</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$trash_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($trash_total_count || 0) + ' catalog'"></div>
+                <div class="stat-title fieldset-legend grade-white">White</div>
+                <div class="fishydex-stat-value stat-value text-lg" data-text="$white_caught_count || 0"></div>
+                <div class="stat-desc" data-text="'of ' + ($white_total_count || 0) + ' catalog'"></div>
               </div>
             </div>
           </div>
@@ -2824,30 +2832,30 @@
               <legend class="fieldset-legend">Grade</legend>
               <div class="fishydex-filter-chips" role="group" aria-label="Grade color filters">
                 <button type="button"
-                        class="btn btn-sm btn-outline fishydex-filter-chip grade-prize"
-                        data-grade-filter-value="Prize"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-red"
+                        data-grade-filter-value="red"
                         aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('Prize')">Red</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('red')">Red</button>
                 <button type="button"
-                        class="btn btn-sm btn-outline fishydex-filter-chip grade-rare"
-                        data-grade-filter-value="Rare"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-yellow"
+                        data-grade-filter-value="yellow"
                         aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('Rare')">Yellow</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('yellow')">Yellow</button>
                 <button type="button"
-                        class="btn btn-sm btn-outline fishydex-filter-chip grade-highquality"
-                        data-grade-filter-value="HighQuality"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-blue"
+                        data-grade-filter-value="blue"
                         aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('HighQuality')">Blue</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('blue')">Blue</button>
                 <button type="button"
-                        class="btn btn-sm btn-outline fishydex-filter-chip grade-general"
-                        data-grade-filter-value="General"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-green"
+                        data-grade-filter-value="green"
                         aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('General')">Green</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('green')">Green</button>
                 <button type="button"
-                        class="btn btn-sm btn-outline fishydex-filter-chip grade-trash"
-                        data-grade-filter-value="Trash"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-white"
+                        data-grade-filter-value="white"
                         aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('Trash')">White</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('white')">White</button>
               </div>
             </fieldset>
 
