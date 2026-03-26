@@ -358,13 +358,6 @@
     overflow-anchor: none;
   }
 
-  .fishydex-grid-meta {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
   .fishydex-groups {
     display: grid;
     gap: 1rem;
@@ -413,6 +406,44 @@
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
+  }
+
+  .fishydex-panel-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .fishydex-sort-button.btn {
+    min-height: 2rem;
+    padding-inline: 0.65rem;
+    border-color: transparent;
+    color: var(--dex-text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    white-space: nowrap;
+  }
+
+  .fishydex-sort-button.btn:hover,
+  .fishydex-sort-button.btn:focus-visible {
+    color: var(--color-base-content, #1f2937);
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 6%, transparent);
+  }
+
+  .fishydex-sort-button.is-active {
+    color: var(--color-base-content, #1f2937);
+    background: transparent;
+    box-shadow: inset 0 -2px 0 0 color-mix(in oklab, var(--dex-highlight) 42%, transparent);
+  }
+
+  .fishydex-sort-button .fishy-icon {
+    flex: none;
+  }
+
+  .fishydex-sort-button.is-active .fishy-icon {
+    color: color-mix(in oklab, var(--dex-highlight) 72%, var(--color-base-content, #1f2937) 28%);
   }
 
   .fishydex-panel-toggle {
@@ -1795,7 +1826,6 @@
         const field = button.dataset.sortFieldValue || "";
         const active = field === sortField;
         button.classList.toggle("is-active", active);
-        button.classList.toggle("btn-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
         button.innerHTML = sortFieldButtonMarkup(field, active, sortDirection);
         if (active) {
@@ -2981,27 +3011,24 @@
     </div>
 
     <fieldset class="fishydex-grid-shell card card-border bg-base-100">
-      <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2"><span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-nav-dex"></use></svg><span>Catalog</span></span></legend>
+      <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
+        <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-nav-dex"></use></svg><span>Catalog</span></span>
+        <span class="fishydex-panel-controls" role="group" aria-label="Catalog sort controls">
+          <button type="button"
+                  class="btn btn-sm btn-ghost fishydex-sort-button"
+                  data-sort-field-value="name"
+                  aria-pressed="true"
+                  aria-label="Toggle name sort direction. Current: ascending."
+                  data-on:click="window.Fishydex.activateSortField('name')"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg><span>Name</span></button>
+          <button type="button"
+                  class="btn btn-sm btn-ghost fishydex-sort-button"
+                  data-sort-field-value="price"
+                  aria-pressed="false"
+                  aria-label="Sort catalog by price ascending."
+                  data-on:click="window.Fishydex.activateSortField('price')"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-up-fill"></use></svg></span></span><span>Price</span></button>
+        </span>
+      </legend>
       <div class="card-body fishydex-grid-body">
-      <div class="fishydex-grid-meta">
-        <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
-          <legend class="fieldset-legend">Sort</legend>
-          <div class="fishydex-filter-chips" role="group" aria-label="Sort controls">
-            <button type="button"
-                    class="btn btn-sm btn-outline fishydex-filter-chip"
-                    data-sort-field-value="name"
-                    aria-pressed="true"
-                    aria-label="Toggle name sort direction. Current: ascending."
-                    data-on:click="window.Fishydex.activateSortField('name')"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg><span>Name</span></button>
-            <button type="button"
-                    class="btn btn-sm btn-outline fishydex-filter-chip"
-                    data-sort-field-value="price"
-                    aria-pressed="false"
-                    aria-label="Sort catalog by price ascending."
-                    data-on:click="window.Fishydex.activateSortField('price')"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-up-fill"></use></svg></span></span><span>Price</span></button>
-          </div>
-        </fieldset>
-      </div>
       <div id="fishydex-grid" class="fishydex-groups"></div>
       </div>
     </fieldset>
