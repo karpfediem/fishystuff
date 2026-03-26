@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::Write as _;
@@ -6,9 +7,11 @@ use async_stream::stream;
 use axum::body::Bytes;
 use axum::extract::{rejection::QueryRejection, Extension, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue};
-use axum::response::{sse::Event, IntoResponse, Sse};
+use axum::response::{sse::Event, Html, IntoResponse, Sse};
 use axum::Json;
 use datastar::prelude::{DatastarEvent, ElementPatchMode, PatchElements, PatchSignals};
+use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
@@ -35,6 +38,14 @@ pub struct CalculatorDatastarQuery {
     pub lang: Option<String>,
     pub r#ref: Option<String>,
     pub datastar: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CalculatorZoneSearchQuery {
+    pub lang: Option<String>,
+    pub r#ref: Option<String>,
+    pub q: Option<String>,
+    pub selected: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -81,6 +92,20 @@ struct SelectOption<'a> {
     label: &'a str,
     icon: Option<&'a str>,
 }
+
+struct SearchableDropdownConfig<'a> {
+    root_id: &'a str,
+    value_input_id: &'a str,
+    selected_label_id: &'a str,
+    search_input_id: &'a str,
+    panel_id: &'a str,
+    results_list_id: &'a str,
+    search_url_builder: &'a str,
+    selected_label: &'a str,
+    search_placeholder: &'a str,
+}
+
+const SEARCHABLE_DROPDOWN_RESULT_LIMIT: usize = 24;
 
 pub async fn get_calculator_catalog(
     State(state): State<SharedState>,
@@ -161,6 +186,36 @@ pub async fn post_calculator_datastar_eval(
                 .into_datastar_event(),
         ];
     Ok(calculator_datastar_response(events))
+}
+
+pub async fn get_calculator_datastar_zone_search(
+    State(state): State<SharedState>,
+    query: Result<Query<CalculatorZoneSearchQuery>, QueryRejection>,
+    Extension(request_id): Extension<RequestId>,
+) -> AppResult<impl IntoResponse> {
+    let Query(query) = query.map_err(|err| {
+        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
+    })?;
+
+    let lang = FishLang::from_param(query.lang.as_deref());
+    let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let selected_zone = query
+        .selected
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(data.catalog.defaults.zone.as_str());
+    let search_text = query.q.unwrap_or_default();
+    let fragment = render_zone_search_results(
+        "calculator-zone-picker",
+        "calculator-zone-search-results",
+        &data.zones,
+        selected_zone,
+        &search_text,
+    );
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok((headers, Html(fragment)))
 }
 
 fn calculator_datastar_init_response(
@@ -507,61 +562,68 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
     signals.catch_time_afk = signals.catch_time_afk.max(0.0);
     signals.timespan_amount = signals.timespan_amount.max(0.0);
 
-    signals.zone = normalize_named_value(
+    signals.zone = normalize_named_value_with_fuzzy(
         &signals.zone,
         &valid_zone_keys,
         &zone_name_to_key,
         None,
         defaults.zone.clone(),
         false,
+        true,
     );
-    signals.lifeskill_level = normalize_named_value(
+    signals.lifeskill_level = normalize_named_value_with_fuzzy(
         &signals.lifeskill_level,
         &valid_level_keys,
         &level_name_to_key,
         None,
         defaults.lifeskill_level.clone(),
         false,
+        false,
     );
-    signals.rod = normalize_named_value(
+    signals.rod = normalize_named_value_with_fuzzy(
         &signals.rod,
         &valid_item_keys,
         &item_name_to_key,
         Some(&item_legacy_aliases),
         defaults.rod.clone(),
         false,
+        false,
     );
-    signals.float = normalize_named_value(
+    signals.float = normalize_named_value_with_fuzzy(
         &signals.float,
         &valid_item_keys,
         &item_name_to_key,
         Some(&item_legacy_aliases),
         String::new(),
         true,
+        false,
     );
-    signals.chair = normalize_named_value(
+    signals.chair = normalize_named_value_with_fuzzy(
         &signals.chair,
         &valid_item_keys,
         &item_name_to_key,
         Some(&item_legacy_aliases),
         defaults.chair.clone(),
         true,
+        false,
     );
-    signals.lightstone_set = normalize_named_value(
+    signals.lightstone_set = normalize_named_value_with_fuzzy(
         &signals.lightstone_set,
         &valid_item_keys,
         &item_name_to_key,
         Some(&item_legacy_aliases),
         defaults.lightstone_set.clone(),
         true,
+        false,
     );
-    signals.backpack = normalize_named_value(
+    signals.backpack = normalize_named_value_with_fuzzy(
         &signals.backpack,
         &valid_item_keys,
         &item_name_to_key,
         Some(&item_legacy_aliases),
         defaults.backpack.clone(),
         true,
+        false,
     );
     signals.outfit = normalize_named_array(
         &signals.outfit,
@@ -675,6 +737,26 @@ fn normalize_named_value(
     default_value: String,
     allow_empty: bool,
 ) -> String {
+    normalize_named_value_with_fuzzy(
+        value,
+        valid_keys,
+        lookup,
+        aliases,
+        default_value,
+        allow_empty,
+        false,
+    )
+}
+
+fn normalize_named_value_with_fuzzy(
+    value: &str,
+    valid_keys: &std::collections::HashSet<String>,
+    lookup: &HashMap<String, String>,
+    aliases: Option<&HashMap<String, String>>,
+    default_value: String,
+    allow_empty: bool,
+    allow_fuzzy_lookup: bool,
+) -> String {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return if allow_empty {
@@ -695,11 +777,30 @@ fn normalize_named_value(
             return key.clone();
         }
     }
+    if allow_fuzzy_lookup {
+        if let Some(key) = fuzzy_lookup_value(trimmed, lookup) {
+            return key;
+        }
+    }
     if allow_empty {
         String::new()
     } else {
         default_value
     }
+}
+
+fn fuzzy_lookup_value(value: &str, lookup: &HashMap<String, String>) -> Option<String> {
+    let matcher = SkimMatcherV2::default();
+    let normalized_input = normalize_lookup_value(value);
+    lookup
+        .iter()
+        .filter_map(|(candidate, resolved)| {
+            matcher
+                .fuzzy_match(candidate, &normalized_input)
+                .map(|score| (score, resolved))
+        })
+        .max_by_key(|(score, _)| *score)
+        .map(|(_, resolved)| resolved.clone())
 }
 
 fn normalize_named_array(
@@ -1097,10 +1198,9 @@ fn trim_float(value: f64) -> String {
 fn render_calculator_app(
     data: &CalculatorData,
     signals: &CalculatorSignals,
-    _derived: &CalculatorDerivedSignals,
+    derived: &CalculatorDerivedSignals,
 ) -> AppResult<String> {
     let fishing_levels = select_options_from_catalog(&data.catalog.fishing_levels);
-    let zones = sorted_zone_options(&data.zones);
     let lifeskill_levels = sorted_lifeskill_options(&data.catalog.lifeskill_levels);
     let session_units = select_options_from_catalog(&data.catalog.session_units);
     let rods = item_options_by_type(&data.catalog.items, "rod");
@@ -1113,6 +1213,27 @@ fn render_calculator_app(
     let buffs = item_options_by_type(&data.catalog.items, "buff");
     let active_checked = if signals.active { " checked" } else { "" };
     let debug_checked = if signals.debug { " checked" } else { "" };
+    let zone_results = render_zone_search_results(
+        "calculator-zone-picker",
+        "calculator-zone-search-results",
+        &data.zones,
+        &signals.zone,
+        "",
+    );
+    let zone_dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            root_id: "calculator-zone-picker",
+            value_input_id: "calculator-zone-value",
+            selected_label_id: "calculator-zone-selected-label",
+            search_input_id: "calculator-zone-search-input",
+            panel_id: "calculator-zone-search-results-shell",
+            results_list_id: "calculator-zone-search-results",
+            search_url_builder: "zoneSearchUrl",
+            selected_label: &derived.zone_name,
+            search_placeholder: "Search zones",
+        },
+        &zone_results,
+    );
     let mut html = r####"
 <div id="calculator-app" class="grid gap-6">
     <div class="hidden"
@@ -1227,7 +1348,8 @@ fn render_calculator_app(
             <legend class="fieldset-legend ml-6 px-2">Zone</legend>
             <div class="card-body gap-4 pt-0">
                 <div class="grid gap-4">
-                    __ZONE_SELECT__
+                    <input id="calculator-zone-value" type="hidden" data-bind="zone">
+                    __ZONE_SEARCH_DROPDOWN__
                     <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
                         <div class="stat px-4 py-3">
                             <div class="stat-title">Min</div>
@@ -1383,18 +1505,7 @@ fn render_calculator_app(
     .to_string();
 
     let replacements = [
-        (
-            "__ZONE_SELECT__",
-            render_select(
-                "zone",
-                "select w-full",
-                "data-bind=\"zone\"",
-                &signals.zone,
-                &zones,
-                false,
-                None,
-            ),
-        ),
+        ("__ZONE_SEARCH_DROPDOWN__", zone_dropdown),
         (
             "__LEVEL_SELECT__",
             render_select(
@@ -1529,20 +1640,158 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
         .collect()
 }
 
-fn sorted_zone_options(zones: &[ZoneEntry]) -> Vec<SelectOption<'_>> {
-    let mut zones = zones
+fn zone_name(zone: &ZoneEntry) -> &str {
+    zone.name.as_deref().unwrap_or(zone.rgb_key.0.as_str())
+}
+
+fn searchable_zones(zones: &[ZoneEntry]) -> Vec<&ZoneEntry> {
+    zones
         .iter()
         .filter(|zone| zone.bite_time_min.is_some() && zone.bite_time_max.is_some())
-        .collect::<Vec<_>>();
-    zones.sort_by(|a, b| a.name.cmp(&b.name));
-    zones
-        .into_iter()
-        .map(|zone| SelectOption {
-            value: zone.rgb_key.0.as_str(),
-            label: zone.name.as_deref().unwrap_or(zone.rgb_key.0.as_str()),
-            icon: None,
-        })
         .collect()
+}
+
+fn fuzzy_zone_matches<'a>(
+    zones: &'a [ZoneEntry],
+    query: &str,
+    current_zone: &str,
+) -> Vec<&'a ZoneEntry> {
+    let mut zones = searchable_zones(zones);
+    zones.sort_by(|left, right| zone_name(left).cmp(zone_name(right)));
+
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        zones.sort_by_key(|zone| {
+            (
+                if zone.rgb_key.0 == current_zone { 0 } else { 1 },
+                zone_name(zone).to_string(),
+            )
+        });
+        zones.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
+        return zones;
+    }
+
+    let matcher = SkimMatcherV2::default();
+    let normalized_query = normalize_lookup_value(trimmed);
+    let mut scored = zones
+        .into_iter()
+        .filter_map(|zone| {
+            matcher
+                .fuzzy_match(&normalize_lookup_value(zone_name(zone)), &normalized_query)
+                .map(|score| (zone, score))
+        })
+        .collect::<Vec<_>>();
+    scored.sort_by_key(|(zone, score)| (Reverse(*score), zone_name(zone).to_string()));
+    scored.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
+    scored.into_iter().map(|(zone, _)| zone).collect()
+}
+
+fn render_zone_search_results(
+    root_id: &str,
+    results_list_id: &str,
+    zones: &[ZoneEntry],
+    current_zone: &str,
+    query: &str,
+) -> String {
+    let matches = fuzzy_zone_matches(zones, query, current_zone);
+    let mut html = String::new();
+    write!(
+        html,
+        "<ul id=\"{}\" tabindex=\"-1\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
+        escape_html(results_list_id),
+    )
+    .unwrap();
+    if matches.is_empty() {
+        html.push_str("<li class=\"menu-disabled\"><span>No matching zones</span></li>");
+    } else {
+        for zone in matches {
+            let label = zone_name(zone);
+            let is_selected = zone.rgb_key.0 == current_zone;
+            let active_class = if is_selected { " menu-active" } else { "" };
+            write!(
+                html,
+                "<li><button type=\"button\" class=\"justify-between text-left{}\" onmousedown=\"window.__fishystuffCalculator.selectSearchableDropdownOption('{}', '{}', '{}'); return false;\"><span>{}</span>{}</button></li>",
+                active_class,
+                escape_html(&escape_js_single_quoted(root_id)),
+                escape_html(&escape_js_single_quoted(&zone.rgb_key.0)),
+                escape_html(&escape_js_single_quoted(label)),
+                escape_html(label),
+                if is_selected {
+                    "<span class=\"badge badge-soft badge-primary badge-xs\">Selected</span>"
+                } else {
+                    ""
+                }
+            )
+            .unwrap();
+        }
+    }
+    html.push_str("</ul>");
+    html
+}
+
+fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_html: &str) -> String {
+    let mut html = String::new();
+    write!(
+        html,
+        r#"<div id="{root_id}"
+     class="relative z-30 w-full"
+     data-search-url-builder="{search_url_builder}"
+     data-value-input-id="{value_input_id}"
+     data-label-id="{selected_label_id}"
+     data-input-id="{search_input_id}"
+     data-results-id="{results_list_id}"
+     data-panel-id="{panel_id}">
+    <button type="button"
+            class="flex min-h-11 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3 text-left shadow-sm"
+            onclick="window.__fishystuffCalculator.toggleSearchableDropdown('{root_id}'); return false;">
+        <span id="{selected_label_id}" class="truncate font-medium">{selected_label}</span>
+        <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
+    </button>
+
+    <div id="{panel_id}" class="absolute left-0 top-0 z-40 w-full min-w-full max-w-full" hidden>
+        <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
+            <label class="flex min-h-11 w-full min-w-full items-center gap-3 bg-base-100 px-4 py-3"
+                   onmousedown="window.__fishystuffCalculator.cancelSearchableDropdownClose('{root_id}')">
+                <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
+                <input id="{search_input_id}"
+                       type="search"
+                       class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
+                       style="outline: none; box-shadow: none;"
+                       placeholder="{search_placeholder}"
+                       autocomplete="off"
+                       spellcheck="false"
+                       onfocus="window.__fishystuffCalculator.searchSearchableDropdown('{root_id}', this.value)"
+                       oninput="window.__fishystuffCalculator.searchSearchableDropdown('{root_id}', this.value)"
+                       onkeydown="window.__fishystuffCalculator.handleSearchableDropdownKeydown(event, '{root_id}')"
+                       onblur="window.__fishystuffCalculator.scheduleSearchableDropdownClose('{root_id}')">
+            </label>
+            <div class="px-1 pb-1">
+                {results_html}
+            </div>
+        </div>
+    </div>
+</div>"#,
+        root_id = escape_html(config.root_id),
+        search_url_builder = escape_html(config.search_url_builder),
+        value_input_id = escape_html(config.value_input_id),
+        selected_label_id = escape_html(config.selected_label_id),
+        search_input_id = escape_html(config.search_input_id),
+        results_list_id = escape_html(config.results_list_id),
+        panel_id = escape_html(config.panel_id),
+        selected_label = escape_html(config.selected_label),
+        search_placeholder = escape_html(config.search_placeholder),
+        results_html = results_html,
+    )
+    .unwrap();
+    html
+}
+
+fn escape_js_single_quoted(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
 }
 
 fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<SelectOption<'_>> {
@@ -1822,8 +2071,9 @@ mod tests {
     use crate::store::{FishLang, Store};
 
     use super::{
-        get_calculator_datastar_init, normalize_lookup_value, normalize_named_array,
-        post_calculator_datastar_eval, CalculatorDatastarQuery, CalculatorQuery,
+        get_calculator_datastar_init, get_calculator_datastar_zone_search, normalize_lookup_value,
+        normalize_named_array, post_calculator_datastar_eval, CalculatorDatastarQuery,
+        CalculatorQuery, CalculatorZoneSearchQuery,
     };
 
     struct MockStore;
@@ -2069,7 +2319,9 @@ mod tests {
         assert!(text.contains("event:datastar-patch-elements"));
         assert!(text.contains("data:selector #calculator-app"));
         assert!(text.contains("<div id=\"calculator-app\""));
-        assert!(text.contains("<select id=\"zone\""));
+        assert!(text.contains("placeholder=\"Search zones\""));
+        assert!(text.contains("id=\"calculator-zone-search-results-shell\""));
+        assert!(text.contains("onclick=\"window.__fishystuffCalculator.toggleSearchableDropdown('calculator-zone-picker'); return false;\""));
     }
 
     #[tokio::test]
@@ -2125,6 +2377,62 @@ mod tests {
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("\"auto_fish_time\":\"63.00\""));
         assert!(!text.contains("\"active\":true"));
+    }
+
+    #[tokio::test]
+    async fn init_fuzzy_matches_zone_name() {
+        let response = get_calculator_datastar_init(
+            State(test_state()),
+            Ok(Query(CalculatorDatastarQuery {
+                lang: Some("en".to_string()),
+                r#ref: None,
+                datastar: Some(r#"{"zone":"vlia bech"}"#.to_string()),
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("\"zone\":\"240,74,74\""));
+        assert!(text.contains("\"zone_name\":\"Velia Beach\""));
+    }
+
+    #[tokio::test]
+    async fn zone_search_returns_fuzzy_dropdown_results() {
+        let response = get_calculator_datastar_zone_search(
+            State(test_state()),
+            Ok(Query(CalculatorZoneSearchQuery {
+                lang: Some("en".to_string()),
+                r#ref: None,
+                q: Some("vlia bech".to_string()),
+                selected: Some("240,74,74".to_string()),
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("text/html; charset=utf-8")
+        );
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("id=\"calculator-zone-search-results\""));
+        assert!(text.contains(
+            "window.__fishystuffCalculator.selectSearchableDropdownOption('calculator-zone-picker'"
+        ));
+        assert!(text.contains("Velia Beach"));
+        assert!(text.contains("Selected"));
     }
 
     #[test]

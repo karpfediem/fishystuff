@@ -151,6 +151,8 @@
     window.__fishystuffCalculator = {
         iconSpriteUrl: ICON_SPRITE_URL,
         lang: calculatorLang,
+        searchableDropdownAbortControllers: new Map(),
+        searchableDropdownCloseTimers: new Map(),
         initUrl() {
             return window.__fishystuffResolveApiUrl(
                 `/api/v1/calculator/datastar/init?lang=${this.lang}`,
@@ -159,6 +161,18 @@
         evalUrl() {
             return window.__fishystuffResolveApiUrl(
                 `/api/v1/calculator/datastar/eval?lang=${this.lang}`,
+            );
+        },
+        zoneSearchUrl(selected, query) {
+            const params = new URLSearchParams({ lang: this.lang });
+            if (selected && String(selected).trim()) {
+                params.set("selected", String(selected).trim());
+            }
+            if (query && String(query).trim()) {
+                params.set("q", String(query).trim());
+            }
+            return window.__fishystuffResolveApiUrl(
+                `/api/v1/calculator/datastar/zone-search?${params.toString()}`,
             );
         },
         persistSignalPatchFilter() {
@@ -191,6 +205,189 @@
         },
         restore(signals) {
             Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
+        },
+        searchableDropdownRoot(rootId) {
+            return document.getElementById(rootId);
+        },
+        searchableDropdownPanel(rootId) {
+            const root = this.searchableDropdownRoot(rootId);
+            return root ? document.getElementById(root.dataset.panelId) : null;
+        },
+        searchableDropdownInput(rootId) {
+            const root = this.searchableDropdownRoot(rootId);
+            return root ? document.getElementById(root.dataset.inputId) : null;
+        },
+        searchableDropdownValueInput(rootId) {
+            const root = this.searchableDropdownRoot(rootId);
+            return root ? document.getElementById(root.dataset.valueInputId) : null;
+        },
+        searchableDropdownLabel(rootId) {
+            const root = this.searchableDropdownRoot(rootId);
+            return root ? document.getElementById(root.dataset.labelId) : null;
+        },
+        searchableDropdownResults(rootId) {
+            const root = this.searchableDropdownRoot(rootId);
+            return root ? document.getElementById(root.dataset.resultsId) : null;
+        },
+        cancelSearchableDropdownClose(rootId) {
+            const timer = this.searchableDropdownCloseTimers.get(rootId);
+            if (timer) {
+                window.clearTimeout(timer);
+                this.searchableDropdownCloseTimers.delete(rootId);
+            }
+        },
+        scheduleSearchableDropdownClose(rootId) {
+            this.cancelSearchableDropdownClose(rootId);
+            const timer = window.setTimeout(() => {
+                this.closeSearchableDropdown(rootId);
+            }, 150);
+            this.searchableDropdownCloseTimers.set(rootId, timer);
+        },
+        toggleSearchableDropdown(rootId) {
+            const panel = this.searchableDropdownPanel(rootId);
+            if (!panel) {
+                return;
+            }
+            if (panel.hidden) {
+                this.openSearchableDropdown(rootId);
+                return;
+            }
+            this.closeSearchableDropdown(rootId);
+        },
+        openSearchableDropdown(rootId) {
+            const panel = this.searchableDropdownPanel(rootId);
+            const input = this.searchableDropdownInput(rootId);
+            if (!panel || !input) {
+                return;
+            }
+            this.cancelSearchableDropdownClose(rootId);
+            panel.hidden = false;
+            input.value = "";
+            const root = this.searchableDropdownRoot(rootId);
+            if (root) {
+                root.dataset.lastSearchKey = "";
+            }
+            window.requestAnimationFrame(() => {
+                input.focus();
+                this.searchSearchableDropdown(rootId, "");
+            });
+        },
+        closeSearchableDropdown(rootId) {
+            this.cancelSearchableDropdownClose(rootId);
+            const panel = this.searchableDropdownPanel(rootId);
+            if (panel) {
+                panel.hidden = true;
+            }
+            const controller = this.searchableDropdownAbortControllers.get(rootId);
+            if (controller) {
+                controller.abort();
+                this.searchableDropdownAbortControllers.delete(rootId);
+            }
+        },
+        handleSearchableDropdownKeydown(event, rootId) {
+            if (event.key !== "Escape") {
+                return;
+            }
+            event.preventDefault();
+            this.closeSearchableDropdown(rootId);
+        },
+        searchableDropdownSearchUrl(rootId, query) {
+            const root = this.searchableDropdownRoot(rootId);
+            if (!root) {
+                return "";
+            }
+            const valueInput = this.searchableDropdownValueInput(rootId);
+            const selected = valueInput?.value ?? "";
+            const builderName = root.dataset.searchUrlBuilder;
+            const builder = builderName ? this[builderName] : null;
+            if (typeof builder !== "function") {
+                return "";
+            }
+            return builder.call(this, selected, query);
+        },
+        searchSearchableDropdown(rootId, rawQuery) {
+            const root = this.searchableDropdownRoot(rootId);
+            const results = this.searchableDropdownResults(rootId);
+            if (!root || !results) {
+                return;
+            }
+            this.cancelSearchableDropdownClose(rootId);
+            const query = String(rawQuery ?? "");
+            const valueInput = this.searchableDropdownValueInput(rootId);
+            const selected = valueInput?.value ?? "";
+            const searchKey = `${selected}\n${query}`;
+            if (root.dataset.lastSearchKey === searchKey) {
+                return;
+            }
+            root.dataset.lastSearchKey = searchKey;
+            const url = this.searchableDropdownSearchUrl(rootId, query);
+            if (!url) {
+                return;
+            }
+            const previous = this.searchableDropdownAbortControllers.get(rootId);
+            if (previous) {
+                previous.abort();
+            }
+            const controller = new AbortController();
+            this.searchableDropdownAbortControllers.set(rootId, controller);
+            fetch(url, {
+                signal: controller.signal,
+                cache: "no-store",
+                headers: {
+                    Accept: "text/html",
+                },
+            })
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error(`Search request failed: ${response.status}`);
+                    }
+                    return response.text();
+                })
+                .then((html) => {
+                    if (controller.signal.aborted) {
+                        return;
+                    }
+                    const currentResults = this.searchableDropdownResults(rootId);
+                    if (!currentResults) {
+                        return;
+                    }
+                    currentResults.outerHTML = html;
+                })
+                .catch((error) => {
+                    if (error?.name === "AbortError") {
+                        return;
+                    }
+                    console.error("Error loading searchable dropdown results:", error);
+                })
+                .finally(() => {
+                    if (this.searchableDropdownAbortControllers.get(rootId) === controller) {
+                        this.searchableDropdownAbortControllers.delete(rootId);
+                    }
+                });
+        },
+        updateBoundInputValue(input, value) {
+            if (!input) {
+                return;
+            }
+            input.value = value;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+        selectSearchableDropdownOption(rootId, value, label) {
+            const labelNode = this.searchableDropdownLabel(rootId);
+            if (labelNode) {
+                labelNode.textContent = label;
+            }
+            this.updateBoundInputValue(this.searchableDropdownValueInput(rootId), value);
+            const input = this.searchableDropdownInput(rootId);
+            if (input) {
+                input.value = "";
+            }
+            const root = this.searchableDropdownRoot(rootId);
+            if (root) {
+                root.dataset.lastSearchKey = "";
+            }
+            this.closeSearchableDropdown(rootId);
         },
         persist(signals) {
             const payload = persistedCalculatorSignals(signals);

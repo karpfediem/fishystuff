@@ -3034,6 +3034,7 @@ dependencies = [
  "fishystuff_api",
  "fishystuff_config",
  "fishystuff_core",
+ "fuzzy-matcher",
  "hyper",
  "mysql",
  "serde",

@@ -36,6 +36,10 @@ pub fn build_router(state: SharedState) -> Router {
             post(routes::calculator::post_calculator_datastar_eval),
         )
         .route(
+            "/calculator/datastar/zone-search",
+            get(routes::calculator::get_calculator_datastar_zone_search),
+        )
+        .route(
             "/zone_profile_v2",
             post(routes::zone_profile_v2::zone_profile_v2),
         )
