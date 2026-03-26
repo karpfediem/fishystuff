@@ -55,15 +55,22 @@
         return current;
     };
 
-    const persistedCalculatorSignals = (signals) =>
+    const storedCalculatorSignals = (signals) =>
         Object.fromEntries(
             Object.entries(canonicalizeStoredSignals(signals)).filter(
                 ([key]) => !key.startsWith("_"),
             )
         );
 
+    const sharedCalculatorSignals = (signals) =>
+        Object.fromEntries(
+            Object.entries(storedCalculatorSignals(signals)).filter(
+                ([key]) => key !== "debug",
+            )
+        );
+
     const presetURL = (signals) => {
-        const payload = JSON.stringify(persistedCalculatorSignals(signals));
+        const payload = JSON.stringify(sharedCalculatorSignals(signals));
         return (
             window.location.origin +
             window.location.pathname +
@@ -195,7 +202,7 @@
             Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
         },
         persist(signals) {
-            const payload = persistedCalculatorSignals(signals);
+            const payload = storedCalculatorSignals(signals);
             localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(payload));
         },
         syncInput(signals) {
