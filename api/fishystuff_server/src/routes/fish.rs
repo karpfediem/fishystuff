@@ -65,7 +65,7 @@ fn datastar_fish_sse(response: FishListResponse) -> AppResult<String> {
     }))
     .map_err(|err| AppError::internal(format!("serialize fish datastar payload: {err}")))?;
     Ok(format!(
-        "event: datastar-merge-signals\ndata: signals {signals}\n\n"
+        "event: datastar-patch-signals\ndata: signals {signals}\n\n"
     ))
 }
 
@@ -297,7 +297,7 @@ mod tests {
         );
         let body = to_bytes(response.into_body()).await.expect("body bytes");
         let text = String::from_utf8(body.to_vec()).expect("utf8 body");
-        assert!(text.contains("event: datastar-merge-signals"));
+        assert!(text.contains("event: datastar-patch-signals"));
         assert!(text.contains("data: signals "));
         assert!(text.contains("\"loading\":false"));
         assert!(text.contains("\"count\":2"));

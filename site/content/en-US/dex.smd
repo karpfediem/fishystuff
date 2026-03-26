@@ -934,8 +934,7 @@
   <script>
   (() => {
     const STORAGE_KEY = "fishystuff.fishydex.caught.v1";
-    const DATASTAR_EVENT = "datastar-sse";
-    const DATASTAR_MERGE_SIGNALS = "datastar-merge-signals";
+    const DATASTAR_PATCH_SIGNALS_EVENT = "datastar-patch-signals";
     const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
     const GRADE_FILTER_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash"];
     const GRADE_LABELS = {
@@ -991,14 +990,11 @@
     };
 
     function mergeSignals(patch) {
-      document.dispatchEvent(new CustomEvent(DATASTAR_EVENT, {
-        detail: {
-          type: DATASTAR_MERGE_SIGNALS,
-          argsRaw: {
-            signals: JSON.stringify(patch),
-          },
-        },
-      }));
+      const patchElement = document.getElementById("fishydex-signal-patch");
+      if (!(patchElement instanceof HTMLElement)) {
+        return;
+      }
+      patchElement.setAttribute("data-signals", JSON.stringify(patch));
     }
 
     function normalizeFishPayload(payload) {
@@ -1021,7 +1017,7 @@
       let dataLines = [];
 
       function decodePatch() {
-        if (eventType !== DATASTAR_MERGE_SIGNALS) {
+        if (eventType !== DATASTAR_PATCH_SIGNALS_EVENT) {
           return null;
         }
         for (const rawLine of dataLines) {
@@ -2334,7 +2330,7 @@
       return apiUrl("/api/v1/fish");
     }
 
-    document.addEventListener(DATASTAR_EVENT, handleDatastarEvent);
+    document.addEventListener("datastar-fetch", handleDatastarEvent);
 
     window.Fishydex = {
       resetFilters,
@@ -2395,9 +2391,10 @@
        api_error_hint: '',
      }">
 
-  <div data-indicator-loading
-       data-on-load="window.Fishydex.resetFilters(); window.Fishydex.restoreCaught(); window.Fishydex.loadFish()"
-       data-on-signals-change="window.Fishydex.sync({
+  <div id="fishydex-signal-patch" class="hidden" hidden></div>
+  <div
+       data-init="window.Fishydex.resetFilters(); window.Fishydex.restoreCaught(); window.Fishydex.loadFish()"
+       data-effect="window.Fishydex.sync({
          fish: $fish || [],
          revision: $revision || '',
          search_query: $search_query || '',
@@ -2469,8 +2466,8 @@
           <div class="fishydex-subtle">Fetching the fish catalog from the API.</div>
         </div>
         <div class="fishydex-actions" data-show="!$loading">
-          <button type="button" class="btn btn-sm btn-soft btn-primary fishydex-button" data-on-click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
-          <button type="button" class="btn btn-sm btn-outline fishydex-button" data-on-click="window.Fishydex.importCaught()">Import</button>
+          <button type="button" class="btn btn-sm btn-soft btn-primary fishydex-button" data-on:click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
+          <button type="button" class="btn btn-sm btn-outline fishydex-button" data-on:click="window.Fishydex.importCaught()">Import</button>
         </div>
         </div>
       </fieldset>
@@ -2492,8 +2489,8 @@
                      type="search"
                      autocomplete="off"
                      placeholder="Search by fish name or ID"
-                     data-bind-search_draft
-                     data-on-input__debounce.125ms="$search_query = ($search_draft || '').trim()">
+                     data-bind:search_draft
+                     data-on:input__debounce.125ms="$search_query = ($search_draft || '').trim()">
             </label>
           </fieldset>
 
@@ -2505,17 +2502,17 @@
                         class="btn btn-sm btn-outline fishydex-filter-chip"
                         data-caught-filter-value="all"
                         aria-pressed="true"
-                        data-on-click="window.Fishydex.setCaughtFilter('all')">All</button>
+                        data-on:click="window.Fishydex.setCaughtFilter('all')">All</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-caught"
                         data-caught-filter-value="caught"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.setCaughtFilter('caught')">Caught</button>
+                        data-on:click="window.Fishydex.setCaughtFilter('caught')">Caught</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-missing"
                         data-caught-filter-value="missing"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.setCaughtFilter('missing')">Missing</button>
+                        data-on:click="window.Fishydex.setCaughtFilter('missing')">Missing</button>
               </div>
             </fieldset>
 
@@ -2527,27 +2524,27 @@
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-prize"
                         data-grade-filter-value="Prize"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.toggleGradeFilter('Prize')">Red</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('Prize')">Red</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-rare"
                         data-grade-filter-value="Rare"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.toggleGradeFilter('Rare')">Yellow</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('Rare')">Yellow</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-highquality"
                         data-grade-filter-value="HighQuality"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.toggleGradeFilter('HighQuality')">Blue</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('HighQuality')">Blue</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-general"
                         data-grade-filter-value="General"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.toggleGradeFilter('General')">Green</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('General')">Green</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-trash"
                         data-grade-filter-value="Trash"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.toggleGradeFilter('Trash')">White</button>
+                        data-on:click="window.Fishydex.toggleGradeFilter('Trash')">White</button>
               </div>
             </fieldset>
 
@@ -2560,25 +2557,25 @@
                         data-show="$supports_method_filter"
                         data-method-filter-value="all"
                         aria-pressed="true"
-                        data-on-click="window.Fishydex.clearMethodFilters()">All</button>
+                        data-on:click="window.Fishydex.clearMethodFilters()">All</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-rod"
                         data-show="$supports_method_filter"
                         data-method-filter-value="rod"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.toggleMethodFilter('rod')">Rod</button>
+                        data-on:click="window.Fishydex.toggleMethodFilter('rod')">Rod</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-harpoon"
                         data-show="$supports_method_filter"
                         data-method-filter-value="harpoon"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.toggleMethodFilter('harpoon')">Harpoon</button>
+                        data-on:click="window.Fishydex.toggleMethodFilter('harpoon')">Harpoon</button>
                 <button type="button"
                         data-show="$supports_dried_filter"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-show-dried"
                         data-dried-toggle
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.toggleShowDried()">Show Dried</button>
+                        data-on:click="window.Fishydex.toggleShowDried()">Show Dried</button>
               </div>
             </fieldset>
 
@@ -2589,24 +2586,24 @@
                         class="btn btn-sm btn-outline fishydex-filter-chip"
                         data-sort-field-value="name"
                         aria-pressed="true"
-                        data-on-click="window.Fishydex.setSortField('name')">Name</button>
+                        data-on:click="window.Fishydex.setSortField('name')">Name</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip"
                         data-sort-field-value="price"
                         aria-pressed="false"
-                        data-on-click="window.Fishydex.setSortField('price')">Price</button>
+                        data-on:click="window.Fishydex.setSortField('price')">Price</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip"
                         data-sort-direction-toggle
                         aria-pressed="true"
-                        data-on-click="window.Fishydex.toggleSortDirection()">Ascending</button>
+                        data-on:click="window.Fishydex.toggleSortDirection()">Ascending</button>
               </div>
             </fieldset>
 
             <div class="fishydex-filter-meta">
               <span class="fishydex-filter-count"
                     data-text="'Showing ' + ($visible_count || 0) + '/' + ($catalog_count || 0) + ' matches'"></span>
-              <button type="button" class="btn btn-sm btn-soft fishydex-filter-clear" data-on-click="window.Fishydex.resetFilters()">Clear filters</button>
+              <button type="button" class="btn btn-sm btn-soft fishydex-filter-clear" data-on:click="window.Fishydex.resetFilters()">Clear filters</button>
             </div>
           </div>
 
