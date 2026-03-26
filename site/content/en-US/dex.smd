@@ -490,7 +490,8 @@
     transform-origin: 50% 60%;
   }
 
-  .fishydex-caught-button.is-stamping .fishy-icon {
+  .fishydex-caught-button.is-stamping .fishy-icon,
+  .fishydex-favourite-button.is-stamping .fishy-icon {
     animation: fishydex-caught-stamp 360ms cubic-bezier(0.2, 0.9, 0.25, 1.15);
   }
 
@@ -736,7 +737,8 @@
       animation: none;
     }
 
-    .fishydex-caught-button.is-stamping .fishy-icon {
+    .fishydex-caught-button.is-stamping .fishy-icon,
+    .fishydex-favourite-button.is-stamping .fishy-icon {
       animation: none;
     }
   }
@@ -1010,6 +1012,8 @@
       suppressCardAnimation: false,
       pendingCaughtStampFishId: null,
       pendingCaughtStampTimer: 0,
+      pendingFavouriteStampFishId: null,
+      pendingFavouriteStampTimer: 0,
     };
 
     function connect(signals) {
@@ -1211,6 +1215,28 @@
       return isCaught && Number.isInteger(fishId) && state.pendingCaughtStampFishId === fishId;
     }
 
+    function queueFavouriteStamp(fishId, isFavourite) {
+      if (state.pendingFavouriteStampTimer) {
+        window.clearTimeout(state.pendingFavouriteStampTimer);
+        state.pendingFavouriteStampTimer = 0;
+      }
+      if (!isFavourite || !Number.isInteger(fishId)) {
+        state.pendingFavouriteStampFishId = null;
+        return;
+      }
+      state.pendingFavouriteStampFishId = fishId;
+      state.pendingFavouriteStampTimer = window.setTimeout(() => {
+        if (state.pendingFavouriteStampFishId === fishId) {
+          state.pendingFavouriteStampFishId = null;
+        }
+        state.pendingFavouriteStampTimer = 0;
+      }, 420);
+    }
+
+    function shouldStampFavouriteToggle(fishId, isFavourite) {
+      return isFavourite && Number.isInteger(fishId) && state.pendingFavouriteStampFishId === fishId;
+    }
+
     function toggleCaught(fishId) {
       const next = new Set(state.currentCaughtIds);
       if (next.has(fishId)) {
@@ -1235,6 +1261,8 @@
       }
       const favouriteIds = Array.from(next).sort((left, right) => left - right);
       state.currentFavouriteIds = favouriteIds;
+      queueFavouriteStamp(fishId, next.has(fishId));
+      state.suppressCardAnimation = true;
       persistFavouriteIds(favouriteIds);
       mergeSignals({ favourite_ids: favouriteIds, status_message: "" });
     }
@@ -1731,6 +1759,7 @@
       const isCaught = caughtSet.has(itemId);
       const isFavourite = favouriteSet.has(itemId);
       const stampCaught = shouldStampCaughtToggle(itemId, isCaught);
+      const stampFavourite = shouldStampFavouriteToggle(itemId, isFavourite);
       const card = createElement("article", "fishydex-card card card-border bg-base-100");
       card.dataset.fishId = String(itemId);
       if (animateCards) {
@@ -1752,7 +1781,7 @@
       const actions = createElement("div", "fishydex-card-actions");
       const favouriteButton = createElement(
         "button",
-        `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${isFavourite ? " is-favourite" : ""}`
+        `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${isFavourite ? " is-favourite" : ""}${stampFavourite ? " is-stamping" : ""}`
       );
       favouriteButton.type = "button";
       favouriteButton.dataset.action = "toggle-favourite";
@@ -1862,6 +1891,7 @@
         }
         const favouriteButton = target.closest("[data-action='toggle-favourite']");
         if (favouriteButton) {
+          rememberViewport(card, favouriteButton);
           toggleFavourite(fishId);
           return;
         }
@@ -2073,7 +2103,7 @@
 
       setElementText(title, meta.name);
       if (titleFavouriteToggle instanceof HTMLButtonElement) {
-        titleFavouriteToggle.className = `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${meta.favourite ? " is-favourite" : ""}`;
+        titleFavouriteToggle.className = `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${meta.favourite ? " is-favourite" : ""}${shouldStampFavouriteToggle(meta.fishId, meta.favourite) ? " is-stamping" : ""}`;
         titleFavouriteToggle.dataset.favouriteState = meta.favourite ? "active" : "inactive";
         titleFavouriteToggle.setAttribute("aria-pressed", meta.favourite ? "true" : "false");
         titleFavouriteToggle.setAttribute(
