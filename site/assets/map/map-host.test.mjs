@@ -381,6 +381,17 @@ test("search text patches preserve trailing spaces while typing", () => {
   assert.equal(next.filters.searchText, "Zenato Sea ");
 });
 
+test("fish filter term patches normalize favourite and missing aliases", () => {
+  const next = applyStatePatch(undefined, {
+    version: 1,
+    filters: {
+      fishFilterTerms: ["favorite", "missing", "favourites", ""],
+    },
+  });
+
+  assert.deepEqual(next.filters.fishFilterTerms, ["favourite", "missing"]);
+});
+
 test("semantic field filter patches are normalized and keep zone ids in sync", () => {
   const next = applyStatePatch(undefined, {
     version: 1,
@@ -1561,6 +1572,14 @@ test("explicit query range keeps the canonical patch id empty", () => {
   assert.equal(patch.filters.patchId, null);
   assert.equal(patch.filters.fromPatchId, "2026-02-26");
   assert.equal(patch.filters.toPatchId, "2026-03-12");
+});
+
+test("query state supports fish filter terms", () => {
+  const patch = parseQueryState(
+    "https://fishystuff.fish/map/?fishTerms=favourite,missing",
+  );
+
+  assert.deepEqual(patch.filters.fishFilterTerms, ["favourite", "missing"]);
 });
 
 test("query state supports direct world-point selection", () => {

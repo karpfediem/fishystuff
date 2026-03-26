@@ -370,6 +370,55 @@ test("buildSearchMatches keeps fish search working and filters already selected 
   assert.equal(fishMatches[0]?.fishId, 77);
 });
 
+test("buildSearchMatches supports favourite and missing fish filter terms", () => {
+  const stateBundle = buildStateBundle();
+  stateBundle.sharedFishState = {
+    caughtIds: [912],
+    favouriteIds: [77],
+    caughtSet: new Set([912]),
+    favouriteSet: new Set([77]),
+  };
+
+  const favouriteMatches = buildSearchMatches(stateBundle, "favorite", TEST_ZONE_CATALOG);
+  assert.equal(favouriteMatches[0]?.kind, "fish-filter");
+  assert.equal(
+    favouriteMatches.some((match) => match.kind === "fish" && match.fishId === 77),
+    true,
+  );
+  assert.equal(
+    favouriteMatches.some((match) => match.kind === "fish" && match.fishId === 912),
+    false,
+  );
+
+  const missingMatches = buildSearchMatches(stateBundle, "missing", TEST_ZONE_CATALOG);
+  assert.equal(missingMatches[0]?.kind, "fish-filter");
+  assert.equal(
+    missingMatches.some((match) => match.kind === "fish" && match.fishId === 77),
+    true,
+  );
+  assert.equal(
+    missingMatches.some((match) => match.kind === "fish" && match.fishId === 912),
+    false,
+  );
+
+  const selectedFilterMatches = buildSearchMatches(
+    {
+      ...stateBundle,
+      inputState: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
+    "",
+    TEST_ZONE_CATALOG,
+  );
+  assert.equal(selectedFilterMatches[0]?.kind, "fish");
+  assert.equal(selectedFilterMatches[0]?.fishId, 77);
+});
+
 test("buildSearchMatches returns semantic hits and skips selected semantic fields", () => {
   const stateBundle = buildStateBundle();
   stateBundle.state.catalog.semanticTerms = [

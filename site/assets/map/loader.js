@@ -27,6 +27,19 @@ const TERRITORY_SUMMARY_FACT_KEYS = Object.freeze(["resources", "origin"]);
 const DEFAULT_ZONE_INFO_TAB = "";
 const DEFAULT_AUTO_ADJUST_VIEW = true;
 const FISHYMAP_WINDOW_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
+const FISH_FILTER_TERM_ORDER = Object.freeze(["favourite", "missing"]);
+const FISH_FILTER_TERM_METADATA = Object.freeze({
+  favourite: Object.freeze({
+    label: "Favourite",
+    description: "Fish marked with a heart in Fishydex.",
+    searchText: "favourite favourites favorite favorites heart liked",
+  }),
+  missing: Object.freeze({
+    label: "Missing",
+    description: "Fish not marked caught in Fishydex.",
+    searchText: "missing uncaught not caught not yet caught",
+  }),
+});
 const ZONE_INFO_TAB_BUTTON_CLASS =
   "tab shrink-0 gap-2 whitespace-nowrap text-xs font-semibold sm:text-sm";
 const POINT_DETAIL_PANE_BUILDERS = Object.freeze([buildLayerSamplePointDetailPanes]);
@@ -190,20 +203,80 @@ function requestBridgeState(target, options = {}) {
   if (options.refresh === true) {
     dispatchMapEvent(target, FISHYMAP_EVENTS.requestState, detail);
   }
-  return {
+  return withSharedFishState({
     state: detail.state || FishyMapBridge.getCurrentState(),
     inputState:
       detail.inputState ||
       (typeof FishyMapBridge.getCurrentInputState === "function"
         ? FishyMapBridge.getCurrentInputState()
         : {}),
-  };
+  });
 }
 
 export function projectStateBundleStatePatch(stateBundle, patch) {
-  return {
+  return withSharedFishState({
+    ...(stateBundle || {}),
     state: stateBundle?.state || {},
     inputState: applyStatePatch(stateBundle?.inputState, patch),
+  });
+}
+
+function normalizeSharedFishIds(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  const ids = [];
+  const seen = new Set();
+  for (const value of values) {
+    const fishId = Number.parseInt(value, 10);
+    if (!Number.isInteger(fishId) || fishId <= 0 || seen.has(fishId)) {
+      continue;
+    }
+    seen.add(fishId);
+    ids.push(fishId);
+  }
+  return ids;
+}
+
+function loadSharedFishState(storage = globalThis.localStorage) {
+  const read = (key) => {
+    try {
+      return normalizeSharedFishIds(JSON.parse(storage?.getItem?.(key) || "[]"));
+    } catch (_) {
+      return [];
+    }
+  };
+  const caughtIds = read(FISHYMAP_STORAGE_KEYS.caught);
+  const favouriteIds = read(FISHYMAP_STORAGE_KEYS.favourites);
+  return {
+    caughtIds,
+    favouriteIds,
+    caughtSet: new Set(caughtIds),
+    favouriteSet: new Set(favouriteIds),
+  };
+}
+
+function withSharedFishState(stateBundle) {
+  const sharedFishState = stateBundle?.sharedFishState;
+  if (sharedFishState?.caughtSet instanceof Set && sharedFishState?.favouriteSet instanceof Set) {
+    return stateBundle || {};
+  }
+  const normalizedCaughtIds = normalizeSharedFishIds(sharedFishState?.caughtIds);
+  const normalizedFavouriteIds = normalizeSharedFishIds(sharedFishState?.favouriteIds);
+  if (normalizedCaughtIds.length || normalizedFavouriteIds.length) {
+    return {
+      ...(stateBundle || {}),
+      sharedFishState: {
+        caughtIds: normalizedCaughtIds,
+        favouriteIds: normalizedFavouriteIds,
+        caughtSet: new Set(normalizedCaughtIds),
+        favouriteSet: new Set(normalizedFavouriteIds),
+      },
+    };
+  }
+  return {
+    ...(stateBundle || {}),
+    sharedFishState: loadSharedFishState(),
   };
 }
 
@@ -3545,6 +3618,97 @@ function resolveSelectedZoneRgbs(stateBundle) {
   return [];
 }
 
+function normalizeFishFilterTerm(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (
+    normalized === "favourite" ||
+    normalized === "favourites" ||
+    normalized === "favorite" ||
+    normalized === "favorites"
+  ) {
+    return "favourite";
+  }
+  if (
+    normalized === "missing" ||
+    normalized === "uncaught" ||
+    normalized === "not caught" ||
+    normalized === "not yet caught"
+  ) {
+    return "missing";
+  }
+  return "";
+}
+
+function normalizeFishFilterTerms(values) {
+  const selected = new Set();
+  for (const value of Array.isArray(values) ? values : []) {
+    const normalized = normalizeFishFilterTerm(value);
+    if (normalized) {
+      selected.add(normalized);
+    }
+  }
+  return FISH_FILTER_TERM_ORDER.filter((term) => selected.has(term));
+}
+
+function resolveSelectedFishFilterTerms(stateBundle) {
+  const inputTerms = normalizeFishFilterTerms(stateBundle?.inputState?.filters?.fishFilterTerms);
+  if (inputTerms.length) {
+    return inputTerms;
+  }
+  return normalizeFishFilterTerms(stateBundle?.state?.filters?.fishFilterTerms);
+}
+
+function addSelectedFishFilterTerm(selectedTerms, term) {
+  return normalizeFishFilterTerms((selectedTerms || []).concat(term));
+}
+
+function removeSelectedFishFilterTerm(selectedTerms, term) {
+  const normalizedTerm = normalizeFishFilterTerm(term);
+  return normalizeFishFilterTerms((selectedTerms || []).filter((entry) => entry !== normalizedTerm));
+}
+
+function parseFishFilterDirectives(searchText) {
+  const rawQuery = String(searchText || "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (!rawQuery) {
+    return {
+      rawQuery: "",
+      remainingQuery: "",
+      directTerms: [],
+    };
+  }
+
+  let remainingQuery = rawQuery;
+  const directTerms = new Set();
+  const replacements = [
+    {
+      term: "missing",
+      patterns: [/\bnot\s+yet\s+caught\b/g, /\bnot\s+caught\b/g, /\buncaught\b/g, /\bmissing\b/g],
+    },
+    {
+      term: "favourite",
+      patterns: [/\bfavou?rites?\b/g],
+    },
+  ];
+  for (const replacement of replacements) {
+    for (const pattern of replacement.patterns) {
+      remainingQuery = remainingQuery.replace(pattern, () => {
+        directTerms.add(replacement.term);
+        return " ";
+      });
+    }
+  }
+  remainingQuery = remainingQuery.replace(/\s+/g, " ").trim();
+  return {
+    rawQuery,
+    remainingQuery,
+    directTerms: FISH_FILTER_TERM_ORDER.filter((term) => directTerms.has(term)),
+  };
+}
+
+function resolveSharedFishState(stateBundle) {
+  return withSharedFishState(stateBundle).sharedFishState;
+}
+
 function scoreFishMatch(fish, queryTerms) {
   if (!queryTerms.length) {
     return 0;
@@ -3580,21 +3744,47 @@ function scoreTermMatch(haystack, term, baseScore) {
   return baseScore - Math.min(index, baseScore - 1);
 }
 
-function findFishMatches(catalogFish, searchText) {
+function fishMatchesFilterTerms(fish, filterTerms, sharedFishState) {
+  if (!filterTerms.length) {
+    return true;
+  }
+  const fishId = Number.parseInt(fish?.fishId ?? fish?.itemId, 10);
+  if (!Number.isInteger(fishId) || fishId <= 0) {
+    return false;
+  }
+  for (const term of filterTerms) {
+    if (term === "favourite" && !sharedFishState?.favouriteSet?.has(fishId)) {
+      return false;
+    }
+    if (term === "missing" && sharedFishState?.caughtSet?.has(fishId)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function findFishMatches(catalogFish, searchText, options = {}) {
   const query = String(searchText || "").trim().toLowerCase();
   const terms = query ? query.split(/\s+/g).filter(Boolean) : [];
-  if (!terms.length) {
+  const includeAllWhenEmpty = options.includeAllWhenEmpty === true;
+  const filterTerms = normalizeFishFilterTerms(options.filterTerms);
+  const sharedFishState = options.sharedFishState;
+  if (!terms.length && !includeAllWhenEmpty) {
     return [];
   }
   const filtered = [];
   for (const fish of catalogFish || []) {
-    const score = scoreFishMatch(fish, terms);
-    if (!terms.length || Number.isFinite(score)) {
-      filtered.push({
-        ...fish,
-        _score: Number.isFinite(score) ? score : 0,
-      });
+    if (!fishMatchesFilterTerms(fish, filterTerms, sharedFishState)) {
+      continue;
     }
+    const score = terms.length ? scoreFishMatch(fish, terms) : 0;
+    if (terms.length && !Number.isFinite(score)) {
+      continue;
+    }
+    filtered.push({
+      ...fish,
+      _score: Number.isFinite(score) ? score : 0,
+    });
   }
   filtered.sort((left, right) => {
     if (terms.length && right._score !== left._score) {
@@ -3603,6 +3793,53 @@ function findFishMatches(catalogFish, searchText) {
     return String(left.name || "").localeCompare(String(right.name || ""));
   });
   return filtered;
+}
+
+function findFishFilterMatches(searchText, selectedTerms) {
+  const query = String(searchText || "").trim().toLowerCase();
+  const terms = query ? query.split(/\s+/g).filter(Boolean) : [];
+  if (!terms.length) {
+    return [];
+  }
+  const selected = new Set(normalizeFishFilterTerms(selectedTerms));
+  const matches = [];
+  for (const term of FISH_FILTER_TERM_ORDER) {
+    if (selected.has(term)) {
+      continue;
+    }
+    const metadata = FISH_FILTER_TERM_METADATA[term];
+    let score = 0;
+    for (const queryTerm of terms) {
+      const best = Math.max(
+        term === queryTerm ? 240 : Number.NEGATIVE_INFINITY,
+        scoreTermMatch(String(metadata?.label || "").toLowerCase(), queryTerm, 200),
+        scoreTermMatch(String(metadata?.description || "").toLowerCase(), queryTerm, 140),
+        scoreTermMatch(String(metadata?.searchText || "").toLowerCase(), queryTerm, 160),
+      );
+      if (!Number.isFinite(best)) {
+        score = Number.NEGATIVE_INFINITY;
+        break;
+      }
+      score += best;
+    }
+    if (!Number.isFinite(score)) {
+      continue;
+    }
+    matches.push({
+      kind: "fish-filter",
+      term,
+      label: metadata?.label || term,
+      description: metadata?.description || "",
+      _score: score,
+    });
+  }
+  matches.sort((left, right) => {
+    if (right._score !== left._score) {
+      return right._score - left._score;
+    }
+    return String(left.label || "").localeCompare(String(right.label || ""));
+  });
+  return matches;
 }
 
 export function parseZoneRgbSearch(searchText) {
@@ -5015,21 +5252,32 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const catalogFish = stateBundle.state?.catalog?.fish || [];
   const semanticTerms = stateBundle.state?.catalog?.semanticTerms || [];
   const selectedFishIds = new Set(resolveSelectedFishIds(stateBundle));
+  const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
   const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
   const selectedZoneRgbs = new Set(resolveSelectedZoneRgbs(stateBundle));
-  const fishMatches = findFishMatches(catalogFish, searchText)
+  const sharedFishState = resolveSharedFishState(stateBundle);
+  const filterDirectives = parseFishFilterDirectives(searchText);
+  const effectiveFishFilterTerms = normalizeFishFilterTerms(
+    selectedFishFilterTerms.concat(filterDirectives.directTerms),
+  );
+  const fishFilterMatches = findFishFilterMatches(searchText, selectedFishFilterTerms);
+  const fishMatches = findFishMatches(catalogFish, filterDirectives.remainingQuery, {
+    includeAllWhenEmpty: effectiveFishFilterTerms.length > 0,
+    filterTerms: effectiveFishFilterTerms,
+    sharedFishState,
+  })
     .filter((fish) => !selectedFishIds.has(fish.fishId))
     .map((fish) => ({
       kind: "fish",
       ...fish,
     }));
-  const zoneMatches = findZoneMatches(zoneCatalog, searchText).filter(
+  const zoneMatches = findZoneMatches(zoneCatalog, filterDirectives.remainingQuery).filter(
     (zone) => !selectedZoneRgbs.has(zone.zoneRgb),
   );
-  const semanticMatches = findSemanticMatches(semanticTerms, searchText).filter(
+  const semanticMatches = findSemanticMatches(semanticTerms, filterDirectives.remainingQuery).filter(
     (term) => !(selectedSemanticFieldIdsByLayer[term.layerId] || []).includes(term.fieldId),
   );
-  return fishMatches.concat(zoneMatches, semanticMatches).sort((left, right) => {
+  return fishFilterMatches.concat(fishMatches, zoneMatches, semanticMatches).sort((left, right) => {
     const leftPriority = searchMatchPriority(left);
     const rightPriority = searchMatchPriority(right);
     if (leftPriority !== rightPriority) {
@@ -5045,6 +5293,9 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
 }
 
 function searchMatchPriority(match) {
+  if (match?.kind === "fish-filter") {
+    return -1;
+  }
   if (match?.kind === "fish") {
     return 0;
   }
@@ -5088,9 +5339,13 @@ function buildSemanticTermLookup(stateBundle) {
 
 export function renderSearchSelection(elements, stateBundle, fishLookup) {
   const selectedFishIds = resolveSelectedFishIds(stateBundle);
+  const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
   const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
   const selectedZoneRgbs = resolveSelectedZoneRgbs(stateBundle);
-  const hasSelection = selectedFishIds.length > 0 || selectedZoneRgbs.length > 0;
+  const hasSelection =
+    selectedFishIds.length > 0 ||
+    selectedFishFilterTerms.length > 0 ||
+    selectedZoneRgbs.length > 0;
   const zoneLookup = new Map(
     (elements.zoneCatalog || []).map((zone) => [zone.zoneRgb, zone]),
   );
@@ -5107,6 +5362,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
   const hasSemanticSelection = selectedSemanticEntries.length > 0;
   const hasAnySelection = hasSelection || hasSemanticSelection;
   const renderKey = JSON.stringify({
+    selectedFishFilterTerms,
     selectedFishIds,
     selectedZoneRgbs,
     selectedSemantic: selectedSemanticEntries.map(({ layerId, fieldId, term }) => [
@@ -5164,7 +5420,28 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
     elements.searchWindow.dataset.hasSelection = "true";
   }
 
-  elements.searchSelection.innerHTML = selectedFishIds
+  elements.searchSelection.innerHTML = selectedFishFilterTerms
+    .map((fishFilterTerm) => {
+      const metadata = FISH_FILTER_TERM_METADATA[fishFilterTerm];
+      const label = metadata?.label || fishFilterTerm;
+      return `
+        <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
+          <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
+            <span class="badge badge-soft badge-secondary badge-sm">Filter</span>
+            <span class="font-medium">${escapeHtml(label)}</span>
+          </span>
+          <button
+            class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
+            data-fish-filter-term="${escapeHtml(fishFilterTerm)}"
+            type="button"
+            aria-label="Remove ${escapeHtml(label)}"
+          >
+            ×
+          </button>
+        </div>
+      `;
+    })
+    .concat(selectedFishIds
     .map((fishId) => {
       const fish = fishLookup.get(fishId);
       const name = fish?.name || `Fish ${fishId}`;
@@ -5184,7 +5461,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
           </button>
         </div>
       `;
-    })
+    }))
     .concat(
       selectedZoneRgbs.map((zoneRgb) => {
         const zone = zoneLookup.get(zoneRgb);
@@ -5250,12 +5527,15 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
 
 export function renderSearchResults(elements, matches, stateBundle) {
   const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
+  const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
   const showResults = matches.length > 0;
   const activeMatches = matches.slice(0, 12);
   const renderKey = JSON.stringify({
     query,
     results: activeMatches.map((match) =>
-      match.kind === "zone"
+      match.kind === "fish-filter"
+        ? ["fish-filter", match.term, match.label || "", match.description || ""]
+        : match.kind === "zone"
         ? ["zone", match.zoneRgb, match.name, match.rgbKey]
         : match.kind === "semantic"
           ? [
@@ -5282,7 +5562,7 @@ export function renderSearchResults(elements, matches, stateBundle) {
   }
   if (elements.searchCount) {
     setTextContent(elements.searchCount, `${matches.length} ${matches.length === 1 ? "match" : "matches"}`);
-    setBooleanProperty(elements.searchCount, "hidden", !query);
+    setBooleanProperty(elements.searchCount, "hidden", !query && selectedFishFilterTerms.length === 0);
   }
   if (elements.searchResults.dataset.renderKey === renderKey) {
     return;
@@ -5294,6 +5574,30 @@ export function renderSearchResults(elements, matches, stateBundle) {
   }
   elements.searchResults.innerHTML = activeMatches
     .map((match) => {
+      if (match.kind === "fish-filter") {
+        return `
+          <li>
+            <div
+              class="flex cursor-pointer items-start gap-3 rounded-box px-3 py-2 text-sm"
+              data-fish-filter-term="${escapeHtml(match.term)}"
+              role="button"
+              tabindex="0"
+              aria-label="Add ${escapeHtml(match.label || match.term)}"
+              title="Add ${escapeHtml(match.label || match.term)}"
+            >
+              <span class="min-w-0 flex-1 text-left">
+                <span class="flex items-center gap-2">
+                  <span class="font-semibold">${escapeHtml(match.label || match.term)}</span>
+                  <span class="badge badge-outline badge-xs">Filter</span>
+                </span>
+                <span class="mt-1 block truncate text-xs text-base-content/60">
+                  ${escapeHtml(match.description || "")}
+                </span>
+              </span>
+            </div>
+          </li>
+        `;
+      }
       if (match.kind === "zone") {
         const zoneMarkup =
           zoneIdentityMarkup(match, { interactive: true }) ||
@@ -5723,11 +6027,16 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
   }
   elements.search.value = "";
   const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
+  const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
   const patch = {
     version: 1,
     filters: {
       searchText: "",
-      ...(match.kind === "fish"
+      ...(match.kind === "fish-filter"
+        ? {
+            fishFilterTerms: addSelectedFishFilterTerm(selectedFishFilterTerms, match.term),
+          }
+        : match.kind === "fish"
         ? { fishIds: addSelectedFishId(resolveSelectedFishIds(stateBundle), match.fishId) }
         : match.kind === "zone"
           ? {
@@ -6010,21 +6319,22 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function stateBundleFromEvent(event) {
-    return {
+    return withSharedFishState({
       state: event.detail?.state || FishyMapBridge.getCurrentState(),
       inputState:
         event.detail?.inputState ||
         (typeof FishyMapBridge.getCurrentInputState === "function"
           ? FishyMapBridge.getCurrentInputState()
           : {}),
-    };
+    });
   }
 
   function getLatestStateBundle(options = {}) {
     if (options.refresh !== true && latestStateBundle) {
+      latestStateBundle = withSharedFishState(latestStateBundle);
       return latestStateBundle;
     }
-    latestStateBundle = requestBridgeState(shell, options);
+    latestStateBundle = withSharedFishState(requestBridgeState(shell, options));
     return latestStateBundle;
   }
 
@@ -6361,10 +6671,10 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function renderCurrentState(stateBundle = latestStateBundle || requestBridgeState(shell)) {
-    latestStateBundle = {
+    latestStateBundle = withSharedFishState({
       ...(stateBundle || {}),
       zoneCatalog,
-    };
+    });
     bookmarks = persistResolvedBookmarksFromStateBundle(latestStateBundle, bookmarks, bookmarkUi);
     scheduleBookmarkMetadataRefresh();
     isRendering = true;
@@ -6708,12 +7018,20 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     const button = event.target.closest(
-      "[data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+      "[data-fish-filter-term], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
     );
     if (!button) {
       return;
     }
     const current = getLatestStateBundle();
+    const fishFilterTerm = normalizeFishFilterTerm(button.getAttribute("data-fish-filter-term"));
+    if (fishFilterTerm) {
+      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+        kind: "fish-filter",
+        term: fishFilterTerm,
+      });
+      return;
+    }
     const zoneRgb = Number.parseInt(button.getAttribute("data-zone-rgb"), 10);
     if (Number.isFinite(zoneRgb)) {
       applySearchMatchSelection(shell, elements, renderCurrentState, current, {
@@ -6755,12 +7073,21 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     const row = event.target.closest(
-      "[data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+      "[data-fish-filter-term], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
     );
     if (!row) {
       return;
     }
     const current = getLatestStateBundle();
+    const fishFilterTerm = normalizeFishFilterTerm(row.getAttribute("data-fish-filter-term"));
+    if (fishFilterTerm) {
+      event.preventDefault();
+      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+        kind: "fish-filter",
+        term: fishFilterTerm,
+      });
+      return;
+    }
     const fishId = Number.parseInt(row.getAttribute("data-fish-id"), 10);
     if (Number.isFinite(fishId)) {
       event.preventDefault();
@@ -6795,12 +7122,25 @@ function bindUi(shell, elements, options = {}) {
 
   elements.searchSelection.addEventListener("click", (event) => {
     const removeButton = event.target.closest(
-      "button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb], button.fishymap-selection-remove[data-semantic-layer-id][data-semantic-field-id]",
+      "button.fishymap-selection-remove[data-fish-filter-term], button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb], button.fishymap-selection-remove[data-semantic-layer-id][data-semantic-field-id]",
     );
     if (!removeButton) {
       return;
     }
     const current = getLatestStateBundle();
+    const fishFilterTerm = normalizeFishFilterTerm(removeButton.getAttribute("data-fish-filter-term"));
+    if (fishFilterTerm) {
+      dispatchStatePatchAndRender({
+        version: 1,
+        filters: {
+          fishFilterTerms: removeSelectedFishFilterTerm(
+            resolveSelectedFishFilterTerms(current),
+            fishFilterTerm,
+          ),
+        },
+      });
+      return;
+    }
     const zoneRgb = Number.parseInt(removeButton.getAttribute("data-zone-rgb"), 10);
     if (Number.isFinite(zoneRgb)) {
       dispatchStatePatchAndRender({

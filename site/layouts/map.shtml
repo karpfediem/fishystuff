@@ -1153,7 +1153,7 @@
             <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
           </div>
           <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
-            <input id="fishymap-search" class="grow" type="search" placeholder="Search fish or zone" autocomplete="off">
+            <input id="fishymap-search" class="grow" type="search" placeholder="Search fish, zone, or filter term" autocomplete="off">
             <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
           </label>
         </div>

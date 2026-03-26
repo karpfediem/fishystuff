@@ -26,7 +26,8 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
   session: "fishystuff.map.session.v1",
   prefs: "fishystuff.map.prefs.v1",
   bookmarks: "fishystuff.map.bookmarks.v1",
-  caught: "fishystuff.pokedex.caught.v1",
+  caught: "fishystuff.fishydex.caught.v1",
+  favourites: "fishystuff.fishydex.favourites.v1",
 });
 
 /**
@@ -60,6 +61,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     fishIds?: number[],
  *     zoneRgbs?: number[],
  *     semanticFieldIdsByLayer?: Record<string, number[]>,
+ *     fishFilterTerms?: string[],
  *     searchText?: string,
  *     patchId?: string | null,
  *     fromPatchId?: string | null,
@@ -135,6 +137,7 @@ export function createEmptyInputState() {
       fishIds: [],
       zoneRgbs: [],
       semanticFieldIdsByLayer: {},
+      fishFilterTerms: [],
       searchText: "",
       patchId: null,
       fromPatchId: null,
@@ -174,6 +177,7 @@ export function createEmptySnapshot() {
       fishIds: [],
       zoneRgbs: [],
       semanticFieldIdsByLayer: {},
+      fishFilterTerms: [],
       searchText: "",
       patchId: null,
       fromPatchId: null,
@@ -426,6 +430,33 @@ function normalizeStringList(values) {
     out.push(normalized);
   }
   return out;
+}
+
+const FISHYMAP_FISH_FILTER_TERMS = Object.freeze(["favourite", "missing"]);
+
+function normalizeFishFilterTerm(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "favorite" || normalized === "favorites") {
+    return "favourite";
+  }
+  if (normalized === "favourite" || normalized === "favourites") {
+    return "favourite";
+  }
+  if (normalized === "missing") {
+    return "missing";
+  }
+  return "";
+}
+
+function normalizeFishFilterTerms(values) {
+  const selected = new Set();
+  for (const value of Array.isArray(values) ? values : []) {
+    const normalized = normalizeFishFilterTerm(value);
+    if (normalized) {
+      selected.add(normalized);
+    }
+  }
+  return FISHYMAP_FISH_FILTER_TERMS.filter((term) => selected.has(term));
 }
 
 function readPersistedLayerVisibility(filters) {
@@ -887,6 +918,9 @@ export function normalizeStatePatch(patch = {}) {
         patch.filters.semanticFieldIdsByLayer,
       );
     }
+    if (hasOwn(patch.filters, "fishFilterTerms")) {
+      normalized.filters.fishFilterTerms = normalizeFishFilterTerms(patch.filters.fishFilterTerms);
+    }
     if (hasOwn(patch.filters, "searchText")) {
       normalized.filters.searchText = String(patch.filters.searchText ?? "");
     }
@@ -1132,6 +1166,7 @@ export function applyStatePatch(inputState, patch) {
     semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(
       current.filters?.semanticFieldIdsByLayer,
     ),
+    fishFilterTerms: normalizeFishFilterTerms(current.filters?.fishFilterTerms),
     searchText: String(current.filters?.searchText || ""),
     patchId: current.filters?.patchId ?? null,
     fromPatchId: current.filters?.fromPatchId ?? null,
@@ -1204,6 +1239,9 @@ export function applyStatePatch(inputState, patch) {
       next.filters.zoneRgbs = normalizeZoneRgbs(
         next.filters.semanticFieldIdsByLayer.zone_mask,
       );
+    }
+    if (hasOwn(normalized.filters, "fishFilterTerms")) {
+      next.filters.fishFilterTerms = normalizeFishFilterTerms(normalized.filters.fishFilterTerms);
     }
     if (hasOwn(normalized.filters, "searchText")) {
       next.filters.searchText = normalized.filters.searchText || "";
@@ -1591,6 +1629,15 @@ function parseLayerSetParam(value) {
   return normalizeStringList(normalized.split(/[,+]/g));
 }
 
+function parseFishFilterTermsParam(value) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized) {
+    return undefined;
+  }
+  const terms = normalizeFishFilterTerms(normalized.split(/[\s,]+/g));
+  return terms.length ? terms : undefined;
+}
+
 export function parseQueryState(locationHref = globalThis.location?.href) {
   if (!locationHref) {
     return normalizeStatePatch({});
@@ -1608,6 +1655,9 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   const fromPatchId = params.get("fromPatch") ?? params.get("patchFrom");
   const toPatchId =
     params.get("toPatch") ?? params.get("untilPatch") ?? params.get("patchTo");
+  const fishFilterTerms =
+    parseFishFilterTermsParam(params.get("fishTerms"))
+    ?? parseFishFilterTermsParam(params.get("fishFilterTerms"));
   const searchText = params.get("search");
   const diagnosticsOpen = parseBooleanParam(params.get("diagnostics"));
   const legendOpen = parseBooleanParam(params.get("legend"));
@@ -1627,6 +1677,7 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     patchId != null ||
     fromPatchId != null ||
     toPatchId != null ||
+    fishFilterTerms != null ||
     searchText != null ||
     layers != null
   ) {
@@ -1644,6 +1695,9 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     }
   } else if (patchId != null) {
     patch.filters.patchId = patchId || null;
+  }
+  if (fishFilterTerms != null) {
+    patch.filters.fishFilterTerms = fishFilterTerms;
   }
   if (searchText != null) {
     patch.filters.searchText = searchText;
@@ -1730,6 +1784,9 @@ export function snapshotToRestorePatch(snapshot) {
       patch.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer(
         snapshot.filters.semanticFieldIdsByLayer,
       );
+    }
+    if (hasOwn(snapshot.filters, "fishFilterTerms")) {
+      patch.filters.fishFilterTerms = normalizeFishFilterTerms(snapshot.filters.fishFilterTerms);
     }
     if (hasOwn(snapshot.filters, "searchText")) {
       patch.filters.searchText = String(snapshot.filters.searchText || "");
@@ -2727,6 +2784,7 @@ class FishyMapBridgeImpl {
         semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(
           this.inputState.filters.semanticFieldIdsByLayer,
         ),
+        fishFilterTerms: normalizeFishFilterTerms(this.inputState.filters.fishFilterTerms),
         searchText: this.inputState.filters.searchText,
         patchId:
           fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,

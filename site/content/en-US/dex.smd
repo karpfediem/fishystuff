@@ -440,9 +440,11 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    gap: 0.35rem;
   }
 
-  .fishydex-caught-button {
+  .fishydex-caught-button,
+  .fishydex-favourite-button {
     pointer-events: auto;
     width: 2.25rem;
     height: 2.25rem;
@@ -452,11 +454,13 @@
     transition: color 120ms ease, background 120ms ease, outline-color 120ms ease;
   }
 
-  .fishydex-caught-button:hover {
+  .fishydex-caught-button:hover,
+  .fishydex-favourite-button:hover {
     color: var(--color-base-content, #1f2937);
   }
 
-  .fishydex-caught-button:focus-visible {
+  .fishydex-caught-button:focus-visible,
+  .fishydex-favourite-button:focus-visible {
     color: var(--color-base-content, #1f2937);
   }
 
@@ -469,7 +473,17 @@
     background: color-mix(in oklab, var(--dex-caught) 16%, var(--dex-surface-soft) 84%);
   }
 
-  .fishydex-caught-button .fishy-icon {
+  .fishydex-favourite-button.is-favourite {
+    color: color-mix(in oklab, var(--color-error, #d64545) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .fishydex-favourite-button.is-favourite:hover,
+  .fishydex-favourite-button.is-favourite:focus-visible {
+    background: color-mix(in oklab, var(--color-error, #d64545) 14%, var(--dex-surface-soft) 86%);
+  }
+
+  .fishydex-caught-button .fishy-icon,
+  .fishydex-favourite-button .fishy-icon {
     inline-size: 2rem;
     block-size: 2rem;
     flex: none;
@@ -803,6 +817,10 @@
     color: color-mix(in oklab, var(--color-success, #2f855a) 82%, var(--color-base-content, #1f2937) 18%);
   }
 
+  #fishydex-details-favourite-toggle[data-favourite-state="active"] {
+    color: color-mix(in oklab, var(--color-error, #d64545) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
   .fishydex-details-icon-wrap {
     display: grid;
     place-items: center;
@@ -933,7 +951,8 @@
 
   <script>
   (() => {
-    const STORAGE_KEY = "fishystuff.fishydex.caught.v1";
+    const CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
+    const FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
     const DATASTAR_PATCH_SIGNALS_EVENT = "datastar-patch-signals";
     const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
     const GRADE_FILTER_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash"];
@@ -953,11 +972,12 @@
       if (className) {
         classes.push(className);
       }
-      return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-${name}"></use></svg>`;
+      return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-1#fishy-${name}"></use></svg>`;
     }
 
     const ICON_CHECK_BADGE_OUTLINE = spriteIconMarkup("check-badge-outline", "size-7");
     const ICON_CHECK_BADGE_SOLID = spriteIconMarkup("check-badge-solid", "size-7");
+    const ICON_HEART_FILL = spriteIconMarkup("heart-fill", "size-6");
     const ICON_COIN_STACK = spriteIconMarkup("coin-stack");
     const CAUGHT_FILTER_ORDER = ["all", "caught", "missing"];
     const METHOD_ORDER = ["rod", "harpoon"];
@@ -971,6 +991,7 @@
     const SILVER_FORMATTER = new Intl.NumberFormat();
     const state = {
       currentCaughtIds: [],
+      currentFavouriteIds: [],
       currentCaughtFilter: "all",
       currentGradeFilters: [],
       currentMethodFilters: [],
@@ -1107,7 +1128,7 @@
       }
     }
 
-    function normalizeCaughtIds(value) {
+    function normalizeStoredFishIds(value) {
       let ids = [];
       if (Array.isArray(value)) {
         ids = value;
@@ -1127,13 +1148,33 @@
       return Array.from(unique).sort((left, right) => left - right);
     }
 
+    function normalizeCaughtIds(value) {
+      return normalizeStoredFishIds(value);
+    }
+
+    function normalizeFavouriteIds(value) {
+      return normalizeStoredFishIds(value);
+    }
+
     function parseCaughtJson(raw) {
       return normalizeCaughtIds(JSON.parse(raw));
     }
 
+    function parseFavouriteJson(raw) {
+      return normalizeFavouriteIds(JSON.parse(raw));
+    }
+
     function persistCaughtIds(caughtIds) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(caughtIds));
+        localStorage.setItem(CAUGHT_STORAGE_KEY, JSON.stringify(caughtIds));
+      } catch (_error) {
+        mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
+      }
+    }
+
+    function persistFavouriteIds(favouriteIds) {
+      try {
+        localStorage.setItem(FAVOURITES_STORAGE_KEY, JSON.stringify(favouriteIds));
       } catch (_error) {
         mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
       }
@@ -1153,12 +1194,12 @@
     function restoreCaught() {
       let caughtIds = [];
       try {
-        const raw = localStorage.getItem(STORAGE_KEY);
+        const raw = localStorage.getItem(CAUGHT_STORAGE_KEY);
         if (raw) {
           try {
             caughtIds = parseCaughtJson(raw);
           } catch (_error) {
-            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(CAUGHT_STORAGE_KEY);
             mergeSignals({ status_message: "Reset corrupted local fishydex progress." });
           }
         }
@@ -1167,6 +1208,25 @@
       }
       state.currentCaughtIds = caughtIds;
       mergeSignals({ caught_ids: caughtIds });
+    }
+
+    function restoreFavourites() {
+      let favouriteIds = [];
+      try {
+        const raw = localStorage.getItem(FAVOURITES_STORAGE_KEY);
+        if (raw) {
+          try {
+            favouriteIds = parseFavouriteJson(raw);
+          } catch (_error) {
+            localStorage.removeItem(FAVOURITES_STORAGE_KEY);
+            mergeSignals({ status_message: "Reset corrupted local fishydex favourites." });
+          }
+        }
+      } catch (_error) {
+        mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
+      }
+      state.currentFavouriteIds = favouriteIds;
+      mergeSignals({ favourite_ids: favouriteIds });
     }
 
     function queueCaughtStamp(fishId, isCaught) {
@@ -1204,6 +1264,19 @@
       state.suppressCardAnimation = true;
       persistCaughtIds(caughtIds);
       mergeSignals({ caught_ids: caughtIds, status_message: "" });
+    }
+
+    function toggleFavourite(fishId) {
+      const next = new Set(state.currentFavouriteIds);
+      if (next.has(fishId)) {
+        next.delete(fishId);
+      } else {
+        next.add(fishId);
+      }
+      const favouriteIds = Array.from(next).sort((left, right) => left - right);
+      state.currentFavouriteIds = favouriteIds;
+      persistFavouriteIds(favouriteIds);
+      mergeSignals({ favourite_ids: favouriteIds, status_message: "" });
     }
 
     function rememberViewport(card, anchor) {
@@ -1693,9 +1766,10 @@
       return empty;
     }
 
-    function renderFishCard(fish, caughtSet, animationIndex, animateCards) {
+    function renderFishCard(fish, caughtSet, favouriteSet, animationIndex, animateCards) {
       const itemId = fishItemId(fish);
       const isCaught = caughtSet.has(itemId);
+      const isFavourite = favouriteSet.has(itemId);
       const stampCaught = shouldStampCaughtToggle(itemId, isCaught);
       const card = createElement("article", "fishydex-card card card-border bg-base-100");
       card.dataset.fishId = String(itemId);
@@ -1716,6 +1790,19 @@
       const content = createElement("div", "fishydex-card-content card-body");
       const top = createElement("div", "fishydex-card-top");
       const actions = createElement("div", "fishydex-card-actions");
+      const favouriteButton = createElement(
+        "button",
+        `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${isFavourite ? " is-favourite" : ""}`
+      );
+      favouriteButton.type = "button";
+      favouriteButton.dataset.action = "toggle-favourite";
+      favouriteButton.dataset.fishId = String(itemId);
+      favouriteButton.setAttribute("aria-pressed", isFavourite ? "true" : "false");
+      favouriteButton.setAttribute(
+        "aria-label",
+        `${isFavourite ? "Remove" : "Add"} ${fish.name || `Fish ${itemId}`} ${isFavourite ? "from" : "to"} favourites`
+      );
+      favouriteButton.innerHTML = ICON_HEART_FILL;
       const caughtButton = createElement(
         "button",
         `fishydex-caught-button btn btn-sm btn-circle btn-ghost${isCaught ? " is-caught" : ""}${stampCaught ? " is-stamping" : ""}`
@@ -1729,6 +1816,7 @@
         `Mark ${fish.name || `Fish ${itemId}`} as ${isCaught ? "not caught" : "caught"}`
       );
       caughtButton.innerHTML = isCaught ? ICON_CHECK_BADGE_SOLID : ICON_CHECK_BADGE_OUTLINE;
+      actions.appendChild(favouriteButton);
       actions.appendChild(caughtButton);
       top.appendChild(actions);
 
@@ -1759,7 +1847,7 @@
       return card;
     }
 
-    function renderGroup(title, fish, caughtSet, animationIndex, animateCards) {
+    function renderGroup(title, fish, caughtSet, favouriteSet, animationIndex, animateCards) {
       if (!fish.length) {
         return null;
       }
@@ -1773,7 +1861,7 @@
       const grid = createElement("div", "fishydex-card-grid");
       let nextAnimationIndex = animationIndex;
       for (const entry of fish) {
-        grid.appendChild(renderFishCard(entry, caughtSet, nextAnimationIndex, animateCards));
+        grid.appendChild(renderFishCard(entry, caughtSet, favouriteSet, nextAnimationIndex, animateCards));
         nextAnimationIndex += 1;
       }
 
@@ -1812,6 +1900,11 @@
           toggleCaught(fishId);
           return;
         }
+        const favouriteButton = target.closest("[data-action='toggle-favourite']");
+        if (favouriteButton) {
+          toggleFavourite(fishId);
+          return;
+        }
         openDetails(fishId);
       });
       state.gridBound = true;
@@ -1838,6 +1931,7 @@
           ? Number(fish.vendor_price)
           : null,
         caught: state.currentCaughtIds.includes(fishId),
+        favourite: state.currentFavouriteIds.includes(fishId),
       };
     }
 
@@ -1997,9 +2091,11 @@
       modal.hidden = false;
       modal.classList.add("modal-open");
       const title = document.getElementById("fishydex-details-title");
+      const titleFavouriteToggle = document.getElementById("fishydex-details-favourite-toggle");
       const titleToggle = document.getElementById("fishydex-details-caught-toggle");
       const itemKey = document.getElementById("fishydex-details-item-key");
       const vendorPrice = document.getElementById("fishydex-details-vendor-price");
+      const favourite = document.getElementById("fishydex-details-favourite");
       const caught = document.getElementById("fishydex-details-caught");
       const grade = document.getElementById("fishydex-details-grade");
       const methodRod = document.getElementById("fishydex-details-method-rod");
@@ -2016,6 +2112,16 @@
       const guideIconUrl = fishEncyclopediaIconUrl(meta.encyclopediaId);
 
       setElementText(title, meta.name);
+      if (titleFavouriteToggle instanceof HTMLButtonElement) {
+        titleFavouriteToggle.className = `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${meta.favourite ? " is-favourite" : ""}`;
+        titleFavouriteToggle.dataset.favouriteState = meta.favourite ? "active" : "inactive";
+        titleFavouriteToggle.setAttribute("aria-pressed", meta.favourite ? "true" : "false");
+        titleFavouriteToggle.setAttribute(
+          "aria-label",
+          `${meta.favourite ? "Remove" : "Add"} ${meta.name} ${meta.favourite ? "from" : "to"} favourites`
+        );
+        titleFavouriteToggle.innerHTML = ICON_HEART_FILL;
+      }
       if (titleToggle instanceof HTMLButtonElement) {
         titleToggle.className = `fishydex-caught-button btn btn-sm btn-circle btn-ghost${meta.caught ? " is-caught" : ""}${shouldStampCaughtToggle(meta.fishId, meta.caught) ? " is-stamping" : ""}`;
         titleToggle.dataset.caughtState = meta.caught ? "caught" : "uncaught";
@@ -2039,6 +2145,9 @@
       if (caught instanceof HTMLElement) {
         caught.className = meta.caught ? "fishydex-caught badge badge-soft badge-success" : "fishydex-grade badge badge-soft grade-unknown";
         caught.textContent = meta.caught ? "Caught" : "Not Caught";
+      }
+      if (favourite instanceof HTMLElement) {
+        favourite.hidden = !meta.favourite;
       }
       if (grade instanceof HTMLElement) {
         grade.className = `fishydex-grade badge badge-soft grade-${slugifyGrade(meta.grade)}`;
@@ -2106,6 +2215,13 @@
           }
           return;
         }
+        if (target.closest("[data-action='toggle-favourite-details']")) {
+          if (Number.isInteger(state.detailsFishId)) {
+            toggleFavourite(state.detailsFishId);
+            renderDetails();
+          }
+          return;
+        }
         if (target.closest("[data-action='close-details']")) {
           closeDetails();
         }
@@ -2124,7 +2240,9 @@
 
       const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
       const caughtIds = normalizeCaughtIds(snapshot.caught_ids);
+      const favouriteIds = normalizeFavouriteIds(snapshot.favourite_ids);
       state.currentCaughtIds = caughtIds;
+      state.currentFavouriteIds = favouriteIds;
       const caughtFilter = normalizeCaughtFilter(snapshot.caught_filter);
       const gradeFilters = normalizeGradeFilters(snapshot.grade_filters);
       const methodFilters = normalizeMethodFilters(
@@ -2158,6 +2276,7 @@
         sortField,
         sortDirection,
         caughtIds.join(","),
+        favouriteIds.join(","),
       ].join("|");
       if (renderKey === state.renderKey) {
         renderDetails();
@@ -2170,6 +2289,7 @@
       const supportsDriedFilter = fish.some((entry) => entry && entryIsDried(entry));
       const searchQuery = (snapshot.search_query || "").trim().toLowerCase();
       const caughtSet = new Set(caughtIds);
+      const favouriteSet = new Set(favouriteIds);
       const catalogEntries = fish.filter((entry) => {
         return entry && (showDried || !entryIsDried(entry));
       });
@@ -2245,7 +2365,14 @@
         const animateCards = !state.suppressCardAnimation;
         let animationIndex = 0;
         for (const grade of GRADE_ORDER) {
-          const rendered = renderGroup(grade, groups.get(grade) || [], caughtSet, animationIndex, animateCards);
+          const rendered = renderGroup(
+            grade,
+            groups.get(grade) || [],
+            caughtSet,
+            favouriteSet,
+            animationIndex,
+            animateCards,
+          );
           if (rendered) {
             fragment.appendChild(rendered.section);
             animationIndex = rendered.nextAnimationIndex;
@@ -2335,6 +2462,7 @@
     window.Fishydex = {
       resetFilters,
       restoreCaught,
+      restoreFavourites,
       loadFish,
       sync,
       setCaughtFilter,
@@ -2346,6 +2474,7 @@
       setSortDirection,
       toggleSortDirection,
       toggleGradeFilter,
+      toggleFavourite,
       exportCaught,
       importCaught,
       fishApiUrl,
@@ -2368,6 +2497,7 @@
        sort_field: 'name',
        sort_direction: 'asc',
        caught_ids: [],
+       favourite_ids: [],
        catalog_count: 0,
        total_count: 0,
        visible_count: 0,
@@ -2393,7 +2523,7 @@
 
   <div id="fishydex-signal-patch" class="hidden" hidden></div>
   <div
-       data-init="window.Fishydex.resetFilters(); window.Fishydex.restoreCaught(); window.Fishydex.loadFish()"
+       data-init="window.Fishydex.resetFilters(); window.Fishydex.restoreCaught(); window.Fishydex.restoreFavourites(); window.Fishydex.loadFish()"
        data-effect="window.Fishydex.sync({
          fish: $fish || [],
          revision: $revision || '',
@@ -2405,6 +2535,7 @@
          sort_field: $sort_field || 'name',
          sort_direction: $sort_direction || 'asc',
          caught_ids: $caught_ids || [],
+         favourite_ids: $favourite_ids || [],
        })"></div>
 
   <section class="fishydex-shell">
@@ -2483,7 +2614,7 @@
           <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
             <legend class="fieldset-legend">Search</legend>
             <label class="fishydex-search-field input input-bordered">
-              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260320-1#fishy-search-field"></use></svg>
+              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-1#fishy-search-field"></use></svg>
               <span class="sr-only">Search fish</span>
               <input class="fishydex-search"
                      type="search"
@@ -2649,6 +2780,12 @@
             <div class="fishydex-details-title-row">
               <h3 id="fishydex-details-title" class="fishydex-details-title">Fish</h3>
               <button type="button"
+                      id="fishydex-details-favourite-toggle"
+                      class="fishydex-favourite-button btn btn-sm btn-circle btn-ghost"
+                      data-action="toggle-favourite-details"
+                      aria-pressed="false"
+                      aria-label="Mark fish as favourite"></button>
+              <button type="button"
                       id="fishydex-details-caught-toggle"
                       class="fishydex-caught-button btn btn-sm btn-circle btn-ghost"
                       data-action="toggle-caught-details"
@@ -2657,6 +2794,7 @@
             </div>
 
             <div class="fishydex-details-badges">
+              <span id="fishydex-details-favourite" class="badge badge-soft badge-error" hidden>Favourite</span>
               <span id="fishydex-details-caught" class="fishydex-caught badge badge-soft badge-success">Caught</span>
               <span id="fishydex-details-grade" class="fishydex-grade badge badge-soft grade-unknown">Unknown</span>
               <span id="fishydex-details-method-rod" class="fishydex-method badge badge-soft method-rod" hidden>Rod</span>
