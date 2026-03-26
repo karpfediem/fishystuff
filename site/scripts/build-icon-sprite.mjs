@@ -33,6 +33,8 @@ const iconSources = {
   "nav-community": { type: "mingcute", name: "group-3-fill" },
   "nav-log": { type: "mingcute", name: "paper-fill" },
   "theme-palette": { type: "mingcute", name: "palette-2-fill" },
+  "chart-pie-2-fill": { type: "mingcute", name: "chart-pie-2-fill" },
+  "filter-2-fill": { type: "mingcute", name: "filter-2-fill" },
   "adjustments-horizontal": { type: "mingcute", name: "settings-3-fill" },
   "information-circle": { type: "mingcute", name: "live-location-fill" },
   "squares-2x2": { type: "mingcute", name: "layers-fill" },
