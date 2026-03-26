@@ -36,6 +36,7 @@ Multilingual {
     "js/lz-string.min.js",
     "js/script.js",
     "js/toast.js",
+    "js/ui-settings.js",
 
     "map/loader.js",
     "map/map-host.js",

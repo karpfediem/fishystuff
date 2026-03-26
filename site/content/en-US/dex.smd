@@ -369,6 +369,35 @@
     flex: none;
   }
 
+  .fishydex-panel-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .fishydex-panel-toggle {
+    pointer-events: auto;
+    width: 1.85rem;
+    height: 1.85rem;
+    min-height: 1.85rem;
+    padding: 0;
+    color: var(--dex-text-muted);
+    transition: color 120ms ease, background 120ms ease;
+  }
+
+  .fishydex-panel-toggle:hover,
+  .fishydex-panel-toggle:focus-visible {
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-panel-toggle .fishy-icon {
+    transition: transform 120ms ease;
+  }
+
+  .fishydex-panel-toggle.is-collapsed .fishy-icon {
+    transform: rotate(-90deg);
+  }
+
   .fishydex-group-count {
     color: var(--dex-text-muted);
     font-size: 0.9rem;
@@ -966,6 +995,8 @@
   <script>
   (() => {
     const DEX_UI_STORAGE_KEY = "fishystuff.fishydex.ui.v1";
+    const DEX_PROGRESS_PANEL_UI_KEY = "dex.panels.progress.collapsed";
+    const DEX_FILTER_PANEL_UI_KEY = "dex.panels.filter.collapsed";
     const CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
     const FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
     const GRADE_ORDER = ["Prize", "Rare", "HighQuality", "General", "Trash", "Unknown"];
@@ -1015,6 +1046,7 @@
       currentSortDirection: "asc",
       fishById: new Map(),
       signals: null,
+      uiSettingsUnsubscribe: null,
       detailsFishId: null,
       detailsBound: false,
       renderKey: "",
@@ -1031,6 +1063,30 @@
 
     function connect(signals) {
       state.signals = signals && typeof signals === "object" ? signals : null;
+      if (typeof state.uiSettingsUnsubscribe === "function") {
+        state.uiSettingsUnsubscribe();
+        state.uiSettingsUnsubscribe = null;
+      }
+      const store = sharedUiSettingsStore();
+      if (store && typeof store.subscribe === "function") {
+        state.uiSettingsUnsubscribe = store.subscribe(() => {
+          if (!state.signals) {
+            return;
+          }
+          const progressCollapsed = readPanelCollapsedState("progress");
+          const filterCollapsed = readPanelCollapsedState("filter");
+          if (
+            normalizeBooleanFlag(state.signals.progress_panel_collapsed) === progressCollapsed
+            && normalizeBooleanFlag(state.signals.filter_panel_collapsed) === filterCollapsed
+          ) {
+            return;
+          }
+          mergeSignals({
+            progress_panel_collapsed: progressCollapsed,
+            filter_panel_collapsed: filterCollapsed,
+          });
+        });
+      }
     }
 
     function mergeSignals(patch) {
@@ -1038,6 +1094,34 @@
         return;
       }
       Object.assign(state.signals, patch);
+    }
+
+    function sharedUiSettingsStore() {
+      const store = window.__fishystuffUiSettings;
+      return store && typeof store.get === "function" && typeof store.set === "function"
+        ? store
+        : null;
+    }
+
+    function panelUiKey(panelId) {
+      return panelId === "progress" ? DEX_PROGRESS_PANEL_UI_KEY : DEX_FILTER_PANEL_UI_KEY;
+    }
+
+    function panelSignalKey(panelId) {
+      return panelId === "progress" ? "progress_panel_collapsed" : "filter_panel_collapsed";
+    }
+
+    function readPanelCollapsedState(panelId) {
+      const store = sharedUiSettingsStore();
+      return normalizeBooleanFlag(store ? store.get(panelUiKey(panelId), false) : false);
+    }
+
+    function persistPanelCollapsedState(panelId, collapsed) {
+      const store = sharedUiSettingsStore();
+      if (!store) {
+        return;
+      }
+      store.set(panelUiKey(panelId), Boolean(collapsed));
     }
 
     function storedUiSignals(signals) {
@@ -1198,12 +1282,36 @@
       Object.assign(signals, uiState.patch, {
         caught_ids: caughtState.caughtIds,
         favourite_ids: favouriteState.favouriteIds,
+        progress_panel_collapsed: readPanelCollapsedState("progress"),
+        filter_panel_collapsed: readPanelCollapsedState("filter"),
         status_message:
           uiState.statusMessage
           || caughtState.statusMessage
           || favouriteState.statusMessage
           || "",
       });
+    }
+
+    function syncPanelUi(progressCollapsed, filterCollapsed) {
+      for (const button of document.querySelectorAll("[data-panel-toggle]")) {
+        if (!(button instanceof HTMLButtonElement)) {
+          continue;
+        }
+        const panelId = button.dataset.panelToggle === "filter" ? "filter" : "progress";
+        const collapsed = panelId === "progress" ? progressCollapsed : filterCollapsed;
+        const label = panelId === "progress" ? "progress" : "filter";
+        button.classList.toggle("is-collapsed", collapsed);
+        button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${label} panel`);
+        button.setAttribute("title", `${collapsed ? "Expand" : "Collapse"} ${label} panel`);
+      }
+    }
+
+    function togglePanel(panelId) {
+      const key = panelSignalKey(panelId);
+      const next = !normalizeBooleanFlag(state.signals && state.signals[key]);
+      mergeSignals({ [key]: next });
+      persistPanelCollapsedState(panelId, next);
     }
 
     function queueCaughtStamp(fishId, isCaught) {
@@ -2245,6 +2353,9 @@
       persistUiSignals(snapshot);
 
       const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
+      const progressPanelCollapsed = normalizeBooleanFlag(snapshot.progress_panel_collapsed);
+      const filterPanelCollapsed = normalizeBooleanFlag(snapshot.filter_panel_collapsed);
+      syncPanelUi(progressPanelCollapsed, filterPanelCollapsed);
       const caughtIds = normalizeCaughtIds(snapshot.caught_ids);
       const favouriteIds = normalizeFavouriteIds(snapshot.favourite_ids);
       state.currentCaughtIds = caughtIds;
@@ -2472,6 +2583,7 @@
       restore,
       resetFilters,
       sync,
+      togglePanel,
       setCaughtFilter,
       clearMethodFilters,
       toggleMethodFilter,
@@ -2505,6 +2617,8 @@
        sort_direction: 'asc',
        caught_ids: [],
        favourite_ids: [],
+       progress_panel_collapsed: false,
+       filter_panel_collapsed: false,
        catalog_count: 0,
        total_count: 0,
        visible_count: 0,
@@ -2541,13 +2655,18 @@
          sort_direction: $sort_direction || 'asc',
          caught_ids: $caught_ids || [],
          favourite_ids: $favourite_ids || [],
+         progress_panel_collapsed: $progress_panel_collapsed === true,
+         filter_panel_collapsed: $filter_panel_collapsed === true,
        })"></div>
 
   <section class="fishydex-shell">
     <div class="fishydex-bento">
       <fieldset class="fishydex-stats card card-border bg-base-100">
-        <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-4#fishy-chart-pie-2-fill"></use></svg><span>Progress</span></legend>
-        <div class="card-body fishydex-stats-body pt-0">
+        <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
+          <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-4#fishy-chart-pie-2-fill"></use></svg><span>Progress</span></span>
+          <button type="button" class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle" data-panel-toggle="progress" aria-controls="fishydex-progress-body" aria-expanded="true" aria-label="Collapse progress panel" data-on:click="window.Fishydex.togglePanel('progress')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-4#fishy-caret-down"></use></svg></button>
+        </legend>
+        <div id="fishydex-progress-body" class="card-body fishydex-stats-body pt-0" data-show="!$progress_panel_collapsed">
         <div class="fishydex-stat-stack">
           <div class="fishydex-stat-row stats stats-horizontal rounded-box border border-base-300 bg-base-200">
             <div class="fishydex-stat stat">
@@ -2609,8 +2728,11 @@
       </fieldset>
 
       <fieldset class="fishydex-screen card card-border bg-base-100">
-        <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-4#fishy-filter-2-fill"></use></svg><span>Filter</span></legend>
-        <div class="card-body fishydex-panel-body pt-0">
+        <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
+          <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-4#fishy-filter-2-fill"></use></svg><span>Filter</span></span>
+          <button type="button" class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle" data-panel-toggle="filter" aria-controls="fishydex-filter-body" aria-expanded="true" aria-label="Collapse filter panel" data-on:click="window.Fishydex.togglePanel('filter')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-4#fishy-caret-down"></use></svg></button>
+        </legend>
+        <div id="fishydex-filter-body" class="card-body fishydex-panel-body pt-0" data-show="!$filter_panel_collapsed">
         <div class="fishydex-panel-meta">
           <span class="fishydex-subtle">Revision <span data-text="$revision || 'pending'"></span></span>
         </div>
