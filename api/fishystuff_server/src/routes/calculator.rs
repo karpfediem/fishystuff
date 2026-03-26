@@ -48,6 +48,16 @@ pub struct CalculatorZoneSearchQuery {
     pub selected: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CalculatorSearchableOptionQuery {
+    pub lang: Option<String>,
+    pub r#ref: Option<String>,
+    pub kind: Option<String>,
+    pub q: Option<String>,
+    pub results_id: Option<String>,
+    pub selected: Option<String>,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 struct CalculatorDerivedSignals {
     zone_name: String,
@@ -87,7 +97,7 @@ struct CalculatorData {
     zones: Vec<ZoneEntry>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct SelectOption<'a> {
     value: &'a str,
     label: &'a str,
@@ -95,6 +105,8 @@ struct SelectOption<'a> {
 }
 
 struct SearchableDropdownConfig<'a> {
+    catalog_html: Option<&'a str>,
+    compact: bool,
     root_id: &'a str,
     input_id: &'a str,
     label: &'a str,
@@ -106,6 +118,62 @@ struct SearchableDropdownConfig<'a> {
 }
 
 const SEARCHABLE_DROPDOWN_RESULT_LIMIT: usize = 24;
+
+const NONE_SELECT_OPTION: SelectOption<'static> = SelectOption {
+    value: "",
+    label: "None",
+    icon: None,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CalculatorSearchableOptionKind {
+    FishingLevel,
+    LifeskillLevel,
+    Rod,
+    Float,
+    Chair,
+    LightstoneSet,
+    Backpack,
+    PetSpecial,
+    PetTalent,
+    PetTier,
+    SessionUnit,
+}
+
+impl CalculatorSearchableOptionKind {
+    fn from_param(value: Option<&str>) -> Option<Self> {
+        match value?.trim() {
+            "fishing_level" => Some(Self::FishingLevel),
+            "lifeskill_level" => Some(Self::LifeskillLevel),
+            "rod" => Some(Self::Rod),
+            "float" => Some(Self::Float),
+            "chair" => Some(Self::Chair),
+            "lightstone_set" => Some(Self::LightstoneSet),
+            "backpack" => Some(Self::Backpack),
+            "pet_special" => Some(Self::PetSpecial),
+            "pet_talent" => Some(Self::PetTalent),
+            "pet_tier" => Some(Self::PetTier),
+            "session_unit" => Some(Self::SessionUnit),
+            _ => None,
+        }
+    }
+
+    fn param(self) -> &'static str {
+        match self {
+            Self::FishingLevel => "fishing_level",
+            Self::LifeskillLevel => "lifeskill_level",
+            Self::Rod => "rod",
+            Self::Float => "float",
+            Self::Chair => "chair",
+            Self::LightstoneSet => "lightstone_set",
+            Self::Backpack => "backpack",
+            Self::PetSpecial => "pet_special",
+            Self::PetTalent => "pet_talent",
+            Self::PetTier => "pet_tier",
+            Self::SessionUnit => "session_unit",
+        }
+    }
+}
 
 pub async fn get_calculator_catalog(
     State(state): State<SharedState>,
@@ -210,6 +278,41 @@ pub async fn get_calculator_datastar_zone_search(
         "calculator-zone-search-results",
         &data.zones,
         selected_zone,
+        &search_text,
+    );
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok((headers, Html(fragment)))
+}
+
+pub async fn get_calculator_datastar_option_search(
+    State(state): State<SharedState>,
+    query: Result<Query<CalculatorSearchableOptionQuery>, QueryRejection>,
+    Extension(request_id): Extension<RequestId>,
+) -> AppResult<impl IntoResponse> {
+    let Query(query) = query.map_err(|err| {
+        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
+    })?;
+
+    let kind =
+        CalculatorSearchableOptionKind::from_param(query.kind.as_deref()).ok_or_else(|| {
+            AppError::invalid_argument("missing or invalid calculator searchable option kind")
+                .with_request_id(request_id.0.clone())
+        })?;
+    let lang = FishLang::from_param(query.lang.as_deref());
+    let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let selected_value = query.selected.as_deref().unwrap_or_default();
+    let search_text = query.q.unwrap_or_default();
+    let results_id = query
+        .results_id
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("calculator-search-results");
+    let (options, include_none) = searchable_options_for_kind(&data, kind);
+    let fragment = render_searchable_select_results(
+        results_id,
+        &with_optional_none(&options, include_none),
+        selected_value,
         &search_text,
     );
     let mut headers = HeaderMap::new();
@@ -1236,6 +1339,8 @@ fn render_calculator_app(
     );
     let zone_dropdown = render_searchable_dropdown(
         &SearchableDropdownConfig {
+            catalog_html: None,
+            compact: false,
             root_id: "calculator-zone-picker",
             input_id: "calculator-zone-value",
             label: &derived.zone_name,
@@ -1522,26 +1627,32 @@ fn render_calculator_app(
         ("__ZONE_VALUE__", escape_html(&signals.zone)),
         (
             "__LEVEL_SELECT__",
-            render_select(
+            render_searchable_select_control(
+                data.lang,
+                "calculator-level-picker",
+                "calculator-level-value",
                 "level",
-                "select w-full",
-                "data-bind=\"level\"",
+                CalculatorSearchableOptionKind::FishingLevel,
                 &signals.level.to_string(),
                 &fishing_levels,
                 false,
-                None,
+                "Search fishing levels",
+                false,
             ),
         ),
         (
             "__TIMESPAN_UNIT_SELECT__",
-            render_select(
-                "timespan_unit",
-                "select select-sm w-full",
-                "data-bind=\"timespanUnit\"",
+            render_searchable_select_control(
+                data.lang,
+                "calculator-session-unit-picker",
+                "calculator-session-unit-value",
+                "timespanUnit",
+                CalculatorSearchableOptionKind::SessionUnit,
                 &signals.timespan_unit,
                 &session_units,
                 false,
-                None,
+                "Search session units",
+                true,
             ),
         ),
         (
@@ -1550,74 +1661,92 @@ fn render_calculator_app(
         ),
         (
             "__LIFESKILL_LEVEL_SELECT__",
-            render_select(
+            render_searchable_select_control(
+                data.lang,
+                "calculator-lifeskill-level-picker",
+                "calculator-lifeskill-level-value",
                 "lifeskill_level",
-                "select w-full",
-                "data-bind=\"lifeskill_level\"",
+                CalculatorSearchableOptionKind::LifeskillLevel,
                 &signals.lifeskill_level,
                 &lifeskill_levels,
                 false,
-                None,
+                "Search lifeskill levels",
+                false,
             ),
         ),
         (
             "__ROD_SELECT__",
-            render_select(
-                "rods",
-                "select w-full",
-                "data-bind=\"rod\"",
+            render_searchable_select_control(
+                data.lang,
+                "calculator-rod-picker",
+                "calculator-rod-value",
+                "rod",
+                CalculatorSearchableOptionKind::Rod,
                 &signals.rod,
                 &rods,
                 false,
-                None,
+                "Search rods",
+                false,
             ),
         ),
         (
             "__FLOAT_SELECT__",
-            render_select(
-                "floats",
-                "select w-full",
-                "data-bind=\"float\"",
+            render_searchable_select_control(
+                data.lang,
+                "calculator-float-picker",
+                "calculator-float-value",
+                "float",
+                CalculatorSearchableOptionKind::Float,
                 &signals.float,
                 &floats,
                 true,
-                None,
+                "Search floats",
+                false,
             ),
         ),
         (
             "__CHAIR_SELECT__",
-            render_select(
-                "chairs",
-                "select w-full",
-                "data-bind=\"chair\"",
+            render_searchable_select_control(
+                data.lang,
+                "calculator-chair-picker",
+                "calculator-chair-value",
+                "chair",
+                CalculatorSearchableOptionKind::Chair,
                 &signals.chair,
                 &chairs,
                 true,
-                None,
+                "Search chairs",
+                false,
             ),
         ),
         (
             "__LIGHTSTONE_SET_SELECT__",
-            render_select(
-                "lightstone_sets",
-                "select w-full",
-                "data-bind=\"lightstone_set\"",
+            render_searchable_select_control(
+                data.lang,
+                "calculator-lightstone-set-picker",
+                "calculator-lightstone-set-value",
+                "lightstone_set",
+                CalculatorSearchableOptionKind::LightstoneSet,
                 &signals.lightstone_set,
                 &lightstone_sets,
                 true,
-                None,
+                "Search lightstone sets",
+                false,
             ),
         ),
         (
             "__BACKPACK_SELECT__",
-            render_select(
-                "backpacks",
-                "select w-full",
-                "data-bind=\"backpack\"",
+            render_searchable_select_control(
+                data.lang,
+                "calculator-backpack-picker",
+                "calculator-backpack-value",
+                "backpack",
+                CalculatorSearchableOptionKind::Backpack,
                 &signals.backpack,
                 &backpacks,
                 true,
-                None,
+                "Search backpacks",
+                false,
             ),
         ),
         (
@@ -1632,7 +1761,10 @@ fn render_calculator_app(
             "__BUFFS__",
             render_checkbox_group("buffs", "buff", &signals.buff, &buffs, None),
         ),
-        ("__PETS__", render_pet_cards(&data.catalog.pets, signals)),
+        (
+            "__PETS__",
+            render_pet_cards(data.lang, &data.catalog.pets, signals),
+        ),
     ];
 
     for (token, replacement) in replacements {
@@ -1707,6 +1839,242 @@ fn render_searchable_dropdown_text_content(label: &str) -> String {
     )
 }
 
+fn render_searchable_dropdown_option_content_html(option: SelectOption<'_>) -> String {
+    let mut html = String::new();
+    if let Some(icon) = option.icon {
+        write!(
+            html,
+            "<img aria-hidden=\"true\" src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
+            escape_html(icon),
+            escape_html(option.label)
+        )
+        .unwrap();
+    }
+    html.push_str(&render_searchable_dropdown_text_content(option.label));
+    html
+}
+
+fn with_optional_none<'a>(
+    options: &[SelectOption<'a>],
+    include_none: bool,
+) -> Vec<SelectOption<'a>> {
+    let mut values = Vec::with_capacity(options.len() + usize::from(include_none));
+    if include_none {
+        values.push(NONE_SELECT_OPTION);
+    }
+    values.extend_from_slice(options);
+    values
+}
+
+fn searchable_options_for_kind<'a>(
+    data: &'a CalculatorData,
+    kind: CalculatorSearchableOptionKind,
+) -> (Vec<SelectOption<'a>>, bool) {
+    match kind {
+        CalculatorSearchableOptionKind::FishingLevel => (
+            select_options_from_catalog(&data.catalog.fishing_levels),
+            false,
+        ),
+        CalculatorSearchableOptionKind::SessionUnit => (
+            select_options_from_catalog(&data.catalog.session_units),
+            false,
+        ),
+        CalculatorSearchableOptionKind::LifeskillLevel => (
+            sorted_lifeskill_options(&data.catalog.lifeskill_levels),
+            false,
+        ),
+        CalculatorSearchableOptionKind::Rod => {
+            (item_options_by_type(&data.catalog.items, "rod"), false)
+        }
+        CalculatorSearchableOptionKind::Float => {
+            (item_options_by_type(&data.catalog.items, "float"), true)
+        }
+        CalculatorSearchableOptionKind::Chair => {
+            (item_options_by_type(&data.catalog.items, "chair"), true)
+        }
+        CalculatorSearchableOptionKind::LightstoneSet => (
+            item_options_by_type(&data.catalog.items, "lightstone_set"),
+            true,
+        ),
+        CalculatorSearchableOptionKind::Backpack => {
+            (item_options_by_type(&data.catalog.items, "backpack"), true)
+        }
+        CalculatorSearchableOptionKind::PetTier => {
+            (select_options_from_catalog(&data.catalog.pets.tiers), false)
+        }
+        CalculatorSearchableOptionKind::PetSpecial => (
+            select_options_from_catalog(&data.catalog.pets.specials),
+            false,
+        ),
+        CalculatorSearchableOptionKind::PetTalent => (
+            select_options_from_catalog(&data.catalog.pets.talents),
+            false,
+        ),
+    }
+}
+
+fn fuzzy_select_matches<'a>(
+    options: &[SelectOption<'a>],
+    query: &str,
+    current_value: &str,
+) -> Vec<SelectOption<'a>> {
+    let mut options = options.to_vec();
+    options.sort_by(|left, right| left.label.cmp(right.label));
+
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        options.sort_by_key(|option| {
+            (
+                if option.value == current_value { 0 } else { 1 },
+                option.label.to_string(),
+            )
+        });
+        options.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
+        return options;
+    }
+
+    let matcher = SkimMatcherV2::default();
+    let normalized_query = normalize_lookup_value(trimmed);
+    let mut scored = options
+        .into_iter()
+        .filter_map(|option| {
+            matcher
+                .fuzzy_match(&normalize_lookup_value(option.label), &normalized_query)
+                .map(|score| (option, score))
+        })
+        .collect::<Vec<_>>();
+    scored.sort_by_key(|(option, score)| (Reverse(*score), option.label.to_string()));
+    scored.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
+    scored.into_iter().map(|(option, _)| option).collect()
+}
+
+fn render_searchable_dropdown_catalog_html(options: &[SelectOption<'_>]) -> String {
+    let mut html = String::new();
+    html.push_str("<div data-role=\"selected-content-catalog\" hidden>");
+    for option in options {
+        write!(
+            html,
+            "<template data-role=\"selected-content\" data-value=\"{}\" data-label=\"{}\">{}</template>",
+            escape_html(option.value),
+            escape_html(option.label),
+            render_searchable_dropdown_option_content_html(*option),
+        )
+        .unwrap();
+    }
+    html.push_str("</div>");
+    html
+}
+
+fn render_searchable_select_results(
+    results_list_id: &str,
+    options: &[SelectOption<'_>],
+    current_value: &str,
+    query: &str,
+) -> String {
+    let matches = fuzzy_select_matches(options, query, current_value);
+    let mut html = String::new();
+    write!(
+        html,
+        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
+        escape_html(results_list_id),
+    )
+    .unwrap();
+    if matches.is_empty() {
+        html.push_str("<li class=\"menu-disabled\"><span>No matching options</span></li>");
+    } else {
+        for option in matches {
+            let is_selected = option.value == current_value;
+            write!(
+                html,
+                "<li><button type=\"button\" class=\"justify-between gap-3 text-left{}\" data-searchable-dropdown-option data-value=\"{}\" data-label=\"{}\"><span data-role=\"option-content\" class=\"flex min-w-0 flex-1 items-center gap-3\">{}</span>{}</button></li>",
+                if is_selected { " menu-active" } else { "" },
+                escape_html(option.value),
+                escape_html(option.label),
+                render_searchable_dropdown_option_content_html(option),
+                if is_selected {
+                    "<span class=\"badge badge-soft badge-primary badge-xs\">Selected</span>"
+                } else {
+                    ""
+                }
+            )
+            .unwrap();
+        }
+    }
+    html.push_str("</ul>");
+    html
+}
+
+fn render_calculator_option_search_url(
+    lang: FishLang,
+    kind: CalculatorSearchableOptionKind,
+    results_id: &str,
+) -> String {
+    format!(
+        "/api/v1/calculator/datastar/option-search?lang={}&kind={}&results_id={}",
+        lang_param(lang),
+        kind.param(),
+        results_id,
+    )
+}
+
+fn render_searchable_select_control(
+    lang: FishLang,
+    root_id: &str,
+    input_id: &str,
+    bind_key: &str,
+    kind: CalculatorSearchableOptionKind,
+    selected_value: &str,
+    options: &[SelectOption<'_>],
+    include_none: bool,
+    search_placeholder: &str,
+    compact: bool,
+) -> String {
+    let results_id = format!("{root_id}-results");
+    let options = with_optional_none(options, include_none);
+    let selected_option = options
+        .iter()
+        .copied()
+        .find(|option| option.value == selected_value);
+    let selected_label = selected_option
+        .map(|option| option.label)
+        .unwrap_or_else(|| {
+            if selected_value.trim().is_empty() {
+                NONE_SELECT_OPTION.label
+            } else {
+                selected_value
+            }
+        });
+    let selected_content_html = selected_option
+        .map(render_searchable_dropdown_option_content_html)
+        .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
+    let catalog_html = render_searchable_dropdown_catalog_html(&options);
+    let results_html = render_searchable_select_results(&results_id, &options, selected_value, "");
+    let search_url = render_calculator_option_search_url(lang, kind, &results_id);
+    let dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            catalog_html: Some(&catalog_html),
+            compact,
+            root_id,
+            input_id,
+            label: selected_label,
+            selected_content_html: &selected_content_html,
+            value: selected_value,
+            search_url: &search_url,
+            search_url_root: Some("api"),
+            search_placeholder,
+        },
+        &results_html,
+    );
+
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"{}\" value=\"{}\">{}",
+        escape_html(input_id),
+        escape_html(bind_key),
+        escape_html(selected_value),
+        dropdown,
+    )
+}
+
 fn render_zone_search_results(
     results_list_id: &str,
     zones: &[ZoneEntry],
@@ -1752,6 +2120,22 @@ fn render_zone_search_results(
 fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_html: &str) -> String {
     let panel_id = format!("{}-panel", config.root_id);
     let search_input_id = format!("{}-search-input", config.root_id);
+    let catalog_html = config.catalog_html.unwrap_or("");
+    let trigger_class = if config.compact {
+        "flex min-h-10 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-left text-sm shadow-sm"
+    } else {
+        "flex min-h-11 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3 text-left shadow-sm"
+    };
+    let search_shell_class = if config.compact {
+        "flex min-h-10 w-full min-w-full items-center gap-3 bg-base-100 px-3 py-2 text-sm"
+    } else {
+        "flex min-h-11 w-full min-w-full items-center gap-3 bg-base-100 px-4 py-3"
+    };
+    let selected_content_class = if config.compact {
+        "flex min-w-0 flex-1 items-center gap-3 text-sm"
+    } else {
+        "flex min-w-0 flex-1 items-center gap-3"
+    };
     let search_url_root_attr = config
         .search_url_root
         .map(|value| format!(" search-url-root=\"{}\"", escape_html(value)))
@@ -1768,17 +2152,17 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
      placeholder="{search_placeholder}">
     <button type="button"
             data-role="trigger"
-            class="flex min-h-11 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3 text-left shadow-sm"
+            class="{trigger_class}"
             aria-haspopup="listbox"
             aria-expanded="false"
             aria-controls="{panel_id}">
-        <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3">{selected_content_html}</span>
+        <span data-role="selected-content" class="{selected_content_class}">{selected_content_html}</span>
         <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
     </button>
 
     <div id="{panel_id}" data-role="panel" class="absolute left-0 top-0 z-40 w-full min-w-full max-w-full" hidden>
         <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
-            <label class="flex min-h-11 w-full min-w-full items-center gap-3 bg-base-100 px-4 py-3">
+            <label class="{search_shell_class}">
                 <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
                 <input id="{search_input_id}"
                        data-role="search-input"
@@ -1794,11 +2178,15 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
             </div>
         </div>
     </div>
+    {catalog_html}
 </fishy-searchable-dropdown>"#,
+        catalog_html = catalog_html,
         root_id = escape_html(config.root_id),
         input_id = escape_html(config.input_id),
         label = escape_html(config.label),
+        selected_content_class = selected_content_class,
         selected_content_html = config.selected_content_html,
+        search_shell_class = search_shell_class,
         value = escape_html(config.value),
         search_url = escape_html(config.search_url),
         search_url_root_attr = search_url_root_attr,
@@ -1806,6 +2194,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         search_input_id = escape_html(&search_input_id),
         search_placeholder = escape_html(config.search_placeholder),
         results_html = results_html,
+        trigger_class = trigger_class,
     )
     .unwrap();
     html
@@ -1837,68 +2226,6 @@ fn item_options_by_type<'a>(
             icon: item.icon.as_deref(),
         })
         .collect()
-}
-
-fn render_select(
-    id: &str,
-    class_name: &str,
-    bind_attr: &str,
-    selected_value: &str,
-    options: &[SelectOption<'_>],
-    include_none: bool,
-    change_attr: Option<&str>,
-) -> String {
-    let mut html = String::new();
-    let change_attr = change_attr.unwrap_or("");
-    if id.is_empty() {
-        write!(
-            html,
-            "<select class=\"{}\" {} {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
-            escape_html(class_name),
-            bind_attr,
-            change_attr,
-        )
-        .unwrap();
-    } else {
-        write!(
-            html,
-            "<select id=\"{}\" class=\"{}\" {} {}><button class=\"w-full justify-between\"><div><selectedcontent></selectedcontent></div></button>",
-            escape_html(id),
-            escape_html(class_name),
-            bind_attr,
-            change_attr,
-        )
-        .unwrap();
-    }
-    if include_none {
-        html.push_str("<option value=\"\"><span>None</span></option>");
-    }
-    for option in options {
-        let selected = if option.value == selected_value {
-            " selected"
-        } else {
-            ""
-        };
-        write!(
-            html,
-            "<option value=\"{}\"{}>",
-            escape_html(option.value),
-            selected
-        )
-        .unwrap();
-        if let Some(icon) = option.icon {
-            write!(
-                html,
-                "<img aria-hidden=\"true\" src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
-                escape_html(icon),
-                escape_html(option.label)
-            )
-            .unwrap();
-        }
-        write!(html, "<span>{}</span></option>", escape_html(option.label)).unwrap();
-    }
-    html.push_str("</select>");
-    html
 }
 
 fn render_checkbox_group(
@@ -1972,7 +2299,11 @@ fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) ->
     html
 }
 
-fn render_pet_cards(catalog: &CalculatorPetCatalog, signals: &CalculatorSignals) -> String {
+fn render_pet_cards(
+    lang: FishLang,
+    catalog: &CalculatorPetCatalog,
+    signals: &CalculatorSignals,
+) -> String {
     let tier_options = select_options_from_catalog(&catalog.tiers);
     let special_options = select_options_from_catalog(&catalog.specials);
     let talent_options = select_options_from_catalog(&catalog.talents);
@@ -1998,40 +2329,49 @@ fn render_pet_cards(catalog: &CalculatorPetCatalog, signals: &CalculatorSignals)
         html.push_str(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Tier</legend>",
         );
-        html.push_str(&render_select(
-            "",
-            "select select-sm w-full",
-            &format!("data-bind=\"{}.tier\"", bind_prefix),
+        html.push_str(&render_searchable_select_control(
+            lang,
+            &format!("calculator-pet{slot}-tier-picker"),
+            &format!("calculator-pet{slot}-tier-value"),
+            &format!("{}.tier", bind_prefix),
+            CalculatorSearchableOptionKind::PetTier,
             &pet.tier,
             &tier_options,
             false,
-            None,
+            "Search pet tiers",
+            true,
         ));
         html.push_str("</fieldset>");
         html.push_str(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Special</legend>",
         );
-        html.push_str(&render_select(
-            "",
-            "select select-sm w-full",
-            &format!("data-bind=\"{}.special\"", bind_prefix),
+        html.push_str(&render_searchable_select_control(
+            lang,
+            &format!("calculator-pet{slot}-special-picker"),
+            &format!("calculator-pet{slot}-special-value"),
+            &format!("{}.special", bind_prefix),
+            CalculatorSearchableOptionKind::PetSpecial,
             &pet.special,
             &special_options,
             false,
-            None,
+            "Search pet specials",
+            true,
         ));
         html.push_str("</fieldset>");
         html.push_str(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Talent</legend>",
         );
-        html.push_str(&render_select(
-            "",
-            "select select-sm w-full",
-            &format!("data-bind=\"{}.talent\"", bind_prefix),
+        html.push_str(&render_searchable_select_control(
+            lang,
+            &format!("calculator-pet{slot}-talent-picker"),
+            &format!("calculator-pet{slot}-talent-value"),
+            &format!("{}.talent", bind_prefix),
+            CalculatorSearchableOptionKind::PetTalent,
             &pet.talent,
             &talent_options,
             false,
-            None,
+            "Search pet talents",
+            true,
         ));
         html.push_str("</fieldset></div>");
         html.push_str("<fieldset class=\"fieldset mt-3 gap-2\"><legend class=\"fieldset-legend\">Skills</legend>");
@@ -2088,9 +2428,10 @@ mod tests {
     use crate::store::{FishLang, Store};
 
     use super::{
-        get_calculator_datastar_init, get_calculator_datastar_zone_search, normalize_lookup_value,
-        normalize_named_array, post_calculator_datastar_eval, CalculatorDatastarQuery,
-        CalculatorQuery, CalculatorZoneSearchQuery,
+        get_calculator_datastar_init, get_calculator_datastar_option_search,
+        get_calculator_datastar_zone_search, normalize_lookup_value, normalize_named_array,
+        post_calculator_datastar_eval, CalculatorDatastarQuery, CalculatorQuery,
+        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
     };
 
     struct MockStore;
@@ -2126,6 +2467,7 @@ mod tests {
                     CalculatorItemEntry {
                         key: "item:16162".to_string(),
                         name: "Balenos Fishing Rod".to_string(),
+                        icon: Some("/img/items/00016162.webp".to_string()),
                         r#type: "rod".to_string(),
                         afr: Some(0.1),
                         ..CalculatorItemEntry::default()
@@ -2133,6 +2475,7 @@ mod tests {
                     CalculatorItemEntry {
                         key: "item:705539".to_string(),
                         name: "Manos Fishing Chair".to_string(),
+                        icon: Some("/img/items/00705539.webp".to_string()),
                         r#type: "chair".to_string(),
                         afr: Some(0.1),
                         ..CalculatorItemEntry::default()
@@ -2148,6 +2491,7 @@ mod tests {
                     CalculatorItemEntry {
                         key: "item:830150".to_string(),
                         name: "Lil' Otter Fishing Carrier".to_string(),
+                        icon: Some("/img/items/00830150.webp".to_string()),
                         r#type: "backpack".to_string(),
                         drr: Some(0.05),
                         ..CalculatorItemEntry::default()
@@ -2342,6 +2686,9 @@ mod tests {
         assert!(text.contains("search-url=\"/api/v1/calculator/datastar/zone-search?lang=en\""));
         assert!(text.contains("search-url-root=\"api\""));
         assert!(text.contains("data-role=\"selected-content\""));
+        assert!(text.contains("kind=rod"));
+        assert!(text.contains("calculator-rod-picker"));
+        assert!(text.contains("calculator-pet1-tier-picker"));
     }
 
     #[tokio::test]
@@ -2453,6 +2800,44 @@ mod tests {
         assert!(text.contains("data-role=\"option-content\""));
         assert!(text.contains("data-value=\"240,74,74\""));
         assert!(text.contains("Velia Beach"));
+        assert!(text.contains("Selected"));
+    }
+
+    #[tokio::test]
+    async fn option_search_returns_fuzzy_item_results_with_rich_content() {
+        let response = get_calculator_datastar_option_search(
+            State(test_state()),
+            Ok(Query(CalculatorSearchableOptionQuery {
+                lang: Some("en".to_string()),
+                r#ref: None,
+                kind: Some("rod".to_string()),
+                q: Some("baleno".to_string()),
+                results_id: Some("calculator-rod-picker-results".to_string()),
+                selected: Some("item:16162".to_string()),
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok()),
+            Some("text/html; charset=utf-8")
+        );
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("id=\"calculator-rod-picker-results\""));
+        assert!(text.contains("data-role=\"results\""));
+        assert!(text.contains("data-searchable-dropdown-option"));
+        assert!(text.contains("data-role=\"option-content\""));
+        assert!(text.contains("item-icon"));
+        assert!(text.contains("/img/items/00016162.webp"));
+        assert!(text.contains("Balenos Fishing Rod"));
         assert!(text.contains("Selected"));
     }
 

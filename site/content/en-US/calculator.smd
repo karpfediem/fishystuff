@@ -294,35 +294,6 @@
 </div>
 
 <style>
-    @supports (appearance: base-select) {
-        select {
-            &, &::picker(select) {
-                appearance: base-select;
-            }
-
-            selectedcontent {
-                display: flex;
-                align-items: center;
-                gap: .5ch;
-            }
-
-            option {
-                display: grid;
-                grid-template-columns: [icon] auto [content] 1fr [mark] auto;
-
-                &::checkmark {
-                    display: none;
-                }
-
-                padding-block: 0.25rem;
-
-                &:checked {
-                    background: #61afef;
-                }
-            }
-        }
-    }
-
     @layer support {
         html {
             color-scheme: dark light;

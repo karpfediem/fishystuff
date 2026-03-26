@@ -38,6 +38,18 @@ function cloneChildNodes(source) {
     return Array.from(source.childNodes, (node) => node.cloneNode(true));
 }
 
+function findPropertyDescriptor(target, property) {
+    let current = target;
+    while (current) {
+        const descriptor = Object.getOwnPropertyDescriptor(current, property);
+        if (descriptor) {
+            return descriptor;
+        }
+        current = Object.getPrototypeOf(current);
+    }
+    return null;
+}
+
 function resolveScopedUrl(rawUrl, scope) {
     const normalizedUrl = String(rawUrl ?? "").trim();
     if (!normalizedUrl) {
@@ -73,11 +85,16 @@ export class FishySearchableDropdown extends HTMLElement {
 
     constructor() {
         super();
+        this._boundInput = null;
         this._closeTimer = 0;
         this._lastSearchKey = "";
         this._outsideListenerAttached = false;
+        this._isReflectingBoundInputValue = false;
+        this._isWritingBoundInputValue = false;
+        this._releaseBoundInput = null;
         this._searchController = null;
 
+        this._handleBoundInputEvent = this._handleBoundInputEvent.bind(this);
         this._handleClick = this._handleClick.bind(this);
         this._handleDocumentPointerDown = this._handleDocumentPointerDown.bind(this);
         this._handleFocusIn = this._handleFocusIn.bind(this);
@@ -149,6 +166,7 @@ export class FishySearchableDropdown extends HTMLElement {
         upgradeProperty(this, "searchUrl");
         upgradeProperty(this, "searchUrlRoot");
         upgradeProperty(this, "value");
+        this._bindBoundInput();
 
         queueMicrotask(() => {
             if (!this.isConnected) {
@@ -156,10 +174,12 @@ export class FishySearchableDropdown extends HTMLElement {
             }
             this._syncUi();
             this._syncBoundInputValue(this.value, false);
+            this._syncFromBoundInputValue(this.boundInputElement()?.value ?? this.value);
         });
     }
 
     disconnectedCallback() {
+        this._unbindBoundInput();
         this._cancelClose();
         this._abortSearch();
         this._detachOutsideListener();
@@ -169,9 +189,14 @@ export class FishySearchableDropdown extends HTMLElement {
         if (oldValue === newValue) {
             return;
         }
+        if (name === "input-id") {
+            this._bindBoundInput();
+        }
         if (name === "value") {
             this._lastSearchKey = "";
-            this._syncBoundInputValue(this.value, false);
+            if (!this._isReflectingBoundInputValue) {
+                this._syncBoundInputValue(this.value, false);
+            }
         }
         this._syncUi();
     }
@@ -332,8 +357,65 @@ export class FishySearchableDropdown extends HTMLElement {
         return this.querySelector('[data-role="selected-content"]');
     }
 
+    selectedContentCatalogElement() {
+        return this.querySelector('[data-role="selected-content-catalog"]');
+    }
+
     triggerElement() {
         return this.querySelector('[data-role="trigger"]');
+    }
+
+    _bindBoundInput() {
+        const input = this.boundInputElement();
+        if (this._boundInput === input) {
+            return;
+        }
+
+        this._unbindBoundInput();
+        if (!(input instanceof HTMLInputElement)) {
+            return;
+        }
+
+        input.addEventListener("input", this._handleBoundInputEvent);
+        input.addEventListener("change", this._handleBoundInputEvent);
+
+        let releaseValueObserver = () => {};
+        if (!Object.prototype.hasOwnProperty.call(input, "value")) {
+            const descriptor = findPropertyDescriptor(input, "value");
+            if (descriptor?.get && descriptor?.set) {
+                Object.defineProperty(input, "value", {
+                    configurable: true,
+                    enumerable: descriptor.enumerable ?? true,
+                    get() {
+                        return descriptor.get.call(this);
+                    },
+                    set: (nextValue) => {
+                        const previousValue = descriptor.get.call(input);
+                        descriptor.set.call(input, nextValue);
+                        const currentValue = descriptor.get.call(input);
+                        if (
+                            this._isWritingBoundInputValue
+                            || currentValue === previousValue
+                        ) {
+                            return;
+                        }
+                        this._syncFromBoundInputValue(currentValue);
+                    },
+                });
+                releaseValueObserver = () => {
+                    delete input.value;
+                };
+            }
+        }
+
+        this._boundInput = input;
+        this._releaseBoundInput = () => {
+            input.removeEventListener("input", this._handleBoundInputEvent);
+            input.removeEventListener("change", this._handleBoundInputEvent);
+            releaseValueObserver();
+            this._boundInput = null;
+            this._releaseBoundInput = null;
+        };
     }
 
     _abortSearch() {
@@ -399,6 +481,26 @@ export class FishySearchableDropdown extends HTMLElement {
         }
         document.removeEventListener("pointerdown", this._handleDocumentPointerDown, true);
         this._outsideListenerAttached = false;
+    }
+
+    _findCatalogTemplateByValue(value) {
+        const catalog = this.selectedContentCatalogElement();
+        if (!(catalog instanceof HTMLElement)) {
+            return null;
+        }
+        return Array.from(
+            catalog.querySelectorAll('template[data-role="selected-content"]'),
+        ).find((template) => template.getAttribute("data-value") === value) ?? null;
+    }
+
+    _findOptionByValue(value) {
+        return Array.from(
+            this.querySelectorAll("[data-searchable-dropdown-option]"),
+        ).find((option) => option.getAttribute("data-value") === value) ?? null;
+    }
+
+    _handleBoundInputEvent() {
+        this._syncFromBoundInputValue(this.boundInputElement()?.value ?? "");
     }
 
     _handleClick(event) {
@@ -500,6 +602,37 @@ export class FishySearchableDropdown extends HTMLElement {
         }
     }
 
+    _syncFromBoundInputValue(rawValue) {
+        const value = String(rawValue ?? "");
+        this._isReflectingBoundInputValue = true;
+        this.value = value;
+        this._isReflectingBoundInputValue = false;
+
+        const option = this._findOptionByValue(value);
+        if (option instanceof HTMLElement) {
+            const label = String(
+                option.getAttribute("data-label") ?? option.textContent ?? "",
+            ).trim();
+            if (label) {
+                this.label = label;
+            }
+            this._syncSelectedContentFromOption(option, label);
+            return;
+        }
+
+        const template = this._findCatalogTemplateByValue(value);
+        if (template instanceof HTMLTemplateElement) {
+            const label = String(template.getAttribute("data-label") ?? value).trim();
+            if (label) {
+                this.label = label;
+            }
+            const container = this.selectedContentElement();
+            if (container instanceof HTMLElement) {
+                container.replaceChildren(...cloneChildNodes(template.content));
+            }
+        }
+    }
+
     _syncSelectedContentFromOption(option, fallbackLabel) {
         const container = this.selectedContentElement();
         if (!(container instanceof HTMLElement)) {
@@ -531,10 +664,12 @@ export class FishySearchableDropdown extends HTMLElement {
             return;
         }
 
+        this._isWritingBoundInputValue = true;
         input.value = String(value ?? "");
         if (emitEvents) {
             dispatchValueEvents(input);
         }
+        this._isWritingBoundInputValue = false;
     }
 
     _syncUi() {
@@ -558,6 +693,12 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         this._setExpanded(this.isOpen());
+    }
+
+    _unbindBoundInput() {
+        if (typeof this._releaseBoundInput === "function") {
+            this._releaseBoundInput();
+        }
     }
 }
 
