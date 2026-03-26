@@ -1,4 +1,5 @@
 const CLOSE_DELAY_MS = 150;
+const LOCAL_RESULT_LIMIT = 24;
 const SEARCH_QUERY_PARAM = "q";
 const SELECTED_QUERY_PARAM = "selected";
 const URL_SCOPE_RESOLVERS = Object.freeze({
@@ -48,6 +49,10 @@ function findPropertyDescriptor(target, property) {
         current = Object.getPrototypeOf(current);
     }
     return null;
+}
+
+function normalizeSearchText(value) {
+    return String(value ?? "").trim().toLowerCase();
 }
 
 function resolveScopedUrl(rawUrl, scope) {
@@ -239,6 +244,11 @@ export class FishySearchableDropdown extends HTMLElement {
         this._setExpanded(false);
     }
 
+    refreshResults() {
+        this._lastSearchKey = "";
+        this.search(this.searchInputElement()?.value ?? "");
+    }
+
     toggle() {
         if (this.isOpen()) {
             this.close();
@@ -254,11 +264,6 @@ export class FishySearchableDropdown extends HTMLElement {
             return;
         }
 
-        const searchUrl = this._buildSearchUrl(query);
-        if (!searchUrl) {
-            return;
-        }
-
         const selectedValue = String(
             this.boundInputElement()?.value ?? this.value,
         );
@@ -270,6 +275,12 @@ export class FishySearchableDropdown extends HTMLElement {
         this._cancelClose();
         this._lastSearchKey = searchKey;
         this._abortSearch();
+
+        const searchUrl = this._buildSearchUrl(query);
+        if (!searchUrl) {
+            this._renderLocalResults(query, selectedValue);
+            return;
+        }
 
         const controller = new AbortController();
         this._searchController = controller;
@@ -501,6 +512,14 @@ export class FishySearchableDropdown extends HTMLElement {
         ).find((option) => option.getAttribute("data-value") === value) ?? null;
     }
 
+    _catalogTemplates() {
+        const catalog = this.selectedContentCatalogElement();
+        if (!(catalog instanceof HTMLElement)) {
+            return [];
+        }
+        return Array.from(catalog.querySelectorAll('template[data-role="selected-content"]'));
+    }
+
     _handleBoundInputEvent() {
         this._syncFromBoundInputValue(this.boundInputElement()?.value ?? "");
     }
@@ -602,6 +621,89 @@ export class FishySearchableDropdown extends HTMLElement {
         if (trigger instanceof HTMLElement) {
             trigger.setAttribute("aria-expanded", isExpanded ? "true" : "false");
         }
+    }
+
+    _localTemplateMatches(template, normalizedQuery) {
+        if (!normalizedQuery) {
+            return true;
+        }
+        const haystack = normalizeSearchText(
+            [
+                template.getAttribute("data-search-text"),
+                template.getAttribute("data-label"),
+                template.textContent,
+            ]
+                .filter(Boolean)
+                .join(" "),
+        );
+        return normalizedQuery
+            .split(/\s+/)
+            .filter(Boolean)
+            .every((part) => haystack.includes(part));
+    }
+
+    _renderLocalResults(rawQuery, selectedValue) {
+        const results = this.resultsElement();
+        if (!(results instanceof HTMLElement)) {
+            return;
+        }
+
+        const templates = this._catalogTemplates();
+        if (!templates.length) {
+            return;
+        }
+
+        const normalizedQuery = normalizeSearchText(rawQuery);
+        const matches = templates
+            .filter((template) => this._localTemplateMatches(template, normalizedQuery))
+            .sort((left, right) => {
+                const leftValue = String(left.getAttribute("data-value") ?? "");
+                const rightValue = String(right.getAttribute("data-value") ?? "");
+                const leftSelected = leftValue === selectedValue ? 0 : 1;
+                const rightSelected = rightValue === selectedValue ? 0 : 1;
+                return leftSelected - rightSelected;
+            })
+            .slice(0, LOCAL_RESULT_LIMIT);
+
+        if (!matches.length) {
+            const item = document.createElement("li");
+            item.className = "menu-disabled";
+            const label = document.createElement("span");
+            label.textContent = "No matching options";
+            item.append(label);
+            results.replaceChildren(item);
+            return;
+        }
+
+        results.replaceChildren(
+            ...matches.map((template) => {
+                const value = String(template.getAttribute("data-value") ?? "");
+                const label = String(template.getAttribute("data-label") ?? value).trim();
+                const item = document.createElement("li");
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = `justify-between gap-3 text-left${value === selectedValue ? " menu-active" : ""}`;
+                button.dataset.searchableDropdownOption = "";
+                button.setAttribute("data-value", value);
+                button.setAttribute("data-label", label);
+
+                const optionContent = document.createElement("span");
+                optionContent.dataset.role = "option-content";
+                optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
+                optionContent.replaceChildren(...cloneChildNodes(template.content));
+                button.append(optionContent);
+
+                if (value === selectedValue) {
+                    const badge = document.createElement("span");
+                    badge.className = "badge badge-soft badge-primary badge-xs";
+                    badge.textContent = "Selected";
+                    button.append(badge);
+                }
+
+                item.append(button);
+                return item;
+            }),
+        );
     }
 
     _syncFromBoundInputValue(rawValue) {

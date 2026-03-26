@@ -26,6 +26,7 @@ const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"])
 const TERRITORY_SUMMARY_FACT_KEYS = Object.freeze(["resources", "origin"]);
 const DEFAULT_ZONE_INFO_TAB = "";
 const DEFAULT_AUTO_ADJUST_VIEW = true;
+const FISHYMAP_WINDOW_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
 const ZONE_INFO_TAB_BUTTON_CLASS =
   "tab shrink-0 gap-2 whitespace-nowrap text-xs font-semibold sm:text-sm";
 const POINT_DETAIL_PANE_BUILDERS = Object.freeze([buildLayerSamplePointDetailPanes]);
@@ -353,6 +354,28 @@ export function serializeWindowUiState(windowUiState) {
 
 export function buildDefaultWindowUiStateSerialized() {
   return serializeWindowUiState(DEFAULT_WINDOW_UI_STATE);
+}
+
+function loadPersistedWindowUiState(
+  fallbackSerializedState = "",
+  storage = globalThis.localStorage,
+) {
+  try {
+    const persisted = storage?.getItem?.(FISHYMAP_WINDOW_UI_STORAGE_KEY);
+    if (typeof persisted === "string" && persisted.trim()) {
+      return parseWindowUiState(persisted);
+    }
+  } catch (_) {}
+  return parseWindowUiState(fallbackSerializedState);
+}
+
+function persistWindowUiStateStorage(serializedState, storage = globalThis.localStorage) {
+  try {
+    storage?.setItem?.(FISHYMAP_WINDOW_UI_STORAGE_KEY, serializedState);
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function windowUiEntriesEqual(left, right) {
@@ -1963,6 +1986,22 @@ function escapeHtml(value) {
         }[char] || char
       ),
   );
+}
+
+function renderSearchableDropdownTextContent(label) {
+  return `<span class="truncate font-medium">${escapeHtml(label)}</span>`;
+}
+
+function renderPatchDropdownContentHtml(name, dateLabel) {
+  if (!dateLabel) {
+    return renderSearchableDropdownTextContent(name);
+  }
+  return `
+    <span class="grid min-w-0 gap-0.5">
+      <span class="truncate font-medium">${escapeHtml(name)}</span>
+      <span class="truncate text-xs text-base-content/55">${escapeHtml(dateLabel)}</span>
+    </span>
+  `;
 }
 
 function fishIconUrl(fish) {
@@ -4571,13 +4610,24 @@ function normalizePatchRangeSelection(patches, fromPatchId, toPatchId) {
   };
 }
 
-function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel) {
-  if (!select) {
+function renderPatchDropdown(dropdown, input, orderedPatches, selectedPatchId, emptyLabel) {
+  if (!(dropdown instanceof HTMLElement) || !(input instanceof HTMLInputElement)) {
     return;
   }
+  const results = dropdown.querySelector("[data-role='results']");
+  const catalog = dropdown.querySelector("[data-role='selected-content-catalog']");
+  const selectedContent = dropdown.querySelector("[data-role='selected-content']");
   if (!orderedPatches.length) {
-    setMarkup(select, `empty:${emptyLabel}`, `<option value="">${emptyLabel}</option>`);
-    select.value = "";
+    dropdown.label = emptyLabel;
+    dropdown.value = "";
+    input.value = "";
+    setMarkup(
+      selectedContent,
+      `empty:${emptyLabel}`,
+      renderSearchableDropdownTextContent(emptyLabel),
+    );
+    setMarkup(results, `empty:${emptyLabel}`, `<li class="menu-disabled"><span>${escapeHtml(emptyLabel)}</span></li>`);
+    setMarkup(catalog, `empty:${emptyLabel}`, "");
     return;
   }
 
@@ -4587,19 +4637,46 @@ function renderPatchOptions(select, orderedPatches, selectedPatchId, emptyLabel)
     const label = date ? `${name} (${date})` : name;
     return {
       patchId: patch.patchId,
+      contentHtml: renderPatchDropdownContentHtml(name, date),
       label,
-      html: `<option value="${patch.patchId.replace(/"/g, "&quot;")}">${label}</option>`,
+      templateHtml: `<template data-role="selected-content" data-value="${escapeHtml(patch.patchId)}" data-label="${escapeHtml(label)}" data-search-text="${escapeHtml([name, date, patch.patchId].filter(Boolean).join(" "))}">${renderPatchDropdownContentHtml(name, date)}</template>`,
     };
   });
 
-  setMarkup(
-    select,
-    JSON.stringify(options.map((option) => [option.patchId, option.label])),
-    options.map((option) => option.html).join(""),
-  );
   const nextValue = selectedPatchId || orderedPatches[0].patchId;
-  if (select.value !== nextValue) {
-    select.value = nextValue;
+  const selectedOption =
+    options.find((option) => option.patchId === nextValue) || options[0];
+  const optionRenderKey = JSON.stringify(options.map((option) => [option.patchId, option.label]));
+  const resultsRenderKey = `${selectedOption.patchId}:${optionRenderKey}`;
+  setMarkup(
+    results,
+    resultsRenderKey,
+    options
+      .map((option) => {
+        const isSelected = option.patchId === selectedOption.patchId;
+        return `<li><button type="button" class="justify-between gap-3 text-left${
+          isSelected ? " menu-active" : ""
+        }" data-searchable-dropdown-option data-value="${escapeHtml(option.patchId)}" data-label="${escapeHtml(option.label)}"><span data-role="option-content" class="flex min-w-0 flex-1 items-center gap-3">${option.contentHtml}</span>${
+          isSelected
+            ? '<span class="badge badge-soft badge-primary badge-xs">Selected</span>'
+            : ""
+        }</button></li>`;
+      })
+      .join(""),
+  );
+  setMarkup(catalog, optionRenderKey, options.map((option) => option.templateHtml).join(""));
+  dropdown.label = selectedOption.label;
+  dropdown.value = selectedOption.patchId;
+  setMarkup(
+    selectedContent,
+    `selected:${selectedOption.patchId}:${selectedOption.label}`,
+    selectedOption.contentHtml,
+  );
+  if (input.value !== selectedOption.patchId) {
+    input.value = selectedOption.patchId;
+  }
+  if (typeof dropdown.isOpen === "function" && dropdown.isOpen()) {
+    dropdown.refreshResults?.();
   }
 }
 
@@ -5554,6 +5631,7 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
   );
   const searchText = inputState.filters?.searchText || "";
   const autoAdjustView = windowUiState?.settings?.autoAdjustView !== false;
+  const patchEmptyLabel = isReady ? "No patches available" : "Loading patches…";
   const fishLookup = mergeZoneEvidenceIntoFishLookup(buildFishLookup(catalogFish), isReady ? state.selection?.zoneStats || null : null);
   elements.zoneCatalog = zoneCatalog;
 
@@ -5573,17 +5651,19 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
     elements.search.value = searchText;
   }
 
-  renderPatchOptions(
+  renderPatchDropdown(
+    elements.patchFromPicker,
     elements.patchFrom,
     patchRange.ordered,
     patchRange.fromPatchId,
-    "Loading patches…",
+    patchEmptyLabel,
   );
-  renderPatchOptions(
+  renderPatchDropdown(
+    elements.patchToPicker,
     elements.patchTo,
     patchRange.ordered,
     patchRange.toPatchId,
-    "Loading patches…",
+    patchEmptyLabel,
   );
   const activeOpacityInteraction =
     isReady &&
@@ -5685,7 +5765,7 @@ function bindUi(shell, elements, options = {}) {
   let isRendering = false;
   let latestStateBundle = requestBridgeState(shell);
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
-  let windowUiState = parseWindowUiState(elements.windowStateInput?.value);
+  let windowUiState = loadPersistedWindowUiState(elements.windowStateInput?.value);
   let bookmarks = loadPersistedBookmarks();
   let bookmarkMetadataRefreshTimer = 0;
   let bookmarkMetadataRefreshAttempts = 0;
@@ -6087,10 +6167,11 @@ function bindUi(shell, elements, options = {}) {
     }
     const serialized = serializeWindowUiState(windowUiState);
     if (elements.windowStateInput.value === serialized) {
+      persistWindowUiStateStorage(serialized);
       return;
     }
     elements.windowStateInput.value = serialized;
-    elements.windowStateInput.dispatchEvent(new Event("input", { bubbles: true }));
+    persistWindowUiStateStorage(serialized);
   }
 
   function updateWindowUiEntry(windowId, patch) {
@@ -7621,7 +7702,6 @@ function bindUi(shell, elements, options = {}) {
     windowUiState = parseWindowUiState(defaultWindowUiState);
     if (elements.windowStateInput) {
       elements.windowStateInput.value = defaultWindowUiState;
-      elements.windowStateInput.dispatchEvent(new Event("input", { bubbles: true }));
     }
     applyManagedWindows({ persist: true });
 
@@ -7630,6 +7710,9 @@ function bindUi(shell, elements, options = {}) {
     } catch (_) {}
     try {
       globalThis.localStorage?.removeItem?.(FISHYMAP_STORAGE_KEYS.prefs);
+    } catch (_) {}
+    try {
+      globalThis.localStorage?.removeItem?.(FISHYMAP_WINDOW_UI_STORAGE_KEY);
     } catch (_) {}
 
     try {
@@ -7791,7 +7874,9 @@ async function main() {
     searchResultsShell: document.getElementById("fishymap-search-results-shell"),
     searchResults: document.getElementById("fishymap-search-results"),
     searchCount: document.getElementById("fishymap-search-count"),
+    patchFromPicker: document.getElementById("fishymap-patch-from-picker"),
     patchFrom: document.getElementById("fishymap-patch-from"),
+    patchToPicker: document.getElementById("fishymap-patch-to-picker"),
     patchTo: document.getElementById("fishymap-patch-to"),
     viewToggle: document.getElementById("fishymap-view-toggle"),
     viewToggleIcon: document.getElementById("fishymap-view-toggle-icon"),
