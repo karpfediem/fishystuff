@@ -83,6 +83,7 @@ struct CalculatorDerivedSignals {
 #[derive(Debug)]
 struct CalculatorData {
     catalog: CalculatorCatalogResponse,
+    lang: FishLang,
     zones: Vec<ZoneEntry>,
 }
 
@@ -95,13 +96,11 @@ struct SelectOption<'a> {
 
 struct SearchableDropdownConfig<'a> {
     root_id: &'a str,
-    value_input_id: &'a str,
-    selected_label_id: &'a str,
-    search_input_id: &'a str,
-    panel_id: &'a str,
-    results_list_id: &'a str,
-    search_url_builder: &'a str,
-    selected_label: &'a str,
+    input_id: &'a str,
+    label: &'a str,
+    value: &'a str,
+    search_url: &'a str,
+    search_url_root: Option<&'a str>,
     search_placeholder: &'a str,
 }
 
@@ -207,7 +206,6 @@ pub async fn get_calculator_datastar_zone_search(
         .unwrap_or(data.catalog.defaults.zone.as_str());
     let search_text = query.q.unwrap_or_default();
     let fragment = render_zone_search_results(
-        "calculator-zone-picker",
         "calculator-zone-search-results",
         &data.zones,
         selected_zone,
@@ -482,7 +480,18 @@ async fn load_calculator_data(
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
-    Ok(CalculatorData { catalog, zones })
+    Ok(CalculatorData {
+        catalog,
+        lang,
+        zones,
+    })
+}
+
+fn lang_param(lang: FishLang) -> &'static str {
+    match lang {
+        FishLang::En => "en",
+        FishLang::Ko => "ko",
+    }
 }
 
 fn normalize_and_derive(
@@ -1213,8 +1222,11 @@ fn render_calculator_app(
     let buffs = item_options_by_type(&data.catalog.items, "buff");
     let active_checked = if signals.active { " checked" } else { "" };
     let debug_checked = if signals.debug { " checked" } else { "" };
+    let zone_search_url = format!(
+        "/api/v1/calculator/datastar/zone-search?lang={}",
+        lang_param(data.lang)
+    );
     let zone_results = render_zone_search_results(
-        "calculator-zone-picker",
         "calculator-zone-search-results",
         &data.zones,
         &signals.zone,
@@ -1223,13 +1235,11 @@ fn render_calculator_app(
     let zone_dropdown = render_searchable_dropdown(
         &SearchableDropdownConfig {
             root_id: "calculator-zone-picker",
-            value_input_id: "calculator-zone-value",
-            selected_label_id: "calculator-zone-selected-label",
-            search_input_id: "calculator-zone-search-input",
-            panel_id: "calculator-zone-search-results-shell",
-            results_list_id: "calculator-zone-search-results",
-            search_url_builder: "zoneSearchUrl",
-            selected_label: &derived.zone_name,
+            input_id: "calculator-zone-value",
+            label: &derived.zone_name,
+            value: &signals.zone,
+            search_url: &zone_search_url,
+            search_url_root: Some("api"),
             search_placeholder: "Search zones",
         },
         &zone_results,
@@ -1348,7 +1358,7 @@ fn render_calculator_app(
             <legend class="fieldset-legend ml-6 px-2">Zone</legend>
             <div class="card-body gap-4 pt-0">
                 <div class="grid gap-4">
-                    <input id="calculator-zone-value" type="hidden" data-bind="zone">
+                    <input id="calculator-zone-value" type="hidden" data-bind="zone" value="__ZONE_VALUE__">
                     __ZONE_SEARCH_DROPDOWN__
                     <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
                         <div class="stat px-4 py-3">
@@ -1506,6 +1516,7 @@ fn render_calculator_app(
 
     let replacements = [
         ("__ZONE_SEARCH_DROPDOWN__", zone_dropdown),
+        ("__ZONE_VALUE__", escape_html(&signals.zone)),
         (
             "__LEVEL_SELECT__",
             render_select(
@@ -1687,7 +1698,6 @@ fn fuzzy_zone_matches<'a>(
 }
 
 fn render_zone_search_results(
-    root_id: &str,
     results_list_id: &str,
     zones: &[ZoneEntry],
     current_zone: &str,
@@ -1697,7 +1707,7 @@ fn render_zone_search_results(
     let mut html = String::new();
     write!(
         html,
-        "<ul id=\"{}\" tabindex=\"-1\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
+        "<ul id=\"{}\" tabindex=\"-1\" data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
         escape_html(results_list_id),
     )
     .unwrap();
@@ -1710,11 +1720,10 @@ fn render_zone_search_results(
             let active_class = if is_selected { " menu-active" } else { "" };
             write!(
                 html,
-                "<li><button type=\"button\" class=\"justify-between text-left{}\" onmousedown=\"window.__fishystuffCalculator.selectSearchableDropdownOption('{}', '{}', '{}'); return false;\"><span>{}</span>{}</button></li>",
+                "<li><button type=\"button\" class=\"justify-between text-left{}\" data-searchable-dropdown-option data-value=\"{}\" data-label=\"{}\"><span>{}</span>{}</button></li>",
                 active_class,
-                escape_html(&escape_js_single_quoted(root_id)),
-                escape_html(&escape_js_single_quoted(&zone.rgb_key.0)),
-                escape_html(&escape_js_single_quoted(label)),
+                escape_html(&zone.rgb_key.0),
+                escape_html(label),
                 escape_html(label),
                 if is_selected {
                     "<span class=\"badge badge-soft badge-primary badge-xs\">Selected</span>"
@@ -1730,68 +1739,64 @@ fn render_zone_search_results(
 }
 
 fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_html: &str) -> String {
+    let panel_id = format!("{}-panel", config.root_id);
+    let search_input_id = format!("{}-search-input", config.root_id);
+    let search_url_root_attr = config
+        .search_url_root
+        .map(|value| format!(" search-url-root=\"{}\"", escape_html(value)))
+        .unwrap_or_default();
     let mut html = String::new();
     write!(
         html,
-        r#"<div id="{root_id}"
-     class="relative z-30 w-full"
-     data-search-url-builder="{search_url_builder}"
-     data-value-input-id="{value_input_id}"
-     data-label-id="{selected_label_id}"
-     data-input-id="{search_input_id}"
-     data-results-id="{results_list_id}"
-     data-panel-id="{panel_id}">
+        r#"<fishy-searchable-dropdown id="{root_id}"
+     class="relative z-30 block w-full"
+     input-id="{input_id}"
+     label="{label}"
+     value="{value}"
+     search-url="{search_url}"{search_url_root_attr}
+     placeholder="{search_placeholder}">
     <button type="button"
+            data-role="trigger"
             class="flex min-h-11 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-4 py-3 text-left shadow-sm"
-            onclick="window.__fishystuffCalculator.toggleSearchableDropdown('{root_id}'); return false;">
-        <span id="{selected_label_id}" class="truncate font-medium">{selected_label}</span>
+            aria-haspopup="listbox"
+            aria-expanded="false"
+            aria-controls="{panel_id}">
+        <span data-role="selected-label" class="truncate font-medium">{label}</span>
         <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
     </button>
 
-    <div id="{panel_id}" class="absolute left-0 top-0 z-40 w-full min-w-full max-w-full" hidden>
+    <div id="{panel_id}" data-role="panel" class="absolute left-0 top-0 z-40 w-full min-w-full max-w-full" hidden>
         <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
-            <label class="flex min-h-11 w-full min-w-full items-center gap-3 bg-base-100 px-4 py-3"
-                   onmousedown="window.__fishystuffCalculator.cancelSearchableDropdownClose('{root_id}')">
+            <label class="flex min-h-11 w-full min-w-full items-center gap-3 bg-base-100 px-4 py-3">
                 <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
                 <input id="{search_input_id}"
+                       data-role="search-input"
                        type="search"
                        class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
                        style="outline: none; box-shadow: none;"
                        placeholder="{search_placeholder}"
                        autocomplete="off"
-                       spellcheck="false"
-                       onfocus="window.__fishystuffCalculator.searchSearchableDropdown('{root_id}', this.value)"
-                       oninput="window.__fishystuffCalculator.searchSearchableDropdown('{root_id}', this.value)"
-                       onkeydown="window.__fishystuffCalculator.handleSearchableDropdownKeydown(event, '{root_id}')"
-                       onblur="window.__fishystuffCalculator.scheduleSearchableDropdownClose('{root_id}')">
+                       spellcheck="false">
             </label>
             <div class="px-1 pb-1">
                 {results_html}
             </div>
         </div>
     </div>
-</div>"#,
+</fishy-searchable-dropdown>"#,
         root_id = escape_html(config.root_id),
-        search_url_builder = escape_html(config.search_url_builder),
-        value_input_id = escape_html(config.value_input_id),
-        selected_label_id = escape_html(config.selected_label_id),
-        search_input_id = escape_html(config.search_input_id),
-        results_list_id = escape_html(config.results_list_id),
-        panel_id = escape_html(config.panel_id),
-        selected_label = escape_html(config.selected_label),
+        input_id = escape_html(config.input_id),
+        label = escape_html(config.label),
+        value = escape_html(config.value),
+        search_url = escape_html(config.search_url),
+        search_url_root_attr = search_url_root_attr,
+        panel_id = escape_html(&panel_id),
+        search_input_id = escape_html(&search_input_id),
         search_placeholder = escape_html(config.search_placeholder),
         results_html = results_html,
     )
     .unwrap();
     html
-}
-
-fn escape_js_single_quoted(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('\'', "\\'")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
 }
 
 fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<SelectOption<'_>> {
@@ -2320,8 +2325,10 @@ mod tests {
         assert!(text.contains("data:selector #calculator-app"));
         assert!(text.contains("<div id=\"calculator-app\""));
         assert!(text.contains("placeholder=\"Search zones\""));
-        assert!(text.contains("id=\"calculator-zone-search-results-shell\""));
-        assert!(text.contains("onclick=\"window.__fishystuffCalculator.toggleSearchableDropdown('calculator-zone-picker'); return false;\""));
+        assert!(text.contains("<fishy-searchable-dropdown"));
+        assert!(text.contains("input-id=\"calculator-zone-value\""));
+        assert!(text.contains("search-url=\"/api/v1/calculator/datastar/zone-search?lang=en\""));
+        assert!(text.contains("search-url-root=\"api\""));
     }
 
     #[tokio::test]
@@ -2428,9 +2435,9 @@ mod tests {
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("id=\"calculator-zone-search-results\""));
-        assert!(text.contains(
-            "window.__fishystuffCalculator.selectSearchableDropdownOption('calculator-zone-picker'"
-        ));
+        assert!(text.contains("data-role=\"results\""));
+        assert!(text.contains("data-searchable-dropdown-option"));
+        assert!(text.contains("data-value=\"240,74,74\""));
         assert!(text.contains("Velia Beach"));
         assert!(text.contains("Selected"));
     }

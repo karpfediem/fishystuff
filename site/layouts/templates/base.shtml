@@ -182,6 +182,7 @@
     })();
   </script>
 
+  <script type="module" src="$site.asset('js/components/registry.js').link()"></script>
   <script src="$site.asset('js/theme.js').link()"></script>
   <script src="$site.asset('js/toast.js').link()"></script>
   <!-- Tailwind + daisyUI (compiled) -->

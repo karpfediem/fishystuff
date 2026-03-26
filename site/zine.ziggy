@@ -30,6 +30,8 @@ Multilingual {
     "css/site.css", // Tailwind generated
 
     "js/datastar.js",
+    "js/components/registry.js",
+    "js/components/searchable-dropdown.js",
     "js/durationFormatter.js",
     "js/lz-string.min.js",
     "js/script.js",
