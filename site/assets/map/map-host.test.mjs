@@ -392,6 +392,83 @@ test("fish filter term patches normalize favourite and missing aliases", () => {
   assert.deepEqual(next.filters.fishFilterTerms, ["favourite", "missing"]);
 });
 
+test("fish filter terms derive outbound fishIds for the wasm point filter", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    env.localStorage.setItem(FISHYMAP_STORAGE_KEYS.caught, JSON.stringify([912]));
+    env.localStorage.setItem(FISHYMAP_STORAGE_KEYS.favourites, JSON.stringify([77]));
+
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: {
+          capabilities: [],
+          layers: [],
+          patches: [],
+          fish: [
+            { fishId: 912, name: "Cron Dart" },
+            { fishId: 77, name: "Serendia Carp" },
+          ],
+        },
+        statuses: {},
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      debounceMs: 0,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+    wasm.calls.applied.length = 0;
+
+    bridge.setState({
+      version: 1,
+      filters: {
+        fishFilterTerms: ["missing"],
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishIds, []);
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["missing"]);
+    assert.equal(wasm.calls.applied.length, 1);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77]);
+
+    wasm.calls.applied.length = 0;
+    bridge.setState({
+      version: 1,
+      filters: {
+        fishIds: [77, 912],
+        fishFilterTerms: ["favourite"],
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishIds, [77, 912]);
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["favourite"]);
+    assert.equal(wasm.calls.applied.length, 1);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77]);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("semantic field filter patches are normalized and keep zone ids in sync", () => {
   const next = applyStatePatch(undefined, {
     version: 1,

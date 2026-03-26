@@ -433,6 +433,7 @@ function normalizeStringList(values) {
 }
 
 const FISHYMAP_FISH_FILTER_TERMS = Object.freeze(["favourite", "missing"]);
+const FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID = -1;
 
 function normalizeFishFilterTerm(value) {
   const normalized = String(value ?? "").trim().toLowerCase();
@@ -631,6 +632,100 @@ function normalizeFishIds(values) {
     out.push(number);
   }
   return out;
+}
+
+function readSharedFishIds(storage, key) {
+  try {
+    return normalizeFishIds(JSON.parse(storage?.getItem?.(key) || "[]"));
+  } catch (_) {
+    return [];
+  }
+}
+
+function loadSharedFishFilterState(storage = globalThis.localStorage) {
+  const caughtIds = readSharedFishIds(storage, FISHYMAP_STORAGE_KEYS.caught);
+  const favouriteIds = readSharedFishIds(storage, FISHYMAP_STORAGE_KEYS.favourites);
+  return {
+    caughtSet: new Set(caughtIds),
+    favouriteSet: new Set(favouriteIds),
+  };
+}
+
+function fishMatchesSharedFilterTerms(fishId, filterTerms, sharedFishState) {
+  for (const term of filterTerms) {
+    if (term === "favourite" && !sharedFishState.favouriteSet.has(fishId)) {
+      return false;
+    }
+    if (term === "missing" && sharedFishState.caughtSet.has(fishId)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function resolveEffectiveFishIdsForWasm(inputState, currentState, storage = globalThis.localStorage) {
+  const selectedFishIds = normalizeFishIds(inputState?.filters?.fishIds);
+  const filterTerms = normalizeFishFilterTerms(inputState?.filters?.fishFilterTerms);
+  if (!filterTerms.length) {
+    return selectedFishIds;
+  }
+
+  const catalogFish = Array.isArray(currentState?.catalog?.fish) ? currentState.catalog.fish : [];
+  if (!catalogFish.length) {
+    return selectedFishIds.length ? selectedFishIds : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
+  }
+
+  const sharedFishState = loadSharedFishFilterState(storage);
+  const matchingFishIds = [];
+  const seen = new Set();
+  for (const fish of catalogFish) {
+    const fishId = Number.parseInt(fish?.fishId, 10);
+    if (!Number.isFinite(fishId) || seen.has(fishId)) {
+      continue;
+    }
+    seen.add(fishId);
+    if (fishMatchesSharedFilterTerms(fishId, filterTerms, sharedFishState)) {
+      matchingFishIds.push(fishId);
+    }
+  }
+
+  if (!selectedFishIds.length) {
+    return matchingFishIds.length
+      ? matchingFishIds
+      : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
+  }
+
+  const matchingSet = new Set(matchingFishIds);
+  const effectiveFishIds = selectedFishIds.filter((fishId) => matchingSet.has(fishId));
+  return effectiveFishIds.length
+    ? effectiveFishIds
+    : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
+}
+
+function buildEffectiveOutboundStatePatch(
+  patch,
+  inputState,
+  currentState,
+  storage = globalThis.localStorage,
+) {
+  const normalized = normalizeStatePatch(patch);
+  if (!patchHasStateFields(normalized)) {
+    return normalized;
+  }
+  const normalizedFilters = normalized.filters || null;
+  const activeFishFilterTerms = normalizeFishFilterTerms(inputState?.filters?.fishFilterTerms);
+  const shouldOverrideFishIds =
+    activeFishFilterTerms.length > 0 || Boolean(normalizedFilters && hasOwn(normalizedFilters, "fishIds"));
+  if (!shouldOverrideFishIds) {
+    return normalized;
+  }
+  return normalizeStatePatch({
+    ...normalized,
+    filters: {
+      ...(normalizedFilters || {}),
+      fishIds: resolveEffectiveFishIdsForWasm(inputState, currentState, storage),
+    },
+  });
 }
 
 function normalizeZoneRgbs(values) {
@@ -2511,7 +2606,11 @@ class FishyMapBridgeImpl {
       if (!patchHasStateFields(this.pendingStatePatch)) {
         return;
       }
-      const patch = this.pendingStatePatch;
+      const patch = buildEffectiveOutboundStatePatch(
+        this.pendingStatePatch,
+        this.inputState,
+        this.currentState,
+      );
       this.pendingStatePatch = normalizeStatePatch({});
       this.addPerformanceCounter("host.patches.flushed");
       this.wasmModule.fishymap_apply_state_patch_json(JSON.stringify(patch));
@@ -2562,6 +2661,16 @@ class FishyMapBridgeImpl {
 
       if (becameReady || fishFinishedLoading) {
         this.refreshCurrentStateFromWasm();
+        if (normalizeFishFilterTerms(this.inputState.filters?.fishFilterTerms).length) {
+          this.pendingStatePatch = mergeStatePatch(this.pendingStatePatch, {
+            version: FISHYMAP_CONTRACT_VERSION,
+            filters: {
+              fishIds: this.inputState.filters?.fishIds,
+              fishFilterTerms: this.inputState.filters?.fishFilterTerms,
+            },
+          });
+          this.schedulePatchFlush();
+        }
       }
 
       if (bootstrapStateSignature(this.currentState) !== previousSignature) {
