@@ -140,6 +140,12 @@
     background: color-mix(in oklab, var(--color-base-content, #1f2937) 10%, var(--dex-surface-strong) 90%);
   }
 
+  .fishydex-filter-chip.filter-favourite.is-active {
+    border-color: color-mix(in oklab, var(--color-error, #d64545) 56%, var(--dex-line) 44%);
+    background: color-mix(in oklab, var(--color-error, #d64545) 14%, var(--dex-surface-strong) 86%);
+    color: color-mix(in oklab, var(--color-error, #d64545) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
   .fishydex-filter-chip.filter-rod.is-active {
     border-color: color-mix(in oklab, var(--color-info, #6b8afd) 56%, var(--dex-line) 44%);
     background: color-mix(in oklab, var(--color-info, #6b8afd) 18%, var(--dex-surface-strong) 82%);
@@ -1039,6 +1045,7 @@
       currentCaughtIds: [],
       currentFavouriteIds: [],
       currentCaughtFilter: "all",
+      currentFavouriteFilter: false,
       currentGradeFilters: [],
       currentMethodFilters: [],
       currentShowDried: false,
@@ -1130,6 +1137,7 @@
         search_draft: searchQuery,
         search_query: searchQuery,
         caught_filter: normalizeCaughtFilter(signals && signals.caught_filter),
+        favourite_filter: normalizeBooleanFlag(signals && signals.favourite_filter),
         grade_filters: normalizeGradeFilters(signals && signals.grade_filters),
         method_filters: normalizeMethodFilters(signals && signals.method_filters),
         show_dried: normalizeBooleanFlag(signals && signals.show_dried),
@@ -1266,6 +1274,7 @@
         search_draft: "",
         search_query: "",
         caught_filter: "all",
+        favourite_filter: false,
         grade_filters: [],
         method_filters: [],
         show_dried: false,
@@ -1657,12 +1666,22 @@
       return normalizeBooleanFlag(entry && entry.is_dried);
     }
 
-    function syncFilterUi(caughtFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection) {
+    function syncFilterUi(caughtFilter, favouriteFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection) {
       for (const button of document.querySelectorAll("[data-caught-filter-value]")) {
         if (!(button instanceof HTMLButtonElement)) {
           continue;
         }
         const active = button.dataset.caughtFilterValue === caughtFilter;
+        button.classList.toggle("is-active", active);
+        button.classList.toggle("btn-active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      }
+
+      for (const button of document.querySelectorAll("[data-favourite-filter-toggle]")) {
+        if (!(button instanceof HTMLButtonElement)) {
+          continue;
+        }
+        const active = favouriteFilter;
         button.classList.toggle("is-active", active);
         button.classList.toggle("btn-active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
@@ -1727,6 +1746,16 @@
       const next = normalizeCaughtFilter(value);
       state.currentCaughtFilter = next;
       mergeSignals({ caught_filter: next });
+    }
+
+    function setFavouriteFilter(value) {
+      const next = normalizeBooleanFlag(value);
+      state.currentFavouriteFilter = next;
+      mergeSignals({ favourite_filter: next });
+    }
+
+    function toggleFavouriteFilter() {
+      setFavouriteFilter(!state.currentFavouriteFilter);
     }
 
     function clearMethodFilters() {
@@ -2361,6 +2390,7 @@
       state.currentCaughtIds = caughtIds;
       state.currentFavouriteIds = favouriteIds;
       const caughtFilter = normalizeCaughtFilter(snapshot.caught_filter);
+      const favouriteFilter = normalizeBooleanFlag(snapshot.favourite_filter);
       const gradeFilters = normalizeGradeFilters(snapshot.grade_filters);
       const methodFilters = normalizeMethodFilters(
         snapshot.method_filters !== undefined ? snapshot.method_filters : snapshot.method_filter
@@ -2369,6 +2399,7 @@
       const sortField = normalizeSortField(snapshot.sort_field);
       const sortDirection = normalizeSortDirection(snapshot.sort_direction);
       state.currentCaughtFilter = caughtFilter;
+      state.currentFavouriteFilter = favouriteFilter;
       state.currentGradeFilters = gradeFilters;
       state.currentMethodFilters = methodFilters;
       state.currentShowDried = showDried;
@@ -2380,13 +2411,14 @@
           .map((entry) => [entry.item_id, entry])
       );
       const fishSignature = fishRenderSignature(fish);
-      syncFilterUi(caughtFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection);
+      syncFilterUi(caughtFilter, favouriteFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection);
 
       const renderKey = [
         snapshot.revision || "",
         fishSignature,
         (snapshot.search_query || "").trim().toLowerCase(),
         caughtFilter,
+        favouriteFilter ? "1" : "0",
         gradeFilters.join(","),
         methodFilters.join(","),
         showDried ? "1" : "0",
@@ -2424,6 +2456,9 @@
         if (caughtFilter === "missing" && caughtSet.has(fishItemId(entry))) {
           return false;
         }
+        if (favouriteFilter && !favouriteSet.has(fishItemId(entry))) {
+          return false;
+        }
         if (gradeFilters.length > 0 && !gradeFilters.includes(filterGradeForEntry(entry))) {
           return false;
         }
@@ -2444,6 +2479,7 @@
       });
       const hasNarrowingFilters = Boolean(searchQuery)
         || caughtFilter !== "all"
+        || favouriteFilter
         || gradeFilters.length > 0
         || methodFilters.length > 0;
       const catalogCaughtCount = catalogEntries.reduce((count, entry) => {
@@ -2585,6 +2621,8 @@
       sync,
       togglePanel,
       setCaughtFilter,
+      setFavouriteFilter,
+      toggleFavouriteFilter,
       clearMethodFilters,
       toggleMethodFilter,
       setShowDried,
@@ -2610,6 +2648,7 @@
        search_draft: '',
        search_query: '',
        caught_filter: 'all',
+       favourite_filter: false,
        grade_filters: [],
        method_filters: [],
        show_dried: false,
@@ -2648,6 +2687,7 @@
          revision: $revision || '',
          search_query: $search_query || '',
          caught_filter: $caught_filter || 'all',
+         favourite_filter: $favourite_filter === true,
          grade_filters: $grade_filters || [],
          method_filters: $method_filters || [],
          show_dried: $show_dried === true,
@@ -2754,8 +2794,8 @@
 
           <div class="fishydex-filter-stack">
             <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
-              <legend class="fieldset-legend">Caught Status</legend>
-              <div class="fishydex-filter-chips" role="group" aria-label="Caught status filters">
+              <legend class="fieldset-legend">Status</legend>
+              <div class="fishydex-filter-chips" role="group" aria-label="Status filters">
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip"
                         data-caught-filter-value="all"
@@ -2771,6 +2811,11 @@
                         data-caught-filter-value="missing"
                         aria-pressed="false"
                         data-on:click="window.Fishydex.setCaughtFilter('missing')"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-4#fishy-check-circle-dash-fill"></use></svg><span>Missing</span></button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip filter-favourite"
+                        data-favourite-filter-toggle
+                        aria-pressed="false"
+                        data-on:click="window.Fishydex.toggleFavouriteFilter()"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-4#fishy-heart-fill"></use></svg><span>Favourite</span></button>
               </div>
             </fieldset>
 
