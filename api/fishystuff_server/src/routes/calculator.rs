@@ -2144,7 +2144,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
     write!(
         html,
         r#"<fishy-searchable-dropdown id="{root_id}"
-     class="relative z-30 block w-full"
+     class="relative block w-full"
      input-id="{input_id}"
      label="{label}"
      value="{value}"
@@ -2160,7 +2160,7 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
         <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
     </button>
 
-    <div id="{panel_id}" data-role="panel" class="absolute left-0 top-0 z-40 w-full min-w-full max-w-full" hidden>
+    <div id="{panel_id}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
         <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
             <label class="{search_shell_class}">
                 <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>

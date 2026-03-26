@@ -210,6 +210,7 @@ export class FishySearchableDropdown extends HTMLElement {
 
         this._cancelClose();
         panel.hidden = false;
+        this.style.zIndex = "60";
         this._setExpanded(true);
         this._attachOutsideListener();
         input.value = "";
@@ -232,6 +233,7 @@ export class FishySearchableDropdown extends HTMLElement {
             panel.hidden = true;
         }
 
+        this.style.zIndex = "";
         this._abortSearch();
         this._detachOutsideListener();
         this._setExpanded(false);
