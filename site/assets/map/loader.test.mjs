@@ -1766,6 +1766,64 @@ test("renderSearchResults makes fish matches focusable while keeping row selecti
   }
 });
 
+test("renderSearchResults shows filter term suggestions on empty-query focus without a count badge", () => {
+  const elements = {
+    searchResults: {
+      dataset: {},
+      innerHTML: "",
+    },
+    searchResultsShell: { hidden: true },
+    searchCount: { hidden: true, textContent: "" },
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.inputState.filters.searchText = "";
+
+  renderSearchResults(
+    elements,
+    [
+      {
+        kind: "fish-filter",
+        term: "favourite",
+        label: "Favourite",
+        description: "Fish you marked with a heart.",
+      },
+      {
+        kind: "fish-filter",
+        term: "missing",
+        label: "Missing",
+        description: "Fish you have not caught yet.",
+      },
+    ],
+    stateBundle,
+  );
+
+  assert.equal(elements.searchResultsShell.hidden, false);
+  assert.equal(elements.searchCount.hidden, true);
+  assert.match(elements.searchResults.innerHTML, /data-fish-filter-term="favourite"/);
+  assert.match(elements.searchResults.innerHTML, /Favourite/);
+  assert.match(elements.searchResults.innerHTML, /data-fish-filter-term="missing"/);
+  assert.match(elements.searchResults.innerHTML, /Missing/);
+});
+
+test("renderSearchResults hides and clears the results shell when closed or unmatched", () => {
+  const elements = {
+    searchResults: {
+      dataset: {},
+      innerHTML: "<li>stale</li>",
+    },
+    searchResultsShell: { hidden: false },
+    searchCount: { hidden: false, textContent: "1 match" },
+  };
+  const stateBundle = buildStateBundle();
+  stateBundle.inputState.filters.searchText = "";
+
+  renderSearchResults(elements, [], stateBundle);
+
+  assert.equal(elements.searchResultsShell.hidden, true);
+  assert.equal(elements.searchCount.hidden, true);
+  assert.equal(elements.searchResults.innerHTML, "");
+});
+
 test("buildZoneEvidenceListMarkup hides stability percentages while keeping the detail tooltip", () => {
   const originalWindow = globalThis.window;
   const originalLocation = globalThis.location;

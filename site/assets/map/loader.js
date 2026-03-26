@@ -3842,6 +3842,17 @@ function findFishFilterMatches(searchText, selectedTerms) {
   return matches;
 }
 
+function buildDefaultFishFilterMatches(stateBundle) {
+  const selected = new Set(resolveSelectedFishFilterTerms(stateBundle));
+  return FISH_FILTER_TERM_ORDER.filter((term) => !selected.has(term)).map((term) => ({
+    kind: "fish-filter",
+    term,
+    label: FISH_FILTER_TERM_METADATA[term]?.label || term,
+    description: FISH_FILTER_TERM_METADATA[term]?.description || "",
+    _score: 0,
+  }));
+}
+
 export function parseZoneRgbSearch(searchText) {
   const query = String(searchText || "").trim().toLowerCase();
   if (!query) {
@@ -5527,7 +5538,6 @@ export function renderSearchSelection(elements, stateBundle, fishLookup) {
 
 export function renderSearchResults(elements, matches, stateBundle) {
   const query = String(stateBundle.inputState?.filters?.searchText || "").trim();
-  const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
   const showResults = matches.length > 0;
   const activeMatches = matches.slice(0, 12);
   const renderKey = JSON.stringify({
@@ -5562,7 +5572,7 @@ export function renderSearchResults(elements, matches, stateBundle) {
   }
   if (elements.searchCount) {
     setTextContent(elements.searchCount, `${matches.length} ${matches.length === 1 ? "match" : "matches"}`);
-    setBooleanProperty(elements.searchCount, "hidden", !query && selectedFishFilterTerms.length === 0);
+    setBooleanProperty(elements.searchCount, "hidden", !query);
   }
   if (elements.searchResults.dataset.renderKey === renderKey) {
     return;
@@ -5911,7 +5921,13 @@ function syncLayerPointIconScaleControl(container, layerId, scale) {
   return true;
 }
 
-function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DEFAULT_WINDOW_UI_STATE) {
+function renderPanel(
+  elements,
+  stateBundle,
+  zoneCatalog = [],
+  windowUiState = DEFAULT_WINDOW_UI_STATE,
+  searchUiState = { open: false },
+) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
   const renderStateBundle = {
@@ -5999,7 +6015,12 @@ function renderPanel(elements, stateBundle, zoneCatalog = [], windowUiState = DE
     setTextContent(elements.layersCount, String(isReady ? (state.catalog?.layers || []).length : 0));
   }
 
-  const matches = isReady ? buildSearchMatches(renderStateBundle, searchText, zoneCatalog) : [];
+  const matches =
+    isReady && searchUiState.open
+      ? String(searchText || "").trim()
+        ? buildSearchMatches(renderStateBundle, searchText, zoneCatalog)
+        : buildDefaultFishFilterMatches(renderStateBundle)
+      : [];
   renderSearchSelection(elements, renderStateBundle, fishLookup);
   renderSearchResults(elements, matches, renderStateBundle);
 
@@ -6073,6 +6094,9 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
 function bindUi(shell, elements, options = {}) {
   let isRendering = false;
   let latestStateBundle = requestBridgeState(shell);
+  const searchUiState = {
+    open: false,
+  };
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
   let windowUiState = loadPersistedWindowUiState(elements.windowStateInput?.value);
   let bookmarks = loadPersistedBookmarks();
@@ -6679,7 +6703,7 @@ function bindUi(shell, elements, options = {}) {
     scheduleBookmarkMetadataRefresh();
     isRendering = true;
     try {
-      renderPanel(elements, latestStateBundle, zoneCatalog, windowUiState);
+      renderPanel(elements, latestStateBundle, zoneCatalog, windowUiState, searchUiState);
       syncActiveDetailPaneState(
         resolveZoneInfoActiveTab(
           windowUiState,
@@ -6966,6 +6990,21 @@ function bindUi(shell, elements, options = {}) {
     });
   }
 
+  function setSearchDropdownOpen(open) {
+    const nextOpen = open === true;
+    if (searchUiState.open === nextOpen) {
+      return;
+    }
+    searchUiState.open = nextOpen;
+    renderCurrentState(getLatestStateBundle());
+  }
+
+  function applySearchMatchAndClose(stateBundle, match) {
+    applySearchMatchSelection(shell, elements, renderCurrentState, stateBundle, match);
+    searchUiState.open = false;
+    renderCurrentState(getLatestStateBundle());
+  }
+
   function pushPatchRangePatch() {
     const current = getLatestStateBundle();
     const patchRange = normalizePatchRangeSelection(
@@ -6992,21 +7031,34 @@ function bindUi(shell, elements, options = {}) {
     if (isRendering) {
       return;
     }
+    searchUiState.open = true;
     pushSearchPatch();
   });
 
+  elements.search.addEventListener("focus", () => {
+    setSearchDropdownOpen(true);
+  });
+
   elements.search.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setSearchDropdownOpen(false);
+      elements.search.blur();
+      return;
+    }
     if (event.key !== "Enter") {
       return;
     }
     const current = getLatestStateBundle();
-    const matches = buildSearchMatches(current, elements.search.value, zoneCatalog);
+    const matches = String(elements.search.value || "").trim()
+      ? buildSearchMatches(current, elements.search.value, zoneCatalog)
+      : buildDefaultFishFilterMatches(current);
     const top = matches[0];
     if (!top) {
       return;
     }
     event.preventDefault();
-    applySearchMatchSelection(shell, elements, renderCurrentState, current, top);
+    applySearchMatchAndClose(current, top);
   });
 
   elements.searchResults.addEventListener("click", (event) => {
@@ -7026,7 +7078,7 @@ function bindUi(shell, elements, options = {}) {
     const current = getLatestStateBundle();
     const fishFilterTerm = normalizeFishFilterTerm(button.getAttribute("data-fish-filter-term"));
     if (fishFilterTerm) {
-      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+      applySearchMatchAndClose(current, {
         kind: "fish-filter",
         term: fishFilterTerm,
       });
@@ -7034,7 +7086,7 @@ function bindUi(shell, elements, options = {}) {
     }
     const zoneRgb = Number.parseInt(button.getAttribute("data-zone-rgb"), 10);
     if (Number.isFinite(zoneRgb)) {
-      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+      applySearchMatchAndClose(current, {
         kind: "zone",
         zoneRgb,
       });
@@ -7043,7 +7095,7 @@ function bindUi(shell, elements, options = {}) {
     const semanticLayerId = String(button.getAttribute("data-semantic-layer-id") || "").trim();
     const semanticFieldId = Number.parseInt(button.getAttribute("data-semantic-field-id"), 10);
     if (semanticLayerId && Number.isFinite(semanticFieldId)) {
-      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+      applySearchMatchAndClose(current, {
         kind: "semantic",
         layerId: semanticLayerId,
         fieldId: semanticFieldId,
@@ -7055,7 +7107,7 @@ function bindUi(shell, elements, options = {}) {
     if (!Number.isFinite(fishId)) {
       return;
     }
-    applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+    applySearchMatchAndClose(current, {
       kind: "fish",
       fishId,
     });
@@ -7082,7 +7134,7 @@ function bindUi(shell, elements, options = {}) {
     const fishFilterTerm = normalizeFishFilterTerm(row.getAttribute("data-fish-filter-term"));
     if (fishFilterTerm) {
       event.preventDefault();
-      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+      applySearchMatchAndClose(current, {
         kind: "fish-filter",
         term: fishFilterTerm,
       });
@@ -7091,7 +7143,7 @@ function bindUi(shell, elements, options = {}) {
     const fishId = Number.parseInt(row.getAttribute("data-fish-id"), 10);
     if (Number.isFinite(fishId)) {
       event.preventDefault();
-      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+      applySearchMatchAndClose(current, {
         kind: "fish",
         fishId,
       });
@@ -7100,7 +7152,7 @@ function bindUi(shell, elements, options = {}) {
     const zoneRgb = Number.parseInt(row.getAttribute("data-zone-rgb"), 10);
     if (Number.isFinite(zoneRgb)) {
       event.preventDefault();
-      applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+      applySearchMatchAndClose(current, {
         kind: "zone",
         zoneRgb,
       });
@@ -7112,12 +7164,22 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     event.preventDefault();
-    applySearchMatchSelection(shell, elements, renderCurrentState, current, {
+    applySearchMatchAndClose(current, {
       kind: "semantic",
       layerId: semanticLayerId,
       fieldId: semanticFieldId,
       label: row.getAttribute("data-semantic-label") || "",
     });
+  });
+
+  elements.searchWindow?.addEventListener("focusout", () => {
+    globalThis.setTimeout?.(() => {
+      const activeElement = globalThis.document?.activeElement;
+      if (activeElement instanceof Element && elements.searchWindow?.contains(activeElement)) {
+        return;
+      }
+      setSearchDropdownOpen(false);
+    }, 0);
   });
 
   elements.searchSelection.addEventListener("click", (event) => {
