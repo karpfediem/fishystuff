@@ -324,6 +324,30 @@ impl ArchiveIndex {
             .with_context(|| format!("failed to read raw payload from {}", paz_path.display()))
     }
 
+    pub fn write_entry(
+        &mut self,
+        entry: &FileEntry,
+        output_path: &Path,
+        overwrite: bool,
+    ) -> Result<()> {
+        if let Some(parent) = output_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
+            }
+        }
+        if output_path.exists() && !overwrite {
+            bail!(
+                "{} already exists; pass --overwrite to replace it",
+                output_path.display()
+            );
+        }
+
+        let payload = self.read_payload(entry)?;
+        fs::write(output_path, payload)
+            .with_context(|| format!("failed to write {}", output_path.display()))
+    }
+
     fn extract_entry(
         &mut self,
         entry: &FileEntry,

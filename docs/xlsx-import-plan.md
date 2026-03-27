@@ -20,6 +20,12 @@ Date: 2026-02-26
 Other artifact:
 - FishingTables.zip (not expanded/inspected in this pass)
 
+## Current correction
+
+- `data/data/excel/` is now a legacy local dump and should not be treated as the maintained source of truth.
+- The maintained refresh path should be original archive data (`.meta`, `.paz`, or an archive directory containing them) -> `pazifista archive extract-fishing-workbooks` -> verified workbook set.
+- The newer top-level workbook set under `data/data/` differs from the legacy `data/data/excel/` copies for the four core fishing workbooks.
+
 Additional local legacy dataset:
 
 - `data/data/excel/Fishing_Table.xlsx`
@@ -61,11 +67,12 @@ Additional local legacy dataset:
 
 ## Current durable conclusions
 
-- The raw legacy XLSX dump under `data/data/excel/` is the durable source-schema backbone for:
+- The extracted workbook set is the source-schema backbone for:
   - `fishing_table`
   - `item_main_group_table`
   - `item_sub_group_table`
   - `item_table`
+- The legacy mirror under `data/data/excel/` is stale and should not be used as the maintained refresh input.
 - `fishing_table` should remain the legacy RGB-to-slot baseline.
 - `item_main_group_table` and `item_sub_group_table` are the correct merge targets for subgroup-resolution enrichment.
 - The raw `ItemSubGroup_Table.xlsx` layout is structurally correct, but its `SelectRate_0..2` values are not sufficient on their own for usable subgroup item expansion in Dolt.
@@ -75,11 +82,12 @@ Additional local legacy dataset:
 
 For durable import work:
 
-1. Import the raw legacy zone-slot layer into `fishing_table`.
-2. Preserve `fishing_table` row identities keyed by `R,G,B`.
-3. Import raw legacy main/subgroup rows into `item_main_group_table` and `item_sub_group_table`.
-4. Apply any later subgroup-baseline enrichment at the group-table layer, not by bulk-overwriting `fishing_table`.
-5. Exclude user-entered placeholder group keys from maintained imports.
+1. Refresh the raw workbook set from original archive data before import.
+2. Import the raw zone-slot layer into `fishing_table`.
+3. Preserve `fishing_table` row identities keyed by `R,G,B`.
+4. Import raw main/subgroup rows into `item_main_group_table` and `item_sub_group_table`.
+5. Apply any later subgroup-baseline enrichment at the group-table layer, not by bulk-overwriting `fishing_table`.
+6. Exclude user-entered placeholder group keys from maintained imports.
 
 ## Runtime state after subgroup baseline backfill
 

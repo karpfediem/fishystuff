@@ -28,4 +28,5 @@ Current migration contents:
 - `tools/scripts/rebuild_region_groups_vector_layer_from_pabr.sh`
 - `tools/scripts/rebuild_region_groups_overlay.sh`
 - `tools/scripts/rebuild_water_overlay.sh`
+- `tools/scripts/extract_fishing_workbooks_from_paz.sh`
 - `tools/scripts/xlsx-*`

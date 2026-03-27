@@ -1,5 +1,6 @@
 mod archive;
 mod compression;
+mod fishing_workbooks;
 mod gcdata;
 mod ice;
 mod pabr;
@@ -10,6 +11,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Context, Result};
 use archive::{ArchiveIndex, ExtractOptions};
 use clap::{ArgAction, CommandFactory, Parser, Subcommand};
+use fishing_workbooks::build_fishing_workbook_plan;
 use gcdata::{
     compare_region_sources, inspect_arraywaypoint_bin, inspect_loc, inspect_pabr_table,
     inspect_regionclientdata, inspect_regiongroupinfo_bss, inspect_regioninfo_bss,
@@ -44,7 +46,7 @@ enum Command {
 
 #[derive(Debug, Parser, Default)]
 struct ExtractCli {
-    #[arg(value_name = "input file")]
+    #[arg(value_name = "input archive (.meta, .paz, or directory)")]
     input_file: Option<PathBuf>,
     #[arg(
         short = 'f',
@@ -89,6 +91,8 @@ enum ArchiveCommand {
         about = "Inspect matching archive entries and optionally dump their raw on-disk payload"
     )]
     Inspect(ArchiveInspectCli),
+    #[command(about = "Extract the maintained fishing workbook set from original archive data")]
+    ExtractFishingWorkbooks(ArchiveExtractFishingWorkbooksCli),
 }
 
 #[derive(Debug, Subcommand)]
@@ -367,7 +371,7 @@ struct GcdataInspectWaypointXmlCli {
 
 #[derive(Debug, Parser)]
 struct ArchiveInspectCli {
-    #[arg(value_name = "input file")]
+    #[arg(value_name = "input archive (.meta, .paz, or directory)")]
     input_file: PathBuf,
     #[arg(
         short = 'f',
@@ -399,6 +403,31 @@ struct ArchiveInspectCli {
     quiet: bool,
 }
 
+#[derive(Debug, Parser)]
+struct ArchiveExtractFishingWorkbooksCli {
+    #[arg(value_name = "input archive (.meta, .paz, or directory)")]
+    input_file: PathBuf,
+    #[arg(short = 'o', long = "output", value_name = "path")]
+    output: PathBuf,
+    #[arg(
+        long = "core-only",
+        help = "Extract only the four core fishing workbooks required for fishing/group import"
+    )]
+    core_only: bool,
+    #[arg(
+        long = "overwrite",
+        help = "Overwrite existing output files instead of failing"
+    )]
+    overwrite: bool,
+    #[arg(
+        long = "dry-run",
+        help = "Print the extraction plan without writing files"
+    )]
+    dry_run: bool,
+    #[arg(short = 'q')]
+    quiet: bool,
+}
+
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
     if cli.command.is_none() && cli.extract.input_file.is_none() {
@@ -420,7 +449,7 @@ fn run_extract(cli: ExtractCli) -> Result<()> {
     let input_file = cli
         .input_file
         .context("missing input file; use `pazifista -h` for help")?;
-    let source_path = canonical_existing_path(&input_file)?;
+    let source_path = canonical_archive_input(&input_file)?;
     let target_path = match &cli.output {
         Some(path) => normalize_output_path(path)?,
         None => std::env::current_dir().context("failed to read current directory")?,
@@ -435,21 +464,7 @@ fn run_extract(cli: ExtractCli) -> Result<()> {
         println!("Filter masks: {}", format_filters(&cli.filters));
     }
 
-    let extension = source_path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .unwrap_or_default();
-
-    let mut archive = if extension.eq_ignore_ascii_case("meta") {
-        ArchiveIndex::from_meta(&source_path, cli.quiet)?
-    } else if extension.eq_ignore_ascii_case("paz") {
-        ArchiveIndex::from_paz(&source_path, cli.quiet)?
-    } else {
-        bail!(
-            "input file must have extension .meta or .paz; got .{}",
-            extension
-        );
-    };
+    let mut archive = open_archive_index(&source_path, cli.quiet)?;
 
     if cli.list {
         archive.list(&cli.filters, cli.quiet);
@@ -475,21 +490,8 @@ fn run_archive(cli: ArchiveCli) -> Result<()> {
                 bail!("at least one -f/--filter mask is required");
             }
 
-            let input_path = canonical_existing_path(&args.input_file)?;
-            let extension = input_path
-                .extension()
-                .and_then(|ext| ext.to_str())
-                .unwrap_or_default();
-            let mut archive = if extension.eq_ignore_ascii_case("meta") {
-                ArchiveIndex::from_meta(&input_path, true)?
-            } else if extension.eq_ignore_ascii_case("paz") {
-                ArchiveIndex::from_paz(&input_path, true)?
-            } else {
-                bail!(
-                    "input file must have extension .meta or .paz; got .{}",
-                    extension
-                );
-            };
+            let input_path = canonical_archive_input(&args.input_file)?;
+            let mut archive = open_archive_index(&input_path, true)?;
 
             let matches = archive.matching_entries(&args.filters);
             if matches.is_empty() {
@@ -559,6 +561,81 @@ fn run_archive(cli: ArchiveCli) -> Result<()> {
                     preview_len,
                     format_hex_bytes(&raw_preview[..preview_len])
                 );
+            }
+
+            Ok(())
+        }
+        ArchiveCommand::ExtractFishingWorkbooks(args) => {
+            let input_path = canonical_archive_input(&args.input_file)?;
+            let output_path = normalize_output_path(&args.output)?;
+            let include_optional = !args.core_only;
+            let mut archive = open_archive_index(&input_path, true)?;
+            let plan = build_fishing_workbook_plan(include_optional, |target| {
+                let exact_excel = format!("*excel/{}", target.file_name);
+                let fallback = format!("*{}", target.file_name);
+                archive.matching_entries(&[exact_excel, fallback])
+            })?;
+
+            if !args.quiet {
+                println!("{VERSION_HEADER}");
+                println!("Archive: {}", input_path.display());
+                println!("Output path: {}", output_path.display());
+                println!(
+                    "Workbook set: {}",
+                    if include_optional {
+                        "calculator"
+                    } else {
+                        "core"
+                    }
+                );
+                println!("Files to extract: {}", plan.extracted.len());
+                if include_optional {
+                    println!("Optional files missing: {}", plan.missing_optional.len());
+                }
+                println!();
+            }
+
+            if args.dry_run {
+                for item in &plan.extracted {
+                    println!(
+                        "{} <= [pad{:05}.paz] {}",
+                        item.target.file_name, item.entry.paz_num, item.entry.file_path
+                    );
+                }
+                if include_optional && !plan.missing_optional.is_empty() {
+                    println!();
+                    println!(
+                        "Missing optional workbooks: {}",
+                        plan.missing_optional.join(", ")
+                    );
+                }
+                return Ok(());
+            }
+
+            std::fs::create_dir_all(&output_path)
+                .with_context(|| format!("failed to create {}", output_path.display()))?;
+            for item in &plan.extracted {
+                let target_path = output_path.join(item.target.file_name);
+                archive.write_entry(&item.entry, &target_path, args.overwrite)?;
+                if !args.quiet {
+                    println!(
+                        "> {} <= [pad{:05}.paz] {}",
+                        target_path.display(),
+                        item.entry.paz_num,
+                        item.entry.file_path
+                    );
+                }
+            }
+
+            if !args.quiet {
+                println!();
+                println!("Extracted fishing workbooks: {}", plan.extracted.len());
+                if include_optional && !plan.missing_optional.is_empty() {
+                    println!(
+                        "Missing optional workbooks: {}",
+                        plan.missing_optional.join(", ")
+                    );
+                }
             }
 
             Ok(())
@@ -1161,6 +1238,95 @@ fn format_hex_bytes(bytes: &[u8]) -> String {
         .join(" ")
 }
 
+fn open_archive_index(input_path: &PathBuf, quiet: bool) -> Result<ArchiveIndex> {
+    let extension = input_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or_default();
+    if extension.eq_ignore_ascii_case("meta") {
+        ArchiveIndex::from_meta(input_path, quiet)
+    } else if extension.eq_ignore_ascii_case("paz") {
+        ArchiveIndex::from_paz(input_path, quiet)
+    } else {
+        bail!(
+            "input file must have extension .meta or .paz; got .{}",
+            extension
+        );
+    }
+}
+
+fn canonical_archive_input(path: &PathBuf) -> Result<PathBuf> {
+    let absolute = normalize_output_path(path)?;
+    if !absolute.exists() {
+        bail!("{} doesn't exist", absolute.display());
+    }
+    if absolute.is_dir() {
+        return resolve_archive_input_from_dir(&absolute);
+    }
+    canonical_existing_path(&absolute)
+}
+
+fn resolve_archive_input_from_dir(path: &PathBuf) -> Result<PathBuf> {
+    let mut meta_paths = Vec::new();
+    let mut paz_paths = Vec::new();
+    for entry in std::fs::read_dir(path)
+        .with_context(|| format!("failed to read archive directory {}", path.display()))?
+    {
+        let entry = entry.with_context(|| format!("failed to read {}", path.display()))?;
+        let child = entry.path();
+        if !child.is_file() {
+            continue;
+        }
+        let Some(extension) = child.extension().and_then(|ext| ext.to_str()) else {
+            continue;
+        };
+        if extension.eq_ignore_ascii_case("meta") {
+            meta_paths.push(child);
+            continue;
+        }
+        if extension.eq_ignore_ascii_case("paz") {
+            paz_paths.push(child);
+        }
+    }
+
+    if meta_paths.len() == 1 {
+        return canonical_existing_path(&meta_paths.pop().unwrap());
+    }
+    if meta_paths.len() > 1 {
+        meta_paths.sort();
+        bail!(
+            "archive directory {} contains multiple .meta files: {}",
+            path.display(),
+            meta_paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    if paz_paths.len() == 1 {
+        return canonical_existing_path(&paz_paths.pop().unwrap());
+    }
+    if paz_paths.is_empty() {
+        bail!(
+            "archive directory {} contains no .meta or .paz files",
+            path.display()
+        );
+    }
+
+    paz_paths.sort();
+    bail!(
+        "archive directory {} contains multiple .paz files and no .meta file; pass a specific archive file instead: {}",
+        path.display(),
+        paz_paths
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
 fn canonical_existing_path(path: &PathBuf) -> Result<PathBuf> {
     let absolute = normalize_output_path(path)?;
     if !absolute.exists() {
@@ -1181,5 +1347,49 @@ fn normalize_output_path(path: &PathBuf) -> Result<PathBuf> {
         Ok(std::env::current_dir()
             .context("failed to read current directory")?
             .join(path))
+    }
+}
+
+#[cfg(test)]
+mod lib_tests {
+    use super::canonical_archive_input;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn canonical_archive_input_prefers_single_meta_file_in_directory() {
+        let dir = unique_test_dir("archive-meta");
+        fs::create_dir_all(&dir).unwrap();
+        let meta = dir.join("version.meta");
+        let paz = dir.join("pad00001.paz");
+        fs::write(&meta, b"meta").unwrap();
+        fs::write(&paz, b"paz").unwrap();
+
+        let resolved = canonical_archive_input(&dir).unwrap();
+        assert_eq!(resolved, meta.canonicalize().unwrap());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn canonical_archive_input_errors_for_directory_with_many_paz_and_no_meta() {
+        let dir = unique_test_dir("archive-many-paz");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("pad00001.paz"), b"a").unwrap();
+        fs::write(dir.join("pad00002.paz"), b"b").unwrap();
+
+        let err = canonical_archive_input(&dir).unwrap_err();
+        assert!(err.to_string().contains("multiple .paz files"));
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn unique_test_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("pazifista-lib-{label}-{nanos}"))
     }
 }
