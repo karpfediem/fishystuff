@@ -8,10 +8,14 @@ use crate::store::validate_dolt_ref;
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
-type CalculatorConsumableEffectDbRow =
+type CalculatorConsumableEffectDbRow = (Option<i32>, Option<String>, Option<String>);
+
+type CalculatorConsumableEffectFallbackDbRow =
     (Option<i32>, Option<String>, Option<String>, Option<String>);
 
-type CalculatorLightstoneEffectDbRow = (Option<String>, Option<String>);
+type CalculatorLightstoneEffectDbRow = (Option<String>, Option<String>, Option<String>);
+
+type CalculatorLightstoneEffectFallbackDbRow = (Option<String>, Option<String>);
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct CalculatorLightstoneSourceEntry {
@@ -119,16 +123,10 @@ pub(super) fn legacy_lightstone_name_for_source_name_ko(name_ko: &str) -> Option
 }
 
 impl DoltMySqlStore {
-    pub(super) fn query_calculator_lightstone_sources(
+    fn query_calculator_lightstone_sources_fallback(
         &self,
-        ref_id: Option<&str>,
+        as_of: &str,
     ) -> AppResult<HashMap<String, CalculatorLightstoneSourceEntry>> {
-        let as_of = if let Some(ref_id) = ref_id {
-            validate_dolt_ref(ref_id)?;
-            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
-        } else {
-            String::new()
-        };
         let query = format!(
             "SELECT \
                 set_name_ko, \
@@ -137,7 +135,7 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<CalculatorLightstoneEffectDbRow> = match conn.query(query) {
+        let rows: Vec<CalculatorLightstoneEffectFallbackDbRow> = match conn.query(query) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "calculator_lightstone_set_effects") => {
                 return Ok(HashMap::new());
@@ -173,21 +171,63 @@ impl DoltMySqlStore {
         Ok(sources)
     }
 
-    pub(super) fn query_calculator_consumable_effect_overrides(
+    pub(super) fn query_calculator_lightstone_sources(
         &self,
         ref_id: Option<&str>,
-        item_ids: &[i32],
-    ) -> AppResult<HashMap<i32, CalculatorItemEffectValues>> {
-        if item_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
+    ) -> AppResult<HashMap<String, CalculatorLightstoneSourceEntry>> {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
         } else {
             String::new()
         };
+        let query = format!(
+            "SELECT \
+                legacy_name_en, \
+                set_name_ko, \
+                effect_description_ko \
+             FROM calculator_lightstone_effect_sources{as_of}"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<CalculatorLightstoneEffectDbRow> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "calculator_lightstone_effect_sources") => {
+                return self.query_calculator_lightstone_sources_fallback(&as_of);
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut sources = HashMap::new();
+        for (legacy_name, set_name_ko, effect_description_ko) in rows {
+            let Some(legacy_name) = normalize_optional_string(legacy_name) else {
+                continue;
+            };
+            let Some(set_name_ko) = normalize_optional_string(set_name_ko) else {
+                continue;
+            };
+            let values = normalize_optional_string(effect_description_ko).and_then(|description| {
+                let mut values = CalculatorItemEffectValues::default();
+                parse_calculator_effect_text(&mut values, &description);
+                values.has_any().then_some(values)
+            });
+            sources.insert(
+                legacy_name,
+                CalculatorLightstoneSourceEntry {
+                    name_ko: set_name_ko,
+                    values,
+                },
+            );
+        }
+
+        Ok(sources)
+    }
+
+    fn query_calculator_consumable_effect_overrides_fallback(
+        &self,
+        as_of: &str,
+        item_ids: &[i32],
+    ) -> AppResult<HashMap<i32, CalculatorItemEffectValues>> {
         let id_list = item_ids
             .iter()
             .map(i32::to_string)
@@ -204,7 +244,7 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<CalculatorConsumableEffectDbRow> = match conn.query(query) {
+        let rows: Vec<CalculatorConsumableEffectFallbackDbRow> = match conn.query(query) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "calculator_consumable_effects") => {
                 return Ok(HashMap::new());
@@ -251,6 +291,64 @@ impl DoltMySqlStore {
                 if let Some(description) = item_descriptions.get(&item_id) {
                     parse_calculator_effect_text(&mut values, description);
                 }
+            }
+            if values.has_any() {
+                overrides.insert(item_id, values);
+            }
+        }
+
+        Ok(overrides)
+    }
+
+    pub(super) fn query_calculator_consumable_effect_overrides(
+        &self,
+        ref_id: Option<&str>,
+        item_ids: &[i32],
+    ) -> AppResult<HashMap<i32, CalculatorItemEffectValues>> {
+        if item_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let id_list = item_ids
+            .iter()
+            .map(i32::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "SELECT \
+                item_id, \
+                item_description_ko, \
+                effect_description_ko \
+             FROM calculator_consumable_effect_sources{as_of} \
+             WHERE item_id IN ({id_list})"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<CalculatorConsumableEffectDbRow> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "calculator_consumable_effect_sources") => {
+                return self
+                    .query_calculator_consumable_effect_overrides_fallback(&as_of, item_ids);
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut overrides = HashMap::new();
+        for (item_id, item_description, effect_description) in rows {
+            let Some(item_id) = item_id else {
+                continue;
+            };
+            let mut values = CalculatorItemEffectValues::default();
+            if let Some(effect_description) = normalize_optional_string(effect_description) {
+                parse_calculator_effect_text(&mut values, &effect_description);
+            } else if let Some(item_description) = normalize_optional_string(item_description) {
+                parse_calculator_effect_text(&mut values, &item_description);
             }
             if values.has_any() {
                 overrides.insert(item_id, values);
