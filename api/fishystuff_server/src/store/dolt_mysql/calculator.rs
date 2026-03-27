@@ -639,3 +639,87 @@ impl DoltMySqlStore {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        extract_first_number, legacy_lightstone_name_for_source_name_ko,
+        parse_calculator_effect_text, CalculatorItemEffectValues,
+    };
+
+    #[test]
+    fn extract_first_number_handles_signed_percent_lines() {
+        assert_eq!(extract_first_number("자동 낚시 시간 -15%"), Some(-15.0));
+        assert_eq!(extract_first_number("낚시 경험치 획득량 +10%"), Some(10.0));
+        assert_eq!(extract_first_number("생활 숙련도 +20"), Some(20.0));
+        assert_eq!(extract_first_number("효과 없음"), None);
+    }
+
+    #[test]
+    fn calculator_effect_text_parses_balacs_style_lines() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(
+            &mut values,
+            "자동 낚시 시간 감소 7%\n낚시 경험치 획득량 +10%",
+        );
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                afr: Some(0.07),
+                exp_fish: Some(0.10),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
+    fn calculator_effect_text_parses_event_food_and_housekeeper_lines() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(&mut values, "생활 숙련도 +50\n생활 경험치 획득량 +20%");
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                exp_life: Some(0.20),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+
+        let mut event_food = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(
+            &mut event_food,
+            "자동 낚시 시간 -10%\n생활 경험치 획득량 +50%\n생활 숙련도 +100",
+        );
+
+        assert_eq!(
+            event_food,
+            CalculatorItemEffectValues {
+                afr: Some(0.10),
+                exp_life: Some(0.50),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
+    fn legacy_lightstone_names_map_to_current_calculator_entries() {
+        assert_eq!(
+            legacy_lightstone_name_for_source_name_ko("신의 입질"),
+            Some("Nibbles")
+        );
+        assert_eq!(
+            legacy_lightstone_name_for_source_name_ko("고래의 입"),
+            Some("Whaling")
+        );
+        assert_eq!(
+            legacy_lightstone_name_for_source_name_ko("예리한 갈매기"),
+            Some("Sharp-Eyed Seagull")
+        );
+        assert_eq!(
+            legacy_lightstone_name_for_source_name_ko("선택과 집중 : 낚시"),
+            Some("Choice & Focus: Fishing")
+        );
+        assert_eq!(legacy_lightstone_name_for_source_name_ko("없는 세트"), None);
+    }
+}

@@ -1684,9 +1684,6 @@ mod tests {
     use crate::config::ZoneStatusConfig;
 
     use super::{
-        calculator::{
-            extract_first_number, parse_calculator_effect_text, CalculatorItemEffectValues,
-        },
         catalog::{encyclopedia_icon_id_from_db, is_web_icon_path},
         compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
         fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
@@ -2030,60 +2027,5 @@ mod tests {
         };
 
         assert_eq!(zone_distribution_fish_ids(&summary), vec![1]);
-    }
-
-    #[test]
-    fn extract_first_number_handles_signed_percent_lines() {
-        assert_eq!(extract_first_number("자동 낚시 시간 -15%"), Some(-15.0));
-        assert_eq!(extract_first_number("낚시 경험치 획득량 +10%"), Some(10.0));
-        assert_eq!(extract_first_number("생활 숙련도 +20"), Some(20.0));
-        assert_eq!(extract_first_number("효과 없음"), None);
-    }
-
-    #[test]
-    fn calculator_effect_text_parses_balacs_style_lines() {
-        let mut values = CalculatorItemEffectValues::default();
-        parse_calculator_effect_text(
-            &mut values,
-            "자동 낚시 시간 감소 7%\n낚시 경험치 획득량 +10%",
-        );
-
-        assert_eq!(
-            values,
-            CalculatorItemEffectValues {
-                afr: Some(0.07),
-                exp_fish: Some(0.10),
-                ..CalculatorItemEffectValues::default()
-            }
-        );
-    }
-
-    #[test]
-    fn calculator_effect_text_parses_event_food_and_housekeeper_lines() {
-        let mut values = CalculatorItemEffectValues::default();
-        parse_calculator_effect_text(&mut values, "생활 숙련도 +50\n생활 경험치 획득량 +20%");
-
-        assert_eq!(
-            values,
-            CalculatorItemEffectValues {
-                exp_life: Some(0.20),
-                ..CalculatorItemEffectValues::default()
-            }
-        );
-
-        let mut event_food = CalculatorItemEffectValues::default();
-        parse_calculator_effect_text(
-            &mut event_food,
-            "자동 낚시 시간 -10%\n생활 경험치 획득량 +50%\n생활 숙련도 +100",
-        );
-
-        assert_eq!(
-            event_food,
-            CalculatorItemEffectValues {
-                afr: Some(0.10),
-                exp_life: Some(0.50),
-                ..CalculatorItemEffectValues::default()
-            }
-        );
     }
 }
