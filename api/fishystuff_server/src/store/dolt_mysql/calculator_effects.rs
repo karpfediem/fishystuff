@@ -17,10 +17,23 @@ type CalculatorLightstoneEffectDbRow = (Option<String>, Option<String>, Option<S
 
 type CalculatorLightstoneEffectFallbackDbRow = (Option<String>, Option<String>);
 
+type CalculatorEffectSourceEntryDbRow = (
+    Option<String>,
+    Option<i32>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 #[derive(Debug, Clone, Default)]
 pub(super) struct CalculatorLightstoneSourceEntry {
     pub(super) name_ko: String,
     pub(super) values: Option<CalculatorItemEffectValues>,
+}
+
+pub(super) struct CalculatorEffectSourceData {
+    pub(super) consumable_overrides: HashMap<i32, CalculatorItemEffectValues>,
+    pub(super) lightstone_sources: HashMap<String, CalculatorLightstoneSourceEntry>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -123,6 +136,98 @@ pub(super) fn legacy_lightstone_name_for_source_name_ko(name_ko: &str) -> Option
 }
 
 impl DoltMySqlStore {
+    pub(super) fn query_calculator_effect_source_data(
+        &self,
+        ref_id: Option<&str>,
+        item_ids: &[i32],
+    ) -> AppResult<CalculatorEffectSourceData> {
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let where_clause = if item_ids.is_empty() {
+            "source_kind = 'lightstone_set'".to_string()
+        } else {
+            let id_list = item_ids
+                .iter()
+                .map(i32::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("source_kind = 'lightstone_set' OR item_id IN ({id_list})")
+        };
+        let query = format!(
+            "SELECT \
+                source_kind, \
+                item_id, \
+                legacy_name_en, \
+                source_name_ko, \
+                effect_description_ko \
+             FROM calculator_effect_source_entries{as_of} \
+             WHERE {where_clause}"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<CalculatorEffectSourceEntryDbRow> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "calculator_effect_source_entries") => {
+                return Ok(CalculatorEffectSourceData {
+                    consumable_overrides: self
+                        .query_calculator_consumable_effect_overrides_from_views(
+                            ref_id, item_ids,
+                        )?,
+                    lightstone_sources: self
+                        .query_calculator_lightstone_sources_from_views(ref_id)?,
+                });
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut consumable_overrides = HashMap::new();
+        let mut lightstone_sources = HashMap::new();
+        for (source_kind, item_id, legacy_name, source_name_ko, effect_description_ko) in rows {
+            let Some(source_kind) = normalize_optional_string(source_kind) else {
+                continue;
+            };
+            let effect_text = normalize_optional_string(effect_description_ko);
+            let values = effect_text.and_then(|description| {
+                let mut values = CalculatorItemEffectValues::default();
+                parse_calculator_effect_text(&mut values, &description);
+                values.has_any().then_some(values)
+            });
+            match source_kind.as_str() {
+                "item" => {
+                    let Some(item_id) = item_id else {
+                        continue;
+                    };
+                    let Some(values) = values else {
+                        continue;
+                    };
+                    consumable_overrides.insert(item_id, values);
+                }
+                "lightstone_set" => {
+                    let Some(legacy_name) = normalize_optional_string(legacy_name) else {
+                        continue;
+                    };
+                    let Some(name_ko) = normalize_optional_string(source_name_ko) else {
+                        continue;
+                    };
+                    lightstone_sources.insert(
+                        legacy_name,
+                        CalculatorLightstoneSourceEntry { name_ko, values },
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        Ok(CalculatorEffectSourceData {
+            consumable_overrides,
+            lightstone_sources,
+        })
+    }
+
     fn query_calculator_lightstone_sources_fallback(
         &self,
         as_of: &str,
@@ -171,7 +276,7 @@ impl DoltMySqlStore {
         Ok(sources)
     }
 
-    pub(super) fn query_calculator_lightstone_sources(
+    fn query_calculator_lightstone_sources_from_views(
         &self,
         ref_id: Option<&str>,
     ) -> AppResult<HashMap<String, CalculatorLightstoneSourceEntry>> {
@@ -300,7 +405,7 @@ impl DoltMySqlStore {
         Ok(overrides)
     }
 
-    pub(super) fn query_calculator_consumable_effect_overrides(
+    fn query_calculator_consumable_effect_overrides_from_views(
         &self,
         ref_id: Option<&str>,
         item_ids: &[i32],

@@ -5,7 +5,9 @@ use mysql::prelude::Queryable;
 use crate::error::AppResult;
 use crate::store::validate_dolt_ref;
 
-use super::calculator_effects::{CalculatorItemEffectValues, CalculatorLightstoneSourceEntry};
+use super::calculator_effects::{
+    CalculatorEffectSourceData, CalculatorItemEffectValues, CalculatorLightstoneSourceEntry,
+};
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
@@ -155,7 +157,6 @@ impl DoltMySqlStore {
             .filter_map(|row| row.10)
             .collect::<Vec<_>>();
         let item_source_metadata = self.query_calculator_item_table_metadata(ref_id, &item_ids)?;
-        let lightstone_sources = self.query_calculator_lightstone_sources(ref_id)?;
         let override_item_ids = legacy_rows
             .iter()
             .filter_map(|row| {
@@ -167,8 +168,10 @@ impl DoltMySqlStore {
                 }
             })
             .collect::<Vec<_>>();
-        let consumable_overrides =
-            self.query_calculator_consumable_effect_overrides(ref_id, &override_item_ids)?;
+        let CalculatorEffectSourceData {
+            consumable_overrides,
+            lightstone_sources,
+        } = self.query_calculator_effect_source_data(ref_id, &override_item_ids)?;
 
         Ok(CalculatorCatalogSourceData {
             legacy_rows,
