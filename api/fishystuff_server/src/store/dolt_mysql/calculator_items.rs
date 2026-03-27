@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
 use fishystuff_api::models::calculator::CalculatorItemEntry;
+use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
 
 use crate::error::AppResult;
 use crate::store::FishLang;
 
-use super::calculator_effects::{CalculatorItemEffectValues, CalculatorLightstoneSourceEntry};
+use super::calculator_effects::CalculatorItemEffectValues;
 use super::calculator_sources::{
     CalculatorCatalogSourceData, CalculatorItemDbRow, CalculatorItemSourceMetadata,
+    CalculatorSourceBackedItemRow,
 };
 use super::util::normalize_optional_string;
 use super::DoltMySqlStore;
@@ -34,34 +36,40 @@ fn slugify_calculator_effect_key(name: &str) -> String {
 pub(super) fn build_source_consumable_item(
     lang: FishLang,
     item_id: i32,
-    legacy: &CalculatorItemEntry,
+    item_type: &str,
+    legacy_name_en: Option<&str>,
+    fish_multiplier: Option<f32>,
+    source_durability: Option<i32>,
     metadata: Option<&CalculatorItemSourceMetadata>,
     override_values: CalculatorItemEffectValues,
 ) -> CalculatorItemEntry {
     let name = if matches!(lang, FishLang::Ko) {
         metadata
             .and_then(|metadata| metadata.name_ko.clone())
-            .unwrap_or_else(|| legacy.name.clone())
+            .or_else(|| legacy_name_en.map(ToOwned::to_owned))
+            .unwrap_or_else(|| format!("item:{item_id}"))
     } else {
-        legacy.name.clone()
+        legacy_name_en
+            .map(ToOwned::to_owned)
+            .or_else(|| metadata.and_then(|metadata| metadata.name_ko.clone()))
+            .unwrap_or_else(|| format!("item:{item_id}"))
     };
     let icon_id = metadata
         .and_then(|metadata| metadata.icon_id)
-        .or(legacy.icon_id)
         .or(Some(item_id));
 
     CalculatorItemEntry {
         key: format!("item:{item_id}"),
         name,
-        r#type: legacy.r#type.clone(),
+        r#type: item_type.to_string(),
         afr: override_values.afr,
         bonus_rare: override_values.bonus_rare,
         bonus_big: override_values.bonus_big,
         durability: metadata
             .and_then(|metadata| metadata.durability)
-            .or(legacy.durability),
+            .or(source_durability),
         drr: override_values.drr,
-        fish_multiplier: legacy.fish_multiplier,
+        fish_multiplier,
         exp_fish: override_values.exp_fish,
         exp_life: override_values.exp_life,
         item_id: Some(item_id),
@@ -72,33 +80,37 @@ pub(super) fn build_source_consumable_item(
 
 pub(super) fn build_source_lightstone_item(
     lang: FishLang,
-    legacy: &CalculatorItemEntry,
+    legacy_name_en: &str,
     name_ko: Option<&str>,
+    item_type: &str,
+    icon_id: Option<i32>,
+    durability: Option<i32>,
+    fish_multiplier: Option<f32>,
     override_values: CalculatorItemEffectValues,
 ) -> CalculatorItemEntry {
     let name = if matches!(lang, FishLang::Ko) {
         name_ko
             .map(ToOwned::to_owned)
-            .unwrap_or_else(|| legacy.name.clone())
+            .unwrap_or_else(|| legacy_name_en.to_string())
     } else {
-        legacy.name.clone()
+        legacy_name_en.to_string()
     };
 
     CalculatorItemEntry {
-        key: legacy.key.clone(),
+        key: format!("effect:{}", slugify_calculator_effect_key(legacy_name_en)),
         name,
-        r#type: legacy.r#type.clone(),
+        r#type: item_type.to_string(),
         afr: override_values.afr,
         bonus_rare: override_values.bonus_rare,
         bonus_big: override_values.bonus_big,
-        durability: legacy.durability,
+        durability,
         drr: override_values.drr,
-        fish_multiplier: legacy.fish_multiplier,
+        fish_multiplier,
         exp_fish: override_values.exp_fish,
         exp_life: override_values.exp_life,
-        item_id: legacy.item_id,
-        icon_id: legacy.icon_id,
-        icon: legacy.icon.clone(),
+        item_id: None,
+        icon_id,
+        icon: icon_id.map(calculator_item_icon_path),
     }
 }
 
@@ -108,7 +120,6 @@ impl DoltMySqlStore {
         lang: FishLang,
         rows: Vec<CalculatorItemDbRow>,
         item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
-        lightstone_sources: &HashMap<String, CalculatorLightstoneSourceEntry>,
     ) -> Vec<CalculatorItemEntry> {
         let mut items = Vec::with_capacity(rows.len());
         for (
@@ -136,15 +147,6 @@ impl DoltMySqlStore {
                         item_source_metadata
                             .get(&item_id)
                             .and_then(|metadata| metadata.name_ko.clone())
-                    } else {
-                        None
-                    }
-                })
-                .or_else(|| {
-                    if item_type == "lightstone_set" {
-                        lightstone_sources
-                            .get(&legacy_name)
-                            .map(|source| source.name_ko.clone())
                     } else {
                         None
                     }
@@ -191,66 +193,62 @@ impl DoltMySqlStore {
         items
     }
 
-    fn build_source_consumable_items(
+    fn build_source_backed_items(
         lang: FishLang,
-        legacy_items: &[CalculatorItemEntry],
         item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
-        consumable_overrides: &HashMap<i32, CalculatorItemEffectValues>,
+        source_backed_rows: &[CalculatorSourceBackedItemRow],
     ) -> AppResult<Vec<CalculatorItemEntry>> {
-        let legacy_by_item_id = legacy_items
-            .iter()
-            .filter_map(|item| item.item_id.map(|item_id| (item_id, item)))
-            .collect::<HashMap<_, _>>();
-        let mut ordered_item_ids = consumable_overrides.keys().copied().collect::<Vec<_>>();
-        ordered_item_ids.sort_unstable();
         let mut items = Vec::new();
-        for item_id in ordered_item_ids {
-            let Some(legacy) = legacy_by_item_id.get(&item_id).copied() else {
+        for row in source_backed_rows {
+            let Some(effect_description) = row.effect_description_ko.as_deref() else {
                 continue;
             };
-            let Some(override_values) = consumable_overrides.get(&item_id).copied() else {
+            let mut override_values = CalculatorItemEffectValues::default();
+            super::calculator_effects::parse_calculator_effect_text(
+                &mut override_values,
+                effect_description,
+            );
+            if override_values == CalculatorItemEffectValues::default() {
                 continue;
-            };
-            items.push(build_source_consumable_item(
-                lang,
-                item_id,
-                legacy,
-                item_source_metadata.get(&item_id),
-                override_values,
-            ));
-        }
-        Ok(items)
-    }
-
-    fn build_source_lightstone_items(
-        lang: FishLang,
-        legacy_items: &[CalculatorItemEntry],
-        lightstone_sources: &HashMap<String, CalculatorLightstoneSourceEntry>,
-    ) -> AppResult<Vec<CalculatorItemEntry>> {
-        let legacy_by_name = legacy_items
-            .iter()
-            .filter(|item| item.r#type == "lightstone_set")
-            .map(|item| (item.name.clone(), item))
-            .collect::<HashMap<_, _>>();
-        let mut ordered_names = lightstone_sources.keys().cloned().collect::<Vec<_>>();
-        ordered_names.sort_unstable();
-        let mut items = Vec::new();
-        for legacy_name in ordered_names {
-            let Some(legacy) = legacy_by_name.get(&legacy_name).copied() else {
-                continue;
-            };
-            let Some(source) = lightstone_sources.get(legacy_name.as_str()) else {
-                continue;
-            };
-            let Some(override_values) = source.values else {
-                continue;
-            };
-            items.push(build_source_lightstone_item(
-                lang,
-                legacy,
-                Some(source.name_ko.as_str()),
-                override_values,
-            ));
+            }
+            match row.source_kind.as_str() {
+                "item" => {
+                    let Some(item_id) = row.item_id else {
+                        continue;
+                    };
+                    items.push(build_source_consumable_item(
+                        lang,
+                        item_id,
+                        &row.item_type,
+                        row.legacy_name_en.as_deref(),
+                        row.fish_multiplier,
+                        row.durability,
+                        item_source_metadata.get(&item_id),
+                        override_values,
+                    ));
+                }
+                "lightstone_set" => {
+                    let Some(legacy_name_en) = row.legacy_name_en.as_deref() else {
+                        continue;
+                    };
+                    let icon_id = row
+                        .item_icon_file
+                        .as_deref()
+                        .and_then(parse_fish_icon_asset_id)
+                        .or(row.legacy_icon_id);
+                    items.push(build_source_lightstone_item(
+                        lang,
+                        legacy_name_en,
+                        row.source_name_ko.as_deref(),
+                        &row.item_type,
+                        icon_id,
+                        row.durability,
+                        row.fish_multiplier,
+                        override_values,
+                    ));
+                }
+                _ => {}
+            }
         }
         Ok(items)
     }
@@ -288,34 +286,18 @@ impl DoltMySqlStore {
         let CalculatorCatalogSourceData {
             legacy_rows,
             item_source_metadata,
-            lightstone_sources,
-            consumable_overrides,
+            source_backed_rows,
         } = self.query_calculator_catalog_source_data(ref_id)?;
-        let legacy_items = self.build_legacy_calculator_items(
-            lang,
-            legacy_rows,
-            &item_source_metadata,
-            &lightstone_sources,
-        );
-        let mut sourced_items = Self::build_source_consumable_items(
-            lang,
-            &legacy_items,
-            &item_source_metadata,
-            &consumable_overrides,
-        )?;
-        sourced_items.extend(Self::build_source_lightstone_items(
-            lang,
-            &legacy_items,
-            &lightstone_sources,
-        )?);
+        let legacy_items =
+            self.build_legacy_calculator_items(lang, legacy_rows, &item_source_metadata);
+        let sourced_items =
+            Self::build_source_backed_items(lang, &item_source_metadata, &source_backed_rows)?;
         Ok(self.merge_calculator_items(legacy_items, sourced_items))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use fishystuff_api::models::calculator::CalculatorItemEntry;
-
     use crate::store::FishLang;
 
     use super::super::calculator_effects::CalculatorItemEffectValues;
@@ -325,17 +307,6 @@ mod tests {
 
     #[test]
     fn source_consumable_item_prefers_source_metadata() {
-        let legacy = CalculatorItemEntry {
-            key: "item:9359".to_string(),
-            name: "Balacs Lunchbox".to_string(),
-            r#type: "food".to_string(),
-            durability: Some(7),
-            fish_multiplier: Some(1.5),
-            item_id: Some(9359),
-            icon_id: Some(42),
-            icon: Some("/img/items/00000042.webp".to_string()),
-            ..CalculatorItemEntry::default()
-        };
         let metadata = CalculatorItemSourceMetadata {
             name_ko: Some("발락스 도시락".to_string()),
             durability: Some(11),
@@ -344,7 +315,10 @@ mod tests {
         let sourced = build_source_consumable_item(
             FishLang::Ko,
             9359,
-            &legacy,
+            "food",
+            Some("Balacs Lunchbox"),
+            Some(1.5),
+            Some(11),
             Some(&metadata),
             CalculatorItemEffectValues {
                 afr: Some(0.07),
@@ -366,19 +340,14 @@ mod tests {
 
     #[test]
     fn source_lightstone_item_uses_localized_name_but_keeps_legacy_identity() {
-        let legacy = CalculatorItemEntry {
-            key: "effect:sharp-eyed-seagull".to_string(),
-            name: "Sharp-Eyed Seagull".to_string(),
-            r#type: "lightstone_set".to_string(),
-            fish_multiplier: Some(1.25),
-            icon_id: Some(721),
-            icon: Some("/img/items/00000721.webp".to_string()),
-            ..CalculatorItemEntry::default()
-        };
         let sourced = build_source_lightstone_item(
             FishLang::Ko,
-            &legacy,
+            "Sharp-Eyed Seagull",
             Some("예리한 갈매기"),
+            "lightstone_set",
+            Some(721),
+            Some(9),
+            Some(1.25),
             CalculatorItemEffectValues {
                 bonus_rare: Some(0.05),
                 exp_fish: Some(0.10),
@@ -386,11 +355,12 @@ mod tests {
             },
         );
 
-        assert_eq!(sourced.key, legacy.key);
+        assert_eq!(sourced.key, "effect:sharp-eyed-seagull");
         assert_eq!(sourced.name, "예리한 갈매기");
         assert_eq!(sourced.r#type, "lightstone_set");
-        assert_eq!(sourced.icon_id, legacy.icon_id);
-        assert_eq!(sourced.icon, legacy.icon);
+        assert_eq!(sourced.icon_id, Some(721));
+        assert_eq!(sourced.icon.as_deref(), Some("/img/items/00000721.webp"));
+        assert_eq!(sourced.durability, Some(9));
         assert_eq!(sourced.fish_multiplier, Some(1.25));
         assert_eq!(sourced.bonus_rare, Some(0.05));
         assert_eq!(sourced.exp_fish, Some(0.10));

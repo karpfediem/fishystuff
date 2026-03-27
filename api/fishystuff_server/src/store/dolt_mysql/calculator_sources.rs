@@ -5,9 +5,6 @@ use mysql::prelude::Queryable;
 use crate::error::AppResult;
 use crate::store::validate_dolt_ref;
 
-use super::calculator_effects::{
-    CalculatorEffectSourceData, CalculatorItemEffectValues, CalculatorLightstoneSourceEntry,
-};
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
@@ -36,8 +33,20 @@ pub(super) struct CalculatorItemSourceMetadata {
 pub(super) struct CalculatorCatalogSourceData {
     pub(super) legacy_rows: Vec<CalculatorItemDbRow>,
     pub(super) item_source_metadata: HashMap<i32, CalculatorItemSourceMetadata>,
-    pub(super) lightstone_sources: HashMap<String, CalculatorLightstoneSourceEntry>,
-    pub(super) consumable_overrides: HashMap<i32, CalculatorItemEffectValues>,
+    pub(super) source_backed_rows: Vec<CalculatorSourceBackedItemRow>,
+}
+
+pub(super) struct CalculatorSourceBackedItemRow {
+    pub(super) source_kind: String,
+    pub(super) item_id: Option<i32>,
+    pub(super) item_type: String,
+    pub(super) legacy_name_en: Option<String>,
+    pub(super) source_name_ko: Option<String>,
+    pub(super) item_icon_file: Option<String>,
+    pub(super) legacy_icon_id: Option<i32>,
+    pub(super) durability: Option<i32>,
+    pub(super) fish_multiplier: Option<f32>,
+    pub(super) effect_description_ko: Option<String>,
 }
 
 impl DoltMySqlStore {
@@ -119,12 +128,38 @@ impl DoltMySqlStore {
     fn query_legacy_calculator_item_rows(
         &self,
         ref_id: Option<&str>,
+        excluded_item_ids: &[i32],
+        excluded_effect_names: &[String],
     ) -> AppResult<Vec<CalculatorItemDbRow>> {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
         } else {
             String::new()
+        };
+        let mut where_clauses = Vec::new();
+        if !excluded_item_ids.is_empty() {
+            let id_list = excluded_item_ids
+                .iter()
+                .map(i32::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            where_clauses.push(format!("(id IS NULL OR id NOT IN ({id_list}))"));
+        }
+        if !excluded_effect_names.is_empty() {
+            let escaped_names = excluded_effect_names
+                .iter()
+                .map(|name| format!("'{}'", name.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",");
+            where_clauses.push(format!(
+                "NOT (type = 'lightstone_set' AND name IN ({escaped_names}))"
+            ));
+        }
+        let where_sql = if where_clauses.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", where_clauses.join(" AND "))
         };
         let query = format!(
             "SELECT \
@@ -140,44 +175,122 @@ impl DoltMySqlStore {
                 exp_life, \
                 id, \
                 icon_id \
-             FROM items{as_of}"
+             FROM items{as_of}{where_sql}"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         conn.query(query).map_err(db_unavailable)
     }
 
+    fn query_calculator_source_backed_item_rows(
+        &self,
+        ref_id: Option<&str>,
+    ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let query = format!(
+            "SELECT \
+                source_kind, \
+                item_id, \
+                item_type, \
+                legacy_name_en, \
+                source_name_ko, \
+                item_icon_file, \
+                legacy_icon_id, \
+                durability, \
+                fish_multiplier, \
+                effect_description_ko \
+             FROM calculator_source_backed_item_entries{as_of}"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(
+            Option<String>,
+            Option<i32>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<i32>,
+            Option<i32>,
+            Option<f32>,
+            Option<String>,
+        )> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "calculator_source_backed_item_entries") => {
+                return Ok(Vec::new());
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        Ok(rows
+            .into_iter()
+            .filter_map(
+                |(
+                    source_kind,
+                    item_id,
+                    item_type,
+                    legacy_name_en,
+                    source_name_ko,
+                    item_icon_file,
+                    legacy_icon_id,
+                    durability,
+                    fish_multiplier,
+                    effect_description_ko,
+                )| {
+                    Some(CalculatorSourceBackedItemRow {
+                        source_kind: normalize_optional_string(source_kind)?,
+                        item_id,
+                        item_type: normalize_optional_string(item_type).unwrap_or_default(),
+                        legacy_name_en: normalize_optional_string(legacy_name_en),
+                        source_name_ko: normalize_optional_string(source_name_ko),
+                        item_icon_file: normalize_optional_string(item_icon_file),
+                        legacy_icon_id,
+                        durability,
+                        fish_multiplier,
+                        effect_description_ko: normalize_optional_string(effect_description_ko),
+                    })
+                },
+            )
+            .collect())
+    }
+
     pub(super) fn query_calculator_catalog_source_data(
         &self,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogSourceData> {
-        let legacy_rows = self.query_legacy_calculator_item_rows(ref_id)?;
+        let source_backed_rows = self.query_calculator_source_backed_item_rows(ref_id)?;
+        let excluded_item_ids = source_backed_rows
+            .iter()
+            .filter_map(|row| (row.source_kind == "item").then_some(row.item_id).flatten())
+            .collect::<Vec<_>>();
+        let excluded_effect_names = source_backed_rows
+            .iter()
+            .filter_map(|row| {
+                (row.source_kind == "lightstone_set")
+                    .then_some(row.legacy_name_en.clone())
+                    .flatten()
+            })
+            .collect::<Vec<_>>();
+        let legacy_rows = self.query_legacy_calculator_item_rows(
+            ref_id,
+            &excluded_item_ids,
+            &excluded_effect_names,
+        )?;
         let item_ids = legacy_rows
             .iter()
             .filter_map(|row| row.10)
             .collect::<Vec<_>>();
         let item_source_metadata = self.query_calculator_item_table_metadata(ref_id, &item_ids)?;
-        let override_item_ids = legacy_rows
-            .iter()
-            .filter_map(|row| {
-                let item_type = normalize_optional_string(row.1.clone())?;
-                if matches!(item_type.as_str(), "food" | "buff") {
-                    row.10
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        let CalculatorEffectSourceData {
-            consumable_overrides,
-            lightstone_sources,
-        } = self.query_calculator_effect_source_data(ref_id, &override_item_ids)?;
 
         Ok(CalculatorCatalogSourceData {
             legacy_rows,
             item_source_metadata,
-            lightstone_sources,
-            consumable_overrides,
+            source_backed_rows,
         })
     }
 }
