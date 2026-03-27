@@ -1,3 +1,4 @@
+mod calculator;
 mod catalog;
 mod stats;
 mod util;
@@ -6,17 +7,13 @@ mod zone_profile_v2;
 #[cfg(test)]
 mod layers;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::time::Duration;
 
 use async_trait::async_trait;
 use fishystuff_api::error::ApiError;
 use fishystuff_api::ids::{MapVersionId, Rgb};
-use fishystuff_api::models::calculator::{
-    CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
-    CalculatorOptionEntry, CalculatorPetCatalog, CalculatorPetSignals,
-    CalculatorSessionPresetEntry, CalculatorSignals,
-};
+use fishystuff_api::models::calculator::CalculatorCatalogResponse;
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{
     EventPointCompact, EventSourceKind, EventsSnapshotMetaResponse, EventsSnapshotResponse,
@@ -76,48 +73,6 @@ const DOLT_TCP_KEEPALIVE_PROBE_INTERVAL_SECS: u32 = 5;
 const DOLT_TCP_KEEPALIVE_PROBE_COUNT: u32 = 3;
 #[cfg(target_os = "linux")]
 const DOLT_TCP_USER_TIMEOUT_MS: u32 = 10_000;
-
-fn build_calculator_default_pet(tier: &str, special: &str) -> CalculatorPetSignals {
-    CalculatorPetSignals {
-        tier: tier.to_string(),
-        special: special.to_string(),
-        talent: "durability_reduction_resistance".to_string(),
-        skills: vec!["fishing_exp".to_string()],
-    }
-}
-
-fn build_calculator_default_signals() -> CalculatorSignals {
-    CalculatorSignals {
-        level: 5,
-        lifeskill_level: "100".to_string(),
-        zone: "240,74,74".to_string(),
-        resources: 0.0,
-        rod: "item:16162".to_string(),
-        float: String::new(),
-        chair: "item:705539".to_string(),
-        lightstone_set: "effect:blacksmith-s-blessing".to_string(),
-        backpack: "item:830150".to_string(),
-        outfit: vec![
-            "effect:8-piece-outfit-set-effect".to_string(),
-            "effect:awakening-weapon-outfit".to_string(),
-            "effect:mainhand-weapon-outfit".to_string(),
-        ],
-        food: vec!["item:9359".to_string()],
-        buff: vec!["".to_string(), "item:721092".to_string()],
-        pet1: build_calculator_default_pet("5", "auto_fishing_time_reduction"),
-        pet2: build_calculator_default_pet("4", ""),
-        pet3: build_calculator_default_pet("4", ""),
-        pet4: build_calculator_default_pet("4", ""),
-        pet5: build_calculator_default_pet("4", ""),
-        catch_time_active: 17.5,
-        catch_time_afk: 6.5,
-        timespan_amount: 8.0,
-        timespan_unit: "hours".to_string(),
-        brand: true,
-        active: false,
-        debug: false,
-    }
-}
 
 #[derive(Clone)]
 pub struct DoltMySqlStore {
@@ -223,112 +178,6 @@ struct FishCatalogRow {
     is_dried: bool,
     catch_methods: Vec<String>,
     vendor_price: Option<i64>,
-}
-
-type CalculatorItemDbRow = (
-    Option<String>,
-    Option<String>,
-    Option<f32>,
-    Option<f32>,
-    Option<f32>,
-    Option<i32>,
-    Option<f32>,
-    Option<f32>,
-    Option<f32>,
-    Option<f32>,
-    Option<i32>,
-    Option<i32>,
-);
-
-type CalculatorConsumableEffectDbRow =
-    (Option<i32>, Option<String>, Option<String>, Option<String>);
-
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-struct CalculatorItemEffectValues {
-    afr: Option<f32>,
-    bonus_rare: Option<f32>,
-    bonus_big: Option<f32>,
-    drr: Option<f32>,
-    exp_fish: Option<f32>,
-    exp_life: Option<f32>,
-}
-
-impl CalculatorItemEffectValues {
-    fn has_any(self) -> bool {
-        self.afr.is_some()
-            || self.bonus_rare.is_some()
-            || self.bonus_big.is_some()
-            || self.drr.is_some()
-            || self.exp_fish.is_some()
-            || self.exp_life.is_some()
-    }
-}
-
-fn add_effect_value(slot: &mut Option<f32>, value: Option<f32>) {
-    let Some(value) = value else {
-        return;
-    };
-    *slot = Some(slot.unwrap_or(0.0) + value);
-}
-
-fn extract_first_number(text: &str) -> Option<f32> {
-    let chars: Vec<char> = text.chars().collect();
-    let mut idx = 0;
-    while idx < chars.len() {
-        if chars[idx] == '+' || chars[idx] == '-' || chars[idx].is_ascii_digit() {
-            let start = idx;
-            idx += 1;
-            let mut seen_digit = chars[start].is_ascii_digit();
-            while idx < chars.len() && (chars[idx].is_ascii_digit() || chars[idx] == '.') {
-                seen_digit |= chars[idx].is_ascii_digit();
-                idx += 1;
-            }
-            if seen_digit {
-                let candidate = chars[start..idx].iter().collect::<String>();
-                if let Ok(value) = candidate.parse::<f32>() {
-                    return Some(value);
-                }
-            }
-        } else {
-            idx += 1;
-        }
-    }
-    None
-}
-
-fn extract_percent_ratio(text: &str) -> Option<f32> {
-    extract_first_number(text).map(|value| value.abs() / 100.0)
-}
-
-fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &str) {
-    let line = line.trim();
-    if line.is_empty() {
-        return;
-    }
-    if line.contains("자동 낚시") {
-        add_effect_value(&mut values.afr, extract_percent_ratio(line));
-    }
-    if line.contains("희귀 어종") {
-        add_effect_value(&mut values.bonus_rare, extract_percent_ratio(line));
-    }
-    if line.contains("대형 어종") {
-        add_effect_value(&mut values.bonus_big, extract_percent_ratio(line));
-    }
-    if line.contains("내구도 소모 감소 저항") {
-        add_effect_value(&mut values.drr, extract_percent_ratio(line));
-    }
-    if line.contains("낚시 경험치") {
-        add_effect_value(&mut values.exp_fish, extract_percent_ratio(line));
-    }
-    if line.contains("생활 경험치") {
-        add_effect_value(&mut values.exp_life, extract_percent_ratio(line));
-    }
-}
-
-fn parse_calculator_effect_text(values: &mut CalculatorItemEffectValues, text: &str) {
-    for line in text.lines() {
-        parse_calculator_effect_line(values, line);
-    }
 }
 
 impl QueryParams {
@@ -687,261 +536,6 @@ impl DoltMySqlStore {
         }
 
         Ok(out)
-    }
-
-    fn query_calculator_names_ko(
-        &self,
-        ref_id: Option<&str>,
-        item_ids: &[i32],
-    ) -> AppResult<HashMap<i32, String>> {
-        if item_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-        let as_of = if let Some(ref_id) = ref_id {
-            validate_dolt_ref(ref_id)?;
-            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
-        } else {
-            String::new()
-        };
-        let id_list = item_ids
-            .iter()
-            .map(i32::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
-        let query = format!(
-            "SELECT it.`Index`, it.`ItemName` \
-             FROM item_table{as_of} it \
-             WHERE it.`Index` IN ({id_list}) \
-               AND NULLIF(TRIM(it.`ItemName`), '') IS NOT NULL"
-        );
-
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, Option<String>)> = conn.query(query).map_err(db_unavailable)?;
-        let mut out = HashMap::new();
-        for (item_id, name) in rows {
-            let Ok(item_id) = i32::try_from(item_id) else {
-                continue;
-            };
-            let Some(name) = normalize_optional_string(name) else {
-                continue;
-            };
-            out.insert(item_id, name);
-        }
-        Ok(out)
-    }
-
-    fn query_calculator_items(
-        &self,
-        lang: FishLang,
-        ref_id: Option<&str>,
-    ) -> AppResult<Vec<CalculatorItemEntry>> {
-        let as_of = if let Some(ref_id) = ref_id {
-            validate_dolt_ref(ref_id)?;
-            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
-        } else {
-            String::new()
-        };
-        let query = format!(
-            "SELECT \
-                name, \
-                type, \
-                afr, \
-                bonus_rare, \
-                bonus_big, \
-                durability, \
-                drr, \
-                fish_multiplier, \
-                exp_fish, \
-                exp_life, \
-                id, \
-                icon_id \
-             FROM items{as_of}"
-        );
-
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<CalculatorItemDbRow> = conn.query(query).map_err(db_unavailable)?;
-
-        let item_ids = rows.iter().filter_map(|row| row.10).collect::<Vec<_>>();
-        let names_ko = if matches!(lang, FishLang::Ko) {
-            self.query_calculator_names_ko(ref_id, &item_ids)?
-        } else {
-            HashMap::new()
-        };
-
-        let mut items = Vec::with_capacity(rows.len());
-        for (
-            name,
-            item_type,
-            afr,
-            bonus_rare,
-            bonus_big,
-            durability,
-            drr,
-            fish_multiplier,
-            exp_fish,
-            exp_life,
-            item_id,
-            icon_id,
-        ) in rows
-        {
-            let Some(legacy_name) = normalize_optional_string(name) else {
-                continue;
-            };
-            let display_name = item_id
-                .and_then(|item_id| names_ko.get(&item_id).cloned())
-                .unwrap_or_else(|| legacy_name.clone());
-            let item_type = normalize_optional_string(item_type).unwrap_or_default();
-            let key = if let Some(item_id) = item_id {
-                format!("item:{item_id}")
-            } else {
-                format!("effect:{}", slugify_calculator_effect_key(&legacy_name))
-            };
-            let icon_id = icon_id.or(item_id);
-            let icon = icon_id.map(calculator_item_icon_path);
-            items.push(CalculatorItemEntry {
-                key,
-                name: display_name,
-                r#type: item_type,
-                afr,
-                bonus_rare,
-                bonus_big,
-                durability,
-                drr,
-                fish_multiplier,
-                exp_fish,
-                exp_life,
-                item_id,
-                icon_id,
-                icon,
-            });
-        }
-
-        let override_item_ids = items
-            .iter()
-            .filter(|item| matches!(item.r#type.as_str(), "food" | "buff"))
-            .filter_map(|item| item.item_id)
-            .collect::<Vec<_>>();
-        let consumable_overrides =
-            self.query_calculator_consumable_effect_overrides(ref_id, &override_item_ids)?;
-        for item in &mut items {
-            let Some(item_id) = item.item_id else {
-                continue;
-            };
-            let Some(override_values) = consumable_overrides.get(&item_id).copied() else {
-                continue;
-            };
-            item.afr = override_values.afr;
-            item.bonus_rare = override_values.bonus_rare;
-            item.bonus_big = override_values.bonus_big;
-            item.drr = override_values.drr;
-            item.exp_fish = override_values.exp_fish;
-            item.exp_life = override_values.exp_life;
-        }
-
-        items.sort_by(|left, right| {
-            left.r#type
-                .cmp(&right.r#type)
-                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-                .then_with(|| left.key.cmp(&right.key))
-        });
-
-        Ok(items)
-    }
-
-    fn query_calculator_consumable_effect_overrides(
-        &self,
-        ref_id: Option<&str>,
-        item_ids: &[i32],
-    ) -> AppResult<HashMap<i32, CalculatorItemEffectValues>> {
-        if item_ids.is_empty() {
-            return Ok(HashMap::new());
-        }
-
-        let as_of = if let Some(ref_id) = ref_id {
-            validate_dolt_ref(ref_id)?;
-            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
-        } else {
-            String::new()
-        };
-        let id_list = item_ids
-            .iter()
-            .map(i32::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
-        let query = format!(
-            "SELECT \
-                item_id, \
-                item_description_ko, \
-                skill_description_ko, \
-                buff_description_ko \
-             FROM calculator_consumable_effects{as_of} \
-             WHERE item_id IN ({id_list})"
-        );
-
-        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<CalculatorConsumableEffectDbRow> =
-            conn.query(query).map_err(db_unavailable)?;
-
-        let mut description_lines = HashMap::<i32, HashSet<String>>::new();
-        let mut item_descriptions = HashMap::<i32, String>::new();
-        for (item_id, item_description, skill_description, buff_description) in rows {
-            let Some(item_id) = item_id else {
-                continue;
-            };
-            if let Some(item_description) = normalize_optional_string(item_description) {
-                item_descriptions.entry(item_id).or_insert(item_description);
-            }
-            let entry = description_lines.entry(item_id).or_default();
-            for description in [buff_description, skill_description] {
-                let Some(description) = normalize_optional_string(description) else {
-                    continue;
-                };
-                for line in description.lines() {
-                    let line = line.trim();
-                    if !line.is_empty() {
-                        entry.insert(line.to_string());
-                    }
-                }
-            }
-        }
-
-        let mut overrides = HashMap::new();
-        for item_id in item_ids.iter().copied() {
-            let mut values = CalculatorItemEffectValues::default();
-            let mut had_effect_lines = false;
-            if let Some(lines) = description_lines.get(&item_id) {
-                had_effect_lines = !lines.is_empty();
-                for line in lines {
-                    parse_calculator_effect_line(&mut values, line);
-                }
-            }
-            if !had_effect_lines {
-                if let Some(description) = item_descriptions.get(&item_id) {
-                    parse_calculator_effect_text(&mut values, description);
-                }
-            }
-            if values.has_any() {
-                overrides.insert(item_id, values);
-            }
-        }
-
-        Ok(overrides)
-    }
-
-    fn query_calculator_catalog(
-        &self,
-        lang: FishLang,
-        ref_id: Option<&str>,
-    ) -> AppResult<CalculatorCatalogResponse> {
-        Ok(CalculatorCatalogResponse {
-            items: self.query_calculator_items(lang, ref_id)?,
-            lifeskill_levels: build_calculator_lifeskill_levels(),
-            fishing_levels: build_calculator_fishing_levels(lang),
-            session_units: build_calculator_session_units(lang),
-            session_presets: build_calculator_session_presets(lang),
-            pets: build_calculator_pet_catalog(lang),
-            defaults: build_calculator_default_signals(),
-        })
     }
 
     fn query_fish_catalog(
@@ -1821,109 +1415,6 @@ impl DoltMySqlStore {
     }
 }
 
-fn localized_label(lang: FishLang, en: &'static str, ko: &'static str) -> String {
-    match lang {
-        FishLang::En => en.to_string(),
-        FishLang::Ko => ko.to_string(),
-    }
-}
-
-fn build_calculator_fishing_levels(lang: FishLang) -> Vec<CalculatorOptionEntry> {
-    (0..=5)
-        .map(|level| CalculatorOptionEntry {
-            key: level.to_string(),
-            label: match lang {
-                FishLang::En => format!("Level {level}"),
-                FishLang::Ko => format!("낚시 {level}단계"),
-            },
-        })
-        .collect()
-}
-
-fn build_calculator_session_units(lang: FishLang) -> Vec<CalculatorOptionEntry> {
-    [
-        ("minutes", "Minutes", "분"),
-        ("hours", "Hours", "시간"),
-        ("days", "Days", "일"),
-        ("weeks", "Weeks", "주"),
-    ]
-    .into_iter()
-    .map(|(key, en, ko)| CalculatorOptionEntry {
-        key: key.to_string(),
-        label: localized_label(lang, en, ko),
-    })
-    .collect()
-}
-
-fn build_calculator_session_presets(lang: FishLang) -> Vec<CalculatorSessionPresetEntry> {
-    [
-        ("1 hour", "1시간", 1.0, "hours"),
-        ("8 hours", "8시간", 8.0, "hours"),
-        ("10 hours", "10시간", 10.0, "hours"),
-        ("12 hours", "12시간", 12.0, "hours"),
-        ("1 day", "1일", 1.0, "days"),
-    ]
-    .into_iter()
-    .map(|(en, ko, amount, unit)| CalculatorSessionPresetEntry {
-        label: localized_label(lang, en, ko),
-        amount,
-        unit: unit.to_string(),
-    })
-    .collect()
-}
-
-fn build_calculator_pet_catalog(lang: FishLang) -> CalculatorPetCatalog {
-    let tiers = (1..=5)
-        .map(|tier| CalculatorOptionEntry {
-            key: tier.to_string(),
-            label: match lang {
-                FishLang::En => format!("Tier {tier}"),
-                FishLang::Ko => format!("{tier}세대"),
-            },
-        })
-        .collect();
-    let specials = vec![
-        CalculatorOptionEntry {
-            key: String::new(),
-            label: localized_label(lang, "None", "없음"),
-        },
-        CalculatorOptionEntry {
-            key: "auto_fishing_time_reduction".to_string(),
-            label: localized_label(lang, "Auto-Fishing Time Reduction", "자동 낚시 시간 감소"),
-        },
-    ];
-    let talents = vec![
-        CalculatorOptionEntry {
-            key: String::new(),
-            label: localized_label(lang, "None", "없음"),
-        },
-        CalculatorOptionEntry {
-            key: "durability_reduction_resistance".to_string(),
-            label: localized_label(
-                lang,
-                "Durability Reduction Resistance",
-                "내구도 소모 감소 저항",
-            ),
-        },
-        CalculatorOptionEntry {
-            key: "life_exp".to_string(),
-            label: localized_label(lang, "Life EXP", "생활 경험치"),
-        },
-    ];
-    let skills = vec![CalculatorOptionEntry {
-        key: "fishing_exp".to_string(),
-        label: localized_label(lang, "Fishing EXP", "낚시 경험치"),
-    }];
-
-    CalculatorPetCatalog {
-        slots: 5,
-        tiers,
-        specials,
-        talents,
-        skills,
-    }
-}
-
 fn zone_distribution_fish_ids(summary: &WindowSummary) -> Vec<i32> {
     let mut fish_ids: Vec<i32> = summary.c_zone.keys().copied().collect();
     fish_ids.sort_unstable();
@@ -2182,52 +1673,6 @@ impl Store for DoltMySqlStore {
     }
 }
 
-fn calculator_item_icon_path(icon_id: i32) -> String {
-    format!("/img/items/{icon_id:08}.webp")
-}
-
-fn slugify_calculator_effect_key(name: &str) -> String {
-    let mut slug = String::with_capacity(name.len());
-    let mut last_was_dash = false;
-    for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() {
-            slug.push(ch.to_ascii_lowercase());
-            last_was_dash = false;
-        } else if !last_was_dash {
-            slug.push('-');
-            last_was_dash = true;
-        }
-    }
-    slug.trim_matches('-').to_string()
-}
-
-fn build_calculator_lifeskill_levels() -> Vec<CalculatorLifeskillLevelEntry> {
-    const TIERS: [(&str, i32); 7] = [
-        ("Beginner", 10),
-        ("Apprentice", 10),
-        ("Skilled", 10),
-        ("Professional", 10),
-        ("Artisan", 10),
-        ("Master", 30),
-        ("Guru", 100),
-    ];
-
-    let mut levels = Vec::new();
-    let mut order = 0i32;
-    for (tier_name, max_level) in TIERS {
-        for level in 1..=max_level {
-            order += 1;
-            levels.push(CalculatorLifeskillLevelEntry {
-                key: order.to_string(),
-                name: format!("{tier_name} {level}"),
-                index: order.min(130),
-                order,
-            });
-        }
-    }
-    levels
-}
-
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
@@ -2239,13 +1684,15 @@ mod tests {
     use crate::config::ZoneStatusConfig;
 
     use super::{
+        calculator::{
+            extract_first_number, parse_calculator_effect_text, CalculatorItemEffectValues,
+        },
         catalog::{encyclopedia_icon_id_from_db, is_web_icon_path},
-        compute_status, event_source_kind_from_db, extract_first_number,
-        fish_catch_methods_from_description, fish_is_dried, merge_fish_catalog_row,
-        parse_calculator_effect_text, parse_layer_kind, parse_positive_i64, parse_vector_source,
-        pixel_to_tile_index, resolve_layer_asset_url, synthetic_events_snapshot_revision,
-        zone_distribution_fish_ids, CalculatorItemEffectValues, DoltMySqlStore, FishCatalogRow,
-        FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
+        compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
+        fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
+        parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
+        synthetic_events_snapshot_revision, zone_distribution_fish_ids, DoltMySqlStore,
+        FishCatalogRow, FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
     };
 
     fn vector_source_fields(
