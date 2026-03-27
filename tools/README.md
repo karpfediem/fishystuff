@@ -15,6 +15,9 @@ Current migration contents:
 - `tools/fishystuff_ingest`
 - `tools/fishystuff_tilegen`
 - `tools/fishystuff_dolt_import`
+  - imports raw fishing workbooks and temporary calculator effect workbooks into Dolt
+  - temporary calculator workflow is documented in
+    [`docs/calculator-data-path.md`](/home/carp/code/fishystuff/docs/calculator-data-path.md)
 - `tools/pazifista`
 - `tools/scripts/build_map.sh`
 - `tools/scripts/stage_cdn_assets.sh`

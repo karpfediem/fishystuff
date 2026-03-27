@@ -25,6 +25,7 @@ Other artifact:
 - `data/data/excel/` is now a legacy local dump and should not be treated as the maintained source of truth.
 - The maintained refresh path should be original archive data (`.meta`, `.paz`, or an archive directory containing them) -> `pazifista archive extract-fishing-workbooks` -> verified workbook set.
 - The newer top-level workbook set under `data/data/` differs from the legacy `data/data/excel/` copies for the four core fishing workbooks.
+- For the temporary calculator effect bridge built on intermediate workbook files, see [`docs/calculator-data-path.md`](/home/carp/code/fishystuff/docs/calculator-data-path.md).
 
 Additional local legacy dataset:
 

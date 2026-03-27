@@ -1,3 +1,4 @@
+mod effect_table_headers;
 mod item_table_headers;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -13,6 +14,12 @@ use clap::{Parser, Subcommand, ValueEnum};
 use csv::{QuoteStyle, Writer, WriterBuilder};
 use sha2::{Digest, Sha256};
 
+use effect_table_headers::{
+    BUFF_TABLE_HEADERS, LIGHTSTONE_SET_OPTION_HEADERS, PET_BASE_SKILL_TABLE_HEADERS,
+    PET_EQUIPSKILL_TABLE_HEADERS, PET_EXP_TABLE_HEADERS, PET_GRADE_TABLE_HEADERS,
+    PET_SETSTATS_TABLE_HEADERS, PET_SKILL_TABLE_HEADERS, PET_TABLE_HEADERS,
+    SKILLTYPE_TABLE_NEW_HEADERS, SKILL_TABLE_NEW_HEADERS, UPGRADEPET_LOOTING_PERCENT_HEADERS,
+};
 use item_table_headers::ITEM_TABLE_HEADERS;
 const FISHING_HEADERS: [&str; 18] = [
     "R",
@@ -183,6 +190,20 @@ enum Commands {
         #[arg(long)]
         commit_msg: Option<String>,
     },
+    ImportCalculatorEffectsXlsx {
+        #[arg(long)]
+        dolt_repo: PathBuf,
+        #[arg(long)]
+        excel_dir: PathBuf,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long)]
+        apply_schema: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
@@ -281,6 +302,64 @@ struct CommunityPrizeOutputs {
     community_csv: PathBuf,
 }
 
+struct RawTableImport {
+    row_count: usize,
+}
+
+struct CalculatorEffectsImportCommand {
+    dolt_repo: PathBuf,
+    excel_dir: PathBuf,
+    output_dir: Option<PathBuf>,
+    apply_schema: Option<PathBuf>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+struct CalculatorEffectsWorkbookSet {
+    buff_table_xlsx: PathBuf,
+    skill_table_new_xlsx: PathBuf,
+    skilltype_table_new_xlsx: PathBuf,
+    lightstone_set_option_xlsx: PathBuf,
+    pet_table_xlsx: PathBuf,
+    pet_skill_table_xlsx: PathBuf,
+    pet_base_skill_table_xlsx: PathBuf,
+    pet_setstats_table_xlsx: PathBuf,
+    pet_equipskill_table_xlsx: PathBuf,
+    pet_grade_table_xlsx: PathBuf,
+    pet_exp_table_xlsx: PathBuf,
+    upgradepet_looting_percent_xlsx: PathBuf,
+}
+
+struct CalculatorEffectsOutputs {
+    buff_table_csv: PathBuf,
+    skill_table_new_csv: PathBuf,
+    skilltype_table_new_csv: PathBuf,
+    lightstone_set_option_csv: PathBuf,
+    pet_table_csv: PathBuf,
+    pet_skill_table_csv: PathBuf,
+    pet_base_skill_table_csv: PathBuf,
+    pet_setstats_table_csv: PathBuf,
+    pet_equipskill_table_csv: PathBuf,
+    pet_grade_table_csv: PathBuf,
+    pet_exp_table_csv: PathBuf,
+    upgradepet_looting_percent_csv: PathBuf,
+}
+
+struct CalculatorEffectsDigests {
+    buff_table_sha: String,
+    skill_table_new_sha: String,
+    skilltype_table_new_sha: String,
+    lightstone_set_option_sha: String,
+    pet_table_sha: String,
+    pet_skill_table_sha: String,
+    pet_base_skill_table_sha: String,
+    pet_setstats_table_sha: String,
+    pet_equipskill_table_sha: String,
+    pet_grade_table_sha: String,
+    pet_exp_table_sha: String,
+    upgradepet_looting_percent_sha: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum CommunitySupportStatus {
     DataIncomplete,
@@ -356,6 +435,21 @@ fn main() -> Result<()> {
         } => run_community_prize_import(CommunityPrizeImportCommand {
             dolt_repo,
             workbook_xlsx,
+            output_dir,
+            apply_schema,
+            commit,
+            commit_msg,
+        }),
+        Commands::ImportCalculatorEffectsXlsx {
+            dolt_repo,
+            excel_dir,
+            output_dir,
+            apply_schema,
+            commit,
+            commit_msg,
+        } => run_calculator_effects_import(CalculatorEffectsImportCommand {
+            dolt_repo,
+            excel_dir,
             output_dir,
             apply_schema,
             commit,
@@ -556,6 +650,257 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
     Ok(())
 }
 
+fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Result<()> {
+    let CalculatorEffectsImportCommand {
+        dolt_repo,
+        excel_dir,
+        output_dir,
+        apply_schema,
+        commit,
+        commit_msg,
+    } = command;
+
+    let workbook_set = resolve_calculator_effect_workbooks(&excel_dir)?;
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+
+    if let Some(schema_path) = apply_schema {
+        apply_schema_sql(&dolt_repo, &schema_path)?;
+    }
+
+    let digests = CalculatorEffectsDigests {
+        buff_table_sha: sha256_file(&workbook_set.buff_table_xlsx)?,
+        skill_table_new_sha: sha256_file(&workbook_set.skill_table_new_xlsx)?,
+        skilltype_table_new_sha: sha256_file(&workbook_set.skilltype_table_new_xlsx)?,
+        lightstone_set_option_sha: sha256_file(&workbook_set.lightstone_set_option_xlsx)?,
+        pet_table_sha: sha256_file(&workbook_set.pet_table_xlsx)?,
+        pet_skill_table_sha: sha256_file(&workbook_set.pet_skill_table_xlsx)?,
+        pet_base_skill_table_sha: sha256_file(&workbook_set.pet_base_skill_table_xlsx)?,
+        pet_setstats_table_sha: sha256_file(&workbook_set.pet_setstats_table_xlsx)?,
+        pet_equipskill_table_sha: sha256_file(&workbook_set.pet_equipskill_table_xlsx)?,
+        pet_grade_table_sha: sha256_file(&workbook_set.pet_grade_table_xlsx)?,
+        pet_exp_table_sha: sha256_file(&workbook_set.pet_exp_table_xlsx)?,
+        upgradepet_looting_percent_sha: sha256_file(&workbook_set.upgradepet_looting_percent_xlsx)?,
+    };
+
+    let outputs = CalculatorEffectsOutputs {
+        buff_table_csv: output_dir.join("buff_table.csv"),
+        skill_table_new_csv: output_dir.join("skill_table_new.csv"),
+        skilltype_table_new_csv: output_dir.join("skilltype_table_new.csv"),
+        lightstone_set_option_csv: output_dir.join("lightstone_set_option.csv"),
+        pet_table_csv: output_dir.join("pet_table.csv"),
+        pet_skill_table_csv: output_dir.join("pet_skill_table.csv"),
+        pet_base_skill_table_csv: output_dir.join("pet_base_skill_table.csv"),
+        pet_setstats_table_csv: output_dir.join("pet_setstats_table.csv"),
+        pet_equipskill_table_csv: output_dir.join("pet_equipskill_table.csv"),
+        pet_grade_table_csv: output_dir.join("pet_grade_table.csv"),
+        pet_exp_table_csv: output_dir.join("pet_exp_table.csv"),
+        upgradepet_looting_percent_csv: output_dir.join("upgradepet_looting_percent.csv"),
+    };
+
+    let buff_table_stats = import_workbook_sheet(
+        &workbook_set.buff_table_xlsx,
+        "Buff_Table",
+        &BUFF_TABLE_HEADERS,
+        &outputs.buff_table_csv,
+    )?;
+    let skill_table_new_stats = import_workbook_sheet(
+        &workbook_set.skill_table_new_xlsx,
+        "Skill_Table_New",
+        &SKILL_TABLE_NEW_HEADERS,
+        &outputs.skill_table_new_csv,
+    )?;
+    let skilltype_table_new_stats = import_workbook_sheet(
+        &workbook_set.skilltype_table_new_xlsx,
+        "SkillType_Table_New",
+        &SKILLTYPE_TABLE_NEW_HEADERS,
+        &outputs.skilltype_table_new_csv,
+    )?;
+    let lightstone_set_option_stats = import_workbook_sheet(
+        &workbook_set.lightstone_set_option_xlsx,
+        "LightStoneSetOption",
+        &LIGHTSTONE_SET_OPTION_HEADERS,
+        &outputs.lightstone_set_option_csv,
+    )?;
+    let pet_table_stats = import_workbook_sheet(
+        &workbook_set.pet_table_xlsx,
+        "Pet_Table",
+        &PET_TABLE_HEADERS,
+        &outputs.pet_table_csv,
+    )?;
+    let pet_skill_table_stats = import_workbook_sheet(
+        &workbook_set.pet_skill_table_xlsx,
+        "Pet_Skill_Table",
+        &PET_SKILL_TABLE_HEADERS,
+        &outputs.pet_skill_table_csv,
+    )?;
+    let pet_base_skill_table_stats = import_workbook_sheet(
+        &workbook_set.pet_base_skill_table_xlsx,
+        "Pet_BaseSkill_Table",
+        &PET_BASE_SKILL_TABLE_HEADERS,
+        &outputs.pet_base_skill_table_csv,
+    )?;
+    let pet_setstats_table_stats = import_workbook_sheet(
+        &workbook_set.pet_setstats_table_xlsx,
+        "Pet_SetStats_Table",
+        &PET_SETSTATS_TABLE_HEADERS,
+        &outputs.pet_setstats_table_csv,
+    )?;
+    let pet_equipskill_table_stats = import_workbook_sheet(
+        &workbook_set.pet_equipskill_table_xlsx,
+        "Pet_EquipSkill_Table",
+        &PET_EQUIPSKILL_TABLE_HEADERS,
+        &outputs.pet_equipskill_table_csv,
+    )?;
+    let pet_grade_table_stats = import_workbook_sheet(
+        &workbook_set.pet_grade_table_xlsx,
+        "Pet_Grade_Table",
+        &PET_GRADE_TABLE_HEADERS,
+        &outputs.pet_grade_table_csv,
+    )?;
+    let pet_exp_table_stats = import_workbook_sheet(
+        &workbook_set.pet_exp_table_xlsx,
+        "Pet_Exp_Table",
+        &PET_EXP_TABLE_HEADERS,
+        &outputs.pet_exp_table_csv,
+    )?;
+    let upgradepet_looting_percent_stats = import_workbook_sheet(
+        &workbook_set.upgradepet_looting_percent_xlsx,
+        "UpgradePet_Looting_Percent",
+        &UPGRADEPET_LOOTING_PERCENT_HEADERS,
+        &outputs.upgradepet_looting_percent_csv,
+    )?;
+
+    run_dolt_sql_table_import(&dolt_repo, "buff_table", &outputs.buff_table_csv)?;
+    run_dolt_sql_table_import(&dolt_repo, "skill_table_new", &outputs.skill_table_new_csv)?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "skilltype_table_new",
+        &outputs.skilltype_table_new_csv,
+    )?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "lightstone_set_option",
+        &outputs.lightstone_set_option_csv,
+    )?;
+    run_dolt_sql_table_import(&dolt_repo, "pet_table", &outputs.pet_table_csv)?;
+    run_dolt_sql_table_import(&dolt_repo, "pet_skill_table", &outputs.pet_skill_table_csv)?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "pet_base_skill_table",
+        &outputs.pet_base_skill_table_csv,
+    )?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "pet_setstats_table",
+        &outputs.pet_setstats_table_csv,
+    )?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "pet_equipskill_table",
+        &outputs.pet_equipskill_table_csv,
+    )?;
+    run_dolt_sql_table_import(&dolt_repo, "pet_grade_table", &outputs.pet_grade_table_csv)?;
+    run_dolt_sql_table_import(&dolt_repo, "pet_exp_table", &outputs.pet_exp_table_csv)?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "upgradepet_looting_percent",
+        &outputs.upgradepet_looting_percent_csv,
+    )?;
+
+    if commit {
+        let msg = build_calculator_effects_commit_message(commit_msg, &digests);
+        run_dolt_commit(&dolt_repo, &msg)?;
+    }
+
+    println!("buff_table rows imported: {}", buff_table_stats.row_count);
+    println!(
+        "skill_table_new rows imported: {}",
+        skill_table_new_stats.row_count
+    );
+    println!(
+        "skilltype_table_new rows imported: {}",
+        skilltype_table_new_stats.row_count
+    );
+    println!(
+        "lightstone_set_option rows imported: {}",
+        lightstone_set_option_stats.row_count
+    );
+    println!("pet_table rows imported: {}", pet_table_stats.row_count);
+    println!(
+        "pet_skill_table rows imported: {}",
+        pet_skill_table_stats.row_count
+    );
+    println!(
+        "pet_base_skill_table rows imported: {}",
+        pet_base_skill_table_stats.row_count
+    );
+    println!(
+        "pet_setstats_table rows imported: {}",
+        pet_setstats_table_stats.row_count
+    );
+    println!(
+        "pet_equipskill_table rows imported: {}",
+        pet_equipskill_table_stats.row_count
+    );
+    println!(
+        "pet_grade_table rows imported: {}",
+        pet_grade_table_stats.row_count
+    );
+    println!(
+        "pet_exp_table rows imported: {}",
+        pet_exp_table_stats.row_count
+    );
+    println!(
+        "upgradepet_looting_percent rows imported: {}",
+        upgradepet_looting_percent_stats.row_count
+    );
+
+    Ok(())
+}
+
+fn resolve_calculator_effect_workbooks(excel_dir: &Path) -> Result<CalculatorEffectsWorkbookSet> {
+    Ok(CalculatorEffectsWorkbookSet {
+        buff_table_xlsx: resolve_required_workbook(excel_dir, "Buff_Table.xlsx")?,
+        skill_table_new_xlsx: resolve_required_workbook(excel_dir, "Skill_Table_New.xlsx")?,
+        skilltype_table_new_xlsx: resolve_required_workbook(excel_dir, "SkillType_Table_New.xlsx")?,
+        lightstone_set_option_xlsx: resolve_required_workbook(
+            excel_dir,
+            "LightStoneSetOption.xlsx",
+        )?,
+        pet_table_xlsx: resolve_required_workbook(excel_dir, "Pet_Table.xlsx")?,
+        pet_skill_table_xlsx: resolve_required_workbook(excel_dir, "Pet_Skill_Table.xlsx")?,
+        pet_base_skill_table_xlsx: resolve_required_workbook(
+            excel_dir,
+            "Pet_BaseSkill_Table.xlsx",
+        )?,
+        pet_setstats_table_xlsx: resolve_required_workbook(excel_dir, "Pet_SetStats_Table.xlsx")?,
+        pet_equipskill_table_xlsx: resolve_required_workbook(
+            excel_dir,
+            "Pet_EquipSkill_Table.xlsx",
+        )?,
+        pet_grade_table_xlsx: resolve_required_workbook(excel_dir, "Pet_Grade_Table.xlsx")?,
+        pet_exp_table_xlsx: resolve_required_workbook(excel_dir, "Pet_Exp_Table.xlsx")?,
+        upgradepet_looting_percent_xlsx: resolve_required_workbook(
+            excel_dir,
+            "UpgradePet_Looting_Percent.xlsx",
+        )?,
+    })
+}
+
+fn resolve_required_workbook(base_dir: &Path, filename: &str) -> Result<PathBuf> {
+    let path = base_dir.join(filename);
+    if path.is_file() {
+        Ok(path)
+    } else {
+        bail!("required workbook missing: {}", path.display());
+    }
+}
+
 fn default_output_dir() -> Result<PathBuf> {
     let seconds = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -676,6 +1021,37 @@ fn import_item_table(path: &Path, output_csv: &Path) -> Result<ItemTableImport> 
 
     writer.flush()?;
     Ok(ItemTableImport { row_count })
+}
+
+fn import_workbook_sheet(
+    path: &Path,
+    sheet_name: &str,
+    headers: &[&str],
+    output_csv: &Path,
+) -> Result<RawTableImport> {
+    let range = read_sheet(path, sheet_name)?;
+    let actual_headers = read_headers(&range)?;
+    validate_headers(
+        &actual_headers,
+        headers,
+        &format!("{}:{sheet_name}", path.display()),
+    )?;
+
+    let mut writer = build_csv_writer(output_csv)?;
+    writer.write_record(headers)?;
+
+    let mut row_count = 0usize;
+    for row in range.rows().skip(1) {
+        if row_is_empty(row) {
+            continue;
+        }
+        let record = build_record(row, headers.len())?;
+        writer.write_record(&record)?;
+        row_count += 1;
+    }
+
+    writer.flush()?;
+    Ok(RawTableImport { row_count })
 }
 
 fn import_fish_table_csv(path: &Path, output_csv: &Path) -> Result<FishTableImport> {
@@ -1362,6 +1738,136 @@ fn run_dolt_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> Resu
     bail!("dolt table import failed for {table}: {stderr}");
 }
 
+fn run_dolt_sql_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> Result<()> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(csv_path)
+        .with_context(|| format!("open generated csv for {table}: {}", csv_path.display()))?;
+    let headers = reader
+        .headers()
+        .with_context(|| format!("read generated csv headers for {table}"))?
+        .iter()
+        .map(|header| header.to_string())
+        .collect::<Vec<_>>();
+
+    run_dolt_sql_query(
+        repo_path,
+        &format!("DELETE FROM {};", sql_ident(table)),
+        &format!("truncate {table} via delete"),
+    )?;
+
+    let mut batch = Vec::new();
+    for record in reader.records() {
+        let record = record.with_context(|| format!("read generated csv row for {table}"))?;
+        batch.push(
+            record
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>(),
+        );
+        if batch.len() >= 200 {
+            run_dolt_insert_batch(repo_path, table, &headers, &batch)?;
+            batch.clear();
+        }
+    }
+
+    if !batch.is_empty() {
+        run_dolt_insert_batch(repo_path, table, &headers, &batch)?;
+    }
+
+    Ok(())
+}
+
+fn run_dolt_insert_batch(
+    repo_path: &Path,
+    table: &str,
+    headers: &[String],
+    rows: &[Vec<String>],
+) -> Result<()> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+
+    let columns = headers
+        .iter()
+        .map(|header| sql_ident(header))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let values = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|value| sql_value(value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .map(|joined| format!("({joined})"))
+        .collect::<Vec<_>>()
+        .join(",\n");
+    let query = format!(
+        "INSERT INTO {} ({columns}) VALUES\n{values};",
+        sql_ident(table)
+    );
+    run_dolt_sql_query(repo_path, &query, &format!("insert batch into {table}"))
+}
+
+fn run_dolt_sql_query(repo_path: &Path, query: &str, label: &str) -> Result<()> {
+    let mut child = Command::new("dolt")
+        .current_dir(repo_path)
+        .arg("sql")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("spawn dolt sql for {label}"))?;
+
+    {
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("missing dolt sql stdin for {label}"))?;
+        stdin
+            .write_all(query.as_bytes())
+            .with_context(|| format!("write dolt sql query for {label}"))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .with_context(|| format!("wait for dolt sql during {label}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    bail!("dolt sql failed during {label}: {stderr}");
+}
+
+fn sql_ident(value: &str) -> String {
+    format!("`{}`", value.replace('`', "``"))
+}
+
+fn sql_value(value: &str) -> String {
+    if value.is_empty() {
+        return "NULL".to_string();
+    }
+
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('\'');
+    for ch in value.chars() {
+        match ch {
+            '\'' => out.push_str("''"),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\0' => out.push_str("\\0"),
+            _ => out.push(ch),
+        }
+    }
+    out.push('\'');
+    out
+}
+
 fn run_dolt_commit(repo_path: &Path, message: &str) -> Result<()> {
     let output = Command::new("dolt")
         .current_dir(repo_path)
@@ -1407,6 +1913,31 @@ fn build_commit_message(base: Option<String>, digests: &ImportDigests) -> String
     match base {
         Some(msg) => format!("{msg} {suffix}"),
         None => format!("Import fishing-related groups from community XLSX snapshot {suffix}"),
+    }
+}
+
+fn build_calculator_effects_commit_message(
+    base: Option<String>,
+    digests: &CalculatorEffectsDigests,
+) -> String {
+    let suffix = format!(
+        "(Buff_Table={}, Skill_Table_New={}, SkillType_Table_New={}, LightStoneSetOption={}, Pet_Table={}, Pet_Skill_Table={}, Pet_BaseSkill_Table={}, Pet_SetStats_Table={}, Pet_EquipSkill_Table={}, Pet_Grade_Table={}, Pet_Exp_Table={}, UpgradePet_Looting_Percent={})",
+        digests.buff_table_sha,
+        digests.skill_table_new_sha,
+        digests.skilltype_table_new_sha,
+        digests.lightstone_set_option_sha,
+        digests.pet_table_sha,
+        digests.pet_skill_table_sha,
+        digests.pet_base_skill_table_sha,
+        digests.pet_setstats_table_sha,
+        digests.pet_equipskill_table_sha,
+        digests.pet_grade_table_sha,
+        digests.pet_exp_table_sha,
+        digests.upgradepet_looting_percent_sha,
+    );
+    match base {
+        Some(msg) => format!("{msg} {suffix}"),
+        None => format!("Import calculator effect workbooks {suffix}"),
     }
 }
 
