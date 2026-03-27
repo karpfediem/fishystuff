@@ -453,6 +453,11 @@ impl DoltMySqlStore {
         } else {
             HashMap::new()
         };
+        let lightstone_names_ko = if matches!(lang, FishLang::Ko) {
+            self.query_calculator_lightstone_name_overrides_ko(ref_id)?
+        } else {
+            HashMap::new()
+        };
 
         let mut items = Vec::with_capacity(rows.len());
         for (
@@ -473,10 +478,17 @@ impl DoltMySqlStore {
             let Some(legacy_name) = normalize_optional_string(name) else {
                 continue;
             };
+            let item_type = normalize_optional_string(item_type).unwrap_or_default();
             let display_name = item_id
                 .and_then(|item_id| names_ko.get(&item_id).cloned())
+                .or_else(|| {
+                    if item_type == "lightstone_set" {
+                        lightstone_names_ko.get(&legacy_name).cloned()
+                    } else {
+                        None
+                    }
+                })
                 .unwrap_or_else(|| legacy_name.clone());
-            let item_type = normalize_optional_string(item_type).unwrap_or_default();
             let key = if let Some(item_id) = item_id {
                 format!("item:{item_id}")
             } else {
@@ -582,8 +594,15 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<CalculatorConsumableEffectDbRow> =
-            conn.query(query).map_err(db_unavailable)?;
+        let rows: Vec<CalculatorConsumableEffectDbRow> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "calculator_consumable_effects") => {
+                return Ok(HashMap::new());
+            }
+            Err(err) if is_missing_table(&err, "skill_table_new") => return Ok(HashMap::new()),
+            Err(err) if is_missing_table(&err, "buff_table") => return Ok(HashMap::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
 
         let mut description_lines = HashMap::<i32, HashSet<String>>::new();
         let mut item_descriptions = HashMap::<i32, String>::new();
@@ -649,8 +668,16 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<CalculatorLightstoneEffectDbRow> =
-            conn.query(query).map_err(db_unavailable)?;
+        let rows: Vec<CalculatorLightstoneEffectDbRow> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "calculator_lightstone_set_effects") => {
+                return Ok(HashMap::new());
+            }
+            Err(err) if is_missing_table(&err, "lightstone_set_option") => {
+                return Ok(HashMap::new());
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
 
         let mut overrides = HashMap::new();
         for (set_name_ko, effect_description_ko) in rows {
@@ -671,6 +698,48 @@ impl DoltMySqlStore {
             }
         }
 
+        Ok(overrides)
+    }
+
+    fn query_calculator_lightstone_name_overrides_ko(
+        &self,
+        ref_id: Option<&str>,
+    ) -> AppResult<HashMap<String, String>> {
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let query = format!(
+            "SELECT \
+                set_name_ko, \
+                effect_description_ko \
+             FROM calculator_lightstone_set_effects{as_of}"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<CalculatorLightstoneEffectDbRow> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "calculator_lightstone_set_effects") => {
+                return Ok(HashMap::new());
+            }
+            Err(err) if is_missing_table(&err, "lightstone_set_option") => {
+                return Ok(HashMap::new());
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut overrides = HashMap::new();
+        for (set_name_ko, _) in rows {
+            let Some(set_name_ko) = normalize_optional_string(set_name_ko) else {
+                continue;
+            };
+            let Some(legacy_name) = legacy_lightstone_name_for_source_name_ko(&set_name_ko) else {
+                continue;
+            };
+            overrides.insert(legacy_name.to_string(), set_name_ko);
+        }
         Ok(overrides)
     }
 
