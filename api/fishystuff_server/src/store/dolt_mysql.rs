@@ -1,6 +1,7 @@
 mod calculator;
 mod calculator_effects;
 mod calculator_items;
+mod calculator_pets;
 mod catalog;
 mod stats;
 mod util;
