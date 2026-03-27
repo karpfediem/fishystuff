@@ -23,8 +23,6 @@
     uiSettingsUnsubscribe: null,
     persistedUiJson: "",
     uiStateRestored: false,
-    pendingViewportRestore: null,
-    pendingViewportFrame: 0,
     stampTimers: new Map(),
     fishById: new Map(),
     renderKey: "",
@@ -402,57 +400,6 @@
     state.stampTimers.set(key, timer);
   }
 
-  function rememberViewport(fishId, event) {
-    const trigger = event && event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
-    const card = trigger ? trigger.closest("[data-fish-id]") : null;
-    if (!(card instanceof HTMLElement) || !Number.isInteger(fishId)) {
-      state.pendingViewportRestore = null;
-      return;
-    }
-    const action = trigger.dataset.action || "";
-    state.pendingViewportRestore = {
-      fishId: fishId,
-      anchorTop: trigger.getBoundingClientRect().top,
-      scrollX: window.scrollX,
-      scrollY: window.scrollY,
-      restoreFocusSelector: action ? `[data-action="${action}"]` : "",
-    };
-  }
-
-  function scheduleViewportRestore() {
-    if (!state.pendingViewportRestore) {
-      return;
-    }
-    if (state.pendingViewportFrame) {
-      window.cancelAnimationFrame(state.pendingViewportFrame);
-    }
-    state.pendingViewportFrame = window.requestAnimationFrame(function () {
-      state.pendingViewportFrame = 0;
-      const pending = state.pendingViewportRestore;
-      state.pendingViewportRestore = null;
-      if (!pending) {
-        return;
-      }
-      const nextCard = document.querySelector(`[data-fish-id="${pending.fishId}"]`);
-      if (!(nextCard instanceof HTMLElement)) {
-        window.scrollTo(pending.scrollX, pending.scrollY);
-        return;
-      }
-      const nextAnchor = pending.restoreFocusSelector
-        ? nextCard.querySelector(pending.restoreFocusSelector)
-        : nextCard;
-      if (nextAnchor instanceof HTMLElement) {
-        nextAnchor.focus({ preventScroll: true });
-        const delta = nextAnchor.getBoundingClientRect().top - pending.anchorTop;
-        if (Math.abs(delta) > 1.5 || Math.abs(pending.scrollX - window.scrollX) > 0.5) {
-          window.scrollTo(pending.scrollX, window.scrollY + delta);
-        }
-        return;
-      }
-      window.scrollTo(pending.scrollX, pending.scrollY);
-    });
-  }
-
   function fishItemId(entry) {
     const value = Number(entry && entry.item_id);
     return Number.isInteger(value) ? value : 0;
@@ -718,6 +665,29 @@
     return empty;
   }
 
+  function applyFavouriteButtonState(button, fishName, isFavourite, isStamping) {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    button.className = `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${isFavourite ? " is-favourite" : ""}${isStamping ? " is-stamping" : ""}`;
+    button.setAttribute("aria-pressed", isFavourite ? "true" : "false");
+    button.setAttribute(
+      "aria-label",
+      `${isFavourite ? "Remove" : "Add"} ${fishName} ${isFavourite ? "from" : "to"} favourites`
+    );
+    button.innerHTML = isFavourite ? ICON_HEART_FILL : ICON_HEART_LINE;
+  }
+
+  function applyCaughtButtonState(button, fishName, isCaught, isStamping) {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    button.className = `fishydex-caught-button btn btn-sm btn-circle btn-ghost${isCaught ? " is-caught" : ""}${isStamping ? " is-stamping" : ""}`;
+    button.setAttribute("aria-pressed", isCaught ? "true" : "false");
+    button.setAttribute("aria-label", `Mark ${fishName} as ${isCaught ? "not caught" : "caught"}`);
+    button.innerHTML = isCaught ? ICON_CAUGHT_FILL : ICON_CAUGHT_LINE;
+  }
+
   function renderFishCard(fish, caughtSet, favouriteSet, snapshot, animationIndex, animateCards) {
     const itemId = fishItemId(fish);
     const fishName = fish.name || `Fish ${itemId}`;
@@ -744,27 +714,28 @@
     const actions = createElement("div", "fishydex-card-actions");
 
     const favouriteButton = createElement(
-      "button",
-      `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${isFavourite ? " is-favourite" : ""}${currentStamp(snapshot, "_favourite_stamp_fish_id", itemId) ? " is-stamping" : ""}`
+      "button"
     );
     favouriteButton.type = "button";
     favouriteButton.dataset.action = "toggle-favourite";
-    favouriteButton.setAttribute("aria-pressed", isFavourite ? "true" : "false");
-    favouriteButton.setAttribute(
-      "aria-label",
-      `${isFavourite ? "Remove" : "Add"} ${fishName} ${isFavourite ? "from" : "to"} favourites`
+    applyFavouriteButtonState(
+      favouriteButton,
+      fishName,
+      isFavourite,
+      currentStamp(snapshot, "_favourite_stamp_fish_id", itemId)
     );
-    favouriteButton.innerHTML = isFavourite ? ICON_HEART_FILL : ICON_HEART_LINE;
 
     const caughtButton = createElement(
-      "button",
-      `fishydex-caught-button btn btn-sm btn-circle btn-ghost${isCaught ? " is-caught" : ""}${currentStamp(snapshot, "_caught_stamp_fish_id", itemId) ? " is-stamping" : ""}`
+      "button"
     );
     caughtButton.type = "button";
     caughtButton.dataset.action = "toggle-caught";
-    caughtButton.setAttribute("aria-pressed", isCaught ? "true" : "false");
-    caughtButton.setAttribute("aria-label", `Mark ${fishName} as ${isCaught ? "not caught" : "caught"}`);
-    caughtButton.innerHTML = isCaught ? ICON_CAUGHT_FILL : ICON_CAUGHT_LINE;
+    applyCaughtButtonState(
+      caughtButton,
+      fishName,
+      isCaught,
+      currentStamp(snapshot, "_caught_stamp_fish_id", itemId)
+    );
 
     actions.append(favouriteButton, caughtButton);
     top.appendChild(actions);
@@ -827,6 +798,43 @@
     });
   }
 
+  function syncRenderedCardState(snapshot, caughtSet, favouriteSet) {
+    const cards = document.querySelectorAll("#fishydex-grid [data-fish-id]");
+    for (const card of cards) {
+      if (!(card instanceof HTMLElement)) {
+        continue;
+      }
+      const fishId = Number.parseInt(card.dataset.fishId || "", 10);
+      if (!Number.isInteger(fishId)) {
+        continue;
+      }
+      const fish = state.fishById.get(fishId);
+      if (!fish) {
+        continue;
+      }
+      const fishName = fish.name || `Fish ${fishId}`;
+      const isCaught = caughtSet.has(fishId);
+      const isFavourite = favouriteSet.has(fishId);
+      card.classList.toggle("is-caught", isCaught);
+
+      const favouriteButton = card.querySelector("[data-action='toggle-favourite']");
+      applyFavouriteButtonState(
+        favouriteButton,
+        fishName,
+        isFavourite,
+        currentStamp(snapshot, "_favourite_stamp_fish_id", fishId)
+      );
+
+      const caughtButton = card.querySelector("[data-action='toggle-caught']");
+      applyCaughtButtonState(
+        caughtButton,
+        fishName,
+        isCaught,
+        currentStamp(snapshot, "_caught_stamp_fish_id", fishId)
+      );
+    }
+  }
+
   function toggleFavourite(fishId) {
     const signals = signalObject();
     if (!signals || !Number.isInteger(fishId)) {
@@ -867,14 +875,12 @@
 
       const favouriteButton = target.closest("[data-action='toggle-favourite']");
       if (favouriteButton instanceof HTMLElement) {
-        rememberViewport(fishId, { currentTarget: favouriteButton });
         toggleFavourite(fishId);
         return;
       }
 
       const caughtButton = target.closest("[data-action='toggle-caught']");
       if (caughtButton instanceof HTMLElement) {
-        rememberViewport(fishId, { currentTarget: caughtButton });
         toggleCaught(fishId);
         return;
       }
@@ -951,22 +957,23 @@
     setElementText(title, meta.name);
 
     if (favouriteToggle instanceof HTMLButtonElement) {
-      favouriteToggle.className = `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${meta.favourite ? " is-favourite" : ""}${currentStamp(signals, "_favourite_stamp_fish_id", meta.fishId) ? " is-stamping" : ""}`;
       favouriteToggle.dataset.favouriteState = meta.favourite ? "active" : "inactive";
-      favouriteToggle.setAttribute("aria-pressed", meta.favourite ? "true" : "false");
-      favouriteToggle.setAttribute(
-        "aria-label",
-        `${meta.favourite ? "Remove" : "Add"} ${meta.name} ${meta.favourite ? "from" : "to"} favourites`
+      applyFavouriteButtonState(
+        favouriteToggle,
+        meta.name,
+        meta.favourite,
+        currentStamp(signals, "_favourite_stamp_fish_id", meta.fishId)
       );
-      favouriteToggle.innerHTML = meta.favourite ? ICON_HEART_FILL : ICON_HEART_LINE;
     }
 
     if (caughtToggle instanceof HTMLButtonElement) {
-      caughtToggle.className = `fishydex-caught-button btn btn-sm btn-circle btn-ghost${meta.caught ? " is-caught" : ""}${currentStamp(signals, "_caught_stamp_fish_id", meta.fishId) ? " is-stamping" : ""}`;
       caughtToggle.dataset.caughtState = meta.caught ? "caught" : "uncaught";
-      caughtToggle.setAttribute("aria-pressed", meta.caught ? "true" : "false");
-      caughtToggle.setAttribute("aria-label", `Mark ${meta.name} as ${meta.caught ? "not caught" : "caught"}`);
-      caughtToggle.innerHTML = meta.caught ? ICON_CAUGHT_FILL : ICON_CAUGHT_LINE;
+      applyCaughtButtonState(
+        caughtToggle,
+        meta.name,
+        meta.caught,
+        currentStamp(signals, "_caught_stamp_fish_id", meta.fishId)
+      );
     }
 
     if (favouriteBadge instanceof HTMLElement) {
@@ -1183,10 +1190,8 @@
       showDried ? "1" : "0",
       sortField,
       sortDirection,
-      caughtIds.join(","),
-      favouriteIds.join(","),
-      snapshot._caught_stamp_fish_id || "",
-      snapshot._favourite_stamp_fish_id || "",
+      caughtFilter !== "all" ? caughtIds.join(",") : "",
+      favouriteFilter ? favouriteIds.join(",") : "",
     ].join("|");
 
     if (renderKey !== state.renderKey) {
@@ -1230,6 +1235,8 @@
       state.suppressCardAnimation = false;
     }
 
+    syncRenderedCardState(snapshot, new Set(caughtIds), new Set(favouriteIds));
+
     patchSignals({
       catalog_count: catalogEntries.length,
       total_count: fish.length,
@@ -1255,7 +1262,6 @@
     });
 
     renderDetails();
-    scheduleViewportRestore();
   }
 
   function downloadJson(filename, text) {
@@ -1391,7 +1397,6 @@
     persistCaughtIds: persistCaughtIds,
     persistFavouriteIds: persistFavouriteIds,
     queueStamp: queueStamp,
-    rememberViewport: rememberViewport,
     exportCaught: exportCaught,
     importCaught: importCaught,
     sync: sync,
