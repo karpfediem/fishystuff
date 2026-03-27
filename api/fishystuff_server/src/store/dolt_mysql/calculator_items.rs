@@ -38,24 +38,27 @@ pub(super) fn build_source_consumable_item(
     item_id: i32,
     item_type: &str,
     legacy_name_en: Option<&str>,
+    source_name_ko: Option<&str>,
+    item_icon_file: Option<&str>,
+    legacy_icon_id: Option<i32>,
     fish_multiplier: Option<f32>,
     source_durability: Option<i32>,
-    metadata: Option<&CalculatorItemSourceMetadata>,
     override_values: CalculatorItemEffectValues,
 ) -> CalculatorItemEntry {
     let name = if matches!(lang, FishLang::Ko) {
-        metadata
-            .and_then(|metadata| metadata.name_ko.clone())
+        source_name_ko
+            .map(ToOwned::to_owned)
             .or_else(|| legacy_name_en.map(ToOwned::to_owned))
             .unwrap_or_else(|| format!("item:{item_id}"))
     } else {
         legacy_name_en
             .map(ToOwned::to_owned)
-            .or_else(|| metadata.and_then(|metadata| metadata.name_ko.clone()))
+            .or_else(|| source_name_ko.map(ToOwned::to_owned))
             .unwrap_or_else(|| format!("item:{item_id}"))
     };
-    let icon_id = metadata
-        .and_then(|metadata| metadata.icon_id)
+    let icon_id = item_icon_file
+        .and_then(parse_fish_icon_asset_id)
+        .or(legacy_icon_id)
         .or(Some(item_id));
 
     CalculatorItemEntry {
@@ -65,9 +68,7 @@ pub(super) fn build_source_consumable_item(
         afr: override_values.afr,
         bonus_rare: override_values.bonus_rare,
         bonus_big: override_values.bonus_big,
-        durability: metadata
-            .and_then(|metadata| metadata.durability)
-            .or(source_durability),
+        durability: source_durability,
         drr: override_values.drr,
         fish_multiplier,
         exp_fish: override_values.exp_fish,
@@ -195,7 +196,6 @@ impl DoltMySqlStore {
 
     fn build_source_backed_items(
         lang: FishLang,
-        item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
         source_backed_rows: &[CalculatorSourceBackedItemRow],
     ) -> AppResult<Vec<CalculatorItemEntry>> {
         let mut items = Vec::new();
@@ -221,9 +221,11 @@ impl DoltMySqlStore {
                         item_id,
                         &row.item_type,
                         row.legacy_name_en.as_deref(),
+                        row.source_name_ko.as_deref(),
+                        row.item_icon_file.as_deref(),
+                        row.legacy_icon_id,
                         row.fish_multiplier,
                         row.durability,
-                        item_source_metadata.get(&item_id),
                         override_values,
                     ));
                 }
@@ -290,8 +292,7 @@ impl DoltMySqlStore {
         } = self.query_calculator_catalog_source_data(ref_id)?;
         let legacy_items =
             self.build_legacy_calculator_items(lang, legacy_rows, &item_source_metadata);
-        let sourced_items =
-            Self::build_source_backed_items(lang, &item_source_metadata, &source_backed_rows)?;
+        let sourced_items = Self::build_source_backed_items(lang, &source_backed_rows)?;
         Ok(self.merge_calculator_items(legacy_items, sourced_items))
     }
 }
@@ -301,25 +302,20 @@ mod tests {
     use crate::store::FishLang;
 
     use super::super::calculator_effects::CalculatorItemEffectValues;
-    use super::{
-        build_source_consumable_item, build_source_lightstone_item, CalculatorItemSourceMetadata,
-    };
+    use super::{build_source_consumable_item, build_source_lightstone_item};
 
     #[test]
     fn source_consumable_item_prefers_source_metadata() {
-        let metadata = CalculatorItemSourceMetadata {
-            name_ko: Some("발락스 도시락".to_string()),
-            durability: Some(11),
-            icon_id: Some(9359),
-        };
         let sourced = build_source_consumable_item(
             FishLang::Ko,
             9359,
             "food",
             Some("Balacs Lunchbox"),
+            Some("발락스 도시락"),
+            Some("00009359.dds"),
+            Some(42),
             Some(1.5),
             Some(11),
-            Some(&metadata),
             CalculatorItemEffectValues {
                 afr: Some(0.07),
                 exp_fish: Some(0.10),
