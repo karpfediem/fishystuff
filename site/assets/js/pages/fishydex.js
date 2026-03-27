@@ -328,7 +328,7 @@
       revision: "",
       caught_ids: caughtState.caughtIds,
       favourite_ids: favouriteState.favouriteIds,
-      selected_fish_id: null,
+      selected_fish_id: 0,
       _progress_panel_collapsed: readPanelCollapsedState("progress"),
       _filter_panel_collapsed: readPanelCollapsedState("filter"),
       _status_message:
@@ -923,9 +923,9 @@
       return;
     }
     const signals = signalObject();
-    const selectedFishId = signals && Number.isInteger(signals.selected_fish_id)
+    const selectedFishId = signals && Number.isInteger(signals.selected_fish_id) && signals.selected_fish_id > 0
       ? signals.selected_fish_id
-      : null;
+      : 0;
     const meta = fishMetaById(selectedFishId);
     if (!meta) {
       modal.classList.remove("modal-open");
@@ -1028,9 +1028,12 @@
   function closeDetails(options) {
     const restoreFocus = !options || options.restoreFocus !== false;
     const signals = signalObject();
-    const fishId = signals && Number.isInteger(signals.selected_fish_id) ? signals.selected_fish_id : null;
-    patchSignals({ selected_fish_id: null });
-    if (!restoreFocus || !Number.isInteger(fishId)) {
+    const fishId = signals && Number.isInteger(signals.selected_fish_id) && signals.selected_fish_id > 0
+      ? signals.selected_fish_id
+      : 0;
+    patchSignals({ selected_fish_id: 0 });
+    renderDetails();
+    if (!restoreFocus || !Number.isInteger(fishId) || fishId <= 0) {
       return;
     }
     window.requestAnimationFrame(function () {
@@ -1046,6 +1049,7 @@
       return;
     }
     patchSignals({ selected_fish_id: fishId });
+    renderDetails();
   }
 
   function bindDetailsControls() {
@@ -1061,29 +1065,34 @@
       if (!(target instanceof Element)) {
         return;
       }
-      if (target.closest("[data-action='close-details']")) {
-        closeDetails();
-        return;
-      }
       if (target.closest("[data-action='toggle-favourite-details']")) {
         const signals = signalObject();
-        const fishId = signals && Number.isInteger(signals.selected_fish_id) ? signals.selected_fish_id : null;
-        if (Number.isInteger(fishId)) {
+        const fishId = signals && Number.isInteger(signals.selected_fish_id) && signals.selected_fish_id > 0
+          ? signals.selected_fish_id
+          : 0;
+        if (Number.isInteger(fishId) && fishId > 0) {
           toggleFavourite(fishId);
         }
         return;
       }
       if (target.closest("[data-action='toggle-caught-details']")) {
         const signals = signalObject();
-        const fishId = signals && Number.isInteger(signals.selected_fish_id) ? signals.selected_fish_id : null;
-        if (Number.isInteger(fishId)) {
+        const fishId = signals && Number.isInteger(signals.selected_fish_id) && signals.selected_fish_id > 0
+          ? signals.selected_fish_id
+          : 0;
+        if (Number.isInteger(fishId) && fishId > 0) {
           toggleCaught(fishId);
         }
       }
     });
     document.addEventListener("keydown", function (event) {
       const signals = signalObject();
-      if (event.key === "Escape" && signals && Number.isInteger(signals.selected_fish_id)) {
+      if (
+        event.key === "Escape"
+        && signals
+        && Number.isInteger(signals.selected_fish_id)
+        && signals.selected_fish_id > 0
+      ) {
         closeDetails();
       }
     });
