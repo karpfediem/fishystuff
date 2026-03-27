@@ -72,6 +72,12 @@ type CalculatorItemDbRow = (
 
 type CalculatorPetOptionDbRow = (Option<String>, Option<String>, Option<String>);
 
+#[derive(Debug, Clone, Default)]
+struct CalculatorItemSourceMetadata {
+    name_ko: Option<String>,
+    durability: Option<i32>,
+}
+
 fn localized_label(lang: FishLang, en: &'static str, ko: &'static str) -> String {
     match lang {
         FishLang::En => en.to_string(),
@@ -272,11 +278,11 @@ fn build_calculator_lifeskill_levels() -> Vec<CalculatorLifeskillLevelEntry> {
 }
 
 impl DoltMySqlStore {
-    fn query_calculator_names_ko(
+    fn query_calculator_item_table_metadata(
         &self,
         ref_id: Option<&str>,
         item_ids: &[i32],
-    ) -> AppResult<HashMap<i32, String>> {
+    ) -> AppResult<HashMap<i32, CalculatorItemSourceMetadata>> {
         if item_ids.is_empty() {
             return Ok(HashMap::new());
         }
@@ -292,23 +298,36 @@ impl DoltMySqlStore {
             .collect::<Vec<_>>()
             .join(",");
         let query = format!(
-            "SELECT it.`Index`, it.`ItemName` \
+            "SELECT \
+                CAST(it.`Index` AS SIGNED), \
+                it.`ItemName`, \
+                CASE \
+                    WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
+                    THEN CAST(it.`EnduranceLimit` AS SIGNED) \
+                    ELSE NULL \
+                END AS endurance_limit \
              FROM item_table{as_of} it \
-             WHERE it.`Index` IN ({id_list}) \
-               AND NULLIF(TRIM(it.`ItemName`), '') IS NOT NULL"
+             WHERE it.`Index` IN ({id_list})"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, Option<String>)> = conn.query(query).map_err(db_unavailable)?;
+        let rows: Vec<(i64, Option<String>, Option<i64>)> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
         let mut out = HashMap::new();
-        for (item_id, name) in rows {
+        for (item_id, name, durability) in rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
-            let Some(name) = normalize_optional_string(name) else {
-                continue;
-            };
-            out.insert(item_id, name);
+            out.insert(
+                item_id,
+                CalculatorItemSourceMetadata {
+                    name_ko: normalize_optional_string(name),
+                    durability: durability.and_then(|value| i32::try_from(value).ok()),
+                },
+            );
         }
         Ok(out)
     }
@@ -345,11 +364,7 @@ impl DoltMySqlStore {
         let rows: Vec<CalculatorItemDbRow> = conn.query(query).map_err(db_unavailable)?;
 
         let item_ids = rows.iter().filter_map(|row| row.10).collect::<Vec<_>>();
-        let names_ko = if matches!(lang, FishLang::Ko) {
-            self.query_calculator_names_ko(ref_id, &item_ids)?
-        } else {
-            HashMap::new()
-        };
+        let item_source_metadata = self.query_calculator_item_table_metadata(ref_id, &item_ids)?;
         let lightstone_names_ko = if matches!(lang, FishLang::Ko) {
             self.query_calculator_lightstone_name_overrides_ko(ref_id)?
         } else {
@@ -377,7 +392,15 @@ impl DoltMySqlStore {
             };
             let item_type = normalize_optional_string(item_type).unwrap_or_default();
             let display_name = item_id
-                .and_then(|item_id| names_ko.get(&item_id).cloned())
+                .and_then(|item_id| {
+                    if matches!(lang, FishLang::Ko) {
+                        item_source_metadata
+                            .get(&item_id)
+                            .and_then(|metadata| metadata.name_ko.clone())
+                    } else {
+                        None
+                    }
+                })
                 .or_else(|| {
                     if item_type == "lightstone_set" {
                         lightstone_names_ko.get(&legacy_name).cloned()
@@ -400,7 +423,13 @@ impl DoltMySqlStore {
                 afr,
                 bonus_rare,
                 bonus_big,
-                durability,
+                durability: item_id
+                    .and_then(|item_id| {
+                        item_source_metadata
+                            .get(&item_id)
+                            .and_then(|metadata| metadata.durability)
+                    })
+                    .or(durability),
                 drr,
                 fish_multiplier,
                 exp_fish,
