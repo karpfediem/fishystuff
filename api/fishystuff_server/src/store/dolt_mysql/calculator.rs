@@ -301,6 +301,15 @@ impl DoltMySqlStore {
             .join(",");
         let query = format!(
             "SELECT \
+                item_id, \
+                item_name_ko, \
+                item_icon_file, \
+                endurance_limit \
+             FROM calculator_item_source_metadata{as_of} \
+             WHERE item_id IN ({id_list})"
+        );
+        let raw_item_table_query = format!(
+            "SELECT \
                 CAST(it.`Index` AS SIGNED), \
                 it.`ItemName`, \
                 it.`IconImageFile`, \
@@ -317,6 +326,13 @@ impl DoltMySqlStore {
         let rows: Vec<(i64, Option<String>, Option<String>, Option<i64>)> = match conn.query(query)
         {
             Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "calculator_item_source_metadata") => {
+                match conn.query(raw_item_table_query) {
+                    Ok(rows) => rows,
+                    Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
+                    Err(err) => return Err(db_unavailable(err)),
+                }
+            }
             Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
             Err(err) => return Err(db_unavailable(err)),
         };
