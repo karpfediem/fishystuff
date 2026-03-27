@@ -23,14 +23,6 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/fish", get(routes::fish::list_fish))
         .route("/fish/", get(routes::fish::list_fish))
         .route(
-            "/fish/datastar/init",
-            get(routes::fish::get_fish_datastar_init),
-        )
-        .route(
-            "/fish/datastar/eval",
-            post(routes::fish::post_fish_datastar_eval),
-        )
-        .route(
             "/calculator",
             get(routes::calculator::get_calculator_catalog),
         )

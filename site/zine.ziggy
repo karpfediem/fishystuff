@@ -34,6 +34,7 @@ Multilingual {
     "js/components/searchable-dropdown.js",
     "js/durationFormatter.js",
     "js/lz-string.min.js",
+    "js/pages/fishydex.js",
     "js/script.js",
     "js/toast.js",
     "js/ui-settings.js",
