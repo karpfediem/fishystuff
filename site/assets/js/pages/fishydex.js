@@ -436,6 +436,15 @@
     return GRADE_LABELS[value] || GRADE_LABELS.unknown;
   }
 
+  function completionPercent(caughtCount, totalCount) {
+    const caught = Number(caughtCount);
+    const total = Number(totalCount);
+    if (!Number.isFinite(caught) || !Number.isFinite(total) || total <= 0) {
+      return 0;
+    }
+    return Math.max(0, Math.min(100, Math.round((caught * 100) / total)));
+  }
+
   function entryCatchMethods(entry) {
     if (!entry) {
       return [];
@@ -1246,23 +1255,31 @@
 
     syncRenderedCardState(snapshot, new Set(caughtIds), new Set(favouriteIds));
 
+    const caughtCount = catalogEntries.reduce(function (count, entry) {
+      return count + (caughtIds.includes(fishItemId(entry)) ? 1 : 0);
+    }, 0);
+
     patchSignals({
       catalog_count: catalogEntries.length,
       total_count: fish.length,
       visible_count: sorted.length,
-      caught_count: catalogEntries.reduce(function (count, entry) {
-        return count + (caughtIds.includes(fishItemId(entry)) ? 1 : 0);
-      }, 0),
+      caught_count: caughtCount,
+      completion_percent: completionPercent(caughtCount, catalogEntries.length),
       red_total_count: gradeProgress.red.total,
       red_caught_count: gradeProgress.red.caught,
+      red_completion_percent: completionPercent(gradeProgress.red.caught, gradeProgress.red.total),
       yellow_total_count: gradeProgress.yellow.total,
       yellow_caught_count: gradeProgress.yellow.caught,
+      yellow_completion_percent: completionPercent(gradeProgress.yellow.caught, gradeProgress.yellow.total),
       blue_total_count: gradeProgress.blue.total,
       blue_caught_count: gradeProgress.blue.caught,
+      blue_completion_percent: completionPercent(gradeProgress.blue.caught, gradeProgress.blue.total),
       green_total_count: gradeProgress.green.total,
       green_caught_count: gradeProgress.green.caught,
+      green_completion_percent: completionPercent(gradeProgress.green.caught, gradeProgress.green.total),
       white_total_count: gradeProgress.white.total,
       white_caught_count: gradeProgress.white.caught,
+      white_completion_percent: completionPercent(gradeProgress.white.caught, gradeProgress.white.total),
       supports_grade_filter: supportsGradeFilter,
       supports_method_filter: supportsMethodFilter,
       supports_dried_filter: supportsDriedFilter,

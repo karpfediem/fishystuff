@@ -247,81 +247,146 @@
     align-content: start;
   }
 
-  .fishydex-stat-stack {
+  .fishydex-progress-overview {
     display: grid;
-    gap: 0.85rem;
+    gap: 1rem;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    align-items: center;
     width: 100%;
+    padding: 1rem 1.1rem;
   }
 
-  .fishydex-stat-row {
-    width: 100%;
+  .fishydex-progress-overview-chart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fishydex-progress-overview-copy {
+    display: grid;
+    gap: 0.2rem;
+    align-content: center;
+    min-width: 0;
+  }
+
+  .fishydex-progress-kicker {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--dex-text-muted);
+  }
+
+  .fishydex-progress-title {
+    display: block;
+    font-size: clamp(1.15rem, 2vw, 1.65rem);
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  .fishydex-progress-count {
+    display: block;
+    font-size: clamp(1.25rem, 2vw, 1.95rem);
+    font-weight: 800;
+    line-height: 1.05;
+  }
+
+  .fishydex-progress-pie {
+    flex: none;
+    color: var(--dex-caught);
+  }
+
+  .fishydex-progress-pie.is-overall {
+    color: color-mix(in oklab, var(--dex-caught) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .fishydex-progress-pie-value {
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1;
   }
 
   .fishydex-grade-stats {
     display: grid;
     gap: 0.85rem;
-    grid-template-columns: repeat(auto-fit, minmax(10.75rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   }
 
-  .fishydex-grade-stat {
+  .fishydex-grade-progress-card {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    align-items: center;
     width: 100%;
+    padding: 0.95rem 1rem;
   }
 
-  .fishydex-stat {
-    border-radius: 0;
-    border: 0;
-    background: transparent;
-    padding: 0.9rem;
+  .fishydex-grade-progress-copy {
+    display: grid;
+    gap: 0.14rem;
+    min-width: 0;
   }
 
-  .fishydex-stat-label {
-    display: block;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    opacity: 0.72;
-  }
-
-  .fishydex-stat-value {
-    display: block;
-    font-size: clamp(1.3rem, 2vw, 2rem);
-    font-weight: 800;
-  }
-
-  .fishydex-grade-stat .fishydex-stat-value {
-    font-size: clamp(1.1rem, 1.8vw, 1.45rem);
-  }
-
-  .fishydex-grade-stat .fieldset-legend {
-    margin: 0;
-    opacity: 1;
-  }
-
-  .fishydex-grade-stat .stat-desc {
-    color: var(--dex-text-muted);
+  .fishydex-grade-progress-percent {
     font-size: 0.78rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .fishydex-grade-progress-title {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .fishydex-grade-progress-value {
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  .fishydex-grade-progress-meta {
+    color: var(--dex-text-muted);
+    font-size: 0.8rem;
     font-weight: 600;
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-red {
+  .fishydex-progress-pie.grade-red,
+  .fishydex-grade-progress-title.grade-red {
     color: color-mix(in oklab, var(--dex-grade-red) 78%, var(--color-base-content, #1f2937) 22%);
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-yellow {
+  .fishydex-progress-pie.grade-yellow,
+  .fishydex-grade-progress-title.grade-yellow {
     color: color-mix(in oklab, var(--dex-grade-yellow) 78%, var(--color-base-content, #1f2937) 22%);
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-blue {
+  .fishydex-progress-pie.grade-blue,
+  .fishydex-grade-progress-title.grade-blue {
     color: color-mix(in oklab, var(--dex-grade-blue) 78%, var(--color-base-content, #1f2937) 22%);
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-green {
+  .fishydex-progress-pie.grade-green,
+  .fishydex-grade-progress-title.grade-green {
     color: color-mix(in oklab, var(--dex-grade-green) 78%, var(--color-base-content, #1f2937) 22%);
   }
 
-  .fishydex-grade-stat .fieldset-legend.grade-white {
+  .fishydex-progress-pie.grade-white,
+  .fishydex-grade-progress-title.grade-white {
     color: color-mix(in oklab, var(--color-base-content, #1f2937) 82%, transparent);
+  }
+
+  @media (max-width: 720px) {
+    .fishydex-progress-overview {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .fishydex-progress-overview-copy {
+      justify-items: center;
+    }
   }
 
   .fishydex-status,
@@ -378,8 +443,7 @@
 
   .fishydex-group-title.fieldset-legend,
   .fishydex-panel-legend.fieldset-legend,
-  .fishydex-filter-group .fieldset-legend,
-  .fishydex-grade-stat .fieldset-legend {
+  .fishydex-filter-group .fieldset-legend {
     letter-spacing: normal;
     text-transform: none;
   }
@@ -1089,16 +1153,22 @@
        total_count: 0,
        visible_count: 0,
        caught_count: 0,
+       completion_percent: 0,
        red_total_count: 0,
        red_caught_count: 0,
+       red_completion_percent: 0,
        yellow_total_count: 0,
        yellow_caught_count: 0,
+       yellow_completion_percent: 0,
        blue_total_count: 0,
        blue_caught_count: 0,
+       blue_completion_percent: 0,
        green_total_count: 0,
        green_caught_count: 0,
+       green_completion_percent: 0,
        white_total_count: 0,
        white_caught_count: 0,
+       white_completion_percent: 0,
        supports_grade_filter: false,
        supports_method_filter: false,
        supports_dried_filter: false,
@@ -1150,55 +1220,113 @@
                   data-on:click="$_progress_panel_collapsed = !$_progress_panel_collapsed; window.Fishydex.persistPanelCollapsed('progress', $_progress_panel_collapsed)"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
         </legend>
         <div id="fishydex-progress-body" class="card-body fishydex-stats-body pt-0" data-show="!$_progress_panel_collapsed">
-        <div class="fishydex-stat-stack">
-          <div class="fishydex-stat-row stats stats-horizontal rounded-box border border-base-300 bg-base-200">
-            <div class="fishydex-stat stat">
-              <div class="fishydex-stat-label stat-title">Caught</div>
-              <div class="fishydex-stat-value stat-value text-xl" data-text="$caught_count || 0"></div>
-            </div>
-            <div class="fishydex-stat stat">
-              <div class="fishydex-stat-label stat-title">Catalog</div>
-              <div class="fishydex-stat-value stat-value text-xl" data-text="$catalog_count || 0"></div>
+        <div class="fishydex-progress-overview rounded-box border border-base-300 bg-base-200">
+          <div class="fishydex-progress-overview-chart">
+            <div class="radial-progress fishydex-progress-pie is-overall"
+                 role="progressbar"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 data-attr:style="'--value:' + ($completion_percent || 0) + '; --size:7.5rem; --thickness:0.72rem;'"
+                 data-attr:aria-valuenow="String($completion_percent || 0)"
+                 data-attr:aria-label="'Catalog completion: ' + ($caught_count || 0) + ' of ' + ($catalog_count || 0) + ' fish caught (' + ($completion_percent || 0) + '%)'">
+              <span class="fishydex-progress-pie-value" data-text="($completion_percent || 0) + '%'"></span>
             </div>
           </div>
-          <div class="fishydex-grade-stats" data-show="$supports_grade_filter">
-            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
-              <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-red">Red</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$red_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($red_total_count || 0) + ' catalog'"></div>
-              </div>
-            </div>
-            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
-              <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-yellow">Yellow</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$yellow_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($yellow_total_count || 0) + ' catalog'"></div>
-              </div>
-            </div>
-            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
-              <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-blue">Blue</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$blue_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($blue_total_count || 0) + ' catalog'"></div>
-              </div>
-            </div>
-            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
-              <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-green">Green</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$green_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($green_total_count || 0) + ' catalog'"></div>
-              </div>
-            </div>
-            <div class="fishydex-grade-stat stats rounded-box border border-base-300 bg-base-200">
-              <div class="fishydex-stat stat">
-                <div class="stat-title fieldset-legend grade-white">White</div>
-                <div class="fishydex-stat-value stat-value text-lg" data-text="$white_caught_count || 0"></div>
-                <div class="stat-desc" data-text="'of ' + ($white_total_count || 0) + ' catalog'"></div>
-              </div>
-            </div>
+          <div class="fishydex-progress-overview-copy">
+            <span class="fishydex-progress-kicker">Overall</span>
+            <span class="fishydex-progress-title">Catalog Completion</span>
+            <span class="fishydex-progress-count" data-text="($caught_count || 0) + ' / ' + ($catalog_count || 0)"></span>
+            <span class="fishydex-subtle"
+                  data-text="($catalog_count || 0) > 0 ? (Math.max(($catalog_count || 0) - ($caught_count || 0), 0) + ' remaining') : 'No catalog entries yet'"></span>
           </div>
         </div>
+          <div class="fishydex-grade-stats" data-show="$supports_grade_filter">
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-red"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($red_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($red_completion_percent || 0)"
+                   data-attr:aria-label="'Red completion: ' + ($red_caught_count || 0) + ' of ' + ($red_total_count || 0) + ' fish caught (' + ($red_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($red_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-red">Red</div>
+                <div class="fishydex-grade-progress-value" data-text="($red_caught_count || 0) + ' / ' + ($red_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($red_total_count || 0) > 0 ? (Math.max(($red_total_count || 0) - ($red_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-yellow"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($yellow_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($yellow_completion_percent || 0)"
+                   data-attr:aria-label="'Yellow completion: ' + ($yellow_caught_count || 0) + ' of ' + ($yellow_total_count || 0) + ' fish caught (' + ($yellow_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($yellow_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-yellow">Yellow</div>
+                <div class="fishydex-grade-progress-value" data-text="($yellow_caught_count || 0) + ' / ' + ($yellow_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($yellow_total_count || 0) > 0 ? (Math.max(($yellow_total_count || 0) - ($yellow_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-blue"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($blue_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($blue_completion_percent || 0)"
+                   data-attr:aria-label="'Blue completion: ' + ($blue_caught_count || 0) + ' of ' + ($blue_total_count || 0) + ' fish caught (' + ($blue_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($blue_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-blue">Blue</div>
+                <div class="fishydex-grade-progress-value" data-text="($blue_caught_count || 0) + ' / ' + ($blue_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($blue_total_count || 0) > 0 ? (Math.max(($blue_total_count || 0) - ($blue_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-green"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($green_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($green_completion_percent || 0)"
+                   data-attr:aria-label="'Green completion: ' + ($green_caught_count || 0) + ' of ' + ($green_total_count || 0) + ' fish caught (' + ($green_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($green_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-green">Green</div>
+                <div class="fishydex-grade-progress-value" data-text="($green_caught_count || 0) + ' / ' + ($green_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($green_total_count || 0) > 0 ? (Math.max(($green_total_count || 0) - ($green_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-white"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($white_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($white_completion_percent || 0)"
+                   data-attr:aria-label="'White completion: ' + ($white_caught_count || 0) + ' of ' + ($white_total_count || 0) + ' fish caught (' + ($white_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($white_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-white">White</div>
+                <div class="fishydex-grade-progress-value" data-text="($white_caught_count || 0) + ' / ' + ($white_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($white_total_count || 0) > 0 ? (Math.max(($white_total_count || 0) - ($white_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+          </div>
         <div class="fishydex-actions">
           <button type="button" class="btn btn-sm btn-soft btn-primary fishydex-button" data-on:click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
           <button type="button" class="btn btn-sm btn-outline fishydex-button" data-on:click="window.Fishydex.importCaught()">Import</button>
