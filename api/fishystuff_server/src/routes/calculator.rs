@@ -635,21 +635,7 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         normalize_lookup_value("lil' otter fishing carrier 🦦"),
         "item:830150".to_string(),
     )]);
-    let pet_value_aliases = HashMap::from([
-        (
-            normalize_lookup_value("Auto-Fishing Time Reduction"),
-            "auto_fishing_time_reduction".to_string(),
-        ),
-        (
-            normalize_lookup_value("Durability Reduction Resistance"),
-            "durability_reduction_resistance".to_string(),
-        ),
-        (normalize_lookup_value("Life EXP"), "life_exp".to_string()),
-        (
-            normalize_lookup_value("Fishing EXP"),
-            "fishing_exp".to_string(),
-        ),
-    ]);
+    let pet_value_aliases = build_pet_value_aliases(&data.catalog.pets);
 
     let valid_item_keys = data
         .catalog
@@ -772,6 +758,40 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
     ) {
         signals.timespan_unit = defaults.timespan_unit;
     }
+}
+
+fn build_pet_value_aliases(catalog: &CalculatorPetCatalog) -> HashMap<String, String> {
+    let mut aliases = HashMap::new();
+    for option in catalog
+        .specials
+        .iter()
+        .chain(catalog.talents.iter())
+        .chain(catalog.skills.iter())
+    {
+        if option.key.is_empty() {
+            continue;
+        }
+        aliases.insert(normalize_lookup_value(&option.label), option.key.clone());
+        aliases.insert(normalize_lookup_value(&option.key), option.key.clone());
+        aliases.insert(
+            normalize_lookup_value(&option.key.replace('_', " ")),
+            option.key.clone(),
+        );
+    }
+    aliases.insert(
+        normalize_lookup_value("Auto-Fishing Time Reduction"),
+        "auto_fishing_time_reduction".to_string(),
+    );
+    aliases.insert(
+        normalize_lookup_value("Durability Reduction Resistance"),
+        "durability_reduction_resistance".to_string(),
+    );
+    aliases.insert(normalize_lookup_value("Life EXP"), "life_exp".to_string());
+    aliases.insert(
+        normalize_lookup_value("Fishing EXP"),
+        "fishing_exp".to_string(),
+    );
+    aliases
 }
 
 fn signals_patch_map(signals: &CalculatorSignals) -> AppResult<serde_json::Map<String, Value>> {
@@ -2410,7 +2430,7 @@ mod tests {
     use fishystuff_api::ids::{Rgb, RgbKey};
     use fishystuff_api::models::calculator::{
         CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
-        CalculatorPetSignals, CalculatorSignals,
+        CalculatorOptionEntry, CalculatorPetCatalog, CalculatorPetSignals, CalculatorSignals,
     };
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
@@ -2428,10 +2448,11 @@ mod tests {
     use crate::store::{FishLang, Store};
 
     use super::{
-        get_calculator_datastar_init, get_calculator_datastar_option_search,
-        get_calculator_datastar_zone_search, normalize_lookup_value, normalize_named_array,
-        post_calculator_datastar_eval, CalculatorDatastarQuery, CalculatorQuery,
-        CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
+        build_pet_value_aliases, get_calculator_datastar_init,
+        get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
+        normalize_lookup_value, normalize_named_array, post_calculator_datastar_eval,
+        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
+        CalculatorZoneSearchQuery,
     };
 
     struct MockStore;
@@ -2850,5 +2871,37 @@ mod tests {
             normalize_named_array(&[], &valid_keys, &lookup, None, vec!["item:1".to_string()]);
 
         assert!(normalized.is_empty());
+    }
+
+    #[test]
+    fn build_pet_value_aliases_includes_catalog_labels_and_keys() {
+        let aliases = build_pet_value_aliases(&CalculatorPetCatalog {
+            specials: vec![CalculatorOptionEntry {
+                key: "auto_fishing_time_reduction".to_string(),
+                label: "자동 낚시 시간 감소".to_string(),
+            }],
+            talents: vec![CalculatorOptionEntry {
+                key: "life_exp".to_string(),
+                label: "생활 경험치".to_string(),
+            }],
+            skills: vec![CalculatorOptionEntry {
+                key: "fishing_exp".to_string(),
+                label: "낚시 경험치".to_string(),
+            }],
+            ..CalculatorPetCatalog::default()
+        });
+
+        assert_eq!(
+            aliases.get(&normalize_lookup_value("자동 낚시 시간 감소")),
+            Some(&"auto_fishing_time_reduction".to_string())
+        );
+        assert_eq!(
+            aliases.get(&normalize_lookup_value("life exp")),
+            Some(&"life_exp".to_string())
+        );
+        assert_eq!(
+            aliases.get(&normalize_lookup_value("Fishing EXP")),
+            Some(&"fishing_exp".to_string())
+        );
     }
 }

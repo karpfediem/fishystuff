@@ -10,7 +10,7 @@ use mysql::prelude::Queryable;
 use crate::error::AppResult;
 use crate::store::{validate_dolt_ref, FishLang};
 
-use super::util::{db_unavailable, normalize_optional_string};
+use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
 fn build_calculator_default_pet(tier: &str, special: &str) -> CalculatorPetSignals {
@@ -74,6 +74,7 @@ type CalculatorConsumableEffectDbRow =
     (Option<i32>, Option<String>, Option<String>, Option<String>);
 
 type CalculatorLightstoneEffectDbRow = (Option<String>, Option<String>);
+type CalculatorPetOptionDbRow = (Option<String>, Option<String>, Option<String>);
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(super) struct CalculatorItemEffectValues {
@@ -181,6 +182,60 @@ fn localized_label(lang: FishLang, en: &'static str, ko: &'static str) -> String
     }
 }
 
+fn push_unique_option(options: &mut Vec<CalculatorOptionEntry>, key: &str, label: String) {
+    if options.iter().any(|option| option.key == key) {
+        return;
+    }
+    options.push(CalculatorOptionEntry {
+        key: key.to_string(),
+        label,
+    });
+}
+
+fn canonical_pet_option_key(
+    option_kind: &str,
+    skill_name_ko: Option<&str>,
+    skill_description_ko: Option<&str>,
+) -> Option<&'static str> {
+    let text = [
+        skill_name_ko.unwrap_or(""),
+        skill_description_ko.unwrap_or(""),
+    ]
+    .join("\n");
+    if text.contains("자동 낚시") {
+        return Some("auto_fishing_time_reduction");
+    }
+    if text.contains("내구도 소모 감소 저항") {
+        return Some("durability_reduction_resistance");
+    }
+    if text.contains("낚시 경험치") {
+        return Some("fishing_exp");
+    }
+    if text.contains("생활 경험치") {
+        return Some("life_exp");
+    }
+    if option_kind == "special" {
+        return Some("auto_fishing_time_reduction");
+    }
+    None
+}
+
+fn calculator_pet_option_label(lang: FishLang, key: &str) -> String {
+    match key {
+        "auto_fishing_time_reduction" => {
+            localized_label(lang, "Auto-Fishing Time Reduction", "자동 낚시 시간 감소")
+        }
+        "durability_reduction_resistance" => localized_label(
+            lang,
+            "Durability Reduction Resistance",
+            "내구도 소모 감소 저항",
+        ),
+        "life_exp" => localized_label(lang, "Life EXP", "생활 경험치"),
+        "fishing_exp" => localized_label(lang, "Fishing EXP", "낚시 경험치"),
+        _ => key.to_string(),
+    }
+}
+
 fn build_calculator_fishing_levels(lang: FishLang) -> Vec<CalculatorOptionEntry> {
     (0..=5)
         .map(|level| CalculatorOptionEntry {
@@ -257,10 +312,6 @@ fn build_calculator_pet_catalog(lang: FishLang) -> CalculatorPetCatalog {
                 "Durability Reduction Resistance",
                 "내구도 소모 감소 저항",
             ),
-        },
-        CalculatorOptionEntry {
-            key: "life_exp".to_string(),
-            label: localized_label(lang, "Life EXP", "생활 경험치"),
         },
     ];
     let skills = vec![CalculatorOptionEntry {
@@ -623,6 +674,70 @@ impl DoltMySqlStore {
         Ok(overrides)
     }
 
+    fn query_calculator_pet_catalog(
+        &self,
+        lang: FishLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<CalculatorPetCatalog> {
+        let mut catalog = build_calculator_pet_catalog(lang);
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let query = format!(
+            "SELECT \
+                option_kind, \
+                skill_name_ko, \
+                skill_description_ko \
+             FROM calculator_pet_skill_options{as_of}"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<CalculatorPetOptionDbRow> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err)
+                if is_missing_table(&err, "calculator_pet_skill_options")
+                    || is_missing_table(&err, "skilltype_table_new")
+                    || is_missing_table(&err, "pet_base_skill_table")
+                    || is_missing_table(&err, "pet_equipskill_table")
+                    || is_missing_table(&err, "pet_setstats_table") =>
+            {
+                return Ok(catalog);
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        for (option_kind, skill_name_ko, skill_description_ko) in rows {
+            let option_kind = normalize_optional_string(option_kind).unwrap_or_default();
+            let skill_name_ko = normalize_optional_string(skill_name_ko);
+            let skill_description_ko = normalize_optional_string(skill_description_ko);
+            let Some(key) = canonical_pet_option_key(
+                &option_kind,
+                skill_name_ko.as_deref(),
+                skill_description_ko.as_deref(),
+            ) else {
+                continue;
+            };
+            let label = calculator_pet_option_label(lang, key);
+            match key {
+                "auto_fishing_time_reduction" => {
+                    push_unique_option(&mut catalog.specials, key, label);
+                }
+                "durability_reduction_resistance" | "life_exp" => {
+                    push_unique_option(&mut catalog.talents, key, label);
+                }
+                "fishing_exp" => {
+                    push_unique_option(&mut catalog.skills, key, label);
+                }
+                _ => {}
+            }
+        }
+
+        Ok(catalog)
+    }
+
     pub(super) fn query_calculator_catalog(
         &self,
         lang: FishLang,
@@ -634,7 +749,7 @@ impl DoltMySqlStore {
             fishing_levels: build_calculator_fishing_levels(lang),
             session_units: build_calculator_session_units(lang),
             session_presets: build_calculator_session_presets(lang),
-            pets: build_calculator_pet_catalog(lang),
+            pets: self.query_calculator_pet_catalog(lang, ref_id)?,
             defaults: build_calculator_default_signals(),
         })
     }
@@ -642,9 +757,12 @@ impl DoltMySqlStore {
 
 #[cfg(test)]
 mod tests {
+    use crate::store::FishLang;
+
     use super::{
-        extract_first_number, legacy_lightstone_name_for_source_name_ko,
-        parse_calculator_effect_text, CalculatorItemEffectValues,
+        calculator_pet_option_label, canonical_pet_option_key, extract_first_number,
+        legacy_lightstone_name_for_source_name_ko, parse_calculator_effect_text,
+        CalculatorItemEffectValues,
     };
 
     #[test]
@@ -721,5 +839,41 @@ mod tests {
             Some("Choice & Focus: Fishing")
         );
         assert_eq!(legacy_lightstone_name_for_source_name_ko("없는 세트"), None);
+    }
+
+    #[test]
+    fn canonical_pet_option_key_maps_current_source_rows() {
+        assert_eq!(
+            canonical_pet_option_key("skill", Some("낚시 경험치 획득량 증가 +5%"), None),
+            Some("fishing_exp")
+        );
+        assert_eq!(
+            canonical_pet_option_key("talent", Some("생활 경험치 획득량 증가 +5%"), None),
+            Some("life_exp")
+        );
+        assert_eq!(
+            canonical_pet_option_key("special", Some("자동 낚시 시간 감소 5%"), None),
+            Some("auto_fishing_time_reduction")
+        );
+        assert_eq!(
+            canonical_pet_option_key("talent", Some("내구도 소모 감소 저항 +5%"), None),
+            Some("durability_reduction_resistance")
+        );
+        assert_eq!(
+            canonical_pet_option_key("other", Some("낚시 1단계 상승"), None),
+            None
+        );
+    }
+
+    #[test]
+    fn calculator_pet_option_label_localizes_known_keys() {
+        assert_eq!(
+            calculator_pet_option_label(FishLang::En, "fishing_exp"),
+            "Fishing EXP"
+        );
+        assert_eq!(
+            calculator_pet_option_label(FishLang::Ko, "life_exp"),
+            "생활 경험치"
+        );
     }
 }
