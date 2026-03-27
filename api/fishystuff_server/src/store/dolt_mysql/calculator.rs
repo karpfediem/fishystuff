@@ -416,7 +416,7 @@ impl DoltMySqlStore {
         Ok(out)
     }
 
-    fn query_calculator_items(
+    fn query_legacy_calculator_items(
         &self,
         lang: FishLang,
         ref_id: Option<&str>,
@@ -514,30 +514,55 @@ impl DoltMySqlStore {
             });
         }
 
-        let override_item_ids = items
+        Ok(items)
+    }
+
+    fn build_source_consumable_items(
+        &self,
+        ref_id: Option<&str>,
+        legacy_items: &[CalculatorItemEntry],
+    ) -> AppResult<Vec<CalculatorItemEntry>> {
+        let override_item_ids = legacy_items
             .iter()
             .filter(|item| matches!(item.r#type.as_str(), "food" | "buff"))
             .filter_map(|item| item.item_id)
             .collect::<Vec<_>>();
         let consumable_overrides =
             self.query_calculator_consumable_effect_overrides(ref_id, &override_item_ids)?;
-        for item in &mut items {
+        let mut items = Vec::new();
+        for item in legacy_items {
             let Some(item_id) = item.item_id else {
                 continue;
             };
             let Some(override_values) = consumable_overrides.get(&item_id).copied() else {
                 continue;
             };
-            item.afr = override_values.afr;
-            item.bonus_rare = override_values.bonus_rare;
-            item.bonus_big = override_values.bonus_big;
-            item.drr = override_values.drr;
-            item.exp_fish = override_values.exp_fish;
-            item.exp_life = override_values.exp_life;
+            let mut sourced = item.clone();
+            sourced.afr = override_values.afr;
+            sourced.bonus_rare = override_values.bonus_rare;
+            sourced.bonus_big = override_values.bonus_big;
+            sourced.drr = override_values.drr;
+            sourced.exp_fish = override_values.exp_fish;
+            sourced.exp_life = override_values.exp_life;
+            items.push(sourced);
         }
+        Ok(items)
+    }
 
+    fn build_source_lightstone_items(
+        &self,
+        lang: FishLang,
+        ref_id: Option<&str>,
+        legacy_items: &[CalculatorItemEntry],
+    ) -> AppResult<Vec<CalculatorItemEntry>> {
         let lightstone_overrides = self.query_calculator_lightstone_effect_overrides(ref_id)?;
-        for item in &mut items {
+        let lightstone_names_ko = if matches!(lang, FishLang::Ko) {
+            self.query_calculator_lightstone_name_overrides_ko(ref_id)?
+        } else {
+            HashMap::new()
+        };
+        let mut items = Vec::new();
+        for item in legacy_items {
             if item.r#type != "lightstone_set" {
                 continue;
             }
@@ -545,13 +570,35 @@ impl DoltMySqlStore {
             else {
                 continue;
             };
-            item.afr = override_values.afr;
-            item.bonus_rare = override_values.bonus_rare;
-            item.bonus_big = override_values.bonus_big;
-            item.drr = override_values.drr;
-            item.exp_fish = override_values.exp_fish;
-            item.exp_life = override_values.exp_life;
+            let mut sourced = item.clone();
+            if let Some(name_ko) = lightstone_names_ko.get(item.name.as_str()) {
+                sourced.name = name_ko.clone();
+            }
+            sourced.afr = override_values.afr;
+            sourced.bonus_rare = override_values.bonus_rare;
+            sourced.bonus_big = override_values.bonus_big;
+            sourced.drr = override_values.drr;
+            sourced.exp_fish = override_values.exp_fish;
+            sourced.exp_life = override_values.exp_life;
+            items.push(sourced);
         }
+        Ok(items)
+    }
+
+    fn merge_calculator_items(
+        &self,
+        legacy_items: Vec<CalculatorItemEntry>,
+        sourced_items: Vec<CalculatorItemEntry>,
+    ) -> Vec<CalculatorItemEntry> {
+        let mut merged = HashMap::<String, CalculatorItemEntry>::new();
+        for item in legacy_items {
+            merged.insert(item.key.clone(), item);
+        }
+        for item in sourced_items {
+            merged.insert(item.key.clone(), item);
+        }
+
+        let mut items = merged.into_values().collect::<Vec<_>>();
 
         items.sort_by(|left, right| {
             left.r#type
@@ -560,7 +607,18 @@ impl DoltMySqlStore {
                 .then_with(|| left.key.cmp(&right.key))
         });
 
-        Ok(items)
+        items
+    }
+
+    fn query_calculator_items(
+        &self,
+        lang: FishLang,
+        ref_id: Option<&str>,
+    ) -> AppResult<Vec<CalculatorItemEntry>> {
+        let legacy_items = self.query_legacy_calculator_items(lang, ref_id)?;
+        let mut sourced_items = self.build_source_consumable_items(ref_id, &legacy_items)?;
+        sourced_items.extend(self.build_source_lightstone_items(lang, ref_id, &legacy_items)?);
+        Ok(self.merge_calculator_items(legacy_items, sourced_items))
     }
 
     fn query_calculator_consumable_effect_overrides(
