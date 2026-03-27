@@ -12,6 +12,7 @@ use std::convert::Infallible;
 use std::fmt::Write as _;
 
 use fishystuff_api::models::fish::{FishEntry, FishListResponse};
+use fishystuff_core::fish_icons::{fish_encyclopedia_icon_path, fish_item_icon_path};
 
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
@@ -755,6 +756,13 @@ fn render_fish_card(signals: &FishDexSignals, entry: &FishEntry) -> String {
     let is_caught = signals.caught_ids.contains(&item_id);
     let is_favourite = signals.favourite_ids.contains(&item_id);
     let grade = filter_grade_for_entry(entry);
+    let icon_alt = format!("{fish_name} icon");
+    let icon_markup = render_cdn_image_markup(
+        "fishydex-icon",
+        &icon_alt,
+        &fish_item_icon_path(item_id),
+        "lazy",
+    );
     let open_expr = format!(
         "window.Fishydex.clearRequestUi(); $selected_fish_id = {item_id}; @post(window.Fishydex.datastarEvalUrl())"
     );
@@ -768,7 +776,7 @@ fn render_fish_card(signals: &FishDexSignals, entry: &FishEntry) -> String {
     let mut html = String::new();
     write!(
         html,
-        r#"<article class="fishydex-card card card-border bg-base-100{caught_class}" data-fish-id="{item_id}"><button type="button" class="fishydex-card-open" data-action="open-details" aria-haspopup="dialog" aria-label="Open details for {fish_name}" data-indicator:_details_loading data-on:click="{open_expr}"></button><div class="fishydex-card-content card-body"><div class="fishydex-card-top"><div class="fishydex-card-actions"><button type="button" class="fishydex-favourite-button btn btn-sm btn-circle btn-ghost{favourite_class}" data-action="toggle-favourite" aria-pressed="{favourite_pressed}" aria-label="{favourite_label}" data-class:is-stamping="$_favourite_stamp_fish_id === {item_id}" data-on:click="{favourite_expr}">{favourite_icon}</button><button type="button" class="fishydex-caught-button btn btn-sm btn-circle btn-ghost{caught_class}" data-action="toggle-caught" aria-pressed="{caught_pressed}" aria-label="{caught_label}" data-class:is-stamping="$_caught_stamp_fish_id === {item_id}" data-on:click="{caught_expr}">{caught_icon}</button></div></div><div class="fishydex-card-main"><div class="fishydex-icon-wrap grade-{grade}" data-fish-item-icon="{item_id}" data-fish-icon-alt="{icon_alt}" data-init="window.Fishydex.hydrateItemIcon(el)"><img class="fishydex-icon" hidden><div class="fishydex-placeholder">?</div></div><div class="fishydex-name">{fish_name}</div>{vendor_price}</div></div></article>"#,
+        r#"<article class="fishydex-card card card-border bg-base-100{caught_class}" data-fish-id="{item_id}"><button type="button" class="fishydex-card-open" data-action="open-details" aria-haspopup="dialog" aria-label="Open details for {fish_name}" data-indicator:_details_loading data-on:click="{open_expr}"></button><div class="fishydex-card-content card-body"><div class="fishydex-card-top"><div class="fishydex-card-actions"><button type="button" class="fishydex-favourite-button btn btn-sm btn-circle btn-ghost{favourite_class}" data-action="toggle-favourite" aria-pressed="{favourite_pressed}" aria-label="{favourite_label}" data-class:is-stamping="$_favourite_stamp_fish_id === {item_id}" data-on:click="{favourite_expr}">{favourite_icon}</button><button type="button" class="fishydex-caught-button btn btn-sm btn-circle btn-ghost{caught_class}" data-action="toggle-caught" aria-pressed="{caught_pressed}" aria-label="{caught_label}" data-class:is-stamping="$_caught_stamp_fish_id === {item_id}" data-on:click="{caught_expr}">{caught_icon}</button></div></div><div class="fishydex-card-main"><div class="fishydex-icon-wrap grade-{grade}">{icon_markup}</div><div class="fishydex-name">{fish_name}</div>{vendor_price}</div></div></article>"#,
         caught_class = if is_caught { " is-caught" } else { "" },
         item_id = item_id,
         fish_name = escape_html(&fish_name),
@@ -802,7 +810,7 @@ fn render_fish_card(signals: &FishDexSignals, entry: &FishEntry) -> String {
             "fishy-icon--inline size-7"
         ),
         grade = escape_html(grade),
-        icon_alt = escape_html(&format!("{fish_name} icon")),
+        icon_markup = icon_markup,
         vendor_price = render_vendor_price_markup("div", "fishydex-price fishydex-card-price", entry_vendor_price(entry)),
     )
     .unwrap();
@@ -830,6 +838,25 @@ fn render_fishydex_details_shell(signals: &FishDexSignals, derived: &FishDexDeri
     );
     let methods = entry_catch_methods(entry);
     let grade = filter_grade_for_entry(entry);
+    let item_alt = format!("{fish_name} icon");
+    let item_icon_markup = render_cdn_image_markup(
+        "fishydex-details-icon",
+        &item_alt,
+        &fish_item_icon_path(item_id),
+        "eager",
+    );
+    let guide_alt = format!("{fish_name} guide image");
+    let guide_markup = entry.encyclopedia_id.map_or_else(
+        || r#"<div class="fishydex-subtle">Guide image unavailable.</div>"#.to_string(),
+        |encyclopedia_id| {
+            render_cdn_image_markup(
+                "fishydex-details-guide-image",
+                &guide_alt,
+                &fish_encyclopedia_icon_path(encyclopedia_id),
+                "eager",
+            )
+        },
+    );
 
     let mut badges = String::new();
     if is_favourite {
@@ -862,10 +889,9 @@ fn render_fishydex_details_shell(signals: &FishDexSignals, derived: &FishDexDeri
     let mut html = String::from(r#"<div id="fishydex-details-shell">"#);
     write!(
         html,
-        r#"<section class="fishydex-details-panel modal-box card card-border bg-base-100 w-11/12 max-w-5xl" role="dialog" aria-modal="true" aria-labelledby="fishydex-details-title"><div class="fishydex-details-header"><div class="fishydex-details-header-main"><div class="fishydex-details-icon-wrap grade-{grade}" data-fish-item-icon="{item_id}" data-fish-icon-alt="{item_alt}" data-init="window.Fishydex.hydrateItemIcon(el)"><img class="fishydex-details-icon" hidden><div class="fishydex-placeholder">?</div></div><div class="fishydex-details-copy"><div class="fishydex-details-title-row"><h3 id="fishydex-details-title" class="fishydex-details-title">{fish_name}</h3><button type="button" class="fishydex-favourite-button btn btn-sm btn-circle btn-ghost{favourite_class}" aria-pressed="{favourite_pressed}" aria-label="{favourite_label}" data-indicator:_details_loading data-class:is-stamping="$_favourite_stamp_fish_id === {item_id}" data-on:click="{favourite_expr}">{favourite_icon}</button><button type="button" class="fishydex-caught-button btn btn-sm btn-circle btn-ghost{caught_class}" aria-pressed="{caught_pressed}" aria-label="{caught_label}" data-indicator:_details_loading data-class:is-stamping="$_caught_stamp_fish_id === {item_id}" data-on:click="{caught_expr}">{caught_icon}</button></div><div class="fishydex-details-badges">{badges}</div></div></div><button type="button" class="btn btn-sm btn-outline fishydex-button fishydex-details-close" data-on:click="window.Fishydex.focusFishCardAction($selected_fish_id, 'open-details'); $selected_fish_id = null">Close</button></div><div class="fishydex-details-guide"><div class="fishydex-details-guide-frame rounded-box border border-base-300 bg-base-200" data-fish-encyclopedia-icon="{encyclopedia_id}" data-fish-icon-alt="{guide_alt}" data-init="window.Fishydex.hydrateEncyclopediaIcon(el)"><img class="fishydex-details-guide-image" hidden><div class="fishydex-placeholder">?</div></div></div><dl class="fishydex-details-meta"><div class="fishydex-details-meta-card card card-border bg-base-200"><dt>Item Key</dt><dd><a class="fishydex-details-link link link-hover" href="{item_url}" target="_blank" rel="noreferrer noopener">{item_id}</a></dd></div><div class="fishydex-details-meta-card card card-border bg-base-200"><dt>Vendor Price</dt><dd>{vendor_price}</dd></div></dl><div class="fishydex-details-stack"><section class="fishydex-details-section card card-border bg-base-200"><h4>Best Spots</h4><p class="fishydex-details-note">{spots_note}</p></section></div></section></div>"#,
+        r#"<section class="fishydex-details-panel modal-box card card-border bg-base-100 w-11/12 max-w-5xl" role="dialog" aria-modal="true" aria-labelledby="fishydex-details-title"><div class="fishydex-details-header"><div class="fishydex-details-header-main"><div class="fishydex-details-icon-wrap grade-{grade}">{item_icon_markup}</div><div class="fishydex-details-copy"><div class="fishydex-details-title-row"><h3 id="fishydex-details-title" class="fishydex-details-title">{fish_name}</h3><button type="button" class="fishydex-favourite-button btn btn-sm btn-circle btn-ghost{favourite_class}" aria-pressed="{favourite_pressed}" aria-label="{favourite_label}" data-indicator:_details_loading data-class:is-stamping="$_favourite_stamp_fish_id === {item_id}" data-on:click="{favourite_expr}">{favourite_icon}</button><button type="button" class="fishydex-caught-button btn btn-sm btn-circle btn-ghost{caught_class}" aria-pressed="{caught_pressed}" aria-label="{caught_label}" data-indicator:_details_loading data-class:is-stamping="$_caught_stamp_fish_id === {item_id}" data-on:click="{caught_expr}">{caught_icon}</button></div><div class="fishydex-details-badges">{badges}</div></div></div><button type="button" class="btn btn-sm btn-outline fishydex-button fishydex-details-close" data-on:click="window.Fishydex.focusFishCardAction($selected_fish_id, 'open-details'); $selected_fish_id = null">Close</button></div><div class="fishydex-details-guide"><div class="fishydex-details-guide-frame rounded-box border border-base-300 bg-base-200">{guide_markup}</div></div><dl class="fishydex-details-meta"><div class="fishydex-details-meta-card card card-border bg-base-200"><dt>Item Key</dt><dd><a class="fishydex-details-link link link-hover" href="{item_url}" target="_blank" rel="noreferrer noopener">{item_id}</a></dd></div><div class="fishydex-details-meta-card card card-border bg-base-200"><dt>Vendor Price</dt><dd>{vendor_price}</dd></div></dl><div class="fishydex-details-stack"><section class="fishydex-details-section card card-border bg-base-200"><h4>Best Spots</h4><p class="fishydex-details-note">{spots_note}</p></section></div></section></div>"#,
         grade = escape_html(grade),
-        item_id = item_id,
-        item_alt = escape_html(&format!("{fish_name} icon")),
+        item_icon_markup = item_icon_markup,
         fish_name = escape_html(&fish_name),
         favourite_class = if is_favourite { " is-favourite" } else { "" },
         favourite_pressed = if is_favourite { "true" } else { "false" },
@@ -897,11 +923,8 @@ fn render_fishydex_details_shell(signals: &FishDexSignals, derived: &FishDexDeri
             "fishy-icon--inline size-7"
         ),
         badges = badges,
-        encyclopedia_id = entry
-            .encyclopedia_id
-            .map(|value| value.to_string())
-            .unwrap_or_default(),
-        guide_alt = escape_html(&format!("{fish_name} guide image")),
+        item_id = item_id,
+        guide_markup = guide_markup,
         item_url = escape_html(&item_url),
         vendor_price = render_vendor_price_markup("span", "fishydex-price fishydex-details-price", entry_vendor_price(entry)),
         spots_note = escape_html(DETAILS_SPOTS_NOTE),
@@ -956,6 +979,17 @@ fn sprite_icon(name: &str, class_name: &str) -> String {
         classes = escape_html(&classes),
         sprite = escape_html(ICON_SPRITE_URL),
         name = escape_html(name),
+    )
+}
+
+fn render_cdn_image_markup(class_name: &str, alt: &str, asset_path: &str, loading: &str) -> String {
+    let src_expr = format!("window.__fishystuffResolveCdnUrl('{asset_path}')");
+    format!(
+        r#"<img class="{class_name}" alt="{alt}" loading="{loading}" decoding="async" data-preserve-attr="src" data-attr:src="{src_expr}">"#,
+        class_name = escape_html(class_name),
+        alt = escape_html(alt),
+        loading = escape_html(loading),
+        src_expr = escape_html(&src_expr),
     )
 }
 
@@ -1178,6 +1212,10 @@ mod tests {
         assert!(text.contains("fishydex-grid"));
         assert!(text.contains("Pirarucu"));
         assert!(text.contains("fishydex-details-shell"));
+        assert!(text.contains(r#"data-preserve-attr="src""#));
+        assert!(text.contains(r#"data-attr:src="window.__fishystuffResolveCdnUrl"#));
+        assert!(text.contains("/images/FishIcons/00008474.png"));
+        assert!(!text.contains("hydrateItemIcon"));
     }
 
     #[tokio::test]

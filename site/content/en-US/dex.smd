@@ -760,11 +760,6 @@
     image-rendering: auto;
   }
 
-  .fishydex-placeholder {
-    color: var(--dex-text-muted);
-    font-size: 2rem;
-  }
-
   .fishydex-name {
     max-width: 100%;
     font-weight: 800;
@@ -1519,146 +1514,6 @@
       }
     }
 
-    function zeroPad(value, width) {
-      return String(Math.max(0, Number(value) || 0)).padStart(width, "0");
-    }
-
-    function cdnBaseUrl() {
-      if (typeof window.__fishystuffCdnBaseUrl === "string" && window.__fishystuffCdnBaseUrl.trim()) {
-        return window.__fishystuffCdnBaseUrl.trim().replace(/\/+$/, "");
-      }
-      const candidates = [
-        window.__fishystuffRuntimeConfig && window.__fishystuffRuntimeConfig.cdnBaseUrl,
-        "https://cdn.fishystuff.fish",
-      ];
-      for (const value of candidates) {
-        const explicitBase = String(value || "").trim();
-        if (explicitBase) {
-          return explicitBase.replace(/\/+$/, "");
-        }
-      }
-      return "https://cdn.fishystuff.fish";
-    }
-
-    function cdnUrl(path) {
-      if (typeof window.__fishystuffResolveCdnUrl === "function") {
-        return window.__fishystuffResolveCdnUrl(path);
-      }
-      const raw = String(path || "").trim();
-      if (!raw) {
-        return "";
-      }
-      if (
-        raw.startsWith("http://")
-        || raw.startsWith("https://")
-        || raw.startsWith("data:")
-      ) {
-        return raw;
-      }
-      const base = cdnBaseUrl().replace(/\/+$/, "");
-      if (raw.startsWith("/")) {
-        return `${base}${raw}`;
-      }
-      return `${base}/${raw.replace(/^\/+/, "")}`;
-    }
-
-    function fishItemIconPath(itemId) {
-      if (!Number.isInteger(itemId) || itemId <= 0) {
-        return "";
-      }
-      return `/images/FishIcons/${zeroPad(itemId, 8)}.png`;
-    }
-
-    function fishEncyclopediaIconPath(encyclopediaId) {
-      if (!Number.isInteger(encyclopediaId) || encyclopediaId <= 0) {
-        return "";
-      }
-      return `/images/FishIcons/IC_0${encyclopediaId}.png`;
-    }
-
-    function fishItemIconUrl(itemId) {
-      if (typeof window.__fishystuffResolveFishItemIconUrl === "function") {
-        return window.__fishystuffResolveFishItemIconUrl(itemId);
-      }
-      const path = fishItemIconPath(itemId);
-      return path ? cdnUrl(path) : "";
-    }
-
-    function fishEncyclopediaIconUrl(encyclopediaId) {
-      if (typeof window.__fishystuffResolveFishEncyclopediaIconUrl === "function") {
-        return window.__fishystuffResolveFishEncyclopediaIconUrl(encyclopediaId);
-      }
-      const path = fishEncyclopediaIconPath(encyclopediaId);
-      return path ? cdnUrl(path) : "";
-    }
-
-    function setImageWithPlaceholder(image, placeholder, src, alt) {
-      if (!(image instanceof HTMLImageElement) || !(placeholder instanceof HTMLElement)) {
-        return;
-      }
-      image.onload = null;
-      image.onerror = null;
-      image.dataset.expectedSrc = src || "";
-      if (!src) {
-        image.hidden = true;
-        image.removeAttribute("src");
-        image.alt = "";
-        placeholder.hidden = false;
-        return;
-      }
-      placeholder.hidden = true;
-      image.hidden = false;
-      image.alt = alt;
-      image.onload = () => {
-        if (image.dataset.expectedSrc === src) {
-          placeholder.hidden = true;
-          image.hidden = false;
-        }
-      };
-      image.onerror = () => {
-        if (image.dataset.expectedSrc !== src) {
-          return;
-        }
-        image.onload = null;
-        image.onerror = null;
-        image.hidden = true;
-        image.removeAttribute("src");
-        image.alt = "";
-        placeholder.hidden = false;
-      };
-      image.src = src;
-    }
-
-    function hydrateItemIcon(element) {
-      if (!(element instanceof HTMLElement)) {
-        return;
-      }
-      const itemId = Number.parseInt(element.dataset.fishItemIcon || "", 10);
-      const image = element.querySelector("img");
-      const placeholder = element.querySelector(".fishydex-placeholder");
-      setImageWithPlaceholder(
-        image,
-        placeholder,
-        fishItemIconUrl(itemId),
-        element.dataset.fishIconAlt || "Fish icon"
-      );
-    }
-
-    function hydrateEncyclopediaIcon(element) {
-      if (!(element instanceof HTMLElement)) {
-        return;
-      }
-      const encyclopediaId = Number.parseInt(element.dataset.fishEncyclopediaIcon || "", 10);
-      const image = element.querySelector("img");
-      const placeholder = element.querySelector(".fishydex-placeholder");
-      setImageWithPlaceholder(
-        image,
-        placeholder,
-        fishEncyclopediaIconUrl(encyclopediaId),
-        element.dataset.fishIconAlt || "Fish guide image"
-      );
-    }
-
     function apiUrl(pathname) {
       const candidates = [
         window.__fishystuffApiBaseUrl,
@@ -1688,10 +1543,12 @@
         return;
       }
       if (detail.type === "finished") {
-        scheduleViewportRestore();
-        patchSignals({
-          _api_error_message: "",
-          _api_error_hint: "",
+        window.requestAnimationFrame(() => {
+          scheduleViewportRestore();
+          patchSignals({
+            _api_error_message: "",
+            _api_error_hint: "",
+          });
         });
         return;
       }
@@ -1733,8 +1590,6 @@
       clearRequestUi,
       exportCaught,
       importCaught,
-      hydrateItemIcon,
-      hydrateEncyclopediaIcon,
       datastarInitUrl,
       datastarEvalUrl,
     };
