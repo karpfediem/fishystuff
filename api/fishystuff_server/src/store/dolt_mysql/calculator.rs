@@ -5,6 +5,7 @@ use fishystuff_api::models::calculator::{
     CalculatorOptionEntry, CalculatorPetCatalog, CalculatorPetSignals,
     CalculatorSessionPresetEntry, CalculatorSignals,
 };
+use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
 use mysql::prelude::Queryable;
 
 use crate::error::AppResult;
@@ -76,6 +77,7 @@ type CalculatorPetOptionDbRow = (Option<String>, Option<String>, Option<String>)
 struct CalculatorItemSourceMetadata {
     name_ko: Option<String>,
     durability: Option<i32>,
+    icon_id: Option<i32>,
 }
 
 fn localized_label(lang: FishLang, en: &'static str, ko: &'static str) -> String {
@@ -301,6 +303,7 @@ impl DoltMySqlStore {
             "SELECT \
                 CAST(it.`Index` AS SIGNED), \
                 it.`ItemName`, \
+                it.`IconImageFile`, \
                 CASE \
                     WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
                     THEN CAST(it.`EnduranceLimit` AS SIGNED) \
@@ -311,13 +314,14 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, Option<String>, Option<i64>)> = match conn.query(query) {
+        let rows: Vec<(i64, Option<String>, Option<String>, Option<i64>)> = match conn.query(query)
+        {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
             Err(err) => return Err(db_unavailable(err)),
         };
         let mut out = HashMap::new();
-        for (item_id, name, durability) in rows {
+        for (item_id, name, icon_file, durability) in rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
@@ -326,6 +330,8 @@ impl DoltMySqlStore {
                 CalculatorItemSourceMetadata {
                     name_ko: normalize_optional_string(name),
                     durability: durability.and_then(|value| i32::try_from(value).ok()),
+                    icon_id: normalize_optional_string(icon_file)
+                        .and_then(|value| parse_fish_icon_asset_id(&value)),
                 },
             );
         }
@@ -414,7 +420,14 @@ impl DoltMySqlStore {
             } else {
                 format!("effect:{}", slugify_calculator_effect_key(&legacy_name))
             };
-            let icon_id = icon_id.or(item_id);
+            let icon_id = item_id
+                .and_then(|item_id| {
+                    item_source_metadata
+                        .get(&item_id)
+                        .and_then(|metadata| metadata.icon_id)
+                })
+                .or(icon_id)
+                .or(item_id);
             let icon = icon_id.map(calculator_item_icon_path);
             items.push(CalculatorItemEntry {
                 key,
