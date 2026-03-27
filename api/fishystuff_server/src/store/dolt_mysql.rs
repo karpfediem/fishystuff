@@ -6,7 +6,7 @@ mod zone_profile_v2;
 #[cfg(test)]
 mod layers;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -239,6 +239,97 @@ type CalculatorItemDbRow = (
     Option<i32>,
     Option<i32>,
 );
+
+type CalculatorConsumableEffectDbRow =
+    (Option<i32>, Option<String>, Option<String>, Option<String>);
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct CalculatorItemEffectValues {
+    afr: Option<f32>,
+    bonus_rare: Option<f32>,
+    bonus_big: Option<f32>,
+    drr: Option<f32>,
+    exp_fish: Option<f32>,
+    exp_life: Option<f32>,
+}
+
+impl CalculatorItemEffectValues {
+    fn has_any(self) -> bool {
+        self.afr.is_some()
+            || self.bonus_rare.is_some()
+            || self.bonus_big.is_some()
+            || self.drr.is_some()
+            || self.exp_fish.is_some()
+            || self.exp_life.is_some()
+    }
+}
+
+fn add_effect_value(slot: &mut Option<f32>, value: Option<f32>) {
+    let Some(value) = value else {
+        return;
+    };
+    *slot = Some(slot.unwrap_or(0.0) + value);
+}
+
+fn extract_first_number(text: &str) -> Option<f32> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut idx = 0;
+    while idx < chars.len() {
+        if chars[idx] == '+' || chars[idx] == '-' || chars[idx].is_ascii_digit() {
+            let start = idx;
+            idx += 1;
+            let mut seen_digit = chars[start].is_ascii_digit();
+            while idx < chars.len() && (chars[idx].is_ascii_digit() || chars[idx] == '.') {
+                seen_digit |= chars[idx].is_ascii_digit();
+                idx += 1;
+            }
+            if seen_digit {
+                let candidate = chars[start..idx].iter().collect::<String>();
+                if let Ok(value) = candidate.parse::<f32>() {
+                    return Some(value);
+                }
+            }
+        } else {
+            idx += 1;
+        }
+    }
+    None
+}
+
+fn extract_percent_ratio(text: &str) -> Option<f32> {
+    extract_first_number(text).map(|value| value.abs() / 100.0)
+}
+
+fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &str) {
+    let line = line.trim();
+    if line.is_empty() {
+        return;
+    }
+    if line.contains("자동 낚시") {
+        add_effect_value(&mut values.afr, extract_percent_ratio(line));
+    }
+    if line.contains("희귀 어종") {
+        add_effect_value(&mut values.bonus_rare, extract_percent_ratio(line));
+    }
+    if line.contains("대형 어종") {
+        add_effect_value(&mut values.bonus_big, extract_percent_ratio(line));
+    }
+    if line.contains("내구도 소모 감소 저항") {
+        add_effect_value(&mut values.drr, extract_percent_ratio(line));
+    }
+    if line.contains("낚시 경험치") {
+        add_effect_value(&mut values.exp_fish, extract_percent_ratio(line));
+    }
+    if line.contains("생활 경험치") {
+        add_effect_value(&mut values.exp_life, extract_percent_ratio(line));
+    }
+}
+
+fn parse_calculator_effect_text(values: &mut CalculatorItemEffectValues, text: &str) {
+    for line in text.lines() {
+        parse_calculator_effect_line(values, line);
+    }
+}
 
 impl QueryParams {
     fn validate(&self) -> AppResult<()> {
@@ -725,6 +816,28 @@ impl DoltMySqlStore {
             });
         }
 
+        let override_item_ids = items
+            .iter()
+            .filter(|item| matches!(item.r#type.as_str(), "food" | "buff"))
+            .filter_map(|item| item.item_id)
+            .collect::<Vec<_>>();
+        let consumable_overrides =
+            self.query_calculator_consumable_effect_overrides(ref_id, &override_item_ids)?;
+        for item in &mut items {
+            let Some(item_id) = item.item_id else {
+                continue;
+            };
+            let Some(override_values) = consumable_overrides.get(&item_id).copied() else {
+                continue;
+            };
+            item.afr = override_values.afr;
+            item.bonus_rare = override_values.bonus_rare;
+            item.bonus_big = override_values.bonus_big;
+            item.drr = override_values.drr;
+            item.exp_fish = override_values.exp_fish;
+            item.exp_life = override_values.exp_life;
+        }
+
         items.sort_by(|left, right| {
             left.r#type
                 .cmp(&right.r#type)
@@ -733,6 +846,86 @@ impl DoltMySqlStore {
         });
 
         Ok(items)
+    }
+
+    fn query_calculator_consumable_effect_overrides(
+        &self,
+        ref_id: Option<&str>,
+        item_ids: &[i32],
+    ) -> AppResult<HashMap<i32, CalculatorItemEffectValues>> {
+        if item_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let id_list = item_ids
+            .iter()
+            .map(i32::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "SELECT \
+                item_id, \
+                item_description_ko, \
+                skill_description_ko, \
+                buff_description_ko \
+             FROM calculator_consumable_effects{as_of} \
+             WHERE item_id IN ({id_list})"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<CalculatorConsumableEffectDbRow> =
+            conn.query(query).map_err(db_unavailable)?;
+
+        let mut description_lines = HashMap::<i32, HashSet<String>>::new();
+        let mut item_descriptions = HashMap::<i32, String>::new();
+        for (item_id, item_description, skill_description, buff_description) in rows {
+            let Some(item_id) = item_id else {
+                continue;
+            };
+            if let Some(item_description) = normalize_optional_string(item_description) {
+                item_descriptions.entry(item_id).or_insert(item_description);
+            }
+            let entry = description_lines.entry(item_id).or_default();
+            for description in [buff_description, skill_description] {
+                let Some(description) = normalize_optional_string(description) else {
+                    continue;
+                };
+                for line in description.lines() {
+                    let line = line.trim();
+                    if !line.is_empty() {
+                        entry.insert(line.to_string());
+                    }
+                }
+            }
+        }
+
+        let mut overrides = HashMap::new();
+        for item_id in item_ids.iter().copied() {
+            let mut values = CalculatorItemEffectValues::default();
+            let mut had_effect_lines = false;
+            if let Some(lines) = description_lines.get(&item_id) {
+                had_effect_lines = !lines.is_empty();
+                for line in lines {
+                    parse_calculator_effect_line(&mut values, line);
+                }
+            }
+            if !had_effect_lines {
+                if let Some(description) = item_descriptions.get(&item_id) {
+                    parse_calculator_effect_text(&mut values, description);
+                }
+            }
+            if values.has_any() {
+                overrides.insert(item_id, values);
+            }
+        }
+
+        Ok(overrides)
     }
 
     fn query_calculator_catalog(
@@ -2047,11 +2240,12 @@ mod tests {
 
     use super::{
         catalog::{encyclopedia_icon_id_from_db, is_web_icon_path},
-        compute_status, event_source_kind_from_db, fish_catch_methods_from_description,
-        fish_is_dried, merge_fish_catalog_row, parse_layer_kind, parse_positive_i64,
-        parse_vector_source, pixel_to_tile_index, resolve_layer_asset_url,
-        synthetic_events_snapshot_revision, zone_distribution_fish_ids, DoltMySqlStore,
-        FishCatalogRow, FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
+        compute_status, event_source_kind_from_db, extract_first_number,
+        fish_catch_methods_from_description, fish_is_dried, merge_fish_catalog_row,
+        parse_calculator_effect_text, parse_layer_kind, parse_positive_i64, parse_vector_source,
+        pixel_to_tile_index, resolve_layer_asset_url, synthetic_events_snapshot_revision,
+        zone_distribution_fish_ids, CalculatorItemEffectValues, DoltMySqlStore, FishCatalogRow,
+        FishIdentityEntry, FishIdentityIndex, VectorSourceFields, WindowSummary,
     };
 
     fn vector_source_fields(
@@ -2389,5 +2583,60 @@ mod tests {
         };
 
         assert_eq!(zone_distribution_fish_ids(&summary), vec![1]);
+    }
+
+    #[test]
+    fn extract_first_number_handles_signed_percent_lines() {
+        assert_eq!(extract_first_number("자동 낚시 시간 -15%"), Some(-15.0));
+        assert_eq!(extract_first_number("낚시 경험치 획득량 +10%"), Some(10.0));
+        assert_eq!(extract_first_number("생활 숙련도 +20"), Some(20.0));
+        assert_eq!(extract_first_number("효과 없음"), None);
+    }
+
+    #[test]
+    fn calculator_effect_text_parses_balacs_style_lines() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(
+            &mut values,
+            "자동 낚시 시간 감소 7%\n낚시 경험치 획득량 +10%",
+        );
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                afr: Some(0.07),
+                exp_fish: Some(0.10),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
+    fn calculator_effect_text_parses_event_food_and_housekeeper_lines() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(&mut values, "생활 숙련도 +50\n생활 경험치 획득량 +20%");
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                exp_life: Some(0.20),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+
+        let mut event_food = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(
+            &mut event_food,
+            "자동 낚시 시간 -10%\n생활 경험치 획득량 +50%\n생활 숙련도 +100",
+        );
+
+        assert_eq!(
+            event_food,
+            CalculatorItemEffectValues {
+                afr: Some(0.10),
+                exp_life: Some(0.50),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
     }
 }
