@@ -7,7 +7,7 @@ use mysql::prelude::Queryable;
 use crate::error::AppResult;
 use crate::store::{validate_dolt_ref, FishLang};
 
-use super::calculator_effects::CalculatorItemEffectValues;
+use super::calculator_effects::{CalculatorItemEffectValues, CalculatorLightstoneSourceEntry};
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
@@ -198,11 +198,10 @@ impl DoltMySqlStore {
         Ok(out)
     }
 
-    fn query_legacy_calculator_items(
+    fn query_legacy_calculator_item_rows(
         &self,
-        lang: FishLang,
         ref_id: Option<&str>,
-    ) -> AppResult<Vec<CalculatorItemEntry>> {
+    ) -> AppResult<Vec<CalculatorItemDbRow>> {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -227,16 +226,16 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<CalculatorItemDbRow> = conn.query(query).map_err(db_unavailable)?;
+        conn.query(query).map_err(db_unavailable)
+    }
 
-        let item_ids = rows.iter().filter_map(|row| row.10).collect::<Vec<_>>();
-        let item_source_metadata = self.query_calculator_item_table_metadata(ref_id, &item_ids)?;
-        let lightstone_names_ko = if matches!(lang, FishLang::Ko) {
-            self.query_calculator_lightstone_name_overrides_ko(ref_id)?
-        } else {
-            HashMap::new()
-        };
-
+    fn build_legacy_calculator_items(
+        &self,
+        lang: FishLang,
+        rows: Vec<CalculatorItemDbRow>,
+        item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
+        lightstone_sources: &HashMap<String, CalculatorLightstoneSourceEntry>,
+    ) -> Vec<CalculatorItemEntry> {
         let mut items = Vec::with_capacity(rows.len());
         for (
             name,
@@ -269,7 +268,9 @@ impl DoltMySqlStore {
                 })
                 .or_else(|| {
                     if item_type == "lightstone_set" {
-                        lightstone_names_ko.get(&legacy_name).cloned()
+                        lightstone_sources
+                            .get(&legacy_name)
+                            .map(|source| source.name_ko.clone())
                     } else {
                         None
                     }
@@ -313,24 +314,15 @@ impl DoltMySqlStore {
             });
         }
 
-        Ok(items)
+        items
     }
 
     fn build_source_consumable_items(
-        &self,
         lang: FishLang,
-        ref_id: Option<&str>,
         legacy_items: &[CalculatorItemEntry],
+        item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
+        consumable_overrides: &HashMap<i32, CalculatorItemEffectValues>,
     ) -> AppResult<Vec<CalculatorItemEntry>> {
-        let override_item_ids = legacy_items
-            .iter()
-            .filter(|item| matches!(item.r#type.as_str(), "food" | "buff"))
-            .filter_map(|item| item.item_id)
-            .collect::<Vec<_>>();
-        let consumable_overrides =
-            self.query_calculator_consumable_effect_overrides(ref_id, &override_item_ids)?;
-        let item_source_metadata =
-            self.query_calculator_item_table_metadata(ref_id, &override_item_ids)?;
         let legacy_by_item_id = legacy_items
             .iter()
             .filter_map(|item| item.item_id.map(|item_id| (item_id, item)))
@@ -357,39 +349,32 @@ impl DoltMySqlStore {
     }
 
     fn build_source_lightstone_items(
-        &self,
         lang: FishLang,
-        ref_id: Option<&str>,
         legacy_items: &[CalculatorItemEntry],
+        lightstone_sources: &HashMap<String, CalculatorLightstoneSourceEntry>,
     ) -> AppResult<Vec<CalculatorItemEntry>> {
-        let lightstone_overrides = self.query_calculator_lightstone_effect_overrides(ref_id)?;
-        let lightstone_names_ko = if matches!(lang, FishLang::Ko) {
-            self.query_calculator_lightstone_name_overrides_ko(ref_id)?
-        } else {
-            HashMap::new()
-        };
         let legacy_by_name = legacy_items
             .iter()
             .filter(|item| item.r#type == "lightstone_set")
             .map(|item| (item.name.clone(), item))
             .collect::<HashMap<_, _>>();
-        let mut ordered_names = lightstone_overrides.keys().cloned().collect::<Vec<_>>();
+        let mut ordered_names = lightstone_sources.keys().cloned().collect::<Vec<_>>();
         ordered_names.sort_unstable();
         let mut items = Vec::new();
         for legacy_name in ordered_names {
             let Some(legacy) = legacy_by_name.get(&legacy_name).copied() else {
                 continue;
             };
-            let Some(override_values) = lightstone_overrides.get(legacy_name.as_str()).copied()
-            else {
+            let Some(source) = lightstone_sources.get(legacy_name.as_str()) else {
+                continue;
+            };
+            let Some(override_values) = source.values else {
                 continue;
             };
             items.push(build_source_lightstone_item(
                 lang,
                 legacy,
-                lightstone_names_ko
-                    .get(legacy_name.as_str())
-                    .map(String::as_str),
+                Some(source.name_ko.as_str()),
                 override_values,
             ));
         }
@@ -426,9 +411,37 @@ impl DoltMySqlStore {
         lang: FishLang,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorItemEntry>> {
-        let legacy_items = self.query_legacy_calculator_items(lang, ref_id)?;
-        let mut sourced_items = self.build_source_consumable_items(lang, ref_id, &legacy_items)?;
-        sourced_items.extend(self.build_source_lightstone_items(lang, ref_id, &legacy_items)?);
+        let legacy_rows = self.query_legacy_calculator_item_rows(ref_id)?;
+        let item_ids = legacy_rows
+            .iter()
+            .filter_map(|row| row.10)
+            .collect::<Vec<_>>();
+        let item_source_metadata = self.query_calculator_item_table_metadata(ref_id, &item_ids)?;
+        let lightstone_sources = self.query_calculator_lightstone_sources(ref_id)?;
+        let legacy_items = self.build_legacy_calculator_items(
+            lang,
+            legacy_rows,
+            &item_source_metadata,
+            &lightstone_sources,
+        );
+        let override_item_ids = legacy_items
+            .iter()
+            .filter(|item| matches!(item.r#type.as_str(), "food" | "buff"))
+            .filter_map(|item| item.item_id)
+            .collect::<Vec<_>>();
+        let consumable_overrides =
+            self.query_calculator_consumable_effect_overrides(ref_id, &override_item_ids)?;
+        let mut sourced_items = Self::build_source_consumable_items(
+            lang,
+            &legacy_items,
+            &item_source_metadata,
+            &consumable_overrides,
+        )?;
+        sourced_items.extend(Self::build_source_lightstone_items(
+            lang,
+            &legacy_items,
+            &lightstone_sources,
+        )?);
         Ok(self.merge_calculator_items(legacy_items, sourced_items))
     }
 }
