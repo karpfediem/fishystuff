@@ -1071,119 +1071,27 @@
     const CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
     const FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
     const GRADE_FILTER_COLOR_ORDER = ["red", "yellow", "blue", "green", "white"];
-    const GRADE_COLOR_ORDER = [...GRADE_FILTER_COLOR_ORDER, "unknown"];
-    const GRADE_CODE_TO_COLOR = Object.freeze({
-      Prize: "red",
-      Rare: "yellow",
-      HighQuality: "blue",
-      General: "green",
-      Trash: "white",
-      Unknown: "unknown",
-    });
-    const GRADE_COLOR_LABELS = Object.freeze({
-      red: "Red",
-      yellow: "Yellow",
-      blue: "Blue",
-      green: "Green",
-      white: "White",
-      unknown: "Unknown",
-    });
-    function spriteIconMarkup(name, className = "", inline = false) {
-      const classes = ["fishy-icon"];
-      if (inline) {
-        classes.push("fishy-icon--inline");
-      }
-      if (className) {
-        classes.push(className);
-      }
-      return `<svg class="${classes.join(" ")}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-${name}"></use></svg>`;
-    }
-
-    const ICON_CHECK_CIRCLE_DASH_LINE = spriteIconMarkup("check-circle-dash-line", "size-7");
-    const ICON_CHECK_BADGE_SOLID = spriteIconMarkup("check-badge-solid", "size-7");
-    const ICON_HEART_FILL = spriteIconMarkup("heart-fill", "size-6");
-    const ICON_HEART_LINE = spriteIconMarkup("heart-line", "size-6");
-    const ICON_COIN_STACK = spriteIconMarkup("coin-stack");
-    const ICON_SORT_NAME_ASC = spriteIconMarkup("az-sort-ascending-letters-fill", "size-5");
-    const ICON_SORT_NAME_DESC = spriteIconMarkup("za-sort-descending-letters-fill", "size-5");
-    const ICON_SORT_PRICE_COIN = spriteIconMarkup("coin-2-fill", "size-5");
-    const ICON_SORT_PRICE_ASC = spriteIconMarkup("arrow-up-fill");
-    const ICON_SORT_PRICE_DESC = spriteIconMarkup("arrow-down-fill");
-    const CAUGHT_FILTER_ORDER = ["all", "caught", "missing"];
     const METHOD_ORDER = ["rod", "harpoon"];
-    const SORT_FIELD_ORDER = ["price", "name"];
-    const SORT_DIRECTION_ORDER = ["asc", "desc"];
-    const SORT_FIELD_LABELS = Object.freeze({
-      name: "Name",
-      price: "Price",
-    });
-    const METHOD_LABELS = {
-      rod: "Rod",
-      harpoon: "Harpoon",
-      unknown: "Unknown",
-    };
-    const SILVER_FORMATTER = new Intl.NumberFormat();
     const state = {
-      currentCaughtIds: [],
-      currentFavouriteIds: [],
-      currentCaughtFilter: "all",
-      currentFavouriteFilter: false,
-      currentGradeFilters: [],
-      currentMethodFilters: [],
-      currentShowDried: false,
-      currentSortField: "price",
-      currentSortDirection: "desc",
-      fishById: new Map(),
       signals: null,
       uiSettingsUnsubscribe: null,
-      detailsFishId: null,
-      detailsBound: false,
-      renderKey: "",
-      gridBound: false,
       persistedUiJson: "",
       uiStateRestored: false,
       pendingViewportRestore: null,
       pendingViewportFrame: 0,
-      suppressCardAnimation: false,
-      pendingCaughtStampFishId: null,
-      pendingCaughtStampTimer: 0,
-      pendingFavouriteStampFishId: null,
-      pendingFavouriteStampTimer: 0,
+      stampTimers: new Map(),
     };
 
-    function connect(signals) {
-      state.signals = signals && typeof signals === "object" ? signals : null;
-      if (typeof state.uiSettingsUnsubscribe === "function") {
-        state.uiSettingsUnsubscribe();
-        state.uiSettingsUnsubscribe = null;
-      }
-      const store = sharedUiSettingsStore();
-      if (store && typeof store.subscribe === "function") {
-        state.uiSettingsUnsubscribe = store.subscribe(() => {
-          if (!state.signals) {
-            return;
-          }
-          const progressCollapsed = readPanelCollapsedState("progress");
-          const filterCollapsed = readPanelCollapsedState("filter");
-          if (
-            normalizeBooleanFlag(state.signals.progress_panel_collapsed) === progressCollapsed
-            && normalizeBooleanFlag(state.signals.filter_panel_collapsed) === filterCollapsed
-          ) {
-            return;
-          }
-          mergeSignals({
-            progress_panel_collapsed: progressCollapsed,
-            filter_panel_collapsed: filterCollapsed,
-          });
-        });
-      }
+    function signalObject() {
+      return state.signals && typeof state.signals === "object" ? state.signals : null;
     }
 
-    function mergeSignals(patch) {
-      if (!state.signals || !patch || typeof patch !== "object") {
+    function patchSignals(patch) {
+      const signals = signalObject();
+      if (!signals || !patch || typeof patch !== "object") {
         return;
       }
-      Object.assign(state.signals, patch);
+      Object.assign(signals, patch);
     }
 
     function sharedUiSettingsStore() {
@@ -1197,8 +1105,8 @@
       return panelId === "progress" ? DEX_PROGRESS_PANEL_UI_KEY : DEX_FILTER_PANEL_UI_KEY;
     }
 
-    function panelSignalKey(panelId) {
-      return panelId === "progress" ? "progress_panel_collapsed" : "filter_panel_collapsed";
+    function normalizeBooleanFlag(value) {
+      return value === true || value === "true" || value === 1 || value === "1";
     }
 
     function readPanelCollapsedState(panelId) {
@@ -1206,7 +1114,7 @@
       return normalizeBooleanFlag(store ? store.get(panelUiKey(panelId), false) : false);
     }
 
-    function persistPanelCollapsedState(panelId, collapsed) {
+    function persistPanelCollapsed(panelId, collapsed) {
       const store = sharedUiSettingsStore();
       if (!store) {
         return;
@@ -1214,35 +1122,36 @@
       store.set(panelUiKey(panelId), Boolean(collapsed));
     }
 
-    function storedUiSignals(signals) {
-      const searchQuery = String(signals && (signals.search_query ?? signals.search_draft) || "").trim();
-      return {
-        search_draft: searchQuery,
-        search_query: searchQuery,
-        caught_filter: normalizeCaughtFilter(signals && signals.caught_filter),
-        favourite_filter: normalizeBooleanFlag(signals && signals.favourite_filter),
-        grade_filters: normalizeGradeFilters(signals && signals.grade_filters),
-        method_filters: normalizeMethodFilters(signals && signals.method_filters),
-        show_dried: normalizeBooleanFlag(signals && signals.show_dried),
-        sort_field: normalizeSortField(signals && signals.sort_field),
-        sort_direction: normalizeSortDirection(signals && signals.sort_direction),
-      };
-    }
+    function connect(signals) {
+      state.signals = signals && typeof signals === "object" ? signals : null;
+      if (typeof state.uiSettingsUnsubscribe === "function") {
+        state.uiSettingsUnsubscribe();
+        state.uiSettingsUnsubscribe = null;
+      }
 
-    function persistUiSignals(signals) {
-      if (!state.uiStateRestored) {
+      const store = sharedUiSettingsStore();
+      if (!store || typeof store.subscribe !== "function") {
         return;
       }
-      try {
-        const json = JSON.stringify(storedUiSignals(signals));
-        if (json === state.persistedUiJson) {
+
+      state.uiSettingsUnsubscribe = store.subscribe(() => {
+        const currentSignals = signalObject();
+        if (!currentSignals) {
           return;
         }
-        localStorage.setItem(DEX_UI_STORAGE_KEY, json);
-        state.persistedUiJson = json;
-      } catch (_error) {
-        mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
-      }
+        const progressCollapsed = readPanelCollapsedState("progress");
+        const filterCollapsed = readPanelCollapsedState("filter");
+        if (
+          normalizeBooleanFlag(currentSignals._progress_panel_collapsed) === progressCollapsed
+          && normalizeBooleanFlag(currentSignals._filter_panel_collapsed) === filterCollapsed
+        ) {
+          return;
+        }
+        Object.assign(currentSignals, {
+          _progress_panel_collapsed: progressCollapsed,
+          _filter_panel_collapsed: filterCollapsed,
+        });
+      });
     }
 
     function normalizeStoredFishIds(value) {
@@ -1265,20 +1174,51 @@
       return Array.from(unique).sort((left, right) => left - right);
     }
 
-    function normalizeCaughtIds(value) {
-      return normalizeStoredFishIds(value);
-    }
-
-    function normalizeFavouriteIds(value) {
-      return normalizeStoredFishIds(value);
-    }
-
     function parseCaughtJson(raw) {
-      return normalizeCaughtIds(JSON.parse(raw));
+      return normalizeStoredFishIds(JSON.parse(raw));
     }
 
     function parseFavouriteJson(raw) {
-      return normalizeFavouriteIds(JSON.parse(raw));
+      return normalizeStoredFishIds(JSON.parse(raw));
+    }
+
+    function normalizeOrderedValues(values, order) {
+      const selected = new Set(Array.isArray(values) ? values.map(String) : []);
+      return order.filter((value) => selected.has(value));
+    }
+
+    function storedUiSignals(signals) {
+      return {
+        search_query: String(signals && signals.search_query || "").trim(),
+        caught_filter: String(signals && signals.caught_filter || "all").trim().toLowerCase() === "caught"
+          ? "caught"
+          : String(signals && signals.caught_filter || "all").trim().toLowerCase() === "missing"
+            ? "missing"
+            : "all",
+        favourite_filter: normalizeBooleanFlag(signals && signals.favourite_filter),
+        grade_filters: normalizeOrderedValues(signals && signals.grade_filters, GRADE_FILTER_COLOR_ORDER),
+        method_filters: normalizeOrderedValues(signals && signals.method_filters, METHOD_ORDER),
+        show_dried: normalizeBooleanFlag(signals && signals.show_dried),
+        sort_field: String(signals && signals.sort_field || "price").trim().toLowerCase() === "name" ? "name" : "price",
+        sort_direction: String(signals && signals.sort_direction || "desc").trim().toLowerCase() === "asc" ? "asc" : "desc",
+      };
+    }
+
+    function persistUi() {
+      const signals = signalObject();
+      if (!signals || !state.uiStateRestored) {
+        return;
+      }
+      try {
+        const json = JSON.stringify(storedUiSignals(signals));
+        if (json === state.persistedUiJson) {
+          return;
+        }
+        localStorage.setItem(DEX_UI_STORAGE_KEY, json);
+        state.persistedUiJson = json;
+      } catch (_error) {
+        patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+      }
     }
 
     function loadUiStateFromStorage() {
@@ -1341,30 +1281,18 @@
 
     function persistCaughtIds(caughtIds) {
       try {
-        localStorage.setItem(CAUGHT_STORAGE_KEY, JSON.stringify(caughtIds));
+        localStorage.setItem(CAUGHT_STORAGE_KEY, JSON.stringify(normalizeStoredFishIds(caughtIds)));
       } catch (_error) {
-        mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
+        patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
       }
     }
 
     function persistFavouriteIds(favouriteIds) {
       try {
-        localStorage.setItem(FAVOURITES_STORAGE_KEY, JSON.stringify(favouriteIds));
+        localStorage.setItem(FAVOURITES_STORAGE_KEY, JSON.stringify(normalizeStoredFishIds(favouriteIds)));
       } catch (_error) {
-        mergeSignals({ status_message: "localStorage is unavailable; progress is not persisted." });
+        patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
       }
-    }
-
-    function resetFilters() {
-      mergeSignals({
-        search_draft: "",
-        search_query: "",
-        caught_filter: "all",
-        favourite_filter: false,
-        grade_filters: [],
-        method_filters: [],
-        show_dried: false,
-      });
     }
 
     function restore(signals) {
@@ -1372,14 +1300,13 @@
       const uiState = loadUiStateFromStorage();
       const caughtState = loadCaughtIdsFromStorage();
       const favouriteState = loadFavouriteIdsFromStorage();
-      state.currentCaughtIds = caughtState.caughtIds;
-      state.currentFavouriteIds = favouriteState.favouriteIds;
       Object.assign(signals, uiState.patch, {
         caught_ids: caughtState.caughtIds,
         favourite_ids: favouriteState.favouriteIds,
-        progress_panel_collapsed: readPanelCollapsedState("progress"),
-        filter_panel_collapsed: readPanelCollapsedState("filter"),
-        status_message:
+        _progress_panel_collapsed: readPanelCollapsedState("progress"),
+        _filter_panel_collapsed: readPanelCollapsedState("filter"),
+        selected_fish_id: null,
+        _status_message:
           uiState.statusMessage
           || caughtState.statusMessage
           || favouriteState.statusMessage
@@ -1388,126 +1315,74 @@
       state.uiStateRestored = true;
     }
 
-    function syncPanelUi(progressCollapsed, filterCollapsed) {
-      for (const button of document.querySelectorAll("[data-panel-toggle]")) {
-        if (!(button instanceof HTMLButtonElement)) {
-          continue;
-        }
-        const panelId = button.dataset.panelToggle === "filter" ? "filter" : "progress";
-        const collapsed = panelId === "progress" ? progressCollapsed : filterCollapsed;
-        const label = panelId === "progress" ? "progress" : "filter";
-        button.classList.toggle("is-collapsed", collapsed);
-        button.setAttribute("aria-expanded", collapsed ? "false" : "true");
-        button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${label} panel`);
-        button.setAttribute("title", `${collapsed ? "Expand" : "Collapse"} ${label} panel`);
-      }
-    }
-
-    function togglePanel(panelId) {
-      const key = panelSignalKey(panelId);
-      const next = !normalizeBooleanFlag(state.signals && state.signals[key]);
-      mergeSignals({ [key]: next });
-      persistPanelCollapsedState(panelId, next);
-    }
-
-    function queueCaughtStamp(fishId, isCaught) {
-      if (state.pendingCaughtStampTimer) {
-        window.clearTimeout(state.pendingCaughtStampTimer);
-        state.pendingCaughtStampTimer = 0;
-      }
-      if (!isCaught || !Number.isInteger(fishId)) {
-        state.pendingCaughtStampFishId = null;
-        return;
-      }
-      state.pendingCaughtStampFishId = fishId;
-      state.pendingCaughtStampTimer = window.setTimeout(() => {
-        if (state.pendingCaughtStampFishId === fishId) {
-          state.pendingCaughtStampFishId = null;
-        }
-        state.pendingCaughtStampTimer = 0;
-      }, 420);
-    }
-
-    function shouldStampCaughtToggle(fishId, isCaught) {
-      return isCaught && Number.isInteger(fishId) && state.pendingCaughtStampFishId === fishId;
-    }
-
-    function queueFavouriteStamp(fishId, isFavourite) {
-      if (state.pendingFavouriteStampTimer) {
-        window.clearTimeout(state.pendingFavouriteStampTimer);
-        state.pendingFavouriteStampTimer = 0;
-      }
-      if (!isFavourite || !Number.isInteger(fishId)) {
-        state.pendingFavouriteStampFishId = null;
-        return;
-      }
-      state.pendingFavouriteStampFishId = fishId;
-      state.pendingFavouriteStampTimer = window.setTimeout(() => {
-        if (state.pendingFavouriteStampFishId === fishId) {
-          state.pendingFavouriteStampFishId = null;
-        }
-        state.pendingFavouriteStampTimer = 0;
-      }, 420);
-    }
-
-    function shouldStampFavouriteToggle(fishId, isFavourite) {
-      return isFavourite && Number.isInteger(fishId) && state.pendingFavouriteStampFishId === fishId;
-    }
-
-    function toggleCaught(fishId) {
-      const next = new Set(state.currentCaughtIds);
+    function toggleFishIds(values, fishId) {
+      const next = new Set(normalizeStoredFishIds(values));
       if (next.has(fishId)) {
         next.delete(fishId);
       } else {
         next.add(fishId);
       }
-      const caughtIds = Array.from(next).sort((left, right) => left - right);
-      state.currentCaughtIds = caughtIds;
-      queueCaughtStamp(fishId, next.has(fishId));
-      state.suppressCardAnimation = true;
-      persistCaughtIds(caughtIds);
-      mergeSignals({ caught_ids: caughtIds, status_message: "" });
+      return Array.from(next).sort((left, right) => left - right);
     }
 
-    function toggleFavourite(fishId) {
-      const next = new Set(state.currentFavouriteIds);
-      if (next.has(fishId)) {
-        next.delete(fishId);
+    function toggleGradeFilters(values, grade) {
+      const next = new Set(normalizeOrderedValues(values, GRADE_FILTER_COLOR_ORDER));
+      if (next.has(grade)) {
+        next.delete(grade);
       } else {
-        next.add(fishId);
+        next.add(grade);
       }
-      const favouriteIds = Array.from(next).sort((left, right) => left - right);
-      state.currentFavouriteIds = favouriteIds;
-      queueFavouriteStamp(fishId, next.has(fishId));
-      state.suppressCardAnimation = true;
-      persistFavouriteIds(favouriteIds);
-      mergeSignals({ favourite_ids: favouriteIds, status_message: "" });
+      return GRADE_FILTER_COLOR_ORDER.filter((value) => next.has(value));
     }
 
-    function rememberViewport(card, anchor) {
-      if (!(card instanceof HTMLElement)) {
-        state.pendingViewportRestore = null;
+    function toggleMethodFilters(values, method) {
+      const next = new Set(normalizeOrderedValues(values, METHOD_ORDER));
+      if (next.has(method)) {
+        next.delete(method);
+      } else {
+        next.add(method);
+      }
+      return METHOD_ORDER.filter((value) => next.has(value));
+    }
+
+    function queueStamp(key, fishId) {
+      const signals = signalObject();
+      if (!signals || typeof key !== "string" || !key) {
         return;
       }
-      const fishId = Number.parseInt(card.dataset.fishId || "", 10);
+      const currentTimer = state.stampTimers.get(key);
+      if (currentTimer) {
+        window.clearTimeout(currentTimer);
+        state.stampTimers.delete(key);
+      }
+      signals[key] = Number.isInteger(fishId) ? fishId : null;
       if (!Number.isInteger(fishId)) {
+        return;
+      }
+      const timer = window.setTimeout(() => {
+        const activeSignals = signalObject();
+        if (activeSignals && activeSignals[key] === fishId) {
+          activeSignals[key] = null;
+        }
+        state.stampTimers.delete(key);
+      }, 420);
+      state.stampTimers.set(key, timer);
+    }
+
+    function rememberViewport(fishId, event) {
+      const trigger = event && event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+      const card = trigger ? trigger.closest("[data-fish-id]") : null;
+      if (!(card instanceof HTMLElement) || !Number.isInteger(fishId)) {
         state.pendingViewportRestore = null;
         return;
       }
-      const anchorElement = anchor instanceof HTMLElement ? anchor : card;
-      const restoreFocusSelector = anchorElement.closest("[data-action='toggle-caught']")
-        ? "[data-action='toggle-caught']"
-        : anchorElement.closest("[data-action='toggle-favourite']")
-          ? "[data-action='toggle-favourite']"
-        : anchorElement.closest("[data-action='open-details']")
-          ? "[data-action='open-details']"
-          : "";
+      const action = trigger.dataset.action || "";
       state.pendingViewportRestore = {
         fishId,
-        anchorTop: anchorElement.getBoundingClientRect().top,
+        anchorTop: trigger.getBoundingClientRect().top,
         scrollX: window.scrollX,
         scrollY: window.scrollY,
-        restoreFocusSelector,
+        restoreFocusSelector: action ? `[data-action="${action}"]` : "",
       };
     }
 
@@ -1525,17 +1400,13 @@
         if (!pending) {
           return;
         }
-
         const nextCard = document.querySelector(`[data-fish-id="${pending.fishId}"]`);
         if (!(nextCard instanceof HTMLElement)) {
           window.scrollTo(pending.scrollX, pending.scrollY);
           return;
         }
-
         const nextAnchor = pending.restoreFocusSelector
-          ? nextCard.matches(pending.restoreFocusSelector)
-            ? nextCard
-            : nextCard.querySelector(pending.restoreFocusSelector)
+          ? nextCard.querySelector(pending.restoreFocusSelector)
           : nextCard;
         if (nextAnchor instanceof HTMLElement) {
           nextAnchor.focus({ preventScroll: true });
@@ -1546,6 +1417,26 @@
           return;
         }
         window.scrollTo(pending.scrollX, pending.scrollY);
+      });
+    }
+
+    function focusFishCardAction(fishId, action) {
+      if (!Number.isInteger(fishId) || !action) {
+        return;
+      }
+      window.requestAnimationFrame(() => {
+        const target = document.querySelector(`[data-fish-id="${fishId}"] [data-action="${action}"]`);
+        if (target instanceof HTMLElement) {
+          target.focus({ preventScroll: true });
+        }
+      });
+    }
+
+    function clearRequestUi() {
+      patchSignals({
+        _status_message: "",
+        _api_error_message: "",
+        _api_error_hint: "",
       });
     }
 
@@ -1578,20 +1469,28 @@
     }
 
     async function exportCaught(caughtIds) {
-      const normalized = normalizeCaughtIds(caughtIds);
+      const normalized = normalizeStoredFishIds(caughtIds);
       const text = JSON.stringify(normalized, null, 2);
       try {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           await navigator.clipboard.writeText(text);
-          mergeSignals({ status_message: `Copied ${normalized.length} caught fish IDs.` });
+          patchSignals({ _status_message: `Copied ${normalized.length} caught fish IDs.` });
           showToast("success", `Copied ${normalized.length} caught fish IDs.`);
           return;
         }
       } catch (_error) {
       }
       downloadJson("fishystuff-fishydex-caught.json", text);
-      mergeSignals({ status_message: `Downloaded ${normalized.length} caught fish IDs.` });
+      patchSignals({ _status_message: `Downloaded ${normalized.length} caught fish IDs.` });
       showToast("info", `Downloaded ${normalized.length} caught fish IDs.`);
+    }
+
+    function requestEval() {
+      const bridge = document.getElementById("fishydex-request-bridge");
+      if (!(bridge instanceof HTMLElement)) {
+        return;
+      }
+      bridge.dispatchEvent(new CustomEvent("fishydex-eval", { bubbles: true }));
     }
 
     function importCaught() {
@@ -1601,591 +1500,25 @@
       }
       try {
         const caughtIds = parseCaughtJson(raw);
-        state.currentCaughtIds = caughtIds;
         persistCaughtIds(caughtIds);
-        mergeSignals({
+        patchSignals({
           caught_ids: caughtIds,
-          status_message: `Imported ${caughtIds.length} caught fish IDs.`,
+          _status_message: `Imported ${caughtIds.length} caught fish IDs.`,
+          _api_error_message: "",
+          _api_error_hint: "",
         });
+        requestEval();
         showToast("success", `Imported ${caughtIds.length} caught fish IDs.`);
       } catch (_error) {
-        mergeSignals({
-          status_message: "Import failed. Paste a JSON array of fish IDs or a map like {\"8474\": true}.",
+        patchSignals({
+          _status_message: "Import failed. Paste a JSON array of fish IDs or a map like {\"8474\": true}.",
         });
         showToast("error", "Import failed. Paste a JSON array of fish IDs or a map like {\"8474\": true}.");
       }
     }
 
-    function gradeColorKey(value) {
-      const code = String(value || "Unknown");
-      return GRADE_CODE_TO_COLOR[code] || "unknown";
-    }
-
-    function gradeLabel(value) {
-      return GRADE_COLOR_LABELS[gradeColorKey(value)] || GRADE_COLOR_LABELS.unknown;
-    }
-
-    function normalizeMethod(value) {
-      const normalized = String(value || "").trim().toLowerCase();
-      return normalized === "harpoon" ? "harpoon" : normalized === "rod" ? "rod" : "unknown";
-    }
-
-    function normalizeMethodList(values) {
-      const rawValues = Array.isArray(values)
-        ? values
-        : values === undefined || values === null
-          ? []
-          : [values];
-      const selected = new Set();
-      for (const raw of rawValues) {
-        const method = normalizeMethod(raw);
-        if (method !== "unknown") {
-          selected.add(method);
-        }
-      }
-      return METHOD_ORDER.filter((method) => selected.has(method));
-    }
-
-    function entryCatchMethods(entry) {
-      if (!entry) {
-        return [];
-      }
-      const methods = Array.isArray(entry.catch_methods)
-        ? normalizeMethodList(entry.catch_methods)
-        : normalizeMethodList(entry.catch_method);
-      return methods.length ? methods : ["rod"];
-    }
-
-    function methodLabel(values) {
-      const methods = normalizeMethodList(values);
-      if (!methods.length) {
-        return METHOD_LABELS.rod;
-      }
-      return methods.map((method) => METHOD_LABELS[method] || METHOD_LABELS.unknown).join(" + ");
-    }
-
-    function formatSilver(value) {
-      const amount = Number(value);
-      if (!Number.isFinite(amount) || amount <= 0) {
-        return "Unavailable";
-      }
-      return SILVER_FORMATTER.format(amount);
-    }
-
-    function populateVendorPrice(element, value) {
-      if (!(element instanceof HTMLElement)) {
-        return;
-      }
-      const icon = createElement("span", "fishydex-price-icon");
-      icon.innerHTML = ICON_COIN_STACK;
-      const amount = createElement("span", "fishydex-price-value", formatSilver(value));
-      element.replaceChildren(icon, amount);
-    }
-
-    function createVendorPriceElement(tagName, className, value) {
-      const element = createElement(tagName, className);
-      populateVendorPrice(element, value);
-      return element;
-    }
-
-    function normalizeBooleanFlag(value) {
-      return value === true || value === "true" || value === 1 || value === "1";
-    }
-
-    function normalizeSortField(value) {
-      const normalized = String(value || "price").trim().toLowerCase();
-      return SORT_FIELD_ORDER.includes(normalized) ? normalized : "price";
-    }
-
-    function normalizeSortDirection(value) {
-      const normalized = String(value || "desc").trim().toLowerCase();
-      return SORT_DIRECTION_ORDER.includes(normalized) ? normalized : "desc";
-    }
-
-    function sortFieldIconMarkup(sortField, sortDirection) {
-      if (sortField === "price") {
-        const arrow = sortDirection === "desc" ? ICON_SORT_PRICE_DESC : ICON_SORT_PRICE_ASC;
-        return `<span class="fishydex-sort-price-icon" aria-hidden="true">${ICON_SORT_PRICE_COIN}<span class="fishydex-sort-price-arrow">${arrow}</span></span>`;
-      }
-      return sortDirection === "desc" ? ICON_SORT_NAME_DESC : ICON_SORT_NAME_ASC;
-    }
-
-    function sortFieldButtonMarkup(sortField, active, sortDirection) {
-      const effectiveDirection = active ? sortDirection : "asc";
-      const label = SORT_FIELD_LABELS[sortField] || sortField;
-      return `${sortFieldIconMarkup(sortField, effectiveDirection)}<span>${label}</span>`;
-    }
-
-    function normalizeCaughtFilter(value) {
-      const normalized = String(value || "all").trim().toLowerCase();
-      return CAUGHT_FILTER_ORDER.includes(normalized) ? normalized : "all";
-    }
-
-    function normalizeMethodFilters(value) {
-      const rawValues = Array.isArray(value)
-        ? value
-        : value === undefined || value === null || value === "all"
-          ? []
-          : [value];
-      const selected = [];
-      for (const raw of rawValues) {
-        const method = normalizeMethod(raw);
-        if (METHOD_ORDER.includes(method) && !selected.includes(method)) {
-          selected.push(method);
-        }
-      }
-      return METHOD_ORDER.filter((method) => selected.includes(method));
-    }
-
-    function normalizeGradeFilters(value) {
-      const rawValues = Array.isArray(value) ? value : [];
-      const selected = [];
-      for (const raw of rawValues) {
-        const normalized = String(raw || "").trim();
-        const grade = GRADE_FILTER_COLOR_ORDER.find((candidate) => candidate === normalized)
-          || (normalized ? gradeColorKey(normalized) : "");
-        if (GRADE_FILTER_COLOR_ORDER.includes(grade) && !selected.includes(grade)) {
-          selected.push(grade);
-        }
-      }
-      return GRADE_FILTER_COLOR_ORDER.filter((candidate) => selected.includes(candidate));
-    }
-
-    function filterGradeForEntry(entry) {
-      if (!entry) {
-        return "unknown";
-      }
-      if (entry.is_prize === true || entry.grade === "Prize") {
-        return "red";
-      }
-      return gradeColorKey(entry.grade);
-    }
-
-    function filterMethodsForEntry(entry) {
-      return entryCatchMethods(entry);
-    }
-
-    function entryIsDried(entry) {
-      return normalizeBooleanFlag(entry && entry.is_dried);
-    }
-
-    function syncFilterUi(caughtFilter, favouriteFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection) {
-      for (const button of document.querySelectorAll("[data-caught-filter-value]")) {
-        if (!(button instanceof HTMLButtonElement)) {
-          continue;
-        }
-        const active = button.dataset.caughtFilterValue === caughtFilter;
-        button.classList.toggle("is-active", active);
-        button.classList.toggle("btn-active", active);
-        button.setAttribute("aria-pressed", active ? "true" : "false");
-      }
-
-      for (const button of document.querySelectorAll("[data-favourite-filter-toggle]")) {
-        if (!(button instanceof HTMLButtonElement)) {
-          continue;
-        }
-        const active = favouriteFilter;
-        button.classList.toggle("is-active", active);
-        button.classList.toggle("btn-active", active);
-        button.setAttribute("aria-pressed", active ? "true" : "false");
-      }
-
-      const selectedGrades = new Set(gradeFilters);
-      for (const button of document.querySelectorAll("[data-grade-filter-value]")) {
-        if (!(button instanceof HTMLButtonElement)) {
-          continue;
-        }
-        const grade = button.dataset.gradeFilterValue || "";
-        const active = selectedGrades.has(grade);
-        button.classList.toggle("is-active", active);
-        button.classList.toggle("btn-active", active);
-        button.setAttribute("aria-pressed", active ? "true" : "false");
-      }
-
-      const selectedMethods = new Set(methodFilters);
-      for (const button of document.querySelectorAll("[data-method-filter-value]")) {
-        if (!(button instanceof HTMLButtonElement)) {
-          continue;
-        }
-        const method = button.dataset.methodFilterValue || "";
-        const active = method === "all" ? selectedMethods.size === 0 : selectedMethods.has(method);
-        button.classList.toggle("is-active", active);
-        button.classList.toggle("btn-active", active);
-        button.setAttribute("aria-pressed", active ? "true" : "false");
-      }
-
-      for (const button of document.querySelectorAll("[data-dried-toggle]")) {
-        if (!(button instanceof HTMLButtonElement)) {
-          continue;
-        }
-        const active = showDried;
-        button.classList.toggle("is-active", active);
-        button.classList.toggle("btn-active", active);
-        button.setAttribute("aria-pressed", active ? "true" : "false");
-      }
-
-      for (const button of document.querySelectorAll("[data-sort-field-value]")) {
-        if (!(button instanceof HTMLButtonElement)) {
-          continue;
-        }
-        const field = button.dataset.sortFieldValue || "";
-        const active = field === sortField;
-        button.classList.toggle("is-active", active);
-        button.setAttribute("aria-pressed", active ? "true" : "false");
-        button.innerHTML = sortFieldButtonMarkup(field, active, sortDirection);
-        if (active) {
-          button.setAttribute("aria-label", `Toggle ${field} sort direction. Current: ${sortDirection === "desc" ? "descending" : "ascending"}.`);
-        } else {
-          button.setAttribute("aria-label", `Sort catalog by ${field} ascending.`);
-        }
-      }
-    }
-
-    function setCaughtFilter(value) {
-      const next = normalizeCaughtFilter(value);
-      state.currentCaughtFilter = next;
-      mergeSignals({ caught_filter: next });
-    }
-
-    function setFavouriteFilter(value) {
-      const next = normalizeBooleanFlag(value);
-      state.currentFavouriteFilter = next;
-      mergeSignals({ favourite_filter: next });
-    }
-
-    function toggleFavouriteFilter() {
-      setFavouriteFilter(!state.currentFavouriteFilter);
-    }
-
-    function clearMethodFilters() {
-      state.currentMethodFilters = [];
-      mergeSignals({ method_filters: [] });
-    }
-
-    function toggleMethodFilter(value) {
-      const method = METHOD_ORDER.find((candidate) => candidate === normalizeMethod(value));
-      if (!method) {
-        return;
-      }
-      const next = new Set(state.currentMethodFilters);
-      if (next.has(method)) {
-        next.delete(method);
-      } else {
-        next.add(method);
-      }
-      const selected = METHOD_ORDER.filter((candidate) => next.has(candidate));
-      state.currentMethodFilters = selected;
-      mergeSignals({ method_filters: selected });
-    }
-
-    function setShowDried(value) {
-      const next = normalizeBooleanFlag(value);
-      state.currentShowDried = next;
-      mergeSignals({ show_dried: next });
-    }
-
-    function toggleShowDried() {
-      setShowDried(!state.currentShowDried);
-    }
-
-    function setSortField(value) {
-      const next = normalizeSortField(value);
-      state.currentSortField = next;
-      mergeSignals({ sort_field: next });
-    }
-
-    function activateSortField(value) {
-      const nextField = normalizeSortField(value);
-      const nextDirection = state.currentSortField === nextField
-        ? (state.currentSortDirection === "desc" ? "asc" : "desc")
-        : "asc";
-      state.currentSortField = nextField;
-      state.currentSortDirection = nextDirection;
-      mergeSignals({
-        sort_field: nextField,
-        sort_direction: nextDirection,
-      });
-    }
-
-    function setSortDirection(value) {
-      const next = normalizeSortDirection(value);
-      state.currentSortDirection = next;
-      mergeSignals({ sort_direction: next });
-    }
-
-    function toggleSortDirection() {
-      setSortDirection(state.currentSortDirection === "desc" ? "asc" : "desc");
-    }
-
-    function toggleGradeFilter(value) {
-      const grade = GRADE_FILTER_COLOR_ORDER.find((candidate) => candidate === String(value));
-      if (!grade) {
-        return;
-      }
-      const next = new Set(state.currentGradeFilters);
-      if (next.has(grade)) {
-        next.delete(grade);
-      } else {
-        next.add(grade);
-      }
-      const selected = GRADE_FILTER_COLOR_ORDER.filter((candidate) => next.has(candidate));
-      state.currentGradeFilters = selected;
-      mergeSignals({ grade_filters: selected });
-    }
-
-    function createElement(tagName, className, textContent) {
-      const element = document.createElement(tagName);
-      if (className) {
-        element.className = className;
-      }
-      if (textContent !== undefined) {
-        element.textContent = textContent;
-      }
-      return element;
-    }
-
-    function fishItemId(entry) {
-      const value = Number(entry && entry.item_id);
-      return Number.isInteger(value) ? value : 0;
-    }
-
-    function fishEncyclopediaId(entry) {
-      const value = Number(entry && entry.encyclopedia_id);
-      return Number.isInteger(value) && value > 0 ? value : null;
-    }
-
-    function fishRenderSignature(fish) {
-      let hash = 2166136261;
-      for (const entry of fish) {
-        const raw = entry
-          ? `${fishItemId(entry)}|${fishEncyclopediaId(entry) || 0}|${entry.grade || ""}|${entry.is_prize === true ? 1 : 0}|${entry.name || ""}|${entryIsDried(entry) ? 1 : 0}|${entryCatchMethods(entry).join(",")}|${entry.vendor_price || 0}`
-          : "null";
-        for (let index = 0; index < raw.length; index += 1) {
-          hash ^= raw.charCodeAt(index);
-          hash = Math.imul(hash, 16777619);
-        }
-      }
-      return `${fish.length}:${(hash >>> 0).toString(16)}`;
-    }
-
-    function compareFishNames(left, right) {
-      return String(left?.name || "").localeCompare(String(right?.name || ""), undefined, {
-        sensitivity: "base",
-        numeric: true,
-      });
-    }
-
-    function entryVendorPrice(entry) {
-      const amount = Number(entry && entry.vendor_price);
-      return Number.isFinite(amount) && amount > 0 ? amount : null;
-    }
-
-    function compareFishEntries(left, right, sortField, sortDirection) {
-      if (sortField === "price") {
-        const leftPrice = entryVendorPrice(left);
-        const rightPrice = entryVendorPrice(right);
-        if (leftPrice === null && rightPrice !== null) {
-          return 1;
-        }
-        if (leftPrice !== null && rightPrice === null) {
-          return -1;
-        }
-        if (leftPrice !== null && rightPrice !== null && leftPrice !== rightPrice) {
-          return sortDirection === "desc" ? rightPrice - leftPrice : leftPrice - rightPrice;
-        }
-      }
-
-      const nameOrder = compareFishNames(left, right);
-      if (nameOrder !== 0) {
-        return sortDirection === "desc" && sortField === "name" ? -nameOrder : nameOrder;
-      }
-      return fishItemId(left) - fishItemId(right);
-    }
-
-    function renderEmptyState(hasActiveFilters) {
-      const empty = createElement("div", "fishydex-empty card card-dash bg-base-100");
-      const body = createElement("div", "card-body items-center");
-      const title = createElement("h3", "fishydex-empty-title", "No fish match this filter.");
-      const detail = createElement(
-        "p",
-        "fishydex-subtle",
-        hasActiveFilters
-          ? "Try a broader search or clear some filters."
-          : "The fish catalog is empty."
-      );
-      body.append(title, detail);
-      empty.appendChild(body);
-      return empty;
-    }
-
-    function renderFishCard(fish, caughtSet, favouriteSet, animationIndex, animateCards) {
-      const itemId = fishItemId(fish);
-      const isCaught = caughtSet.has(itemId);
-      const isFavourite = favouriteSet.has(itemId);
-      const stampCaught = shouldStampCaughtToggle(itemId, isCaught);
-      const stampFavourite = shouldStampFavouriteToggle(itemId, isFavourite);
-      const card = createElement("article", "fishydex-card card card-border bg-base-100");
-      card.dataset.fishId = String(itemId);
-      if (animateCards) {
-        card.classList.add("is-entering");
-        card.style.setProperty("--fishydex-card-delay", `${Math.min(animationIndex, 11) * 24}ms`);
-      }
-      if (isCaught) {
-        card.classList.add("is-caught");
-      }
-
-      const openButton = createElement("button", "fishydex-card-open");
-      openButton.type = "button";
-      openButton.dataset.action = "open-details";
-      openButton.setAttribute("aria-haspopup", "dialog");
-      openButton.setAttribute("aria-label", `Open details for ${fish.name || `Fish ${itemId}`}`);
-
-      const content = createElement("div", "fishydex-card-content card-body");
-      const top = createElement("div", "fishydex-card-top");
-      const actions = createElement("div", "fishydex-card-actions");
-      const favouriteButton = createElement(
-        "button",
-        `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${isFavourite ? " is-favourite" : ""}${stampFavourite ? " is-stamping" : ""}`
-      );
-      favouriteButton.type = "button";
-      favouriteButton.dataset.action = "toggle-favourite";
-      favouriteButton.dataset.fishId = String(itemId);
-      favouriteButton.setAttribute("aria-pressed", isFavourite ? "true" : "false");
-      favouriteButton.setAttribute(
-        "aria-label",
-        `${isFavourite ? "Remove" : "Add"} ${fish.name || `Fish ${itemId}`} ${isFavourite ? "from" : "to"} favourites`
-      );
-      favouriteButton.innerHTML = isFavourite ? ICON_HEART_FILL : ICON_HEART_LINE;
-      const caughtButton = createElement(
-        "button",
-        `fishydex-caught-button btn btn-sm btn-circle btn-ghost${isCaught ? " is-caught" : ""}${stampCaught ? " is-stamping" : ""}`
-      );
-      caughtButton.type = "button";
-      caughtButton.dataset.action = "toggle-caught";
-      caughtButton.dataset.fishId = String(itemId);
-      caughtButton.setAttribute("aria-pressed", isCaught ? "true" : "false");
-      caughtButton.setAttribute(
-        "aria-label",
-        `Mark ${fish.name || `Fish ${itemId}`} as ${isCaught ? "not caught" : "caught"}`
-      );
-      caughtButton.innerHTML = isCaught ? ICON_CHECK_BADGE_SOLID : ICON_CHECK_CIRCLE_DASH_LINE;
-      actions.appendChild(favouriteButton);
-      actions.appendChild(caughtButton);
-      top.appendChild(actions);
-
-      const main = createElement("div", "fishydex-card-main");
-      const iconWrap = createElement(
-        "div",
-        `fishydex-icon-wrap grade-${filterGradeForEntry(fish)}`
-      );
-      const iconUrl = fishItemIconUrl(itemId);
-      const iconPlaceholder = createElement("div", "fishydex-placeholder", "?");
-      if (iconUrl) {
-        const icon = createElement("img", "fishydex-icon");
-        icon.loading = "lazy";
-        iconPlaceholder.hidden = true;
-        setImageWithPlaceholder(icon, iconPlaceholder, iconUrl, `${fish.name} icon`);
-        iconWrap.append(icon, iconPlaceholder);
-      } else {
-        iconWrap.appendChild(iconPlaceholder);
-      }
-      main.appendChild(iconWrap);
-      main.appendChild(createElement("div", "fishydex-name", fish.name || `Fish ${itemId}`));
-      main.appendChild(
-        createVendorPriceElement("div", "fishydex-price fishydex-card-price", entryVendorPrice(fish))
-      );
-
-      content.append(top, main);
-      card.append(openButton, content);
-      return card;
-    }
-
-    function renderGroup(title, fish, caughtSet, favouriteSet, animationIndex, animateCards) {
-      if (!fish.length) {
-        return null;
-      }
-
-      const section = createElement("fieldset", "fishydex-group card card-border bg-base-100");
-      const legend = createElement("legend", "fishydex-group-title fieldset-legend ml-6 px-2", gradeLabel(title));
-      const body = createElement("div", "card-body pt-0");
-      const header = createElement("div", "fishydex-group-header");
-      header.appendChild(createElement("span", "fishydex-group-count badge badge-ghost", `${fish.length} fish`));
-
-      const grid = createElement("div", "fishydex-card-grid");
-      let nextAnimationIndex = animationIndex;
-      for (const entry of fish) {
-        grid.appendChild(renderFishCard(entry, caughtSet, favouriteSet, nextAnimationIndex, animateCards));
-        nextAnimationIndex += 1;
-      }
-
-      body.append(header, grid);
-      section.append(legend, body);
-      return {
-        section,
-        nextAnimationIndex,
-      };
-    }
-
-    function bindGridClicks() {
-      if (state.gridBound) {
-        return;
-      }
-      const grid = document.getElementById("fishydex-grid");
-      if (!grid) {
-        return;
-      }
-      grid.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) {
-          return;
-        }
-        const card = target.closest("[data-fish-id]");
-        if (!card) {
-          return;
-        }
-        const fishId = Number.parseInt(card.dataset.fishId || "", 10);
-        if (!Number.isInteger(fishId)) {
-          return;
-        }
-        const toggleButton = target.closest("[data-action='toggle-caught']");
-        if (toggleButton) {
-          rememberViewport(card, toggleButton);
-          toggleCaught(fishId);
-          return;
-        }
-        const favouriteButton = target.closest("[data-action='toggle-favourite']");
-        if (favouriteButton) {
-          rememberViewport(card, favouriteButton);
-          toggleFavourite(fishId);
-          return;
-        }
-        openDetails(fishId);
-      });
-      state.gridBound = true;
-    }
-
-    function fishMetaById(fishId) {
-      if (!Number.isInteger(fishId)) {
-        return null;
-      }
-      const fish = state.fishById.get(fishId);
-      if (!fish) {
-        return null;
-      }
-      return {
-        fishId,
-        itemId: fishItemId(fish),
-        encyclopediaId: fishEncyclopediaId(fish),
-        name: fish.name || `Fish ${fishId}`,
-        grade: fish.grade || "Unknown",
-        isDried: entryIsDried(fish),
-        catchMethods: entryCatchMethods(fish),
-        vendorPrice: Number.isFinite(Number(fish.vendor_price)) && Number(fish.vendor_price) > 0
-          ? Number(fish.vendor_price)
-          : null,
-        caught: state.currentCaughtIds.includes(fishId),
-        favourite: state.currentFavouriteIds.includes(fishId),
-      };
+    function zeroPad(value, width) {
+      return String(Math.max(0, Number(value) || 0)).padStart(width, "0");
     }
 
     function cdnBaseUrl() {
@@ -2225,10 +1558,6 @@
         return `${base}${raw}`;
       }
       return `${base}/${raw.replace(/^\/+/, "")}`;
-    }
-
-    function zeroPad(value, width) {
-      return String(Math.max(0, Number(value) || 0)).padStart(width, "0");
     }
 
     function fishItemIconPath(itemId) {
@@ -2298,410 +1627,34 @@
       image.src = src;
     }
 
-    function setElementText(element, text) {
-      if (element) {
-        element.textContent = text;
-      }
-    }
-
-    function setElementLink(element, text, href) {
-      if (!element) {
+    function hydrateItemIcon(element) {
+      if (!(element instanceof HTMLElement)) {
         return;
       }
-      if (!href) {
-        element.textContent = text;
-        return;
-      }
-      const link = document.createElement("a");
-      link.className = "fishydex-details-link link link-hover";
-      link.href = href;
-      link.target = "_blank";
-      link.rel = "noreferrer noopener";
-      link.textContent = text;
-      element.replaceChildren(link);
-    }
-
-    function bdolyticsItemUrl(itemKey) {
-      if (!Number.isInteger(itemKey)) {
-        return "";
-      }
-      return `https://bdolytics.com/en/NA/db/item/${itemKey}`;
-    }
-
-    function renderDetails() {
-      const modal = document.getElementById("fishydex-details");
-      if (!(modal instanceof HTMLElement)) {
-        return;
-      }
-
-      const meta = fishMetaById(state.detailsFishId);
-      if (!meta) {
-        modal.classList.remove("modal-open");
-        modal.hidden = true;
-        return;
-      }
-
-      modal.hidden = false;
-      modal.classList.add("modal-open");
-      const title = document.getElementById("fishydex-details-title");
-      const titleFavouriteToggle = document.getElementById("fishydex-details-favourite-toggle");
-      const titleToggle = document.getElementById("fishydex-details-caught-toggle");
-      const itemKey = document.getElementById("fishydex-details-item-key");
-      const vendorPrice = document.getElementById("fishydex-details-vendor-price");
-      const favourite = document.getElementById("fishydex-details-favourite");
-      const caught = document.getElementById("fishydex-details-caught");
-      const grade = document.getElementById("fishydex-details-grade");
-      const methodRod = document.getElementById("fishydex-details-method-rod");
-      const methodHarpoon = document.getElementById("fishydex-details-method-harpoon");
-      const driedBadge = document.getElementById("fishydex-details-dried-badge");
-      const spotsNote = document.getElementById("fishydex-details-spots-note");
-      const icon = document.getElementById("fishydex-details-icon");
-      const iconFrame = document.getElementById("fishydex-details-icon-frame");
-      const placeholder = document.getElementById("fishydex-details-placeholder");
-      const guideImage = document.getElementById("fishydex-details-guide-image");
-      const guidePlaceholder = document.getElementById("fishydex-details-guide-placeholder");
-      const iconFrameGrade = gradeColorKey(meta.grade);
-      const itemIconUrl = fishItemIconUrl(meta.itemId);
-      const guideIconUrl = fishEncyclopediaIconUrl(meta.encyclopediaId);
-
-      setElementText(title, meta.name);
-      if (titleFavouriteToggle instanceof HTMLButtonElement) {
-        titleFavouriteToggle.className = `fishydex-favourite-button btn btn-sm btn-circle btn-ghost${meta.favourite ? " is-favourite" : ""}${shouldStampFavouriteToggle(meta.fishId, meta.favourite) ? " is-stamping" : ""}`;
-        titleFavouriteToggle.dataset.favouriteState = meta.favourite ? "active" : "inactive";
-        titleFavouriteToggle.setAttribute("aria-pressed", meta.favourite ? "true" : "false");
-        titleFavouriteToggle.setAttribute(
-          "aria-label",
-          `${meta.favourite ? "Remove" : "Add"} ${meta.name} ${meta.favourite ? "from" : "to"} favourites`
-        );
-        titleFavouriteToggle.innerHTML = meta.favourite ? ICON_HEART_FILL : ICON_HEART_LINE;
-      }
-      if (titleToggle instanceof HTMLButtonElement) {
-        titleToggle.className = `fishydex-caught-button btn btn-sm btn-circle btn-ghost${meta.caught ? " is-caught" : ""}${shouldStampCaughtToggle(meta.fishId, meta.caught) ? " is-stamping" : ""}`;
-        titleToggle.dataset.caughtState = meta.caught ? "caught" : "uncaught";
-        titleToggle.setAttribute("aria-pressed", meta.caught ? "true" : "false");
-        titleToggle.setAttribute(
-          "aria-label",
-          `Mark ${meta.name} as ${meta.caught ? "not caught" : "caught"}`
-        );
-        titleToggle.innerHTML = meta.caught ? ICON_CHECK_BADGE_SOLID : ICON_CHECK_CIRCLE_DASH_LINE;
-      }
-      setElementLink(itemKey, String(meta.itemId), bdolyticsItemUrl(meta.itemId));
-      if (vendorPrice instanceof HTMLElement) {
-        vendorPrice.className = "fishydex-price fishydex-details-price";
-        populateVendorPrice(vendorPrice, meta.vendorPrice);
-      }
-      setElementText(
-        spotsNote,
-        "Planned input: evidence locations mapped back to fishing zones, then ranked by rarity and bite-time behavior in each zone."
+      const itemId = Number.parseInt(element.dataset.fishItemIcon || "", 10);
+      const image = element.querySelector("img");
+      const placeholder = element.querySelector(".fishydex-placeholder");
+      setImageWithPlaceholder(
+        image,
+        placeholder,
+        fishItemIconUrl(itemId),
+        element.dataset.fishIconAlt || "Fish icon"
       );
-
-      if (caught instanceof HTMLElement) {
-        caught.className = meta.caught ? "fishydex-caught badge badge-soft badge-success" : "fishydex-grade badge badge-soft grade-unknown";
-        caught.textContent = meta.caught ? "Caught" : "Not Caught";
-      }
-      if (favourite instanceof HTMLElement) {
-        favourite.hidden = !meta.favourite;
-      }
-      if (grade instanceof HTMLElement) {
-        grade.className = `fishydex-grade badge badge-soft grade-${gradeColorKey(meta.grade)}`;
-        grade.textContent = gradeLabel(meta.grade);
-      }
-      if (methodRod instanceof HTMLElement) {
-        methodRod.hidden = !meta.catchMethods.includes("rod");
-      }
-      if (methodHarpoon instanceof HTMLElement) {
-        methodHarpoon.hidden = !meta.catchMethods.includes("harpoon");
-      }
-      if (driedBadge instanceof HTMLElement) {
-        driedBadge.hidden = !meta.isDried;
-      }
-      if (icon instanceof HTMLImageElement && placeholder instanceof HTMLElement) {
-        if (iconFrame instanceof HTMLElement) {
-          iconFrame.className = `fishydex-details-icon-wrap grade-${iconFrameGrade}`;
-        }
-        setImageWithPlaceholder(icon, placeholder, itemIconUrl, `${meta.name} icon`);
-      }
-      if (guideImage instanceof HTMLImageElement && guidePlaceholder instanceof HTMLElement) {
-        setImageWithPlaceholder(guideImage, guidePlaceholder, guideIconUrl, `${meta.name} guide image`);
-      }
     }
 
-    function closeDetails(options = {}) {
-      const restoreFocus = options.restoreFocus !== false;
-      const fishId = state.detailsFishId;
-      state.detailsFishId = null;
-      renderDetails();
-      if (!restoreFocus || !Number.isInteger(fishId)) {
+    function hydrateEncyclopediaIcon(element) {
+      if (!(element instanceof HTMLElement)) {
         return;
       }
-      const nextFocus = document.querySelector(`[data-fish-id="${fishId}"] [data-action="open-details"]`);
-      if (nextFocus instanceof HTMLElement) {
-        nextFocus.focus({ preventScroll: true });
-      }
-    }
-
-    function openDetails(fishId) {
-      if (!fishMetaById(fishId)) {
-        return;
-      }
-      state.detailsFishId = fishId;
-      renderDetails();
-    }
-
-    function bindDetailsControls() {
-      if (state.detailsBound) {
-        return;
-      }
-      const modal = document.getElementById("fishydex-details");
-      if (!(modal instanceof HTMLElement)) {
-        return;
-      }
-      modal.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) {
-          return;
-        }
-        if (target.closest("[data-action='toggle-caught-details']")) {
-          if (Number.isInteger(state.detailsFishId)) {
-            toggleCaught(state.detailsFishId);
-            renderDetails();
-          }
-          return;
-        }
-        if (target.closest("[data-action='toggle-favourite-details']")) {
-          if (Number.isInteger(state.detailsFishId)) {
-            toggleFavourite(state.detailsFishId);
-            renderDetails();
-          }
-          return;
-        }
-        if (target.closest("[data-action='close-details']")) {
-          closeDetails();
-        }
-      });
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape" && state.detailsFishId !== null) {
-          closeDetails();
-        }
-      });
-      state.detailsBound = true;
-    }
-
-    function sync(snapshot) {
-      bindGridClicks();
-      bindDetailsControls();
-      persistUiSignals(snapshot);
-
-      const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
-      const progressPanelCollapsed = normalizeBooleanFlag(snapshot.progress_panel_collapsed);
-      const filterPanelCollapsed = normalizeBooleanFlag(snapshot.filter_panel_collapsed);
-      syncPanelUi(progressPanelCollapsed, filterPanelCollapsed);
-      const caughtIds = normalizeCaughtIds(snapshot.caught_ids);
-      const favouriteIds = normalizeFavouriteIds(snapshot.favourite_ids);
-      state.currentCaughtIds = caughtIds;
-      state.currentFavouriteIds = favouriteIds;
-      const caughtFilter = normalizeCaughtFilter(snapshot.caught_filter);
-      const favouriteFilter = normalizeBooleanFlag(snapshot.favourite_filter);
-      const gradeFilters = normalizeGradeFilters(snapshot.grade_filters);
-      const methodFilters = normalizeMethodFilters(
-        snapshot.method_filters !== undefined ? snapshot.method_filters : snapshot.method_filter
+      const encyclopediaId = Number.parseInt(element.dataset.fishEncyclopediaIcon || "", 10);
+      const image = element.querySelector("img");
+      const placeholder = element.querySelector(".fishydex-placeholder");
+      setImageWithPlaceholder(
+        image,
+        placeholder,
+        fishEncyclopediaIconUrl(encyclopediaId),
+        element.dataset.fishIconAlt || "Fish guide image"
       );
-      const showDried = normalizeBooleanFlag(snapshot.show_dried);
-      const sortField = normalizeSortField(snapshot.sort_field);
-      const sortDirection = normalizeSortDirection(snapshot.sort_direction);
-      state.currentCaughtFilter = caughtFilter;
-      state.currentFavouriteFilter = favouriteFilter;
-      state.currentGradeFilters = gradeFilters;
-      state.currentMethodFilters = methodFilters;
-      state.currentShowDried = showDried;
-      state.currentSortField = sortField;
-      state.currentSortDirection = sortDirection;
-      state.fishById = new Map(
-        fish
-          .filter((entry) => entry && Number.isInteger(entry.item_id))
-          .map((entry) => [entry.item_id, entry])
-      );
-      const fishSignature = fishRenderSignature(fish);
-      syncFilterUi(caughtFilter, favouriteFilter, gradeFilters, methodFilters, showDried, sortField, sortDirection);
-
-      const renderKey = [
-        snapshot.revision || "",
-        fishSignature,
-        (snapshot.search_query || "").trim().toLowerCase(),
-        caughtFilter,
-        favouriteFilter ? "1" : "0",
-        gradeFilters.join(","),
-        methodFilters.join(","),
-        showDried ? "1" : "0",
-        sortField,
-        sortDirection,
-        caughtIds.join(","),
-        favouriteIds.join(","),
-      ].join("|");
-      if (renderKey === state.renderKey) {
-        renderDetails();
-        return;
-      }
-      state.renderKey = renderKey;
-
-      const supportsGradeFilter = fish.some((entry) => entry && (entry.is_prize !== null || entry.grade));
-      const supportsMethodFilter = fish.some((entry) => entry && filterMethodsForEntry(entry).length > 0);
-      const supportsDriedFilter = fish.some((entry) => entry && entryIsDried(entry));
-      const searchQuery = (snapshot.search_query || "").trim().toLowerCase();
-      const caughtSet = new Set(caughtIds);
-      const favouriteSet = new Set(favouriteIds);
-      const catalogEntries = fish.filter((entry) => {
-        return entry && (showDried || !entryIsDried(entry));
-      });
-      const filtered = fish.filter((entry) => {
-        if (!entry) {
-          return false;
-        }
-        const haystack = `${fishItemId(entry) || ""} ${entry.name || ""}`.toLowerCase();
-        if (searchQuery && !haystack.includes(searchQuery)) {
-          return false;
-        }
-        if (caughtFilter === "caught" && !caughtSet.has(fishItemId(entry))) {
-          return false;
-        }
-        if (caughtFilter === "missing" && caughtSet.has(fishItemId(entry))) {
-          return false;
-        }
-        if (favouriteFilter && !favouriteSet.has(fishItemId(entry))) {
-          return false;
-        }
-        if (gradeFilters.length > 0 && !gradeFilters.includes(filterGradeForEntry(entry))) {
-          return false;
-        }
-        if (!showDried && entryIsDried(entry)) {
-          return false;
-        }
-        if (
-          methodFilters.length > 0
-          && !methodFilters.every((method) => filterMethodsForEntry(entry).includes(method))
-        ) {
-          return false;
-        }
-        return true;
-      });
-
-      const sorted = filtered.slice().sort((left, right) => {
-        return compareFishEntries(left, right, sortField, sortDirection);
-      });
-      const hasNarrowingFilters = Boolean(searchQuery)
-        || caughtFilter !== "all"
-        || favouriteFilter
-        || gradeFilters.length > 0
-        || methodFilters.length > 0;
-      const catalogCaughtCount = catalogEntries.reduce((count, entry) => {
-        return count + (caughtSet.has(fishItemId(entry)) ? 1 : 0);
-      }, 0);
-      const gradeProgress = {
-        red: { total: 0, caught: 0 },
-        yellow: { total: 0, caught: 0 },
-        blue: { total: 0, caught: 0 },
-        green: { total: 0, caught: 0 },
-        white: { total: 0, caught: 0 },
-      };
-      for (const entry of catalogEntries) {
-        const grade = filterGradeForEntry(entry);
-        if (!(grade in gradeProgress)) {
-          continue;
-        }
-        gradeProgress[grade].total += 1;
-        if (caughtSet.has(fishItemId(entry))) {
-          gradeProgress[grade].caught += 1;
-        }
-      }
-
-      const groups = new Map();
-      for (const grade of GRADE_COLOR_ORDER) {
-        groups.set(grade, []);
-      }
-      for (const entry of sorted) {
-        const grade = filterGradeForEntry(entry);
-        groups.get(grade).push(entry);
-      }
-
-      const grid = document.getElementById("fishydex-grid");
-      if (grid) {
-        const fragment = document.createDocumentFragment();
-        const animateCards = !state.suppressCardAnimation;
-        let animationIndex = 0;
-        for (const grade of GRADE_COLOR_ORDER) {
-          const rendered = renderGroup(
-            grade,
-            groups.get(grade) || [],
-            caughtSet,
-            favouriteSet,
-            animationIndex,
-            animateCards,
-          );
-          if (rendered) {
-            fragment.appendChild(rendered.section);
-            animationIndex = rendered.nextAnimationIndex;
-          }
-        }
-        if (!filtered.length) {
-          fragment.appendChild(renderEmptyState(hasNarrowingFilters));
-        }
-        grid.replaceChildren(fragment);
-      }
-      state.suppressCardAnimation = false;
-
-      const patch = {
-        catalog_count: catalogEntries.length,
-        total_count: fish.length,
-        visible_count: filtered.length,
-        caught_count: catalogCaughtCount,
-        red_total_count: gradeProgress.red.total,
-        red_caught_count: gradeProgress.red.caught,
-        yellow_total_count: gradeProgress.yellow.total,
-        yellow_caught_count: gradeProgress.yellow.caught,
-        blue_total_count: gradeProgress.blue.total,
-        blue_caught_count: gradeProgress.blue.caught,
-        green_total_count: gradeProgress.green.total,
-        green_caught_count: gradeProgress.green.caught,
-        white_total_count: gradeProgress.white.total,
-        white_caught_count: gradeProgress.white.caught,
-        supports_grade_filter: supportsGradeFilter,
-        supports_method_filter: supportsMethodFilter,
-        supports_dried_filter: supportsDriedFilter,
-      };
-      if (fish.length > 0) {
-        patch.api_error_message = "";
-        patch.api_error_hint = "";
-      }
-      mergeSignals(patch);
-      renderDetails();
-      scheduleViewportRestore();
-    }
-
-    function handleDatastarEvent(event) {
-      const detail = event && event.detail ? event.detail : null;
-      if (!detail) {
-        return;
-      }
-      if (detail.type === "error") {
-        const status = detail.argsRaw && detail.argsRaw.status;
-        const message = status
-          ? `Fish API request failed (HTTP ${status}).`
-          : "Fish API request failed.";
-        mergeSignals({
-          loading: false,
-          api_error_message: message,
-          api_error_hint: "If this page is on a different origin than the API, confirm the API CORS allowlist includes this site.",
-        });
-      }
-      if (detail.type === "retrying") {
-        mergeSignals({
-          loading: true,
-          api_error_message: "Fish API request is retrying.",
-          api_error_hint: detail.argsRaw && detail.argsRaw.message
-            ? String(detail.argsRaw.message)
-            : "The request could not be completed cleanly.",
-        });
-      }
     }
 
     function apiUrl(pathname) {
@@ -2719,45 +1672,76 @@
       return new URL(pathname, "https://api.fishystuff.fish").toString();
     }
 
-    function fishApiUrl() {
-      return apiUrl("/api/v1/fish");
+    function datastarInitUrl() {
+      return apiUrl("/api/v1/fish/datastar/init");
+    }
+
+    function datastarEvalUrl() {
+      return apiUrl("/api/v1/fish/datastar/eval");
+    }
+
+    function handleDatastarEvent(event) {
+      const detail = event && event.detail ? event.detail : null;
+      if (!detail) {
+        return;
+      }
+      if (detail.type === "finished") {
+        scheduleViewportRestore();
+        patchSignals({
+          _api_error_message: "",
+          _api_error_hint: "",
+        });
+        return;
+      }
+      if (detail.type === "error") {
+        const status = detail.argsRaw && detail.argsRaw.status;
+        patchSignals({
+          _api_error_message: status
+            ? `Fish API request failed (HTTP ${status}).`
+            : "Fish API request failed.",
+          _api_error_hint:
+            "If this page is on a different origin than the API, confirm the API CORS allowlist includes this site.",
+        });
+        return;
+      }
+      if (detail.type === "retrying") {
+        patchSignals({
+          _api_error_message: "Fish API request is retrying.",
+          _api_error_hint: detail.argsRaw && detail.argsRaw.message
+            ? String(detail.argsRaw.message)
+            : "The request could not be completed cleanly.",
+        });
+      }
     }
 
     document.addEventListener("datastar-fetch", handleDatastarEvent);
 
     window.Fishydex = {
-      connect,
       restore,
-      resetFilters,
-      sync,
-      togglePanel,
-      setCaughtFilter,
-      setFavouriteFilter,
-      toggleFavouriteFilter,
-      clearMethodFilters,
-      toggleMethodFilter,
-      setShowDried,
-      toggleShowDried,
-      activateSortField,
-      setSortField,
-      setSortDirection,
-      toggleSortDirection,
-      toggleGradeFilter,
-      toggleFavourite,
+      persistUi,
+      persistPanelCollapsed,
+      toggleFishIds,
+      toggleGradeFilters,
+      toggleMethodFilters,
+      persistCaughtIds,
+      persistFavouriteIds,
+      queueStamp,
+      rememberViewport,
+      focusFishCardAction,
+      clearRequestUi,
       exportCaught,
       importCaught,
-      fishApiUrl,
-      closeDetails,
+      hydrateItemIcon,
+      hydrateEncyclopediaIcon,
+      datastarInitUrl,
+      datastarEvalUrl,
     };
   })();
 </script>
 
 <div id="fishydex-app" class="not-prose"
      data-signals="{
-       fish: [],
        revision: '',
-       count: 0,
-       search_draft: '',
        search_query: '',
        caught_filter: 'all',
        favourite_filter: false,
@@ -2768,8 +1752,9 @@
        sort_direction: 'desc',
        caught_ids: [],
        favourite_ids: [],
-       progress_panel_collapsed: false,
-       filter_panel_collapsed: false,
+       selected_fish_id: null,
+       _progress_panel_collapsed: false,
+       _filter_panel_collapsed: false,
        catalog_count: 0,
        total_count: 0,
        visible_count: 0,
@@ -2787,38 +1772,36 @@
        supports_grade_filter: false,
        supports_method_filter: false,
        supports_dried_filter: false,
-       loading: true,
-       status_message: '',
-       api_error_message: '',
-       api_error_hint: '',
+       _loading: true,
+       _details_loading: false,
+       _caught_stamp_fish_id: null,
+       _favourite_stamp_fish_id: null,
+       _status_message: '',
+       _api_error_message: '',
+       _api_error_hint: '',
      }"
-     data-init__delay.50ms="window.Fishydex.restore($); @get(window.Fishydex.fishApiUrl())">
-  <div
-       data-effect="window.Fishydex.sync({
-         fish: $fish || [],
-         revision: $revision || '',
-         search_query: $search_query || '',
-         caught_filter: $caught_filter || 'all',
-         favourite_filter: $favourite_filter === true,
-         grade_filters: $grade_filters || [],
-         method_filters: $method_filters || [],
-         show_dried: $show_dried === true,
-         sort_field: $sort_field || 'price',
-         sort_direction: $sort_direction || 'desc',
-         caught_ids: $caught_ids || [],
-         favourite_ids: $favourite_ids || [],
-         progress_panel_collapsed: $progress_panel_collapsed === true,
-         filter_panel_collapsed: $filter_panel_collapsed === true,
-       })"></div>
+     data-indicator:_loading
+     data-on-signal-patch-filter="{include: /^(search_query|caught_filter|favourite_filter|grade_filters|method_filters|show_dried|sort_field|sort_direction)$/}"
+     data-on-signal-patch__debounce.40ms="window.Fishydex.persistUi()"
+     data-init="window.Fishydex.restore($); @get(window.Fishydex.datastarInitUrl())">
+  <div id="fishydex-request-bridge" hidden data-indicator:_loading data-on:fishydex-eval="@post(window.Fishydex.datastarEvalUrl())"></div>
 
   <section class="fishydex-shell">
     <div class="fishydex-bento">
       <fieldset class="fishydex-stats card card-border bg-base-100">
         <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
           <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-chart-pie-2-fill"></use></svg><span>Progress</span></span>
-          <button type="button" class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle" data-panel-toggle="progress" aria-controls="fishydex-progress-body" aria-expanded="true" aria-label="Collapse progress panel" data-on:click="window.Fishydex.togglePanel('progress')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
+          <button type="button"
+                  class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle"
+                  data-panel-toggle="progress"
+                  aria-controls="fishydex-progress-body"
+                  data-class:is-collapsed="$_progress_panel_collapsed"
+                  data-attr:aria-expanded="(!$_progress_panel_collapsed).toString()"
+                  data-attr:aria-label="$_progress_panel_collapsed ? 'Expand progress panel' : 'Collapse progress panel'"
+                  data-attr:title="$_progress_panel_collapsed ? 'Expand progress panel' : 'Collapse progress panel'"
+                  data-on:click="$_progress_panel_collapsed = !$_progress_panel_collapsed; window.Fishydex.persistPanelCollapsed('progress', $_progress_panel_collapsed)"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
         </legend>
-        <div id="fishydex-progress-body" class="card-body fishydex-stats-body pt-0" data-show="!$progress_panel_collapsed">
+        <div id="fishydex-progress-body" class="card-body fishydex-stats-body pt-0" data-show="!$_progress_panel_collapsed">
         <div class="fishydex-stat-stack">
           <div class="fishydex-stat-row stats stats-horizontal rounded-box border border-base-300 bg-base-200">
             <div class="fishydex-stat stat">
@@ -2868,11 +1851,11 @@
             </div>
           </div>
         </div>
-        <div class="fishydex-status" data-show="$loading">
+        <div class="fishydex-status" data-show="$_loading">
           <strong>Loading...</strong>
           <div class="fishydex-subtle">Fetching the fish catalog from the API.</div>
         </div>
-        <div class="fishydex-actions" data-show="!$loading">
+        <div class="fishydex-actions" data-show="!$_loading">
           <button type="button" class="btn btn-sm btn-soft btn-primary fishydex-button" data-on:click="window.Fishydex.exportCaught($caught_ids || [])">Export</button>
           <button type="button" class="btn btn-sm btn-outline fishydex-button" data-on:click="window.Fishydex.importCaught()">Import</button>
         </div>
@@ -2882,9 +1865,17 @@
       <fieldset class="fishydex-screen card card-border bg-base-100">
         <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
           <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-filter-2-fill"></use></svg><span>Filter</span></span>
-          <button type="button" class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle" data-panel-toggle="filter" aria-controls="fishydex-filter-body" aria-expanded="true" aria-label="Collapse filter panel" data-on:click="window.Fishydex.togglePanel('filter')"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
+          <button type="button"
+                  class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle"
+                  data-panel-toggle="filter"
+                  aria-controls="fishydex-filter-body"
+                  data-class:is-collapsed="$_filter_panel_collapsed"
+                  data-attr:aria-expanded="(!$_filter_panel_collapsed).toString()"
+                  data-attr:aria-label="$_filter_panel_collapsed ? 'Expand filter panel' : 'Collapse filter panel'"
+                  data-attr:title="$_filter_panel_collapsed ? 'Expand filter panel' : 'Collapse filter panel'"
+                  data-on:click="$_filter_panel_collapsed = !$_filter_panel_collapsed; window.Fishydex.persistPanelCollapsed('filter', $_filter_panel_collapsed)"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
         </legend>
-        <div id="fishydex-filter-body" class="card-body fishydex-panel-body pt-0" data-show="!$filter_panel_collapsed">
+        <div id="fishydex-filter-body" class="card-body fishydex-panel-body pt-0" data-show="!$_filter_panel_collapsed">
         <div class="fishydex-panel-meta">
           <span class="fishydex-subtle">Revision <span data-text="$revision || 'pending'"></span></span>
         </div>
@@ -2899,8 +1890,9 @@
                      type="search"
                      autocomplete="off"
                      placeholder="Search by fish name or ID"
-                     data-bind:search_draft
-                     data-on:input__debounce.125ms="$search_query = ($search_draft || '').trim()">
+                     data-bind:search_query
+                     data-indicator:_loading
+                     data-on:input__debounce.200ms="window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">
             </label>
           </fieldset>
 
@@ -2910,24 +1902,32 @@
               <div class="fishydex-filter-chips" role="group" aria-label="Status filters">
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip"
-                        data-caught-filter-value="all"
-                        aria-pressed="true"
-                        data-on:click="window.Fishydex.setCaughtFilter('all')">All</button>
+                        data-class:is-active="$caught_filter === 'all'"
+                        data-class:btn-active="$caught_filter === 'all'"
+                        data-attr:aria-pressed="($caught_filter === 'all').toString()"
+                        data-indicator:_loading
+                        data-on:click="$caught_filter = 'all'; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">All</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-caught"
-                        data-caught-filter-value="caught"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.setCaughtFilter('caught')"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-check-badge-solid"></use></svg><span>Caught</span></button>
+                        data-class:is-active="$caught_filter === 'caught'"
+                        data-class:btn-active="$caught_filter === 'caught'"
+                        data-attr:aria-pressed="($caught_filter === 'caught').toString()"
+                        data-indicator:_loading
+                        data-on:click="$caught_filter = 'caught'; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-check-badge-solid"></use></svg><span>Caught</span></button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-missing"
-                        data-caught-filter-value="missing"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.setCaughtFilter('missing')"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-check-circle-dash-fill"></use></svg><span>Missing</span></button>
+                        data-class:is-active="$caught_filter === 'missing'"
+                        data-class:btn-active="$caught_filter === 'missing'"
+                        data-attr:aria-pressed="($caught_filter === 'missing').toString()"
+                        data-indicator:_loading
+                        data-on:click="$caught_filter = 'missing'; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-check-circle-dash-fill"></use></svg><span>Missing</span></button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-favourite"
-                        data-favourite-filter-toggle
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleFavouriteFilter()"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-heart-fill"></use></svg><span>Favourite</span></button>
+                        data-class:is-active="$favourite_filter"
+                        data-class:btn-active="$favourite_filter"
+                        data-attr:aria-pressed="$favourite_filter.toString()"
+                        data-indicator:_loading
+                        data-on:click="$favourite_filter = !$favourite_filter; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-heart-fill"></use></svg><span>Favourite</span></button>
               </div>
             </fieldset>
 
@@ -2937,29 +1937,39 @@
               <div class="fishydex-filter-chips" role="group" aria-label="Grade color filters">
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-red"
-                        data-grade-filter-value="red"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('red')">Red</button>
+                        data-class:is-active="($grade_filters || []).includes('red')"
+                        data-class:btn-active="($grade_filters || []).includes('red')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('red')).toString()"
+                        data-indicator:_loading
+                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'red'); window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">Red</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-yellow"
-                        data-grade-filter-value="yellow"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('yellow')">Yellow</button>
+                        data-class:is-active="($grade_filters || []).includes('yellow')"
+                        data-class:btn-active="($grade_filters || []).includes('yellow')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('yellow')).toString()"
+                        data-indicator:_loading
+                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'yellow'); window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">Yellow</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-blue"
-                        data-grade-filter-value="blue"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('blue')">Blue</button>
+                        data-class:is-active="($grade_filters || []).includes('blue')"
+                        data-class:btn-active="($grade_filters || []).includes('blue')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('blue')).toString()"
+                        data-indicator:_loading
+                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'blue'); window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">Blue</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-green"
-                        data-grade-filter-value="green"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('green')">Green</button>
+                        data-class:is-active="($grade_filters || []).includes('green')"
+                        data-class:btn-active="($grade_filters || []).includes('green')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('green')).toString()"
+                        data-indicator:_loading
+                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'green'); window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">Green</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-white"
-                        data-grade-filter-value="white"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleGradeFilter('white')">White</button>
+                        data-class:is-active="($grade_filters || []).includes('white')"
+                        data-class:btn-active="($grade_filters || []).includes('white')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('white')).toString()"
+                        data-indicator:_loading
+                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'white'); window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">White</button>
               </div>
             </fieldset>
 
@@ -2970,45 +1980,56 @@
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip"
                         data-show="$supports_method_filter"
-                        data-method-filter-value="all"
-                        aria-pressed="true"
-                        data-on:click="window.Fishydex.clearMethodFilters()">All</button>
+                        data-class:is-active="($method_filters || []).length === 0"
+                        data-class:btn-active="($method_filters || []).length === 0"
+                        data-attr:aria-pressed="(($method_filters || []).length === 0).toString()"
+                        data-indicator:_loading
+                        data-on:click="$method_filters = []; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">All</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-rod"
                         data-show="$supports_method_filter"
-                        data-method-filter-value="rod"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleMethodFilter('rod')">Rod</button>
+                        data-class:is-active="($method_filters || []).includes('rod')"
+                        data-class:btn-active="($method_filters || []).includes('rod')"
+                        data-attr:aria-pressed="(($method_filters || []).includes('rod')).toString()"
+                        data-indicator:_loading
+                        data-on:click="$method_filters = window.Fishydex.toggleMethodFilters($method_filters, 'rod'); window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">Rod</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-harpoon"
                         data-show="$supports_method_filter"
-                        data-method-filter-value="harpoon"
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleMethodFilter('harpoon')">Harpoon</button>
+                        data-class:is-active="($method_filters || []).includes('harpoon')"
+                        data-class:btn-active="($method_filters || []).includes('harpoon')"
+                        data-attr:aria-pressed="(($method_filters || []).includes('harpoon')).toString()"
+                        data-indicator:_loading
+                        data-on:click="$method_filters = window.Fishydex.toggleMethodFilters($method_filters, 'harpoon'); window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">Harpoon</button>
                 <button type="button"
                         data-show="$supports_dried_filter"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-show-dried"
-                        data-dried-toggle
-                        aria-pressed="false"
-                        data-on:click="window.Fishydex.toggleShowDried()">Show Dried</button>
+                        data-class:is-active="$show_dried"
+                        data-class:btn-active="$show_dried"
+                        data-attr:aria-pressed="$show_dried.toString()"
+                        data-indicator:_loading
+                        data-on:click="$show_dried = !$show_dried; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">Show Dried</button>
               </div>
             </fieldset>
 
             <div class="fishydex-filter-meta">
               <span class="fishydex-filter-count"
                     data-text="'Showing ' + ($visible_count || 0) + '/' + ($catalog_count || 0) + ' matches'"></span>
-              <button type="button" class="btn btn-sm btn-soft fishydex-filter-clear" data-on:click="window.Fishydex.resetFilters()">Clear filters</button>
+              <button type="button"
+                      class="btn btn-sm btn-soft fishydex-filter-clear"
+                      data-indicator:_loading
+                      data-on:click="$search_query = ''; $caught_filter = 'all'; $favourite_filter = false; $grade_filters = []; $method_filters = []; $show_dried = false; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())">Clear filters</button>
             </div>
           </div>
 
-          <div class="fishydex-status" data-show="($status_message || '').length > 0">
+          <div class="fishydex-status" data-show="($_status_message || '').length > 0">
             <strong>Status:</strong>
-            <span data-text="$status_message"></span>
+            <span data-text="$_status_message"></span>
           </div>
 
-          <div class="fishydex-error" data-show="($api_error_message || '').length > 0">
-            <strong data-text="$api_error_message"></strong>
-            <div class="fishydex-subtle" data-show="($api_error_hint || '').length > 0" data-text="$api_error_hint"></div>
+          <div class="fishydex-error" data-show="($_api_error_message || '').length > 0">
+            <strong data-text="$_api_error_message"></strong>
+            <div class="fishydex-subtle" data-show="($_api_error_hint || '').length > 0" data-text="$_api_error_hint"></div>
           </div>
         </div>
         </div>
@@ -3021,16 +2042,18 @@
         <span class="fishydex-panel-controls" role="group" aria-label="Catalog sort controls">
           <button type="button"
                   class="btn btn-sm btn-ghost fishydex-sort-button"
-                  data-sort-field-value="price"
-                  aria-pressed="true"
-                  aria-label="Toggle price sort direction. Current: descending."
-                  data-on:click="window.Fishydex.activateSortField('price')"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-down-fill"></use></svg></span></span><span>Price</span></button>
+                  data-class:is-active="$sort_field === 'price'"
+                  data-attr:aria-pressed="($sort_field === 'price').toString()"
+                  data-attr:aria-label="$sort_field === 'price' ? 'Toggle price sort direction. Current: ' + ($sort_direction === 'desc' ? 'descending.' : 'ascending.') : 'Sort catalog by price ascending.'"
+                  data-indicator:_loading
+                  data-on:click="$sort_direction = $sort_field === 'price' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'price'; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><span data-show="$sort_field === 'price' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-up-fill"></use></svg></span><span data-show="$sort_field === 'price' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-down-fill"></use></svg></span></span></span><span>Price</span></button>
           <button type="button"
                   class="btn btn-sm btn-ghost fishydex-sort-button"
-                  data-sort-field-value="name"
-                  aria-pressed="false"
-                  aria-label="Sort catalog by name ascending."
-                  data-on:click="window.Fishydex.activateSortField('name')"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg><span>Name</span></button>
+                  data-class:is-active="$sort_field === 'name'"
+                  data-attr:aria-pressed="($sort_field === 'name').toString()"
+                  data-attr:aria-label="$sort_field === 'name' ? 'Toggle name sort direction. Current: ' + ($sort_direction === 'desc' ? 'descending.' : 'ascending.') : 'Sort catalog by name ascending.'"
+                  data-indicator:_loading
+                  data-on:click="$sort_direction = $sort_field === 'name' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'name'; window.Fishydex.clearRequestUi(); @post(window.Fishydex.datastarEvalUrl())"><span data-show="$sort_field === 'name' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg></span><span data-show="$sort_field === 'name' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-za-sort-descending-letters-fill"></use></svg></span><span>Name</span></button>
         </span>
       </legend>
       <div class="card-body fishydex-grid-body">
@@ -3039,80 +2062,28 @@
     </fieldset>
   </section>
 
-  <div id="fishydex-details" class="fishydex-details-modal modal" hidden>
+  <div id="fishydex-details"
+       class="fishydex-details-modal modal"
+       data-show="Number.isInteger($selected_fish_id) && $selected_fish_id > 0"
+       style="display: none;"
+       data-on:keydown__window="evt.key === 'Escape' && Number.isInteger($selected_fish_id) && (window.Fishydex.focusFishCardAction($selected_fish_id, 'open-details'), $selected_fish_id = null)">
     <button type="button"
             class="fishydex-details-backdrop modal-backdrop"
-            data-action="close-details"
-            aria-label="Close fish details"></button>
+            aria-label="Close fish details"
+            data-on:click="window.Fishydex.focusFishCardAction($selected_fish_id, 'open-details'); $selected_fish_id = null"></button>
 
-    <section class="fishydex-details-panel modal-box card card-border bg-base-100 w-11/12 max-w-5xl"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="fishydex-details-title">
-      <div class="fishydex-details-header">
-        <div class="fishydex-details-header-main">
-          <div id="fishydex-details-icon-frame" class="fishydex-details-icon-wrap grade-unknown">
-            <img id="fishydex-details-icon" class="fishydex-details-icon" hidden>
-            <div id="fishydex-details-placeholder" class="fishydex-placeholder">?</div>
-          </div>
-
-          <div class="fishydex-details-copy">
-            <div class="fishydex-details-title-row">
-              <h3 id="fishydex-details-title" class="fishydex-details-title">Fish</h3>
-              <button type="button"
-                      id="fishydex-details-favourite-toggle"
-                      class="fishydex-favourite-button btn btn-sm btn-circle btn-ghost"
-                      data-action="toggle-favourite-details"
-                      aria-pressed="false"
-                      aria-label="Mark fish as favourite"></button>
-              <button type="button"
-                      id="fishydex-details-caught-toggle"
-                      class="fishydex-caught-button btn btn-sm btn-circle btn-ghost"
-                      data-action="toggle-caught-details"
-                      aria-pressed="false"
-                      aria-label="Mark fish as caught"></button>
-            </div>
-
-            <div class="fishydex-details-badges">
-              <span id="fishydex-details-favourite" class="badge badge-soft badge-error" hidden>Favourite</span>
-              <span id="fishydex-details-caught" class="fishydex-caught badge badge-soft badge-success">Caught</span>
-              <span id="fishydex-details-grade" class="fishydex-grade badge badge-soft grade-unknown">Unknown</span>
-              <span id="fishydex-details-method-rod" class="fishydex-method badge badge-soft method-rod" hidden>Rod</span>
-              <span id="fishydex-details-method-harpoon" class="fishydex-method badge badge-soft method-harpoon" hidden>Harpoon</span>
-              <span id="fishydex-details-dried-badge" class="fishydex-method badge badge-soft method-dried" hidden>Dried</span>
-            </div>
-          </div>
-        </div>
-        <button type="button"
-                class="btn btn-sm btn-outline fishydex-button fishydex-details-close"
-                data-action="close-details">Close</button>
+    <div class="modal-box card card-border bg-base-100 w-11/12 max-w-md"
+         data-show="$_details_loading"
+         style="display: none;">
+      <div class="card-body items-center text-center">
+        <strong>Loading fish details...</strong>
+        <div class="fishydex-subtle">Fetching the selected catalog entry from the Fishydex backend.</div>
       </div>
+    </div>
 
-      <div class="fishydex-details-guide">
-        <div class="fishydex-details-guide-frame rounded-box border border-base-300 bg-base-200">
-          <img id="fishydex-details-guide-image" class="fishydex-details-guide-image" hidden>
-          <div id="fishydex-details-guide-placeholder" class="fishydex-placeholder">?</div>
-        </div>
-      </div>
-
-      <dl class="fishydex-details-meta">
-        <div class="fishydex-details-meta-card card card-border bg-base-200">
-          <dt>Item Key</dt>
-          <dd id="fishydex-details-item-key"></dd>
-        </div>
-        <div class="fishydex-details-meta-card card card-border bg-base-200">
-          <dt>Vendor Price</dt>
-          <dd id="fishydex-details-vendor-price"></dd>
-        </div>
-      </dl>
-
-      <div class="fishydex-details-stack">
-        <section class="fishydex-details-section card card-border bg-base-200">
-          <h4>Best Spots</h4>
-          <p id="fishydex-details-spots-note" class="fishydex-details-note"></p>
-        </section>
-      </div>
-    </section>
+    <div id="fishydex-details-shell"
+         data-show="!$_details_loading && Number.isInteger($selected_fish_id) && $selected_fish_id > 0"
+         style="display: none;"></div>
   </div>
 </div>
 ```
