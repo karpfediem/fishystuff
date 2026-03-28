@@ -1868,7 +1868,7 @@ fn format_effect_percent(value: f32) -> String {
 
 fn render_effect_badge(label: &str, class_name: &str) -> String {
     format!(
-        "<span class=\"badge badge-xs whitespace-nowrap {class_name}\">{}</span>",
+        "<span class=\"badge badge-xs whitespace-nowrap border font-medium {class_name}\">{}</span>",
         escape_html(label)
     )
 }
@@ -1878,25 +1878,25 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
     if let Some(afr) = item.afr.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
             &format!("-{}% AFT", format_effect_percent(afr)),
-            "badge-soft badge-success",
+            "border-emerald-400 bg-emerald-300 text-emerald-950",
         ));
     }
     if let Some(bonus_rare) = item.bonus_rare.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
             &format!("+{}% Rare", format_effect_percent(bonus_rare)),
-            "badge-soft badge-warning",
+            "border-yellow-400 bg-yellow-300 text-yellow-950",
         ));
     }
     if let Some(bonus_big) = item.bonus_big.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
             &format!("+{}% HQ", format_effect_percent(bonus_big)),
-            "border-blue-500/40 bg-blue-500/15 text-blue-700",
+            "border-blue-400 bg-blue-300 text-blue-950",
         ));
     }
     if let Some(drr) = item.drr.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
             &format!("+{}% DRR", format_effect_percent(drr)),
-            "badge-soft badge-warning",
+            "border-amber-400 bg-amber-300 text-amber-950",
         ));
     }
     if let Some(fish_multiplier) = item
@@ -1905,25 +1905,25 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
     {
         badges.push(render_effect_badge(
             &format!("Fish ×{}", trim_float(f64::from(fish_multiplier))),
-            "badge-soft badge-neutral",
+            "border-base-content/15 bg-base-300 text-base-content",
         ));
     }
     if let Some(exp_fish) = item.exp_fish.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
             &format!("+{}% Fish EXP", format_effect_percent(exp_fish)),
-            "border-cyan-500/40 bg-cyan-500/15 text-cyan-700",
+            "border-cyan-400 bg-cyan-300 text-cyan-950",
         ));
     }
     if let Some(exp_life) = item.exp_life.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
             &format!("+{}% Life EXP", format_effect_percent(exp_life)),
-            "badge-soft badge-success",
+            "border-green-400 bg-green-300 text-green-950",
         ));
     }
     if badges.is_empty() && item.r#type == "outfit" {
         badges.push(render_effect_badge(
             "Set effect",
-            "badge-soft badge-neutral",
+            "border-base-content/15 bg-base-300 text-base-content",
         ));
     }
     if badges.is_empty() {
