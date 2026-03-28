@@ -33,7 +33,7 @@ fn slugify_calculator_effect_key(name: &str) -> String {
     slug.trim_matches('-').to_string()
 }
 
-pub(super) fn build_source_consumable_item(
+pub(super) fn build_source_item(
     lang: FishLang,
     item_id: i32,
     item_type: &str,
@@ -77,6 +77,21 @@ pub(super) fn build_source_consumable_item(
         icon_id,
         icon: icon_id.map(calculator_item_icon_path),
     }
+}
+
+fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> CalculatorItemEffectValues {
+    let mut values = CalculatorItemEffectValues {
+        afr: row.afr,
+        bonus_rare: row.bonus_rare,
+        bonus_big: row.bonus_big,
+        drr: row.drr,
+        exp_fish: row.exp_fish,
+        exp_life: row.exp_life,
+    };
+    if let Some(effect_description) = row.effect_description_ko.as_deref() {
+        super::calculator_effects::parse_calculator_effect_text(&mut values, effect_description);
+    }
+    values
 }
 
 pub(super) fn build_source_lightstone_item(
@@ -200,14 +215,7 @@ impl DoltMySqlStore {
     ) -> AppResult<Vec<CalculatorItemEntry>> {
         let mut items = Vec::new();
         for row in source_backed_rows {
-            let Some(effect_description) = row.effect_description_ko.as_deref() else {
-                continue;
-            };
-            let mut override_values = CalculatorItemEffectValues::default();
-            super::calculator_effects::parse_calculator_effect_text(
-                &mut override_values,
-                effect_description,
-            );
+            let override_values = source_backed_effect_values(row);
             if override_values == CalculatorItemEffectValues::default() {
                 continue;
             }
@@ -216,7 +224,7 @@ impl DoltMySqlStore {
                     let Some(item_id) = row.item_id else {
                         continue;
                     };
-                    items.push(build_source_consumable_item(
+                    items.push(build_source_item(
                         lang,
                         item_id,
                         &row.item_type,
@@ -302,11 +310,14 @@ mod tests {
     use crate::store::FishLang;
 
     use super::super::calculator_effects::CalculatorItemEffectValues;
-    use super::{build_source_consumable_item, build_source_lightstone_item};
+    use super::{
+        build_source_item, build_source_lightstone_item, source_backed_effect_values,
+        CalculatorSourceBackedItemRow, DoltMySqlStore,
+    };
 
     #[test]
     fn source_consumable_item_prefers_source_metadata() {
-        let sourced = build_source_consumable_item(
+        let sourced = build_source_item(
             FishLang::Ko,
             9359,
             "food",
@@ -332,6 +343,74 @@ mod tests {
         assert_eq!(sourced.fish_multiplier, Some(1.5));
         assert_eq!(sourced.afr, Some(0.07));
         assert_eq!(sourced.exp_fish, Some(0.10));
+    }
+
+    #[test]
+    fn source_backed_item_rows_can_use_direct_numeric_effects() {
+        let items = DoltMySqlStore::build_source_backed_items(
+            FishLang::En,
+            &[CalculatorSourceBackedItemRow {
+                source_kind: "item".to_string(),
+                item_id: Some(16162),
+                item_type: "rod".to_string(),
+                legacy_name_en: Some("Balenos Fishing Rod".to_string()),
+                source_name_ko: Some("발레노스 낚싯대".to_string()),
+                item_icon_file: Some(
+                    "New_Icon/06_PC_EquipItem/00_Common/00_ETC/00016162.dds".to_string(),
+                ),
+                legacy_icon_id: Some(1),
+                durability: Some(100),
+                fish_multiplier: None,
+                effect_description_ko: None,
+                afr: Some(0.25),
+                bonus_rare: None,
+                bonus_big: None,
+                drr: None,
+                exp_fish: None,
+                exp_life: None,
+            }],
+        )
+        .expect("source-backed rows should build");
+
+        assert_eq!(items.len(), 1);
+        let sourced = &items[0];
+        assert_eq!(sourced.key, "item:16162");
+        assert_eq!(sourced.name, "Balenos Fishing Rod");
+        assert_eq!(sourced.r#type, "rod");
+        assert_eq!(sourced.icon_id, Some(16162));
+        assert_eq!(sourced.durability, Some(100));
+        assert_eq!(sourced.afr, Some(0.25));
+    }
+
+    #[test]
+    fn source_backed_effect_values_merge_direct_and_text_effects() {
+        let values = source_backed_effect_values(&CalculatorSourceBackedItemRow {
+            source_kind: "item".to_string(),
+            item_id: Some(1),
+            item_type: "buff".to_string(),
+            legacy_name_en: None,
+            source_name_ko: None,
+            item_icon_file: None,
+            legacy_icon_id: None,
+            durability: None,
+            fish_multiplier: None,
+            effect_description_ko: Some("낚시 경험치 획득량 +10%".to_string()),
+            afr: Some(0.05),
+            bonus_rare: None,
+            bonus_big: None,
+            drr: None,
+            exp_fish: None,
+            exp_life: None,
+        });
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                afr: Some(0.05),
+                exp_fish: Some(0.10),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
     }
 
     #[test]

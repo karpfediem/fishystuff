@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use mysql::prelude::Queryable;
+use mysql::Row;
 
 use crate::error::AppResult;
 use crate::store::validate_dolt_ref;
@@ -47,6 +48,12 @@ pub(super) struct CalculatorSourceBackedItemRow {
     pub(super) durability: Option<i32>,
     pub(super) fish_multiplier: Option<f32>,
     pub(super) effect_description_ko: Option<String>,
+    pub(super) afr: Option<f32>,
+    pub(super) bonus_rare: Option<f32>,
+    pub(super) bonus_big: Option<f32>,
+    pub(super) drr: Option<f32>,
+    pub(super) exp_fish: Option<f32>,
+    pub(super) exp_life: Option<f32>,
 }
 
 impl DoltMySqlStore {
@@ -182,7 +189,7 @@ impl DoltMySqlStore {
         conn.query(query).map_err(db_unavailable)
     }
 
-    fn query_calculator_source_backed_item_rows(
+    fn query_text_source_backed_item_rows(
         &self,
         ref_id: Option<&str>,
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
@@ -208,18 +215,7 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(
-            Option<String>,
-            Option<i32>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<String>,
-            Option<i32>,
-            Option<i32>,
-            Option<f32>,
-            Option<String>,
-        )> = match conn.query(query) {
+        let rows: Vec<Row> = match conn.query(query) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "calculator_source_backed_item_entries") => {
                 return Ok(Vec::new());
@@ -229,33 +225,120 @@ impl DoltMySqlStore {
 
         Ok(rows
             .into_iter()
-            .filter_map(
-                |(
-                    source_kind,
-                    item_id,
-                    item_type,
-                    legacy_name_en,
-                    source_name_ko,
-                    item_icon_file,
-                    legacy_icon_id,
-                    durability,
-                    fish_multiplier,
-                    effect_description_ko,
-                )| {
-                    Some(CalculatorSourceBackedItemRow {
-                        source_kind: normalize_optional_string(source_kind)?,
-                        item_id,
-                        item_type: normalize_optional_string(item_type).unwrap_or_default(),
-                        legacy_name_en: normalize_optional_string(legacy_name_en),
-                        source_name_ko: normalize_optional_string(source_name_ko),
-                        item_icon_file: normalize_optional_string(item_icon_file),
-                        legacy_icon_id,
-                        durability,
-                        fish_multiplier,
-                        effect_description_ko: normalize_optional_string(effect_description_ko),
-                    })
-                },
-            )
+            .filter_map(|row| {
+                Some(CalculatorSourceBackedItemRow {
+                    source_kind: normalize_optional_string(row.get::<String, _>("source_kind"))?,
+                    item_id: row.get("item_id"),
+                    item_type: normalize_optional_string(row.get::<String, _>("item_type"))
+                        .unwrap_or_default(),
+                    legacy_name_en: normalize_optional_string(
+                        row.get::<String, _>("legacy_name_en"),
+                    ),
+                    source_name_ko: normalize_optional_string(
+                        row.get::<String, _>("source_name_ko"),
+                    ),
+                    item_icon_file: normalize_optional_string(
+                        row.get::<String, _>("item_icon_file"),
+                    ),
+                    legacy_icon_id: row.get("legacy_icon_id"),
+                    durability: row.get("durability"),
+                    fish_multiplier: row.get("fish_multiplier"),
+                    effect_description_ko: normalize_optional_string(
+                        row.get::<String, _>("effect_description_ko"),
+                    ),
+                    afr: None,
+                    bonus_rare: None,
+                    bonus_big: None,
+                    drr: None,
+                    exp_fish: None,
+                    exp_life: None,
+                })
+            })
+            .collect())
+    }
+
+    fn query_legacy_aligned_enchant_source_backed_item_rows(
+        &self,
+        ref_id: Option<&str>,
+        item_ids: &[i32],
+    ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
+        if item_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let id_list = item_ids
+            .iter()
+            .map(i32::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "SELECT \
+                item_id, \
+                item_type, \
+                legacy_name_en, \
+                source_name_ko, \
+                item_icon_file, \
+                legacy_icon_id, \
+                durability, \
+                fish_multiplier, \
+                afr, \
+                bonus_rare, \
+                bonus_big, \
+                drr, \
+                exp_fish, \
+                exp_life \
+             FROM calculator_legacy_aligned_enchant_item_effect_entries{as_of} \
+             WHERE item_id IN ({id_list})"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<Row> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err)
+                if is_missing_table(
+                    &err,
+                    "calculator_legacy_aligned_enchant_item_effect_entries",
+                ) =>
+            {
+                return Ok(Vec::new());
+            }
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                Some(CalculatorSourceBackedItemRow {
+                    source_kind: "item".to_string(),
+                    item_id: row.get("item_id"),
+                    item_type: normalize_optional_string(row.get::<String, _>("item_type"))
+                        .unwrap_or_default(),
+                    legacy_name_en: normalize_optional_string(
+                        row.get::<String, _>("legacy_name_en"),
+                    ),
+                    source_name_ko: normalize_optional_string(
+                        row.get::<String, _>("source_name_ko"),
+                    ),
+                    item_icon_file: normalize_optional_string(
+                        row.get::<String, _>("item_icon_file"),
+                    ),
+                    legacy_icon_id: row.get("legacy_icon_id"),
+                    durability: row.get("durability"),
+                    fish_multiplier: row.get("fish_multiplier"),
+                    effect_description_ko: None,
+                    afr: row.get("afr"),
+                    bonus_rare: row.get("bonus_rare"),
+                    bonus_big: row.get("bonus_big"),
+                    drr: row.get("drr"),
+                    exp_fish: row.get("exp_fish"),
+                    exp_life: row.get("exp_life"),
+                })
+            })
             .collect())
     }
 
@@ -263,7 +346,20 @@ impl DoltMySqlStore {
         &self,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogSourceData> {
-        let source_backed_rows = self.query_calculator_source_backed_item_rows(ref_id)?;
+        let mut source_backed_rows = self.query_text_source_backed_item_rows(ref_id)?;
+        let all_legacy_rows = self.query_legacy_calculator_item_rows(ref_id, &[], &[])?;
+        let legacy_aligned_item_ids = all_legacy_rows
+            .iter()
+            .filter_map(|row| {
+                let item_type = normalize_optional_string(row.1.clone())?;
+                matches!(item_type.as_str(), "rod" | "float" | "chair").then_some(row.10?)
+            })
+            .collect::<Vec<_>>();
+        source_backed_rows.extend(self.query_legacy_aligned_enchant_source_backed_item_rows(
+            ref_id,
+            &legacy_aligned_item_ids,
+        )?);
+
         let excluded_item_ids = source_backed_rows
             .iter()
             .filter_map(|row| (row.source_kind == "item").then_some(row.item_id).flatten())
@@ -276,11 +372,31 @@ impl DoltMySqlStore {
                     .flatten()
             })
             .collect::<Vec<_>>();
-        let legacy_rows = self.query_legacy_calculator_item_rows(
-            ref_id,
-            &excluded_item_ids,
-            &excluded_effect_names,
-        )?;
+        let excluded_item_ids = excluded_item_ids
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>();
+        let excluded_effect_names = excluded_effect_names
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>();
+        let legacy_rows = all_legacy_rows
+            .into_iter()
+            .filter(|row| {
+                let keep_item = row
+                    .10
+                    .map(|item_id| !excluded_item_ids.contains(&item_id))
+                    .unwrap_or(true);
+                let keep_effect = match (
+                    normalize_optional_string(row.1.clone()),
+                    normalize_optional_string(row.0.clone()),
+                ) {
+                    (Some(item_type), Some(name)) if item_type == "lightstone_set" => {
+                        !excluded_effect_names.contains(&name)
+                    }
+                    _ => true,
+                };
+                keep_item && keep_effect
+            })
+            .collect::<Vec<_>>();
         let item_ids = legacy_rows
             .iter()
             .filter_map(|row| row.10)

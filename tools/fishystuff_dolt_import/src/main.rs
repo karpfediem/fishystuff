@@ -15,10 +15,11 @@ use csv::{QuoteStyle, Writer, WriterBuilder};
 use sha2::{Digest, Sha256};
 
 use effect_table_headers::{
-    BUFF_TABLE_HEADERS, LIGHTSTONE_SET_OPTION_HEADERS, PET_BASE_SKILL_TABLE_HEADERS,
-    PET_EQUIPSKILL_TABLE_HEADERS, PET_EXP_TABLE_HEADERS, PET_GRADE_TABLE_HEADERS,
-    PET_SETSTATS_TABLE_HEADERS, PET_SKILL_TABLE_HEADERS, PET_TABLE_HEADERS,
-    SKILLTYPE_TABLE_NEW_HEADERS, SKILL_TABLE_NEW_HEADERS, UPGRADEPET_LOOTING_PERCENT_HEADERS,
+    BUFF_TABLE_HEADERS, ENCHANT_WORKBOOK_HEADERS, LIGHTSTONE_SET_OPTION_HEADERS,
+    PET_BASE_SKILL_TABLE_HEADERS, PET_EQUIPSKILL_TABLE_HEADERS, PET_EXP_TABLE_HEADERS,
+    PET_GRADE_TABLE_HEADERS, PET_SETSTATS_TABLE_HEADERS, PET_SKILL_TABLE_HEADERS,
+    PET_TABLE_HEADERS, PRODUCTTOOL_PROPERTY_HEADERS, SKILLTYPE_TABLE_NEW_HEADERS,
+    SKILL_TABLE_NEW_HEADERS, TOOLTIP_TABLE_HEADERS, UPGRADEPET_LOOTING_PERCENT_HEADERS,
 };
 use item_table_headers::ITEM_TABLE_HEADERS;
 const FISHING_HEADERS: [&str; 18] = [
@@ -320,6 +321,11 @@ struct CalculatorEffectsWorkbookSet {
     skill_table_new_xlsx: PathBuf,
     skilltype_table_new_xlsx: PathBuf,
     lightstone_set_option_xlsx: PathBuf,
+    enchant_cash_xlsx: PathBuf,
+    enchant_equipment_xlsx: PathBuf,
+    enchant_lifeequipment_xlsx: PathBuf,
+    tooltip_table_xlsx: PathBuf,
+    producttool_property_xlsx: PathBuf,
     pet_table_xlsx: PathBuf,
     pet_skill_table_xlsx: PathBuf,
     pet_base_skill_table_xlsx: PathBuf,
@@ -335,6 +341,11 @@ struct CalculatorEffectsOutputs {
     skill_table_new_csv: PathBuf,
     skilltype_table_new_csv: PathBuf,
     lightstone_set_option_csv: PathBuf,
+    enchant_cash_csv: PathBuf,
+    enchant_equipment_csv: PathBuf,
+    enchant_lifeequipment_csv: PathBuf,
+    tooltip_table_csv: PathBuf,
+    producttool_property_csv: PathBuf,
     pet_table_csv: PathBuf,
     pet_skill_table_csv: PathBuf,
     pet_base_skill_table_csv: PathBuf,
@@ -350,6 +361,11 @@ struct CalculatorEffectsDigests {
     skill_table_new_sha: String,
     skilltype_table_new_sha: String,
     lightstone_set_option_sha: String,
+    enchant_cash_sha: String,
+    enchant_equipment_sha: String,
+    enchant_lifeequipment_sha: String,
+    tooltip_table_sha: String,
+    producttool_property_sha: String,
     pet_table_sha: String,
     pet_skill_table_sha: String,
     pet_base_skill_table_sha: String,
@@ -677,6 +693,11 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         skill_table_new_sha: sha256_file(&workbook_set.skill_table_new_xlsx)?,
         skilltype_table_new_sha: sha256_file(&workbook_set.skilltype_table_new_xlsx)?,
         lightstone_set_option_sha: sha256_file(&workbook_set.lightstone_set_option_xlsx)?,
+        enchant_cash_sha: sha256_file(&workbook_set.enchant_cash_xlsx)?,
+        enchant_equipment_sha: sha256_file(&workbook_set.enchant_equipment_xlsx)?,
+        enchant_lifeequipment_sha: sha256_file(&workbook_set.enchant_lifeequipment_xlsx)?,
+        tooltip_table_sha: sha256_file(&workbook_set.tooltip_table_xlsx)?,
+        producttool_property_sha: sha256_file(&workbook_set.producttool_property_xlsx)?,
         pet_table_sha: sha256_file(&workbook_set.pet_table_xlsx)?,
         pet_skill_table_sha: sha256_file(&workbook_set.pet_skill_table_xlsx)?,
         pet_base_skill_table_sha: sha256_file(&workbook_set.pet_base_skill_table_xlsx)?,
@@ -692,6 +713,11 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         skill_table_new_csv: output_dir.join("skill_table_new.csv"),
         skilltype_table_new_csv: output_dir.join("skilltype_table_new.csv"),
         lightstone_set_option_csv: output_dir.join("lightstone_set_option.csv"),
+        enchant_cash_csv: output_dir.join("enchant_cash.csv"),
+        enchant_equipment_csv: output_dir.join("enchant_equipment.csv"),
+        enchant_lifeequipment_csv: output_dir.join("enchant_lifeequipment.csv"),
+        tooltip_table_csv: output_dir.join("tooltip_table.csv"),
+        producttool_property_csv: output_dir.join("producttool_property.csv"),
         pet_table_csv: output_dir.join("pet_table.csv"),
         pet_skill_table_csv: output_dir.join("pet_skill_table.csv"),
         pet_base_skill_table_csv: output_dir.join("pet_base_skill_table.csv"),
@@ -725,6 +751,36 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         "LightStoneSetOption",
         &LIGHTSTONE_SET_OPTION_HEADERS,
         &outputs.lightstone_set_option_csv,
+    )?;
+    let enchant_cash_stats = import_workbook_sheet(
+        &workbook_set.enchant_cash_xlsx,
+        "Enchant_Cash",
+        &ENCHANT_WORKBOOK_HEADERS,
+        &outputs.enchant_cash_csv,
+    )?;
+    let enchant_equipment_stats = import_workbook_sheet(
+        &workbook_set.enchant_equipment_xlsx,
+        "Enchant_Equipment",
+        &ENCHANT_WORKBOOK_HEADERS,
+        &outputs.enchant_equipment_csv,
+    )?;
+    let enchant_lifeequipment_stats = import_workbook_sheet(
+        &workbook_set.enchant_lifeequipment_xlsx,
+        "Enchant_LifeEquipment",
+        &ENCHANT_WORKBOOK_HEADERS,
+        &outputs.enchant_lifeequipment_csv,
+    )?;
+    let tooltip_table_stats = import_workbook_sheet(
+        &workbook_set.tooltip_table_xlsx,
+        "Tooltip_Table",
+        &TOOLTIP_TABLE_HEADERS,
+        &outputs.tooltip_table_csv,
+    )?;
+    let producttool_property_stats = import_workbook_sheet(
+        &workbook_set.producttool_property_xlsx,
+        "ProductTool_Property",
+        &PRODUCTTOOL_PROPERTY_HEADERS,
+        &outputs.producttool_property_csv,
     )?;
     let pet_table_stats = import_workbook_sheet(
         &workbook_set.pet_table_xlsx,
@@ -787,6 +843,23 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         "lightstone_set_option",
         &outputs.lightstone_set_option_csv,
     )?;
+    run_dolt_sql_table_import(&dolt_repo, "enchant_cash", &outputs.enchant_cash_csv)?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "enchant_equipment",
+        &outputs.enchant_equipment_csv,
+    )?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "enchant_lifeequipment",
+        &outputs.enchant_lifeequipment_csv,
+    )?;
+    run_dolt_sql_table_import(&dolt_repo, "tooltip_table", &outputs.tooltip_table_csv)?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "producttool_property",
+        &outputs.producttool_property_csv,
+    )?;
     run_dolt_sql_table_import(&dolt_repo, "pet_table", &outputs.pet_table_csv)?;
     run_dolt_sql_table_import(&dolt_repo, "pet_skill_table", &outputs.pet_skill_table_csv)?;
     run_dolt_sql_table_import(
@@ -830,6 +903,26 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         "lightstone_set_option rows imported: {}",
         lightstone_set_option_stats.row_count
     );
+    println!(
+        "enchant_cash rows imported: {}",
+        enchant_cash_stats.row_count
+    );
+    println!(
+        "enchant_equipment rows imported: {}",
+        enchant_equipment_stats.row_count
+    );
+    println!(
+        "enchant_lifeequipment rows imported: {}",
+        enchant_lifeequipment_stats.row_count
+    );
+    println!(
+        "tooltip_table rows imported: {}",
+        tooltip_table_stats.row_count
+    );
+    println!(
+        "producttool_property rows imported: {}",
+        producttool_property_stats.row_count
+    );
     println!("pet_table rows imported: {}", pet_table_stats.row_count);
     println!(
         "pet_skill_table rows imported: {}",
@@ -871,6 +964,17 @@ fn resolve_calculator_effect_workbooks(excel_dir: &Path) -> Result<CalculatorEff
         lightstone_set_option_xlsx: resolve_required_workbook(
             excel_dir,
             "LightStoneSetOption.xlsx",
+        )?,
+        enchant_cash_xlsx: resolve_required_workbook(excel_dir, "Enchant_Cash.xlsx")?,
+        enchant_equipment_xlsx: resolve_required_workbook(excel_dir, "Enchant_Equipment.xlsx")?,
+        enchant_lifeequipment_xlsx: resolve_required_workbook(
+            excel_dir,
+            "Enchant_LifeEquipment.xlsx",
+        )?,
+        tooltip_table_xlsx: resolve_required_workbook(excel_dir, "Tooltip_Table.xlsx")?,
+        producttool_property_xlsx: resolve_required_workbook(
+            excel_dir,
+            "ProductTool_Property.xlsx",
         )?,
         pet_table_xlsx: resolve_required_workbook(excel_dir, "Pet_Table.xlsx")?,
         pet_skill_table_xlsx: resolve_required_workbook(excel_dir, "Pet_Skill_Table.xlsx")?,
@@ -1921,11 +2025,16 @@ fn build_calculator_effects_commit_message(
     digests: &CalculatorEffectsDigests,
 ) -> String {
     let suffix = format!(
-        "(Buff_Table={}, Skill_Table_New={}, SkillType_Table_New={}, LightStoneSetOption={}, Pet_Table={}, Pet_Skill_Table={}, Pet_BaseSkill_Table={}, Pet_SetStats_Table={}, Pet_EquipSkill_Table={}, Pet_Grade_Table={}, Pet_Exp_Table={}, UpgradePet_Looting_Percent={})",
+        "(Buff_Table={}, Skill_Table_New={}, SkillType_Table_New={}, LightStoneSetOption={}, Enchant_Cash={}, Enchant_Equipment={}, Enchant_LifeEquipment={}, Tooltip_Table={}, ProductTool_Property={}, Pet_Table={}, Pet_Skill_Table={}, Pet_BaseSkill_Table={}, Pet_SetStats_Table={}, Pet_EquipSkill_Table={}, Pet_Grade_Table={}, Pet_Exp_Table={}, UpgradePet_Looting_Percent={})",
         digests.buff_table_sha,
         digests.skill_table_new_sha,
         digests.skilltype_table_new_sha,
         digests.lightstone_set_option_sha,
+        digests.enchant_cash_sha,
+        digests.enchant_equipment_sha,
+        digests.enchant_lifeequipment_sha,
+        digests.tooltip_table_sha,
+        digests.producttool_property_sha,
         digests.pet_table_sha,
         digests.pet_skill_table_sha,
         digests.pet_base_skill_table_sha,
