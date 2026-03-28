@@ -1163,36 +1163,43 @@ CREATE VIEW calculator_fishing_effect_tooltips AS
 SELECT NULLIF(TRIM(`Key`), '') AS effect_macro,
        NULLIF(TRIM(`StringFormat`), '') AS tooltip_format_ko,
        CASE TRIM(COALESCE(`Key`, ''))
+         WHEN 'AUTO_FISHING_REDUCE_TIME_DOWN' THEN 'afr'
          WHEN 'AUTO_FISHING_REDUCE_TIME_DOWN_2' THEN 'afr'
+         WHEN 'AUTO_FISHING_REDUCE_TIME_DOWN_3' THEN 'afr'
          WHEN 'CHANCE_LARGE_SPECIES_FISH_INCRE' THEN 'bonus_big'
          WHEN 'CHANCE_RARE_SPECIES_FISH_INCRE' THEN 'bonus_rare'
          WHEN 'DUR_WEAPONS_CON_DOWN' THEN 'drr'
          WHEN 'FISHING_EXP_POINT_ADD' THEN 'exp_fish'
          WHEN 'LIFE_EXP_2' THEN 'exp_fish'
          WHEN 'FISHING_POINT' THEN 'fishing_potential_stage'
+         WHEN 'LIFESTAT_FISHING_HOE' THEN 'fishing_mastery'
          WHEN 'LIFESTAT_FISHING_ALL_ADD' THEN 'fishing_mastery'
          WHEN 'FISHING_SIT_EFFECT_NORMAL' THEN 'fishing_mastery'
          WHEN 'FISHING_SIT_EFFECT_NORMAL2' THEN 'fishing_mastery'
          WHEN 'FISHING_SIT_EFFECT_NORMAL_44' THEN 'mixed'
          ELSE NULL
        END AS metric_kind,
-       CASE
-         WHEN TRIM(COALESCE(`Key`, '')) IN (
-           'FISHING_SIT_EFFECT_NORMAL',
-           'FISHING_SIT_EFFECT_NORMAL2',
-           'FISHING_SIT_EFFECT_NORMAL_44'
-         ) THEN 0
-         ELSE 1
-       END AS has_numeric_param
+      CASE
+        WHEN TRIM(COALESCE(`Key`, '')) IN (
+          'AUTO_FISHING_REDUCE_TIME_DOWN_3',
+          'FISHING_SIT_EFFECT_NORMAL',
+          'FISHING_SIT_EFFECT_NORMAL2',
+          'FISHING_SIT_EFFECT_NORMAL_44'
+        ) THEN 0
+        ELSE 1
+      END AS has_numeric_param
 FROM tooltip_table
 WHERE TRIM(COALESCE(`Key`, '')) IN (
+  'AUTO_FISHING_REDUCE_TIME_DOWN',
   'AUTO_FISHING_REDUCE_TIME_DOWN_2',
+  'AUTO_FISHING_REDUCE_TIME_DOWN_3',
   'CHANCE_LARGE_SPECIES_FISH_INCRE',
   'CHANCE_RARE_SPECIES_FISH_INCRE',
   'DUR_WEAPONS_CON_DOWN',
   'FISHING_EXP_POINT_ADD',
   'LIFE_EXP_2',
   'FISHING_POINT',
+  'LIFESTAT_FISHING_HOE',
   'LIFESTAT_FISHING_ALL_ADD',
   'FISHING_SIT_EFFECT_NORMAL',
   'FISHING_SIT_EFFECT_NORMAL2',
@@ -1242,9 +1249,12 @@ SELECT 'equipment' AS source_sheet,
 FROM enchant_equipment
 WHERE COALESCE(`ItemName`, '') LIKE '%낚시%'
    OR COALESCE(`ItemName`, '') LIKE '%찌%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN_2(%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN_3();%'
    OR COALESCE(`PatternDescription`, '') LIKE '%CHANCE_LARGE_SPECIES_FISH_INCRE(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%CHANCE_RARE_SPECIES_FISH_INCRE(%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%LIFESTAT_FISHING_HOE(%'
 UNION ALL
 SELECT 'lifeequipment' AS source_sheet,
        CASE
@@ -1273,10 +1283,13 @@ SELECT 'lifeequipment' AS source_sheet,
 FROM enchant_lifeequipment
 WHERE COALESCE(`ItemName`, '') LIKE '%낚시%'
    OR COALESCE(`PatternDescription`, '') LIKE '%FISHING_SIT_EFFECT_%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%LIFESTAT_FISHING_HOE(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%LIFESTAT_FISHING_ALL_ADD(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%FISHING_POINT(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%FISHING_EXP_POINT_ADD(%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN_2(%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN_3();%'
 UNION ALL
 SELECT 'cash' AS source_sheet,
        CASE
@@ -1304,9 +1317,12 @@ SELECT 'cash' AS source_sheet,
        NULLIF(TRIM(`Description`), '') AS description_ko
 FROM enchant_cash
 WHERE COALESCE(`ItemName`, '') LIKE '%낚시%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%LIFESTAT_FISHING_HOE(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%LIFESTAT_FISHING_ALL_ADD(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%FISHING_POINT(%'
    OR COALESCE(`PatternDescription`, '') LIKE '%FISHING_EXP_POINT_ADD(%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN(%'
+   OR COALESCE(`PatternDescription`, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN_3();%'
    OR COALESCE(`PatternDescription`, '') LIKE '%DUR_WEAPONS_CON_DOWN(%';
 
 DROP VIEW IF EXISTS calculator_enchant_fishing_item_effects;
@@ -1339,6 +1355,21 @@ SELECT src.source_sheet,
        NULLIF(
          (
            CASE
+             WHEN COALESCE(src.pattern_description, '') LIKE '%LIFESTAT_FISHING_HOE(%'
+               THEN CAST(
+                 SUBSTRING_INDEX(
+                   SUBSTRING(
+                     src.pattern_description,
+                     LOCATE('LIFESTAT_FISHING_HOE(', src.pattern_description)
+                       + CHAR_LENGTH('LIFESTAT_FISHING_HOE(')
+                   ),
+                   ')',
+                   1
+                 ) AS DECIMAL(10, 4)
+               )
+             ELSE 0
+           END
+           + CASE
              WHEN COALESCE(src.pattern_description, '') LIKE '%LIFESTAT_FISHING_ALL_ADD(%'
                THEN CAST(
                  SUBSTRING_INDEX(
@@ -1371,6 +1402,21 @@ SELECT src.source_sheet,
        NULLIF(
          (
            CASE
+             WHEN COALESCE(src.pattern_description, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN(%'
+               THEN CAST(
+                 SUBSTRING_INDEX(
+                   SUBSTRING(
+                     src.pattern_description,
+                     LOCATE('AUTO_FISHING_REDUCE_TIME_DOWN(', src.pattern_description)
+                       + CHAR_LENGTH('AUTO_FISHING_REDUCE_TIME_DOWN(')
+                   ),
+                   ')',
+                   1
+                 ) AS DECIMAL(10, 4)
+               ) / 100.0
+             ELSE 0
+           END
+           + CASE
              WHEN COALESCE(src.pattern_description, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN_2(%'
                THEN CAST(
                  SUBSTRING_INDEX(
@@ -1385,6 +1431,10 @@ SELECT src.source_sheet,
                ) / 100.0
              ELSE 0
            END
+           + CASE
+               WHEN COALESCE(src.pattern_description, '') LIKE '%AUTO_FISHING_REDUCE_TIME_DOWN_3();%' THEN 0.8
+               ELSE 0
+             END
            + CASE
                WHEN COALESCE(src.pattern_description, '') LIKE '%FISHING_SIT_EFFECT_NORMAL_44();%' THEN 0.05
                ELSE 0
@@ -1495,7 +1545,7 @@ SELECT CONCAT('enchant-source:', CAST(effects.source_item_key AS CHAR)) AS sourc
        effects.item_name_ko,
        effects.enchant_level,
        NULLIF(effects.endurance_limit, 0) AS durability,
-       COALESCE(effects.afr, effects.producttool_afr) AS afr,
+       effects.afr AS afr,
        effects.bonus_rare,
        effects.bonus_big,
        effects.drr,
@@ -1519,77 +1569,161 @@ DROP VIEW IF EXISTS calculator_item_source_metadata;
 CREATE VIEW calculator_item_source_metadata AS
 SELECT CAST(`Index` AS SIGNED) AS item_id,
        NULLIF(TRIM(`ItemName`), '') AS item_name_ko,
+       TRIM(
+         REPLACE(
+           REPLACE(
+             REPLACE(
+               REPLACE(
+                 REPLACE(NULLIF(TRIM(`ItemName`), ''), '[의상] ', ''),
+                 '[이벤트] ',
+                 ''
+               ),
+               '의 낚시 배낭',
+               ' 낚시 배낭'
+             ),
+             '의 낚시복',
+             ' 낚시복'
+           ),
+           '  ',
+           ' '
+         )
+       ) AS normalized_item_name_ko,
+       MAX(
+         CASE
+           WHEN COALESCE(l.`format`, '') = 'A'
+             AND COALESCE(l.`unk`, '') = ''
+             THEN NULLIF(TRIM(l.`text`), '')
+           ELSE NULL
+         END
+       ) AS item_name_en,
        NULLIF(TRIM(`IconImageFile`), '') AS item_icon_file,
        CASE
          WHEN TRIM(COALESCE(`EnduranceLimit`, '')) REGEXP '^[0-9]+$'
            THEN CAST(`EnduranceLimit` AS SIGNED)
          ELSE NULL
        END AS endurance_limit
-FROM item_table;
+FROM item_table it
+LEFT JOIN languagedata_en l
+  ON l.`id` = CAST(it.`Index` AS SIGNED)
+GROUP BY CAST(it.`Index` AS SIGNED),
+         NULLIF(TRIM(it.`ItemName`), ''),
+         TRIM(
+           REPLACE(
+             REPLACE(
+               REPLACE(
+                 REPLACE(
+                   REPLACE(NULLIF(TRIM(it.`ItemName`), ''), '[의상] ', ''),
+                   '[이벤트] ',
+                   ''
+                 ),
+                 '의 낚시 배낭',
+                 ' 낚시 배낭'
+               ),
+               '의 낚시복',
+               ' 낚시복'
+             ),
+             '  ',
+             ' '
+           )
+         ),
+         NULLIF(TRIM(it.`IconImageFile`), ''),
+         CASE
+           WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$'
+             THEN CAST(it.`EnduranceLimit` AS SIGNED)
+           ELSE NULL
+         END;
 
-DROP VIEW IF EXISTS calculator_legacy_aligned_enchant_item_effect_entries;
-CREATE VIEW calculator_legacy_aligned_enchant_item_effect_entries AS
+DROP VIEW IF EXISTS calculator_source_owned_enchant_item_effect_entries;
+CREATE VIEW calculator_source_owned_enchant_item_effect_entries AS
 SELECT CONCAT(
          'item:',
-         CAST(matched.item_id AS CHAR),
-         ':enchant:',
-         CAST(matched.enchant_level AS CHAR)
+         CAST(COALESCE(meta_exact.item_id, meta_fallback.item_id) AS CHAR)
        ) AS source_key,
-       matched.item_id,
-       matched.item_type,
-       matched.legacy_name_en,
-       matched.source_name_ko,
-       NULLIF(TRIM(item_source.`IconImageFile`), '') AS item_icon_file,
-       legacy_item.icon_id AS legacy_icon_id,
+       COALESCE(meta_exact.item_id, meta_fallback.item_id) AS item_id,
+       chosen.item_type,
+       COALESCE(meta_exact.item_name_en, meta_fallback.item_name_en) AS source_name_en,
+       COALESCE(meta_exact.item_name_ko, meta_fallback.item_name_ko) AS source_name_ko,
+       COALESCE(meta_exact.item_icon_file, meta_fallback.item_icon_file) AS item_icon_file,
        COALESCE(
-         legacy_item.durability,
-         CASE
-           WHEN TRIM(COALESCE(item_source.`EnduranceLimit`, '')) REGEXP '^[0-9]+$'
-             THEN CAST(item_source.`EnduranceLimit` AS SIGNED)
-           ELSE NULL
-         END,
-         effect_match.durability
+         chosen.durability,
+         meta_exact.endurance_limit,
+         meta_fallback.endurance_limit
        ) AS durability,
-       legacy_item.fish_multiplier,
-       effect_match.afr,
-       effect_match.bonus_rare,
-       effect_match.bonus_big,
-       effect_match.drr,
-       effect_match.exp_fish,
+       chosen.afr,
+       chosen.bonus_rare,
+       chosen.bonus_big,
+       chosen.drr,
+       chosen.exp_fish,
        NULL AS exp_life
 FROM (
-  SELECT CAST(it.`Index` AS SIGNED) AS item_id,
-         legacy_item.type AS item_type,
-         legacy_item.name AS legacy_name_en,
-         effects.item_name_ko AS source_name_ko,
-         MIN(CAST(effects.enchant_level AS SIGNED)) AS enchant_level,
-         MAX(effects.durability) AS durability,
-         MAX(effects.afr) AS afr,
-         MAX(effects.bonus_rare) AS bonus_rare,
-         MAX(effects.bonus_big) AS bonus_big,
-         MAX(effects.drr) AS drr,
-         MAX(effects.exp_fish) AS exp_fish
-  FROM calculator_enchant_item_effect_entries effects
-  JOIN item_table it
-    ON NULLIF(TRIM(it.`ItemName`), '') = effects.item_name_ko
-  JOIN items legacy_item
-    ON legacy_item.id = CAST(it.`Index` AS SIGNED)
-   AND legacy_item.type IN ('rod', 'float', 'chair')
-  WHERE COALESCE(effects.afr, 0) = COALESCE(legacy_item.afr, 0)
-    AND COALESCE(effects.bonus_rare, 0) = COALESCE(legacy_item.bonus_rare, 0)
-    AND COALESCE(effects.bonus_big, 0) = COALESCE(legacy_item.bonus_big, 0)
-    AND COALESCE(effects.drr, 0) = COALESCE(legacy_item.drr, 0)
-    AND COALESCE(effects.exp_fish, 0) = COALESCE(legacy_item.exp_fish, 0)
-  GROUP BY CAST(it.`Index` AS SIGNED), legacy_item.type, legacy_item.name, effects.item_name_ko
-) matched
-JOIN calculator_enchant_item_effect_entries effect_match
-  ON effect_match.item_name_ko = matched.source_name_ko
- AND CAST(effect_match.enchant_level AS SIGNED) = matched.enchant_level
-LEFT JOIN items legacy_item
-  ON legacy_item.id = matched.item_id
- AND legacy_item.type = matched.item_type
-LEFT JOIN item_table item_source
-  ON CAST(item_source.`Index` AS SIGNED) = matched.item_id;
+  SELECT picked.item_name_ko,
+         TRIM(
+           REPLACE(
+             REPLACE(
+               REPLACE(
+                 REPLACE(
+                   REPLACE(picked.item_name_ko, '[의상] ', ''),
+                   '[이벤트] ',
+                   ''
+                 ),
+                 '의 낚시 배낭',
+                 ' 낚시 배낭'
+               ),
+               '의 낚시복',
+               ' 낚시복'
+             ),
+             '  ',
+             ' '
+           )
+         ) AS normalized_item_name_ko,
+         picked.item_type,
+         MAX(picked.durability) AS durability,
+         MAX(picked.afr) AS afr,
+         MAX(picked.bonus_rare) AS bonus_rare,
+         MAX(picked.bonus_big) AS bonus_big,
+         MAX(picked.drr) AS drr,
+         MAX(picked.exp_fish) AS exp_fish
+  FROM calculator_enchant_item_effect_entries picked
+  JOIN (
+    SELECT item_name_ko,
+           item_type,
+           MAX(
+             CASE
+               WHEN COALESCE(enchant_level, '') REGEXP '^-?[0-9]+$'
+                 THEN CAST(enchant_level AS SIGNED)
+               ELSE 0
+             END
+           ) AS best_enchant
+    FROM calculator_enchant_item_effect_entries
+    WHERE item_type IN ('rod', 'float', 'chair', 'backpack', 'outfit')
+    GROUP BY item_name_ko, item_type
+  ) best
+    ON best.item_name_ko = picked.item_name_ko
+   AND best.item_type = picked.item_type
+   AND (
+     CASE
+       WHEN COALESCE(picked.enchant_level, '') REGEXP '^-?[0-9]+$'
+         THEN CAST(picked.enchant_level AS SIGNED)
+       ELSE 0
+     END
+   ) = best.best_enchant
+  WHERE picked.item_type IN ('rod', 'float', 'chair', 'backpack', 'outfit')
+  GROUP BY picked.item_name_ko, picked.item_type
+) chosen
+LEFT JOIN calculator_item_source_metadata meta_exact
+  ON meta_exact.item_name_ko = chosen.item_name_ko
+LEFT JOIN (
+  SELECT normalized_item_name_ko,
+         MIN(item_id) AS item_id
+  FROM calculator_item_source_metadata
+  GROUP BY normalized_item_name_ko
+  HAVING COUNT(*) = 1
+) fallback_item
+  ON meta_exact.item_id IS NULL
+ AND fallback_item.normalized_item_name_ko = chosen.normalized_item_name_ko
+LEFT JOIN calculator_item_source_metadata meta_fallback
+  ON meta_fallback.item_id = fallback_item.item_id
+WHERE COALESCE(meta_exact.item_id, meta_fallback.item_id) IS NOT NULL;
 
 DROP VIEW IF EXISTS calculator_consumable_item_targets;
 CREATE VIEW calculator_consumable_item_targets AS
@@ -1945,94 +2079,14 @@ WHERE
 
 DROP VIEW IF EXISTS calculator_lightstone_effect_sources;
 CREATE VIEW calculator_lightstone_effect_sources AS
-SELECT mapped.source_key,
-       mapped.lightstone_set_id,
-       mapped.set_name_ko,
-       mapped.legacy_name_en,
-       mapped.effect_description_ko
-FROM (
-  SELECT source_key,
-         lightstone_set_id,
-         set_name_ko,
-         CASE TRIM(COALESCE(set_name_ko, ''))
-           WHEN '신의 입질' THEN 'Nibbles'
-           WHEN '고래의 입' THEN 'Whaling'
-           WHEN '예리한 갈매기' THEN 'Sharp-Eyed Seagull'
-           WHEN '선택과 집중 : 낚시' THEN 'Choice & Focus: Fishing'
-           WHEN '대장장이의 축복' THEN 'Blacksmith''s Blessing'
-           ELSE NULL
-         END AS legacy_name_en,
-         effect_description_ko
-  FROM calculator_lightstone_set_effects
-  WHERE NULLIF(TRIM(COALESCE(set_name_ko, '')), '') IS NOT NULL
-) mapped
-JOIN (
-  SELECT DISTINCT name AS legacy_name_en
-  FROM items
-  WHERE type = 'lightstone_set'
-) targets
-  ON targets.legacy_name_en = mapped.legacy_name_en;
-
-DROP VIEW IF EXISTS calculator_effect_source_entries;
-CREATE VIEW calculator_effect_source_entries AS
 SELECT source_key,
-       'item' AS source_kind,
-       item_id,
-       NULL AS legacy_name_en,
-       item_name_ko AS source_name_ko,
-       COALESCE(effect_description_ko, item_description_ko) AS effect_description_ko
-FROM calculator_consumable_effect_sources
-UNION ALL
-SELECT source_key,
-       'lightstone_set' AS source_kind,
-       NULL AS item_id,
-       legacy_name_en,
-       set_name_ko AS source_name_ko,
+       lightstone_set_id,
+       set_name_ko,
+       NULL AS source_name_en,
+       skill_icon_file,
        effect_description_ko
-FROM calculator_lightstone_effect_sources
-WHERE legacy_name_en IS NOT NULL;
-
-DROP VIEW IF EXISTS calculator_source_backed_item_entries;
-CREATE VIEW calculator_source_backed_item_entries AS
-SELECT effects.source_key,
-       effects.source_kind,
-       effects.item_id,
-       COALESCE(legacy_item.type, 'buff') AS item_type,
-       legacy_item.name AS legacy_name_en,
-       effects.source_name_ko,
-       source_meta.item_icon_file,
-       legacy_item.icon_id AS legacy_icon_id,
-       COALESCE(source_meta.endurance_limit, legacy_item.durability) AS durability,
-       legacy_item.fish_multiplier,
-       effects.effect_description_ko
-FROM calculator_effect_source_entries effects
-LEFT JOIN items legacy_item
-  ON effects.source_kind = 'item'
- AND legacy_item.id = effects.item_id
- AND legacy_item.type IN ('food', 'buff')
-LEFT JOIN calculator_item_source_metadata source_meta
-  ON effects.source_kind = 'item'
- AND source_meta.item_id = effects.item_id
-WHERE effects.source_kind = 'item'
-UNION ALL
-SELECT effects.source_key,
-       effects.source_kind,
-       NULL AS item_id,
-       COALESCE(legacy_item.type, 'lightstone_set') AS item_type,
-       effects.legacy_name_en AS legacy_name_en,
-       effects.source_name_ko,
-       NULL AS item_icon_file,
-       legacy_item.icon_id AS legacy_icon_id,
-       legacy_item.durability,
-       legacy_item.fish_multiplier,
-       effects.effect_description_ko
-FROM calculator_effect_source_entries effects
-LEFT JOIN items legacy_item
-  ON effects.source_kind = 'lightstone_set'
- AND legacy_item.name = effects.legacy_name_en
- AND legacy_item.type = 'lightstone_set'
-WHERE effects.source_kind = 'lightstone_set'
-  AND effects.legacy_name_en IS NOT NULL;
+FROM calculator_lightstone_set_effects
+WHERE NULLIF(TRIM(COALESCE(set_name_ko, '')), '') IS NOT NULL;
 
 DROP VIEW IF EXISTS calculator_pet_skill_sources;
 CREATE VIEW calculator_pet_skill_sources AS

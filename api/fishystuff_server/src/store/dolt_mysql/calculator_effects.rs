@@ -75,23 +75,9 @@ pub(super) fn parse_calculator_effect_text(values: &mut CalculatorItemEffectValu
     }
 }
 
-pub(super) fn legacy_lightstone_name_for_source_name_ko(name_ko: &str) -> Option<&'static str> {
-    match name_ko.trim() {
-        "신의 입질" => Some("Nibbles"),
-        "고래의 입" => Some("Whaling"),
-        "예리한 갈매기" => Some("Sharp-Eyed Seagull"),
-        "선택과 집중 : 낚시" => Some("Choice & Focus: Fishing"),
-        "대장장이의 축복" => Some("Blacksmith's Blessing"),
-        _ => None,
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        extract_first_number, legacy_lightstone_name_for_source_name_ko,
-        parse_calculator_effect_text, CalculatorItemEffectValues,
-    };
+    use super::{extract_first_number, parse_calculator_effect_text, CalculatorItemEffectValues};
 
     #[test]
     fn extract_first_number_handles_signed_percent_lines() {
@@ -146,26 +132,5 @@ mod tests {
                 ..CalculatorItemEffectValues::default()
             }
         );
-    }
-
-    #[test]
-    fn legacy_lightstone_names_map_to_current_calculator_entries() {
-        assert_eq!(
-            legacy_lightstone_name_for_source_name_ko("신의 입질"),
-            Some("Nibbles")
-        );
-        assert_eq!(
-            legacy_lightstone_name_for_source_name_ko("고래의 입"),
-            Some("Whaling")
-        );
-        assert_eq!(
-            legacy_lightstone_name_for_source_name_ko("예리한 갈매기"),
-            Some("Sharp-Eyed Seagull")
-        );
-        assert_eq!(
-            legacy_lightstone_name_for_source_name_ko("선택과 집중 : 낚시"),
-            Some("Choice & Focus: Fishing")
-        );
-        assert_eq!(legacy_lightstone_name_for_source_name_ko("없는 세트"), None);
     }
 }

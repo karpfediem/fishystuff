@@ -2597,8 +2597,8 @@ mod tests {
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
-                        key: "effect:blacksmith-s-blessing".to_string(),
-                        name: "Blacksmith's Blessing".to_string(),
+                        key: "lightstone-set:160".to_string(),
+                        name: "신의 입질".to_string(),
                         r#type: "lightstone_set".to_string(),
                         afr: Some(0.1),
                         drr: Some(0.1),
@@ -2610,6 +2610,13 @@ mod tests {
                         icon: Some("/img/items/00830150.webp".to_string()),
                         r#type: "backpack".to_string(),
                         drr: Some(0.05),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "item:14330".to_string(),
+                        name: "Professional Fisher's Uniform (Costume)".to_string(),
+                        r#type: "outfit".to_string(),
+                        exp_fish: Some(0.1),
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
@@ -2641,13 +2648,9 @@ mod tests {
                     rod: "item:16162".to_string(),
                     float: String::new(),
                     chair: "item:705539".to_string(),
-                    lightstone_set: "effect:blacksmith-s-blessing".to_string(),
+                    lightstone_set: "lightstone-set:160".to_string(),
                     backpack: "item:830150".to_string(),
-                    outfit: vec![
-                        "effect:8-piece-outfit-set-effect".to_string(),
-                        "effect:awakening-weapon-outfit".to_string(),
-                        "effect:mainhand-weapon-outfit".to_string(),
-                    ],
+                    outfit: vec!["item:14330".to_string()],
                     food: vec!["item:9359".to_string()],
                     buff: vec!["".to_string(), "item:721092".to_string()],
                     pet1: CalculatorPetSignals {

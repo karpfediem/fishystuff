@@ -27,6 +27,7 @@ pub(super) type CalculatorItemDbRow = (
 #[derive(Debug, Clone, Default)]
 pub(super) struct CalculatorItemSourceMetadata {
     pub(super) name_ko: Option<String>,
+    pub(super) name_en: Option<String>,
     pub(super) durability: Option<i32>,
     pub(super) icon_id: Option<i32>,
 }
@@ -38,13 +39,14 @@ pub(super) struct CalculatorCatalogSourceData {
 }
 
 pub(super) struct CalculatorSourceBackedItemRow {
+    pub(super) source_key: String,
     pub(super) source_kind: String,
     pub(super) item_id: Option<i32>,
     pub(super) item_type: String,
-    pub(super) legacy_name_en: Option<String>,
+    pub(super) source_name_en: Option<String>,
     pub(super) source_name_ko: Option<String>,
     pub(super) item_icon_file: Option<String>,
-    pub(super) legacy_icon_id: Option<i32>,
+    pub(super) icon_id: Option<i32>,
     pub(super) durability: Option<i32>,
     pub(super) fish_multiplier: Option<f32>,
     pub(super) effect_description_ko: Option<String>,
@@ -271,7 +273,15 @@ impl DoltMySqlStore {
     fn query_lightstone_source_rows(
         &self,
         ref_id: Option<&str>,
-    ) -> AppResult<Vec<(String, Option<String>, Option<String>)>> {
+    ) -> AppResult<
+        Vec<(
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>,
+    > {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
@@ -280,15 +290,22 @@ impl DoltMySqlStore {
         };
         let query = format!(
             "SELECT \
-                legacy_name_en, \
+                source_key, \
                 set_name_ko, \
+                source_name_en, \
+                skill_icon_file, \
                 effect_description_ko \
-             FROM calculator_lightstone_effect_sources{as_of} \
-             WHERE legacy_name_en IS NOT NULL"
+             FROM calculator_lightstone_effect_sources{as_of}"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(String, Option<String>, Option<String>)> = match conn.query(query) {
+        let rows: Vec<(
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = match conn.query(query) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "calculator_lightstone_effect_sources") => {
                 return Ok(Vec::new());
@@ -322,6 +339,14 @@ impl DoltMySqlStore {
             "SELECT \
                 CAST(it.`Index` AS SIGNED), \
                 it.`ItemName`, \
+                MAX( \
+                    CASE \
+                        WHEN COALESCE(l.`format`, '') = 'A' \
+                         AND COALESCE(l.`unk`, '') = '' \
+                        THEN NULLIF(TRIM(l.`text`), '') \
+                        ELSE NULL \
+                    END \
+                ) AS item_name_en, \
                 it.`IconImageFile`, \
                 CASE \
                     WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
@@ -329,25 +354,41 @@ impl DoltMySqlStore {
                     ELSE NULL \
                 END AS endurance_limit \
              FROM item_table{as_of} it \
-             WHERE it.`Index` IN ({id_list})"
+             LEFT JOIN languagedata_en{as_of} l \
+               ON l.`id` = CAST(it.`Index` AS SIGNED) \
+             WHERE it.`Index` IN ({id_list}) \
+             GROUP BY CAST(it.`Index` AS SIGNED), \
+                      it.`ItemName`, \
+                      it.`IconImageFile`, \
+                      CASE \
+                          WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
+                          THEN CAST(it.`EnduranceLimit` AS SIGNED) \
+                          ELSE NULL \
+                      END"
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, Option<String>, Option<String>, Option<i64>)> =
-            match conn.query(raw_item_table_query) {
-                Ok(rows) => rows,
-                Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
-                Err(err) => return Err(db_unavailable(err)),
-            };
+        let rows: Vec<(
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+        )> = match conn.query(raw_item_table_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
         let mut out = HashMap::new();
-        for (item_id, name, icon_file, durability) in rows {
+        for (item_id, name_ko, name_en, icon_file, durability) in rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
             out.insert(
                 item_id,
                 CalculatorItemSourceMetadata {
-                    name_ko: normalize_optional_string(name),
+                    name_ko: normalize_optional_string(name_ko),
+                    name_en: normalize_optional_string(name_en),
                     durability: durability.and_then(|value| i32::try_from(value).ok()),
                     icon_id: normalize_optional_string(icon_file).and_then(|value| {
                         fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
@@ -425,14 +466,6 @@ impl DoltMySqlStore {
             .iter()
             .filter_map(|row| Some((row.10?, row)))
             .collect::<HashMap<_, _>>();
-        let legacy_lightstone_rows_by_name = legacy_rows
-            .iter()
-            .filter_map(|row| {
-                let item_type = normalize_optional_string(row.1.clone())?;
-                let legacy_name = normalize_optional_string(row.0.clone())?;
-                (item_type == "lightstone_set").then_some((legacy_name, row))
-            })
-            .collect::<HashMap<_, _>>();
 
         let mut effect_lines_by_item_id = HashMap::<i32, Vec<String>>::new();
         for (item_id, effect_line) in self.query_consumable_effect_line_rows(ref_id)? {
@@ -448,16 +481,16 @@ impl DoltMySqlStore {
                 let legacy_row = legacy_rows_by_item_id.get(&item_id)?;
                 let item_type = normalize_optional_string(legacy_row.1.clone())
                     .unwrap_or_else(|| "buff".into());
-                let legacy_name_en = normalize_optional_string(legacy_row.0.clone());
                 let source_meta = item_source_metadata.get(&item_id);
                 Some(CalculatorSourceBackedItemRow {
+                    source_key: format!("item:{item_id}"),
                     source_kind: "item".to_string(),
                     item_id: Some(item_id),
                     item_type,
-                    legacy_name_en,
+                    source_name_en: source_meta.and_then(|meta| meta.name_en.clone()),
                     source_name_ko: source_meta.and_then(|meta| meta.name_ko.clone()),
                     item_icon_file: None,
-                    legacy_icon_id: source_meta.and_then(|meta| meta.icon_id).or(legacy_row.11),
+                    icon_id: source_meta.and_then(|meta| meta.icon_id).or(legacy_row.11),
                     durability: source_meta
                         .and_then(|meta| meta.durability)
                         .or(legacy_row.5),
@@ -473,75 +506,70 @@ impl DoltMySqlStore {
             })
             .collect::<Vec<_>>();
 
-        source_backed_rows.extend(
-            self.query_lightstone_source_rows(ref_id)?
-                .into_iter()
-                .filter_map(|(legacy_name_en, source_name_ko, effect_description_ko)| {
-                    let legacy_row = legacy_lightstone_rows_by_name.get(&legacy_name_en)?;
-                    let item_type = normalize_optional_string(legacy_row.1.clone())
-                        .unwrap_or_else(|| "lightstone_set".into());
-                    Some(CalculatorSourceBackedItemRow {
-                        source_kind: "lightstone_set".to_string(),
-                        item_id: None,
-                        item_type,
-                        legacy_name_en: Some(legacy_name_en),
-                        source_name_ko,
-                        item_icon_file: None,
-                        legacy_icon_id: legacy_row.11,
-                        durability: legacy_row.5,
-                        fish_multiplier: legacy_row.7,
-                        effect_description_ko,
-                        afr: None,
-                        bonus_rare: None,
-                        bonus_big: None,
-                        drr: None,
-                        exp_fish: None,
-                        exp_life: None,
-                    })
-                }),
-        );
+        source_backed_rows.extend(self.query_lightstone_source_rows(ref_id)?.into_iter().map(
+            |(
+                source_key,
+                source_name_ko,
+                source_name_en,
+                item_icon_file,
+                effect_description_ko,
+            )| CalculatorSourceBackedItemRow {
+                source_key,
+                source_kind: "lightstone_set".to_string(),
+                item_id: None,
+                item_type: "lightstone_set".to_string(),
+                source_name_en,
+                source_name_ko,
+                item_icon_file,
+                icon_id: None,
+                durability: None,
+                fish_multiplier: None,
+                effect_description_ko,
+                afr: None,
+                bonus_rare: None,
+                bonus_big: None,
+                drr: None,
+                exp_fish: None,
+                exp_life: None,
+            },
+        ));
 
         Ok(source_backed_rows)
     }
 
-    fn query_legacy_aligned_enchant_source_backed_item_rows(
+    fn query_source_owned_enchant_source_backed_item_rows(
         &self,
         ref_id: Option<&str>,
-        item_ids: &[i32],
+        legacy_rows: &[CalculatorItemDbRow],
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
-        if item_ids.is_empty() {
-            return Ok(Vec::new());
-        }
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
             format!(" AS OF '{}'", ref_id.replace('\'', "''"))
         } else {
             String::new()
         };
-        let id_list = item_ids
-            .iter()
-            .map(i32::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
         let query = format!(
             "SELECT \
+                source_key, \
                 item_id, \
                 item_type, \
-                legacy_name_en, \
+                source_name_en, \
                 source_name_ko, \
                 item_icon_file, \
-                legacy_icon_id, \
                 durability, \
-                fish_multiplier, \
                 afr, \
                 bonus_rare, \
                 bonus_big, \
                 drr, \
                 exp_fish, \
                 exp_life \
-             FROM calculator_legacy_aligned_enchant_item_effect_entries{as_of} \
-             WHERE item_id IN ({id_list})"
+             FROM calculator_source_owned_enchant_item_effect_entries{as_of}"
         );
+
+        let fish_multiplier_by_item_id = legacy_rows
+            .iter()
+            .filter_map(|row| Some((row.10?, row.7)))
+            .collect::<HashMap<_, _>>();
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         let rows: Vec<Row> = match conn.query(query) {
@@ -549,7 +577,7 @@ impl DoltMySqlStore {
             Err(err)
                 if is_missing_table(
                     &err,
-                    "calculator_legacy_aligned_enchant_item_effect_entries",
+                    "calculator_source_owned_enchant_item_effect_entries",
                 ) =>
             {
                 return Ok(Vec::new());
@@ -560,13 +588,16 @@ impl DoltMySqlStore {
         Ok(rows
             .into_iter()
             .filter_map(|row| {
+                let item_id = row.get::<Option<i32>, _>("item_id").flatten()?;
                 Some(CalculatorSourceBackedItemRow {
+                    source_key: normalize_optional_string(row.get::<String, _>("source_key"))
+                        .unwrap_or_else(|| format!("item:{item_id}")),
                     source_kind: "item".to_string(),
-                    item_id: row.get::<Option<i32>, _>("item_id").flatten(),
+                    item_id: Some(item_id),
                     item_type: normalize_optional_string(row.get::<String, _>("item_type"))
                         .unwrap_or_default(),
-                    legacy_name_en: normalize_optional_string(
-                        row.get::<String, _>("legacy_name_en"),
+                    source_name_en: normalize_optional_string(
+                        row.get::<String, _>("source_name_en"),
                     ),
                     source_name_ko: normalize_optional_string(
                         row.get::<String, _>("source_name_ko"),
@@ -574,9 +605,12 @@ impl DoltMySqlStore {
                     item_icon_file: normalize_optional_string(
                         row.get::<String, _>("item_icon_file"),
                     ),
-                    legacy_icon_id: row.get::<Option<i32>, _>("legacy_icon_id").flatten(),
+                    icon_id: normalize_optional_string(row.get::<String, _>("item_icon_file"))
+                        .and_then(|value| {
+                            fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
+                        }),
                     durability: row.get::<Option<i32>, _>("durability").flatten(),
-                    fish_multiplier: row.get::<Option<f32>, _>("fish_multiplier").flatten(),
+                    fish_multiplier: fish_multiplier_by_item_id.get(&item_id).copied().flatten(),
                     effect_description_ko: None,
                     afr: row.get::<Option<f32>, _>("afr").flatten(),
                     bonus_rare: row.get::<Option<f32>, _>("bonus_rare").flatten(),
@@ -605,36 +639,20 @@ impl DoltMySqlStore {
             &all_legacy_rows,
             &item_source_metadata,
         )?;
-        let legacy_aligned_item_ids = all_legacy_rows
-            .iter()
-            .filter_map(|row| {
-                let item_type = normalize_optional_string(row.1.clone())?;
-                matches!(item_type.as_str(), "rod" | "float" | "chair").then_some(row.10?)
-            })
-            .collect::<Vec<_>>();
-        source_backed_rows.extend(self.query_legacy_aligned_enchant_source_backed_item_rows(
-            ref_id,
-            &legacy_aligned_item_ids,
-        )?);
+        source_backed_rows.extend(
+            self.query_source_owned_enchant_source_backed_item_rows(ref_id, &all_legacy_rows)?,
+        );
 
         let excluded_item_ids = source_backed_rows
             .iter()
             .filter_map(|row| (row.source_kind == "item").then_some(row.item_id).flatten())
             .collect::<Vec<_>>();
-        let excluded_effect_names = source_backed_rows
-            .iter()
-            .filter_map(|row| {
-                (row.source_kind == "lightstone_set")
-                    .then_some(row.legacy_name_en.clone())
-                    .flatten()
-            })
-            .collect::<Vec<_>>();
         let excluded_item_ids = excluded_item_ids
             .into_iter()
             .collect::<std::collections::HashSet<_>>();
-        let excluded_effect_names = excluded_effect_names
-            .into_iter()
-            .collect::<std::collections::HashSet<_>>();
+        let has_source_lightstones = source_backed_rows
+            .iter()
+            .any(|row| row.source_kind == "lightstone_set");
         let legacy_rows = all_legacy_rows
             .into_iter()
             .filter(|row| {
@@ -642,12 +660,9 @@ impl DoltMySqlStore {
                     .10
                     .map(|item_id| !excluded_item_ids.contains(&item_id))
                     .unwrap_or(true);
-                let keep_effect = match (
-                    normalize_optional_string(row.1.clone()),
-                    normalize_optional_string(row.0.clone()),
-                ) {
-                    (Some(item_type), Some(name)) if item_type == "lightstone_set" => {
-                        !excluded_effect_names.contains(&name)
+                let keep_effect = match normalize_optional_string(row.1.clone()) {
+                    Some(item_type) if has_source_lightstones && item_type == "lightstone_set" => {
+                        false
                     }
                     _ => true,
                 };

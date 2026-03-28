@@ -37,10 +37,10 @@ pub(super) fn build_source_item(
     lang: FishLang,
     item_id: i32,
     item_type: &str,
-    legacy_name_en: Option<&str>,
+    source_name_en: Option<&str>,
     source_name_ko: Option<&str>,
     item_icon_file: Option<&str>,
-    legacy_icon_id: Option<i32>,
+    icon_id: Option<i32>,
     fish_multiplier: Option<f32>,
     source_durability: Option<i32>,
     override_values: CalculatorItemEffectValues,
@@ -48,17 +48,17 @@ pub(super) fn build_source_item(
     let name = if matches!(lang, FishLang::Ko) {
         source_name_ko
             .map(ToOwned::to_owned)
-            .or_else(|| legacy_name_en.map(ToOwned::to_owned))
+            .or_else(|| source_name_en.map(ToOwned::to_owned))
             .unwrap_or_else(|| format!("item:{item_id}"))
     } else {
-        legacy_name_en
+        source_name_en
             .map(ToOwned::to_owned)
             .or_else(|| source_name_ko.map(ToOwned::to_owned))
             .unwrap_or_else(|| format!("item:{item_id}"))
     };
     let icon_id = item_icon_file
         .and_then(parse_fish_icon_asset_id)
-        .or(legacy_icon_id)
+        .or(icon_id)
         .or(Some(item_id));
 
     CalculatorItemEntry {
@@ -96,24 +96,31 @@ fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> Calculato
 
 pub(super) fn build_source_lightstone_item(
     lang: FishLang,
-    legacy_name_en: &str,
+    source_key: &str,
+    source_name_en: Option<&str>,
     name_ko: Option<&str>,
     item_type: &str,
-    icon_id: Option<i32>,
+    item_icon_file: Option<&str>,
     durability: Option<i32>,
     fish_multiplier: Option<f32>,
     override_values: CalculatorItemEffectValues,
 ) -> CalculatorItemEntry {
     let name = if matches!(lang, FishLang::Ko) {
-        name_ko
-            .map(ToOwned::to_owned)
-            .unwrap_or_else(|| legacy_name_en.to_string())
+        name_ko.map(ToOwned::to_owned).unwrap_or_else(|| {
+            source_name_en
+                .map(ToOwned::to_owned)
+                .unwrap_or_else(|| source_key.to_string())
+        })
     } else {
-        legacy_name_en.to_string()
+        source_name_en
+            .map(ToOwned::to_owned)
+            .or_else(|| name_ko.map(ToOwned::to_owned))
+            .unwrap_or_else(|| source_key.to_string())
     };
+    let icon_id = item_icon_file.and_then(parse_fish_icon_asset_id);
 
     CalculatorItemEntry {
-        key: format!("effect:{}", slugify_calculator_effect_key(legacy_name_en)),
+        key: source_key.to_string(),
         name,
         r#type: item_type.to_string(),
         afr: override_values.afr,
@@ -228,30 +235,23 @@ impl DoltMySqlStore {
                         lang,
                         item_id,
                         &row.item_type,
-                        row.legacy_name_en.as_deref(),
+                        row.source_name_en.as_deref(),
                         row.source_name_ko.as_deref(),
                         row.item_icon_file.as_deref(),
-                        row.legacy_icon_id,
+                        row.icon_id,
                         row.fish_multiplier,
                         row.durability,
                         override_values,
                     ));
                 }
                 "lightstone_set" => {
-                    let Some(legacy_name_en) = row.legacy_name_en.as_deref() else {
-                        continue;
-                    };
-                    let icon_id = row
-                        .item_icon_file
-                        .as_deref()
-                        .and_then(parse_fish_icon_asset_id)
-                        .or(row.legacy_icon_id);
                     items.push(build_source_lightstone_item(
                         lang,
-                        legacy_name_en,
+                        &row.source_key,
+                        row.source_name_en.as_deref(),
                         row.source_name_ko.as_deref(),
                         &row.item_type,
-                        icon_id,
+                        row.item_icon_file.as_deref(),
                         row.durability,
                         row.fish_multiplier,
                         override_values,
@@ -350,15 +350,16 @@ mod tests {
         let items = DoltMySqlStore::build_source_backed_items(
             FishLang::En,
             &[CalculatorSourceBackedItemRow {
+                source_key: "item:16162".to_string(),
                 source_kind: "item".to_string(),
                 item_id: Some(16162),
                 item_type: "rod".to_string(),
-                legacy_name_en: Some("Balenos Fishing Rod".to_string()),
+                source_name_en: Some("Balenos Fishing Rod".to_string()),
                 source_name_ko: Some("발레노스 낚싯대".to_string()),
                 item_icon_file: Some(
                     "New_Icon/06_PC_EquipItem/00_Common/00_ETC/00016162.dds".to_string(),
                 ),
-                legacy_icon_id: Some(1),
+                icon_id: Some(1),
                 durability: Some(100),
                 fish_multiplier: None,
                 effect_description_ko: None,
@@ -385,13 +386,14 @@ mod tests {
     #[test]
     fn source_backed_effect_values_merge_direct_and_text_effects() {
         let values = source_backed_effect_values(&CalculatorSourceBackedItemRow {
+            source_key: "item:1".to_string(),
             source_kind: "item".to_string(),
             item_id: Some(1),
             item_type: "buff".to_string(),
-            legacy_name_en: None,
+            source_name_en: None,
             source_name_ko: None,
             item_icon_file: None,
-            legacy_icon_id: None,
+            icon_id: None,
             durability: None,
             fish_multiplier: None,
             effect_description_ko: Some("낚시 경험치 획득량 +10%".to_string()),
@@ -414,13 +416,64 @@ mod tests {
     }
 
     #[test]
-    fn source_lightstone_item_uses_localized_name_but_keeps_legacy_identity() {
+    fn source_backed_items_skip_rows_without_supported_calculator_effects() {
+        let items = DoltMySqlStore::build_source_backed_items(
+            FishLang::En,
+            &[
+                CalculatorSourceBackedItemRow {
+                    source_key: "item:14069".to_string(),
+                    source_kind: "item".to_string(),
+                    item_id: Some(14069),
+                    item_type: "outfit".to_string(),
+                    source_name_en: Some("Apprentice Fisher's Uniform".to_string()),
+                    source_name_ko: Some("수습 낚시복".to_string()),
+                    item_icon_file: Some("00014069.dds".to_string()),
+                    icon_id: None,
+                    durability: Some(0),
+                    fish_multiplier: None,
+                    effect_description_ko: None,
+                    afr: None,
+                    bonus_rare: None,
+                    bonus_big: None,
+                    drr: None,
+                    exp_fish: None,
+                    exp_life: None,
+                },
+                CalculatorSourceBackedItemRow {
+                    source_key: "lightstone-set:151".to_string(),
+                    source_kind: "lightstone_set".to_string(),
+                    item_id: None,
+                    item_type: "lightstone_set".to_string(),
+                    source_name_en: None,
+                    source_name_ko: Some("낚시꾼의 비기".to_string()),
+                    item_icon_file: None,
+                    icon_id: None,
+                    durability: None,
+                    fish_multiplier: None,
+                    effect_description_ko: Some("낚시 숙련도 +30".to_string()),
+                    afr: None,
+                    bonus_rare: None,
+                    bonus_big: None,
+                    drr: None,
+                    exp_fish: None,
+                    exp_life: None,
+                },
+            ],
+        )
+        .expect("source-backed rows should build");
+
+        assert!(items.is_empty());
+    }
+
+    #[test]
+    fn source_lightstone_item_uses_source_owned_identity() {
         let sourced = build_source_lightstone_item(
             FishLang::Ko,
-            "Sharp-Eyed Seagull",
+            "lightstone-set:162",
+            None,
             Some("예리한 갈매기"),
             "lightstone_set",
-            Some(721),
+            Some("00000721.dds"),
             Some(9),
             Some(1.25),
             CalculatorItemEffectValues {
@@ -430,7 +483,7 @@ mod tests {
             },
         );
 
-        assert_eq!(sourced.key, "effect:sharp-eyed-seagull");
+        assert_eq!(sourced.key, "lightstone-set:162");
         assert_eq!(sourced.name, "예리한 갈매기");
         assert_eq!(sourced.r#type, "lightstone_set");
         assert_eq!(sourced.icon_id, Some(721));
