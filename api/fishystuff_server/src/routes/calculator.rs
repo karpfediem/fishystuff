@@ -102,6 +102,7 @@ struct SelectOption<'a> {
     value: &'a str,
     label: &'a str,
     icon: Option<&'a str>,
+    item: Option<&'a CalculatorItemEntry>,
 }
 
 struct SearchableDropdownConfig<'a> {
@@ -123,6 +124,7 @@ const NONE_SELECT_OPTION: SelectOption<'static> = SelectOption {
     value: "",
     label: "None",
     icon: None,
+    item: None,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1802,6 +1804,7 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             value: option.key.as_str(),
             label: option.label.as_str(),
             icon: None,
+            item: None,
         })
         .collect()
 }
@@ -1859,6 +1862,76 @@ fn render_searchable_dropdown_text_content(label: &str) -> String {
     )
 }
 
+fn format_effect_percent(value: f32) -> String {
+    trim_float(f64::from(value) * 100.0)
+}
+
+fn render_effect_badge(label: &str, class_name: &str) -> String {
+    format!(
+        "<span class=\"badge badge-xs whitespace-nowrap {class_name}\">{}</span>",
+        escape_html(label)
+    )
+}
+
+fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
+    let mut badges = Vec::new();
+    if let Some(afr) = item.afr.filter(|value| *value > 0.0) {
+        badges.push(render_effect_badge(
+            &format!("-{}% AFT", format_effect_percent(afr)),
+            "badge-soft badge-success",
+        ));
+    }
+    if let Some(bonus_rare) = item.bonus_rare.filter(|value| *value > 0.0) {
+        badges.push(render_effect_badge(
+            &format!("+{}% Rare", format_effect_percent(bonus_rare)),
+            "badge-soft badge-warning",
+        ));
+    }
+    if let Some(bonus_big) = item.bonus_big.filter(|value| *value > 0.0) {
+        badges.push(render_effect_badge(
+            &format!("+{}% HQ", format_effect_percent(bonus_big)),
+            "border-blue-500/40 bg-blue-500/15 text-blue-700",
+        ));
+    }
+    if let Some(drr) = item.drr.filter(|value| *value > 0.0) {
+        badges.push(render_effect_badge(
+            &format!("+{}% DRR", format_effect_percent(drr)),
+            "badge-soft badge-warning",
+        ));
+    }
+    if let Some(fish_multiplier) = item.fish_multiplier.filter(|value| *value > 0.0) {
+        badges.push(render_effect_badge(
+            &format!("Fish ×{}", trim_float(f64::from(fish_multiplier))),
+            "badge-soft badge-neutral",
+        ));
+    }
+    if let Some(exp_fish) = item.exp_fish.filter(|value| *value > 0.0) {
+        badges.push(render_effect_badge(
+            &format!("+{}% Fish EXP", format_effect_percent(exp_fish)),
+            "border-cyan-500/40 bg-cyan-500/15 text-cyan-700",
+        ));
+    }
+    if let Some(exp_life) = item.exp_life.filter(|value| *value > 0.0) {
+        badges.push(render_effect_badge(
+            &format!("+{}% Life EXP", format_effect_percent(exp_life)),
+            "badge-soft badge-success",
+        ));
+    }
+    if badges.is_empty() && item.r#type == "outfit" {
+        badges.push(render_effect_badge(
+            "Set effect",
+            "badge-soft badge-neutral",
+        ));
+    }
+    if badges.is_empty() {
+        return String::new();
+    }
+    format!(
+        "<span class=\"mt-1 flex flex-wrap gap-1\">{}</span>",
+        badges.join("")
+    )
+}
+
 fn render_searchable_dropdown_option_content_html(option: SelectOption<'_>) -> String {
     let mut html = String::new();
     if let Some(icon) = option.icon {
@@ -1870,7 +1943,17 @@ fn render_searchable_dropdown_option_content_html(option: SelectOption<'_>) -> S
         )
         .unwrap();
     }
-    html.push_str(&render_searchable_dropdown_text_content(option.label));
+    let badges = option
+        .item
+        .map(render_item_effect_badges)
+        .unwrap_or_default();
+    write!(
+        html,
+        "<span class=\"min-w-0 flex-1\"><span class=\"block truncate font-medium\">{}</span>{}</span>",
+        escape_html(option.label),
+        badges,
+    )
+    .unwrap();
     html
 }
 
@@ -2229,6 +2312,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             value: level.key.as_str(),
             label: level.name.as_str(),
             icon: None,
+            item: None,
         })
         .collect()
 }
@@ -2244,6 +2328,7 @@ fn item_options_by_type<'a>(
             value: item.key.as_str(),
             label: item.name.as_str(),
             icon: item.icon.as_deref(),
+            item: Some(item),
         })
         .collect()
 }
@@ -2276,7 +2361,7 @@ fn render_checkbox_group(
         };
         write!(
             html,
-            "<label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm font-medium\"><input data-bind=\"{}\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm shrink-0\" value=\"{}\"{}>",
+            "<label class=\"label cursor-pointer items-start justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"{}\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm mt-0.5 shrink-0\" value=\"{}\"{}>",
             escape_html(bind_key),
             escape_html(option.value),
             checked
@@ -2291,7 +2376,17 @@ fn render_checkbox_group(
             )
             .unwrap();
         }
-        write!(html, "<span>{}</span></label>", escape_html(option.label)).unwrap();
+        let badges = option
+            .item
+            .map(render_item_effect_badges)
+            .unwrap_or_default();
+        write!(
+            html,
+            "<span class=\"min-w-0 flex-1\"><span class=\"block font-medium\">{}</span>{}</span></label>",
+            escape_html(option.label),
+            badges,
+        )
+        .unwrap();
     }
     html.push_str("</div>");
     html
@@ -2859,6 +2954,7 @@ mod tests {
         assert!(text.contains("item-icon"));
         assert!(text.contains("/img/items/00016162.webp"));
         assert!(text.contains("Balenos Fishing Rod"));
+        assert!(text.contains("-10% AFT"));
         assert!(text.contains("Selected"));
     }
 
