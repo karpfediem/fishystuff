@@ -1899,7 +1899,10 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
             "badge-soft badge-warning",
         ));
     }
-    if let Some(fish_multiplier) = item.fish_multiplier.filter(|value| *value > 0.0) {
+    if let Some(fish_multiplier) = item
+        .fish_multiplier
+        .filter(|value| *value > 0.0 && (*value - 1.0).abs() > 0.0001)
+    {
         badges.push(render_effect_badge(
             &format!("Fish ×{}", trim_float(f64::from(fish_multiplier))),
             "badge-soft badge-neutral",
