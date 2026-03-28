@@ -1051,7 +1051,10 @@ fn collapse_named_array_by_buff_category(
 
     winners.extend(winners_by_category.into_values());
     winners.sort_by_key(|candidate| candidate.position);
-    winners.into_iter().map(|candidate| candidate.value).collect()
+    winners
+        .into_iter()
+        .map(|candidate| candidate.value)
+        .collect()
 }
 
 fn normalize_lookup_value(value: &str) -> String {
@@ -2047,8 +2050,19 @@ fn buff_category_label(item: &CalculatorItemEntry) -> Option<String> {
     }
 
     match item.buff_category_key.as_deref() {
-        Some("source-family:cake") => Some("Cake".to_string()),
-        Some(_) => Some("Exclusive".to_string()),
+        Some(key) if key.starts_with("skill-family:") => {
+            Some(format!("Skill {}", &key["skill-family:".len()..]))
+        }
+        Some(key) if key.starts_with("buff-category:") => {
+            let suffix = romanize_category_level(item.buff_category_level.unwrap_or(0));
+            let label = format!("Category {}", &key["buff-category:".len()..]);
+            if suffix.is_empty() {
+                Some(label)
+            } else {
+                Some(format!("{label} {suffix}"))
+            }
+        }
+        Some(key) => Some(key.to_string()),
         None => None,
     }
 }
@@ -2166,7 +2180,11 @@ fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
         );
     }
     if item.exp_life.filter(|value| *value > 0.0).is_some() {
-        parts.extend(["life exp", "life experience"].into_iter().map(ToOwned::to_owned));
+        parts.extend(
+            ["life exp", "life experience"]
+                .into_iter()
+                .map(ToOwned::to_owned),
+        );
     }
     if item
         .fish_multiplier
@@ -2180,7 +2198,11 @@ fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
         );
     }
     if item.r#type == "outfit" {
-        parts.extend(["set effect", "set bonus"].into_iter().map(ToOwned::to_owned));
+        parts.extend(
+            ["set effect", "set bonus"]
+                .into_iter()
+                .map(ToOwned::to_owned),
+        );
     }
     if let Some(category_label) = buff_category_label(item) {
         parts.push(category_label);
@@ -2635,12 +2657,8 @@ fn render_searchable_multiselect_control(
     let search_input_id = format!("{}-search-input", config.root_id);
     let selection_html =
         render_searchable_multiselect_selection_html(cdn_base_url, selected_values, &options);
-    let results_html = render_searchable_multiselect_results_html(
-        cdn_base_url,
-        &options,
-        selected_values,
-        "",
-    );
+    let results_html =
+        render_searchable_multiselect_results_html(cdn_base_url, &options, selected_values, "");
     let catalog_html = render_searchable_multiselect_catalog_html(cdn_base_url, &options);
     let inputs_html =
         render_searchable_multiselect_inputs_html(config.bind_key, selected_values, &options);
@@ -3690,22 +3708,23 @@ mod tests {
     }
 
     #[test]
-    fn buff_category_label_uses_source_family_name_for_cakes() {
-        let item = CalculatorItemEntry {
-            buff_category_key: Some("source-family:cake".to_string()),
-            ..CalculatorItemEntry::default()
-        };
-
-        assert_eq!(buff_category_label(&item).as_deref(), Some("Cake"));
-    }
-
-    #[test]
-    fn buff_category_label_uses_generic_label_for_unknown_exclusive_groups() {
+    fn buff_category_label_uses_unique_label_for_skill_family_groups() {
         let item = CalculatorItemEntry {
             buff_category_key: Some("skill-family:59778".to_string()),
             ..CalculatorItemEntry::default()
         };
 
-        assert_eq!(buff_category_label(&item).as_deref(), Some("Exclusive"));
+        assert_eq!(buff_category_label(&item).as_deref(), Some("Skill 59778"));
+    }
+
+    #[test]
+    fn buff_category_label_uses_unique_label_for_unknown_buff_categories() {
+        let item = CalculatorItemEntry {
+            buff_category_key: Some("buff-category:7".to_string()),
+            buff_category_level: Some(1),
+            ..CalculatorItemEntry::default()
+        };
+
+        assert_eq!(buff_category_label(&item).as_deref(), Some("Category 7 II"));
     }
 }

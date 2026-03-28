@@ -107,23 +107,10 @@ fn buff_category_key(category_id: Option<i32>) -> Option<String> {
     category_id.map(|category_id| format!("buff-category:{category_id}"))
 }
 
-fn is_cake_family_name(name_en: Option<&str>, name_ko: Option<&str>) -> bool {
-    name_en
-        .map(|value| value.to_ascii_lowercase().contains("cake"))
-        .unwrap_or(false)
-        || name_ko.map(|value| value.contains("케이크")).unwrap_or(false)
-}
-
 fn fallback_consumable_family_key(
     primary_skill_id: Option<&str>,
-    source_name_en: Option<&str>,
-    source_name_ko: Option<&str>,
     primary_skill_counts: &HashMap<String, usize>,
 ) -> Option<String> {
-    if is_cake_family_name(source_name_en, source_name_ko) {
-        return Some("source-family:cake".to_string());
-    }
-
     let skill_id = primary_skill_id?;
     (primary_skill_counts.get(skill_id).copied().unwrap_or(0) > 1)
         .then(|| format!("skill-family:{skill_id}"))
@@ -1033,14 +1020,7 @@ impl DoltMySqlStore {
                 let source_name_en = source_meta.and_then(|meta| meta.name_en.clone());
                 let source_name_ko = source_meta.and_then(|meta| meta.name_ko.clone());
                 let buff_category_key = buff_category_key(category_metadata.category_id).or_else(
-                    || {
-                        fallback_consumable_family_key(
-                            row.skill_no.as_deref(),
-                            source_name_en.as_deref(),
-                            source_name_ko.as_deref(),
-                            &primary_skill_counts,
-                        )
-                    },
+                    || fallback_consumable_family_key(row.skill_no.as_deref(), &primary_skill_counts),
                 );
                 let item_type = match (category_metadata.category_id, row.item_classify.as_deref())
                 {
@@ -1434,30 +1414,20 @@ mod tests {
     }
 
     #[test]
-    fn fallback_consumable_family_uses_shared_skill_when_category_missing() {
-        let counts = HashMap::from([("59778".to_string(), 7usize)]);
+    fn fallback_consumable_family_uses_skill_family_for_duplicate_skills() {
+        let counts = HashMap::from([("12345".to_string(), 3usize)]);
 
-        let key = fallback_consumable_family_key(
-            Some("59778"),
-            Some("[Event] 10th Anniversary Cake"),
-            Some("[이벤트] 10주년 기념 케이크"),
-            &counts,
-        );
+        let key = fallback_consumable_family_key(Some("12345"), &counts);
 
-        assert_eq!(key.as_deref(), Some("source-family:cake"));
+        assert_eq!(key.as_deref(), Some("skill-family:12345"));
     }
 
     #[test]
-    fn fallback_consumable_family_uses_skill_family_for_non_cake_duplicates() {
-        let counts = HashMap::from([("12345".to_string(), 3usize)]);
+    fn fallback_consumable_family_is_none_for_unique_skills_without_category() {
+        let counts = HashMap::from([("59778".to_string(), 1usize)]);
 
-        let key = fallback_consumable_family_key(
-            Some("12345"),
-            Some("Book of Life (7 Days)"),
-            Some("생활 주문서"),
-            &counts,
-        );
+        let key = fallback_consumable_family_key(Some("59778"), &counts);
 
-        assert_eq!(key.as_deref(), Some("skill-family:12345"));
+        assert_eq!(key, None);
     }
 }
