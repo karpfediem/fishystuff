@@ -36,7 +36,7 @@ watch-release:
     watchexec -r --postpone \
       -w content -w layouts \
       -w assets/CNAME -w assets/config.ziggy -w assets/css -w assets/js -w assets/map -w assets/jsonld \
-      -w assets/img/items -w assets/img/embed.png -w assets/img/logo.png \
+      -w assets/img/embed.png -w assets/img/logo.png \
       -w scripts -w zine.ziggy \
       --ignore assets/js/datastar.js \
       --ignore assets/img/icons.svg \

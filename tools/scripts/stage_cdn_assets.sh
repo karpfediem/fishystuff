@@ -6,6 +6,8 @@ CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 SITE_MAP_ASSETS_DIR="$ROOT_DIR/site/assets/map"
 CDN_MAP_ASSETS_DIR="$CDN_ROOT/map"
 
+node "$ROOT_DIR/tools/scripts/build_item_icons_from_source.mjs" --output-dir "$CDN_ROOT/images/items"
+
 require_path() {
   local path="$1"
   if [ ! -e "$path" ]; then

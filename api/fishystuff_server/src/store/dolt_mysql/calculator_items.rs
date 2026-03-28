@@ -15,7 +15,7 @@ use super::util::normalize_optional_string;
 use super::DoltMySqlStore;
 
 fn calculator_item_icon_path(icon_id: i32) -> String {
-    format!("/img/items/{icon_id:08}.webp")
+    format!("/images/items/{icon_id:08}.webp")
 }
 
 fn slugify_calculator_effect_key(name: &str) -> String {
@@ -362,7 +362,7 @@ mod tests {
         assert_eq!(sourced.r#type, "food");
         assert_eq!(sourced.durability, Some(11));
         assert_eq!(sourced.icon_id, Some(9359));
-        assert_eq!(sourced.icon.as_deref(), Some("/img/items/00009359.webp"));
+        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00009359.webp"));
         assert_eq!(sourced.fish_multiplier, Some(1.5));
         assert_eq!(sourced.afr, Some(0.07));
         assert_eq!(sourced.exp_fish, Some(0.10));
@@ -630,7 +630,7 @@ mod tests {
         assert_eq!(sourced.name, "예리한 갈매기");
         assert_eq!(sourced.r#type, "lightstone_set");
         assert_eq!(sourced.icon_id, Some(721));
-        assert_eq!(sourced.icon.as_deref(), Some("/img/items/00000721.webp"));
+        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00000721.webp"));
         assert_eq!(sourced.durability, Some(9));
         assert_eq!(sourced.fish_multiplier, Some(1.25));
         assert_eq!(sourced.bonus_rare, Some(0.05));

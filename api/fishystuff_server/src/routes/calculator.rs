@@ -3033,7 +3033,7 @@ mod tests {
                     CalculatorItemEntry {
                         key: "item:16162".to_string(),
                         name: "Balenos Fishing Rod".to_string(),
-                        icon: Some("/img/items/00016162.webp".to_string()),
+                        icon: Some("/images/items/00016162.webp".to_string()),
                         r#type: "rod".to_string(),
                         afr: Some(0.1),
                         ..CalculatorItemEntry::default()
@@ -3041,7 +3041,7 @@ mod tests {
                     CalculatorItemEntry {
                         key: "item:705539".to_string(),
                         name: "Manos Fishing Chair".to_string(),
-                        icon: Some("/img/items/00705539.webp".to_string()),
+                        icon: Some("/images/items/00705539.webp".to_string()),
                         r#type: "chair".to_string(),
                         afr: Some(0.1),
                         ..CalculatorItemEntry::default()
@@ -3057,7 +3057,7 @@ mod tests {
                     CalculatorItemEntry {
                         key: "item:830150".to_string(),
                         name: "Lil' Otter Fishing Carrier".to_string(),
-                        icon: Some("/img/items/00830150.webp".to_string()),
+                        icon: Some("/images/items/00830150.webp".to_string()),
                         r#type: "backpack".to_string(),
                         item_drr: Some(0.05),
                         ..CalculatorItemEntry::default()
@@ -3416,7 +3416,7 @@ mod tests {
         assert!(text.contains("data-searchable-dropdown-option"));
         assert!(text.contains("data-role=\"option-content\""));
         assert!(text.contains("item-icon"));
-        assert!(text.contains("/img/items/00016162.webp"));
+        assert!(text.contains("/images/items/00016162.webp"));
         assert!(text.contains("Balenos Fishing Rod"));
         assert!(text.contains("-10% AFT"));
         assert!(text.contains("Selected"));

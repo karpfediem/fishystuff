@@ -9,7 +9,7 @@ cd "$ROOT_DIR/site"
   "site release watcher" \
   "$ROOT_DIR/tools/scripts/watch_site_release.sh" \
   "./tools/scripts/watch_site_release.sh" \
-  "watchexec -r -w content -w layouts -w assets/CNAME -w assets/config.ziggy -w assets/css -w assets/js -w assets/map -w assets/jsonld -w assets/img/items -w assets/img/embed.png -w assets/img/logo.png -w scripts -w zine.ziggy" \
+  "watchexec -r -w content -w layouts -w assets/CNAME -w assets/config.ziggy -w assets/css -w assets/js -w assets/map -w assets/jsonld -w assets/img/embed.png -w assets/img/logo.png -w scripts -w zine.ziggy" \
   "-- just build-release-no-tailwind"
 
 devenv_notify_status "building initial site release"
@@ -24,7 +24,6 @@ devenv_run_forever watchexec -r --postpone \
   -w assets/js \
   -w assets/map \
   -w assets/jsonld \
-  -w assets/img/items \
   -w assets/img/embed.png \
   -w assets/img/logo.png \
   -w scripts \

@@ -23,6 +23,8 @@ Current contents:
 - `tools/pazifista`
 - `tools/scripts/build_map.sh`
 - `tools/scripts/stage_cdn_assets.sh`
+  - stages CDN-owned site and map assets under `data/cdn/public/`
+  - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
 - `tools/scripts/push_bunnycdn.sh`
 - `tools/scripts/cleanup_cdn_server.sh`
 - `tools/scripts/run_cdn_server.sh`
@@ -34,4 +36,20 @@ Current contents:
 - `tools/scripts/rebuild_region_groups_overlay.sh`
 - `tools/scripts/rebuild_water_overlay.sh`
 - `tools/scripts/extract_fishing_workbooks_from_paz.sh`
+- `tools/scripts/build_item_icons_from_source.mjs`
+  - resolves the current calculator item icon set from Dolt
+  - extracts source `.dds` icon textures from PAZ via `pazifista`
+  - converts them to `44x44` WebP under `data/cdn/public/images/items/`
 - `tools/scripts/xlsx-*`
+
+For local source-backed item icon generation, use:
+
+```bash
+devenv shell -- node tools/scripts/build_item_icons_from_source.mjs
+```
+
+To rebuild all current calculator item icons from PAZ source:
+
+```bash
+devenv shell -- node tools/scripts/build_item_icons_from_source.mjs --force
+```

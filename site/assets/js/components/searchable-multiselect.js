@@ -4,6 +4,7 @@ import {
     findPropertyDescriptor,
     getStringAttribute,
     normalizeSearchText,
+    rewritePublicAssetUrls,
     setStringAttribute,
     upgradeProperty,
 } from "./searchable-dropdown.js";
@@ -509,6 +510,7 @@ export class FishySearchableMultiselect extends HTMLElement {
                 const optionContent = document.createElement("span");
                 optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
                 optionContent.append(...cloneChildNodes(template.content));
+                rewritePublicAssetUrls(optionContent);
                 button.append(optionContent);
 
                 if (isSelected) {
@@ -557,6 +559,7 @@ export class FishySearchableMultiselect extends HTMLElement {
                 content.className = "inline-flex min-w-0 items-center px-2 py-1 text-sm";
                 if (template instanceof HTMLTemplateElement) {
                     content.append(...cloneChildNodes(template.content));
+                    rewritePublicAssetUrls(content);
                 } else {
                     content.textContent = label;
                 }
@@ -580,6 +583,7 @@ export class FishySearchableMultiselect extends HTMLElement {
         if (searchInput instanceof HTMLInputElement && this.hasAttribute("placeholder")) {
             searchInput.placeholder = this.placeholder;
         }
+        rewritePublicAssetUrls(this);
     }
 
     _unbindInputs() {
