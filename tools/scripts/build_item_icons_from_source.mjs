@@ -2,7 +2,7 @@
 
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { mkdtempSync, rmSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,10 +17,24 @@ const defaultCalculatorApiUrl =
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
+const defaultConvertConcurrency = Math.max(
+  2,
+  Math.min(
+    8,
+    Number.parseInt(process.env.FISHYSTUFF_ITEM_ICON_CONCURRENCY ?? "", 10) ||
+      (typeof os.availableParallelism === "function"
+        ? os.availableParallelism()
+        : os.cpus().length || 4),
+  ),
+);
 const sourceIconPathOverrides = new Map([
   [
     768425,
     "ui_texture/icon/new_icon/03_etc/00768388.dds",
+  ],
+  [
+    830349,
+    "ui_texture/icon/new_icon/09_cash/00830349_3.dds",
   ],
 ]);
 
@@ -96,6 +110,32 @@ function runCommand(command, args, { capture = true } = {}) {
     );
   }
   return capture ? result.stdout : "";
+}
+
+function runCommandAsync(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: repoRoot,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          `${command} ${args.join(" ")} failed with exit code ${code}${stderr.trim() ? `\n${stderr.trim()}` : ""}`,
+        ),
+      );
+    });
+  });
 }
 
 function doltQueryJson(sql) {
@@ -555,7 +595,7 @@ function extractSelectedSources(sourceArchive, sourcePaths, tempDir) {
   runCommand("cargo", args, { capture: false });
 }
 
-function convertToWebp(sourcePath, outputPath, target) {
+async function convertToWebp(sourcePath, outputPath, target) {
   const args = [
     sourcePath,
     "-auto-orient",
@@ -571,10 +611,42 @@ function convertToWebp(sourcePath, outputPath, target) {
     String(webpQuality),
     outputPath,
   );
-  runCommand("magick", args);
+  await runCommandAsync("magick", args);
 }
 
-function main() {
+async function buildReadyTargets(readyTargets, options, tempDir) {
+  const concurrency = Math.max(1, defaultConvertConcurrency);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      const target = readyTargets[currentIndex];
+      if (!target) {
+        return;
+      }
+      const extractedPath = path.join(tempDir, target.sourcePath);
+      if (!existsSync(extractedPath)) {
+        fail(`expected extracted source icon is missing: ${extractedPath}`);
+      }
+      const outputPath = target.assetStem
+        ? outputPathForStem(options.outputDir, target.assetStem)
+        : outputPathForIcon(options.outputDir, target.iconId);
+      await convertToWebp(extractedPath, outputPath, target);
+      if (!options.quiet) {
+        console.log(
+          `built ${path.relative(repoRoot, outputPath)} from ${target.sourcePath} (${target.displayName})`,
+        );
+      }
+    }
+  }
+
+  const workerCount = Math.min(concurrency, readyTargets.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+}
+
+async function main() {
   const options = parseArgs(process.argv.slice(2));
   mkdirSync(options.outputDir, { recursive: true });
 
@@ -618,25 +690,13 @@ function main() {
       [...new Set(readyTargets.map((target) => target.sourcePath))],
       tempDir,
     );
-
-    for (const target of readyTargets) {
-      const extractedPath = path.join(tempDir, target.sourcePath);
-      if (!existsSync(extractedPath)) {
-        fail(`expected extracted source icon is missing: ${extractedPath}`);
-      }
-      const outputPath = target.assetStem
-        ? outputPathForStem(options.outputDir, target.assetStem)
-        : outputPathForIcon(options.outputDir, target.iconId);
-      convertToWebp(extractedPath, outputPath, target);
-      if (!options.quiet) {
-        console.log(
-          `built ${path.relative(repoRoot, outputPath)} from ${target.sourcePath} (${target.displayName})`,
-        );
-      }
-    }
+    await buildReadyTargets(readyTargets, options, tempDir);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
-main();
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

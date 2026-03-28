@@ -39,8 +39,8 @@ pub(super) fn build_source_item(
     item_type: &str,
     source_name_en: Option<&str>,
     source_name_ko: Option<&str>,
-    item_icon_file: Option<&str>,
-    icon_id: Option<i32>,
+    _item_icon_file: Option<&str>,
+    _icon_id: Option<i32>,
     fish_multiplier: Option<f32>,
     source_durability: Option<i32>,
     override_values: CalculatorItemEffectValues,
@@ -56,10 +56,7 @@ pub(super) fn build_source_item(
             .or_else(|| source_name_ko.map(ToOwned::to_owned))
             .unwrap_or_else(|| format!("item:{item_id}"))
     };
-    let icon_id = item_icon_file
-        .and_then(parse_fish_icon_asset_id)
-        .or(icon_id)
-        .or(Some(item_id));
+    let icon_id = Some(item_id);
 
     CalculatorItemEntry {
         key: format!("item:{item_id}"),
@@ -407,6 +404,43 @@ mod tests {
         assert_eq!(sourced.icon_id, Some(16162));
         assert_eq!(sourced.durability, Some(100));
         assert_eq!(sourced.afr, Some(0.25));
+    }
+
+    #[test]
+    fn source_backed_items_key_icons_by_item_id() {
+        let items = DoltMySqlStore::build_source_backed_items(
+            FishLang::En,
+            &[CalculatorSourceBackedItemRow {
+                source_key: "item:14330".to_string(),
+                source_kind: "item".to_string(),
+                item_id: Some(14330),
+                item_type: "outfit".to_string(),
+                buff_category_key: None,
+                buff_category_id: None,
+                buff_category_level: None,
+                source_name_en: Some("Professional Fisher's Uniform (Costume)".to_string()),
+                source_name_ko: Some("[의상] 전문 낚시복".to_string()),
+                item_icon_file: Some(
+                    "New_Icon/06_PC_EquipItem/00_Common/09_Upperbody/00014071.dds".to_string(),
+                ),
+                icon_id: Some(14071),
+                durability: None,
+                fish_multiplier: None,
+                effect_description_ko: None,
+                afr: None,
+                bonus_rare: None,
+                bonus_big: None,
+                item_drr: None,
+                exp_fish: Some(0.10),
+                exp_life: None,
+            }],
+        )
+        .expect("source-backed rows should build");
+
+        assert_eq!(items.len(), 1);
+        let sourced = &items[0];
+        assert_eq!(sourced.icon_id, Some(14330));
+        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00014330.webp"));
     }
 
     #[test]
