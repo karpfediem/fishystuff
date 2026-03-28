@@ -1973,7 +1973,7 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
     if let Some(afr) = item.afr.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
             &format!("-{}% AFT", format_effect_percent(afr)),
-            "border-emerald-400 bg-emerald-300 text-emerald-950",
+            "border-blue-400 bg-blue-300 text-blue-950",
         ));
     }
     if let Some(bonus_rare) = item.bonus_rare.filter(|value| *value > 0.0) {
