@@ -23,6 +23,20 @@ const CAPTURE_PATTERNS = [
 
 const CLASSLIST_PATTERN = /classList\.(?:add|remove|toggle|contains)\(([\s\S]*?)\)/g;
 const STRING_LITERAL_PATTERN = /(["'`])((?:\\.|(?!\1)[\s\S])*)\1/g;
+const CLASS_TOKEN_PATTERN = /^[A-Za-z0-9_!:[\]/.%()-]+$/;
+const CLASSISH_BARE_TOKENS = new Set([
+  "badge",
+  "btn",
+  "card",
+  "divider",
+  "dropdown",
+  "flex",
+  "grid",
+  "hidden",
+  "inline",
+  "block",
+  "truncate",
+]);
 
 async function walk(dir, exts) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -58,6 +72,22 @@ function escapeAttribute(value) {
     .replace(/>/g, "&gt;");
 }
 
+function looksLikeClassValue(value) {
+  const tokens = value.split(" ").filter(Boolean);
+  if (tokens.length < 2) {
+    return false;
+  }
+  if (!tokens.every((token) => CLASS_TOKEN_PATTERN.test(token))) {
+    return false;
+  }
+  return tokens.some((token) => {
+    return token.includes("-")
+      || token.includes(":")
+      || token.includes("/")
+      || CLASSISH_BARE_TOKENS.has(token);
+  });
+}
+
 function collectClassValues(sourceText) {
   const values = new Set();
 
@@ -80,6 +110,13 @@ function collectClassValues(sourceText) {
     }
     if (classes.length > 0) {
       values.add(classes.join(" "));
+    }
+  }
+
+  for (const match of sourceText.matchAll(STRING_LITERAL_PATTERN)) {
+    const value = normalizeClassValue(match[2]);
+    if (looksLikeClassValue(value)) {
+      values.add(value);
     }
   }
 
