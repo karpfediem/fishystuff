@@ -107,16 +107,29 @@ fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &
             extract_percent_ratio_after_any(line, &["자동 낚시 시간 감소", "자동 낚시 시간"]),
         );
     }
-    if line.contains("희귀 어종") {
+    if line.contains("희귀 어종") || line.contains("희귀 확률 증가") {
         add_effect_value(
             &mut values.bonus_rare,
-            extract_percent_ratio_after_any(line, &["희귀 어종을 낚을 확률 증가", "희귀 어종"]),
+            extract_percent_ratio_after_any(
+                line,
+                &["희귀 어종을 낚을 확률 증가", "희귀 어종", "희귀 확률 증가"],
+            ),
         );
     }
-    if line.contains("대형 어종") {
+    if line.contains("대형 어종") || line.contains("대어 확률 증가") || line.contains("고급 어종")
+    {
         add_effect_value(
             &mut values.bonus_big,
-            extract_percent_ratio_after_any(line, &["대형 어종을 낚을 확률 증가", "대형 어종"]),
+            extract_percent_ratio_after_any(
+                line,
+                &[
+                    "대형 어종을 낚을 확률 증가",
+                    "대형 어종",
+                    "대어 확률 증가",
+                    "고급 어종을 낚을 확률 증가",
+                    "고급 어종",
+                ],
+            ),
         );
     }
     if line.contains("내구도 소모 감소 저항") || line.contains("장비 내구도 감소 저항")
@@ -267,6 +280,25 @@ mod tests {
                 afr: Some(0.10),
                 bonus_rare: Some(0.05),
                 exp_life: Some(0.50),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
+    fn calculator_effect_text_parses_atomic_rod_skill_buff_names() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(
+            &mut values,
+            "자동 낚시 시간 감소(80%)\n희귀 확률 증가(5%)\n대어 확률 증가(11%)",
+        );
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                afr: Some(0.80),
+                bonus_rare: Some(0.05),
+                bonus_big: Some(0.11),
                 ..CalculatorItemEffectValues::default()
             }
         );
