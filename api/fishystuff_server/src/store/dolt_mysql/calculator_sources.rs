@@ -127,6 +127,16 @@ fn fallback_consumable_family_key(
         .then(|| format!("skill-family:{skill_id}"))
 }
 
+fn manually_maintained_source_fish_multiplier(item_id: i32, item_type: &str) -> Option<f32> {
+    if item_type != "rod" {
+        return None;
+    }
+    match item_id {
+        16153 | 760976 | 767158 | 767187 | 767671 => Some(1.6),
+        _ => None,
+    }
+}
+
 fn normalize_source_owned_item_name(name: &str) -> String {
     name.replace("[의상] ", "")
         .replace("[이벤트] ", "")
@@ -1309,7 +1319,6 @@ impl DoltMySqlStore {
     fn query_source_owned_enchant_source_backed_item_rows(
         &self,
         ref_id: Option<&str>,
-        legacy_rows: &[CalculatorItemDbRow],
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
         let as_of = if let Some(ref_id) = ref_id {
             validate_dolt_ref(ref_id)?;
@@ -1317,11 +1326,6 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let fish_multiplier_by_item_id = legacy_rows
-            .iter()
-            .filter_map(|row| Some((row.10?, row.7)))
-            .collect::<HashMap<_, _>>();
-
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
         let query = format!(
             "SELECT \
@@ -1449,6 +1453,8 @@ impl DoltMySqlStore {
                         .and_then(|matches| matches.first().cloned())
                 })?;
                 let (item_id, metadata) = resolved;
+                let fish_multiplier =
+                    manually_maintained_source_fish_multiplier(item_id, &row.item_type);
 
                 Some(CalculatorSourceBackedItemRow {
                     source_key: format!("item:{item_id}"),
@@ -1463,7 +1469,7 @@ impl DoltMySqlStore {
                     item_icon_file: None,
                     icon_id: metadata.icon_id,
                     durability: row.durability.or(metadata.durability),
-                    fish_multiplier: fish_multiplier_by_item_id.get(&item_id).copied().flatten(),
+                    fish_multiplier,
                     effect_description_ko: None,
                     afr: row.afr,
                     bonus_rare: row.bonus_rare,
@@ -1488,9 +1494,7 @@ impl DoltMySqlStore {
         let item_source_metadata =
             self.query_calculator_item_table_metadata(ref_id, &all_item_ids)?;
         let mut source_backed_rows = self.query_consumable_source_backed_item_rows(ref_id)?;
-        source_backed_rows.extend(
-            self.query_source_owned_enchant_source_backed_item_rows(ref_id, &all_legacy_rows)?,
-        );
+        source_backed_rows.extend(self.query_source_owned_enchant_source_backed_item_rows(ref_id)?);
 
         let excluded_item_ids = source_backed_rows
             .iter()
@@ -1532,7 +1536,8 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        fallback_consumable_family_key, parse_lightstone_set_name_ko,
+        fallback_consumable_family_key, manually_maintained_source_fish_multiplier,
+        parse_lightstone_set_name_ko,
         select_consumable_category_metadata, select_consumable_effect_texts,
         CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
     };
@@ -1663,5 +1668,37 @@ mod tests {
         );
 
         assert_eq!(name.as_deref(), Some("대장장이의 축복"));
+    }
+
+    #[test]
+    fn manually_maintained_source_fish_multiplier_covers_known_multi_catch_rods() {
+        assert_eq!(
+            manually_maintained_source_fish_multiplier(16153, "rod"),
+            Some(1.6)
+        );
+        assert_eq!(
+            manually_maintained_source_fish_multiplier(760976, "rod"),
+            Some(1.6)
+        );
+        assert_eq!(
+            manually_maintained_source_fish_multiplier(767158, "rod"),
+            Some(1.6)
+        );
+        assert_eq!(
+            manually_maintained_source_fish_multiplier(767187, "rod"),
+            Some(1.6)
+        );
+        assert_eq!(
+            manually_maintained_source_fish_multiplier(767671, "rod"),
+            Some(1.6)
+        );
+        assert_eq!(
+            manually_maintained_source_fish_multiplier(16162, "rod"),
+            None
+        );
+        assert_eq!(
+            manually_maintained_source_fish_multiplier(830150, "backpack"),
+            None
+        );
     }
 }
