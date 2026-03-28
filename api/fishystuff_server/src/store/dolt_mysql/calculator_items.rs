@@ -93,7 +93,10 @@ fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> Calculato
     };
     if let Some(effect_description) = row.effect_description_ko.as_deref() {
         let mut parsed = CalculatorItemEffectValues::default();
-        super::calculator_effects::parse_calculator_effect_text(&mut parsed, effect_description);
+        super::calculator_effects::parse_unique_calculator_effect_text(
+            &mut parsed,
+            effect_description,
+        );
         values.afr = values.afr.or(parsed.afr);
         values.bonus_rare = values.bonus_rare.or(parsed.bonus_rare);
         values.bonus_big = values.bonus_big.or(parsed.bonus_big);
@@ -515,6 +518,38 @@ mod tests {
                 ..CalculatorItemEffectValues::default()
             }
         );
+    }
+
+    #[test]
+    fn source_backed_effect_values_deduplicate_repeated_effect_lines() {
+        let values = source_backed_effect_values(&CalculatorSourceBackedItemRow {
+            source_key: "item:59335".to_string(),
+            source_kind: "item".to_string(),
+            item_id: Some(59335),
+            item_type: "buff".to_string(),
+            buff_category_key: None,
+            buff_category_id: None,
+            buff_category_level: None,
+            source_name_en: Some("Treant's Tear".to_string()),
+            source_name_ko: Some("엔트의 눈물".to_string()),
+            item_icon_file: None,
+            icon_id: None,
+            durability: None,
+            fish_multiplier: None,
+            effect_description_ko: Some(
+                "생활 경험치 획득량 +30%\n생활 경험치 획득량 +30%\n낚시 경험치 획득량 +10%"
+                    .to_string(),
+            ),
+            afr: None,
+            bonus_rare: None,
+            bonus_big: None,
+            item_drr: None,
+            exp_fish: None,
+            exp_life: None,
+        });
+
+        assert_eq!(values.exp_life, Some(0.30));
+        assert_eq!(values.exp_fish, Some(0.10));
     }
 
     #[test]

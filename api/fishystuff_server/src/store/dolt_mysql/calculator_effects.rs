@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(super) struct CalculatorItemEffectValues {
     pub(super) afr: Option<f32>,
@@ -31,6 +33,19 @@ fn strip_game_markup(text: &str) -> String {
         }
     }
 
+    out
+}
+
+pub(super) fn normalized_effect_lines(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut seen = HashSet::<String>::new();
+    for line in text.lines() {
+        let normalized = strip_game_markup(line).trim().to_string();
+        if normalized.is_empty() || !seen.insert(normalized.clone()) {
+            continue;
+        }
+        out.push(normalized);
+    }
     out
 }
 
@@ -122,9 +137,21 @@ pub(super) fn parse_calculator_effect_text(values: &mut CalculatorItemEffectValu
     }
 }
 
+pub(super) fn parse_unique_calculator_effect_text(
+    values: &mut CalculatorItemEffectValues,
+    text: &str,
+) {
+    for normalized in normalized_effect_lines(text) {
+        parse_calculator_effect_line(values, &normalized);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{extract_first_number, parse_calculator_effect_text, CalculatorItemEffectValues};
+    use super::{
+        extract_first_number, normalized_effect_lines, parse_calculator_effect_text,
+        CalculatorItemEffectValues,
+    };
 
     #[test]
     fn extract_first_number_handles_signed_percent_lines() {
@@ -215,6 +242,22 @@ mod tests {
                 exp_life: Some(0.50),
                 ..CalculatorItemEffectValues::default()
             }
+        );
+    }
+
+    #[test]
+    fn normalized_effect_lines_strip_markup_and_deduplicate_lines() {
+        let lines = normalized_effect_lines(
+            "<PAColor0xffe9bd23>엔트의 눈물<PAOldColor>\n\n 생활 경험치 획득량 <PAColor0xffe9bd23>+30%<PAOldColor>\n 생활 경험치 획득량 +30%\n 자동 낚시 시간 감소 +10%",
+        );
+
+        assert_eq!(
+            lines,
+            vec![
+                "엔트의 눈물".to_string(),
+                "생활 경험치 획득량 +30%".to_string(),
+                "자동 낚시 시간 감소 +10%".to_string(),
+            ]
         );
     }
 }

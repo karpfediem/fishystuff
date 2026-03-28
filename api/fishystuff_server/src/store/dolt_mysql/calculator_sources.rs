@@ -8,6 +8,7 @@ use crate::store::validate_dolt_ref;
 
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
+use super::calculator_effects::normalized_effect_lines;
 
 pub(super) type CalculatorItemDbRow = (
     Option<String>,
@@ -877,8 +878,10 @@ impl DoltMySqlStore {
         let mut effect_lines_by_item_id = HashMap::<i32, Vec<String>>::new();
         for (item_id, effect_line) in self.query_consumable_effect_line_rows(ref_id)? {
             let lines = effect_lines_by_item_id.entry(item_id).or_default();
-            if !lines.iter().any(|existing| existing == &effect_line) {
-                lines.push(effect_line);
+            for normalized_line in normalized_effect_lines(&effect_line) {
+                if !lines.iter().any(|existing| existing == &normalized_line) {
+                    lines.push(normalized_line);
+                }
             }
         }
 
