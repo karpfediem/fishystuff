@@ -33,10 +33,7 @@ mod tests {
     #[test]
     fn item_icon_paths_are_zero_padded() {
         assert_eq!(fish_item_icon_path(8475), "/images/items/00008475.webp");
-        assert_eq!(
-            fish_item_icon_path(821295),
-            "/images/items/00821295.webp"
-        );
+        assert_eq!(fish_item_icon_path(821295), "/images/items/00821295.webp");
     }
 
     #[test]

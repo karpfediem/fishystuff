@@ -1019,9 +1019,13 @@ impl DoltMySqlStore {
                 );
                 let source_name_en = source_meta.and_then(|meta| meta.name_en.clone());
                 let source_name_ko = source_meta.and_then(|meta| meta.name_ko.clone());
-                let buff_category_key = buff_category_key(category_metadata.category_id).or_else(
-                    || fallback_consumable_family_key(row.skill_no.as_deref(), &primary_skill_counts),
-                );
+                let buff_category_key =
+                    buff_category_key(category_metadata.category_id).or_else(|| {
+                        fallback_consumable_family_key(
+                            row.skill_no.as_deref(),
+                            &primary_skill_counts,
+                        )
+                    });
                 let item_type = match (category_metadata.category_id, row.item_classify.as_deref())
                 {
                     (Some(1), _) | (None, Some("8")) => "food",
@@ -1406,8 +1410,7 @@ mod tests {
             ),
         ]);
 
-        let selected =
-            select_consumable_category_metadata(Some("55595"), Some("51349"), &by_skill);
+        let selected = select_consumable_category_metadata(Some("55595"), Some("51349"), &by_skill);
 
         assert_eq!(selected.category_id, Some(1));
         assert_eq!(selected.category_level, Some(1));
