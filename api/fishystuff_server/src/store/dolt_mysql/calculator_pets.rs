@@ -7,7 +7,8 @@ use crate::store::{validate_dolt_ref, FishLang};
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
-type CalculatorPetOptionDbRow = (Option<String>, Option<String>, Option<String>);
+type CalculatorPetSkillSourceDbRow = (Option<String>, Option<String>);
+type CalculatorPetSkillTextDbRow = (String, Option<String>, Option<String>);
 
 fn localized_label(lang: FishLang, en: &'static str, ko: &'static str) -> String {
     match lang {
@@ -131,19 +132,17 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let query = format!(
-            "SELECT \
-                option_kind, \
-                skill_name_ko, \
-                skill_description_ko \
-             FROM calculator_pet_skill_options{as_of}"
-        );
-
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<CalculatorPetOptionDbRow> = match conn.query(query) {
+        let source_query = format!(
+            "SELECT DISTINCT \
+                source_type, \
+                skill_no \
+             FROM calculator_pet_skill_sources{as_of}"
+        );
+        let source_rows: Vec<CalculatorPetSkillSourceDbRow> = match conn.query(source_query) {
             Ok(rows) => rows,
             Err(err)
-                if is_missing_table(&err, "calculator_pet_skill_options")
+                if is_missing_table(&err, "calculator_pet_skill_sources")
                     || is_missing_table(&err, "skilltype_table_new")
                     || is_missing_table(&err, "pet_base_skill_table")
                     || is_missing_table(&err, "pet_equipskill_table")
@@ -154,12 +153,61 @@ impl DoltMySqlStore {
             Err(err) => return Err(db_unavailable(err)),
         };
 
-        for (option_kind, skill_name_ko, skill_description_ko) in rows {
-            let option_kind = normalize_optional_string(option_kind).unwrap_or_default();
-            let skill_name_ko = normalize_optional_string(skill_name_ko);
-            let skill_description_ko = normalize_optional_string(skill_description_ko);
+        let mut pet_skill_sources = Vec::new();
+        let mut skill_ids = Vec::new();
+        for (source_type, skill_no) in source_rows {
+            let source_type = normalize_optional_string(source_type).unwrap_or_default();
+            let Some(skill_no) = normalize_optional_string(skill_no) else {
+                continue;
+            };
+            if !skill_ids.iter().any(|existing| existing == &skill_no) {
+                skill_ids.push(skill_no.clone());
+            }
+            pet_skill_sources.push((source_type, skill_no));
+        }
+
+        if skill_ids.is_empty() {
+            return Ok(catalog);
+        }
+
+        let quoted_skill_ids = skill_ids
+            .iter()
+            .map(|skill_id| format!("'{}'", skill_id.replace('\'', "''")))
+            .collect::<Vec<_>>()
+            .join(",");
+        let skill_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`SkillNo`, '')) AS skill_no, \
+                `SkillName`, \
+                `Desc` \
+             FROM skilltype_table_new{as_of} \
+             WHERE TRIM(COALESCE(`SkillNo`, '')) IN ({quoted_skill_ids})"
+        );
+        let skill_rows: Vec<CalculatorPetSkillTextDbRow> = match conn.query(skill_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "skilltype_table_new") => return Ok(catalog),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+        let skill_text_by_id = skill_rows
+            .into_iter()
+            .map(|(skill_no, skill_name_ko, skill_description_ko)| {
+                (
+                    skill_no,
+                    (
+                        normalize_optional_string(skill_name_ko),
+                        normalize_optional_string(skill_description_ko),
+                    ),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
+
+        for (source_type, skill_no) in pet_skill_sources {
+            let Some((skill_name_ko, skill_description_ko)) = skill_text_by_id.get(&skill_no)
+            else {
+                continue;
+            };
             let Some(key) = canonical_pet_option_key(
-                &option_kind,
+                &source_type,
                 skill_name_ko.as_deref(),
                 skill_description_ko.as_deref(),
             ) else {

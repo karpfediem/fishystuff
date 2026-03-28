@@ -67,33 +67,205 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let query = format!(
-            "SELECT \
-                item_id, \
-                effect_line \
-             FROM calculator_consumable_effect_lines{as_of} \
-             WHERE item_id IS NOT NULL \
-               AND effect_line IS NOT NULL"
-        );
-
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, Option<String>)> = match conn.query(query) {
+        let keyword_predicate = |column: &str| {
+            [
+                "낚시",
+                "자동 낚시",
+                "희귀 어종",
+                "대형 어종",
+                "낚시 경험치",
+                "생활 경험치",
+                "낚시 숙련도",
+                "생활 숙련도",
+                "내구도 소모 감소 저항",
+            ]
+            .into_iter()
+            .map(|keyword| format!("COALESCE({column}, '') LIKE '%{keyword}%'"))
+            .collect::<Vec<_>>()
+            .join(" OR ")
+        };
+        let quote_list = |values: &[String]| {
+            values
+                .iter()
+                .map(|value| format!("'{}'", value.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+
+        let skill_desc_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`SkillNo`, '')) AS skill_no, \
+                `Desc` \
+             FROM skilltype_table_new{as_of} \
+             WHERE ({})",
+            keyword_predicate("`Desc`")
+        );
+        let skill_desc_rows: Vec<(String, Option<String>)> = match conn.query(skill_desc_query) {
             Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "calculator_consumable_effect_lines") => {
-                return Ok(Vec::new());
-            }
+            Err(err) if is_missing_table(&err, "skilltype_table_new") => Vec::new(),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+        let skill_descriptions = skill_desc_rows
+            .into_iter()
+            .filter_map(|(skill_no, description)| {
+                Some((skill_no, normalize_optional_string(description)?))
+            })
+            .collect::<HashMap<_, _>>();
+
+        let buff_desc_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`Index`, '')) AS buff_id, \
+                `Description` \
+             FROM buff_table{as_of} \
+             WHERE ({})",
+            keyword_predicate("`Description`")
+        );
+        let buff_desc_rows: Vec<(String, Option<String>)> = match conn.query(buff_desc_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "buff_table") => Vec::new(),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+        let buff_descriptions = buff_desc_rows
+            .into_iter()
+            .filter_map(|(buff_id, description)| {
+                Some((buff_id, normalize_optional_string(description)?))
+            })
+            .collect::<HashMap<_, _>>();
+
+        if skill_descriptions.is_empty() && buff_descriptions.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let skill_ids = skill_descriptions.keys().cloned().collect::<Vec<_>>();
+        let buff_ids = buff_descriptions.keys().cloned().collect::<Vec<_>>();
+        let skill_filter = if skill_ids.is_empty() {
+            String::from("FALSE")
+        } else {
+            format!(
+                "TRIM(COALESCE(`SkillNo`, '')) IN ({})",
+                quote_list(&skill_ids)
+            )
+        };
+        let buff_filter = if buff_ids.is_empty() {
+            String::from("FALSE")
+        } else {
+            format!(
+                "TRIM(COALESCE(`Buff0`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff1`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff2`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff3`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff4`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff5`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff6`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff7`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff8`, '')) IN ({ids}) \
+                 OR TRIM(COALESCE(`Buff9`, '')) IN ({ids})",
+                ids = quote_list(&buff_ids)
+            )
+        };
+
+        let skill_rows_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`SkillNo`, '')) AS skill_no, \
+                TRIM(COALESCE(`Buff0`, '')) AS buff0, \
+                TRIM(COALESCE(`Buff1`, '')) AS buff1, \
+                TRIM(COALESCE(`Buff2`, '')) AS buff2, \
+                TRIM(COALESCE(`Buff3`, '')) AS buff3, \
+                TRIM(COALESCE(`Buff4`, '')) AS buff4, \
+                TRIM(COALESCE(`Buff5`, '')) AS buff5, \
+                TRIM(COALESCE(`Buff6`, '')) AS buff6, \
+                TRIM(COALESCE(`Buff7`, '')) AS buff7, \
+                TRIM(COALESCE(`Buff8`, '')) AS buff8, \
+                TRIM(COALESCE(`Buff9`, '')) AS buff9 \
+             FROM skill_table_new{as_of} \
+             WHERE ({skill_filter}) OR ({buff_filter})"
+        );
+        let skill_rows: Vec<(
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = match conn.query(skill_rows_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "skill_table_new") => Vec::new(),
             Err(err) => return Err(db_unavailable(err)),
         };
 
-        Ok(rows
+        let mut relevant_skill_ids = Vec::<String>::new();
+        let mut skill_buffs = HashMap::<String, Vec<String>>::new();
+        for (skill_no, buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9) in
+            skill_rows
+        {
+            if !relevant_skill_ids
+                .iter()
+                .any(|existing| existing == &skill_no)
+            {
+                relevant_skill_ids.push(skill_no.clone());
+            }
+            let entry = skill_buffs.entry(skill_no).or_default();
+            for buff_id in [
+                buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9,
+            ]
             .into_iter()
-            .filter_map(|(item_id, effect_line)| {
-                Some((
-                    i32::try_from(item_id).ok()?,
-                    normalize_optional_string(effect_line)?,
-                ))
-            })
-            .collect())
+            .filter_map(normalize_optional_string)
+            {
+                if !entry.iter().any(|existing| existing == &buff_id) {
+                    entry.push(buff_id);
+                }
+            }
+        }
+
+        if relevant_skill_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let quoted_skill_ids = quote_list(&relevant_skill_ids);
+        let item_query = format!(
+            "SELECT \
+                CAST(`Index` AS SIGNED) AS item_id, \
+                TRIM(COALESCE(`SkillNo`, '')) AS skill_no, \
+                TRIM(COALESCE(`SubSkillNo`, '')) AS sub_skill_no \
+             FROM item_table{as_of} \
+             WHERE TRIM(COALESCE(`SkillNo`, '')) IN ({quoted_skill_ids}) \
+                OR TRIM(COALESCE(`SubSkillNo`, '')) IN ({quoted_skill_ids})"
+        );
+        let item_rows: Vec<(i64, Option<String>, Option<String>)> = match conn.query(item_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "item_table") => Vec::new(),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut effect_lines = Vec::new();
+        for (item_id, skill_no, sub_skill_no) in item_rows {
+            let Ok(item_id) = i32::try_from(item_id) else {
+                continue;
+            };
+            for candidate_skill in [skill_no, sub_skill_no]
+                .into_iter()
+                .filter_map(normalize_optional_string)
+            {
+                if let Some(description) = skill_descriptions.get(&candidate_skill) {
+                    effect_lines.push((item_id, description.clone()));
+                }
+                if let Some(buff_ids) = skill_buffs.get(&candidate_skill) {
+                    for buff_id in buff_ids {
+                        if let Some(description) = buff_descriptions.get(buff_id) {
+                            effect_lines.push((item_id, description.clone()));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(effect_lines)
     }
 
     fn query_lightstone_source_rows(
@@ -146,15 +318,6 @@ impl DoltMySqlStore {
             .map(i32::to_string)
             .collect::<Vec<_>>()
             .join(",");
-        let query = format!(
-            "SELECT \
-                item_id, \
-                item_name_ko, \
-                item_icon_file, \
-                endurance_limit \
-             FROM calculator_item_source_metadata{as_of} \
-             WHERE item_id IN ({id_list})"
-        );
         let raw_item_table_query = format!(
             "SELECT \
                 CAST(it.`Index` AS SIGNED), \
@@ -170,19 +333,12 @@ impl DoltMySqlStore {
         );
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(i64, Option<String>, Option<String>, Option<i64>)> = match conn.query(query)
-        {
-            Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "calculator_item_source_metadata") => {
-                match conn.query(raw_item_table_query) {
-                    Ok(rows) => rows,
-                    Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
-                    Err(err) => return Err(db_unavailable(err)),
-                }
-            }
-            Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
-            Err(err) => return Err(db_unavailable(err)),
-        };
+        let rows: Vec<(i64, Option<String>, Option<String>, Option<i64>)> =
+            match conn.query(raw_item_table_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
+                Err(err) => return Err(db_unavailable(err)),
+            };
         let mut out = HashMap::new();
         for (item_id, name, icon_file, durability) in rows {
             let Ok(item_id) = i32::try_from(item_id) else {
@@ -406,7 +562,7 @@ impl DoltMySqlStore {
             .filter_map(|row| {
                 Some(CalculatorSourceBackedItemRow {
                     source_kind: "item".to_string(),
-                    item_id: row.get("item_id"),
+                    item_id: row.get::<Option<i32>, _>("item_id").flatten(),
                     item_type: normalize_optional_string(row.get::<String, _>("item_type"))
                         .unwrap_or_default(),
                     legacy_name_en: normalize_optional_string(
@@ -418,16 +574,16 @@ impl DoltMySqlStore {
                     item_icon_file: normalize_optional_string(
                         row.get::<String, _>("item_icon_file"),
                     ),
-                    legacy_icon_id: row.get("legacy_icon_id"),
-                    durability: row.get("durability"),
-                    fish_multiplier: row.get("fish_multiplier"),
+                    legacy_icon_id: row.get::<Option<i32>, _>("legacy_icon_id").flatten(),
+                    durability: row.get::<Option<i32>, _>("durability").flatten(),
+                    fish_multiplier: row.get::<Option<f32>, _>("fish_multiplier").flatten(),
                     effect_description_ko: None,
-                    afr: row.get("afr"),
-                    bonus_rare: row.get("bonus_rare"),
-                    bonus_big: row.get("bonus_big"),
-                    drr: row.get("drr"),
-                    exp_fish: row.get("exp_fish"),
-                    exp_life: row.get("exp_life"),
+                    afr: row.get::<Option<f32>, _>("afr").flatten(),
+                    bonus_rare: row.get::<Option<f32>, _>("bonus_rare").flatten(),
+                    bonus_big: row.get::<Option<f32>, _>("bonus_big").flatten(),
+                    drr: row.get::<Option<f32>, _>("drr").flatten(),
+                    exp_fish: row.get::<Option<f32>, _>("exp_fish").flatten(),
+                    exp_life: row.get::<Option<f32>, _>("exp_life").flatten(),
                 })
             })
             .collect())

@@ -13,6 +13,7 @@ mod zone_profile_v2;
 mod layers;
 
 use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -83,6 +84,7 @@ const DOLT_TCP_USER_TIMEOUT_MS: u32 = 10_000;
 pub struct DoltMySqlStore {
     pool: Pool,
     defaults: MetaDefaults,
+    calculator_catalog_cache: Arc<Mutex<HashMap<String, CalculatorCatalogResponse>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -244,7 +246,15 @@ impl DoltMySqlStore {
             builder = builder.tcp_user_timeout_ms(Some(DOLT_TCP_USER_TIMEOUT_MS));
         }
         let pool = Pool::new(builder).map_err(db_unavailable)?;
-        Ok(Self { pool, defaults })
+        let store = Self {
+            pool,
+            defaults,
+            calculator_catalog_cache: Arc::new(Mutex::new(HashMap::new())),
+        };
+        for lang in [FishLang::En, FishLang::Ko] {
+            let _ = store.query_calculator_catalog(lang, None);
+        }
+        Ok(store)
     }
 
     fn query_patches(&self) -> AppResult<Vec<PatchInfo>> {
