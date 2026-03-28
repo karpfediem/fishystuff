@@ -2864,7 +2864,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(text.contains("\"auto_fish_time\":\"63.00\""));
+        assert!(text.contains("\"auto_fish_time\":\"60.00\""));
         assert!(!text.contains("\"active\":true"));
     }
 

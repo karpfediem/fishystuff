@@ -91,16 +91,31 @@ Helper views used by those surfaces:
 
 ## Temporary Workflow
 
-### 1. Ensure the schema exists
+### 1. Ensure the required schema surfaces exist
 
-Apply the migration:
+Run imports against a Dolt repo that already contains the required tables and
+views.
 
 ```bash
 devenv shell -- bash -lc \
-  'dolt sql < api/sql/migrations/20260327_add_calculator_effect_source_tables.sql'
+  'dolt sql -q "
+    SHOW FULL TABLES
+  "'
 ```
 
-This creates the raw workbook tables and the temporary calculator-focused views.
+Minimum spot check before running calculator imports:
+
+```bash
+devenv shell -- bash -lc \
+  'dolt sql -q "
+    SHOW FULL TABLES LIKE '\''item_table'\'';
+    SHOW FULL TABLES LIKE '\''languagedata_en'\'';
+    SHOW FULL TABLES LIKE '\''calculator_lightstone_effect_sources'\'';
+  "'
+```
+
+For schema inspection and schema-history workflow, use Dolt directly. This repo
+does not treat checked-in migration files as authoritative history.
 
 ### 2. Import the temporary effect workbooks
 
@@ -203,3 +218,6 @@ The intended direction is:
 2. Repoint calculator catalog endpoints away from the legacy `items` table.
 3. Fold in unresolved gear categories as soon as their effect source is known.
 4. Replace this temporary workbook import path with decoded original PAZ data.
+
+For the schema workflow around these temporary tables/views, see
+[`docs/dolt-schema-workflow.md`](/home/carp/code/fishystuff/docs/dolt-schema-workflow.md).

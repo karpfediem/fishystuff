@@ -6,15 +6,19 @@ This component should own:
 
 - the Axum/Tower server crate
 - runtime-only route, service, and store code
-- SQL schema and migrations used by the API deployment path
+- Dolt-backed runtime data, schema integration, and schema history
 - deployment configuration for the API process
 
-Current migration contents:
+Current contents:
 
 - `api/fishystuff_server/`
 - `api/sql/`
 - `api/config.toml`
 - `api/fly.toml`
+
+Schema changes are tracked by Dolt commits. The repo no longer maintains a
+numbered SQL migration chain. For workflow details, see
+[`docs/dolt-schema-workflow.md`](/home/carp/code/fishystuff/docs/dolt-schema-workflow.md).
 
 The API returns normalized relative asset paths and does not resolve CDN/public
 asset base URLs itself.

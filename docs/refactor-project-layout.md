@@ -5,7 +5,7 @@ This note defines the staged split of the current `zonegen/` workspace into expl
 ## Target Layout
 
 - `api/`
-  Axum/Tower API runtime, deploy configuration, SQL migrations, and server-only internals.
+  Axum/Tower API runtime, deploy configuration, Dolt-backed schema/data integration, and server-only internals.
 - `bot/`
   Deployable Serenity/Poise bot runtime.
 - `data/`
@@ -33,7 +33,7 @@ This note defines the staged split of the current `zonegen/` workspace into expl
 | `zonegen/fishystuff_zones_meta` | `lib/fishystuff_zones_meta` | shared/tooling | Zone metadata loaders reused by tooling and analytics. |
 | `zonegen/fishystuff_analytics` | `lib/fishystuff_analytics` | shared/tooling | Offline analytics helpers shared by tooling. |
 | `zonegen/fishystuff_server` | `api/fishystuff_server` | runtime | Axum/Tower API server only. |
-| `zonegen/sql` | `api/sql` | runtime | Server migrations, schema, and seed files used by API deployment/runtime setup. |
+| `zonegen/sql` | `api/sql` | runtime | Seed/reference files associated with Dolt-backed runtime setup. |
 | `zonegen/config.toml` | `api/config.toml` or `api/config.example.toml` | runtime | API-focused local/dev config. |
 | `zonegen/fly.toml` | `api/fly.toml` | runtime | API deployment config. |
 | `zonegen/fishystuff_ui_bevy` | `map/fishystuff_ui_bevy` | runtime | WASM Bevy runtime, browser bridge, rendering, local interaction. |

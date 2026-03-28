@@ -138,8 +138,8 @@ pub(super) fn events_schema_or_db_unavailable(err: mysql::Error) -> AppError {
     if is_events_schema_error(&err) {
         return AppError::unavailable(
             "events schema is outdated for /api/v1/events_snapshot and /api/v1/zone_stats. \
-             Apply api/sql/migrations/20260301_events_evidence_pipeline.sql on a fresh events schema \
-             (or rebuild events tables and re-import ranking), then rebuild event zone assignments.",
+             Use a Dolt commit or branch that contains the current events schema \
+             (and rebuild events tables and re-import ranking if needed), then rebuild event zone assignments.",
         );
     }
     db_unavailable(err)

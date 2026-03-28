@@ -10,7 +10,7 @@ This component should contain:
 
 Scripts should stay thin. If a script accumulates business logic, move that logic into a Rust crate and keep the script as a small wrapper.
 
-Current migration contents:
+Current contents:
 
 - `tools/fishystuff_ingest`
 - `tools/fishystuff_tilegen`
@@ -18,6 +18,8 @@ Current migration contents:
   - imports raw fishing workbooks and temporary calculator effect workbooks into Dolt
   - temporary calculator workflow is documented in
     [`docs/calculator-data-path.md`](/home/carp/code/fishystuff/docs/calculator-data-path.md)
+  - Dolt schema inspection and schema-history workflow are documented in
+    [`docs/dolt-schema-workflow.md`](/home/carp/code/fishystuff/docs/dolt-schema-workflow.md)
 - `tools/pazifista`
 - `tools/scripts/build_map.sh`
 - `tools/scripts/stage_cdn_assets.sh`

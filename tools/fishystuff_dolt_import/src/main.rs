@@ -171,8 +171,6 @@ enum Commands {
         output_dir: Option<PathBuf>,
         #[arg(long, value_enum, default_value_t = SubsetMode::FishingOnly)]
         subset: SubsetMode,
-        #[arg(long)]
-        apply_schema: Option<PathBuf>,
         #[arg(long, default_value_t = false)]
         commit: bool,
         #[arg(long)]
@@ -185,8 +183,6 @@ enum Commands {
         workbook_xlsx: PathBuf,
         #[arg(long)]
         output_dir: Option<PathBuf>,
-        #[arg(long)]
-        apply_schema: Option<PathBuf>,
         #[arg(long, default_value_t = false)]
         commit: bool,
         #[arg(long)]
@@ -199,8 +195,6 @@ enum Commands {
         excel_dir: PathBuf,
         #[arg(long)]
         output_dir: Option<PathBuf>,
-        #[arg(long)]
-        apply_schema: Option<PathBuf>,
         #[arg(long, default_value_t = false)]
         commit: bool,
         #[arg(long)]
@@ -213,8 +207,6 @@ enum Commands {
         excel_dir: PathBuf,
         #[arg(long)]
         output_dir: Option<PathBuf>,
-        #[arg(long)]
-        apply_schema: Option<PathBuf>,
         #[arg(long, default_value_t = false)]
         commit: bool,
         #[arg(long)]
@@ -272,7 +264,6 @@ struct ImportCommand {
     languagedata_en_csv: Option<PathBuf>,
     output_dir: Option<PathBuf>,
     subset: SubsetMode,
-    apply_schema: Option<PathBuf>,
     commit: bool,
     commit_msg: Option<String>,
 }
@@ -309,7 +300,6 @@ struct CommunityPrizeImportCommand {
     dolt_repo: PathBuf,
     workbook_xlsx: PathBuf,
     output_dir: Option<PathBuf>,
-    apply_schema: Option<PathBuf>,
     commit: bool,
     commit_msg: Option<String>,
 }
@@ -326,7 +316,6 @@ struct CalculatorEffectsImportCommand {
     dolt_repo: PathBuf,
     excel_dir: PathBuf,
     output_dir: Option<PathBuf>,
-    apply_schema: Option<PathBuf>,
     commit: bool,
     commit_msg: Option<String>,
 }
@@ -404,7 +393,6 @@ struct CalculatorProgressionImportCommand {
     dolt_repo: PathBuf,
     excel_dir: PathBuf,
     output_dir: Option<PathBuf>,
-    apply_schema: Option<PathBuf>,
     commit: bool,
     commit_msg: Option<String>,
 }
@@ -474,7 +462,6 @@ fn main() -> Result<()> {
             languagedata_en_csv,
             output_dir,
             subset,
-            apply_schema,
             commit,
             commit_msg,
         } => run_import(ImportCommand {
@@ -488,7 +475,6 @@ fn main() -> Result<()> {
             languagedata_en_csv,
             output_dir,
             subset,
-            apply_schema,
             commit,
             commit_msg,
         }),
@@ -496,14 +482,12 @@ fn main() -> Result<()> {
             dolt_repo,
             workbook_xlsx,
             output_dir,
-            apply_schema,
             commit,
             commit_msg,
         } => run_community_prize_import(CommunityPrizeImportCommand {
             dolt_repo,
             workbook_xlsx,
             output_dir,
-            apply_schema,
             commit,
             commit_msg,
         }),
@@ -511,14 +495,12 @@ fn main() -> Result<()> {
             dolt_repo,
             excel_dir,
             output_dir,
-            apply_schema,
             commit,
             commit_msg,
         } => run_calculator_effects_import(CalculatorEffectsImportCommand {
             dolt_repo,
             excel_dir,
             output_dir,
-            apply_schema,
             commit,
             commit_msg,
         }),
@@ -526,14 +508,12 @@ fn main() -> Result<()> {
             dolt_repo,
             excel_dir,
             output_dir,
-            apply_schema,
             commit,
             commit_msg,
         } => run_calculator_progression_import(CalculatorProgressionImportCommand {
             dolt_repo,
             excel_dir,
             output_dir,
-            apply_schema,
             commit,
             commit_msg,
         }),
@@ -552,7 +532,6 @@ fn run_import(command: ImportCommand) -> Result<()> {
         languagedata_en_csv,
         output_dir,
         subset,
-        apply_schema,
         commit,
         commit_msg,
     } = command;
@@ -585,10 +564,6 @@ fn run_import(command: ImportCommand) -> Result<()> {
             None => None,
         },
     };
-
-    if let Some(schema_path) = apply_schema {
-        apply_schema_sql(&dolt_repo, &schema_path)?;
-    }
 
     let outputs = ImportOutputs {
         fishing_csv: output_dir.join("fishing_table.csv"),
@@ -671,7 +646,6 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
         dolt_repo,
         workbook_xlsx,
         output_dir,
-        apply_schema,
         commit,
         commit_msg,
     } = command;
@@ -684,10 +658,6 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
         .with_context(|| format!("create output dir: {}", output_dir.display()))?;
 
     let workbook_sha = sha256_file(&workbook_xlsx)?;
-    if let Some(schema_path) = apply_schema {
-        apply_schema_sql(&dolt_repo, &schema_path)?;
-    }
-
     let outputs = CommunityPrizeOutputs {
         community_csv: output_dir.join("community_zone_fish_support.csv"),
     };
@@ -737,7 +707,6 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         dolt_repo,
         excel_dir,
         output_dir,
-        apply_schema,
         commit,
         commit_msg,
     } = command;
@@ -749,10 +718,6 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
     };
     fs::create_dir_all(&output_dir)
         .with_context(|| format!("create output dir: {}", output_dir.display()))?;
-
-    if let Some(schema_path) = apply_schema {
-        apply_schema_sql(&dolt_repo, &schema_path)?;
-    }
 
     let digests = CalculatorEffectsDigests {
         buff_table_sha: sha256_file(&workbook_set.buff_table_xlsx)?,
@@ -1074,7 +1039,6 @@ fn run_calculator_progression_import(command: CalculatorProgressionImportCommand
         dolt_repo,
         excel_dir,
         output_dir,
-        apply_schema,
         commit,
         commit_msg,
     } = command;
@@ -1086,10 +1050,6 @@ fn run_calculator_progression_import(command: CalculatorProgressionImportCommand
     };
     fs::create_dir_all(&output_dir)
         .with_context(|| format!("create output dir: {}", output_dir.display()))?;
-
-    if let Some(schema_path) = apply_schema {
-        apply_schema_sql(&dolt_repo, &schema_path)?;
-    }
 
     let digests = CalculatorProgressionDigests {
         common_stat_data_sha: sha256_file(&workbook_set.common_stat_data_xlsx)?,
@@ -2015,22 +1975,6 @@ fn build_csv_writer(path: &Path) -> Result<Writer<File>> {
         .quote_style(QuoteStyle::Necessary)
         .terminator(csv::Terminator::Any(b'\n'))
         .from_writer(file))
-}
-
-fn apply_schema_sql(repo_path: &Path, schema_path: &Path) -> Result<()> {
-    let schema_file = File::open(schema_path)
-        .with_context(|| format!("open schema file: {}", schema_path.display()))?;
-    let output = Command::new("dolt")
-        .current_dir(repo_path)
-        .arg("sql")
-        .stdin(Stdio::from(schema_file))
-        .output()
-        .context("run dolt sql for schema")?;
-    if output.status.success() {
-        return Ok(());
-    }
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    bail!("dolt sql failed: {stderr}");
 }
 
 fn run_dolt_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> Result<()> {

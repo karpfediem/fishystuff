@@ -281,7 +281,7 @@ impl DoltMySqlStore {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "map_versions") => {
                 return Err(AppError::not_found(
-                    "map_versions table is missing; apply api/sql/migrations/20260301_vector_geojson_layers.sql",
+                    "map_versions table is missing; use a Dolt commit or branch that contains the current map schema",
                 ));
             }
             Err(err) => return Err(db_unavailable(err)),
@@ -329,7 +329,7 @@ impl DoltMySqlStore {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "region_group_meta") => {
                 return Err(AppError::not_found(
-                    "region_group_meta table is missing; apply api/sql/migrations/20260301_region_groups.sql",
+                    "region_group_meta table is missing; use a Dolt commit or branch that contains the current region-group schema",
                 ));
             }
             Err(err) => return Err(db_unavailable(err)),
@@ -341,7 +341,7 @@ impl DoltMySqlStore {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "region_group_regions") => {
                 return Err(AppError::not_found(
-                    "region_group_regions table is missing; apply api/sql/migrations/20260301_region_groups.sql",
+                    "region_group_regions table is missing; use a Dolt commit or branch that contains the current region-group schema",
                 ));
             }
             Err(err) => return Err(db_unavailable(err)),
@@ -446,7 +446,7 @@ impl DoltMySqlStore {
                 Ok(value) => value,
                 Err(err) if is_missing_table(&err, "layer_revisions") => {
                     return Err(AppError::unavailable(
-                        "layer_revisions table missing; apply evidence layer revision migration",
+                        "layer_revisions table missing; use a Dolt commit or branch that contains the current evidence schema",
                     ));
                 }
                 Err(err) => return Err(db_unavailable(err)),
@@ -474,7 +474,7 @@ impl DoltMySqlStore {
             Ok(value) => value,
             Err(err) if is_missing_table(&err, "layer_revisions") => {
                 return Err(AppError::unavailable(
-                    "layer_revisions table missing; apply evidence layer revision migration",
+                    "layer_revisions table missing; use a Dolt commit or branch that contains the current evidence schema",
                 ));
             }
             Err(err) => return Err(db_unavailable(err)),

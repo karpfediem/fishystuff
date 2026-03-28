@@ -1,4 +1,0 @@
--- Deprecated on 2026-03-01:
--- Water map overlay was removed from runtime layers because the available water
--- raster is not trusted as a canonical base image.
--- Keep this migration as a no-op placeholder for historical ordering.
