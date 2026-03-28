@@ -996,26 +996,59 @@ fn collapse_named_array_by_buff_category(
             .collect::<Vec<_>>();
     };
 
-    let mut seen_keys = std::collections::HashSet::<String>::new();
-    let mut seen_categories = std::collections::HashSet::<String>::new();
-    let mut collapsed = Vec::new();
-    for value in values.into_iter().rev() {
-        if value.is_empty() || !seen_keys.insert(value.clone()) {
+    #[derive(Clone)]
+    struct Candidate {
+        value: String,
+        position: usize,
+        category_key: Option<String>,
+        category_level: i32,
+    }
+
+    let latest_positions = values
+        .iter()
+        .enumerate()
+        .filter_map(|(position, value)| (!value.is_empty()).then_some((value.clone(), position)))
+        .collect::<HashMap<_, _>>();
+
+    let mut winners_by_category = HashMap::<String, Candidate>::new();
+    let mut winners = Vec::<Candidate>::new();
+    for (position, value) in values.into_iter().enumerate() {
+        if value.is_empty() || latest_positions.get(&value) != Some(&position) {
             continue;
         }
         let Some(item) = items_by_key.get(value.as_str()) else {
-            collapsed.push(value);
+            winners.push(Candidate {
+                value,
+                position,
+                category_key: None,
+                category_level: 0,
+            });
             continue;
         };
-        if let Some(category_key) = item.buff_category_key.as_ref() {
-            if !seen_categories.insert(category_key.clone()) {
-                continue;
+        let candidate = Candidate {
+            value,
+            position,
+            category_key: item.buff_category_key.clone(),
+            category_level: item.buff_category_level.unwrap_or(0),
+        };
+        if let Some(category_key) = candidate.category_key.clone() {
+            match winners_by_category.get(&category_key) {
+                Some(existing)
+                    if existing.category_level > candidate.category_level
+                        || (existing.category_level == candidate.category_level
+                            && existing.position > candidate.position) => {}
+                _ => {
+                    winners_by_category.insert(category_key, candidate);
+                }
             }
+        } else {
+            winners.push(candidate);
         }
-        collapsed.push(value);
     }
-    collapsed.reverse();
-    collapsed
+
+    winners.extend(winners_by_category.into_values());
+    winners.sort_by_key(|candidate| candidate.position);
+    winners.into_iter().map(|candidate| candidate.value).collect()
 }
 
 fn normalize_lookup_value(value: &str) -> String {
@@ -1838,7 +1871,7 @@ fn render_calculator_app(
                     bind_key: "food",
                     search_placeholder: "Search foods by name or effect",
                     helper_text: Some(
-                        "Selecting another food in the same buff group replaces the previous one.",
+                        "Only one food family applies at a time. Higher-tier foods replace lower-tier ones in the same family.",
                     ),
                 },
                 &signals.food,
@@ -1940,14 +1973,31 @@ fn render_searchable_dropdown_text_content(label: &str) -> String {
     )
 }
 
-fn buff_category_label(item: &CalculatorItemEntry) -> Option<&'static str> {
-    match item.buff_category_id {
+fn romanize_category_level(level: i32) -> &'static str {
+    match level {
+        0 => "I",
+        1 => "II",
+        2 => "III",
+        3 => "IV",
+        4 => "V",
+        _ => "",
+    }
+}
+
+fn buff_category_label(item: &CalculatorItemEntry) -> Option<String> {
+    let base = match item.buff_category_id {
         Some(1) => Some("Meal"),
         Some(2) => Some("Elixir"),
         Some(6) => Some("Perfume"),
         Some(18) => Some("Housekeeper"),
         Some(2002) => Some("Event"),
         _ => None,
+    }?;
+    let suffix = romanize_category_level(item.buff_category_level.unwrap_or(0));
+    if suffix.is_empty() {
+        Some(base.to_string())
+    } else {
+        Some(format!("{base} {suffix}"))
     }
 }
 
@@ -1966,7 +2016,7 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
     let mut badges = Vec::new();
     if let Some(category_label) = buff_category_label(item) {
         badges.push(render_effect_badge(
-            category_label,
+            &category_label,
             "border-base-content/15 bg-base-300 text-base-content",
         ));
     }
@@ -2031,39 +2081,62 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
 }
 
 fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
-    let mut parts = Vec::<&str>::new();
+    let mut parts = Vec::<String>::new();
     if item.afr.filter(|value| *value > 0.0).is_some() {
-        parts.extend(["aft", "auto fishing", "auto-fishing", "auto fish time"]);
+        parts.extend(
+            ["aft", "auto fishing", "auto-fishing", "auto fish time"]
+                .into_iter()
+                .map(ToOwned::to_owned),
+        );
     }
     if item.bonus_rare.filter(|value| *value > 0.0).is_some() {
-        parts.extend(["rare", "rare fish"]);
+        parts.extend(["rare", "rare fish"].into_iter().map(ToOwned::to_owned));
     }
     if item.bonus_big.filter(|value| *value > 0.0).is_some() {
-        parts.extend(["hq", "high quality", "high-quality", "big fish"]);
+        parts.extend(
+            ["hq", "high quality", "high-quality", "big fish"]
+                .into_iter()
+                .map(ToOwned::to_owned),
+        );
     }
     if item.item_drr.filter(|value| *value > 0.0).is_some() {
-        parts.extend(["item drr", "durability reduction resistance", "durability"]);
+        parts.extend(
+            ["item drr", "durability reduction resistance", "durability"]
+                .into_iter()
+                .map(ToOwned::to_owned),
+        );
     }
     if item.exp_fish.filter(|value| *value > 0.0).is_some() {
-        parts.extend(["fish exp", "fishing exp", "fishing experience"]);
+        parts.extend(
+            ["fish exp", "fishing exp", "fishing experience"]
+                .into_iter()
+                .map(ToOwned::to_owned),
+        );
     }
     if item.exp_life.filter(|value| *value > 0.0).is_some() {
-        parts.extend(["life exp", "life experience"]);
+        parts.extend(["life exp", "life experience"].into_iter().map(ToOwned::to_owned));
     }
     if item
         .fish_multiplier
         .filter(|value| *value > 0.0 && (*value - 1.0).abs() > 0.0001)
         .is_some()
     {
-        parts.extend(["fish multiplier", "fish value"]);
+        parts.extend(
+            ["fish multiplier", "fish value"]
+                .into_iter()
+                .map(ToOwned::to_owned),
+        );
     }
     if item.r#type == "outfit" {
-        parts.extend(["set effect", "set bonus"]);
+        parts.extend(["set effect", "set bonus"].into_iter().map(ToOwned::to_owned));
     }
     if let Some(category_label) = buff_category_label(item) {
         parts.push(category_label);
-        parts.push("buff category");
-        parts.push("exclusive group");
+        parts.push("buff category".to_string());
+        parts.push("exclusive group".to_string());
+        if matches!(item.buff_category_id, Some(1)) {
+            parts.push("meal".to_string());
+        }
     }
     parts.join(" ")
 }
@@ -3467,6 +3540,40 @@ mod tests {
         );
 
         assert_eq!(normalized, vec!["item:2".to_string(), "item:3".to_string()]);
+    }
+
+    #[test]
+    fn normalize_named_array_prefers_higher_buff_category_level() {
+        let valid_keys =
+            std::collections::HashSet::from(["item:1".to_string(), "item:2".to_string()]);
+        let lookup = HashMap::from([
+            (normalize_lookup_value("Meal I"), "item:1".to_string()),
+            (normalize_lookup_value("Meal II"), "item:2".to_string()),
+        ]);
+        let item_one = CalculatorItemEntry {
+            key: "item:1".to_string(),
+            buff_category_key: Some("buff-category:1".to_string()),
+            buff_category_level: Some(0),
+            ..CalculatorItemEntry::default()
+        };
+        let item_two = CalculatorItemEntry {
+            key: "item:2".to_string(),
+            buff_category_key: Some("buff-category:1".to_string()),
+            buff_category_level: Some(1),
+            ..CalculatorItemEntry::default()
+        };
+        let items_by_key = HashMap::from([("item:1", &item_one), ("item:2", &item_two)]);
+
+        let normalized = normalize_named_array(
+            &["item:2".to_string(), "item:1".to_string()],
+            &valid_keys,
+            &lookup,
+            None,
+            Vec::new(),
+            Some(&items_by_key),
+        );
+
+        assert_eq!(normalized, vec!["item:2".to_string()]);
     }
 
     #[test]

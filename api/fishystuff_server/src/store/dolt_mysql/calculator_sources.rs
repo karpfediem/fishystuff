@@ -83,7 +83,8 @@ pub(super) struct CalculatorSourceBackedItemRow {
 struct CalculatorConsumableItemRow {
     item_id: i32,
     item_classify: Option<String>,
-    skill_ids: Vec<String>,
+    skill_no: Option<String>,
+    sub_skill_no: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -131,6 +132,46 @@ fn max_opt_f32(left: Option<f32>, right: Option<f32>) -> Option<f32> {
         (Some(left), None) => Some(left),
         (None, Some(right)) => Some(right),
         (None, None) => None,
+    }
+}
+
+fn select_consumable_category_metadata(
+    primary_skill_id: Option<&str>,
+    fallback_skill_id: Option<&str>,
+    buff_categories_by_skill: &HashMap<String, CalculatorBuffSourceMetadata>,
+) -> CalculatorBuffSourceMetadata {
+    if let Some(primary) = primary_skill_id
+        .and_then(|skill_id| buff_categories_by_skill.get(skill_id))
+        .filter(|metadata| metadata.category_id.is_some())
+    {
+        return primary.clone();
+    }
+    if let Some(fallback) = fallback_skill_id
+        .and_then(|skill_id| buff_categories_by_skill.get(skill_id))
+        .filter(|metadata| metadata.category_id.is_some())
+    {
+        return fallback.clone();
+    }
+    let categories = [primary_skill_id, fallback_skill_id]
+        .into_iter()
+        .flatten()
+        .filter_map(|skill_id| buff_categories_by_skill.get(skill_id))
+        .filter_map(|metadata| {
+            metadata
+                .category_id
+                .map(|category_id| (category_id, metadata.category_level))
+        })
+        .collect::<Vec<_>>();
+    let Some((category_id, category_level)) = categories
+        .iter()
+        .max_by_key(|(category_id, category_level)| (*category_level, -*category_id))
+        .copied()
+    else {
+        return CalculatorBuffSourceMetadata::default();
+    };
+    CalculatorBuffSourceMetadata {
+        category_id: Some(category_id),
+        category_level,
     }
 }
 
@@ -443,14 +484,11 @@ impl DoltMySqlStore {
                 let Ok(item_id) = i32::try_from(item_id) else {
                     return None;
                 };
-                let skill_ids = [skill_no, sub_skill_no]
-                    .into_iter()
-                    .filter_map(normalize_optional_string)
-                    .collect::<Vec<_>>();
                 Some(CalculatorConsumableItemRow {
                     item_id,
                     item_classify: normalize_optional_string(item_classify),
-                    skill_ids,
+                    skill_no: normalize_optional_string(skill_no),
+                    sub_skill_no: normalize_optional_string(sub_skill_no),
                 })
             })
             .collect())
@@ -947,7 +985,8 @@ impl DoltMySqlStore {
         let item_source_metadata = self.query_calculator_item_table_metadata(ref_id, &item_ids)?;
         let skill_ids = item_rows
             .iter()
-            .flat_map(|row| row.skill_ids.iter().cloned())
+            .flat_map(|row| [row.skill_no.clone(), row.sub_skill_no.clone()])
+            .flatten()
             .collect::<Vec<_>>();
         let buff_categories_by_skill =
             self.query_consumable_skill_buff_categories(ref_id, &skill_ids)?;
@@ -957,35 +996,11 @@ impl DoltMySqlStore {
             .filter_map(|row| {
                 let effect_lines = effect_lines_by_item_id.remove(&row.item_id)?;
                 let source_meta = item_source_metadata.get(&row.item_id);
-                let category_entries = row
-                    .skill_ids
-                    .iter()
-                    .filter_map(|skill_id| buff_categories_by_skill.get(skill_id))
-                    .filter_map(|metadata| {
-                        metadata
-                            .category_id
-                            .map(|category_id| (category_id, metadata.category_level))
-                    })
-                    .collect::<Vec<_>>();
-                let category_metadata = category_entries
-                    .first()
-                    .copied()
-                    .filter(|(category_id, _)| {
-                        category_entries
-                            .iter()
-                            .all(|(candidate_id, _)| candidate_id == category_id)
-                    })
-                    .map(
-                        |(category_id, category_level)| CalculatorBuffSourceMetadata {
-                            category_id: Some(category_id),
-                            category_level: category_entries
-                                .iter()
-                                .filter_map(|(_, category_level)| *category_level)
-                                .max()
-                                .or(category_level),
-                        },
-                    )
-                    .unwrap_or_default();
+                let category_metadata = select_consumable_category_metadata(
+                    row.skill_no.as_deref(),
+                    row.sub_skill_no.as_deref(),
+                    &buff_categories_by_skill,
+                );
                 let item_type = match (category_metadata.category_id, row.item_classify.as_deref())
                 {
                     (Some(1), _) | (None, Some("8")) => "food",
@@ -1281,7 +1296,10 @@ impl DoltMySqlStore {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{select_consumable_effect_texts, CalculatorBuffTextRow};
+    use super::{
+        select_consumable_category_metadata, select_consumable_effect_texts,
+        CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
+    };
 
     #[test]
     fn consumable_effect_texts_prefer_composite_buff_rows_over_leaf_rows() {
@@ -1346,5 +1364,31 @@ mod tests {
                 "자동 낚시 시간 감소 7%".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn consumable_category_prefers_primary_skill_over_buff_removal_subskill() {
+        let by_skill = HashMap::from([
+            (
+                "55595".to_string(),
+                CalculatorBuffSourceMetadata {
+                    category_id: Some(1),
+                    category_level: Some(1),
+                },
+            ),
+            (
+                "51349".to_string(),
+                CalculatorBuffSourceMetadata {
+                    category_id: Some(10),
+                    category_level: Some(1),
+                },
+            ),
+        ]);
+
+        let selected =
+            select_consumable_category_metadata(Some("55595"), Some("51349"), &by_skill);
+
+        assert_eq!(selected.category_id, Some(1));
+        assert_eq!(selected.category_level, Some(1));
     }
 }
