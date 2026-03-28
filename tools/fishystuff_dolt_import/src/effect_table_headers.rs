@@ -206,6 +206,21 @@ pub const LIGHTSTONE_SET_OPTION_HEADERS: [&str; 7] = [
     "Description",
 ];
 
+pub const COMMON_STAT_DATA_HEADERS: [&str; 2] = ["LifeLevel", "BaseStat"];
+
+pub const FISHING_STAT_DATA_HEADERS: [&str; 2] = ["Stat", "HighDropRate1"];
+
+pub const TRANSLATE_STAT_HEADERS: [&str; 8] = [
+    "Point",
+    "MovespeedPercent",
+    "AttackspeedPercent",
+    "CastingspeedPercent",
+    "CriticalPercent",
+    "DropItemPercent",
+    "FishingPercent",
+    "CollectionPercent",
+];
+
 pub const ENCHANT_WORKBOOK_HEADERS: [&str; 107] = [
     "Index",
     "ItemName",

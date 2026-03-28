@@ -15,11 +15,12 @@ use csv::{QuoteStyle, Writer, WriterBuilder};
 use sha2::{Digest, Sha256};
 
 use effect_table_headers::{
-    BUFF_TABLE_HEADERS, ENCHANT_WORKBOOK_HEADERS, LIGHTSTONE_SET_OPTION_HEADERS,
-    PET_BASE_SKILL_TABLE_HEADERS, PET_EQUIPSKILL_TABLE_HEADERS, PET_EXP_TABLE_HEADERS,
-    PET_GRADE_TABLE_HEADERS, PET_SETSTATS_TABLE_HEADERS, PET_SKILL_TABLE_HEADERS,
-    PET_TABLE_HEADERS, PRODUCTTOOL_PROPERTY_HEADERS, SKILLTYPE_TABLE_NEW_HEADERS,
-    SKILL_TABLE_NEW_HEADERS, TOOLTIP_TABLE_HEADERS, UPGRADEPET_LOOTING_PERCENT_HEADERS,
+    BUFF_TABLE_HEADERS, COMMON_STAT_DATA_HEADERS, ENCHANT_WORKBOOK_HEADERS,
+    FISHING_STAT_DATA_HEADERS, LIGHTSTONE_SET_OPTION_HEADERS, PET_BASE_SKILL_TABLE_HEADERS,
+    PET_EQUIPSKILL_TABLE_HEADERS, PET_EXP_TABLE_HEADERS, PET_GRADE_TABLE_HEADERS,
+    PET_SETSTATS_TABLE_HEADERS, PET_SKILL_TABLE_HEADERS, PET_TABLE_HEADERS,
+    PRODUCTTOOL_PROPERTY_HEADERS, SKILLTYPE_TABLE_NEW_HEADERS, SKILL_TABLE_NEW_HEADERS,
+    TOOLTIP_TABLE_HEADERS, TRANSLATE_STAT_HEADERS, UPGRADEPET_LOOTING_PERCENT_HEADERS,
 };
 use item_table_headers::ITEM_TABLE_HEADERS;
 const FISHING_HEADERS: [&str; 18] = [
@@ -205,6 +206,20 @@ enum Commands {
         #[arg(long)]
         commit_msg: Option<String>,
     },
+    ImportCalculatorProgressionXlsx {
+        #[arg(long)]
+        dolt_repo: PathBuf,
+        #[arg(long)]
+        excel_dir: PathBuf,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long)]
+        apply_schema: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
@@ -318,9 +333,12 @@ struct CalculatorEffectsImportCommand {
 
 struct CalculatorEffectsWorkbookSet {
     buff_table_xlsx: PathBuf,
+    common_stat_data_xlsx: PathBuf,
+    fishing_stat_data_xlsx: PathBuf,
     skill_table_new_xlsx: PathBuf,
     skilltype_table_new_xlsx: PathBuf,
     lightstone_set_option_xlsx: PathBuf,
+    translate_stat_xlsx: PathBuf,
     enchant_cash_xlsx: PathBuf,
     enchant_equipment_xlsx: PathBuf,
     enchant_lifeequipment_xlsx: PathBuf,
@@ -338,9 +356,12 @@ struct CalculatorEffectsWorkbookSet {
 
 struct CalculatorEffectsOutputs {
     buff_table_csv: PathBuf,
+    common_stat_data_csv: PathBuf,
+    fishing_stat_data_csv: PathBuf,
     skill_table_new_csv: PathBuf,
     skilltype_table_new_csv: PathBuf,
     lightstone_set_option_csv: PathBuf,
+    translate_stat_csv: PathBuf,
     enchant_cash_csv: PathBuf,
     enchant_equipment_csv: PathBuf,
     enchant_lifeequipment_csv: PathBuf,
@@ -358,9 +379,12 @@ struct CalculatorEffectsOutputs {
 
 struct CalculatorEffectsDigests {
     buff_table_sha: String,
+    common_stat_data_sha: String,
+    fishing_stat_data_sha: String,
     skill_table_new_sha: String,
     skilltype_table_new_sha: String,
     lightstone_set_option_sha: String,
+    translate_stat_sha: String,
     enchant_cash_sha: String,
     enchant_equipment_sha: String,
     enchant_lifeequipment_sha: String,
@@ -374,6 +398,33 @@ struct CalculatorEffectsDigests {
     pet_grade_table_sha: String,
     pet_exp_table_sha: String,
     upgradepet_looting_percent_sha: String,
+}
+
+struct CalculatorProgressionImportCommand {
+    dolt_repo: PathBuf,
+    excel_dir: PathBuf,
+    output_dir: Option<PathBuf>,
+    apply_schema: Option<PathBuf>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+struct CalculatorProgressionWorkbookSet {
+    common_stat_data_xlsx: PathBuf,
+    fishing_stat_data_xlsx: PathBuf,
+    translate_stat_xlsx: PathBuf,
+}
+
+struct CalculatorProgressionOutputs {
+    common_stat_data_csv: PathBuf,
+    fishing_stat_data_csv: PathBuf,
+    translate_stat_csv: PathBuf,
+}
+
+struct CalculatorProgressionDigests {
+    common_stat_data_sha: String,
+    fishing_stat_data_sha: String,
+    translate_stat_sha: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -464,6 +515,21 @@ fn main() -> Result<()> {
             commit,
             commit_msg,
         } => run_calculator_effects_import(CalculatorEffectsImportCommand {
+            dolt_repo,
+            excel_dir,
+            output_dir,
+            apply_schema,
+            commit,
+            commit_msg,
+        }),
+        Commands::ImportCalculatorProgressionXlsx {
+            dolt_repo,
+            excel_dir,
+            output_dir,
+            apply_schema,
+            commit,
+            commit_msg,
+        } => run_calculator_progression_import(CalculatorProgressionImportCommand {
             dolt_repo,
             excel_dir,
             output_dir,
@@ -690,9 +756,12 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
 
     let digests = CalculatorEffectsDigests {
         buff_table_sha: sha256_file(&workbook_set.buff_table_xlsx)?,
+        common_stat_data_sha: sha256_file(&workbook_set.common_stat_data_xlsx)?,
+        fishing_stat_data_sha: sha256_file(&workbook_set.fishing_stat_data_xlsx)?,
         skill_table_new_sha: sha256_file(&workbook_set.skill_table_new_xlsx)?,
         skilltype_table_new_sha: sha256_file(&workbook_set.skilltype_table_new_xlsx)?,
         lightstone_set_option_sha: sha256_file(&workbook_set.lightstone_set_option_xlsx)?,
+        translate_stat_sha: sha256_file(&workbook_set.translate_stat_xlsx)?,
         enchant_cash_sha: sha256_file(&workbook_set.enchant_cash_xlsx)?,
         enchant_equipment_sha: sha256_file(&workbook_set.enchant_equipment_xlsx)?,
         enchant_lifeequipment_sha: sha256_file(&workbook_set.enchant_lifeequipment_xlsx)?,
@@ -710,9 +779,12 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
 
     let outputs = CalculatorEffectsOutputs {
         buff_table_csv: output_dir.join("buff_table.csv"),
+        common_stat_data_csv: output_dir.join("common_stat_data.csv"),
+        fishing_stat_data_csv: output_dir.join("fishing_stat_data.csv"),
         skill_table_new_csv: output_dir.join("skill_table_new.csv"),
         skilltype_table_new_csv: output_dir.join("skilltype_table_new.csv"),
         lightstone_set_option_csv: output_dir.join("lightstone_set_option.csv"),
+        translate_stat_csv: output_dir.join("translate_stat.csv"),
         enchant_cash_csv: output_dir.join("enchant_cash.csv"),
         enchant_equipment_csv: output_dir.join("enchant_equipment.csv"),
         enchant_lifeequipment_csv: output_dir.join("enchant_lifeequipment.csv"),
@@ -734,6 +806,18 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         &BUFF_TABLE_HEADERS,
         &outputs.buff_table_csv,
     )?;
+    let common_stat_data_stats = import_workbook_sheet(
+        &workbook_set.common_stat_data_xlsx,
+        "CommonStatData",
+        &COMMON_STAT_DATA_HEADERS,
+        &outputs.common_stat_data_csv,
+    )?;
+    let fishing_stat_data_stats = import_workbook_sheet(
+        &workbook_set.fishing_stat_data_xlsx,
+        "FishingStatData",
+        &FISHING_STAT_DATA_HEADERS,
+        &outputs.fishing_stat_data_csv,
+    )?;
     let skill_table_new_stats = import_workbook_sheet(
         &workbook_set.skill_table_new_xlsx,
         "Skill_Table_New",
@@ -751,6 +835,12 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         "LightStoneSetOption",
         &LIGHTSTONE_SET_OPTION_HEADERS,
         &outputs.lightstone_set_option_csv,
+    )?;
+    let translate_stat_stats = import_workbook_sheet(
+        &workbook_set.translate_stat_xlsx,
+        "TranslateStat",
+        &TRANSLATE_STAT_HEADERS,
+        &outputs.translate_stat_csv,
     )?;
     let enchant_cash_stats = import_workbook_sheet(
         &workbook_set.enchant_cash_xlsx,
@@ -832,6 +922,16 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
     )?;
 
     run_dolt_sql_table_import(&dolt_repo, "buff_table", &outputs.buff_table_csv)?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "common_stat_data",
+        &outputs.common_stat_data_csv,
+    )?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "fishing_stat_data",
+        &outputs.fishing_stat_data_csv,
+    )?;
     run_dolt_sql_table_import(&dolt_repo, "skill_table_new", &outputs.skill_table_new_csv)?;
     run_dolt_sql_table_import(
         &dolt_repo,
@@ -843,6 +943,7 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
         "lightstone_set_option",
         &outputs.lightstone_set_option_csv,
     )?;
+    run_dolt_sql_table_import(&dolt_repo, "translate_stat", &outputs.translate_stat_csv)?;
     run_dolt_sql_table_import(&dolt_repo, "enchant_cash", &outputs.enchant_cash_csv)?;
     run_dolt_sql_table_import(
         &dolt_repo,
@@ -892,6 +993,14 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
 
     println!("buff_table rows imported: {}", buff_table_stats.row_count);
     println!(
+        "common_stat_data rows imported: {}",
+        common_stat_data_stats.row_count
+    );
+    println!(
+        "fishing_stat_data rows imported: {}",
+        fishing_stat_data_stats.row_count
+    );
+    println!(
         "skill_table_new rows imported: {}",
         skill_table_new_stats.row_count
     );
@@ -902,6 +1011,10 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
     println!(
         "lightstone_set_option rows imported: {}",
         lightstone_set_option_stats.row_count
+    );
+    println!(
+        "translate_stat rows imported: {}",
+        translate_stat_stats.row_count
     );
     println!(
         "enchant_cash rows imported: {}",
@@ -956,15 +1069,104 @@ fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Res
     Ok(())
 }
 
+fn run_calculator_progression_import(command: CalculatorProgressionImportCommand) -> Result<()> {
+    let CalculatorProgressionImportCommand {
+        dolt_repo,
+        excel_dir,
+        output_dir,
+        apply_schema,
+        commit,
+        commit_msg,
+    } = command;
+
+    let workbook_set = resolve_calculator_progression_workbooks(&excel_dir)?;
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+
+    if let Some(schema_path) = apply_schema {
+        apply_schema_sql(&dolt_repo, &schema_path)?;
+    }
+
+    let digests = CalculatorProgressionDigests {
+        common_stat_data_sha: sha256_file(&workbook_set.common_stat_data_xlsx)?,
+        fishing_stat_data_sha: sha256_file(&workbook_set.fishing_stat_data_xlsx)?,
+        translate_stat_sha: sha256_file(&workbook_set.translate_stat_xlsx)?,
+    };
+
+    let outputs = CalculatorProgressionOutputs {
+        common_stat_data_csv: output_dir.join("common_stat_data.csv"),
+        fishing_stat_data_csv: output_dir.join("fishing_stat_data.csv"),
+        translate_stat_csv: output_dir.join("translate_stat.csv"),
+    };
+
+    let common_stat_data_stats = import_workbook_sheet(
+        &workbook_set.common_stat_data_xlsx,
+        "CommonStatData",
+        &COMMON_STAT_DATA_HEADERS,
+        &outputs.common_stat_data_csv,
+    )?;
+    let fishing_stat_data_stats = import_workbook_sheet(
+        &workbook_set.fishing_stat_data_xlsx,
+        "FishingStatData",
+        &FISHING_STAT_DATA_HEADERS,
+        &outputs.fishing_stat_data_csv,
+    )?;
+    let translate_stat_stats = import_workbook_sheet(
+        &workbook_set.translate_stat_xlsx,
+        "TranslateStat",
+        &TRANSLATE_STAT_HEADERS,
+        &outputs.translate_stat_csv,
+    )?;
+
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "common_stat_data",
+        &outputs.common_stat_data_csv,
+    )?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "fishing_stat_data",
+        &outputs.fishing_stat_data_csv,
+    )?;
+    run_dolt_sql_table_import(&dolt_repo, "translate_stat", &outputs.translate_stat_csv)?;
+
+    if commit {
+        let msg = build_calculator_progression_commit_message(commit_msg, &digests);
+        run_dolt_commit(&dolt_repo, &msg)?;
+    }
+
+    println!(
+        "common_stat_data rows imported: {}",
+        common_stat_data_stats.row_count
+    );
+    println!(
+        "fishing_stat_data rows imported: {}",
+        fishing_stat_data_stats.row_count
+    );
+    println!(
+        "translate_stat rows imported: {}",
+        translate_stat_stats.row_count
+    );
+
+    Ok(())
+}
+
 fn resolve_calculator_effect_workbooks(excel_dir: &Path) -> Result<CalculatorEffectsWorkbookSet> {
     Ok(CalculatorEffectsWorkbookSet {
         buff_table_xlsx: resolve_required_workbook(excel_dir, "Buff_Table.xlsx")?,
+        common_stat_data_xlsx: resolve_required_workbook(excel_dir, "CommonStatData.xlsx")?,
+        fishing_stat_data_xlsx: resolve_required_workbook(excel_dir, "FishingStatData.xlsx")?,
         skill_table_new_xlsx: resolve_required_workbook(excel_dir, "Skill_Table_New.xlsx")?,
         skilltype_table_new_xlsx: resolve_required_workbook(excel_dir, "SkillType_Table_New.xlsx")?,
         lightstone_set_option_xlsx: resolve_required_workbook(
             excel_dir,
             "LightStoneSetOption.xlsx",
         )?,
+        translate_stat_xlsx: resolve_required_workbook(excel_dir, "TranslateStat.xlsx")?,
         enchant_cash_xlsx: resolve_required_workbook(excel_dir, "Enchant_Cash.xlsx")?,
         enchant_equipment_xlsx: resolve_required_workbook(excel_dir, "Enchant_Equipment.xlsx")?,
         enchant_lifeequipment_xlsx: resolve_required_workbook(
@@ -993,6 +1195,16 @@ fn resolve_calculator_effect_workbooks(excel_dir: &Path) -> Result<CalculatorEff
             excel_dir,
             "UpgradePet_Looting_Percent.xlsx",
         )?,
+    })
+}
+
+fn resolve_calculator_progression_workbooks(
+    excel_dir: &Path,
+) -> Result<CalculatorProgressionWorkbookSet> {
+    Ok(CalculatorProgressionWorkbookSet {
+        common_stat_data_xlsx: resolve_required_workbook(excel_dir, "CommonStatData.xlsx")?,
+        fishing_stat_data_xlsx: resolve_required_workbook(excel_dir, "FishingStatData.xlsx")?,
+        translate_stat_xlsx: resolve_required_workbook(excel_dir, "TranslateStat.xlsx")?,
     })
 }
 
@@ -2025,11 +2237,14 @@ fn build_calculator_effects_commit_message(
     digests: &CalculatorEffectsDigests,
 ) -> String {
     let suffix = format!(
-        "(Buff_Table={}, Skill_Table_New={}, SkillType_Table_New={}, LightStoneSetOption={}, Enchant_Cash={}, Enchant_Equipment={}, Enchant_LifeEquipment={}, Tooltip_Table={}, ProductTool_Property={}, Pet_Table={}, Pet_Skill_Table={}, Pet_BaseSkill_Table={}, Pet_SetStats_Table={}, Pet_EquipSkill_Table={}, Pet_Grade_Table={}, Pet_Exp_Table={}, UpgradePet_Looting_Percent={})",
+        "(Buff_Table={}, CommonStatData={}, FishingStatData={}, Skill_Table_New={}, SkillType_Table_New={}, LightStoneSetOption={}, TranslateStat={}, Enchant_Cash={}, Enchant_Equipment={}, Enchant_LifeEquipment={}, Tooltip_Table={}, ProductTool_Property={}, Pet_Table={}, Pet_Skill_Table={}, Pet_BaseSkill_Table={}, Pet_SetStats_Table={}, Pet_EquipSkill_Table={}, Pet_Grade_Table={}, Pet_Exp_Table={}, UpgradePet_Looting_Percent={})",
         digests.buff_table_sha,
+        digests.common_stat_data_sha,
+        digests.fishing_stat_data_sha,
         digests.skill_table_new_sha,
         digests.skilltype_table_new_sha,
         digests.lightstone_set_option_sha,
+        digests.translate_stat_sha,
         digests.enchant_cash_sha,
         digests.enchant_equipment_sha,
         digests.enchant_lifeequipment_sha,
@@ -2047,6 +2262,20 @@ fn build_calculator_effects_commit_message(
     match base {
         Some(msg) => format!("{msg} {suffix}"),
         None => format!("Import calculator effect workbooks {suffix}"),
+    }
+}
+
+fn build_calculator_progression_commit_message(
+    base: Option<String>,
+    digests: &CalculatorProgressionDigests,
+) -> String {
+    let suffix = format!(
+        "(CommonStatData={}, FishingStatData={}, TranslateStat={})",
+        digests.common_stat_data_sha, digests.fishing_stat_data_sha, digests.translate_stat_sha,
+    );
+    match base {
+        Some(msg) => format!("{msg} {suffix}"),
+        None => format!("Import calculator progression workbooks {suffix}"),
     }
 }
 
