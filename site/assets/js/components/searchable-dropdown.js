@@ -80,24 +80,31 @@ export function resolvePublicAssetUrl(rawUrl) {
     return normalizedUrl;
 }
 
-export function rewritePublicAssetUrls(root) {
+export function materializePublicAssetUrls(root) {
     if (!(root instanceof Element || root instanceof DocumentFragment)) {
         return;
     }
 
-    if (root instanceof Element && root.matches("img[src]")) {
-        const resolvedSrc = resolvePublicAssetUrl(root.getAttribute("src"));
+    if (root instanceof Element && root.matches("img[data-public-src]")) {
+        const resolvedSrc = resolvePublicAssetUrl(root.getAttribute("data-public-src"));
         if (resolvedSrc) {
             root.setAttribute("src", resolvedSrc);
         }
     }
 
-    for (const image of root.querySelectorAll("img[src]")) {
-        const resolvedSrc = resolvePublicAssetUrl(image.getAttribute("src"));
+    for (const image of root.querySelectorAll("img[data-public-src]")) {
+        const resolvedSrc = resolvePublicAssetUrl(image.getAttribute("data-public-src"));
         if (resolvedSrc) {
             image.setAttribute("src", resolvedSrc);
         }
     }
+}
+
+function parseHtmlFragment(html) {
+    const template = document.createElement("template");
+    template.innerHTML = String(html ?? "");
+    materializePublicAssetUrls(template.content);
+    return template.content;
 }
 
 export function resolveScopedUrl(rawUrl, scope) {
@@ -352,8 +359,12 @@ export class FishySearchableDropdown extends HTMLElement {
                     return;
                 }
 
-                currentResults.outerHTML = html;
-                rewritePublicAssetUrls(this.resultsElement());
+                const fragment = parseHtmlFragment(html);
+                const nextResults = fragment.firstElementChild;
+                if (!(nextResults instanceof HTMLElement)) {
+                    return;
+                }
+                currentResults.replaceWith(nextResults);
             })
             .catch((error) => {
                 if (error?.name === "AbortError") {
@@ -737,6 +748,7 @@ export class FishySearchableDropdown extends HTMLElement {
                 optionContent.dataset.role = "option-content";
                 optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
                 optionContent.replaceChildren(...cloneChildNodes(template.content));
+                materializePublicAssetUrls(optionContent);
                 button.append(optionContent);
 
                 if (value === selectedValue) {
@@ -747,7 +759,6 @@ export class FishySearchableDropdown extends HTMLElement {
                 }
 
                 item.append(button);
-                rewritePublicAssetUrls(item);
                 return item;
             }),
         );
@@ -780,7 +791,7 @@ export class FishySearchableDropdown extends HTMLElement {
             const container = this.selectedContentElement();
             if (container instanceof HTMLElement) {
                 container.replaceChildren(...cloneChildNodes(template.content));
-                rewritePublicAssetUrls(container);
+                materializePublicAssetUrls(container);
             }
         }
     }
@@ -798,14 +809,14 @@ export class FishySearchableDropdown extends HTMLElement {
         const selectedTemplate = option.querySelector('template[data-role="selected-content"]');
         if (selectedTemplate instanceof HTMLTemplateElement) {
             container.replaceChildren(...cloneChildNodes(selectedTemplate.content));
-            rewritePublicAssetUrls(container);
+            materializePublicAssetUrls(container);
             return;
         }
 
         const optionContent = option.querySelector('[data-role="option-content"]');
         if (optionContent instanceof HTMLElement) {
             container.replaceChildren(...cloneChildNodes(optionContent));
-            rewritePublicAssetUrls(container);
+            materializePublicAssetUrls(container);
             return;
         }
 
@@ -847,7 +858,7 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         this._setExpanded(this.isOpen());
-        rewritePublicAssetUrls(this);
+        materializePublicAssetUrls(this);
     }
 
     _unbindBoundInput() {

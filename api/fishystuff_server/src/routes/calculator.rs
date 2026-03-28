@@ -2146,7 +2146,7 @@ fn render_searchable_dropdown_option_content_html(option: SelectOption<'_>) -> S
     if let Some(icon) = option.icon {
         write!(
             html,
-            "<img aria-hidden=\"true\" src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
+            "<img aria-hidden=\"true\" data-public-src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
             escape_html(icon),
             escape_html(option.label)
         )
@@ -2820,7 +2820,7 @@ fn render_checkbox_group(
         if let Some(icon) = option.icon {
             write!(
                 html,
-                "<img aria-hidden=\"true\" src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
+                "<img aria-hidden=\"true\" data-public-src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
                 escape_html(icon),
                 escape_html(option.label)
             )
