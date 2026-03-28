@@ -6,9 +6,9 @@ use mysql::Row;
 use crate::error::AppResult;
 use crate::store::validate_dolt_ref;
 
+use super::calculator_effects::normalized_effect_lines;
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
-use super::calculator_effects::normalized_effect_lines;
 
 pub(super) type CalculatorItemDbRow = (
     Option<String>,
@@ -55,6 +55,7 @@ pub(super) struct CalculatorCatalogSourceData {
     pub(super) source_backed_rows: Vec<CalculatorSourceBackedItemRow>,
 }
 
+#[derive(Debug, Clone)]
 pub(super) struct CalculatorSourceBackedItemRow {
     pub(super) source_key: String,
     pub(super) source_kind: String,
@@ -91,6 +92,12 @@ struct CalculatorBuffSourceMetadata {
     category_level: Option<i32>,
 }
 
+#[derive(Debug, Clone)]
+struct CalculatorBuffTextRow {
+    text: String,
+    has_description: bool,
+}
+
 fn parse_optional_i32(value: Option<String>) -> Option<i32> {
     normalize_optional_string(value).and_then(|value| value.parse::<i32>().ok())
 }
@@ -125,6 +132,38 @@ fn max_opt_f32(left: Option<f32>, right: Option<f32>) -> Option<f32> {
         (None, Some(right)) => Some(right),
         (None, None) => None,
     }
+}
+
+fn select_consumable_effect_texts(
+    skill_id: &str,
+    buff_ids: &[String],
+    buff_text_rows: &HashMap<String, CalculatorBuffTextRow>,
+    skill_descriptions: &HashMap<String, String>,
+) -> Vec<String> {
+    let buff_rows = buff_ids
+        .iter()
+        .filter_map(|buff_id| buff_text_rows.get(buff_id))
+        .collect::<Vec<_>>();
+    let composite_rows = buff_rows
+        .iter()
+        .filter(|row| row.has_description && normalized_effect_lines(&row.text).len() > 1)
+        .map(|row| row.text.clone())
+        .collect::<Vec<_>>();
+    if !composite_rows.is_empty() {
+        return composite_rows;
+    }
+    let leaf_rows = buff_rows
+        .iter()
+        .map(|row| row.text.clone())
+        .collect::<Vec<_>>();
+    if !leaf_rows.is_empty() {
+        return leaf_rows;
+    }
+    skill_descriptions
+        .get(skill_id)
+        .cloned()
+        .into_iter()
+        .collect()
 }
 
 impl DoltMySqlStore {
@@ -194,28 +233,33 @@ impl DoltMySqlStore {
             keyword_predicate("`Description`"),
             keyword_predicate("`BuffName`")
         );
-        let buff_desc_rows: Vec<(String, Option<String>, Option<String>)> = match conn.query(buff_desc_query) {
-            Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "buff_table") => Vec::new(),
-            Err(err) => return Err(db_unavailable(err)),
-        };
-        let buff_descriptions = buff_desc_rows
+        let buff_desc_rows: Vec<(String, Option<String>, Option<String>)> =
+            match conn.query(buff_desc_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "buff_table") => Vec::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+        let buff_text_rows = buff_desc_rows
             .into_iter()
             .filter_map(|(buff_id, buff_name, description)| {
+                let normalized_description = normalize_optional_string(description);
+                let normalized_buff_name = normalize_optional_string(buff_name);
                 Some((
                     buff_id,
-                    normalize_optional_string(description)
-                        .or_else(|| normalize_optional_string(buff_name))?,
+                    CalculatorBuffTextRow {
+                        text: normalized_description.clone().or(normalized_buff_name)?,
+                        has_description: normalized_description.is_some(),
+                    },
                 ))
             })
             .collect::<HashMap<_, _>>();
 
-        if skill_descriptions.is_empty() && buff_descriptions.is_empty() {
+        if skill_descriptions.is_empty() && buff_text_rows.is_empty() {
             return Ok(Vec::new());
         }
 
         let skill_ids = skill_descriptions.keys().cloned().collect::<Vec<_>>();
-        let buff_ids = buff_descriptions.keys().cloned().collect::<Vec<_>>();
+        let buff_ids = buff_text_rows.keys().cloned().collect::<Vec<_>>();
         let skill_filter = if skill_ids.is_empty() {
             String::from("FALSE")
         } else {
@@ -325,23 +369,30 @@ impl DoltMySqlStore {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
-            let mut item_has_buff_lines = false;
             for candidate_skill in [skill_no, sub_skill_no]
                 .into_iter()
                 .filter_map(normalize_optional_string)
             {
-                if let Some(buff_ids) = skill_buffs.get(&candidate_skill) {
-                    for buff_id in buff_ids {
-                        if let Some(description) = buff_descriptions.get(buff_id) {
-                            effect_lines.push((item_id, description.clone()));
-                            item_has_buff_lines = true;
-                        }
-                    }
-                }
-                if !item_has_buff_lines {
-                    if let Some(description) = skill_descriptions.get(&candidate_skill) {
-                        effect_lines.push((item_id, description.clone()));
-                    }
+                let selected_texts = skill_buffs
+                    .get(&candidate_skill)
+                    .map(|buff_ids| {
+                        select_consumable_effect_texts(
+                            &candidate_skill,
+                            buff_ids,
+                            &buff_text_rows,
+                            &skill_descriptions,
+                        )
+                    })
+                    .filter(|texts| !texts.is_empty())
+                    .unwrap_or_else(|| {
+                        skill_descriptions
+                            .get(&candidate_skill)
+                            .cloned()
+                            .into_iter()
+                            .collect()
+                    });
+                for text in selected_texts {
+                    effect_lines.push((item_id, text));
                 }
             }
         }
@@ -528,15 +579,17 @@ impl DoltMySqlStore {
                         .map(|category_id| (category_id, metadata.category_level))
                 })
                 .collect::<Vec<_>>();
-            let Some((category_id, occurrences)) = categories.iter().fold(
-                HashMap::<i32, usize>::new(),
-                |mut counts, (category_id, _)| {
-                    *counts.entry(*category_id).or_default() += 1;
-                    counts
-                },
-            )
-            .into_iter()
-            .max_by_key(|(category_id, count)| (*count, -(*category_id)))
+            let Some((category_id, occurrences)) = categories
+                .iter()
+                .fold(
+                    HashMap::<i32, usize>::new(),
+                    |mut counts, (category_id, _)| {
+                        *counts.entry(*category_id).or_default() += 1;
+                        counts
+                    },
+                )
+                .into_iter()
+                .max_by_key(|(category_id, count)| (*count, -(*category_id)))
             else {
                 continue;
             };
@@ -1184,9 +1237,7 @@ impl DoltMySqlStore {
             .collect::<Vec<_>>();
         let item_source_metadata =
             self.query_calculator_item_table_metadata(ref_id, &all_item_ids)?;
-        let mut source_backed_rows = self.query_consumable_source_backed_item_rows(
-            ref_id,
-        )?;
+        let mut source_backed_rows = self.query_consumable_source_backed_item_rows(ref_id)?;
         source_backed_rows.extend(
             self.query_source_owned_enchant_source_backed_item_rows(ref_id, &all_legacy_rows)?,
         );
@@ -1223,5 +1274,77 @@ impl DoltMySqlStore {
             item_source_metadata,
             source_backed_rows,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{select_consumable_effect_texts, CalculatorBuffTextRow};
+
+    #[test]
+    fn consumable_effect_texts_prefer_composite_buff_rows_over_leaf_rows() {
+        let mut buff_text_rows = HashMap::new();
+        buff_text_rows.insert(
+            "55426".to_string(),
+            CalculatorBuffTextRow {
+                text: "엔트의 눈물\n생활 경험치 획득량 +30%\n낚시 속도 잠재력 +2단계".to_string(),
+                has_description: true,
+            },
+        );
+        buff_text_rows.insert(
+            "55427".to_string(),
+            CalculatorBuffTextRow {
+                text: "생활 경험치 획득량 +30%".to_string(),
+                has_description: false,
+            },
+        );
+
+        let selected = select_consumable_effect_texts(
+            "59335",
+            &["55426".to_string(), "55427".to_string()],
+            &buff_text_rows,
+            &HashMap::new(),
+        );
+
+        assert_eq!(
+            selected,
+            vec!["엔트의 눈물\n생활 경험치 획득량 +30%\n낚시 속도 잠재력 +2단계".to_string()]
+        );
+    }
+
+    #[test]
+    fn consumable_effect_texts_fall_back_to_leaf_rows_without_composite_text() {
+        let mut buff_text_rows = HashMap::new();
+        buff_text_rows.insert(
+            "55948".to_string(),
+            CalculatorBuffTextRow {
+                text: "낚시 경험치 획득량 +10%".to_string(),
+                has_description: true,
+            },
+        );
+        buff_text_rows.insert(
+            "55942".to_string(),
+            CalculatorBuffTextRow {
+                text: "자동 낚시 시간 감소 7%".to_string(),
+                has_description: true,
+            },
+        );
+
+        let selected = select_consumable_effect_texts(
+            "55570",
+            &["55948".to_string(), "55942".to_string()],
+            &buff_text_rows,
+            &HashMap::new(),
+        );
+
+        assert_eq!(
+            selected,
+            vec![
+                "낚시 경험치 획득량 +10%".to_string(),
+                "자동 낚시 시간 감소 7%".to_string(),
+            ]
+        );
     }
 }

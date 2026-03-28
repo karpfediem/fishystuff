@@ -36,11 +36,19 @@ fn strip_game_markup(text: &str) -> String {
     out
 }
 
+fn normalize_effect_text(text: &str) -> String {
+    strip_game_markup(text)
+        .replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\r\n", "\n")
+        .replace('\r', "\n")
+}
+
 pub(super) fn normalized_effect_lines(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut seen = HashSet::<String>::new();
-    for line in text.lines() {
-        let normalized = strip_game_markup(line).trim().to_string();
+    for line in normalize_effect_text(text).lines() {
+        let normalized = line.trim().to_string();
         if normalized.is_empty() || !seen.insert(normalized.clone()) {
             continue;
         }
@@ -132,7 +140,8 @@ fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &
 }
 
 pub(super) fn parse_calculator_effect_text(values: &mut CalculatorItemEffectValues, text: &str) {
-    for line in text.lines() {
+    let normalized = normalize_effect_text(text);
+    for line in normalized.lines() {
         parse_calculator_effect_line(values, line);
     }
 }
@@ -257,6 +266,22 @@ mod tests {
                 "엔트의 눈물".to_string(),
                 "생활 경험치 획득량 +30%".to_string(),
                 "자동 낚시 시간 감소 +10%".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn normalized_effect_lines_split_escaped_newlines() {
+        let lines = normalized_effect_lines(
+            "엔트의 눈물\\n\\n 생활 경험치 획득량 +30%\\n 채집/낚시 속도 잠재력 +2단계\n생활 경험치 획득량 +30%",
+        );
+
+        assert_eq!(
+            lines,
+            vec![
+                "엔트의 눈물".to_string(),
+                "생활 경험치 획득량 +30%".to_string(),
+                "채집/낚시 속도 잠재력 +2단계".to_string(),
             ]
         );
     }
