@@ -107,6 +107,28 @@ fn buff_category_key(category_id: Option<i32>) -> Option<String> {
     category_id.map(|category_id| format!("buff-category:{category_id}"))
 }
 
+fn is_cake_family_name(name_en: Option<&str>, name_ko: Option<&str>) -> bool {
+    name_en
+        .map(|value| value.to_ascii_lowercase().contains("cake"))
+        .unwrap_or(false)
+        || name_ko.map(|value| value.contains("케이크")).unwrap_or(false)
+}
+
+fn fallback_consumable_family_key(
+    primary_skill_id: Option<&str>,
+    source_name_en: Option<&str>,
+    source_name_ko: Option<&str>,
+    primary_skill_counts: &HashMap<String, usize>,
+) -> Option<String> {
+    if is_cake_family_name(source_name_en, source_name_ko) {
+        return Some("source-family:cake".to_string());
+    }
+
+    let skill_id = primary_skill_id?;
+    (primary_skill_counts.get(skill_id).copied().unwrap_or(0) > 1)
+        .then(|| format!("skill-family:{skill_id}"))
+}
+
 fn normalize_source_owned_item_name(name: &str) -> String {
     name.replace("[의상] ", "")
         .replace("[이벤트] ", "")
@@ -983,6 +1005,13 @@ impl DoltMySqlStore {
         let item_ids = effect_lines_by_item_id.keys().copied().collect::<Vec<_>>();
         let item_rows = self.query_consumable_item_rows(ref_id, &item_ids)?;
         let item_source_metadata = self.query_calculator_item_table_metadata(ref_id, &item_ids)?;
+        let primary_skill_counts = item_rows
+            .iter()
+            .filter_map(|row| row.skill_no.clone())
+            .fold(HashMap::<String, usize>::new(), |mut counts, skill_id| {
+                *counts.entry(skill_id).or_default() += 1;
+                counts
+            });
         let skill_ids = item_rows
             .iter()
             .flat_map(|row| [row.skill_no.clone(), row.sub_skill_no.clone()])
@@ -1001,6 +1030,18 @@ impl DoltMySqlStore {
                     row.sub_skill_no.as_deref(),
                     &buff_categories_by_skill,
                 );
+                let source_name_en = source_meta.and_then(|meta| meta.name_en.clone());
+                let source_name_ko = source_meta.and_then(|meta| meta.name_ko.clone());
+                let buff_category_key = buff_category_key(category_metadata.category_id).or_else(
+                    || {
+                        fallback_consumable_family_key(
+                            row.skill_no.as_deref(),
+                            source_name_en.as_deref(),
+                            source_name_ko.as_deref(),
+                            &primary_skill_counts,
+                        )
+                    },
+                );
                 let item_type = match (category_metadata.category_id, row.item_classify.as_deref())
                 {
                     (Some(1), _) | (None, Some("8")) => "food",
@@ -1011,11 +1052,11 @@ impl DoltMySqlStore {
                     source_kind: "item".to_string(),
                     item_id: Some(row.item_id),
                     item_type: item_type.to_string(),
-                    buff_category_key: buff_category_key(category_metadata.category_id),
+                    buff_category_key,
                     buff_category_id: category_metadata.category_id,
                     buff_category_level: category_metadata.category_level,
-                    source_name_en: source_meta.and_then(|meta| meta.name_en.clone()),
-                    source_name_ko: source_meta.and_then(|meta| meta.name_ko.clone()),
+                    source_name_en,
+                    source_name_ko,
                     item_icon_file: None,
                     icon_id: source_meta.and_then(|meta| meta.icon_id),
                     durability: source_meta.and_then(|meta| meta.durability),
@@ -1297,8 +1338,8 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        select_consumable_category_metadata, select_consumable_effect_texts,
-        CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
+        fallback_consumable_family_key, select_consumable_category_metadata,
+        select_consumable_effect_texts, CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
     };
 
     #[test]
@@ -1390,5 +1431,33 @@ mod tests {
 
         assert_eq!(selected.category_id, Some(1));
         assert_eq!(selected.category_level, Some(1));
+    }
+
+    #[test]
+    fn fallback_consumable_family_uses_shared_skill_when_category_missing() {
+        let counts = HashMap::from([("59778".to_string(), 7usize)]);
+
+        let key = fallback_consumable_family_key(
+            Some("59778"),
+            Some("[Event] 10th Anniversary Cake"),
+            Some("[이벤트] 10주년 기념 케이크"),
+            &counts,
+        );
+
+        assert_eq!(key.as_deref(), Some("source-family:cake"));
+    }
+
+    #[test]
+    fn fallback_consumable_family_uses_skill_family_for_non_cake_duplicates() {
+        let counts = HashMap::from([("12345".to_string(), 3usize)]);
+
+        let key = fallback_consumable_family_key(
+            Some("12345"),
+            Some("Book of Life (7 Days)"),
+            Some("생활 주문서"),
+            &counts,
+        );
+
+        assert_eq!(key.as_deref(), Some("skill-family:12345"));
     }
 }

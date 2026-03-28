@@ -2036,12 +2036,20 @@ fn buff_category_label(item: &CalculatorItemEntry) -> Option<String> {
         Some(18) => Some("Housekeeper"),
         Some(2002) => Some("Event"),
         _ => None,
-    }?;
-    let suffix = romanize_category_level(item.buff_category_level.unwrap_or(0));
-    if suffix.is_empty() {
-        Some(base.to_string())
-    } else {
-        Some(format!("{base} {suffix}"))
+    };
+    if let Some(base) = base {
+        let suffix = romanize_category_level(item.buff_category_level.unwrap_or(0));
+        return if suffix.is_empty() {
+            Some(base.to_string())
+        } else {
+            Some(format!("{base} {suffix}"))
+        };
+    }
+
+    match item.buff_category_key.as_deref() {
+        Some("source-family:cake") => Some("Cake".to_string()),
+        Some(_) => Some("Exclusive".to_string()),
+        None => None,
     }
 }
 
@@ -3064,7 +3072,7 @@ mod tests {
     use crate::store::{FishLang, Store};
 
     use super::{
-        build_pet_value_aliases, get_calculator_datastar_init,
+        buff_category_label, build_pet_value_aliases, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
         normalize_lookup_value, normalize_named_array, post_calculator_datastar_eval,
         CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
@@ -3679,5 +3687,25 @@ mod tests {
             aliases.get(&normalize_lookup_value("Fishing EXP")),
             Some(&"fishing_exp".to_string())
         );
+    }
+
+    #[test]
+    fn buff_category_label_uses_source_family_name_for_cakes() {
+        let item = CalculatorItemEntry {
+            buff_category_key: Some("source-family:cake".to_string()),
+            ..CalculatorItemEntry::default()
+        };
+
+        assert_eq!(buff_category_label(&item).as_deref(), Some("Cake"));
+    }
+
+    #[test]
+    fn buff_category_label_uses_generic_label_for_unknown_exclusive_groups() {
+        let item = CalculatorItemEntry {
+            buff_category_key: Some("skill-family:59778".to_string()),
+            ..CalculatorItemEntry::default()
+        };
+
+        assert_eq!(buff_category_label(&item).as_deref(), Some("Exclusive"));
     }
 }
