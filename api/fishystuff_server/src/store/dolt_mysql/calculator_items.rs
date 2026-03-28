@@ -80,7 +80,7 @@ pub(super) fn build_source_item(
 }
 
 fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> CalculatorItemEffectValues {
-    let mut values = CalculatorItemEffectValues {
+    let values = CalculatorItemEffectValues {
         afr: row.afr,
         bonus_rare: row.bonus_rare,
         bonus_big: row.bonus_big,
@@ -88,6 +88,10 @@ fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> Calculato
         exp_fish: row.exp_fish,
         exp_life: row.exp_life,
     };
+    if row.source_kind == "lightstone_set" {
+        return values;
+    }
+    let mut values = values;
     if let Some(effect_description) = row.effect_description_ko.as_deref() {
         let mut parsed = CalculatorItemEffectValues::default();
         super::calculator_effects::parse_unique_calculator_effect_text(
@@ -552,6 +556,37 @@ mod tests {
                 ..CalculatorItemEffectValues::default()
             }
         );
+    }
+
+    #[test]
+    fn source_backed_lightstone_values_do_not_parse_set_tooltip_fallback() {
+        let values = source_backed_effect_values(&CalculatorSourceBackedItemRow {
+            source_key: "lightstone-set:30".to_string(),
+            source_kind: "lightstone_set".to_string(),
+            item_id: None,
+            item_type: "lightstone_set".to_string(),
+            buff_category_key: None,
+            buff_category_id: None,
+            buff_category_level: None,
+            source_name_en: Some("Blacksmith's Blessing".to_string()),
+            source_name_ko: Some("대장장이의 축복".to_string()),
+            item_icon_file: None,
+            icon_id: None,
+            durability: None,
+            fish_multiplier: None,
+            effect_description_ko: Some(
+                "[대장장이의 축복]\n몬스터 추가 공격력 +5\n몬스터 피해 감소 +5\n장비 내구도 감소 저항 +30%"
+                    .to_string(),
+            ),
+            afr: None,
+            bonus_rare: None,
+            bonus_big: None,
+            item_drr: None,
+            exp_fish: None,
+            exp_life: None,
+        });
+
+        assert_eq!(values, CalculatorItemEffectValues::default());
     }
 
     #[test]

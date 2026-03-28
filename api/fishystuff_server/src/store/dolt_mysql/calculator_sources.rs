@@ -6,7 +6,9 @@ use mysql::Row;
 use crate::error::AppResult;
 use crate::store::validate_dolt_ref;
 
-use super::calculator_effects::normalized_effect_lines;
+use super::calculator_effects::{
+    normalized_effect_lines, parse_unique_calculator_effect_text, CalculatorItemEffectValues,
+};
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
@@ -99,6 +101,15 @@ struct CalculatorBuffTextRow {
     has_description: bool,
 }
 
+#[derive(Debug, Clone)]
+struct CalculatorLightstoneSourceMetadataRow {
+    source_key: String,
+    skill_no: String,
+    set_name_ko: Option<String>,
+    source_name_en: Option<String>,
+    skill_icon_file: Option<String>,
+}
+
 fn parse_optional_i32(value: Option<String>) -> Option<i32> {
     normalize_optional_string(value).and_then(|value| value.parse::<i32>().ok())
 }
@@ -124,6 +135,24 @@ fn normalize_source_owned_item_name(name: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn extract_bracketed_name(text: &str) -> Option<String> {
+    let start = text.find('[')?;
+    let end = text[start + 1..].find(']')?;
+    let name = text[start + 1..start + 1 + end].trim();
+    (!name.is_empty()).then(|| name.to_string())
+}
+
+fn parse_lightstone_set_name_ko(
+    skill_name_ko: Option<&str>,
+    description_ko: Option<&str>,
+) -> Option<String> {
+    skill_name_ko.and_then(extract_bracketed_name).or_else(|| {
+        description_ko
+            .and_then(|description| normalized_effect_lines(description).into_iter().next())
+            .and_then(|line| extract_bracketed_name(&line))
+    })
 }
 
 fn max_opt_i32(left: Option<i32>, right: Option<i32>) -> Option<i32> {
@@ -682,44 +711,225 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let query = format!(
-            "SELECT \
-                source_key, \
-                set_name_ko, \
-                source_name_en, \
-                skill_icon_file, \
-                effect_description_ko, \
-                afr, \
-                bonus_rare, \
-                bonus_big, \
-                drr, \
-                exp_fish, \
-                exp_life \
-             FROM calculator_lightstone_effect_sources{as_of}"
-        );
-
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
-        let rows: Vec<(
+
+        let metadata_query = format!(
+            "SELECT \
+                CONCAT('lightstone-set:', TRIM(ls.`Index`)) AS source_key, \
+                TRIM(ls.`Index`) AS lightstone_set_id, \
+                TRIM(COALESCE(ls.`SetOptionSkillNo`, '')) AS skill_no, \
+                NULLIF(TRIM(stype.`SkillName`), '') AS skill_name_ko, \
+                NULLIF(TRIM(ls.`Description`), '') AS description_ko, \
+                l_en.source_name_en AS source_name_en, \
+                NULLIF(TRIM(stype.`IconImageFile`), '') AS skill_icon_file \
+             FROM lightstone_set_option{as_of} ls \
+             LEFT JOIN skilltype_table_new{as_of} stype \
+               ON TRIM(COALESCE(stype.`SkillNo`, '')) = TRIM(COALESCE(ls.`SetOptionSkillNo`, '')) \
+             LEFT JOIN ( \
+                SELECT \
+                    CAST(l.`id` AS SIGNED) AS skill_id, \
+                    MAX( \
+                        TRIM( \
+                            TRAILING ']' FROM SUBSTRING_INDEX(NULLIF(TRIM(l.`text`), ''), '[', -1) \
+                        ) \
+                    ) AS source_name_en \
+                FROM languagedata_en{as_of} l \
+                WHERE COALESCE(l.`format`, '') = 'B' \
+                  AND COALESCE(l.`unk`, '') = '10' \
+                  AND COALESCE(l.`text`, '') LIKE 'Set % - [%' \
+                GROUP BY CAST(l.`id` AS SIGNED) \
+             ) l_en \
+               ON l_en.skill_id = CAST(TRIM(COALESCE(ls.`SetOptionSkillNo`, '')) AS SIGNED) \
+             WHERE NULLIF(TRIM(COALESCE(ls.`SetOptionSkillNo`, '')), '') IS NOT NULL"
+        );
+        let metadata_rows: Vec<(
+            String,
+            String,
             String,
             Option<String>,
             Option<String>,
             Option<String>,
             Option<String>,
-            Option<f32>,
-            Option<f32>,
-            Option<f32>,
-            Option<f32>,
-            Option<f32>,
-            Option<f32>,
-        )> = match conn.query(query) {
+        )> = match conn.query(metadata_query) {
             Ok(rows) => rows,
-            Err(err) if is_missing_table(&err, "calculator_lightstone_effect_sources") => {
-                return Ok(Vec::new());
-            }
+            Err(err) if is_missing_table(&err, "lightstone_set_option") => return Ok(Vec::new()),
             Err(err) => return Err(db_unavailable(err)),
         };
 
-        Ok(rows)
+        let metadata_rows = metadata_rows
+            .into_iter()
+            .filter_map(
+                |(
+                    source_key,
+                    _lightstone_set_id,
+                    skill_no,
+                    skill_name_ko,
+                    description_ko,
+                    source_name_en,
+                    skill_icon_file,
+                )| {
+                    let skill_no = normalize_optional_string(Some(skill_no))?;
+                    Some(CalculatorLightstoneSourceMetadataRow {
+                        source_key,
+                        skill_no,
+                        set_name_ko: parse_lightstone_set_name_ko(
+                            skill_name_ko.as_deref(),
+                            description_ko.as_deref(),
+                        ),
+                        source_name_en: normalize_optional_string(source_name_en),
+                        skill_icon_file: normalize_optional_string(skill_icon_file),
+                    })
+                },
+            )
+            .collect::<Vec<_>>();
+
+        if metadata_rows.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let quote_list = |values: &[String]| {
+            values
+                .iter()
+                .map(|value| format!("'{}'", value.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+
+        let skill_nos = metadata_rows
+            .iter()
+            .map(|row| row.skill_no.clone())
+            .collect::<Vec<_>>();
+        let skill_rows_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`SkillNo`, '')) AS skill_no, \
+                TRIM(COALESCE(`Buff0`, '')) AS buff0, \
+                TRIM(COALESCE(`Buff1`, '')) AS buff1, \
+                TRIM(COALESCE(`Buff2`, '')) AS buff2, \
+                TRIM(COALESCE(`Buff3`, '')) AS buff3, \
+                TRIM(COALESCE(`Buff4`, '')) AS buff4, \
+                TRIM(COALESCE(`Buff5`, '')) AS buff5, \
+                TRIM(COALESCE(`Buff6`, '')) AS buff6, \
+                TRIM(COALESCE(`Buff7`, '')) AS buff7, \
+                TRIM(COALESCE(`Buff8`, '')) AS buff8, \
+                TRIM(COALESCE(`Buff9`, '')) AS buff9 \
+             FROM skill_table_new{as_of} \
+             WHERE TRIM(COALESCE(`SkillNo`, '')) IN ({})",
+            quote_list(&skill_nos)
+        );
+        let skill_rows: Vec<(
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = match conn.query(skill_rows_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "skill_table_new") => return Ok(Vec::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut buff_ids_by_skill = HashMap::<String, Vec<String>>::new();
+        for (skill_no, buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9) in
+            skill_rows
+        {
+            let entry = buff_ids_by_skill.entry(skill_no).or_default();
+            for buff_id in [
+                buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9,
+            ]
+            .into_iter()
+            .filter_map(normalize_optional_string)
+            {
+                if !entry.iter().any(|existing| existing == &buff_id) {
+                    entry.push(buff_id);
+                }
+            }
+        }
+
+        let buff_ids = buff_ids_by_skill
+            .values()
+            .flat_map(|buff_ids| buff_ids.iter().cloned())
+            .collect::<Vec<_>>();
+        if buff_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let buff_rows_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`Index`, '')) AS buff_id, \
+                `BuffName`, \
+                `Description` \
+             FROM buff_table{as_of} \
+             WHERE TRIM(COALESCE(`Index`, '')) IN ({})",
+            quote_list(&buff_ids)
+        );
+        let buff_rows: Vec<(String, Option<String>, Option<String>)> =
+            match conn.query(buff_rows_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "buff_table") => return Ok(Vec::new()),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+
+        let buff_text_by_id = buff_rows
+            .into_iter()
+            .filter_map(|(buff_id, buff_name, description)| {
+                normalize_optional_string(description)
+                    .or_else(|| normalize_optional_string(buff_name))
+                    .map(|text| (buff_id, text))
+            })
+            .collect::<HashMap<_, _>>();
+
+        let mut out = Vec::new();
+        for row in metadata_rows {
+            let Some(buff_ids) = buff_ids_by_skill.get(&row.skill_no) else {
+                continue;
+            };
+            let mut effect_lines = Vec::new();
+            for buff_id in buff_ids {
+                let Some(text) = buff_text_by_id.get(buff_id) else {
+                    continue;
+                };
+                for normalized_line in normalized_effect_lines(text) {
+                    if !effect_lines
+                        .iter()
+                        .any(|existing| existing == &normalized_line)
+                    {
+                        effect_lines.push(normalized_line);
+                    }
+                }
+            }
+            if effect_lines.is_empty() {
+                continue;
+            }
+
+            let effect_description_ko = effect_lines.join("\n");
+            let mut values = CalculatorItemEffectValues::default();
+            parse_unique_calculator_effect_text(&mut values, &effect_description_ko);
+            if values == CalculatorItemEffectValues::default() {
+                continue;
+            }
+
+            out.push((
+                row.source_key,
+                row.set_name_ko,
+                row.source_name_en,
+                row.skill_icon_file,
+                Some(effect_description_ko),
+                values.afr,
+                values.bonus_rare,
+                values.bonus_big,
+                values.item_drr,
+                values.exp_fish,
+                values.exp_life,
+            ));
+        }
+
+        Ok(out)
     }
 
     fn query_calculator_item_table_metadata(
@@ -1322,8 +1532,9 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        fallback_consumable_family_key, select_consumable_category_metadata,
-        select_consumable_effect_texts, CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
+        fallback_consumable_family_key, parse_lightstone_set_name_ko,
+        select_consumable_category_metadata, select_consumable_effect_texts,
+        CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
     };
 
     #[test]
@@ -1432,5 +1643,25 @@ mod tests {
         let key = fallback_consumable_family_key(Some("59778"), &counts);
 
         assert_eq!(key, None);
+    }
+
+    #[test]
+    fn parse_lightstone_set_name_prefers_skill_name() {
+        let name = parse_lightstone_set_name_ko(
+            Some("160.[신의 입질]"),
+            Some("[대장장이의 축복]\n장비 내구도 감소 저항 +30%"),
+        );
+
+        assert_eq!(name.as_deref(), Some("신의 입질"));
+    }
+
+    #[test]
+    fn parse_lightstone_set_name_falls_back_to_description() {
+        let name = parse_lightstone_set_name_ko(
+            None,
+            Some("<PAColor0xffd2ffad>[대장장이의 축복]<PAOldColor>\\n장비 내구도 감소 저항 +30%"),
+        );
+
+        assert_eq!(name.as_deref(), Some("대장장이의 축복"));
     }
 }

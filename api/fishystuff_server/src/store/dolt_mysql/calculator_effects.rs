@@ -119,10 +119,14 @@ fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &
             extract_percent_ratio_after_any(line, &["대형 어종을 낚을 확률 증가", "대형 어종"]),
         );
     }
-    if line.contains("내구도 소모 감소 저항") {
+    if line.contains("내구도 소모 감소 저항") || line.contains("장비 내구도 감소 저항")
+    {
         add_effect_value(
             &mut values.item_drr,
-            extract_percent_ratio_after_any(line, &["내구도 소모 감소 저항"]),
+            extract_percent_ratio_after_any(
+                line,
+                &["내구도 소모 감소 저항", "장비 내구도 감소 저항"],
+            ),
         );
     }
     if line.contains("낚시 경험치") {
@@ -212,6 +216,20 @@ mod tests {
             CalculatorItemEffectValues {
                 afr: Some(0.10),
                 exp_life: Some(0.50),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
+    fn calculator_effect_text_parses_equipment_durability_phrase() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(&mut values, "장비 내구도 감소 저항 +30%");
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                item_drr: Some(0.30),
                 ..CalculatorItemEffectValues::default()
             }
         );
