@@ -1,9 +1,9 @@
 pub fn fish_item_icon_path(item_id: i32) -> String {
-    format!("/images/FishIcons/{item_id:08}.png")
+    format!("/images/items/{item_id:08}.webp")
 }
 
 pub fn fish_encyclopedia_icon_path(encyclopedia_id: i32) -> String {
-    format!("/images/FishIcons/IC_0{encyclopedia_id}.png")
+    format!("/images/items/IC_0{encyclopedia_id}.webp")
 }
 
 pub fn parse_fish_icon_asset_id(value: &str) -> Option<i32> {
@@ -32,10 +32,10 @@ mod tests {
 
     #[test]
     fn item_icon_paths_are_zero_padded() {
-        assert_eq!(fish_item_icon_path(8475), "/images/FishIcons/00008475.png");
+        assert_eq!(fish_item_icon_path(8475), "/images/items/00008475.webp");
         assert_eq!(
             fish_item_icon_path(821295),
-            "/images/FishIcons/00821295.png"
+            "/images/items/00821295.webp"
         );
     }
 
@@ -43,15 +43,15 @@ mod tests {
     fn encyclopedia_icon_paths_are_zero_padded() {
         assert_eq!(
             fish_encyclopedia_icon_path(8501),
-            "/images/FishIcons/IC_08501.png"
+            "/images/items/IC_08501.webp"
         );
         assert_eq!(
             fish_encyclopedia_icon_path(9434),
-            "/images/FishIcons/IC_09434.png"
+            "/images/items/IC_09434.webp"
         );
         assert_eq!(
             fish_encyclopedia_icon_path(11558),
-            "/images/FishIcons/IC_011558.png"
+            "/images/items/IC_011558.webp"
         );
     }
 

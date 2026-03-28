@@ -545,14 +545,14 @@
     if (!Number.isInteger(itemId) || itemId <= 0) {
       return "";
     }
-    return `/images/FishIcons/${String(itemId).padStart(8, "0")}.png`;
+    return `/images/items/${String(itemId).padStart(8, "0")}.webp`;
   }
 
   function fishEncyclopediaIconPath(encyclopediaId) {
     if (!Number.isInteger(encyclopediaId) || encyclopediaId <= 0) {
       return "";
     }
-    return `/images/FishIcons/IC_0${encyclopediaId}.png`;
+    return `/images/items/IC_0${encyclopediaId}.webp`;
   }
 
   function cdnUrl(path) {

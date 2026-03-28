@@ -17,6 +17,12 @@ const defaultCalculatorApiUrl =
 const iconSize = 44;
 const webpQuality = 86;
 const scriptMtimeMs = statSync(scriptPath).mtimeMs;
+const sourceIconPathOverrides = new Map([
+  [
+    768425,
+    "ui_texture/icon/new_icon/03_etc/00768388.dds",
+  ],
+]);
 
 function fail(message) {
   throw new Error(message);
@@ -106,6 +112,20 @@ function outputPathForIcon(outputDir, iconId) {
   return path.join(outputDir, `${padIconId(iconId)}.webp`);
 }
 
+function outputPathForStem(outputDir, stem) {
+  return path.join(outputDir, `${stem}.webp`);
+}
+
+function targetStem(target) {
+  if (target?.assetStem) {
+    return String(target.assetStem);
+  }
+  if (Number.isFinite(target?.iconId)) {
+    return padIconId(target.iconId);
+  }
+  return "";
+}
+
 function shouldBuild(outputPath, force) {
   if (force || !existsSync(outputPath)) {
     return true;
@@ -118,8 +138,17 @@ function normalizeArchivePath(rawPath) {
     return null;
   }
   const normalized = rawPath.trim().replaceAll("\\", "/").toLowerCase();
+  if (normalized.endsWith(".png")) {
+    if (normalized.startsWith("ui_texture/icon/new_icon/product_icon_png/")) {
+      return normalized;
+    }
+    return null;
+  }
   if (!normalized.endsWith(".dds")) {
     return null;
+  }
+  if (normalized.startsWith("ui_texture/ui_artwork/")) {
+    return normalized;
   }
   if (normalized.startsWith("ui_texture/")) {
     return normalized;
@@ -154,6 +183,16 @@ function parseIconIdFromAssetName(rawPath) {
   }
   const parsed = Number(digits);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseAssetStemFromPath(rawPath) {
+  if (!rawPath) {
+    return null;
+  }
+  const file = String(rawPath).trim().split(/[?#]/, 1)[0];
+  const basename = file.split("/").pop() ?? file;
+  const stem = basename.replace(/\.[^.]+$/, "");
+  return stem || null;
 }
 
 function parseArchiveMatches(listingText) {
@@ -232,7 +271,30 @@ function addIconTarget(targets, row) {
   if (normalizedSourcePath) {
     existing.sourcePath = normalizedSourcePath;
   }
+  const overrideSourcePath = normalizeArchivePath(sourceIconPathOverrides.get(iconId));
+  if (overrideSourcePath) {
+    existing.sourcePath = overrideSourcePath;
+  }
   targets.set(iconId, existing);
+}
+
+function addNamedIconTarget(targets, target) {
+  const assetStem = String(target.assetStem ?? "").trim();
+  if (!assetStem) {
+    return;
+  }
+  const key = `stem:${assetStem.toLowerCase()}`;
+  const existing = targets.get(key) ?? {
+    assetStem,
+    displayName: target.displayName || `icon:${assetStem}`,
+    sourcePath: null,
+  };
+  existing.displayName = target.displayName || existing.displayName;
+  const normalizedSourcePath = normalizeArchivePath(target.sourcePath);
+  if (normalizedSourcePath) {
+    existing.sourcePath = normalizedSourcePath;
+  }
+  targets.set(key, existing);
 }
 
 function queryLegacyIconRows() {
@@ -341,14 +403,41 @@ function queryLightstoneIconRows() {
   `);
 }
 
+function queryFishingDomainItemIconRows() {
+  return doltQueryJson(`
+    SELECT DISTINCT
+      CAST(v.item_key AS SIGNED) AS item_id,
+      NULLIF(TRIM(it.ItemName), '') AS display_name,
+      NULLIF(TRIM(it.IconImageFile), '') AS item_icon_file
+    FROM item_sub_group_item_variants v
+    LEFT JOIN item_table it
+      ON CAST(it.Index AS SIGNED) = CAST(v.item_key AS SIGNED)
+    WHERE v.item_key IS NOT NULL
+      AND NULLIF(TRIM(it.IconImageFile), '') IS NOT NULL
+    ORDER BY CAST(v.item_key AS SIGNED)
+  `);
+}
+
+function queryFishTableIconRows() {
+  return doltQueryJson(`
+    SELECT DISTINCT
+      CAST(ft.item_key AS SIGNED) AS item_id,
+      NULLIF(TRIM(ft.name), '') AS display_name,
+      NULLIF(TRIM(ft.icon), '') AS fish_item_icon_file,
+      NULLIF(TRIM(ft.encyclopedia_icon), '') AS encyclopedia_icon_file,
+      NULLIF(TRIM(it.IconImageFile), '') AS item_icon_file
+    FROM fish_table ft
+    LEFT JOIN item_table it
+      ON CAST(it.Index AS SIGNED) = CAST(ft.item_key AS SIGNED)
+    ORDER BY CAST(ft.item_key AS SIGNED)
+  `);
+}
+
 function queryCalculatorIconTargets(calculatorApiUrl) {
   const targets = new Map();
   const apiRows = queryCalculatorApiIconRows(calculatorApiUrl);
-  if (apiRows.length > 0) {
-    for (const row of apiRows) {
-      addIconTarget(targets, row);
-    }
-    return [...targets.values()];
+  for (const row of apiRows) {
+    addIconTarget(targets, row);
   }
   for (const row of queryLegacyIconRows()) {
     addIconTarget(targets, row);
@@ -361,6 +450,36 @@ function queryCalculatorIconTargets(calculatorApiUrl) {
   }
   for (const row of queryLightstoneIconRows()) {
     addIconTarget(targets, row);
+  }
+  for (const row of queryFishingDomainItemIconRows()) {
+    addIconTarget(targets, row);
+  }
+  for (const row of queryFishTableIconRows()) {
+    if (row.fish_item_icon_file) {
+      const assetStem = parseAssetStemFromPath(row.fish_item_icon_file);
+      const preferredSourcePath = row.item_icon_file
+        ? normalizeArchivePath(row.item_icon_file)
+        : null;
+      if (assetStem) {
+        addNamedIconTarget(targets, {
+          assetStem,
+          displayName: row.display_name || `fish:${assetStem}`,
+          sourcePath:
+            preferredSourcePath ||
+            `ui_texture/icon/new_icon/product_icon_png/${String(row.fish_item_icon_file).trim().toLowerCase()}`,
+        });
+      }
+    }
+    if (row.encyclopedia_icon_file) {
+      const assetStem = parseAssetStemFromPath(row.encyclopedia_icon_file);
+      if (assetStem) {
+        addNamedIconTarget(targets, {
+          assetStem,
+          displayName: row.display_name || `encyclopedia:${assetStem}`,
+          sourcePath: `ui_texture/ui_artwork/encyclopedia/${assetStem.toLowerCase()}.dds`,
+        });
+      }
+    }
   }
   return [...targets.values()];
 }
@@ -396,21 +515,22 @@ function resolveMissingSourcePaths(targets, sourceArchive) {
 
   const wildcardMatches = listArchiveMatches(
     sourceArchive,
-    unresolved.map((target) => `*${padIconId(target.iconId)}.dds`),
+    unresolved.flatMap((target) => [`*${target.assetStem || padIconId(target.iconId)}.dds`, `*${target.assetStem || padIconId(target.iconId)}.png`]),
   );
-  const matchesByIconId = new Map();
+  const matchesByStem = new Map();
   for (const match of wildcardMatches) {
-    const iconId = parseIconIdFromSourcePath(match.path);
-    if (!iconId) {
+    const stem = parseAssetStemFromPath(match.path)?.toLowerCase();
+    if (!stem) {
       continue;
     }
-    const group = matchesByIconId.get(iconId) ?? [];
+    const group = matchesByStem.get(stem) ?? [];
     group.push(match);
-    matchesByIconId.set(iconId, group);
+    matchesByStem.set(stem, group);
   }
 
   for (const target of unresolved) {
-    const bestMatch = chooseBestArchiveMatch(matchesByIconId.get(target.iconId) ?? []);
+    const targetStem = String(target.assetStem || padIconId(target.iconId)).toLowerCase();
+    const bestMatch = chooseBestArchiveMatch(matchesByStem.get(targetStem) ?? []);
     if (!bestMatch) {
       target.unresolved = true;
       continue;
@@ -452,12 +572,17 @@ function main() {
 
   const targets = queryCalculatorIconTargets(options.calculatorApiUrl);
   const pendingTargets = targets.filter((target) =>
-    shouldBuild(outputPathForIcon(options.outputDir, target.iconId), options.force),
+    shouldBuild(
+      target.assetStem
+        ? outputPathForStem(options.outputDir, target.assetStem)
+        : outputPathForIcon(options.outputDir, target.iconId),
+      options.force,
+    ),
   );
 
   if (pendingTargets.length === 0) {
     if (!options.quiet) {
-      console.log(`calculator item icons are current under ${path.relative(repoRoot, options.outputDir)}`);
+      console.log(`source-backed fishing icons are current under ${path.relative(repoRoot, options.outputDir)}`);
     }
     return;
   }
@@ -473,7 +598,7 @@ function main() {
   const unresolvedTargets = pendingTargets.filter((target) => target.unresolved);
   for (const target of unresolvedTargets) {
     console.warn(
-      `warning: could not resolve a source DDS for icon ${padIconId(target.iconId)} (${target.displayName})`,
+      `warning: could not resolve a source asset for ${targetStem(target) || "unknown"} (${target.displayName})`,
     );
   }
   const readyTargets = pendingTargets.filter((target) => target.sourcePath && !target.unresolved);
@@ -491,7 +616,9 @@ function main() {
       if (!existsSync(extractedPath)) {
         fail(`expected extracted source icon is missing: ${extractedPath}`);
       }
-      const outputPath = outputPathForIcon(options.outputDir, target.iconId);
+      const outputPath = target.assetStem
+        ? outputPathForStem(options.outputDir, target.assetStem)
+        : outputPathForIcon(options.outputDir, target.iconId);
       convertToWebp(extractedPath, outputPath);
       if (!options.quiet) {
         console.log(

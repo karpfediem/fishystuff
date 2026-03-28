@@ -2112,7 +2112,7 @@ function fishItemIconPath(itemId) {
   if (!digits) {
     return "";
   }
-  return `/images/FishIcons/${digits}.png`;
+  return `/images/items/${digits}.webp`;
 }
 
 function fishEncyclopediaIconPath(encyclopediaId) {
@@ -2120,7 +2120,7 @@ function fishEncyclopediaIconPath(encyclopediaId) {
   if (!Number.isFinite(numeric) || numeric <= 0) {
     return "";
   }
-  return `/images/FishIcons/IC_0${numeric}.png`;
+  return `/images/items/IC_0${numeric}.webp`;
 }
 
 function clampPointIconScale(value) {

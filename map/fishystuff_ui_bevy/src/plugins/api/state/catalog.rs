@@ -89,11 +89,11 @@ mod tests {
 
         assert_eq!(
             catalog.item_icon_path_for_fish(88).as_deref(),
-            Some("/images/FishIcons/00008289.png")
+            Some("/images/items/00008289.webp")
         );
         assert_eq!(
             catalog.item_icon_path_for_fish(8289).as_deref(),
-            Some("/images/FishIcons/00008289.png")
+            Some("/images/items/00008289.webp")
         );
     }
 }

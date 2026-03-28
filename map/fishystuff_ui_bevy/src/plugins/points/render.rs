@@ -564,7 +564,7 @@ mod tests {
         assert!(handle.is_none());
         assert_eq!(
             cache.requested_urls.get(&88).map(String::as_str),
-            Some("https://cdn.fishystuff.fish/images/FishIcons/00008289.png")
+            Some("https://cdn.fishystuff.fish/images/items/00008289.webp")
         );
         assert!(cache.loading_ids.contains(&88));
     }

@@ -73,20 +73,39 @@ fn normalize_known_public_asset_path(raw: &str) -> Option<String> {
 }
 
 fn normalize_fish_icon_path(raw: &str) -> Option<String> {
-    if raw.starts_with("/images/FishIcons/") {
+    if raw.starts_with("/images/items/") {
         return Some(raw.to_string());
     }
+    if let Some(rest) = raw.strip_prefix("images/items/") {
+        return Some(format!("/images/items/{rest}"));
+    }
+
+    fn stemmed(value: &str) -> Option<&str> {
+        let value = value.trim();
+        let file = value.rsplit('/').next().unwrap_or(value);
+        let stem = file.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(file);
+        (!stem.is_empty()).then_some(stem)
+    }
+
+    if raw.starts_with("/images/FishIcons/") {
+        let stem = stemmed(raw)?;
+        return Some(format!("/images/items/{stem}.webp"));
+    }
     if let Some(rest) = raw.strip_prefix("images/FishIcons/") {
-        return Some(format!("/images/FishIcons/{rest}"));
+        let stem = stemmed(rest)?;
+        return Some(format!("/images/items/{stem}.webp"));
     }
     if let Some(rest) = raw.strip_prefix("/FishIcons/") {
-        return Some(format!("/images/FishIcons/{rest}"));
+        let stem = stemmed(rest)?;
+        return Some(format!("/images/items/{stem}.webp"));
     }
     if let Some(rest) = raw.strip_prefix("FishIcons/") {
-        return Some(format!("/images/FishIcons/{rest}"));
+        let stem = stemmed(rest)?;
+        return Some(format!("/images/items/{stem}.webp"));
     }
     if looks_like_icon_filename(raw) && !raw.contains('/') {
-        return Some(format!("/images/FishIcons/{raw}"));
+        let stem = stemmed(raw)?;
+        return Some(format!("/images/items/{stem}.webp"));
     }
     None
 }
@@ -178,11 +197,11 @@ mod tests {
             normalize_public_asset_reference(
                 "https://cdn.example.com/images/FishIcons/00008475.png"
             ),
-            "/images/FishIcons/00008475.png"
+            "/images/items/00008475.webp"
         );
         assert_eq!(
             normalize_public_asset_reference("00820994.png"),
-            "/images/FishIcons/00820994.png"
+            "/images/items/00820994.webp"
         );
     }
 }

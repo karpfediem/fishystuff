@@ -86,7 +86,7 @@ sync_root_for_path() {
   case "$path" in
     map/*) printf '%s\n' "map" ;;
     region_groups/*) printf '%s\n' "region_groups" ;;
-    images/FishIcons/*) printf '%s\n' "images/FishIcons" ;;
+    images/items/*) printf '%s\n' "images/items" ;;
     images/terrain_fullres/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;
     images/terrain_height/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;
     images/terrain/*) printf '%s\n' "$(printf '%s' "$path" | cut -d/ -f1-3)" ;;

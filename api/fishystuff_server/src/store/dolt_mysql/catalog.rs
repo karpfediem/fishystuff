@@ -110,7 +110,7 @@ mod tests {
         );
         assert_eq!(
             encyclopedia_icon_id_from_db(Some(
-                "https://cdn.example.com/images/FishIcons/IC_08588.png".to_string()
+                "https://cdn.example.com/images/items/IC_08588.webp".to_string()
             )),
             Some(8588)
         );

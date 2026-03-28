@@ -94,7 +94,7 @@ mod tests {
     fn fish_item_icon_urls_use_the_cdn_base() {
         assert_eq!(
             fish_item_icon_url(8289).as_deref(),
-            Some("https://cdn.fishystuff.fish/images/FishIcons/00008289.png")
+            Some("https://cdn.fishystuff.fish/images/items/00008289.webp")
         );
     }
 }

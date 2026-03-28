@@ -121,7 +121,7 @@
 
       function fishItemIconPath(itemId) {
         var digits = zeroPad(itemId, 8);
-        return digits ? '/images/FishIcons/' + digits + '.png' : '';
+        return digits ? '/images/items/' + digits + '.webp' : '';
       }
 
       function fishEncyclopediaIconPath(encyclopediaId) {
@@ -129,7 +129,7 @@
         if (!Number.isFinite(numeric) || numeric <= 0) {
           return '';
         }
-        return '/images/FishIcons/IC_0' + numeric + '.png';
+        return '/images/items/IC_0' + numeric + '.webp';
       }
 
       var runtimeConfig = window.__fishystuffRuntimeConfig || {};
