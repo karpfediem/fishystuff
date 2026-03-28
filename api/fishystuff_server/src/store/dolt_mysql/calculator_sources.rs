@@ -28,8 +28,24 @@ pub(super) type CalculatorItemDbRow = (
 pub(super) struct CalculatorItemSourceMetadata {
     pub(super) name_ko: Option<String>,
     pub(super) name_en: Option<String>,
+    pub(super) normalized_name_ko: Option<String>,
     pub(super) durability: Option<i32>,
     pub(super) icon_id: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+struct CalculatorEnchantEffectEntryRow {
+    item_type: String,
+    item_name_ko: String,
+    normalized_item_name_ko: String,
+    enchant_level: i32,
+    durability: Option<i32>,
+    afr: Option<f32>,
+    bonus_rare: Option<f32>,
+    bonus_big: Option<f32>,
+    drr: Option<f32>,
+    exp_fish: Option<f32>,
+    exp_life: Option<f32>,
 }
 
 pub(super) struct CalculatorCatalogSourceData {
@@ -56,6 +72,34 @@ pub(super) struct CalculatorSourceBackedItemRow {
     pub(super) drr: Option<f32>,
     pub(super) exp_fish: Option<f32>,
     pub(super) exp_life: Option<f32>,
+}
+
+fn normalize_source_owned_item_name(name: &str) -> String {
+    name.replace("[의상] ", "")
+        .replace("[이벤트] ", "")
+        .replace("의 낚시 배낭", " 낚시 배낭")
+        .replace("의 낚시복", " 낚시복")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn max_opt_i32(left: Option<i32>, right: Option<i32>) -> Option<i32> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
+}
+
+fn max_opt_f32(left: Option<f32>, right: Option<f32>) -> Option<f32> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }
 }
 
 impl DoltMySqlStore {
@@ -387,6 +431,8 @@ impl DoltMySqlStore {
             out.insert(
                 item_id,
                 CalculatorItemSourceMetadata {
+                    normalized_name_ko: normalize_optional_string(name_ko.as_ref().cloned())
+                        .map(|value| normalize_source_owned_item_name(&value)),
                     name_ko: normalize_optional_string(name_ko),
                     name_en: normalize_optional_string(name_en),
                     durability: durability.and_then(|value| i32::try_from(value).ok()),
@@ -396,6 +442,113 @@ impl DoltMySqlStore {
                 },
             );
         }
+        Ok(out)
+    }
+
+    fn query_calculator_item_table_metadata_by_names(
+        &self,
+        ref_id: Option<&str>,
+        exact_names: &[String],
+        normalized_names: &[String],
+    ) -> AppResult<HashMap<i32, CalculatorItemSourceMetadata>> {
+        if exact_names.is_empty() && normalized_names.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let quote_list = |values: &[String]| {
+            values
+                .iter()
+                .map(|value| format!("'{}'", value.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let normalized_name_expr = "TRIM(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(it.`ItemName`, ''), '[의상] ', ''), '[이벤트] ', ''), '의 낚시 배낭', ' 낚시 배낭'), '의 낚시복', ' 낚시복'), '  ', ' '))";
+        let exact_filter = if exact_names.is_empty() {
+            String::from("FALSE")
+        } else {
+            format!(
+                "NULLIF(TRIM(it.`ItemName`), '') IN ({})",
+                quote_list(exact_names)
+            )
+        };
+        let normalized_filter = if normalized_names.is_empty() {
+            String::from("FALSE")
+        } else {
+            format!(
+                "{normalized_name_expr} IN ({})",
+                quote_list(normalized_names)
+            )
+        };
+        let query = format!(
+            "SELECT \
+                CAST(it.`Index` AS SIGNED), \
+                it.`ItemName`, \
+                MAX( \
+                    CASE \
+                        WHEN COALESCE(l.`format`, '') = 'A' \
+                         AND COALESCE(l.`unk`, '') = '' \
+                        THEN NULLIF(TRIM(l.`text`), '') \
+                        ELSE NULL \
+                    END \
+                ) AS item_name_en, \
+                it.`IconImageFile`, \
+                CASE \
+                    WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
+                    THEN CAST(it.`EnduranceLimit` AS SIGNED) \
+                    ELSE NULL \
+                END AS endurance_limit \
+             FROM item_table{as_of} it \
+             LEFT JOIN languagedata_en{as_of} l \
+               ON l.`id` = CAST(it.`Index` AS SIGNED) \
+             WHERE ({exact_filter}) OR ({normalized_filter}) \
+             GROUP BY CAST(it.`Index` AS SIGNED), \
+                      it.`ItemName`, \
+                      it.`IconImageFile`, \
+                      CASE \
+                          WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
+                          THEN CAST(it.`EnduranceLimit` AS SIGNED) \
+                          ELSE NULL \
+                      END"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<i64>,
+        )> = match conn.query(query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "item_table") => return Ok(HashMap::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut out = HashMap::new();
+        for (item_id, name_ko, name_en, icon_file, durability) in rows {
+            let Ok(item_id) = i32::try_from(item_id) else {
+                continue;
+            };
+            out.insert(
+                item_id,
+                CalculatorItemSourceMetadata {
+                    normalized_name_ko: normalize_optional_string(name_ko.as_ref().cloned())
+                        .map(|value| normalize_source_owned_item_name(&value)),
+                    name_ko: normalize_optional_string(name_ko),
+                    name_en: normalize_optional_string(name_en),
+                    durability: durability.and_then(|value| i32::try_from(value).ok()),
+                    icon_id: normalize_optional_string(icon_file).and_then(|value| {
+                        fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
+                    }),
+                },
+            );
+        }
+
         Ok(out)
     }
 
@@ -548,76 +701,155 @@ impl DoltMySqlStore {
         } else {
             String::new()
         };
-        let query = format!(
-            "SELECT \
-                source_key, \
-                item_id, \
-                item_type, \
-                source_name_en, \
-                source_name_ko, \
-                item_icon_file, \
-                durability, \
-                afr, \
-                bonus_rare, \
-                bonus_big, \
-                drr, \
-                exp_fish, \
-                exp_life \
-             FROM calculator_source_owned_enchant_item_effect_entries{as_of}"
-        );
-
         let fish_multiplier_by_item_id = legacy_rows
             .iter()
             .filter_map(|row| Some((row.10?, row.7)))
             .collect::<HashMap<_, _>>();
 
         let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let query = format!(
+            "SELECT \
+                item_type, \
+                item_name_ko, \
+                enchant_level, \
+                durability, \
+                afr, \
+                bonus_rare, \
+                bonus_big, \
+                drr, \
+                exp_fish \
+             FROM calculator_enchant_item_effect_entries{as_of}"
+        );
         let rows: Vec<Row> = match conn.query(query) {
             Ok(rows) => rows,
-            Err(err)
-                if is_missing_table(
-                    &err,
-                    "calculator_source_owned_enchant_item_effect_entries",
-                ) =>
-            {
+            Err(err) if is_missing_table(&err, "calculator_enchant_item_effect_entries") => {
                 return Ok(Vec::new());
             }
             Err(err) => return Err(db_unavailable(err)),
         };
 
-        Ok(rows
+        let mut chosen_effects = HashMap::<(String, String), CalculatorEnchantEffectEntryRow>::new();
+        for row in rows {
+            let item_type = normalize_optional_string(row.get::<String, _>("item_type"))
+                .unwrap_or_default();
+            if !matches!(
+                item_type.as_str(),
+                "rod" | "float" | "chair" | "backpack" | "outfit"
+            ) {
+                continue;
+            }
+            let Some(item_name_ko) = normalize_optional_string(row.get::<String, _>("item_name_ko"))
+            else {
+                continue;
+            };
+            let effect_row = CalculatorEnchantEffectEntryRow {
+                item_type: item_type.clone(),
+                normalized_item_name_ko: normalize_source_owned_item_name(&item_name_ko),
+                item_name_ko: item_name_ko.clone(),
+                enchant_level: normalize_optional_string(row.get::<String, _>("enchant_level"))
+                    .and_then(|value| value.parse::<i32>().ok())
+                    .unwrap_or_default(),
+                durability: row.get::<Option<i32>, _>("durability").flatten(),
+                afr: row.get::<Option<f32>, _>("afr").flatten(),
+                bonus_rare: row.get::<Option<f32>, _>("bonus_rare").flatten(),
+                bonus_big: row.get::<Option<f32>, _>("bonus_big").flatten(),
+                drr: row.get::<Option<f32>, _>("drr").flatten(),
+                exp_fish: row.get::<Option<f32>, _>("exp_fish").flatten(),
+                exp_life: None,
+            };
+
+            let key = (item_type, item_name_ko);
+            match chosen_effects.get_mut(&key) {
+                Some(existing) if effect_row.enchant_level > existing.enchant_level => {
+                    *existing = effect_row;
+                }
+                Some(existing) if effect_row.enchant_level == existing.enchant_level => {
+                    existing.durability = max_opt_i32(existing.durability, effect_row.durability);
+                    existing.afr = max_opt_f32(existing.afr, effect_row.afr);
+                    existing.bonus_rare =
+                        max_opt_f32(existing.bonus_rare, effect_row.bonus_rare);
+                    existing.bonus_big = max_opt_f32(existing.bonus_big, effect_row.bonus_big);
+                    existing.drr = max_opt_f32(existing.drr, effect_row.drr);
+                    existing.exp_fish = max_opt_f32(existing.exp_fish, effect_row.exp_fish);
+                    existing.exp_life = max_opt_f32(existing.exp_life, effect_row.exp_life);
+                }
+                Some(_) => {}
+                None => {
+                    chosen_effects.insert(key, effect_row);
+                }
+            }
+        }
+
+        let chosen_effects = chosen_effects.into_values().collect::<Vec<_>>();
+        if chosen_effects.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let exact_names = chosen_effects
+            .iter()
+            .map(|row| row.item_name_ko.clone())
+            .collect::<Vec<_>>();
+        let normalized_names = chosen_effects
+            .iter()
+            .map(|row| row.normalized_item_name_ko.clone())
+            .collect::<Vec<_>>();
+        let metadata_candidates = self.query_calculator_item_table_metadata_by_names(
+            ref_id,
+            &exact_names,
+            &normalized_names,
+        )?;
+
+        let mut exact_metadata_by_name = HashMap::<String, Vec<(i32, CalculatorItemSourceMetadata)>>::new();
+        let mut normalized_metadata_by_name =
+            HashMap::<String, Vec<(i32, CalculatorItemSourceMetadata)>>::new();
+        for (item_id, metadata) in metadata_candidates {
+            if let Some(name_ko) = metadata.name_ko.clone() {
+                exact_metadata_by_name
+                    .entry(name_ko)
+                    .or_default()
+                    .push((item_id, metadata.clone()));
+            }
+            if let Some(normalized_name_ko) = metadata.normalized_name_ko.clone() {
+                normalized_metadata_by_name
+                    .entry(normalized_name_ko)
+                    .or_default()
+                    .push((item_id, metadata));
+            }
+        }
+
+        Ok(chosen_effects
             .into_iter()
             .filter_map(|row| {
-                let item_id = row.get::<Option<i32>, _>("item_id").flatten()?;
+                let exact_match = exact_metadata_by_name
+                    .get(&row.item_name_ko)
+                    .and_then(|matches| matches.iter().min_by_key(|(item_id, _)| *item_id))
+                    .cloned();
+                let resolved = exact_match.or_else(|| {
+                    normalized_metadata_by_name
+                        .get(&row.normalized_item_name_ko)
+                        .filter(|matches| matches.len() == 1)
+                        .and_then(|matches| matches.first().cloned())
+                })?;
+                let (item_id, metadata) = resolved;
+
                 Some(CalculatorSourceBackedItemRow {
-                    source_key: normalize_optional_string(row.get::<String, _>("source_key"))
-                        .unwrap_or_else(|| format!("item:{item_id}")),
+                    source_key: format!("item:{item_id}"),
                     source_kind: "item".to_string(),
                     item_id: Some(item_id),
-                    item_type: normalize_optional_string(row.get::<String, _>("item_type"))
-                        .unwrap_or_default(),
-                    source_name_en: normalize_optional_string(
-                        row.get::<String, _>("source_name_en"),
-                    ),
-                    source_name_ko: normalize_optional_string(
-                        row.get::<String, _>("source_name_ko"),
-                    ),
-                    item_icon_file: normalize_optional_string(
-                        row.get::<String, _>("item_icon_file"),
-                    ),
-                    icon_id: normalize_optional_string(row.get::<String, _>("item_icon_file"))
-                        .and_then(|value| {
-                            fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
-                        }),
-                    durability: row.get::<Option<i32>, _>("durability").flatten(),
+                    item_type: row.item_type,
+                    source_name_en: metadata.name_en,
+                    source_name_ko: metadata.name_ko,
+                    item_icon_file: None,
+                    icon_id: metadata.icon_id,
+                    durability: row.durability.or(metadata.durability),
                     fish_multiplier: fish_multiplier_by_item_id.get(&item_id).copied().flatten(),
                     effect_description_ko: None,
-                    afr: row.get::<Option<f32>, _>("afr").flatten(),
-                    bonus_rare: row.get::<Option<f32>, _>("bonus_rare").flatten(),
-                    bonus_big: row.get::<Option<f32>, _>("bonus_big").flatten(),
-                    drr: row.get::<Option<f32>, _>("drr").flatten(),
-                    exp_fish: row.get::<Option<f32>, _>("exp_fish").flatten(),
-                    exp_life: row.get::<Option<f32>, _>("exp_life").flatten(),
+                    afr: row.afr,
+                    bonus_rare: row.bonus_rare,
+                    bonus_big: row.bonus_big,
+                    drr: row.drr,
+                    exp_fish: row.exp_fish,
+                    exp_life: row.exp_life,
                 })
             })
             .collect())
