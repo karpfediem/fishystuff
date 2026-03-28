@@ -2601,10 +2601,10 @@ mod tests {
                     },
                     CalculatorItemEntry {
                         key: "lightstone-set:160".to_string(),
-                        name: "신의 입질".to_string(),
+                        name: "Nibbles".to_string(),
                         r#type: "lightstone_set".to_string(),
-                        afr: Some(0.1),
-                        drr: Some(0.1),
+                        afr: Some(0.15),
+                        exp_fish: Some(0.1),
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
@@ -2961,6 +2961,35 @@ mod tests {
         assert!(text.contains("/img/items/00016162.webp"));
         assert!(text.contains("Balenos Fishing Rod"));
         assert!(text.contains("-10% AFT"));
+        assert!(text.contains("Selected"));
+    }
+
+    #[tokio::test]
+    async fn option_search_returns_source_backed_lightstone_translation_and_badges() {
+        let response = get_calculator_datastar_option_search(
+            State(test_state()),
+            Ok(Query(CalculatorSearchableOptionQuery {
+                lang: Some("en".to_string()),
+                r#ref: None,
+                kind: Some("lightstone_set".to_string()),
+                q: Some("nibb".to_string()),
+                results_id: Some("calculator-lightstone-picker-results".to_string()),
+                selected: Some("lightstone-set:160".to_string()),
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("id=\"calculator-lightstone-picker-results\""));
+        assert!(text.contains("data-searchable-dropdown-option"));
+        assert!(text.contains("Nibbles"));
+        assert!(text.contains("-15% AFT"));
+        assert!(text.contains("+10% Fish EXP"));
         assert!(text.contains("Selected"));
     }
 

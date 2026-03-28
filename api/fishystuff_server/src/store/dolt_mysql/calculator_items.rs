@@ -89,7 +89,14 @@ fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> Calculato
         exp_life: row.exp_life,
     };
     if let Some(effect_description) = row.effect_description_ko.as_deref() {
-        super::calculator_effects::parse_calculator_effect_text(&mut values, effect_description);
+        let mut parsed = CalculatorItemEffectValues::default();
+        super::calculator_effects::parse_calculator_effect_text(&mut parsed, effect_description);
+        values.afr = values.afr.or(parsed.afr);
+        values.bonus_rare = values.bonus_rare.or(parsed.bonus_rare);
+        values.bonus_big = values.bonus_big.or(parsed.bonus_big);
+        values.drr = values.drr.or(parsed.drr);
+        values.exp_fish = values.exp_fish.or(parsed.exp_fish);
+        values.exp_life = values.exp_life.or(parsed.exp_life);
     }
     values
 }
@@ -416,6 +423,40 @@ mod tests {
     }
 
     #[test]
+    fn source_backed_effect_values_prefer_direct_numeric_values() {
+        let values = source_backed_effect_values(&CalculatorSourceBackedItemRow {
+            source_key: "lightstone-set:160".to_string(),
+            source_kind: "lightstone_set".to_string(),
+            item_id: None,
+            item_type: "lightstone_set".to_string(),
+            source_name_en: Some("Nibbles".to_string()),
+            source_name_ko: Some("신의 입질".to_string()),
+            item_icon_file: None,
+            icon_id: None,
+            durability: None,
+            fish_multiplier: None,
+            effect_description_ko: Some(
+                "자동 낚시 시간 -15%\n낚시 경험치 획득량 +10%\n낚시 숙련도 +20".to_string(),
+            ),
+            afr: Some(0.15),
+            bonus_rare: None,
+            bonus_big: None,
+            drr: None,
+            exp_fish: Some(0.10),
+            exp_life: None,
+        });
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                afr: Some(0.15),
+                exp_fish: Some(0.10),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
     fn source_backed_items_skip_rows_without_supported_calculator_effects() {
         let items = DoltMySqlStore::build_source_backed_items(
             FishLang::En,
@@ -491,6 +532,31 @@ mod tests {
         assert_eq!(sourced.durability, Some(9));
         assert_eq!(sourced.fish_multiplier, Some(1.25));
         assert_eq!(sourced.bonus_rare, Some(0.05));
+        assert_eq!(sourced.exp_fish, Some(0.10));
+    }
+
+    #[test]
+    fn source_lightstone_item_uses_source_owned_english_name() {
+        let sourced = build_source_lightstone_item(
+            FishLang::En,
+            "lightstone-set:160",
+            Some("Nibbles"),
+            Some("신의 입질"),
+            "lightstone_set",
+            None,
+            None,
+            None,
+            CalculatorItemEffectValues {
+                afr: Some(0.15),
+                exp_fish: Some(0.10),
+                ..CalculatorItemEffectValues::default()
+            },
+        );
+
+        assert_eq!(sourced.key, "lightstone-set:160");
+        assert_eq!(sourced.name, "Nibbles");
+        assert_eq!(sourced.r#type, "lightstone_set");
+        assert_eq!(sourced.afr, Some(0.15));
         assert_eq!(sourced.exp_fish, Some(0.10));
     }
 }

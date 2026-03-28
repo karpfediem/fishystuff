@@ -324,6 +324,12 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
         )>,
     > {
         let as_of = if let Some(ref_id) = ref_id {
@@ -338,7 +344,13 @@ impl DoltMySqlStore {
                 set_name_ko, \
                 source_name_en, \
                 skill_icon_file, \
-                effect_description_ko \
+                effect_description_ko, \
+                afr, \
+                bonus_rare, \
+                bonus_big, \
+                drr, \
+                exp_fish, \
+                exp_life \
              FROM calculator_lightstone_effect_sources{as_of}"
         );
 
@@ -349,6 +361,12 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
+            Option<f32>,
         )> = match conn.query(query) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "calculator_lightstone_effect_sources") => {
@@ -666,6 +684,12 @@ impl DoltMySqlStore {
                 source_name_en,
                 item_icon_file,
                 effect_description_ko,
+                afr,
+                bonus_rare,
+                bonus_big,
+                drr,
+                exp_fish,
+                exp_life,
             )| CalculatorSourceBackedItemRow {
                 source_key,
                 source_kind: "lightstone_set".to_string(),
@@ -678,12 +702,12 @@ impl DoltMySqlStore {
                 durability: None,
                 fish_multiplier: None,
                 effect_description_ko,
-                afr: None,
-                bonus_rare: None,
-                bonus_big: None,
-                drr: None,
-                exp_fish: None,
-                exp_life: None,
+                afr,
+                bonus_rare,
+                bonus_big,
+                drr,
+                exp_fish,
+                exp_life,
             },
         ));
 
