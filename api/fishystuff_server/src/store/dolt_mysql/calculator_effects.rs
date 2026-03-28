@@ -60,8 +60,16 @@ pub(super) fn extract_first_number(text: &str) -> Option<f32> {
     None
 }
 
-fn extract_percent_ratio(text: &str) -> Option<f32> {
-    extract_first_number(text).map(|value| value.abs() / 100.0)
+fn extract_first_number_after(text: &str, needle: &str) -> Option<f32> {
+    let index = text.find(needle)?;
+    extract_first_number(&text[index + needle.len()..])
+}
+
+fn extract_percent_ratio_after_any(text: &str, needles: &[&str]) -> Option<f32> {
+    needles
+        .iter()
+        .find_map(|needle| extract_first_number_after(text, needle))
+        .map(|value| value.abs() / 100.0)
 }
 
 fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &str) {
@@ -71,22 +79,40 @@ fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &
         return;
     }
     if line.contains("자동 낚시") {
-        add_effect_value(&mut values.afr, extract_percent_ratio(line));
+        add_effect_value(
+            &mut values.afr,
+            extract_percent_ratio_after_any(line, &["자동 낚시 시간 감소", "자동 낚시 시간"]),
+        );
     }
     if line.contains("희귀 어종") {
-        add_effect_value(&mut values.bonus_rare, extract_percent_ratio(line));
+        add_effect_value(
+            &mut values.bonus_rare,
+            extract_percent_ratio_after_any(line, &["희귀 어종을 낚을 확률 증가", "희귀 어종"]),
+        );
     }
     if line.contains("대형 어종") {
-        add_effect_value(&mut values.bonus_big, extract_percent_ratio(line));
+        add_effect_value(
+            &mut values.bonus_big,
+            extract_percent_ratio_after_any(line, &["대형 어종을 낚을 확률 증가", "대형 어종"]),
+        );
     }
     if line.contains("내구도 소모 감소 저항") {
-        add_effect_value(&mut values.item_drr, extract_percent_ratio(line));
+        add_effect_value(
+            &mut values.item_drr,
+            extract_percent_ratio_after_any(line, &["내구도 소모 감소 저항"]),
+        );
     }
     if line.contains("낚시 경험치") {
-        add_effect_value(&mut values.exp_fish, extract_percent_ratio(line));
+        add_effect_value(
+            &mut values.exp_fish,
+            extract_percent_ratio_after_any(line, &["낚시 경험치 획득량", "낚시 경험치"]),
+        );
     }
     if line.contains("생활 경험치") {
-        add_effect_value(&mut values.exp_life, extract_percent_ratio(line));
+        add_effect_value(
+            &mut values.exp_life,
+            extract_percent_ratio_after_any(line, &["생활 경험치 획득량", "생활 경험치"]),
+        );
     }
 }
 
@@ -168,6 +194,25 @@ mod tests {
             CalculatorItemEffectValues {
                 afr: Some(0.10),
                 exp_fish: Some(0.25),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
+    fn calculator_effect_text_binds_numbers_to_matching_effect_phrase() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(
+            &mut values,
+            "[이벤트] 겉바속촉 붕어빵\n모든 생활 숙련도 +100\n생활 경험치 획득량 +50%\n자동 낚시 시간 감소 +10%\n희귀 어종을 낚을 확률 증가 +5%\n최대 소지 무게 +100LT",
+        );
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                afr: Some(0.10),
+                bonus_rare: Some(0.05),
+                exp_life: Some(0.50),
                 ..CalculatorItemEffectValues::default()
             }
         );

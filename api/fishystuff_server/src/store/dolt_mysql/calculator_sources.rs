@@ -186,20 +186,26 @@ impl DoltMySqlStore {
         let buff_desc_query = format!(
             "SELECT \
                 TRIM(COALESCE(`Index`, '')) AS buff_id, \
+                `BuffName`, \
                 `Description` \
              FROM buff_table{as_of} \
-             WHERE ({})",
-            keyword_predicate("`Description`")
+             WHERE ({}) OR ({})",
+            keyword_predicate("`Description`"),
+            keyword_predicate("`BuffName`")
         );
-        let buff_desc_rows: Vec<(String, Option<String>)> = match conn.query(buff_desc_query) {
+        let buff_desc_rows: Vec<(String, Option<String>, Option<String>)> = match conn.query(buff_desc_query) {
             Ok(rows) => rows,
             Err(err) if is_missing_table(&err, "buff_table") => Vec::new(),
             Err(err) => return Err(db_unavailable(err)),
         };
         let buff_descriptions = buff_desc_rows
             .into_iter()
-            .filter_map(|(buff_id, description)| {
-                Some((buff_id, normalize_optional_string(description)?))
+            .filter_map(|(buff_id, buff_name, description)| {
+                Some((
+                    buff_id,
+                    normalize_optional_string(description)
+                        .or_else(|| normalize_optional_string(buff_name))?,
+                ))
             })
             .collect::<HashMap<_, _>>();
 
@@ -318,18 +324,22 @@ impl DoltMySqlStore {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
+            let mut item_has_buff_lines = false;
             for candidate_skill in [skill_no, sub_skill_no]
                 .into_iter()
                 .filter_map(normalize_optional_string)
             {
-                if let Some(description) = skill_descriptions.get(&candidate_skill) {
-                    effect_lines.push((item_id, description.clone()));
-                }
                 if let Some(buff_ids) = skill_buffs.get(&candidate_skill) {
                     for buff_id in buff_ids {
                         if let Some(description) = buff_descriptions.get(buff_id) {
                             effect_lines.push((item_id, description.clone()));
+                            item_has_buff_lines = true;
                         }
+                    }
+                }
+                if !item_has_buff_lines {
+                    if let Some(description) = skill_descriptions.get(&candidate_skill) {
+                        effect_lines.push((item_id, description.clone()));
                     }
                 }
             }
@@ -517,26 +527,31 @@ impl DoltMySqlStore {
                         .map(|category_id| (category_id, metadata.category_level))
                 })
                 .collect::<Vec<_>>();
-            let Some((category_id, category_level)) = categories.first().copied() else {
+            let Some((category_id, occurrences)) = categories.iter().fold(
+                HashMap::<i32, usize>::new(),
+                |mut counts, (category_id, _)| {
+                    *counts.entry(*category_id).or_default() += 1;
+                    counts
+                },
+            )
+            .into_iter()
+            .max_by_key(|(category_id, count)| (*count, -(*category_id)))
+            else {
                 continue;
             };
-            if categories
+            let _ = occurrences;
+            let category_level = categories
                 .iter()
-                .all(|(candidate_id, _)| *candidate_id == category_id)
-            {
-                let category_level = categories
-                    .iter()
-                    .filter_map(|(_, category_level)| *category_level)
-                    .max()
-                    .or(category_level);
-                out.insert(
-                    skill_id,
-                    CalculatorBuffSourceMetadata {
-                        category_id: Some(category_id),
-                        category_level,
-                    },
-                );
-            }
+                .filter(|(candidate_id, _)| *candidate_id == category_id)
+                .filter_map(|(_, category_level)| *category_level)
+                .max();
+            out.insert(
+                skill_id,
+                CalculatorBuffSourceMetadata {
+                    category_id: Some(category_id),
+                    category_level,
+                },
+            );
         }
 
         Ok(out)
@@ -858,18 +873,9 @@ impl DoltMySqlStore {
     fn query_consumable_source_backed_item_rows(
         &self,
         ref_id: Option<&str>,
-        legacy_rows: &[CalculatorItemDbRow],
-        item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
     ) -> AppResult<Vec<CalculatorSourceBackedItemRow>> {
-        let legacy_rows_by_item_id = legacy_rows
-            .iter()
-            .filter_map(|row| Some((row.10?, row)))
-            .collect::<HashMap<_, _>>();
         let mut effect_lines_by_item_id = HashMap::<i32, Vec<String>>::new();
         for (item_id, effect_line) in self.query_consumable_effect_line_rows(ref_id)? {
-            if !legacy_rows_by_item_id.contains_key(&item_id) {
-                continue;
-            }
             let lines = effect_lines_by_item_id.entry(item_id).or_default();
             if !lines.iter().any(|existing| existing == &effect_line) {
                 lines.push(effect_line);
@@ -882,6 +888,7 @@ impl DoltMySqlStore {
 
         let item_ids = effect_lines_by_item_id.keys().copied().collect::<Vec<_>>();
         let item_rows = self.query_consumable_item_rows(ref_id, &item_ids)?;
+        let item_source_metadata = self.query_calculator_item_table_metadata(ref_id, &item_ids)?;
         let skill_ids = item_rows
             .iter()
             .flat_map(|row| row.skill_ids.iter().cloned())
@@ -893,7 +900,6 @@ impl DoltMySqlStore {
             .into_iter()
             .filter_map(|row| {
                 let effect_lines = effect_lines_by_item_id.remove(&row.item_id)?;
-                let legacy_row = legacy_rows_by_item_id.get(&row.item_id)?;
                 let source_meta = item_source_metadata.get(&row.item_id);
                 let category_entries = row
                     .skill_ids
@@ -924,12 +930,10 @@ impl DoltMySqlStore {
                         },
                     )
                     .unwrap_or_default();
-                let legacy_item_type = normalize_optional_string(legacy_row.1.clone())
-                    .unwrap_or_else(|| "buff".to_string());
                 let item_type = match (category_metadata.category_id, row.item_classify.as_deref())
                 {
                     (Some(1), _) | (None, Some("8")) => "food",
-                    _ => legacy_item_type.as_str(),
+                    _ => "buff",
                 };
                 Some(CalculatorSourceBackedItemRow {
                     source_key: format!("item:{}", row.item_id),
@@ -942,11 +946,9 @@ impl DoltMySqlStore {
                     source_name_en: source_meta.and_then(|meta| meta.name_en.clone()),
                     source_name_ko: source_meta.and_then(|meta| meta.name_ko.clone()),
                     item_icon_file: None,
-                    icon_id: source_meta.and_then(|meta| meta.icon_id).or(legacy_row.11),
-                    durability: source_meta
-                        .and_then(|meta| meta.durability)
-                        .or(legacy_row.5),
-                    fish_multiplier: legacy_row.7,
+                    icon_id: source_meta.and_then(|meta| meta.icon_id),
+                    durability: source_meta.and_then(|meta| meta.durability),
+                    fish_multiplier: None,
                     effect_description_ko: Some(effect_lines.join("\n")),
                     afr: None,
                     bonus_rare: None,
@@ -1181,8 +1183,6 @@ impl DoltMySqlStore {
             self.query_calculator_item_table_metadata(ref_id, &all_item_ids)?;
         let mut source_backed_rows = self.query_consumable_source_backed_item_rows(
             ref_id,
-            &all_legacy_rows,
-            &item_source_metadata,
         )?;
         source_backed_rows.extend(
             self.query_source_owned_enchant_source_backed_item_rows(ref_id, &all_legacy_rows)?,
