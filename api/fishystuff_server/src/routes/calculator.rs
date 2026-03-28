@@ -93,6 +93,7 @@ struct CalculatorDerivedSignals {
 #[derive(Debug)]
 struct CalculatorData {
     catalog: CalculatorCatalogResponse,
+    cdn_base_url: String,
     lang: FishLang,
     zones: Vec<ZoneEntry>,
 }
@@ -321,6 +322,7 @@ pub async fn get_calculator_datastar_option_search(
         .unwrap_or("calculator-search-results");
     let (options, include_none) = searchable_options_for_kind(&data, kind);
     let fragment = render_searchable_select_results(
+        data.cdn_base_url.as_str(),
         results_id,
         &with_optional_none(&options, include_none),
         selected_value,
@@ -597,6 +599,7 @@ async fn load_calculator_data(
     .map_err(|err| map_request_id(err, request_id))?;
     Ok(CalculatorData {
         catalog,
+        cdn_base_url: state.config.runtime_cdn_base_url.clone(),
         lang,
         zones,
     })
@@ -1418,6 +1421,25 @@ fn trim_float(value: f64) -> String {
         .to_string()
 }
 
+fn absolute_public_asset_url(cdn_base_url: &str, raw_path: &str) -> String {
+    let normalized_base = cdn_base_url.trim().trim_end_matches('/');
+    let normalized_path = raw_path.trim();
+    if normalized_path.starts_with("http://")
+        || normalized_path.starts_with("https://")
+        || normalized_path.starts_with("data:")
+    {
+        return normalized_path.to_string();
+    }
+    if normalized_base.is_empty() {
+        return normalized_path.to_string();
+    }
+    if normalized_path.starts_with('/') {
+        format!("{normalized_base}{normalized_path}")
+    } else {
+        format!("{normalized_base}/{normalized_path}")
+    }
+}
+
 fn render_calculator_app(
     data: &CalculatorData,
     signals: &CalculatorSignals,
@@ -1738,6 +1760,7 @@ fn render_calculator_app(
         (
             "__LEVEL_SELECT__",
             render_searchable_select_control(
+                data.cdn_base_url.as_str(),
                 data.lang,
                 "calculator-level-picker",
                 "calculator-level-value",
@@ -1753,6 +1776,7 @@ fn render_calculator_app(
         (
             "__TIMESPAN_UNIT_SELECT__",
             render_searchable_select_control(
+                data.cdn_base_url.as_str(),
                 data.lang,
                 "calculator-session-unit-picker",
                 "calculator-session-unit-value",
@@ -1772,6 +1796,7 @@ fn render_calculator_app(
         (
             "__LIFESKILL_LEVEL_SELECT__",
             render_searchable_select_control(
+                data.cdn_base_url.as_str(),
                 data.lang,
                 "calculator-lifeskill-level-picker",
                 "calculator-lifeskill-level-value",
@@ -1787,6 +1812,7 @@ fn render_calculator_app(
         (
             "__ROD_SELECT__",
             render_searchable_select_control(
+                data.cdn_base_url.as_str(),
                 data.lang,
                 "calculator-rod-picker",
                 "calculator-rod-value",
@@ -1802,6 +1828,7 @@ fn render_calculator_app(
         (
             "__FLOAT_SELECT__",
             render_searchable_select_control(
+                data.cdn_base_url.as_str(),
                 data.lang,
                 "calculator-float-picker",
                 "calculator-float-value",
@@ -1817,6 +1844,7 @@ fn render_calculator_app(
         (
             "__CHAIR_SELECT__",
             render_searchable_select_control(
+                data.cdn_base_url.as_str(),
                 data.lang,
                 "calculator-chair-picker",
                 "calculator-chair-value",
@@ -1832,6 +1860,7 @@ fn render_calculator_app(
         (
             "__LIGHTSTONE_SET_SELECT__",
             render_searchable_select_control(
+                data.cdn_base_url.as_str(),
                 data.lang,
                 "calculator-lightstone-set-picker",
                 "calculator-lightstone-set-value",
@@ -1847,6 +1876,7 @@ fn render_calculator_app(
         (
             "__BACKPACK_SELECT__",
             render_searchable_select_control(
+                data.cdn_base_url.as_str(),
                 data.lang,
                 "calculator-backpack-picker",
                 "calculator-backpack-value",
@@ -1861,11 +1891,19 @@ fn render_calculator_app(
         ),
         (
             "__OUTFITS__",
-            render_checkbox_group("outfits", "outfit", &signals.outfit, &outfits, None),
+            render_checkbox_group(
+                data.cdn_base_url.as_str(),
+                "outfits",
+                "outfit",
+                &signals.outfit,
+                &outfits,
+                None,
+            ),
         ),
         (
             "__FOODS__",
             render_searchable_multiselect_control(
+                data.cdn_base_url.as_str(),
                 &SearchableMultiselectConfig {
                     root_id: "calculator-food-picker",
                     bind_key: "food",
@@ -1881,6 +1919,7 @@ fn render_calculator_app(
         (
             "__BUFFS__",
             render_searchable_multiselect_control(
+                data.cdn_base_url.as_str(),
                 &SearchableMultiselectConfig {
                     root_id: "calculator-buff-picker",
                     bind_key: "buff",
@@ -1895,7 +1934,12 @@ fn render_calculator_app(
         ),
         (
             "__PETS__",
-            render_pet_cards(data.lang, &data.catalog.pets, signals),
+            render_pet_cards(
+                data.cdn_base_url.as_str(),
+                data.lang,
+                &data.catalog.pets,
+                signals,
+            ),
         ),
     ];
 
@@ -2141,13 +2185,16 @@ fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
     parts.join(" ")
 }
 
-fn render_searchable_dropdown_option_content_html(option: SelectOption<'_>) -> String {
+fn render_searchable_dropdown_option_content_html(
+    cdn_base_url: &str,
+    option: SelectOption<'_>,
+) -> String {
     let mut html = String::new();
     if let Some(icon) = option.icon {
         write!(
             html,
-            "<img aria-hidden=\"true\" data-public-src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
-            escape_html(icon),
+            "<img aria-hidden=\"true\" src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
+            escape_html(&absolute_public_asset_url(cdn_base_url, icon)),
             escape_html(option.label)
         )
         .unwrap();
@@ -2274,7 +2321,10 @@ fn fuzzy_select_matches<'a>(
     scored.into_iter().map(|(option, _)| option).collect()
 }
 
-fn render_searchable_dropdown_catalog_html(options: &[SelectOption<'_>]) -> String {
+fn render_searchable_dropdown_catalog_html(
+    cdn_base_url: &str,
+    options: &[SelectOption<'_>],
+) -> String {
     let mut html = String::new();
     html.push_str("<div data-role=\"selected-content-catalog\" hidden>");
     for option in options {
@@ -2283,7 +2333,7 @@ fn render_searchable_dropdown_catalog_html(options: &[SelectOption<'_>]) -> Stri
             "<template data-role=\"selected-content\" data-value=\"{}\" data-label=\"{}\">{}</template>",
             escape_html(option.value),
             escape_html(option.label),
-            render_searchable_dropdown_option_content_html(*option),
+            render_searchable_dropdown_option_content_html(cdn_base_url, *option),
         )
         .unwrap();
     }
@@ -2292,6 +2342,7 @@ fn render_searchable_dropdown_catalog_html(options: &[SelectOption<'_>]) -> Stri
 }
 
 fn render_searchable_select_results(
+    cdn_base_url: &str,
     results_list_id: &str,
     options: &[SelectOption<'_>],
     current_value: &str,
@@ -2316,7 +2367,7 @@ fn render_searchable_select_results(
                 if is_selected { " menu-active" } else { "" },
                 escape_html(option.value),
                 escape_html(option.label),
-                render_searchable_dropdown_option_content_html(option),
+                render_searchable_dropdown_option_content_html(cdn_base_url, option),
                 if is_selected {
                     "<span class=\"badge badge-soft badge-primary badge-xs\">Selected</span>"
                 } else {
@@ -2344,6 +2395,7 @@ fn render_calculator_option_search_url(
 }
 
 fn render_searchable_select_control(
+    cdn_base_url: &str,
     lang: FishLang,
     root_id: &str,
     input_id: &str,
@@ -2371,10 +2423,11 @@ fn render_searchable_select_control(
             }
         });
     let selected_content_html = selected_option
-        .map(render_searchable_dropdown_option_content_html)
+        .map(|option| render_searchable_dropdown_option_content_html(cdn_base_url, option))
         .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
-    let catalog_html = render_searchable_dropdown_catalog_html(&options);
-    let results_html = render_searchable_select_results(&results_id, &options, selected_value, "");
+    let catalog_html = render_searchable_dropdown_catalog_html(cdn_base_url, &options);
+    let results_html =
+        render_searchable_select_results(cdn_base_url, &results_id, &options, selected_value, "");
     let search_url = render_calculator_option_search_url(lang, kind, &results_id);
     let dropdown = render_searchable_dropdown(
         &SearchableDropdownConfig {
@@ -2412,7 +2465,10 @@ fn render_searchable_multiselect_search_text(option: SelectOption<'_>) -> String
     parts.join(" ")
 }
 
-fn render_searchable_multiselect_catalog_html(options: &[SelectOption<'_>]) -> String {
+fn render_searchable_multiselect_catalog_html(
+    cdn_base_url: &str,
+    options: &[SelectOption<'_>],
+) -> String {
     let mut html = String::new();
     html.push_str("<div data-role=\"catalog\" hidden>");
     for option in options {
@@ -2428,7 +2484,7 @@ fn render_searchable_multiselect_catalog_html(options: &[SelectOption<'_>]) -> S
             escape_html(option.label),
             escape_html(&render_searchable_multiselect_search_text(*option)),
             category_key_attr,
-            render_searchable_dropdown_option_content_html(*option),
+            render_searchable_dropdown_option_content_html(cdn_base_url, *option),
         )
         .unwrap();
     }
@@ -2474,6 +2530,7 @@ fn render_searchable_multiselect_inputs_html(
 }
 
 fn render_searchable_multiselect_selection_html(
+    cdn_base_url: &str,
     selected_values: &[String],
     options: &[SelectOption<'_>],
 ) -> String {
@@ -2490,7 +2547,7 @@ fn render_searchable_multiselect_selection_html(
         write!(
             html,
             "<div class=\"join items-stretch rounded-box border border-base-300 bg-base-100 p-1 text-base-content shadow-sm\"><span class=\"inline-flex min-w-0 items-center px-2 py-1 text-sm\">{}</span><button type=\"button\" class=\"btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70\" data-searchable-multiselect-remove data-value=\"{}\" aria-label=\"Remove {}\">×</button></div>",
-            render_searchable_dropdown_option_content_html(option),
+            render_searchable_dropdown_option_content_html(cdn_base_url, option),
             escape_html(option.value),
             escape_html(option.label),
         )
@@ -2500,6 +2557,7 @@ fn render_searchable_multiselect_selection_html(
 }
 
 fn render_searchable_multiselect_results_html(
+    cdn_base_url: &str,
     options: &[SelectOption<'_>],
     selected_values: &[String],
     query: &str,
@@ -2542,7 +2600,7 @@ fn render_searchable_multiselect_results_html(
                 if is_selected { "true" } else { "false" },
                 escape_html(option.value),
                 escape_html(option.label),
-                render_searchable_dropdown_option_content_html(option),
+                render_searchable_dropdown_option_content_html(cdn_base_url, option),
                 if is_selected {
                     "<span class=\"badge badge-soft badge-primary badge-xs\">Added</span>"
                 } else {
@@ -2557,6 +2615,7 @@ fn render_searchable_multiselect_results_html(
 }
 
 fn render_searchable_multiselect_control(
+    cdn_base_url: &str,
     config: &SearchableMultiselectConfig<'_>,
     selected_values: &[String],
     options: &[SelectOption<'_>],
@@ -2566,9 +2625,15 @@ fn render_searchable_multiselect_control(
 
     let panel_id = format!("{}-panel", config.root_id);
     let search_input_id = format!("{}-search-input", config.root_id);
-    let selection_html = render_searchable_multiselect_selection_html(selected_values, &options);
-    let results_html = render_searchable_multiselect_results_html(&options, selected_values, "");
-    let catalog_html = render_searchable_multiselect_catalog_html(&options);
+    let selection_html =
+        render_searchable_multiselect_selection_html(cdn_base_url, selected_values, &options);
+    let results_html = render_searchable_multiselect_results_html(
+        cdn_base_url,
+        &options,
+        selected_values,
+        "",
+    );
+    let catalog_html = render_searchable_multiselect_catalog_html(cdn_base_url, &options);
     let inputs_html =
         render_searchable_multiselect_inputs_html(config.bind_key, selected_values, &options);
     let selection_hidden_attr = if selection_html.is_empty() {
@@ -2784,6 +2849,7 @@ fn item_options_by_type<'a>(
 }
 
 fn render_checkbox_group(
+    cdn_base_url: &str,
     id: &str,
     bind_key: &str,
     selected_values: &[String],
@@ -2820,8 +2886,8 @@ fn render_checkbox_group(
         if let Some(icon) = option.icon {
             write!(
                 html,
-                "<img aria-hidden=\"true\" data-public-src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
-                escape_html(icon),
+                "<img aria-hidden=\"true\" src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
+                escape_html(&absolute_public_asset_url(cdn_base_url, icon)),
                 escape_html(option.label)
             )
             .unwrap();
@@ -2865,6 +2931,7 @@ fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) ->
 }
 
 fn render_pet_cards(
+    cdn_base_url: &str,
     lang: FishLang,
     catalog: &CalculatorPetCatalog,
     signals: &CalculatorSignals,
@@ -2895,6 +2962,7 @@ fn render_pet_cards(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Tier</legend>",
         );
         html.push_str(&render_searchable_select_control(
+            cdn_base_url,
             lang,
             &format!("calculator-pet{slot}-tier-picker"),
             &format!("calculator-pet{slot}-tier-value"),
@@ -2911,6 +2979,7 @@ fn render_pet_cards(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Special</legend>",
         );
         html.push_str(&render_searchable_select_control(
+            cdn_base_url,
             lang,
             &format!("calculator-pet{slot}-special-picker"),
             &format!("calculator-pet{slot}-special-value"),
@@ -2927,6 +2996,7 @@ fn render_pet_cards(
             "<fieldset class=\"fieldset\"><legend class=\"fieldset-legend\">Talent</legend>",
         );
         html.push_str(&render_searchable_select_control(
+            cdn_base_url,
             lang,
             &format!("calculator-pet{slot}-talent-picker"),
             &format!("calculator-pet{slot}-talent-value"),
@@ -2941,6 +3011,7 @@ fn render_pet_cards(
         html.push_str("</fieldset></div>");
         html.push_str("<fieldset class=\"fieldset mt-3 gap-2\"><legend class=\"fieldset-legend\">Skills</legend>");
         html.push_str(&render_checkbox_group(
+            "",
             &skills_id,
             &skill_bind,
             &pet.skills,
@@ -3205,6 +3276,7 @@ mod tests {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
             cors_allowed_origins: vec!["https://fishystuff.fish".to_string()],
+            runtime_cdn_base_url: "http://127.0.0.1:4040".to_string(),
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,
@@ -3269,6 +3341,7 @@ mod tests {
         assert!(text.contains("Search foods by name or effect"));
         assert!(text.contains("data-category-key=\"buff-category:1\""));
         assert!(text.contains("Meal"));
+        assert!(text.contains("src=\"http://127.0.0.1:4040/images/items/00016162.webp\""));
     }
 
     #[tokio::test]

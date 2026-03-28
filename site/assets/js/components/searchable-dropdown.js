@@ -55,55 +55,9 @@ export function normalizeSearchText(value) {
     return String(value ?? "").trim().toLowerCase();
 }
 
-export function resolvePublicAssetUrl(rawUrl) {
-    const normalizedUrl = String(rawUrl ?? "").trim();
-    if (!normalizedUrl) {
-        return "";
-    }
-    if (
-        normalizedUrl.startsWith("http://")
-        || normalizedUrl.startsWith("https://")
-        || normalizedUrl.startsWith("data:")
-    ) {
-        return normalizedUrl;
-    }
-    if (
-        normalizedUrl.startsWith("/images/")
-        || normalizedUrl.startsWith("images/")
-        || normalizedUrl.startsWith("/fields/")
-        || normalizedUrl.startsWith("fields/")
-        || normalizedUrl.startsWith("/region_groups/")
-        || normalizedUrl.startsWith("region_groups/")
-    ) {
-        return resolveScopedUrl(normalizedUrl, "cdn");
-    }
-    return normalizedUrl;
-}
-
-export function materializePublicAssetUrls(root) {
-    if (!(root instanceof Element || root instanceof DocumentFragment)) {
-        return;
-    }
-
-    if (root instanceof Element && root.matches("img[data-public-src]")) {
-        const resolvedSrc = resolvePublicAssetUrl(root.getAttribute("data-public-src"));
-        if (resolvedSrc) {
-            root.setAttribute("src", resolvedSrc);
-        }
-    }
-
-    for (const image of root.querySelectorAll("img[data-public-src]")) {
-        const resolvedSrc = resolvePublicAssetUrl(image.getAttribute("data-public-src"));
-        if (resolvedSrc) {
-            image.setAttribute("src", resolvedSrc);
-        }
-    }
-}
-
 function parseHtmlFragment(html) {
     const template = document.createElement("template");
     template.innerHTML = String(html ?? "");
-    materializePublicAssetUrls(template.content);
     return template.content;
 }
 
@@ -748,7 +702,6 @@ export class FishySearchableDropdown extends HTMLElement {
                 optionContent.dataset.role = "option-content";
                 optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
                 optionContent.replaceChildren(...cloneChildNodes(template.content));
-                materializePublicAssetUrls(optionContent);
                 button.append(optionContent);
 
                 if (value === selectedValue) {
@@ -791,7 +744,6 @@ export class FishySearchableDropdown extends HTMLElement {
             const container = this.selectedContentElement();
             if (container instanceof HTMLElement) {
                 container.replaceChildren(...cloneChildNodes(template.content));
-                materializePublicAssetUrls(container);
             }
         }
     }
@@ -809,14 +761,12 @@ export class FishySearchableDropdown extends HTMLElement {
         const selectedTemplate = option.querySelector('template[data-role="selected-content"]');
         if (selectedTemplate instanceof HTMLTemplateElement) {
             container.replaceChildren(...cloneChildNodes(selectedTemplate.content));
-            materializePublicAssetUrls(container);
             return;
         }
 
         const optionContent = option.querySelector('[data-role="option-content"]');
         if (optionContent instanceof HTMLElement) {
             container.replaceChildren(...cloneChildNodes(optionContent));
-            materializePublicAssetUrls(container);
             return;
         }
 
@@ -858,7 +808,6 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         this._setExpanded(this.isOpen());
-        materializePublicAssetUrls(this);
     }
 
     _unbindBoundInput() {

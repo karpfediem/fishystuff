@@ -181,6 +181,7 @@ mod tests {
             bind: "127.0.0.1:0".to_string(),
             database_url: "mysql://unused".to_string(),
             cors_allowed_origins: vec!["https://fishystuff.fish".to_string()],
+            runtime_cdn_base_url: "http://127.0.0.1:4040".to_string(),
             terrain_manifest_url: None,
             terrain_drape_manifest_url: None,
             terrain_height_tiles_url: None,

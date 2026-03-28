@@ -35,6 +35,7 @@ pub struct AppConfig {
     pub bind: String,
     pub database_url: String,
     pub cors_allowed_origins: Vec<String>,
+    pub runtime_cdn_base_url: String,
     pub terrain_manifest_url: Option<String>,
     pub terrain_drape_manifest_url: Option<String>,
     pub terrain_height_tiles_url: Option<String>,
@@ -87,6 +88,13 @@ impl AppConfig {
                 .as_deref()
                 .or(fs_config.server.cors_allowed_origins.as_deref()),
         )?;
+        let runtime_cdn_base_url = std::env::var("FISHYSTUFF_RUNTIME_CDN_BASE_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "https://cdn.fishystuff.fish".to_string())
+            .trim()
+            .trim_end_matches('/')
+            .to_string();
         let mut images_dir = resolve(&fs_config.paths.images_dir).unwrap_or_else(|| {
             resolve_default_runtime_dir(
                 config_dir.as_deref(),
@@ -314,6 +322,7 @@ impl AppConfig {
             bind,
             database_url,
             cors_allowed_origins,
+            runtime_cdn_base_url,
             terrain_manifest_url,
             terrain_drape_manifest_url,
             terrain_height_tiles_url,
