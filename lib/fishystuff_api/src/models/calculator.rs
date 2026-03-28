@@ -5,11 +5,14 @@ pub struct CalculatorItemEntry {
     pub key: String,
     pub name: String,
     pub r#type: String,
+    pub buff_category_key: Option<String>,
+    pub buff_category_id: Option<i32>,
+    pub buff_category_level: Option<i32>,
     pub afr: Option<f32>,
     pub bonus_rare: Option<f32>,
     pub bonus_big: Option<f32>,
     pub durability: Option<i32>,
-    pub drr: Option<f32>,
+    pub item_drr: Option<f32>,
     pub fish_multiplier: Option<f32>,
     pub exp_fish: Option<f32>,
     pub exp_life: Option<f32>,
@@ -24,6 +27,7 @@ pub struct CalculatorLifeskillLevelEntry {
     pub name: String,
     pub index: i32,
     pub order: i32,
+    pub lifeskill_level_drr: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

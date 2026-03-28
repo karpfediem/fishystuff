@@ -37,6 +37,15 @@ const CLASSISH_BARE_TOKENS = new Set([
   "block",
   "truncate",
 ]);
+const EXTRA_CLASS_VALUES = [
+  "border-base-content/15 bg-base-300 text-base-content",
+  "border-emerald-400 bg-emerald-300 text-emerald-950",
+  "border-yellow-400 bg-yellow-300 text-yellow-950",
+  "border-blue-400 bg-blue-300 text-blue-950",
+  "border-amber-400 bg-amber-300 text-amber-950",
+  "border-cyan-400 bg-cyan-300 text-cyan-950",
+  "border-green-400 bg-green-300 text-green-950",
+];
 
 async function walk(dir, exts) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -134,6 +143,10 @@ for (const root of ROOTS) {
       classValues.add(classValue);
     }
   }
+}
+
+for (const classValue of EXTRA_CLASS_VALUES) {
+  classValues.add(classValue);
 }
 
 const lines = [

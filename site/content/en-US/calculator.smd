@@ -190,7 +190,7 @@
                 ? "Active | "
                 : `${calc.auto_fish_time_reduction_text ?? "0%"} AFR | `;
             return (
-                `[FishyStuff Calculator Preset | ${lead}${calc.durability_reduction_resistance_text ?? "0%"} DRR | ${calc.zone_name ?? current.zone}](` +
+                `[FishyStuff Calculator Preset | ${lead}${calc.item_drr_text ?? "0%"} Item DRR | ${calc.zone_name ?? current.zone}](` +
                 this.presetUrl(current) +
                 ")"
             );

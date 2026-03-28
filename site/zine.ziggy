@@ -32,6 +32,7 @@ Multilingual {
     "js/datastar.js",
     "js/components/registry.js",
     "js/components/searchable-dropdown.js",
+    "js/components/searchable-multiselect.js",
     "js/durationFormatter.js",
     "js/lz-string.min.js",
     "js/pages/fishydex.js",

@@ -8,11 +8,11 @@ const URL_SCOPE_RESOLVERS = Object.freeze({
     cdn: "__fishystuffResolveCdnUrl",
 });
 
-function getStringAttribute(element, name) {
+export function getStringAttribute(element, name) {
     return String(element.getAttribute(name) ?? "").trim();
 }
 
-function setStringAttribute(element, name, value) {
+export function setStringAttribute(element, name, value) {
     const normalized = String(value ?? "");
     if (normalized) {
         element.setAttribute(name, normalized);
@@ -21,7 +21,7 @@ function setStringAttribute(element, name, value) {
     element.removeAttribute(name);
 }
 
-function upgradeProperty(element, property) {
+export function upgradeProperty(element, property) {
     if (!Object.prototype.hasOwnProperty.call(element, property)) {
         return;
     }
@@ -30,16 +30,16 @@ function upgradeProperty(element, property) {
     element[property] = value;
 }
 
-function dispatchValueEvents(element) {
+export function dispatchValueEvents(element) {
     element.dispatchEvent(new Event("input", { bubbles: true }));
     element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-function cloneChildNodes(source) {
+export function cloneChildNodes(source) {
     return Array.from(source.childNodes, (node) => node.cloneNode(true));
 }
 
-function findPropertyDescriptor(target, property) {
+export function findPropertyDescriptor(target, property) {
     let current = target;
     while (current) {
         const descriptor = Object.getOwnPropertyDescriptor(current, property);
@@ -51,11 +51,11 @@ function findPropertyDescriptor(target, property) {
     return null;
 }
 
-function normalizeSearchText(value) {
+export function normalizeSearchText(value) {
     return String(value ?? "").trim().toLowerCase();
 }
 
-function resolveScopedUrl(rawUrl, scope) {
+export function resolveScopedUrl(rawUrl, scope) {
     const normalizedUrl = String(rawUrl ?? "").trim();
     if (!normalizedUrl) {
         return "";

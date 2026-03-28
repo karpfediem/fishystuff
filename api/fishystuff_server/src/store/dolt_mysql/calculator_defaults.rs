@@ -5,6 +5,10 @@ use fishystuff_api::models::calculator::{
 
 use crate::store::FishLang;
 
+pub(super) fn lifeskill_level_drr_from_index(index: i32) -> f32 {
+    (0.1 + 0.005 * index as f32).min(0.6)
+}
+
 fn build_calculator_default_pet(tier: &str, special: &str) -> CalculatorPetSignals {
     CalculatorPetSignals {
         tier: tier.to_string(),
@@ -117,6 +121,7 @@ pub(super) fn build_calculator_lifeskill_levels() -> Vec<CalculatorLifeskillLeve
                 name: format!("{tier_name} {level}"),
                 index: order.min(130),
                 order,
+                lifeskill_level_drr: lifeskill_level_drr_from_index(order.min(130)),
             });
         }
     }

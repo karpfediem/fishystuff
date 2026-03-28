@@ -65,11 +65,14 @@ pub(super) fn build_source_item(
         key: format!("item:{item_id}"),
         name,
         r#type: item_type.to_string(),
+        buff_category_key: None,
+        buff_category_id: None,
+        buff_category_level: None,
         afr: override_values.afr,
         bonus_rare: override_values.bonus_rare,
         bonus_big: override_values.bonus_big,
         durability: source_durability,
-        drr: override_values.drr,
+        item_drr: override_values.item_drr,
         fish_multiplier,
         exp_fish: override_values.exp_fish,
         exp_life: override_values.exp_life,
@@ -84,7 +87,7 @@ fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> Calculato
         afr: row.afr,
         bonus_rare: row.bonus_rare,
         bonus_big: row.bonus_big,
-        drr: row.drr,
+        item_drr: row.item_drr,
         exp_fish: row.exp_fish,
         exp_life: row.exp_life,
     };
@@ -94,7 +97,7 @@ fn source_backed_effect_values(row: &CalculatorSourceBackedItemRow) -> Calculato
         values.afr = values.afr.or(parsed.afr);
         values.bonus_rare = values.bonus_rare.or(parsed.bonus_rare);
         values.bonus_big = values.bonus_big.or(parsed.bonus_big);
-        values.drr = values.drr.or(parsed.drr);
+        values.item_drr = values.item_drr.or(parsed.item_drr);
         values.exp_fish = values.exp_fish.or(parsed.exp_fish);
         values.exp_life = values.exp_life.or(parsed.exp_life);
     }
@@ -130,11 +133,14 @@ pub(super) fn build_source_lightstone_item(
         key: source_key.to_string(),
         name,
         r#type: item_type.to_string(),
+        buff_category_key: None,
+        buff_category_id: None,
+        buff_category_level: None,
         afr: override_values.afr,
         bonus_rare: override_values.bonus_rare,
         bonus_big: override_values.bonus_big,
         durability,
-        drr: override_values.drr,
+        item_drr: override_values.item_drr,
         fish_multiplier,
         exp_fish: override_values.exp_fish,
         exp_life: override_values.exp_life,
@@ -200,6 +206,9 @@ impl DoltMySqlStore {
                 key,
                 name: display_name,
                 r#type: item_type,
+                buff_category_key: None,
+                buff_category_id: None,
+                buff_category_level: None,
                 afr,
                 bonus_rare,
                 bonus_big,
@@ -210,7 +219,7 @@ impl DoltMySqlStore {
                             .and_then(|metadata| metadata.durability)
                     })
                     .or(durability),
-                drr,
+                item_drr: drr,
                 fish_multiplier,
                 exp_fish,
                 exp_life,
@@ -238,7 +247,7 @@ impl DoltMySqlStore {
                     let Some(item_id) = row.item_id else {
                         continue;
                     };
-                    items.push(build_source_item(
+                    let mut item = build_source_item(
                         lang,
                         item_id,
                         &row.item_type,
@@ -249,7 +258,11 @@ impl DoltMySqlStore {
                         row.fish_multiplier,
                         row.durability,
                         override_values,
-                    ));
+                    );
+                    item.buff_category_key = row.buff_category_key.clone();
+                    item.buff_category_id = row.buff_category_id;
+                    item.buff_category_level = row.buff_category_level;
+                    items.push(item);
                 }
                 "lightstone_set" => {
                     items.push(build_source_lightstone_item(
@@ -361,6 +374,9 @@ mod tests {
                 source_kind: "item".to_string(),
                 item_id: Some(16162),
                 item_type: "rod".to_string(),
+                buff_category_key: None,
+                buff_category_id: None,
+                buff_category_level: None,
                 source_name_en: Some("Balenos Fishing Rod".to_string()),
                 source_name_ko: Some("발레노스 낚싯대".to_string()),
                 item_icon_file: Some(
@@ -373,7 +389,7 @@ mod tests {
                 afr: Some(0.25),
                 bonus_rare: None,
                 bonus_big: None,
-                drr: None,
+                item_drr: None,
                 exp_fish: None,
                 exp_life: None,
             }],
@@ -391,12 +407,54 @@ mod tests {
     }
 
     #[test]
+    fn source_backed_items_preserve_buff_category_metadata() {
+        let items = DoltMySqlStore::build_source_backed_items(
+            FishLang::En,
+            &[CalculatorSourceBackedItemRow {
+                source_key: "item:9359".to_string(),
+                source_kind: "item".to_string(),
+                item_id: Some(9359),
+                item_type: "food".to_string(),
+                buff_category_key: Some("buff-category:1".to_string()),
+                buff_category_id: Some(1),
+                buff_category_level: Some(0),
+                source_name_en: Some("Balacs Lunchbox".to_string()),
+                source_name_ko: Some("발락스 도시락".to_string()),
+                item_icon_file: Some("00009359.dds".to_string()),
+                icon_id: None,
+                durability: None,
+                fish_multiplier: None,
+                effect_description_ko: Some("자동 낚시 시간 감소 +7%".to_string()),
+                afr: None,
+                bonus_rare: None,
+                bonus_big: None,
+                item_drr: None,
+                exp_fish: None,
+                exp_life: None,
+            }],
+        )
+        .expect("source-backed rows should build");
+
+        assert_eq!(items.len(), 1);
+        let sourced = &items[0];
+        assert_eq!(
+            sourced.buff_category_key.as_deref(),
+            Some("buff-category:1")
+        );
+        assert_eq!(sourced.buff_category_id, Some(1));
+        assert_eq!(sourced.buff_category_level, Some(0));
+    }
+
+    #[test]
     fn source_backed_effect_values_merge_direct_and_text_effects() {
         let values = source_backed_effect_values(&CalculatorSourceBackedItemRow {
             source_key: "item:1".to_string(),
             source_kind: "item".to_string(),
             item_id: Some(1),
             item_type: "buff".to_string(),
+            buff_category_key: None,
+            buff_category_id: None,
+            buff_category_level: None,
             source_name_en: None,
             source_name_ko: None,
             item_icon_file: None,
@@ -407,7 +465,7 @@ mod tests {
             afr: Some(0.05),
             bonus_rare: None,
             bonus_big: None,
-            drr: None,
+            item_drr: None,
             exp_fish: None,
             exp_life: None,
         });
@@ -429,6 +487,9 @@ mod tests {
             source_kind: "lightstone_set".to_string(),
             item_id: None,
             item_type: "lightstone_set".to_string(),
+            buff_category_key: None,
+            buff_category_id: None,
+            buff_category_level: None,
             source_name_en: Some("Nibbles".to_string()),
             source_name_ko: Some("신의 입질".to_string()),
             item_icon_file: None,
@@ -441,7 +502,7 @@ mod tests {
             afr: Some(0.15),
             bonus_rare: None,
             bonus_big: None,
-            drr: None,
+            item_drr: None,
             exp_fish: Some(0.10),
             exp_life: None,
         });
@@ -466,6 +527,9 @@ mod tests {
                     source_kind: "item".to_string(),
                     item_id: Some(14069),
                     item_type: "outfit".to_string(),
+                    buff_category_key: None,
+                    buff_category_id: None,
+                    buff_category_level: None,
                     source_name_en: Some("Apprentice Fisher's Uniform".to_string()),
                     source_name_ko: Some("수습 낚시복".to_string()),
                     item_icon_file: Some("00014069.dds".to_string()),
@@ -476,7 +540,7 @@ mod tests {
                     afr: None,
                     bonus_rare: None,
                     bonus_big: None,
-                    drr: None,
+                    item_drr: None,
                     exp_fish: None,
                     exp_life: None,
                 },
@@ -485,6 +549,9 @@ mod tests {
                     source_kind: "lightstone_set".to_string(),
                     item_id: None,
                     item_type: "lightstone_set".to_string(),
+                    buff_category_key: None,
+                    buff_category_id: None,
+                    buff_category_level: None,
                     source_name_en: None,
                     source_name_ko: Some("낚시꾼의 비기".to_string()),
                     item_icon_file: None,
@@ -495,7 +562,7 @@ mod tests {
                     afr: None,
                     bonus_rare: None,
                     bonus_big: None,
-                    drr: None,
+                    item_drr: None,
                     exp_fish: None,
                     exp_life: None,
                 },

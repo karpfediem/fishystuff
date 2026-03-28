@@ -43,7 +43,7 @@ struct CalculatorEnchantEffectEntryRow {
     afr: Option<f32>,
     bonus_rare: Option<f32>,
     bonus_big: Option<f32>,
-    drr: Option<f32>,
+    item_drr: Option<f32>,
     exp_fish: Option<f32>,
     exp_life: Option<f32>,
 }
@@ -59,6 +59,9 @@ pub(super) struct CalculatorSourceBackedItemRow {
     pub(super) source_kind: String,
     pub(super) item_id: Option<i32>,
     pub(super) item_type: String,
+    pub(super) buff_category_key: Option<String>,
+    pub(super) buff_category_id: Option<i32>,
+    pub(super) buff_category_level: Option<i32>,
     pub(super) source_name_en: Option<String>,
     pub(super) source_name_ko: Option<String>,
     pub(super) item_icon_file: Option<String>,
@@ -69,9 +72,30 @@ pub(super) struct CalculatorSourceBackedItemRow {
     pub(super) afr: Option<f32>,
     pub(super) bonus_rare: Option<f32>,
     pub(super) bonus_big: Option<f32>,
-    pub(super) drr: Option<f32>,
+    pub(super) item_drr: Option<f32>,
     pub(super) exp_fish: Option<f32>,
     pub(super) exp_life: Option<f32>,
+}
+
+#[derive(Debug, Clone)]
+struct CalculatorConsumableItemRow {
+    item_id: i32,
+    item_classify: Option<String>,
+    skill_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CalculatorBuffSourceMetadata {
+    category_id: Option<i32>,
+    category_level: Option<i32>,
+}
+
+fn parse_optional_i32(value: Option<String>) -> Option<i32> {
+    normalize_optional_string(value).and_then(|value| value.parse::<i32>().ok())
+}
+
+fn buff_category_key(category_id: Option<i32>) -> Option<String> {
+    category_id.map(|category_id| format!("buff-category:{category_id}"))
 }
 
 fn normalize_source_owned_item_name(name: &str) -> String {
@@ -312,6 +336,210 @@ impl DoltMySqlStore {
         }
 
         Ok(effect_lines)
+    }
+
+    fn query_consumable_item_rows(
+        &self,
+        ref_id: Option<&str>,
+        item_ids: &[i32],
+    ) -> AppResult<Vec<CalculatorConsumableItemRow>> {
+        if item_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let id_list = item_ids
+            .iter()
+            .map(i32::to_string)
+            .collect::<Vec<_>>()
+            .join(",");
+        let query = format!(
+            "SELECT \
+                CAST(`Index` AS SIGNED) AS item_id, \
+                `ItemClassify`, \
+                TRIM(COALESCE(`SkillNo`, '')) AS skill_no, \
+                TRIM(COALESCE(`SubSkillNo`, '')) AS sub_skill_no \
+             FROM item_table{as_of} \
+             WHERE `Index` IN ({id_list})"
+        );
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let rows: Vec<(i64, Option<String>, Option<String>, Option<String>)> =
+            match conn.query(query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "item_table") => return Ok(Vec::new()),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|(item_id, item_classify, skill_no, sub_skill_no)| {
+                let Ok(item_id) = i32::try_from(item_id) else {
+                    return None;
+                };
+                let skill_ids = [skill_no, sub_skill_no]
+                    .into_iter()
+                    .filter_map(normalize_optional_string)
+                    .collect::<Vec<_>>();
+                Some(CalculatorConsumableItemRow {
+                    item_id,
+                    item_classify: normalize_optional_string(item_classify),
+                    skill_ids,
+                })
+            })
+            .collect())
+    }
+
+    fn query_consumable_skill_buff_categories(
+        &self,
+        ref_id: Option<&str>,
+        skill_ids: &[String],
+    ) -> AppResult<HashMap<String, CalculatorBuffSourceMetadata>> {
+        if skill_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let quote_list = |values: &[String]| {
+            values
+                .iter()
+                .map(|value| format!("'{}'", value.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let skill_id_list = quote_list(skill_ids);
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let skill_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`SkillNo`, '')) AS skill_no, \
+                TRIM(COALESCE(`Buff0`, '')) AS buff0, \
+                TRIM(COALESCE(`Buff1`, '')) AS buff1, \
+                TRIM(COALESCE(`Buff2`, '')) AS buff2, \
+                TRIM(COALESCE(`Buff3`, '')) AS buff3, \
+                TRIM(COALESCE(`Buff4`, '')) AS buff4, \
+                TRIM(COALESCE(`Buff5`, '')) AS buff5, \
+                TRIM(COALESCE(`Buff6`, '')) AS buff6, \
+                TRIM(COALESCE(`Buff7`, '')) AS buff7, \
+                TRIM(COALESCE(`Buff8`, '')) AS buff8, \
+                TRIM(COALESCE(`Buff9`, '')) AS buff9 \
+             FROM skill_table_new{as_of} \
+             WHERE TRIM(COALESCE(`SkillNo`, '')) IN ({skill_id_list})"
+        );
+        let skill_rows: Vec<(
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = match conn.query(skill_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "skill_table_new") => return Ok(HashMap::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut buff_ids = Vec::<String>::new();
+        let mut skill_buffs = HashMap::<String, Vec<String>>::new();
+        for (skill_no, buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9) in
+            skill_rows
+        {
+            let entry = skill_buffs.entry(skill_no).or_default();
+            for buff_id in [
+                buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9,
+            ]
+            .into_iter()
+            .filter_map(normalize_optional_string)
+            {
+                if !entry.iter().any(|existing| existing == &buff_id) {
+                    entry.push(buff_id.clone());
+                }
+                if !buff_ids.iter().any(|existing| existing == &buff_id) {
+                    buff_ids.push(buff_id);
+                }
+            }
+        }
+
+        if buff_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let buff_id_list = quote_list(&buff_ids);
+        let buff_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`Index`, '')) AS buff_id, \
+                `Category`, \
+                `CategoryLevel` \
+             FROM buff_table{as_of} \
+             WHERE TRIM(COALESCE(`Index`, '')) IN ({buff_id_list})"
+        );
+        let buff_rows: Vec<(String, Option<String>, Option<String>)> = match conn.query(buff_query)
+        {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "buff_table") => return Ok(HashMap::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+        let buff_metadata = buff_rows
+            .into_iter()
+            .map(|(buff_id, category, category_level)| {
+                (
+                    buff_id,
+                    CalculatorBuffSourceMetadata {
+                        category_id: parse_optional_i32(category),
+                        category_level: parse_optional_i32(category_level),
+                    },
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        let mut out = HashMap::new();
+        for (skill_id, buff_ids) in skill_buffs {
+            let categories = buff_ids
+                .iter()
+                .filter_map(|buff_id| buff_metadata.get(buff_id))
+                .filter_map(|metadata| {
+                    metadata
+                        .category_id
+                        .filter(|category_id| *category_id > 0)
+                        .map(|category_id| (category_id, metadata.category_level))
+                })
+                .collect::<Vec<_>>();
+            let Some((category_id, category_level)) = categories.first().copied() else {
+                continue;
+            };
+            if categories
+                .iter()
+                .all(|(candidate_id, _)| *candidate_id == category_id)
+            {
+                let category_level = categories
+                    .iter()
+                    .filter_map(|(_, category_level)| *category_level)
+                    .max()
+                    .or(category_level);
+                out.insert(
+                    skill_id,
+                    CalculatorBuffSourceMetadata {
+                        category_id: Some(category_id),
+                        category_level,
+                    },
+                );
+            }
+        }
+
+        Ok(out)
     }
 
     fn query_lightstone_source_rows(
@@ -627,7 +855,7 @@ impl DoltMySqlStore {
         conn.query(query).map_err(db_unavailable)
     }
 
-    fn query_text_source_backed_item_rows(
+    fn query_consumable_source_backed_item_rows(
         &self,
         ref_id: Option<&str>,
         legacy_rows: &[CalculatorItemDbRow],
@@ -637,27 +865,80 @@ impl DoltMySqlStore {
             .iter()
             .filter_map(|row| Some((row.10?, row)))
             .collect::<HashMap<_, _>>();
-
         let mut effect_lines_by_item_id = HashMap::<i32, Vec<String>>::new();
         for (item_id, effect_line) in self.query_consumable_effect_line_rows(ref_id)? {
+            if !legacy_rows_by_item_id.contains_key(&item_id) {
+                continue;
+            }
             let lines = effect_lines_by_item_id.entry(item_id).or_default();
             if !lines.iter().any(|existing| existing == &effect_line) {
                 lines.push(effect_line);
             }
         }
 
-        let mut source_backed_rows = effect_lines_by_item_id
+        if effect_lines_by_item_id.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let item_ids = effect_lines_by_item_id.keys().copied().collect::<Vec<_>>();
+        let item_rows = self.query_consumable_item_rows(ref_id, &item_ids)?;
+        let skill_ids = item_rows
+            .iter()
+            .flat_map(|row| row.skill_ids.iter().cloned())
+            .collect::<Vec<_>>();
+        let buff_categories_by_skill =
+            self.query_consumable_skill_buff_categories(ref_id, &skill_ids)?;
+
+        let mut source_backed_rows = item_rows
             .into_iter()
-            .filter_map(|(item_id, effect_lines)| {
-                let legacy_row = legacy_rows_by_item_id.get(&item_id)?;
-                let item_type = normalize_optional_string(legacy_row.1.clone())
-                    .unwrap_or_else(|| "buff".into());
-                let source_meta = item_source_metadata.get(&item_id);
+            .filter_map(|row| {
+                let effect_lines = effect_lines_by_item_id.remove(&row.item_id)?;
+                let legacy_row = legacy_rows_by_item_id.get(&row.item_id)?;
+                let source_meta = item_source_metadata.get(&row.item_id);
+                let category_entries = row
+                    .skill_ids
+                    .iter()
+                    .filter_map(|skill_id| buff_categories_by_skill.get(skill_id))
+                    .filter_map(|metadata| {
+                        metadata
+                            .category_id
+                            .map(|category_id| (category_id, metadata.category_level))
+                    })
+                    .collect::<Vec<_>>();
+                let category_metadata = category_entries
+                    .first()
+                    .copied()
+                    .filter(|(category_id, _)| {
+                        category_entries
+                            .iter()
+                            .all(|(candidate_id, _)| candidate_id == category_id)
+                    })
+                    .map(
+                        |(category_id, category_level)| CalculatorBuffSourceMetadata {
+                            category_id: Some(category_id),
+                            category_level: category_entries
+                                .iter()
+                                .filter_map(|(_, category_level)| *category_level)
+                                .max()
+                                .or(category_level),
+                        },
+                    )
+                    .unwrap_or_default();
+                let legacy_item_type = normalize_optional_string(legacy_row.1.clone())
+                    .unwrap_or_else(|| "buff".to_string());
+                let item_type = match (category_metadata.category_id, row.item_classify.as_deref())
+                {
+                    (Some(1), _) | (None, Some("8")) => "food",
+                    _ => legacy_item_type.as_str(),
+                };
                 Some(CalculatorSourceBackedItemRow {
-                    source_key: format!("item:{item_id}"),
+                    source_key: format!("item:{}", row.item_id),
                     source_kind: "item".to_string(),
-                    item_id: Some(item_id),
-                    item_type,
+                    item_id: Some(row.item_id),
+                    item_type: item_type.to_string(),
+                    buff_category_key: buff_category_key(category_metadata.category_id),
+                    buff_category_id: category_metadata.category_id,
+                    buff_category_level: category_metadata.category_level,
                     source_name_en: source_meta.and_then(|meta| meta.name_en.clone()),
                     source_name_ko: source_meta.and_then(|meta| meta.name_ko.clone()),
                     item_icon_file: None,
@@ -670,7 +951,7 @@ impl DoltMySqlStore {
                     afr: None,
                     bonus_rare: None,
                     bonus_big: None,
-                    drr: None,
+                    item_drr: None,
                     exp_fish: None,
                     exp_life: None,
                 })
@@ -695,6 +976,9 @@ impl DoltMySqlStore {
                 source_kind: "lightstone_set".to_string(),
                 item_id: None,
                 item_type: "lightstone_set".to_string(),
+                buff_category_key: None,
+                buff_category_id: None,
+                buff_category_level: None,
                 source_name_en,
                 source_name_ko,
                 item_icon_file,
@@ -705,7 +989,7 @@ impl DoltMySqlStore {
                 afr,
                 bonus_rare,
                 bonus_big,
-                drr,
+                item_drr: drr,
                 exp_fish,
                 exp_life,
             },
@@ -752,17 +1036,19 @@ impl DoltMySqlStore {
             Err(err) => return Err(db_unavailable(err)),
         };
 
-        let mut chosen_effects = HashMap::<(String, String), CalculatorEnchantEffectEntryRow>::new();
+        let mut chosen_effects =
+            HashMap::<(String, String), CalculatorEnchantEffectEntryRow>::new();
         for row in rows {
-            let item_type = normalize_optional_string(row.get::<String, _>("item_type"))
-                .unwrap_or_default();
+            let item_type =
+                normalize_optional_string(row.get::<String, _>("item_type")).unwrap_or_default();
             if !matches!(
                 item_type.as_str(),
                 "rod" | "float" | "chair" | "backpack" | "outfit"
             ) {
                 continue;
             }
-            let Some(item_name_ko) = normalize_optional_string(row.get::<String, _>("item_name_ko"))
+            let Some(item_name_ko) =
+                normalize_optional_string(row.get::<String, _>("item_name_ko"))
             else {
                 continue;
             };
@@ -777,7 +1063,7 @@ impl DoltMySqlStore {
                 afr: row.get::<Option<f32>, _>("afr").flatten(),
                 bonus_rare: row.get::<Option<f32>, _>("bonus_rare").flatten(),
                 bonus_big: row.get::<Option<f32>, _>("bonus_big").flatten(),
-                drr: row.get::<Option<f32>, _>("drr").flatten(),
+                item_drr: row.get::<Option<f32>, _>("drr").flatten(),
                 exp_fish: row.get::<Option<f32>, _>("exp_fish").flatten(),
                 exp_life: None,
             };
@@ -790,10 +1076,9 @@ impl DoltMySqlStore {
                 Some(existing) if effect_row.enchant_level == existing.enchant_level => {
                     existing.durability = max_opt_i32(existing.durability, effect_row.durability);
                     existing.afr = max_opt_f32(existing.afr, effect_row.afr);
-                    existing.bonus_rare =
-                        max_opt_f32(existing.bonus_rare, effect_row.bonus_rare);
+                    existing.bonus_rare = max_opt_f32(existing.bonus_rare, effect_row.bonus_rare);
                     existing.bonus_big = max_opt_f32(existing.bonus_big, effect_row.bonus_big);
-                    existing.drr = max_opt_f32(existing.drr, effect_row.drr);
+                    existing.item_drr = max_opt_f32(existing.item_drr, effect_row.item_drr);
                     existing.exp_fish = max_opt_f32(existing.exp_fish, effect_row.exp_fish);
                     existing.exp_life = max_opt_f32(existing.exp_life, effect_row.exp_life);
                 }
@@ -823,7 +1108,8 @@ impl DoltMySqlStore {
             &normalized_names,
         )?;
 
-        let mut exact_metadata_by_name = HashMap::<String, Vec<(i32, CalculatorItemSourceMetadata)>>::new();
+        let mut exact_metadata_by_name =
+            HashMap::<String, Vec<(i32, CalculatorItemSourceMetadata)>>::new();
         let mut normalized_metadata_by_name =
             HashMap::<String, Vec<(i32, CalculatorItemSourceMetadata)>>::new();
         for (item_id, metadata) in metadata_candidates {
@@ -861,6 +1147,9 @@ impl DoltMySqlStore {
                     source_kind: "item".to_string(),
                     item_id: Some(item_id),
                     item_type: row.item_type,
+                    buff_category_key: None,
+                    buff_category_id: None,
+                    buff_category_level: None,
                     source_name_en: metadata.name_en,
                     source_name_ko: metadata.name_ko,
                     item_icon_file: None,
@@ -871,7 +1160,7 @@ impl DoltMySqlStore {
                     afr: row.afr,
                     bonus_rare: row.bonus_rare,
                     bonus_big: row.bonus_big,
-                    drr: row.drr,
+                    item_drr: row.item_drr,
                     exp_fish: row.exp_fish,
                     exp_life: row.exp_life,
                 })
@@ -890,7 +1179,7 @@ impl DoltMySqlStore {
             .collect::<Vec<_>>();
         let item_source_metadata =
             self.query_calculator_item_table_metadata(ref_id, &all_item_ids)?;
-        let mut source_backed_rows = self.query_text_source_backed_item_rows(
+        let mut source_backed_rows = self.query_consumable_source_backed_item_rows(
             ref_id,
             &all_legacy_rows,
             &item_source_metadata,

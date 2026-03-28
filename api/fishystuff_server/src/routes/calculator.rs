@@ -74,7 +74,7 @@ struct CalculatorDerivedSignals {
     auto_fish_time_reduction_text: String,
     casts_title: String,
     casts_average: String,
-    durability_reduction_resistance_text: String,
+    item_drr_text: String,
     chance_to_consume_durability_text: String,
     durability_loss_title: String,
     durability_loss_average: String,
@@ -103,6 +103,7 @@ struct SelectOption<'a> {
     label: &'a str,
     icon: Option<&'a str>,
     item: Option<&'a CalculatorItemEntry>,
+    lifeskill_level: Option<&'a CalculatorLifeskillLevelEntry>,
 }
 
 struct SearchableDropdownConfig<'a> {
@@ -118,6 +119,13 @@ struct SearchableDropdownConfig<'a> {
     search_placeholder: &'a str,
 }
 
+struct SearchableMultiselectConfig<'a> {
+    root_id: &'a str,
+    bind_key: &'a str,
+    search_placeholder: &'a str,
+    helper_text: Option<&'a str>,
+}
+
 const SEARCHABLE_DROPDOWN_RESULT_LIMIT: usize = 24;
 
 const NONE_SELECT_OPTION: SelectOption<'static> = SelectOption {
@@ -125,6 +133,7 @@ const NONE_SELECT_OPTION: SelectOption<'static> = SelectOption {
     label: "None",
     icon: None,
     item: None,
+    lifeskill_level: None,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -638,6 +647,12 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         "item:830150".to_string(),
     )]);
     let pet_value_aliases = build_pet_value_aliases(&data.catalog.pets);
+    let items_by_key = data
+        .catalog
+        .items
+        .iter()
+        .map(|item| (item.key.as_str(), item))
+        .collect::<HashMap<_, _>>();
 
     let valid_item_keys = data
         .catalog
@@ -732,6 +747,7 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         &item_name_to_key,
         Some(&item_legacy_aliases),
         defaults.outfit.clone(),
+        None,
     );
     signals.food = normalize_named_array(
         &signals.food,
@@ -739,6 +755,7 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         &item_name_to_key,
         Some(&item_legacy_aliases),
         defaults.food.clone(),
+        Some(&items_by_key),
     );
     signals.buff = normalize_named_array(
         &signals.buff,
@@ -746,6 +763,7 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         &item_name_to_key,
         Some(&item_legacy_aliases),
         defaults.buff.clone(),
+        Some(&items_by_key),
     );
 
     normalize_pet(&mut signals.pet1, defaults.pet1.clone(), &pet_value_aliases);
@@ -944,6 +962,7 @@ fn normalize_named_array(
     lookup: &HashMap<String, String>,
     aliases: Option<&HashMap<String, String>>,
     default_values: Vec<String>,
+    items_by_key: Option<&HashMap<&str, &CalculatorItemEntry>>,
 ) -> Vec<String> {
     if values.is_empty() {
         return Vec::new();
@@ -958,11 +977,45 @@ fn normalize_named_array(
             }
         })
         .collect::<Vec<_>>();
+    let normalized = collapse_named_array_by_buff_category(normalized, items_by_key);
     if normalized.is_empty() {
         default_values
     } else {
         normalized
     }
+}
+
+fn collapse_named_array_by_buff_category(
+    values: Vec<String>,
+    items_by_key: Option<&HashMap<&str, &CalculatorItemEntry>>,
+) -> Vec<String> {
+    let Some(items_by_key) = items_by_key else {
+        return values
+            .into_iter()
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
+    };
+
+    let mut seen_keys = std::collections::HashSet::<String>::new();
+    let mut seen_categories = std::collections::HashSet::<String>::new();
+    let mut collapsed = Vec::new();
+    for value in values.into_iter().rev() {
+        if value.is_empty() || !seen_keys.insert(value.clone()) {
+            continue;
+        }
+        let Some(item) = items_by_key.get(value.as_str()) else {
+            collapsed.push(value);
+            continue;
+        };
+        if let Some(category_key) = item.buff_category_key.as_ref() {
+            if !seen_categories.insert(category_key.clone()) {
+                continue;
+            }
+        }
+        collapsed.push(value);
+    }
+    collapsed.reverse();
+    collapsed
 }
 
 fn normalize_lookup_value(value: &str) -> String {
@@ -1065,7 +1118,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     // this baseline locally, so server-backed control changes must not poison it.
     let auto_fish_time_raw = (180.0 * (1.0 - afr_raw)).max(60.0);
 
-    let drr_raw = pet_drr_sum
+    let item_drr_raw = pet_drr_sum
         + sum_item_property(
             &items_by_key,
             &[
@@ -1075,7 +1128,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
                 &signals.lightstone_set,
             ],
             &[&signals.buff, &signals.outfit],
-            |item| item.drr.map(f64::from),
+            |item| item.item_drr.map(f64::from),
         );
 
     let catch_time_active_raw = signals.catch_time_active.max(0.0);
@@ -1103,13 +1156,13 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let percent_improvement =
         100.0 - percentage_of_average_time(total_time_raw, unoptimized_time_raw);
 
-    let lifeskill_index = levels_by_key
-        .get(signals.lifeskill_level.as_str())
-        .map(|level| level.index)
-        .unwrap_or_default() as f64;
-    let chance_to_reduce_raw = (if signals.brand { 0.5 } else { 1.0 })
-        * (1.0 - drr_raw)
-        * (0.9 - 0.005 * lifeskill_index).max(0.4);
+    let lifeskill_level = levels_by_key.get(signals.lifeskill_level.as_str()).copied();
+    let lifeskill_level_drr_raw = lifeskill_level
+        .map(|level| f64::from(level.lifeskill_level_drr))
+        .unwrap_or_default();
+    let brandstone_durability_factor = if signals.brand { 0.5 } else { 1.0 };
+    let chance_to_reduce_raw =
+        brandstone_durability_factor * (1.0 - item_drr_raw) * (1.0 - lifeskill_level_drr_raw);
 
     let timespan_seconds = timespan_seconds(signals.timespan_amount, &signals.timespan_unit);
     let timespan_text = timespan_text(signals.timespan_amount, &signals.timespan_unit);
@@ -1128,10 +1181,12 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
             "petLifeExp": pet_life_exp,
             "afrUncapped": afr_uncapped_raw,
             "afr": afr_raw,
-            "drr": drr_raw,
+            "itemDrr": item_drr_raw,
+            "lifeskillLevelDrr": lifeskill_level_drr_raw,
+            "brandstoneDurabilityFactor": brandstone_durability_factor,
             "biteTime": bite_time_raw,
             "totalTime": total_time_raw,
-            "chanceToReduce": chance_to_reduce_raw,
+            "chanceToConsumeDurability": chance_to_reduce_raw,
             "castsAverage": casts_average_raw,
             "durabilityLossAverage": durability_loss_average_raw,
         }
@@ -1153,7 +1208,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         auto_fish_time_reduction_text: format!("{:.0}%", afr_uncapped_raw * 100.0),
         casts_title: format!("Average Casts ({timespan_text})"),
         casts_average: fmt2(casts_average_raw),
-        durability_reduction_resistance_text: format!("{:.0}%", drr_raw * 100.0),
+        item_drr_text: format!("{:.0}%", item_drr_raw * 100.0),
         chance_to_consume_durability_text: format!("{:.2}%", chance_to_reduce_raw * 100.0),
         durability_loss_title: format!("Average Durability Loss ({timespan_text})"),
         durability_loss_average: fmt2(durability_loss_average_raw),
@@ -1463,8 +1518,8 @@ fn render_calculator_app(
                         <div class="stat-value text-2xl" data-text="$_live.casts_average"></div>
                     </div>
                     <div class="stat">
-                        <div class="stat-title">Durability Reduction Resistance (DRR)</div>
-                        <div class="stat-value text-2xl" data-text="$_live.durability_reduction_resistance_text"></div>
+                        <div class="stat-title">Item DRR</div>
+                        <div class="stat-value text-2xl" data-text="$_live.item_drr_text"></div>
                     </div>
                     <div class="stat">
                         <div class="stat-title">Chance to consume Durability</div>
@@ -1777,11 +1832,33 @@ fn render_calculator_app(
         ),
         (
             "__FOODS__",
-            render_checkbox_group("foods", "food", &signals.food, &foods, None),
+            render_searchable_multiselect_control(
+                &SearchableMultiselectConfig {
+                    root_id: "calculator-food-picker",
+                    bind_key: "food",
+                    search_placeholder: "Search foods by name or effect",
+                    helper_text: Some(
+                        "Selecting another food in the same buff group replaces the previous one.",
+                    ),
+                },
+                &signals.food,
+                &foods,
+            ),
         ),
         (
             "__BUFFS__",
-            render_checkbox_group("buffs", "buff", &signals.buff, &buffs, None),
+            render_searchable_multiselect_control(
+                &SearchableMultiselectConfig {
+                    root_id: "calculator-buff-picker",
+                    bind_key: "buff",
+                    search_placeholder: "Search buffs by name or effect",
+                    helper_text: Some(
+                        "Selecting another buff in the same buff group replaces the previous one.",
+                    ),
+                },
+                &signals.buff,
+                &buffs,
+            ),
         ),
         (
             "__PETS__",
@@ -1805,6 +1882,7 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             label: option.label.as_str(),
             icon: None,
             item: None,
+            lifeskill_level: None,
         })
         .collect()
 }
@@ -1862,6 +1940,17 @@ fn render_searchable_dropdown_text_content(label: &str) -> String {
     )
 }
 
+fn buff_category_label(item: &CalculatorItemEntry) -> Option<&'static str> {
+    match item.buff_category_id {
+        Some(1) => Some("Meal"),
+        Some(2) => Some("Elixir"),
+        Some(6) => Some("Perfume"),
+        Some(18) => Some("Housekeeper"),
+        Some(2002) => Some("Event"),
+        _ => None,
+    }
+}
+
 fn format_effect_percent(value: f32) -> String {
     trim_float(f64::from(value) * 100.0)
 }
@@ -1875,6 +1964,12 @@ fn render_effect_badge(label: &str, class_name: &str) -> String {
 
 fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
     let mut badges = Vec::new();
+    if let Some(category_label) = buff_category_label(item) {
+        badges.push(render_effect_badge(
+            category_label,
+            "border-base-content/15 bg-base-300 text-base-content",
+        ));
+    }
     if let Some(afr) = item.afr.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
             &format!("-{}% AFT", format_effect_percent(afr)),
@@ -1893,9 +1988,9 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
             "border-blue-400 bg-blue-300 text-blue-950",
         ));
     }
-    if let Some(drr) = item.drr.filter(|value| *value > 0.0) {
+    if let Some(item_drr) = item.item_drr.filter(|value| *value > 0.0) {
         badges.push(render_effect_badge(
-            &format!("+{}% DRR", format_effect_percent(drr)),
+            &format!("+{}% Item DRR", format_effect_percent(item_drr)),
             "border-amber-400 bg-amber-300 text-amber-950",
         ));
     }
@@ -1935,6 +2030,44 @@ fn render_item_effect_badges(item: &CalculatorItemEntry) -> String {
     )
 }
 
+fn render_item_effect_search_text(item: &CalculatorItemEntry) -> String {
+    let mut parts = Vec::<&str>::new();
+    if item.afr.filter(|value| *value > 0.0).is_some() {
+        parts.extend(["aft", "auto fishing", "auto-fishing", "auto fish time"]);
+    }
+    if item.bonus_rare.filter(|value| *value > 0.0).is_some() {
+        parts.extend(["rare", "rare fish"]);
+    }
+    if item.bonus_big.filter(|value| *value > 0.0).is_some() {
+        parts.extend(["hq", "high quality", "high-quality", "big fish"]);
+    }
+    if item.item_drr.filter(|value| *value > 0.0).is_some() {
+        parts.extend(["item drr", "durability reduction resistance", "durability"]);
+    }
+    if item.exp_fish.filter(|value| *value > 0.0).is_some() {
+        parts.extend(["fish exp", "fishing exp", "fishing experience"]);
+    }
+    if item.exp_life.filter(|value| *value > 0.0).is_some() {
+        parts.extend(["life exp", "life experience"]);
+    }
+    if item
+        .fish_multiplier
+        .filter(|value| *value > 0.0 && (*value - 1.0).abs() > 0.0001)
+        .is_some()
+    {
+        parts.extend(["fish multiplier", "fish value"]);
+    }
+    if item.r#type == "outfit" {
+        parts.extend(["set effect", "set bonus"]);
+    }
+    if let Some(category_label) = buff_category_label(item) {
+        parts.push(category_label);
+        parts.push("buff category");
+        parts.push("exclusive group");
+    }
+    parts.join(" ")
+}
+
 fn render_searchable_dropdown_option_content_html(option: SelectOption<'_>) -> String {
     let mut html = String::new();
     if let Some(icon) = option.icon {
@@ -1949,6 +2082,20 @@ fn render_searchable_dropdown_option_content_html(option: SelectOption<'_>) -> S
     let badges = option
         .item
         .map(render_item_effect_badges)
+        .or_else(|| {
+            option.lifeskill_level.map(|level| {
+                format!(
+                    "<span class=\"mt-1 flex flex-wrap gap-1\">{}</span>",
+                    render_effect_badge(
+                        &format!(
+                            "+{}% Lv DRR",
+                            format_effect_percent(level.lifeskill_level_drr)
+                        ),
+                        "border-amber-400 bg-amber-300 text-amber-950",
+                    )
+                )
+            })
+        })
         .unwrap_or_default();
     write!(
         html,
@@ -2181,6 +2328,231 @@ fn render_searchable_select_control(
     )
 }
 
+fn render_searchable_multiselect_search_text(option: SelectOption<'_>) -> String {
+    let mut parts = vec![option.label.to_string()];
+    if let Some(item) = option.item {
+        let effect_terms = render_item_effect_search_text(item);
+        if !effect_terms.is_empty() {
+            parts.push(effect_terms);
+        }
+    }
+    parts.join(" ")
+}
+
+fn render_searchable_multiselect_catalog_html(options: &[SelectOption<'_>]) -> String {
+    let mut html = String::new();
+    html.push_str("<div data-role=\"catalog\" hidden>");
+    for option in options {
+        let category_key_attr = option
+            .item
+            .and_then(|item| item.buff_category_key.as_deref())
+            .map(|value| format!(" data-category-key=\"{}\"", escape_html(value)))
+            .unwrap_or_default();
+        write!(
+            html,
+            "<template data-role=\"option-template\" data-value=\"{}\" data-label=\"{}\" data-search-text=\"{}\"{}>{}</template>",
+            escape_html(option.value),
+            escape_html(option.label),
+            escape_html(&render_searchable_multiselect_search_text(*option)),
+            category_key_attr,
+            render_searchable_dropdown_option_content_html(*option),
+        )
+        .unwrap();
+    }
+    html.push_str("</div>");
+    html
+}
+
+fn render_searchable_multiselect_inputs_html(
+    bind_key: &str,
+    selected_values: &[String],
+    options: &[SelectOption<'_>],
+) -> String {
+    let selected = selected_values
+        .iter()
+        .map(|value| value.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    let mut html = String::new();
+    html.push_str("<div data-role=\"bound-inputs\" hidden>");
+    for option in options {
+        let checked_attr = if selected.contains(option.value) {
+            " checked"
+        } else {
+            ""
+        };
+        let category_key_attr = option
+            .item
+            .and_then(|item| item.buff_category_key.as_deref())
+            .map(|value| format!(" data-category-key=\"{}\"", escape_html(value)))
+            .unwrap_or_default();
+        write!(
+            html,
+            "<input data-role=\"bound-option\" data-bind=\"{}\" data-label=\"{}\" type=\"checkbox\" value=\"{}\"{}{}>",
+            escape_html(bind_key),
+            escape_html(option.label),
+            escape_html(option.value),
+            checked_attr,
+            category_key_attr,
+        )
+        .unwrap();
+    }
+    html.push_str("</div>");
+    html
+}
+
+fn render_searchable_multiselect_selection_html(
+    selected_values: &[String],
+    options: &[SelectOption<'_>],
+) -> String {
+    let selected_lookup = options
+        .iter()
+        .copied()
+        .map(|option| (option.value, option))
+        .collect::<HashMap<_, _>>();
+    let mut html = String::new();
+    for value in selected_values {
+        let Some(option) = selected_lookup.get(value.as_str()).copied() else {
+            continue;
+        };
+        write!(
+            html,
+            "<div class=\"join items-stretch rounded-box border border-base-300 bg-base-100 p-1 text-base-content shadow-sm\"><span class=\"inline-flex min-w-0 items-center px-2 py-1 text-sm\">{}</span><button type=\"button\" class=\"btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70\" data-searchable-multiselect-remove data-value=\"{}\" aria-label=\"Remove {}\">×</button></div>",
+            render_searchable_dropdown_option_content_html(option),
+            escape_html(option.value),
+            escape_html(option.label),
+        )
+        .unwrap();
+    }
+    html
+}
+
+fn render_searchable_multiselect_results_html(
+    options: &[SelectOption<'_>],
+    selected_values: &[String],
+    query: &str,
+) -> String {
+    let selected = selected_values
+        .iter()
+        .map(|value| value.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    let normalized_query = normalize_lookup_value(query);
+    let mut matches = options
+        .iter()
+        .copied()
+        .filter(|option| {
+            if normalized_query.is_empty() {
+                return true;
+            }
+            let haystack =
+                normalize_lookup_value(&render_searchable_multiselect_search_text(*option));
+            normalized_query
+                .split_whitespace()
+                .all(|part| haystack.contains(part))
+        })
+        .collect::<Vec<_>>();
+    matches.sort_by_key(|option| (selected.contains(option.value), option.label.to_string()));
+    matches.truncate(SEARCHABLE_DROPDOWN_RESULT_LIMIT);
+
+    let mut html = String::new();
+    html.push_str(
+        "<ul data-role=\"results\" class=\"menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1\">",
+    );
+    if matches.is_empty() {
+        html.push_str("<li class=\"menu-disabled\"><span>No matching options</span></li>");
+    } else {
+        for option in matches {
+            let is_selected = selected.contains(option.value);
+            write!(
+                html,
+                "<li><button type=\"button\" class=\"justify-between gap-3 text-left{}\" data-searchable-multiselect-option data-selected=\"{}\" data-value=\"{}\" data-label=\"{}\"><span class=\"flex min-w-0 flex-1 items-center gap-3\">{}</span>{}</button></li>",
+                if is_selected { " opacity-75" } else { "" },
+                if is_selected { "true" } else { "false" },
+                escape_html(option.value),
+                escape_html(option.label),
+                render_searchable_dropdown_option_content_html(option),
+                if is_selected {
+                    "<span class=\"badge badge-soft badge-primary badge-xs\">Added</span>"
+                } else {
+                    ""
+                }
+            )
+            .unwrap();
+        }
+    }
+    html.push_str("</ul>");
+    html
+}
+
+fn render_searchable_multiselect_control(
+    config: &SearchableMultiselectConfig<'_>,
+    selected_values: &[String],
+    options: &[SelectOption<'_>],
+) -> String {
+    let mut options = options.to_vec();
+    options.sort_by(|left, right| left.label.cmp(right.label));
+
+    let panel_id = format!("{}-panel", config.root_id);
+    let search_input_id = format!("{}-search-input", config.root_id);
+    let selection_html = render_searchable_multiselect_selection_html(selected_values, &options);
+    let results_html = render_searchable_multiselect_results_html(&options, selected_values, "");
+    let catalog_html = render_searchable_multiselect_catalog_html(&options);
+    let inputs_html =
+        render_searchable_multiselect_inputs_html(config.bind_key, selected_values, &options);
+    let selection_hidden_attr = if selection_html.is_empty() {
+        " hidden"
+    } else {
+        ""
+    };
+    let helper_text_html = config
+        .helper_text
+        .map(|helper_text| {
+            format!(
+                "<p class=\"text-xs text-base-content/60\">{}</p>",
+                escape_html(helper_text)
+            )
+        })
+        .unwrap_or_default();
+
+    format!(
+        r#"<fishy-searchable-multiselect id="{root_id}" class="relative block w-full" placeholder="{search_placeholder}">
+    <div data-role="shell" class="flex min-h-11 w-full flex-wrap items-center gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm">
+        <div data-role="selection" class="flex flex-wrap gap-2"{selection_hidden_attr}>{selection_html}</div>
+        <label class="flex min-w-[12rem] flex-1 items-center gap-2 text-sm">
+            <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
+            <input id="{search_input_id}"
+                   data-role="search-input"
+                   type="search"
+                   class="w-full min-w-0 border-0 bg-transparent p-0 shadow-none outline-none"
+                   style="outline: none; box-shadow: none;"
+                   placeholder="{search_placeholder}"
+                   autocomplete="off"
+                   spellcheck="false">
+        </label>
+    </div>
+    <div id="{panel_id}" data-role="panel" class="absolute left-0 top-full z-50 mt-2 w-full min-w-full max-w-full" hidden>
+        <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
+            <div class="px-1 py-1">
+                {results_html}
+            </div>
+        </div>
+    </div>
+    {helper_text_html}
+    {catalog_html}
+    {inputs_html}
+</fishy-searchable-multiselect>"#,
+        root_id = escape_html(config.root_id),
+        panel_id = escape_html(&panel_id),
+        search_input_id = escape_html(&search_input_id),
+        selection_hidden_attr = selection_hidden_attr,
+        selection_html = selection_html,
+        search_placeholder = escape_html(config.search_placeholder),
+        results_html = results_html,
+        helper_text_html = helper_text_html,
+        catalog_html = catalog_html,
+        inputs_html = inputs_html,
+    )
+}
+
 fn render_zone_search_results(
     results_list_id: &str,
     zones: &[ZoneEntry],
@@ -2316,6 +2688,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             label: level.name.as_str(),
             icon: None,
             item: None,
+            lifeskill_level: Some(level),
         })
         .collect()
 }
@@ -2332,6 +2705,7 @@ fn item_options_by_type<'a>(
             label: item.name.as_str(),
             icon: item.icon.as_deref(),
             item: Some(item),
+            lifeskill_level: None,
         })
         .collect()
 }
@@ -2612,7 +2986,7 @@ mod tests {
                         name: "Lil' Otter Fishing Carrier".to_string(),
                         icon: Some("/img/items/00830150.webp".to_string()),
                         r#type: "backpack".to_string(),
-                        drr: Some(0.05),
+                        item_drr: Some(0.05),
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
@@ -2626,6 +3000,8 @@ mod tests {
                         key: "item:9359".to_string(),
                         name: "Balacs Lunchbox".to_string(),
                         r#type: "food".to_string(),
+                        buff_category_key: Some("buff-category:1".to_string()),
+                        buff_category_id: Some(1),
                         afr: Some(0.05),
                         ..CalculatorItemEntry::default()
                     },
@@ -2633,6 +3009,8 @@ mod tests {
                         key: "item:721092".to_string(),
                         name: "Treant's Tear".to_string(),
                         r#type: "buff".to_string(),
+                        buff_category_key: Some("buff-category:6".to_string()),
+                        buff_category_id: Some(6),
                         exp_life: Some(0.3),
                         ..CalculatorItemEntry::default()
                     },
@@ -2642,6 +3020,7 @@ mod tests {
                     name: "Guru 20".to_string(),
                     index: 100,
                     order: 100,
+                    lifeskill_level_drr: 0.6,
                 }],
                 defaults: CalculatorSignals {
                     level: 5,
@@ -2811,6 +3190,12 @@ mod tests {
         assert!(text.contains("kind=rod"));
         assert!(text.contains("calculator-rod-picker"));
         assert!(text.contains("calculator-pet1-tier-picker"));
+        assert!(text.contains("<fishy-searchable-multiselect"));
+        assert!(text.contains("calculator-food-picker"));
+        assert!(text.contains("calculator-buff-picker"));
+        assert!(text.contains("Search foods by name or effect"));
+        assert!(text.contains("data-category-key=\"buff-category:1\""));
+        assert!(text.contains("Meal"));
     }
 
     #[tokio::test]
@@ -2993,15 +3378,95 @@ mod tests {
         assert!(text.contains("Selected"));
     }
 
+    #[tokio::test]
+    async fn option_search_returns_lifeskill_level_drr_badges() {
+        let response = get_calculator_datastar_option_search(
+            State(test_state()),
+            Ok(Query(CalculatorSearchableOptionQuery {
+                lang: Some("en".to_string()),
+                r#ref: None,
+                kind: Some("lifeskill_level".to_string()),
+                q: Some("guru".to_string()),
+                results_id: Some("calculator-lifeskill-level-picker-results".to_string()),
+                selected: Some("100".to_string()),
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .unwrap()
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body()).await.unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("Guru 20"));
+        assert!(text.contains("+60% Lv DRR"));
+        assert!(text.contains("Selected"));
+    }
+
     #[test]
     fn normalize_named_array_keeps_explicit_empty_selection() {
         let valid_keys = std::collections::HashSet::from(["item:1".to_string()]);
         let lookup = HashMap::from([(normalize_lookup_value("Item One"), "item:1".to_string())]);
 
-        let normalized =
-            normalize_named_array(&[], &valid_keys, &lookup, None, vec!["item:1".to_string()]);
+        let normalized = normalize_named_array(
+            &[],
+            &valid_keys,
+            &lookup,
+            None,
+            vec!["item:1".to_string()],
+            None,
+        );
 
         assert!(normalized.is_empty());
+    }
+
+    #[test]
+    fn normalize_named_array_keeps_only_last_item_per_buff_category() {
+        let valid_keys = std::collections::HashSet::from([
+            "item:1".to_string(),
+            "item:2".to_string(),
+            "item:3".to_string(),
+        ]);
+        let lookup = HashMap::from([
+            (normalize_lookup_value("Item One"), "item:1".to_string()),
+            (normalize_lookup_value("Item Two"), "item:2".to_string()),
+            (normalize_lookup_value("Item Three"), "item:3".to_string()),
+        ]);
+        let item_one = CalculatorItemEntry {
+            key: "item:1".to_string(),
+            buff_category_key: Some("buff-category:1".to_string()),
+            ..CalculatorItemEntry::default()
+        };
+        let item_two = CalculatorItemEntry {
+            key: "item:2".to_string(),
+            buff_category_key: Some("buff-category:1".to_string()),
+            ..CalculatorItemEntry::default()
+        };
+        let item_three = CalculatorItemEntry {
+            key: "item:3".to_string(),
+            ..CalculatorItemEntry::default()
+        };
+        let items_by_key = HashMap::from([
+            ("item:1", &item_one),
+            ("item:2", &item_two),
+            ("item:3", &item_three),
+        ]);
+
+        let normalized = normalize_named_array(
+            &[
+                "item:1".to_string(),
+                "item:2".to_string(),
+                "item:3".to_string(),
+            ],
+            &valid_keys,
+            &lookup,
+            None,
+            Vec::new(),
+            Some(&items_by_key),
+        );
+
+        assert_eq!(normalized, vec!["item:2".to_string(), "item:3".to_string()]);
     }
 
     #[test]

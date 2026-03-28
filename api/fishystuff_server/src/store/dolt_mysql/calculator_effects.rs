@@ -3,7 +3,7 @@ pub(super) struct CalculatorItemEffectValues {
     pub(super) afr: Option<f32>,
     pub(super) bonus_rare: Option<f32>,
     pub(super) bonus_big: Option<f32>,
-    pub(super) drr: Option<f32>,
+    pub(super) item_drr: Option<f32>,
     pub(super) exp_fish: Option<f32>,
     pub(super) exp_life: Option<f32>,
 }
@@ -15,8 +15,28 @@ fn add_effect_value(slot: &mut Option<f32>, value: Option<f32>) {
     *slot = Some(slot.unwrap_or(0.0) + value);
 }
 
+fn strip_game_markup(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut angle_depth = 0usize;
+    let mut brace_depth = 0usize;
+
+    for ch in text.chars() {
+        match ch {
+            '<' if brace_depth == 0 => angle_depth += 1,
+            '>' if angle_depth > 0 => angle_depth -= 1,
+            '{' if angle_depth == 0 => brace_depth += 1,
+            '}' if brace_depth > 0 => brace_depth -= 1,
+            _ if angle_depth == 0 && brace_depth == 0 => out.push(ch),
+            _ => {}
+        }
+    }
+
+    out
+}
+
 pub(super) fn extract_first_number(text: &str) -> Option<f32> {
-    let chars: Vec<char> = text.chars().collect();
+    let sanitized = strip_game_markup(text);
+    let chars: Vec<char> = sanitized.chars().collect();
     let mut idx = 0;
     while idx < chars.len() {
         if chars[idx] == '+' || chars[idx] == '-' || chars[idx].is_ascii_digit() {
@@ -45,7 +65,8 @@ fn extract_percent_ratio(text: &str) -> Option<f32> {
 }
 
 fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &str) {
-    let line = line.trim();
+    let sanitized = strip_game_markup(line);
+    let line = sanitized.trim();
     if line.is_empty() {
         return;
     }
@@ -59,7 +80,7 @@ fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &
         add_effect_value(&mut values.bonus_big, extract_percent_ratio(line));
     }
     if line.contains("내구도 소모 감소 저항") {
-        add_effect_value(&mut values.drr, extract_percent_ratio(line));
+        add_effect_value(&mut values.item_drr, extract_percent_ratio(line));
     }
     if line.contains("낚시 경험치") {
         add_effect_value(&mut values.exp_fish, extract_percent_ratio(line));
@@ -129,6 +150,24 @@ mod tests {
             CalculatorItemEffectValues {
                 afr: Some(0.10),
                 exp_life: Some(0.50),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
+    fn calculator_effect_text_ignores_game_markup_when_parsing_numbers() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(
+            &mut values,
+            "<PAColor0xffe9bd23>자동 낚시 시간 감소 +10%<PAOldColor>\n<PAColor0xffe9bd23>낚시 경험치 획득량 +25%<PAOldColor>",
+        );
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                afr: Some(0.10),
+                exp_fish: Some(0.25),
                 ..CalculatorItemEffectValues::default()
             }
         );
