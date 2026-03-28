@@ -288,8 +288,10 @@ function addNamedIconTarget(targets, target) {
     assetStem,
     displayName: target.displayName || `icon:${assetStem}`,
     sourcePath: null,
+    kind: target.kind || "item",
   };
   existing.displayName = target.displayName || existing.displayName;
+  existing.kind = target.kind || existing.kind || "item";
   const normalizedSourcePath = normalizeArchivePath(target.sourcePath);
   if (normalizedSourcePath) {
     existing.sourcePath = normalizedSourcePath;
@@ -464,6 +466,7 @@ function queryCalculatorIconTargets(calculatorApiUrl) {
         addNamedIconTarget(targets, {
           assetStem,
           displayName: row.display_name || `fish:${assetStem}`,
+          kind: "item",
           sourcePath:
             preferredSourcePath ||
             `ui_texture/icon/new_icon/product_icon_png/${String(row.fish_item_icon_file).trim().toLowerCase()}`,
@@ -476,6 +479,7 @@ function queryCalculatorIconTargets(calculatorApiUrl) {
         addNamedIconTarget(targets, {
           assetStem,
           displayName: row.display_name || `encyclopedia:${assetStem}`,
+          kind: "encyclopedia",
           sourcePath: `ui_texture/ui_artwork/encyclopedia/${assetStem.toLowerCase()}.dds`,
         });
       }
@@ -551,19 +555,23 @@ function extractSelectedSources(sourceArchive, sourcePaths, tempDir) {
   runCommand("cargo", args, { capture: false });
 }
 
-function convertToWebp(sourcePath, outputPath) {
-  runCommand("magick", [
+function convertToWebp(sourcePath, outputPath, target) {
+  const args = [
     sourcePath,
     "-auto-orient",
     "-strip",
-    "-resize",
-    `${iconSize}x${iconSize}`,
+  ];
+  if (target?.kind !== "encyclopedia") {
+    args.push("-resize", `${iconSize}x${iconSize}`);
+  }
+  args.push(
     "-define",
     "webp:method=6",
     "-quality",
     String(webpQuality),
     outputPath,
-  ]);
+  );
+  runCommand("magick", args);
 }
 
 function main() {
@@ -619,7 +627,7 @@ function main() {
       const outputPath = target.assetStem
         ? outputPathForStem(options.outputDir, target.assetStem)
         : outputPathForIcon(options.outputDir, target.iconId);
-      convertToWebp(extractedPath, outputPath);
+      convertToWebp(extractedPath, outputPath, target);
       if (!options.quiet) {
         console.log(
           `built ${path.relative(repoRoot, outputPath)} from ${target.sourcePath} (${target.displayName})`,
