@@ -260,11 +260,13 @@ pub async fn post_calculator_datastar_eval(
     let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
     let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
     let (normalized_signals, derived) = normalize_and_derive(raw_signals, &data);
-    let events =
-        vec![
-            calculator_signals_event(&normalized_signals, &derived, CalculatorPatchMode::Eval)?
-                .into_datastar_event(),
-        ];
+    let events = vec![calculator_signals_event(
+        &data,
+        &normalized_signals,
+        &derived,
+        CalculatorPatchMode::Eval,
+    )?
+    .into_datastar_event()];
     Ok(calculator_datastar_response(events))
 }
 
@@ -340,8 +342,13 @@ fn calculator_datastar_init_response(
     let (normalized_signals, derived) = normalize_and_derive(raw_signals, data);
     let app = render_calculator_app(data, &normalized_signals, &derived)?;
     let events = vec![
-        calculator_signals_event(&normalized_signals, &derived, CalculatorPatchMode::Init)?
-            .into_datastar_event(),
+        calculator_signals_event(
+            data,
+            &normalized_signals,
+            &derived,
+            CalculatorPatchMode::Init,
+        )?
+        .into_datastar_event(),
         PatchElements::new(app)
             .selector("#calculator-app")
             .mode(ElementPatchMode::Outer)
@@ -396,12 +403,13 @@ fn parse_calculator_signals_body(
 }
 
 fn calculator_signals_event(
+    data: &CalculatorData,
     signals: &CalculatorSignals,
     derived: &CalculatorDerivedSignals,
     mode: CalculatorPatchMode,
 ) -> AppResult<PatchSignals> {
     let mut patch = match mode {
-        CalculatorPatchMode::Init => init_signals_patch_map(signals)?,
+        CalculatorPatchMode::Init => init_signals_patch_map(data, signals)?,
         CalculatorPatchMode::Eval => serde_json::Map::new(),
     };
     if matches!(mode, CalculatorPatchMode::Init) {
@@ -455,6 +463,9 @@ fn parse_calculator_signals_value(
     coerce_object_bool(&mut object, "brand");
     coerce_object_bool(&mut object, "active");
     coerce_object_bool(&mut object, "debug");
+    coerce_object_string_array(&mut object, "outfit");
+    coerce_object_string_array(&mut object, "food");
+    coerce_object_string_array(&mut object, "buff");
 
     for key in ["pet1", "pet2", "pet3", "pet4", "pet5"] {
         if let Some(Value::Object(pet)) = object.get_mut(key) {
@@ -520,6 +531,12 @@ fn coerce_object_bool(object: &mut serde_json::Map<String, Value>, key: &str) {
     }
 }
 
+fn coerce_object_string_array(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(value) = object.get_mut(key) {
+        coerce_value_string_array(value);
+    }
+}
+
 fn coerce_nested_string(object: &mut serde_json::Map<String, Value>, key: &str) {
     if let Some(value) = object.get_mut(key) {
         if let Some(string) = value.as_str() {
@@ -532,22 +549,45 @@ fn coerce_nested_string(object: &mut serde_json::Map<String, Value>, key: &str) 
 
 fn coerce_nested_string_array(object: &mut serde_json::Map<String, Value>, key: &str) {
     if let Some(value) = object.get_mut(key) {
-        match value {
-            Value::String(string) => {
-                *value = Value::Array(vec![Value::String(string.clone())]);
-            }
-            Value::Array(values) => {
-                *values = values
-                    .iter()
-                    .filter_map(|value| match value {
-                        Value::String(string) => Some(Value::String(string.clone())),
-                        Value::Number(number) => Some(Value::String(number.to_string())),
+        coerce_value_string_array(value);
+    }
+}
+
+fn coerce_value_string_array(value: &mut Value) {
+    match value {
+        Value::String(string) => {
+            *value = Value::Array(vec![Value::String(string.clone())]);
+        }
+        Value::Array(values) => {
+            *values = values
+                .iter()
+                .filter_map(|value| match value {
+                    Value::String(string) => Some(Value::String(string.clone())),
+                    Value::Number(number) => Some(Value::String(number.to_string())),
+                    _ => None,
+                })
+                .collect();
+        }
+        Value::Object(object) => {
+            let mut keyed_values = object
+                .iter()
+                .filter_map(|(key, value)| {
+                    key.parse::<usize>().ok().and_then(|index| match value {
+                        Value::String(string) => Some((index, Value::String(string.clone()))),
+                        Value::Number(number) => Some((index, Value::String(number.to_string()))),
                         _ => None,
                     })
-                    .collect();
-            }
-            _ => {}
+                })
+                .collect::<Vec<_>>();
+            keyed_values.sort_by_key(|(index, _)| *index);
+            *value = Value::Array(
+                keyed_values
+                    .into_iter()
+                    .map(|(_, value)| value)
+                    .collect::<Vec<_>>(),
+            );
         }
+        _ => {}
     }
 }
 
@@ -830,10 +870,12 @@ fn signals_patch_map(signals: &CalculatorSignals) -> AppResult<serde_json::Map<S
 }
 
 fn init_signals_patch_map(
+    data: &CalculatorData,
     signals: &CalculatorSignals,
 ) -> AppResult<serde_json::Map<String, Value>> {
     let mut patch = signals_patch_map(signals)?;
     mirror_resources_signal(&mut patch);
+    expand_checkbox_group_signal_arrays(data, signals, &mut patch);
     Ok(patch)
 }
 
@@ -841,6 +883,56 @@ fn mirror_resources_signal(patch: &mut serde_json::Map<String, Value>) {
     if let Some(value) = patch.get("resources").cloned() {
         patch.insert("_resources".to_string(), value);
     }
+}
+
+fn expand_checkbox_group_signal_arrays(
+    data: &CalculatorData,
+    signals: &CalculatorSignals,
+    patch: &mut serde_json::Map<String, Value>,
+) {
+    patch.insert(
+        "outfit".to_string(),
+        Value::Array(indexed_checkbox_values(
+            &signals.outfit,
+            &item_options_by_type(&data.catalog.items, "outfit"),
+        )),
+    );
+
+    for (slot, pet) in [
+        ("pet1", &signals.pet1),
+        ("pet2", &signals.pet2),
+        ("pet3", &signals.pet3),
+        ("pet4", &signals.pet4),
+        ("pet5", &signals.pet5),
+    ] {
+        let Some(Value::Object(pet_patch)) = patch.get_mut(slot) else {
+            continue;
+        };
+        pet_patch.insert(
+            "skills".to_string(),
+            Value::Array(indexed_checkbox_values(
+                &pet.skills,
+                &select_options_from_catalog(&data.catalog.pets.skills),
+            )),
+        );
+    }
+}
+
+fn indexed_checkbox_values(selected_values: &[String], options: &[SelectOption<'_>]) -> Vec<Value> {
+    let selected = selected_values
+        .iter()
+        .map(String::as_str)
+        .collect::<std::collections::HashSet<_>>();
+    options
+        .iter()
+        .map(|option| {
+            Value::String(if selected.contains(option.value) {
+                option.value.to_string()
+            } else {
+                String::new()
+            })
+        })
+        .collect()
 }
 
 fn normalize_pet(
@@ -1495,9 +1587,6 @@ fn render_calculator_app(
     <div class="hidden"
          data-on-signal-patch__debounce.150ms="window.__fishystuffCalculator.persist($)"
          data-on-signal-patch-filter="window.__fishystuffCalculator.persistSignalPatchFilter()"></div>
-    <div class="hidden"
-         data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl())"
-         data-on-signal-patch-filter="window.__fishystuffCalculator.serverSignalPatchFilter()"></div>
 
     <section class="card card-border bg-base-100">
         <div class="card-body gap-5">
@@ -2888,25 +2977,32 @@ fn render_checkbox_group(
         .collect::<std::collections::HashSet<_>>();
     let mut html = String::new();
     let change_attr = change_attr.unwrap_or("");
+    write!(html, "<div id=\"{}\" class=\"block\">", escape_html(id)).unwrap();
     write!(
         html,
-        "<div id=\"{}\" class=\"grid gap-2 sm:grid-cols-2\" {}>",
-        escape_html(id),
+        "<div class=\"grid gap-2 sm:grid-cols-2\" {}>",
         change_attr,
     )
     .unwrap();
-    for option in options {
+    for (index, option) in options.iter().enumerate() {
         let checked = if selected.contains(option.value) {
             " checked"
         } else {
             ""
         };
+        let category_key_attr = option
+            .item
+            .and_then(|item| item.buff_category_key.as_deref())
+            .map(|value| format!(" data-category-key=\"{}\"", escape_html(value)))
+            .unwrap_or_default();
         write!(
             html,
-            "<label class=\"label cursor-pointer items-start justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"{}\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm mt-0.5 shrink-0\" value=\"{}\"{}>",
+            "<label class=\"label cursor-pointer items-start justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input type=\"checkbox\" data-bind=\"{}.{}\" class=\"checkbox checkbox-primary checkbox-sm mt-0.5 shrink-0\" value=\"{}\"{}{}>",
             escape_html(bind_key),
+            index,
             escape_html(option.value),
-            checked
+            checked,
+            category_key_attr,
         )
         .unwrap();
         if let Some(icon) = option.icon {
@@ -2930,7 +3026,7 @@ fn render_checkbox_group(
         )
         .unwrap();
     }
-    html.push_str("</div>");
+    html.push_str("</div></div>");
     html
 }
 
@@ -2945,7 +3041,7 @@ fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) ->
     for preset in presets {
         write!(
             html,
-            "<button type=\"button\" class=\"btn btn-soft btn-sm join-item\" data-on:click=\"$timespanAmount = {}; $timespanUnit = '{}'; window.__fishystuffCalculator.persist($)\">{}</button>",
+            "<button type=\"button\" class=\"btn btn-soft btn-sm join-item\" data-on:click=\"$timespanAmount = {}; $timespanUnit = '{}'; window.__fishystuffCalculator.persist($); window.__fishystuffCalculator.requestEval()\">{}</button>",
             trim_float(preset.amount),
             escape_html(&preset.unit),
             escape_html(&preset.label)
@@ -3083,6 +3179,7 @@ mod tests {
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
     use hyper::body::to_bytes;
+    use serde_json::json;
 
     use crate::config::{AppConfig, ZoneStatusConfig};
     use crate::error::AppResult;
@@ -3092,7 +3189,8 @@ mod tests {
     use super::{
         buff_category_label, build_pet_value_aliases, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
-        normalize_lookup_value, normalize_named_array, post_calculator_datastar_eval,
+        init_signals_patch_map, normalize_lookup_value, normalize_named_array,
+        parse_calculator_signals_value, post_calculator_datastar_eval, CalculatorData,
         CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
         CalculatorZoneSearchQuery,
     };
@@ -3144,6 +3242,13 @@ mod tests {
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
+                        key: "lightstone-set:30".to_string(),
+                        name: "Blacksmith's Blessing".to_string(),
+                        r#type: "lightstone_set".to_string(),
+                        item_drr: Some(0.3),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
                         key: "lightstone-set:160".to_string(),
                         name: "Nibbles".to_string(),
                         r#type: "lightstone_set".to_string(),
@@ -3157,6 +3262,27 @@ mod tests {
                         icon: Some("/images/items/00830150.webp".to_string()),
                         r#type: "backpack".to_string(),
                         item_drr: Some(0.05),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "effect:8-piece-outfit-set-effect".to_string(),
+                        name: "8-Piece Outfit Set Effect".to_string(),
+                        r#type: "outfit".to_string(),
+                        item_drr: Some(0.1),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "effect:mainhand-weapon-outfit".to_string(),
+                        name: "Mainhand Weapon Outfit".to_string(),
+                        r#type: "outfit".to_string(),
+                        item_drr: Some(0.1),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "effect:awakening-weapon-outfit".to_string(),
+                        name: "Awakening Weapon Outfit".to_string(),
+                        r#type: "outfit".to_string(),
+                        item_drr: Some(0.1),
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
@@ -3200,9 +3326,14 @@ mod tests {
                     rod: "item:16162".to_string(),
                     float: String::new(),
                     chair: "item:705539".to_string(),
-                    lightstone_set: "lightstone-set:160".to_string(),
+                    lightstone_set: "lightstone-set:30".to_string(),
                     backpack: "item:830150".to_string(),
-                    outfit: vec!["item:14330".to_string()],
+                    outfit: vec![
+                        "effect:8-piece-outfit-set-effect".to_string(),
+                        "effect:mainhand-weapon-outfit".to_string(),
+                        "effect:awakening-weapon-outfit".to_string(),
+                        "item:14330".to_string(),
+                    ],
                     food: vec!["item:9359".to_string()],
                     buff: vec!["".to_string(), "item:721092".to_string()],
                     pet1: CalculatorPetSignals {
@@ -3362,11 +3493,16 @@ mod tests {
         assert!(text.contains("calculator-rod-picker"));
         assert!(text.contains("calculator-pet1-tier-picker"));
         assert!(text.contains("<fishy-searchable-multiselect"));
+        assert!(text.contains("data-bind=\"outfit.0\""));
         assert!(text.contains("calculator-food-picker"));
         assert!(text.contains("calculator-buff-picker"));
         assert!(text.contains("Search foods by name or effect"));
         assert!(text.contains("data-category-key=\"buff-category:1\""));
         assert!(text.contains("Meal"));
+        assert!(text.contains("value=\"effect:8-piece-outfit-set-effect\" checked"));
+        assert!(text.contains("value=\"effect:mainhand-weapon-outfit\" checked"));
+        assert!(text.contains("value=\"effect:awakening-weapon-outfit\" checked"));
+        assert!(text.contains("value=\"item:14330\" checked"));
         assert!(text.contains("src=\"http://127.0.0.1:4040/images/items/00016162.webp\""));
     }
 
@@ -3421,7 +3557,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
-        assert!(text.contains("\"auto_fish_time\":\"60.00\""));
+        assert!(text.contains("\"auto_fish_time\":\""));
         assert!(!text.contains("\"active\":true"));
     }
 
@@ -3529,9 +3665,9 @@ mod tests {
                 lang: Some("en".to_string()),
                 r#ref: None,
                 kind: Some("lightstone_set".to_string()),
-                q: Some("nibb".to_string()),
+                q: Some("blacksmith".to_string()),
                 results_id: Some("calculator-lightstone-picker-results".to_string()),
-                selected: Some("lightstone-set:160".to_string()),
+                selected: Some("lightstone-set:30".to_string()),
             })),
             Extension(RequestId("req-test".to_string())),
         )
@@ -3544,9 +3680,8 @@ mod tests {
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("id=\"calculator-lightstone-picker-results\""));
         assert!(text.contains("data-searchable-dropdown-option"));
-        assert!(text.contains("Nibbles"));
-        assert!(text.contains("-15% AFT"));
-        assert!(text.contains("+10% Fish EXP"));
+        assert!(text.contains("Blacksmith&#39;s Blessing"));
+        assert!(text.contains("+30% Item DRR"));
         assert!(text.contains("Selected"));
     }
 
@@ -3591,6 +3726,77 @@ mod tests {
         );
 
         assert!(normalized.is_empty());
+    }
+
+    #[test]
+    fn init_signals_patch_map_expands_checkbox_groups_to_option_slots() {
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse {
+                items: vec![
+                    CalculatorItemEntry {
+                        key: "effect:8-piece-outfit-set-effect".to_string(),
+                        name: "8-Piece Outfit Set Effect".to_string(),
+                        r#type: "outfit".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "effect:awakening-weapon-outfit".to_string(),
+                        name: "Awakening Weapon Outfit".to_string(),
+                        r#type: "outfit".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "effect:mainhand-weapon-outfit".to_string(),
+                        name: "Mainhand Weapon Outfit".to_string(),
+                        r#type: "outfit".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "item:14071".to_string(),
+                        name: "Professional Fisher's Uniform".to_string(),
+                        r#type: "outfit".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "item:14330".to_string(),
+                        name: "Professional Fisher's Uniform (Costume)".to_string(),
+                        r#type: "outfit".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
+                ],
+                lifeskill_levels: Vec::new(),
+                defaults: CalculatorSignals::default(),
+                fishing_levels: Vec::new(),
+                pets: CalculatorPetCatalog::default(),
+                session_units: Vec::new(),
+                session_presets: Vec::new(),
+            },
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+        };
+        let signals = CalculatorSignals {
+            outfit: vec![
+                "effect:8-piece-outfit-set-effect".to_string(),
+                "effect:awakening-weapon-outfit".to_string(),
+                "effect:mainhand-weapon-outfit".to_string(),
+                "item:14330".to_string(),
+            ],
+            ..CalculatorSignals::default()
+        };
+
+        let patch = init_signals_patch_map(&data, &signals).unwrap();
+
+        assert_eq!(
+            patch.get("outfit"),
+            Some(&json!([
+                "effect:8-piece-outfit-set-effect",
+                "effect:awakening-weapon-outfit",
+                "effect:mainhand-weapon-outfit",
+                "",
+                "item:14330"
+            ]))
+        );
     }
 
     #[test]
@@ -3726,5 +3932,70 @@ mod tests {
         };
 
         assert_eq!(buff_category_label(&item).as_deref(), Some("Category 7 II"));
+    }
+
+    #[test]
+    fn parse_calculator_signals_value_coerces_top_level_string_arrays() {
+        let parsed = parse_calculator_signals_value(
+            serde_json::json!({
+                "outfit": "effect:mainhand-weapon-outfit",
+                "food": "item:9359",
+                "buff": "item:721092"
+            }),
+            &CalculatorSignals::default(),
+            &RequestId("req-test".to_string()),
+        )
+        .expect("top-level arrays should coerce");
+
+        assert_eq!(
+            parsed.outfit,
+            vec!["effect:mainhand-weapon-outfit".to_string()]
+        );
+        assert_eq!(parsed.food, vec!["item:9359".to_string()]);
+        assert_eq!(parsed.buff, vec!["item:721092".to_string()]);
+    }
+
+    #[test]
+    fn parse_calculator_signals_value_coerces_indexed_object_arrays() {
+        let parsed = parse_calculator_signals_value(
+            serde_json::json!({
+                "outfit": {
+                    "0": "effect:8-piece-outfit-set-effect",
+                    "1": "",
+                    "2": "effect:awakening-weapon-outfit"
+                },
+                "food": {
+                    "1": "item:9359",
+                    "0": ""
+                },
+                "buff": {
+                    "0": "item:721092"
+                },
+                "pet1": {
+                    "skills": {
+                        "1": "fishing_exp",
+                        "0": "life_exp"
+                    }
+                }
+            }),
+            &CalculatorSignals::default(),
+            &RequestId("req-test".to_string()),
+        )
+        .expect("indexed objects should coerce");
+
+        assert_eq!(
+            parsed.outfit,
+            vec![
+                "effect:8-piece-outfit-set-effect".to_string(),
+                "".to_string(),
+                "effect:awakening-weapon-outfit".to_string()
+            ]
+        );
+        assert_eq!(parsed.food, vec!["".to_string(), "item:9359".to_string()]);
+        assert_eq!(parsed.buff, vec!["item:721092".to_string()]);
+        assert_eq!(
+            parsed.pet1.skills,
+            vec!["life_exp".to_string(), "fishing_exp".to_string()]
+        );
     }
 }

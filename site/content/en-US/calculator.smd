@@ -19,7 +19,6 @@
     const urlParams = new URLSearchParams(window.location.search);
     const presetQueryParam = urlParams.get("preset");
     const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_live(\.|$)|_calc(\.|$))$/;
-
     const loadStoredSignals = () => {
         const raw = localStorage.getItem(CALCULATOR_STORAGE_KEY);
         if (!raw) {
@@ -175,10 +174,20 @@
                 exclude: CALCULATOR_EPHEMERAL_SIGNAL_PATTERN,
             };
         },
-        serverSignalPatchFilter() {
-            return {
-                include: /^(zone|lifeskill_level|rod|float|chair|lightstone_set|backpack|brand|outfit($|\\.)|food($|\\.)|buff($|\\.)|pet[1-5]($|\\.))/,
-            };
+        shouldRequestEvalEvent(evt) {
+            const target = evt?.target;
+            if (!(target instanceof Element)) {
+                return false;
+            }
+            return target.closest("[data-bind]") instanceof Element;
+        },
+        requestEval(evt) {
+            if (evt && !this.shouldRequestEvalEvent(evt)) {
+                return;
+            }
+            document
+                .getElementById("calculator-eval-trigger")
+                ?.dispatchEvent(new Event("calculator-eval-request"));
         },
         presetUrl(signals) {
             return presetURL(signals);
@@ -291,7 +300,11 @@
 <div id="calculator"
      class="not-prose grid gap-6"
      data-signals="{ _loading: true }"
+     data-on:input="window.__fishystuffCalculator.requestEval(evt)"
      data-init__delay.50ms="window.__fishystuffCalculator.restore($); @get(window.__fishystuffCalculator.initUrl())">
+    <div id="calculator-eval-trigger"
+         class="hidden"
+         data-on:calculator-eval-request__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl())"></div>
     <section data-show="$_loading" class="card card-border bg-base-100">
         <div class="card-body">
             <span class="loading loading-spinner loading-md"></span>

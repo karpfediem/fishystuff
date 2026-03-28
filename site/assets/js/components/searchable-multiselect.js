@@ -69,6 +69,7 @@ export class FishySearchableMultiselect extends HTMLElement {
             if (!this.isConnected) {
                 return;
             }
+            this._syncBoundInputsFromMarkup();
             this._syncUi();
             this._syncSelection();
             this.search(this.searchInputElement()?.value ?? "");
@@ -573,6 +574,12 @@ export class FishySearchableMultiselect extends HTMLElement {
                 return chip;
             }),
         );
+    }
+
+    _syncBoundInputsFromMarkup() {
+        for (const input of this.boundInputElements()) {
+            input.checked = input.hasAttribute("checked");
+        }
     }
 
     _syncUi() {
