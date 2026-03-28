@@ -42,13 +42,21 @@ struct CalculatorEnchantEffectEntryRow {
     item_name_ko: String,
     normalized_item_name_ko: String,
     enchant_level: i32,
+    skill_no: Option<String>,
     durability: Option<i32>,
+    effect_description_ko: Option<String>,
     afr: Option<f32>,
     bonus_rare: Option<f32>,
     bonus_big: Option<f32>,
     item_drr: Option<f32>,
     exp_fish: Option<f32>,
     exp_life: Option<f32>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct CalculatorSkillEffectBundle {
+    effect_description_ko: Option<String>,
+    values: CalculatorItemEffectValues,
 }
 
 pub(super) struct CalculatorCatalogSourceData {
@@ -253,6 +261,22 @@ fn select_consumable_effect_texts(
         .cloned()
         .into_iter()
         .collect()
+}
+
+fn merge_skill_effect_bundle(
+    target: &mut CalculatorEnchantEffectEntryRow,
+    bundle: &CalculatorSkillEffectBundle,
+) {
+    target.effect_description_ko = target
+        .effect_description_ko
+        .clone()
+        .or_else(|| bundle.effect_description_ko.clone());
+    target.afr = max_opt_f32(target.afr, bundle.values.afr);
+    target.bonus_rare = max_opt_f32(target.bonus_rare, bundle.values.bonus_rare);
+    target.bonus_big = max_opt_f32(target.bonus_big, bundle.values.bonus_big);
+    target.item_drr = max_opt_f32(target.item_drr, bundle.values.item_drr);
+    target.exp_fish = max_opt_f32(target.exp_fish, bundle.values.exp_fish);
+    target.exp_life = max_opt_f32(target.exp_life, bundle.values.exp_life);
 }
 
 impl DoltMySqlStore {
@@ -942,6 +966,219 @@ impl DoltMySqlStore {
         Ok(out)
     }
 
+    fn query_skill_buff_effect_bundles(
+        &self,
+        ref_id: Option<&str>,
+        skill_nos: &[String],
+    ) -> AppResult<HashMap<String, CalculatorSkillEffectBundle>> {
+        if skill_nos.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let quote_list = |values: &[String]| {
+            values
+                .iter()
+                .map(|value| format!("'{}'", value.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let skill_rows_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`SkillNo`, '')) AS skill_no, \
+                TRIM(COALESCE(`Buff0`, '')) AS buff0, \
+                TRIM(COALESCE(`Buff1`, '')) AS buff1, \
+                TRIM(COALESCE(`Buff2`, '')) AS buff2, \
+                TRIM(COALESCE(`Buff3`, '')) AS buff3, \
+                TRIM(COALESCE(`Buff4`, '')) AS buff4, \
+                TRIM(COALESCE(`Buff5`, '')) AS buff5, \
+                TRIM(COALESCE(`Buff6`, '')) AS buff6, \
+                TRIM(COALESCE(`Buff7`, '')) AS buff7, \
+                TRIM(COALESCE(`Buff8`, '')) AS buff8, \
+                TRIM(COALESCE(`Buff9`, '')) AS buff9 \
+             FROM skill_table_new{as_of} \
+             WHERE TRIM(COALESCE(`SkillNo`, '')) IN ({})",
+            quote_list(skill_nos)
+        );
+        let skill_rows: Vec<(
+            String,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )> = match conn.query(skill_rows_query) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "skill_table_new") => return Ok(HashMap::new()),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+
+        let mut buff_ids_by_skill = HashMap::<String, Vec<String>>::new();
+        let mut buff_ids = Vec::<String>::new();
+        for (skill_no, buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9) in
+            skill_rows
+        {
+            let entry = buff_ids_by_skill.entry(skill_no).or_default();
+            for buff_id in [
+                buff0, buff1, buff2, buff3, buff4, buff5, buff6, buff7, buff8, buff9,
+            ]
+            .into_iter()
+            .filter_map(normalize_optional_string)
+            {
+                if !entry.iter().any(|existing| existing == &buff_id) {
+                    entry.push(buff_id.clone());
+                }
+                if !buff_ids.iter().any(|existing| existing == &buff_id) {
+                    buff_ids.push(buff_id);
+                }
+            }
+        }
+
+        if buff_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let buff_rows_query = format!(
+            "SELECT \
+                TRIM(COALESCE(`Index`, '')) AS buff_id, \
+                `BuffName`, \
+                `Description` \
+             FROM buff_table{as_of} \
+             WHERE TRIM(COALESCE(`Index`, '')) IN ({})",
+            quote_list(&buff_ids)
+        );
+        let buff_rows: Vec<(String, Option<String>, Option<String>)> =
+            match conn.query(buff_rows_query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "buff_table") => return Ok(HashMap::new()),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+
+        let mut buff_lines_by_id = HashMap::<String, Vec<String>>::new();
+        for (buff_id, buff_name, description) in buff_rows {
+            let entry = buff_lines_by_id.entry(buff_id).or_default();
+            for text in [description, buff_name]
+                .into_iter()
+                .filter_map(normalize_optional_string)
+            {
+                for normalized_line in normalized_effect_lines(&text) {
+                    if !entry.iter().any(|existing| existing == &normalized_line) {
+                        entry.push(normalized_line);
+                    }
+                }
+            }
+        }
+
+        let mut out = HashMap::new();
+        for (skill_no, buff_ids) in buff_ids_by_skill {
+            let mut effect_lines = Vec::new();
+            for buff_id in buff_ids {
+                let Some(lines) = buff_lines_by_id.get(&buff_id) else {
+                    continue;
+                };
+                for line in lines {
+                    if !effect_lines.iter().any(|existing| existing == line) {
+                        effect_lines.push(line.clone());
+                    }
+                }
+            }
+            if effect_lines.is_empty() {
+                continue;
+            }
+            let effect_description_ko = Some(effect_lines.join("\n"));
+            let mut values = CalculatorItemEffectValues::default();
+            if let Some(text) = effect_description_ko.as_deref() {
+                parse_unique_calculator_effect_text(&mut values, text);
+            }
+            out.insert(
+                skill_no,
+                CalculatorSkillEffectBundle {
+                    effect_description_ko,
+                    values,
+                },
+            );
+        }
+
+        Ok(out)
+    }
+
+    fn query_raw_enchant_skill_map(
+        &self,
+        ref_id: Option<&str>,
+        item_names: &[String],
+    ) -> AppResult<HashMap<(String, i32), String>> {
+        if item_names.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let quote_list = |values: &[String]| {
+            values
+                .iter()
+                .map(|value| format!("'{}'", value.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let name_list = quote_list(item_names);
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let mut candidates = HashMap::<(String, i32), Vec<String>>::new();
+        for table_name in ["enchant_equipment", "enchant_lifeequipment", "enchant_cash"] {
+            let query = format!(
+                "SELECT \
+                    NULLIF(TRIM(`ItemName`), '') AS item_name_ko, \
+                    CAST(TRIM(COALESCE(`Enchant`, '0')) AS SIGNED) AS enchant_level, \
+                    TRIM(COALESCE(`SkillNo`, '')) AS skill_no \
+                 FROM {table_name}{as_of} \
+                 WHERE NULLIF(TRIM(`ItemName`), '') IN ({name_list}) \
+                   AND NULLIF(TRIM(COALESCE(`SkillNo`, '')), '') IS NOT NULL \
+                   AND TRIM(COALESCE(`SkillNo`, '')) <> '0'"
+            );
+            let rows: Vec<(Option<String>, i64, Option<String>)> = match conn.query(query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, table_name) => Vec::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+            for (item_name_ko, enchant_level, skill_no) in rows {
+                let Some(item_name_ko) = normalize_optional_string(item_name_ko) else {
+                    continue;
+                };
+                let Some(skill_no) = normalize_optional_string(skill_no) else {
+                    continue;
+                };
+                let Ok(enchant_level) = i32::try_from(enchant_level) else {
+                    continue;
+                };
+                let entry = candidates.entry((item_name_ko, enchant_level)).or_default();
+                if !entry.iter().any(|existing| existing == &skill_no) {
+                    entry.push(skill_no);
+                }
+            }
+        }
+
+        Ok(candidates
+            .into_iter()
+            .filter_map(|(key, skill_nos)| {
+                (skill_nos.len() == 1).then(|| (key, skill_nos.into_iter().next().unwrap()))
+            })
+            .collect())
+    }
+
     fn query_calculator_item_table_metadata(
         &self,
         ref_id: Option<&str>,
@@ -1364,14 +1601,17 @@ impl DoltMySqlStore {
             else {
                 continue;
             };
+            let enchant_level = normalize_optional_string(row.get::<String, _>("enchant_level"))
+                .and_then(|value| value.parse::<i32>().ok())
+                .unwrap_or_default();
             let effect_row = CalculatorEnchantEffectEntryRow {
                 item_type: item_type.clone(),
                 normalized_item_name_ko: normalize_source_owned_item_name(&item_name_ko),
                 item_name_ko: item_name_ko.clone(),
-                enchant_level: normalize_optional_string(row.get::<String, _>("enchant_level"))
-                    .and_then(|value| value.parse::<i32>().ok())
-                    .unwrap_or_default(),
+                enchant_level,
+                skill_no: None,
                 durability: row.get::<Option<i32>, _>("durability").flatten(),
+                effect_description_ko: None,
                 afr: row.get::<Option<f32>, _>("afr").flatten(),
                 bonus_rare: row.get::<Option<f32>, _>("bonus_rare").flatten(),
                 bonus_big: row.get::<Option<f32>, _>("bonus_big").flatten(),
@@ -1401,9 +1641,37 @@ impl DoltMySqlStore {
             }
         }
 
-        let chosen_effects = chosen_effects.into_values().collect::<Vec<_>>();
+        let mut chosen_effects = chosen_effects.into_values().collect::<Vec<_>>();
         if chosen_effects.is_empty() {
             return Ok(Vec::new());
+        }
+
+        let skill_no_by_item = self.query_raw_enchant_skill_map(
+            ref_id,
+            &chosen_effects
+                .iter()
+                .map(|row| row.item_name_ko.clone())
+                .collect::<Vec<_>>(),
+        )?;
+        for effect_row in &mut chosen_effects {
+            effect_row.skill_no = skill_no_by_item
+                .get(&(effect_row.item_name_ko.clone(), effect_row.enchant_level))
+                .cloned();
+        }
+
+        let skill_nos = chosen_effects
+            .iter()
+            .filter_map(|row| row.skill_no.clone())
+            .collect::<Vec<_>>();
+        let skill_effects = self.query_skill_buff_effect_bundles(ref_id, &skill_nos)?;
+        for effect_row in &mut chosen_effects {
+            let Some(skill_no) = effect_row.skill_no.as_deref() else {
+                continue;
+            };
+            let Some(bundle) = skill_effects.get(skill_no) else {
+                continue;
+            };
+            merge_skill_effect_bundle(effect_row, bundle);
         }
 
         let exact_names = chosen_effects
@@ -1470,7 +1738,7 @@ impl DoltMySqlStore {
                     icon_id: metadata.icon_id,
                     durability: row.durability.or(metadata.durability),
                     fish_multiplier,
-                    effect_description_ko: None,
+                    effect_description_ko: row.effect_description_ko,
                     afr: row.afr,
                     bonus_rare: row.bonus_rare,
                     bonus_big: row.bonus_big,
@@ -1537,9 +1805,8 @@ mod tests {
 
     use super::{
         fallback_consumable_family_key, manually_maintained_source_fish_multiplier,
-        parse_lightstone_set_name_ko,
-        select_consumable_category_metadata, select_consumable_effect_texts,
-        CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
+        parse_lightstone_set_name_ko, select_consumable_category_metadata,
+        select_consumable_effect_texts, CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
     };
 
     #[test]
