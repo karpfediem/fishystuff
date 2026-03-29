@@ -2079,7 +2079,7 @@ fn loot_species_evidence_text(
             evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
         })
         .and_then(|evidence| evidence_display_rate(signals, evidence))
-        .map(|rate| format!("DB {}%", trim_float(rate * 100.0)));
+        .map(|rate| format!("DB {}%", format_evidence_percent(rate)));
 
     let guessed_rate_text = entry
         .evidence
@@ -2088,7 +2088,7 @@ fn loot_species_evidence_text(
             evidence.source_family == "community" && evidence.claim_kind == "guessed_in_group_rate"
         })
         .and_then(|evidence| evidence_display_rate(signals, evidence))
-        .map(|rate| format!("Community guess {}%", trim_float(rate * 100.0)));
+        .map(|rate| format!("Community guess {}%", format_evidence_percent(rate)));
 
     let community_presence_text = entry
         .evidence
@@ -2123,7 +2123,7 @@ fn loot_species_evidence_text(
         parts.push(text);
     }
     if parts.is_empty() {
-        return format!("DB {}%", trim_float(entry.within_group_rate * 100.0));
+        return format!("DB {}%", format_evidence_percent(entry.within_group_rate));
     }
     parts.join(" · ")
 }
@@ -2350,12 +2350,27 @@ fn fmt2(value: f64) -> String {
     format!("{value:.2}")
 }
 
-fn trim_float(value: f64) -> String {
-    let fixed = format!("{value:.2}");
+fn trim_float_to(value: f64, decimals: usize) -> String {
+    let fixed = format!("{value:.decimals$}");
     fixed
         .trim_end_matches('0')
         .trim_end_matches('.')
         .to_string()
+}
+
+fn trim_float(value: f64) -> String {
+    trim_float_to(value, 2)
+}
+
+fn format_evidence_percent(rate: f64) -> String {
+    let percent = rate * 100.0;
+    let max_decimals = if percent.abs() < 1.0 { 4 } else { 2 };
+    let compact = trim_float_to(percent, max_decimals);
+    if compact == "0" && percent != 0.0 {
+        trim_float_to(percent, 6)
+    } else {
+        compact
+    }
 }
 
 fn absolute_public_asset_url(cdn_base_url: &str, raw_path: &str) -> String {
@@ -5316,6 +5331,32 @@ mod tests {
         assert_eq!(
             loot_species_evidence_text(&raw_signals, &entry),
             "Community guess 2%"
+        );
+    }
+
+    #[test]
+    fn loot_species_evidence_text_preserves_tiny_non_zero_rates() {
+        let raw_signals = CalculatorSignals {
+            show_normalized_select_rates: false,
+            ..CalculatorSignals::default()
+        };
+        let entry = CalculatorZoneLootEntry {
+            within_group_rate: 0.0000005,
+            evidence: vec![CalculatorZoneLootEvidence {
+                source_family: "database".to_string(),
+                claim_kind: "in_group_rate".to_string(),
+                scope: "group".to_string(),
+                rate: Some(0.0000005),
+                normalized_rate: Some(0.0000005),
+                status: Some("best_effort".to_string()),
+                claim_count: None,
+            }],
+            ..CalculatorZoneLootEntry::default()
+        };
+
+        assert_eq!(
+            loot_species_evidence_text(&raw_signals, &entry),
+            "DB 0.00005%"
         );
     }
 
