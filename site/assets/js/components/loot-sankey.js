@@ -1,6 +1,5 @@
 import * as d3 from "../d3.js";
 
-const MIN_INTERNAL_WIDTH = 1320;
 const TOP_PADDING = 20;
 const BOTTOM_PADDING = 20;
 const GROUP_GAP = 12;
@@ -19,8 +18,21 @@ const GROUP_TO_SPECIES_GAP = 110;
 const SPECIES_TO_SILVER_GAP = 78;
 const SILVER_TO_GROUP_GAP = 76;
 const SILVER_GROUP_WIDTH = 212;
+const RIGHT_MARGIN = 24;
 const NODE_RADIUS = 12;
 const MIN_SILVER_NODE_HEIGHT = 1.5;
+const MIN_INTERNAL_WIDTH =
+    LEFT_X
+    + LEFT_WIDTH
+    + GROUP_TO_SPECIES_GAP
+    + RIGHT_BAR_WIDTH
+    + RIGHT_LABEL_OFFSET
+    + RIGHT_LABEL_WIDTH
+    + SPECIES_TO_SILVER_GAP
+    + RIGHT_BAR_WIDTH
+    + SILVER_TO_GROUP_GAP
+    + SILVER_GROUP_WIDTH
+    + RIGHT_MARGIN;
 
 function provenanceDotColor(kind) {
     if (kind === "database") {
@@ -231,16 +243,20 @@ class FishyLootSankey extends HTMLElement {
                 + Math.max(0, speciesRows.length - 1) * SPECIES_LABEL_GAP
             : 0;
         const innerHeight = Math.max(labelStackHeight, 340);
-        const countBarX = LEFT_X + LEFT_WIDTH + GROUP_TO_SPECIES_GAP;
-        const labelX = countBarX + RIGHT_BAR_WIDTH + RIGHT_LABEL_OFFSET;
-        const speciesCenterWidth =
-            RIGHT_LABEL_WIDTH - SPECIES_METRIC_WIDTH * 2 - SPECIES_BOX_CONNECTOR_GAP * 2;
-        const silverBarX = labelX + RIGHT_LABEL_WIDTH + SPECIES_TO_SILVER_GAP;
-        const silverGroupX = silverBarX + RIGHT_BAR_WIDTH + SILVER_TO_GROUP_GAP;
         const width = Math.max(
             this.clientWidth || 0,
-            Math.max(MIN_INTERNAL_WIDTH, silverGroupX + SILVER_GROUP_WIDTH + 24),
+            MIN_INTERNAL_WIDTH,
         );
+        const countBarX = LEFT_X + LEFT_WIDTH + GROUP_TO_SPECIES_GAP;
+        const labelX = countBarX + RIGHT_BAR_WIDTH + RIGHT_LABEL_OFFSET;
+        const silverGroupX = width - RIGHT_MARGIN - SILVER_GROUP_WIDTH;
+        const silverBarX = silverGroupX - SILVER_TO_GROUP_GAP - RIGHT_BAR_WIDTH;
+        const labelWidth = Math.max(
+            RIGHT_LABEL_WIDTH,
+            silverBarX - SPECIES_TO_SILVER_GAP - labelX,
+        );
+        const speciesCenterWidth =
+            labelWidth - SPECIES_METRIC_WIDTH * 2 - SPECIES_BOX_CONNECTOR_GAP * 2;
         const leftScale = Math.max(
             0,
             (innerHeight - GROUP_GAP * Math.max(0, rows.length - 1)) / totalCount,
