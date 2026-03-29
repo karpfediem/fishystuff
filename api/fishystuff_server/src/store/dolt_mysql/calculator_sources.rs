@@ -32,6 +32,7 @@ pub(super) struct CalculatorItemSourceMetadata {
     pub(super) name_ko: Option<String>,
     pub(super) name_en: Option<String>,
     pub(super) normalized_name_ko: Option<String>,
+    pub(super) item_type: Option<String>,
     pub(super) durability: Option<i32>,
     pub(super) icon_id: Option<i32>,
 }
@@ -57,6 +58,14 @@ struct CalculatorEnchantEffectEntryRow {
 struct CalculatorSkillEffectBundle {
     effect_description_ko: Option<String>,
     values: CalculatorItemEffectValues,
+}
+
+#[derive(Debug, Clone)]
+struct RawEnchantSkillCandidateRow {
+    item_name_ko: String,
+    normalized_item_name_ko: String,
+    enchant_level: i32,
+    skill_no: String,
 }
 
 pub(super) struct CalculatorCatalogSourceData {
@@ -181,6 +190,21 @@ fn normalize_source_owned_item_name(name: &str) -> String {
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+fn calculator_item_type_from_equip_type(equip_type: Option<&str>) -> Option<&'static str> {
+    match equip_type
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .and_then(|value| value.parse::<i32>().ok())
+    {
+        Some(22) => Some("outfit"),
+        Some(44) => Some("rod"),
+        Some(46) => Some("chair"),
+        Some(59) => Some("float"),
+        Some(111) => Some("backpack"),
+        _ => None,
+    }
 }
 
 fn extract_bracketed_name(text: &str) -> Option<String> {
@@ -1207,6 +1231,135 @@ impl DoltMySqlStore {
             .collect())
     }
 
+    fn query_raw_enchant_skill_only_candidates(
+        &self,
+        ref_id: Option<&str>,
+    ) -> AppResult<Vec<CalculatorEnchantEffectEntryRow>> {
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let mut raw_rows = Vec::<RawEnchantSkillCandidateRow>::new();
+        for table_name in ["enchant_equipment", "enchant_lifeequipment", "enchant_cash"] {
+            let query = format!(
+                "SELECT \
+                    NULLIF(TRIM(`ItemName`), '') AS item_name_ko, \
+                    CAST(TRIM(COALESCE(`Enchant`, '0')) AS SIGNED) AS enchant_level, \
+                    TRIM(COALESCE(`SkillNo`, '')) AS skill_no \
+                 FROM {table_name}{as_of} \
+                 WHERE NULLIF(TRIM(COALESCE(`SkillNo`, '')), '') IS NOT NULL \
+                   AND TRIM(COALESCE(`SkillNo`, '')) <> '0' \
+                   AND NULLIF(TRIM(`ItemName`), '') IS NOT NULL"
+            );
+            let rows: Vec<(Option<String>, i64, Option<String>)> = match conn.query(query) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, table_name) => Vec::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+            for (item_name_ko, enchant_level, skill_no) in rows {
+                let Some(item_name_ko) = normalize_optional_string(item_name_ko) else {
+                    continue;
+                };
+                let Some(skill_no) = normalize_optional_string(skill_no) else {
+                    continue;
+                };
+                let Ok(enchant_level) = i32::try_from(enchant_level) else {
+                    continue;
+                };
+                raw_rows.push(RawEnchantSkillCandidateRow {
+                    normalized_item_name_ko: normalize_source_owned_item_name(&item_name_ko),
+                    item_name_ko,
+                    enchant_level,
+                    skill_no,
+                });
+            }
+        }
+
+        if raw_rows.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let exact_names = raw_rows
+            .iter()
+            .map(|row| row.item_name_ko.clone())
+            .collect::<Vec<_>>();
+        let normalized_names = raw_rows
+            .iter()
+            .map(|row| row.normalized_item_name_ko.clone())
+            .collect::<Vec<_>>();
+        let metadata_candidates = self.query_calculator_item_table_metadata_by_names(
+            ref_id,
+            &exact_names,
+            &normalized_names,
+        )?;
+
+        let mut exact_metadata_by_name =
+            HashMap::<String, Vec<(i32, CalculatorItemSourceMetadata)>>::new();
+        let mut normalized_metadata_by_name =
+            HashMap::<String, Vec<(i32, CalculatorItemSourceMetadata)>>::new();
+        for (item_id, metadata) in metadata_candidates {
+            if let Some(name_ko) = metadata.name_ko.clone() {
+                exact_metadata_by_name
+                    .entry(name_ko)
+                    .or_default()
+                    .push((item_id, metadata.clone()));
+            }
+            if let Some(normalized_name_ko) = metadata.normalized_name_ko.clone() {
+                normalized_metadata_by_name
+                    .entry(normalized_name_ko)
+                    .or_default()
+                    .push((item_id, metadata));
+            }
+        }
+
+        let mut out = Vec::new();
+        for row in raw_rows {
+            let exact_match = exact_metadata_by_name
+                .get(&row.item_name_ko)
+                .and_then(|matches| matches.iter().min_by_key(|(item_id, _)| *item_id))
+                .cloned();
+            let resolved = exact_match.or_else(|| {
+                normalized_metadata_by_name
+                    .get(&row.normalized_item_name_ko)
+                    .filter(|matches| matches.len() == 1)
+                    .and_then(|matches| matches.first().cloned())
+            });
+            let Some((_item_id, metadata)) = resolved else {
+                continue;
+            };
+            let Some(item_type) = metadata.item_type.clone() else {
+                continue;
+            };
+            if !matches!(
+                item_type.as_str(),
+                "rod" | "float" | "chair" | "backpack" | "outfit"
+            ) {
+                continue;
+            }
+            out.push(CalculatorEnchantEffectEntryRow {
+                item_type,
+                item_name_ko: row.item_name_ko,
+                normalized_item_name_ko: row.normalized_item_name_ko,
+                enchant_level: row.enchant_level,
+                skill_no: Some(row.skill_no),
+                durability: metadata.durability,
+                effect_description_ko: None,
+                afr: None,
+                bonus_rare: None,
+                bonus_big: None,
+                item_drr: None,
+                exp_fish: None,
+                exp_life: None,
+            });
+        }
+
+        Ok(out)
+    }
+
     fn query_calculator_item_table_metadata(
         &self,
         ref_id: Option<&str>,
@@ -1238,6 +1391,7 @@ impl DoltMySqlStore {
                         ELSE NULL \
                     END \
                 ) AS item_name_en, \
+                it.`EquipType`, \
                 it.`IconImageFile`, \
                 CASE \
                     WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
@@ -1250,6 +1404,7 @@ impl DoltMySqlStore {
              WHERE it.`Index` IN ({id_list}) \
              GROUP BY CAST(it.`Index` AS SIGNED), \
                       it.`ItemName`, \
+                      it.`EquipType`, \
                       it.`IconImageFile`, \
                       CASE \
                           WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
@@ -1264,6 +1419,7 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<String>,
             Option<i64>,
         )> = match conn.query(raw_item_table_query) {
             Ok(rows) => rows,
@@ -1271,7 +1427,7 @@ impl DoltMySqlStore {
             Err(err) => return Err(db_unavailable(err)),
         };
         let mut out = HashMap::new();
-        for (item_id, name_ko, name_en, icon_file, durability) in rows {
+        for (item_id, name_ko, name_en, equip_type, icon_file, durability) in rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
@@ -1282,6 +1438,8 @@ impl DoltMySqlStore {
                         .map(|value| normalize_source_owned_item_name(&value)),
                     name_ko: normalize_optional_string(name_ko),
                     name_en: normalize_optional_string(name_en),
+                    item_type: calculator_item_type_from_equip_type(equip_type.as_deref())
+                        .map(str::to_string),
                     durability: durability.and_then(|value| i32::try_from(value).ok()),
                     icon_id: normalize_optional_string(icon_file).and_then(|value| {
                         fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
@@ -1343,6 +1501,7 @@ impl DoltMySqlStore {
                         ELSE NULL \
                     END \
                 ) AS item_name_en, \
+                it.`EquipType`, \
                 it.`IconImageFile`, \
                 CASE \
                     WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
@@ -1355,6 +1514,7 @@ impl DoltMySqlStore {
              WHERE ({exact_filter}) OR ({normalized_filter}) \
              GROUP BY CAST(it.`Index` AS SIGNED), \
                       it.`ItemName`, \
+                      it.`EquipType`, \
                       it.`IconImageFile`, \
                       CASE \
                           WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
@@ -1369,6 +1529,7 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<String>,
             Option<i64>,
         )> = match conn.query(query) {
             Ok(rows) => rows,
@@ -1377,7 +1538,7 @@ impl DoltMySqlStore {
         };
 
         let mut out = HashMap::new();
-        for (item_id, name_ko, name_en, icon_file, durability) in rows {
+        for (item_id, name_ko, name_en, equip_type, icon_file, durability) in rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
@@ -1388,6 +1549,8 @@ impl DoltMySqlStore {
                         .map(|value| normalize_source_owned_item_name(&value)),
                     name_ko: normalize_optional_string(name_ko),
                     name_en: normalize_optional_string(name_en),
+                    item_type: calculator_item_type_from_equip_type(equip_type.as_deref())
+                        .map(str::to_string),
                     durability: durability.and_then(|value| i32::try_from(value).ok()),
                     icon_id: normalize_optional_string(icon_file).and_then(|value| {
                         fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
@@ -1669,6 +1832,19 @@ impl DoltMySqlStore {
             }
         }
 
+        for candidate in self.query_raw_enchant_skill_only_candidates(ref_id)? {
+            let key = (candidate.item_type.clone(), candidate.item_name_ko.clone());
+            match chosen_effects.get_mut(&key) {
+                Some(existing) if candidate.enchant_level > existing.enchant_level => {
+                    *existing = candidate;
+                }
+                Some(_) => {}
+                None => {
+                    chosen_effects.insert(key, candidate);
+                }
+            }
+        }
+
         let mut chosen_effects = chosen_effects.into_values().collect::<Vec<_>>();
         if chosen_effects.is_empty() {
             return Ok(Vec::new());
@@ -1882,10 +2058,10 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        fallback_consumable_family_key, manually_maintained_source_effect_values,
-        manually_maintained_source_fish_multiplier, parse_lightstone_set_name_ko,
-        select_consumable_category_metadata, select_consumable_effect_texts,
-        CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
+        calculator_item_type_from_equip_type, fallback_consumable_family_key,
+        manually_maintained_source_effect_values, manually_maintained_source_fish_multiplier,
+        parse_lightstone_set_name_ko, select_consumable_category_metadata,
+        select_consumable_effect_texts, CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
     };
 
     #[test]
@@ -2061,5 +2237,31 @@ mod tests {
         let wrong_type = manually_maintained_source_effect_values(16153, "backpack");
         assert_eq!(wrong_type.bonus_rare, None);
         assert_eq!(wrong_type.bonus_big, None);
+    }
+
+    #[test]
+    fn calculator_item_type_from_equip_type_maps_supported_gear_categories() {
+        assert_eq!(
+            calculator_item_type_from_equip_type(Some("22")),
+            Some("outfit")
+        );
+        assert_eq!(
+            calculator_item_type_from_equip_type(Some("44")),
+            Some("rod")
+        );
+        assert_eq!(
+            calculator_item_type_from_equip_type(Some("46")),
+            Some("chair")
+        );
+        assert_eq!(
+            calculator_item_type_from_equip_type(Some("59")),
+            Some("float")
+        );
+        assert_eq!(
+            calculator_item_type_from_equip_type(Some("111")),
+            Some("backpack")
+        );
+        assert_eq!(calculator_item_type_from_equip_type(Some("15")), None);
+        assert_eq!(calculator_item_type_from_equip_type(None), None);
     }
 }
