@@ -18,8 +18,8 @@ use serde_json::{json, Value};
 use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
     CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
-    CalculatorPetSignals, CalculatorSessionPresetEntry, CalculatorSignals,
-    CalculatorZoneGroupRateEntry,
+    CalculatorPetSignals, CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry,
+    CalculatorSignals, CalculatorZoneGroupRateEntry,
 };
 use fishystuff_api::models::zones::ZoneEntry;
 
@@ -599,6 +599,7 @@ fn parse_calculator_signals_value(
     coerce_object_f64(&mut object, "resources");
     coerce_object_f64(&mut object, "tradeDistanceBonus");
     coerce_object_f64(&mut object, "tradePriceCurve");
+    coerce_object_price_override_map(&mut object, "priceOverrides");
     coerce_object_f64(&mut object, "catchTimeActive");
     coerce_object_f64(&mut object, "catchTimeAfk");
     coerce_object_f64(&mut object, "timespanAmount");
@@ -683,6 +684,54 @@ fn coerce_object_string(object: &mut serde_json::Map<String, Value>, key: &str) 
         } else if let Some(number) = value.as_i64() {
             *value = Value::String(number.to_string());
         }
+    }
+}
+
+fn normalize_price_override_key(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    let numeric = trimmed.strip_prefix("item:").unwrap_or(trimmed);
+    let parsed = numeric.parse::<i32>().ok()?;
+    (parsed > 0).then(|| parsed.to_string())
+}
+
+fn coerce_object_price_override_map(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(Value::Object(map)) = object.get_mut(key) {
+        let normalized = map
+            .iter()
+            .filter_map(|(raw_key, value)| {
+                let key = normalize_price_override_key(raw_key)?;
+                let Value::Object(entry) = value else {
+                    return None;
+                };
+                let trade_price_curve_percent = entry
+                    .get("tradePriceCurvePercent")
+                    .and_then(|value| match value {
+                        Value::Number(number) => number.as_f64(),
+                        Value::String(string) => string.trim().parse::<f64>().ok(),
+                        _ => None,
+                    })
+                    .map(|value| value.max(0.0));
+                let base_price = entry
+                    .get("basePrice")
+                    .and_then(|value| match value {
+                        Value::Number(number) => number.as_f64(),
+                        Value::String(string) => string.trim().parse::<f64>().ok(),
+                        _ => None,
+                    })
+                    .map(|value| value.max(0.0));
+                if trade_price_curve_percent.is_none() && base_price.is_none() {
+                    return None;
+                }
+                Some((
+                    key,
+                    json!({
+                        "tradePriceCurvePercent": trade_price_curve_percent,
+                        "basePrice": base_price,
+                    }),
+                ))
+            })
+            .collect::<serde_json::Map<_, _>>();
+        *map = normalized;
     }
 }
 
@@ -1918,13 +1967,50 @@ fn trade_bargain_bonus_from_level_key(level_key: &str) -> f64 {
 }
 
 fn trade_sale_multiplier(signals: &CalculatorSignals) -> f64 {
+    trade_sale_multiplier_for_curve_percent(signals, signals.trade_price_curve)
+}
+
+fn price_override_for_species(
+    signals: &CalculatorSignals,
+    item_id: i32,
+) -> Option<&CalculatorPriceOverrideSignals> {
+    signals.price_overrides.get(&item_id.to_string())
+}
+
+fn trade_price_curve_percent_for_species(signals: &CalculatorSignals, item_id: i32) -> f64 {
+    price_override_for_species(signals, item_id)
+        .and_then(|override_values| override_values.trade_price_curve_percent)
+        .unwrap_or(signals.trade_price_curve)
+}
+
+fn base_price_for_species(
+    signals: &CalculatorSignals,
+    item_id: i32,
+    source_base_price: f64,
+) -> f64 {
+    price_override_for_species(signals, item_id)
+        .and_then(|override_values| override_values.base_price)
+        .unwrap_or(source_base_price)
+}
+
+fn trade_sale_multiplier_for_curve_percent(
+    signals: &CalculatorSignals,
+    trade_price_curve_percent: f64,
+) -> f64 {
     if !signals.apply_trade_modifiers {
         return 1.0;
     }
     let distance_bonus = (signals.trade_distance_bonus.max(0.0) / 100.0).min(1.5);
-    let trade_price_curve = signals.trade_price_curve.max(0.0) / 100.0;
+    let trade_price_curve = trade_price_curve_percent.max(0.0) / 100.0;
     let bargain_bonus = trade_bargain_bonus_from_level_key(&signals.trade_level);
     (1.0 + distance_bonus) * trade_price_curve * (1.0 + bargain_bonus)
+}
+
+fn trade_sale_multiplier_for_species(signals: &CalculatorSignals, item_id: i32) -> f64 {
+    trade_sale_multiplier_for_curve_percent(
+        signals,
+        trade_price_curve_percent_for_species(signals, item_id),
+    )
 }
 
 fn normalize_discard_grade(value: &str) -> &str {
@@ -2044,12 +2130,15 @@ fn derive_loot_chart(
             .copied()
             .unwrap_or_default();
         let expected_count_raw = total_catches_raw * group_share * entry.within_group_rate;
-        let vendor_price_raw = entry.vendor_price.unwrap_or_default() as f64;
+        let source_vendor_price_raw = entry.vendor_price.unwrap_or_default() as f64;
+        let base_price_raw =
+            base_price_for_species(signals, entry.item_id, source_vendor_price_raw);
+        let sale_multiplier_raw = trade_sale_multiplier_for_species(signals, entry.item_id);
         let discarded = entry.is_fish && discard_grade_enabled(signals, entry.grade.as_deref());
         let expected_profit_raw = if discarded {
             0.0
         } else {
-            expected_count_raw * vendor_price_raw * sale_multiplier_raw
+            expected_count_raw * base_price_raw * sale_multiplier_raw
         };
         *group_profit_by_slot.entry(entry.slot_idx).or_default() += expected_profit_raw;
         species_rows.push(LootSpeciesRow {
@@ -4128,7 +4217,8 @@ mod tests {
     use fishystuff_api::models::calculator::{
         CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
         CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
-        CalculatorPetSignals, CalculatorSignals, CalculatorZoneGroupRateEntry,
+        CalculatorPetSignals, CalculatorPriceOverrideSignals, CalculatorSignals,
+        CalculatorZoneGroupRateEntry,
     };
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
@@ -4147,12 +4237,12 @@ mod tests {
     use crate::store::{FishLang, Store};
 
     use super::{
-        buff_category_label, build_pet_value_aliases, discard_grade_enabled,
-        get_calculator_datastar_init, get_calculator_datastar_option_search,
+        base_price_for_species, buff_category_label, build_pet_value_aliases,
+        discard_grade_enabled, get_calculator_datastar_init, get_calculator_datastar_option_search,
         get_calculator_datastar_zone_search, init_signals_patch_map, normalize_lookup_value,
         normalize_named_array, parse_calculator_signals_value, post_calculator_datastar_eval,
-        CalculatorData, CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery,
+        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
+        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
     };
 
     struct MockStore;
@@ -4359,6 +4449,7 @@ mod tests {
                     },
                     trade_distance_bonus: 134.15,
                     trade_price_curve: 120.0,
+                    price_overrides: Default::default(),
                     catch_time_active: 17.5,
                     catch_time_afk: 6.5,
                     timespan_amount: 8.0,
@@ -5027,6 +5118,52 @@ mod tests {
     }
 
     #[test]
+    fn parse_calculator_signals_value_normalizes_price_overrides() {
+        let parsed = parse_calculator_signals_value(
+            serde_json::json!({
+                "priceOverrides": {
+                    "item:8473": {
+                        "tradePriceCurvePercent": "130",
+                        "basePrice": "8800000"
+                    },
+                    "8476": {
+                        "tradePriceCurvePercent": 115
+                    },
+                    "bad": {
+                        "tradePriceCurvePercent": 999
+                    }
+                }
+            }),
+            &CalculatorSignals::default(),
+            &RequestId("req-test".to_string()),
+        )
+        .expect("price overrides should normalize");
+
+        assert_eq!(
+            parsed
+                .price_overrides
+                .get("8473")
+                .and_then(|entry| entry.trade_price_curve_percent),
+            Some(130.0)
+        );
+        assert_eq!(
+            parsed
+                .price_overrides
+                .get("8473")
+                .and_then(|entry| entry.base_price),
+            Some(8_800_000.0)
+        );
+        assert_eq!(
+            parsed
+                .price_overrides
+                .get("8476")
+                .and_then(|entry| entry.trade_price_curve_percent),
+            Some(115.0)
+        );
+        assert!(!parsed.price_overrides.contains_key("bad"));
+    }
+
+    #[test]
     fn discard_grade_threshold_keeps_prize_fish() {
         let signals = CalculatorSignals {
             discard_grade: "yellow".to_string(),
@@ -5038,5 +5175,49 @@ mod tests {
         assert!(discard_grade_enabled(&signals, Some("HighQuality")));
         assert!(discard_grade_enabled(&signals, Some("Rare")));
         assert!(!discard_grade_enabled(&signals, Some("Prize")));
+    }
+
+    #[test]
+    fn trade_sale_multiplier_for_species_prefers_species_override() {
+        let mut signals = CalculatorSignals {
+            trade_distance_bonus: 100.0,
+            trade_price_curve: 120.0,
+            trade_level: "73".to_string(),
+            apply_trade_modifiers: true,
+            ..CalculatorSignals::default()
+        };
+        signals.price_overrides.insert(
+            "8473".to_string(),
+            CalculatorPriceOverrideSignals {
+                trade_price_curve_percent: Some(130.0),
+                base_price: None,
+            },
+        );
+
+        let default_multiplier = trade_sale_multiplier_for_species(&signals, 8476);
+        let override_multiplier = trade_sale_multiplier_for_species(&signals, 8473);
+
+        assert!(override_multiplier > default_multiplier);
+    }
+
+    #[test]
+    fn base_price_for_species_prefers_species_override() {
+        let mut signals = CalculatorSignals::default();
+        signals.price_overrides.insert(
+            "8473".to_string(),
+            CalculatorPriceOverrideSignals {
+                trade_price_curve_percent: None,
+                base_price: Some(8_800_000.0),
+            },
+        );
+
+        assert_eq!(
+            base_price_for_species(&signals, 8473, 8_000_000.0),
+            8_800_000.0
+        );
+        assert_eq!(
+            base_price_for_species(&signals, 8476, 16_000_000.0),
+            16_000_000.0
+        );
     }
 }

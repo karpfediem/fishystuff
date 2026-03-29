@@ -78,6 +78,38 @@
         } else {
             current.discardGrade = String(current.discardGrade).trim().toLowerCase();
         }
+        if (
+            !current.priceOverrides ||
+            typeof current.priceOverrides !== "object" ||
+            Array.isArray(current.priceOverrides)
+        ) {
+            current.priceOverrides = {};
+        }
+        current.priceOverrides = Object.fromEntries(
+            Object.entries(current.priceOverrides)
+                .map(([key, value]) => {
+                    const normalizedKey = String(key).trim().replace(/^item:/, "");
+                    if (!/^\d+$/.test(normalizedKey) || !value || typeof value !== "object" || Array.isArray(value)) {
+                        return null;
+                    }
+                    const tradeValueRaw = value.tradePriceCurvePercent;
+                    const basePriceRaw = value.basePrice;
+                    const tradePriceCurvePercent = Number(tradeValueRaw);
+                    const basePrice = Number(basePriceRaw);
+                    const normalizedValue = {};
+                    if (Number.isFinite(tradePriceCurvePercent)) {
+                        normalizedValue.tradePriceCurvePercent = Math.max(0, tradePriceCurvePercent);
+                    }
+                    if (Number.isFinite(basePrice)) {
+                        normalizedValue.basePrice = Math.max(0, basePrice);
+                    }
+                    if (Object.keys(normalizedValue).length === 0) {
+                        return null;
+                    }
+                    return [normalizedKey, normalizedValue];
+                })
+                .filter(Boolean)
+        );
         return current;
     };
 

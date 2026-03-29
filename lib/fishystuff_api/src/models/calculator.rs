@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -84,6 +86,15 @@ pub struct CalculatorPetSignals {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 #[serde(default)]
+pub struct CalculatorPriceOverrideSignals {
+    #[serde(rename = "tradePriceCurvePercent")]
+    pub trade_price_curve_percent: Option<f64>,
+    #[serde(rename = "basePrice")]
+    pub base_price: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct CalculatorSignals {
     pub level: i32,
     pub lifeskill_level: String,
@@ -108,6 +119,8 @@ pub struct CalculatorSignals {
     pub trade_distance_bonus: f64,
     #[serde(rename = "tradePriceCurve")]
     pub trade_price_curve: f64,
+    #[serde(rename = "priceOverrides")]
+    pub price_overrides: BTreeMap<String, CalculatorPriceOverrideSignals>,
     #[serde(rename = "catchTimeActive")]
     pub catch_time_active: f64,
     #[serde(rename = "catchTimeAfk")]
