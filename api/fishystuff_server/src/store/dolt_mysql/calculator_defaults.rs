@@ -60,6 +60,7 @@ pub(super) fn build_calculator_default_signals() -> CalculatorSignals {
         timespan_unit: "hours".to_string(),
         apply_trade_modifiers: true,
         show_silver_amounts: false,
+        show_normalized_select_rates: true,
         discard_grade: "none".to_string(),
         brand: true,
         active: false,

@@ -19,22 +19,26 @@ fn calculator_loot_item_icon_path(icon_id: i32) -> String {
 }
 
 const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
-const COMMUNITY_PRIZE_GUESS_WEIGHT_SCALE: f64 = 1_000_000.0;
+const GROUP_RATE_SCALE: f64 = 1_000_000.0;
+const COMBINED_GROUP_RATE_SCALE: f64 = GROUP_RATE_SCALE * GROUP_RATE_SCALE;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 struct CommunityPrizeGuessMeta {
     slot_idx: u8,
     guessed_rate: f64,
+    subgroup_key: Option<i64>,
 }
 
 fn parse_community_prize_guess_notes(notes: &str) -> Option<CommunityPrizeGuessMeta> {
     let mut slot_idx = None;
     let mut guessed_rate = None;
+    let mut subgroup_key = None;
     for part in notes.split(';') {
         let (key, value) = part.split_once('=')?;
         match key.trim() {
             "slot_idx" => slot_idx = value.trim().parse::<u8>().ok(),
             "guessed_rate" => guessed_rate = value.trim().parse::<f64>().ok(),
+            "subgroup_key" => subgroup_key = value.trim().parse::<i64>().ok(),
             _ => {}
         }
     }
@@ -43,7 +47,48 @@ fn parse_community_prize_guess_notes(notes: &str) -> Option<CommunityPrizeGuessM
     (guessed_rate > 0.0).then_some(CommunityPrizeGuessMeta {
         slot_idx,
         guessed_rate,
+        subgroup_key,
     })
+}
+
+fn apply_community_guess_weights(
+    aggregate_weights: &HashMap<(u8, i32), f64>,
+    community_guess_by_key: &HashMap<(u8, i32), CommunityPrizeGuessMeta>,
+    slot_subgroup_select_rate: &HashMap<(u8, i64), i64>,
+    slot_option_count: &HashMap<u8, usize>,
+) -> HashMap<(u8, i32), f64> {
+    let mut effective_weights = aggregate_weights.clone();
+    for ((slot_idx, item_id), guess) in community_guess_by_key {
+        let select_rate = guess
+            .subgroup_key
+            .and_then(|subgroup_key| {
+                slot_subgroup_select_rate
+                    .get(&(*slot_idx, subgroup_key))
+                    .copied()
+            })
+            .or_else(|| {
+                if slot_option_count.get(slot_idx).copied().unwrap_or_default() == 1 {
+                    slot_subgroup_select_rate.iter().find_map(
+                        |((candidate_slot_idx, _), select_rate)| {
+                            (*candidate_slot_idx == *slot_idx).then_some(*select_rate)
+                        },
+                    )
+                } else {
+                    None
+                }
+            });
+        let Some(select_rate) = select_rate else {
+            continue;
+        };
+        let guessed_weight = guess.guessed_rate * GROUP_RATE_SCALE * (select_rate as f64);
+        if guessed_weight <= 0.0 {
+            continue;
+        }
+        effective_weights
+            .entry((*slot_idx, *item_id))
+            .or_insert(guessed_weight);
+    }
+    effective_weights
 }
 
 impl DoltMySqlStore {
@@ -248,13 +293,11 @@ impl DoltMySqlStore {
             if item_id <= 0 {
                 continue;
             }
-            for select_rate in [select_rate_0, select_rate_1, select_rate_2] {
-                let Some(select_rate) = select_rate else {
-                    continue;
-                };
-                if select_rate <= 0 {
-                    continue;
-                }
+            let select_rate = [select_rate_0, select_rate_1, select_rate_2]
+                .into_iter()
+                .flatten()
+                .find(|select_rate| *select_rate > 0);
+            if let Some(select_rate) = select_rate {
                 subgroup_variants
                     .entry(item_sub_group_key)
                     .or_default()
@@ -263,8 +306,8 @@ impl DoltMySqlStore {
         }
 
         let mut aggregate_weights = HashMap::<(u8, i32), f64>::new();
-        for (slot_idx, item_main_group_key) in slot_rows {
-            let Some(options) = subgroup_options.get(&item_main_group_key) else {
+        for (slot_idx, item_main_group_key) in &slot_rows {
+            let Some(options) = subgroup_options.get(item_main_group_key) else {
                 continue;
             };
             for (select_rate, subgroup_key) in options {
@@ -273,12 +316,24 @@ impl DoltMySqlStore {
                 };
                 for (item_id, variant_rate) in variants {
                     let weight = (*select_rate as f64) * (*variant_rate as f64);
-                    *aggregate_weights.entry((slot_idx, *item_id)).or_default() += weight;
+                    *aggregate_weights.entry((*slot_idx, *item_id)).or_default() += weight;
                 }
             }
         }
+        let mut slot_subgroup_select_rate = HashMap::<(u8, i64), i64>::new();
+        let mut slot_option_count = HashMap::<u8, usize>::new();
+        for (slot_idx, item_main_group_key) in &slot_rows {
+            let Some(options) = subgroup_options.get(item_main_group_key) else {
+                continue;
+            };
+            slot_option_count.insert(*slot_idx, options.len());
+            for (select_rate, subgroup_key) in options {
+                slot_subgroup_select_rate.insert((*slot_idx, *subgroup_key), *select_rate);
+            }
+        }
+
         let mut community_presence_by_item = HashMap::<i32, (String, u32)>::new();
-        let mut community_guess_by_key = HashMap::<(u8, i32), f64>::new();
+        let mut community_guess_by_key = HashMap::<(u8, i32), CommunityPrizeGuessMeta>::new();
         let community_query = format!(
             "SELECT source_id, CAST(item_id AS SIGNED), support_status, CAST(claim_count AS SIGNED), notes \
              FROM community_zone_fish_support{as_of} \
@@ -301,7 +356,7 @@ impl DoltMySqlStore {
                 let Some(guess) = parse_community_prize_guess_notes(&notes) else {
                     continue;
                 };
-                community_guess_by_key.insert((guess.slot_idx, item_id), guess.guessed_rate);
+                community_guess_by_key.insert((guess.slot_idx, item_id), guess);
                 continue;
             }
             let claim_count = u32::try_from(claim_count.max(0)).unwrap_or(u32::MAX);
@@ -311,16 +366,12 @@ impl DoltMySqlStore {
             );
         }
 
-        let mut effective_weights = aggregate_weights.clone();
-        for ((slot_idx, item_id), guessed_rate) in &community_guess_by_key {
-            let guessed_weight = *guessed_rate * COMMUNITY_PRIZE_GUESS_WEIGHT_SCALE;
-            if guessed_weight <= 0.0 {
-                continue;
-            }
-            effective_weights
-                .entry((*slot_idx, *item_id))
-                .or_insert(guessed_weight);
-        }
+        let effective_weights = apply_community_guess_weights(
+            &aggregate_weights,
+            &community_guess_by_key,
+            &slot_subgroup_select_rate,
+            &slot_option_count,
+        );
         if effective_weights.is_empty() {
             return Ok(Vec::new());
         }
@@ -329,7 +380,6 @@ impl DoltMySqlStore {
         for ((slot_idx, _), weight) in &effective_weights {
             *slot_totals.entry(*slot_idx).or_default() += *weight;
         }
-
         let mut slot_membership_count = HashMap::<i32, usize>::new();
         for (_, item_id) in effective_weights.keys() {
             *slot_membership_count.entry(*item_id).or_default() += 1;
@@ -409,22 +459,50 @@ impl DoltMySqlStore {
                         )
                     });
                 let mut evidence = Vec::new();
-                if aggregate_weights.contains_key(&(slot_idx, item_id)) {
+                if let Some(db_weight) = aggregate_weights.get(&(slot_idx, item_id)).copied() {
                     evidence.push(CalculatorZoneLootEvidence {
                         source_family: "database".to_string(),
                         claim_kind: "in_group_rate".to_string(),
                         scope: "group".to_string(),
-                        rate: Some(within_group_rate),
+                        rate: Some(db_weight / COMBINED_GROUP_RATE_SCALE),
+                        normalized_rate: Some(db_weight / total_weight),
                         status: Some("best_effort".to_string()),
                         claim_count: None,
                     });
                 }
-                if let Some(guessed_rate) = community_guess_by_key.get(&(slot_idx, item_id)) {
+                if let Some(guess) = community_guess_by_key.get(&(slot_idx, item_id)) {
+                    let guess_weight = slot_subgroup_select_rate
+                        .get(&(slot_idx, guess.subgroup_key.unwrap_or_default()))
+                        .copied()
+                        .map(|select_rate| {
+                            guess.guessed_rate * GROUP_RATE_SCALE * (select_rate as f64)
+                        })
+                        .or_else(|| {
+                            if slot_option_count
+                                .get(&slot_idx)
+                                .copied()
+                                .unwrap_or_default()
+                                == 1
+                            {
+                                slot_subgroup_select_rate.iter().find_map(
+                                    |((candidate_slot_idx, _), select_rate)| {
+                                        (*candidate_slot_idx == slot_idx).then_some(
+                                            guess.guessed_rate
+                                                * GROUP_RATE_SCALE
+                                                * (*select_rate as f64),
+                                        )
+                                    },
+                                )
+                            } else {
+                                None
+                            }
+                        });
                     evidence.push(CalculatorZoneLootEvidence {
                         source_family: "community".to_string(),
                         claim_kind: "guessed_in_group_rate".to_string(),
                         scope: "group".to_string(),
-                        rate: Some(*guessed_rate),
+                        rate: Some(guess.guessed_rate),
+                        normalized_rate: guess_weight.map(|weight| weight / total_weight),
                         status: Some("guessed".to_string()),
                         claim_count: None,
                     });
@@ -447,6 +525,7 @@ impl DoltMySqlStore {
                         claim_kind: "presence".to_string(),
                         scope: scope.to_string(),
                         rate: None,
+                        normalized_rate: None,
                         status: Some(support_status.clone()),
                         claim_count: Some(*claim_count),
                     });
@@ -482,7 +561,11 @@ impl DoltMySqlStore {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_community_prize_guess_notes;
+    use std::collections::HashMap;
+
+    use super::{
+        apply_community_guess_weights, parse_community_prize_guess_notes, CommunityPrizeGuessMeta,
+    };
 
     #[test]
     fn parse_community_prize_guess_notes_reads_slot_and_rate() {
@@ -492,11 +575,76 @@ mod tests {
 
         assert_eq!(parsed.slot_idx, 1);
         assert!((parsed.guessed_rate - 0.02).abs() < f64::EPSILON);
+        assert_eq!(parsed.subgroup_key, Some(11054));
     }
 
     #[test]
     fn parse_community_prize_guess_notes_rejects_missing_fields() {
         assert!(parse_community_prize_guess_notes("guessed_rate=0.02").is_none());
         assert!(parse_community_prize_guess_notes("slot_idx=1").is_none());
+    }
+
+    #[test]
+    fn community_prize_guess_uses_subgroup_weight_scale() {
+        let aggregate_weights = HashMap::from([
+            ((1_u8, 8201_i32), 10_000_000_000.0),
+            ((1_u8, 8473_i32), 300_000_000_000.0),
+            ((1_u8, 8476_i32), 100_000_000_000.0),
+        ]);
+        let community_guess_by_key = HashMap::from([(
+            (1_u8, 820985_i32),
+            CommunityPrizeGuessMeta {
+                slot_idx: 1,
+                guessed_rate: 0.02,
+                subgroup_key: Some(11054),
+            },
+        )]);
+        let slot_subgroup_select_rate = HashMap::from([((1_u8, 11054_i64), 1_000_000_i64)]);
+        let slot_option_count = HashMap::from([(1_u8, 1_usize)]);
+
+        let effective_weights = apply_community_guess_weights(
+            &aggregate_weights,
+            &community_guess_by_key,
+            &slot_subgroup_select_rate,
+            &slot_option_count,
+        );
+
+        let total = effective_weights.values().sum::<f64>();
+        let yellow = effective_weights
+            .get(&(1, 8473))
+            .copied()
+            .unwrap_or_default()
+            / total;
+        let blue = effective_weights
+            .get(&(1, 8476))
+            .copied()
+            .unwrap_or_default()
+            / total;
+        let mud = effective_weights
+            .get(&(1, 8201))
+            .copied()
+            .unwrap_or_default()
+            / total;
+        let silver = effective_weights
+            .get(&(1, 820985))
+            .copied()
+            .unwrap_or_default()
+            / total;
+
+        assert!((yellow - 0.6976744186).abs() < 1e-9);
+        assert!((blue - 0.2325581395).abs() < 1e-9);
+        assert!((mud - 0.0232558139).abs() < 1e-9);
+        assert!((silver - 0.0465116279).abs() < 1e-9);
+    }
+
+    #[test]
+    fn database_group_rate_uses_raw_source_scale() {
+        let yellow_weight = 300_000_000_000.0_f64;
+        let blue_weight = 100_000_000_000.0_f64;
+        let mud_weight = 10_000_000_000.0_f64;
+
+        assert!((yellow_weight / super::COMBINED_GROUP_RATE_SCALE - 0.30_f64).abs() < 1e-9);
+        assert!((blue_weight / super::COMBINED_GROUP_RATE_SCALE - 0.10_f64).abs() < 1e-9);
+        assert!((mud_weight / super::COMBINED_GROUP_RATE_SCALE - 0.01_f64).abs() < 1e-9);
     }
 }

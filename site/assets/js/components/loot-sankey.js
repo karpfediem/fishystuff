@@ -40,6 +40,20 @@ function truncateLabel(label, maxChars) {
     return chars.slice(0, Math.max(0, maxChars - 1)).join("") + "…";
 }
 
+function compactSilverText(valueText) {
+    const numeric = Number(String(valueText ?? "").replaceAll(",", ""));
+    if (!Number.isFinite(numeric)) {
+        return String(valueText ?? "");
+    }
+    if (numeric < 1000) {
+        return Math.round(numeric).toString();
+    }
+    return new Intl.NumberFormat("en-US", {
+        notation: "compact",
+        maximumFractionDigits: 1,
+    }).format(numeric);
+}
+
 function sankeyPath(x1, y1, x2, y2, h1, h2) {
     const c1 = x1 + 120;
     const c2 = x2 - 120;
@@ -213,7 +227,7 @@ class FishyLootSankey extends HTMLElement {
             );
             const mid = top + heightValue / 2;
             const valueLabel = showSilverAmounts
-                ? `${row.expected_count_text} | ${row.expected_profit_text}`
+                ? `${row.expected_count_text} | ${compactSilverText(row.expected_profit_text)}`
                 : row.expected_count_text;
             const evidenceLabel = String(row.evidence_text ?? "");
 
@@ -257,7 +271,7 @@ class FishyLootSankey extends HTMLElement {
             const labelMid = labelTop + RIGHT_LABEL_HEIGHT / 2;
             const barMid = barTop + barHeight / 2;
             const valueLabel = showSilverAmounts
-                ? `${row.expected_count_text} | ${row.expected_profit_text}`
+                ? `${row.expected_count_text} | ${compactSilverText(row.expected_profit_text)}`
                 : row.expected_count_text;
             const evidenceLabel = String(row.evidence_text ?? "");
             const hasIcon = Boolean(row.icon_url);

@@ -133,6 +133,8 @@ pub struct CalculatorSignals {
     pub apply_trade_modifiers: bool,
     #[serde(rename = "showSilverAmounts")]
     pub show_silver_amounts: bool,
+    #[serde(rename = "showNormalizedSelectRates")]
+    pub show_normalized_select_rates: bool,
     #[serde(rename = "discardGrade")]
     pub discard_grade: String,
     pub brand: bool,

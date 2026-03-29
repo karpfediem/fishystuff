@@ -26,7 +26,7 @@ use fishystuff_api::models::zones::ZoneEntry;
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
 use crate::state::{RequestId, SharedState};
-use crate::store::{CalculatorZoneLootEntry, FishLang};
+use crate::store::{CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang};
 
 #[derive(Debug, Deserialize)]
 pub struct CalculatorQuery {
@@ -610,6 +610,7 @@ fn parse_calculator_signals_value(
     coerce_object_bool(&mut object, "debug");
     coerce_object_bool(&mut object, "applyTradeModifiers");
     coerce_object_bool(&mut object, "showSilverAmounts");
+    coerce_object_bool(&mut object, "showNormalizedSelectRates");
     coerce_object_string(&mut object, "discardGrade");
     coerce_object_string_array(&mut object, "outfit");
     coerce_object_string_array(&mut object, "food");
@@ -2056,14 +2057,28 @@ fn fmt_silver(value: f64) -> String {
     grouped
 }
 
-fn loot_species_evidence_text(entry: &CalculatorZoneLootEntry) -> String {
+fn evidence_display_rate(
+    signals: &CalculatorSignals,
+    evidence: &CalculatorZoneLootEvidence,
+) -> Option<f64> {
+    if signals.show_normalized_select_rates {
+        evidence.normalized_rate.or(evidence.rate)
+    } else {
+        evidence.rate
+    }
+}
+
+fn loot_species_evidence_text(
+    signals: &CalculatorSignals,
+    entry: &CalculatorZoneLootEntry,
+) -> String {
     let db_rate_text = entry
         .evidence
         .iter()
         .find(|evidence| {
             evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
         })
-        .and_then(|evidence| evidence.rate)
+        .and_then(|evidence| evidence_display_rate(signals, evidence))
         .map(|rate| format!("DB {}%", trim_float(rate * 100.0)));
 
     let guessed_rate_text = entry
@@ -2072,7 +2087,7 @@ fn loot_species_evidence_text(entry: &CalculatorZoneLootEntry) -> String {
         .find(|evidence| {
             evidence.source_family == "community" && evidence.claim_kind == "guessed_in_group_rate"
         })
-        .and_then(|evidence| evidence.rate)
+        .and_then(|evidence| evidence_display_rate(signals, evidence))
         .map(|rate| format!("Community guess {}%", trim_float(rate * 100.0)));
 
     let community_presence_text = entry
@@ -2197,7 +2212,7 @@ fn derive_loot_chart(
             expected_count_raw,
             expected_count_text: trim_float(expected_count_raw),
             expected_profit_text: fmt_silver(expected_profit_raw),
-            evidence_text: loot_species_evidence_text(entry),
+            evidence_text: loot_species_evidence_text(signals, entry),
         });
     }
     species_rows.sort_by(|left, right| {
@@ -3214,6 +3229,10 @@ fn render_loot_window(
                                 <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
                                     <input data-bind=\"showSilverAmounts\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
                                     <span class=\"text-sm font-medium\">Show silver amounts for groups and species</span>\
+                                </label>\
+                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
+                                    <input data-bind=\"showNormalizedSelectRates\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
+                                    <span class=\"text-sm font-medium\">Show normalized select-rates instead of raw in-group rates</span>\
                                 </label>\
                             </div>\
                         </fieldset>\
@@ -4503,6 +4522,7 @@ mod tests {
                     timespan_unit: "hours".to_string(),
                     apply_trade_modifiers: true,
                     show_silver_amounts: false,
+                    show_normalized_select_rates: true,
                     discard_grade: "none".to_string(),
                     brand: true,
                     active: false,
@@ -5213,6 +5233,14 @@ mod tests {
 
     #[test]
     fn loot_species_evidence_text_includes_db_guess_and_presence() {
+        let normalized_signals = CalculatorSignals {
+            show_normalized_select_rates: true,
+            ..CalculatorSignals::default()
+        };
+        let raw_signals = CalculatorSignals {
+            show_normalized_select_rates: false,
+            ..CalculatorSignals::default()
+        };
         let entry = CalculatorZoneLootEntry {
             within_group_rate: 0.5,
             evidence: vec![
@@ -5221,6 +5249,7 @@ mod tests {
                     claim_kind: "in_group_rate".to_string(),
                     scope: "group".to_string(),
                     rate: Some(0.3),
+                    normalized_rate: Some(0.25),
                     status: Some("best_effort".to_string()),
                     claim_count: None,
                 },
@@ -5229,6 +5258,7 @@ mod tests {
                     claim_kind: "guessed_in_group_rate".to_string(),
                     scope: "group".to_string(),
                     rate: Some(0.02),
+                    normalized_rate: Some(0.05),
                     status: Some("guessed".to_string()),
                     claim_count: None,
                 },
@@ -5237,6 +5267,7 @@ mod tests {
                     claim_kind: "presence".to_string(),
                     scope: "group_inferred".to_string(),
                     rate: None,
+                    normalized_rate: None,
                     status: Some("confirmed".to_string()),
                     claim_count: Some(1),
                 },
@@ -5245,13 +5276,25 @@ mod tests {
         };
 
         assert_eq!(
-            loot_species_evidence_text(&entry),
+            loot_species_evidence_text(&normalized_signals, &entry),
+            "DB 25% · Community guess 5% · Community confirmed×1 · group-inferred"
+        );
+        assert_eq!(
+            loot_species_evidence_text(&raw_signals, &entry),
             "DB 30% · Community guess 2% · Community confirmed×1 · group-inferred"
         );
     }
 
     #[test]
     fn loot_species_evidence_text_handles_community_guess_without_db_rate() {
+        let normalized_signals = CalculatorSignals {
+            show_normalized_select_rates: true,
+            ..CalculatorSignals::default()
+        };
+        let raw_signals = CalculatorSignals {
+            show_normalized_select_rates: false,
+            ..CalculatorSignals::default()
+        };
         let entry = CalculatorZoneLootEntry {
             within_group_rate: 0.02,
             evidence: vec![CalculatorZoneLootEvidence {
@@ -5259,13 +5302,21 @@ mod tests {
                 claim_kind: "guessed_in_group_rate".to_string(),
                 scope: "group".to_string(),
                 rate: Some(0.02),
+                normalized_rate: Some(0.04651),
                 status: Some("guessed".to_string()),
                 claim_count: None,
             }],
             ..CalculatorZoneLootEntry::default()
         };
 
-        assert_eq!(loot_species_evidence_text(&entry), "Community guess 2%");
+        assert_eq!(
+            loot_species_evidence_text(&normalized_signals, &entry),
+            "Community guess 4.65%"
+        );
+        assert_eq!(
+            loot_species_evidence_text(&raw_signals, &entry),
+            "Community guess 2%"
+        );
     }
 
     #[test]

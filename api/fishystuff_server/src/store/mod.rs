@@ -24,6 +24,7 @@ pub struct CalculatorZoneLootEvidence {
     pub claim_kind: String,
     pub scope: String,
     pub rate: Option<f64>,
+    pub normalized_rate: Option<f64>,
     pub status: Option<String>,
     pub claim_count: Option<u32>,
 }
