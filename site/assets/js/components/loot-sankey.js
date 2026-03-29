@@ -9,14 +9,15 @@ const SPECIES_LABEL_GAP = 8;
 const LEFT_X = 24;
 const LEFT_WIDTH = 200;
 const RIGHT_BAR_WIDTH = 18;
-const RIGHT_LABEL_WIDTH = 248;
-const RIGHT_LABEL_HEIGHT = 54;
+const RIGHT_LABEL_WIDTH = 320;
+const RIGHT_LABEL_HEIGHT = 58;
 const RIGHT_LABEL_OFFSET = 14;
 const GROUP_TO_SPECIES_GAP = 110;
 const SPECIES_TO_SILVER_GAP = 78;
 const SILVER_TO_GROUP_GAP = 76;
 const SILVER_GROUP_WIDTH = 212;
 const NODE_RADIUS = 12;
+const MIN_SILVER_NODE_HEIGHT = 1.5;
 
 function provenanceDotColor(kind) {
     if (kind === "database") {
@@ -26,6 +27,23 @@ function provenanceDotColor(kind) {
         return "color-mix(in oklab, var(--color-warning) 78%, var(--color-base-content) 22%)";
     }
     return "color-mix(in oklab, var(--color-neutral) 72%, var(--color-base-content) 28%)";
+}
+
+function gradeRingColor(tone) {
+    switch (String(tone || "").trim().toLowerCase()) {
+        case "prize":
+            return "color-mix(in oklab, var(--color-error) 76%, var(--color-base-content) 24%)";
+        case "yellow":
+            return "color-mix(in oklab, var(--color-warning) 76%, var(--color-base-content) 24%)";
+        case "blue":
+            return "color-mix(in oklab, var(--color-info) 76%, var(--color-base-content) 24%)";
+        case "green":
+            return "color-mix(in oklab, var(--color-success) 76%, var(--color-base-content) 24%)";
+        case "white":
+            return "color-mix(in oklab, var(--color-base-content) 64%, var(--color-base-300) 36%)";
+        default:
+            return "color-mix(in oklab, var(--color-neutral) 72%, var(--color-base-content) 28%)";
+    }
 }
 
 function positiveNumber(value) {
@@ -39,6 +57,55 @@ function stackedHeight(rows, scale, gap) {
     }
     const total = d3.sum(rows, (row) => positiveNumber(row.expected_count_raw) * scale);
     return total + gap * Math.max(0, rows.length - 1);
+}
+
+function distributedDisplayHeights(values, totalSpan, gap, minimumHeight) {
+    const count = values.length;
+    if (!count) {
+        return [];
+    }
+
+    const usableSpan = Math.max(0, totalSpan - gap * Math.max(0, count - 1));
+    if (usableSpan <= 0) {
+        return Array.from({ length: count }, () => 0);
+    }
+
+    const positiveValues = values.map((value) => positiveNumber(value));
+    const totalValue = d3.sum(positiveValues);
+    if (totalValue <= 0) {
+        return Array.from({ length: count }, () => usableSpan / count);
+    }
+
+    const baseHeights = positiveValues.map((value) => (usableSpan * value) / totalValue);
+    const boostedHeights = baseHeights.map((height) => Math.max(minimumHeight, height));
+    const boostedTotal = d3.sum(boostedHeights);
+
+    if (boostedTotal <= usableSpan) {
+        const extra = usableSpan - boostedTotal;
+        return boostedHeights.map((height, index) =>
+            height + (positiveValues[index] / totalValue) * extra,
+        );
+    }
+
+    const floorTotal = minimumHeight * count;
+    if (floorTotal >= usableSpan) {
+        return Array.from({ length: count }, () => usableSpan / count);
+    }
+
+    const scalableBudget = usableSpan - floorTotal;
+    const scalableValues = positiveValues.map((value, index) =>
+        baseHeights[index] > minimumHeight ? value : 0,
+    );
+    const scalableTotal = d3.sum(scalableValues);
+
+    if (scalableTotal <= 0) {
+        return Array.from({ length: count }, () => usableSpan / count);
+    }
+
+    return positiveValues.map((_, index) => {
+        const scaledShare = scalableValues[index] / scalableTotal;
+        return minimumHeight + scaledShare * scalableBudget;
+    });
 }
 
 function readChartSignal(path) {
@@ -132,7 +199,6 @@ class FishyLootSankey extends HTMLElement {
         const chart = readChartSignal(this.getAttribute("signal-path"));
         const rows = Array.isArray(chart?.rows) ? chart.rows : [];
         const speciesRows = Array.isArray(chart?.species_rows) ? chart.species_rows : [];
-        const showSilverAmounts = Boolean(chart?.show_silver_amounts);
         if (!rows.length || !speciesRows.length) {
             this.replaceChildren();
             return;
@@ -167,10 +233,6 @@ class FishyLootSankey extends HTMLElement {
             0,
             (innerHeight - SPECIES_GAP * Math.max(0, speciesRows.length - 1)) / totalCount,
         );
-        const profitScale = Math.max(
-            0,
-            (innerHeight - SPECIES_GAP * Math.max(0, speciesRows.length - 1)) / totalProfit,
-        );
         const height = innerHeight + TOP_PADDING + BOTTOM_PADDING;
 
         const groupTop = new Map();
@@ -187,18 +249,33 @@ class FishyLootSankey extends HTMLElement {
             rightCursor += positiveNumber(row.expected_count_raw) * rightScale + SPECIES_GAP;
         });
 
+        const profitSpeciesHeights = distributedDisplayHeights(
+            speciesRows.map((row) => row.expected_profit_raw),
+            innerHeight,
+            SPECIES_GAP,
+            MIN_SILVER_NODE_HEIGHT,
+        );
         const profitSpeciesTop = [];
         let profitSpeciesCursor = TOP_PADDING;
-        speciesRows.forEach((row) => {
+        profitSpeciesHeights.forEach((heightValue) => {
             profitSpeciesTop.push(profitSpeciesCursor);
-            profitSpeciesCursor += positiveNumber(row.expected_profit_raw) * profitScale + SPECIES_GAP;
+            profitSpeciesCursor += heightValue + SPECIES_GAP;
         });
 
+        const profitGroupHeightsList = distributedDisplayHeights(
+            rows.map((row) => row.expected_profit_raw),
+            innerHeight,
+            GROUP_GAP,
+            MIN_SILVER_NODE_HEIGHT,
+        );
         const profitGroupTop = new Map();
+        const profitGroupHeights = new Map();
         let profitGroupCursor = TOP_PADDING;
-        rows.forEach((row) => {
+        rows.forEach((row, index) => {
+            const heightValue = profitGroupHeightsList[index] ?? 0;
             profitGroupTop.set(row.label, profitGroupCursor);
-            profitGroupCursor += positiveNumber(row.expected_profit_raw) * profitScale + GROUP_GAP;
+            profitGroupHeights.set(row.label, heightValue);
+            profitGroupCursor += heightValue + GROUP_GAP;
         });
 
         const speciesLabelTop = [];
@@ -209,6 +286,14 @@ class FishyLootSankey extends HTMLElement {
         });
 
         const leftFlowCursor = new Map(groupTop);
+        const groupedProfitSpeciesHeights = d3.rollup(
+            speciesRows.map((row, index) => ({
+                groupLabel: row.group_label,
+                heightValue: profitSpeciesHeights[index] ?? 0,
+            })),
+            (entries) => d3.sum(entries, (entry) => entry.heightValue),
+            (entry) => entry.groupLabel,
+        );
         const profitFlowCursor = new Map(profitGroupTop);
 
         const svg = d3
@@ -258,11 +343,10 @@ class FishyLootSankey extends HTMLElement {
                 1.5,
                 positiveNumber(row.expected_count_raw) * rightScale,
             );
-            const profitRaw = positiveNumber(row.expected_profit_raw);
-            const profitHeight = profitRaw * profitScale;
-            if (profitHeight <= 0) {
-                return;
-            }
+            const profitHeight = Math.max(
+                MIN_SILVER_NODE_HEIGHT,
+                profitSpeciesHeights[index] ?? 0,
+            );
             const speciesProfitTop = profitSpeciesTop[index];
             silverFlows.append("path")
                 .attr(
@@ -280,6 +364,12 @@ class FishyLootSankey extends HTMLElement {
                 .style("opacity", 0.28);
 
             const groupProfitTop = profitFlowCursor.get(row.group_label) ?? TOP_PADDING;
+            const groupHeight = profitGroupHeights.get(row.group_label) ?? profitHeight;
+            const groupedHeightTotal =
+                groupedProfitSpeciesHeights.get(row.group_label) ?? profitHeight;
+            const groupSliceHeight = groupedHeightTotal > 0
+                ? (profitHeight / groupedHeightTotal) * groupHeight
+                : profitHeight;
             silverFlows.append("path")
                 .attr(
                     "d",
@@ -289,13 +379,13 @@ class FishyLootSankey extends HTMLElement {
                         silverGroupX,
                         groupProfitTop,
                         profitHeight,
-                        profitHeight,
+                        groupSliceHeight,
                     ),
                 )
                 .style("fill", row.connector_color)
                 .style("opacity", 0.44);
 
-            profitFlowCursor.set(row.group_label, groupProfitTop + profitHeight);
+            profitFlowCursor.set(row.group_label, groupProfitTop + groupSliceHeight);
         });
 
         const leftNodes = svg.append("g");
@@ -306,10 +396,7 @@ class FishyLootSankey extends HTMLElement {
                 positiveNumber(row.expected_count_raw) * leftScale,
             );
             const mid = top + heightValue / 2;
-            const valueLabel = showSilverAmounts
-                ? `${row.expected_count_text} | ${compactSilverText(row.expected_profit_text)}`
-                : row.expected_count_text;
-            const evidenceLabel = String(row.evidence_text ?? "");
+            const valueLabel = `${row.count_share_text} · ${row.expected_count_text}`;
 
             leftNodes.append("rect")
                 .attr("x", LEFT_X)
@@ -351,12 +438,12 @@ class FishyLootSankey extends HTMLElement {
             const labelTop = speciesLabelTop[index];
             const labelMid = labelTop + RIGHT_LABEL_HEIGHT / 2;
             const barMid = barTop + barHeight / 2;
-            const valueLabel = showSilverAmounts
-                ? `${row.expected_count_text} | ${compactSilverText(row.expected_profit_text)}`
-                : row.expected_count_text;
-            const rateLabel = String(row.rate_text ?? "");
-            const rateTooltip = String(row.rate_tooltip ?? "");
-            const dotColor = provenanceDotColor(String(row.rate_source_kind ?? ""));
+            const dropMetricText = String(row.drop_rate_text ?? "");
+            const dropRateTooltip = String(row.drop_rate_tooltip ?? "");
+            const dropDotColor = provenanceDotColor(String(row.drop_rate_source_kind ?? ""));
+            const silverMetricText = String(row.silver_share_text ?? "");
+            const silverValueText = compactSilverText(row.expected_profit_text);
+            const iconRing = gradeRingColor(row.icon_grade_tone);
             const hasIcon = Boolean(row.icon_url);
 
             rightNodes.append("rect")
@@ -394,52 +481,65 @@ class FishyLootSankey extends HTMLElement {
                 .style("--loot-card-fill", row.fill_color)
                 .style("--loot-card-stroke", row.stroke_color)
                 .style("--loot-card-text", row.text_color)
-                .style("--loot-card-dot", dotColor);
-            const infoDot = cardRoot.append("xhtml:span")
-                .attr("class", "loot-sankey-card__info-dot")
-                .attr("aria-hidden", "true");
-            if (rateTooltip) {
-                infoDot.attr("title", rateTooltip);
-            }
+                .style("--loot-card-dot", dropDotColor)
+                .style("--loot-card-icon-ring", iconRing);
 
             const cardBody = cardRoot.append("xhtml:div")
                 .attr("class", "loot-sankey-card__body");
 
+            const leftMetric = cardBody.append("xhtml:div")
+                .attr("class", "loot-sankey-card__metric loot-sankey-card__metric--left");
+
+            leftMetric.append("xhtml:div")
+                .attr("class", "loot-sankey-card__metric-primary")
+                .text(dropMetricText);
+
+            const infoDot = leftMetric.append("xhtml:span")
+                .attr("class", "loot-sankey-card__info-dot")
+                .attr("aria-hidden", "true");
+            if (dropRateTooltip) {
+                infoDot.attr("title", dropRateTooltip);
+            }
+
+            const centerColumn = cardBody.append("xhtml:div")
+                .attr("class", "loot-sankey-card__center");
+
             if (hasIcon) {
-                cardBody.append("xhtml:img")
+                const iconFrame = centerColumn.append("xhtml:span")
+                    .attr("class", "loot-sankey-card__icon-frame");
+                iconFrame.append("xhtml:img")
                     .attr("class", "loot-sankey-card__icon")
                     .attr("src", row.icon_url)
                     .attr("alt", "")
                     .attr("aria-hidden", "true");
             }
 
-            const textStack = cardBody.append("xhtml:div")
+            const textStack = centerColumn.append("xhtml:div")
                 .attr("class", "loot-sankey-card__text");
 
             textStack.append("xhtml:div")
                 .attr("class", "loot-sankey-card__label")
                 .text(String(row.label ?? ""));
 
-            textStack.append("xhtml:div")
-                .attr("class", "loot-sankey-card__value")
-                .text(valueLabel);
+            const rightMetric = cardBody.append("xhtml:div")
+                .attr("class", "loot-sankey-card__metric loot-sankey-card__metric--right");
 
-            const rateColumn = cardBody.append("xhtml:div")
-                .attr("class", "loot-sankey-card__rate-column");
+            rightMetric.append("xhtml:div")
+                .attr("class", "loot-sankey-card__metric-primary")
+                .text(silverMetricText);
 
-            rateColumn.append("xhtml:div")
-                .attr("class", "loot-sankey-card__rate")
-                .text(rateLabel);
+            rightMetric.append("xhtml:div")
+                .attr("class", "loot-sankey-card__metric-secondary")
+                .text(silverValueText);
         });
 
         const silverNodes = svg.append("g");
         speciesRows.forEach((row, index) => {
-            const profitRaw = positiveNumber(row.expected_profit_raw);
             const top = profitSpeciesTop[index];
-            const heightValue = profitRaw * profitScale;
-            if (heightValue <= 0) {
-                return;
-            }
+            const heightValue = Math.max(
+                MIN_SILVER_NODE_HEIGHT,
+                profitSpeciesHeights[index] ?? 0,
+            );
 
             silverNodes.append("rect")
                 .attr("x", silverBarX)
@@ -456,11 +556,12 @@ class FishyLootSankey extends HTMLElement {
         const profitGroups = svg.append("g");
         rows.forEach((row) => {
             const top = profitGroupTop.get(row.label) ?? TOP_PADDING;
-            const heightValue = positiveNumber(row.expected_profit_raw) * profitScale;
-            if (heightValue <= 0) {
-                return;
-            }
+            const heightValue = Math.max(
+                MIN_SILVER_NODE_HEIGHT,
+                profitGroupHeights.get(row.label) ?? 0,
+            );
             const mid = top + heightValue / 2;
+            const valueLabel = `${row.silver_share_text} · ${compactSilverText(row.expected_profit_text)}`;
 
             profitGroups.append("rect")
                 .attr("x", silverGroupX)
@@ -482,16 +583,14 @@ class FishyLootSankey extends HTMLElement {
                 .style("font-weight", "700")
                 .text(row.label);
 
-            if (showSilverAmounts) {
-                profitGroups.append("text")
-                    .attr("x", silverGroupX + 10)
-                    .attr("y", mid + 10)
-                    .attr("dominant-baseline", "middle")
-                    .style("fill", row.text_color)
-                    .style("font-size", "11.5px")
-                    .style("font-weight", "600")
-                    .text(compactSilverText(row.expected_profit_text));
-            }
+            profitGroups.append("text")
+                .attr("x", silverGroupX + 10)
+                .attr("y", mid + 10)
+                .attr("dominant-baseline", "middle")
+                .style("fill", row.text_color)
+                .style("font-size", "11.5px")
+                .style("font-weight", "600")
+                .text(valueLabel);
         });
 
         this.replaceChildren(svg.node());
