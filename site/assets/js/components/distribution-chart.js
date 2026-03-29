@@ -3,7 +3,7 @@ import * as d3 from "../d3.js";
 const DEFAULT_VIEWBOX_WIDTH = 1351;
 const CHART_HEIGHT = 164;
 const CALLOUT_TOP = 8;
-const CALLOUT_HEIGHT = 46;
+const CALLOUT_HEIGHT = 60;
 const CALLOUT_RADIUS = 16;
 const TRACK_TOP = 132;
 const TRACK_HEIGHT = 18;
@@ -19,12 +19,13 @@ function chartSegments(path) {
     return Array.isArray(chart?.segments) ? chart.segments : [];
 }
 
-function estimateCalloutWidthPx(label, valueText) {
+function estimateCalloutWidthPx(label, valueText, detailText) {
     const longest = Math.max(
         String(label ?? "").length,
         String(valueText ?? "").length,
+        String(detailText ?? "").length,
     );
-    return Math.max(112, Math.min(228, 42 + longest * 8.6));
+    return Math.max(112, Math.min(248, 42 + longest * 8.6));
 }
 
 function neutralSpan(start, end, leftRadius, rightRadius) {
@@ -143,6 +144,7 @@ class FishyDistributionChart extends HTMLElement {
                 estimateCalloutWidthPx(
                     segment.label,
                     segment.value_text,
+                    segment.detail_text,
                 ),
             );
             const startX = x(startPct);
@@ -269,12 +271,21 @@ class FishyDistributionChart extends HTMLElement {
 
             callout.append("text")
                 .attr("x", calloutX + calloutWidth / 2)
-                .attr("y", CALLOUT_TOP + 34)
+                .attr("y", CALLOUT_TOP + 36)
                 .attr("text-anchor", "middle")
                 .style("fill", entry.segment.text_color)
                 .style("font-size", "15px")
                 .style("font-weight", "700")
                 .text(entry.segment.value_text);
+
+            callout.append("text")
+                .attr("x", calloutX + calloutWidth / 2)
+                .attr("y", CALLOUT_TOP + 51)
+                .attr("text-anchor", "middle")
+                .style("fill", entry.segment.text_color)
+                .style("font-size", "11.5px")
+                .style("font-weight", "600")
+                .text(entry.segment.detail_text);
         });
 
         track.append("rect")

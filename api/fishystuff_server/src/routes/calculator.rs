@@ -139,6 +139,8 @@ struct LootChartRow {
     expected_count_text: String,
     expected_profit_text: String,
     current_share_pct: f64,
+    count_share_text: String,
+    silver_share_text: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -189,6 +191,7 @@ struct LootSpeciesRow {
 struct DistributionChartSegment {
     label: String,
     value_text: String,
+    detail_text: String,
     width_pct: f64,
     fill_color: &'static str,
     stroke_color: &'static str,
@@ -412,9 +415,9 @@ pub async fn post_calculator_datastar_eval(
         )?
         .into_datastar_event(),
         PatchElements::new(render_fish_group_chart(&fish_group_chart))
-        .selector("#calculator-fish-group-chart")
-        .mode(ElementPatchMode::Outer)
-        .into_datastar_event(),
+            .selector("#calculator-fish-group-chart")
+            .mode(ElementPatchMode::Outer)
+            .into_datastar_event(),
         PatchElements::new(render_fish_group_silver_chart(&loot_chart))
             .selector("#calculator-fish-group-silver-chart")
             .mode(ElementPatchMode::Outer)
@@ -1633,7 +1636,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     }))
     .unwrap_or_else(|_| "{}".to_string());
     let fish_group_distribution_chart = DistributionChartSignal {
-        segments: groups_distribution_segments(&fish_group_chart.rows),
+        segments: groups_distribution_segments(&loot_chart.rows),
     };
     let fish_group_silver_distribution_chart = DistributionChartSignal {
         segments: group_silver_distribution_segments(&loot_chart.rows),
@@ -2073,6 +2076,23 @@ fn fmt_silver(value: f64) -> String {
     grouped
 }
 
+fn compact_silver_text(value: f64) -> String {
+    let absolute = value.abs();
+    let (divisor, suffix) = if absolute >= 1_000_000_000_000.0 {
+        (1_000_000_000_000.0, "T")
+    } else if absolute >= 1_000_000_000.0 {
+        (1_000_000_000.0, "B")
+    } else if absolute >= 1_000_000.0 {
+        (1_000_000.0, "M")
+    } else if absolute >= 1_000.0 {
+        (1_000.0, "K")
+    } else {
+        return fmt_silver(value);
+    };
+
+    format!("{}{}", trim_float_to(value / divisor, 1), suffix)
+}
+
 fn evidence_display_rate(
     signals: &CalculatorSignals,
     evidence: &CalculatorZoneLootEvidence,
@@ -2344,6 +2364,15 @@ fn derive_loot_chart(
         .map(|(index, row)| {
             let slot_idx = (index + 1) as u8;
             let expected_count_raw = total_catches_raw * (row.current_share_pct / 100.0);
+            let expected_profit_raw = group_profit_by_slot
+                .get(&slot_idx)
+                .copied()
+                .unwrap_or_default();
+            let silver_share_pct = if total_profit_raw > 0.0 {
+                (expected_profit_raw / total_profit_raw) * 100.0
+            } else {
+                0.0
+            };
             LootChartRow {
                 label: row.label,
                 fill_color: row.fill_color,
@@ -2351,18 +2380,12 @@ fn derive_loot_chart(
                 text_color: row.text_color,
                 connector_color: row.connector_color,
                 expected_count_raw,
-                expected_profit_raw: group_profit_by_slot
-                    .get(&slot_idx)
-                    .copied()
-                    .unwrap_or_default(),
+                expected_profit_raw,
                 expected_count_text: trim_float(expected_count_raw),
-                expected_profit_text: fmt_silver(
-                    group_profit_by_slot
-                        .get(&slot_idx)
-                        .copied()
-                        .unwrap_or_default(),
-                ),
+                expected_profit_text: fmt_silver(expected_profit_raw),
                 current_share_pct: row.current_share_pct,
+                count_share_text: percent_value_text(row.current_share_pct),
+                silver_share_text: percent_value_text(silver_share_pct),
             }
         })
         .collect::<Vec<_>>();
@@ -3175,12 +3198,13 @@ fn render_distribution_chart(chart_id: &str, aria_label: &str, signal_path: &str
     )
 }
 
-fn groups_distribution_segments(fish_rows: &[FishGroupChartRow]) -> Vec<DistributionChartSegment> {
-    fish_rows
+fn groups_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<DistributionChartSegment> {
+    loot_rows
         .iter()
         .map(|row| DistributionChartSegment {
             label: row.label.to_string(),
-            value_text: percent_value_text(row.current_share_pct),
+            value_text: row.count_share_text.clone(),
+            detail_text: row.expected_count_text.clone(),
             width_pct: row.current_share_pct,
             fill_color: row.fill_color,
             stroke_color: row.stroke_color,
@@ -3200,11 +3224,8 @@ fn group_silver_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<Distrib
         .iter()
         .map(|row| DistributionChartSegment {
             label: row.label.to_string(),
-            value_text: percent_value_text(if total_profit_raw > 0.0 {
-                (row.expected_profit_raw / total_profit_raw) * 100.0
-            } else {
-                0.0
-            }),
+            value_text: row.silver_share_text.clone(),
+            detail_text: compact_silver_text(row.expected_profit_raw),
             width_pct: if total_profit_raw > 0.0 {
                 (row.expected_profit_raw / total_profit_raw) * 100.0
             } else {
