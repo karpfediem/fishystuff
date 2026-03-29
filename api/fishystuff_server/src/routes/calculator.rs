@@ -1793,31 +1793,16 @@ fn effective_fish_multiplier(
     multiplier
 }
 
-fn interpolate_mastery_prize_rate(curve: &[CalculatorMasteryPrizeRateEntry], mastery: f64) -> f64 {
+fn mastery_prize_rate_for_bracket(
+    curve: &[CalculatorMasteryPrizeRateEntry],
+    mastery: f64,
+) -> f64 {
     let mastery = mastery.max(0.0);
-    let Some(first) = curve.first() else {
-        return 0.0;
-    };
-    if mastery <= f64::from(first.fishing_mastery) {
-        return f64::from(first.high_drop_rate_raw) / 1_000_000.0;
-    }
-    for window in curve.windows(2) {
-        let [left, right] = window else {
-            continue;
-        };
-        let left_mastery = f64::from(left.fishing_mastery);
-        let right_mastery = f64::from(right.fishing_mastery);
-        if mastery > right_mastery {
-            continue;
-        }
-        let left_rate = f64::from(left.high_drop_rate_raw) / 1_000_000.0;
-        let right_rate = f64::from(right.high_drop_rate_raw) / 1_000_000.0;
-        let span = (right_mastery - left_mastery).max(f64::EPSILON);
-        let progress = ((mastery - left_mastery) / span).clamp(0.0, 1.0);
-        return left_rate + (right_rate - left_rate) * progress;
-    }
     curve
-        .last()
+        .iter()
+        .rev()
+        .find(|entry| mastery >= f64::from(entry.fishing_mastery))
+        .or_else(|| curve.first())
         .map(|entry| f64::from(entry.high_drop_rate_raw) / 1_000_000.0)
         .unwrap_or_default()
 }
@@ -1838,7 +1823,7 @@ fn derive_fish_group_chart(
     };
 
     let mastery_prize_rate =
-        interpolate_mastery_prize_rate(&data.catalog.mastery_prize_curve, signals.mastery);
+        mastery_prize_rate_for_bracket(&data.catalog.mastery_prize_curve, signals.mastery);
     let rare_bonus = sum_item_property(
         items_by_key,
         &[
@@ -3125,7 +3110,7 @@ fn render_fish_group_window(chart: &FishGroupChart, mastery: f64) -> String {
                 <div class=\"grid gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] lg:items-start\">\
                     <fieldset class=\"fieldset\">\
                         <legend class=\"fieldset-legend\">Mastery</legend>\
-                        <input type=\"number\" min=\"0\" step=\"1\" class=\"input input-sm w-full\" data-bind=\"mastery\" value=\"{}\">\
+                        <input type=\"number\" min=\"0\" step=\"50\" class=\"input input-sm w-full\" data-bind=\"mastery\" value=\"{}\">\
                         <span class=\"label text-xs\">Enter your consolidated fishing mastery directly.</span>\
                     </fieldset>\
                     {}\
@@ -4276,9 +4261,10 @@ mod tests {
         base_price_for_species, buff_category_label, build_pet_value_aliases,
         discard_grade_enabled, get_calculator_datastar_init, get_calculator_datastar_option_search,
         get_calculator_datastar_zone_search, init_signals_patch_map, normalize_lookup_value,
-        normalize_named_array, parse_calculator_signals_value, post_calculator_datastar_eval,
-        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
-        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
+        mastery_prize_rate_for_bracket, normalize_named_array, parse_calculator_signals_value,
+        post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
+        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
+        CalculatorZoneSearchQuery,
     };
 
     struct MockStore;
@@ -4621,6 +4607,7 @@ mod tests {
         assert!(text.contains("calculator-buff-picker"));
         assert!(text.contains("Search foods by name or effect"));
         assert!(text.contains("data-bind=\"mastery\""));
+        assert!(text.contains("step=\"50\""));
         assert!(text.contains("Raw Prize Catch Rate"));
         assert!(text.contains("Expected Group Haul"));
         assert!(text.contains("Expected Catches / Hour"));
@@ -5234,6 +5221,32 @@ mod tests {
         let override_multiplier = trade_sale_multiplier_for_species(&signals, 8473);
 
         assert!(override_multiplier > default_multiplier);
+    }
+
+    #[test]
+    fn mastery_prize_rate_uses_last_reached_bracket() {
+        let curve = vec![
+            CalculatorMasteryPrizeRateEntry {
+                fishing_mastery: 0,
+                high_drop_rate_raw: 0,
+                high_drop_rate: 0.0,
+            },
+            CalculatorMasteryPrizeRateEntry {
+                fishing_mastery: 50,
+                high_drop_rate_raw: 1_250,
+                high_drop_rate: 0.00125,
+            },
+            CalculatorMasteryPrizeRateEntry {
+                fishing_mastery: 100,
+                high_drop_rate_raw: 2_500,
+                high_drop_rate: 0.0025,
+            },
+        ];
+
+        assert_eq!(mastery_prize_rate_for_bracket(&curve, 0.0), 0.0);
+        assert_eq!(mastery_prize_rate_for_bracket(&curve, 50.0), 0.00125);
+        assert_eq!(mastery_prize_rate_for_bracket(&curve, 99.0), 0.00125);
+        assert_eq!(mastery_prize_rate_for_bracket(&curve, 100.0), 0.0025);
     }
 
     #[test]
