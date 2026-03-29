@@ -258,6 +258,7 @@ class FishyLootSankey extends HTMLElement {
             const valueLabel = showSilverAmounts
                 ? `${row.expected_count_text} | ${row.expected_profit_text}`
                 : row.expected_count_text;
+            const evidenceLabel = String(row.evidence_text ?? "");
 
             rightNodes.append("rect")
                 .attr("x", rightBarX)
