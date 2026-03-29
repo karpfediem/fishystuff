@@ -140,7 +140,7 @@ fn manually_maintained_source_fish_multiplier(item_id: i32, item_type: &str) -> 
         return None;
     }
     match item_id {
-        16153 | 760976 | 767158 | 767187 | 767671 => Some(1.6),
+        16153 | 767158 | 767187 | 767671 => Some(1.6),
         _ => None,
     }
 }
@@ -2023,10 +2023,6 @@ mod tests {
             Some(1.6)
         );
         assert_eq!(
-            manually_maintained_source_fish_multiplier(760976, "rod"),
-            Some(1.6)
-        );
-        assert_eq!(
             manually_maintained_source_fish_multiplier(767158, "rod"),
             Some(1.6)
         );
@@ -2040,6 +2036,10 @@ mod tests {
         );
         assert_eq!(
             manually_maintained_source_fish_multiplier(16162, "rod"),
+            None
+        );
+        assert_eq!(
+            manually_maintained_source_fish_multiplier(760976, "rod"),
             None
         );
         assert_eq!(
