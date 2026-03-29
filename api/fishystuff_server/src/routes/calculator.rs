@@ -2355,13 +2355,13 @@ fn derive_loot_chart(
         } else {
             0.0
         };
-        species_row.silver_share_text = percent_text(silver_share);
+        species_row.silver_share_text = percent_value_text(silver_share);
         if signals.show_silver_amounts {
-            species_row.rate_text = percent_text(silver_share);
+            species_row.rate_text = percent_value_text(silver_share);
             species_row.rate_source_kind = "derived".to_string();
             species_row.rate_tooltip = format!(
                 "Derived {} of total expected silver",
-                percent_text(silver_share)
+                percent_value_text(silver_share)
             );
         } else {
             species_row.rate_text = species_row.drop_rate_text.clone();

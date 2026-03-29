@@ -468,6 +468,7 @@ class FishyLootSankey extends HTMLElement {
             const connectorTop = labelTop + SPECIES_BOX_CONNECTOR_INSET;
             const connectorHeight = RIGHT_LABEL_HEIGHT - SPECIES_BOX_CONNECTOR_INSET * 2;
             const dropMetricText = String(row.drop_rate_text ?? "");
+            const dropValueText = String(row.expected_count_text ?? "");
             const dropRateTooltip = String(row.drop_rate_tooltip ?? "");
             const dropDotColor = provenanceDotColor(String(row.drop_rate_source_kind ?? ""));
             const silverMetricText = String(row.silver_share_text ?? "");
@@ -575,7 +576,7 @@ class FishyLootSankey extends HTMLElement {
 
             rightNodes.append("text")
                 .attr("x", leftBoxX + SPECIES_METRIC_WIDTH / 2)
-                .attr("y", leftBoxMid + 1)
+                .attr("y", leftBoxMid - 6)
                 .attr("text-anchor", "middle")
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
@@ -583,6 +584,17 @@ class FishyLootSankey extends HTMLElement {
                 .style("font-weight", "800")
                 .style("font-variant-numeric", "tabular-nums")
                 .text(dropMetricText);
+
+            rightNodes.append("text")
+                .attr("x", leftBoxX + SPECIES_METRIC_WIDTH / 2)
+                .attr("y", leftBoxMid + 10)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .style("fill", row.text_color)
+                .style("font-size", "11px")
+                .style("font-weight", "700")
+                .style("font-variant-numeric", "tabular-nums")
+                .text(dropValueText);
 
             const infoDot = rightNodes.append("circle")
                 .attr("cx", leftBoxX + SPECIES_METRIC_WIDTH - 10)
