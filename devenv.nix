@@ -59,7 +59,14 @@ in {
       (inputs.zine.packages.${pkgs.system}.default.override { zigPreferMusl = true; })
     ];
 
-  languages.python.enable = true;
+  languages.python = {
+    enable = true;
+    venv.enable = true;
+    uv = {
+      enable = true;
+      sync.enable = true;
+    };
+  };
   languages.javascript.enable = true;
   languages.javascript.bun.enable = true;
   languages.rust = {
