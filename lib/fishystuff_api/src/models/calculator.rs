@@ -107,6 +107,10 @@ pub struct CalculatorSignals {
     pub chair: String,
     pub lightstone_set: String,
     pub backpack: String,
+    #[serde(rename = "targetFish")]
+    pub target_fish: String,
+    #[serde(rename = "targetFishAmount")]
+    pub target_fish_amount: f64,
     pub outfit: Vec<String>,
     pub food: Vec<String>,
     pub buff: Vec<String>,

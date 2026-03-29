@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Write as _;
 
@@ -57,6 +57,7 @@ pub struct CalculatorSearchableOptionQuery {
     pub q: Option<String>,
     pub results_id: Option<String>,
     pub selected: Option<String>,
+    pub zone: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -102,6 +103,11 @@ struct CalculatorDerivedSignals {
     fish_group_distribution_chart: DistributionChartSignal,
     fish_group_silver_distribution_chart: DistributionChartSignal,
     loot_sankey_chart: LootSankeySignal,
+    target_fish_selected_label: String,
+    target_fish_expected_count: String,
+    target_fish_per_hour: String,
+    target_fish_time_to_target: String,
+    target_fish_status_text: String,
     debug_json: String,
 }
 
@@ -210,6 +216,16 @@ struct LootSankeySignal {
     species_rows: Vec<LootSpeciesRow>,
 }
 
+#[derive(Debug, Clone)]
+struct TargetFishSummary {
+    selected_label: String,
+    expected_count_raw: f64,
+    expected_count_text: String,
+    per_hour_text: String,
+    time_to_target_text: String,
+    status_text: String,
+}
+
 #[derive(Debug)]
 struct CalculatorData {
     catalog: CalculatorCatalogResponse,
@@ -264,6 +280,7 @@ enum CalculatorSearchableOptionKind {
     FishingLevel,
     LifeskillLevel,
     TradeLevel,
+    TargetFish,
     Rod,
     Float,
     Chair,
@@ -281,6 +298,7 @@ impl CalculatorSearchableOptionKind {
             "fishing_level" => Some(Self::FishingLevel),
             "lifeskill_level" => Some(Self::LifeskillLevel),
             "trade_level" => Some(Self::TradeLevel),
+            "target_fish" => Some(Self::TargetFish),
             "rod" => Some(Self::Rod),
             "float" => Some(Self::Float),
             "chair" => Some(Self::Chair),
@@ -299,6 +317,7 @@ impl CalculatorSearchableOptionKind {
             Self::FishingLevel => "fishing_level",
             Self::LifeskillLevel => "lifeskill_level",
             Self::TradeLevel => "trade_level",
+            Self::TargetFish => "target_fish",
             Self::Rod => "rod",
             Self::Float => "float",
             Self::Chair => "chair",
@@ -405,6 +424,7 @@ pub async fn post_calculator_datastar_eval(
         derived.loot_total_catches_raw,
         derived.fish_multiplier_raw,
     );
+    let target_fishes = target_fish_options(&data);
     let events = vec![
         calculator_signals_event(
             &data,
@@ -421,6 +441,14 @@ pub async fn post_calculator_datastar_eval(
             .selector("#calculator-fish-group-silver-chart")
             .mode(ElementPatchMode::Outer)
             .into_datastar_event(),
+        PatchElements::new(render_target_fish_panel(
+            &data,
+            &normalized_signals,
+            &target_fishes,
+        ))
+        .selector("#calculator-target-fish-panel")
+        .mode(ElementPatchMode::Outer)
+        .into_datastar_event(),
         PatchElements::new(render_loot_chart(&normalized_signals, &loot_chart))
             .selector("#calculator-loot-chart")
             .mode(ElementPatchMode::Outer)
@@ -473,7 +501,24 @@ pub async fn get_calculator_datastar_option_search(
                 .with_request_id(request_id.0.clone())
         })?;
     let lang = FishLang::from_param(query.lang.as_deref());
-    let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    let mut data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
+    if kind == CalculatorSearchableOptionKind::TargetFish {
+        let zone = query
+            .zone
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(data.catalog.defaults.zone.as_str())
+            .to_string();
+        data.zone_loot_entries = with_timeout(
+            state.config.request_timeout_secs,
+            state
+                .store
+                .calculator_zone_loot(lang, query.r#ref.clone(), zone),
+        )
+        .await
+        .map_err(|err| map_request_id(err, &request_id))?;
+    }
     let selected_value = query.selected.as_deref().unwrap_or_default();
     let search_text = query.q.unwrap_or_default();
     let results_id = query
@@ -896,6 +941,7 @@ async fn load_calculator_runtime_data(
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
+    normalize_zone_target_fish(&mut signals, &data);
     let derived = derive_signals(&signals, &data);
     Ok((data, signals, derived))
 }
@@ -980,6 +1026,7 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
     signals.catch_time_active = signals.catch_time_active.max(0.0);
     signals.catch_time_afk = signals.catch_time_afk.max(0.0);
     signals.timespan_amount = signals.timespan_amount.max(0.0);
+    signals.target_fish_amount = signals.target_fish_amount.max(1.0);
     signals.trade_level = normalize_named_value_with_fuzzy(
         &signals.trade_level,
         &valid_trade_level_keys,
@@ -1089,6 +1136,21 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         "minutes" | "hours" | "days" | "weeks"
     ) {
         signals.timespan_unit = defaults.timespan_unit;
+    }
+}
+
+fn normalize_zone_target_fish(signals: &mut CalculatorSignals, data: &CalculatorData) {
+    let valid_target_fish = target_fish_options(data)
+        .into_iter()
+        .map(|option| option.value.to_string())
+        .collect::<HashSet<_>>();
+
+    if signals.target_fish.trim().is_empty() {
+        return;
+    }
+
+    if !valid_target_fish.contains(signals.target_fish.as_str()) {
+        signals.target_fish.clear();
     }
 }
 
@@ -1588,6 +1650,13 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         loot_total_catches_raw,
         fish_multiplier_raw,
     );
+    let target_fish_summary = derive_target_fish_summary(
+        signals,
+        data,
+        &fish_group_chart,
+        loot_total_catches_raw,
+        timespan_seconds,
+    );
 
     let debug_json = serde_json::to_string_pretty(&json!({
         "inputs": signals,
@@ -1642,7 +1711,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     };
     let loot_sankey_chart = LootSankeySignal {
         show_silver_amounts: loot_chart.show_silver_amounts,
-        rows: loot_chart.rows.clone(),
+        rows: filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows),
         species_rows: loot_chart.species_rows.clone(),
     };
 
@@ -1704,6 +1773,11 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         fish_group_distribution_chart,
         fish_group_silver_distribution_chart,
         loot_sankey_chart,
+        target_fish_selected_label: target_fish_summary.selected_label,
+        target_fish_expected_count: target_fish_summary.expected_count_text,
+        target_fish_per_hour: target_fish_summary.per_hour_text,
+        target_fish_time_to_target: target_fish_summary.time_to_target_text,
+        target_fish_status_text: target_fish_summary.status_text,
         debug_json,
     }
 }
@@ -1871,11 +1945,38 @@ fn derive_fish_group_chart(
     let general_base = f64::from(zone_group_rate.general_rate_raw.max(0)) / 1_000_000.0;
     let trash_base = f64::from(zone_group_rate.trash_rate_raw.max(0)) / 1_000_000.0;
 
-    let rare_weight = rare_base * (1.0 + rare_bonus.max(0.0));
-    let high_quality_weight = high_quality_base * (1.0 + high_quality_bonus.max(0.0));
-    let general_weight = general_base;
-    let trash_weight = trash_base;
-    let prize_weight = mastery_prize_rate.max(0.0);
+    let available_slots = data
+        .zone_loot_entries
+        .iter()
+        .filter(|entry| entry.within_group_rate > 0.0)
+        .map(|entry| entry.slot_idx)
+        .collect::<HashSet<_>>();
+
+    let rare_weight = if available_slots.contains(&2) {
+        rare_base * (1.0 + rare_bonus.max(0.0))
+    } else {
+        0.0
+    };
+    let high_quality_weight = if available_slots.contains(&3) {
+        high_quality_base * (1.0 + high_quality_bonus.max(0.0))
+    } else {
+        0.0
+    };
+    let general_weight = if available_slots.contains(&4) {
+        general_base
+    } else {
+        0.0
+    };
+    let trash_weight = if available_slots.contains(&5) {
+        trash_base
+    } else {
+        0.0
+    };
+    let prize_weight = if available_slots.contains(&1) {
+        mastery_prize_rate.max(0.0)
+    } else {
+        0.0
+    };
     let total_weight =
         prize_weight + rare_weight + high_quality_weight + general_weight + trash_weight;
 
@@ -2288,6 +2389,9 @@ fn derive_loot_chart(
         let Some(group_row) = group_row_by_slot.get(&entry.slot_idx) else {
             continue;
         };
+        if group_row.current_share_pct <= 0.0 {
+            continue;
+        }
         let group_share = group_share_by_slot
             .get(&entry.slot_idx)
             .copied()
@@ -2430,6 +2534,97 @@ fn derive_loot_chart(
     }
 }
 
+fn derive_target_fish_summary(
+    signals: &CalculatorSignals,
+    data: &CalculatorData,
+    fish_group_chart: &FishGroupChart,
+    total_catches_raw: f64,
+    timespan_seconds: f64,
+) -> TargetFishSummary {
+    let selected_label = signals.target_fish.trim().to_string();
+    if selected_label.is_empty() {
+        return TargetFishSummary {
+            selected_label: String::new(),
+            expected_count_raw: 0.0,
+            expected_count_text: "—".to_string(),
+            per_hour_text: "—".to_string(),
+            time_to_target_text: "—".to_string(),
+            status_text: "Select a target fish or loot item from this zone.".to_string(),
+        };
+    }
+
+    let group_share_by_slot = fish_group_chart
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| ((index + 1) as u8, row.current_share_pct / 100.0))
+        .collect::<HashMap<_, _>>();
+
+    let expected_count_raw = data
+        .zone_loot_entries
+        .iter()
+        .filter(|entry| entry.name == selected_label)
+        .map(|entry| {
+            total_catches_raw
+                * group_share_by_slot
+                    .get(&entry.slot_idx)
+                    .copied()
+                    .unwrap_or_default()
+                * entry.within_group_rate
+        })
+        .sum::<f64>();
+
+    let per_hour_raw = if timespan_seconds > 0.0 {
+        (expected_count_raw / timespan_seconds) * 3600.0
+    } else {
+        0.0
+    };
+    let time_to_target_text = if per_hour_raw > 0.0 {
+        human_duration_text((signals.target_fish_amount.max(1.0) / per_hour_raw) * 3600.0)
+    } else {
+        "Unavailable".to_string()
+    };
+
+    let status_text = if expected_count_raw > 0.0 {
+        format!(
+            "{} / hour at the current spot and setup.",
+            trim_float(per_hour_raw)
+        )
+    } else {
+        "This target does not currently appear at this spot.".to_string()
+    };
+
+    TargetFishSummary {
+        selected_label,
+        expected_count_raw,
+        expected_count_text: trim_float(expected_count_raw),
+        per_hour_text: trim_float(per_hour_raw),
+        time_to_target_text,
+        status_text,
+    }
+}
+
+fn human_duration_text(total_seconds: f64) -> String {
+    if !total_seconds.is_finite() || total_seconds <= 0.0 {
+        return "0m".to_string();
+    }
+
+    let mut remaining = total_seconds.round() as i64;
+    let days = remaining / 86_400;
+    remaining %= 86_400;
+    let hours = remaining / 3_600;
+    remaining %= 3_600;
+    let minutes = remaining / 60;
+
+    if days > 0 {
+        format!("{days}d {hours}h")
+    } else if hours > 0 {
+        format!("{hours}h {minutes}m")
+    } else {
+        format!("{}m", minutes.max(1))
+    }
+}
+
 fn percentage_of_average_time(time: f64, unoptimized_time: f64) -> f64 {
     if unoptimized_time <= 0.0 {
         0.0
@@ -2569,6 +2764,7 @@ fn render_calculator_app(
     let chairs = item_options_by_type(&data.catalog.items, "chair");
     let lightstone_sets = item_options_by_type(&data.catalog.items, "lightstone_set");
     let backpacks = item_options_by_type(&data.catalog.items, "backpack");
+    let target_fishes = target_fish_options(data);
     let outfits = item_options_by_type(&data.catalog.items, "outfit");
     let foods = item_options_by_type(&data.catalog.items, "food");
     let buffs = item_options_by_type(&data.catalog.items, "buff");
@@ -2930,7 +3126,14 @@ fn render_calculator_app(
         ),
         (
             "__FISH_GROUP_WINDOW__",
-            render_fish_group_window(signals, &fish_group_chart, &loot_chart, signals.mastery),
+            render_fish_group_window(
+                data,
+                signals,
+                &fish_group_chart,
+                &loot_chart,
+                signals.mastery,
+                &target_fishes,
+            ),
         ),
         (
             "__LOOT_WINDOW__",
@@ -3252,6 +3455,22 @@ fn group_silver_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<Distrib
         .collect()
 }
 
+fn filtered_loot_flow_rows(
+    loot_rows: &[LootChartRow],
+    species_rows: &[LootSpeciesRow],
+) -> Vec<LootChartRow> {
+    let groups_with_species = species_rows
+        .iter()
+        .map(|row| row.group_label)
+        .collect::<HashSet<_>>();
+
+    loot_rows
+        .iter()
+        .filter(|row| row.current_share_pct > 0.0 && groups_with_species.contains(row.label))
+        .cloned()
+        .collect()
+}
+
 fn render_loot_sankey(chart: &LootChart, signals: &CalculatorSignals) -> String {
     if chart.species_rows.is_empty() {
         return "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No source-backed loot rows are available for this zone yet.</div>".to_string();
@@ -3316,11 +3535,52 @@ fn render_loot_chart(signals: &CalculatorSignals, chart: &LootChart) -> String {
     )
 }
 
+fn render_target_fish_panel(
+    data: &CalculatorData,
+    signals: &CalculatorSignals,
+    target_fish_options: &[SelectOption<'_>],
+) -> String {
+    if target_fish_options.is_empty() {
+        return "<div id=\"calculator-target-fish-panel\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No loot rows are currently available for target analysis at this spot.</div>".to_string();
+    }
+
+    format!(
+        "<div id=\"calculator-target-fish-panel\" class=\"grid gap-4\">\
+            <div class=\"grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem]\">\
+                <fieldset class=\"fieldset\">\
+                    <legend class=\"fieldset-legend\">Target Fish / Loot Item</legend>\
+                    {}\
+                </fieldset>\
+                <fieldset class=\"fieldset\">\
+                    <legend class=\"fieldset-legend\">Target Amount</legend>\
+                    <input type=\"number\" min=\"1\" step=\"1\" class=\"input input-sm w-full\" data-bind=\"targetFishAmount\">\
+                    <span class=\"label text-xs\">Expected time to reach this amount.</span>\
+                </fieldset>\
+            </div>\
+            <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-200 shadow-none lg:stats-horizontal\">\
+                <div class=\"stat\">\
+                    <div class=\"stat-title whitespace-normal leading-snug\">Expected (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
+                    <div class=\"stat-value text-2xl\" data-text=\"$_calc.target_fish_expected_count\"></div>\
+                    <div class=\"stat-desc\" data-text=\"$_calc.target_fish_status_text\"></div>\
+                </div>\
+                <div class=\"stat\">\
+                    <div class=\"stat-title\">Time to Target</div>\
+                    <div class=\"stat-value text-2xl\" data-text=\"$_calc.target_fish_time_to_target\"></div>\
+                    <div class=\"stat-desc\" data-text=\"$_calc.target_fish_selected_label ? ($_calc.target_fish_selected_label + ' · ' + ($_calc.target_fish_per_hour || '—') + '/hour') : 'Select a target fish.'\"></div>\
+                </div>\
+            </div>\
+        </div>",
+        render_target_fish_select_control(data, signals, target_fish_options),
+    )
+}
+
 fn render_fish_group_window(
+    data: &CalculatorData,
     signals: &CalculatorSignals,
     fish_group_chart: &FishGroupChart,
     loot_chart: &LootChart,
     mastery: f64,
+    target_fish_options: &[SelectOption<'_>],
 ) -> String {
     format!(
         "<fieldset id=\"calculator-fish-group-window\" class=\"card card-border bg-base-100\">\
@@ -3360,10 +3620,13 @@ fn render_fish_group_window(
                         </div>\
                         <div role=\"tablist\" class=\"tabs tabs-box bg-base-200/80 p-1\" aria-label=\"Distribution tabs\">\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'groups'\" data-attr:aria-selected=\"($_distribution_tab === 'groups').toString()\" data-on:click=\"$_distribution_tab = 'groups'\">Groups</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_distribution_tab === 'target_fish').toString()\" data-on:click=\"$_distribution_tab = 'target_fish'\">Target Fish</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'silver'\" data-attr:aria-selected=\"($_distribution_tab === 'silver').toString()\" data-on:click=\"$_distribution_tab = 'silver'\">Silver</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_distribution_tab = 'loot_flow'\">Loot Flow</button>\
                         </div>\
                         <div data-show=\"$_distribution_tab === 'groups'\">{}\
+                        </div>\
+                        <div data-show=\"$_distribution_tab === 'target_fish'\">{}\
                         </div>\
                         <div data-show=\"$_distribution_tab === 'silver'\">{}\
                         </div>\
@@ -3382,6 +3645,7 @@ fn render_fish_group_window(
             ""
         },
         render_fish_group_chart(fish_group_chart),
+        render_target_fish_panel(data, signals, target_fish_options),
         render_fish_group_silver_chart(loot_chart),
         render_loot_chart(signals, loot_chart),
     )
@@ -3678,6 +3942,7 @@ fn searchable_options_for_kind<'a>(
             select_options_from_catalog(&data.catalog.trade_levels),
             false,
         ),
+        CalculatorSearchableOptionKind::TargetFish => (target_fish_options(data), true),
         CalculatorSearchableOptionKind::Rod => {
             (item_options_by_type(&data.catalog.items, "rod"), false)
         }
@@ -3872,6 +4137,66 @@ fn render_searchable_select_control(
         escape_html(input_id),
         escape_html(bind_key),
         escape_html(selected_value),
+        dropdown,
+    )
+}
+
+fn render_target_fish_select_control(
+    data: &CalculatorData,
+    signals: &CalculatorSignals,
+    options: &[SelectOption<'_>],
+) -> String {
+    let root_id = "calculator-target-fish-picker";
+    let input_id = "calculator-target-fish-value";
+    let results_id = format!("{root_id}-results");
+    let options = with_optional_none(options, true);
+    let selected_option = options
+        .iter()
+        .copied()
+        .find(|option| option.value == signals.target_fish);
+    let selected_label = selected_option
+        .map(|option| option.label)
+        .unwrap_or(NONE_SELECT_OPTION.label);
+    let selected_content_html = selected_option
+        .map(|option| {
+            render_searchable_dropdown_option_content_html(data.cdn_base_url.as_str(), option)
+        })
+        .unwrap_or_else(|| render_searchable_dropdown_text_content(selected_label));
+    let catalog_html =
+        render_searchable_dropdown_catalog_html(data.cdn_base_url.as_str(), &options);
+    let results_html = render_searchable_select_results(
+        data.cdn_base_url.as_str(),
+        &results_id,
+        &options,
+        &signals.target_fish,
+        "",
+    );
+    let search_url = format!(
+        "/api/v1/calculator/datastar/option-search?lang={}&kind=target_fish&results_id={}&zone={}",
+        lang_param(data.lang),
+        escape_html(&results_id),
+        escape_html(&signals.zone),
+    );
+    let dropdown = render_searchable_dropdown(
+        &SearchableDropdownConfig {
+            catalog_html: Some(&catalog_html),
+            compact: false,
+            root_id,
+            input_id,
+            label: selected_label,
+            selected_content_html: &selected_content_html,
+            value: &signals.target_fish,
+            search_url: &search_url,
+            search_url_root: Some("api"),
+            search_placeholder: "Search loot rows at this spot",
+        },
+        &results_html,
+    );
+
+    format!(
+        "<input id=\"{}\" type=\"hidden\" data-bind=\"targetFish\" value=\"{}\">{}",
+        escape_html(input_id),
+        escape_html(&signals.target_fish),
         dropdown,
     )
 }
@@ -4266,6 +4591,27 @@ fn item_options_by_type<'a>(
         .collect()
 }
 
+fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
+    let mut seen = HashSet::<String>::new();
+    let mut options = data
+        .zone_loot_entries
+        .iter()
+        .filter(|entry| {
+            let key = normalize_lookup_value(&entry.name);
+            !key.is_empty() && seen.insert(key)
+        })
+        .map(|entry| SelectOption {
+            value: entry.name.as_str(),
+            label: entry.name.as_str(),
+            icon: entry.icon.as_deref(),
+            item: None,
+            lifeskill_level: None,
+        })
+        .collect::<Vec<_>>();
+    options.sort_by(|left, right| left.label.cmp(right.label));
+    options
+}
+
 fn render_checkbox_group(
     cdn_base_url: &str,
     id: &str,
@@ -4493,12 +4839,14 @@ mod tests {
 
     use super::{
         base_price_for_species, buff_category_label, build_pet_value_aliases,
-        discard_grade_enabled, get_calculator_datastar_init, get_calculator_datastar_option_search,
-        get_calculator_datastar_zone_search, init_signals_patch_map, loot_species_evidence_text,
-        mastery_prize_rate_for_bracket, normalize_lookup_value, normalize_named_array,
-        parse_calculator_signals_value, post_calculator_datastar_eval,
-        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
-        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
+        derive_fish_group_chart, derive_loot_chart, derive_target_fish_summary,
+        discard_grade_enabled, filtered_loot_flow_rows, get_calculator_datastar_init,
+        get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
+        init_signals_patch_map, loot_species_evidence_text, mastery_prize_rate_for_bracket,
+        normalize_lookup_value, normalize_named_array, parse_calculator_signals_value,
+        post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
+        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
+        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow,
     };
 
     struct MockStore;
@@ -4665,6 +5013,8 @@ mod tests {
                     chair: "item:705539".to_string(),
                     lightstone_set: "lightstone-set:30".to_string(),
                     backpack: "item:830150".to_string(),
+                    target_fish: String::new(),
+                    target_fish_amount: 1.0,
                     outfit: vec![
                         "effect:8-piece-outfit-set-effect".to_string(),
                         "effect:mainhand-weapon-outfit".to_string(),
@@ -4844,6 +5194,7 @@ mod tests {
         assert!(text.contains("data-bind=\"mastery\""));
         assert!(text.contains("step=\"50\""));
         assert!(text.contains("Raw Prize Catch Rate"));
+        assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
         assert!(text.contains("calculator-loot-window"));
@@ -4889,6 +5240,7 @@ mod tests {
         assert!(text.contains("event:datastar-patch-signals"));
         assert!(text.contains("event:datastar-patch-elements"));
         assert!(text.contains("data:selector #calculator-fish-group-chart"));
+        assert!(text.contains("data:selector #calculator-target-fish-panel"));
         assert!(text.contains("data:selector #calculator-loot-chart"));
         assert!(text.contains("\"zone_name\":\"Velia Beach\""));
         assert!(!text.contains("\"zone\":\"240,74,74\""));
@@ -4986,6 +5338,7 @@ mod tests {
                 q: Some("baleno".to_string()),
                 results_id: Some("calculator-rod-picker-results".to_string()),
                 selected: Some("item:16162".to_string()),
+                zone: None,
             })),
             Extension(RequestId("req-test".to_string())),
         )
@@ -5025,6 +5378,7 @@ mod tests {
                 q: Some("blacksmith".to_string()),
                 results_id: Some("calculator-lightstone-picker-results".to_string()),
                 selected: Some("lightstone-set:30".to_string()),
+                zone: None,
             })),
             Extension(RequestId("req-test".to_string())),
         )
@@ -5053,6 +5407,7 @@ mod tests {
                 q: Some("guru".to_string()),
                 results_id: Some("calculator-lifeskill-level-picker-results".to_string()),
                 selected: Some("100".to_string()),
+                zone: None,
             })),
             Extension(RequestId("req-test".to_string())),
         )
@@ -5533,6 +5888,239 @@ mod tests {
             loot_species_evidence_text(&raw_signals, &entry),
             "DB 0.00005%"
         );
+    }
+
+    #[test]
+    fn loot_flow_filter_excludes_groups_without_share_or_derived_species_rows() {
+        let signals = CalculatorSignals::default();
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "5%".to_string(),
+            mastery_text: "3000".to_string(),
+            rows: vec![
+                FishGroupChartRow {
+                    label: "Prize",
+                    fill_color: "pink",
+                    stroke_color: "red",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: String::new(),
+                    base_share_pct: 0.0,
+                    weight_pct: 0.0,
+                    current_share_pct: 10.0,
+                },
+                FishGroupChartRow {
+                    label: "Rare",
+                    fill_color: "yellow",
+                    stroke_color: "gold",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: String::new(),
+                    base_share_pct: 0.0,
+                    weight_pct: 0.0,
+                    current_share_pct: 0.0,
+                },
+                FishGroupChartRow {
+                    label: "General",
+                    fill_color: "green",
+                    stroke_color: "lime",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: String::new(),
+                    base_share_pct: 0.0,
+                    weight_pct: 0.0,
+                    current_share_pct: 90.0,
+                },
+            ],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 820985,
+                name: "Silver Beltfish".to_string(),
+                vendor_price: Some(80_000_000),
+                within_group_rate: 1.0,
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "guessed_in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.02),
+                    normalized_rate: Some(0.04651),
+                    status: Some("guessed".to_string()),
+                    claim_count: None,
+                }],
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let loot_chart = derive_loot_chart(&signals, &data, &fish_group_chart, 100.0, 1.0);
+        let loot_flow_rows = filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
+
+        assert_eq!(loot_chart.rows.len(), 3);
+        assert_eq!(loot_chart.species_rows.len(), 1);
+        assert_eq!(loot_chart.species_rows[0].group_label, "Prize");
+        assert_eq!(loot_chart.species_rows[0].label, "Silver Beltfish");
+        assert_eq!(loot_flow_rows.len(), 1);
+        assert_eq!(loot_flow_rows[0].label, "Prize");
+    }
+
+    #[test]
+    fn derive_target_fish_summary_aggregates_matching_rows_across_groups() {
+        let signals = CalculatorSignals {
+            target_fish: "Laila's Petal".to_string(),
+            target_fish_amount: 1.0,
+            ..CalculatorSignals::default()
+        };
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "5%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![
+                FishGroupChartRow {
+                    label: "Prize",
+                    fill_color: "pink",
+                    stroke_color: "red",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: String::new(),
+                    base_share_pct: 0.0,
+                    weight_pct: 0.0,
+                    current_share_pct: 25.0,
+                },
+                FishGroupChartRow {
+                    label: "Rare",
+                    fill_color: "yellow",
+                    stroke_color: "gold",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: String::new(),
+                    base_share_pct: 0.0,
+                    weight_pct: 0.0,
+                    current_share_pct: 0.0,
+                },
+                FishGroupChartRow {
+                    label: "High-Quality",
+                    fill_color: "blue",
+                    stroke_color: "navy",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: String::new(),
+                    base_share_pct: 0.0,
+                    weight_pct: 0.0,
+                    current_share_pct: 0.0,
+                },
+                FishGroupChartRow {
+                    label: "General",
+                    fill_color: "green",
+                    stroke_color: "lime",
+                    text_color: "black",
+                    connector_color: "rgba(0,0,0,0.2)",
+                    bonus_text: String::new(),
+                    base_share_pct: 0.0,
+                    weight_pct: 0.0,
+                    current_share_pct: 75.0,
+                },
+            ],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![
+                CalculatorZoneLootEntry {
+                    slot_idx: 1,
+                    item_id: 54031,
+                    name: "Laila's Petal".to_string(),
+                    within_group_rate: 0.1,
+                    ..CalculatorZoneLootEntry::default()
+                },
+                CalculatorZoneLootEntry {
+                    slot_idx: 4,
+                    item_id: 54031,
+                    name: "Laila's Petal".to_string(),
+                    within_group_rate: 0.02,
+                    ..CalculatorZoneLootEntry::default()
+                },
+            ],
+        };
+
+        let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 7200.0);
+
+        assert_eq!(summary.selected_label, "Laila's Petal");
+        assert_eq!(summary.expected_count_raw, 4.0);
+        assert_eq!(summary.expected_count_text, "4");
+        assert_eq!(summary.per_hour_text, "2");
+        assert_eq!(summary.time_to_target_text, "30m");
+    }
+
+    #[test]
+    fn derive_fish_group_chart_zeroes_groups_without_any_loot_rows() {
+        let signals = CalculatorSignals {
+            zone: "240,74,74".to_string(),
+            mastery: 1000.0,
+            ..CalculatorSignals::default()
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse {
+                mastery_prize_curve: vec![
+                    CalculatorMasteryPrizeRateEntry {
+                        fishing_mastery: 0,
+                        high_drop_rate_raw: 0,
+                        high_drop_rate: 0.0,
+                    },
+                    CalculatorMasteryPrizeRateEntry {
+                        fishing_mastery: 1000,
+                        high_drop_rate_raw: 25_000,
+                        high_drop_rate: 0.025,
+                    },
+                ],
+                ..CalculatorCatalogResponse::default()
+            },
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::from([(
+                "240,74,74".to_string(),
+                CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "240,74,74".to_string(),
+                    prize_main_group_key: Some(11054),
+                    rare_rate_raw: 100_000,
+                    high_quality_rate_raw: 217_500,
+                    general_rate_raw: 620_000,
+                    trash_rate_raw: 62_500,
+                },
+            )]),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 4,
+                item_id: 8201,
+                name: "Mudskipper".to_string(),
+                within_group_rate: 1.0,
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let fish_group_chart = derive_fish_group_chart(&signals, &data, &HashMap::new());
+
+        assert_eq!(fish_group_chart.rows.len(), 5);
+        assert_eq!(fish_group_chart.rows[0].label, "Prize");
+        assert_eq!(fish_group_chart.rows[0].current_share_pct, 0.0);
+        assert_eq!(fish_group_chart.rows[1].label, "Rare");
+        assert_eq!(fish_group_chart.rows[1].current_share_pct, 0.0);
+        assert_eq!(fish_group_chart.rows[2].label, "High-Quality");
+        assert_eq!(fish_group_chart.rows[2].current_share_pct, 0.0);
+        assert_eq!(fish_group_chart.rows[3].label, "General");
+        assert_eq!(fish_group_chart.rows[3].current_share_pct, 100.0);
+        assert_eq!(fish_group_chart.rows[4].label, "Trash");
+        assert_eq!(fish_group_chart.rows[4].current_share_pct, 0.0);
     }
 
     #[test]
