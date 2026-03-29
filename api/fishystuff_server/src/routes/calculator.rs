@@ -607,11 +607,7 @@ fn parse_calculator_signals_value(
     coerce_object_bool(&mut object, "debug");
     coerce_object_bool(&mut object, "applyTradeModifiers");
     coerce_object_bool(&mut object, "showSilverAmounts");
-    coerce_object_bool(&mut object, "discardTrashFish");
-    coerce_object_bool(&mut object, "discardGeneralFish");
-    coerce_object_bool(&mut object, "discardHighQualityFish");
-    coerce_object_bool(&mut object, "discardRareFish");
-    coerce_object_bool(&mut object, "discardPrizeFish");
+    coerce_object_string(&mut object, "discardGrade");
     coerce_object_string_array(&mut object, "outfit");
     coerce_object_string_array(&mut object, "food");
     coerce_object_string_array(&mut object, "buff");
@@ -677,6 +673,16 @@ fn coerce_object_f64(object: &mut serde_json::Map<String, Value>, key: &str) {
 fn coerce_object_bool(object: &mut serde_json::Map<String, Value>, key: &str) {
     if let Some(value) = object.get_mut(key) {
         coerce_value_bool(value);
+    }
+}
+
+fn coerce_object_string(object: &mut serde_json::Map<String, Value>, key: &str) {
+    if let Some(value) = object.get_mut(key) {
+        if let Some(string) = value.as_str() {
+            *value = Value::String(normalize_discard_grade(string).to_string());
+        } else if let Some(number) = value.as_i64() {
+            *value = Value::String(number.to_string());
+        }
     }
 }
 
@@ -1921,15 +1927,45 @@ fn trade_sale_multiplier(signals: &CalculatorSignals) -> f64 {
     (1.0 + distance_bonus) * trade_price_curve * (1.0 + bargain_bonus)
 }
 
-fn discard_grade_enabled(signals: &CalculatorSignals, grade: Option<&str>) -> bool {
-    match grade {
-        Some("Trash") => signals.discard_trash_fish,
-        Some("General") => signals.discard_general_fish,
-        Some("HighQuality") => signals.discard_high_quality_fish,
-        Some("Rare") => signals.discard_rare_fish,
-        Some("Prize") => signals.discard_prize_fish,
-        _ => false,
+fn normalize_discard_grade(value: &str) -> &str {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "white" => "white",
+        "green" => "green",
+        "blue" => "blue",
+        "yellow" => "yellow",
+        _ => "none",
     }
+}
+
+fn discard_grade_threshold(value: &str) -> Option<u8> {
+    match normalize_discard_grade(value) {
+        "white" => Some(0),
+        "green" => Some(1),
+        "blue" => Some(2),
+        "yellow" => Some(3),
+        _ => None,
+    }
+}
+
+fn fish_grade_rank(grade: &str) -> Option<u8> {
+    match grade {
+        "Trash" => Some(0),
+        "General" => Some(1),
+        "HighQuality" => Some(2),
+        "Rare" => Some(3),
+        "Prize" => Some(4),
+        _ => None,
+    }
+}
+
+fn discard_grade_enabled(signals: &CalculatorSignals, grade: Option<&str>) -> bool {
+    let Some(threshold) = discard_grade_threshold(&signals.discard_grade) else {
+        return false;
+    };
+    let Some(rank) = grade.and_then(fish_grade_rank) else {
+        return false;
+    };
+    rank <= threshold && rank < 4
 }
 
 fn fmt_silver(value: f64) -> String {
@@ -3048,14 +3084,19 @@ fn render_loot_window(
                         </fieldset>\
                         <fieldset class=\"fieldset rounded-box border border-base-300 bg-base-200 p-4\">\
                             <legend class=\"fieldset-legend\">Auto-Discard Fish</legend>\
-                            <div class=\"grid gap-2 sm:grid-cols-2\">\
-                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"discardTrashFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>Trash</span></label>\
-                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"discardGeneralFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>General</span></label>\
-                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"discardHighQualityFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>High-Quality</span></label>\
-                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"discardRareFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>Rare</span></label>\
-                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm sm:col-span-2\"><input data-bind=\"discardPrizeFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>Prize</span></label>\
+                            <div class=\"grid gap-3\">\
+                                <fieldset class=\"fieldset\">\
+                                    <legend class=\"fieldset-legend\">Discard Up To Grade</legend>\
+                                    <select data-bind=\"discardGrade\" class=\"select select-sm w-full\">\
+                                        <option value=\"none\">Do not discard</option>\
+                                        <option value=\"white\">White</option>\
+                                        <option value=\"green\">Green</option>\
+                                        <option value=\"blue\">Blue</option>\
+                                        <option value=\"yellow\">Yellow</option>\
+                                    </select>\
+                                </fieldset>\
                             </div>\
-                            <span class=\"label text-xs\">Only fish are discarded. Non-fish loot remains included.</span>\
+                            <span class=\"label text-xs\">Only fish are discarded. Non-fish loot remains included. Red fish are always kept.</span>\
                         </fieldset>\
                     </div>\
                     <div class=\"grid gap-4\">\
@@ -4106,11 +4147,11 @@ mod tests {
     use crate::store::{FishLang, Store};
 
     use super::{
-        buff_category_label, build_pet_value_aliases, get_calculator_datastar_init,
-        get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
-        init_signals_patch_map, normalize_lookup_value, normalize_named_array,
-        parse_calculator_signals_value, post_calculator_datastar_eval, CalculatorData,
-        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
+        buff_category_label, build_pet_value_aliases, discard_grade_enabled,
+        get_calculator_datastar_init, get_calculator_datastar_option_search,
+        get_calculator_datastar_zone_search, init_signals_patch_map, normalize_lookup_value,
+        normalize_named_array, parse_calculator_signals_value, post_calculator_datastar_eval,
+        CalculatorData, CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
         CalculatorZoneSearchQuery,
     };
 
@@ -4324,11 +4365,7 @@ mod tests {
                     timespan_unit: "hours".to_string(),
                     apply_trade_modifiers: true,
                     show_silver_amounts: false,
-                    discard_trash_fish: false,
-                    discard_general_fish: false,
-                    discard_high_quality_fish: false,
-                    discard_rare_fish: false,
-                    discard_prize_fish: false,
+                    discard_grade: "none".to_string(),
                     brand: true,
                     active: false,
                     debug: false,
@@ -4973,5 +5010,33 @@ mod tests {
             parsed.pet1.skills,
             vec!["life_exp".to_string(), "fishing_exp".to_string()]
         );
+    }
+
+    #[test]
+    fn parse_calculator_signals_value_normalizes_discard_grade() {
+        let parsed = parse_calculator_signals_value(
+            serde_json::json!({
+                "discardGrade": "YELLOW"
+            }),
+            &CalculatorSignals::default(),
+            &RequestId("req-test".to_string()),
+        )
+        .expect("discard grade should normalize");
+
+        assert_eq!(parsed.discard_grade, "yellow");
+    }
+
+    #[test]
+    fn discard_grade_threshold_keeps_prize_fish() {
+        let signals = CalculatorSignals {
+            discard_grade: "yellow".to_string(),
+            ..CalculatorSignals::default()
+        };
+
+        assert!(discard_grade_enabled(&signals, Some("Trash")));
+        assert!(discard_grade_enabled(&signals, Some("General")));
+        assert!(discard_grade_enabled(&signals, Some("HighQuality")));
+        assert!(discard_grade_enabled(&signals, Some("Rare")));
+        assert!(!discard_grade_enabled(&signals, Some("Prize")));
     }
 }

@@ -120,16 +120,8 @@ pub struct CalculatorSignals {
     pub apply_trade_modifiers: bool,
     #[serde(rename = "showSilverAmounts")]
     pub show_silver_amounts: bool,
-    #[serde(rename = "discardTrashFish")]
-    pub discard_trash_fish: bool,
-    #[serde(rename = "discardGeneralFish")]
-    pub discard_general_fish: bool,
-    #[serde(rename = "discardHighQualityFish")]
-    pub discard_high_quality_fish: bool,
-    #[serde(rename = "discardRareFish")]
-    pub discard_rare_fish: bool,
-    #[serde(rename = "discardPrizeFish")]
-    pub discard_prize_fish: bool,
+    #[serde(rename = "discardGrade")]
+    pub discard_grade: String,
     pub brand: bool,
     pub active: bool,
     pub debug: bool,

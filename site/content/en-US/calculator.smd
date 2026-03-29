@@ -54,6 +54,30 @@
             }
             delete current[legacyKey];
         }
+        if (!("discardGrade" in current)) {
+            if (current.discardRareFish || current.discardPrizeFish) {
+                current.discardGrade = "yellow";
+            } else if (current.discardHighQualityFish) {
+                current.discardGrade = "blue";
+            } else if (current.discardGeneralFish) {
+                current.discardGrade = "green";
+            } else if (current.discardTrashFish) {
+                current.discardGrade = "white";
+            } else {
+                current.discardGrade = "none";
+            }
+        }
+        delete current.discardTrashFish;
+        delete current.discardGeneralFish;
+        delete current.discardHighQualityFish;
+        delete current.discardRareFish;
+        delete current.discardPrizeFish;
+        const validDiscardGrades = new Set(["none", "white", "green", "blue", "yellow"]);
+        if (!validDiscardGrades.has(String(current.discardGrade ?? "").trim().toLowerCase())) {
+            current.discardGrade = "none";
+        } else {
+            current.discardGrade = String(current.discardGrade).trim().toLowerCase();
+        }
         return current;
     };
 
