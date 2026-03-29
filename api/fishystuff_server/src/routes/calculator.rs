@@ -100,7 +100,6 @@ struct CalculatorDerivedSignals {
     trade_bargain_bonus_text: String,
     trade_sale_multiplier_text: String,
     fish_group_distribution_chart: DistributionChartSignal,
-    loot_distribution_chart: DistributionChartSignal,
     loot_sankey_chart: LootSankeySignal,
     debug_json: String,
 }
@@ -135,6 +134,7 @@ struct LootChartRow {
     text_color: &'static str,
     connector_color: &'static str,
     expected_count_raw: f64,
+    expected_profit_raw: f64,
     expected_count_text: String,
     expected_profit_text: String,
     current_share_pct: f64,
@@ -168,11 +168,18 @@ struct LootSpeciesRow {
     text_color: &'static str,
     connector_color: &'static str,
     expected_count_raw: f64,
+    expected_profit_raw: f64,
     expected_count_text: String,
     expected_profit_text: String,
     rate_text: String,
     rate_source_kind: String,
     rate_tooltip: String,
+    #[serde(skip_serializing)]
+    drop_rate_text: String,
+    #[serde(skip_serializing)]
+    drop_rate_source_kind: String,
+    #[serde(skip_serializing)]
+    drop_rate_tooltip: String,
     presence_text: Option<String>,
     evidence_text: String,
 }
@@ -403,11 +410,14 @@ pub async fn post_calculator_datastar_eval(
             CalculatorPatchMode::Eval,
         )?
         .into_datastar_event(),
-        PatchElements::new(render_fish_group_chart(&fish_group_chart))
-            .selector("#calculator-fish-group-chart")
-            .mode(ElementPatchMode::Outer)
-            .into_datastar_event(),
-        PatchElements::new(render_loot_chart(&loot_chart))
+        PatchElements::new(render_fish_group_chart(
+            &normalized_signals,
+            &fish_group_chart,
+        ))
+        .selector("#calculator-fish-group-chart")
+        .mode(ElementPatchMode::Outer)
+        .into_datastar_event(),
+        PatchElements::new(render_loot_chart(&normalized_signals, &loot_chart))
             .selector("#calculator-loot-chart")
             .mode(ElementPatchMode::Outer)
             .into_datastar_event(),
@@ -1621,10 +1631,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     }))
     .unwrap_or_else(|_| "{}".to_string());
     let fish_group_distribution_chart = DistributionChartSignal {
-        segments: fish_group_distribution_segments(&fish_group_chart.rows),
-    };
-    let loot_distribution_chart = DistributionChartSignal {
-        segments: loot_distribution_segments(&loot_chart.rows),
+        segments: groups_distribution_segments(signals, &fish_group_chart.rows, &loot_chart.rows),
     };
     let loot_sankey_chart = LootSankeySignal {
         show_silver_amounts: loot_chart.show_silver_amounts,
@@ -1688,7 +1695,6 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         trade_bargain_bonus_text: loot_chart.trade_bargain_bonus_text.clone(),
         trade_sale_multiplier_text: loot_chart.trade_sale_multiplier_text.clone(),
         fish_group_distribution_chart,
-        loot_distribution_chart,
         loot_sankey_chart,
         debug_json,
     }
@@ -2112,14 +2118,17 @@ fn loot_species_presence_text(entry: &CalculatorZoneLootEntry) -> Option<String>
     })
 }
 
-fn loot_species_rate_text(signals: &CalculatorSignals, entry: &CalculatorZoneLootEntry) -> String {
+fn loot_species_drop_rate_text(
+    signals: &CalculatorSignals,
+    entry: &CalculatorZoneLootEntry,
+) -> String {
     let rate = loot_species_rate_evidence(entry)
         .and_then(|evidence| evidence_display_rate(signals, evidence))
         .unwrap_or(entry.within_group_rate);
     format!("{}%", format_evidence_percent(rate))
 }
 
-fn loot_species_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'static str {
+fn loot_species_drop_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'static str {
     loot_species_rate_evidence(entry)
         .map(|evidence| match evidence.source_family.as_str() {
             "database" => "database",
@@ -2129,7 +2138,7 @@ fn loot_species_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'static st
         .unwrap_or("derived")
 }
 
-fn loot_species_evidence_text(
+fn loot_species_drop_rate_tooltip(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
 ) -> String {
@@ -2167,6 +2176,27 @@ fn loot_species_evidence_text(
         return format!("DB {}%", format_evidence_percent(entry.within_group_rate));
     }
     parts.join(" · ")
+}
+
+fn loot_species_evidence_text(
+    signals: &CalculatorSignals,
+    entry: &CalculatorZoneLootEntry,
+) -> String {
+    loot_species_drop_rate_tooltip(signals, entry)
+}
+
+fn percent_text(value: f64) -> String {
+    format!("{}%", format_evidence_percent(value))
+}
+
+fn percent_value_text(value_pct: f64) -> String {
+    let max_decimals = if value_pct.abs() < 1.0 { 4 } else { 2 };
+    let compact = trim_float_to(value_pct, max_decimals);
+    if compact == "0" && value_pct != 0.0 {
+        format!("{}%", trim_float_to(value_pct, 6))
+    } else {
+        format!("{compact}%")
+    }
 }
 
 fn derive_loot_chart(
@@ -2237,6 +2267,9 @@ fn derive_loot_chart(
         } else {
             expected_count_raw * base_price_raw * sale_multiplier_raw
         };
+        let drop_rate_text = loot_species_drop_rate_text(signals, entry);
+        let drop_rate_source_kind = loot_species_drop_rate_source_kind(entry).to_string();
+        let drop_rate_tooltip = loot_species_drop_rate_tooltip(signals, entry);
         *group_profit_by_slot.entry(entry.slot_idx).or_default() += expected_profit_raw;
         species_rows.push(LootSpeciesRow {
             slot_idx: entry.slot_idx,
@@ -2251,13 +2284,17 @@ fn derive_loot_chart(
             text_color: group_row.text_color,
             connector_color: group_row.connector_color,
             expected_count_raw,
+            expected_profit_raw,
             expected_count_text: trim_float(expected_count_raw),
             expected_profit_text: fmt_silver(expected_profit_raw),
-            rate_text: loot_species_rate_text(signals, entry),
-            rate_source_kind: loot_species_rate_source_kind(entry).to_string(),
-            rate_tooltip: loot_species_evidence_text(signals, entry),
+            rate_text: drop_rate_text.clone(),
+            rate_source_kind: drop_rate_source_kind.clone(),
+            rate_tooltip: drop_rate_tooltip.clone(),
+            drop_rate_text,
+            drop_rate_source_kind,
+            drop_rate_tooltip,
             presence_text: loot_species_presence_text(entry),
-            evidence_text: loot_species_evidence_text(signals, entry),
+            evidence_text: loot_species_drop_rate_tooltip(signals, entry),
         });
     }
     species_rows.sort_by(|left, right| {
@@ -2271,6 +2308,28 @@ fn derive_loot_chart(
             })
             .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
     });
+
+    let total_profit_raw = group_profit_by_slot.values().sum::<f64>();
+
+    for species_row in &mut species_rows {
+        if signals.show_silver_amounts {
+            let silver_share = if total_profit_raw > 0.0 {
+                (species_row.expected_profit_raw / total_profit_raw) * 100.0
+            } else {
+                0.0
+            };
+            species_row.rate_text = percent_text(silver_share);
+            species_row.rate_source_kind = "derived".to_string();
+            species_row.rate_tooltip = format!(
+                "Derived {} of total expected silver",
+                percent_text(silver_share)
+            );
+        } else {
+            species_row.rate_text = species_row.drop_rate_text.clone();
+            species_row.rate_source_kind = species_row.drop_rate_source_kind.clone();
+            species_row.rate_tooltip = species_row.drop_rate_tooltip.clone();
+        }
+    }
 
     let rows = fish_group_chart
         .rows
@@ -2286,6 +2345,10 @@ fn derive_loot_chart(
                 text_color: row.text_color,
                 connector_color: row.connector_color,
                 expected_count_raw,
+                expected_profit_raw: group_profit_by_slot
+                    .get(&slot_idx)
+                    .copied()
+                    .unwrap_or_default(),
                 expected_count_text: trim_float(expected_count_raw),
                 expected_profit_text: fmt_silver(
                     group_profit_by_slot
@@ -2297,7 +2360,6 @@ fn derive_loot_chart(
             }
         })
         .collect::<Vec<_>>();
-    let total_profit_raw = group_profit_by_slot.values().sum::<f64>();
     let profit_per_catch_raw = if total_catches_raw > 0.0 {
         total_profit_raw / total_catches_raw
     } else {
@@ -2823,7 +2885,7 @@ fn render_calculator_app(
         ),
         (
             "__FISH_GROUP_WINDOW__",
-            render_fish_group_window(&fish_group_chart, signals.mastery),
+            render_fish_group_window(signals, &fish_group_chart, &loot_chart, signals.mastery),
         ),
         (
             "__LOOT_WINDOW__",
@@ -3104,11 +3166,39 @@ fn render_distribution_chart(chart_id: &str, aria_label: &str, signal_path: &str
     )
 }
 
-fn fish_group_distribution_segments(rows: &[FishGroupChartRow]) -> Vec<DistributionChartSegment> {
-    rows.iter()
+fn groups_distribution_segments(
+    signals: &CalculatorSignals,
+    fish_rows: &[FishGroupChartRow],
+    loot_rows: &[LootChartRow],
+) -> Vec<DistributionChartSegment> {
+    if signals.show_silver_amounts {
+        let total_profit_raw = loot_rows
+            .iter()
+            .map(|row| row.expected_profit_raw)
+            .sum::<f64>();
+        return loot_rows
+            .iter()
+            .map(|row| DistributionChartSegment {
+                label: row.label.to_string(),
+                value_text: row.expected_profit_text.clone(),
+                width_pct: if total_profit_raw > 0.0 {
+                    (row.expected_profit_raw / total_profit_raw) * 100.0
+                } else {
+                    0.0
+                },
+                fill_color: row.fill_color,
+                stroke_color: row.stroke_color,
+                text_color: row.text_color,
+                connector_color: row.connector_color,
+            })
+            .collect();
+    }
+
+    fish_rows
+        .iter()
         .map(|row| DistributionChartSegment {
             label: row.label.to_string(),
-            value_text: format!("{}%", trim_float(row.current_share_pct)),
+            value_text: percent_value_text(row.current_share_pct),
             width_pct: row.current_share_pct,
             fill_color: row.fill_color,
             stroke_color: row.stroke_color,
@@ -3118,35 +3208,26 @@ fn fish_group_distribution_segments(rows: &[FishGroupChartRow]) -> Vec<Distribut
         .collect()
 }
 
-fn loot_distribution_segments(rows: &[LootChartRow]) -> Vec<DistributionChartSegment> {
-    rows.iter()
-        .map(|row| DistributionChartSegment {
-            label: row.label.to_string(),
-            value_text: row.expected_count_text.clone(),
-            width_pct: row.current_share_pct,
-            fill_color: row.fill_color,
-            stroke_color: row.stroke_color,
-            text_color: row.text_color,
-            connector_color: row.connector_color,
-        })
-        .collect()
-}
-
-fn render_loot_sankey(chart: &LootChart) -> String {
+fn render_loot_sankey(chart: &LootChart, signals: &CalculatorSignals) -> String {
     if chart.species_rows.is_empty() {
-        return "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No source-backed species rows are available for this zone yet.</div>".to_string();
+        return "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No source-backed loot rows are available for this zone yet.</div>".to_string();
     }
     format!(
-        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Species Sankey</div><div class=\"text-xs text-base-content/70\">Each flow starts at a fish group and ends at a source-backed species row. Node sizes stay count-based; enabling silver adds value labels without changing the flow widths.</div></div><div class=\"text-right text-xs text-base-content/70\">{}</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"Expected loot flows from groups to species\" signal-path=\"_calc.loot_sankey_chart\"></fishy-loot-sankey></div></div>",
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Loot Flow</div><div class=\"text-xs text-base-content/70\">Each flow starts at a fish group and ends at a source-backed loot row. Species cards switch between in-group select-rates and derived silver contribution based on the shared mode toggle.</div></div><div class=\"text-right text-xs text-base-content/70\">{}<br>{}</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"Expected loot flow from groups to loot rows\" signal-path=\"_calc.loot_sankey_chart\"></fishy-loot-sankey></div></div>",
         if chart.show_silver_amounts {
-            "count + silver labels"
+            "silver mode"
         } else {
-            "count labels only"
+            "droprate mode"
+        },
+        if signals.show_normalized_select_rates {
+            "normalized select-rates"
+        } else {
+            "raw select-rates"
         },
     )
 }
 
-fn render_fish_group_chart(chart: &FishGroupChart) -> String {
+fn render_fish_group_chart(signals: &CalculatorSignals, chart: &FishGroupChart) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-fish-group-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -3156,15 +3237,31 @@ fn render_fish_group_chart(chart: &FishGroupChart) -> String {
 
     let mut html = String::new();
     html.push_str("<div id=\"calculator-fish-group-chart\" class=\"grid gap-4\">");
+    let chart_title = if signals.show_silver_amounts {
+        "Group Silver Distribution"
+    } else {
+        "Group Droprate Distribution"
+    };
+    let chart_note = if signals.show_silver_amounts {
+        "Expected silver share by fish group after trade settings, price overrides, and fish discard rules."
+    } else {
+        "Current fish-group share after prize, rare, and high-quality weighting."
+    };
     write!(
         html,
-        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Raw Prize Catch Rate</div><div class=\"text-xs text-base-content/70\">Mastery {} drives the direct prize-rate formula before normalization.</div></div><div class=\"text-right\"><div class=\"text-2xl font-semibold\">{}</div><div class=\"text-xs text-base-content/70\">before zone-group normalization</div></div></div><div class=\"mb-3 text-xs text-base-content/70\">{}</div>{}",
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Raw Prize Catch Rate</div><div class=\"text-xs text-base-content/70\">Mastery {} drives the direct prize-rate formula before normalization.</div></div><div class=\"text-right\"><div class=\"text-2xl font-semibold\">{}</div><div class=\"text-xs text-base-content/70\">before zone-group normalization</div></div></div><div class=\"rounded-box border border-base-300 bg-base-100 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">{}</div><div class=\"text-xs text-base-content/70\">{}</div></div><div class=\"text-right text-xs text-base-content/70\">{}</div></div>{}</div>",
         escape_html(&chart.mastery_text),
         escape_html(&chart.raw_prize_rate_text),
-        escape_html(&chart.note),
+        chart_title,
+        chart_note,
+        if signals.show_silver_amounts {
+            "silver share"
+        } else {
+            "droprate share"
+        },
         render_distribution_chart(
             "fish-group-distribution-chart",
-            "Current fish group distribution",
+            chart_title,
             "_calc.fish_group_distribution_chart",
         ),
     )
@@ -3173,7 +3270,7 @@ fn render_fish_group_chart(chart: &FishGroupChart) -> String {
     html
 }
 
-fn render_loot_chart(chart: &LootChart) -> String {
+fn render_loot_chart(signals: &CalculatorSignals, chart: &LootChart) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-loot-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -3181,44 +3278,74 @@ fn render_loot_chart(chart: &LootChart) -> String {
         );
     }
 
-    let mut html = String::new();
-    html.push_str("<div id=\"calculator-loot-chart\" class=\"grid gap-4\">");
-    write!(
-        html,
-        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Expected Group Haul</div><div class=\"text-xs text-base-content/70\">{}</div></div><div class=\"text-right\"><div class=\"text-lg font-semibold\">Fish {}</div><div class=\"text-xs text-base-content/70\">bargain {} • sale {}</div></div></div>{}</div>{}",
-        escape_html(&chart.note),
-        escape_html(&chart.fish_multiplier_text),
-        escape_html(&chart.trade_bargain_bonus_text),
-        escape_html(&chart.trade_sale_multiplier_text),
-        render_distribution_chart(
-            "loot-distribution-chart",
-            "Expected loot distribution by fish group",
-            "_calc.loot_distribution_chart",
-        ),
-        render_loot_sankey(chart),
+    format!(
+        "<div id=\"calculator-loot-chart\" class=\"grid gap-4\">{}</div>",
+        render_loot_sankey(chart, signals),
     )
-    .unwrap();
-    html.push_str("</div>");
-    html
 }
 
-fn render_fish_group_window(chart: &FishGroupChart, mastery: f64) -> String {
+fn render_fish_group_window(
+    signals: &CalculatorSignals,
+    fish_group_chart: &FishGroupChart,
+    loot_chart: &LootChart,
+    mastery: f64,
+) -> String {
     format!(
         "<fieldset id=\"calculator-fish-group-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
-            <legend class=\"fieldset-legend ml-6 px-2\">Fish Groups</legend>\
+            <legend class=\"fieldset-legend ml-6 px-2\">Distribution</legend>\
             <div class=\"card-body gap-4 pt-0\">\
-                <div class=\"grid gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] lg:items-start\">\
+                <div class=\"grid gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] lg:items-start\" data-signals='{{ _distribution_tab: \"groups\" }}'>\
                     <fieldset class=\"fieldset\">\
                         <legend class=\"fieldset-legend\">Mastery</legend>\
                         <input type=\"number\" min=\"0\" step=\"50\" class=\"input input-sm w-full\" data-bind=\"mastery\" value=\"{}\">\
                         <span class=\"label text-xs\">Enter your consolidated fishing mastery directly.</span>\
                     </fieldset>\
-                    {}\
+                    <div class=\"grid gap-4\">\
+                        <div class=\"grid gap-3 md:grid-cols-3\">\
+                            <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
+                                <div class=\"mb-2 text-sm font-medium\">Mode</div>\
+                                <div class=\"flex items-center justify-between gap-3\">\
+                                    <span class=\"text-sm\" data-class:font-semibold=\"!$showSilverAmounts\">Droprate Rates</span>\
+                                    <input data-bind=\"showSilverAmounts\" type=\"checkbox\" class=\"toggle toggle-primary toggle-sm\">\
+                                    <span class=\"text-sm\" data-class:font-semibold=\"$showSilverAmounts\">Silver</span>\
+                                </div>\
+                            </div>\
+                            <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
+                                <input data-bind=\"showNormalizedSelectRates\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"{}>\
+                                <span class=\"text-sm font-medium\">Normalize select-rates</span>\
+                            </label>\
+                            <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
+                                <label class=\"mb-2 block text-sm font-medium\">Discard fish up to grade</label>\
+                                <select data-bind=\"discardGrade\" class=\"select select-sm w-full\">\
+                                    <option value=\"none\">Do not discard</option>\
+                                    <option value=\"white\">White</option>\
+                                    <option value=\"green\">Green</option>\
+                                    <option value=\"blue\">Blue</option>\
+                                    <option value=\"yellow\">Yellow</option>\
+                                </select>\
+                                <div class=\"mt-2 text-xs text-base-content/70\">Fish only. Non-fish loot stays. Red fish are always kept.</div>\
+                            </div>\
+                        </div>\
+                        <div role=\"tablist\" class=\"tabs tabs-box bg-base-200/80 p-1\" aria-label=\"Distribution tabs\">\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'groups'\" data-attr:aria-selected=\"($_distribution_tab === 'groups').toString()\" data-on:click=\"$_distribution_tab = 'groups'\">Groups</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_distribution_tab = 'loot_flow'\">Loot Flow</button>\
+                        </div>\
+                        <div data-show=\"$_distribution_tab === 'groups'\">{}\
+                        </div>\
+                        <div data-show=\"$_distribution_tab === 'loot_flow'\">{}\
+                        </div>\
+                    </div>\
                 </div>\
             </div>\
         </fieldset>",
         escape_html(&trim_float(mastery)),
-        render_fish_group_chart(chart),
+        if signals.show_normalized_select_rates {
+            " checked"
+        } else {
+            ""
+        },
+        render_fish_group_chart(signals, fish_group_chart),
+        render_loot_chart(signals, loot_chart),
     )
 }
 
@@ -3226,14 +3353,13 @@ fn render_loot_window(
     data: &CalculatorData,
     signals: &CalculatorSignals,
     trade_levels: &[SelectOption<'_>],
-    chart: &LootChart,
+    _chart: &LootChart,
 ) -> String {
     format!(
         "<fieldset id=\"calculator-loot-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
             <legend class=\"fieldset-legend ml-6 px-2\">Loot</legend>\
             <div class=\"card-body gap-4 pt-0\">\
-                <div class=\"grid gap-4 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:items-start\">\
-                    <div class=\"grid gap-4\">\
+                <div class=\"grid gap-4\">\
                         <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none\">\
                             <div class=\"stat\">\
                                 <div class=\"stat-title whitespace-normal leading-snug\">Expected Catches (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
@@ -3283,39 +3409,6 @@ fn render_loot_window(
                                 </div>\
                             </div>\
                         </fieldset>\
-                        <fieldset class=\"fieldset rounded-box border border-base-300 bg-base-200 p-4\">\
-                            <legend class=\"fieldset-legend\">Loot View</legend>\
-                            <div class=\"grid gap-3\">\
-                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
-                                    <input data-bind=\"showSilverAmounts\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
-                                    <span class=\"text-sm font-medium\">Show silver amounts for groups and species</span>\
-                                </label>\
-                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
-                                    <input data-bind=\"showNormalizedSelectRates\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
-                                    <span class=\"text-sm font-medium\">Show normalized select-rates instead of raw in-group rates</span>\
-                                </label>\
-                            </div>\
-                        </fieldset>\
-                        <fieldset class=\"fieldset rounded-box border border-base-300 bg-base-200 p-4\">\
-                            <legend class=\"fieldset-legend\">Auto-Discard Fish</legend>\
-                            <div class=\"grid gap-3\">\
-                                <fieldset class=\"fieldset\">\
-                                    <legend class=\"fieldset-legend\">Discard Up To Grade</legend>\
-                                    <select data-bind=\"discardGrade\" class=\"select select-sm w-full\">\
-                                        <option value=\"none\">Do not discard</option>\
-                                        <option value=\"white\">White</option>\
-                                        <option value=\"green\">Green</option>\
-                                        <option value=\"blue\">Blue</option>\
-                                        <option value=\"yellow\">Yellow</option>\
-                                    </select>\
-                                </fieldset>\
-                            </div>\
-                            <span class=\"label text-xs\">Only fish are discarded. Non-fish loot remains included. Red fish are always kept.</span>\
-                        </fieldset>\
-                    </div>\
-                    <div class=\"grid gap-4\">\
-                        {}\
-                    </div>\
                 </div>\
             </div>\
         </fieldset>",
@@ -3332,7 +3425,6 @@ fn render_loot_window(
             "Search trade levels",
             false,
         ),
-        render_loot_chart(chart),
     )
 }
 
@@ -4714,13 +4806,13 @@ mod tests {
         assert!(text.contains("data-bind=\"mastery\""));
         assert!(text.contains("step=\"50\""));
         assert!(text.contains("Raw Prize Catch Rate"));
-        assert!(text.contains("Expected Group Haul"));
+        assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
         assert!(text.contains("calculator-loot-window"));
         assert!(text.contains("<fishy-distribution-chart"));
         assert!(text.contains("signal-path=\"_calc.fish_group_distribution_chart\""));
-        assert!(text.contains("signal-path=\"_calc.loot_distribution_chart\""));
-        assert!(text.contains("No source-backed species rows are available for this zone yet."));
+        assert!(text.contains("No source-backed loot rows are available for this zone yet."));
+        assert!(text.contains("Normalize select-rates"));
         assert!(text.contains("data-category-key=\"buff-category:1\""));
         assert!(text.contains("Meal"));
         assert!(text.contains("value=\"effect:8-piece-outfit-set-effect\" checked"));
