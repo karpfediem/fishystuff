@@ -102,7 +102,7 @@ struct CalculatorDerivedSignals {
     trade_sale_multiplier_text: String,
     fish_group_distribution_chart: DistributionChartSignal,
     fish_group_silver_distribution_chart: DistributionChartSignal,
-    target_fish_distribution_chart: DistributionChartSignal,
+    target_fish_pmf_chart: PmfChartSignal,
     loot_sankey_chart: LootSankeySignal,
     target_fish_selected_label: String,
     target_fish_expected_count: String,
@@ -208,6 +208,20 @@ struct DistributionChartSegment {
 #[derive(Debug, Clone, serde::Serialize)]
 struct DistributionChartSignal {
     segments: Vec<DistributionChartSegment>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct PmfChartBar {
+    label: String,
+    value_text: String,
+    probability_pct: f64,
+    highlight: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct PmfChartSignal {
+    bars: Vec<PmfChartBar>,
+    expected_value_text: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1731,9 +1745,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let fish_group_silver_distribution_chart = DistributionChartSignal {
         segments: group_silver_distribution_segments(&loot_chart.rows),
     };
-    let target_fish_distribution_chart = DistributionChartSignal {
-        segments: target_fish_distribution_segments(&target_fish_summary),
-    };
+    let target_fish_pmf_chart = target_fish_pmf_chart(&target_fish_summary);
     let loot_sankey_chart = LootSankeySignal {
         show_silver_amounts: loot_chart.show_silver_amounts,
         rows: filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows),
@@ -1797,7 +1809,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         trade_sale_multiplier_text: loot_chart.trade_sale_multiplier_text.clone(),
         fish_group_distribution_chart,
         fish_group_silver_distribution_chart,
-        target_fish_distribution_chart,
+        target_fish_pmf_chart,
         loot_sankey_chart,
         target_fish_selected_label: target_fish_summary.selected_label,
         target_fish_expected_count: target_fish_summary.expected_count_text,
@@ -2670,30 +2682,44 @@ fn target_fish_session_distribution(
         return Vec::new();
     }
 
-    let exact_bucket_limit = target_amount.saturating_sub(1).min(5);
-    let mut buckets = (0..=exact_bucket_limit)
-        .map(|count| {
+    let mut buckets = Vec::new();
+    if target_amount <= 12 {
+        for count in 0..target_amount {
             let probability_pct = poisson_exact_probability(lambda, count) * 100.0;
-            TargetFishDistributionBucket {
+            buckets.push(TargetFishDistributionBucket {
                 label: count.to_string(),
                 probability_pct,
                 probability_text: percent_value_text(probability_pct),
-            }
-        })
-        .collect::<Vec<_>>();
+            });
+        }
+    } else {
+        for count in 0..=5 {
+            let probability_pct = poisson_exact_probability(lambda, count) * 100.0;
+            buckets.push(TargetFishDistributionBucket {
+                label: count.to_string(),
+                probability_pct,
+                probability_text: percent_value_text(probability_pct),
+            });
+        }
 
-    if target_amount > exact_bucket_limit + 1 {
-        let middle_start = exact_bucket_limit + 1;
-        let middle_end = target_amount - 1;
-        let middle_probability = (poisson_probability_below(lambda, target_amount)
-            - poisson_probability_below(lambda, middle_start))
-        .clamp(0.0, 1.0);
-        let probability_pct = middle_probability * 100.0;
-        buckets.push(TargetFishDistributionBucket {
-            label: format!("{middle_start}–{middle_end}"),
-            probability_pct,
-            probability_text: percent_value_text(probability_pct),
-        });
+        let grouped_start = 6;
+        let grouped_count = target_amount.saturating_sub(grouped_start);
+        let grouped_bucket_width = ((f64::from(grouped_count) / 8.0).ceil() as u32).max(2);
+        let mut start = grouped_start;
+        while start < target_amount {
+            let end = (start + grouped_bucket_width - 1).min(target_amount - 1);
+            let probability_pct = poisson_probability_range(lambda, start, end) * 100.0;
+            buckets.push(TargetFishDistributionBucket {
+                label: if start == end {
+                    start.to_string()
+                } else {
+                    format!("{start}–{end}")
+                },
+                probability_pct,
+                probability_text: percent_value_text(probability_pct),
+            });
+            start = end + 1;
+        }
     }
 
     let probability_pct = poisson_probability_at_least(lambda, target_amount) * 100.0;
@@ -2704,6 +2730,15 @@ fn target_fish_session_distribution(
     });
 
     buckets
+}
+
+fn poisson_probability_range(lambda: f64, start: u32, end_inclusive: u32) -> f64 {
+    if start > end_inclusive {
+        return 0.0;
+    }
+    (poisson_probability_below(lambda, end_inclusive + 1)
+        - poisson_probability_below(lambda, start))
+    .clamp(0.0, 1.0)
 }
 
 fn poisson_exact_probability(lambda: f64, count: u32) -> f64 {
@@ -3543,6 +3578,15 @@ fn render_distribution_chart(chart_id: &str, aria_label: &str, signal_path: &str
     )
 }
 
+fn render_pmf_chart(chart_id: &str, aria_label: &str, signal_path: &str) -> String {
+    format!(
+        "<fishy-pmf-chart id=\"{}\" class=\"distribution-chart\" aria-label=\"{}\" signal-path=\"{}\"></fishy-pmf-chart>",
+        escape_html(chart_id),
+        escape_html(aria_label),
+        escape_html(signal_path),
+    )
+}
+
 fn groups_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<DistributionChartSegment> {
     loot_rows
         .iter()
@@ -3584,21 +3628,20 @@ fn group_silver_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<Distrib
         .collect()
 }
 
-fn target_fish_distribution_segments(summary: &TargetFishSummary) -> Vec<DistributionChartSegment> {
-    summary
-        .session_distribution
-        .iter()
-        .map(|bucket| DistributionChartSegment {
-            label: bucket.label.clone(),
-            value_text: bucket.probability_text.clone(),
-            detail_text: "session chance".to_string(),
-            width_pct: bucket.probability_pct,
-            fill_color: "var(--color-primary)",
-            stroke_color: "color-mix(in srgb, var(--color-primary) 72%, white)",
-            text_color: "var(--color-primary-content)",
-            connector_color: "color-mix(in srgb, var(--color-primary) 36%, transparent)",
-        })
-        .collect()
+fn target_fish_pmf_chart(summary: &TargetFishSummary) -> PmfChartSignal {
+    PmfChartSignal {
+        bars: summary
+            .session_distribution
+            .iter()
+            .map(|bucket| PmfChartBar {
+                label: bucket.label.clone(),
+                value_text: bucket.probability_text.clone(),
+                probability_pct: bucket.probability_pct,
+                highlight: bucket.label.starts_with('≥'),
+            })
+            .collect(),
+        expected_value_text: summary.expected_count_text.clone(),
+    }
 }
 
 fn filtered_loot_flow_rows(
@@ -3699,16 +3742,16 @@ fn render_target_fish_panel(
                 <div class=\"mb-3 flex items-center justify-between gap-3\">\
                     <div>\
                         <div class=\"text-sm font-medium\">Session Count Distribution</div>\
-                        <div class=\"text-xs text-base-content/70\">Estimated probability mass for this target within the current session duration.</div>\
+                        <div class=\"text-xs text-base-content/70\">Discrete session outcome distribution for this target within the current session duration.</div>\
                     </div>\
-                    <div class=\"text-right text-xs text-base-content/70\">count bucket chance</div>\
+                    <div class=\"text-right text-xs text-base-content/70\">count bucket probability</div>\
                 </div>\
                 {}\
             </div>",
-            render_distribution_chart(
-                "target-fish-distribution-chart",
+            render_pmf_chart(
+                "target-fish-pmf-chart",
                 "Target Fish Session Distribution",
-                "_calc.target_fish_distribution_chart",
+                "_calc.target_fish_pmf_chart",
             )
         )
     };
@@ -6309,7 +6352,61 @@ mod tests {
                 .iter()
                 .map(|bucket| bucket.label.as_str())
                 .collect::<Vec<_>>(),
-            vec!["0", "1", "2", "3", "4", "5", "6–7", "≥8"]
+            vec!["0", "1", "2", "3", "4", "5", "6", "7", "≥8"]
+        );
+    }
+
+    #[test]
+    fn derive_target_fish_summary_uses_narrower_ranges_for_large_targets() {
+        let signals = CalculatorSignals {
+            target_fish: "Laila's Petal".to_string(),
+            target_fish_amount: 20.0,
+            ..CalculatorSignals::default()
+        };
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "5%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![FishGroupChartRow {
+                label: "General",
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 0.0,
+                weight_pct: 0.0,
+                current_share_pct: 100.0,
+            }],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 54031,
+                name: "Laila's Petal".to_string(),
+                within_group_rate: 0.1118,
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 3600.0);
+
+        assert_eq!(
+            summary
+                .session_distribution
+                .iter()
+                .map(|bucket| bucket.label.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "0", "1", "2", "3", "4", "5", "6–7", "8–9", "10–11", "12–13", "14–15", "16–17",
+                "18–19", "≥20"
+            ]
         );
     }
 
