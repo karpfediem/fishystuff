@@ -169,6 +169,7 @@ struct LootSpeciesRow {
     expected_count_raw: f64,
     expected_count_text: String,
     expected_profit_text: String,
+    evidence_text: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2072,6 +2073,40 @@ fn fmt_silver(value: f64) -> String {
     grouped
 }
 
+fn loot_species_evidence_text(entry: &CalculatorZoneLootEntry) -> String {
+    let db_rate_text = entry
+        .evidence
+        .iter()
+        .find(|evidence| evidence.source_family == "database" && evidence.claim_kind == "in_group_rate")
+        .and_then(|evidence| evidence.rate)
+        .map(|rate| format!("DB {}%", trim_float(rate * 100.0)))
+        .unwrap_or_else(|| format!("DB {}%", trim_float(entry.within_group_rate * 100.0)));
+
+    let Some(community) = entry
+        .evidence
+        .iter()
+        .find(|evidence| evidence.source_family == "community" && evidence.claim_kind == "presence")
+    else {
+        return db_rate_text;
+    };
+
+    let status = match community.status.as_deref().unwrap_or_default() {
+        "confirmed" => "Community confirmed",
+        "data_incomplete" => "Community incomplete",
+        _ => "Community unconfirmed",
+    };
+    let claims = community
+        .claim_count
+        .map(|count| format!("×{count}"))
+        .unwrap_or_default();
+    let scope = match community.scope.as_str() {
+        "group_inferred" => "group-inferred",
+        "group" => "group",
+        _ => "zone-only",
+    };
+    format!("{db_rate_text} · {status}{claims} · {scope}")
+}
+
 fn derive_loot_chart(
     signals: &CalculatorSignals,
     data: &CalculatorData,
@@ -2152,6 +2187,7 @@ fn derive_loot_chart(
             expected_count_raw,
             expected_count_text: trim_float(expected_count_raw),
             expected_profit_text: fmt_silver(expected_profit_raw),
+            evidence_text: loot_species_evidence_text(entry),
         });
     }
     species_rows.sort_by(|left, right| {
@@ -2201,7 +2237,7 @@ fn derive_loot_chart(
 
     LootChart {
         available: true,
-        note: "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices. Fish auto-discard applies only to fish, not non-fish loot.".to_string(),
+        note: "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices. Species rows show DB in-group rates separately from community presence evidence. Fish auto-discard applies only to fish, not non-fish loot.".to_string(),
         fish_multiplier_text: format!("×{}", trim_float(fish_multiplier_raw)),
         trade_bargain_bonus_text: format!("+{}%", trim_float(bargain_bonus_raw * 100.0)),
         trade_sale_multiplier_text: if signals.apply_trade_modifiers {

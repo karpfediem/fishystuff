@@ -19,6 +19,16 @@ pub mod queries;
 pub use dolt_mysql::DoltMySqlStore;
 
 #[derive(Debug, Clone, Default)]
+pub struct CalculatorZoneLootEvidence {
+    pub source_family: String,
+    pub claim_kind: String,
+    pub scope: String,
+    pub rate: Option<f64>,
+    pub status: Option<String>,
+    pub claim_count: Option<u32>,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct CalculatorZoneLootEntry {
     pub slot_idx: u8,
     pub item_id: i32,
@@ -27,6 +37,7 @@ pub struct CalculatorZoneLootEntry {
     pub grade: Option<String>,
     pub is_fish: bool,
     pub within_group_rate: f64,
+    pub evidence: Vec<CalculatorZoneLootEvidence>,
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -4,10 +4,12 @@ use fishystuff_api::ids::RgbKey;
 use mysql::prelude::Queryable;
 
 use crate::error::{AppError, AppResult};
-use crate::store::{validate_dolt_ref, CalculatorZoneLootEntry, FishLang};
+use crate::store::{
+    validate_dolt_ref, CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang,
+};
 
 use super::catalog::{fish_grade_from_db, parse_positive_i64};
-use super::util::{db_unavailable, normalize_optional_string};
+use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
 impl DoltMySqlStore {
@@ -250,6 +252,34 @@ impl DoltMySqlStore {
             *slot_totals.entry(*slot_idx).or_default() += *weight;
         }
 
+        let mut community_presence_by_item = HashMap::<i32, (String, u32)>::new();
+        let community_query = format!(
+            "SELECT CAST(item_id AS SIGNED), support_status, CAST(claim_count AS SIGNED) \
+             FROM community_zone_fish_support{as_of} \
+             WHERE zone_rgb = ?"
+        );
+        let community_rows: Vec<(i64, String, i64)> =
+            match conn.exec(community_query, (zone_rgb.to_u32(),)) {
+                Ok(rows) => rows,
+                Err(err) if is_missing_table(&err, "community_zone_fish_support") => Vec::new(),
+                Err(err) => return Err(db_unavailable(err)),
+            };
+        for (item_id, support_status, claim_count) in community_rows {
+            let Ok(item_id) = i32::try_from(item_id) else {
+                continue;
+            };
+            let claim_count = u32::try_from(claim_count.max(0)).unwrap_or(u32::MAX);
+            community_presence_by_item.insert(
+                item_id,
+                (support_status.trim().to_ascii_lowercase(), claim_count),
+            );
+        }
+
+        let mut slot_membership_count = HashMap::<i32, usize>::new();
+        for (_, item_id) in aggregate_weights.keys() {
+            *slot_membership_count.entry(*item_id).or_default() += 1;
+        }
+
         let item_id_csv = aggregate_weights
             .keys()
             .map(|(_, item_id)| item_id.to_string())
@@ -305,6 +335,32 @@ impl DoltMySqlStore {
                     .get(&item_id)
                     .cloned()
                     .unwrap_or_else(|| (item_id.to_string(), None, None, false));
+                let mut evidence = vec![CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(within_group_rate),
+                    status: Some("best_effort".to_string()),
+                    claim_count: None,
+                }];
+                if let Some((support_status, claim_count)) = community_presence_by_item.get(&item_id)
+                {
+                    let scope = if slot_membership_count.get(&item_id).copied().unwrap_or_default()
+                        <= 1
+                    {
+                        "group_inferred"
+                    } else {
+                        "zone"
+                    };
+                    evidence.push(CalculatorZoneLootEvidence {
+                        source_family: "community".to_string(),
+                        claim_kind: "presence".to_string(),
+                        scope: scope.to_string(),
+                        rate: None,
+                        status: Some(support_status.clone()),
+                        claim_count: Some(*claim_count),
+                    });
+                }
                 Some(CalculatorZoneLootEntry {
                     slot_idx,
                     item_id,
@@ -313,6 +369,7 @@ impl DoltMySqlStore {
                     grade,
                     is_fish,
                     within_group_rate,
+                    evidence,
                 })
             })
             .collect::<Vec<_>>();

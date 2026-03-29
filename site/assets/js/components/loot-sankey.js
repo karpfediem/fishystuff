@@ -10,7 +10,7 @@ const LEFT_X = 24;
 const LEFT_WIDTH = 200;
 const RIGHT_BAR_WIDTH = 18;
 const RIGHT_LABEL_WIDTH = 248;
-const RIGHT_LABEL_HEIGHT = 36;
+const RIGHT_LABEL_HEIGHT = 54;
 const RIGHT_LABEL_OFFSET = 14;
 const NODE_RADIUS = 12;
 
@@ -214,6 +214,7 @@ class FishyLootSankey extends HTMLElement {
             const valueLabel = showSilverAmounts
                 ? `${row.expected_count_text} | ${row.expected_profit_text}`
                 : row.expected_count_text;
+            const evidenceLabel = String(row.evidence_text ?? "");
 
             leftNodes.append("rect")
                 .attr("x", LEFT_X)
@@ -295,7 +296,7 @@ class FishyLootSankey extends HTMLElement {
 
             rightNodes.append("text")
                 .attr("x", labelX + 10)
-                .attr("y", labelMid - 6)
+                .attr("y", labelTop + 15)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "11px")
@@ -304,11 +305,20 @@ class FishyLootSankey extends HTMLElement {
 
             rightNodes.append("text")
                 .attr("x", labelX + 10)
-                .attr("y", labelMid + 8)
+                .attr("y", labelTop + 29)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "10px")
                 .text(valueLabel);
+
+            rightNodes.append("text")
+                .attr("x", labelX + 10)
+                .attr("y", labelTop + 43)
+                .attr("dominant-baseline", "middle")
+                .style("fill", row.text_color)
+                .style("font-size", "9px")
+                .style("opacity", 0.88)
+                .text(truncateLabel(evidenceLabel, 44));
         });
 
         this.replaceChildren(svg.node());
