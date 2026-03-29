@@ -50,7 +50,6 @@ in {
       wasm-bindgen-cli_0_2_108
       woff2
       imagemagick
-      tailwindcss
       watchexec
       xauth
       xvfb

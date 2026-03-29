@@ -1,4 +1,4 @@
-
+# Build-only site tasks. Repo-root dev watch/serve flow lives in `../Justfile`.
 build-tailwind:
     bun run tailwind:build
 
@@ -30,44 +30,3 @@ build-release:
     just build-release-no-tailwind
 
 release: build-release
-
-# rebuild site whenever sources change (ignore .out)
-watch-release:
-    watchexec -r --postpone \
-      -w content -w layouts \
-      -w assets/CNAME -w assets/config.ziggy -w assets/css -w assets/js -w assets/map -w assets/jsonld \
-      -w assets/img/embed.png -w assets/img/logo.png \
-      -w scripts -w zine.ziggy \
-      --ignore assets/js/datastar.js \
-      --ignore assets/img/icons.svg \
-      --ignore assets/img/guides/*-320.webp \
-      --ignore assets/img/guides/*-640.webp \
-      --ignore assets/img/favicon-16x16.png \
-      --ignore assets/img/favicon-32x32.png \
-      --ignore assets/img/logo-32.png \
-      --ignore assets/img/logo-64.png \
-      --ignore assets/css/fonts/**/*.site.woff2 \
-      --exts smd,md,shtml,html,ziggy,css,js,mjs,ts \
-      -- just build-release-no-tailwind
-
-serve-release:
-    bun run ./scripts/serve-release.mjs --root .out --port 1990
-
-# tailwind watch (builds to assets/css/site.css)
-watch-tailwind:
-    bun run tailwind:build
-    watchexec -r --postpone \
-      -w content -w layouts -w assets/js -w assets/map -w assets/css/style.css -w scripts -w tailwind.input.css \
-      --ignore assets/js/datastar.js \
-      --ignore assets/css/site.css --ignore .tailwind \
-      --exts smd,md,shtml,html,css,js,mjs,ts \
-      -- bun run tailwind:build
-
-# dev: run both watchers concurrently
-watch:
-    just build-tailwind
-    just build-release-no-tailwind
-    just watch-release & \
-    just watch-tailwind & \
-    just serve-release & \
-    wait
