@@ -145,6 +145,34 @@ fn manually_maintained_source_fish_multiplier(item_id: i32, item_type: &str) -> 
     }
 }
 
+fn manually_maintained_source_effect_values(
+    item_id: i32,
+    item_type: &str,
+) -> CalculatorItemEffectValues {
+    if item_type != "rod" {
+        return CalculatorItemEffectValues::default();
+    }
+
+    match item_id {
+        // Base Triple-Float Fishing Rod. The current intermediate source dump
+        // exposes the multi-catch family link, but not the hidden Rare/HQ
+        // rates that are visible in-game after the tooltip rewrite.
+        16153 => CalculatorItemEffectValues {
+            bonus_rare: Some(0.02),
+            bonus_big: Some(0.05),
+            ..CalculatorItemEffectValues::default()
+        },
+        _ => CalculatorItemEffectValues::default(),
+    }
+}
+
+fn manually_maintained_source_item_type(item_id: i32) -> Option<&'static str> {
+    match item_id {
+        16153 => Some("rod"),
+        _ => None,
+    }
+}
+
 fn normalize_source_owned_item_name(name: &str) -> String {
     name.replace("[의상] ", "")
         .replace("[이벤트] ", "")
@@ -1707,7 +1735,7 @@ impl DoltMySqlStore {
             }
         }
 
-        Ok(chosen_effects
+        let mut source_backed_rows = chosen_effects
             .into_iter()
             .filter_map(|row| {
                 let exact_match = exact_metadata_by_name
@@ -1723,6 +1751,8 @@ impl DoltMySqlStore {
                 let (item_id, metadata) = resolved;
                 let fish_multiplier =
                     manually_maintained_source_fish_multiplier(item_id, &row.item_type);
+                let manual_values =
+                    manually_maintained_source_effect_values(item_id, &row.item_type);
 
                 Some(CalculatorSourceBackedItemRow {
                     source_key: format!("item:{item_id}"),
@@ -1740,14 +1770,62 @@ impl DoltMySqlStore {
                     fish_multiplier,
                     effect_description_ko: row.effect_description_ko,
                     afr: row.afr,
-                    bonus_rare: row.bonus_rare,
-                    bonus_big: row.bonus_big,
+                    bonus_rare: max_opt_f32(row.bonus_rare, manual_values.bonus_rare),
+                    bonus_big: max_opt_f32(row.bonus_big, manual_values.bonus_big),
                     item_drr: row.item_drr,
                     exp_fish: row.exp_fish,
                     exp_life: row.exp_life,
                 })
             })
-            .collect())
+            .collect::<Vec<_>>();
+
+        let existing_item_ids = source_backed_rows
+            .iter()
+            .filter_map(|row| row.item_id)
+            .collect::<std::collections::HashSet<_>>();
+        let manual_item_ids = [16153];
+        let manual_metadata =
+            self.query_calculator_item_table_metadata(ref_id, &manual_item_ids)?;
+        for item_id in manual_item_ids {
+            if existing_item_ids.contains(&item_id) {
+                continue;
+            }
+            let Some(item_type) = manually_maintained_source_item_type(item_id) else {
+                continue;
+            };
+            let manual_values = manually_maintained_source_effect_values(item_id, item_type);
+            let fish_multiplier = manually_maintained_source_fish_multiplier(item_id, item_type);
+            if manual_values == CalculatorItemEffectValues::default() && fish_multiplier.is_none() {
+                continue;
+            }
+            let Some(metadata) = manual_metadata.get(&item_id) else {
+                continue;
+            };
+            source_backed_rows.push(CalculatorSourceBackedItemRow {
+                source_key: format!("item:{item_id}"),
+                source_kind: "item".to_string(),
+                item_id: Some(item_id),
+                item_type: item_type.to_string(),
+                buff_category_key: None,
+                buff_category_id: None,
+                buff_category_level: None,
+                source_name_en: metadata.name_en.clone(),
+                source_name_ko: metadata.name_ko.clone(),
+                item_icon_file: None,
+                icon_id: metadata.icon_id,
+                durability: metadata.durability,
+                fish_multiplier,
+                effect_description_ko: None,
+                afr: manual_values.afr,
+                bonus_rare: manual_values.bonus_rare,
+                bonus_big: manual_values.bonus_big,
+                item_drr: manual_values.item_drr,
+                exp_fish: manual_values.exp_fish,
+                exp_life: manual_values.exp_life,
+            });
+        }
+
+        Ok(source_backed_rows)
     }
 
     pub(super) fn query_calculator_catalog_source_data(
@@ -1804,9 +1882,10 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        fallback_consumable_family_key, manually_maintained_source_fish_multiplier,
-        parse_lightstone_set_name_ko, select_consumable_category_metadata,
-        select_consumable_effect_texts, CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
+        fallback_consumable_family_key, manually_maintained_source_effect_values,
+        manually_maintained_source_fish_multiplier, parse_lightstone_set_name_ko,
+        select_consumable_category_metadata, select_consumable_effect_texts,
+        CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
     };
 
     #[test]
@@ -1967,5 +2046,20 @@ mod tests {
             manually_maintained_source_fish_multiplier(830150, "backpack"),
             None
         );
+    }
+
+    #[test]
+    fn manually_maintained_source_effect_values_cover_base_triple_float_hidden_rates() {
+        let values = manually_maintained_source_effect_values(16153, "rod");
+        assert_eq!(values.bonus_rare, Some(0.02));
+        assert_eq!(values.bonus_big, Some(0.05));
+
+        let unrelated = manually_maintained_source_effect_values(767158, "rod");
+        assert_eq!(unrelated.bonus_rare, None);
+        assert_eq!(unrelated.bonus_big, None);
+
+        let wrong_type = manually_maintained_source_effect_values(16153, "backpack");
+        assert_eq!(wrong_type.bonus_rare, None);
+        assert_eq!(wrong_type.bonus_big, None);
     }
 }

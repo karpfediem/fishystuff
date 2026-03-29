@@ -40,7 +40,7 @@ pub(super) fn build_source_item(
     source_name_en: Option<&str>,
     source_name_ko: Option<&str>,
     _item_icon_file: Option<&str>,
-    _icon_id: Option<i32>,
+    icon_id: Option<i32>,
     fish_multiplier: Option<f32>,
     source_durability: Option<i32>,
     override_values: CalculatorItemEffectValues,
@@ -56,7 +56,7 @@ pub(super) fn build_source_item(
             .or_else(|| source_name_ko.map(ToOwned::to_owned))
             .unwrap_or_else(|| format!("item:{item_id}"))
     };
-    let icon_id = Some(item_id);
+    let icon_id = icon_id.or(Some(item_id));
 
     CalculatorItemEntry {
         key: format!("item:{item_id}"),
@@ -362,8 +362,8 @@ mod tests {
         assert_eq!(sourced.name, "발락스 도시락");
         assert_eq!(sourced.r#type, "food");
         assert_eq!(sourced.durability, Some(11));
-        assert_eq!(sourced.icon_id, Some(9359));
-        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00009359.webp"));
+        assert_eq!(sourced.icon_id, Some(42));
+        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00000042.webp"));
         assert_eq!(sourced.fish_multiplier, Some(1.5));
         assert_eq!(sourced.afr, Some(0.07));
         assert_eq!(sourced.exp_fish, Some(0.10));
@@ -405,7 +405,7 @@ mod tests {
         assert_eq!(sourced.key, "item:16162");
         assert_eq!(sourced.name, "Balenos Fishing Rod");
         assert_eq!(sourced.r#type, "rod");
-        assert_eq!(sourced.icon_id, Some(16162));
+        assert_eq!(sourced.icon_id, Some(1));
         assert_eq!(sourced.durability, Some(100));
         assert_eq!(sourced.afr, Some(0.25));
     }
@@ -443,8 +443,8 @@ mod tests {
 
         assert_eq!(items.len(), 1);
         let sourced = &items[0];
-        assert_eq!(sourced.icon_id, Some(14330));
-        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00014330.webp"));
+        assert_eq!(sourced.icon_id, Some(14071));
+        assert_eq!(sourced.icon.as_deref(), Some("/images/items/00014071.webp"));
     }
 
     #[test]
