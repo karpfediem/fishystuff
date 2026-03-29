@@ -33,6 +33,7 @@ pub struct CalculatorZoneLootEntry {
     pub slot_idx: u8,
     pub item_id: i32,
     pub name: String,
+    pub icon: Option<String>,
     pub vendor_price: Option<i64>,
     pub grade: Option<String>,
     pub is_fish: bool,

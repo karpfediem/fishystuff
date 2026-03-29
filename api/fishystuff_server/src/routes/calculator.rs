@@ -162,6 +162,7 @@ struct LootSpeciesRow {
     slot_idx: u8,
     group_label: &'static str,
     label: String,
+    icon_url: Option<String>,
     fill_color: &'static str,
     stroke_color: &'static str,
     text_color: &'static str,
@@ -1793,10 +1794,7 @@ fn effective_fish_multiplier(
     multiplier
 }
 
-fn mastery_prize_rate_for_bracket(
-    curve: &[CalculatorMasteryPrizeRateEntry],
-    mastery: f64,
-) -> f64 {
+fn mastery_prize_rate_for_bracket(curve: &[CalculatorMasteryPrizeRateEntry], mastery: f64) -> f64 {
     let mastery = mastery.max(0.0);
     curve
         .iter()
@@ -2062,16 +2060,16 @@ fn loot_species_evidence_text(entry: &CalculatorZoneLootEntry) -> String {
     let db_rate_text = entry
         .evidence
         .iter()
-        .find(|evidence| evidence.source_family == "database" && evidence.claim_kind == "in_group_rate")
+        .find(|evidence| {
+            evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
+        })
         .and_then(|evidence| evidence.rate)
         .map(|rate| format!("DB {}%", trim_float(rate * 100.0)))
         .unwrap_or_else(|| format!("DB {}%", trim_float(entry.within_group_rate * 100.0)));
 
-    let Some(community) = entry
-        .evidence
-        .iter()
-        .find(|evidence| evidence.source_family == "community" && evidence.claim_kind == "presence")
-    else {
+    let Some(community) = entry.evidence.iter().find(|evidence| {
+        evidence.source_family == "community" && evidence.claim_kind == "presence"
+    }) else {
         return db_rate_text;
     };
 
@@ -2165,6 +2163,10 @@ fn derive_loot_chart(
             slot_idx: entry.slot_idx,
             group_label: group_row.label,
             label: entry.name.clone(),
+            icon_url: entry
+                .icon
+                .as_deref()
+                .map(|icon| absolute_public_asset_url(data.cdn_base_url.as_str(), icon)),
             fill_color: group_row.fill_color,
             stroke_color: group_row.stroke_color,
             text_color: group_row.text_color,
@@ -4260,11 +4262,11 @@ mod tests {
     use super::{
         base_price_for_species, buff_category_label, build_pet_value_aliases,
         discard_grade_enabled, get_calculator_datastar_init, get_calculator_datastar_option_search,
-        get_calculator_datastar_zone_search, init_signals_patch_map, normalize_lookup_value,
-        mastery_prize_rate_for_bracket, normalize_named_array, parse_calculator_signals_value,
-        post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
-        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery,
+        get_calculator_datastar_zone_search, init_signals_patch_map,
+        mastery_prize_rate_for_bracket, normalize_lookup_value, normalize_named_array,
+        parse_calculator_signals_value, post_calculator_datastar_eval,
+        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
+        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
     };
 
     struct MockStore;

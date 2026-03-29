@@ -13,6 +13,7 @@ const RIGHT_LABEL_WIDTH = 248;
 const RIGHT_LABEL_HEIGHT = 54;
 const RIGHT_LABEL_OFFSET = 14;
 const NODE_RADIUS = 12;
+const LABEL_ICON_SIZE = 20;
 
 function positiveNumber(value) {
     const numeric = Number(value);
@@ -259,6 +260,8 @@ class FishyLootSankey extends HTMLElement {
                 ? `${row.expected_count_text} | ${row.expected_profit_text}`
                 : row.expected_count_text;
             const evidenceLabel = String(row.evidence_text ?? "");
+            const hasIcon = Boolean(row.icon_url);
+            const textX = labelX + 10 + (hasIcon ? LABEL_ICON_SIZE + 8 : 0);
 
             rightNodes.append("rect")
                 .attr("x", rightBarX)
@@ -295,17 +298,27 @@ class FishyLootSankey extends HTMLElement {
                 .style("stroke", row.stroke_color)
                 .style("stroke-width", 1.5);
 
+            if (hasIcon) {
+                rightNodes.append("image")
+                    .attr("x", labelX + 10)
+                    .attr("y", labelTop + (RIGHT_LABEL_HEIGHT - LABEL_ICON_SIZE) / 2)
+                    .attr("width", LABEL_ICON_SIZE)
+                    .attr("height", LABEL_ICON_SIZE)
+                    .attr("href", row.icon_url)
+                    .attr("preserveAspectRatio", "xMidYMid meet");
+            }
+
             rightNodes.append("text")
-                .attr("x", labelX + 10)
+                .attr("x", textX)
                 .attr("y", labelTop + 15)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "11px")
                 .style("font-weight", "700")
-                .text(truncateLabel(row.label, 28));
+                .text(truncateLabel(row.label, hasIcon ? 24 : 28));
 
             rightNodes.append("text")
-                .attr("x", labelX + 10)
+                .attr("x", textX)
                 .attr("y", labelTop + 29)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
@@ -313,7 +326,7 @@ class FishyLootSankey extends HTMLElement {
                 .text(valueLabel);
 
             rightNodes.append("text")
-                .attr("x", labelX + 10)
+                .attr("x", textX)
                 .attr("y", labelTop + 43)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)

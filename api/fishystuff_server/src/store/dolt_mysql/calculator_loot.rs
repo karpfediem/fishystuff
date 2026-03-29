@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use fishystuff_api::ids::RgbKey;
+use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
 use mysql::prelude::Queryable;
 
 use crate::error::{AppError, AppResult};
@@ -11,6 +12,10 @@ use crate::store::{
 use super::catalog::{fish_grade_from_db, parse_positive_i64};
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
+
+fn calculator_loot_item_icon_path(icon_id: i32) -> String {
+    format!("/images/items/{icon_id:08}.webp")
+}
 
 impl DoltMySqlStore {
     fn calculator_zone_loot_cache_key(
@@ -299,6 +304,7 @@ impl DoltMySqlStore {
             "SELECT \
                 CAST(it.`Index` AS SIGNED), \
                 {item_name_expr} AS item_name, \
+                NULLIF(TRIM(it.`IconImageFile`), '') AS icon_file, \
                 it.`GradeType`, \
                 it.`OriginalPrice`, \
                 CASE WHEN ft.item_key IS NULL THEN 0 ELSE 1 END AS is_fish \
@@ -310,17 +316,28 @@ impl DoltMySqlStore {
                AND NULLIF(TRIM(en.`text`), '') IS NOT NULL \
              WHERE it.`Index` IN ({item_id_csv})"
         );
-        let item_rows: Vec<(i64, Option<String>, Option<String>, Option<String>, i64)> =
-            conn.query(item_query).map_err(db_unavailable)?;
-        let mut item_meta = HashMap::<i32, (String, Option<String>, Option<i64>, bool)>::new();
-        for (item_id, name, grade_type, original_price, is_fish) in item_rows {
+        let item_rows: Vec<(
+            i64,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            i64,
+        )> = conn.query(item_query).map_err(db_unavailable)?;
+        let mut item_meta =
+            HashMap::<i32, (String, Option<String>, Option<String>, Option<i64>, bool)>::new();
+        for (item_id, name, icon_file, grade_type, original_price, is_fish) in item_rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
             let name = normalize_optional_string(name).unwrap_or_else(|| item_id.to_string());
+            let icon = normalize_optional_string(icon_file)
+                .and_then(|value| parse_fish_icon_asset_id(&value))
+                .map(calculator_loot_item_icon_path)
+                .or_else(|| Some(calculator_loot_item_icon_path(item_id)));
             let (grade, _, _is_prize) = fish_grade_from_db(grade_type);
             let vendor_price = parse_positive_i64(original_price);
-            item_meta.insert(item_id, (name, grade, vendor_price, is_fish > 0));
+            item_meta.insert(item_id, (name, icon, grade, vendor_price, is_fish > 0));
         }
 
         let mut entries = aggregate_weights
@@ -331,10 +348,16 @@ impl DoltMySqlStore {
                     return None;
                 }
                 let within_group_rate = weight / total_weight;
-                let (name, grade, vendor_price, is_fish) = item_meta
-                    .get(&item_id)
-                    .cloned()
-                    .unwrap_or_else(|| (item_id.to_string(), None, None, false));
+                let (name, icon, grade, vendor_price, is_fish) =
+                    item_meta.get(&item_id).cloned().unwrap_or_else(|| {
+                        (
+                            item_id.to_string(),
+                            Some(calculator_loot_item_icon_path(item_id)),
+                            None,
+                            None,
+                            false,
+                        )
+                    });
                 let mut evidence = vec![CalculatorZoneLootEvidence {
                     source_family: "database".to_string(),
                     claim_kind: "in_group_rate".to_string(),
@@ -343,9 +366,13 @@ impl DoltMySqlStore {
                     status: Some("best_effort".to_string()),
                     claim_count: None,
                 }];
-                if let Some((support_status, claim_count)) = community_presence_by_item.get(&item_id)
+                if let Some((support_status, claim_count)) =
+                    community_presence_by_item.get(&item_id)
                 {
-                    let scope = if slot_membership_count.get(&item_id).copied().unwrap_or_default()
+                    let scope = if slot_membership_count
+                        .get(&item_id)
+                        .copied()
+                        .unwrap_or_default()
                         <= 1
                     {
                         "group_inferred"
@@ -365,6 +392,7 @@ impl DoltMySqlStore {
                     slot_idx,
                     item_id,
                     name,
+                    icon,
                     vendor_price,
                     grade,
                     is_fish,
