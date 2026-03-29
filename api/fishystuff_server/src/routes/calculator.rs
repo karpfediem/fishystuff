@@ -2420,7 +2420,7 @@ fn render_distribution_chart(
     let mut html = String::new();
     write!(
         html,
-        "<div id=\"{}\" class=\"distribution-chart\" aria-label=\"{}\"><div class=\"distribution-chart-graphic\">",
+        "<fishy-distribution-chart id=\"{}\" class=\"distribution-chart\" aria-label=\"{}\"><div class=\"distribution-chart-graphic\">",
         escape_html(chart_id),
         escape_html(aria_label),
     )
@@ -2517,7 +2517,7 @@ fn render_distribution_chart(
         )
         .unwrap();
     }
-    html.push_str("</div></div></div>");
+    html.push_str("</div></div></fishy-distribution-chart>");
     html
 }
 
