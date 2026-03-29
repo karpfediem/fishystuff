@@ -1,6 +1,6 @@
 import * as d3 from "../d3.js";
 
-const MIN_INTERNAL_WIDTH = 720;
+const DEFAULT_VIEWBOX_WIDTH = 1351;
 const CHART_HEIGHT = 164;
 const CALLOUT_TOP = 8;
 const CALLOUT_HEIGHT = 46;
@@ -8,7 +8,7 @@ const CALLOUT_RADIUS = 16;
 const TRACK_TOP = 132;
 const TRACK_HEIGHT = 18;
 const TRACK_RADIUS = TRACK_HEIGHT / 2;
-const CALLOUT_GAP_PCT = 1.2;
+const CALLOUT_GAP_PX = 10;
 
 function readChartSignal(path) {
     return window.__fishystuffCalculator?.readSignal?.(path) ?? null;
@@ -56,7 +56,7 @@ class FishyDistributionChart extends HTMLElement {
     }
 
     static get observedAttributes() {
-        return ["signal-path", "aria-label"];
+        return ["signal-path", "aria-label", "viewbox-width"];
     }
 
     connectedCallback() {
@@ -109,7 +109,10 @@ class FishyDistributionChart extends HTMLElement {
             return;
         }
 
-        const width = Math.max(this.clientWidth || 0, MIN_INTERNAL_WIDTH);
+        const requestedWidth = Number(this.getAttribute("viewbox-width"));
+        const width = Number.isFinite(requestedWidth) && requestedWidth > 0
+            ? requestedWidth
+            : DEFAULT_VIEWBOX_WIDTH;
         const trackWidth = width;
         const x = d3.scaleLinear().domain([0, 100]).range([0, trackWidth]);
         const styles = getComputedStyle(this);
@@ -120,44 +123,69 @@ class FishyDistributionChart extends HTMLElement {
         const clipId = `distribution-track-${crypto.randomUUID()}`;
 
         let startPct = 0;
-        let previousCalloutRightPct = 0;
-        const layout = segments.map((segment) => {
+        const provisional = segments.map((segment) => {
             const widthPct = Math.max(0, Number(segment.width_pct) || 0);
             const endPct = Math.min(100, startPct + widthPct);
-            const calloutWidthPx = estimateCalloutWidthPx(
-                segment.label,
-                segment.value_text,
+            const calloutWidthPx = Math.min(
+                width - 8,
+                estimateCalloutWidthPx(
+                    segment.label,
+                    segment.value_text,
+                ),
             );
-            const calloutWidthPct = (calloutWidthPx / width) * 100;
-            const preferredLeftPct =
-                startPct + calloutWidthPct <= 100
-                    ? startPct
-                    : Math.max(0, endPct - calloutWidthPct);
-            const maxLeftPct = Math.max(0, 100 - calloutWidthPct);
-            const minLeftPct =
-                previousCalloutRightPct > 0
-                    ? Math.min(maxLeftPct, previousCalloutRightPct + CALLOUT_GAP_PCT)
-                    : 0;
-            const calloutLeftPct = Math.min(
-                maxLeftPct,
-                Math.max(minLeftPct, preferredLeftPct),
+            const startX = x(startPct);
+            const endX = x(endPct);
+            const segmentMidX = startX + (endX - startX) / 2;
+            const preferredLeftPx = Math.max(
+                0,
+                Math.min(width - calloutWidthPx, segmentMidX - calloutWidthPx / 2),
             );
-            const calloutRightPct = Math.min(100, calloutLeftPct + calloutWidthPct);
             const current = {
                 segment,
                 startPct,
                 endPct,
-                calloutLeftPct,
-                calloutRightPct,
+                startX,
+                endX,
+                calloutWidthPx,
+                preferredLeftPx,
+                calloutLeftPx: preferredLeftPx,
             };
             startPct = endPct;
-            previousCalloutRightPct = calloutRightPct;
             return current;
         });
+
+        for (let index = 1; index < provisional.length; index += 1) {
+            const previous = provisional[index - 1];
+            const current = provisional[index];
+            const minimumLeft =
+                previous.calloutLeftPx + previous.calloutWidthPx + CALLOUT_GAP_PX;
+            current.calloutLeftPx = Math.max(current.preferredLeftPx, minimumLeft);
+        }
+
+        let nextLeft = width;
+        for (let index = provisional.length - 1; index >= 0; index -= 1) {
+            const current = provisional[index];
+            const maximumLeft =
+                nextLeft - current.calloutWidthPx - (index === provisional.length - 1 ? 0 : CALLOUT_GAP_PX);
+            current.calloutLeftPx = Math.max(
+                0,
+                Math.min(current.calloutLeftPx, maximumLeft),
+            );
+            nextLeft = current.calloutLeftPx;
+        }
+
+        const layout = provisional.map((entry) => ({
+            ...entry,
+            calloutLeftPx: Math.max(
+                0,
+                Math.min(width - entry.calloutWidthPx, entry.calloutLeftPx),
+            ),
+        }));
 
         const svg = d3
             .create("svg")
             .attr("viewBox", `0 0 ${width} ${CHART_HEIGHT}`)
+            .attr("preserveAspectRatio", "xMidYMin meet")
             .attr("role", "img")
             .attr("aria-label", this.getAttribute("aria-label") || "Distribution chart");
 
@@ -177,10 +205,10 @@ class FishyDistributionChart extends HTMLElement {
         const track = svg.append("g");
 
         layout.forEach((entry, index) => {
-            const startX = x(entry.startPct);
-            const endX = x(entry.endPct);
-            const calloutX = x(entry.calloutLeftPct);
-            const calloutWidth = x(entry.calloutRightPct) - calloutX;
+            const startX = entry.startX;
+            const endX = entry.endX;
+            const calloutX = entry.calloutLeftPx;
+            const calloutWidth = entry.calloutWidthPx;
             const [segmentNeutralLeft, segmentNeutralRight] = neutralSpan(
                 startX,
                 endX,
