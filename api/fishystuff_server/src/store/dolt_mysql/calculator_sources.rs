@@ -144,11 +144,20 @@ fn fallback_consumable_family_key(
         .then(|| format!("skill-family:{skill_id}"))
 }
 
+// Remaining manual source fallbacks.
+//
+// These are intentionally narrow and only cover values we have not yet been
+// able to prove from the current intermediate dump. They should stay small and
+// disappear as stronger source-backed paths are found.
 fn manually_maintained_source_fish_multiplier(item_id: i32, item_type: &str) -> Option<f32> {
     if item_type != "rod" {
         return None;
     }
     match item_id {
+        // Multi-catch rods. The current source set lets us prove the rod family
+        // identity, but not a structured numeric multiplier field like `1.6`.
+        // Keep this maintained manually until an original-source numeric path is
+        // found.
         16153 | 767158 | 767187 | 767671 => Some(1.6),
         _ => None,
     }
@@ -1925,6 +1934,9 @@ impl DoltMySqlStore {
                         .and_then(|matches| matches.first().cloned())
                 })?;
                 let (item_id, metadata) = resolved;
+                // Manual values only fill gaps that are still unproven in the
+                // current source dump. They do not replace source-backed stats
+                // already recovered from enchant/producttool/skill/buff data.
                 let fish_multiplier =
                     manually_maintained_source_fish_multiplier(item_id, &row.item_type);
                 let manual_values =
@@ -1959,6 +1971,9 @@ impl DoltMySqlStore {
             .iter()
             .filter_map(|row| row.item_id)
             .collect::<std::collections::HashSet<_>>();
+        // Manual-only rows are a last resort for items that should still be in
+        // the calculator but currently have no recoverable source-backed effect
+        // row in the intermediate dump.
         let manual_item_ids = [16153];
         let manual_metadata =
             self.query_calculator_item_table_metadata(ref_id, &manual_item_ids)?;
