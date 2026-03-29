@@ -38,6 +38,11 @@ const CLASSISH_BARE_TOKENS = new Set([
   "truncate",
 ]);
 const EXTRA_CLASS_VALUES = [
+  "bg-red-500",
+  "bg-yellow-400",
+  "bg-blue-500",
+  "bg-green-500",
+  "border-red-400 bg-red-300 text-red-950",
   "border-base-content/15 bg-base-300 text-base-content",
   "border-emerald-400 bg-emerald-300 text-emerald-950",
   "border-yellow-400 bg-yellow-300 text-yellow-950",
@@ -83,7 +88,7 @@ function escapeAttribute(value) {
 
 function looksLikeClassValue(value) {
   const tokens = value.split(" ").filter(Boolean);
-  if (tokens.length < 2) {
+  if (tokens.length === 0) {
     return false;
   }
   if (!tokens.every((token) => CLASS_TOKEN_PATTERN.test(token))) {

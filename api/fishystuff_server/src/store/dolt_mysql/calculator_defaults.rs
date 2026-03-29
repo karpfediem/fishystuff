@@ -29,6 +29,7 @@ pub(super) fn build_calculator_default_signals() -> CalculatorSignals {
     CalculatorSignals {
         level: 5,
         lifeskill_level: "100".to_string(),
+        mastery: 0.0,
         zone: "240,74,74".to_string(),
         resources: 0.0,
         rod: "item:16162".to_string(),

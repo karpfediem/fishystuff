@@ -359,5 +359,28 @@
             flex-grow: 1;
         }
     }
+
+    #calculator-fish-group-chart {
+        .fish-group-timeline {
+            width: 100%;
+            display: flex;
+            position: relative;
+            margin: 0 auto;
+            height: 1.125rem;
+            overflow: hidden;
+            background-color: var(--color-base-300);
+            border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
+            border-radius: 999px;
+
+            .segment {
+                height: 100%;
+                min-inline-size: 0;
+            }
+
+            .segment + .segment {
+                box-shadow: inset 1px 0 0 color-mix(in srgb, var(--color-base-content) 12%, transparent);
+            }
+        }
+    }
 </style>
 ```

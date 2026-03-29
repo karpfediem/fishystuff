@@ -37,6 +37,23 @@ pub struct CalculatorOptionEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalculatorMasteryPrizeRateEntry {
+    pub fishing_mastery: i32,
+    pub high_drop_rate_raw: i32,
+    pub high_drop_rate: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CalculatorZoneGroupRateEntry {
+    pub zone_rgb_key: String,
+    pub prize_main_group_key: Option<i32>,
+    pub rare_rate_raw: i32,
+    pub high_quality_rate_raw: i32,
+    pub general_rate_raw: i32,
+    pub treasure_rate_raw: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CalculatorSessionPresetEntry {
     pub label: String,
     pub amount: f64,
@@ -70,6 +87,7 @@ pub struct CalculatorPetSignals {
 pub struct CalculatorSignals {
     pub level: i32,
     pub lifeskill_level: String,
+    pub mastery: f64,
     pub zone: String,
     pub resources: f64,
     pub rod: String,
@@ -104,6 +122,10 @@ pub struct CalculatorCatalogResponse {
     pub items: Vec<CalculatorItemEntry>,
     #[serde(default)]
     pub lifeskill_levels: Vec<CalculatorLifeskillLevelEntry>,
+    #[serde(default)]
+    pub mastery_prize_curve: Vec<CalculatorMasteryPrizeRateEntry>,
+    #[serde(default)]
+    pub zone_group_rates: Vec<CalculatorZoneGroupRateEntry>,
     #[serde(default)]
     pub fishing_levels: Vec<CalculatorOptionEntry>,
     #[serde(default)]

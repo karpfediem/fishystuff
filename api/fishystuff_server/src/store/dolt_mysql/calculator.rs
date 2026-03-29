@@ -37,6 +37,8 @@ impl DoltMySqlStore {
         let catalog = CalculatorCatalogResponse {
             items: self.query_calculator_items(lang, ref_id)?,
             lifeskill_levels: build_calculator_lifeskill_levels(),
+            mastery_prize_curve: self.query_calculator_mastery_prize_curve(ref_id)?,
+            zone_group_rates: self.query_calculator_zone_group_rates(ref_id)?,
             fishing_levels: build_calculator_fishing_levels(lang),
             session_units: build_calculator_session_units(lang),
             session_presets: build_calculator_session_presets(lang),

@@ -3,6 +3,7 @@ mod calculator_defaults;
 mod calculator_effects;
 mod calculator_items;
 mod calculator_pets;
+mod calculator_progression;
 mod calculator_sources;
 mod catalog;
 mod stats;

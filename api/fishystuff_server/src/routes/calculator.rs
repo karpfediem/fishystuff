@@ -17,8 +17,9 @@ use serde_json::{json, Value};
 
 use fishystuff_api::models::calculator::{
     CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
-    CalculatorOptionEntry, CalculatorPetCatalog, CalculatorPetSignals,
-    CalculatorSessionPresetEntry, CalculatorSignals,
+    CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
+    CalculatorPetSignals, CalculatorSessionPresetEntry, CalculatorSignals,
+    CalculatorZoneGroupRateEntry,
 };
 use fishystuff_api::models::zones::ZoneEntry;
 
@@ -90,12 +91,33 @@ struct CalculatorDerivedSignals {
     debug_json: String,
 }
 
+#[derive(Debug, Clone)]
+struct FishGroupChartRow {
+    label: &'static str,
+    tone_class: &'static str,
+    badge_class: &'static str,
+    bonus_text: String,
+    base_share_pct: f64,
+    weight_pct: f64,
+    current_share_pct: f64,
+}
+
+#[derive(Debug, Clone)]
+struct FishGroupChart {
+    available: bool,
+    note: String,
+    raw_prize_rate_text: String,
+    mastery_text: String,
+    rows: Vec<FishGroupChartRow>,
+}
+
 #[derive(Debug)]
 struct CalculatorData {
     catalog: CalculatorCatalogResponse,
     cdn_base_url: String,
     lang: FishLang,
     zones: Vec<ZoneEntry>,
+    zone_group_rates: HashMap<String, CalculatorZoneGroupRateEntry>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -260,13 +282,26 @@ pub async fn post_calculator_datastar_eval(
     let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
     let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
     let (normalized_signals, derived) = normalize_and_derive(raw_signals, &data);
-    let events = vec![calculator_signals_event(
-        &data,
-        &normalized_signals,
-        &derived,
-        CalculatorPatchMode::Eval,
-    )?
-    .into_datastar_event()];
+    let items_by_key = data
+        .catalog
+        .items
+        .iter()
+        .map(|item| (item.key.as_str(), item))
+        .collect::<HashMap<_, _>>();
+    let fish_group_chart = derive_fish_group_chart(&normalized_signals, &data, &items_by_key);
+    let events = vec![
+        calculator_signals_event(
+            &data,
+            &normalized_signals,
+            &derived,
+            CalculatorPatchMode::Eval,
+        )?
+        .into_datastar_event(),
+        PatchElements::new(render_fish_group_chart(&fish_group_chart))
+            .selector("#calculator-fish-group-chart")
+            .mode(ElementPatchMode::Outer)
+            .into_datastar_event(),
+    ];
     Ok(calculator_datastar_response(events))
 }
 
@@ -456,6 +491,7 @@ fn parse_calculator_signals_value(
     apply_local_signal_aliases(&mut object);
 
     coerce_object_i64(&mut object, "level");
+    coerce_object_f64(&mut object, "mastery");
     coerce_object_f64(&mut object, "resources");
     coerce_object_f64(&mut object, "catchTimeActive");
     coerce_object_f64(&mut object, "catchTimeAfk");
@@ -637,11 +673,18 @@ async fn load_calculator_data(
     )
     .await
     .map_err(|err| map_request_id(err, request_id))?;
+    let zone_group_rates = catalog
+        .zone_group_rates
+        .iter()
+        .cloned()
+        .map(|entry| (entry.zone_rgb_key.clone(), entry))
+        .collect::<HashMap<_, _>>();
     Ok(CalculatorData {
         catalog,
         cdn_base_url: state.config.runtime_cdn_base_url.clone(),
         lang,
         zones,
+        zone_group_rates,
     })
 }
 
@@ -716,6 +759,7 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         .collect::<std::collections::HashSet<_>>();
 
     signals.level = signals.level.clamp(0, 5);
+    signals.mastery = signals.mastery.max(0.0);
     signals.resources = signals.resources.clamp(0.0, 100.0);
     signals.catch_time_active = signals.catch_time_active.max(0.0);
     signals.catch_time_afk = signals.catch_time_afk.max(0.0);
@@ -1294,6 +1338,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let brandstone_durability_factor = if signals.brand { 0.5 } else { 1.0 };
     let chance_to_reduce_raw =
         brandstone_durability_factor * (1.0 - item_drr_raw) * (1.0 - lifeskill_level_drr_raw);
+    let fish_group_chart = derive_fish_group_chart(signals, data, &items_by_key);
 
     let timespan_seconds = timespan_seconds(signals.timespan_amount, &signals.timespan_unit);
     let timespan_text = timespan_text(signals.timespan_amount, &signals.timespan_unit);
@@ -1320,6 +1365,17 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
             "chanceToConsumeDurability": chance_to_reduce_raw,
             "castsAverage": casts_average_raw,
             "durabilityLossAverage": durability_loss_average_raw,
+            "fishGroups": {
+                "available": fish_group_chart.available,
+                "rawPrizeCatchRateText": fish_group_chart.raw_prize_rate_text,
+                "rows": fish_group_chart.rows.iter().map(|row| json!({
+                    "label": row.label,
+                    "bonusText": row.bonus_text,
+                    "baseSharePct": row.base_share_pct,
+                    "weightPct": row.weight_pct,
+                    "currentSharePct": row.current_share_pct,
+                })).collect::<Vec<_>>(),
+            },
         }
     }))
     .unwrap_or_else(|_| "{}".to_string());
@@ -1439,6 +1495,165 @@ fn sum_item_property(
     total
 }
 
+fn interpolate_mastery_prize_rate(curve: &[CalculatorMasteryPrizeRateEntry], mastery: f64) -> f64 {
+    let mastery = mastery.max(0.0);
+    let Some(first) = curve.first() else {
+        return 0.0;
+    };
+    if mastery <= f64::from(first.fishing_mastery) {
+        return f64::from(first.high_drop_rate_raw) / 1_000_000.0;
+    }
+    for window in curve.windows(2) {
+        let [left, right] = window else {
+            continue;
+        };
+        let left_mastery = f64::from(left.fishing_mastery);
+        let right_mastery = f64::from(right.fishing_mastery);
+        if mastery > right_mastery {
+            continue;
+        }
+        let left_rate = f64::from(left.high_drop_rate_raw) / 1_000_000.0;
+        let right_rate = f64::from(right.high_drop_rate_raw) / 1_000_000.0;
+        let span = (right_mastery - left_mastery).max(f64::EPSILON);
+        let progress = ((mastery - left_mastery) / span).clamp(0.0, 1.0);
+        return left_rate + (right_rate - left_rate) * progress;
+    }
+    curve
+        .last()
+        .map(|entry| f64::from(entry.high_drop_rate_raw) / 1_000_000.0)
+        .unwrap_or_default()
+}
+
+fn derive_fish_group_chart(
+    signals: &CalculatorSignals,
+    data: &CalculatorData,
+    items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+) -> FishGroupChart {
+    let Some(zone_group_rate) = data.zone_group_rates.get(&signals.zone) else {
+        return FishGroupChart {
+            available: false,
+            note: "Fish group data is unavailable for this zone.".to_string(),
+            raw_prize_rate_text: "0.00%".to_string(),
+            mastery_text: trim_float(signals.mastery),
+            rows: Vec::new(),
+        };
+    };
+
+    let mastery_prize_rate =
+        interpolate_mastery_prize_rate(&data.catalog.mastery_prize_curve, signals.mastery);
+    let rare_bonus = sum_item_property(
+        items_by_key,
+        &[
+            &signals.rod,
+            &signals.float,
+            &signals.chair,
+            &signals.lightstone_set,
+            &signals.backpack,
+        ],
+        &[&signals.outfit, &signals.food, &signals.buff],
+        |item| item.bonus_rare.map(f64::from),
+    );
+    let high_quality_bonus = sum_item_property(
+        items_by_key,
+        &[
+            &signals.rod,
+            &signals.float,
+            &signals.chair,
+            &signals.lightstone_set,
+            &signals.backpack,
+        ],
+        &[&signals.outfit, &signals.food, &signals.buff],
+        |item| item.bonus_big.map(f64::from),
+    );
+
+    let rare_base = f64::from(zone_group_rate.rare_rate_raw.max(0)) / 1_000_000.0;
+    let high_quality_base = f64::from(zone_group_rate.high_quality_rate_raw.max(0)) / 1_000_000.0;
+    let general_base = f64::from(zone_group_rate.general_rate_raw.max(0)) / 1_000_000.0;
+    let treasure_base = f64::from(zone_group_rate.treasure_rate_raw.max(0)) / 1_000_000.0;
+
+    let rare_weight = rare_base * (1.0 + rare_bonus.max(0.0));
+    let high_quality_weight = high_quality_base * (1.0 + high_quality_bonus.max(0.0));
+    let general_weight = general_base;
+    let treasure_weight = treasure_base;
+    let prize_weight = mastery_prize_rate.max(0.0);
+    let total_weight =
+        prize_weight + rare_weight + high_quality_weight + general_weight + treasure_weight;
+
+    let current_share = |weight: f64| {
+        if total_weight <= 0.0 {
+            0.0
+        } else {
+            (weight / total_weight) * 100.0
+        }
+    };
+
+    FishGroupChart {
+        available: true,
+        note: "Zone groups are renormalized to 100% after applying Rare and High-Quality bonuses plus prize weight from mastery.".to_string(),
+        raw_prize_rate_text: format!("{}%", trim_float(prize_weight * 100.0)),
+        mastery_text: trim_float(signals.mastery),
+        rows: vec![
+            FishGroupChartRow {
+                label: "Prize",
+                tone_class: "bg-red-300",
+                badge_class: "border-red-400 bg-red-300 text-red-950",
+                bonus_text: format!(
+                    "Mastery {} → {}% raw prize",
+                    trim_float(signals.mastery),
+                    trim_float(prize_weight * 100.0)
+                ),
+                base_share_pct: 0.0,
+                weight_pct: prize_weight * 100.0,
+                current_share_pct: current_share(prize_weight),
+            },
+            FishGroupChartRow {
+                label: "Rare",
+                tone_class: "bg-yellow-300",
+                badge_class: "border-yellow-400 bg-yellow-300 text-yellow-950",
+                bonus_text: if rare_bonus > 0.0 {
+                    format!("+{}% Rare", trim_float(rare_bonus * 100.0))
+                } else {
+                    "No bonus".to_string()
+                },
+                base_share_pct: rare_base * 100.0,
+                weight_pct: rare_weight * 100.0,
+                current_share_pct: current_share(rare_weight),
+            },
+            FishGroupChartRow {
+                label: "High-Quality",
+                tone_class: "bg-blue-300",
+                badge_class: "border-blue-400 bg-blue-300 text-blue-950",
+                bonus_text: if high_quality_bonus > 0.0 {
+                    format!("+{}% HQ", trim_float(high_quality_bonus * 100.0))
+                } else {
+                    "No bonus".to_string()
+                },
+                base_share_pct: high_quality_base * 100.0,
+                weight_pct: high_quality_weight * 100.0,
+                current_share_pct: current_share(high_quality_weight),
+            },
+            FishGroupChartRow {
+                label: "General",
+                tone_class: "bg-base-100",
+                badge_class: "border-base-300 bg-base-100 text-base-content",
+                bonus_text: "No bonus".to_string(),
+                base_share_pct: general_base * 100.0,
+                weight_pct: general_weight * 100.0,
+                current_share_pct: current_share(general_weight),
+            },
+            FishGroupChartRow {
+                label: "Treasure",
+                tone_class: "bg-green-300",
+                badge_class: "border-green-400 bg-green-300 text-green-950",
+                bonus_text: "No bonus".to_string(),
+                base_share_pct: treasure_base * 100.0,
+                weight_pct: treasure_weight * 100.0,
+                current_share_pct: current_share(treasure_weight),
+            },
+        ],
+    }
+}
+
 fn percentage_of_average_time(time: f64, unoptimized_time: f64) -> f64 {
     if unoptimized_time <= 0.0 {
         0.0
@@ -1540,6 +1755,13 @@ fn render_calculator_app(
     signals: &CalculatorSignals,
     derived: &CalculatorDerivedSignals,
 ) -> AppResult<String> {
+    let items_by_key = data
+        .catalog
+        .items
+        .iter()
+        .map(|item| (item.key.as_str(), item))
+        .collect::<HashMap<_, _>>();
+    let fish_group_chart = derive_fish_group_chart(signals, data, &items_by_key);
     let fishing_levels = select_options_from_catalog(&data.catalog.fishing_levels);
     let lifeskill_levels = sorted_lifeskill_options(&data.catalog.lifeskill_levels);
     let session_units = select_options_from_catalog(&data.catalog.session_units);
@@ -1785,6 +2007,8 @@ fn render_calculator_app(
             </div>
         </fieldset>
 
+        __FISH_GROUP_WINDOW__
+
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             <legend class="fieldset-legend ml-6 px-2">Gear</legend>
             <div class="card-body pt-0">
@@ -1900,6 +2124,10 @@ fn render_calculator_app(
                 "Search lifeskill levels",
                 false,
             ),
+        ),
+        (
+            "__FISH_GROUP_WINDOW__",
+            render_fish_group_window(&fish_group_chart, signals.mastery),
         ),
         (
             "__ROD_SELECT__",
@@ -2164,6 +2392,74 @@ fn render_effect_badge(label: &str, class_name: &str) -> String {
     format!(
         "<span class=\"badge badge-xs whitespace-nowrap border font-medium {class_name}\">{}</span>",
         escape_html(label)
+    )
+}
+
+fn render_fish_group_chart(chart: &FishGroupChart) -> String {
+    if !chart.available {
+        return format!(
+            "<div id=\"calculator-fish-group-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
+            escape_html(&chart.note)
+        );
+    }
+
+    let mut html = String::new();
+    html.push_str("<div id=\"calculator-fish-group-chart\" class=\"grid gap-4\">");
+    write!(
+        html,
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Raw Prize Catch Rate</div><div class=\"text-xs text-base-content/70\">Mastery {} drives the direct prize-rate formula before normalization.</div></div><div class=\"text-right\"><div class=\"text-2xl font-semibold\">{}</div><div class=\"text-xs text-base-content/70\">before zone-group normalization</div></div></div><div class=\"mb-3 text-xs text-base-content/70\">{}</div><div class=\"mb-3 grid grid-cols-5 gap-2 text-center text-xs font-medium text-base-content/80\">",
+        escape_html(&chart.mastery_text),
+        escape_html(&chart.raw_prize_rate_text),
+        escape_html(&chart.note),
+    )
+    .unwrap();
+    for row in &chart.rows {
+        write!(
+            html,
+            "<div class=\"rounded-box border px-2 py-1 {}\"><div class=\"truncate\">{}</div><div class=\"text-sm\">{}%</div></div>",
+            row.badge_class,
+            escape_html(row.label),
+            trim_float(row.current_share_pct),
+        )
+        .unwrap();
+    }
+    html.push_str(
+        "</div><div class=\"fish-group-timeline\" aria-label=\"Current fish group distribution\">",
+    );
+    for row in &chart.rows {
+        write!(
+            html,
+            "<div class=\"segment {}\" style=\"flex-basis: {:.4}%;\" title=\"{}: {}% current share, {}% applied weight, {}% base zone\"></div>",
+            row.tone_class,
+            row.current_share_pct.max(0.0),
+            escape_html(row.label),
+            trim_float(row.current_share_pct),
+            trim_float(row.weight_pct),
+            trim_float(row.base_share_pct),
+        )
+        .unwrap();
+    }
+    html.push_str("</div></div>");
+    html
+}
+
+fn render_fish_group_window(chart: &FishGroupChart, mastery: f64) -> String {
+    format!(
+        "<fieldset id=\"calculator-fish-group-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
+            <legend class=\"fieldset-legend ml-6 px-2\">Fish Groups</legend>\
+            <div class=\"card-body gap-4 pt-0\">\
+                <div class=\"grid gap-4 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] lg:items-start\">\
+                    <fieldset class=\"fieldset\">\
+                        <legend class=\"fieldset-legend\">Mastery</legend>\
+                        <input type=\"number\" min=\"0\" step=\"1\" class=\"input input-sm w-full\" data-bind=\"mastery\" value=\"{}\">\
+                        <span class=\"label text-xs\">Enter your consolidated fishing mastery directly.</span>\
+                    </fieldset>\
+                    {}\
+                </div>\
+            </div>\
+        </fieldset>",
+        escape_html(&trim_float(mastery)),
+        render_fish_group_chart(chart),
     )
 }
 
@@ -3168,7 +3464,8 @@ mod tests {
     use fishystuff_api::ids::{Rgb, RgbKey};
     use fishystuff_api::models::calculator::{
         CalculatorCatalogResponse, CalculatorItemEntry, CalculatorLifeskillLevelEntry,
-        CalculatorOptionEntry, CalculatorPetCatalog, CalculatorPetSignals, CalculatorSignals,
+        CalculatorMasteryPrizeRateEntry, CalculatorOptionEntry, CalculatorPetCatalog,
+        CalculatorPetSignals, CalculatorSignals, CalculatorZoneGroupRateEntry,
     };
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
@@ -3318,9 +3615,35 @@ mod tests {
                     order: 100,
                     lifeskill_level_drr: 0.6,
                 }],
+                mastery_prize_curve: vec![
+                    CalculatorMasteryPrizeRateEntry {
+                        fishing_mastery: 0,
+                        high_drop_rate_raw: 0,
+                        high_drop_rate: 0.0,
+                    },
+                    CalculatorMasteryPrizeRateEntry {
+                        fishing_mastery: 1000,
+                        high_drop_rate_raw: 25_000,
+                        high_drop_rate: 0.025,
+                    },
+                    CalculatorMasteryPrizeRateEntry {
+                        fishing_mastery: 2000,
+                        high_drop_rate_raw: 50_000,
+                        high_drop_rate: 0.05,
+                    },
+                ],
+                zone_group_rates: vec![CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "240,74,74".to_string(),
+                    prize_main_group_key: Some(16424),
+                    rare_rate_raw: 100_000,
+                    high_quality_rate_raw: 217_500,
+                    general_rate_raw: 620_000,
+                    treasure_rate_raw: 62_500,
+                }],
                 defaults: CalculatorSignals {
                     level: 5,
                     lifeskill_level: "100".to_string(),
+                    mastery: 0.0,
                     zone: "240,74,74".to_string(),
                     resources: 0.0,
                     rod: "item:16162".to_string(),
@@ -3497,6 +3820,9 @@ mod tests {
         assert!(text.contains("calculator-food-picker"));
         assert!(text.contains("calculator-buff-picker"));
         assert!(text.contains("Search foods by name or effect"));
+        assert!(text.contains("data-bind=\"mastery\""));
+        assert!(text.contains("Raw Prize Catch Rate"));
+        assert!(text.contains("fish-group-timeline"));
         assert!(text.contains("data-category-key=\"buff-category:1\""));
         assert!(text.contains("Meal"));
         assert!(text.contains("value=\"effect:8-piece-outfit-set-effect\" checked"));
@@ -3533,6 +3859,8 @@ mod tests {
         let body = to_bytes(response.into_body()).await.unwrap();
         let text = String::from_utf8(body.to_vec()).unwrap();
         assert!(text.contains("event:datastar-patch-signals"));
+        assert!(text.contains("event:datastar-patch-elements"));
+        assert!(text.contains("data:selector #calculator-fish-group-chart"));
         assert!(text.contains("\"zone_name\":\"Velia Beach\""));
         assert!(!text.contains("\"zone\":\"240,74,74\""));
         assert!(!text.contains("\"rod\":\"item:16162\""));
@@ -3765,6 +4093,8 @@ mod tests {
                     },
                 ],
                 lifeskill_levels: Vec::new(),
+                mastery_prize_curve: Vec::new(),
+                zone_group_rates: Vec::new(),
                 defaults: CalculatorSignals::default(),
                 fishing_levels: Vec::new(),
                 pets: CalculatorPetCatalog::default(),
@@ -3774,6 +4104,7 @@ mod tests {
             cdn_base_url: "http://127.0.0.1:4040".to_string(),
             lang: FishLang::En,
             zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
         };
         let signals = CalculatorSignals {
             outfit: vec![
