@@ -26,8 +26,10 @@ Current contents:
   - stages CDN-owned site and map assets under `data/cdn/public/`
   - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
 - `tools/scripts/push_bunnycdn.sh`
-- `tools/scripts/cleanup_cdn_server.sh`
+- `tools/scripts/run_db_server.sh`
+- `tools/scripts/run_api.sh`
 - `tools/scripts/run_cdn_server.sh`
+- `tools/scripts/run_site_server.sh`
 - `tools/scripts/serve_cdn.py`
 - `tools/scripts/rebuild_detailed_regions_layer.sh`
 - `tools/scripts/rebuild_detailed_regions_layer_from_pabr.sh`

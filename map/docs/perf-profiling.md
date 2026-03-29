@@ -103,8 +103,9 @@ The single-threaded-web baseline and future threading constraints are recorded i
 - It launches headless Chromium against the local `/map` page, waits for
   `FishyMapBridge` to report `ready` with a usable fish catalog, and writes a
   JSON result to `target/smoke/map-browser.json`.
-- Use it after `devenv up` to catch browser startup stalls or renderer startup
-  regressions before making performance claims from native harness results.
+- Use it after `just dev-build` and `devenv up` to catch browser startup stalls
+  or renderer startup regressions before making performance claims from native
+  harness results.
 
 ## Integrated browser profiling
 - The browser-integrated profiler measures the JS host, wasm bridge, and Bevy runtime together from the real `/map` page.

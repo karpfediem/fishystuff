@@ -16,37 +16,29 @@ development.
 
 Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/public/` locally and `https://cdn.fishystuff.fish/` in production. The site build no longer copies a runtime image tree into `.out`.
 
-For local map development, either run the pieces manually:
+For local site and map development, the repo-root flow is now explicit:
 
-- repo root: `just cdn-serve`
-- `site/`: `just watch`
-
-`just cdn-serve` now uses a guarded launcher that reclaims a stale local
-`serve_cdn.py` listener on `127.0.0.1:4040` instead of failing immediately on an
-address-in-use error. The root `devenv up` stack also runs the same cleanup
-before starting the CDN server and again when the managed CDN process exits.
-The same guarded pattern now applies to the local API server on
-`127.0.0.1:8080`.
-
-Or start the full local stack from the repo root:
-
+- `just dev-build`
 - `devenv up`
 
-The repo-level `devenv` stack now uses the native process graph with explicit
-readiness ordering:
+Then add only the rebuild watchers you actually need:
 
-- `site-tailwind -> site-build`
-- `map-build -> cdn-stage -> cdn`
-- `db -> api`
-- `site` waits for `site-build`, `cdn`, and `api`
+- `just dev-watch-site`
+  - rebuild `site/.out` when site sources change
+- `just dev-watch-map`
+  - rebuild the wasm runtime and refresh the staged CDN payload
+- `just dev-watch-cdn`
+  - restage CDN-owned browser host assets from `site/assets/map`
+- `just dev-watch-api`
+  - restart the API on backend changes; use it with `just dev-up-no-api`
 
-That means the local site server only starts once the generated site output
-exists and the local API/CDN endpoints referenced by `.out/runtime-config.js`
-are already reachable.
+`devenv up` now serves the current outputs instead of owning the build graph.
+If `site/.out` or `data/cdn/public/` is stale or missing, that state is visible
+directly instead of being hidden behind nested watchers.
 
 ## Browser smoke check
 
-Once the local stack is up, run:
+Once the local stack is serving current outputs, run:
 
 - `tools/scripts/map-browser-smoke.sh`
 

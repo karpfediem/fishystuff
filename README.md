@@ -21,26 +21,35 @@ devenv shell
 If you use `direnv`, run `direnv allow` once at the repo root and the environment
 will activate automatically on entry.
 
-To run the local development stack managed by `devenv` processes:
+To run the local development servers:
 
 ```bash
+just dev-build
 devenv up
 ```
 
-The managed stack now starts the API directly and reclaims stale local API/CDN
-listeners before rebinding, so repeated `devenv up` runs are less likely to get
-stuck on old background processes. It also uses the native `devenv` process
-graph with explicit readiness checks:
+`devenv up` now supervises only the long-lived local servers:
 
 - `db` must become ready before `api`
-- `map-build` must become ready before `cdn-stage`, which must become ready
-  before `cdn`
-- `site-tailwind` must become ready before `site-build`
-- `site` now waits for `site-build`, `cdn`, and `api`
+- `cdn` serves `data/cdn/public/`
+- `site` serves `site/.out/`
 
-The site build now emits `.out/runtime-config.js` from the current environment.
-That file is the single local-development source of truth for the site/API/CDN
-base URLs consumed by the browser host and Bevy runtime.
+Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
+
+- `just dev-build`
+  - one-shot build of the map runtime, staged CDN payload, and site output
+- `just dev-watch-map`
+  - rebuild the wasm map runtime and restage CDN assets on map/lib changes
+- `just dev-watch-cdn`
+  - restage CDN-owned browser host assets on `site/assets/map` changes
+- `just dev-watch-site`
+  - rebuild `site/.out` on site source changes
+- `just dev-watch-api`
+  - restart the API on source changes; use it with `just dev-up-no-api`
+
+The site build still emits `.out/runtime-config.js` from the current
+environment. That file is the single local-development source of truth for the
+site/API/CDN base URLs consumed by the browser host and Bevy runtime.
 
 The API uses a strict explicit CORS allowlist. Production origins are declared
 in [api/config.toml](/home/carp/code/fishystuff/api/config.toml), and `devenv`

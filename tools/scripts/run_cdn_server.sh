@@ -2,18 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-source "$ROOT_DIR/tools/scripts/devenv_process_lib.sh"
 
 CDN_ROOT="${CDN_ROOT:-$ROOT_DIR/data/cdn/public}"
 CDN_HOST="${CDN_HOST:-127.0.0.1}"
 CDN_PORT="${CDN_PORT:-4040}"
 
-"$ROOT_DIR/tools/scripts/cleanup_cdn_server.sh"
-devenv_notify_status "starting CDN server on ${CDN_HOST}:${CDN_PORT}"
-devenv_run_with_http_ready \
-  "http://${CDN_HOST}:${CDN_PORT}/map/runtime-manifest.json" \
-  "CDN server ready on ${CDN_HOST}:${CDN_PORT}" \
-  python "$ROOT_DIR/tools/scripts/serve_cdn.py" \
-    --root "$CDN_ROOT" \
-    --host "$CDN_HOST" \
-    --port "$CDN_PORT"
+exec python "$ROOT_DIR/tools/scripts/serve_cdn.py" \
+  --root "$CDN_ROOT" \
+  --host "$CDN_HOST" \
+  --port "$CDN_PORT"

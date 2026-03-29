@@ -57,6 +57,79 @@ cdn-sync-map:
 secrets-check profile="api":
   p='{{profile}}'; p="${p#profile=}"; secretspec check --profile "$p"
 
-# Start the full local dev stack through devenv process orchestration
+# Build the current map runtime and staged CDN payload once
+dev-build-map:
+  ./tools/scripts/build_map.sh
+  ./tools/scripts/stage_cdn_assets.sh
+
+# Build the current site output once
+dev-build-site:
+  cd site && just build-release
+
+# Build the current local dev outputs once
+dev-build:
+  just dev-build-map
+  just dev-build-site
+
+# Watch the API in a dedicated terminal. Use with `just dev-up-no-api`.
+dev-watch-api:
+  watchexec -r \
+    -w api \
+    -w lib \
+    -w Cargo.toml \
+    -w Cargo.lock \
+    -w secretspec.toml \
+    -w tools/scripts/run_api.sh \
+    --exts rs,toml \
+    -- ./tools/scripts/run_api.sh
+
+# Watch the wasm map runtime and refresh staged CDN assets
+dev-watch-map:
+  watchexec -r --postpone \
+    -w map/fishystuff_ui_bevy \
+    -w lib/fishystuff_api \
+    -w lib/fishystuff_client \
+    -w lib/fishystuff_core \
+    -w Cargo.toml \
+    -w Cargo.lock \
+    -w tools/scripts/build_map.sh \
+    --exts rs,toml,css \
+    -- just dev-build-map
+
+# Watch CDN-owned browser host assets and restage them
+dev-watch-cdn:
+  watchexec -r --postpone \
+    -w site/assets/map \
+    -w tools/scripts/stage_cdn_assets.sh \
+    -w tools/scripts/build_item_icons_from_source.mjs \
+    --exts js,mjs,css \
+    -- just cdn-stage
+
+# Watch site inputs and rebuild `.out`
+dev-watch-site:
+  watchexec -r --postpone \
+    -w site/content \
+    -w site/layouts \
+    -w site/assets \
+    -w site/scripts \
+    -w site/tailwind.input.css \
+    -w site/zine.ziggy \
+    --ignore site/assets/js/datastar.js \
+    --ignore site/assets/img/icons.svg \
+    --ignore site/assets/img/guides/*-320.webp \
+    --ignore site/assets/img/guides/*-640.webp \
+    --ignore site/assets/img/favicon-16x16.png \
+    --ignore site/assets/img/favicon-32x32.png \
+    --ignore site/assets/img/logo-32.png \
+    --ignore site/assets/img/logo-64.png \
+    --ignore site/assets/css/fonts/**/*.site.woff2 \
+    --ignore site/assets/css/site.css \
+    -- just dev-build-site
+
+# Start the full local dev server stack
 dev-up:
   devenv up
+
+# Start the local dev servers except the API, for use with `just dev-watch-api`
+dev-up-no-api:
+  devenv up db cdn site

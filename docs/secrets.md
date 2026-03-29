@@ -49,5 +49,6 @@ secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
 secretspec run --profile bot -- cargo run --manifest-path bot/Cargo.toml
 ```
 
-`devenv up` pins SecretSpec to the repo's `api` profile for the local API
-process, so it does not depend on your personal SecretSpec default profile.
+`devenv up` and `just dev-watch-api` pin SecretSpec to the repo's `api` profile
+for the local API process, so they do not depend on your personal SecretSpec
+default profile.
