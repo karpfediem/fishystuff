@@ -28,23 +28,51 @@ impl DoltMySqlStore {
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogResponse> {
         let cache_key = Self::calculator_catalog_cache_key(lang, ref_id);
-        if let Ok(cache) = self.calculator_catalog_cache.lock() {
-            if let Some(cached) = cache.get(&cache_key) {
-                return Ok(cached.clone());
+        loop {
+            if let Ok(cache) = self.calculator_catalog_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
             }
+
+            let (inflight_lock, inflight_cvar) = &*self.calculator_catalog_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("calculator catalog inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("calculator catalog inflight wait poisoned");
+            drop(inflight);
         }
 
-        let catalog = CalculatorCatalogResponse {
-            items: self.query_calculator_items(lang, ref_id)?,
-            lifeskill_levels: build_calculator_lifeskill_levels(),
-            mastery_prize_curve: self.query_calculator_mastery_prize_curve(ref_id)?,
-            zone_group_rates: self.query_calculator_zone_group_rates(ref_id)?,
-            fishing_levels: build_calculator_fishing_levels(lang),
-            session_units: build_calculator_session_units(lang),
-            session_presets: build_calculator_session_presets(lang),
-            pets: self.query_calculator_pet_catalog(lang, ref_id)?,
-            defaults: build_calculator_default_signals(),
-        };
+        let result: AppResult<CalculatorCatalogResponse> = (|| {
+            Ok(CalculatorCatalogResponse {
+                items: self.query_calculator_items(lang, ref_id)?,
+                lifeskill_levels: build_calculator_lifeskill_levels(),
+                mastery_prize_curve: self.query_calculator_mastery_prize_curve(ref_id)?,
+                zone_group_rates: self.query_calculator_zone_group_rates(ref_id)?,
+                fishing_levels: build_calculator_fishing_levels(lang),
+                session_units: build_calculator_session_units(lang),
+                session_presets: build_calculator_session_presets(lang),
+                pets: self.query_calculator_pet_catalog(lang, ref_id)?,
+                defaults: build_calculator_default_signals(),
+            })
+        })();
+
+        let (inflight_lock, inflight_cvar) = &*self.calculator_catalog_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("calculator catalog inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let catalog = result?;
 
         if let Ok(mut cache) = self.calculator_catalog_cache.lock() {
             cache.insert(cache_key, catalog.clone());

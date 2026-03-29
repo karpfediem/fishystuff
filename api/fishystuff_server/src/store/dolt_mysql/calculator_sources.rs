@@ -68,6 +68,7 @@ struct RawEnchantSkillCandidateRow {
     skill_no: String,
 }
 
+#[derive(Debug, Clone)]
 pub(super) struct CalculatorCatalogSourceData {
     pub(super) legacy_rows: Vec<CalculatorItemDbRow>,
     pub(super) item_source_metadata: HashMap<i32, CalculatorItemSourceMetadata>,
@@ -2114,48 +2115,92 @@ impl DoltMySqlStore {
         &self,
         ref_id: Option<&str>,
     ) -> AppResult<CalculatorCatalogSourceData> {
-        let all_legacy_rows = self.query_legacy_calculator_item_rows(ref_id, &[], &[])?;
-        let all_item_ids = all_legacy_rows
-            .iter()
-            .filter_map(|row| row.10)
-            .collect::<Vec<_>>();
-        let item_source_metadata =
-            self.query_calculator_item_table_metadata(ref_id, &all_item_ids)?;
-        let mut source_backed_rows = self.query_consumable_source_backed_item_rows(ref_id)?;
-        source_backed_rows.extend(self.query_source_owned_enchant_source_backed_item_rows(ref_id)?);
+        let cache_key = ref_id.unwrap_or("head").to_string();
+        loop {
+            if let Ok(cache) = self.calculator_source_data_cache.lock() {
+                if let Some(cached) = cache.get(&cache_key) {
+                    return Ok(cached.clone());
+                }
+            }
 
-        let excluded_item_ids = source_backed_rows
-            .iter()
-            .filter_map(|row| (row.source_kind == "item").then_some(row.item_id).flatten())
-            .collect::<Vec<_>>();
-        let excluded_item_ids = excluded_item_ids
-            .into_iter()
-            .collect::<std::collections::HashSet<_>>();
-        let has_source_lightstones = source_backed_rows
-            .iter()
-            .any(|row| row.source_kind == "lightstone_set");
-        let legacy_rows = all_legacy_rows
-            .into_iter()
-            .filter(|row| {
-                let keep_item = row
-                    .10
-                    .map(|item_id| !excluded_item_ids.contains(&item_id))
-                    .unwrap_or(true);
-                let keep_effect = match normalize_optional_string(row.1.clone()) {
-                    Some(item_type) if has_source_lightstones && item_type == "lightstone_set" => {
-                        false
-                    }
-                    _ => true,
-                };
-                keep_item && keep_effect
+            let (inflight_lock, inflight_cvar) = &*self.calculator_source_data_inflight;
+            let mut inflight = inflight_lock
+                .lock()
+                .expect("calculator source data inflight lock poisoned");
+            if !inflight.contains(&cache_key) {
+                inflight.insert(cache_key.clone());
+                drop(inflight);
+                break;
+            }
+            inflight = inflight_cvar
+                .wait(inflight)
+                .expect("calculator source data inflight wait poisoned");
+            drop(inflight);
+        }
+
+        let result: AppResult<CalculatorCatalogSourceData> = (|| {
+            let all_legacy_rows = self.query_legacy_calculator_item_rows(ref_id, &[], &[])?;
+            let all_item_ids = all_legacy_rows
+                .iter()
+                .filter_map(|row| row.10)
+                .collect::<Vec<_>>();
+            let item_source_metadata =
+                self.query_calculator_item_table_metadata(ref_id, &all_item_ids)?;
+            let mut source_backed_rows = self.query_consumable_source_backed_item_rows(ref_id)?;
+            source_backed_rows
+                .extend(self.query_source_owned_enchant_source_backed_item_rows(ref_id)?);
+
+            let excluded_item_ids = source_backed_rows
+                .iter()
+                .filter_map(|row| (row.source_kind == "item").then_some(row.item_id).flatten())
+                .collect::<Vec<_>>();
+            let excluded_item_ids = excluded_item_ids
+                .into_iter()
+                .collect::<std::collections::HashSet<_>>();
+            let has_source_lightstones = source_backed_rows
+                .iter()
+                .any(|row| row.source_kind == "lightstone_set");
+            let legacy_rows = all_legacy_rows
+                .into_iter()
+                .filter(|row| {
+                    let keep_item = row
+                        .10
+                        .map(|item_id| !excluded_item_ids.contains(&item_id))
+                        .unwrap_or(true);
+                    let keep_effect = match normalize_optional_string(row.1.clone()) {
+                        Some(item_type)
+                            if has_source_lightstones && item_type == "lightstone_set" =>
+                        {
+                            false
+                        }
+                        _ => true,
+                    };
+                    keep_item && keep_effect
+                })
+                .collect::<Vec<_>>();
+
+            Ok(CalculatorCatalogSourceData {
+                legacy_rows,
+                item_source_metadata,
+                source_backed_rows,
             })
-            .collect::<Vec<_>>();
+        })();
 
-        Ok(CalculatorCatalogSourceData {
-            legacy_rows,
-            item_source_metadata,
-            source_backed_rows,
-        })
+        let (inflight_lock, inflight_cvar) = &*self.calculator_source_data_inflight;
+        let mut inflight = inflight_lock
+            .lock()
+            .expect("calculator source data inflight lock poisoned");
+        inflight.remove(&cache_key);
+        inflight_cvar.notify_all();
+        drop(inflight);
+
+        let source_data = result?;
+
+        if let Ok(mut cache) = self.calculator_source_data_cache.lock() {
+            cache.insert(cache_key, source_data.clone());
+        }
+
+        Ok(source_data)
     }
 }
 

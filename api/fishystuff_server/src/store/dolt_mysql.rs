@@ -13,8 +13,8 @@ mod zone_profile_v2;
 #[cfg(test)]
 mod layers;
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -48,6 +48,7 @@ use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
 use crate::store::queries;
 use crate::store::{validate_dolt_ref, FishLang, Store};
+use calculator_sources::CalculatorCatalogSourceData;
 use catalog::{
     encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_grade_from_db,
     fish_is_dried, merge_fish_catalog_row, parse_positive_i64,
@@ -86,6 +87,9 @@ pub struct DoltMySqlStore {
     pool: Pool,
     defaults: MetaDefaults,
     calculator_catalog_cache: Arc<Mutex<HashMap<String, CalculatorCatalogResponse>>>,
+    calculator_catalog_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    calculator_source_data_cache: Arc<Mutex<HashMap<String, CalculatorCatalogSourceData>>>,
+    calculator_source_data_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
 }
 
 #[derive(Debug, Clone)]
@@ -251,6 +255,9 @@ impl DoltMySqlStore {
             pool,
             defaults,
             calculator_catalog_cache: Arc::new(Mutex::new(HashMap::new())),
+            calculator_catalog_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            calculator_source_data_cache: Arc::new(Mutex::new(HashMap::new())),
+            calculator_source_data_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
         };
         Ok(store)
     }
