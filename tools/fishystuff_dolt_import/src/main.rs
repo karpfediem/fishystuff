@@ -795,7 +795,7 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
         )?),
         None => None,
     };
-    run_dolt_table_import_or_sql_server(
+    run_dolt_sql_table_import_or_remote(
         &dolt_repo,
         "community_zone_fish_support",
         &outputs.community_csv,
@@ -1316,12 +1316,12 @@ fn run_flockfish_subgroup_import(command: FlockfishSubgroupImportCommand) -> Res
         &outputs.zone_group_slots_csv,
     )?;
 
-    run_dolt_table_import_or_sql_server(
+    run_dolt_sql_table_import_or_remote(
         &dolt_repo,
         "item_main_group_table",
         &outputs.main_group_csv,
     )?;
-    run_dolt_table_import_or_sql_server(
+    run_dolt_sql_table_import_or_remote(
         &dolt_repo,
         "item_sub_group_table",
         &outputs.sub_group_csv,
@@ -1423,7 +1423,21 @@ fn load_flockfish_main_group_rows(workbook_xlsx: &Path) -> Result<Vec<Vec<String
 }
 
 fn load_flockfish_sub_group_rows(workbook_xlsx: &Path) -> Result<Vec<Vec<String>>> {
-    load_flockfish_sheet_rows(workbook_xlsx, "Subgroup", &SUB_GROUP_HEADERS)
+    load_flockfish_sheet_rows(workbook_xlsx, "Subgroup", &SUB_GROUP_HEADERS).map(|rows| {
+        rows.into_iter()
+            .filter(|row| !is_removed_flockfish_subgroup_outlier(row))
+            .collect()
+    })
+}
+
+fn is_removed_flockfish_subgroup_outlier(row: &[String]) -> bool {
+    matches!(
+        (
+            row.get(SUB_GROUP_KEY_COL).map(String::as_str),
+            row.get(1).map(String::as_str),
+        ),
+        (Some("10956"), Some("43871"))
+    )
 }
 
 fn load_flockfish_sheet_rows(
@@ -2875,6 +2889,26 @@ fn run_dolt_sql_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> 
     Ok(())
 }
 
+fn run_dolt_sql_table_import_or_remote(
+    repo_path: &Path,
+    table: &str,
+    csv_path: &Path,
+) -> Result<()> {
+    match run_dolt_sql_table_import(repo_path, table, csv_path) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let err_text = err.to_string();
+            if !err_text.contains("database is read only") {
+                return Err(err);
+            }
+            eprintln!(
+                "local dolt sql import for {table} is read-only; falling back to sql-server import"
+            );
+            run_dolt_remote_sql_table_import(table, csv_path)
+        }
+    }
+}
+
 fn run_dolt_remote_sql_table_import(table: &str, csv_path: &Path) -> Result<()> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
@@ -3453,5 +3487,26 @@ mod tests {
             normalize_flockfish_numeric_literal("getLifeLevel(1)>34;"),
             "getLifeLevel(1)>34;"
         );
+    }
+
+    #[test]
+    fn flockfish_subgroup_outlier_filter_drops_velia_bottle() {
+        let row = vec![
+            "10956".to_string(),
+            "43871".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+        ];
+        assert!(is_removed_flockfish_subgroup_outlier(&row));
+
+        let keep = vec![
+            "10956".to_string(),
+            "54031".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+        ];
+        assert!(!is_removed_flockfish_subgroup_outlier(&keep));
     }
 }
