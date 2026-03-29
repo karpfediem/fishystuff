@@ -166,6 +166,7 @@ struct LootSpeciesRow {
     group_label: &'static str,
     label: String,
     icon_url: Option<String>,
+    icon_grade_tone: String,
     fill_color: &'static str,
     stroke_color: &'static str,
     text_color: &'static str,
@@ -174,14 +175,12 @@ struct LootSpeciesRow {
     expected_profit_raw: f64,
     expected_count_text: String,
     expected_profit_text: String,
+    silver_share_text: String,
     rate_text: String,
     rate_source_kind: String,
     rate_tooltip: String,
-    #[serde(skip_serializing)]
     drop_rate_text: String,
-    #[serde(skip_serializing)]
     drop_rate_source_kind: String,
-    #[serde(skip_serializing)]
     drop_rate_tooltip: String,
     presence_text: Option<String>,
     evidence_text: String,
@@ -2048,6 +2047,17 @@ fn fish_grade_rank(grade: &str) -> Option<u8> {
     }
 }
 
+fn loot_icon_grade_tone(grade: Option<&str>) -> &'static str {
+    match grade {
+        Some("Prize") => "prize",
+        Some("Rare") => "yellow",
+        Some("HighQuality") => "blue",
+        Some("General") => "green",
+        Some("Trash") => "white",
+        _ => "neutral",
+    }
+}
+
 fn discard_grade_enabled(signals: &CalculatorSignals, grade: Option<&str>) -> bool {
     let Some(threshold) = discard_grade_threshold(&signals.discard_grade) else {
         return false;
@@ -2305,6 +2315,7 @@ fn derive_loot_chart(
                 .icon
                 .as_deref()
                 .map(|icon| absolute_public_asset_url(data.cdn_base_url.as_str(), icon)),
+            icon_grade_tone: loot_icon_grade_tone(entry.grade.as_deref()).to_string(),
             fill_color: group_row.fill_color,
             stroke_color: group_row.stroke_color,
             text_color: group_row.text_color,
@@ -2313,6 +2324,7 @@ fn derive_loot_chart(
             expected_profit_raw,
             expected_count_text: trim_float(expected_count_raw),
             expected_profit_text: fmt_silver(expected_profit_raw),
+            silver_share_text: String::new(),
             rate_text: drop_rate_text.clone(),
             rate_source_kind: drop_rate_source_kind.clone(),
             rate_tooltip: drop_rate_tooltip.clone(),
@@ -2338,12 +2350,13 @@ fn derive_loot_chart(
     let total_profit_raw = group_profit_by_slot.values().sum::<f64>();
 
     for species_row in &mut species_rows {
+        let silver_share = if total_profit_raw > 0.0 {
+            (species_row.expected_profit_raw / total_profit_raw) * 100.0
+        } else {
+            0.0
+        };
+        species_row.silver_share_text = percent_text(silver_share);
         if signals.show_silver_amounts {
-            let silver_share = if total_profit_raw > 0.0 {
-                (species_row.expected_profit_raw / total_profit_raw) * 100.0
-            } else {
-                0.0
-            };
             species_row.rate_text = percent_text(silver_share);
             species_row.rate_source_kind = "derived".to_string();
             species_row.rate_tooltip = format!(
