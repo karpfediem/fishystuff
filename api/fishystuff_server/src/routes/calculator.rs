@@ -1600,7 +1600,7 @@ fn derive_fish_group_chart(
                 fill_color: "#fda4af",
                 stroke_color: "#f87171",
                 text_color: "#450a0a",
-                connector_color: "rgb(248 113 113 / 0.32)",
+                connector_color: "rgb(248 113 113 / 0.48)",
                 bonus_text: format!(
                     "Mastery {} → {}% raw prize",
                     trim_float(signals.mastery),
@@ -1615,7 +1615,7 @@ fn derive_fish_group_chart(
                 fill_color: "#fde68a",
                 stroke_color: "#facc15",
                 text_color: "#422006",
-                connector_color: "rgb(250 204 21 / 0.32)",
+                connector_color: "rgb(250 204 21 / 0.48)",
                 bonus_text: if rare_bonus > 0.0 {
                     format!("+{}% Rare", trim_float(rare_bonus * 100.0))
                 } else {
@@ -1630,7 +1630,7 @@ fn derive_fish_group_chart(
                 fill_color: "#93c5fd",
                 stroke_color: "#60a5fa",
                 text_color: "#172554",
-                connector_color: "rgb(96 165 250 / 0.32)",
+                connector_color: "rgb(96 165 250 / 0.48)",
                 bonus_text: if high_quality_bonus > 0.0 {
                     format!("+{}% HQ", trim_float(high_quality_bonus * 100.0))
                 } else {
@@ -1645,7 +1645,7 @@ fn derive_fish_group_chart(
                 fill_color: "var(--color-base-100)",
                 stroke_color: "color-mix(in srgb, var(--color-base-content) 16%, transparent)",
                 text_color: "var(--color-base-content)",
-                connector_color: "color-mix(in srgb, var(--color-base-content) 14%, transparent)",
+                connector_color: "color-mix(in srgb, var(--color-base-content) 24%, transparent)",
                 bonus_text: "No bonus".to_string(),
                 base_share_pct: general_base * 100.0,
                 weight_pct: general_weight * 100.0,
@@ -1656,7 +1656,7 @@ fn derive_fish_group_chart(
                 fill_color: "#86efac",
                 stroke_color: "#4ade80",
                 text_color: "#052e16",
-                connector_color: "rgb(74 222 128 / 0.32)",
+                connector_color: "rgb(74 222 128 / 0.48)",
                 bonus_text: "No bonus".to_string(),
                 base_share_pct: treasure_base * 100.0,
                 weight_pct: treasure_weight * 100.0,
