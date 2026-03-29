@@ -101,6 +101,47 @@ fn parse_calculator_effect_line(values: &mut CalculatorItemEffectValues, line: &
     if line.is_empty() {
         return;
     }
+    if line.contains("AUTO_FISHING_REDUCE_TIME_DOWN_2(") {
+        add_effect_value(
+            &mut values.afr,
+            extract_first_number_after(line, "AUTO_FISHING_REDUCE_TIME_DOWN_2(")
+                .map(|value| value.abs() / 100.0),
+        );
+    }
+    if line.contains("CHANCE_RARE_SPECIES_FISH_INCRE(") {
+        add_effect_value(
+            &mut values.bonus_rare,
+            extract_first_number_after(line, "CHANCE_RARE_SPECIES_FISH_INCRE(")
+                .map(|value| value.abs() / 100.0),
+        );
+    }
+    if line.contains("CHANCE_LARGE_SPECIES_FISH_INCRE(") {
+        add_effect_value(
+            &mut values.bonus_big,
+            extract_first_number_after(line, "CHANCE_LARGE_SPECIES_FISH_INCRE(")
+                .map(|value| value.abs() / 100.0),
+        );
+    }
+    if line.contains("DUR_WEAPONS_CON_DOWN(") {
+        add_effect_value(
+            &mut values.item_drr,
+            extract_first_number_after(line, "DUR_WEAPONS_CON_DOWN(")
+                .map(|value| value.abs() / 100.0),
+        );
+    }
+    if line.contains("FISHING_EXP_POINT_ADD(") {
+        add_effect_value(
+            &mut values.exp_fish,
+            extract_first_number_after(line, "FISHING_EXP_POINT_ADD(")
+                .map(|value| value.abs() / 100.0),
+        );
+    }
+    if line.contains("LIFE_EXP_2(") {
+        add_effect_value(
+            &mut values.exp_fish,
+            extract_first_number_after(line, "LIFE_EXP_2(").map(|value| value.abs() / 100.0),
+        );
+    }
     if line.contains("자동 낚시") {
         add_effect_value(
             &mut values.afr,
@@ -261,6 +302,27 @@ mod tests {
             CalculatorItemEffectValues {
                 afr: Some(0.10),
                 exp_fish: Some(0.25),
+                ..CalculatorItemEffectValues::default()
+            }
+        );
+    }
+
+    #[test]
+    fn calculator_effect_text_parses_source_macros() {
+        let mut values = CalculatorItemEffectValues::default();
+        parse_calculator_effect_text(
+            &mut values,
+            "AUTO_FISHING_REDUCE_TIME_DOWN_2(10)\nCHANCE_RARE_SPECIES_FISH_INCRE(5)\nCHANCE_LARGE_SPECIES_FISH_INCRE(11)\nDUR_WEAPONS_CON_DOWN(10)\nFISHING_EXP_POINT_ADD(10)\nLIFE_EXP_2(20)",
+        );
+
+        assert_eq!(
+            values,
+            CalculatorItemEffectValues {
+                afr: Some(0.10),
+                bonus_rare: Some(0.05),
+                bonus_big: Some(0.11),
+                item_drr: Some(0.10),
+                exp_fish: Some(0.30),
                 ..CalculatorItemEffectValues::default()
             }
         );

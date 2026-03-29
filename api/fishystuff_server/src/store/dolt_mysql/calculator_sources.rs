@@ -252,6 +252,18 @@ fn max_opt_f32(left: Option<f32>, right: Option<f32>) -> Option<f32> {
     }
 }
 
+fn merge_unique_effect_texts(left: Option<String>, right: Option<String>) -> Option<String> {
+    let mut lines = Vec::<String>::new();
+    for text in [left, right].into_iter().flatten() {
+        for line in normalized_effect_lines(&text) {
+            if !lines.iter().any(|existing| existing == &line) {
+                lines.push(line);
+            }
+        }
+    }
+    (!lines.is_empty()).then(|| lines.join("\n"))
+}
+
 fn select_consumable_category_metadata(
     primary_skill_id: Option<&str>,
     fallback_skill_id: Option<&str>,
@@ -328,10 +340,10 @@ fn merge_skill_effect_bundle(
     target: &mut CalculatorEnchantEffectEntryRow,
     bundle: &CalculatorSkillEffectBundle,
 ) {
-    target.effect_description_ko = target
-        .effect_description_ko
-        .clone()
-        .or_else(|| bundle.effect_description_ko.clone());
+    target.effect_description_ko = merge_unique_effect_texts(
+        target.effect_description_ko.clone(),
+        bundle.effect_description_ko.clone(),
+    );
     target.afr = max_opt_f32(target.afr, bundle.values.afr);
     target.bonus_rare = max_opt_f32(target.bonus_rare, bundle.values.bonus_rare);
     target.bonus_big = max_opt_f32(target.bonus_big, bundle.values.bonus_big);
@@ -1240,6 +1252,72 @@ impl DoltMySqlStore {
             .collect())
     }
 
+    fn query_raw_enchant_effect_text_map(
+        &self,
+        ref_id: Option<&str>,
+        item_names: &[String],
+    ) -> AppResult<HashMap<(String, i32), String>> {
+        if item_names.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let as_of = if let Some(ref_id) = ref_id {
+            validate_dolt_ref(ref_id)?;
+            format!(" AS OF '{}'", ref_id.replace('\'', "''"))
+        } else {
+            String::new()
+        };
+        let quote_list = |values: &[String]| {
+            values
+                .iter()
+                .map(|value| format!("'{}'", value.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let name_list = quote_list(item_names);
+
+        let mut conn = self.pool.get_conn().map_err(db_unavailable)?;
+        let mut effect_text_by_key = HashMap::<(String, i32), String>::new();
+        for table_name in ["enchant_equipment", "enchant_lifeequipment", "enchant_cash"] {
+            let query = format!(
+                "SELECT \
+                    NULLIF(TRIM(`ItemName`), '') AS item_name_ko, \
+                    CAST(TRIM(COALESCE(`Enchant`, '0')) AS SIGNED) AS enchant_level, \
+                    NULLIF(TRIM(COALESCE(`PatternDescription`, '')), '') AS pattern_description, \
+                    NULLIF(TRIM(COALESCE(`Description`, '')), '') AS description \
+                 FROM {table_name}{as_of} \
+                 WHERE NULLIF(TRIM(`ItemName`), '') IN ({name_list})"
+            );
+            let rows: Vec<(Option<String>, i64, Option<String>, Option<String>)> =
+                match conn.query(query) {
+                    Ok(rows) => rows,
+                    Err(err) if is_missing_table(&err, table_name) => Vec::new(),
+                    Err(err) => return Err(db_unavailable(err)),
+                };
+            for (item_name_ko, enchant_level, pattern_description, description) in rows {
+                let Some(item_name_ko) = normalize_optional_string(item_name_ko) else {
+                    continue;
+                };
+                let Ok(enchant_level) = i32::try_from(enchant_level) else {
+                    continue;
+                };
+                let effect_text = merge_unique_effect_texts(
+                    normalize_optional_string(pattern_description),
+                    normalize_optional_string(description),
+                );
+                let Some(effect_text) = effect_text else {
+                    continue;
+                };
+                let key = (item_name_ko, enchant_level);
+                let merged =
+                    merge_unique_effect_texts(effect_text_by_key.remove(&key), Some(effect_text))
+                        .expect("merged raw enchant effect text should exist");
+                effect_text_by_key.insert(key, merged);
+            }
+        }
+
+        Ok(effect_text_by_key)
+    }
+
     fn query_raw_enchant_skill_only_candidates(
         &self,
         ref_id: Option<&str>,
@@ -1866,10 +1944,23 @@ impl DoltMySqlStore {
                 .map(|row| row.item_name_ko.clone())
                 .collect::<Vec<_>>(),
         )?;
+        let raw_effect_text_by_item = self.query_raw_enchant_effect_text_map(
+            ref_id,
+            &chosen_effects
+                .iter()
+                .map(|row| row.item_name_ko.clone())
+                .collect::<Vec<_>>(),
+        )?;
         for effect_row in &mut chosen_effects {
             effect_row.skill_no = skill_no_by_item
                 .get(&(effect_row.item_name_ko.clone(), effect_row.enchant_level))
                 .cloned();
+            effect_row.effect_description_ko = merge_unique_effect_texts(
+                effect_row.effect_description_ko.clone(),
+                raw_effect_text_by_item
+                    .get(&(effect_row.item_name_ko.clone(), effect_row.enchant_level))
+                    .cloned(),
+            );
         }
 
         let skill_nos = chosen_effects
@@ -2075,8 +2166,9 @@ mod tests {
     use super::{
         calculator_item_type_from_equip_type, fallback_consumable_family_key,
         manually_maintained_source_effect_values, manually_maintained_source_fish_multiplier,
-        parse_lightstone_set_name_ko, select_consumable_category_metadata,
-        select_consumable_effect_texts, CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
+        merge_unique_effect_texts, parse_lightstone_set_name_ko,
+        select_consumable_category_metadata, select_consumable_effect_texts,
+        CalculatorBuffSourceMetadata, CalculatorBuffTextRow,
     };
 
     #[test]
@@ -2278,5 +2370,23 @@ mod tests {
         );
         assert_eq!(calculator_item_type_from_equip_type(Some("15")), None);
         assert_eq!(calculator_item_type_from_equip_type(None), None);
+    }
+
+    #[test]
+    fn merge_unique_effect_texts_combines_raw_and_skill_lines_without_duplicates() {
+        let merged = merge_unique_effect_texts(
+            Some(
+                "AUTO_FISHING_REDUCE_TIME_DOWN_2(10)\nCHANCE_RARE_SPECIES_FISH_INCRE(5)"
+                    .to_string(),
+            ),
+            Some("희귀 확률 증가(5%)\nCHANCE_RARE_SPECIES_FISH_INCRE(5)".to_string()),
+        );
+
+        assert_eq!(
+            merged.as_deref(),
+            Some(
+                "AUTO_FISHING_REDUCE_TIME_DOWN_2(10)\nCHANCE_RARE_SPECIES_FISH_INCRE(5)\n희귀 확률 증가(5%)"
+            )
+        );
     }
 }
