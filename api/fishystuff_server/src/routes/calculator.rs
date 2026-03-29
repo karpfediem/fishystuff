@@ -102,6 +102,7 @@ struct CalculatorDerivedSignals {
     trade_sale_multiplier_text: String,
     fish_group_distribution_chart: DistributionChartSignal,
     fish_group_silver_distribution_chart: DistributionChartSignal,
+    target_fish_distribution_chart: DistributionChartSignal,
     loot_sankey_chart: LootSankeySignal,
     target_fish_selected_label: String,
     target_fish_expected_count: String,
@@ -219,11 +220,21 @@ struct LootSankeySignal {
 #[derive(Debug, Clone)]
 struct TargetFishSummary {
     selected_label: String,
+    target_amount_text: String,
     expected_count_raw: f64,
     expected_count_text: String,
     per_hour_text: String,
     time_to_target_text: String,
+    probability_at_least_text: String,
+    session_distribution: Vec<TargetFishDistributionBucket>,
     status_text: String,
+}
+
+#[derive(Debug, Clone)]
+struct TargetFishDistributionBucket {
+    label: String,
+    probability_pct: f64,
+    probability_text: String,
 }
 
 #[derive(Debug)]
@@ -424,6 +435,16 @@ pub async fn post_calculator_datastar_eval(
         derived.loot_total_catches_raw,
         derived.fish_multiplier_raw,
     );
+    let target_fish_summary = derive_target_fish_summary(
+        &normalized_signals,
+        &data,
+        &fish_group_chart,
+        derived.loot_total_catches_raw,
+        timespan_seconds(
+            normalized_signals.timespan_amount,
+            &normalized_signals.timespan_unit,
+        ),
+    );
     let target_fishes = target_fish_options(&data);
     let events = vec![
         calculator_signals_event(
@@ -445,6 +466,7 @@ pub async fn post_calculator_datastar_eval(
             &data,
             &normalized_signals,
             &target_fishes,
+            &target_fish_summary,
         ))
         .selector("#calculator-target-fish-panel")
         .mode(ElementPatchMode::Outer)
@@ -1709,6 +1731,9 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let fish_group_silver_distribution_chart = DistributionChartSignal {
         segments: group_silver_distribution_segments(&loot_chart.rows),
     };
+    let target_fish_distribution_chart = DistributionChartSignal {
+        segments: target_fish_distribution_segments(&target_fish_summary),
+    };
     let loot_sankey_chart = LootSankeySignal {
         show_silver_amounts: loot_chart.show_silver_amounts,
         rows: filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows),
@@ -1772,6 +1797,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         trade_sale_multiplier_text: loot_chart.trade_sale_multiplier_text.clone(),
         fish_group_distribution_chart,
         fish_group_silver_distribution_chart,
+        target_fish_distribution_chart,
         loot_sankey_chart,
         target_fish_selected_label: target_fish_summary.selected_label,
         target_fish_expected_count: target_fish_summary.expected_count_text,
@@ -2542,13 +2568,17 @@ fn derive_target_fish_summary(
     timespan_seconds: f64,
 ) -> TargetFishSummary {
     let selected_label = signals.target_fish.trim().to_string();
+    let target_amount = signals.target_fish_amount.max(1.0).round() as u32;
     if selected_label.is_empty() {
         return TargetFishSummary {
             selected_label: String::new(),
+            target_amount_text: trim_float(f64::from(target_amount)),
             expected_count_raw: 0.0,
             expected_count_text: "—".to_string(),
             per_hour_text: "—".to_string(),
             time_to_target_text: "—".to_string(),
+            probability_at_least_text: "—".to_string(),
+            session_distribution: Vec::new(),
             status_text: "Select a target fish or loot item from this zone.".to_string(),
         };
     }
@@ -2580,10 +2610,11 @@ fn derive_target_fish_summary(
         0.0
     };
     let time_to_target_text = if per_hour_raw > 0.0 {
-        human_duration_text((signals.target_fish_amount.max(1.0) / per_hour_raw) * 3600.0)
+        human_duration_text((f64::from(target_amount) / per_hour_raw) * 3600.0)
     } else {
         "Unavailable".to_string()
     };
+    let probability_at_least = poisson_probability_at_least(expected_count_raw, target_amount);
 
     let status_text = if expected_count_raw > 0.0 {
         format!(
@@ -2596,12 +2627,98 @@ fn derive_target_fish_summary(
 
     TargetFishSummary {
         selected_label,
+        target_amount_text: trim_float(f64::from(target_amount)),
         expected_count_raw,
         expected_count_text: trim_float(expected_count_raw),
         per_hour_text: trim_float(per_hour_raw),
         time_to_target_text,
+        probability_at_least_text: percent_value_text(probability_at_least * 100.0),
+        session_distribution: target_fish_session_distribution(expected_count_raw, target_amount),
         status_text,
     }
+}
+
+fn poisson_probability_at_least(lambda: f64, target_amount: u32) -> f64 {
+    if target_amount == 0 {
+        return 1.0;
+    }
+    (1.0 - poisson_probability_below(lambda, target_amount)).clamp(0.0, 1.0)
+}
+
+fn poisson_probability_below(lambda: f64, exclusive_upper: u32) -> f64 {
+    if exclusive_upper == 0 {
+        return 0.0;
+    }
+    if !lambda.is_finite() || lambda <= 0.0 {
+        return 1.0;
+    }
+
+    let mut term = (-lambda).exp();
+    let mut sum = term;
+    for k in 1..exclusive_upper {
+        term *= lambda / f64::from(k);
+        sum += term;
+    }
+    sum.clamp(0.0, 1.0)
+}
+
+fn target_fish_session_distribution(
+    lambda: f64,
+    target_amount: u32,
+) -> Vec<TargetFishDistributionBucket> {
+    if target_amount == 0 {
+        return Vec::new();
+    }
+
+    let exact_bucket_limit = target_amount.saturating_sub(1).min(5);
+    let mut buckets = (0..=exact_bucket_limit)
+        .map(|count| {
+            let probability_pct = poisson_exact_probability(lambda, count) * 100.0;
+            TargetFishDistributionBucket {
+                label: count.to_string(),
+                probability_pct,
+                probability_text: percent_value_text(probability_pct),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if target_amount > exact_bucket_limit + 1 {
+        let middle_start = exact_bucket_limit + 1;
+        let middle_end = target_amount - 1;
+        let middle_probability = (poisson_probability_below(lambda, target_amount)
+            - poisson_probability_below(lambda, middle_start))
+        .clamp(0.0, 1.0);
+        let probability_pct = middle_probability * 100.0;
+        buckets.push(TargetFishDistributionBucket {
+            label: format!("{middle_start}–{middle_end}"),
+            probability_pct,
+            probability_text: percent_value_text(probability_pct),
+        });
+    }
+
+    let probability_pct = poisson_probability_at_least(lambda, target_amount) * 100.0;
+    buckets.push(TargetFishDistributionBucket {
+        label: format!("≥{target_amount}"),
+        probability_pct,
+        probability_text: percent_value_text(probability_pct),
+    });
+
+    buckets
+}
+
+fn poisson_exact_probability(lambda: f64, count: u32) -> f64 {
+    if !lambda.is_finite() || lambda < 0.0 {
+        return 0.0;
+    }
+    if lambda == 0.0 {
+        return if count == 0 { 1.0 } else { 0.0 };
+    }
+
+    let mut term = (-lambda).exp();
+    for k in 1..=count {
+        term *= lambda / f64::from(k);
+    }
+    term.clamp(0.0, 1.0)
 }
 
 fn human_duration_text(total_seconds: f64) -> String {
@@ -2765,6 +2882,17 @@ fn render_calculator_app(
     let lightstone_sets = item_options_by_type(&data.catalog.items, "lightstone_set");
     let backpacks = item_options_by_type(&data.catalog.items, "backpack");
     let target_fishes = target_fish_options(data);
+    let target_fish_summary = derive_target_fish_summary(
+        signals,
+        data,
+        &fish_group_chart,
+        loot_chart
+            .rows
+            .iter()
+            .map(|row| row.expected_count_raw)
+            .sum(),
+        timespan_seconds(signals.timespan_amount, &signals.timespan_unit),
+    );
     let outfits = item_options_by_type(&data.catalog.items, "outfit");
     let foods = item_options_by_type(&data.catalog.items, "food");
     let buffs = item_options_by_type(&data.catalog.items, "buff");
@@ -3133,6 +3261,7 @@ fn render_calculator_app(
                 &loot_chart,
                 signals.mastery,
                 &target_fishes,
+                &target_fish_summary,
             ),
         ),
         (
@@ -3455,6 +3584,23 @@ fn group_silver_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<Distrib
         .collect()
 }
 
+fn target_fish_distribution_segments(summary: &TargetFishSummary) -> Vec<DistributionChartSegment> {
+    summary
+        .session_distribution
+        .iter()
+        .map(|bucket| DistributionChartSegment {
+            label: bucket.label.clone(),
+            value_text: bucket.probability_text.clone(),
+            detail_text: "session chance".to_string(),
+            width_pct: bucket.probability_pct,
+            fill_color: "var(--color-primary)",
+            stroke_color: "color-mix(in srgb, var(--color-primary) 72%, white)",
+            text_color: "var(--color-primary-content)",
+            connector_color: "color-mix(in srgb, var(--color-primary) 36%, transparent)",
+        })
+        .collect()
+}
+
 fn filtered_loot_flow_rows(
     loot_rows: &[LootChartRow],
     species_rows: &[LootSpeciesRow],
@@ -3539,10 +3685,33 @@ fn render_target_fish_panel(
     data: &CalculatorData,
     signals: &CalculatorSignals,
     target_fish_options: &[SelectOption<'_>],
+    target_fish_summary: &TargetFishSummary,
 ) -> String {
     if target_fish_options.is_empty() {
         return "<div id=\"calculator-target-fish-panel\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No loot rows are currently available for target analysis at this spot.</div>".to_string();
     }
+
+    let session_distribution_html = if target_fish_summary.session_distribution.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\">\
+                <div class=\"mb-3 flex items-center justify-between gap-3\">\
+                    <div>\
+                        <div class=\"text-sm font-medium\">Session Count Distribution</div>\
+                        <div class=\"text-xs text-base-content/70\">Estimated probability mass for this target within the current session duration.</div>\
+                    </div>\
+                    <div class=\"text-right text-xs text-base-content/70\">count bucket chance</div>\
+                </div>\
+                {}\
+            </div>",
+            render_distribution_chart(
+                "target-fish-distribution-chart",
+                "Target Fish Session Distribution",
+                "_calc.target_fish_distribution_chart",
+            )
+        )
+    };
 
     format!(
         "<div id=\"calculator-target-fish-panel\" class=\"grid gap-4\">\
@@ -3557,20 +3726,42 @@ fn render_target_fish_panel(
                     <span class=\"label text-xs\">Expected time to reach this amount.</span>\
                 </fieldset>\
             </div>\
-            <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-200 shadow-none lg:stats-horizontal\">\
-                <div class=\"stat\">\
-                    <div class=\"stat-title whitespace-normal leading-snug\">Expected (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
-                    <div class=\"stat-value text-2xl\" data-text=\"$_calc.target_fish_expected_count\"></div>\
-                    <div class=\"stat-desc\" data-text=\"$_calc.target_fish_status_text\"></div>\
+            <div class=\"grid gap-3 lg:grid-cols-3\">\
+                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3\">\
+                    <div class=\"text-sm font-medium whitespace-normal leading-snug\">Expected ({})</div>\
+                    <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
+                    <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
                 </div>\
-                <div class=\"stat\">\
-                    <div class=\"stat-title\">Time to Target</div>\
-                    <div class=\"stat-value text-2xl\" data-text=\"$_calc.target_fish_time_to_target\"></div>\
-                    <div class=\"stat-desc\" data-text=\"$_calc.target_fish_selected_label ? ($_calc.target_fish_selected_label + ' · ' + ($_calc.target_fish_per_hour || '—') + '/hour') : 'Select a target fish.'\"></div>\
+                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3\">\
+                    <div class=\"text-sm font-medium\">Time to Target</div>\
+                    <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
+                    <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
+                </div>\
+                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3\">\
+                    <div class=\"text-sm font-medium\">Chance to Get at Least {}</div>\
+                    <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
+                    <div class=\"mt-1 text-xs text-base-content/70\">within the current session duration</div>\
                 </div>\
             </div>\
+            {}\
         </div>",
         render_target_fish_select_control(data, signals, target_fish_options),
+        escape_html(&timespan_text(signals.timespan_amount, &signals.timespan_unit)),
+        escape_html(&target_fish_summary.expected_count_text),
+        escape_html(&target_fish_summary.status_text),
+        escape_html(&target_fish_summary.time_to_target_text),
+        escape_html(&if target_fish_summary.selected_label.is_empty() {
+            "Select a target fish.".to_string()
+        } else {
+            format!(
+                "{} · {}/hour",
+                target_fish_summary.selected_label,
+                target_fish_summary.per_hour_text
+            )
+        }),
+        escape_html(&target_fish_summary.target_amount_text),
+        escape_html(&target_fish_summary.probability_at_least_text),
+        session_distribution_html,
     )
 }
 
@@ -3581,6 +3772,7 @@ fn render_fish_group_window(
     loot_chart: &LootChart,
     mastery: f64,
     target_fish_options: &[SelectOption<'_>],
+    target_fish_summary: &TargetFishSummary,
 ) -> String {
     format!(
         "<fieldset id=\"calculator-fish-group-window\" class=\"card card-border bg-base-100\">\
@@ -3645,7 +3837,7 @@ fn render_fish_group_window(
             ""
         },
         render_fish_group_chart(fish_group_chart),
-        render_target_fish_panel(data, signals, target_fish_options),
+        render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
         render_fish_group_silver_chart(loot_chart),
         render_loot_chart(signals, loot_chart),
     )
@@ -6056,10 +6248,69 @@ mod tests {
         let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 7200.0);
 
         assert_eq!(summary.selected_label, "Laila's Petal");
+        assert_eq!(summary.target_amount_text, "1");
         assert_eq!(summary.expected_count_raw, 4.0);
         assert_eq!(summary.expected_count_text, "4");
         assert_eq!(summary.per_hour_text, "2");
         assert_eq!(summary.time_to_target_text, "30m");
+        assert_eq!(summary.probability_at_least_text, "98.17%");
+        assert_eq!(summary.session_distribution.len(), 2);
+        assert_eq!(summary.session_distribution[0].label, "0");
+        assert_eq!(summary.session_distribution[0].probability_text, "1.83%");
+        assert_eq!(summary.session_distribution[1].label, "≥1");
+        assert_eq!(summary.session_distribution[1].probability_text, "98.17%");
+    }
+
+    #[test]
+    fn derive_target_fish_summary_compresses_distribution_for_larger_targets() {
+        let signals = CalculatorSignals {
+            target_fish: "Laila's Petal".to_string(),
+            target_fish_amount: 8.0,
+            ..CalculatorSignals::default()
+        };
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "5%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![FishGroupChartRow {
+                label: "General",
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 0.0,
+                weight_pct: 0.0,
+                current_share_pct: 100.0,
+            }],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 54031,
+                name: "Laila's Petal".to_string(),
+                within_group_rate: 0.04,
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 7200.0);
+
+        assert_eq!(summary.target_amount_text, "8");
+        assert_eq!(
+            summary
+                .session_distribution
+                .iter()
+                .map(|bucket| bucket.label.as_str())
+                .collect::<Vec<_>>(),
+            vec!["0", "1", "2", "3", "4", "5", "6–7", "≥8"]
+        );
     }
 
     #[test]
