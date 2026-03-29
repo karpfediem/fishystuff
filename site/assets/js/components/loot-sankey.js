@@ -12,6 +12,9 @@ const RIGHT_BAR_WIDTH = 18;
 const RIGHT_LABEL_WIDTH = 320;
 const RIGHT_LABEL_HEIGHT = 58;
 const RIGHT_LABEL_OFFSET = 14;
+const SPECIES_METRIC_WIDTH = 78;
+const SPECIES_BOX_CONNECTOR_GAP = 8;
+const SPECIES_BOX_CONNECTOR_INSET = 8;
 const GROUP_TO_SPECIES_GAP = 110;
 const SPECIES_TO_SILVER_GAP = 78;
 const SILVER_TO_GROUP_GAP = 76;
@@ -126,6 +129,17 @@ function compactSilverText(valueText) {
     }).format(numeric);
 }
 
+function truncateText(value, maxChars) {
+    const text = String(value ?? "");
+    if (text.length <= maxChars) {
+        return text;
+    }
+    if (maxChars <= 1) {
+        return "…";
+    }
+    return `${text.slice(0, maxChars - 1)}…`;
+}
+
 function sankeyPath(x1, y1, x2, y2, h1, h2) {
     const c1 = x1 + 120;
     const c2 = x2 - 120;
@@ -219,6 +233,8 @@ class FishyLootSankey extends HTMLElement {
         const innerHeight = Math.max(labelStackHeight, 340);
         const countBarX = LEFT_X + LEFT_WIDTH + GROUP_TO_SPECIES_GAP;
         const labelX = countBarX + RIGHT_BAR_WIDTH + RIGHT_LABEL_OFFSET;
+        const speciesCenterWidth =
+            RIGHT_LABEL_WIDTH - SPECIES_METRIC_WIDTH * 2 - SPECIES_BOX_CONNECTOR_GAP * 2;
         const silverBarX = labelX + RIGHT_LABEL_WIDTH + SPECIES_TO_SILVER_GAP;
         const silverGroupX = silverBarX + RIGHT_BAR_WIDTH + SILVER_TO_GROUP_GAP;
         const width = Math.max(
@@ -428,6 +444,7 @@ class FishyLootSankey extends HTMLElement {
                 .text(valueLabel);
         });
 
+        const speciesConnectors = svg.append("g");
         const rightNodes = svg.append("g");
         speciesRows.forEach((row, index) => {
             const barTop = speciesTop[index];
@@ -436,8 +453,8 @@ class FishyLootSankey extends HTMLElement {
                 positiveNumber(row.expected_count_raw) * rightScale,
             );
             const labelTop = speciesLabelTop[index];
-            const labelMid = labelTop + RIGHT_LABEL_HEIGHT / 2;
-            const barMid = barTop + barHeight / 2;
+            const connectorTop = labelTop + SPECIES_BOX_CONNECTOR_INSET;
+            const connectorHeight = RIGHT_LABEL_HEIGHT - SPECIES_BOX_CONNECTOR_INSET * 2;
             const dropMetricText = String(row.drop_rate_text ?? "");
             const dropRateTooltip = String(row.drop_rate_tooltip ?? "");
             const dropDotColor = provenanceDotColor(String(row.drop_rate_source_kind ?? ""));
@@ -445,6 +462,22 @@ class FishyLootSankey extends HTMLElement {
             const silverValueText = compactSilverText(row.expected_profit_text);
             const iconRing = gradeRingColor(row.icon_grade_tone);
             const hasIcon = Boolean(row.icon_url);
+            const leftBoxX = labelX;
+            const centerBoxX = leftBoxX + SPECIES_METRIC_WIDTH + SPECIES_BOX_CONNECTOR_GAP;
+            const rightBoxX =
+                centerBoxX + speciesCenterWidth + SPECIES_BOX_CONNECTOR_GAP;
+            const leftBoxMid = labelTop + RIGHT_LABEL_HEIGHT / 2;
+            const rightBoxMid = leftBoxMid;
+            const iconFrameSize = 28;
+            const iconFrameX = centerBoxX + 12;
+            const iconFrameY = labelTop + (RIGHT_LABEL_HEIGHT - iconFrameSize) / 2;
+            const labelTextX = hasIcon ? iconFrameX + iconFrameSize + 10 : centerBoxX + 12;
+            const labelTextMaxChars = hasIcon ? 18 : 24;
+            const speciesProfitTop = profitSpeciesTop[index];
+            const profitHeight = Math.max(
+                MIN_SILVER_NODE_HEIGHT,
+                profitSpeciesHeights[index] ?? 0,
+            );
 
             rightNodes.append("rect")
                 .attr("x", countBarX)
@@ -457,79 +490,175 @@ class FishyLootSankey extends HTMLElement {
                 .style("stroke", row.stroke_color)
                 .style("stroke-width", 1.25);
 
-            rightNodes.append("path")
+            speciesConnectors.append("path")
                 .attr(
                     "d",
-                    [
-                        `M ${countBarX + RIGHT_BAR_WIDTH} ${barMid}`,
-                        `C ${countBarX + RIGHT_BAR_WIDTH + 16} ${barMid}, ${labelX - 16} ${labelMid}, ${labelX} ${labelMid}`,
-                    ].join(" "),
+                    sankeyPath(
+                        countBarX + RIGHT_BAR_WIDTH,
+                        barTop,
+                        leftBoxX,
+                        connectorTop,
+                        barHeight,
+                        connectorHeight,
+                    ),
                 )
-                .style("fill", "none")
+                .style("fill", row.connector_color)
+                .style("opacity", 0.38);
+
+            speciesConnectors.append("path")
+                .attr(
+                    "d",
+                    sankeyPath(
+                        leftBoxX + SPECIES_METRIC_WIDTH,
+                        connectorTop,
+                        centerBoxX,
+                        connectorTop,
+                        connectorHeight,
+                        connectorHeight,
+                    ),
+                )
+                .style("fill", row.connector_color)
+                .style("opacity", 0.34);
+
+            speciesConnectors.append("path")
+                .attr(
+                    "d",
+                    sankeyPath(
+                        centerBoxX + speciesCenterWidth,
+                        connectorTop,
+                        rightBoxX,
+                        connectorTop,
+                        connectorHeight,
+                        connectorHeight,
+                    ),
+                )
+                .style("fill", row.connector_color)
+                .style("opacity", 0.34);
+
+            speciesConnectors.append("path")
+                .attr(
+                    "d",
+                    sankeyPath(
+                        rightBoxX + SPECIES_METRIC_WIDTH,
+                        connectorTop,
+                        silverBarX,
+                        speciesProfitTop,
+                        connectorHeight,
+                        profitHeight,
+                    ),
+                )
+                .style("fill", row.connector_color)
+                .style("opacity", 0.34);
+
+            rightNodes.append("rect")
+                .attr("x", leftBoxX)
+                .attr("y", labelTop)
+                .attr("width", SPECIES_METRIC_WIDTH)
+                .attr("height", RIGHT_LABEL_HEIGHT)
+                .attr("rx", NODE_RADIUS)
+                .attr("ry", NODE_RADIUS)
+                .style("fill", row.fill_color)
                 .style("stroke", row.stroke_color)
-                .style("stroke-opacity", 0.75)
                 .style("stroke-width", 1.5);
 
-            const card = rightNodes.append("foreignObject")
-                .attr("x", labelX)
-                .attr("y", labelTop)
-                .attr("width", RIGHT_LABEL_WIDTH)
-                .attr("height", RIGHT_LABEL_HEIGHT);
-
-            const cardRoot = card.append("xhtml:div")
-                .attr("class", "loot-sankey-card")
-                .style("--loot-card-fill", row.fill_color)
-                .style("--loot-card-stroke", row.stroke_color)
-                .style("--loot-card-text", row.text_color)
-                .style("--loot-card-dot", dropDotColor)
-                .style("--loot-card-icon-ring", iconRing);
-
-            const cardBody = cardRoot.append("xhtml:div")
-                .attr("class", "loot-sankey-card__body");
-
-            const leftMetric = cardBody.append("xhtml:div")
-                .attr("class", "loot-sankey-card__metric loot-sankey-card__metric--left");
-
-            leftMetric.append("xhtml:div")
-                .attr("class", "loot-sankey-card__metric-primary")
+            rightNodes.append("text")
+                .attr("x", leftBoxX + SPECIES_METRIC_WIDTH / 2)
+                .attr("y", leftBoxMid + 1)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .style("fill", row.text_color)
+                .style("font-size", "13px")
+                .style("font-weight", "800")
+                .style("font-variant-numeric", "tabular-nums")
                 .text(dropMetricText);
 
-            const infoDot = leftMetric.append("xhtml:span")
-                .attr("class", "loot-sankey-card__info-dot")
-                .attr("aria-hidden", "true");
+            const infoDot = rightNodes.append("circle")
+                .attr("cx", leftBoxX + SPECIES_METRIC_WIDTH - 10)
+                .attr("cy", labelTop + 10)
+                .attr("r", 3.5)
+                .style("fill", dropDotColor)
+                .style("stroke", row.text_color)
+                .style("stroke-width", 1);
             if (dropRateTooltip) {
-                infoDot.attr("title", dropRateTooltip);
+                infoDot.append("title").text(dropRateTooltip);
             }
 
-            const centerColumn = cardBody.append("xhtml:div")
-                .attr("class", "loot-sankey-card__center");
+            rightNodes.append("rect")
+                .attr("x", centerBoxX)
+                .attr("y", labelTop)
+                .attr("width", speciesCenterWidth)
+                .attr("height", RIGHT_LABEL_HEIGHT)
+                .attr("rx", NODE_RADIUS)
+                .attr("ry", NODE_RADIUS)
+                .style("fill", row.fill_color)
+                .style("stroke", row.stroke_color)
+                .style("stroke-width", 1.5);
 
             if (hasIcon) {
-                const iconFrame = centerColumn.append("xhtml:span")
-                    .attr("class", "loot-sankey-card__icon-frame");
-                iconFrame.append("xhtml:img")
-                    .attr("class", "loot-sankey-card__icon")
-                    .attr("src", row.icon_url)
-                    .attr("alt", "")
-                    .attr("aria-hidden", "true");
+                rightNodes.append("rect")
+                    .attr("x", iconFrameX)
+                    .attr("y", iconFrameY)
+                    .attr("width", iconFrameSize)
+                    .attr("height", iconFrameSize)
+                    .attr("rx", iconFrameSize / 2)
+                    .attr("ry", iconFrameSize / 2)
+                    .style("fill", row.fill_color)
+                    .style(
+                        "stroke",
+                        `color-mix(in oklab, ${iconRing} 76%, ${row.stroke_color} 24%)`,
+                    )
+                    .style("stroke-width", 1.5);
+
+                rightNodes.append("image")
+                    .attr("x", iconFrameX + 5)
+                    .attr("y", iconFrameY + 5)
+                    .attr("width", iconFrameSize - 10)
+                    .attr("height", iconFrameSize - 10)
+                    .attr("href", row.icon_url)
+                    .attr("preserveAspectRatio", "xMidYMid meet");
             }
 
-            const textStack = centerColumn.append("xhtml:div")
-                .attr("class", "loot-sankey-card__text");
+            rightNodes.append("text")
+                .attr("x", labelTextX)
+                .attr("y", labelTop + RIGHT_LABEL_HEIGHT / 2 + 1)
+                .attr("dominant-baseline", "middle")
+                .attr("text-anchor", "start")
+                .style("fill", row.text_color)
+                .style("font-size", "13px")
+                .style("font-weight", "700")
+                .text(truncateText(row.label, labelTextMaxChars));
 
-            textStack.append("xhtml:div")
-                .attr("class", "loot-sankey-card__label")
-                .text(String(row.label ?? ""));
+            rightNodes.append("rect")
+                .attr("x", rightBoxX)
+                .attr("y", labelTop)
+                .attr("width", SPECIES_METRIC_WIDTH)
+                .attr("height", RIGHT_LABEL_HEIGHT)
+                .attr("rx", NODE_RADIUS)
+                .attr("ry", NODE_RADIUS)
+                .style("fill", row.fill_color)
+                .style("stroke", row.stroke_color)
+                .style("stroke-width", 1.5);
 
-            const rightMetric = cardBody.append("xhtml:div")
-                .attr("class", "loot-sankey-card__metric loot-sankey-card__metric--right");
-
-            rightMetric.append("xhtml:div")
-                .attr("class", "loot-sankey-card__metric-primary")
+            rightNodes.append("text")
+                .attr("x", rightBoxX + SPECIES_METRIC_WIDTH / 2)
+                .attr("y", rightBoxMid - 6)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .style("fill", row.text_color)
+                .style("font-size", "12.5px")
+                .style("font-weight", "800")
+                .style("font-variant-numeric", "tabular-nums")
                 .text(silverMetricText);
 
-            rightMetric.append("xhtml:div")
-                .attr("class", "loot-sankey-card__metric-secondary")
+            rightNodes.append("text")
+                .attr("x", rightBoxX + SPECIES_METRIC_WIDTH / 2)
+                .attr("y", rightBoxMid + 10)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .style("fill", row.text_color)
+                .style("font-size", "11px")
+                .style("font-weight", "700")
+                .style("font-variant-numeric", "tabular-nums")
                 .text(silverValueText);
         });
 
