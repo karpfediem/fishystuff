@@ -1252,17 +1252,25 @@ fn run_flockfish_subgroup_import(command: FlockfishSubgroupImportCommand) -> Res
     if commit {
         let msg = match commit_msg {
             Some(msg) => format!("{msg} (FlockfishWorkbook={workbook_sha})"),
-            None => format!("Import flockfish fishing group tables (FlockfishWorkbook={workbook_sha})"),
+            None => {
+                format!("Import flockfish fishing group tables (FlockfishWorkbook={workbook_sha})")
+            }
         };
         run_dolt_commit(&dolt_repo, &msg)?;
     }
 
-    println!("flockfish main-group rows emitted: {}", stats.main_group.row_count);
+    println!(
+        "flockfish main-group rows emitted: {}",
+        stats.main_group.row_count
+    );
     println!(
         "output main-group csv: {}",
         outputs.main_group_csv.display()
     );
-    println!("flockfish subgroup rows emitted: {}", stats.sub_group.row_count);
+    println!(
+        "flockfish subgroup rows emitted: {}",
+        stats.sub_group.row_count
+    );
     println!("output subgroup csv: {}", outputs.sub_group_csv.display());
     println!(
         "flockfish resolved zone-group rows emitted: {}",
@@ -1405,8 +1413,7 @@ fn import_flockfish_zone_group_slots(
         let Ok(zone_b_i64) = zone_b_raw.parse::<i64>() else {
             continue;
         };
-        let Some(zone_name) =
-            cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_ZONE_NAME_COL))?
+        let Some(zone_name) = cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_ZONE_NAME_COL))?
         else {
             continue;
         };
@@ -1427,8 +1434,8 @@ fn import_flockfish_zone_group_slots(
             .with_context(|| format!("zone B out of range: {zone_b_i64}"))?;
         let zone_rgb = (u32::from(zone_r) << 16) | (u32::from(zone_g) << 8) | u32::from(zone_b);
 
-        let resolution_value_raw = cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_GROUP_VALUE_COL))?
-            .unwrap_or_default();
+        let resolution_value_raw =
+            cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_GROUP_VALUE_COL))?.unwrap_or_default();
         let (item_main_group_key, resolution_status) =
             parse_flockfish_zone_group_value(&resolution_value_raw);
         if item_main_group_key.is_some() {
@@ -3070,7 +3077,10 @@ mod tests {
 
     #[test]
     fn flockfish_drop_label_to_slot_idx_maps_final_combined_labels() {
-        assert_eq!(flockfish_drop_label_to_slot_idx("DropID PRIZE CATCH"), Some(1));
+        assert_eq!(
+            flockfish_drop_label_to_slot_idx("DropID PRIZE CATCH"),
+            Some(1)
+        );
         assert_eq!(flockfish_drop_label_to_slot_idx("DropID RARE"), Some(2));
         assert_eq!(flockfish_drop_label_to_slot_idx("DropID LARGE"), Some(3));
         assert_eq!(flockfish_drop_label_to_slot_idx("DropID GENERAL"), Some(4));
@@ -3084,15 +3094,9 @@ mod tests {
             parse_flockfish_zone_group_value("11023"),
             (Some(11023), "numeric")
         );
-        assert_eq!(
-            parse_flockfish_zone_group_value("DUMMY1"),
-            (None, "dummy")
-        );
+        assert_eq!(parse_flockfish_zone_group_value("DUMMY1"), (None, "dummy"));
         assert_eq!(parse_flockfish_zone_group_value(""), (None, "blank"));
-        assert_eq!(
-            parse_flockfish_zone_group_value("UNKNOWN"),
-            (None, "other")
-        );
+        assert_eq!(parse_flockfish_zone_group_value("UNKNOWN"), (None, "other"));
     }
 
     #[test]
