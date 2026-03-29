@@ -243,20 +243,27 @@ class FishyLootSankey extends HTMLElement {
                 + Math.max(0, speciesRows.length - 1) * SPECIES_LABEL_GAP
             : 0;
         const innerHeight = Math.max(labelStackHeight, 340);
-        const width = Math.max(
-            this.clientWidth || 0,
-            MIN_INTERNAL_WIDTH,
-        );
-        const countBarX = LEFT_X + LEFT_WIDTH + GROUP_TO_SPECIES_GAP;
+        const width = Math.max(this.clientWidth || 0, MIN_INTERNAL_WIDTH);
+        const extraWidth = Math.max(0, width - MIN_INTERNAL_WIDTH);
+        const leftGap = GROUP_TO_SPECIES_GAP + extraWidth / 2;
+        const countBarX = LEFT_X + LEFT_WIDTH + leftGap;
         const labelX = countBarX + RIGHT_BAR_WIDTH + RIGHT_LABEL_OFFSET;
-        const silverGroupX = width - RIGHT_MARGIN - SILVER_GROUP_WIDTH;
-        const silverBarX = silverGroupX - SILVER_TO_GROUP_GAP - RIGHT_BAR_WIDTH;
-        const labelWidth = Math.max(
-            RIGHT_LABEL_WIDTH,
-            silverBarX - SPECIES_TO_SILVER_GAP - labelX,
-        );
+        const labelWidth = RIGHT_LABEL_WIDTH;
         const speciesCenterWidth =
             labelWidth - SPECIES_METRIC_WIDTH * 2 - SPECIES_BOX_CONNECTOR_GAP * 2;
+        const speciesRightEdge = labelX + labelWidth;
+        const silverGroupX = width - RIGHT_MARGIN - SILVER_GROUP_WIDTH;
+        const rightBaseGap = SPECIES_TO_SILVER_GAP + SILVER_TO_GROUP_GAP;
+        const rightAvailableGap =
+            silverGroupX - speciesRightEdge - RIGHT_BAR_WIDTH;
+        const rightExtraGap = Math.max(0, rightAvailableGap - rightBaseGap);
+        const speciesToSilverGap =
+            SPECIES_TO_SILVER_GAP
+            + (rightExtraGap * SPECIES_TO_SILVER_GAP) / rightBaseGap;
+        const silverToGroupGap =
+            SILVER_TO_GROUP_GAP
+            + (rightExtraGap * SILVER_TO_GROUP_GAP) / rightBaseGap;
+        const silverBarX = silverGroupX - silverToGroupGap - RIGHT_BAR_WIDTH;
         const leftScale = Math.max(
             0,
             (innerHeight - GROUP_GAP * Math.max(0, rows.length - 1)) / totalCount,
