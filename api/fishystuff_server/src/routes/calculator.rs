@@ -106,7 +106,7 @@ struct CalculatorDerivedSignals {
     loot_sankey_chart: LootSankeySignal,
     target_fish_selected_label: String,
     target_fish_expected_count: String,
-    target_fish_per_hour: String,
+    target_fish_per_day: String,
     target_fish_time_to_target: String,
     target_fish_status_text: String,
     debug_json: String,
@@ -223,7 +223,7 @@ struct TargetFishSummary {
     target_amount_text: String,
     expected_count_raw: f64,
     expected_count_text: String,
-    per_hour_text: String,
+    per_day_text: String,
     time_to_target_text: String,
     probability_at_least_text: String,
     session_distribution: Vec<TargetFishDistributionBucket>,
@@ -1801,7 +1801,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         loot_sankey_chart,
         target_fish_selected_label: target_fish_summary.selected_label,
         target_fish_expected_count: target_fish_summary.expected_count_text,
-        target_fish_per_hour: target_fish_summary.per_hour_text,
+        target_fish_per_day: target_fish_summary.per_day_text,
         target_fish_time_to_target: target_fish_summary.time_to_target_text,
         target_fish_status_text: target_fish_summary.status_text,
         debug_json,
@@ -2575,7 +2575,7 @@ fn derive_target_fish_summary(
             target_amount_text: trim_float(f64::from(target_amount)),
             expected_count_raw: 0.0,
             expected_count_text: "—".to_string(),
-            per_hour_text: "—".to_string(),
+            per_day_text: "—".to_string(),
             time_to_target_text: "—".to_string(),
             probability_at_least_text: "—".to_string(),
             session_distribution: Vec::new(),
@@ -2604,13 +2604,13 @@ fn derive_target_fish_summary(
         })
         .sum::<f64>();
 
-    let per_hour_raw = if timespan_seconds > 0.0 {
-        (expected_count_raw / timespan_seconds) * 3600.0
+    let per_day_raw = if timespan_seconds > 0.0 {
+        (expected_count_raw / timespan_seconds) * 86_400.0
     } else {
         0.0
     };
-    let time_to_target_text = if per_hour_raw > 0.0 {
-        human_duration_text((f64::from(target_amount) / per_hour_raw) * 3600.0)
+    let time_to_target_text = if per_day_raw > 0.0 {
+        human_duration_text((f64::from(target_amount) / per_day_raw) * 86_400.0)
     } else {
         "Unavailable".to_string()
     };
@@ -2618,8 +2618,8 @@ fn derive_target_fish_summary(
 
     let status_text = if expected_count_raw > 0.0 {
         format!(
-            "{} / hour at the current spot and setup.",
-            trim_float(per_hour_raw)
+            "{} / day at the current spot and setup.",
+            trim_float(per_day_raw)
         )
     } else {
         "This target does not currently appear at this spot.".to_string()
@@ -2630,7 +2630,7 @@ fn derive_target_fish_summary(
         target_amount_text: trim_float(f64::from(target_amount)),
         expected_count_raw,
         expected_count_text: trim_float(expected_count_raw),
-        per_hour_text: trim_float(per_hour_raw),
+        per_day_text: trim_float(per_day_raw),
         time_to_target_text,
         probability_at_least_text: percent_value_text(probability_at_least * 100.0),
         session_distribution: target_fish_session_distribution(expected_count_raw, target_amount),
@@ -3754,9 +3754,9 @@ fn render_target_fish_panel(
             "Select a target fish.".to_string()
         } else {
             format!(
-                "{} · {}/hour",
+                "{} · {}/day",
                 target_fish_summary.selected_label,
-                target_fish_summary.per_hour_text
+                target_fish_summary.per_day_text
             )
         }),
         escape_html(&target_fish_summary.target_amount_text),
@@ -3812,17 +3812,17 @@ fn render_fish_group_window(
                         </div>\
                         <div role=\"tablist\" class=\"tabs tabs-box bg-base-200/80 p-1\" aria-label=\"Distribution tabs\">\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'groups'\" data-attr:aria-selected=\"($_distribution_tab === 'groups').toString()\" data-on:click=\"$_distribution_tab = 'groups'\">Groups</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_distribution_tab === 'target_fish').toString()\" data-on:click=\"$_distribution_tab = 'target_fish'\">Target Fish</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'silver'\" data-attr:aria-selected=\"($_distribution_tab === 'silver').toString()\" data-on:click=\"$_distribution_tab = 'silver'\">Silver</button>\
                             <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_distribution_tab = 'loot_flow'\">Loot Flow</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_distribution_tab === 'target_fish').toString()\" data-on:click=\"$_distribution_tab = 'target_fish'\">Target Fish</button>\
                         </div>\
                         <div data-show=\"$_distribution_tab === 'groups'\">{}\
-                        </div>\
-                        <div data-show=\"$_distribution_tab === 'target_fish'\">{}\
                         </div>\
                         <div data-show=\"$_distribution_tab === 'silver'\">{}\
                         </div>\
                         <div data-show=\"$_distribution_tab === 'loot_flow'\">{}\
+                        </div>\
+                        <div data-show=\"$_distribution_tab === 'target_fish'\">{}\
                         </div>\
                     </div>\
                 </div>\
@@ -3837,9 +3837,9 @@ fn render_fish_group_window(
             ""
         },
         render_fish_group_chart(fish_group_chart),
-        render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
         render_fish_group_silver_chart(loot_chart),
         render_loot_chart(signals, loot_chart),
+        render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
     )
 }
 
@@ -6251,7 +6251,7 @@ mod tests {
         assert_eq!(summary.target_amount_text, "1");
         assert_eq!(summary.expected_count_raw, 4.0);
         assert_eq!(summary.expected_count_text, "4");
-        assert_eq!(summary.per_hour_text, "2");
+        assert_eq!(summary.per_day_text, "48");
         assert_eq!(summary.time_to_target_text, "30m");
         assert_eq!(summary.probability_at_least_text, "98.17%");
         assert_eq!(summary.session_distribution.len(), 2);
