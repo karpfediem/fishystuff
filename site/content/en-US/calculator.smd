@@ -362,6 +362,8 @@
 
     #calculator-fish-group-chart {
         .distribution-chart-graphic {
+            --distribution-callout-height: 2.9rem;
+            --distribution-track-height: 1.125rem;
             position: relative;
             padding-top: 4.25rem;
         }
@@ -377,8 +379,13 @@
         .distribution-chart-callout {
             position: absolute;
             inset-block-start: 0;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
             border: 1px solid;
             border-radius: 1rem;
+            block-size: var(--distribution-callout-height);
             padding: 0.35rem 0.6rem 0.45rem;
             min-inline-size: 0;
             text-align: center;
@@ -405,8 +412,8 @@
         .distribution-chart-connector {
             position: absolute;
             inset-inline: 0;
-            inset-block-start: 2.55rem;
-            inset-block-end: 1.125rem;
+            inset-block-start: calc(var(--distribution-callout-height) - 1px);
+            inset-block-end: calc(var(--distribution-track-height) - 1px);
             z-index: 1;
         }
 
@@ -415,7 +422,7 @@
             display: flex;
             position: relative;
             margin: 0 auto;
-            height: 1.125rem;
+            height: var(--distribution-track-height);
             overflow: hidden;
             background-color: var(--color-base-300);
             border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);

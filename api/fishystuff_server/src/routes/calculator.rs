@@ -2461,11 +2461,23 @@ fn render_distribution_chart(
         let local_callout_right_pct =
             ((callout_right_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
         let local_callout_width_pct = local_callout_right_pct - local_callout_left_pct;
+        let connector_segment_left_inset = if segment_start_pct <= 0.001 && segment_width_pct > 0.5
+        {
+            "0.5625rem"
+        } else {
+            "0px"
+        };
+        let connector_segment_right_inset = if segment_end_pct >= 99.999 && segment_width_pct > 0.5
+        {
+            "0.5625rem"
+        } else {
+            "0px"
+        };
 
         write!(
             html,
             "<div class=\"distribution-chart-item\" style=\"left: {:.4}%; width: {:.4}%;\">\
-                <div class=\"distribution-chart-connector\" style=\"background: {}; clip-path: polygon({:.4}% 100%, {:.4}% 100%, {:.4}% 0%, {:.4}% 0%, {:.4}% 100%);\"></div>\
+                <div class=\"distribution-chart-connector\" style=\"background: {}; --distribution-segment-left: {:.4}%; --distribution-segment-right: {:.4}%; --distribution-callout-left: {:.4}%; --distribution-callout-right: {:.4}%; --distribution-segment-left-inset: {}; --distribution-segment-right-inset: {}; clip-path: polygon(calc(var(--distribution-segment-left) + var(--distribution-segment-left-inset)) 100%, calc(var(--distribution-segment-right) - var(--distribution-segment-right-inset)) 100%, calc(var(--distribution-callout-right) - 1rem) 0%, calc(var(--distribution-callout-left) + 1rem) 0%, calc(var(--distribution-segment-left) + var(--distribution-segment-left-inset)) 100%);\"></div>\
                 <div class=\"distribution-chart-callout\" style=\"left: {:.4}%; width: {:.4}%; border-color: {}; background: {}; color: {};\">\
                     <div class=\"distribution-chart-callout-label\">{}</div>\
                     <div class=\"distribution-chart-callout-value\">{}</div>\
@@ -2476,9 +2488,10 @@ fn render_distribution_chart(
             row.connector_color,
             local_segment_left_pct,
             local_segment_right_pct,
-            local_callout_right_pct,
             local_callout_left_pct,
-            local_segment_left_pct,
+            local_callout_right_pct,
+            connector_segment_left_inset,
+            connector_segment_right_inset,
             local_callout_left_pct,
             local_callout_width_pct,
             row.stroke_color,
