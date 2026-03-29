@@ -170,6 +170,10 @@ struct LootSpeciesRow {
     expected_count_raw: f64,
     expected_count_text: String,
     expected_profit_text: String,
+    rate_text: String,
+    rate_source_kind: String,
+    rate_tooltip: String,
+    presence_text: Option<String>,
     evidence_text: String,
 }
 
@@ -2068,6 +2072,63 @@ fn evidence_display_rate(
     }
 }
 
+fn loot_species_rate_evidence(
+    entry: &CalculatorZoneLootEntry,
+) -> Option<&CalculatorZoneLootEvidence> {
+    entry
+        .evidence
+        .iter()
+        .find(|evidence| {
+            evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
+        })
+        .or_else(|| {
+            entry.evidence.iter().find(|evidence| {
+                evidence.source_family == "community"
+                    && evidence.claim_kind == "guessed_in_group_rate"
+            })
+        })
+}
+
+fn loot_species_presence_text(entry: &CalculatorZoneLootEntry) -> Option<String> {
+    entry.evidence.iter().find_map(|evidence| {
+        if evidence.source_family != "community" || evidence.claim_kind != "presence" {
+            return None;
+        }
+        let status = match evidence.status.as_deref().unwrap_or_default() {
+            "confirmed" => "Community confirmed",
+            "data_incomplete" => "Community incomplete",
+            _ => "Community unconfirmed",
+        };
+        let claims = evidence
+            .claim_count
+            .map(|count| format!("×{count}"))
+            .unwrap_or_default();
+        let scope = match evidence.scope.as_str() {
+            "group_inferred" => "group-inferred",
+            "group" => "group",
+            _ => "zone-only",
+        };
+        Some(format!("{status}{claims} · {scope}"))
+    })
+}
+
+fn loot_species_rate_text(signals: &CalculatorSignals, entry: &CalculatorZoneLootEntry) -> String {
+    let rate = loot_species_rate_evidence(entry)
+        .and_then(|evidence| evidence_display_rate(signals, evidence))
+        .unwrap_or(entry.within_group_rate);
+    format!("{}%", format_evidence_percent(rate))
+}
+
+fn loot_species_rate_source_kind(entry: &CalculatorZoneLootEntry) -> &'static str {
+    loot_species_rate_evidence(entry)
+        .map(|evidence| match evidence.source_family.as_str() {
+            "database" => "database",
+            "community" => "community",
+            _ => "derived",
+        })
+        .unwrap_or("derived")
+}
+
 fn loot_species_evidence_text(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
@@ -2090,27 +2151,7 @@ fn loot_species_evidence_text(
         .and_then(|evidence| evidence_display_rate(signals, evidence))
         .map(|rate| format!("Community guess {}%", format_evidence_percent(rate)));
 
-    let community_presence_text = entry
-        .evidence
-        .iter()
-        .find(|evidence| evidence.source_family == "community" && evidence.claim_kind == "presence")
-        .map(|community| {
-            let status = match community.status.as_deref().unwrap_or_default() {
-                "confirmed" => "Community confirmed",
-                "data_incomplete" => "Community incomplete",
-                _ => "Community unconfirmed",
-            };
-            let claims = community
-                .claim_count
-                .map(|count| format!("×{count}"))
-                .unwrap_or_default();
-            let scope = match community.scope.as_str() {
-                "group_inferred" => "group-inferred",
-                "group" => "group",
-                _ => "zone-only",
-            };
-            format!("{status}{claims} · {scope}")
-        });
+    let community_presence_text = loot_species_presence_text(entry);
 
     let mut parts = Vec::new();
     if let Some(text) = db_rate_text {
@@ -2212,6 +2253,10 @@ fn derive_loot_chart(
             expected_count_raw,
             expected_count_text: trim_float(expected_count_raw),
             expected_profit_text: fmt_silver(expected_profit_raw),
+            rate_text: loot_species_rate_text(signals, entry),
+            rate_source_kind: loot_species_rate_source_kind(entry).to_string(),
+            rate_tooltip: loot_species_evidence_text(signals, entry),
+            presence_text: loot_species_presence_text(entry),
             evidence_text: loot_species_evidence_text(signals, entry),
         });
     }

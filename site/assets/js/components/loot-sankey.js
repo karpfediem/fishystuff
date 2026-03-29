@@ -15,6 +15,16 @@ const RIGHT_LABEL_OFFSET = 14;
 const NODE_RADIUS = 12;
 const LABEL_ICON_SIZE = 20;
 
+function provenanceDotColor(kind) {
+    if (kind === "database") {
+        return "color-mix(in oklab, var(--color-info) 72%, var(--color-base-content) 28%)";
+    }
+    if (kind === "community") {
+        return "color-mix(in oklab, var(--color-warning) 78%, var(--color-base-content) 22%)";
+    }
+    return "color-mix(in oklab, var(--color-neutral) 72%, var(--color-base-content) 28%)";
+}
+
 function positiveNumber(value) {
     const numeric = Number(value);
     return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
@@ -273,9 +283,13 @@ class FishyLootSankey extends HTMLElement {
             const valueLabel = showSilverAmounts
                 ? `${row.expected_count_text} | ${compactSilverText(row.expected_profit_text)}`
                 : row.expected_count_text;
-            const evidenceLabel = String(row.evidence_text ?? "");
+            const rateLabel = String(row.rate_text ?? "");
+            const rateTooltip = String(row.rate_tooltip ?? "");
+            const dotColor = provenanceDotColor(String(row.rate_source_kind ?? ""));
             const hasIcon = Boolean(row.icon_url);
             const textX = labelX + 10 + (hasIcon ? LABEL_ICON_SIZE + 8 : 0);
+            const dotX = labelX + RIGHT_LABEL_WIDTH - 12;
+            const rateX = dotX - 10;
 
             rightNodes.append("rect")
                 .attr("x", rightBarX)
@@ -324,29 +338,42 @@ class FishyLootSankey extends HTMLElement {
 
             rightNodes.append("text")
                 .attr("x", textX)
-                .attr("y", labelTop + 15)
+                .attr("y", labelTop + 18)
+                .attr("dominant-baseline", "middle")
+                .style("fill", row.text_color)
+                .style("font-size", "12px")
+                .style("font-weight", "700")
+                .text(truncateLabel(row.label, hasIcon ? 18 : 22));
+
+            rightNodes.append("text")
+                .attr("x", rateX)
+                .attr("y", labelTop + 18)
+                .attr("text-anchor", "end")
+                .attr("dominant-baseline", "middle")
+                .style("fill", row.text_color)
+                .style("font-size", "12px")
+                .style("font-weight", "700")
+                .text(rateLabel);
+
+            const infoDot = rightNodes.append("circle")
+                .attr("cx", dotX)
+                .attr("cy", labelTop + 14)
+                .attr("r", 4)
+                .style("fill", dotColor)
+                .style("stroke", row.text_color)
+                .style("stroke-width", 1.25);
+            if (rateTooltip) {
+                infoDot.append("title").text(rateTooltip);
+            }
+
+            rightNodes.append("text")
+                .attr("x", textX)
+                .attr("y", labelTop + 36)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "11px")
-                .style("font-weight", "700")
-                .text(truncateLabel(row.label, hasIcon ? 24 : 28));
-
-            rightNodes.append("text")
-                .attr("x", textX)
-                .attr("y", labelTop + 29)
-                .attr("dominant-baseline", "middle")
-                .style("fill", row.text_color)
-                .style("font-size", "10px")
+                .style("font-weight", "600")
                 .text(valueLabel);
-
-            rightNodes.append("text")
-                .attr("x", textX)
-                .attr("y", labelTop + 43)
-                .attr("dominant-baseline", "middle")
-                .style("fill", row.text_color)
-                .style("font-size", "9px")
-                .style("opacity", 0.88)
-                .text(truncateLabel(evidenceLabel, 44));
         });
 
         this.replaceChildren(svg.node());
