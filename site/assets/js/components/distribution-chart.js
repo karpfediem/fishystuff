@@ -46,7 +46,7 @@ function polygonPath(points) {
 }
 
 class FishyDistributionChart extends HTMLElement {
-    #resizeObserver = null;
+    #childObserver = null;
     #rafId = 0;
     _handleSignalPatchBound = null;
 
@@ -61,8 +61,12 @@ class FishyDistributionChart extends HTMLElement {
 
     connectedCallback() {
         this.#scheduleRender();
-        this.#resizeObserver = new ResizeObserver(() => this.#scheduleRender());
-        this.#resizeObserver.observe(this);
+        this.#childObserver = new MutationObserver(() => {
+            this.#scheduleRender();
+        });
+        this.#childObserver.observe(this, {
+            childList: true,
+        });
         document.addEventListener(
             "datastar-patch-signals",
             this._handleSignalPatchBound,
@@ -70,9 +74,9 @@ class FishyDistributionChart extends HTMLElement {
     }
 
     disconnectedCallback() {
-        if (this.#resizeObserver) {
-            this.#resizeObserver.disconnect();
-            this.#resizeObserver = null;
+        if (this.#childObserver) {
+            this.#childObserver.disconnect();
+            this.#childObserver = null;
         }
         if (this.#rafId) {
             cancelAnimationFrame(this.#rafId);
@@ -105,7 +109,15 @@ class FishyDistributionChart extends HTMLElement {
     #render() {
         const segments = chartSegments(this.getAttribute("signal-path"));
         if (!segments.length) {
+            if (this.#childObserver) {
+                this.#childObserver.disconnect();
+            }
             this.replaceChildren();
+            if (this.#childObserver) {
+                this.#childObserver.observe(this, {
+                    childList: true,
+                });
+            }
             return;
         }
 
@@ -298,7 +310,15 @@ class FishyDistributionChart extends HTMLElement {
             .style("stroke-opacity", 0.1)
             .style("stroke-width", 1.2);
 
+        if (this.#childObserver) {
+            this.#childObserver.disconnect();
+        }
         this.replaceChildren(svg.node());
+        if (this.#childObserver) {
+            this.#childObserver.observe(this, {
+                childList: true,
+            });
+        }
     }
 }
 
