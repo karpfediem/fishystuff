@@ -26,7 +26,7 @@ use fishystuff_api::models::zones::ZoneEntry;
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
 use crate::state::{RequestId, SharedState};
-use crate::store::FishLang;
+use crate::store::{CalculatorZoneLootEntry, FishLang};
 
 #[derive(Debug, Deserialize)]
 pub struct CalculatorQuery {
@@ -88,6 +88,20 @@ struct CalculatorDerivedSignals {
     percent_bite: String,
     percent_af: String,
     percent_catch: String,
+    fish_multiplier_raw: f64,
+    loot_total_catches_raw: f64,
+    loot_fish_per_hour_raw: f64,
+    loot_profit_per_catch_raw: f64,
+    loot_total_catches: String,
+    loot_fish_per_hour: String,
+    loot_fish_multiplier_text: String,
+    loot_total_profit: String,
+    loot_profit_per_hour: String,
+    trade_bargain_bonus_text: String,
+    trade_sale_multiplier_text: String,
+    fish_group_distribution_chart: DistributionChartSignal,
+    loot_distribution_chart: DistributionChartSignal,
+    loot_sankey_chart: LootSankeySignal,
     debug_json: String,
 }
 
@@ -113,6 +127,73 @@ struct FishGroupChart {
     rows: Vec<FishGroupChartRow>,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+struct LootChartRow {
+    label: &'static str,
+    fill_color: &'static str,
+    stroke_color: &'static str,
+    text_color: &'static str,
+    connector_color: &'static str,
+    expected_count_raw: f64,
+    expected_count_text: String,
+    expected_profit_text: String,
+    current_share_pct: f64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct LootChart {
+    available: bool,
+    note: String,
+    fish_multiplier_text: String,
+    trade_bargain_bonus_text: String,
+    trade_sale_multiplier_text: String,
+    show_silver_amounts: bool,
+    total_profit_raw: f64,
+    total_profit_text: String,
+    profit_per_hour_raw: f64,
+    profit_per_hour_text: String,
+    profit_per_catch_raw: f64,
+    rows: Vec<LootChartRow>,
+    species_rows: Vec<LootSpeciesRow>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct LootSpeciesRow {
+    slot_idx: u8,
+    group_label: &'static str,
+    label: String,
+    fill_color: &'static str,
+    stroke_color: &'static str,
+    text_color: &'static str,
+    connector_color: &'static str,
+    expected_count_raw: f64,
+    expected_count_text: String,
+    expected_profit_text: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct DistributionChartSegment {
+    label: String,
+    value_text: String,
+    width_pct: f64,
+    fill_color: &'static str,
+    stroke_color: &'static str,
+    text_color: &'static str,
+    connector_color: &'static str,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct DistributionChartSignal {
+    segments: Vec<DistributionChartSegment>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct LootSankeySignal {
+    show_silver_amounts: bool,
+    rows: Vec<LootChartRow>,
+    species_rows: Vec<LootSpeciesRow>,
+}
+
 #[derive(Debug)]
 struct CalculatorData {
     catalog: CalculatorCatalogResponse,
@@ -120,6 +201,7 @@ struct CalculatorData {
     lang: FishLang,
     zones: Vec<ZoneEntry>,
     zone_group_rates: HashMap<String, CalculatorZoneGroupRateEntry>,
+    zone_loot_entries: Vec<CalculatorZoneLootEntry>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -165,6 +247,7 @@ const NONE_SELECT_OPTION: SelectOption<'static> = SelectOption {
 enum CalculatorSearchableOptionKind {
     FishingLevel,
     LifeskillLevel,
+    TradeLevel,
     Rod,
     Float,
     Chair,
@@ -181,6 +264,7 @@ impl CalculatorSearchableOptionKind {
         match value?.trim() {
             "fishing_level" => Some(Self::FishingLevel),
             "lifeskill_level" => Some(Self::LifeskillLevel),
+            "trade_level" => Some(Self::TradeLevel),
             "rod" => Some(Self::Rod),
             "float" => Some(Self::Float),
             "chair" => Some(Self::Chair),
@@ -198,6 +282,7 @@ impl CalculatorSearchableOptionKind {
         match self {
             Self::FishingLevel => "fishing_level",
             Self::LifeskillLevel => "lifeskill_level",
+            Self::TradeLevel => "trade_level",
             Self::Rod => "rod",
             Self::Float => "float",
             Self::Chair => "chair",
@@ -249,8 +334,10 @@ pub async fn get_calculator_datastar_init(
         }
         _ => data.catalog.defaults.clone(),
     };
-
-    calculator_datastar_init_response(&data, raw_signals)
+    let (data, normalized_signals, derived) =
+        load_calculator_runtime_data(&state, lang, query.r#ref.clone(), &request_id, raw_signals)
+            .await?;
+    calculator_datastar_init_response(&data, normalized_signals, derived)
 }
 
 pub async fn post_calculator_datastar_init(
@@ -266,8 +353,10 @@ pub async fn post_calculator_datastar_init(
     let lang = FishLang::from_param(query.lang.as_deref());
     let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
     let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
-
-    calculator_datastar_init_response(&data, raw_signals)
+    let (data, normalized_signals, derived) =
+        load_calculator_runtime_data(&state, lang, query.r#ref.clone(), &request_id, raw_signals)
+            .await?;
+    calculator_datastar_init_response(&data, normalized_signals, derived)
 }
 
 pub async fn post_calculator_datastar_eval(
@@ -283,7 +372,9 @@ pub async fn post_calculator_datastar_eval(
     let lang = FishLang::from_param(query.lang.as_deref());
     let data = load_calculator_data(&state, lang, query.r#ref.clone(), &request_id).await?;
     let raw_signals = parse_calculator_signals_body(&body, &data.catalog.defaults, &request_id)?;
-    let (normalized_signals, derived) = normalize_and_derive(raw_signals, &data);
+    let (data, normalized_signals, derived) =
+        load_calculator_runtime_data(&state, lang, query.r#ref.clone(), &request_id, raw_signals)
+            .await?;
     let items_by_key = data
         .catalog
         .items
@@ -291,6 +382,13 @@ pub async fn post_calculator_datastar_eval(
         .map(|item| (item.key.as_str(), item))
         .collect::<HashMap<_, _>>();
     let fish_group_chart = derive_fish_group_chart(&normalized_signals, &data, &items_by_key);
+    let loot_chart = derive_loot_chart(
+        &normalized_signals,
+        &data,
+        &fish_group_chart,
+        derived.loot_total_catches_raw,
+        derived.fish_multiplier_raw,
+    );
     let events = vec![
         calculator_signals_event(
             &data,
@@ -301,6 +399,10 @@ pub async fn post_calculator_datastar_eval(
         .into_datastar_event(),
         PatchElements::new(render_fish_group_chart(&fish_group_chart))
             .selector("#calculator-fish-group-chart")
+            .mode(ElementPatchMode::Outer)
+            .into_datastar_event(),
+        PatchElements::new(render_loot_chart(&loot_chart))
+            .selector("#calculator-loot-chart")
             .mode(ElementPatchMode::Outer)
             .into_datastar_event(),
     ];
@@ -374,9 +476,9 @@ pub async fn get_calculator_datastar_option_search(
 
 fn calculator_datastar_init_response(
     data: &CalculatorData,
-    raw_signals: CalculatorSignals,
+    normalized_signals: CalculatorSignals,
+    derived: CalculatorDerivedSignals,
 ) -> AppResult<impl IntoResponse> {
-    let (normalized_signals, derived) = normalize_and_derive(raw_signals, data);
     let app = render_calculator_app(data, &normalized_signals, &derived)?;
     let events = vec![
         calculator_signals_event(
@@ -495,12 +597,21 @@ fn parse_calculator_signals_value(
     coerce_object_i64(&mut object, "level");
     coerce_object_f64(&mut object, "mastery");
     coerce_object_f64(&mut object, "resources");
+    coerce_object_f64(&mut object, "tradeDistanceBonus");
+    coerce_object_f64(&mut object, "tradePriceCurve");
     coerce_object_f64(&mut object, "catchTimeActive");
     coerce_object_f64(&mut object, "catchTimeAfk");
     coerce_object_f64(&mut object, "timespanAmount");
     coerce_object_bool(&mut object, "brand");
     coerce_object_bool(&mut object, "active");
     coerce_object_bool(&mut object, "debug");
+    coerce_object_bool(&mut object, "applyTradeModifiers");
+    coerce_object_bool(&mut object, "showSilverAmounts");
+    coerce_object_bool(&mut object, "discardTrashFish");
+    coerce_object_bool(&mut object, "discardGeneralFish");
+    coerce_object_bool(&mut object, "discardHighQualityFish");
+    coerce_object_bool(&mut object, "discardRareFish");
+    coerce_object_bool(&mut object, "discardPrizeFish");
     coerce_object_string_array(&mut object, "outfit");
     coerce_object_string_array(&mut object, "food");
     coerce_object_string_array(&mut object, "buff");
@@ -687,7 +798,30 @@ async fn load_calculator_data(
         lang,
         zones,
         zone_group_rates,
+        zone_loot_entries: Vec::new(),
     })
+}
+
+async fn load_calculator_runtime_data(
+    state: &SharedState,
+    lang: FishLang,
+    ref_id: Option<String>,
+    request_id: &RequestId,
+    raw_signals: CalculatorSignals,
+) -> AppResult<(CalculatorData, CalculatorSignals, CalculatorDerivedSignals)> {
+    let mut data = load_calculator_data(state, lang, ref_id.clone(), request_id).await?;
+    let mut signals = raw_signals;
+    normalize_signals(&mut signals, &data);
+    data.zone_loot_entries = with_timeout(
+        state.config.request_timeout_secs,
+        state
+            .store
+            .calculator_zone_loot(lang, ref_id, signals.zone.clone()),
+    )
+    .await
+    .map_err(|err| map_request_id(err, request_id))?;
+    let derived = derive_signals(&signals, &data);
+    Ok((data, signals, derived))
 }
 
 fn lang_param(lang: FishLang) -> &'static str {
@@ -695,16 +829,6 @@ fn lang_param(lang: FishLang) -> &'static str {
         FishLang::En => "en",
         FishLang::Ko => "ko",
     }
-}
-
-fn normalize_and_derive(
-    raw_signals: CalculatorSignals,
-    data: &CalculatorData,
-) -> (CalculatorSignals, CalculatorDerivedSignals) {
-    let mut signals = raw_signals;
-    normalize_signals(&mut signals, data);
-    let derived = derive_signals(&signals, data);
-    (signals, derived)
 }
 
 fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
@@ -720,6 +844,12 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         .lifeskill_levels
         .iter()
         .map(|level| (normalize_lookup_value(&level.name), level.key.clone()))
+        .collect::<HashMap<_, _>>();
+    let trade_level_name_to_key = data
+        .catalog
+        .trade_levels
+        .iter()
+        .map(|level| (normalize_lookup_value(&level.label), level.key.clone()))
         .collect::<HashMap<_, _>>();
     let zone_name_to_key = data
         .zones
@@ -754,6 +884,12 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
         .iter()
         .map(|level| level.key.clone())
         .collect::<std::collections::HashSet<_>>();
+    let valid_trade_level_keys = data
+        .catalog
+        .trade_levels
+        .iter()
+        .map(|level| level.key.clone())
+        .collect::<std::collections::HashSet<_>>();
     let valid_zone_keys = data
         .zones
         .iter()
@@ -763,9 +899,20 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
     signals.level = signals.level.clamp(0, 5);
     signals.mastery = signals.mastery.max(0.0);
     signals.resources = signals.resources.clamp(0.0, 100.0);
+    signals.trade_distance_bonus = signals.trade_distance_bonus.max(0.0);
+    signals.trade_price_curve = signals.trade_price_curve.max(0.0);
     signals.catch_time_active = signals.catch_time_active.max(0.0);
     signals.catch_time_afk = signals.catch_time_afk.max(0.0);
     signals.timespan_amount = signals.timespan_amount.max(0.0);
+    signals.trade_level = normalize_named_value_with_fuzzy(
+        &signals.trade_level,
+        &valid_trade_level_keys,
+        &trade_level_name_to_key,
+        None,
+        defaults.trade_level.clone(),
+        false,
+        false,
+    );
 
     signals.zone = normalize_named_value_with_fuzzy(
         &signals.zone,
@@ -1341,6 +1488,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     let chance_to_reduce_raw =
         brandstone_durability_factor * (1.0 - item_drr_raw) * (1.0 - lifeskill_level_drr_raw);
     let fish_group_chart = derive_fish_group_chart(signals, data, &items_by_key);
+    let fish_multiplier_raw = effective_fish_multiplier(signals, &items_by_key);
 
     let timespan_seconds = timespan_seconds(signals.timespan_amount, &signals.timespan_unit);
     let timespan_text = timespan_text(signals.timespan_amount, &signals.timespan_unit);
@@ -1349,7 +1497,21 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     } else {
         0.0
     };
+    let loot_total_catches_raw = casts_average_raw * fish_multiplier_raw;
+    let loot_fish_per_hour_raw = if total_time_raw > 0.0 {
+        (3600.0 / total_time_raw) * fish_multiplier_raw
+    } else {
+        0.0
+    };
     let durability_loss_average_raw = casts_average_raw * chance_to_reduce_raw;
+
+    let loot_chart = derive_loot_chart(
+        signals,
+        data,
+        &fish_group_chart,
+        loot_total_catches_raw,
+        fish_multiplier_raw,
+    );
 
     let debug_json = serde_json::to_string_pretty(&json!({
         "inputs": signals,
@@ -1367,6 +1529,21 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
             "chanceToConsumeDurability": chance_to_reduce_raw,
             "castsAverage": casts_average_raw,
             "durabilityLossAverage": durability_loss_average_raw,
+            "fishMultiplier": fish_multiplier_raw,
+            "loot": {
+                "totalCatches": loot_total_catches_raw,
+                "fishPerHour": loot_fish_per_hour_raw,
+                "totalProfit": loot_chart.total_profit_raw,
+                "profitPerHour": loot_chart.profit_per_hour_raw,
+                "profitPerCatch": loot_chart.profit_per_catch_raw,
+                "tradeBargainBonusText": loot_chart.trade_bargain_bonus_text,
+                "tradeSaleMultiplierText": loot_chart.trade_sale_multiplier_text,
+                "rows": fish_group_chart.rows.iter().map(|row| json!({
+                    "label": row.label,
+                    "expectedCount": loot_total_catches_raw * (row.current_share_pct / 100.0),
+                    "currentSharePct": row.current_share_pct,
+                })).collect::<Vec<_>>(),
+            },
             "fishGroups": {
                 "available": fish_group_chart.available,
                 "rawPrizeCatchRateText": fish_group_chart.raw_prize_rate_text,
@@ -1381,6 +1558,17 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         }
     }))
     .unwrap_or_else(|_| "{}".to_string());
+    let fish_group_distribution_chart = DistributionChartSignal {
+        segments: fish_group_distribution_segments(&fish_group_chart.rows),
+    };
+    let loot_distribution_chart = DistributionChartSignal {
+        segments: loot_distribution_segments(&loot_chart.rows),
+    };
+    let loot_sankey_chart = LootSankeySignal {
+        show_silver_amounts: loot_chart.show_silver_amounts,
+        rows: loot_chart.rows.clone(),
+        species_rows: loot_chart.species_rows.clone(),
+    };
 
     CalculatorDerivedSignals {
         zone_name,
@@ -1426,6 +1614,20 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         percent_bite: fmt2(percent_bite),
         percent_af: fmt2(percent_af),
         percent_catch: fmt2(percent_catch),
+        fish_multiplier_raw,
+        loot_total_catches_raw,
+        loot_fish_per_hour_raw,
+        loot_profit_per_catch_raw: loot_chart.profit_per_catch_raw,
+        loot_total_catches: fmt2(loot_total_catches_raw),
+        loot_fish_per_hour: fmt2(loot_fish_per_hour_raw),
+        loot_fish_multiplier_text: format!("×{}", trim_float(fish_multiplier_raw)),
+        loot_total_profit: loot_chart.total_profit_text.clone(),
+        loot_profit_per_hour: loot_chart.profit_per_hour_text.clone(),
+        trade_bargain_bonus_text: loot_chart.trade_bargain_bonus_text.clone(),
+        trade_sale_multiplier_text: loot_chart.trade_sale_multiplier_text.clone(),
+        fish_group_distribution_chart,
+        loot_distribution_chart,
+        loot_sankey_chart,
         debug_json,
     }
 }
@@ -1495,6 +1697,44 @@ fn sum_item_property(
         }
     }
     total
+}
+
+fn effective_fish_multiplier(
+    signals: &CalculatorSignals,
+    items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+) -> f64 {
+    let mut multiplier = 1.0_f64;
+    for key in [
+        signals.rod.as_str(),
+        signals.float.as_str(),
+        signals.chair.as_str(),
+        signals.lightstone_set.as_str(),
+        signals.backpack.as_str(),
+    ] {
+        if let Some(value) = items_by_key
+            .get(key)
+            .and_then(|item| item.fish_multiplier.map(f64::from))
+            .filter(|value| *value > multiplier)
+        {
+            multiplier = value;
+        }
+    }
+    for key in signals
+        .outfit
+        .iter()
+        .chain(signals.food.iter())
+        .chain(signals.buff.iter())
+        .map(String::as_str)
+    {
+        if let Some(value) = items_by_key
+            .get(key)
+            .and_then(|item| item.fish_multiplier.map(f64::from))
+            .filter(|value| *value > multiplier)
+        {
+            multiplier = value;
+        }
+    }
+    multiplier
 }
 
 fn interpolate_mastery_prize_rate(curve: &[CalculatorMasteryPrizeRateEntry], mastery: f64) -> f64 {
@@ -1666,6 +1906,195 @@ fn derive_fish_group_chart(
     }
 }
 
+fn trade_bargain_bonus_from_level_key(level_key: &str) -> f64 {
+    let index = level_key.trim().parse::<i32>().unwrap_or_default().max(0);
+    0.05 + 0.005 * f64::from(index)
+}
+
+fn trade_sale_multiplier(signals: &CalculatorSignals) -> f64 {
+    if !signals.apply_trade_modifiers {
+        return 1.0;
+    }
+    let distance_bonus = (signals.trade_distance_bonus.max(0.0) / 100.0).min(1.5);
+    let trade_price_curve = signals.trade_price_curve.max(0.0) / 100.0;
+    let bargain_bonus = trade_bargain_bonus_from_level_key(&signals.trade_level);
+    (1.0 + distance_bonus) * trade_price_curve * (1.0 + bargain_bonus)
+}
+
+fn discard_grade_enabled(signals: &CalculatorSignals, grade: Option<&str>) -> bool {
+    match grade {
+        Some("Trash") => signals.discard_trash_fish,
+        Some("General") => signals.discard_general_fish,
+        Some("HighQuality") => signals.discard_high_quality_fish,
+        Some("Rare") => signals.discard_rare_fish,
+        Some("Prize") => signals.discard_prize_fish,
+        _ => false,
+    }
+}
+
+fn fmt_silver(value: f64) -> String {
+    let rounded = value.max(0.0).round() as i64;
+    let negative = rounded < 0;
+    let digits = rounded.abs().to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+    for (index, ch) in digits.chars().rev().enumerate() {
+        if index > 0 && index % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+    let mut grouped = grouped.chars().rev().collect::<String>();
+    if negative {
+        grouped.insert(0, '-');
+    }
+    grouped
+}
+
+fn derive_loot_chart(
+    signals: &CalculatorSignals,
+    data: &CalculatorData,
+    fish_group_chart: &FishGroupChart,
+    total_catches_raw: f64,
+    fish_multiplier_raw: f64,
+) -> LootChart {
+    if !fish_group_chart.available {
+        return LootChart {
+            available: false,
+            note: "Expected loot data is unavailable for this zone.".to_string(),
+            fish_multiplier_text: "×1".to_string(),
+            trade_bargain_bonus_text: "0.00%".to_string(),
+            trade_sale_multiplier_text: "×1".to_string(),
+            show_silver_amounts: signals.show_silver_amounts,
+            total_profit_raw: 0.0,
+            total_profit_text: "0".to_string(),
+            profit_per_hour_raw: 0.0,
+            profit_per_hour_text: "0".to_string(),
+            profit_per_catch_raw: 0.0,
+            rows: Vec::new(),
+            species_rows: Vec::new(),
+        };
+    }
+
+    let bargain_bonus_raw = trade_bargain_bonus_from_level_key(&signals.trade_level);
+    let sale_multiplier_raw = trade_sale_multiplier(signals);
+    let timespan_seconds = timespan_seconds(signals.timespan_amount, &signals.timespan_unit);
+    let fish_per_hour_raw = if timespan_seconds > 0.0 {
+        (total_catches_raw / timespan_seconds) * 3600.0
+    } else {
+        0.0
+    };
+
+    let group_share_by_slot = fish_group_chart
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| ((index + 1) as u8, row.current_share_pct / 100.0))
+        .collect::<HashMap<_, _>>();
+    let group_row_by_slot = fish_group_chart
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| ((index + 1) as u8, row))
+        .collect::<HashMap<_, _>>();
+
+    let mut group_profit_by_slot = HashMap::<u8, f64>::new();
+    let mut species_rows = Vec::new();
+    for entry in &data.zone_loot_entries {
+        let Some(group_row) = group_row_by_slot.get(&entry.slot_idx) else {
+            continue;
+        };
+        let group_share = group_share_by_slot
+            .get(&entry.slot_idx)
+            .copied()
+            .unwrap_or_default();
+        let expected_count_raw = total_catches_raw * group_share * entry.within_group_rate;
+        let vendor_price_raw = entry.vendor_price.unwrap_or_default() as f64;
+        let discarded = entry.is_fish && discard_grade_enabled(signals, entry.grade.as_deref());
+        let expected_profit_raw = if discarded {
+            0.0
+        } else {
+            expected_count_raw * vendor_price_raw * sale_multiplier_raw
+        };
+        *group_profit_by_slot.entry(entry.slot_idx).or_default() += expected_profit_raw;
+        species_rows.push(LootSpeciesRow {
+            slot_idx: entry.slot_idx,
+            group_label: group_row.label,
+            label: entry.name.clone(),
+            fill_color: group_row.fill_color,
+            stroke_color: group_row.stroke_color,
+            text_color: group_row.text_color,
+            connector_color: group_row.connector_color,
+            expected_count_raw,
+            expected_count_text: trim_float(expected_count_raw),
+            expected_profit_text: fmt_silver(expected_profit_raw),
+        });
+    }
+    species_rows.sort_by(|left, right| {
+        left.slot_idx
+            .cmp(&right.slot_idx)
+            .then_with(|| {
+                right
+                    .expected_count_raw
+                    .partial_cmp(&left.expected_count_raw)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+    });
+
+    let rows = fish_group_chart
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            let slot_idx = (index + 1) as u8;
+            let expected_count_raw = total_catches_raw * (row.current_share_pct / 100.0);
+            LootChartRow {
+                label: row.label,
+                fill_color: row.fill_color,
+                stroke_color: row.stroke_color,
+                text_color: row.text_color,
+                connector_color: row.connector_color,
+                expected_count_raw,
+                expected_count_text: trim_float(expected_count_raw),
+                expected_profit_text: fmt_silver(
+                    group_profit_by_slot
+                        .get(&slot_idx)
+                        .copied()
+                        .unwrap_or_default(),
+                ),
+                current_share_pct: row.current_share_pct,
+            }
+        })
+        .collect::<Vec<_>>();
+    let total_profit_raw = group_profit_by_slot.values().sum::<f64>();
+    let profit_per_catch_raw = if total_catches_raw > 0.0 {
+        total_profit_raw / total_catches_raw
+    } else {
+        0.0
+    };
+    let profit_per_hour_raw = fish_per_hour_raw * profit_per_catch_raw;
+
+    LootChart {
+        available: true,
+        note: "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices. Fish auto-discard applies only to fish, not non-fish loot.".to_string(),
+        fish_multiplier_text: format!("×{}", trim_float(fish_multiplier_raw)),
+        trade_bargain_bonus_text: format!("+{}%", trim_float(bargain_bonus_raw * 100.0)),
+        trade_sale_multiplier_text: if signals.apply_trade_modifiers {
+            format!("×{}", trim_float(sale_multiplier_raw))
+        } else {
+            "Off (×1)".to_string()
+        },
+        show_silver_amounts: signals.show_silver_amounts,
+        total_profit_raw,
+        total_profit_text: fmt_silver(total_profit_raw),
+        profit_per_hour_raw,
+        profit_per_hour_text: fmt_silver(profit_per_hour_raw),
+        profit_per_catch_raw,
+        rows,
+        species_rows,
+    }
+}
+
 fn percentage_of_average_time(time: f64, unoptimized_time: f64) -> f64 {
     if unoptimized_time <= 0.0 {
         0.0
@@ -1774,8 +2203,16 @@ fn render_calculator_app(
         .map(|item| (item.key.as_str(), item))
         .collect::<HashMap<_, _>>();
     let fish_group_chart = derive_fish_group_chart(signals, data, &items_by_key);
+    let loot_chart = derive_loot_chart(
+        signals,
+        data,
+        &fish_group_chart,
+        derived.loot_total_catches_raw,
+        derived.fish_multiplier_raw,
+    );
     let fishing_levels = select_options_from_catalog(&data.catalog.fishing_levels);
     let lifeskill_levels = sorted_lifeskill_options(&data.catalog.lifeskill_levels);
+    let trade_levels = select_options_from_catalog(&data.catalog.trade_levels);
     let session_units = select_options_from_catalog(&data.catalog.session_units);
     let rods = item_options_by_type(&data.catalog.items, "rod");
     let floats = item_options_by_type(&data.catalog.items, "float");
@@ -2020,6 +2457,7 @@ fn render_calculator_app(
         </fieldset>
 
         __FISH_GROUP_WINDOW__
+        __LOOT_WINDOW__
 
         <fieldset class="card card-border bg-base-100 xl:col-span-2">
             <legend class="fieldset-legend ml-6 px-2">Gear</legend>
@@ -2140,6 +2578,10 @@ fn render_calculator_app(
         (
             "__FISH_GROUP_WINDOW__",
             render_fish_group_window(&fish_group_chart, signals.mastery),
+        ),
+        (
+            "__LOOT_WINDOW__",
+            render_loot_window(data, signals, &trade_levels, &loot_chart),
         ),
         (
             "__ROD_SELECT__",
@@ -2407,118 +2849,55 @@ fn render_effect_badge(label: &str, class_name: &str) -> String {
     )
 }
 
-fn estimate_distribution_callout_width_pct(label: &str, value_text: &str) -> f64 {
-    let longest_line = label.chars().count().max(value_text.chars().count()) as f64;
-    (5.0 + longest_line * 0.9).clamp(10.5, 23.0)
-}
-
-fn render_distribution_chart(
-    chart_id: &str,
-    aria_label: &str,
-    rows: &[FishGroupChartRow],
-) -> String {
-    let mut html = String::new();
-    write!(
-        html,
-        "<fishy-distribution-chart id=\"{}\" class=\"distribution-chart\" aria-label=\"{}\"><div class=\"distribution-chart-graphic\">",
+fn render_distribution_chart(chart_id: &str, aria_label: &str, signal_path: &str) -> String {
+    format!(
+        "<fishy-distribution-chart id=\"{}\" class=\"distribution-chart\" aria-label=\"{}\" signal-path=\"{}\"></fishy-distribution-chart>",
         escape_html(chart_id),
         escape_html(aria_label),
+        escape_html(signal_path),
     )
-    .unwrap();
+}
 
-    let mut segment_start_pct = 0.0_f64;
-    let mut previous_callout_right_pct = 0.0_f64;
+fn fish_group_distribution_segments(rows: &[FishGroupChartRow]) -> Vec<DistributionChartSegment> {
+    rows.iter()
+        .map(|row| DistributionChartSegment {
+            label: row.label.to_string(),
+            value_text: format!("{}%", trim_float(row.current_share_pct)),
+            width_pct: row.current_share_pct,
+            fill_color: row.fill_color,
+            stroke_color: row.stroke_color,
+            text_color: row.text_color,
+            connector_color: row.connector_color,
+        })
+        .collect()
+}
 
-    for row in rows {
-        let segment_width_pct = row.current_share_pct.max(0.0);
-        let value_text = format!("{}%", trim_float(row.current_share_pct));
-        let callout_width_pct = estimate_distribution_callout_width_pct(row.label, &value_text);
-        let preferred_callout_left_pct = if segment_start_pct + callout_width_pct <= 100.0 {
-            segment_start_pct
-        } else {
-            (segment_start_pct + segment_width_pct - callout_width_pct).max(0.0)
-        };
-        let max_callout_left_pct = (100.0 - callout_width_pct).max(0.0);
-        let min_callout_left_pct = if previous_callout_right_pct > 0.0 {
-            (previous_callout_right_pct + 1.0).min(max_callout_left_pct)
-        } else {
-            0.0
-        };
-        let callout_left_pct = preferred_callout_left_pct
-            .max(min_callout_left_pct)
-            .min(max_callout_left_pct);
-        let callout_right_pct = (callout_left_pct + callout_width_pct).min(100.0);
-        let segment_end_pct = (segment_start_pct + segment_width_pct).min(100.0);
-        let overlay_left_pct = segment_start_pct.min(callout_left_pct);
-        let overlay_right_pct = segment_end_pct.max(callout_right_pct);
-        let overlay_width_pct = (overlay_right_pct - overlay_left_pct).max(0.1);
-        let local_segment_left_pct =
-            ((segment_start_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
-        let local_segment_right_pct =
-            ((segment_end_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
-        let local_callout_left_pct =
-            ((callout_left_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
-        let local_callout_right_pct =
-            ((callout_right_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
-        let local_callout_width_pct = local_callout_right_pct - local_callout_left_pct;
-        let connector_segment_left_inset = if segment_start_pct <= 0.001 && segment_width_pct > 0.5
-        {
-            "0.5625rem"
-        } else {
-            "0px"
-        };
-        let connector_segment_right_inset = if segment_end_pct >= 99.999 && segment_width_pct > 0.5
-        {
-            "0.5625rem"
-        } else {
-            "0px"
-        };
+fn loot_distribution_segments(rows: &[LootChartRow]) -> Vec<DistributionChartSegment> {
+    rows.iter()
+        .map(|row| DistributionChartSegment {
+            label: row.label.to_string(),
+            value_text: row.expected_count_text.clone(),
+            width_pct: row.current_share_pct,
+            fill_color: row.fill_color,
+            stroke_color: row.stroke_color,
+            text_color: row.text_color,
+            connector_color: row.connector_color,
+        })
+        .collect()
+}
 
-        write!(
-            html,
-            "<div class=\"distribution-chart-item\" style=\"left: {:.4}%; width: {:.4}%;\">\
-                <div class=\"distribution-chart-connector\" style=\"background: {}; --distribution-segment-left: {:.4}%; --distribution-segment-right: {:.4}%; --distribution-callout-left: {:.4}%; --distribution-callout-right: {:.4}%; --distribution-segment-left-inset: {}; --distribution-segment-right-inset: {}; clip-path: polygon(calc(var(--distribution-segment-left) + var(--distribution-segment-left-inset)) 100%, calc(var(--distribution-segment-right) - var(--distribution-segment-right-inset)) 100%, calc(var(--distribution-callout-right) - 1rem) 0%, calc(var(--distribution-callout-left) + 1rem) 0%, calc(var(--distribution-segment-left) + var(--distribution-segment-left-inset)) 100%);\"></div>\
-                <div class=\"distribution-chart-callout\" style=\"left: {:.4}%; width: {:.4}%; border-color: {}; background: {}; color: {};\">\
-                    <div class=\"distribution-chart-callout-label\">{}</div>\
-                    <div class=\"distribution-chart-callout-value\">{}</div>\
-                </div>\
-            </div>",
-            overlay_left_pct,
-            overlay_width_pct,
-            row.connector_color,
-            local_segment_left_pct,
-            local_segment_right_pct,
-            local_callout_left_pct,
-            local_callout_right_pct,
-            connector_segment_left_inset,
-            connector_segment_right_inset,
-            local_callout_left_pct,
-            local_callout_width_pct,
-            row.stroke_color,
-            row.fill_color,
-            row.text_color,
-            escape_html(row.label),
-            escape_html(&value_text),
-        )
-        .unwrap();
-
-        segment_start_pct = segment_end_pct;
-        previous_callout_right_pct = callout_right_pct;
+fn render_loot_sankey(chart: &LootChart) -> String {
+    if chart.species_rows.is_empty() {
+        return "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No source-backed species rows are available for this zone yet.</div>".to_string();
     }
-
-    html.push_str("<div class=\"distribution-chart-track\">");
-    for row in rows {
-        write!(
-            html,
-            "<div class=\"distribution-chart-track-segment\" style=\"flex-basis: {:.4}%; background: {}; border-color: {};\"></div>",
-            row.current_share_pct.max(0.0),
-            row.fill_color,
-            row.stroke_color,
-        )
-        .unwrap();
-    }
-    html.push_str("</div></div></fishy-distribution-chart>");
-    html
+    format!(
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Species Sankey</div><div class=\"text-xs text-base-content/70\">Each flow starts at a fish group and ends at a source-backed species row. Node sizes stay count-based; enabling silver adds value labels without changing the flow widths.</div></div><div class=\"text-right text-xs text-base-content/70\">{}</div></div><div class=\"overflow-x-auto\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"Expected loot flows from groups to species\" signal-path=\"_calc.loot_sankey_chart\"></fishy-loot-sankey></div></div>",
+        if chart.show_silver_amounts {
+            "count + silver labels"
+        } else {
+            "count labels only"
+        },
+    )
 }
 
 fn render_fish_group_chart(chart: &FishGroupChart) -> String {
@@ -2540,11 +2919,40 @@ fn render_fish_group_chart(chart: &FishGroupChart) -> String {
         render_distribution_chart(
             "fish-group-distribution-chart",
             "Current fish group distribution",
-            &chart.rows,
+            "_calc.fish_group_distribution_chart",
         ),
     )
     .unwrap();
     html.push_str("</div></div>");
+    html
+}
+
+fn render_loot_chart(chart: &LootChart) -> String {
+    if !chart.available {
+        return format!(
+            "<div id=\"calculator-loot-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
+            escape_html(&chart.note)
+        );
+    }
+
+    let mut html = String::new();
+    html.push_str("<div id=\"calculator-loot-chart\" class=\"grid gap-4\">");
+    write!(
+        html,
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Expected Group Haul</div><div class=\"text-xs text-base-content/70\">{}</div></div><div class=\"text-right\"><div class=\"text-lg font-semibold\">Fish {}</div><div class=\"text-xs text-base-content/70\">bargain {} • sale {}</div></div></div>{}</div>{}",
+        escape_html(&chart.note),
+        escape_html(&chart.fish_multiplier_text),
+        escape_html(&chart.trade_bargain_bonus_text),
+        escape_html(&chart.trade_sale_multiplier_text),
+        render_distribution_chart(
+            "loot-distribution-chart",
+            "Expected loot distribution by fish group",
+            "_calc.loot_distribution_chart",
+        ),
+        render_loot_sankey(chart),
+    )
+    .unwrap();
+    html.push_str("</div>");
     html
 }
 
@@ -2565,6 +2973,111 @@ fn render_fish_group_window(chart: &FishGroupChart, mastery: f64) -> String {
         </fieldset>",
         escape_html(&trim_float(mastery)),
         render_fish_group_chart(chart),
+    )
+}
+
+fn render_loot_window(
+    data: &CalculatorData,
+    signals: &CalculatorSignals,
+    trade_levels: &[SelectOption<'_>],
+    chart: &LootChart,
+) -> String {
+    format!(
+        "<fieldset id=\"calculator-loot-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
+            <legend class=\"fieldset-legend ml-6 px-2\">Loot</legend>\
+            <div class=\"card-body gap-4 pt-0\">\
+                <div class=\"grid gap-4 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:items-start\">\
+                    <div class=\"grid gap-4\">\
+                        <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none\">\
+                            <div class=\"stat\">\
+                                <div class=\"stat-title whitespace-normal leading-snug\">Expected Catches (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
+                                <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_catches\"></div>\
+                                <div class=\"stat-desc\">using <span data-text=\"$_live.loot_fish_multiplier_text\"></span> per cast</div>\
+                            </div>\
+                            <div class=\"stat\">\
+                                <div class=\"stat-title\">Expected Catches / Hour</div>\
+                                <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_fish_per_hour\"></div>\
+                            </div>\
+                            <div class=\"stat\">\
+                                <div class=\"stat-title whitespace-normal leading-snug\">Expected Profit (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
+                                <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_profit\"></div>\
+                                <div class=\"stat-desc\">sale <span data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
+                            </div>\
+                            <div class=\"stat\">\
+                                <div class=\"stat-title\">Profit / Hour</div>\
+                                <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_profit_per_hour\"></div>\
+                            </div>\
+                        </div>\
+                        <fieldset class=\"fieldset rounded-box border border-base-300 bg-base-200 p-4\">\
+                            <legend class=\"fieldset-legend\">Trade</legend>\
+                            <div class=\"grid gap-3\">\
+                                <fieldset class=\"fieldset\">\
+                                    <legend class=\"fieldset-legend\">Trade Level</legend>\
+                                    {}\
+                                </fieldset>\
+                                <div class=\"grid gap-3 sm:grid-cols-2\">\
+                                    <fieldset class=\"fieldset\">\
+                                        <legend class=\"fieldset-legend\">Distance Bonus</legend>\
+                                        <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradeDistanceBonus\">\
+                                        <span class=\"label text-xs\">manual % bonus, capped at +150% in the sale formula</span>\
+                                    </fieldset>\
+                                    <fieldset class=\"fieldset\">\
+                                        <legend class=\"fieldset-legend\">Trade Price Curve</legend>\
+                                        <input type=\"number\" min=\"0\" step=\"any\" class=\"input input-sm w-full\" data-bind=\"tradePriceCurve\">\
+                                        <span class=\"label text-xs\">manual % curve, commonly around 105–130%</span>\
+                                    </fieldset>\
+                                </div>\
+                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
+                                    <input data-bind=\"applyTradeModifiers\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
+                                    <span class=\"text-sm font-medium\">Apply Trade Settings</span>\
+                                </label>\
+                                <div class=\"grid gap-3 sm:grid-cols-2\">\
+                                    <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><span class=\"block text-xs text-base-content/70\">Bargain Bonus</span><span class=\"font-medium\" data-text=\"$_calc.trade_bargain_bonus_text\"></span></div>\
+                                    <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><span class=\"block text-xs text-base-content/70\">Sale Multiplier</span><span class=\"font-medium\" data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
+                                </div>\
+                            </div>\
+                        </fieldset>\
+                        <fieldset class=\"fieldset rounded-box border border-base-300 bg-base-200 p-4\">\
+                            <legend class=\"fieldset-legend\">Loot View</legend>\
+                            <div class=\"grid gap-3\">\
+                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
+                                    <input data-bind=\"showSilverAmounts\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\">\
+                                    <span class=\"text-sm font-medium\">Show silver amounts for groups and species</span>\
+                                </label>\
+                            </div>\
+                        </fieldset>\
+                        <fieldset class=\"fieldset rounded-box border border-base-300 bg-base-200 p-4\">\
+                            <legend class=\"fieldset-legend\">Auto-Discard Fish</legend>\
+                            <div class=\"grid gap-2 sm:grid-cols-2\">\
+                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"discardTrashFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>Trash</span></label>\
+                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"discardGeneralFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>General</span></label>\
+                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"discardHighQualityFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>High-Quality</span></label>\
+                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input data-bind=\"discardRareFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>Rare</span></label>\
+                                <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm sm:col-span-2\"><input data-bind=\"discardPrizeFish\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"><span>Prize</span></label>\
+                            </div>\
+                            <span class=\"label text-xs\">Only fish are discarded. Non-fish loot remains included.</span>\
+                        </fieldset>\
+                    </div>\
+                    <div class=\"grid gap-4\">\
+                        {}\
+                    </div>\
+                </div>\
+            </div>\
+        </fieldset>",
+        render_searchable_select_control(
+            data.cdn_base_url.as_str(),
+            data.lang,
+            "calculator-trade-level-picker",
+            "calculator-trade-level-value",
+            "trade_level",
+            CalculatorSearchableOptionKind::TradeLevel,
+            &signals.trade_level,
+            trade_levels,
+            false,
+            "Search trade levels",
+            false,
+        ),
+        render_loot_chart(chart),
     )
 }
 
@@ -2774,6 +3287,10 @@ fn searchable_options_for_kind<'a>(
         ),
         CalculatorSearchableOptionKind::LifeskillLevel => (
             sorted_lifeskill_options(&data.catalog.lifeskill_levels),
+            false,
+        ),
+        CalculatorSearchableOptionKind::TradeLevel => (
+            select_options_from_catalog(&data.catalog.trade_levels),
             false,
         ),
         CalculatorSearchableOptionKind::Rod => {
@@ -3745,10 +4262,15 @@ mod tests {
                     general_rate_raw: 620_000,
                     treasure_rate_raw: 62_500,
                 }],
+                trade_levels: vec![CalculatorOptionEntry {
+                    key: "73".to_string(),
+                    label: "Master 23".to_string(),
+                }],
                 defaults: CalculatorSignals {
                     level: 5,
                     lifeskill_level: "100".to_string(),
                     mastery: 0.0,
+                    trade_level: "73".to_string(),
                     zone: "240,74,74".to_string(),
                     resources: 0.0,
                     rod: "item:16162".to_string(),
@@ -3794,10 +4316,19 @@ mod tests {
                         talent: "durability_reduction_resistance".to_string(),
                         skills: vec!["fishing_exp".to_string()],
                     },
+                    trade_distance_bonus: 134.15,
+                    trade_price_curve: 120.0,
                     catch_time_active: 17.5,
                     catch_time_afk: 6.5,
                     timespan_amount: 8.0,
                     timespan_unit: "hours".to_string(),
+                    apply_trade_modifiers: true,
+                    show_silver_amounts: false,
+                    discard_trash_fish: false,
+                    discard_general_fish: false,
+                    discard_high_quality_fish: false,
+                    discard_rare_fish: false,
+                    discard_prize_fish: false,
                     brand: true,
                     active: false,
                     debug: false,
@@ -3927,8 +4458,13 @@ mod tests {
         assert!(text.contains("Search foods by name or effect"));
         assert!(text.contains("data-bind=\"mastery\""));
         assert!(text.contains("Raw Prize Catch Rate"));
-        assert!(text.contains("distribution-chart-track"));
-        assert!(text.contains("distribution-chart-callout"));
+        assert!(text.contains("Expected Group Haul"));
+        assert!(text.contains("Expected Catches / Hour"));
+        assert!(text.contains("calculator-loot-window"));
+        assert!(text.contains("<fishy-distribution-chart"));
+        assert!(text.contains("signal-path=\"_calc.fish_group_distribution_chart\""));
+        assert!(text.contains("signal-path=\"_calc.loot_distribution_chart\""));
+        assert!(text.contains("No source-backed species rows are available for this zone yet."));
         assert!(text.contains("data-category-key=\"buff-category:1\""));
         assert!(text.contains("Meal"));
         assert!(text.contains("value=\"effect:8-piece-outfit-set-effect\" checked"));
@@ -3967,6 +4503,7 @@ mod tests {
         assert!(text.contains("event:datastar-patch-signals"));
         assert!(text.contains("event:datastar-patch-elements"));
         assert!(text.contains("data:selector #calculator-fish-group-chart"));
+        assert!(text.contains("data:selector #calculator-loot-chart"));
         assert!(text.contains("\"zone_name\":\"Velia Beach\""));
         assert!(!text.contains("\"zone\":\"240,74,74\""));
         assert!(!text.contains("\"rod\":\"item:16162\""));
@@ -4201,6 +4738,7 @@ mod tests {
                 lifeskill_levels: Vec::new(),
                 mastery_prize_curve: Vec::new(),
                 zone_group_rates: Vec::new(),
+                trade_levels: Vec::new(),
                 defaults: CalculatorSignals::default(),
                 fishing_levels: Vec::new(),
                 pets: CalculatorPetCatalog::default(),
@@ -4211,6 +4749,7 @@ mod tests {
             lang: FishLang::En,
             zones: Vec::new(),
             zone_group_rates: HashMap::new(),
+            zone_loot_entries: Vec::new(),
         };
         let signals = CalculatorSignals {
             outfit: vec![

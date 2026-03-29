@@ -1,13 +1,72 @@
+import * as d3 from "../d3.js";
+
+const MIN_INTERNAL_WIDTH = 720;
+const CHART_HEIGHT = 164;
+const CALLOUT_TOP = 8;
+const CALLOUT_HEIGHT = 46;
+const CALLOUT_RADIUS = 16;
+const TRACK_TOP = 132;
+const TRACK_HEIGHT = 18;
+const TRACK_RADIUS = TRACK_HEIGHT / 2;
+const CALLOUT_GAP_PCT = 1.2;
+
+function readChartSignal(path) {
+    return window.__fishystuffCalculator?.readSignal?.(path) ?? null;
+}
+
+function chartSegments(path) {
+    const chart = readChartSignal(path);
+    return Array.isArray(chart?.segments) ? chart.segments : [];
+}
+
+function estimateCalloutWidthPx(label, valueText) {
+    const longest = Math.max(
+        String(label ?? "").length,
+        String(valueText ?? "").length,
+    );
+    return Math.max(112, Math.min(228, 42 + longest * 8.6));
+}
+
+function neutralSpan(start, end, leftRadius, rightRadius) {
+    const width = Math.max(0, end - start);
+    const left = start + Math.min(leftRadius, width / 2);
+    const right = end - Math.min(rightRadius, width / 2);
+    if (left <= right) {
+        return [left, right];
+    }
+    const center = start + width / 2;
+    return [center, center];
+}
+
+function polygonPath(points) {
+    return points
+        .map((point, index) => `${index === 0 ? "M" : "L"} ${point[0]} ${point[1]}`)
+        .join(" ")
+        .concat(" Z");
+}
+
 class FishyDistributionChart extends HTMLElement {
     #resizeObserver = null;
     #rafId = 0;
+    _handleSignalPatchBound = null;
+
+    constructor() {
+        super();
+        this._handleSignalPatchBound = () => this.#handleSignalPatch();
+    }
+
+    static get observedAttributes() {
+        return ["signal-path", "aria-label"];
+    }
 
     connectedCallback() {
-        this.#scheduleLayout();
-        this.#resizeObserver = new ResizeObserver(() => {
-            this.#scheduleLayout();
-        });
+        this.#scheduleRender();
+        this.#resizeObserver = new ResizeObserver(() => this.#scheduleRender());
         this.#resizeObserver.observe(this);
+        document.addEventListener(
+            "datastar-patch-signals",
+            this._handleSignalPatchBound,
+        );
     }
 
     disconnectedCallback() {
@@ -19,118 +78,206 @@ class FishyDistributionChart extends HTMLElement {
             cancelAnimationFrame(this.#rafId);
             this.#rafId = 0;
         }
+        document.removeEventListener(
+            "datastar-patch-signals",
+            this._handleSignalPatchBound,
+        );
     }
 
-    #scheduleLayout() {
+    attributeChangedCallback() {
+        this.#scheduleRender();
+    }
+
+    #handleSignalPatch() {
+        this.#scheduleRender();
+    }
+
+    #scheduleRender() {
         if (this.#rafId) {
             cancelAnimationFrame(this.#rafId);
         }
         this.#rafId = requestAnimationFrame(() => {
             this.#rafId = 0;
-            this.#layoutConnectors();
+            this.#render();
         });
     }
 
-    #layoutConnectors() {
-        const graphic = this.querySelector(".distribution-chart-graphic");
-        const track = this.querySelector(".distribution-chart-track");
-        if (!(graphic instanceof HTMLElement) || !(track instanceof HTMLElement)) {
+    #render() {
+        const segments = chartSegments(this.getAttribute("signal-path"));
+        if (!segments.length) {
+            this.replaceChildren();
             return;
         }
 
-        const items = Array.from(
-            this.querySelectorAll(".distribution-chart-item"),
-        ).filter((node) => node instanceof HTMLElement);
-        const segments = Array.from(
-            this.querySelectorAll(".distribution-chart-track-segment"),
-        ).filter((node) => node instanceof HTMLElement);
+        const width = Math.max(this.clientWidth || 0, MIN_INTERNAL_WIDTH);
+        const trackWidth = width;
+        const x = d3.scaleLinear().domain([0, 100]).range([0, trackWidth]);
+        const styles = getComputedStyle(this);
+        const trackBackground =
+            styles.getPropertyValue("--color-base-300").trim() || "#d6d3d1";
+        const trackBorder =
+            styles.getPropertyValue("--color-base-content").trim() || "#1f2937";
+        const clipId = `distribution-track-${crypto.randomUUID()}`;
 
-        if (items.length !== segments.length) {
-            return;
-        }
-
-        const trackRect = track.getBoundingClientRect();
-        const trackNeutralLeft = trackRect.left + trackRect.height / 2;
-        const trackNeutralRight = trackRect.right - trackRect.height / 2;
-
-        for (const [index, item] of items.entries()) {
-            const connector = item.querySelector(".distribution-chart-connector");
-            const callout = item.querySelector(".distribution-chart-callout");
-            const segment = segments[index];
-            if (
-                !(connector instanceof HTMLElement) ||
-                !(callout instanceof HTMLElement) ||
-                !(segment instanceof HTMLElement)
-            ) {
-                continue;
-            }
-
-            const itemRect = item.getBoundingClientRect();
-            const calloutRect = callout.getBoundingClientRect();
-            const segmentRect = segment.getBoundingClientRect();
-            const connectorTop = Math.max(0, calloutRect.bottom - itemRect.top - 1);
-            const connectorBottom = Math.max(connectorTop, trackRect.top - itemRect.top + 1);
-            const connectorHeight = Math.max(0, connectorBottom - connectorTop);
-
-            const calloutStyle = getComputedStyle(callout);
-            const calloutLeftRadius = parseFloat(calloutStyle.borderBottomLeftRadius) || 0;
-            const calloutRightRadius = parseFloat(calloutStyle.borderBottomRightRadius) || 0;
-            const [calloutNeutralLeft, calloutNeutralRight] = neutralEdgePoints(
-                calloutRect.left,
-                calloutRect.right,
-                calloutLeftRadius,
-                calloutRightRadius,
+        let startPct = 0;
+        let previousCalloutRightPct = 0;
+        const layout = segments.map((segment) => {
+            const widthPct = Math.max(0, Number(segment.width_pct) || 0);
+            const endPct = Math.min(100, startPct + widthPct);
+            const calloutWidthPx = estimateCalloutWidthPx(
+                segment.label,
+                segment.value_text,
             );
-            const [segmentNeutralLeft, segmentNeutralRight] = neutralEdgePoints(
-                Math.max(segmentRect.left, trackNeutralLeft),
-                Math.min(segmentRect.right, trackNeutralRight),
-                0,
-                0,
-                segmentRect.left,
-                segmentRect.right,
+            const calloutWidthPct = (calloutWidthPx / width) * 100;
+            const preferredLeftPct =
+                startPct + calloutWidthPct <= 100
+                    ? startPct
+                    : Math.max(0, endPct - calloutWidthPct);
+            const maxLeftPct = Math.max(0, 100 - calloutWidthPct);
+            const minLeftPct =
+                previousCalloutRightPct > 0
+                    ? Math.min(maxLeftPct, previousCalloutRightPct + CALLOUT_GAP_PCT)
+                    : 0;
+            const calloutLeftPct = Math.min(
+                maxLeftPct,
+                Math.max(minLeftPct, preferredLeftPct),
+            );
+            const calloutRightPct = Math.min(100, calloutLeftPct + calloutWidthPct);
+            const current = {
+                segment,
+                startPct,
+                endPct,
+                calloutLeftPct,
+                calloutRightPct,
+            };
+            startPct = endPct;
+            previousCalloutRightPct = calloutRightPct;
+            return current;
+        });
+
+        const svg = d3
+            .create("svg")
+            .attr("viewBox", `0 0 ${width} ${CHART_HEIGHT}`)
+            .attr("role", "img")
+            .attr("aria-label", this.getAttribute("aria-label") || "Distribution chart");
+
+        const defs = svg.append("defs");
+        defs.append("clipPath")
+            .attr("id", clipId)
+            .append("rect")
+            .attr("x", 0)
+            .attr("y", TRACK_TOP)
+            .attr("width", trackWidth)
+            .attr("height", TRACK_HEIGHT)
+            .attr("rx", TRACK_RADIUS)
+            .attr("ry", TRACK_RADIUS);
+
+        const connectors = svg.append("g");
+        const callouts = svg.append("g");
+        const track = svg.append("g");
+
+        layout.forEach((entry, index) => {
+            const startX = x(entry.startPct);
+            const endX = x(entry.endPct);
+            const calloutX = x(entry.calloutLeftPct);
+            const calloutWidth = x(entry.calloutRightPct) - calloutX;
+            const [segmentNeutralLeft, segmentNeutralRight] = neutralSpan(
+                startX,
+                endX,
+                index === 0 ? TRACK_RADIUS : 0,
+                index === layout.length - 1 ? TRACK_RADIUS : 0,
+            );
+            const [calloutNeutralLeft, calloutNeutralRight] = neutralSpan(
+                calloutX,
+                calloutX + calloutWidth,
+                CALLOUT_RADIUS,
+                CALLOUT_RADIUS,
             );
 
-            connector.style.top = `${connectorTop}px`;
-            connector.style.bottom = "auto";
-            connector.style.height = `${connectorHeight}px`;
-            connector.style.clipPath = [
-                "polygon(",
-                `${segmentNeutralLeft - itemRect.left}px 100%, `,
-                `${segmentNeutralRight - itemRect.left}px 100%, `,
-                `${calloutNeutralRight - itemRect.left}px 0, `,
-                `${calloutNeutralLeft - itemRect.left}px 0, `,
-                `${segmentNeutralLeft - itemRect.left}px 100%`,
-                ")",
-            ].join("");
-        }
-    }
-}
+            connectors.append("path")
+                .attr(
+                    "d",
+                    polygonPath([
+                        [segmentNeutralLeft, TRACK_TOP],
+                        [segmentNeutralRight, TRACK_TOP],
+                        [calloutNeutralRight, CALLOUT_TOP + CALLOUT_HEIGHT],
+                        [calloutNeutralLeft, CALLOUT_TOP + CALLOUT_HEIGHT],
+                    ]),
+                )
+                .style("fill", entry.segment.connector_color);
 
-function neutralEdgePoints(
-    start,
-    end,
-    startInset,
-    endInset,
-    fallbackStart = start,
-    fallbackEnd = end,
-) {
-    const left = start + startInset;
-    const right = end - endInset;
-    if (left <= right) {
-        return [left, right];
-    }
+            const callout = callouts.append("g");
+            callout.append("rect")
+                .attr("x", calloutX)
+                .attr("y", CALLOUT_TOP)
+                .attr("width", calloutWidth)
+                .attr("height", CALLOUT_HEIGHT)
+                .attr("rx", CALLOUT_RADIUS)
+                .attr("ry", CALLOUT_RADIUS)
+                .style("fill", entry.segment.fill_color)
+                .style("stroke", entry.segment.stroke_color)
+                .style("stroke-width", 1.5);
 
-    const clampedStart = Math.min(fallbackStart, fallbackEnd);
-    const clampedEnd = Math.max(fallbackStart, fallbackEnd);
-    const center = (clampedStart + clampedEnd) / 2;
-    return [center, center];
+            callout.append("text")
+                .attr("x", calloutX + calloutWidth / 2)
+                .attr("y", CALLOUT_TOP + 18)
+                .attr("text-anchor", "middle")
+                .style("fill", entry.segment.text_color)
+                .style("font-size", "11px")
+                .style("font-weight", "600")
+                .text(entry.segment.label);
+
+            callout.append("text")
+                .attr("x", calloutX + calloutWidth / 2)
+                .attr("y", CALLOUT_TOP + 34)
+                .attr("text-anchor", "middle")
+                .style("fill", entry.segment.text_color)
+                .style("font-size", "15px")
+                .style("font-weight", "700")
+                .text(entry.segment.value_text);
+        });
+
+        track.append("rect")
+            .attr("x", 0)
+            .attr("y", TRACK_TOP)
+            .attr("width", trackWidth)
+            .attr("height", TRACK_HEIGHT)
+            .attr("rx", TRACK_RADIUS)
+            .attr("ry", TRACK_RADIUS)
+            .style("fill", trackBackground);
+
+        const segmentsGroup = track.append("g").attr("clip-path", `url(#${clipId})`);
+        layout.forEach((entry) => {
+            const startX = x(entry.startPct);
+            const endX = x(entry.endPct);
+            segmentsGroup.append("rect")
+                .attr("x", startX)
+                .attr("y", TRACK_TOP)
+                .attr("width", Math.max(0, endX - startX))
+                .attr("height", TRACK_HEIGHT)
+                .style("fill", entry.segment.fill_color);
+        });
+
+        track.append("rect")
+            .attr("x", 0)
+            .attr("y", TRACK_TOP)
+            .attr("width", trackWidth)
+            .attr("height", TRACK_HEIGHT)
+            .attr("rx", TRACK_RADIUS)
+            .attr("ry", TRACK_RADIUS)
+            .style("fill", "none")
+            .style("stroke", trackBorder)
+            .style("stroke-opacity", 0.1)
+            .style("stroke-width", 1.2);
+
+        this.replaceChildren(svg.node());
+    }
 }
 
 export function registerDistributionChart() {
     if (window.customElements.get("fishy-distribution-chart")) {
         return;
     }
-
     window.customElements.define(
         "fishy-distribution-chart",
         FishyDistributionChart,

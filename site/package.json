@@ -2,20 +2,22 @@
   "devDependencies": {
     "@iconify-json/mingcute": "^1.2.7",
     "@iconify/utils": "^3.1.0",
+    "@starfederation/datastar": "github:starfederation/datastar#v1.0.0-RC.8",
     "@tailwindcss/cli": "^4.1.14",
     "@tailwindcss/typography": "^0.5.19",
+    "d3": "^7.9.0",
     "daisyui": "^5.5.19",
-    "@starfederation/datastar": "github:starfederation/datastar#v1.0.0-RC.8",
     "tailwindcss": "^4.1.14"
   },
   "scripts": {
+    "d3:build": "bun run ./scripts/build-d3.mjs",
     "datastar:build": "bun run ./scripts/build-datastar.mjs",
     "fonts:build": "bash ./scripts/build-web-fonts.sh",
     "images:build": "bun run ./scripts/build-responsive-images.mjs",
     "icons:build": "bun run ./scripts/build-icon-sprite.mjs",
     "tailwind:scan": "bun run ./scripts/write-tailwind-scan.mjs",
     "tailwind:build": "bun run icons:build && bun run tailwind:scan && bunx @tailwindcss/cli -i tailwind.input.css -o assets/css/site.css",
-    "pre-build": "bun run datastar:build && bun run images:build && bun run fonts:build && bun run tailwind:build",
+    "pre-build": "bun run datastar:build && bun run d3:build && bun run images:build && bun run fonts:build && bun run tailwind:build",
     "build": "bash ./scripts/build-public-release.sh"
   }
 }

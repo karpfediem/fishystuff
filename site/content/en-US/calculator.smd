@@ -13,6 +13,9 @@
 <script>
     const ICON_SPRITE_URL = "/img/icons.svg?v=20260325-2";
     const CALCULATOR_STORAGE_KEY = "calculator";
+    const calculatorState = {
+        signals: null,
+    };
     const calculatorLang = document.documentElement.lang?.trim().toLowerCase().startsWith("ko")
         ? "ko"
         : "en";
@@ -108,6 +111,9 @@
 
     const calculatorFmt2 = (value) => calculatorNumber(value).toFixed(2);
 
+    const calculatorFmtSilver = (value) =>
+        Math.max(0, Math.round(calculatorNumber(value))).toLocaleString();
+
     const calculatorTrimFloat = (value) =>
         calculatorFmt2(value).replace(/\.?0+$/, "");
 
@@ -169,6 +175,29 @@
                 `/api/v1/calculator/datastar/eval?lang=${this.lang}`,
             );
         },
+        connect(signals) {
+            calculatorState.signals = signals && typeof signals === "object" ? signals : null;
+        },
+        signalObject() {
+            return calculatorState.signals && typeof calculatorState.signals === "object"
+                ? calculatorState.signals
+                : null;
+        },
+        readSignal(path) {
+            const signals = this.signalObject();
+            if (!signals) {
+                return null;
+            }
+            return String(path ?? "")
+                .split(".")
+                .filter(Boolean)
+                .reduce((current, key) => {
+                    if (current && typeof current === "object" && key in current) {
+                        return current[key];
+                    }
+                    return null;
+                }, signals);
+        },
         persistSignalPatchFilter() {
             return {
                 exclude: CALCULATOR_EPHEMERAL_SIGNAL_PATTERN,
@@ -208,6 +237,7 @@
             clearSignals();
         },
         restore(signals) {
+            this.connect(signals);
             Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
         },
         persist(signals) {
@@ -265,6 +295,17 @@
                 String(current.chance_to_consume_durability_text ?? "").replace("%", ""),
             ) / 100;
             const durabilityLossAverageRaw = castsAverageRaw * chanceToReduceRaw;
+            const fishMultiplierRaw = Math.max(1, calculatorNumber(current.fish_multiplier_raw || 1));
+            const lootTotalCatchesRaw = castsAverageRaw * fishMultiplierRaw;
+            const lootFishPerHourRaw = totalTimeRaw > 0
+                ? (3600 / totalTimeRaw) * fishMultiplierRaw
+                : 0;
+            const lootProfitPerCatchRaw = Math.max(
+                0,
+                calculatorNumber(current.loot_profit_per_catch_raw || 0),
+            );
+            const lootTotalProfitRaw = lootTotalCatchesRaw * lootProfitPerCatchRaw;
+            const lootProfitPerHourRaw = lootFishPerHourRaw * lootProfitPerCatchRaw;
 
             return {
                 ...current,
@@ -282,6 +323,11 @@
                 casts_average: calculatorFmt2(castsAverageRaw),
                 durability_loss_title: `Average Durability Loss (${currentTimespanText})`,
                 durability_loss_average: calculatorFmt2(durabilityLossAverageRaw),
+                loot_total_catches: calculatorFmt2(lootTotalCatchesRaw),
+                loot_fish_per_hour: calculatorFmt2(lootFishPerHourRaw),
+                loot_fish_multiplier_text: `×${calculatorTrimFloat(fishMultiplierRaw)}`,
+                loot_total_profit: calculatorFmtSilver(lootTotalProfitRaw),
+                loot_profit_per_hour: calculatorFmtSilver(lootProfitPerHourRaw),
                 timespan_text: currentTimespanText,
                 bite_time_title: `Bitetime: ${calculatorFmt2(biteTimeRaw)}s (${calculatorFmt2(percentBite)}%)`,
                 auto_fish_time_title: `Auto-Fishing Time: ${calculatorFmt2(autoFishTimeRaw)}s (${calculatorFmt2(percentAF)}%)`,
@@ -361,82 +407,42 @@
     }
 
     #calculator-fish-group-chart {
-        .distribution-chart-graphic {
-            --distribution-callout-height: 2.9rem;
-            --distribution-track-height: 1.125rem;
-            position: relative;
-            padding-top: 4.25rem;
-        }
-
-        .distribution-chart-item {
-            position: absolute;
-            inset-block-start: 0;
-            inset-block-end: 0;
-            min-inline-size: 0;
-            pointer-events: none;
-        }
-
-        .distribution-chart-callout {
-            position: absolute;
-            inset-block-start: 0;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            border: 1px solid;
-            border-radius: 1rem;
-            block-size: var(--distribution-callout-height);
-            padding: 0.35rem 0.6rem 0.45rem;
-            min-inline-size: 0;
-            text-align: center;
-            box-shadow: 0 8px 24px color-mix(in srgb, var(--color-base-content) 10%, transparent);
-            z-index: 2;
-        }
-
-        .distribution-chart-callout-label {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-size: 0.72rem;
-            font-weight: 600;
-            line-height: 1.15;
-        }
-
-        .distribution-chart-callout-value {
-            font-size: 1rem;
-            font-weight: 700;
-            line-height: 1.1;
-            white-space: nowrap;
-        }
-
-        .distribution-chart-connector {
-            position: absolute;
-            inset-inline: 0;
-            inset-block-start: calc(var(--distribution-callout-height) - 1px);
-            inset-block-end: calc(var(--distribution-track-height) - 1px);
-            z-index: 1;
-        }
-
-        .distribution-chart-track {
+        .distribution-chart {
+            display: block;
             width: 100%;
-            display: flex;
-            position: relative;
-            margin: 0 auto;
-            height: var(--distribution-track-height);
-            overflow: hidden;
-            background-color: var(--color-base-300);
-            border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
-            border-radius: 999px;
-            z-index: 3;
+        }
 
-            .distribution-chart-track-segment {
-                height: 100%;
-                min-inline-size: 0;
-            }
+        .distribution-chart > svg {
+            display: block;
+            width: 100%;
+            height: auto;
+            overflow: visible;
+        }
+    }
 
-            .distribution-chart-track-segment + .distribution-chart-track-segment {
-                box-shadow: inset 1px 0 0 color-mix(in srgb, var(--color-base-content) 12%, transparent);
-            }
+    #calculator-loot-chart {
+        .distribution-chart {
+            display: block;
+            width: 100%;
+        }
+
+        .distribution-chart > svg {
+            display: block;
+            width: 100%;
+            height: auto;
+            overflow: visible;
+        }
+
+        .loot-sankey {
+            width: 100%;
+            min-width: 58rem;
+            display: block;
+        }
+
+        .loot-sankey > svg {
+            display: block;
+            width: 100%;
+            height: auto;
         }
     }
 </style>
