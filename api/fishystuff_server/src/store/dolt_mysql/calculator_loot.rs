@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use fishystuff_api::ids::RgbKey;
 use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
 use mysql::prelude::Queryable;
+use serde::Deserialize;
 
 use crate::error::{AppError, AppResult};
 use crate::store::{
@@ -15,6 +16,34 @@ use super::DoltMySqlStore;
 
 fn calculator_loot_item_icon_path(icon_id: i32) -> String {
     format!("/images/items/{icon_id:08}.webp")
+}
+
+const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
+const COMMUNITY_PRIZE_GUESS_WEIGHT_SCALE: f64 = 1_000_000.0;
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+struct CommunityPrizeGuessMeta {
+    slot_idx: u8,
+    guessed_rate: f64,
+}
+
+fn parse_community_prize_guess_notes(notes: &str) -> Option<CommunityPrizeGuessMeta> {
+    let mut slot_idx = None;
+    let mut guessed_rate = None;
+    for part in notes.split(';') {
+        let (key, value) = part.split_once('=')?;
+        match key.trim() {
+            "slot_idx" => slot_idx = value.trim().parse::<u8>().ok(),
+            "guessed_rate" => guessed_rate = value.trim().parse::<f64>().ok(),
+            _ => {}
+        }
+    }
+    let slot_idx = slot_idx?;
+    let guessed_rate = guessed_rate?;
+    (guessed_rate > 0.0).then_some(CommunityPrizeGuessMeta {
+        slot_idx,
+        guessed_rate,
+    })
 }
 
 impl DoltMySqlStore {
@@ -248,31 +277,33 @@ impl DoltMySqlStore {
                 }
             }
         }
-        if aggregate_weights.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let mut slot_totals = HashMap::<u8, f64>::new();
-        for ((slot_idx, _), weight) in &aggregate_weights {
-            *slot_totals.entry(*slot_idx).or_default() += *weight;
-        }
-
         let mut community_presence_by_item = HashMap::<i32, (String, u32)>::new();
+        let mut community_guess_by_key = HashMap::<(u8, i32), f64>::new();
         let community_query = format!(
-            "SELECT CAST(item_id AS SIGNED), support_status, CAST(claim_count AS SIGNED) \
+            "SELECT source_id, CAST(item_id AS SIGNED), support_status, CAST(claim_count AS SIGNED), notes \
              FROM community_zone_fish_support{as_of} \
              WHERE zone_rgb = ?"
         );
-        let community_rows: Vec<(i64, String, i64)> =
+        let community_rows: Vec<(String, i64, String, i64, Option<String>)> =
             match conn.exec(community_query, (zone_rgb.to_u32(),)) {
                 Ok(rows) => rows,
                 Err(err) if is_missing_table(&err, "community_zone_fish_support") => Vec::new(),
                 Err(err) => return Err(db_unavailable(err)),
             };
-        for (item_id, support_status, claim_count) in community_rows {
+        for (source_id, item_id, support_status, claim_count, notes) in community_rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
+            if source_id == COMMUNITY_PRIZE_GUESS_SOURCE_ID {
+                let Some(notes) = normalize_optional_string(notes) else {
+                    continue;
+                };
+                let Some(guess) = parse_community_prize_guess_notes(&notes) else {
+                    continue;
+                };
+                community_guess_by_key.insert((guess.slot_idx, item_id), guess.guessed_rate);
+                continue;
+            }
             let claim_count = u32::try_from(claim_count.max(0)).unwrap_or(u32::MAX);
             community_presence_by_item.insert(
                 item_id,
@@ -280,12 +311,31 @@ impl DoltMySqlStore {
             );
         }
 
+        let mut effective_weights = aggregate_weights.clone();
+        for ((slot_idx, item_id), guessed_rate) in &community_guess_by_key {
+            let guessed_weight = *guessed_rate * COMMUNITY_PRIZE_GUESS_WEIGHT_SCALE;
+            if guessed_weight <= 0.0 {
+                continue;
+            }
+            effective_weights
+                .entry((*slot_idx, *item_id))
+                .or_insert(guessed_weight);
+        }
+        if effective_weights.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut slot_totals = HashMap::<u8, f64>::new();
+        for ((slot_idx, _), weight) in &effective_weights {
+            *slot_totals.entry(*slot_idx).or_default() += *weight;
+        }
+
         let mut slot_membership_count = HashMap::<i32, usize>::new();
-        for (_, item_id) in aggregate_weights.keys() {
+        for (_, item_id) in effective_weights.keys() {
             *slot_membership_count.entry(*item_id).or_default() += 1;
         }
 
-        let item_id_csv = aggregate_weights
+        let item_id_csv = effective_weights
             .keys()
             .map(|(_, item_id)| item_id.to_string())
             .collect::<std::collections::HashSet<_>>()
@@ -340,7 +390,7 @@ impl DoltMySqlStore {
             item_meta.insert(item_id, (name, icon, grade, vendor_price, is_fish > 0));
         }
 
-        let mut entries = aggregate_weights
+        let mut entries = effective_weights
             .into_iter()
             .filter_map(|((slot_idx, item_id), weight)| {
                 let total_weight = slot_totals.get(&slot_idx).copied().unwrap_or_default();
@@ -358,14 +408,27 @@ impl DoltMySqlStore {
                             false,
                         )
                     });
-                let mut evidence = vec![CalculatorZoneLootEvidence {
-                    source_family: "database".to_string(),
-                    claim_kind: "in_group_rate".to_string(),
-                    scope: "group".to_string(),
-                    rate: Some(within_group_rate),
-                    status: Some("best_effort".to_string()),
-                    claim_count: None,
-                }];
+                let mut evidence = Vec::new();
+                if aggregate_weights.contains_key(&(slot_idx, item_id)) {
+                    evidence.push(CalculatorZoneLootEvidence {
+                        source_family: "database".to_string(),
+                        claim_kind: "in_group_rate".to_string(),
+                        scope: "group".to_string(),
+                        rate: Some(within_group_rate),
+                        status: Some("best_effort".to_string()),
+                        claim_count: None,
+                    });
+                }
+                if let Some(guessed_rate) = community_guess_by_key.get(&(slot_idx, item_id)) {
+                    evidence.push(CalculatorZoneLootEvidence {
+                        source_family: "community".to_string(),
+                        claim_kind: "guessed_in_group_rate".to_string(),
+                        scope: "group".to_string(),
+                        rate: Some(*guessed_rate),
+                        status: Some("guessed".to_string()),
+                        claim_count: None,
+                    });
+                }
                 if let Some((support_status, claim_count)) =
                     community_presence_by_item.get(&item_id)
                 {
@@ -414,5 +477,26 @@ impl DoltMySqlStore {
                 .then_with(|| left.item_id.cmp(&right.item_id))
         });
         Ok(entries)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_community_prize_guess_notes;
+
+    #[test]
+    fn parse_community_prize_guess_notes_reads_slot_and_rate() {
+        let parsed =
+            parse_community_prize_guess_notes("slot_idx=1;guessed_rate=0.02;subgroup_key=11054")
+                .expect("guess notes should parse");
+
+        assert_eq!(parsed.slot_idx, 1);
+        assert!((parsed.guessed_rate - 0.02).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn parse_community_prize_guess_notes_rejects_missing_fields() {
+        assert!(parse_community_prize_guess_notes("guessed_rate=0.02").is_none());
+        assert!(parse_community_prize_guess_notes("slot_idx=1").is_none());
     }
 }

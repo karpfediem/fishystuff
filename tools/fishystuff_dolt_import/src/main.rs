@@ -2,7 +2,7 @@ mod effect_table_headers;
 mod item_table_headers;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -147,6 +147,8 @@ const MAIN_GROUP_SG_COLS: [usize; 4] = [7, 10, 13, 16];
 const SUB_GROUP_KEY_COL: usize = 0;
 const COMMUNITY_PRIZE_SOURCE_ID: &str = "community_prize_fish_workbook";
 const COMMUNITY_PRIZE_SOURCE_LABEL: &str = "Curated community prize-fish workbook";
+const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
+const COMMUNITY_PRIZE_GUESS_SOURCE_LABEL: &str = "Updated Fishing Setup guessed prize-fish rates";
 const FLOCKFISH_SOURCE_ID: &str = "flockfish_workbook";
 const FLOCKFISH_ZONE_GROUP_SOURCE_LABEL: &str = "Flockfish final combined zone group table";
 const COMMUNITY_REMARK_COL: usize = 0;
@@ -157,6 +159,17 @@ const COMMUNITY_REGION_COL: usize = 4;
 const COMMUNITY_ZONE_NAME_COL: usize = 5;
 const COMMUNITY_ITEM_NAME_COL: usize = 9;
 const COMMUNITY_FISH_NAME_COL: usize = 14;
+const SETUP_SPOT_NAME_COL: usize = 0;
+const SETUP_SPOT_R_COL: usize = 1;
+const SETUP_SPOT_G_COL: usize = 2;
+const SETUP_SPOT_B_COL: usize = 3;
+const SETUP_SPOT_PRIZE_SUBGROUP_COL: usize = 4;
+const SETUP_NEW_PRIZE_ID_COL: usize = 0;
+const SETUP_NEW_PRIZE_TITLE_COL: usize = 1;
+const SETUP_NEW_PRIZE_ZONE_COL: usize = 4;
+const SETUP_NEW_PRIZE_ITEM_KEY_COL: usize = 5;
+const SETUP_NEW_PRIZE_FISH_COL: usize = 6;
+const SETUP_NEW_PRIZE_CHANCE_COL: usize = 7;
 const FLOCKFISH_JALLO_FINAL_R_COL: usize = 14;
 const FLOCKFISH_JALLO_FINAL_G_COL: usize = 15;
 const FLOCKFISH_JALLO_FINAL_B_COL: usize = 16;
@@ -205,6 +218,8 @@ enum Commands {
         dolt_repo: PathBuf,
         #[arg(long)]
         workbook_xlsx: PathBuf,
+        #[arg(long)]
+        guessed_rates_workbook_xlsx: Option<PathBuf>,
         #[arg(long)]
         output_dir: Option<PathBuf>,
         #[arg(long, default_value_t = false)]
@@ -332,9 +347,19 @@ struct CommunityPrizeImport {
     skipped_placeholder_names: usize,
 }
 
+struct CommunityPrizeGuessImport {
+    emitted_rows: usize,
+    resolved_item_keys: usize,
+    matched_names: usize,
+    unresolved_names: usize,
+    unresolved_zones: usize,
+    subgroup_mapped_rows: usize,
+}
+
 struct CommunityPrizeImportCommand {
     dolt_repo: PathBuf,
     workbook_xlsx: PathBuf,
+    guessed_rates_workbook_xlsx: Option<PathBuf>,
     output_dir: Option<PathBuf>,
     commit: bool,
     commit_msg: Option<String>,
@@ -547,12 +572,14 @@ fn main() -> Result<()> {
         Commands::ImportCommunityPrizeFishXlsx {
             dolt_repo,
             workbook_xlsx,
+            guessed_rates_workbook_xlsx,
             output_dir,
             commit,
             commit_msg,
         } => run_community_prize_import(CommunityPrizeImportCommand {
             dolt_repo,
             workbook_xlsx,
+            guessed_rates_workbook_xlsx,
             output_dir,
             commit,
             commit_msg,
@@ -732,6 +759,7 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
     let CommunityPrizeImportCommand {
         dolt_repo,
         workbook_xlsx,
+        guessed_rates_workbook_xlsx,
         output_dir,
         commit,
         commit_msg,
@@ -754,7 +782,20 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
         &workbook_sha,
         &outputs.community_csv,
     )?;
-    run_dolt_table_import(
+    let guessed_sha = match guessed_rates_workbook_xlsx.as_ref() {
+        Some(path) => Some(sha256_file(path)?),
+        None => None,
+    };
+    let guess_stats = match guessed_rates_workbook_xlsx.as_ref() {
+        Some(path) => Some(append_community_prize_guess_rows(
+            &dolt_repo,
+            path,
+            guessed_sha.as_deref().unwrap_or_default(),
+            &outputs.community_csv,
+        )?),
+        None => None,
+    };
+    run_dolt_table_import_or_sql_server(
         &dolt_repo,
         "community_zone_fish_support",
         &outputs.community_csv,
@@ -762,10 +803,14 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
 
     if commit {
         let msg = match commit_msg {
-            Some(msg) => format!("{msg} (PrizeFishWorkbook={workbook_sha})"),
-            None => {
-                format!("Import community zone fish support (PrizeFishWorkbook={workbook_sha})")
+            Some(msg) => {
+                build_community_prize_commit_message(&msg, &workbook_sha, guessed_sha.as_deref())
             }
+            None => build_community_prize_commit_message(
+                "Import community zone fish support",
+                &workbook_sha,
+                guessed_sha.as_deref(),
+            ),
         };
         run_dolt_commit(&dolt_repo, &msg)?;
     }
@@ -784,9 +829,48 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
         "community placeholder names skipped: {}",
         stats.skipped_placeholder_names
     );
+    if let Some(stats) = guess_stats.as_ref() {
+        println!(
+            "community guessed prize rows emitted: {}",
+            stats.emitted_rows
+        );
+        println!(
+            "community guessed prize direct item keys resolved: {}",
+            stats.resolved_item_keys
+        );
+        println!(
+            "community guessed prize name lookups resolved: {}",
+            stats.matched_names
+        );
+        println!(
+            "community guessed prize unresolved names skipped: {}",
+            stats.unresolved_names
+        );
+        println!(
+            "community guessed prize unresolved zones skipped: {}",
+            stats.unresolved_zones
+        );
+        println!(
+            "community guessed prize rows with subgroup mapping: {}",
+            stats.subgroup_mapped_rows
+        );
+    }
     println!("output community csv: {}", outputs.community_csv.display());
 
     Ok(())
+}
+
+fn build_community_prize_commit_message(
+    prefix: &str,
+    workbook_sha: &str,
+    guessed_sha: Option<&str>,
+) -> String {
+    match guessed_sha {
+        Some(guessed_sha) => format!(
+            "{prefix} (PrizeFishWorkbook={workbook_sha}, FishingSetupWorkbook={guessed_sha})"
+        ),
+        None => format!("{prefix} (PrizeFishWorkbook={workbook_sha})"),
+    }
 }
 
 fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Result<()> {
@@ -2034,6 +2118,218 @@ fn import_community_prize_fish_xlsx(
     })
 }
 
+fn append_community_prize_guess_rows(
+    _dolt_repo: &Path,
+    workbook_xlsx: &Path,
+    workbook_sha: &str,
+    output_csv: &Path,
+) -> Result<CommunityPrizeGuessImport> {
+    let spot_lookup = load_setup_spot_lookup(workbook_xlsx)?;
+    let range = read_sheet(workbook_xlsx, "New Prize Fish Info")?;
+    let rows = range.rows().collect::<Vec<_>>();
+    if rows.is_empty() {
+        bail!(
+            "{}:New Prize Fish Info has no rows",
+            workbook_xlsx.display()
+        );
+    }
+    validate_community_prize_guess_headers(rows[0], workbook_xlsx)?;
+
+    let mut aggregate = BTreeMap::<(u32, i64), Vec<String>>::new();
+    let mut resolved_item_keys = 0usize;
+    let matched_names = 0usize;
+    let mut unresolved_names = 0usize;
+    let mut unresolved_zones = 0usize;
+    let mut subgroup_mapped_rows = 0usize;
+
+    for row in rows.into_iter().skip(1) {
+        if row_is_empty(row) {
+            continue;
+        }
+
+        let Some(zone_name) = cell_to_string_opt(row.get(SETUP_NEW_PRIZE_ZONE_COL))? else {
+            continue;
+        };
+        let Some(guessed_rate) = cell_to_f64_opt(row.get(SETUP_NEW_PRIZE_CHANCE_COL))? else {
+            continue;
+        };
+        if guessed_rate <= 0.0 {
+            continue;
+        }
+
+        let Some((zone_rgb, zone_r, zone_g, zone_b, subgroup_key)) = spot_lookup.get(&zone_name)
+        else {
+            unresolved_zones += 1;
+            continue;
+        };
+
+        let preferred_name = cell_to_string_opt(row.get(SETUP_NEW_PRIZE_TITLE_COL))?
+            .or(cell_to_string_opt(row.get(SETUP_NEW_PRIZE_FISH_COL))?)
+            .unwrap_or_default();
+        if preferred_name.is_empty() {
+            unresolved_names += 1;
+            continue;
+        }
+
+        let Some(item_id) = cell_to_i64_opt(row.get(SETUP_NEW_PRIZE_ITEM_KEY_COL))?
+            .or(cell_to_i64_opt(row.get(SETUP_NEW_PRIZE_ID_COL))?)
+            .filter(|value| *value > 0)
+        else {
+            unresolved_names += 1;
+            continue;
+        };
+        resolved_item_keys += 1;
+
+        if subgroup_key.is_some() {
+            subgroup_mapped_rows += 1;
+        }
+
+        let fish_name = preferred_name;
+        let notes = format_community_prize_guess_notes(1, guessed_rate, *subgroup_key);
+        let record = vec![
+            COMMUNITY_PRIZE_GUESS_SOURCE_ID.to_string(),
+            COMMUNITY_PRIZE_GUESS_SOURCE_LABEL.to_string(),
+            workbook_sha.to_string(),
+            zone_rgb.to_string(),
+            zone_r.to_string(),
+            zone_g.to_string(),
+            zone_b.to_string(),
+            derive_region_name_from_zone_name(&zone_name),
+            zone_name.clone(),
+            item_id.to_string(),
+            fish_name,
+            "guessed".to_string(),
+            "0".to_string(),
+            notes,
+        ];
+
+        let key = (*zone_rgb, item_id);
+        if let Some(existing) = aggregate.insert(key, record.clone()) {
+            if existing != record {
+                bail!(
+                    "conflicting guessed prize rows for zone_rgb={} item_id={item_id}",
+                    zone_rgb
+                );
+            }
+        }
+    }
+
+    let output = OpenOptions::new()
+        .append(true)
+        .open(output_csv)
+        .with_context(|| format!("append community csv: {}", output_csv.display()))?;
+    let mut writer = WriterBuilder::new()
+        .has_headers(false)
+        .quote_style(QuoteStyle::Necessary)
+        .from_writer(output);
+    for row in aggregate.values() {
+        writer.write_record(row)?;
+    }
+    writer.flush()?;
+
+    Ok(CommunityPrizeGuessImport {
+        emitted_rows: aggregate.len(),
+        resolved_item_keys,
+        matched_names,
+        unresolved_names,
+        unresolved_zones,
+        subgroup_mapped_rows,
+    })
+}
+
+fn load_setup_spot_lookup(
+    workbook_xlsx: &Path,
+) -> Result<HashMap<String, (u32, u8, u8, u8, Option<i64>)>> {
+    let range = read_sheet(workbook_xlsx, "Spot Info")?;
+    let rows = range.rows().collect::<Vec<_>>();
+    if rows.is_empty() {
+        bail!("{}:Spot Info has no rows", workbook_xlsx.display());
+    }
+
+    let mut lookup = HashMap::new();
+    for row in rows.into_iter().skip(1) {
+        if row_is_empty(row) {
+            continue;
+        }
+        let Some(zone_name) = cell_to_string_opt(row.get(SETUP_SPOT_NAME_COL))? else {
+            continue;
+        };
+        let Some(zone_r_i64) = cell_to_i64_opt(row.get(SETUP_SPOT_R_COL))? else {
+            continue;
+        };
+        let Some(zone_g_i64) = cell_to_i64_opt(row.get(SETUP_SPOT_G_COL))? else {
+            continue;
+        };
+        let Some(zone_b_i64) = cell_to_i64_opt(row.get(SETUP_SPOT_B_COL))? else {
+            continue;
+        };
+        let zone_r = u8::try_from(zone_r_i64)
+            .with_context(|| format!("zone R out of range: {zone_r_i64}"))?;
+        let zone_g = u8::try_from(zone_g_i64)
+            .with_context(|| format!("zone G out of range: {zone_g_i64}"))?;
+        let zone_b = u8::try_from(zone_b_i64)
+            .with_context(|| format!("zone B out of range: {zone_b_i64}"))?;
+        let zone_rgb = (u32::from(zone_r) << 16) | (u32::from(zone_g) << 8) | u32::from(zone_b);
+        let prize_subgroup = cell_to_i64_opt(row.get(SETUP_SPOT_PRIZE_SUBGROUP_COL))?;
+
+        lookup.insert(
+            zone_name,
+            (zone_rgb, zone_r, zone_g, zone_b, prize_subgroup),
+        );
+    }
+    Ok(lookup)
+}
+
+fn validate_community_prize_guess_headers(row: &[Data], workbook_xlsx: &Path) -> Result<()> {
+    let headers: Vec<String> = row.iter().map(header_cell_to_string).collect();
+    let expected = [
+        (SETUP_NEW_PRIZE_TITLE_COL, "Title"),
+        (SETUP_NEW_PRIZE_ZONE_COL, "Fishing Zone"),
+        (SETUP_NEW_PRIZE_ITEM_KEY_COL, "%ItemKey"),
+        (SETUP_NEW_PRIZE_FISH_COL, "Fish"),
+        (SETUP_NEW_PRIZE_CHANCE_COL, "Chance Guess"),
+    ];
+    for (idx, expected_value) in expected {
+        let actual = headers.get(idx).map(|value| value.trim()).unwrap_or("");
+        if actual != expected_value {
+            bail!(
+                "unexpected community guessed-rate workbook headers in {}:New Prize Fish Info at column {}. expected '{}' got '{}'",
+                workbook_xlsx.display(),
+                idx,
+                expected_value,
+                actual
+            );
+        }
+    }
+    Ok(())
+}
+
+fn derive_region_name_from_zone_name(zone_name: &str) -> String {
+    zone_name
+        .split(" - ")
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_string()
+}
+
+fn format_community_prize_guess_notes(
+    slot_idx: u8,
+    guessed_rate: f64,
+    subgroup_key: Option<i64>,
+) -> String {
+    match subgroup_key {
+        Some(subgroup_key) => format!(
+            "slot_idx={slot_idx};guessed_rate={};subgroup_key={subgroup_key}",
+            format_float(guessed_rate)
+        ),
+        None => format!(
+            "slot_idx={slot_idx};guessed_rate={}",
+            format_float(guessed_rate)
+        ),
+    }
+}
+
 fn process_fishing_rows<'a, W, I>(
     rows: I,
     writer: &mut Writer<W>,
@@ -2145,7 +2441,19 @@ fn load_fish_name_lookup(repo_path: &Path) -> Result<HashMap<String, (i64, Strin
             "-r",
             "csv",
             "-q",
-            "select fish_id,name_en as fish_name from fish_names_en union select fish_id,name_ko as fish_name from fish_names_ko",
+            "SELECT CAST(ft.item_key AS SIGNED) AS fish_id, ft.name AS fish_name \
+             FROM fish_table ft \
+             UNION \
+             SELECT CAST(it.`Index` AS SIGNED) AS fish_id, it.`ItemName` AS fish_name \
+             FROM item_table it \
+             INNER JOIN fish_table ft ON ft.item_key = it.`Index` \
+             UNION \
+             SELECT CAST(en.`id` AS SIGNED) AS fish_id, en.`text` AS fish_name \
+             FROM languagedata_en en \
+             INNER JOIN fish_table ft ON ft.item_key = en.`id` \
+             WHERE en.`format` = 'A' \
+               AND COALESCE(en.`unk`, '') = '' \
+               AND NULLIF(TRIM(en.`text`), '') IS NOT NULL",
         ])
         .output()
         .context("query fish names from dolt")?;
@@ -2376,6 +2684,13 @@ fn cell_to_i64_opt(cell: Option<&Data>) -> Result<Option<i64>> {
     }
 }
 
+fn cell_to_f64_opt(cell: Option<&Data>) -> Result<Option<f64>> {
+    match cell {
+        Some(cell) => cell_to_f64(cell),
+        None => Ok(None),
+    }
+}
+
 fn cell_to_i64(cell: &Data) -> Result<Option<i64>> {
     match cell {
         Data::Empty => Ok(None),
@@ -2416,6 +2731,37 @@ fn cell_to_i64(cell: &Data) -> Result<Option<i64>> {
                 Ok(None)
             }
         }
+        Data::Error(err) => bail!("cell error: {err:?}"),
+    }
+}
+
+fn cell_to_f64(cell: &Data) -> Result<Option<f64>> {
+    match cell {
+        Data::Empty => Ok(None),
+        Data::String(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() || is_null_marker(trimmed) {
+                return Ok(None);
+            }
+            let parsed = trimmed
+                .parse::<f64>()
+                .with_context(|| format!("parse float: {trimmed}"))?;
+            Ok(Some(parsed))
+        }
+        Data::DateTimeIso(value) | Data::DurationIso(value) => {
+            let trimmed = value.trim();
+            if trimmed.is_empty() || is_null_marker(trimmed) {
+                return Ok(None);
+            }
+            let parsed = trimmed
+                .parse::<f64>()
+                .with_context(|| format!("parse float: {trimmed}"))?;
+            Ok(Some(parsed))
+        }
+        Data::Float(value) => Ok(Some(*value)),
+        Data::Int(value) => Ok(Some(*value as f64)),
+        Data::Bool(value) => Ok(Some(if *value { 1.0 } else { 0.0 })),
+        Data::DateTime(value) => Ok(Some(value.as_f64())),
         Data::Error(err) => bail!("cell error: {err:?}"),
     }
 }

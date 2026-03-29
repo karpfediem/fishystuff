@@ -2064,30 +2064,53 @@ fn loot_species_evidence_text(entry: &CalculatorZoneLootEntry) -> String {
             evidence.source_family == "database" && evidence.claim_kind == "in_group_rate"
         })
         .and_then(|evidence| evidence.rate)
-        .map(|rate| format!("DB {}%", trim_float(rate * 100.0)))
-        .unwrap_or_else(|| format!("DB {}%", trim_float(entry.within_group_rate * 100.0)));
+        .map(|rate| format!("DB {}%", trim_float(rate * 100.0)));
 
-    let Some(community) = entry.evidence.iter().find(|evidence| {
-        evidence.source_family == "community" && evidence.claim_kind == "presence"
-    }) else {
-        return db_rate_text;
-    };
+    let guessed_rate_text = entry
+        .evidence
+        .iter()
+        .find(|evidence| {
+            evidence.source_family == "community" && evidence.claim_kind == "guessed_in_group_rate"
+        })
+        .and_then(|evidence| evidence.rate)
+        .map(|rate| format!("Community guess {}%", trim_float(rate * 100.0)));
 
-    let status = match community.status.as_deref().unwrap_or_default() {
-        "confirmed" => "Community confirmed",
-        "data_incomplete" => "Community incomplete",
-        _ => "Community unconfirmed",
-    };
-    let claims = community
-        .claim_count
-        .map(|count| format!("×{count}"))
-        .unwrap_or_default();
-    let scope = match community.scope.as_str() {
-        "group_inferred" => "group-inferred",
-        "group" => "group",
-        _ => "zone-only",
-    };
-    format!("{db_rate_text} · {status}{claims} · {scope}")
+    let community_presence_text = entry
+        .evidence
+        .iter()
+        .find(|evidence| evidence.source_family == "community" && evidence.claim_kind == "presence")
+        .map(|community| {
+            let status = match community.status.as_deref().unwrap_or_default() {
+                "confirmed" => "Community confirmed",
+                "data_incomplete" => "Community incomplete",
+                _ => "Community unconfirmed",
+            };
+            let claims = community
+                .claim_count
+                .map(|count| format!("×{count}"))
+                .unwrap_or_default();
+            let scope = match community.scope.as_str() {
+                "group_inferred" => "group-inferred",
+                "group" => "group",
+                _ => "zone-only",
+            };
+            format!("{status}{claims} · {scope}")
+        });
+
+    let mut parts = Vec::new();
+    if let Some(text) = db_rate_text {
+        parts.push(text);
+    }
+    if let Some(text) = guessed_rate_text {
+        parts.push(text);
+    }
+    if let Some(text) = community_presence_text {
+        parts.push(text);
+    }
+    if parts.is_empty() {
+        return format!("DB {}%", trim_float(entry.within_group_rate * 100.0));
+    }
+    parts.join(" · ")
 }
 
 fn derive_loot_chart(
@@ -2224,7 +2247,7 @@ fn derive_loot_chart(
 
     LootChart {
         available: true,
-        note: "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices. Species rows show DB in-group rates separately from community presence evidence. Fish auto-discard applies only to fish, not non-fish loot.".to_string(),
+        note: "Expected loot uses average session casts, the current Fish multiplier, normalized group shares, and actual source-backed item prices. Species rows show DB in-group rates separately from community-guessed prize rates and community presence evidence. Fish auto-discard applies only to fish, not non-fish loot.".to_string(),
         fish_multiplier_text: format!("×{}", trim_float(fish_multiplier_raw)),
         trade_bargain_bonus_text: format!("+{}%", trim_float(bargain_bonus_raw * 100.0)),
         trade_sale_multiplier_text: if signals.apply_trade_modifiers {
@@ -4257,12 +4280,12 @@ mod tests {
     use crate::config::{AppConfig, ZoneStatusConfig};
     use crate::error::AppResult;
     use crate::state::{AppState, RequestId};
-    use crate::store::{FishLang, Store};
+    use crate::store::{CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang, Store};
 
     use super::{
         base_price_for_species, buff_category_label, build_pet_value_aliases,
         discard_grade_enabled, get_calculator_datastar_init, get_calculator_datastar_option_search,
-        get_calculator_datastar_zone_search, init_signals_patch_map,
+        get_calculator_datastar_zone_search, init_signals_patch_map, loot_species_evidence_text,
         mastery_prize_rate_for_bracket, normalize_lookup_value, normalize_named_array,
         parse_calculator_signals_value, post_calculator_datastar_eval,
         trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
@@ -5186,6 +5209,63 @@ mod tests {
             Some(115.0)
         );
         assert!(!parsed.price_overrides.contains_key("bad"));
+    }
+
+    #[test]
+    fn loot_species_evidence_text_includes_db_guess_and_presence() {
+        let entry = CalculatorZoneLootEntry {
+            within_group_rate: 0.5,
+            evidence: vec![
+                CalculatorZoneLootEvidence {
+                    source_family: "database".to_string(),
+                    claim_kind: "in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.3),
+                    status: Some("best_effort".to_string()),
+                    claim_count: None,
+                },
+                CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "guessed_in_group_rate".to_string(),
+                    scope: "group".to_string(),
+                    rate: Some(0.02),
+                    status: Some("guessed".to_string()),
+                    claim_count: None,
+                },
+                CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "group_inferred".to_string(),
+                    rate: None,
+                    status: Some("confirmed".to_string()),
+                    claim_count: Some(1),
+                },
+            ],
+            ..CalculatorZoneLootEntry::default()
+        };
+
+        assert_eq!(
+            loot_species_evidence_text(&entry),
+            "DB 30% · Community guess 2% · Community confirmed×1 · group-inferred"
+        );
+    }
+
+    #[test]
+    fn loot_species_evidence_text_handles_community_guess_without_db_rate() {
+        let entry = CalculatorZoneLootEntry {
+            within_group_rate: 0.02,
+            evidence: vec![CalculatorZoneLootEvidence {
+                source_family: "community".to_string(),
+                claim_kind: "guessed_in_group_rate".to_string(),
+                scope: "group".to_string(),
+                rate: Some(0.02),
+                status: Some("guessed".to_string()),
+                claim_count: None,
+            }],
+            ..CalculatorZoneLootEntry::default()
+        };
+
+        assert_eq!(loot_species_evidence_text(&entry), "Community guess 2%");
     }
 
     #[test]
