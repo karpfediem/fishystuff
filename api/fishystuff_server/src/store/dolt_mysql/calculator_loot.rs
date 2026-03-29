@@ -95,18 +95,18 @@ impl DoltMySqlStore {
             "SELECT \
                 CAST(slot_idx AS SIGNED), \
                 CAST(item_main_group_key AS SIGNED) \
-             FROM fishing_zone_slots{as_of} \
-             WHERE R = ? AND G = ? AND B = ? \
+             FROM flockfish_zone_group_slots{as_of} \
+             WHERE zone_rgb = ? \
+               AND resolution_status = 'numeric' \
              ORDER BY slot_idx"
         );
-        let zone_rows: Vec<(i64, Option<i64>)> = conn
-            .exec(zone_query, (zone_rgb.r, zone_rgb.g, zone_rgb.b))
+        let zone_rows: Vec<(i64, i64)> = conn
+            .exec(zone_query, (zone_rgb.to_u32(),))
             .map_err(db_unavailable)?;
         let slot_rows = zone_rows
             .into_iter()
             .filter_map(|(slot_idx, item_main_group_key)| {
                 let slot_idx = u8::try_from(slot_idx).ok()?;
-                let item_main_group_key = item_main_group_key?;
                 (item_main_group_key > 0).then_some((slot_idx, item_main_group_key))
             })
             .collect::<Vec<_>>();

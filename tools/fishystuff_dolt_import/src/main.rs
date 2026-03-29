@@ -125,12 +125,30 @@ const COMMUNITY_ZONE_FISH_SUPPORT_HEADERS: [&str; 14] = [
     "notes",
 ];
 
+const FLOCKFISH_ZONE_GROUP_SLOT_HEADERS: [&str; 13] = [
+    "source_id",
+    "source_label",
+    "source_sha256",
+    "zone_rgb",
+    "zone_r",
+    "zone_g",
+    "zone_b",
+    "zone_name",
+    "source_drop_label",
+    "slot_idx",
+    "item_main_group_key",
+    "resolution_status",
+    "resolution_value_raw",
+];
+
 const FISHING_MG_COLS: [usize; 8] = [3, 4, 5, 7, 9, 11, 13, 15];
 const MAIN_GROUP_KEY_COL: usize = 0;
 const MAIN_GROUP_SG_COLS: [usize; 4] = [7, 10, 13, 16];
 const SUB_GROUP_KEY_COL: usize = 0;
 const COMMUNITY_PRIZE_SOURCE_ID: &str = "community_prize_fish_workbook";
 const COMMUNITY_PRIZE_SOURCE_LABEL: &str = "Curated community prize-fish workbook";
+const FLOCKFISH_SOURCE_ID: &str = "flockfish_workbook";
+const FLOCKFISH_ZONE_GROUP_SOURCE_LABEL: &str = "Flockfish final combined zone group table";
 const COMMUNITY_REMARK_COL: usize = 0;
 const COMMUNITY_R_COL: usize = 1;
 const COMMUNITY_G_COL: usize = 2;
@@ -139,6 +157,12 @@ const COMMUNITY_REGION_COL: usize = 4;
 const COMMUNITY_ZONE_NAME_COL: usize = 5;
 const COMMUNITY_ITEM_NAME_COL: usize = 9;
 const COMMUNITY_FISH_NAME_COL: usize = 14;
+const FLOCKFISH_JALLO_FINAL_R_COL: usize = 14;
+const FLOCKFISH_JALLO_FINAL_G_COL: usize = 15;
+const FLOCKFISH_JALLO_FINAL_B_COL: usize = 16;
+const FLOCKFISH_JALLO_FINAL_ZONE_NAME_COL: usize = 17;
+const FLOCKFISH_JALLO_FINAL_DROP_LABEL_COL: usize = 18;
+const FLOCKFISH_JALLO_FINAL_GROUP_VALUE_COL: usize = 19;
 
 #[derive(Parser)]
 #[command(name = "fishystuff_dolt_import")]
@@ -205,6 +229,18 @@ enum Commands {
         dolt_repo: PathBuf,
         #[arg(long)]
         excel_dir: PathBuf,
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
+    ImportFlockfishSubgroupsXlsx {
+        #[arg(long)]
+        dolt_repo: PathBuf,
+        #[arg(long)]
+        workbook_xlsx: PathBuf,
         #[arg(long)]
         output_dir: Option<PathBuf>,
         #[arg(long, default_value_t = false)]
@@ -310,6 +346,36 @@ struct CommunityPrizeOutputs {
 
 struct RawTableImport {
     row_count: usize,
+}
+
+struct FlockfishSubgroupImportCommand {
+    dolt_repo: PathBuf,
+    workbook_xlsx: PathBuf,
+    output_dir: Option<PathBuf>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+struct FlockfishTableImportStats {
+    row_count: usize,
+}
+
+struct FlockfishGroupsImport {
+    main_group: FlockfishTableImportStats,
+    sub_group: FlockfishTableImportStats,
+    zone_group_slots: FlockfishZoneGroupSlotsImport,
+}
+
+struct FlockfishSubgroupOutputs {
+    main_group_csv: PathBuf,
+    sub_group_csv: PathBuf,
+    zone_group_slots_csv: PathBuf,
+}
+
+struct FlockfishZoneGroupSlotsImport {
+    row_count: usize,
+    numeric_rows: usize,
+    unresolved_rows: usize,
 }
 
 struct CalculatorEffectsImportCommand {
@@ -517,6 +583,19 @@ fn main() -> Result<()> {
             commit,
             commit_msg,
         }),
+        Commands::ImportFlockfishSubgroupsXlsx {
+            dolt_repo,
+            workbook_xlsx,
+            output_dir,
+            commit,
+            commit_msg,
+        } => run_flockfish_subgroup_import(FlockfishSubgroupImportCommand {
+            dolt_repo,
+            workbook_xlsx,
+            output_dir,
+            commit,
+            commit_msg,
+        }),
     }
 }
 
@@ -606,8 +685,16 @@ fn run_import(command: ImportCommand) -> Result<()> {
     };
 
     run_dolt_table_import(&dolt_repo, "fishing_table", &outputs.fishing_csv)?;
-    run_dolt_table_import(&dolt_repo, "item_main_group_table", &outputs.main_group_csv)?;
-    run_dolt_table_import(&dolt_repo, "item_sub_group_table", &outputs.sub_group_csv)?;
+    run_dolt_table_import_or_sql_server(
+        &dolt_repo,
+        "item_main_group_table",
+        &outputs.main_group_csv,
+    )?;
+    run_dolt_table_import_or_sql_server(
+        &dolt_repo,
+        "item_sub_group_table",
+        &outputs.sub_group_csv,
+    )?;
     if item_table_stats.is_some() {
         run_dolt_table_import(&dolt_repo, "item_table", &outputs.item_table_csv)?;
     }
@@ -1113,6 +1200,383 @@ fn run_calculator_progression_import(command: CalculatorProgressionImportCommand
     );
 
     Ok(())
+}
+
+fn run_flockfish_subgroup_import(command: FlockfishSubgroupImportCommand) -> Result<()> {
+    let FlockfishSubgroupImportCommand {
+        dolt_repo,
+        workbook_xlsx,
+        output_dir,
+        commit,
+        commit_msg,
+    } = command;
+
+    let output_dir = match output_dir {
+        Some(path) => path,
+        None => default_output_dir()?,
+    };
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("create output dir: {}", output_dir.display()))?;
+
+    let workbook_sha = sha256_file(&workbook_xlsx)?;
+    let outputs = FlockfishSubgroupOutputs {
+        main_group_csv: output_dir.join("item_main_group_table.csv"),
+        sub_group_csv: output_dir.join("item_sub_group_table.csv"),
+        zone_group_slots_csv: output_dir.join("flockfish_zone_group_slots.csv"),
+    };
+    let stats = import_flockfish_group_tables(
+        &workbook_xlsx,
+        &workbook_sha,
+        &outputs.main_group_csv,
+        &outputs.sub_group_csv,
+        &outputs.zone_group_slots_csv,
+    )?;
+
+    run_dolt_table_import_or_sql_server(
+        &dolt_repo,
+        "item_main_group_table",
+        &outputs.main_group_csv,
+    )?;
+    run_dolt_table_import_or_sql_server(
+        &dolt_repo,
+        "item_sub_group_table",
+        &outputs.sub_group_csv,
+    )?;
+    ensure_flockfish_zone_group_slots_table(&dolt_repo)?;
+    run_dolt_sql_table_import(
+        &dolt_repo,
+        "flockfish_zone_group_slots",
+        &outputs.zone_group_slots_csv,
+    )?;
+
+    if commit {
+        let msg = match commit_msg {
+            Some(msg) => format!("{msg} (FlockfishWorkbook={workbook_sha})"),
+            None => format!("Import flockfish fishing group tables (FlockfishWorkbook={workbook_sha})"),
+        };
+        run_dolt_commit(&dolt_repo, &msg)?;
+    }
+
+    println!("flockfish main-group rows emitted: {}", stats.main_group.row_count);
+    println!(
+        "output main-group csv: {}",
+        outputs.main_group_csv.display()
+    );
+    println!("flockfish subgroup rows emitted: {}", stats.sub_group.row_count);
+    println!("output subgroup csv: {}", outputs.sub_group_csv.display());
+    println!(
+        "flockfish resolved zone-group rows emitted: {}",
+        stats.zone_group_slots.row_count
+    );
+    println!(
+        "flockfish resolved numeric zone-group rows: {}",
+        stats.zone_group_slots.numeric_rows
+    );
+    println!(
+        "flockfish unresolved zone-group rows: {}",
+        stats.zone_group_slots.unresolved_rows
+    );
+    println!(
+        "output resolved zone-group csv: {}",
+        outputs.zone_group_slots_csv.display()
+    );
+
+    Ok(())
+}
+
+fn import_flockfish_group_tables(
+    workbook_xlsx: &Path,
+    workbook_sha: &str,
+    main_group_csv: &Path,
+    sub_group_csv: &Path,
+    zone_group_slots_csv: &Path,
+) -> Result<FlockfishGroupsImport> {
+    let main_group_rows = load_flockfish_main_group_rows(workbook_xlsx)?;
+    let main_group_stats = FlockfishTableImportStats {
+        row_count: main_group_rows.len(),
+    };
+    write_group_rows_csv(main_group_csv, &MAIN_GROUP_HEADERS, main_group_rows)?;
+
+    let sub_group_rows = load_flockfish_sub_group_rows(workbook_xlsx)?;
+    let sub_group_stats = FlockfishTableImportStats {
+        row_count: sub_group_rows.len(),
+    };
+    write_group_rows_csv(sub_group_csv, &SUB_GROUP_HEADERS, sub_group_rows)?;
+
+    let zone_group_slots =
+        import_flockfish_zone_group_slots(workbook_xlsx, workbook_sha, zone_group_slots_csv)?;
+
+    Ok(FlockfishGroupsImport {
+        main_group: main_group_stats,
+        sub_group: sub_group_stats,
+        zone_group_slots,
+    })
+}
+
+fn write_group_rows_csv<I>(output_csv: &Path, headers: &[&str], rows: I) -> Result<()>
+where
+    I: IntoIterator<Item = Vec<String>>,
+{
+    let mut writer = build_csv_writer(output_csv)?;
+    writer.write_record(headers)?;
+    for row in rows {
+        writer.write_record(row)?;
+    }
+    writer.flush()?;
+    Ok(())
+}
+
+fn load_flockfish_main_group_rows(workbook_xlsx: &Path) -> Result<Vec<Vec<String>>> {
+    load_flockfish_sheet_rows(workbook_xlsx, "Maingroup", &MAIN_GROUP_HEADERS)
+}
+
+fn load_flockfish_sub_group_rows(workbook_xlsx: &Path) -> Result<Vec<Vec<String>>> {
+    load_flockfish_sheet_rows(workbook_xlsx, "Subgroup", &SUB_GROUP_HEADERS)
+}
+
+fn load_flockfish_sheet_rows(
+    workbook_xlsx: &Path,
+    sheet_name: &str,
+    expected_headers: &[&str],
+) -> Result<Vec<Vec<String>>> {
+    let range = read_sheet(workbook_xlsx, sheet_name)?;
+    let headers = read_headers(&range)?;
+    validate_headers_normalized(
+        &headers,
+        expected_headers,
+        &format!("{}:{sheet_name}", workbook_xlsx.display()),
+    )?;
+
+    let mut rows_out = Vec::new();
+    for row in range.rows().skip(1) {
+        if row_is_empty(row) {
+            continue;
+        }
+        let Some(first_cell) = cell_to_string_opt(row.get(0))? else {
+            continue;
+        };
+        if first_cell
+            .parse::<i64>()
+            .ok()
+            .filter(|value| *value > 0)
+            .is_none()
+        {
+            continue;
+        }
+        let mut record = build_record(row, expected_headers.len())?;
+        for value in &mut record {
+            *value = normalize_flockfish_numeric_literal(value);
+        }
+        rows_out.push(record);
+    }
+    Ok(rows_out)
+}
+
+fn import_flockfish_zone_group_slots(
+    workbook_xlsx: &Path,
+    workbook_sha: &str,
+    output_csv: &Path,
+) -> Result<FlockfishZoneGroupSlotsImport> {
+    let range = read_sheet(workbook_xlsx, "Jallo - New Fish Work Sheet")?;
+    let mut by_key = BTreeMap::<(u32, u8), Vec<String>>::new();
+    let mut numeric_rows = 0usize;
+    let mut unresolved_rows = 0usize;
+
+    for row in range.rows().skip(2) {
+        if row_is_empty(row) {
+            continue;
+        }
+
+        let Some(zone_r_raw) = cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_R_COL))? else {
+            continue;
+        };
+        let Some(zone_g_raw) = cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_G_COL))? else {
+            continue;
+        };
+        let Some(zone_b_raw) = cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_B_COL))? else {
+            continue;
+        };
+        let Ok(zone_r_i64) = zone_r_raw.parse::<i64>() else {
+            continue;
+        };
+        let Ok(zone_g_i64) = zone_g_raw.parse::<i64>() else {
+            continue;
+        };
+        let Ok(zone_b_i64) = zone_b_raw.parse::<i64>() else {
+            continue;
+        };
+        let Some(zone_name) =
+            cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_ZONE_NAME_COL))?
+        else {
+            continue;
+        };
+        let Some(source_drop_label) =
+            cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_DROP_LABEL_COL))?
+        else {
+            continue;
+        };
+        let Some(slot_idx) = flockfish_drop_label_to_slot_idx(&source_drop_label) else {
+            continue;
+        };
+
+        let zone_r = u8::try_from(zone_r_i64)
+            .with_context(|| format!("zone R out of range: {zone_r_i64}"))?;
+        let zone_g = u8::try_from(zone_g_i64)
+            .with_context(|| format!("zone G out of range: {zone_g_i64}"))?;
+        let zone_b = u8::try_from(zone_b_i64)
+            .with_context(|| format!("zone B out of range: {zone_b_i64}"))?;
+        let zone_rgb = (u32::from(zone_r) << 16) | (u32::from(zone_g) << 8) | u32::from(zone_b);
+
+        let resolution_value_raw = cell_to_string_opt(row.get(FLOCKFISH_JALLO_FINAL_GROUP_VALUE_COL))?
+            .unwrap_or_default();
+        let (item_main_group_key, resolution_status) =
+            parse_flockfish_zone_group_value(&resolution_value_raw);
+        if item_main_group_key.is_some() {
+            numeric_rows += 1;
+        } else {
+            unresolved_rows += 1;
+        }
+
+        let record = vec![
+            FLOCKFISH_SOURCE_ID.to_string(),
+            FLOCKFISH_ZONE_GROUP_SOURCE_LABEL.to_string(),
+            workbook_sha.to_string(),
+            zone_rgb.to_string(),
+            zone_r.to_string(),
+            zone_g.to_string(),
+            zone_b.to_string(),
+            zone_name,
+            source_drop_label,
+            slot_idx.to_string(),
+            item_main_group_key
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
+            resolution_status.to_string(),
+            resolution_value_raw,
+        ];
+
+        let key = (zone_rgb, slot_idx);
+        if let Some(existing) = by_key.insert(key, record.clone()) {
+            if existing != record {
+                bail!(
+                    "conflicting flockfish zone-group rows for rgb={} slot_idx={slot_idx}",
+                    zone_rgb
+                );
+            }
+        }
+    }
+
+    let row_count = by_key.len();
+    write_group_rows_csv(
+        output_csv,
+        &FLOCKFISH_ZONE_GROUP_SLOT_HEADERS,
+        by_key.into_values(),
+    )?;
+
+    Ok(FlockfishZoneGroupSlotsImport {
+        row_count,
+        numeric_rows,
+        unresolved_rows,
+    })
+}
+
+fn ensure_flockfish_zone_group_slots_table(dolt_repo: &Path) -> Result<()> {
+    run_dolt_sql_query(
+        dolt_repo,
+        "CREATE TABLE IF NOT EXISTS `flockfish_zone_group_slots` (\
+            `source_id` VARCHAR(64) NOT NULL,\
+            `source_label` VARCHAR(255) NOT NULL,\
+            `source_sha256` CHAR(64) NOT NULL,\
+            `zone_rgb` INT UNSIGNED NOT NULL,\
+            `zone_r` TINYINT UNSIGNED NOT NULL,\
+            `zone_g` TINYINT UNSIGNED NOT NULL,\
+            `zone_b` TINYINT UNSIGNED NOT NULL,\
+            `zone_name` VARCHAR(255) NOT NULL,\
+            `source_drop_label` VARCHAR(64) NOT NULL,\
+            `slot_idx` TINYINT UNSIGNED NOT NULL,\
+            `item_main_group_key` BIGINT NULL,\
+            `resolution_status` VARCHAR(32) NOT NULL,\
+            `resolution_value_raw` VARCHAR(255) NULL,\
+            PRIMARY KEY (`source_id`, `zone_rgb`, `slot_idx`),\
+            KEY `idx_zone_rgb_slot` (`zone_rgb`, `slot_idx`),\
+            KEY `idx_resolution_status` (`resolution_status`)\
+        );",
+        "ensure flockfish_zone_group_slots table",
+    )
+}
+
+fn flockfish_drop_label_to_slot_idx(value: &str) -> Option<u8> {
+    match value.trim() {
+        "DropID PRIZE CATCH" => Some(1),
+        "DropID RARE" => Some(2),
+        "DropID LARGE" => Some(3),
+        "DropID GENERAL" => Some(4),
+        "DropID TREASURE" => Some(5),
+        _ => None,
+    }
+}
+
+fn parse_flockfish_zone_group_value(value: &str) -> (Option<i64>, &'static str) {
+    let normalized = normalize_import_string(value);
+    if normalized.is_empty() {
+        return (None, "blank");
+    }
+    if let Ok(parsed) = normalized.parse::<i64>() {
+        if parsed > 0 {
+            return (Some(parsed), "numeric");
+        }
+    }
+    if normalized.starts_with("DUMMY") {
+        return (None, "dummy");
+    }
+    (None, "other")
+}
+
+fn validate_headers_normalized(actual: &[String], expected: &[&str], label: &str) -> Result<()> {
+    let normalized_actual = actual
+        .iter()
+        .map(|header| normalize_import_header(header))
+        .collect::<Vec<_>>();
+    let normalized_expected = expected
+        .iter()
+        .map(|header| normalize_import_header(header))
+        .collect::<Vec<_>>();
+    if normalized_actual != normalized_expected {
+        bail!(
+            "unexpected normalized headers in {label}. expected: [{}], got: [{}]",
+            normalized_expected.join(", "),
+            normalized_actual.join(", ")
+        );
+    }
+    Ok(())
+}
+
+fn normalize_import_header(value: &str) -> String {
+    value.trim().trim_start_matches('%').to_string()
+}
+
+fn normalize_import_string(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || is_null_marker(trimmed) {
+        String::new()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn normalize_flockfish_numeric_literal(value: &str) -> String {
+    let trimmed = normalize_import_string(value);
+    if trimmed.is_empty() {
+        return trimmed;
+    }
+    if trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_digit() || matches!(ch, '_' | '-' | '.'))
+    {
+        trimmed.replace('_', "")
+    } else {
+        trimmed
+    }
 }
 
 fn resolve_calculator_effect_workbooks(excel_dir: &Path) -> Result<CalculatorEffectsWorkbookSet> {
@@ -1998,6 +2462,26 @@ fn run_dolt_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> Resu
     bail!("dolt table import failed for {table}: {stderr}");
 }
 
+fn run_dolt_table_import_or_sql_server(
+    repo_path: &Path,
+    table: &str,
+    csv_path: &Path,
+) -> Result<()> {
+    match run_dolt_table_import(repo_path, table, csv_path) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let err_text = err.to_string();
+            if !err_text.contains("database is read only") {
+                return Err(err);
+            }
+            eprintln!(
+                "local dolt table import for {table} is read-only; falling back to sql-server import"
+            );
+            run_dolt_remote_sql_table_import(table, csv_path)
+        }
+    }
+}
+
 fn run_dolt_sql_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> Result<()> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
@@ -2038,6 +2522,49 @@ fn run_dolt_sql_table_import(repo_path: &Path, table: &str, csv_path: &Path) -> 
     Ok(())
 }
 
+fn run_dolt_remote_sql_table_import(table: &str, csv_path: &Path) -> Result<()> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .from_path(csv_path)
+        .with_context(|| format!("open generated csv for {table}: {}", csv_path.display()))?;
+    let headers = reader
+        .headers()
+        .with_context(|| format!("read generated csv headers for {table}"))?
+        .iter()
+        .map(|header| header.to_string())
+        .collect::<Vec<_>>();
+
+    run_dolt_remote_sql_query(
+        &format!(
+            "USE {};\nDELETE FROM {};",
+            sql_ident(&remote_dolt_database_name()),
+            sql_ident(table)
+        ),
+        &format!("truncate {table} via delete on sql-server"),
+    )?;
+
+    let mut batch = Vec::new();
+    for record in reader.records() {
+        let record = record.with_context(|| format!("read generated csv row for {table}"))?;
+        batch.push(
+            record
+                .iter()
+                .map(|value| value.to_string())
+                .collect::<Vec<_>>(),
+        );
+        if batch.len() >= 200 {
+            run_dolt_remote_insert_batch(table, &headers, &batch)?;
+            batch.clear();
+        }
+    }
+
+    if !batch.is_empty() {
+        run_dolt_remote_insert_batch(table, &headers, &batch)?;
+    }
+
+    Ok(())
+}
+
 fn run_dolt_insert_batch(
     repo_path: &Path,
     table: &str,
@@ -2071,6 +2598,39 @@ fn run_dolt_insert_batch(
     run_dolt_sql_query(repo_path, &query, &format!("insert batch into {table}"))
 }
 
+fn run_dolt_remote_insert_batch(
+    table: &str,
+    headers: &[String],
+    rows: &[Vec<String>],
+) -> Result<()> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+
+    let columns = headers
+        .iter()
+        .map(|header| sql_ident(header))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let values = rows
+        .iter()
+        .map(|row| {
+            row.iter()
+                .map(|value| sql_value(value))
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .map(|joined| format!("({joined})"))
+        .collect::<Vec<_>>()
+        .join(",\n");
+    let query = format!(
+        "USE {};\nINSERT INTO {} ({columns}) VALUES\n{values};",
+        sql_ident(&remote_dolt_database_name()),
+        sql_ident(table)
+    );
+    run_dolt_remote_sql_query(&query, &format!("insert batch into {table} on sql-server"))
+}
+
 fn run_dolt_sql_query(repo_path: &Path, query: &str, label: &str) -> Result<()> {
     let mut child = Command::new("dolt")
         .current_dir(repo_path)
@@ -2100,6 +2660,55 @@ fn run_dolt_sql_query(repo_path: &Path, query: &str, label: &str) -> Result<()> 
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     bail!("dolt sql failed during {label}: {stderr}");
+}
+
+fn run_dolt_remote_sql_query(query: &str, label: &str) -> Result<()> {
+    let mut child = Command::new("dolt")
+        .args([
+            "--host",
+            &remote_dolt_host(),
+            "--port",
+            &remote_dolt_port(),
+            "--no-tls",
+            "sql",
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .with_context(|| format!("spawn remote dolt sql for {label}"))?;
+
+    {
+        let stdin = child
+            .stdin
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("missing remote dolt sql stdin for {label}"))?;
+        stdin
+            .write_all(query.as_bytes())
+            .with_context(|| format!("write remote dolt sql query for {label}"))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .with_context(|| format!("wait for remote dolt sql during {label}"))?;
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    bail!("remote dolt sql failed during {label}: {stderr}");
+}
+
+fn remote_dolt_host() -> String {
+    std::env::var("DOLT_SQL_HOST").unwrap_or_else(|_| "127.0.0.1".to_string())
+}
+
+fn remote_dolt_port() -> String {
+    std::env::var("DOLT_SQL_PORT").unwrap_or_else(|_| "3306".to_string())
+}
+
+fn remote_dolt_database_name() -> String {
+    std::env::var("DOLT_DATABASE_NAME").unwrap_or_else(|_| "fishystuff".to_string())
 }
 
 fn sql_ident(value: &str) -> String {
@@ -2442,5 +3051,57 @@ mod tests {
         assert!(is_placeholder_community_name("❔❔"));
         assert!(is_placeholder_community_name("NULL"));
         assert!(!is_placeholder_community_name("Mudskipper"));
+    }
+
+    #[test]
+    fn validate_headers_normalized_accepts_prefixed_flockfish_headers() {
+        let actual = vec![
+            "ItemSubGroupKey".to_string(),
+            "%ItemKey".to_string(),
+            "%EnchantLevel".to_string(),
+        ];
+        validate_headers_normalized(
+            &actual,
+            &["ItemSubGroupKey", "ItemKey", "EnchantLevel"],
+            "test",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn flockfish_drop_label_to_slot_idx_maps_final_combined_labels() {
+        assert_eq!(flockfish_drop_label_to_slot_idx("DropID PRIZE CATCH"), Some(1));
+        assert_eq!(flockfish_drop_label_to_slot_idx("DropID RARE"), Some(2));
+        assert_eq!(flockfish_drop_label_to_slot_idx("DropID LARGE"), Some(3));
+        assert_eq!(flockfish_drop_label_to_slot_idx("DropID GENERAL"), Some(4));
+        assert_eq!(flockfish_drop_label_to_slot_idx("DropID TREASURE"), Some(5));
+        assert_eq!(flockfish_drop_label_to_slot_idx("DropIDHarpoon"), None);
+    }
+
+    #[test]
+    fn parse_flockfish_zone_group_value_preserves_unresolved_rows() {
+        assert_eq!(
+            parse_flockfish_zone_group_value("11023"),
+            (Some(11023), "numeric")
+        );
+        assert_eq!(
+            parse_flockfish_zone_group_value("DUMMY1"),
+            (None, "dummy")
+        );
+        assert_eq!(parse_flockfish_zone_group_value(""), (None, "blank"));
+        assert_eq!(
+            parse_flockfish_zone_group_value("UNKNOWN"),
+            (None, "other")
+        );
+    }
+
+    #[test]
+    fn normalize_flockfish_numeric_literal_strips_visual_underscores() {
+        assert_eq!(normalize_flockfish_numeric_literal("292_200"), "292200");
+        assert_eq!(normalize_flockfish_numeric_literal("1_000_000"), "1000000");
+        assert_eq!(
+            normalize_flockfish_numeric_literal("getLifeLevel(1)>34;"),
+            "getLifeLevel(1)>34;"
+        );
     }
 }
