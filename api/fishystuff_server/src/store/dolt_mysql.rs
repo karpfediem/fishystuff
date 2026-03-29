@@ -252,9 +252,6 @@ impl DoltMySqlStore {
             defaults,
             calculator_catalog_cache: Arc::new(Mutex::new(HashMap::new())),
         };
-        for lang in [FishLang::En, FishLang::Ko] {
-            let _ = store.query_calculator_catalog(lang, None);
-        }
         Ok(store)
     }
 
@@ -1439,6 +1436,18 @@ fn zone_distribution_fish_ids(summary: &WindowSummary) -> Vec<i32> {
 
 #[async_trait]
 impl Store for DoltMySqlStore {
+    async fn prime_startup_caches(&self) -> AppResult<()> {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || {
+            for lang in [FishLang::En, FishLang::Ko] {
+                this.query_calculator_catalog(lang, None)?;
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|err| AppError::internal(err.to_string()))?
+    }
+
     async fn get_meta(&self) -> AppResult<MetaResponse> {
         let this = self.clone();
         tokio::task::spawn_blocking(move || {

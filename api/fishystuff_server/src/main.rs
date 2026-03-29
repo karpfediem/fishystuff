@@ -12,6 +12,12 @@ async fn main() -> Result<()> {
     let config = config::AppConfig::parse()?;
     let bind = config.bind.clone();
     let state = state::AppState::new(config)?;
+    let startup_store = state.store.clone();
+    tokio::spawn(async move {
+        if let Err(err) = startup_store.prime_startup_caches().await {
+            eprintln!("startup cache prewarm failed: {:?}", err);
+        }
+    });
     let app = app::build_router(state);
 
     let addr = bind
