@@ -94,8 +94,10 @@ struct CalculatorDerivedSignals {
 #[derive(Debug, Clone)]
 struct FishGroupChartRow {
     label: &'static str,
-    tone_class: &'static str,
-    badge_class: &'static str,
+    fill_color: &'static str,
+    stroke_color: &'static str,
+    text_color: &'static str,
+    connector_color: &'static str,
     bonus_text: String,
     base_share_pct: f64,
     weight_pct: f64,
@@ -1595,8 +1597,10 @@ fn derive_fish_group_chart(
         rows: vec![
             FishGroupChartRow {
                 label: "Prize",
-                tone_class: "bg-red-300",
-                badge_class: "border-red-400 bg-red-300 text-red-950",
+                fill_color: "#fda4af",
+                stroke_color: "#f87171",
+                text_color: "#450a0a",
+                connector_color: "rgb(248 113 113 / 0.32)",
                 bonus_text: format!(
                     "Mastery {} → {}% raw prize",
                     trim_float(signals.mastery),
@@ -1608,8 +1612,10 @@ fn derive_fish_group_chart(
             },
             FishGroupChartRow {
                 label: "Rare",
-                tone_class: "bg-yellow-300",
-                badge_class: "border-yellow-400 bg-yellow-300 text-yellow-950",
+                fill_color: "#fde68a",
+                stroke_color: "#facc15",
+                text_color: "#422006",
+                connector_color: "rgb(250 204 21 / 0.32)",
                 bonus_text: if rare_bonus > 0.0 {
                     format!("+{}% Rare", trim_float(rare_bonus * 100.0))
                 } else {
@@ -1621,8 +1627,10 @@ fn derive_fish_group_chart(
             },
             FishGroupChartRow {
                 label: "High-Quality",
-                tone_class: "bg-blue-300",
-                badge_class: "border-blue-400 bg-blue-300 text-blue-950",
+                fill_color: "#93c5fd",
+                stroke_color: "#60a5fa",
+                text_color: "#172554",
+                connector_color: "rgb(96 165 250 / 0.32)",
                 bonus_text: if high_quality_bonus > 0.0 {
                     format!("+{}% HQ", trim_float(high_quality_bonus * 100.0))
                 } else {
@@ -1634,8 +1642,10 @@ fn derive_fish_group_chart(
             },
             FishGroupChartRow {
                 label: "General",
-                tone_class: "bg-base-100",
-                badge_class: "border-base-300 bg-base-100 text-base-content",
+                fill_color: "var(--color-base-100)",
+                stroke_color: "color-mix(in srgb, var(--color-base-content) 16%, transparent)",
+                text_color: "var(--color-base-content)",
+                connector_color: "color-mix(in srgb, var(--color-base-content) 14%, transparent)",
                 bonus_text: "No bonus".to_string(),
                 base_share_pct: general_base * 100.0,
                 weight_pct: general_weight * 100.0,
@@ -1643,8 +1653,10 @@ fn derive_fish_group_chart(
             },
             FishGroupChartRow {
                 label: "Treasure",
-                tone_class: "bg-green-300",
-                badge_class: "border-green-400 bg-green-300 text-green-950",
+                fill_color: "#86efac",
+                stroke_color: "#4ade80",
+                text_color: "#052e16",
+                connector_color: "rgb(74 222 128 / 0.32)",
                 bonus_text: "No bonus".to_string(),
                 base_share_pct: treasure_base * 100.0,
                 weight_pct: treasure_weight * 100.0,
@@ -2395,6 +2407,107 @@ fn render_effect_badge(label: &str, class_name: &str) -> String {
     )
 }
 
+fn estimate_distribution_callout_width_pct(label: &str, value_text: &str) -> f64 {
+    let longest_line = label.chars().count().max(value_text.chars().count()) as f64;
+    (5.0 + longest_line * 0.9).clamp(10.5, 23.0)
+}
+
+fn render_distribution_chart(
+    chart_id: &str,
+    aria_label: &str,
+    rows: &[FishGroupChartRow],
+) -> String {
+    let mut html = String::new();
+    write!(
+        html,
+        "<div id=\"{}\" class=\"distribution-chart\" aria-label=\"{}\"><div class=\"distribution-chart-graphic\">",
+        escape_html(chart_id),
+        escape_html(aria_label),
+    )
+    .unwrap();
+
+    let mut segment_start_pct = 0.0_f64;
+    let mut previous_callout_right_pct = 0.0_f64;
+
+    for row in rows {
+        let segment_width_pct = row.current_share_pct.max(0.0);
+        let value_text = format!("{}%", trim_float(row.current_share_pct));
+        let callout_width_pct = estimate_distribution_callout_width_pct(row.label, &value_text);
+        let preferred_callout_left_pct = if segment_start_pct + callout_width_pct <= 100.0 {
+            segment_start_pct
+        } else {
+            (segment_start_pct + segment_width_pct - callout_width_pct).max(0.0)
+        };
+        let max_callout_left_pct = (100.0 - callout_width_pct).max(0.0);
+        let min_callout_left_pct = if previous_callout_right_pct > 0.0 {
+            (previous_callout_right_pct + 1.0).min(max_callout_left_pct)
+        } else {
+            0.0
+        };
+        let callout_left_pct = preferred_callout_left_pct
+            .max(min_callout_left_pct)
+            .min(max_callout_left_pct);
+        let callout_right_pct = (callout_left_pct + callout_width_pct).min(100.0);
+        let segment_end_pct = (segment_start_pct + segment_width_pct).min(100.0);
+        let overlay_left_pct = segment_start_pct.min(callout_left_pct);
+        let overlay_right_pct = segment_end_pct.max(callout_right_pct);
+        let overlay_width_pct = (overlay_right_pct - overlay_left_pct).max(0.1);
+        let local_segment_left_pct =
+            ((segment_start_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
+        let local_segment_right_pct =
+            ((segment_end_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
+        let local_callout_left_pct =
+            ((callout_left_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
+        let local_callout_right_pct =
+            ((callout_right_pct - overlay_left_pct) / overlay_width_pct) * 100.0;
+        let local_callout_width_pct = local_callout_right_pct - local_callout_left_pct;
+
+        write!(
+            html,
+            "<div class=\"distribution-chart-item\" style=\"left: {:.4}%; width: {:.4}%;\">\
+                <div class=\"distribution-chart-connector\" style=\"background: {}; clip-path: polygon({:.4}% 100%, {:.4}% 100%, {:.4}% 0%, {:.4}% 0%, {:.4}% 100%);\"></div>\
+                <div class=\"distribution-chart-callout\" style=\"left: {:.4}%; width: {:.4}%; border-color: {}; background: {}; color: {};\">\
+                    <div class=\"distribution-chart-callout-label\">{}</div>\
+                    <div class=\"distribution-chart-callout-value\">{}</div>\
+                </div>\
+            </div>",
+            overlay_left_pct,
+            overlay_width_pct,
+            row.connector_color,
+            local_segment_left_pct,
+            local_segment_right_pct,
+            local_callout_right_pct,
+            local_callout_left_pct,
+            local_segment_left_pct,
+            local_callout_left_pct,
+            local_callout_width_pct,
+            row.stroke_color,
+            row.fill_color,
+            row.text_color,
+            escape_html(row.label),
+            escape_html(&value_text),
+        )
+        .unwrap();
+
+        segment_start_pct = segment_end_pct;
+        previous_callout_right_pct = callout_right_pct;
+    }
+
+    html.push_str("<div class=\"distribution-chart-track\">");
+    for row in rows {
+        write!(
+            html,
+            "<div class=\"distribution-chart-track-segment\" style=\"flex-basis: {:.4}%; background: {}; border-color: {};\"></div>",
+            row.current_share_pct.max(0.0),
+            row.fill_color,
+            row.stroke_color,
+        )
+        .unwrap();
+    }
+    html.push_str("</div></div></div>");
+    html
+}
+
 fn render_fish_group_chart(chart: &FishGroupChart) -> String {
     if !chart.available {
         return format!(
@@ -2407,38 +2520,17 @@ fn render_fish_group_chart(chart: &FishGroupChart) -> String {
     html.push_str("<div id=\"calculator-fish-group-chart\" class=\"grid gap-4\">");
     write!(
         html,
-        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Raw Prize Catch Rate</div><div class=\"text-xs text-base-content/70\">Mastery {} drives the direct prize-rate formula before normalization.</div></div><div class=\"text-right\"><div class=\"text-2xl font-semibold\">{}</div><div class=\"text-xs text-base-content/70\">before zone-group normalization</div></div></div><div class=\"mb-3 text-xs text-base-content/70\">{}</div><div class=\"mb-3 grid grid-cols-5 gap-2 text-center text-xs font-medium text-base-content/80\">",
+        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Raw Prize Catch Rate</div><div class=\"text-xs text-base-content/70\">Mastery {} drives the direct prize-rate formula before normalization.</div></div><div class=\"text-right\"><div class=\"text-2xl font-semibold\">{}</div><div class=\"text-xs text-base-content/70\">before zone-group normalization</div></div></div><div class=\"mb-3 text-xs text-base-content/70\">{}</div>{}",
         escape_html(&chart.mastery_text),
         escape_html(&chart.raw_prize_rate_text),
         escape_html(&chart.note),
+        render_distribution_chart(
+            "fish-group-distribution-chart",
+            "Current fish group distribution",
+            &chart.rows,
+        ),
     )
     .unwrap();
-    for row in &chart.rows {
-        write!(
-            html,
-            "<div class=\"rounded-box border px-2 py-1 {}\"><div class=\"truncate\">{}</div><div class=\"text-sm\">{}%</div></div>",
-            row.badge_class,
-            escape_html(row.label),
-            trim_float(row.current_share_pct),
-        )
-        .unwrap();
-    }
-    html.push_str(
-        "</div><div class=\"fish-group-timeline\" aria-label=\"Current fish group distribution\">",
-    );
-    for row in &chart.rows {
-        write!(
-            html,
-            "<div class=\"segment {}\" style=\"flex-basis: {:.4}%;\" title=\"{}: {}% current share, {}% applied weight, {}% base zone\"></div>",
-            row.tone_class,
-            row.current_share_pct.max(0.0),
-            escape_html(row.label),
-            trim_float(row.current_share_pct),
-            trim_float(row.weight_pct),
-            trim_float(row.base_share_pct),
-        )
-        .unwrap();
-    }
     html.push_str("</div></div>");
     html
 }
@@ -3822,7 +3914,8 @@ mod tests {
         assert!(text.contains("Search foods by name or effect"));
         assert!(text.contains("data-bind=\"mastery\""));
         assert!(text.contains("Raw Prize Catch Rate"));
-        assert!(text.contains("fish-group-timeline"));
+        assert!(text.contains("distribution-chart-track"));
+        assert!(text.contains("distribution-chart-callout"));
         assert!(text.contains("data-category-key=\"buff-category:1\""));
         assert!(text.contains("Meal"));
         assert!(text.contains("value=\"effect:8-piece-outfit-set-effect\" checked"));
