@@ -2,6 +2,7 @@ mod calculator;
 mod calculator_defaults;
 mod calculator_effects;
 mod calculator_items;
+mod calculator_loot;
 mod calculator_pets;
 mod calculator_progression;
 mod calculator_sources;
@@ -47,7 +48,7 @@ use mysql::{Opts, Pool, PoolConstraints, PoolOpts, Row};
 use crate::config::ZoneStatusConfig;
 use crate::error::{AppError, AppResult};
 use crate::store::queries;
-use crate::store::{validate_dolt_ref, FishLang, Store};
+use crate::store::{validate_dolt_ref, CalculatorZoneLootEntry, FishLang, Store};
 use calculator_sources::CalculatorCatalogSourceData;
 use catalog::{
     encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_grade_from_db,
@@ -90,6 +91,8 @@ pub struct DoltMySqlStore {
     calculator_catalog_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
     calculator_source_data_cache: Arc<Mutex<HashMap<String, CalculatorCatalogSourceData>>>,
     calculator_source_data_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
+    calculator_zone_loot_cache: Arc<Mutex<HashMap<String, Vec<CalculatorZoneLootEntry>>>>,
+    calculator_zone_loot_inflight: Arc<(Mutex<HashSet<String>>, Condvar)>,
 }
 
 #[derive(Debug, Clone)]
@@ -258,6 +261,8 @@ impl DoltMySqlStore {
             calculator_catalog_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
             calculator_source_data_cache: Arc::new(Mutex::new(HashMap::new())),
             calculator_source_data_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
+            calculator_zone_loot_cache: Arc::new(Mutex::new(HashMap::new())),
+            calculator_zone_loot_inflight: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
         };
         Ok(store)
     }
@@ -1562,6 +1567,20 @@ impl Store for DoltMySqlStore {
         tokio::task::spawn_blocking(move || this.query_calculator_catalog(lang, ref_id.as_deref()))
             .await
             .map_err(|err| AppError::internal(err.to_string()))?
+    }
+
+    async fn calculator_zone_loot(
+        &self,
+        lang: FishLang,
+        ref_id: Option<String>,
+        zone_rgb_key: String,
+    ) -> AppResult<Vec<CalculatorZoneLootEntry>> {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || {
+            this.query_calculator_zone_loot_cached(lang, ref_id.as_deref(), &zone_rgb_key)
+        })
+        .await
+        .map_err(|err| AppError::internal(err.to_string()))?
     }
 
     async fn list_zones(&self, ref_id: Option<String>) -> AppResult<Vec<ZoneEntry>> {

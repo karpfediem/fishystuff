@@ -88,6 +88,7 @@ pub struct CalculatorSignals {
     pub level: i32,
     pub lifeskill_level: String,
     pub mastery: f64,
+    pub trade_level: String,
     pub zone: String,
     pub resources: f64,
     pub rod: String,
@@ -103,6 +104,10 @@ pub struct CalculatorSignals {
     pub pet3: CalculatorPetSignals,
     pub pet4: CalculatorPetSignals,
     pub pet5: CalculatorPetSignals,
+    #[serde(rename = "tradeDistanceBonus")]
+    pub trade_distance_bonus: f64,
+    #[serde(rename = "tradePriceCurve")]
+    pub trade_price_curve: f64,
     #[serde(rename = "catchTimeActive")]
     pub catch_time_active: f64,
     #[serde(rename = "catchTimeAfk")]
@@ -111,6 +116,20 @@ pub struct CalculatorSignals {
     pub timespan_amount: f64,
     #[serde(rename = "timespanUnit")]
     pub timespan_unit: String,
+    #[serde(rename = "applyTradeModifiers")]
+    pub apply_trade_modifiers: bool,
+    #[serde(rename = "showSilverAmounts")]
+    pub show_silver_amounts: bool,
+    #[serde(rename = "discardTrashFish")]
+    pub discard_trash_fish: bool,
+    #[serde(rename = "discardGeneralFish")]
+    pub discard_general_fish: bool,
+    #[serde(rename = "discardHighQualityFish")]
+    pub discard_high_quality_fish: bool,
+    #[serde(rename = "discardRareFish")]
+    pub discard_rare_fish: bool,
+    #[serde(rename = "discardPrizeFish")]
+    pub discard_prize_fish: bool,
     pub brand: bool,
     pub active: bool,
     pub debug: bool,
@@ -128,6 +147,8 @@ pub struct CalculatorCatalogResponse {
     pub zone_group_rates: Vec<CalculatorZoneGroupRateEntry>,
     #[serde(default)]
     pub fishing_levels: Vec<CalculatorOptionEntry>,
+    #[serde(default)]
+    pub trade_levels: Vec<CalculatorOptionEntry>,
     #[serde(default)]
     pub session_units: Vec<CalculatorOptionEntry>,
     #[serde(default)]

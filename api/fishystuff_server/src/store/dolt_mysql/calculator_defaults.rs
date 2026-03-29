@@ -18,10 +18,10 @@ fn build_calculator_default_pet(tier: &str, special: &str) -> CalculatorPetSigna
     }
 }
 
-fn localized_label(lang: FishLang, en: &'static str, ko: &'static str) -> String {
+fn localized_label(lang: FishLang, en: impl Into<String>, ko: impl Into<String>) -> String {
     match lang {
-        FishLang::En => en.to_string(),
-        FishLang::Ko => ko.to_string(),
+        FishLang::En => en.into(),
+        FishLang::Ko => ko.into(),
     }
 }
 
@@ -30,6 +30,7 @@ pub(super) fn build_calculator_default_signals() -> CalculatorSignals {
         level: 5,
         lifeskill_level: "100".to_string(),
         mastery: 0.0,
+        trade_level: "73".to_string(),
         zone: "240,74,74".to_string(),
         resources: 0.0,
         rod: "item:16162".to_string(),
@@ -50,10 +51,19 @@ pub(super) fn build_calculator_default_signals() -> CalculatorSignals {
         pet3: build_calculator_default_pet("4", ""),
         pet4: build_calculator_default_pet("4", ""),
         pet5: build_calculator_default_pet("4", ""),
+        trade_distance_bonus: 134.15,
+        trade_price_curve: 120.0,
         catch_time_active: 17.5,
         catch_time_afk: 6.5,
         timespan_amount: 8.0,
         timespan_unit: "hours".to_string(),
+        apply_trade_modifiers: true,
+        show_silver_amounts: false,
+        discard_trash_fish: false,
+        discard_general_fish: false,
+        discard_high_quality_fish: false,
+        discard_rare_fish: false,
+        discard_prize_fish: false,
         brand: true,
         active: false,
         debug: false,
@@ -85,6 +95,35 @@ pub(super) fn build_calculator_session_units(lang: FishLang) -> Vec<CalculatorOp
         label: localized_label(lang, en, ko),
     })
     .collect()
+}
+
+pub(super) fn build_calculator_trade_levels(lang: FishLang) -> Vec<CalculatorOptionEntry> {
+    const TIERS: [(&str, &str, i32); 7] = [
+        ("Beginner", "초급", 10),
+        ("Apprentice", "견습", 10),
+        ("Skilled", "숙련", 10),
+        ("Professional", "전문", 10),
+        ("Artisan", "장인", 10),
+        ("Master", "명장", 30),
+        ("Guru", "도인", 100),
+    ];
+
+    let mut levels = Vec::new();
+    let mut order = 0i32;
+    for (en_tier, ko_tier, max_level) in TIERS {
+        for level in 1..=max_level {
+            order += 1;
+            levels.push(CalculatorOptionEntry {
+                key: order.to_string(),
+                label: localized_label(
+                    lang,
+                    &format!("{en_tier} {level}"),
+                    &format!("{ko_tier} {level}"),
+                ),
+            });
+        }
+    }
+    levels
 }
 
 pub(super) fn build_calculator_session_presets(

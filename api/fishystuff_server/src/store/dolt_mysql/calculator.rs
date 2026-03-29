@@ -6,7 +6,7 @@ use crate::store::FishLang;
 use super::calculator_defaults::{
     build_calculator_default_signals, build_calculator_fishing_levels,
     build_calculator_lifeskill_levels, build_calculator_session_presets,
-    build_calculator_session_units,
+    build_calculator_session_units, build_calculator_trade_levels,
 };
 use super::DoltMySqlStore;
 
@@ -57,6 +57,7 @@ impl DoltMySqlStore {
                 mastery_prize_curve: self.query_calculator_mastery_prize_curve(ref_id)?,
                 zone_group_rates: self.query_calculator_zone_group_rates(ref_id)?,
                 fishing_levels: build_calculator_fishing_levels(lang),
+                trade_levels: build_calculator_trade_levels(lang),
                 session_units: build_calculator_session_units(lang),
                 session_presets: build_calculator_session_presets(lang),
                 pets: self.query_calculator_pet_catalog(lang, ref_id)?,
