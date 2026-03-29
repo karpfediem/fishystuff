@@ -102,7 +102,7 @@ impl DoltMySqlStore {
                 2 => entry.rare_rate_raw = drop_rate,
                 3 => entry.high_quality_rate_raw = drop_rate,
                 4 => entry.general_rate_raw = drop_rate,
-                5 => entry.treasure_rate_raw = drop_rate,
+                5 => entry.trash_rate_raw = drop_rate,
                 _ => {}
             }
         }

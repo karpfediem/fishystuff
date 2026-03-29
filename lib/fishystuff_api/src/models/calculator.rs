@@ -52,7 +52,7 @@ pub struct CalculatorZoneGroupRateEntry {
     pub rare_rate_raw: i32,
     pub high_quality_rate_raw: i32,
     pub general_rate_raw: i32,
-    pub treasure_rate_raw: i32,
+    pub trash_rate_raw: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

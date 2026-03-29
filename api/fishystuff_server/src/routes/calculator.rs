@@ -1866,15 +1866,15 @@ fn derive_fish_group_chart(
     let rare_base = f64::from(zone_group_rate.rare_rate_raw.max(0)) / 1_000_000.0;
     let high_quality_base = f64::from(zone_group_rate.high_quality_rate_raw.max(0)) / 1_000_000.0;
     let general_base = f64::from(zone_group_rate.general_rate_raw.max(0)) / 1_000_000.0;
-    let treasure_base = f64::from(zone_group_rate.treasure_rate_raw.max(0)) / 1_000_000.0;
+    let trash_base = f64::from(zone_group_rate.trash_rate_raw.max(0)) / 1_000_000.0;
 
     let rare_weight = rare_base * (1.0 + rare_bonus.max(0.0));
     let high_quality_weight = high_quality_base * (1.0 + high_quality_bonus.max(0.0));
     let general_weight = general_base;
-    let treasure_weight = treasure_base;
+    let trash_weight = trash_base;
     let prize_weight = mastery_prize_rate.max(0.0);
     let total_weight =
-        prize_weight + rare_weight + high_quality_weight + general_weight + treasure_weight;
+        prize_weight + rare_weight + high_quality_weight + general_weight + trash_weight;
 
     let current_share = |weight: f64| {
         if total_weight <= 0.0 {
@@ -1947,15 +1947,15 @@ fn derive_fish_group_chart(
                 current_share_pct: current_share(general_weight),
             },
             FishGroupChartRow {
-                label: "Treasure",
+                label: "Trash",
                 fill_color: "#86efac",
                 stroke_color: "#4ade80",
                 text_color: "#052e16",
                 connector_color: "rgb(74 222 128 / 0.48)",
                 bonus_text: "No bonus".to_string(),
-                base_share_pct: treasure_base * 100.0,
-                weight_pct: treasure_weight * 100.0,
-                current_share_pct: current_share(treasure_weight),
+                base_share_pct: trash_base * 100.0,
+                weight_pct: trash_weight * 100.0,
+                current_share_pct: current_share(trash_weight),
             },
         ],
     }
@@ -4391,7 +4391,7 @@ mod tests {
                     rare_rate_raw: 100_000,
                     high_quality_rate_raw: 217_500,
                     general_rate_raw: 620_000,
-                    treasure_rate_raw: 62_500,
+                    trash_rate_raw: 62_500,
                 }],
                 trade_levels: vec![CalculatorOptionEntry {
                     key: "73".to_string(),
