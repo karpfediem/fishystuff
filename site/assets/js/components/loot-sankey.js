@@ -616,7 +616,9 @@ class FishyLootSankey extends HTMLElement {
                 .attr("ry", NODE_RADIUS)
                 .style("fill", row.fill_color)
                 .style("stroke", row.stroke_color)
-                .style("stroke-width", 1.5);
+                .style("stroke-width", 1.5)
+                .append("title")
+                .text(String(row.label ?? ""));
 
             if (hasIcon) {
                 rightNodes.append("rect")
@@ -650,7 +652,9 @@ class FishyLootSankey extends HTMLElement {
                 .style("fill", row.text_color)
                 .style("font-size", "13px")
                 .style("font-weight", "700")
-                .text(truncateText(row.label, labelTextMaxChars));
+                .text(truncateText(row.label, labelTextMaxChars))
+                .append("title")
+                .text(String(row.label ?? ""));
 
             rightNodes.append("rect")
                 .attr("x", rightBoxX)
