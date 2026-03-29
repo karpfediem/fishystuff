@@ -444,6 +444,11 @@
             width: 100%;
             height: auto;
         }
+
+        .loot-sankey-scroll {
+            max-height: 48rem;
+            overflow: auto;
+        }
     }
 </style>
 ```

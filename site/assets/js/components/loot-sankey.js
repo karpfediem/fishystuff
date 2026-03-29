@@ -5,10 +5,27 @@ const TOP_PADDING = 20;
 const BOTTOM_PADDING = 20;
 const GROUP_GAP = 12;
 const SPECIES_GAP = 6;
+const SPECIES_LABEL_GAP = 8;
 const LEFT_X = 24;
 const LEFT_WIDTH = 200;
-const RIGHT_WIDTH = 220;
+const RIGHT_BAR_WIDTH = 18;
+const RIGHT_LABEL_WIDTH = 248;
+const RIGHT_LABEL_HEIGHT = 36;
+const RIGHT_LABEL_OFFSET = 14;
 const NODE_RADIUS = 12;
+
+function positiveNumber(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+}
+
+function stackedHeight(rows, scale, gap) {
+    if (!rows.length) {
+        return 0;
+    }
+    const total = d3.sum(rows, (row) => positiveNumber(row.expected_count_raw) * scale);
+    return total + gap * Math.max(0, rows.length - 1);
+}
 
 function readChartSignal(path) {
     return window.__fishystuffCalculator?.readSignal?.(path) ?? null;
@@ -103,12 +120,16 @@ class FishyLootSankey extends HTMLElement {
 
         const totalCount = Math.max(
             Number.EPSILON,
-            d3.sum(speciesRows, (row) => Number(row.expected_count_raw) || 0),
+            d3.sum(speciesRows, (row) => positiveNumber(row.expected_count_raw)),
         );
-        const innerHeight = Math.max(speciesRows.length * 28, 340);
+        const labelStackHeight = speciesRows.length
+            ? speciesRows.length * RIGHT_LABEL_HEIGHT
+                + Math.max(0, speciesRows.length - 1) * SPECIES_LABEL_GAP
+            : 0;
+        const innerHeight = Math.max(labelStackHeight, 340);
         const width = Math.max(this.clientWidth || 0, MIN_INTERNAL_WIDTH);
-        const rightX = width - RIGHT_WIDTH - 24;
-        const height = innerHeight + TOP_PADDING + BOTTOM_PADDING;
+        const labelX = width - RIGHT_LABEL_WIDTH - 24;
+        const rightBarX = labelX - RIGHT_LABEL_OFFSET - RIGHT_BAR_WIDTH;
         const leftScale = Math.max(
             0,
             (innerHeight - GROUP_GAP * Math.max(0, rows.length - 1)) / totalCount,
@@ -117,19 +138,27 @@ class FishyLootSankey extends HTMLElement {
             0,
             (innerHeight - SPECIES_GAP * Math.max(0, speciesRows.length - 1)) / totalCount,
         );
+        const height = innerHeight + TOP_PADDING + BOTTOM_PADDING;
 
         const groupTop = new Map();
         let leftCursor = TOP_PADDING;
         rows.forEach((row) => {
             groupTop.set(row.label, leftCursor);
-            leftCursor += (Number(row.expected_count_raw) || 0) * leftScale + GROUP_GAP;
+            leftCursor += positiveNumber(row.expected_count_raw) * leftScale + GROUP_GAP;
         });
 
         const speciesTop = [];
         let rightCursor = TOP_PADDING;
         speciesRows.forEach((row) => {
             speciesTop.push(rightCursor);
-            rightCursor += (Number(row.expected_count_raw) || 0) * rightScale + SPECIES_GAP;
+            rightCursor += positiveNumber(row.expected_count_raw) * rightScale + SPECIES_GAP;
+        });
+
+        const speciesLabelTop = [];
+        let labelCursor = TOP_PADDING;
+        speciesRows.forEach(() => {
+            speciesLabelTop.push(labelCursor);
+            labelCursor += RIGHT_LABEL_HEIGHT + SPECIES_LABEL_GAP;
         });
 
         const leftFlowCursor = new Map(groupTop);
@@ -148,12 +177,12 @@ class FishyLootSankey extends HTMLElement {
             const leftTop = leftFlowCursor.get(row.group_label) ?? TOP_PADDING;
             const leftHeight = Math.max(
                 1.5,
-                (Number(row.expected_count_raw) || 0) * leftScale,
+                positiveNumber(row.expected_count_raw) * leftScale,
             );
             const rightTop = speciesTop[index];
             const rightHeight = Math.max(
                 1.5,
-                (Number(row.expected_count_raw) || 0) * rightScale,
+                positiveNumber(row.expected_count_raw) * rightScale,
             );
 
             flows.append("path")
@@ -162,7 +191,7 @@ class FishyLootSankey extends HTMLElement {
                     sankeyPath(
                         LEFT_X + LEFT_WIDTH,
                         leftTop,
-                        rightX,
+                        rightBarX,
                         rightTop,
                         leftHeight,
                         rightHeight,
@@ -179,7 +208,7 @@ class FishyLootSankey extends HTMLElement {
             const top = groupTop.get(row.label) ?? TOP_PADDING;
             const heightValue = Math.max(
                 1.5,
-                (Number(row.expected_count_raw) || 0) * leftScale,
+                positiveNumber(row.expected_count_raw) * leftScale,
             );
             const mid = top + heightValue / 2;
             const valueLabel = showSilverAmounts
@@ -217,21 +246,47 @@ class FishyLootSankey extends HTMLElement {
 
         const rightNodes = svg.append("g");
         speciesRows.forEach((row, index) => {
-            const top = speciesTop[index];
-            const heightValue = Math.max(
+            const barTop = speciesTop[index];
+            const barHeight = Math.max(
                 1.5,
-                (Number(row.expected_count_raw) || 0) * rightScale,
+                positiveNumber(row.expected_count_raw) * rightScale,
             );
-            const mid = top + heightValue / 2;
+            const labelTop = speciesLabelTop[index];
+            const labelMid = labelTop + RIGHT_LABEL_HEIGHT / 2;
+            const barMid = barTop + barHeight / 2;
             const valueLabel = showSilverAmounts
                 ? `${row.expected_count_text} | ${row.expected_profit_text}`
                 : row.expected_count_text;
 
             rightNodes.append("rect")
-                .attr("x", rightX)
-                .attr("y", top)
-                .attr("width", RIGHT_WIDTH)
-                .attr("height", heightValue)
+                .attr("x", rightBarX)
+                .attr("y", barTop)
+                .attr("width", RIGHT_BAR_WIDTH)
+                .attr("height", barHeight)
+                .attr("rx", Math.min(NODE_RADIUS, RIGHT_BAR_WIDTH / 2))
+                .attr("ry", Math.min(NODE_RADIUS, RIGHT_BAR_WIDTH / 2))
+                .style("fill", row.fill_color)
+                .style("stroke", row.stroke_color)
+                .style("stroke-width", 1.25);
+
+            rightNodes.append("path")
+                .attr(
+                    "d",
+                    [
+                        `M ${rightBarX + RIGHT_BAR_WIDTH} ${barMid}`,
+                        `C ${rightBarX + RIGHT_BAR_WIDTH + 16} ${barMid}, ${labelX - 16} ${labelMid}, ${labelX} ${labelMid}`,
+                    ].join(" "),
+                )
+                .style("fill", "none")
+                .style("stroke", row.stroke_color)
+                .style("stroke-opacity", 0.75)
+                .style("stroke-width", 1.5);
+
+            rightNodes.append("rect")
+                .attr("x", labelX)
+                .attr("y", labelTop)
+                .attr("width", RIGHT_LABEL_WIDTH)
+                .attr("height", RIGHT_LABEL_HEIGHT)
                 .attr("rx", NODE_RADIUS)
                 .attr("ry", NODE_RADIUS)
                 .style("fill", row.fill_color)
@@ -239,8 +294,8 @@ class FishyLootSankey extends HTMLElement {
                 .style("stroke-width", 1.5);
 
             rightNodes.append("text")
-                .attr("x", rightX + 10)
-                .attr("y", mid - 6)
+                .attr("x", labelX + 10)
+                .attr("y", labelMid - 6)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "11px")
@@ -248,8 +303,8 @@ class FishyLootSankey extends HTMLElement {
                 .text(truncateLabel(row.label, 28));
 
             rightNodes.append("text")
-                .attr("x", rightX + 10)
-                .attr("y", mid + 8)
+                .attr("x", labelX + 10)
+                .attr("y", labelMid + 8)
                 .attr("dominant-baseline", "middle")
                 .style("fill", row.text_color)
                 .style("font-size", "10px")
