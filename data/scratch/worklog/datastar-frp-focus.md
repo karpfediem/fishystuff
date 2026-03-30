@@ -729,6 +729,45 @@ Validation:
   - toggling Settings updates the visible window state cleanly
   - the managed window hides/shows without relying on a separate persistence path
 
+### Step 14
+
+Move Fishydex signal-patch persistence into the page helper.
+
+Work:
+
+- remove the template-level `data-on-signal-patch` persistence hook from `dex.smd`
+- let `fishydex.js` own its own Datastar signal-patch listener and debounce window
+- keep the persisted signal filter logic in JS, next to the actual persistence implementation
+
+Status:
+
+- implemented
+
+Implementation:
+
+- `site/assets/js/pages/fishydex.js` now:
+  - binds one `datastar-signal-patch` listener on restore
+  - filters out ephemeral Fishydex signals in JS
+  - debounces persistence before calling `persistSignals()`
+- `site/content/en-US/dex.smd` no longer needs the hidden template-side persistence node
+
+Why this matters:
+
+- it removes another Datastar persistence concern from template markup
+- it aligns Fishydex persistence ownership with the map page’s Datastar signal-patch model
+- it keeps the “what should persist?” logic beside the persistence implementation instead of splitting it across template and JS
+
+Validation:
+
+- `node --check site/assets/js/pages/fishydex.js`
+- `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served-vs-`.out` spot checks matched for:
+  - `http://127.0.0.1:1990/dex/`
+  - `http://127.0.0.1:1990/js/pages/fishydex.js`
+- live Chromium validation confirmed:
+  - updating the Dex search field changes `fishystuff.fishydex.ui.v1`
+  - the persisted search value reflects the latest Datastar signal state without relying on template-side patch handlers
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:

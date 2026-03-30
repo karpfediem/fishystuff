@@ -1219,9 +1219,6 @@
      data-init="window.Fishydex.restore($); @get(window.Fishydex.fishApiUrl())">
   <div hidden
        data-effect="window.Fishydex.sync($)"></div>
-  <div hidden
-       data-on-signal-patch__debounce.150ms="window.Fishydex.persistSignals($)"
-       data-on-signal-patch-filter="window.Fishydex.persistSignalPatchFilter()"></div>
 
   <section class="fishydex-shell">
     <div class="fishydex-bento">

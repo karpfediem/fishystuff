@@ -1,4 +1,5 @@
 (function () {
+  const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const DEX_UI_STORAGE_KEY = "fishystuff.fishydex.ui.v1";
   const DEX_PROGRESS_PANEL_UI_KEY = "dex.panels.progress.collapsed";
   const DEX_FILTER_PANEL_UI_KEY = "dex.panels.filter.collapsed";
@@ -22,6 +23,8 @@
   const state = {
     signals: null,
     uiSettingsUnsubscribe: null,
+    persistTimer: 0,
+    persistListenerBound: false,
     persistedUiJson: "",
     persistedCaughtJson: "",
     persistedFavouriteJson: "",
@@ -69,6 +72,22 @@
       return;
     }
     Object.assign(signals, patch);
+  }
+
+  function clearPersistTimer() {
+    if (!state.persistTimer) {
+      return;
+    }
+    globalThis.clearTimeout?.(state.persistTimer);
+    state.persistTimer = 0;
+  }
+
+  function schedulePersist() {
+    clearPersistTimer();
+    state.persistTimer = globalThis.setTimeout(() => {
+      state.persistTimer = 0;
+      persistSignals();
+    }, 150);
   }
 
   function sharedUiSettingsStore() {
@@ -131,10 +150,36 @@
     });
   }
 
-  function persistSignalPatchFilter() {
-    return {
-      exclude: DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN,
-    };
+  function patchIncludesPersistedSignals(patch, prefix = "") {
+    if (!patch || typeof patch !== "object") {
+      return false;
+    }
+    return Object.entries(patch).some(([key, value]) => {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (!DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN.test(path)) {
+        return true;
+      }
+      return value && typeof value === "object" && patchIncludesPersistedSignals(value, path);
+    });
+  }
+
+  function handleSignalPatch(event) {
+    if (!state.uiStateRestored) {
+      return;
+    }
+    const patch = event?.detail;
+    if (!patchIncludesPersistedSignals(patch)) {
+      return;
+    }
+    schedulePersist();
+  }
+
+  function bindPersistListener() {
+    if (state.persistListenerBound) {
+      return;
+    }
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    state.persistListenerBound = true;
   }
 
   function normalizeStoredFishIds(value) {
@@ -352,6 +397,7 @@
 
   function restore(signals) {
     connect(signals);
+    bindPersistListener();
     const uiState = loadUiStateFromStorage();
     const caughtState = loadCaughtIdsFromStorage();
     const favouriteState = loadFavouriteIdsFromStorage();
@@ -1571,7 +1617,6 @@
   window.Fishydex = {
     restore: restore,
     persistSignals: persistSignals,
-    persistSignalPatchFilter: persistSignalPatchFilter,
     toggleFishIds: toggleFishIds,
     toggleGradeFilters: toggleGradeFilters,
     toggleMethodFilters: toggleMethodFilters,
