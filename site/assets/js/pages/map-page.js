@@ -2,7 +2,7 @@
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_bookmarks\.entries)(?:\.|$)/;
+    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:searchText|fromPatchId|toPatchId)|map_bookmarks\.entries)(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -111,6 +111,7 @@
   function storedUiSignals(signals) {
     const windowUi = signals?._map_ui?.windowUi;
     const inputUi = signals?._map_input?.ui;
+    const inputFilters = signals?._map_input?.filters;
     const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
       ? cloneJson(signals._map_bookmarks.entries)
       : [];
@@ -133,6 +134,12 @@
           pointIconScale: Number.isFinite(inputUi?.pointIconScale)
             ? Number(inputUi.pointIconScale)
             : 1,
+        },
+        filters: {
+          searchText: String(inputFilters?.searchText || ""),
+          fromPatchId:
+            inputFilters?.fromPatchId == null ? null : String(inputFilters.fromPatchId),
+          toPatchId: inputFilters?.toPatchId == null ? null : String(inputFilters.toPatchId),
         },
       },
       _map_bookmarks: {
@@ -159,6 +166,17 @@
           ? Number(stored._map_input.ui.pointIconScale)
           : 1,
       },
+      inputFilters: {
+        searchText: String(stored?._map_input?.filters?.searchText || ""),
+        fromPatchId:
+          stored?._map_input?.filters?.fromPatchId == null
+            ? null
+            : String(stored._map_input.filters.fromPatchId),
+        toPatchId:
+          stored?._map_input?.filters?.toPatchId == null
+            ? null
+            : String(stored._map_input.filters.toPatchId),
+      },
     };
   }
 
@@ -184,6 +202,20 @@
             ? Number(parsed.inputUi.pointIconScale)
             : 1,
         },
+      };
+    }
+    if (
+      parsed.inputFilters &&
+      typeof parsed.inputFilters === "object" &&
+      !Array.isArray(parsed.inputFilters)
+    ) {
+      patch._map_input = patch._map_input || {};
+      patch._map_input.filters = {
+        searchText: String(parsed.inputFilters.searchText || ""),
+        fromPatchId:
+          parsed.inputFilters.fromPatchId == null ? null : String(parsed.inputFilters.fromPatchId),
+        toPatchId:
+          parsed.inputFilters.toPatchId == null ? null : String(parsed.inputFilters.toPatchId),
       };
     }
     return Object.keys(patch).length ? patch : null;

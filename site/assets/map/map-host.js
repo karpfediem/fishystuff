@@ -1922,18 +1922,6 @@ export function snapshotToRestorePatch(snapshot) {
     if (hasOwn(snapshot.filters, "fishFilterTerms")) {
       patch.filters.fishFilterTerms = normalizeFishFilterTerms(snapshot.filters.fishFilterTerms);
     }
-    if (hasOwn(snapshot.filters, "searchText")) {
-      patch.filters.searchText = String(snapshot.filters.searchText || "");
-    }
-    if (hasOwn(snapshot.filters, "patchId")) {
-      patch.filters.patchId = snapshot.filters.patchId ?? null;
-    }
-    if (hasOwn(snapshot.filters, "fromPatchId")) {
-      patch.filters.fromPatchId = snapshot.filters.fromPatchId ?? null;
-    }
-    if (hasOwn(snapshot.filters, "toPatchId")) {
-      patch.filters.toPatchId = snapshot.filters.toPatchId ?? null;
-    }
     const layerIdsVisible = readPersistedLayerVisibility(snapshot.filters);
     if (layerIdsVisible !== undefined) {
       patch.filters.layerIdsVisible = layerIdsVisible;
@@ -2886,10 +2874,6 @@ class FishyMapBridgeImpl {
 
   createSessionSnapshot() {
     const state = this.currentState || createEmptySnapshot();
-    const fromPatchId =
-      this.inputState.filters.fromPatchId ?? state.filters?.fromPatchId ?? null;
-    const toPatchId =
-      this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
     const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
     const hasExplicitLayerOrder = Array.isArray(this.inputState.filters.layerIdsOrdered);
     const hasExplicitLayerOpacities =
@@ -2934,11 +2918,6 @@ class FishyMapBridgeImpl {
           this.inputState.filters.semanticFieldIdsByLayer,
         ),
         fishFilterTerms: normalizeFishFilterTerms(this.inputState.filters.fishFilterTerms),
-        searchText: this.inputState.filters.searchText,
-        patchId:
-          fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
-        fromPatchId,
-        toPatchId,
         ...(hasExplicitLayerVisibility
           ? {
               layerIdsVisible: normalizeStringList(this.inputState.filters.layerIdsVisible),
@@ -2993,11 +2972,6 @@ class FishyMapBridgeImpl {
   }
 
   createPrefsSnapshot() {
-    const state = this.currentState || createEmptySnapshot();
-    const fromPatchId =
-      this.inputState.filters.fromPatchId ?? state.filters?.fromPatchId ?? null;
-    const toPatchId =
-      this.inputState.filters.toPatchId ?? state.filters?.toPatchId ?? null;
     const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
     const hasExplicitLayerOrder = Array.isArray(this.inputState.filters.layerIdsOrdered);
     const hasExplicitLayerOpacities =
@@ -3021,10 +2995,6 @@ class FishyMapBridgeImpl {
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
-        patchId:
-          fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
-        fromPatchId,
-        toPatchId,
         ...(hasExplicitLayerVisibility
           ? {
               layerIdsVisible: normalizeStringList(this.inputState.filters.layerIdsVisible),

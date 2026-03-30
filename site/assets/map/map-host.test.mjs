@@ -639,6 +639,31 @@ test("bookmark ui patches are normalized in input state and omitted from persist
   assert.equal("bookmarks" in prefsUi, false);
 });
 
+test("search text and patch range stay out of persisted bridge snapshots", () => {
+  const bridge = createFishyMapBridge();
+  bridge.inputState = applyStatePatch(undefined, {
+    version: 1,
+    filters: {
+      searchText: "velia",
+      patchId: null,
+      fromPatchId: "2026-02-26",
+      toPatchId: "2026-03-12",
+    },
+  });
+
+  const sessionFilters = bridge.createSessionSnapshot().filters || {};
+  const prefsFilters = bridge.createPrefsSnapshot().filters || {};
+
+  assert.equal("searchText" in sessionFilters, false);
+  assert.equal("patchId" in sessionFilters, false);
+  assert.equal("fromPatchId" in sessionFilters, false);
+  assert.equal("toPatchId" in sessionFilters, false);
+  assert.equal("searchText" in prefsFilters, false);
+  assert.equal("patchId" in prefsFilters, false);
+  assert.equal("fromPatchId" in prefsFilters, false);
+  assert.equal("toPatchId" in prefsFilters, false);
+});
+
 test("wasm output events are redispatched as DOM CustomEvents", async () => {
   const env = installDomGlobals();
   let bridge;
@@ -1371,6 +1396,40 @@ test("restore priority is URL over session over local preferences", () => {
   assert.equal("selectZoneRgb" in patch.commands, false);
   assert.equal(patch.commands.setViewMode, "3d");
   assert.equal(patch.commands.restoreView.viewMode, "3d");
+});
+
+test("local and session storage do not restore page-owned search and patch filters", () => {
+  const localStorage = new MemoryStorage({
+    "fishystuff.map.prefs.v1": JSON.stringify({
+      version: 1,
+      filters: {
+        searchText: "local sea",
+        fromPatchId: "local-from",
+        toPatchId: "local-to",
+      },
+    }),
+  });
+  const sessionStorage = new MemoryStorage({
+    "fishystuff.map.session.v1": JSON.stringify({
+      version: 1,
+      filters: {
+        searchText: "session sea",
+        fromPatchId: "session-from",
+        toPatchId: "session-to",
+      },
+    }),
+  });
+
+  const patch = buildInitialRestorePatch({
+    locationHref: "https://fishystuff.fish/map/",
+    localStorage,
+    sessionStorage,
+  });
+
+  assert.equal("searchText" in (patch.filters || {}), false);
+  assert.equal("patchId" in (patch.filters || {}), false);
+  assert.equal("fromPatchId" in (patch.filters || {}), false);
+  assert.equal("toPatchId" in (patch.filters || {}), false);
 });
 
 test("layer opacity overrides replace the previous map instead of merging stale entries", () => {

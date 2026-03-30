@@ -1624,3 +1624,57 @@ Validation:
     - `pointIconScale`
   - reload `/map/`
   - verify `_map_input.ui.diagnosticsOpen === true`
+
+### Step 33 - Move Map Filter UI Persistence Into Page-Owned Signals
+
+Completed:
+
+- expanded page-owned map UI persistence in `site/assets/js/pages/map-page.js` to include:
+  - `_map_input.filters.searchText`
+  - `_map_input.filters.fromPatchId`
+  - `_map_input.filters.toPatchId`
+- kept these fields in the same `fishystuff.map.window_ui.v1` page-owned snapshot under:
+  - `inputFilters`
+- removed these fields from bridge-owned restore/snapshot persistence in:
+  - `site/assets/map/map-host.js`
+  - `snapshotToRestorePatch(...)`
+  - `createSessionSnapshot()`
+  - `createPrefsSnapshot()`
+- added regression coverage in:
+  - `site/assets/js/pages/map-page.test.mjs`
+  - `site/assets/map/map-host.test.mjs`
+
+Why this matters:
+
+- search query and patch-range selection are page-visible filter controls already owned live by the Datastar signal graph
+- persisting them through bridge prefs/session storage kept the map split across two owners:
+  - page-owned live state
+  - bridge-owned restore state
+- after this slice:
+  - Datastar page state owns both live and persisted filter UI values
+  - bridge prefs/session no longer restore or save them
+  - query-string restore still works separately through `parseQueryState(...)`
+- loader-side canonicalization still applies after restore:
+  - invalid or reversed patch ranges are normalized through `syncPatchRangeFromSignals()`
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/map-host.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/js/pages/map-page.js`
+  - `/map/map-host.js`
+- live Chromium smoke:
+  - patch `_map_input.filters.searchText`, `fromPatchId`, `toPatchId`
+  - verify `fishystuff.map.window_ui.v1` stores them under `inputFilters`
+  - verify `FishyMapBridge.createSessionSnapshot().filters` omits:
+    - `searchText`
+    - `patchId`
+    - `fromPatchId`
+    - `toPatchId`
+  - verify `FishyMapBridge.createPrefsSnapshot().filters` omits the same fields
+  - reload `/map/`
+  - verify `_map_input.filters` restores from page-owned storage

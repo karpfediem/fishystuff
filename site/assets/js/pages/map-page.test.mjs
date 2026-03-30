@@ -108,6 +108,11 @@ function defaultSignals() {
       entries: [],
     },
     _map_input: {
+      filters: {
+        searchText: "",
+        fromPatchId: null,
+        toPatchId: null,
+      },
       ui: {
         diagnosticsOpen: false,
         legendOpen: false,
@@ -153,6 +158,11 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
         showPointIcons: false,
         pointIconScale: 1.5,
       },
+      inputFilters: {
+        searchText: "velia",
+        fromPatchId: "2026-02-26",
+        toPatchId: "2026-03-12",
+      },
     }),
   });
   const signals = defaultSignals();
@@ -167,6 +177,9 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal(signals._map_input.ui.showPoints, false);
   assert.equal(signals._map_input.ui.showPointIcons, false);
   assert.equal(signals._map_input.ui.pointIconScale, 1.5);
+  assert.equal(signals._map_input.filters.searchText, "velia");
+  assert.equal(signals._map_input.filters.fromPatchId, "2026-02-26");
+  assert.equal(signals._map_input.filters.toPatchId, "2026-03-12");
   assert.equal("windowUi" in signals, false);
 });
 
@@ -262,6 +275,11 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
         showPointIcons: true,
         pointIconScale: 1,
       },
+      inputFilters: {
+        searchText: "",
+        fromPatchId: null,
+        toPatchId: null,
+      },
     }),
   );
 });
@@ -307,6 +325,66 @@ test("map-page persists durable _map_input diagnostics state", () => {
         showPoints: true,
         showPointIcons: true,
         pointIconScale: 1,
+      },
+      inputFilters: {
+        searchText: "",
+        fromPatchId: null,
+        toPatchId: null,
+      },
+    }),
+  );
+});
+
+test("map-page persists durable _map_input filter state", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMap.patchSignals({
+    _map_input: {
+      filters: {
+        searchText: "velia",
+        fromPatchId: "2026-02-26",
+        toPatchId: "2026-03-12",
+      },
+    },
+  });
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _map_input: {
+        filters: {
+          searchText: "velia",
+          fromPatchId: "2026-02-26",
+          toPatchId: "2026-03-12",
+        },
+      },
+    },
+  });
+  env.flushTimers();
+
+  assert.equal(
+    env.localStorage.getItem("fishystuff.map.window_ui.v1"),
+    JSON.stringify({
+      windowUi: {
+        search: { open: true, collapsed: false, x: null, y: null },
+        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
+        layers: { open: true, collapsed: false, x: null, y: null },
+        bookmarks: { open: false, collapsed: false, x: null, y: null },
+      },
+      inputUi: {
+        diagnosticsOpen: false,
+        legendOpen: false,
+        leftPanelOpen: true,
+        showPoints: true,
+        showPointIcons: true,
+        pointIconScale: 1,
+      },
+      inputFilters: {
+        searchText: "velia",
+        fromPatchId: "2026-02-26",
+        toPatchId: "2026-03-12",
       },
     }),
   );
