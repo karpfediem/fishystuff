@@ -4,6 +4,12 @@ import {
     setStringAttribute,
     upgradeProperty,
 } from "./searchable-dropdown.js";
+import {
+    bindBoundSelect,
+    boundSelectOptions,
+    findBoundSelectOption,
+    resolveBoundSelectElement,
+} from "./bound-select.js";
 
 export class FishyCheckboxGroup extends HTMLElement {
     static get observedAttributes() {
@@ -12,7 +18,7 @@ export class FishyCheckboxGroup extends HTMLElement {
 
     constructor() {
         super();
-        this._releaseInputs = [];
+        this._releaseBoundSelect = null;
 
         this._handleBoundInputEvent = this._handleBoundInputEvent.bind(this);
         this._handleChange = this._handleChange.bind(this);
@@ -54,12 +60,7 @@ export class FishyCheckboxGroup extends HTMLElement {
     }
 
     boundSelectElement() {
-        const id = this.boundSelectId;
-        if (id) {
-            const root = this.ownerDocument?.getElementById(id) ?? null;
-            return root?.querySelector('select[data-role="bound-select"]') ?? null;
-        }
-        return this.querySelector('select[data-role="bound-select"]');
+        return resolveBoundSelectElement(this, this.boundSelectId);
     }
 
     checkboxElements() {
@@ -69,34 +70,20 @@ export class FishyCheckboxGroup extends HTMLElement {
     }
 
     boundOptionElements() {
-        const select = this.boundSelectElement();
-        if (!(select instanceof HTMLSelectElement)) {
-            return [];
-        }
-        return Array.from(select.options).filter((element) => element instanceof HTMLOptionElement);
+        return boundSelectOptions(this.boundSelectElement());
     }
 
     _bindInputs() {
         this._unbindInputs();
-
         const select = this.boundSelectElement();
-        if (select instanceof HTMLSelectElement) {
-            select.addEventListener("input", this._handleBoundInputEvent);
-            select.addEventListener("change", this._handleBoundInputEvent);
-            this._releaseInputs.push(() => {
-                select.removeEventListener("input", this._handleBoundInputEvent);
-                select.removeEventListener("change", this._handleBoundInputEvent);
-            });
-        }
+        this._releaseBoundSelect = bindBoundSelect(select, this._handleBoundInputEvent);
     }
 
     _unbindInputs() {
-        while (this._releaseInputs.length) {
-            const release = this._releaseInputs.pop();
-            if (typeof release === "function") {
-                release();
-            }
+        if (typeof this._releaseBoundSelect === "function") {
+            this._releaseBoundSelect();
         }
+        this._releaseBoundSelect = null;
     }
 
     _handleBoundInputEvent() {
@@ -120,8 +107,7 @@ export class FishyCheckboxGroup extends HTMLElement {
     }
 
     _findBoundOptionByValue(value) {
-        const normalized = String(value ?? "");
-        return this.boundOptionElements().find((option) => option.value === normalized) ?? null;
+        return findBoundSelectOption(this.boundSelectElement(), value);
     }
 
     _syncSelection() {

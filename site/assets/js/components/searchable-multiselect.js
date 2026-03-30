@@ -1,12 +1,17 @@
 import {
     cloneChildNodes,
     dispatchValueEvents,
-    findPropertyDescriptor,
     getStringAttribute,
     normalizeSearchText,
     setStringAttribute,
     upgradeProperty,
 } from "./searchable-dropdown.js";
+import {
+    bindBoundSelect,
+    boundSelectOptions,
+    findBoundSelectOption,
+    resolveBoundSelectElement,
+} from "./bound-select.js";
 
 const CLOSE_DELAY_MS = 150;
 const LOCAL_RESULT_LIMIT = 24;
@@ -151,20 +156,11 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     boundSelectElement() {
-        const id = this.boundSelectId;
-        if (id) {
-            const root = this.ownerDocument?.getElementById(id) ?? null;
-            return root?.querySelector('select[data-role="bound-select"]') ?? null;
-        }
-        return this.querySelector('select[data-role="bound-select"]');
+        return resolveBoundSelectElement(this, this.boundSelectId);
     }
 
     boundOptionElements() {
-        const select = this.boundSelectElement();
-        if (!(select instanceof HTMLSelectElement)) {
-            return [];
-        }
-        return Array.from(select.options).filter((element) => element instanceof HTMLOptionElement);
+        return boundSelectOptions(this.boundSelectElement());
     }
 
     catalogTemplates() {
@@ -264,49 +260,8 @@ export class FishySearchableMultiselect extends HTMLElement {
 
     _bindInputs() {
         this._unbindInputs();
-        const releases = [];
         const select = this.boundSelectElement();
-        if (select instanceof HTMLSelectElement) {
-            select.addEventListener("input", this._handleBoundInputEvent);
-            select.addEventListener("change", this._handleBoundInputEvent);
-            releases.push(() => {
-                select.removeEventListener("input", this._handleBoundInputEvent);
-                select.removeEventListener("change", this._handleBoundInputEvent);
-            });
-        }
-
-        for (const option of this.boundOptionElements()) {
-            let releaseSelectedObserver = () => {};
-            if (!Object.prototype.hasOwnProperty.call(option, "selected")) {
-                const descriptor = findPropertyDescriptor(option, "selected");
-                if (descriptor?.get && descriptor?.set) {
-                    Object.defineProperty(option, "selected", {
-                        configurable: true,
-                        enumerable: descriptor.enumerable ?? true,
-                        get() {
-                            return descriptor.get.call(this);
-                        },
-                        set: (nextValue) => {
-                            const previousValue = descriptor.get.call(option);
-                            descriptor.set.call(option, nextValue);
-                            const currentValue = descriptor.get.call(option);
-                            if (currentValue === previousValue) {
-                                return;
-                            }
-                            this._handleBoundInputEvent();
-                        },
-                    });
-                    releaseSelectedObserver = () => {
-                        delete option.selected;
-                    };
-                }
-            }
-
-            releases.push(() => {
-                releaseSelectedObserver();
-            });
-        }
-        this._releaseInputs = releases;
+        this._releaseInputs = [bindBoundSelect(select, this._handleBoundInputEvent)];
     }
 
     _cancelClose() {
@@ -334,7 +289,7 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     _findBoundOptionByValue(value) {
-        return this.boundOptionElements().find((option) => option.value === value) ?? null;
+        return findBoundSelectOption(this.boundSelectElement(), value);
     }
 
     _findCatalogTemplateByValue(value) {

@@ -376,6 +376,67 @@ Validation:
   - `Loot Flow` still renders
   - `Target Fish` PMF still renders once a target is selected
 
+### Step 8
+
+Extract shared hidden `<select multiple>` transport for Datastar array inputs.
+
+Work:
+
+- remove duplicated bound-select wiring from:
+  - `searchable-multiselect.js`
+  - `checkbox-group.js`
+- centralize:
+  - bound select lookup
+  - bound option lookup
+  - `select` input/change subscription
+  - external `option.selected` observation
+
+Status:
+
+- implemented
+
+Implementation:
+
+- added reusable `bound-select.js`
+- `fishy-searchable-multiselect` now uses the shared bound-select transport
+- `fishy-checkbox-group` now uses the same shared bound-select transport
+
+Why this matters:
+
+- it keeps the Datastar array-input transport consistent across searchable and non-searchable controls
+- it removes another source of transport drift between components
+- checkbox groups now react to external `option.selected` changes through the same mechanism as searchable multiselects
+
+Validation:
+
+- JS syntax checks passed for:
+  - `bound-select.js`
+  - `checkbox-group.js`
+  - `searchable-multiselect.js`
+- rebuilt site output successfully
+- live Chromium validation confirmed:
+  - adding Balacs Lunchbox through the searchable multiselect sets:
+    - `food = ["item:9359"]`
+    - `_food_slots = ["item:9359"]`
+    - AFR back to `72%`
+  - removing Balacs Lunchbox returns:
+    - `food = []`
+    - `_food_slots = []`
+    - AFR back to `65%`
+  - removing the selected buff clears:
+    - `buff`
+    - `_buff_slots`
+    - persisted localStorage state
+  - removing an outfit checkbox keeps:
+    - `outfit`
+    - `_outfit_slots`
+    compact and in sync
+  - removing a pet skill checkbox keeps:
+    - `pet{n}.skills`
+    - `_pet{n}_skill_slots`
+    compact and in sync
+  - reload restores the same compact persisted state
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:
