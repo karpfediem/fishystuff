@@ -2605,3 +2605,35 @@ Validation:
   - `/map/loader.js`
   - `/map/map-host.js`
 - `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-no-storage-fallback.json`
+
+## Step 56: Drive Fishydex rendering from Datastar signal patches instead of a template effect
+
+What changed:
+
+- removed the template-level Fishydex render hook:
+  - `data-effect="window.Fishydex.sync($)"`
+- `site/assets/js/pages/fishydex.js` now binds its own Datastar signal-patch sync listener
+  and calls `sync(signals)` from inside the page module
+- `restore(signals)` now:
+  - binds the sync listener
+  - performs the initial sync once after restore
+- shrank the public `window.Fishydex` surface by dropping the exported `sync` method
+- updated `site/assets/js/pages/fishydex.test.mjs` to trigger action handling through
+  Datastar signal-patch events instead of calling `window.Fishydex.sync(...)` directly
+
+Why this matters:
+
+- Fishydex rendering was still being driven by a template escape hatch instead of the
+  Datastar signal graph
+- moving sync ownership into the page module aligns Fishydex with the signal-patch model used
+  elsewhere in the refactor
+- it also reduces one more page-global imperative surface and keeps template markup simpler
+
+Validation:
+
+- `node --check site/assets/js/pages/fishydex.js site/assets/js/pages/fishydex.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/pages/fishydex.js`
+  - `/dex/`

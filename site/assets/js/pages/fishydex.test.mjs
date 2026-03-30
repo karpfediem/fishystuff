@@ -253,7 +253,16 @@ test("fishydex export action token copies caught ids and updates status", async 
     },
   });
 
-  env.window.Fishydex.sync(signals);
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _fishydex_actions: {
+        exportCaughtToken: 1,
+        importCaughtToken: 0,
+        closeDetailsToken: 0,
+      },
+    },
+  });
   await Promise.resolve();
   await Promise.resolve();
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -276,7 +285,16 @@ test("fishydex import action token updates caught ids from prompt input", () => 
     },
   });
 
-  env.window.Fishydex.sync(signals);
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _fishydex_actions: {
+        exportCaughtToken: 0,
+        importCaughtToken: 1,
+        closeDetailsToken: 0,
+      },
+    },
+  });
 
   assert.deepEqual(JSON.parse(JSON.stringify(signals._shared_fish)), {
     caughtIds: [8473, 8476],

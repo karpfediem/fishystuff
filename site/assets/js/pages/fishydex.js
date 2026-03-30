@@ -25,9 +25,12 @@
   const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
   const DEX_FEEDBACK_CLEAR_SIGNAL_PATTERN =
     /^(search_query|caught_filter|favourite_filter|grade_filters|method_filters|show_dried|sort_field|sort_direction)(?:\.|$)/;
+  const DEX_SYNC_SIGNAL_PATTERN =
+    /^(fish(?:\.|$)|revision(?:\.|$)|search_query(?:\.|$)|caught_filter(?:\.|$)|favourite_filter(?:\.|$)|grade_filters(?:\.|$)|method_filters(?:\.|$)|show_dried(?:\.|$)|sort_field(?:\.|$)|sort_direction(?:\.|$)|_shared_fish(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_fishydex_actions(?:\.|$))/;
   const state = {
     persistBinding: null,
     feedbackBinding: null,
+    syncBinding: null,
     persistedUiJson: "",
     persistedCaughtJson: "",
     persistedFavouriteJson: "",
@@ -158,6 +161,39 @@
     };
     document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
     state.feedbackBinding = {
+      dispose() {
+        document.removeEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+      },
+    };
+  }
+
+  function bindSyncListener() {
+    if (state.syncBinding) {
+      return;
+    }
+    const helper = datastarPersistHelper();
+    const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
+      ? helper.patchMatchesSignalFilter
+      : null;
+    if (!patchMatches) {
+      return;
+    }
+    const handleSignalPatch = (event) => {
+      if (!state.uiStateRestored) {
+        return;
+      }
+      const patch = event && event.detail ? event.detail : null;
+      if (!patchMatches(patch, { include: DEX_SYNC_SIGNAL_PATTERN })) {
+        return;
+      }
+      const signals = signalObject();
+      if (!signals) {
+        return;
+      }
+      sync(signals);
+    };
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    state.syncBinding = {
       dispose() {
         document.removeEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
       },
@@ -371,6 +407,7 @@
     connect(signals);
     bindPersistListener();
     bindFeedbackResetListener();
+    bindSyncListener();
     const uiState = loadUiStateFromStorage();
     const caughtState = loadCaughtIdsFromStorage();
     const favouriteState = loadFavouriteIdsFromStorage();
@@ -395,6 +432,7 @@
         || "",
     });
     state.uiStateRestored = true;
+    sync(signals);
   }
 
   function toggleFishIds(values, fishId) {
@@ -1619,7 +1657,6 @@
     persistSignals: persistSignals,
     toggleFishIds: toggleFishIds,
     queueStamp: queueStamp,
-    sync: sync,
     fishApiUrl: fishApiUrl,
     toggleCaught: toggleCaught,
     toggleFavourite: toggleFavourite,
