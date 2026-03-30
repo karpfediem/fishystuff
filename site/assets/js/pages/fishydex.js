@@ -1,7 +1,5 @@
 (function () {
   const DEX_UI_STORAGE_KEY = "fishystuff.fishydex.ui.v1";
-  const DEX_PROGRESS_PANEL_UI_KEY = "dex.panels.progress.collapsed";
-  const DEX_FILTER_PANEL_UI_KEY = "dex.panels.filter.collapsed";
   const CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
   const FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
   const GRADE_COLOR_ORDER = ["red", "yellow", "blue", "green", "white", "unknown"];
@@ -20,7 +18,6 @@
   const SILVER_FORMATTER = new Intl.NumberFormat();
   const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$))/;
   const state = {
-    uiSettingsUnsubscribe: null,
     persistBinding: null,
     persistedUiJson: "",
     persistedCaughtJson: "",
@@ -112,64 +109,12 @@
       : null;
   }
 
-  function sharedUiSettingsStore() {
-    const store = window.__fishystuffUiSettings;
-    return store && typeof store.get === "function" && typeof store.set === "function"
-      ? store
-      : null;
-  }
-
-  function panelUiKey(panelId) {
-    return panelId === "progress" ? DEX_PROGRESS_PANEL_UI_KEY : DEX_FILTER_PANEL_UI_KEY;
-  }
-
   function normalizeBooleanFlag(value) {
     return value === true || value === "true" || value === 1 || value === "1";
   }
 
-  function readPanelCollapsedState(panelId) {
-    const store = sharedUiSettingsStore();
-    return normalizeBooleanFlag(store ? store.get(panelUiKey(panelId), false) : false);
-  }
-
-  function persistPanelCollapsed(panelId, collapsed) {
-    const store = sharedUiSettingsStore();
-    if (!store) {
-      return;
-    }
-    store.set(panelUiKey(panelId), Boolean(collapsed));
-  }
-
   function connect(signals) {
     signalStore.connect(signals);
-    if (typeof state.uiSettingsUnsubscribe === "function") {
-      state.uiSettingsUnsubscribe();
-      state.uiSettingsUnsubscribe = null;
-    }
-
-    const store = sharedUiSettingsStore();
-    if (!store || typeof store.subscribe !== "function") {
-      return;
-    }
-
-    state.uiSettingsUnsubscribe = store.subscribe(function () {
-      const signalsObject = signalObject();
-      if (!signalsObject) {
-        return;
-      }
-      const progressCollapsed = readPanelCollapsedState("progress");
-      const filterCollapsed = readPanelCollapsedState("filter");
-      if (
-        normalizeBooleanFlag(signalsObject._progress_panel_collapsed) === progressCollapsed
-        && normalizeBooleanFlag(signalsObject._filter_panel_collapsed) === filterCollapsed
-      ) {
-        return;
-      }
-      Object.assign(signalsObject, {
-        _progress_panel_collapsed: progressCollapsed,
-        _filter_panel_collapsed: filterCollapsed,
-      });
-    });
   }
 
   function bindPersistListener() {
@@ -280,6 +225,10 @@
       show_dried: normalizeBooleanFlag(signals && signals.show_dried),
       sort_field: normalizeSortField(signals && signals.sort_field),
       sort_direction: normalizeSortDirection(signals && signals.sort_direction),
+      _progress_panel_collapsed: normalizeBooleanFlag(
+        signals && signals._progress_panel_collapsed,
+      ),
+      _filter_panel_collapsed: normalizeBooleanFlag(signals && signals._filter_panel_collapsed),
     };
   }
 
@@ -296,20 +245,6 @@
       state.persistedUiJson = json;
     } catch (_error) {
       patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
-    }
-  }
-
-  function persistPanelSignals(signals) {
-    if (!signals || !state.uiStateRestored) {
-      return;
-    }
-    const progressCollapsed = normalizeBooleanFlag(signals._progress_panel_collapsed);
-    const filterCollapsed = normalizeBooleanFlag(signals._filter_panel_collapsed);
-    if (readPanelCollapsedState("progress") !== progressCollapsed) {
-      persistPanelCollapsed("progress", progressCollapsed);
-    }
-    if (readPanelCollapsedState("filter") !== filterCollapsed) {
-      persistPanelCollapsed("filter", filterCollapsed);
     }
   }
 
@@ -403,7 +338,6 @@
     persistUiSignals(snapshot);
     persistCaughtIds(snapshot.caught_ids);
     persistFavouriteIds(snapshot.favourite_ids);
-    persistPanelSignals(snapshot);
   }
 
   function restore(signals) {
@@ -419,8 +353,6 @@
       caught_ids: caughtState.caughtIds,
       favourite_ids: favouriteState.favouriteIds,
       _selected_fish_id: 0,
-      _progress_panel_collapsed: readPanelCollapsedState("progress"),
-      _filter_panel_collapsed: readPanelCollapsedState("filter"),
       _status_message:
         uiState.statusMessage
         || caughtState.statusMessage
