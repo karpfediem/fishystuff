@@ -24,7 +24,6 @@ export const FISHYMAP_EVENTS = Object.freeze({
 
 export const FISHYMAP_STORAGE_KEYS = Object.freeze({
   session: "fishystuff.map.session.v1",
-  prefs: "fishystuff.map.prefs.v1",
   bookmarks: "fishystuff.map.bookmarks.v1",
   caught: "fishystuff.fishydex.caught.v1",
   favourites: "fishystuff.fishydex.favourites.v1",
@@ -1970,18 +1969,12 @@ export function loadSessionRestorePatch(storage = globalThis.sessionStorage) {
   return snapshotToRestorePatch(readJsonStorage(storage, FISHYMAP_STORAGE_KEYS.session));
 }
 
-export function loadLocalPrefsPatch(storage = globalThis.localStorage) {
-  return snapshotToRestorePatch(readJsonStorage(storage, FISHYMAP_STORAGE_KEYS.prefs));
-}
-
 export function buildInitialRestorePatch({
   locationHref = globalThis.location?.href,
   sessionStorage = globalThis.sessionStorage,
-  localStorage = globalThis.localStorage,
   defaults,
 } = {}) {
   let merged = normalizeStatePatch(defaults || {});
-  merged = mergeStatePatch(merged, loadLocalPrefsPatch(localStorage));
   merged = mergeStatePatch(merged, loadSessionRestorePatch(sessionStorage));
   merged = mergeStatePatch(merged, parseQueryState(locationHref));
   return merged;
@@ -2127,12 +2120,10 @@ class FishyMapBridgeImpl {
     };
     this.boundPageHide = () => {
       this.flushSessionStateSave();
-      this.saveLocalPrefsNow();
     };
     this.boundVisibilityChange = () => {
       if (globalThis.document?.visibilityState === "hidden") {
         this.flushSessionStateSave();
-        this.saveLocalPrefsNow();
       }
     };
     this.performanceOptions = normalizePerformanceOptions({ scenario: "load_map" });
@@ -2292,7 +2283,6 @@ class FishyMapBridgeImpl {
             patchWithoutCommands(normalized),
           );
           this.addPerformanceCounter("host.patches.queued");
-          this.saveLocalPrefsNow();
           this.schedulePatchFlush();
         }
         if (
@@ -2841,14 +2831,6 @@ class FishyMapBridgeImpl {
     };
   }
 
-  createPrefsSnapshot() {
-    return {
-      version: FISHYMAP_CONTRACT_VERSION,
-      filters: {
-      },
-    };
-  }
-
   scheduleSessionStateSave() {
     if (this.flushSessionTimer) {
       return;
@@ -2872,14 +2854,6 @@ class FishyMapBridgeImpl {
     } catch (_) {}
   }
 
-  saveLocalPrefsNow() {
-    try {
-      globalThis.localStorage?.setItem(
-        FISHYMAP_STORAGE_KEYS.prefs,
-        JSON.stringify(this.createPrefsSnapshot()),
-      );
-    } catch (_) {}
-  }
 }
 
 export function createFishyMapBridge() {

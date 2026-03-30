@@ -593,7 +593,7 @@ test("setState updates cached input state without forcing a wasm state read", as
   }
 });
 
-test("bookmark ui patches are normalized in input state and omitted from persisted prefs", () => {
+test("bookmark ui patches are normalized in input state and omitted from bridge session snapshots", () => {
   const next = applyStatePatch(undefined, {
     version: 1,
     ui: {
@@ -632,14 +632,11 @@ test("bookmark ui patches are normalized in input state and omitted from persist
   const bridge = createFishyMapBridge();
   bridge.inputState = next;
   const sessionUi = bridge.createSessionSnapshot().ui || {};
-  const prefsUi = bridge.createPrefsSnapshot().ui || {};
   assert.equal("bookmarkSelectedIds" in sessionUi, false);
   assert.equal("bookmarks" in sessionUi, false);
-  assert.equal("bookmarkSelectedIds" in prefsUi, false);
-  assert.equal("bookmarks" in prefsUi, false);
 });
 
-test("search text and patch range stay out of persisted bridge snapshots", () => {
+test("search text and patch range stay out of persisted bridge session snapshots", () => {
   const bridge = createFishyMapBridge();
   bridge.inputState = applyStatePatch(undefined, {
     version: 1,
@@ -666,7 +663,6 @@ test("search text and patch range stay out of persisted bridge snapshots", () =>
   });
 
   const sessionFilters = bridge.createSessionSnapshot().filters || {};
-  const prefsFilters = bridge.createPrefsSnapshot().filters || {};
 
   assert.equal("searchText" in sessionFilters, false);
   assert.equal("fishIds" in sessionFilters, false);
@@ -676,14 +672,6 @@ test("search text and patch range stay out of persisted bridge snapshots", () =>
   assert.equal("patchId" in sessionFilters, false);
   assert.equal("fromPatchId" in sessionFilters, false);
   assert.equal("toPatchId" in sessionFilters, false);
-  assert.equal("searchText" in prefsFilters, false);
-  assert.equal("fishIds" in prefsFilters, false);
-  assert.equal("zoneRgbs" in prefsFilters, false);
-  assert.equal("semanticFieldIdsByLayer" in prefsFilters, false);
-  assert.equal("fishFilterTerms" in prefsFilters, false);
-  assert.equal("patchId" in prefsFilters, false);
-  assert.equal("fromPatchId" in prefsFilters, false);
-  assert.equal("toPatchId" in prefsFilters, false);
   assert.equal("layerIdsVisible" in sessionFilters, false);
   assert.equal("layerIdsOrdered" in sessionFilters, false);
   assert.equal("layerOpacities" in sessionFilters, false);
@@ -692,14 +680,6 @@ test("search text and patch range stay out of persisted bridge snapshots", () =>
   assert.equal("layerWaypointLabelsVisible" in sessionFilters, false);
   assert.equal("layerPointIconsVisible" in sessionFilters, false);
   assert.equal("layerPointIconScales" in sessionFilters, false);
-  assert.equal("layerIdsVisible" in prefsFilters, false);
-  assert.equal("layerIdsOrdered" in prefsFilters, false);
-  assert.equal("layerOpacities" in prefsFilters, false);
-  assert.equal("layerClipMasks" in prefsFilters, false);
-  assert.equal("layerWaypointConnectionsVisible" in prefsFilters, false);
-  assert.equal("layerWaypointLabelsVisible" in prefsFilters, false);
-  assert.equal("layerPointIconsVisible" in prefsFilters, false);
-  assert.equal("layerPointIconScales" in prefsFilters, false);
 });
 
 test("wasm output events are redispatched as DOM CustomEvents", async () => {
@@ -1297,8 +1277,7 @@ test("mount does not persist an implicit hidden-all layer override before the ma
       sessionStorage: env.sessionStorage,
     });
 
-    const savedPrefs = JSON.parse(env.localStorage.getItem(FISHYMAP_STORAGE_KEYS.prefs));
-    assert.equal("layerIdsVisible" in (savedPrefs.filters || {}), false);
+    assert.equal(env.localStorage.getItem("fishystuff.map.prefs.v1"), null);
   } finally {
     bridge?.destroy();
     env.restore();
@@ -1352,27 +1331,7 @@ test("canvas sizing falls back to the map container when the canvas rect is not 
   }
 });
 
-test("restore priority is URL over session over local preferences", () => {
-  const localStorage = new MemoryStorage({
-    "fishystuff.map.prefs.v1": JSON.stringify({
-      version: 1,
-      filters: {
-        layerIdsVisible: ["terrain"],
-        layerIdsOrdered: ["terrain", "minimap"],
-        layerOpacities: {
-          terrain: 0.25,
-        },
-        layerClipMasks: {
-          terrain: "zones",
-        },
-      },
-      ui: {
-        legendOpen: true,
-        showPointIcons: false,
-        pointIconScale: 2.4,
-      },
-    }),
-  });
+test("restore priority is URL over bridge session state", () => {
   const sessionStorage = new MemoryStorage({
     "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
@@ -1410,7 +1369,6 @@ test("restore priority is URL over session over local preferences", () => {
   const patch = buildInitialRestorePatch({
     locationHref:
       "https://fishystuff.fish/map/?fish=77&view=3d&layers=zones,terrain",
-    localStorage,
     sessionStorage,
   });
 
@@ -1432,31 +1390,7 @@ test("restore priority is URL over session over local preferences", () => {
   assert.equal(patch.commands.restoreView.viewMode, "3d");
 });
 
-test("local and session storage do not restore page-owned map filters", () => {
-  const localStorage = new MemoryStorage({
-    "fishystuff.map.prefs.v1": JSON.stringify({
-      version: 1,
-      filters: {
-        fishIds: [11, 22, 33],
-        zoneRgbs: [0xc17f7f, 0x3c963c],
-        semanticFieldIdsByLayer: {
-          regions: [76, 92],
-        },
-        fishFilterTerms: ["favourite", "missing"],
-        searchText: "local sea",
-        fromPatchId: "local-from",
-        toPatchId: "local-to",
-        layerIdsVisible: ["terrain"],
-        layerIdsOrdered: ["terrain", "minimap"],
-        layerOpacities: { terrain: 0.25 },
-        layerClipMasks: { terrain: "zones" },
-        layerWaypointConnectionsVisible: { terrain: true },
-        layerWaypointLabelsVisible: { terrain: false },
-        layerPointIconsVisible: { terrain: true },
-        layerPointIconScales: { terrain: 1.5 },
-      },
-    }),
-  });
+test("bridge session storage does not restore page-owned map filters", () => {
   const sessionStorage = new MemoryStorage({
     "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
@@ -1484,7 +1418,6 @@ test("local and session storage do not restore page-owned map filters", () => {
 
   const patch = buildInitialRestorePatch({
     locationHref: "https://fishystuff.fish/map/",
-    localStorage,
     sessionStorage,
   });
 
@@ -1779,45 +1712,6 @@ test("state patch normalizes selectSemanticField commands", () => {
     fieldId: 295,
     targetKey: "resource_node",
   });
-});
-
-test("legacy empty layer visibility snapshots do not hide every layer on restore", () => {
-  const localStorage = new MemoryStorage({
-    [FISHYMAP_STORAGE_KEYS.prefs]: JSON.stringify({
-      version: 1,
-      filters: {
-        layerIdsVisible: [],
-      },
-    }),
-  });
-
-  const patch = buildInitialRestorePatch({
-    locationHref: "https://fishystuff.fish/map/",
-    localStorage,
-    sessionStorage: new MemoryStorage(),
-  });
-
-  assert.equal("layerIdsVisible" in (patch.filters || {}), false);
-});
-
-test("explicit empty layer visibility snapshots no longer restore from bridge storage", () => {
-  const localStorage = new MemoryStorage({
-    [FISHYMAP_STORAGE_KEYS.prefs]: JSON.stringify({
-      version: 1,
-      filters: {
-        layerIdsVisible: [],
-        layerVisibilityExplicit: true,
-      },
-    }),
-  });
-
-  const patch = buildInitialRestorePatch({
-    locationHref: "https://fishystuff.fish/map/",
-    localStorage,
-    sessionStorage: new MemoryStorage(),
-  });
-
-  assert.equal("layerIdsVisible" in (patch.filters || {}), false);
 });
 
 test("legacy patch query alias expands to an exact range", () => {

@@ -231,6 +231,20 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal("windowUi" in signals, false);
 });
 
+test("map-page restore clears the legacy bridge prefs key", () => {
+  const env = createContext({
+    "fishystuff.map.prefs.v1": JSON.stringify({
+      version: 1,
+      filters: {},
+    }),
+  });
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+
+  assert.equal(env.localStorage.getItem("fishystuff.map.prefs.v1"), null);
+});
+
 test("map-page restore does not let stored filters override query-owned input state", () => {
   const env = createContext(
     {

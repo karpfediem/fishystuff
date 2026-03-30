@@ -1838,3 +1838,53 @@ Validation:
     - `diagnosticsOpen`
     - `legendOpen`
   - verify no `Maximum call stack size exceeded` errors remain during startup
+
+### Step 37 - Remove Dead Bridge-Owned Map Prefs Persistence
+
+Completed:
+
+- removed the obsolete bridge-owned `prefs` storage path from `site/assets/map/map-host.js`
+  - removed `FISHYMAP_STORAGE_KEYS.prefs`
+  - removed local-prefs restore from `buildInitialRestorePatch(...)`
+  - removed `createPrefsSnapshot()`
+  - removed `saveLocalPrefsNow()`
+  - removed local-prefs writes on signal changes and pagehide/visibilitychange
+- removed the last loader-side cleanup reference to the old prefs key in
+  `site/assets/map/loader.js`
+- updated map bridge tests in `site/assets/map/map-host.test.mjs` to assert the new
+  ownership model:
+  - bridge session snapshots still exist
+  - bridge prefs snapshots no longer exist
+  - URL restore precedence is now only against bridge session state
+- added page-level cleanup in `site/assets/js/pages/map-page.js` so stale
+  `fishystuff.map.prefs.v1` is deleted on map restore
+- added regression coverage in `site/assets/js/pages/map-page.test.mjs` for clearing the
+  legacy prefs key
+
+Why this matters:
+
+- after previous slices, the bridge-owned prefs snapshot had become empty dead weight
+- leaving it around still created a misleading second persistence owner:
+  - page-owned Datastar state for durable visible map UI
+  - bridge-owned localStorage prefs that no longer restored anything useful
+- removing it simplifies the model:
+  - page-owned Datastar storage owns durable map UI/filter persistence
+  - bridge-owned session storage only owns runtime/session restore state that has not been
+    migrated yet
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/map-host.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/pages/map-page.js`
+  - `/map/map-host.js`
+- live Chromium smoke:
+  - seed `localStorage['fishystuff.map.prefs.v1']`
+  - reload `/map/`
+  - verify the map boots cleanly
+  - verify `localStorage['fishystuff.map.prefs.v1'] === null`
+  - verify query-owned `_map_input` state still survives startup

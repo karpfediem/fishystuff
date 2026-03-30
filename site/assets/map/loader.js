@@ -8297,9 +8297,6 @@ function bindUi(shell, elements, options = {}) {
       globalThis.sessionStorage?.removeItem?.(FISHYMAP_STORAGE_KEYS.session);
     } catch (_) {}
     try {
-      globalThis.localStorage?.removeItem?.(FISHYMAP_STORAGE_KEYS.prefs);
-    } catch (_) {}
-    try {
       globalThis.localStorage?.removeItem?.(FISHYMAP_WINDOW_UI_STORAGE_KEY);
     } catch (_) {}
 

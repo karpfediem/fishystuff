@@ -1,6 +1,7 @@
 (function () {
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
+  const LEGACY_MAP_PREFS_STORAGE_KEY = "fishystuff.map.prefs.v1";
   const MAP_PERSIST_SIGNAL_FILTER =
     /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries)(?:\.|$)/;
   const state = {
@@ -475,6 +476,7 @@
     let uiPatch = null;
     let bookmarkPatch = null;
     try {
+      globalThis.localStorage?.removeItem?.(LEGACY_MAP_PREFS_STORAGE_KEY);
       const rawUi = globalThis.localStorage?.getItem?.(MAP_UI_STORAGE_KEY);
       if (rawUi) {
         try {
