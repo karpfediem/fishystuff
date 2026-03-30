@@ -127,7 +127,14 @@ class FishyDistributionChart extends HTMLElement {
             ? requestedWidth
             : DEFAULT_VIEWBOX_WIDTH;
         const trackWidth = width;
-        const x = d3.scaleLinear().domain([0, 100]).range([0, trackWidth]);
+        const totalWidthPct = Math.max(
+            100,
+            segments.reduce(
+                (sum, segment) => sum + Math.max(0, Number(segment.width_pct) || 0),
+                0,
+            ),
+        );
+        const x = d3.scaleLinear().domain([0, totalWidthPct]).range([0, trackWidth]);
         const styles = getComputedStyle(this);
         const trackBackground =
             styles.getPropertyValue("--color-base-300").trim() || "#d6d3d1";
@@ -138,7 +145,7 @@ class FishyDistributionChart extends HTMLElement {
         let startPct = 0;
         const provisional = segments.map((segment) => {
             const widthPct = Math.max(0, Number(segment.width_pct) || 0);
-            const endPct = Math.min(100, startPct + widthPct);
+            const endPct = startPct + widthPct;
             const calloutWidthPx = Math.min(
                 width - 8,
                 estimateCalloutWidthPx(

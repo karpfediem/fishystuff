@@ -471,10 +471,13 @@ pub async fn post_calculator_datastar_eval(
             CalculatorPatchMode::Eval,
         )?
         .into_datastar_event(),
-        PatchElements::new(render_fish_group_chart(&fish_group_chart))
-            .selector("#calculator-fish-group-chart")
-            .mode(ElementPatchMode::Outer)
-            .into_datastar_event(),
+        PatchElements::new(render_fish_group_chart(
+            &fish_group_chart,
+            normalized_signals.show_normalized_select_rates,
+        ))
+        .selector("#calculator-fish-group-chart")
+        .mode(ElementPatchMode::Outer)
+        .into_datastar_event(),
         PatchElements::new(render_fish_group_silver_chart(&loot_chart))
             .selector("#calculator-fish-group-silver-chart")
             .mode(ElementPatchMode::Outer)
@@ -1744,7 +1747,11 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
     }))
     .unwrap_or_else(|_| "{}".to_string());
     let fish_group_distribution_chart = DistributionChartSignal {
-        segments: groups_distribution_segments(&loot_chart.rows),
+        segments: groups_distribution_segments(
+            &fish_group_chart.rows,
+            loot_total_catches_raw,
+            signals.show_normalized_select_rates,
+        ),
     };
     let fish_group_silver_distribution_chart = DistributionChartSignal {
         segments: group_silver_distribution_segments(&loot_chart.rows),
@@ -3661,14 +3668,32 @@ fn render_pmf_chart(chart_id: &str, aria_label: &str, signal_path: &str) -> Stri
     )
 }
 
-fn groups_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<DistributionChartSegment> {
-    loot_rows
-        .iter()
+fn groups_distribution_segments(
+    rows: &[FishGroupChartRow],
+    total_catches_raw: f64,
+    show_normalized_rates: bool,
+) -> Vec<DistributionChartSegment> {
+    rows.iter()
         .map(|row| DistributionChartSegment {
             label: row.label.to_string(),
-            value_text: row.count_share_text.clone(),
-            detail_text: row.expected_count_text.clone(),
-            width_pct: row.current_share_pct,
+            value_text: percent_value_text(if show_normalized_rates {
+                row.current_share_pct
+            } else {
+                row.weight_pct
+            }),
+            detail_text: trim_float(
+                total_catches_raw
+                    * if show_normalized_rates {
+                        row.current_share_pct / 100.0
+                    } else {
+                        row.weight_pct / 100.0
+                    },
+            ),
+            width_pct: if show_normalized_rates {
+                row.current_share_pct
+            } else {
+                row.weight_pct
+            },
             fill_color: row.fill_color,
             stroke_color: row.stroke_color,
             text_color: row.text_color,
@@ -3764,14 +3789,14 @@ fn render_loot_sankey(chart: &LootChart, signals: &CalculatorSignals) -> String 
     format!(
         "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Loot Flow</div><div class=\"text-xs text-base-content/70\">Each flow starts at a fish group, passes through source-backed species rows, then recombines into silver-weighted group totals. Left-side metrics show droprate composition; right-side metrics show silver contribution.</div></div><div class=\"text-right text-xs text-base-content/70\">left: droprate<br>{}</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"Expected loot flow from groups to loot rows\" signal-path=\"_calc.loot_sankey_chart\"></fishy-loot-sankey></div></div>",
         if signals.show_normalized_select_rates {
-            "normalized select-rates"
+            "normalized rates"
         } else {
-            "raw select-rates"
+            "raw rates"
         },
     )
 }
 
-fn render_fish_group_chart(chart: &FishGroupChart) -> String {
+fn render_fish_group_chart(chart: &FishGroupChart, show_normalized_rates: bool) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-fish-group-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -3780,7 +3805,17 @@ fn render_fish_group_chart(chart: &FishGroupChart) -> String {
     }
 
     format!(
-        "<div id=\"calculator-fish-group-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Group Droprate Distribution</div><div class=\"text-xs text-base-content/70\">Current fish-group share after prize, rare, and high-quality weighting.</div></div><div class=\"text-right text-xs text-base-content/70\">droprate share</div></div>{}</div></div>",
+        "<div id=\"calculator-fish-group-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Group Droprate Distribution</div><div class=\"text-xs text-base-content/70\">{}</div></div><div class=\"text-right text-xs text-base-content/70\">{}</div></div>{}</div></div>",
+        if show_normalized_rates {
+            "Current fish-group share after prize, rare, and high-quality weighting."
+        } else {
+            "Raw fish-group rates after prize, rare, and high-quality weighting. These rates can total above or below 100%."
+        },
+        if show_normalized_rates {
+            "normalized share"
+        } else {
+            "raw rate"
+        },
         render_distribution_chart(
             "fish-group-distribution-chart",
             "Group Droprate Distribution",
@@ -3942,7 +3977,7 @@ fn render_fish_group_window(
                         <div class=\"grid gap-3 md:grid-cols-2\">\
                             <label class=\"label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
                                 <input data-bind=\"showNormalizedSelectRates\" type=\"checkbox\" class=\"checkbox checkbox-primary checkbox-sm\"{}>\
-                                <span class=\"text-sm font-medium\">Normalize select-rates</span>\
+                                <span class=\"text-sm font-medium\">Normalize rates</span>\
                             </label>\
                             <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
                                 <label class=\"mb-2 block text-sm font-medium\">Discard fish up to grade</label>\
@@ -3982,7 +4017,7 @@ fn render_fish_group_window(
         } else {
             ""
         },
-        render_fish_group_chart(fish_group_chart),
+        render_fish_group_chart(fish_group_chart, signals.show_normalized_select_rates),
         render_fish_group_silver_chart(loot_chart),
         render_loot_chart(signals, loot_chart),
         render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
@@ -5541,7 +5576,7 @@ mod tests {
         assert!(text.contains("<fishy-distribution-chart"));
         assert!(text.contains("signal-path=\"_calc.fish_group_distribution_chart\""));
         assert!(text.contains("No source-backed loot rows are available for this zone yet."));
-        assert!(text.contains("Normalize select-rates"));
+        assert!(text.contains("Normalize rates"));
         assert!(text.contains("data-category-key=\"buff-category:1\""));
         assert!(text.contains("Meal"));
         assert!(text.contains("value=\"effect:8-piece-outfit-set-effect\" checked"));
@@ -6308,6 +6343,47 @@ mod tests {
         assert_eq!(loot_chart.species_rows[0].label, "Silver Beltfish");
         assert_eq!(loot_flow_rows.len(), 1);
         assert_eq!(loot_flow_rows[0].label, "Prize");
+    }
+
+    #[test]
+    fn groups_distribution_segments_can_use_raw_group_rates() {
+        let rows = vec![
+            FishGroupChartRow {
+                label: "Prize",
+                fill_color: "pink",
+                stroke_color: "red",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 0.0,
+                weight_pct: 6.25,
+                current_share_pct: 5.81,
+            },
+            FishGroupChartRow {
+                label: "Trash",
+                fill_color: "gray",
+                stroke_color: "black",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 6.25,
+                weight_pct: 6.25,
+                current_share_pct: 5.81,
+            },
+        ];
+
+        let normalized = super::groups_distribution_segments(&rows, 52.0, true);
+        let raw = super::groups_distribution_segments(&rows, 52.0, false);
+
+        assert_eq!(normalized[0].value_text, "5.81%");
+        assert_eq!(normalized[0].detail_text, "3.02");
+        assert_eq!(normalized[0].width_pct, 5.81);
+
+        assert_eq!(raw[0].value_text, "6.25%");
+        assert_eq!(raw[0].detail_text, "3.25");
+        assert_eq!(raw[0].width_pct, 6.25);
+        assert_eq!(raw[1].value_text, "6.25%");
+        assert_eq!(raw[1].detail_text, "3.25");
     }
 
     #[test]
