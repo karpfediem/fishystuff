@@ -751,17 +751,26 @@ Already implemented:
 - loader now also publishes bridge input state into `_map_input`
 - loader reconciles `_map_input` back into the bridge
 
-First migrated map controls now round-trip through `_map_input`:
+Map controls currently routed through `_map_input`:
 
 - search text
 - patch range hidden inputs
-- diagnostics open state
+- legend/diagnostics visibility
+- search selection chip removals
+- zone-evidence fish selection rows
+- detail-pane active id
+- layer visibility and layer settings
+- layer ordering / clip-mask drop actions
+- bookmark-selected ids and bookmark list state mirrored into bridge input state
 
 Observed live behavior after the `_map_input` seam:
 
 - typing in search updates:
   - `_map_input.filters.searchText`
   - `_map_runtime.inputState.filters.searchText`
+- toggling a layer visibility control updates:
+  - `_map_input.filters.layerIdsVisible`
+  - `_map_runtime.inputState.filters.layerIdsVisible`
 - diagnostics toggling updates:
   - `_map_input.ui.diagnosticsOpen`
   - `_map_runtime.inputState.ui.diagnosticsOpen`

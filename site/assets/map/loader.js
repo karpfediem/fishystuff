@@ -6176,7 +6176,14 @@ function renderPanel(
   );
 }
 
-function applySearchMatchSelection(shell, elements, renderCurrentState, stateBundle, match) {
+function applySearchMatchSelection(
+  shell,
+  elements,
+  renderCurrentState,
+  patchInputState,
+  stateBundle,
+  match,
+) {
   if (!match) {
     return;
   }
@@ -6213,7 +6220,7 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
             }),
     },
   };
-  dispatchMapState(shell, patch);
+  patchInputState(patch);
   if (match.kind === "semantic") {
     dispatchMapCommand(shell, {
       selectSemanticField: {
@@ -6497,14 +6504,8 @@ function bindUi(shell, elements, options = {}) {
     return latestStateBundle;
   }
 
-  function applyInputStatePatchLocally(patch) {
-    latestStateBundle = projectStateBundleStatePatch(getLatestStateBundle(), patch);
-    return latestStateBundle;
-  }
-
   function dispatchStatePatchAndRender(patch) {
-    dispatchMapState(shell, patch);
-    renderCurrentState(applyInputStatePatchLocally(patch));
+    patchMapInputSignalState(patch);
   }
 
   function syncActiveDetailPaneState(activePaneId) {
@@ -6521,8 +6522,7 @@ function bindUi(shell, elements, options = {}) {
         activeDetailPaneId: normalizedActivePaneId,
       },
     };
-    dispatchMapState(shell, patch);
-    applyInputStatePatchLocally(patch);
+    patchMapInputSignalState(patch);
   }
 
   function activateBookmarkSelection(bookmark) {
@@ -6550,15 +6550,12 @@ function bindUi(shell, elements, options = {}) {
   function setSelectedBookmarkIds(nextSelectedIds) {
     bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds);
     patchMapUiSignalState({ bookmarks: bookmarkUi });
-    const patch = {
+    patchMapInputSignalState({
       version: FISHYMAP_CONTRACT_VERSION,
       ui: {
         bookmarkSelectedIds: bookmarkUi.selectedIds,
       },
-    };
-    FishyMapBridge.setState?.(patch);
-    FishyMapBridge.flushPendingPatchNow?.();
-    applyInputStatePatchLocally(patch);
+    });
   }
 
   function selectedBookmarksForCopy() {
@@ -6571,16 +6568,13 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function syncBookmarksToBridge(nextBookmarks = bookmarks) {
-    const patch = {
+    patchMapInputSignalState({
       version: FISHYMAP_CONTRACT_VERSION,
       ui: {
         bookmarkSelectedIds: normalizeSelectedBookmarkIds(nextBookmarks, bookmarkUi.selectedIds),
         bookmarks: normalizeBookmarks(nextBookmarks),
       },
-    };
-    FishyMapBridge.setState?.(patch);
-    FishyMapBridge.flushPendingPatchNow?.();
-    applyInputStatePatchLocally(patch);
+    });
   }
 
   function setBookmarkPlacementActive(active, options = {}) {
@@ -7191,7 +7185,14 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function applySearchMatchAndClose(stateBundle, match) {
-    applySearchMatchSelection(shell, elements, renderCurrentState, stateBundle, match);
+    applySearchMatchSelection(
+      shell,
+      elements,
+      renderCurrentState,
+      patchMapInputSignalState,
+      stateBundle,
+      match,
+    );
     searchUiState.open = false;
     patchMapUiSignalState({ search: searchUiState });
     renderCurrentState(getLatestStateBundle());
@@ -8074,8 +8075,7 @@ function bindUi(shell, elements, options = {}) {
           ),
         },
       };
-      dispatchMapState(shell, patch);
-      applyInputStatePatchLocally(patch);
+      patchMapInputSignalState(patch);
       return;
     }
 
@@ -8095,8 +8095,7 @@ function bindUi(shell, elements, options = {}) {
         layerOpacities: buildLayerOpacityPatch(current, layerId, slider.value),
       },
     };
-    dispatchMapState(shell, patch);
-    applyInputStatePatchLocally(patch);
+    patchMapInputSignalState(patch);
   });
 
   elements.layers.addEventListener("pointerdown", (event) => {
