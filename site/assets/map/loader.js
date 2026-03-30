@@ -106,6 +106,9 @@ const DEFAULT_MAP_INPUT_SIGNAL_STATE = Object.freeze({
 const DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE = Object.freeze({
   entries: [],
 });
+const DEFAULT_MAP_ACTION_SIGNAL_STATE = Object.freeze({
+  resetViewToken: 0,
+});
 
 function cloneJsonValue(value) {
   return JSON.parse(JSON.stringify(value));
@@ -203,6 +206,16 @@ function patchMapBookmarksSignalState(bookmarks) {
       entries: cloneJsonValue(normalizeBookmarks(bookmarks)),
     },
   });
+}
+
+function currentMapActionSignalState() {
+  const helper = mapSignalHelper();
+  const raw = helper?.readSignal?.("_map_actions");
+  return {
+    resetViewToken: Number.isFinite(raw?.resetViewToken)
+      ? Math.max(0, Math.trunc(raw.resetViewToken))
+      : DEFAULT_MAP_ACTION_SIGNAL_STATE.resetViewToken,
+  };
 }
 
 function publishMapRuntimeSignals(stateBundle) {
@@ -6252,6 +6265,7 @@ function bindUi(shell, elements, options = {}) {
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
   let windowUiState = initialMapUiState.windowUi;
   let bookmarks = currentMapBookmarksSignalState();
+  let mapActionState = currentMapActionSignalState();
   let bookmarkMetadataRefreshTimer = 0;
   let bookmarkMetadataRefreshAttempts = 0;
   const bookmarkUi = {
@@ -6934,6 +6948,14 @@ function bindUi(shell, elements, options = {}) {
       ...getLatestStateBundle(),
       inputState: nextSignalInputState,
     });
+  }
+
+  function syncMapActionsFromSignals() {
+    const nextActionState = currentMapActionSignalState();
+    if (nextActionState.resetViewToken !== mapActionState.resetViewToken) {
+      mapActionState = nextActionState;
+      dispatchMapCommand(shell, { resetView: true });
+    }
   }
 
   function clearLayerDropState() {
@@ -8272,10 +8294,6 @@ function bindUi(shell, elements, options = {}) {
     clearLayerDropState();
   });
 
-  elements.resetView.addEventListener("click", () => {
-    dispatchMapCommand(shell, { resetView: true });
-  });
-
   async function resetMapUiToInitialState() {
     const resetButton = elements.resetUi;
     if (!resetButton || resetButton.disabled) {
@@ -8393,6 +8411,7 @@ function bindUi(shell, elements, options = {}) {
 
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncLocalUiStateFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeInputStateFromSignals);
+  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncMapActionsFromSignals);
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && bookmarkUi.placing) {

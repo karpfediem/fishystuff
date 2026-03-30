@@ -1152,6 +1152,37 @@ Validation:
   - verify `_map_input.ui.diagnosticsOpen === true`
   - verify `_map_runtime.inputState.ui.diagnosticsOpen === true`
 
+### Step 21 - Signal-Driven Map Reset View Action
+
+Completed:
+
+- introduced a local `_map_actions.resetViewToken` signal in `site/layouts/map.shtml`
+- moved the `Reset view` button into a Datastar template expression that increments that token
+- added loader-side action-signal reconciliation in `site/assets/map/loader.js`
+- removed the old loader-owned `Reset view` click listener
+
+Why this matters:
+
+- `Reset view` is not persistent input state, so it should not be modeled as part of `_map_input`
+- using a local action-signal branch keeps the intent inside the Datastar graph without pretending it is durable state
+- this establishes a reusable pattern for one-shot map UI actions that still need to cross into the bridge/runtime
+- it removes another direct DOM-to-bridge path from `loader.js`
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared:
+  - served `/map/` vs `site/.out/map/index.html`
+  - served `/map/loader.js` vs `site/.out/map/loader.js`
+- live Chromium smoke:
+  - reload `/map/`
+  - verify `_map_actions.resetViewToken === 0`
+  - instrument `FishyMapBridge.sendCommand(...)`
+  - click `Reset view`
+  - verify `_map_actions.resetViewToken === 1`
+  - verify the bridge receives `{ resetView: true }`
+
 ### Step 16 - Shared Datastar State Helper
 
 Completed:
