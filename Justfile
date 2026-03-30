@@ -4,7 +4,7 @@ up:
   devenv up
 
 # Start the local dev stack plus rebuild/restart watchers via the `watch` profile
-up-watch:
+watch:
   devenv up --profile watch
 
 # Stop detached local dev processes started via `devenv up -d`

@@ -53,10 +53,10 @@ If you want `devenv` to own the local rebuild/restart loop too, use the opt-in
 watch profile instead of the default stack:
 
 ```bash
-just up-watch
+just watch
 ```
 
-`just up-watch` runs `devenv up --profile watch` and adds:
+`just watch` runs `devenv up --profile watch` and adds:
 
 - API auto-restart on backend changes
 - map runtime rebuild plus CDN restaging on map/lib changes

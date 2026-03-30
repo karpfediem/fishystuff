@@ -23,7 +23,7 @@ For local site and map development, the repo-root flow is now explicit:
 
 Or, if you want `devenv` itself to own rebuild/restart behavior:
 
-- `just up-watch`
+- `just watch`
 
 Then add only the rebuild watchers you actually need:
 
@@ -42,7 +42,7 @@ Then add only the rebuild watchers you actually need:
 If `site/.out` or `data/cdn/public/` is stale or missing, that state is visible
 directly instead of being hidden behind nested watchers.
 
-`just up-watch` is the opt-in alternative where `devenv` runs the initial
+`just watch` is the opt-in alternative where `devenv` runs the initial
 builds, watches source inputs, rebuilds outputs, and restarts the API on
 changes.
 
