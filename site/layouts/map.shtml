@@ -1082,14 +1082,36 @@
         }
       }
     </style>
-    <div id="map-page-shell">
+    <div id="map-page-shell"
+         data-signals="{
+           _map_ui: {
+             windowUi: {
+               search: { open: true, collapsed: false, x: null, y: null },
+               settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+               zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: '' },
+               layers: { open: true, collapsed: false, x: null, y: null },
+               bookmarks: { open: false, collapsed: false, x: null, y: null }
+             },
+             search: { open: false },
+             bookmarks: { placing: false, selectedIds: [] }
+           },
+           _map_runtime: {
+             state: {
+               ready: false,
+               view: { viewMode: '2d', camera: {} },
+               selection: {},
+               hover: {},
+               lastDiagnostic: null
+             },
+             inputState: {}
+           }
+         }">
+      <div hidden
+           data-init="window.__fishystuffMap.restore($)"></div>
+      <div hidden
+           data-on-signal-patch__debounce.120ms="window.__fishystuffMap.persist($)"
+           data-on-signal-patch-filter="window.__fishystuffMap.persistSignalPatchFilter()"></div>
       <canvas id="bevy"></canvas>
-      <div
-        id="fishymap-window-state"
-        class="hidden"
-      >
-        <textarea id="fishymap-window-state-input" class="hidden" aria-hidden="true" tabindex="-1">{"search":{"open":true,"collapsed":false,"x":null,"y":null},"settings":{"open":true,"collapsed":false,"x":null,"y":null},"zoneInfo":{"open":true,"collapsed":false,"x":null,"y":null},"layers":{"open":true,"collapsed":false,"x":null,"y":null},"bookmarks":{"open":false,"collapsed":false,"x":null,"y":null}}</textarea>
-      </div>
       <div id="fishymap-toolbar" class="not-prose" aria-label="Map windows">
         <button
           class="fishymap-toolbar-button btn btn-circle"
@@ -1439,6 +1461,8 @@
         </div>
       </div>
     </div>
+    <script src="$site.asset('js/pages/map-page.js').link()"></script>
+    <script src="$site.asset('js/datastar.js').link()"></script>
     <script type="module" src="$site.asset('map/loader.js').link()"></script>
     </div>
   </div>

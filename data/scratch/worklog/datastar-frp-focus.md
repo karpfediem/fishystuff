@@ -28,6 +28,60 @@ Additional site areas included in this refactor scope:
   - `site/assets/map/map-host.js`
   - the Bevy WASM map backend
 
+## Map Refactor Target
+
+The map page currently has almost no Datastar surface. Its state is split across:
+
+- imperative loader-owned UI state:
+  - window open/collapsed/position state
+  - search dropdown visibility
+  - bookmark placement/selection UI state
+- bridge-owned input state:
+  - filters
+  - layer controls
+  - detail pane selection
+  - bookmarks
+- bridge-owned runtime snapshot state:
+  - ready
+  - view
+  - selection
+  - hover
+  - diagnostics
+
+The target model is:
+
+1. Page-owned local UI state becomes Datastar local signals.
+
+Examples:
+
+- `_map_ui.windowUi`
+- `_map_ui.search`
+- `_map_ui.bookmarks`
+
+2. Bridge/runtime state becomes Datastar-published local signals.
+
+Examples:
+
+- `_map_runtime.state`
+- `_map_runtime.inputState`
+
+3. The current Bevy JSON patch/snapshot contract stays temporarily as the transport layer.
+
+That means:
+
+- `site/assets/map/map-host.js` may keep its JSON patch/snapshot contract for now
+- `site/assets/map/loader.js` should become an adapter between:
+  - Datastar signals
+  - the existing bridge contract
+
+4. The final direction is to make Datastar the single page-level state graph.
+
+That does not require rewriting the entire Bevy contract first. The first useful seam is:
+
+- move map page UI shell state into Datastar signals
+- publish bridge runtime state back into Datastar signals
+- then progressively replace imperative DOM ownership with Datastar ownership
+
 ## Relevant Datastar Guidance
 
 Read:
@@ -258,6 +312,47 @@ Validation:
     - `outfit`
     - `_outfit_slots`
     - localStorage persistence
+
+### Step 9
+
+Introduce the first Datastar-owned map page state seam.
+
+Work:
+
+- add a Datastar signal graph to the map page shell
+- restore/persist page-owned map UI state through Datastar instead of the hidden textarea path
+- publish bridge snapshot/input state back into Datastar signals
+- keep the existing Bevy JSON patch/snapshot contract temporarily as the transport layer
+
+Status:
+
+- implemented
+
+Implementation:
+
+- added `window.__fishystuffMap` in:
+  - `site/assets/js/pages/map-page.js`
+- the map shell now owns local Datastar signals:
+  - `_map_ui.windowUi`
+  - `_map_ui.search`
+  - `_map_ui.bookmarks`
+- the loader now publishes bridge state to:
+  - `_map_runtime.state`
+  - `_map_runtime.inputState`
+- removed the hidden textarea window-ui persistence path from `site/layouts/map.shtml`
+- the loader now reads/publishes page-owned UI state through Datastar signal patches
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- live Chromium validation confirmed:
+  - toggling Bookmarks updates `_map_ui.windowUi.bookmarks.open`
+  - the same toggle persists through `fishystuff.map.window_ui.v1`
+  - typing in Search updates `_map_ui.search.open`
+  - bridge input state is mirrored into `_map_runtime.inputState.filters.searchText`
   - reloading restores the compact persisted outfit state
   - removing the only selected `pet1` skill clears:
     - `pet1.skills`

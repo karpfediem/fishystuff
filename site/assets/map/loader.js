@@ -85,6 +85,82 @@ const DEFAULT_WINDOW_UI_STATE = Object.freeze({
   layers: Object.freeze({ open: true, collapsed: false, x: null, y: null }),
   bookmarks: Object.freeze({ open: false, collapsed: false, x: null, y: null }),
 });
+const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
+  windowUi: DEFAULT_WINDOW_UI_STATE,
+  search: Object.freeze({ open: false }),
+  bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
+});
+
+function cloneJsonValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function mapSignalHelper() {
+  const helper = globalThis.window?.__fishystuffMap || globalThis.__fishystuffMap;
+  return helper && typeof helper.signalObject === "function" ? helper : null;
+}
+
+function currentMapUiSignalState() {
+  const helper = mapSignalHelper();
+  const raw = helper?.readSignal?.("_map_ui");
+  const normalizedBookmarks = raw?.bookmarks && typeof raw.bookmarks === "object"
+    ? raw.bookmarks
+    : {};
+  return {
+    windowUi: normalizeWindowUiState(raw?.windowUi),
+    search: {
+      open: raw?.search?.open === true,
+    },
+    bookmarks: {
+      placing: normalizedBookmarks.placing === true,
+      selectedIds: Array.isArray(normalizedBookmarks.selectedIds)
+        ? normalizedBookmarks.selectedIds
+            .map((value) => String(value ?? "").trim())
+            .filter(Boolean)
+        : [],
+    },
+  };
+}
+
+function patchMapUiSignalState(patch) {
+  const helper = mapSignalHelper();
+  if (!helper) {
+    return;
+  }
+  const current = currentMapUiSignalState();
+  helper.patchSignals({
+    _map_ui: {
+      windowUi: cloneJsonValue(
+        patch?.windowUi && typeof patch.windowUi === "object"
+          ? patch.windowUi
+          : current.windowUi || DEFAULT_MAP_UI_SIGNAL_STATE.windowUi,
+      ),
+      search: cloneJsonValue(
+        patch?.search && typeof patch.search === "object"
+          ? patch.search
+          : current.search || DEFAULT_MAP_UI_SIGNAL_STATE.search,
+      ),
+      bookmarks: cloneJsonValue(
+        patch?.bookmarks && typeof patch.bookmarks === "object"
+          ? patch.bookmarks
+          : current.bookmarks || DEFAULT_MAP_UI_SIGNAL_STATE.bookmarks,
+      ),
+    },
+  });
+}
+
+function publishMapRuntimeSignals(stateBundle) {
+  const helper = mapSignalHelper();
+  if (!helper) {
+    return;
+  }
+  helper.patchSignals({
+    _map_runtime: {
+      state: cloneJsonValue(stateBundle?.state || {}),
+      inputState: cloneJsonValue(stateBundle?.inputState || {}),
+    },
+  });
+}
 
 function dispatchMapEvent(target, type, detail) {
   target.dispatchEvent(new CustomEvent(type, { detail }));
@@ -445,28 +521,6 @@ export function serializeWindowUiState(windowUiState) {
 
 export function buildDefaultWindowUiStateSerialized() {
   return serializeWindowUiState(DEFAULT_WINDOW_UI_STATE);
-}
-
-function loadPersistedWindowUiState(
-  fallbackSerializedState = "",
-  storage = globalThis.localStorage,
-) {
-  try {
-    const persisted = storage?.getItem?.(FISHYMAP_WINDOW_UI_STORAGE_KEY);
-    if (typeof persisted === "string" && persisted.trim()) {
-      return parseWindowUiState(persisted);
-    }
-  } catch (_) {}
-  return parseWindowUiState(fallbackSerializedState);
-}
-
-function persistWindowUiStateStorage(serializedState, storage = globalThis.localStorage) {
-  try {
-    storage?.setItem?.(FISHYMAP_WINDOW_UI_STORAGE_KEY, serializedState);
-    return true;
-  } catch (_) {
-    return false;
-  }
 }
 
 function windowUiEntriesEqual(left, right) {
@@ -6127,17 +6181,18 @@ function applySearchMatchSelection(shell, elements, renderCurrentState, stateBun
 function bindUi(shell, elements, options = {}) {
   let isRendering = false;
   let latestStateBundle = requestBridgeState(shell);
+  const initialMapUiState = currentMapUiSignalState();
   const searchUiState = {
-    open: false,
+    open: initialMapUiState.search.open,
   };
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
-  let windowUiState = loadPersistedWindowUiState(elements.windowStateInput?.value);
+  let windowUiState = initialMapUiState.windowUi;
   let bookmarks = loadPersistedBookmarks();
   let bookmarkMetadataRefreshTimer = 0;
   let bookmarkMetadataRefreshAttempts = 0;
   const bookmarkUi = {
-    placing: false,
-    selectedIds: [],
+    placing: initialMapUiState.bookmarks.placing,
+    selectedIds: normalizeSelectedBookmarkIds(bookmarks, initialMapUiState.bookmarks.selectedIds),
   };
   let nextWindowZIndex = 30;
   const managedWindows = {
@@ -6447,6 +6502,7 @@ function bindUi(shell, elements, options = {}) {
 
   function setSelectedBookmarkIds(nextSelectedIds) {
     bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds);
+    patchMapUiSignalState({ bookmarks: bookmarkUi });
     const patch = {
       version: FISHYMAP_CONTRACT_VERSION,
       ui: {
@@ -6482,6 +6538,7 @@ function bindUi(shell, elements, options = {}) {
 
   function setBookmarkPlacementActive(active, options = {}) {
     bookmarkUi.placing = Boolean(active);
+    patchMapUiSignalState({ bookmarks: bookmarkUi });
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   }
 
@@ -6529,16 +6586,7 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function persistWindowUiState() {
-    if (!elements.windowStateInput) {
-      return;
-    }
-    const serialized = serializeWindowUiState(windowUiState);
-    if (elements.windowStateInput.value === serialized) {
-      persistWindowUiStateStorage(serialized);
-      return;
-    }
-    elements.windowStateInput.value = serialized;
-    persistWindowUiStateStorage(serialized);
+    patchMapUiSignalState({ windowUi: windowUiState });
   }
 
   function updateWindowUiEntry(windowId, patch) {
@@ -6568,6 +6616,7 @@ function bindUi(shell, elements, options = {}) {
       ...windowUiState,
       [windowId]: nextEntry,
     };
+    patchMapUiSignalState({ windowUi: windowUiState });
     return true;
   }
 
@@ -6732,6 +6781,7 @@ function bindUi(shell, elements, options = {}) {
       ...(stateBundle || {}),
       zoneCatalog,
     });
+    publishMapRuntimeSignals(latestStateBundle);
     bookmarks = persistResolvedBookmarksFromStateBundle(latestStateBundle, bookmarks, bookmarkUi);
     scheduleBookmarkMetadataRefresh();
     isRendering = true;
@@ -7029,12 +7079,14 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     searchUiState.open = nextOpen;
+    patchMapUiSignalState({ search: searchUiState });
     renderCurrentState(getLatestStateBundle());
   }
 
   function applySearchMatchAndClose(stateBundle, match) {
     applySearchMatchSelection(shell, elements, renderCurrentState, stateBundle, match);
     searchUiState.open = false;
+    patchMapUiSignalState({ search: searchUiState });
     renderCurrentState(getLatestStateBundle());
   }
 
@@ -7065,6 +7117,7 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     searchUiState.open = true;
+    patchMapUiSignalState({ search: searchUiState });
     pushSearchPatch();
   });
 
@@ -8135,9 +8188,14 @@ function bindUi(shell, elements, options = {}) {
     setTextContent(resetButton, "Resetting...");
 
     windowUiState = parseWindowUiState(defaultWindowUiState);
-    if (elements.windowStateInput) {
-      elements.windowStateInput.value = defaultWindowUiState;
-    }
+    searchUiState.open = false;
+    bookmarkUi.placing = false;
+    bookmarkUi.selectedIds = [];
+    patchMapUiSignalState({
+      windowUi: windowUiState,
+      search: searchUiState,
+      bookmarks: bookmarkUi,
+    });
     applyManagedWindows({ persist: true });
 
     try {
@@ -8228,6 +8286,7 @@ function bindUi(shell, elements, options = {}) {
         ...(nextBundle.state || {}),
       },
     };
+    publishMapRuntimeSignals(latestStateBundle);
     renderViewState(elements, latestStateBundle.state);
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
@@ -8240,6 +8299,7 @@ function bindUi(shell, elements, options = {}) {
         hover,
       };
     }
+    publishMapRuntimeSignals(latestStateBundle);
     renderHoverTooltip(elements, hover, latestStateBundle);
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
@@ -8254,6 +8314,11 @@ function bindUi(shell, elements, options = {}) {
     applyManagedWindows({ persist: true });
   });
 
+  patchMapUiSignalState({
+    windowUi: windowUiState,
+    search: searchUiState,
+    bookmarks: bookmarkUi,
+  });
   syncBookmarksToBridge(bookmarks);
   renderCurrentState();
   return {
@@ -8274,7 +8339,6 @@ async function main() {
   const elements = {
     shell,
     toolbar: document.getElementById("fishymap-toolbar"),
-    windowStateInput: document.getElementById("fishymap-window-state-input"),
     searchWindowToggle: document.querySelector("[data-window-toggle='search']"),
     bookmarksWindowToggle: document.querySelector("[data-window-toggle='bookmarks']"),
     settingsWindowToggle: document.querySelector("[data-window-toggle='settings']"),
