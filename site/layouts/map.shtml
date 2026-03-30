@@ -1194,7 +1194,16 @@
             <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
           </div>
           <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
-            <input id="fishymap-search" class="grow" type="search" placeholder="Search fish, zone, or filter term" autocomplete="off" data-bind="_map_input.filters.searchText">
+            <input
+              id="fishymap-search"
+              class="grow"
+              type="search"
+              placeholder="Search fish, zone, or filter term"
+              autocomplete="off"
+              data-bind="_map_input.filters.searchText"
+              data-on:input="window.__fishystuffDatastarState.setObjectPath($, '_map_ui.search.open', true)"
+              data-on:focus="window.__fishystuffDatastarState.setObjectPath($, '_map_ui.search.open', true)"
+            >
             <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
           </label>
         </div>

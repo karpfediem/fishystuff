@@ -6955,6 +6955,7 @@ function bindUi(shell, elements, options = {}) {
     if (nextActionState.resetViewToken !== mapActionState.resetViewToken) {
       mapActionState = nextActionState;
       dispatchMapCommand(shell, { resetView: true });
+      return;
     }
   }
 
@@ -7274,22 +7275,6 @@ function bindUi(shell, elements, options = {}) {
       },
     });
   }
-
-  elements.search.addEventListener("input", () => {
-    if (isRendering) {
-      return;
-    }
-    patchMapUiSignalState({
-      search: {
-        ...searchUiState,
-        open: true,
-      },
-    });
-  });
-
-  elements.search.addEventListener("focus", () => {
-    setSearchDropdownOpen(true);
-  });
 
   elements.search.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {

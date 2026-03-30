@@ -1178,10 +1178,40 @@ Validation:
 - live Chromium smoke:
   - reload `/map/`
   - verify `_map_actions.resetViewToken === 0`
-  - instrument `FishyMapBridge.sendCommand(...)`
-  - click `Reset view`
-  - verify `_map_actions.resetViewToken === 1`
-  - verify the bridge receives `{ resetView: true }`
+- instrument `FishyMapBridge.sendCommand(...)`
+- click `Reset view`
+- verify `_map_actions.resetViewToken === 1`
+- verify the bridge receives `{ resetView: true }`
+
+### Step 22 - Template-Driven Map Search Open State
+
+Completed:
+
+- moved the map search box `input` and `focus` open-state behavior into Datastar template expressions in `site/layouts/map.shtml`
+- removed the corresponding loader-owned `input` and `focus` listeners from `site/assets/map/loader.js`
+
+Why this matters:
+
+- the search field already binds canonical query state through `_map_input.filters.searchText`
+- the companion local UI state `_map_ui.search.open` should be driven from the same template surface, not from loader-owned DOM listeners
+- this removes another direct DOM-to-signal bridge in `loader.js`
+- the search shell now follows the same pattern as the toolbar and settings controls:
+  - template mutates signals
+  - loader renders from signal state
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared:
+  - served `/map/` vs `site/.out/map/index.html`
+  - served `/map/loader.js` vs `site/.out/map/loader.js`
+- live Chromium smoke:
+  - reload `/map/`
+  - type `manta` into the search field
+  - verify `_map_input.filters.searchText === "manta"`
+  - verify `_map_ui.search.open === true`
+  - verify the results list is visible with `2 matches`
 
 ### Step 16 - Shared Datastar State Helper
 
