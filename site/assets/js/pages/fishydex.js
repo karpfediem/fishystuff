@@ -68,6 +68,14 @@
     return helper && typeof helper.normalizeIds === "function" ? helper : null;
   }
 
+  function sharedFishSnapshot(signals) {
+    const raw = signals && typeof signals === "object" ? signals._shared_fish : null;
+    return {
+      caughtIds: normalizeStoredFishIds(raw && raw.caughtIds),
+      favouriteIds: normalizeStoredFishIds(raw && raw.favouriteIds),
+    };
+  }
+
   function signalObject() {
     return signalStore.signalObject();
   }
@@ -353,9 +361,10 @@
     if (!snapshot || !state.uiStateRestored) {
       return;
     }
+    const sharedFish = sharedFishSnapshot(snapshot);
     persistUiSignals(snapshot);
-    persistCaughtIds(snapshot.caught_ids);
-    persistFavouriteIds(snapshot.favourite_ids);
+    persistCaughtIds(sharedFish.caughtIds);
+    persistFavouriteIds(sharedFish.favouriteIds);
   }
 
   function restore(signals) {
@@ -369,8 +378,10 @@
       fish: [],
       count: 0,
       revision: "",
-      caught_ids: caughtState.caughtIds,
-      favourite_ids: favouriteState.favouriteIds,
+      _shared_fish: {
+        caughtIds: caughtState.caughtIds,
+        favouriteIds: favouriteState.favouriteIds,
+      },
       _selected_fish_id: 0,
       _fishydex_actions: {
         exportCaughtToken: 0,
@@ -818,12 +829,16 @@
     if (!signals || !Number.isInteger(fishId)) {
       return;
     }
-    const caughtIds = toggleFishIds(signals.caught_ids, fishId);
+    const currentSharedFish = sharedFishSnapshot(signals);
+    const caughtIds = toggleFishIds(currentSharedFish.caughtIds, fishId);
     const isCaught = caughtIds.includes(fishId);
     state.suppressCardAnimation = true;
     queueStamp("_caught_stamp_fish_id", isCaught ? fishId : null);
     patchSignals({
-      caught_ids: caughtIds,
+      _shared_fish: {
+        caughtIds: caughtIds,
+        favouriteIds: currentSharedFish.favouriteIds,
+      },
       _status_message: "",
     });
   }
@@ -870,12 +885,16 @@
     if (!signals || !Number.isInteger(fishId)) {
       return;
     }
-    const favouriteIds = toggleFishIds(signals.favourite_ids, fishId);
+    const currentSharedFish = sharedFishSnapshot(signals);
+    const favouriteIds = toggleFishIds(currentSharedFish.favouriteIds, fishId);
     const isFavourite = favouriteIds.includes(fishId);
     state.suppressCardAnimation = true;
     queueStamp("_favourite_stamp_fish_id", isFavourite ? fishId : null);
     patchSignals({
-      favourite_ids: favouriteIds,
+      _shared_fish: {
+        caughtIds: currentSharedFish.caughtIds,
+        favouriteIds: favouriteIds,
+      },
       _status_message: "",
     });
   }
@@ -929,9 +948,7 @@
     if (!fish) {
       return null;
     }
-    const signals = signalObject();
-    const caughtIds = normalizeStoredFishIds(signals && signals.caught_ids);
-    const favouriteIds = normalizeStoredFishIds(signals && signals.favourite_ids);
+    const sharedFish = sharedFishSnapshot(signalObject());
     return {
       fishId: fishId,
       itemId: fishItemId(fish),
@@ -941,8 +958,8 @@
       isDried: entryIsDried(fish),
       catchMethods: entryCatchMethods(fish),
       vendorPrice: entryVendorPrice(fish),
-      caught: caughtIds.includes(fishId),
-      favourite: favouriteIds.includes(fishId),
+      caught: sharedFish.caughtIds.includes(fishId),
+      favourite: sharedFish.favouriteIds.includes(fishId),
     };
   }
 
@@ -965,7 +982,7 @@
       currentActionTokens(snapshot),
       {
         exportCaughtToken: () => {
-          void exportCaught(snapshot && snapshot.caught_ids);
+          void exportCaught(sharedFishSnapshot(snapshot).caughtIds);
         },
         importCaughtToken: () => {
           importCaught();
@@ -1276,8 +1293,9 @@
     }
 
     const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
-    const caughtIds = normalizeStoredFishIds(snapshot.caught_ids);
-    const favouriteIds = normalizeStoredFishIds(snapshot.favourite_ids);
+    const sharedFish = sharedFishSnapshot(snapshot);
+    const caughtIds = sharedFish.caughtIds;
+    const favouriteIds = sharedFish.favouriteIds;
     const caughtFilter = normalizeCaughtFilter(snapshot.caught_filter);
     const favouriteFilter = normalizeBooleanFlag(snapshot.favourite_filter);
     const gradeFilters = normalizeGradeFilters(snapshot.grade_filters);
@@ -1519,8 +1537,12 @@
     }
     try {
       const caughtIds = parseCaughtJson(raw);
+      const currentSharedFish = sharedFishSnapshot(signalObject());
       patchSignals({
-        caught_ids: caughtIds,
+        _shared_fish: {
+          caughtIds: caughtIds,
+          favouriteIds: currentSharedFish.favouriteIds,
+        },
         _status_message: `Imported ${caughtIds.length} caught fish IDs.`,
         _api_error_message: "",
         _api_error_hint: "",

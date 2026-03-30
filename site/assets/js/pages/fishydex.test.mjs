@@ -150,8 +150,10 @@ function defaultSignals() {
     show_dried: false,
     sort_field: "price",
     sort_direction: "desc",
-    caught_ids: [],
-    favourite_ids: [],
+    _shared_fish: {
+      caughtIds: [],
+      favouriteIds: [],
+    },
     _selected_fish_id: 0,
     _progress_panel_collapsed: false,
     _filter_panel_collapsed: false,
@@ -240,7 +242,10 @@ test("fishydex export action token copies caught ids and updates status", async 
 
   env.window.Fishydex.restore(signals);
   Object.assign(signals, {
-    caught_ids: [8473, 8476],
+    _shared_fish: {
+      caughtIds: [8473, 8476],
+      favouriteIds: [],
+    },
     _fishydex_actions: {
       exportCaughtToken: 1,
       importCaughtToken: 0,
@@ -273,7 +278,10 @@ test("fishydex import action token updates caught ids from prompt input", () => 
 
   env.window.Fishydex.sync(signals);
 
-  assert.deepEqual(signals.caught_ids, [8473, 8476]);
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._shared_fish)), {
+    caughtIds: [8473, 8476],
+    favouriteIds: [],
+  });
   assert.equal(signals._status_message, "Imported 2 caught fish IDs.");
 });
 

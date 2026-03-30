@@ -1180,8 +1180,10 @@
        show_dried: false,
        sort_field: 'price',
        sort_direction: 'desc',
-       caught_ids: [],
-       favourite_ids: [],
+       _shared_fish: {
+         caughtIds: [],
+         favouriteIds: [],
+       },
        _selected_fish_id: 0,
        _progress_panel_collapsed: false,
        _filter_panel_collapsed: false,

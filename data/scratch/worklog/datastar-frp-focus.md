@@ -2536,3 +2536,39 @@ Validation:
   - `/js/pages/map-page.js`
   - `/map/loader.js`
 - `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-shared-fish-signals.json`
+
+## Step 54: Unify Fishydex shared fish progress onto the `_shared_fish` signal shape
+
+What changed:
+
+- replaced Fishydex-owned top-level shared progress signals:
+  - `caught_ids`
+  - `favourite_ids`
+- with the shared Datastar shape already used by the map:
+  - `_shared_fish.caughtIds`
+  - `_shared_fish.favouriteIds`
+- updated `site/assets/js/pages/fishydex.js` so:
+  - restore initializes `_shared_fish`
+  - card toggles patch `_shared_fish`
+  - export/import actions read/write `_shared_fish`
+  - render/completion logic derives from `_shared_fish`
+- updated `site/content/en-US/dex.smd` initial signal state to match
+- updated `site/assets/js/pages/fishydex.test.mjs`
+
+Why this matters:
+
+- Fishydex and map were still using different Datastar shapes for the same user-owned
+  caught/favourite fish state
+- that forced extra translation glue at the map boundary and made shared-fish state feel
+  page-specific instead of app-level
+- this slice gives shared fish progress one canonical signal contract across pages while
+  keeping the existing storage helper as the persistence backend
+
+Validation:
+
+- `node --check site/assets/js/pages/fishydex.js site/assets/js/pages/fishydex.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/fishydex.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/pages/fishydex.js`
+  - `/dex/`
