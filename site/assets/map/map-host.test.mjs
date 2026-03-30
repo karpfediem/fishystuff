@@ -648,6 +648,14 @@ test("search text and patch range stay out of persisted bridge snapshots", () =>
       patchId: null,
       fromPatchId: "2026-02-26",
       toPatchId: "2026-03-12",
+      layerIdsVisible: ["zones", "terrain"],
+      layerIdsOrdered: ["zones", "terrain", "minimap"],
+      layerOpacities: { terrain: 0.35 },
+      layerClipMasks: { terrain: "zones" },
+      layerWaypointConnectionsVisible: { terrain: true },
+      layerWaypointLabelsVisible: { terrain: false },
+      layerPointIconsVisible: { terrain: true },
+      layerPointIconScales: { terrain: 1.5 },
     },
   });
 
@@ -662,6 +670,22 @@ test("search text and patch range stay out of persisted bridge snapshots", () =>
   assert.equal("patchId" in prefsFilters, false);
   assert.equal("fromPatchId" in prefsFilters, false);
   assert.equal("toPatchId" in prefsFilters, false);
+  assert.equal("layerIdsVisible" in sessionFilters, false);
+  assert.equal("layerIdsOrdered" in sessionFilters, false);
+  assert.equal("layerOpacities" in sessionFilters, false);
+  assert.equal("layerClipMasks" in sessionFilters, false);
+  assert.equal("layerWaypointConnectionsVisible" in sessionFilters, false);
+  assert.equal("layerWaypointLabelsVisible" in sessionFilters, false);
+  assert.equal("layerPointIconsVisible" in sessionFilters, false);
+  assert.equal("layerPointIconScales" in sessionFilters, false);
+  assert.equal("layerIdsVisible" in prefsFilters, false);
+  assert.equal("layerIdsOrdered" in prefsFilters, false);
+  assert.equal("layerOpacities" in prefsFilters, false);
+  assert.equal("layerClipMasks" in prefsFilters, false);
+  assert.equal("layerWaypointConnectionsVisible" in prefsFilters, false);
+  assert.equal("layerWaypointLabelsVisible" in prefsFilters, false);
+  assert.equal("layerPointIconsVisible" in prefsFilters, false);
+  assert.equal("layerPointIconScales" in prefsFilters, false);
 });
 
 test("wasm output events are redispatched as DOM CustomEvents", async () => {
@@ -1319,8 +1343,6 @@ test("restore priority is URL over session over local preferences", () => {
     "fishystuff.map.prefs.v1": JSON.stringify({
       version: 1,
       filters: {
-        fromPatchId: "local-from",
-        toPatchId: "local-to",
         layerIdsVisible: ["terrain"],
         layerIdsOrdered: ["terrain", "minimap"],
         layerOpacities: {
@@ -1355,8 +1377,6 @@ test("restore priority is URL over session over local preferences", () => {
         worldZ: -654.25,
       },
       filters: {
-        fromPatchId: "session-from",
-        toPatchId: "session-to",
         layerIdsOrdered: ["zones", "terrain", "minimap"],
         layerOpacities: {
           zones: 0.6,
@@ -1375,18 +1395,18 @@ test("restore priority is URL over session over local preferences", () => {
 
   const patch = buildInitialRestorePatch({
     locationHref:
-      "https://fishystuff.fish/map/?fromPatch=url-from&toPatch=url-to&fish=77&view=3d&layers=zones,terrain",
+      "https://fishystuff.fish/map/?fish=77&view=3d&layers=zones,terrain",
     localStorage,
     sessionStorage,
   });
 
-  assert.equal(patch.filters.patchId, null);
-  assert.equal(patch.filters.fromPatchId, "url-from");
-  assert.equal(patch.filters.toPatchId, "url-to");
   assert.deepEqual(patch.filters.layerIdsVisible, ["zones", "terrain"]);
-  assert.deepEqual(patch.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
-  assert.deepEqual(patch.filters.layerOpacities, { zones: 0.6 });
-  assert.deepEqual(patch.filters.layerClipMasks, { terrain: "zones" });
+  assert.equal("layerIdsOrdered" in patch.filters, false);
+  assert.equal("layerOpacities" in patch.filters, false);
+  assert.equal("layerClipMasks" in patch.filters, false);
+  assert.equal("patchId" in patch.filters, false);
+  assert.equal("fromPatchId" in patch.filters, false);
+  assert.equal("toPatchId" in patch.filters, false);
   assert.deepEqual(patch.filters.fishIds, [77]);
   assert.equal("ui" in patch, false);
   assert.deepEqual(patch.commands.selectWorldPoint, {
@@ -1406,6 +1426,14 @@ test("local and session storage do not restore page-owned search and patch filte
         searchText: "local sea",
         fromPatchId: "local-from",
         toPatchId: "local-to",
+        layerIdsVisible: ["terrain"],
+        layerIdsOrdered: ["terrain", "minimap"],
+        layerOpacities: { terrain: 0.25 },
+        layerClipMasks: { terrain: "zones" },
+        layerWaypointConnectionsVisible: { terrain: true },
+        layerWaypointLabelsVisible: { terrain: false },
+        layerPointIconsVisible: { terrain: true },
+        layerPointIconScales: { terrain: 1.5 },
       },
     }),
   });
@@ -1416,6 +1444,14 @@ test("local and session storage do not restore page-owned search and patch filte
         searchText: "session sea",
         fromPatchId: "session-from",
         toPatchId: "session-to",
+        layerIdsVisible: ["zones"],
+        layerIdsOrdered: ["zones", "minimap"],
+        layerOpacities: { zones: 0.6 },
+        layerClipMasks: { terrain: "zones" },
+        layerWaypointConnectionsVisible: { zones: true },
+        layerWaypointLabelsVisible: { zones: false },
+        layerPointIconsVisible: { zones: true },
+        layerPointIconScales: { zones: 2.2 },
       },
     }),
   });
@@ -1430,6 +1466,14 @@ test("local and session storage do not restore page-owned search and patch filte
   assert.equal("patchId" in (patch.filters || {}), false);
   assert.equal("fromPatchId" in (patch.filters || {}), false);
   assert.equal("toPatchId" in (patch.filters || {}), false);
+  assert.equal("layerIdsVisible" in (patch.filters || {}), false);
+  assert.equal("layerIdsOrdered" in (patch.filters || {}), false);
+  assert.equal("layerOpacities" in (patch.filters || {}), false);
+  assert.equal("layerClipMasks" in (patch.filters || {}), false);
+  assert.equal("layerWaypointConnectionsVisible" in (patch.filters || {}), false);
+  assert.equal("layerWaypointLabelsVisible" in (patch.filters || {}), false);
+  assert.equal("layerPointIconsVisible" in (patch.filters || {}), false);
+  assert.equal("layerPointIconScales" in (patch.filters || {}), false);
 });
 
 test("layer opacity overrides replace the previous map instead of merging stale entries", () => {
@@ -1728,7 +1772,7 @@ test("legacy empty layer visibility snapshots do not hide every layer on restore
   assert.equal("layerIdsVisible" in (patch.filters || {}), false);
 });
 
-test("explicit empty layer visibility snapshots still restore intentionally hidden layers", () => {
+test("explicit empty layer visibility snapshots no longer restore from bridge storage", () => {
   const localStorage = new MemoryStorage({
     [FISHYMAP_STORAGE_KEYS.prefs]: JSON.stringify({
       version: 1,
@@ -1745,7 +1789,7 @@ test("explicit empty layer visibility snapshots still restore intentionally hidd
     sessionStorage: new MemoryStorage(),
   });
 
-  assert.deepEqual(patch.filters.layerIdsVisible, []);
+  assert.equal("layerIdsVisible" in (patch.filters || {}), false);
 });
 
 test("legacy patch query alias expands to an exact range", () => {

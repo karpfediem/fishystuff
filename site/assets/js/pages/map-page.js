@@ -2,7 +2,7 @@
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:searchText|fromPatchId|toPatchId)|map_bookmarks\.entries)(?:\.|$)/;
+    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries)(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -140,6 +140,48 @@
           fromPatchId:
             inputFilters?.fromPatchId == null ? null : String(inputFilters.fromPatchId),
           toPatchId: inputFilters?.toPatchId == null ? null : String(inputFilters.toPatchId),
+          layerIdsVisible: Array.isArray(inputFilters?.layerIdsVisible)
+            ? cloneJson(inputFilters.layerIdsVisible)
+            : [],
+          layerIdsOrdered: Array.isArray(inputFilters?.layerIdsOrdered)
+            ? cloneJson(inputFilters.layerIdsOrdered)
+            : [],
+          layerOpacities:
+            inputFilters?.layerOpacities &&
+            typeof inputFilters.layerOpacities === "object" &&
+            !Array.isArray(inputFilters.layerOpacities)
+              ? cloneJson(inputFilters.layerOpacities)
+              : {},
+          layerClipMasks:
+            inputFilters?.layerClipMasks &&
+            typeof inputFilters.layerClipMasks === "object" &&
+            !Array.isArray(inputFilters.layerClipMasks)
+              ? cloneJson(inputFilters.layerClipMasks)
+              : {},
+          layerWaypointConnectionsVisible:
+            inputFilters?.layerWaypointConnectionsVisible &&
+            typeof inputFilters.layerWaypointConnectionsVisible === "object" &&
+            !Array.isArray(inputFilters.layerWaypointConnectionsVisible)
+              ? cloneJson(inputFilters.layerWaypointConnectionsVisible)
+              : {},
+          layerWaypointLabelsVisible:
+            inputFilters?.layerWaypointLabelsVisible &&
+            typeof inputFilters.layerWaypointLabelsVisible === "object" &&
+            !Array.isArray(inputFilters.layerWaypointLabelsVisible)
+              ? cloneJson(inputFilters.layerWaypointLabelsVisible)
+              : {},
+          layerPointIconsVisible:
+            inputFilters?.layerPointIconsVisible &&
+            typeof inputFilters.layerPointIconsVisible === "object" &&
+            !Array.isArray(inputFilters.layerPointIconsVisible)
+              ? cloneJson(inputFilters.layerPointIconsVisible)
+              : {},
+          layerPointIconScales:
+            inputFilters?.layerPointIconScales &&
+            typeof inputFilters.layerPointIconScales === "object" &&
+            !Array.isArray(inputFilters.layerPointIconScales)
+              ? cloneJson(inputFilters.layerPointIconScales)
+              : {},
         },
       },
       _map_bookmarks: {
@@ -176,6 +218,48 @@
           stored?._map_input?.filters?.toPatchId == null
             ? null
             : String(stored._map_input.filters.toPatchId),
+        layerIdsVisible: Array.isArray(stored?._map_input?.filters?.layerIdsVisible)
+          ? cloneJson(stored._map_input.filters.layerIdsVisible)
+          : [],
+        layerIdsOrdered: Array.isArray(stored?._map_input?.filters?.layerIdsOrdered)
+          ? cloneJson(stored._map_input.filters.layerIdsOrdered)
+          : [],
+        layerOpacities:
+          stored?._map_input?.filters?.layerOpacities &&
+          typeof stored._map_input.filters.layerOpacities === "object" &&
+          !Array.isArray(stored._map_input.filters.layerOpacities)
+            ? cloneJson(stored._map_input.filters.layerOpacities)
+            : {},
+        layerClipMasks:
+          stored?._map_input?.filters?.layerClipMasks &&
+          typeof stored._map_input.filters.layerClipMasks === "object" &&
+          !Array.isArray(stored._map_input.filters.layerClipMasks)
+            ? cloneJson(stored._map_input.filters.layerClipMasks)
+            : {},
+        layerWaypointConnectionsVisible:
+          stored?._map_input?.filters?.layerWaypointConnectionsVisible &&
+          typeof stored._map_input.filters.layerWaypointConnectionsVisible === "object" &&
+          !Array.isArray(stored._map_input.filters.layerWaypointConnectionsVisible)
+            ? cloneJson(stored._map_input.filters.layerWaypointConnectionsVisible)
+            : {},
+        layerWaypointLabelsVisible:
+          stored?._map_input?.filters?.layerWaypointLabelsVisible &&
+          typeof stored._map_input.filters.layerWaypointLabelsVisible === "object" &&
+          !Array.isArray(stored._map_input.filters.layerWaypointLabelsVisible)
+            ? cloneJson(stored._map_input.filters.layerWaypointLabelsVisible)
+            : {},
+        layerPointIconsVisible:
+          stored?._map_input?.filters?.layerPointIconsVisible &&
+          typeof stored._map_input.filters.layerPointIconsVisible === "object" &&
+          !Array.isArray(stored._map_input.filters.layerPointIconsVisible)
+            ? cloneJson(stored._map_input.filters.layerPointIconsVisible)
+            : {},
+        layerPointIconScales:
+          stored?._map_input?.filters?.layerPointIconScales &&
+          typeof stored._map_input.filters.layerPointIconScales === "object" &&
+          !Array.isArray(stored._map_input.filters.layerPointIconScales)
+            ? cloneJson(stored._map_input.filters.layerPointIconScales)
+            : {},
       },
     };
   }
@@ -216,6 +300,48 @@
           parsed.inputFilters.fromPatchId == null ? null : String(parsed.inputFilters.fromPatchId),
         toPatchId:
           parsed.inputFilters.toPatchId == null ? null : String(parsed.inputFilters.toPatchId),
+        layerIdsVisible: Array.isArray(parsed.inputFilters.layerIdsVisible)
+          ? cloneJson(parsed.inputFilters.layerIdsVisible)
+          : [],
+        layerIdsOrdered: Array.isArray(parsed.inputFilters.layerIdsOrdered)
+          ? cloneJson(parsed.inputFilters.layerIdsOrdered)
+          : [],
+        layerOpacities:
+          parsed.inputFilters.layerOpacities &&
+          typeof parsed.inputFilters.layerOpacities === "object" &&
+          !Array.isArray(parsed.inputFilters.layerOpacities)
+            ? cloneJson(parsed.inputFilters.layerOpacities)
+            : {},
+        layerClipMasks:
+          parsed.inputFilters.layerClipMasks &&
+          typeof parsed.inputFilters.layerClipMasks === "object" &&
+          !Array.isArray(parsed.inputFilters.layerClipMasks)
+            ? cloneJson(parsed.inputFilters.layerClipMasks)
+            : {},
+        layerWaypointConnectionsVisible:
+          parsed.inputFilters.layerWaypointConnectionsVisible &&
+          typeof parsed.inputFilters.layerWaypointConnectionsVisible === "object" &&
+          !Array.isArray(parsed.inputFilters.layerWaypointConnectionsVisible)
+            ? cloneJson(parsed.inputFilters.layerWaypointConnectionsVisible)
+            : {},
+        layerWaypointLabelsVisible:
+          parsed.inputFilters.layerWaypointLabelsVisible &&
+          typeof parsed.inputFilters.layerWaypointLabelsVisible === "object" &&
+          !Array.isArray(parsed.inputFilters.layerWaypointLabelsVisible)
+            ? cloneJson(parsed.inputFilters.layerWaypointLabelsVisible)
+            : {},
+        layerPointIconsVisible:
+          parsed.inputFilters.layerPointIconsVisible &&
+          typeof parsed.inputFilters.layerPointIconsVisible === "object" &&
+          !Array.isArray(parsed.inputFilters.layerPointIconsVisible)
+            ? cloneJson(parsed.inputFilters.layerPointIconsVisible)
+            : {},
+        layerPointIconScales:
+          parsed.inputFilters.layerPointIconScales &&
+          typeof parsed.inputFilters.layerPointIconScales === "object" &&
+          !Array.isArray(parsed.inputFilters.layerPointIconScales)
+            ? cloneJson(parsed.inputFilters.layerPointIconScales)
+            : {},
       };
     }
     return Object.keys(patch).length ? patch : null;

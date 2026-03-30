@@ -1922,47 +1922,6 @@ export function snapshotToRestorePatch(snapshot) {
     if (hasOwn(snapshot.filters, "fishFilterTerms")) {
       patch.filters.fishFilterTerms = normalizeFishFilterTerms(snapshot.filters.fishFilterTerms);
     }
-    const layerIdsVisible = readPersistedLayerVisibility(snapshot.filters);
-    if (layerIdsVisible !== undefined) {
-      patch.filters.layerIdsVisible = layerIdsVisible;
-    }
-    const layerIdsOrdered = readPersistedLayerOrder(snapshot.filters);
-    if (layerIdsOrdered !== undefined) {
-      patch.filters.layerIdsOrdered = layerIdsOrdered;
-    }
-    const layerOpacities = readPersistedLayerOpacities(snapshot.filters);
-    if (layerOpacities !== undefined) {
-      patch.filters.layerOpacities = layerOpacities;
-    }
-    const layerClipMasks = readPersistedLayerClipMasks(snapshot.filters);
-    if (layerClipMasks !== undefined) {
-      patch.filters.layerClipMasks = layerClipMasks;
-    }
-    const layerWaypointConnectionsVisible = readPersistedLayerBoolMap(
-      snapshot.filters,
-      "layerWaypointConnectionsVisible",
-    );
-    if (layerWaypointConnectionsVisible !== undefined) {
-      patch.filters.layerWaypointConnectionsVisible = layerWaypointConnectionsVisible;
-    }
-    const layerWaypointLabelsVisible = readPersistedLayerBoolMap(
-      snapshot.filters,
-      "layerWaypointLabelsVisible",
-    );
-    if (layerWaypointLabelsVisible !== undefined) {
-      patch.filters.layerWaypointLabelsVisible = layerWaypointLabelsVisible;
-    }
-    const layerPointIconsVisible = readPersistedLayerBoolMap(
-      snapshot.filters,
-      "layerPointIconsVisible",
-    );
-    if (layerPointIconsVisible !== undefined) {
-      patch.filters.layerPointIconsVisible = layerPointIconsVisible;
-    }
-    const layerPointIconScales = readPersistedLayerPointIconScales(snapshot.filters);
-    if (layerPointIconScales !== undefined) {
-      patch.filters.layerPointIconScales = layerPointIconScales;
-    }
   }
   if (patch.filters && !Object.keys(patch.filters).length) {
     delete patch.filters;
@@ -2874,26 +2833,6 @@ class FishyMapBridgeImpl {
 
   createSessionSnapshot() {
     const state = this.currentState || createEmptySnapshot();
-    const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
-    const hasExplicitLayerOrder = Array.isArray(this.inputState.filters.layerIdsOrdered);
-    const hasExplicitLayerOpacities =
-      isPlainObject(this.inputState.filters.layerOpacities) &&
-      Object.keys(this.inputState.filters.layerOpacities).length > 0;
-    const hasExplicitLayerClipMasks =
-      isPlainObject(this.inputState.filters.layerClipMasks) &&
-      Object.keys(this.inputState.filters.layerClipMasks).length > 0;
-    const hasExplicitWaypointConnections =
-      isPlainObject(this.inputState.filters.layerWaypointConnectionsVisible) &&
-      Object.keys(this.inputState.filters.layerWaypointConnectionsVisible).length > 0;
-    const hasExplicitWaypointLabels =
-      isPlainObject(this.inputState.filters.layerWaypointLabelsVisible) &&
-      Object.keys(this.inputState.filters.layerWaypointLabelsVisible).length > 0;
-    const hasExplicitPointIcons =
-      isPlainObject(this.inputState.filters.layerPointIconsVisible) &&
-      Object.keys(this.inputState.filters.layerPointIconsVisible).length > 0;
-    const hasExplicitPointIconScales =
-      isPlainObject(this.inputState.filters.layerPointIconScales) &&
-      Object.keys(this.inputState.filters.layerPointIconScales).length > 0;
     const semanticSelection = semanticFieldSelectionFromLayerSamples(
       state.selection?.layerSamples,
     );
@@ -2918,132 +2857,14 @@ class FishyMapBridgeImpl {
           this.inputState.filters.semanticFieldIdsByLayer,
         ),
         fishFilterTerms: normalizeFishFilterTerms(this.inputState.filters.fishFilterTerms),
-        ...(hasExplicitLayerVisibility
-          ? {
-              layerIdsVisible: normalizeStringList(this.inputState.filters.layerIdsVisible),
-              layerVisibilityExplicit: true,
-            }
-          : {}),
-        ...(hasExplicitLayerOrder
-          ? {
-              layerIdsOrdered: normalizeStringList(this.inputState.filters.layerIdsOrdered),
-            }
-          : {}),
-        ...(hasExplicitLayerOpacities
-          ? {
-              layerOpacities: normalizeLayerOpacityMap(this.inputState.filters.layerOpacities),
-            }
-          : {}),
-        ...(hasExplicitLayerClipMasks
-          ? {
-              layerClipMasks: normalizeLayerClipMaskMap(this.inputState.filters.layerClipMasks),
-            }
-          : {}),
-        ...(hasExplicitWaypointConnections
-          ? {
-              layerWaypointConnectionsVisible: normalizeLayerBoolMap(
-                this.inputState.filters.layerWaypointConnectionsVisible,
-              ),
-            }
-          : {}),
-        ...(hasExplicitWaypointLabels
-          ? {
-              layerWaypointLabelsVisible: normalizeLayerBoolMap(
-                this.inputState.filters.layerWaypointLabelsVisible,
-              ),
-            }
-          : {}),
-        ...(hasExplicitPointIcons
-          ? {
-              layerPointIconsVisible: normalizeLayerBoolMap(
-                this.inputState.filters.layerPointIconsVisible,
-              ),
-            }
-          : {}),
-        ...(hasExplicitPointIconScales
-          ? {
-              layerPointIconScales: normalizeLayerPointIconScaleMap(
-                this.inputState.filters.layerPointIconScales,
-              ),
-            }
-          : {}),
       },
     };
   }
 
   createPrefsSnapshot() {
-    const hasExplicitLayerVisibility = Array.isArray(this.inputState.filters.layerIdsVisible);
-    const hasExplicitLayerOrder = Array.isArray(this.inputState.filters.layerIdsOrdered);
-    const hasExplicitLayerOpacities =
-      isPlainObject(this.inputState.filters.layerOpacities) &&
-      Object.keys(this.inputState.filters.layerOpacities).length > 0;
-    const hasExplicitLayerClipMasks =
-      isPlainObject(this.inputState.filters.layerClipMasks) &&
-      Object.keys(this.inputState.filters.layerClipMasks).length > 0;
-    const hasExplicitWaypointConnections =
-      isPlainObject(this.inputState.filters.layerWaypointConnectionsVisible) &&
-      Object.keys(this.inputState.filters.layerWaypointConnectionsVisible).length > 0;
-    const hasExplicitWaypointLabels =
-      isPlainObject(this.inputState.filters.layerWaypointLabelsVisible) &&
-      Object.keys(this.inputState.filters.layerWaypointLabelsVisible).length > 0;
-    const hasExplicitPointIcons =
-      isPlainObject(this.inputState.filters.layerPointIconsVisible) &&
-      Object.keys(this.inputState.filters.layerPointIconsVisible).length > 0;
-    const hasExplicitPointIconScales =
-      isPlainObject(this.inputState.filters.layerPointIconScales) &&
-      Object.keys(this.inputState.filters.layerPointIconScales).length > 0;
     return {
       version: FISHYMAP_CONTRACT_VERSION,
       filters: {
-        ...(hasExplicitLayerVisibility
-          ? {
-              layerIdsVisible: normalizeStringList(this.inputState.filters.layerIdsVisible),
-              layerVisibilityExplicit: true,
-            }
-          : {}),
-        ...(hasExplicitLayerOrder
-          ? {
-              layerIdsOrdered: normalizeStringList(this.inputState.filters.layerIdsOrdered),
-            }
-          : {}),
-        ...(hasExplicitLayerOpacities
-          ? {
-              layerOpacities: normalizeLayerOpacityMap(this.inputState.filters.layerOpacities),
-            }
-          : {}),
-        ...(hasExplicitLayerClipMasks
-          ? {
-              layerClipMasks: normalizeLayerClipMaskMap(this.inputState.filters.layerClipMasks),
-            }
-          : {}),
-        ...(hasExplicitWaypointConnections
-          ? {
-              layerWaypointConnectionsVisible: normalizeLayerBoolMap(
-                this.inputState.filters.layerWaypointConnectionsVisible,
-              ),
-            }
-          : {}),
-        ...(hasExplicitWaypointLabels
-          ? {
-              layerWaypointLabelsVisible: normalizeLayerBoolMap(
-                this.inputState.filters.layerWaypointLabelsVisible,
-              ),
-            }
-          : {}),
-        ...(hasExplicitPointIcons
-          ? {
-              layerPointIconsVisible: normalizeLayerBoolMap(
-                this.inputState.filters.layerPointIconsVisible,
-              ),
-            }
-          : {}),
-        ...(hasExplicitPointIconScales
-          ? {
-              layerPointIconScales: normalizeLayerPointIconScaleMap(
-                this.inputState.filters.layerPointIconScales,
-              ),
-            }
-          : {}),
       },
     };
   }

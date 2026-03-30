@@ -112,6 +112,14 @@ function defaultSignals() {
         searchText: "",
         fromPatchId: null,
         toPatchId: null,
+        layerIdsVisible: [],
+        layerIdsOrdered: [],
+        layerOpacities: {},
+        layerClipMasks: {},
+        layerWaypointConnectionsVisible: {},
+        layerWaypointLabelsVisible: {},
+        layerPointIconsVisible: {},
+        layerPointIconScales: {},
       },
       ui: {
         diagnosticsOpen: false,
@@ -162,6 +170,14 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
         searchText: "velia",
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
+        layerIdsVisible: ["zones", "terrain"],
+        layerIdsOrdered: ["zones", "terrain", "minimap"],
+        layerOpacities: { terrain: 0.35 },
+        layerClipMasks: { terrain: "zones" },
+        layerWaypointConnectionsVisible: { terrain: true },
+        layerWaypointLabelsVisible: { terrain: false },
+        layerPointIconsVisible: { terrain: true },
+        layerPointIconScales: { terrain: 1.5 },
       },
     }),
   });
@@ -180,6 +196,14 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal(signals._map_input.filters.searchText, "velia");
   assert.equal(signals._map_input.filters.fromPatchId, "2026-02-26");
   assert.equal(signals._map_input.filters.toPatchId, "2026-03-12");
+  assert.deepEqual(signals._map_input.filters.layerIdsVisible, ["zones", "terrain"]);
+  assert.deepEqual(signals._map_input.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
+  assert.deepEqual(signals._map_input.filters.layerOpacities, { terrain: 0.35 });
+  assert.deepEqual(signals._map_input.filters.layerClipMasks, { terrain: "zones" });
+  assert.deepEqual(signals._map_input.filters.layerWaypointConnectionsVisible, { terrain: true });
+  assert.deepEqual(signals._map_input.filters.layerWaypointLabelsVisible, { terrain: false });
+  assert.deepEqual(signals._map_input.filters.layerPointIconsVisible, { terrain: true });
+  assert.deepEqual(signals._map_input.filters.layerPointIconScales, { terrain: 1.5 });
   assert.equal("windowUi" in signals, false);
 });
 
@@ -279,6 +303,14 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
         searchText: "",
         fromPatchId: null,
         toPatchId: null,
+        layerIdsVisible: [],
+        layerIdsOrdered: [],
+        layerOpacities: {},
+        layerClipMasks: {},
+        layerWaypointConnectionsVisible: {},
+        layerWaypointLabelsVisible: {},
+        layerPointIconsVisible: {},
+        layerPointIconScales: {},
       },
     }),
   );
@@ -330,6 +362,14 @@ test("map-page persists durable _map_input diagnostics state", () => {
         searchText: "",
         fromPatchId: null,
         toPatchId: null,
+        layerIdsVisible: [],
+        layerIdsOrdered: [],
+        layerOpacities: {},
+        layerClipMasks: {},
+        layerWaypointConnectionsVisible: {},
+        layerWaypointLabelsVisible: {},
+        layerPointIconsVisible: {},
+        layerPointIconScales: {},
       },
     }),
   );
@@ -346,6 +386,14 @@ test("map-page persists durable _map_input filter state", () => {
         searchText: "velia",
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
+        layerIdsVisible: ["zones", "terrain"],
+        layerIdsOrdered: ["zones", "terrain", "minimap"],
+        layerOpacities: { terrain: 0.35 },
+        layerClipMasks: { terrain: "zones" },
+        layerWaypointConnectionsVisible: { terrain: true },
+        layerWaypointLabelsVisible: { terrain: false },
+        layerPointIconsVisible: { terrain: true },
+        layerPointIconScales: { terrain: 1.5 },
       },
     },
   });
@@ -357,6 +405,14 @@ test("map-page persists durable _map_input filter state", () => {
           searchText: "velia",
           fromPatchId: "2026-02-26",
           toPatchId: "2026-03-12",
+          layerIdsVisible: ["zones", "terrain"],
+          layerIdsOrdered: ["zones", "terrain", "minimap"],
+          layerOpacities: { terrain: 0.35 },
+          layerClipMasks: { terrain: "zones" },
+          layerWaypointConnectionsVisible: { terrain: true },
+          layerWaypointLabelsVisible: { terrain: false },
+          layerPointIconsVisible: { terrain: true },
+          layerPointIconScales: { terrain: 1.5 },
         },
       },
     },
@@ -385,6 +441,14 @@ test("map-page persists durable _map_input filter state", () => {
         searchText: "velia",
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
+        layerIdsVisible: ["zones", "terrain"],
+        layerIdsOrdered: ["zones", "terrain", "minimap"],
+        layerOpacities: { terrain: 0.35 },
+        layerClipMasks: { terrain: "zones" },
+        layerWaypointConnectionsVisible: { terrain: true },
+        layerWaypointLabelsVisible: { terrain: false },
+        layerPointIconsVisible: { terrain: true },
+        layerPointIconScales: { terrain: 1.5 },
       },
     }),
   );

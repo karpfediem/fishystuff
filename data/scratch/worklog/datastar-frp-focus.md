@@ -1678,3 +1678,56 @@ Validation:
   - verify `FishyMapBridge.createPrefsSnapshot().filters` omits the same fields
   - reload `/map/`
   - verify `_map_input.filters` restores from page-owned storage
+
+### Step 34 - Move Map Layer Display Filters Into Page-Owned Signals
+
+Completed:
+
+- expanded page-owned map UI persistence in `site/assets/js/pages/map-page.js` to include the remaining layer-display filter controls under:
+  - `_map_input.filters.layerIdsVisible`
+  - `_map_input.filters.layerIdsOrdered`
+  - `_map_input.filters.layerOpacities`
+  - `_map_input.filters.layerClipMasks`
+  - `_map_input.filters.layerWaypointConnectionsVisible`
+  - `_map_input.filters.layerWaypointLabelsVisible`
+  - `_map_input.filters.layerPointIconsVisible`
+  - `_map_input.filters.layerPointIconScales`
+- kept these fields in the same page-owned `fishystuff.map.window_ui.v1` snapshot under:
+  - `inputFilters`
+- removed these fields from bridge-owned restore/snapshot persistence in:
+  - `site/assets/map/map-host.js`
+  - `snapshotToRestorePatch(...)`
+  - `createSessionSnapshot()`
+  - `createPrefsSnapshot()`
+- updated regression coverage in:
+  - `site/assets/js/pages/map-page.test.mjs`
+  - `site/assets/map/map-host.test.mjs`
+
+Why this matters:
+
+- these controls are visible, user-driven layer UI state, but persistence still lived in bridge prefs/session storage
+- that kept the map in a split ownership model:
+  - Datastar-owned live state in `_map_input.filters`
+  - bridge-owned restore state for the same fields
+- after this slice:
+  - page-owned Datastar state owns both live and persisted layer-display filter state
+  - bridge prefs/session no longer restore or save these layer-display values
+  - the bridge still consumes the live values and forwards them to the WASM runtime
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/map-host.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/js/pages/map-page.js`
+  - `/map/map-host.js`
+- live Chromium smoke:
+  - patch `_map_input.filters.layerIdsVisible`, `layerIdsOrdered`, `layerOpacities`, `layerClipMasks`, `layerWaypointConnectionsVisible`, `layerWaypointLabelsVisible`, `layerPointIconsVisible`, `layerPointIconScales`
+  - verify `fishystuff.map.window_ui.v1` stores them under `inputFilters`
+  - verify `FishyMapBridge.createSessionSnapshot().filters` omits these layer-display keys
+  - verify `FishyMapBridge.createPrefsSnapshot().filters` omits these layer-display keys
+  - reload `/map/`
+  - verify `_map_input.filters` restores the stored layer-display values
