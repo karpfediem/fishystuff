@@ -18,10 +18,13 @@
   const SORT_FIELD_ORDER = ["name", "price"];
   const SORT_DIRECTION_ORDER = ["asc", "desc"];
   const SILVER_FORMATTER = new Intl.NumberFormat();
+  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$))/;
   const state = {
     signals: null,
     uiSettingsUnsubscribe: null,
     persistedUiJson: "",
+    persistedCaughtJson: "",
+    persistedFavouriteJson: "",
     uiStateRestored: false,
     stampTimers: new Map(),
     fishById: new Map(),
@@ -119,6 +122,12 @@
         _filter_panel_collapsed: filterCollapsed,
       });
     });
+  }
+
+  function persistSignalPatchFilter() {
+    return {
+      exclude: DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN,
+    };
   }
 
   function normalizeStoredFishIds(value) {
@@ -227,8 +236,7 @@
     };
   }
 
-  function persistUi() {
-    const signals = signalObject();
+  function persistUiSignals(signals) {
     if (!signals || !state.uiStateRestored) {
       return;
     }
@@ -241,6 +249,20 @@
       state.persistedUiJson = json;
     } catch (_error) {
       patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+    }
+  }
+
+  function persistPanelSignals(signals) {
+    if (!signals || !state.uiStateRestored) {
+      return;
+    }
+    const progressCollapsed = normalizeBooleanFlag(signals._progress_panel_collapsed);
+    const filterCollapsed = normalizeBooleanFlag(signals._filter_panel_collapsed);
+    if (readPanelCollapsedState("progress") !== progressCollapsed) {
+      persistPanelCollapsed("progress", progressCollapsed);
+    }
+    if (readPanelCollapsedState("filter") !== filterCollapsed) {
+      persistPanelCollapsed("filter", filterCollapsed);
     }
   }
 
@@ -280,6 +302,7 @@
     } catch (_error) {
       statusMessage = "localStorage is unavailable; progress is not persisted.";
     }
+    state.persistedCaughtJson = JSON.stringify(normalizeStoredFishIds(caughtIds));
     return { caughtIds, statusMessage };
   }
 
@@ -299,23 +322,47 @@
     } catch (_error) {
       statusMessage = "localStorage is unavailable; progress is not persisted.";
     }
+    state.persistedFavouriteJson = JSON.stringify(normalizeStoredFishIds(favouriteIds));
     return { favouriteIds, statusMessage };
   }
 
   function persistCaughtIds(caughtIds) {
+    const normalized = normalizeStoredFishIds(caughtIds);
     try {
-      localStorage.setItem(CAUGHT_STORAGE_KEY, JSON.stringify(normalizeStoredFishIds(caughtIds)));
+      const json = JSON.stringify(normalized);
+      if (json === state.persistedCaughtJson) {
+        return;
+      }
+      localStorage.setItem(CAUGHT_STORAGE_KEY, json);
+      state.persistedCaughtJson = json;
     } catch (_error) {
       patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
     }
   }
 
   function persistFavouriteIds(favouriteIds) {
+    const normalized = normalizeStoredFishIds(favouriteIds);
     try {
-      localStorage.setItem(FAVOURITES_STORAGE_KEY, JSON.stringify(normalizeStoredFishIds(favouriteIds)));
+      const json = JSON.stringify(normalized);
+      if (json === state.persistedFavouriteJson) {
+        return;
+      }
+      localStorage.setItem(FAVOURITES_STORAGE_KEY, json);
+      state.persistedFavouriteJson = json;
     } catch (_error) {
       patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
     }
+  }
+
+  function persistSignals(signals) {
+    const snapshot = signals && typeof signals === "object" ? signals : signalObject();
+    if (!snapshot || !state.uiStateRestored) {
+      return;
+    }
+    persistUiSignals(snapshot);
+    persistCaughtIds(snapshot.caught_ids);
+    persistFavouriteIds(snapshot.favourite_ids);
+    persistPanelSignals(snapshot);
   }
 
   function restore(signals) {
@@ -800,7 +847,6 @@
     const caughtIds = toggleFishIds(signals.caught_ids, fishId);
     const isCaught = caughtIds.includes(fishId);
     state.suppressCardAnimation = true;
-    persistCaughtIds(caughtIds);
     queueStamp("_caught_stamp_fish_id", isCaught ? fishId : null);
     patchSignals({
       caught_ids: caughtIds,
@@ -853,7 +899,6 @@
     const favouriteIds = toggleFishIds(signals.favourite_ids, fishId);
     const isFavourite = favouriteIds.includes(fishId);
     state.suppressCardAnimation = true;
-    persistFavouriteIds(favouriteIds);
     queueStamp("_favourite_stamp_fish_id", isFavourite ? fishId : null);
     patchSignals({
       favourite_ids: favouriteIds,
@@ -1226,7 +1271,6 @@
   function sync(snapshot) {
     bindGridClicks();
     bindDetailsControls();
-    persistUi();
 
     const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
     const caughtIds = normalizeStoredFishIds(snapshot.caught_ids);
@@ -1458,7 +1502,6 @@
     }
     try {
       const caughtIds = parseCaughtJson(raw);
-      persistCaughtIds(caughtIds);
       patchSignals({
         caught_ids: caughtIds,
         _status_message: `Imported ${caughtIds.length} caught fish IDs.`,
@@ -1534,13 +1577,11 @@
 
   window.Fishydex = {
     restore: restore,
-    persistUi: persistUi,
-    persistPanelCollapsed: persistPanelCollapsed,
+    persistSignals: persistSignals,
+    persistSignalPatchFilter: persistSignalPatchFilter,
     toggleFishIds: toggleFishIds,
     toggleGradeFilters: toggleGradeFilters,
     toggleMethodFilters: toggleMethodFilters,
-    persistCaughtIds: persistCaughtIds,
-    persistFavouriteIds: persistFavouriteIds,
     queueStamp: queueStamp,
     exportCaught: exportCaught,
     importCaught: importCaught,

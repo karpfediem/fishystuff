@@ -233,6 +233,39 @@ Status:
 
 - planned
 
+### Step 5
+
+Move Fishydex persistence to Datastar signal-patch flow.
+
+Work:
+
+- stop persisting filter UI state from `sync()` render passes
+- stop persisting panel collapse state directly from button click handlers
+- stop persisting caught/favourite ids directly from toggle handlers
+- add one debounced `data-on-signal-patch` persistence hook for Fishydex
+- keep persisted state scoped to:
+  - filter/sort UI
+  - caught ids
+  - favourite ids
+  - panel collapse state through shared UI settings
+
+Status:
+
+- implemented
+
+Notes:
+
+- Fishydex still renders imperatively, but persistence is now signal-driven
+- this is a smaller, safe slice that removes state writes from click/render paths without rewriting the full page
+
+Validation:
+
+- live Chromium validation confirmed:
+  - search filter persisted through `fishystuff.fishydex.ui.v1`
+  - panel collapse persisted through `fishystuff.ui.settings.v1`
+  - caught/favourite toggles persisted through their existing storage keys
+  - all of the above restored correctly after reload
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:
