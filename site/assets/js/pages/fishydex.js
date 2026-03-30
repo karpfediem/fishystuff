@@ -17,6 +17,11 @@
   const SORT_FIELD_ORDER = ["name", "price"];
   const SORT_DIRECTION_ORDER = ["asc", "desc"];
   const SILVER_FORMATTER = new Intl.NumberFormat();
+  const FISHYDEX_ACTION_DEFAULTS = Object.freeze({
+    exportCaughtToken: 0,
+    importCaughtToken: 0,
+    closeDetailsToken: 0,
+  });
   const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
   const DEX_FEEDBACK_CLEAR_SIGNAL_PATTERN =
     /^(search_query|caught_filter|favourite_filter|grade_filters|method_filters|show_dried|sort_field|sort_direction)(?:\.|$)/;
@@ -36,11 +41,7 @@
     suppressCardAnimation: false,
     activeDetailsFishId: 0,
     restoreFocusFishId: 0,
-    handledActionTokens: {
-      exportCaughtToken: 0,
-      importCaughtToken: 0,
-      closeDetailsToken: 0,
-    },
+    handledActionTokens: { ...FISHYDEX_ACTION_DEFAULTS },
   };
 
   const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
@@ -952,38 +953,33 @@
 
   function currentActionTokens(snapshot) {
     const raw = snapshot && typeof snapshot === "object" ? snapshot._fishydex_actions : null;
-    return {
-      exportCaughtToken: Number.isFinite(raw?.exportCaughtToken)
-        ? Math.max(0, Math.trunc(raw.exportCaughtToken))
-        : 0,
-      importCaughtToken: Number.isFinite(raw?.importCaughtToken)
-        ? Math.max(0, Math.trunc(raw.importCaughtToken))
-        : 0,
-      closeDetailsToken: Number.isFinite(raw?.closeDetailsToken)
-        ? Math.max(0, Math.trunc(raw.closeDetailsToken))
-        : 0,
-    };
+    return window.__fishystuffDatastarState.normalizeCounterTokenState(
+      raw,
+      FISHYDEX_ACTION_DEFAULTS,
+    );
   }
 
   function consumeActionTokens(snapshot) {
-    const nextTokens = currentActionTokens(snapshot);
-    const previousTokens = state.handledActionTokens;
-    let mutatedSignals = false;
+    const consumption = window.__fishystuffDatastarState.consumeIncrementedCounterTokens(
+      state.handledActionTokens,
+      currentActionTokens(snapshot),
+      {
+        exportCaughtToken: () => {
+          void exportCaught(snapshot && snapshot.caught_ids);
+        },
+        importCaughtToken: () => {
+          importCaught();
+          return true;
+        },
+        closeDetailsToken: () => {
+          closeDetails();
+          return true;
+        },
+      },
+    );
 
-    if (nextTokens.exportCaughtToken !== previousTokens.exportCaughtToken) {
-      void exportCaught(snapshot && snapshot.caught_ids);
-    }
-    if (nextTokens.importCaughtToken !== previousTokens.importCaughtToken) {
-      importCaught();
-      mutatedSignals = true;
-    }
-    if (nextTokens.closeDetailsToken !== previousTokens.closeDetailsToken) {
-      closeDetails();
-      mutatedSignals = true;
-    }
-
-    state.handledActionTokens = nextTokens;
-    return mutatedSignals;
+    state.handledActionTokens = consumption.handledState;
+    return consumption.mutated;
   }
 
   function restoreDetailsFocus(fishId) {

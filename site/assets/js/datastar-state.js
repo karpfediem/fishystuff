@@ -67,6 +67,50 @@
     return root;
   }
 
+  function normalizeCounterTokenValue(value) {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? Math.max(0, Math.trunc(numeric)) : 0;
+  }
+
+  function normalizeCounterTokenState(raw, defaults = {}) {
+    const source = raw && typeof raw === "object" ? raw : {};
+    return Object.fromEntries(
+      Object.entries(defaults).map(([key, defaultValue]) => [
+        key,
+        normalizeCounterTokenValue(source[key] ?? defaultValue),
+      ]),
+    );
+  }
+
+  function consumeIncrementedCounterTokens(previousState, nextState, handlers = {}) {
+    const previous = previousState && typeof previousState === "object" ? previousState : {};
+    const next = nextState && typeof nextState === "object" ? nextState : {};
+    const normalizedKeys = new Set([
+      ...Object.keys(previous),
+      ...Object.keys(next),
+      ...Object.keys(handlers),
+    ]);
+    const handledState = {};
+    let mutated = false;
+
+    for (const key of normalizedKeys) {
+      const previousValue = normalizeCounterTokenValue(previous[key]);
+      const nextValue = normalizeCounterTokenValue(next[key]);
+      handledState[key] = nextValue;
+      if (nextValue > previousValue) {
+        const handler = handlers[key];
+        if (typeof handler === "function" && handler(nextValue, previousValue) === true) {
+          mutated = true;
+        }
+      }
+    }
+
+    return {
+      handledState,
+      mutated,
+    };
+  }
+
   function createSignalStore() {
     const state = {
       signals: null,
@@ -98,9 +142,11 @@
   }
 
   window.__fishystuffDatastarState = Object.freeze({
+    consumeIncrementedCounterTokens,
     createPageSignalStore,
     createSignalStore,
     mergeObjectPatch,
+    normalizeCounterTokenState,
     readObjectPath,
     setObjectPath,
     toggleBooleanPath,

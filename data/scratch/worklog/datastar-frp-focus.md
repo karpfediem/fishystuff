@@ -2342,3 +2342,41 @@ Validation:
   - `/js/pages/calculator-page.js`
   - `/js/pages/fishydex.js`
   - `/js/pages/map-page.js`
+
+## Step 48: Share monotonic Datastar action-token handling
+
+What changed:
+
+- added shared counter-token helpers to `site/assets/js/datastar-state.js`:
+  - `normalizeCounterTokenState(...)`
+  - `consumeIncrementedCounterTokens(...)`
+- moved calculator action-token handling onto those helpers in:
+  - `site/assets/js/pages/calculator-page.js`
+- moved Fishydex action-token handling onto those helpers in:
+  - `site/assets/js/pages/fishydex.js`
+- extended `site/assets/js/datastar-state.test.mjs` to cover the new helper behavior
+
+Why this matters:
+
+- both calculator and Fishydex were still hand-rolling the same token normalization and
+  delta-consumption logic
+- the calculator already exposed why `token changed` is the wrong semantic; action tokens need
+  to be treated as monotonic counters and should fire only on increments
+- centralizing that logic reduces duplication and makes the intended Datastar action-token model
+  explicit and testable
+
+Scope note:
+
+- the map loader still has its own action-token delta handling for now
+- that path should be moved onto the shared helper in a later slice once the loader/runtime
+  boundary is tackled directly
+
+Validation:
+
+- `node --check site/assets/js/datastar-state.js site/assets/js/pages/calculator-page.js site/assets/js/pages/fishydex.js`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/calculator-page.test.mjs site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/datastar-state.js`
+  - `/js/pages/calculator-page.js`
+  - `/js/pages/fishydex.js`

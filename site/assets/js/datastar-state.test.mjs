@@ -144,3 +144,44 @@ test("datastar state helper toggles ordered selection values deterministically",
     ["red", "blue"],
   );
 });
+
+test("datastar state helper normalizes and consumes incremented action tokens", () => {
+  const helper = createContext();
+  const previous = {
+    copyToken: 1,
+    clearToken: 2,
+  };
+  const next = helper.normalizeCounterTokenState(
+    {
+      copyToken: "3",
+      clearToken: 2,
+      ignoredToken: 99,
+    },
+    {
+      copyToken: 0,
+      clearToken: 0,
+    },
+  );
+  const fired = [];
+
+  const result = helper.consumeIncrementedCounterTokens(previous, next, {
+    copyToken(nextValue, previousValue) {
+      fired.push(["copyToken", previousValue, nextValue]);
+    },
+    clearToken() {
+      fired.push(["clearToken"]);
+      return true;
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(next)), {
+    copyToken: 3,
+    clearToken: 2,
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(result.handledState)), {
+    copyToken: 3,
+    clearToken: 2,
+  });
+  assert.deepEqual(fired, [["copyToken", 1, 3]]);
+  assert.equal(result.mutated, false);
+});

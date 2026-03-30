@@ -7,16 +7,17 @@
     /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$))/;
   const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
+  const CALCULATOR_ACTION_DEFAULTS = Object.freeze({
+    copyUrlToken: 0,
+    copyShareToken: 0,
+    clearToken: 0,
+  });
 
   const calculatorState = {
     persistBinding: null,
     actionBinding: null,
     uiStateRestored: false,
-    handledActionTokens: {
-      copyUrlToken: 0,
-      copyShareToken: 0,
-      clearToken: 0,
-    },
+    handledActionTokens: { ...CALCULATOR_ACTION_DEFAULTS },
   };
 
   const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
@@ -388,17 +389,10 @@
       const raw = current && typeof current === "object"
         ? current._calculator_actions
         : null;
-      return {
-        copyUrlToken: Number.isFinite(raw?.copyUrlToken)
-          ? Math.max(0, Math.trunc(raw.copyUrlToken))
-          : 0,
-        copyShareToken: Number.isFinite(raw?.copyShareToken)
-          ? Math.max(0, Math.trunc(raw.copyShareToken))
-          : 0,
-        clearToken: Number.isFinite(raw?.clearToken)
-          ? Math.max(0, Math.trunc(raw.clearToken))
-          : 0,
-      };
+      return window.__fishystuffDatastarState.normalizeCounterTokenState(
+        raw,
+        CALCULATOR_ACTION_DEFAULTS,
+      );
     },
     syncActions(signals) {
       const current = signals && typeof signals === "object"
@@ -407,23 +401,27 @@
       if (!current || typeof current !== "object") {
         return;
       }
-      const nextTokens = this.actionState(current);
-      const previousTokens = calculatorState.handledActionTokens;
-      if (nextTokens.copyUrlToken > previousTokens.copyUrlToken) {
-        window.__fishystuffToast.copyText(this.presetUrl(current), {
-          success: "Preset URL copied.",
-        });
-      }
-      if (nextTokens.copyShareToken > previousTokens.copyShareToken) {
-        window.__fishystuffToast.copyText(this.shareText(current), {
-          success: "Share text copied.",
-        });
-      }
-      if (nextTokens.clearToken > previousTokens.clearToken) {
-        this.clear(current);
-        window.__fishystuffToast.info("Calculator cleared.");
-      }
-      calculatorState.handledActionTokens = nextTokens;
+      const consumption = window.__fishystuffDatastarState.consumeIncrementedCounterTokens(
+        calculatorState.handledActionTokens,
+        this.actionState(current),
+        {
+          copyUrlToken: () => {
+            window.__fishystuffToast.copyText(this.presetUrl(current), {
+              success: "Preset URL copied.",
+            });
+          },
+          copyShareToken: () => {
+            window.__fishystuffToast.copyText(this.shareText(current), {
+              success: "Share text copied.",
+            });
+          },
+          clearToken: () => {
+            this.clear(current);
+            window.__fishystuffToast.info("Calculator cleared.");
+          },
+        },
+      );
+      calculatorState.handledActionTokens = consumption.handledState;
     },
     restore(signals) {
       this.connect(signals);
