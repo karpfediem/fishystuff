@@ -2097,3 +2097,48 @@ Validation:
 - compared served vs `.out` for:
   - `/dex/`
   - `/js/pages/fishydex.js`
+
+### Step 42 - Clear Fishydex Feedback From Signal Patches
+
+Completed:
+
+- added a page-level feedback-clear listener in `site/assets/js/pages/fishydex.js`
+  that reacts to user-owned Fishydex signal patches for:
+  - search
+  - caught/missing/favourite filter
+  - grade filters
+  - method filters
+  - dried toggle
+  - sort field/direction
+- the listener now clears these transient feedback signals centrally:
+  - `_status_message`
+  - `_api_error_message`
+  - `_api_error_hint`
+- removed the repeated inline feedback-reset glue from `site/content/en-US/dex.smd` across:
+  - search input
+  - status filter chips
+  - grade filter chips
+  - method filter chips
+  - clear-filters button
+  - sort buttons
+- added page-level regression coverage in `site/assets/js/pages/fishydex.test.mjs`
+  to prove a matching signal patch clears transient feedback
+
+Why this matters:
+
+- Fishydex still had many template expressions mutating the same transient feedback signals over
+  and over again
+- that was repetitive, easy to miss when adding new controls, and kept feedback lifecycle logic
+  scattered through the template instead of in the page state model
+- the page now owns the rule:
+  - user changes durable filter/sort state
+  - Fishydex clears transient status/error feedback
+
+Validation:
+
+- `node --check site/assets/js/pages/fishydex.js`
+- `node --test site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/dex/`
+  - `/js/pages/fishydex.js`

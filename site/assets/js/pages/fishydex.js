@@ -2,6 +2,7 @@
   const DEX_UI_STORAGE_KEY = "fishystuff.fishydex.ui.v1";
   const CAUGHT_STORAGE_KEY = "fishystuff.fishydex.caught.v1";
   const FAVOURITES_STORAGE_KEY = "fishystuff.fishydex.favourites.v1";
+  const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const GRADE_COLOR_ORDER = ["red", "yellow", "blue", "green", "white", "unknown"];
   const GRADE_FILTER_COLOR_ORDER = ["red", "yellow", "blue", "green", "white"];
   const GRADE_LABELS = {
@@ -17,8 +18,11 @@
   const SORT_DIRECTION_ORDER = ["asc", "desc"];
   const SILVER_FORMATTER = new Intl.NumberFormat();
   const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
+  const DEX_FEEDBACK_CLEAR_SIGNAL_PATTERN =
+    /^(search_query|caught_filter|favourite_filter|grade_filters|method_filters|show_dried|sort_field|sort_direction)(?:\.|$)/;
   const state = {
     persistBinding: null,
+    feedbackBinding: null,
     persistedUiJson: "",
     persistedCaughtJson: "",
     persistedFavouriteJson: "",
@@ -157,6 +161,50 @@
       persist: persistSignals,
     });
     state.persistBinding.bind();
+  }
+
+  function bindFeedbackResetListener() {
+    if (state.feedbackBinding) {
+      return;
+    }
+    const helper = datastarPersistHelper();
+    const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
+      ? helper.patchMatchesSignalFilter
+      : null;
+    if (!patchMatches) {
+      return;
+    }
+    const handleSignalPatch = (event) => {
+      if (!state.uiStateRestored) {
+        return;
+      }
+      const patch = event && event.detail ? event.detail : null;
+      if (!patchMatches(patch, { include: DEX_FEEDBACK_CLEAR_SIGNAL_PATTERN })) {
+        return;
+      }
+      const signals = signalObject();
+      if (!signals) {
+        return;
+      }
+      if (
+        !signals._status_message
+        && !signals._api_error_message
+        && !signals._api_error_hint
+      ) {
+        return;
+      }
+      patchSignals({
+        _status_message: "",
+        _api_error_message: "",
+        _api_error_hint: "",
+      });
+    };
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    state.feedbackBinding = {
+      dispose() {
+        document.removeEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+      },
+    };
   }
 
   function normalizeStoredFishIds(value) {
@@ -364,6 +412,7 @@
   function restore(signals) {
     connect(signals);
     bindPersistListener();
+    bindFeedbackResetListener();
     const uiState = loadUiStateFromStorage();
     const caughtState = loadCaughtIdsFromStorage();
     const favouriteState = loadFavouriteIdsFromStorage();

@@ -271,3 +271,27 @@ test("fishydex import action token updates caught ids from prompt input", () => 
   assert.deepEqual(signals.caught_ids, [8473, 8476]);
   assert.equal(signals._status_message, "Imported 2 caught fish IDs.");
 });
+
+test("fishydex clears transient feedback on filter signal patches", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.Fishydex.restore(signals);
+  Object.assign(signals, {
+    _status_message: "Copied 2 caught fish IDs.",
+    _api_error_message: "Fish API request failed.",
+    _api_error_hint: "Retry later.",
+    search_query: "eel",
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      search_query: "eel",
+    },
+  });
+
+  assert.equal(signals._status_message, "");
+  assert.equal(signals._api_error_message, "");
+  assert.equal(signals._api_error_hint, "");
+});
