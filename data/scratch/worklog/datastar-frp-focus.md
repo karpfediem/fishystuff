@@ -638,6 +638,7 @@ Implementation:
   - initializes bookmark list state from `_map_bookmarks.entries`
   - patches `_map_bookmarks.entries` when bookmark CRUD or derived metadata changes
   - mirrors `_map_bookmarks.entries` back into `_map_input.ui.bookmarks` when signal-owned bookmark state changes
+  - treats bookmark list, selection, and placement changes as signal-first mutations instead of local-first state updates
 
 Why this matters:
 
@@ -802,6 +803,7 @@ Already implemented:
 - loader now also publishes bridge input state into `_map_input`
 - loader reconciles `_map_input` back into the bridge
 - bookmark persistence now lives in `site/assets/js/pages/map-page.js` as a Datastar signal-patch listener, not a template-side hidden handler
+- bookmark CRUD and selection/placement paths now patch Datastar state first, then let loader signal sync reconcile local render state
 
 Map controls currently routed through `_map_input`:
 

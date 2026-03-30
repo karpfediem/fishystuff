@@ -6534,7 +6534,6 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     setSelectedBookmarkIds([bookmark.id]);
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
     const command = buildFocusCommandForWorldPoint(
       bookmark.worldX,
       bookmark.worldZ,
@@ -6552,12 +6551,10 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function setSelectedBookmarkIds(nextSelectedIds) {
-    bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds);
-    patchMapUiSignalState({ bookmarks: bookmarkUi });
-    patchMapInputSignalState({
-      version: FISHYMAP_CONTRACT_VERSION,
-      ui: {
-        bookmarkSelectedIds: bookmarkUi.selectedIds,
+    patchMapUiSignalState({
+      bookmarks: {
+        ...bookmarkUi,
+        selectedIds: normalizeSelectedBookmarkIds(bookmarks, nextSelectedIds),
       },
     });
   }
@@ -6581,24 +6578,31 @@ function bindUi(shell, elements, options = {}) {
     });
   }
 
-  function setBookmarkPlacementActive(active, options = {}) {
-    bookmarkUi.placing = Boolean(active);
-    patchMapUiSignalState({ bookmarks: bookmarkUi });
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+  function setBookmarkPlacementActive(active) {
+    patchMapUiSignalState({
+      bookmarks: {
+        ...bookmarkUi,
+        placing: Boolean(active),
+      },
+    });
   }
 
   function persistBookmarksAndRender(nextBookmarks, statusMessage = "", options = {}) {
-    bookmarks = normalizeBookmarks(nextBookmarks);
-    patchMapBookmarksSignalState(bookmarks);
-    setSelectedBookmarkIds(
-      Array.isArray(options.selectedIds) ? options.selectedIds : bookmarkUi.selectedIds,
-    );
-    syncBookmarksToBridge(bookmarks);
+    const normalizedBookmarks = normalizeBookmarks(nextBookmarks);
+    patchMapBookmarksSignalState(normalizedBookmarks);
+    patchMapUiSignalState({
+      bookmarks: {
+        ...bookmarkUi,
+        selectedIds: normalizeSelectedBookmarkIds(
+          normalizedBookmarks,
+          Array.isArray(options.selectedIds) ? options.selectedIds : bookmarkUi.selectedIds,
+        ),
+      },
+    });
     const normalizedStatusMessage = String(statusMessage || "").trim();
     if (normalizedStatusMessage) {
       showSiteToast(options.toastTone || "success", normalizedStatusMessage);
     }
-    renderCurrentState(getLatestStateBundle());
   }
 
   function clearBookmarkMetadataRefresh() {
@@ -7684,7 +7688,6 @@ function bindUi(shell, elements, options = {}) {
 
   elements.bookmarkSelectAll?.addEventListener("click", () => {
     setSelectedBookmarkIds(bookmarks.map((bookmark) => bookmark.id));
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
   elements.bookmarkDeleteSelected?.addEventListener("click", () => {
@@ -7717,7 +7720,6 @@ function bindUi(shell, elements, options = {}) {
 
   elements.bookmarkClearSelection?.addEventListener("click", () => {
     setSelectedBookmarkIds([]);
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
   elements.bookmarkExport?.addEventListener("click", () => {
@@ -7807,7 +7809,6 @@ function bindUi(shell, elements, options = {}) {
       ? bookmarkUi.selectedIds.concat(bookmarkId)
       : bookmarkUi.selectedIds.filter((selectedId) => selectedId !== bookmarkId);
     setSelectedBookmarkIds(nextSelectedIds);
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
   elements.bookmarksList?.addEventListener("dragstart", (event) => {

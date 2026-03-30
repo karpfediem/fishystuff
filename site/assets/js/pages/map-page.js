@@ -180,12 +180,6 @@
     }
   }
 
-  function persistSignalPatchFilter() {
-    return {
-      include: MAP_PERSIST_SIGNAL_FILTER,
-    };
-  }
-
   function toggleWindow(windowId) {
     const signals = signalObject();
     if (!signals) {
@@ -226,7 +220,6 @@
     },
     restore,
     persist,
-    persistSignalPatchFilter,
     toggleWindow,
   });
 })();
