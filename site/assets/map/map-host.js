@@ -1908,20 +1908,6 @@ export function snapshotToRestorePatch(snapshot) {
     patch.ui = {};
   }
   if (isPlainObject(snapshot.filters)) {
-    if (hasOwn(snapshot.filters, "fishIds")) {
-      patch.filters.fishIds = normalizeFishIds(snapshot.filters.fishIds);
-    }
-    if (hasOwn(snapshot.filters, "zoneRgbs")) {
-      patch.filters.zoneRgbs = normalizeZoneRgbs(snapshot.filters.zoneRgbs);
-    }
-    if (hasOwn(snapshot.filters, "semanticFieldIdsByLayer")) {
-      patch.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer(
-        snapshot.filters.semanticFieldIdsByLayer,
-      );
-    }
-    if (hasOwn(snapshot.filters, "fishFilterTerms")) {
-      patch.filters.fishFilterTerms = normalizeFishFilterTerms(snapshot.filters.fishFilterTerms);
-    }
   }
   if (patch.filters && !Object.keys(patch.filters).length) {
     delete patch.filters;
@@ -2851,12 +2837,6 @@ class FishyMapBridgeImpl {
         pointLabel: normalizeNullableString(state.selection?.pointLabel),
       },
       filters: {
-        fishIds: this.inputState.filters.fishIds,
-        zoneRgbs: this.inputState.filters.zoneRgbs,
-        semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(
-          this.inputState.filters.semanticFieldIdsByLayer,
-        ),
-        fishFilterTerms: normalizeFishFilterTerms(this.inputState.filters.fishFilterTerms),
       },
     };
   }

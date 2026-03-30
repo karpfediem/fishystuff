@@ -109,6 +109,10 @@ function defaultSignals() {
     },
     _map_input: {
       filters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
         searchText: "",
         fromPatchId: null,
         toPatchId: null,
@@ -167,6 +171,12 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
         pointIconScale: 1.5,
       },
       inputFilters: {
+        fishIds: [77, 91],
+        zoneRgbs: [12615551, 3972668],
+        semanticFieldIdsByLayer: {
+          region_groups: [295],
+        },
+        fishFilterTerms: ["favourite", "missing"],
         searchText: "velia",
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
@@ -196,6 +206,12 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal(signals._map_input.filters.searchText, "velia");
   assert.equal(signals._map_input.filters.fromPatchId, "2026-02-26");
   assert.equal(signals._map_input.filters.toPatchId, "2026-03-12");
+  assert.deepEqual(signals._map_input.filters.fishIds, [77, 91]);
+  assert.deepEqual(signals._map_input.filters.zoneRgbs, [12615551, 3972668]);
+  assert.deepEqual(signals._map_input.filters.semanticFieldIdsByLayer, {
+    region_groups: [295],
+  });
+  assert.deepEqual(signals._map_input.filters.fishFilterTerms, ["favourite", "missing"]);
   assert.deepEqual(signals._map_input.filters.layerIdsVisible, ["zones", "terrain"]);
   assert.deepEqual(signals._map_input.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
   assert.deepEqual(signals._map_input.filters.layerOpacities, { terrain: 0.35 });
@@ -300,6 +316,10 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
         pointIconScale: 1,
       },
       inputFilters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
         searchText: "",
         fromPatchId: null,
         toPatchId: null,
@@ -359,6 +379,10 @@ test("map-page persists durable _map_input diagnostics state", () => {
         pointIconScale: 1,
       },
       inputFilters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
         searchText: "",
         fromPatchId: null,
         toPatchId: null,
@@ -383,6 +407,12 @@ test("map-page persists durable _map_input filter state", () => {
   env.window.__fishystuffMap.patchSignals({
     _map_input: {
       filters: {
+        fishIds: [77, 91],
+        zoneRgbs: [12615551, 3972668],
+        semanticFieldIdsByLayer: {
+          region_groups: [295],
+        },
+        fishFilterTerms: ["favourite", "missing"],
         searchText: "velia",
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
@@ -402,6 +432,12 @@ test("map-page persists durable _map_input filter state", () => {
     detail: {
       _map_input: {
         filters: {
+          fishIds: [77, 91],
+          zoneRgbs: [12615551, 3972668],
+          semanticFieldIdsByLayer: {
+            region_groups: [295],
+          },
+          fishFilterTerms: ["favourite", "missing"],
           searchText: "velia",
           fromPatchId: "2026-02-26",
           toPatchId: "2026-03-12",
@@ -438,6 +474,12 @@ test("map-page persists durable _map_input filter state", () => {
         pointIconScale: 1,
       },
       inputFilters: {
+        fishIds: [77, 91],
+        zoneRgbs: [12615551, 3972668],
+        semanticFieldIdsByLayer: {
+          region_groups: [295],
+        },
+        fishFilterTerms: ["favourite", "missing"],
         searchText: "velia",
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",

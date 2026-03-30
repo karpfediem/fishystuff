@@ -1731,3 +1731,52 @@ Validation:
   - verify `FishyMapBridge.createPrefsSnapshot().filters` omits these layer-display keys
   - reload `/map/`
   - verify `_map_input.filters` restores the stored layer-display values
+
+### Step 35 - Move Remaining Selected Map Filters Into Page-Owned Signals
+
+Completed:
+
+- expanded page-owned map UI persistence in `site/assets/js/pages/map-page.js` to include the remaining selected-filter controls under:
+  - `_map_input.filters.fishIds`
+  - `_map_input.filters.zoneRgbs`
+  - `_map_input.filters.semanticFieldIdsByLayer`
+  - `_map_input.filters.fishFilterTerms`
+- kept these values under the same page-owned `fishystuff.map.window_ui.v1` snapshot:
+  - `inputFilters`
+- removed these fields from bridge-owned restore/snapshot persistence in:
+  - `site/assets/map/map-host.js`
+  - `snapshotToRestorePatch(...)`
+  - `createSessionSnapshot()`
+- updated regression coverage in:
+  - `site/assets/js/pages/map-page.test.mjs`
+  - `site/assets/map/map-host.test.mjs`
+
+Why this matters:
+
+- these were the last remaining user-facing filter selections still restored by bridge session storage
+- that meant the map still had a split ownership model for visible filter state:
+  - Datastar-owned live filter signals
+  - bridge-owned restore state for some selected filters
+- after this slice:
+  - page-owned Datastar state owns all visible map filter UI persistence
+  - bridge-owned persistence is now primarily about runtime/session state such as:
+    - selection
+    - view/camera
+    - runtime-driven restore commands
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/map-host.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/js/pages/map-page.js`
+  - `/map/map-host.js`
+- live Chromium smoke:
+  - patch `_map_input.filters.fishIds`, `semanticFieldIdsByLayer`, `fishFilterTerms`
+  - verify `fishystuff.map.window_ui.v1` stores them under `inputFilters`
+  - verify `FishyMapBridge.createSessionSnapshot().filters` is now empty for these page-owned filter fields
+  - reload `/map/`
+  - verify the stored selected-filter values rehydrate into `_map_input.filters`

@@ -644,6 +644,12 @@ test("search text and patch range stay out of persisted bridge snapshots", () =>
   bridge.inputState = applyStatePatch(undefined, {
     version: 1,
     filters: {
+      fishIds: [77, 91],
+      zoneRgbs: [0xc17f7f, 0x3c963c],
+      semanticFieldIdsByLayer: {
+        region_groups: [295],
+      },
+      fishFilterTerms: ["favourite", "missing"],
       searchText: "velia",
       patchId: null,
       fromPatchId: "2026-02-26",
@@ -663,10 +669,18 @@ test("search text and patch range stay out of persisted bridge snapshots", () =>
   const prefsFilters = bridge.createPrefsSnapshot().filters || {};
 
   assert.equal("searchText" in sessionFilters, false);
+  assert.equal("fishIds" in sessionFilters, false);
+  assert.equal("zoneRgbs" in sessionFilters, false);
+  assert.equal("semanticFieldIdsByLayer" in sessionFilters, false);
+  assert.equal("fishFilterTerms" in sessionFilters, false);
   assert.equal("patchId" in sessionFilters, false);
   assert.equal("fromPatchId" in sessionFilters, false);
   assert.equal("toPatchId" in sessionFilters, false);
   assert.equal("searchText" in prefsFilters, false);
+  assert.equal("fishIds" in prefsFilters, false);
+  assert.equal("zoneRgbs" in prefsFilters, false);
+  assert.equal("semanticFieldIdsByLayer" in prefsFilters, false);
+  assert.equal("fishFilterTerms" in prefsFilters, false);
   assert.equal("patchId" in prefsFilters, false);
   assert.equal("fromPatchId" in prefsFilters, false);
   assert.equal("toPatchId" in prefsFilters, false);
@@ -1418,11 +1432,17 @@ test("restore priority is URL over session over local preferences", () => {
   assert.equal(patch.commands.restoreView.viewMode, "3d");
 });
 
-test("local and session storage do not restore page-owned search and patch filters", () => {
+test("local and session storage do not restore page-owned map filters", () => {
   const localStorage = new MemoryStorage({
     "fishystuff.map.prefs.v1": JSON.stringify({
       version: 1,
       filters: {
+        fishIds: [11, 22, 33],
+        zoneRgbs: [0xc17f7f, 0x3c963c],
+        semanticFieldIdsByLayer: {
+          regions: [76, 92],
+        },
+        fishFilterTerms: ["favourite", "missing"],
         searchText: "local sea",
         fromPatchId: "local-from",
         toPatchId: "local-to",
@@ -1441,6 +1461,12 @@ test("local and session storage do not restore page-owned search and patch filte
     "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
       filters: {
+        fishIds: [44, 55],
+        zoneRgbs: [0x123456],
+        semanticFieldIdsByLayer: {
+          region_groups: [295],
+        },
+        fishFilterTerms: ["missing"],
         searchText: "session sea",
         fromPatchId: "session-from",
         toPatchId: "session-to",
@@ -1463,6 +1489,10 @@ test("local and session storage do not restore page-owned search and patch filte
   });
 
   assert.equal("searchText" in (patch.filters || {}), false);
+  assert.equal("fishIds" in (patch.filters || {}), false);
+  assert.equal("zoneRgbs" in (patch.filters || {}), false);
+  assert.equal("semanticFieldIdsByLayer" in (patch.filters || {}), false);
+  assert.equal("fishFilterTerms" in (patch.filters || {}), false);
   assert.equal("patchId" in (patch.filters || {}), false);
   assert.equal("fromPatchId" in (patch.filters || {}), false);
   assert.equal("toPatchId" in (patch.filters || {}), false);
@@ -1639,7 +1669,7 @@ test("layer clip mask normalization flattens nested attachments to a single root
   });
 });
 
-test("session restore preserves multiple selected fish terms", () => {
+test("session restore no longer rehydrates page-owned fish filters", () => {
   const sessionStorage = new MemoryStorage({
     [FISHYMAP_STORAGE_KEYS.session]: JSON.stringify({
       version: 1,
@@ -1658,10 +1688,10 @@ test("session restore preserves multiple selected fish terms", () => {
     sessionStorage,
   });
 
-  assert.deepEqual(patch.filters.fishIds, [11, 22, 33]);
+  assert.deepEqual(patch.filters.fishIds, [33]);
 });
 
-test("session restore preserves selected zone filter terms", () => {
+test("session restore no longer rehydrates page-owned zone filters", () => {
   const sessionStorage = new MemoryStorage({
     [FISHYMAP_STORAGE_KEYS.session]: JSON.stringify({
       version: 1,
@@ -1680,11 +1710,11 @@ test("session restore preserves selected zone filter terms", () => {
     sessionStorage,
   });
 
-  assert.deepEqual(patch.filters.zoneRgbs, [0xc17f7f, 0x3c963c]);
+  assert.equal("zoneRgbs" in (patch.filters || {}), false);
   assert.equal(patch.commands.selectZoneRgb, 0xc17f7f);
 });
 
-test("session restore preserves semantic field selections without world points", () => {
+test("session restore no longer rehydrates page-owned semantic filter sets", () => {
   const sessionStorage = new MemoryStorage({
     [FISHYMAP_STORAGE_KEYS.session]: JSON.stringify({
       version: 1,
@@ -1706,9 +1736,7 @@ test("session restore preserves semantic field selections without world points",
     sessionStorage,
   });
 
-  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
-    regions: [76, 92],
-  });
+  assert.equal("semanticFieldIdsByLayer" in (patch.filters || {}), false);
   assert.deepEqual(patch.commands.selectSemanticField, {
     layerId: "regions",
     fieldId: 76,

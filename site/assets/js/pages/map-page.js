@@ -2,7 +2,7 @@
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries)(?:\.|$)/;
+    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries)(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -136,6 +136,17 @@
             : 1,
         },
         filters: {
+          fishIds: Array.isArray(inputFilters?.fishIds) ? cloneJson(inputFilters.fishIds) : [],
+          zoneRgbs: Array.isArray(inputFilters?.zoneRgbs) ? cloneJson(inputFilters.zoneRgbs) : [],
+          semanticFieldIdsByLayer:
+            inputFilters?.semanticFieldIdsByLayer &&
+            typeof inputFilters.semanticFieldIdsByLayer === "object" &&
+            !Array.isArray(inputFilters.semanticFieldIdsByLayer)
+              ? cloneJson(inputFilters.semanticFieldIdsByLayer)
+              : {},
+          fishFilterTerms: Array.isArray(inputFilters?.fishFilterTerms)
+            ? cloneJson(inputFilters.fishFilterTerms)
+            : [],
           searchText: String(inputFilters?.searchText || ""),
           fromPatchId:
             inputFilters?.fromPatchId == null ? null : String(inputFilters.fromPatchId),
@@ -209,6 +220,21 @@
           : 1,
       },
       inputFilters: {
+        fishIds: Array.isArray(stored?._map_input?.filters?.fishIds)
+          ? cloneJson(stored._map_input.filters.fishIds)
+          : [],
+        zoneRgbs: Array.isArray(stored?._map_input?.filters?.zoneRgbs)
+          ? cloneJson(stored._map_input.filters.zoneRgbs)
+          : [],
+        semanticFieldIdsByLayer:
+          stored?._map_input?.filters?.semanticFieldIdsByLayer &&
+          typeof stored._map_input.filters.semanticFieldIdsByLayer === "object" &&
+          !Array.isArray(stored._map_input.filters.semanticFieldIdsByLayer)
+            ? cloneJson(stored._map_input.filters.semanticFieldIdsByLayer)
+            : {},
+        fishFilterTerms: Array.isArray(stored?._map_input?.filters?.fishFilterTerms)
+          ? cloneJson(stored._map_input.filters.fishFilterTerms)
+          : [],
         searchText: String(stored?._map_input?.filters?.searchText || ""),
         fromPatchId:
           stored?._map_input?.filters?.fromPatchId == null
@@ -295,6 +321,21 @@
     ) {
       patch._map_input = patch._map_input || {};
       patch._map_input.filters = {
+        fishIds: Array.isArray(parsed.inputFilters.fishIds)
+          ? cloneJson(parsed.inputFilters.fishIds)
+          : [],
+        zoneRgbs: Array.isArray(parsed.inputFilters.zoneRgbs)
+          ? cloneJson(parsed.inputFilters.zoneRgbs)
+          : [],
+        semanticFieldIdsByLayer:
+          parsed.inputFilters.semanticFieldIdsByLayer &&
+          typeof parsed.inputFilters.semanticFieldIdsByLayer === "object" &&
+          !Array.isArray(parsed.inputFilters.semanticFieldIdsByLayer)
+            ? cloneJson(parsed.inputFilters.semanticFieldIdsByLayer)
+            : {},
+        fishFilterTerms: Array.isArray(parsed.inputFilters.fishFilterTerms)
+          ? cloneJson(parsed.inputFilters.fishFilterTerms)
+          : [],
         searchText: String(parsed.inputFilters.searchText || ""),
         fromPatchId:
           parsed.inputFilters.fromPatchId == null ? null : String(parsed.inputFilters.fromPatchId),
