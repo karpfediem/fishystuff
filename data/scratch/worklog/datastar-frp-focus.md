@@ -324,6 +324,58 @@ Validation:
   - renders the catalog correctly
   - keeps caught/favourite state and card state in sync after reload
 
+### Step 7
+
+Extract a reusable Datastar render base for calculator charts.
+
+Work:
+
+- remove duplicated chart lifecycle code from:
+  - `distribution-chart.js`
+  - `pmf-chart.js`
+  - `loot-sankey.js`
+- centralize:
+  - Datastar signal-patch subscription
+  - requestAnimationFrame render scheduling
+  - optional child reset observation
+  - optional resize observation
+  - shared calculator signal-path reading
+
+Status:
+
+- implemented
+
+Implementation:
+
+- added reusable `FishyDatastarRenderElement`
+- added shared `readCalculatorSignal(path)`
+- converted:
+  - `fishy-distribution-chart`
+  - `fishy-pmf-chart`
+  - `fishy-loot-sankey`
+  to extend the shared render base
+
+Why this matters:
+
+- it removes repeated Datastar patch-listener boilerplate
+- it makes chart behavior more consistent across patch cycles
+- it creates a reusable foundation for future Datastar-bound visual components
+
+Validation:
+
+- JS syntax checks passed for:
+  - `datastar-render-element.js`
+  - `distribution-chart.js`
+  - `pmf-chart.js`
+  - `loot-sankey.js`
+- rebuilt site output successfully
+- live Chromium validation confirmed:
+  - `Groups` still renders
+  - `Silver` still renders
+  - `Silver` survives a zone change while active
+  - `Loot Flow` still renders
+  - `Target Fish` PMF still renders once a target is selected
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:
@@ -355,7 +407,8 @@ Planned next audit targets after calculator state is stable:
 
 - `site/content/en-US/dex.smd`
 - `site/assets/js/pages/fishydex.js`
-- Datastar patch-listener custom elements under `site/assets/js/components/`
+- remaining Datastar-triggered UI event glue in `site/content/en-US/calculator.smd`
+- broader Fishydex render/event flow beyond persistence
 
 Unrelated local changes not part of this refactor:
 

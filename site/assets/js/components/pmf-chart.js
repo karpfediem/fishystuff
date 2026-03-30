@@ -1,4 +1,8 @@
 import * as d3 from "../d3.js";
+import {
+    FishyDatastarRenderElement,
+    readCalculatorSignal,
+} from "./datastar-render-element.js";
 
 const DEFAULT_WIDTH = 980;
 const MIN_BAR_WIDTH = 84;
@@ -11,84 +15,30 @@ const PLOT_TOP = 48;
 const PLOT_BOTTOM = CHART_HEIGHT - BOTTOM_PADDING;
 const GRID_TICKS = [25, 50, 75, 100];
 
-function readChartSignal(path) {
-    return window.__fishystuffCalculator?.readSignal?.(path) ?? null;
-}
-
 function chartBars(path) {
-    const chart = readChartSignal(path);
+    const chart = readCalculatorSignal(path);
     return Array.isArray(chart?.bars) ? chart.bars : [];
 }
 
 function expectedValueText(path) {
-    const chart = readChartSignal(path);
+    const chart = readCalculatorSignal(path);
     return String(chart?.expected_value_text ?? "");
 }
 
-class FishyPmfChart extends HTMLElement {
-    #rafId = 0;
-    #childObserver = null;
-    _handleSignalPatchBound = null;
-
-    constructor() {
-        super();
-        this._handleSignalPatchBound = () => this.#scheduleRender();
-    }
-
+class FishyPmfChart extends FishyDatastarRenderElement {
     static get observedAttributes() {
         return ["signal-path", "aria-label"];
     }
 
-    connectedCallback() {
-        this.#scheduleRender();
-        this.#childObserver = new MutationObserver(() => this.#scheduleRender());
-        this.#childObserver.observe(this, { childList: true });
-        document.addEventListener(
-            "datastar-patch-signals",
-            this._handleSignalPatchBound,
-        );
+    observeChildren() {
+        return true;
     }
 
-    disconnectedCallback() {
-        if (this.#childObserver) {
-            this.#childObserver.disconnect();
-            this.#childObserver = null;
-        }
-        if (this.#rafId) {
-            cancelAnimationFrame(this.#rafId);
-            this.#rafId = 0;
-        }
-        document.removeEventListener(
-            "datastar-patch-signals",
-            this._handleSignalPatchBound,
-        );
-    }
-
-    attributeChangedCallback() {
-        this.#scheduleRender();
-    }
-
-    #scheduleRender() {
-        if (this.#rafId) {
-            cancelAnimationFrame(this.#rafId);
-        }
-        this.#rafId = requestAnimationFrame(() => {
-            this.#rafId = 0;
-            this.#render();
-        });
-    }
-
-    #render() {
+    renderFromSignals() {
         const path = this.getAttribute("signal-path");
         const bars = chartBars(path);
         if (!bars.length) {
-            if (this.#childObserver) {
-                this.#childObserver.disconnect();
-            }
-            this.replaceChildren();
-            if (this.#childObserver) {
-                this.#childObserver.observe(this, { childList: true });
-            }
+            this.replaceRenderedChildren();
             return;
         }
 
@@ -217,13 +167,7 @@ class FishyPmfChart extends HTMLElement {
                 .text(String(bar.label ?? ""));
         });
 
-        if (this.#childObserver) {
-            this.#childObserver.disconnect();
-        }
-        this.replaceChildren(svg.node());
-        if (this.#childObserver) {
-            this.#childObserver.observe(this, { childList: true });
-        }
+        this.replaceRenderedChildren(svg.node());
     }
 }
 

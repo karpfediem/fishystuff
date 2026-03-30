@@ -1,4 +1,8 @@
 import * as d3 from "../d3.js";
+import {
+    FishyDatastarRenderElement,
+    readCalculatorSignal,
+} from "./datastar-render-element.js";
 
 const TOP_PADDING = 20;
 const BOTTOM_PADDING = 20;
@@ -123,10 +127,6 @@ function distributedDisplayHeights(values, totalSpan, gap, minimumHeight) {
     });
 }
 
-function readChartSignal(path) {
-    return window.__fishystuffCalculator?.readSignal?.(path) ?? null;
-}
-
 function compactSilverText(valueText) {
     const numeric = Number(String(valueText ?? "").replaceAll(",", ""));
     if (!Number.isFinite(numeric)) {
@@ -164,69 +164,25 @@ function sankeyPath(x1, y1, x2, y2, h1, h2) {
     ].join(" ");
 }
 
-class FishyLootSankey extends HTMLElement {
-    #resizeObserver = null;
-    #rafId = 0;
-    _handleSignalPatchBound = null;
-
-    constructor() {
-        super();
-        this._handleSignalPatchBound = () => this.#handleSignalPatch();
-    }
-
+class FishyLootSankey extends FishyDatastarRenderElement {
     static get observedAttributes() {
         return ["signal-path", "aria-label"];
     }
 
-    connectedCallback() {
-        this.#scheduleRender();
-        this.#resizeObserver = new ResizeObserver(() => this.#scheduleRender());
-        this.#resizeObserver.observe(this);
-        document.addEventListener(
-            "datastar-patch-signals",
-            this._handleSignalPatchBound,
-        );
+    observeChildren() {
+        return true;
     }
 
-    disconnectedCallback() {
-        if (this.#resizeObserver) {
-            this.#resizeObserver.disconnect();
-            this.#resizeObserver = null;
-        }
-        if (this.#rafId) {
-            cancelAnimationFrame(this.#rafId);
-            this.#rafId = 0;
-        }
-        document.removeEventListener(
-            "datastar-patch-signals",
-            this._handleSignalPatchBound,
-        );
+    observeResize() {
+        return true;
     }
 
-    attributeChangedCallback() {
-        this.#scheduleRender();
-    }
-
-    #handleSignalPatch() {
-        this.#scheduleRender();
-    }
-
-    #scheduleRender() {
-        if (this.#rafId) {
-            cancelAnimationFrame(this.#rafId);
-        }
-        this.#rafId = requestAnimationFrame(() => {
-            this.#rafId = 0;
-            this.#render();
-        });
-    }
-
-    #render() {
-        const chart = readChartSignal(this.getAttribute("signal-path"));
+    renderFromSignals() {
+        const chart = readCalculatorSignal(this.getAttribute("signal-path"));
         const rows = Array.isArray(chart?.rows) ? chart.rows : [];
         const speciesRows = Array.isArray(chart?.species_rows) ? chart.species_rows : [];
         if (!rows.length || !speciesRows.length) {
-            this.replaceChildren();
+            this.replaceRenderedChildren();
             return;
         }
 
@@ -750,7 +706,7 @@ class FishyLootSankey extends HTMLElement {
                 .text(valueLabel);
         });
 
-        this.replaceChildren(svg.node());
+        this.replaceRenderedChildren(svg.node());
     }
 }
 

@@ -1,4 +1,8 @@
 import * as d3 from "../d3.js";
+import {
+    FishyDatastarRenderElement,
+    readCalculatorSignal,
+} from "./datastar-render-element.js";
 
 const DEFAULT_VIEWBOX_WIDTH = 1351;
 const CHART_HEIGHT = 164;
@@ -10,12 +14,8 @@ const TRACK_HEIGHT = 18;
 const TRACK_RADIUS = TRACK_HEIGHT / 2;
 const CALLOUT_GAP_PX = 10;
 
-function readChartSignal(path) {
-    return window.__fishystuffCalculator?.readSignal?.(path) ?? null;
-}
-
 function chartSegments(path) {
-    const chart = readChartSignal(path);
+    const chart = readCalculatorSignal(path);
     return Array.isArray(chart?.segments) ? chart.segments : [];
 }
 
@@ -46,79 +46,19 @@ function polygonPath(points) {
         .concat(" Z");
 }
 
-class FishyDistributionChart extends HTMLElement {
-    #childObserver = null;
-    #rafId = 0;
-    _handleSignalPatchBound = null;
-
-    constructor() {
-        super();
-        this._handleSignalPatchBound = () => this.#handleSignalPatch();
-    }
-
+class FishyDistributionChart extends FishyDatastarRenderElement {
     static get observedAttributes() {
         return ["signal-path", "aria-label", "viewbox-width"];
     }
 
-    connectedCallback() {
-        this.#scheduleRender();
-        this.#childObserver = new MutationObserver(() => {
-            this.#scheduleRender();
-        });
-        this.#childObserver.observe(this, {
-            childList: true,
-        });
-        document.addEventListener(
-            "datastar-patch-signals",
-            this._handleSignalPatchBound,
-        );
+    observeChildren() {
+        return true;
     }
 
-    disconnectedCallback() {
-        if (this.#childObserver) {
-            this.#childObserver.disconnect();
-            this.#childObserver = null;
-        }
-        if (this.#rafId) {
-            cancelAnimationFrame(this.#rafId);
-            this.#rafId = 0;
-        }
-        document.removeEventListener(
-            "datastar-patch-signals",
-            this._handleSignalPatchBound,
-        );
-    }
-
-    attributeChangedCallback() {
-        this.#scheduleRender();
-    }
-
-    #handleSignalPatch() {
-        this.#scheduleRender();
-    }
-
-    #scheduleRender() {
-        if (this.#rafId) {
-            cancelAnimationFrame(this.#rafId);
-        }
-        this.#rafId = requestAnimationFrame(() => {
-            this.#rafId = 0;
-            this.#render();
-        });
-    }
-
-    #render() {
+    renderFromSignals() {
         const segments = chartSegments(this.getAttribute("signal-path"));
         if (!segments.length) {
-            if (this.#childObserver) {
-                this.#childObserver.disconnect();
-            }
-            this.replaceChildren();
-            if (this.#childObserver) {
-                this.#childObserver.observe(this, {
-                    childList: true,
-                });
-            }
+            this.replaceRenderedChildren();
             return;
         }
 
@@ -328,15 +268,7 @@ class FishyDistributionChart extends HTMLElement {
             .style("stroke-opacity", 0.1)
             .style("stroke-width", 1.2);
 
-        if (this.#childObserver) {
-            this.#childObserver.disconnect();
-        }
-        this.replaceChildren(svg.node());
-        if (this.#childObserver) {
-            this.#childObserver.observe(this, {
-                childList: true,
-            });
-        }
+        this.replaceRenderedChildren(svg.node());
     }
 }
 

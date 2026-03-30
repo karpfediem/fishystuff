@@ -33,6 +33,7 @@ Multilingual {
     "js/d3.js",
     "js/components/registry.js",
     "js/components/checkbox-group.js",
+    "js/components/datastar-render-element.js",
     "js/components/distribution-chart.js",
     "js/components/loot-sankey.js",
     "js/components/pmf-chart.js",
