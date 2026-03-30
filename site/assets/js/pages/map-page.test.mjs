@@ -126,6 +126,27 @@ test("map-page restore loads persisted bookmark entries into Datastar signals", 
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
 });
 
+test("map-page restore loads persisted window ui into _map_ui", () => {
+  const env = createContext({
+    "fishystuff.map.window_ui.v1": JSON.stringify({
+      windowUi: {
+        search: { open: false, collapsed: false, x: null, y: null },
+        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "zone_info" },
+        layers: { open: true, collapsed: false, x: null, y: null },
+        bookmarks: { open: false, collapsed: false, x: null, y: null },
+      },
+    }),
+  });
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+
+  assert.equal(signals._map_ui.windowUi.search.open, false);
+  assert.equal(signals._map_ui.windowUi.zoneInfo.tab, "zone_info");
+  assert.equal("windowUi" in signals, false);
+});
+
 test("map-page persists bookmark signal patches through the Datastar patch event", () => {
   const env = createContext();
   const signals = defaultSignals();

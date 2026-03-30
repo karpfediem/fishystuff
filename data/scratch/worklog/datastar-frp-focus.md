@@ -1543,3 +1543,35 @@ Validation:
   - set `FishyMapBridge.inputState.ui.bookmarkSelectedIds = ['bookmark-a', 'bookmark-b']`
   - verify `createSessionSnapshot().ui` omits `bookmarkSelectedIds`
   - verify `createPrefsSnapshot().ui` omits `bookmarkSelectedIds`
+
+### Step 31 - Fix Map Window UI Restore Contract
+
+Completed:
+
+- fixed `site/assets/js/pages/map-page.js` so `fishystuff.map.window_ui.v1` restores back into:
+  - `_map_ui.windowUi`
+  instead of leaking into a stray top-level `windowUi` signal branch
+- added regression coverage in `site/assets/js/pages/map-page.test.mjs`
+
+Why this matters:
+
+- page-owned map window UI persistence was effectively restoring into the wrong signal shape
+- saved window UI state could exist in storage without actually rehydrating the Datastar-owned `_map_ui` branch
+- this needed to be fixed before broadening map page-owned UI persistence further
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/js/pages/map-page.test.mjs`
+- `node --test site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/js/pages/map-page.js`
+- live Chromium smoke:
+  - write `fishystuff.map.window_ui.v1` with `search.open = false` and `zoneInfo.tab = "zone_info"`
+  - reload `/map/`
+  - verify:
+    - `_map_ui.windowUi.search.open === false`
+    - `_map_ui.windowUi.zoneInfo.tab === "zone_info"`
+    - no stray top-level `windowUi` branch is used

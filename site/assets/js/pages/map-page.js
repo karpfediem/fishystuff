@@ -138,7 +138,9 @@
         try {
           const parsed = JSON.parse(rawUi);
           if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            uiPatch = parsed;
+            uiPatch = {
+              _map_ui: parsed,
+            };
           }
         } catch (_error) {
           globalThis.localStorage?.removeItem?.(MAP_UI_STORAGE_KEY);
