@@ -7655,18 +7655,6 @@ function bindUi(shell, elements, options = {}) {
     pushPatchRangePatch();
   });
 
-  if (elements.viewToggle) {
-    elements.viewToggle.addEventListener("click", () => {
-      const current = getLatestStateBundle().state;
-      const nextViewMode = current?.view?.viewMode === "3d" ? "2d" : "3d";
-      patchMapInputSignalState({
-        ui: {
-          viewMode: nextViewMode,
-        },
-      });
-    });
-  }
-
   elements.bookmarkPlace?.addEventListener("click", () => {
     const state = getLatestStateBundle().state;
     if (state.ready !== true) {

@@ -1305,6 +1305,7 @@
         id="fishymap-view-toggle"
         class="btn btn-primary"
         type="button"
+        data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_input.ui.viewMode', $_map_runtime.state.view.viewMode === '3d' ? '2d' : '3d')"
         aria-label="View mode: 2D. Click to switch to 3D."
         title="View mode: 2D. Click to switch to 3D."
       >

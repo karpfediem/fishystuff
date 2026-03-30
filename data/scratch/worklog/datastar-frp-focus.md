@@ -1093,6 +1093,33 @@ Validation:
   - Dex search updates the catalog immediately
   - after the normal debounce, `fishystuff.fishydex.ui.v1` persists the new `search_query`
 
+### Step 19 - Template-Driven Map View Toggle
+
+Completed:
+
+- moved the map view toggle button itself into a Datastar expression in `site/layouts/map.shtml`
+- removed the corresponding loader-owned `click` listener from `site/assets/map/loader.js`
+- the button now mutates `_map_input.ui.viewMode` directly from the template, using `_map_runtime.state.view.viewMode` to choose the next mode
+
+Why this matters:
+
+- this removes another imperative DOM event path from `loader.js`
+- the view toggle now matches the same Datastar-first pattern as the toolbar buttons
+- it keeps control intent in the template and reconciliation in the host/runtime layer
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared:
+  - served `/map/` vs `site/.out/map/index.html`
+  - served `/map/loader.js` vs `site/.out/map/loader.js`
+- live Chromium smoke:
+  - reload `/map/`
+  - verify the page boots in persisted 3D mode cleanly
+  - click the view toggle
+  - verify bridge input state, `_map_input`, and `_map_runtime.state.view.viewMode` all return to `"2d"`
+
 ### Step 16 - Shared Datastar State Helper
 
 Completed:
