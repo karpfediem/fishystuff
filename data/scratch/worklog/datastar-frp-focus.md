@@ -2050,3 +2050,50 @@ Validation:
 - live browser smoke:
   - `bash tools/scripts/map-browser-smoke.sh /tmp/map-browser.json`
   - bridge reached ready cleanly with the current dev server stack after the direct-read change
+
+### Step 41 - Route Fishydex Import/Export and Modal Close Through Datastar Actions
+
+Completed:
+
+- added a local `_fishydex_actions` branch in `site/content/en-US/dex.smd`:
+  - `exportCaughtToken`
+  - `importCaughtToken`
+  - `closeDetailsToken`
+- moved the Fishydex action buttons in the template off direct `window.Fishydex.*(...)` calls:
+  - `Export`
+  - `Import`
+  - details close button
+  - details backdrop
+- updated `site/assets/js/pages/fishydex.js` so `sync($)` consumes those action tokens and
+  triggers the side effects from page state instead of from imperative template calls
+- removed these no-longer-needed globals from `window.Fishydex`:
+  - `exportCaught`
+  - `importCaught`
+  - `openDetails`
+  - `closeDetails`
+- kept the rendered-card click handling intact for now, so the grid can still open details and
+  toggle caught/favourite state without reworking the whole card render path in the same slice
+- added page-level regression coverage in `site/assets/js/pages/fishydex.test.mjs` for:
+  - export token -> clipboard copy + status message
+  - import token -> caught id patch + status message
+
+Why this matters:
+
+- Fishydex still had several template-level direct calls into `window.Fishydex`, which meant
+  those user actions bypassed the Datastar signal graph
+- moving them onto local action tokens keeps the same user behavior while making the page
+  contract more consistent:
+  - template mutates signals
+  - page module reacts
+  - side effects patch signals back
+- this also shrinks the required global API surface for Fishydex and makes later refactors
+  around details/modal ownership easier
+
+Validation:
+
+- `node --check site/assets/js/pages/fishydex.js`
+- `node --test site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/dex/`
+  - `/js/pages/fishydex.js`

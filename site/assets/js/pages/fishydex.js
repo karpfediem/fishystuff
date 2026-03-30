@@ -16,7 +16,7 @@
   const SORT_FIELD_ORDER = ["name", "price"];
   const SORT_DIRECTION_ORDER = ["asc", "desc"];
   const SILVER_FORMATTER = new Intl.NumberFormat();
-  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$))/;
+  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$)|_fishydex_actions(?:\.|$))/;
   const state = {
     persistBinding: null,
     persistedUiJson: "",
@@ -32,6 +32,11 @@
     suppressCardAnimation: false,
     activeDetailsFishId: 0,
     restoreFocusFishId: 0,
+    handledActionTokens: {
+      exportCaughtToken: 0,
+      importCaughtToken: 0,
+      closeDetailsToken: 0,
+    },
   };
 
   function datastarStateHelper() {
@@ -369,6 +374,11 @@
       caught_ids: caughtState.caughtIds,
       favourite_ids: favouriteState.favouriteIds,
       _selected_fish_id: 0,
+      _fishydex_actions: {
+        exportCaughtToken: 0,
+        importCaughtToken: 0,
+        closeDetailsToken: 0,
+      },
       _status_message:
         uiState.statusMessage
         || caughtState.statusMessage
@@ -967,6 +977,42 @@
     return Number.isInteger(value) && value > 0 ? value : 0;
   }
 
+  function currentActionTokens(snapshot) {
+    const raw = snapshot && typeof snapshot === "object" ? snapshot._fishydex_actions : null;
+    return {
+      exportCaughtToken: Number.isFinite(raw?.exportCaughtToken)
+        ? Math.max(0, Math.trunc(raw.exportCaughtToken))
+        : 0,
+      importCaughtToken: Number.isFinite(raw?.importCaughtToken)
+        ? Math.max(0, Math.trunc(raw.importCaughtToken))
+        : 0,
+      closeDetailsToken: Number.isFinite(raw?.closeDetailsToken)
+        ? Math.max(0, Math.trunc(raw.closeDetailsToken))
+        : 0,
+    };
+  }
+
+  function consumeActionTokens(snapshot) {
+    const nextTokens = currentActionTokens(snapshot);
+    const previousTokens = state.handledActionTokens;
+    let mutatedSignals = false;
+
+    if (nextTokens.exportCaughtToken !== previousTokens.exportCaughtToken) {
+      void exportCaught(snapshot && snapshot.caught_ids);
+    }
+    if (nextTokens.importCaughtToken !== previousTokens.importCaughtToken) {
+      importCaught();
+      mutatedSignals = true;
+    }
+    if (nextTokens.closeDetailsToken !== previousTokens.closeDetailsToken) {
+      closeDetails();
+      mutatedSignals = true;
+    }
+
+    state.handledActionTokens = nextTokens;
+    return mutatedSignals;
+  }
+
   function restoreDetailsFocus(fishId) {
     if (!Number.isInteger(fishId) || fishId <= 0) {
       return;
@@ -1255,6 +1301,10 @@
   function sync(snapshot) {
     bindGridClicks();
     bindDetailsControls();
+
+    if (consumeActionTokens(snapshot)) {
+      return;
+    }
 
     const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
     const caughtIds = normalizeStoredFishIds(snapshot.caught_ids);
@@ -1580,13 +1630,9 @@
     toggleGradeFilters: toggleGradeFilters,
     toggleMethodFilters: toggleMethodFilters,
     queueStamp: queueStamp,
-    exportCaught: exportCaught,
-    importCaught: importCaught,
     sync: sync,
     fishApiUrl: fishApiUrl,
     toggleCaught: toggleCaught,
     toggleFavourite: toggleFavourite,
-    openDetails: openDetails,
-    closeDetails: closeDetails,
   };
 })();

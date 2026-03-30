@@ -31,6 +31,11 @@ class MemoryStorage {
   }
 }
 
+class ElementStub {}
+class HTMLElementStub extends ElementStub {}
+class HTMLImageElementStub extends HTMLElementStub {}
+class HTMLButtonElementStub extends HTMLElementStub {}
+
 function createDocumentStub() {
   const listeners = new Map();
   return {
@@ -45,8 +50,23 @@ function createDocumentStub() {
         listener(event);
       }
     },
+    getElementById() {
+      return null;
+    },
+    querySelector() {
+      return null;
+    },
     querySelectorAll() {
       return [];
+    },
+    createElement() {
+      return {
+        click() {},
+        remove() {},
+      };
+    },
+    body: {
+      appendChild() {},
     },
   };
 }
@@ -62,6 +82,7 @@ function createContext(localStorageInitial = {}) {
     document,
     localStorage,
     navigator: {},
+    Blob,
     JSON,
     Object,
     Array,
@@ -75,6 +96,10 @@ function createContext(localStorageInitial = {}) {
     URL,
     Intl,
     console,
+    Element: ElementStub,
+    HTMLElement: HTMLElementStub,
+    HTMLImageElement: HTMLImageElementStub,
+    HTMLButtonElement: HTMLButtonElementStub,
     globalThis: null,
     setTimeout(callback) {
       const id = nextTimerId;
@@ -87,12 +112,15 @@ function createContext(localStorageInitial = {}) {
     },
   };
   context.globalThis = context;
+  window.prompt = () => null;
+  window.requestAnimationFrame = (callback) => callback();
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
   vm.runInNewContext(SHARED_FISH_STATE_SOURCE, context, { filename: "shared-fish-state.js" });
   vm.runInNewContext(FISHYDEX_SOURCE, context, { filename: "fishydex.js" });
   return {
     window,
     document,
+    navigator: context.navigator,
     localStorage,
     flushTimers() {
       const pending = Array.from(timers.values());
@@ -123,6 +151,11 @@ function defaultSignals() {
     _progress_panel_collapsed: false,
     _filter_panel_collapsed: false,
     _loading: true,
+    _fishydex_actions: {
+      exportCaughtToken: 0,
+      importCaughtToken: 0,
+      closeDetailsToken: 0,
+    },
     _status_message: "",
     _api_error_message: "",
     _api_error_hint: "",
@@ -187,4 +220,54 @@ test("fishydex persists panel collapse state in fishydex ui storage", () => {
       _filter_panel_collapsed: true,
     }),
   );
+});
+
+test("fishydex export action token copies caught ids and updates status", async () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  let copiedText = "";
+  env.navigator.clipboard = {
+    writeText(value) {
+      copiedText = String(value);
+      return Promise.resolve();
+    },
+  };
+
+  env.window.Fishydex.restore(signals);
+  Object.assign(signals, {
+    caught_ids: [8473, 8476],
+    _fishydex_actions: {
+      exportCaughtToken: 1,
+      importCaughtToken: 0,
+      closeDetailsToken: 0,
+    },
+  });
+
+  env.window.Fishydex.sync(signals);
+  await Promise.resolve();
+  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(copiedText, JSON.stringify([8473, 8476], null, 2));
+  assert.equal(signals._status_message, "Copied 2 caught fish IDs.");
+});
+
+test("fishydex import action token updates caught ids from prompt input", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  env.window.prompt = () => JSON.stringify({ 8473: true, 8476: true });
+
+  env.window.Fishydex.restore(signals);
+  Object.assign(signals, {
+    _fishydex_actions: {
+      exportCaughtToken: 0,
+      importCaughtToken: 1,
+      closeDetailsToken: 0,
+    },
+  });
+
+  env.window.Fishydex.sync(signals);
+
+  assert.deepEqual(signals.caught_ids, [8473, 8476]);
+  assert.equal(signals._status_message, "Imported 2 caught fish IDs.");
 });
