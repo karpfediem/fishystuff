@@ -1475,3 +1475,40 @@ Validation:
   - verify no storage write occurs
   - patch `_map_ui.windowUi.search.open = false`
   - verify `fishystuff.map.window_ui.v1` is written with the durable window snapshot
+
+### Step 29 - Remove Duplicate Map Detail Pane Persistence
+
+Completed:
+
+- removed `activeDetailPaneId` from the bridge-owned map input-state contract in:
+  - `site/assets/map/map-host.js`
+- removed the loader-side sync that mirrored resolved zone-info tabs back into bridge input state in:
+  - `site/assets/map/loader.js`
+- kept zone-info tab ownership solely in page-owned Datastar state:
+  - `_map_ui.windowUi.zoneInfo.tab`
+
+Why this matters:
+
+- the map had two copies of the same UI selection:
+  - page-owned `windowUi.zoneInfo.tab`
+  - bridge-owned `inputState.ui.activeDetailPaneId`
+- the bridge copy never left JS and was not required by the WASM runtime
+- keeping both copies made persistence and ownership harder to reason about
+- after this slice, the zone-info tab has one clear owner: the Datastar page UI state
+
+Validation:
+
+- `node --check site/assets/map/map-host.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/map/loader.js`
+  - `/map/map-host.js`
+- live Chromium smoke:
+  - inspect `FishyMapBridge.createPrefsSnapshot()` / `createSessionSnapshot()`
+  - verify neither includes `activeDetailPaneId`
+  - patch `_map_ui.windowUi.zoneInfo.tab = "zone_info"`
+  - verify `fishystuff.map.window_ui.v1` stores the tab
+  - verify `fishystuff.map.prefs.v1` and `fishystuff.map.session.v1` do not

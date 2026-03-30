@@ -6532,23 +6532,6 @@ function bindUi(shell, elements, options = {}) {
     patchMapInputSignalState(patch);
   }
 
-  function syncActiveDetailPaneState(activePaneId) {
-    const normalizedActivePaneId = normalizeNullableString(activePaneId);
-    const currentActivePaneId = normalizeNullableString(
-      getLatestStateBundle().inputState?.ui?.activeDetailPaneId,
-    );
-    if (normalizedActivePaneId === currentActivePaneId) {
-      return;
-    }
-    const patch = {
-      version: 1,
-      ui: {
-        activeDetailPaneId: normalizedActivePaneId,
-      },
-    };
-    patchMapInputSignalState(patch);
-  }
-
   function activateBookmarkSelection(bookmark) {
     if (!bookmark) {
       return;
@@ -6856,13 +6839,6 @@ function bindUi(shell, elements, options = {}) {
     isRendering = true;
     try {
       renderPanel(elements, latestStateBundle, zoneCatalog, windowUiState, searchUiState);
-      syncActiveDetailPaneState(
-        resolveZoneInfoActiveTab(
-          windowUiState,
-          latestStateBundle.state?.selection || null,
-          latestStateBundle,
-        ),
-      );
       renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
       applyManagedWindows();
     } finally {
