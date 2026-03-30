@@ -1512,3 +1512,34 @@ Validation:
   - patch `_map_ui.windowUi.zoneInfo.tab = "zone_info"`
   - verify `fishystuff.map.window_ui.v1` stores the tab
   - verify `fishystuff.map.prefs.v1` and `fishystuff.map.session.v1` do not
+
+### Step 30 - Keep Bookmark Selection Live-Only
+
+Completed:
+
+- removed `bookmarkSelectedIds` from bridge session snapshot persistence in:
+  - `site/assets/map/map-host.js`
+- kept `bookmarkSelectedIds` in live bridge input state for current render/runtime coordination
+- updated `site/assets/map/map-host.test.mjs` accordingly
+
+Why this matters:
+
+- bookmark selection already has a page-owned live UI owner:
+  - `_map_ui.bookmarks.selectedIds`
+- persisting the same selection through bridge session snapshots was another ownership leak
+- after this slice:
+  - bookmark selection can still exist live in runtime input state
+  - but it does not get restored/persisted from the bridge storage layer
+
+Validation:
+
+- `node --check site/assets/map/map-host.js`
+- `node --check site/assets/map/map-host.test.mjs`
+- `node --test site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/map-host.js`
+- live Chromium smoke:
+  - set `FishyMapBridge.inputState.ui.bookmarkSelectedIds = ['bookmark-a', 'bookmark-b']`
+  - verify `createSessionSnapshot().ui` omits `bookmarkSelectedIds`
+  - verify `createPrefsSnapshot().ui` omits `bookmarkSelectedIds`

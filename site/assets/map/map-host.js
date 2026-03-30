@@ -1998,9 +1998,6 @@ export function snapshotToRestorePatch(snapshot) {
         patch.ui.pointIconScale = pointIconScale;
       }
     }
-    if (hasOwn(snapshot.ui, "bookmarkSelectedIds")) {
-      patch.ui.bookmarkSelectedIds = normalizeStringList(snapshot.ui.bookmarkSelectedIds);
-    }
   }
 
   if (patch.filters && !Object.keys(patch.filters).length) {
@@ -3023,7 +3020,6 @@ class FishyMapBridgeImpl {
         showPoints: this.inputState.ui.showPoints,
         showPointIcons: this.inputState.ui.showPointIcons,
         pointIconScale: this.inputState.ui.pointIconScale,
-        bookmarkSelectedIds: normalizeStringList(this.inputState.ui.bookmarkSelectedIds),
       },
     };
   }

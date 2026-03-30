@@ -631,10 +631,7 @@ test("bookmark ui patches are normalized in input state and omitted from persist
 
   const bridge = createFishyMapBridge();
   bridge.inputState = next;
-  assert.deepEqual(bridge.createSessionSnapshot().ui.bookmarkSelectedIds, [
-    "bookmark-a",
-    "bookmark-b",
-  ]);
+  assert.equal("bookmarkSelectedIds" in bridge.createSessionSnapshot().ui, false);
   assert.equal("bookmarks" in bridge.createSessionSnapshot().ui, false);
   assert.equal("bookmarkSelectedIds" in bridge.createPrefsSnapshot().ui, false);
   assert.equal("bookmarks" in bridge.createPrefsSnapshot().ui, false);
