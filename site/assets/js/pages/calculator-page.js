@@ -50,7 +50,7 @@
         if (!signals) {
           return;
         }
-        window.__fishystuffCalculator.persist(signals);
+        persistCalculator(signals);
       },
     });
     calculatorState.persistBinding.bind();
@@ -79,7 +79,7 @@
       if (!signals) {
         return;
       }
-      window.__fishystuffCalculator.syncActions(signals);
+      syncCalculatorActions(signals);
     };
     document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
     calculatorState.actionBinding = {
@@ -334,107 +334,117 @@
     return "Abundant";
   };
 
-  window.__fishystuffCalculator = {
-    iconSpriteUrl: ICON_SPRITE_URL,
-    lang: calculatorLang,
-    initUrl() {
-      return window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/init?lang=${this.lang}`);
-    },
-    evalUrl() {
-      return window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/eval?lang=${this.lang}`);
-    },
-    connect(signals) {
-      signalStore.connect(signals);
-    },
-    signalObject() {
-      return signalStore.signalObject();
-    },
-    evalSignalPatchFilter() {
-      return {
-        exclude: CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN,
-      };
-    },
-    presetUrl(signals) {
-      return presetURL(signals);
-    },
-    shareText(signals) {
-      const current = signals ?? {};
-      const calc = current._calc ?? {};
-      const lead = current.active
-        ? "Active | "
-        : `${calc.auto_fish_time_reduction_text ?? "0%"} AFR | `;
-      return (
-        `[FishyStuff Calculator Preset | ${lead}${calc.item_drr_text ?? "0%"} Item DRR | ${calc.zone_name ?? current.zone}](`
-        + this.presetUrl(current)
-        + ")"
-      );
-    },
-    clear(signals) {
-      clearSignals();
-      const current = signals && typeof signals === "object"
-        ? signals
-        : this.signalObject();
-      const defaults = current && typeof current === "object"
-        ? current._defaults
-        : null;
-      if (!defaults || typeof defaults !== "object" || Array.isArray(defaults)) {
-        return;
-      }
-      Object.assign(current, cloneCalculatorSignals(defaults));
-    },
-    actionState(signals) {
-      const current = signals && typeof signals === "object"
-        ? signals
-        : this.signalObject();
-      const raw = current && typeof current === "object"
-        ? current._calculator_actions
-        : null;
-      return window.__fishystuffDatastarState.normalizeCounterTokenState(
-        raw,
-        CALCULATOR_ACTION_DEFAULTS,
-      );
-    },
-    syncActions(signals) {
-      const current = signals && typeof signals === "object"
-        ? signals
-        : this.signalObject();
-      if (!current || typeof current !== "object") {
-        return;
-      }
-      const consumption = window.__fishystuffDatastarState.consumeIncrementedCounterTokens(
-        calculatorState.handledActionTokens,
-        this.actionState(current),
-        {
-          copyUrlToken: () => {
-            window.__fishystuffToast.copyText(this.presetUrl(current), {
-              success: "Preset URL copied.",
-            });
-          },
-          copyShareToken: () => {
-            window.__fishystuffToast.copyText(this.shareText(current), {
-              success: "Share text copied.",
-            });
-          },
-          clearToken: () => {
-            this.clear(current);
-            window.__fishystuffToast.info("Calculator cleared.");
-          },
+  function calculatorInitUrl() {
+    return window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/init?lang=${calculatorLang}`);
+  }
+
+  function calculatorEvalUrl() {
+    return window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/eval?lang=${calculatorLang}`);
+  }
+
+  function calculatorEvalSignalPatchFilter() {
+    return {
+      exclude: CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN,
+    };
+  }
+
+  function calculatorPresetUrl(signals) {
+    return presetURL(signals);
+  }
+
+  function calculatorShareText(signals) {
+    const current = signals ?? {};
+    const calc = current._calc ?? {};
+    const lead = current.active
+      ? "Active | "
+      : `${calc.auto_fish_time_reduction_text ?? "0%"} AFR | `;
+    return (
+      `[FishyStuff Calculator Preset | ${lead}${calc.item_drr_text ?? "0%"} Item DRR | ${calc.zone_name ?? current.zone}](`
+      + calculatorPresetUrl(current)
+      + ")"
+    );
+  }
+
+  function clearCalculator(signals) {
+    clearSignals();
+    const current = signals && typeof signals === "object"
+      ? signals
+      : signalStore.signalObject();
+    const defaults = current && typeof current === "object"
+      ? current._defaults
+      : null;
+    if (!defaults || typeof defaults !== "object" || Array.isArray(defaults)) {
+      return;
+    }
+    Object.assign(current, cloneCalculatorSignals(defaults));
+  }
+
+  function calculatorActionState(signals) {
+    const current = signals && typeof signals === "object"
+      ? signals
+      : signalStore.signalObject();
+    const raw = current && typeof current === "object"
+      ? current._calculator_actions
+      : null;
+    return window.__fishystuffDatastarState.normalizeCounterTokenState(
+      raw,
+      CALCULATOR_ACTION_DEFAULTS,
+    );
+  }
+
+  function syncCalculatorActions(signals) {
+    const current = signals && typeof signals === "object"
+      ? signals
+      : signalStore.signalObject();
+    if (!current || typeof current !== "object") {
+      return;
+    }
+    const consumption = window.__fishystuffDatastarState.consumeIncrementedCounterTokens(
+      calculatorState.handledActionTokens,
+      calculatorActionState(current),
+      {
+        copyUrlToken: () => {
+          window.__fishystuffToast.copyText(calculatorPresetUrl(current), {
+            success: "Preset URL copied.",
+          });
         },
-      );
-      calculatorState.handledActionTokens = consumption.handledState;
-    },
-    restore(signals) {
-      this.connect(signals);
-      bindPersistListener();
-      bindActionListener();
-      Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
-      calculatorState.uiStateRestored = true;
-    },
-    persist(signals) {
-      const payload = persistedCalculatorSignals(signals);
-      localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(payload));
-    },
-    liveCalc(level, resources, active, catchTimeActive, catchTimeAfk, timespanAmount, timespanUnit, calc) {
+        copyShareToken: () => {
+          window.__fishystuffToast.copyText(calculatorShareText(current), {
+            success: "Share text copied.",
+          });
+        },
+        clearToken: () => {
+          clearCalculator(current);
+          window.__fishystuffToast.info("Calculator cleared.");
+        },
+      },
+    );
+    calculatorState.handledActionTokens = consumption.handledState;
+  }
+
+  function restoreCalculator(signals) {
+    signalStore.connect(signals);
+    bindPersistListener();
+    bindActionListener();
+    Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
+    calculatorState.uiStateRestored = true;
+  }
+
+  function persistCalculator(signals) {
+    const payload = persistedCalculatorSignals(signals);
+    localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(payload));
+  }
+
+  function liveCalculator(
+    level,
+    resources,
+    active,
+    catchTimeActive,
+    catchTimeAfk,
+    timespanAmount,
+    timespanUnit,
+    calc,
+  ) {
       const current = calc ?? {};
       const zoneBiteMinRaw = calculatorNumber(current.zone_bite_min);
       const zoneBiteMaxRaw = calculatorNumber(current.zone_bite_max);
@@ -525,6 +535,15 @@
         percent_af: calculatorFmt2(percentAF),
         percent_catch: calculatorFmt2(percentCatch),
       };
-    },
+  }
+
+  window.__fishystuffCalculator = {
+    iconSpriteUrl: ICON_SPRITE_URL,
+    lang: calculatorLang,
+    initUrl: calculatorInitUrl,
+    evalUrl: calculatorEvalUrl,
+    evalSignalPatchFilter: calculatorEvalSignalPatchFilter,
+    restore: restoreCalculator,
+    liveCalc: liveCalculator,
   };
 })();

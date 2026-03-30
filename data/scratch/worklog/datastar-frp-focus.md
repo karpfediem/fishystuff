@@ -2637,3 +2637,43 @@ Validation:
 - compared served vs `.out` for:
   - `/js/pages/fishydex.js`
   - `/dex/`
+
+## Step 57: Shrink the calculator page-global API to the real bootstrap surface
+
+What changed:
+
+- `site/assets/js/pages/calculator-page.js` no longer calls back through
+  `window.__fishystuffCalculator` from inside the module for:
+  - persistence
+  - action-token handling
+  - share URL/text generation
+  - clear/reset behavior
+- those behaviors now live in internal functions:
+  - `persistCalculator(...)`
+  - `syncCalculatorActions(...)`
+  - `calculatorPresetUrl(...)`
+  - `calculatorShareText(...)`
+  - `clearCalculator(...)`
+- the public `window.__fishystuffCalculator` surface is now reduced to the pieces still
+  needed by server-rendered markup:
+  - `restore`
+  - `initUrl`
+  - `evalUrl`
+  - `evalSignalPatchFilter`
+  - `liveCalc`
+
+Why this matters:
+
+- the calculator page module was still self-coupled through its own global export
+- that made the global surface larger than the real template/runtime contract
+- this slice keeps the bootstrap API explicit while making the module internals independent
+  of that page-global object
+
+Validation:
+
+- `node --check site/assets/js/pages/calculator-page.js site/assets/js/pages/calculator-page.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/calculator-page.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/pages/calculator-page.js`
+  - `/calculator/`
