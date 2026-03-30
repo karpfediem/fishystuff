@@ -768,6 +768,57 @@ Validation:
   - updating the Dex search field changes `fishystuff.fishydex.ui.v1`
   - the persisted search value reflects the latest Datastar signal state without relying on template-side patch handlers
 
+### Step 15
+
+Extract a shared Datastar signal-patch persistence helper.
+
+Work:
+
+- remove duplicated signal-patch debounce/listener/filter code from:
+  - `site/assets/js/pages/map-page.js`
+  - `site/assets/js/pages/fishydex.js`
+- centralize the reusable logic in one browser helper loaded from the base template
+- keep page-specific storage serialization logic in the page helpers themselves
+
+Status:
+
+- implemented
+
+Implementation:
+
+- added `site/assets/js/datastar-persist.js`
+- base layout now loads that helper globally as `window.__fishystuffDatastarPersist`
+- the helper provides:
+  - `patchMatchesSignalFilter(...)`
+  - `createDebouncedSignalPatchPersistor(...)`
+- `map-page.js` now uses the shared helper for include-filtered persistence of:
+  - `_map_ui`
+  - `_map_bookmarks`
+- `fishydex.js` now uses the same helper for exclude-filtered persistence of:
+  - non-ephemeral Fishydex page signals
+
+Why this matters:
+
+- it removes another repeated Datastar lifecycle pattern from page-specific scripts
+- it gives future Datastar pages/components one battle-tested persistence/listener path
+- it keeps the site moving toward a smaller set of reusable Datastar primitives instead of page-specific glue
+
+Validation:
+
+- `node --check site/assets/js/datastar-persist.js`
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/js/pages/fishydex.js`
+- `node --test site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served-vs-`.out` spot checks matched for:
+  - `http://127.0.0.1:1990/map/`
+  - `http://127.0.0.1:1990/js/pages/map-page.js`
+  - `http://127.0.0.1:1990/js/datastar-persist.js`
+  - `http://127.0.0.1:1990/dex/`
+  - `http://127.0.0.1:1990/js/pages/fishydex.js`
+- live Chromium validation confirmed:
+  - updating the Dex search field still persists to `fishystuff.fishydex.ui.v1`
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:

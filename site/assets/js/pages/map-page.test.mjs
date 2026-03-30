@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+const DATASTAR_PERSIST_SOURCE = fs.readFileSync(
+  new URL("../datastar-persist.js", import.meta.url),
+  "utf8",
+);
 const MAP_PAGE_SOURCE = fs.readFileSync(new URL("./map-page.js", import.meta.url), "utf8");
 
 class MemoryStorage {
@@ -71,6 +75,7 @@ function createContext(localStorageInitial = {}) {
     },
   };
   context.globalThis = context;
+  vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
   vm.runInNewContext(MAP_PAGE_SOURCE, context, { filename: "map-page.js" });
   return {
     window,

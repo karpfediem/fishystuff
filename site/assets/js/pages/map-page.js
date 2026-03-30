@@ -1,5 +1,4 @@
 (function () {
-  const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
   const MAP_PERSIST_SIGNAL_FILTER = /^_(?:map_ui|map_bookmarks)(?:\.|$)/;
@@ -8,8 +7,7 @@
     persistedUiJson: "",
     persistedBookmarksJson: "",
     uiStateRestored: false,
-    persistTimer: 0,
-    persistListenerBound: false,
+    persistBinding: null,
   };
 
   function signalObject() {
@@ -24,6 +22,13 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function datastarPersistHelper() {
+    const helper = window.__fishystuffDatastarPersist;
+    return helper && typeof helper.createDebouncedSignalPatchPersistor === "function"
+      ? helper
+      : null;
+  }
+
   function readObjectPath(root, path) {
     return String(path ?? "")
       .split(".")
@@ -36,52 +41,25 @@
       }, root);
   }
 
-  function clearPersistTimer() {
-    if (!state.persistTimer) {
-      return;
-    }
-    globalThis.clearTimeout?.(state.persistTimer);
-    state.persistTimer = 0;
-  }
-
-  function schedulePersist() {
-    clearPersistTimer();
-    state.persistTimer = globalThis.setTimeout(() => {
-      state.persistTimer = 0;
-      persist();
-    }, 120);
-  }
-
-  function patchIncludesPersistedSignals(patch, prefix = "") {
-    if (!patch || typeof patch !== "object") {
-      return false;
-    }
-    return Object.entries(patch).some(([key, value]) => {
-      const path = prefix ? `${prefix}.${key}` : key;
-      if (MAP_PERSIST_SIGNAL_FILTER.test(path)) {
-        return true;
-      }
-      return value && typeof value === "object" && patchIncludesPersistedSignals(value, path);
-    });
-  }
-
-  function handleSignalPatch(event) {
-    if (!state.uiStateRestored) {
-      return;
-    }
-    const patch = event?.detail;
-    if (!patchIncludesPersistedSignals(patch)) {
-      return;
-    }
-    schedulePersist();
-  }
-
   function bindPersistListener() {
-    if (state.persistListenerBound) {
+    if (state.persistBinding) {
       return;
     }
-    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-    state.persistListenerBound = true;
+    const helper = datastarPersistHelper();
+    if (!helper) {
+      return;
+    }
+    state.persistBinding = helper.createDebouncedSignalPatchPersistor({
+      delayMs: 120,
+      isReady() {
+        return state.uiStateRestored;
+      },
+      filter: {
+        include: MAP_PERSIST_SIGNAL_FILTER,
+      },
+      persist,
+    });
+    state.persistBinding.bind();
   }
 
   function patchSignals(patch) {

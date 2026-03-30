@@ -1,5 +1,4 @@
 (function () {
-  const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const DEX_UI_STORAGE_KEY = "fishystuff.fishydex.ui.v1";
   const DEX_PROGRESS_PANEL_UI_KEY = "dex.panels.progress.collapsed";
   const DEX_FILTER_PANEL_UI_KEY = "dex.panels.filter.collapsed";
@@ -23,8 +22,7 @@
   const state = {
     signals: null,
     uiSettingsUnsubscribe: null,
-    persistTimer: 0,
-    persistListenerBound: false,
+    persistBinding: null,
     persistedUiJson: "",
     persistedCaughtJson: "",
     persistedFavouriteJson: "",
@@ -74,20 +72,11 @@
     Object.assign(signals, patch);
   }
 
-  function clearPersistTimer() {
-    if (!state.persistTimer) {
-      return;
-    }
-    globalThis.clearTimeout?.(state.persistTimer);
-    state.persistTimer = 0;
-  }
-
-  function schedulePersist() {
-    clearPersistTimer();
-    state.persistTimer = globalThis.setTimeout(() => {
-      state.persistTimer = 0;
-      persistSignals();
-    }, 150);
+  function datastarPersistHelper() {
+    const helper = window.__fishystuffDatastarPersist;
+    return helper && typeof helper.createDebouncedSignalPatchPersistor === "function"
+      ? helper
+      : null;
   }
 
   function sharedUiSettingsStore() {
@@ -150,36 +139,25 @@
     });
   }
 
-  function patchIncludesPersistedSignals(patch, prefix = "") {
-    if (!patch || typeof patch !== "object") {
-      return false;
-    }
-    return Object.entries(patch).some(([key, value]) => {
-      const path = prefix ? `${prefix}.${key}` : key;
-      if (!DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN.test(path)) {
-        return true;
-      }
-      return value && typeof value === "object" && patchIncludesPersistedSignals(value, path);
-    });
-  }
-
-  function handleSignalPatch(event) {
-    if (!state.uiStateRestored) {
-      return;
-    }
-    const patch = event?.detail;
-    if (!patchIncludesPersistedSignals(patch)) {
-      return;
-    }
-    schedulePersist();
-  }
-
   function bindPersistListener() {
-    if (state.persistListenerBound) {
+    if (state.persistBinding) {
       return;
     }
-    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-    state.persistListenerBound = true;
+    const helper = datastarPersistHelper();
+    if (!helper) {
+      return;
+    }
+    state.persistBinding = helper.createDebouncedSignalPatchPersistor({
+      delayMs: 150,
+      isReady() {
+        return state.uiStateRestored;
+      },
+      filter: {
+        exclude: DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN,
+      },
+      persist: persistSignals,
+    });
+    state.persistBinding.bind();
   }
 
   function normalizeStoredFishIds(value) {
