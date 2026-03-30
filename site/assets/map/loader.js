@@ -102,6 +102,9 @@ const DEFAULT_MAP_INPUT_SIGNAL_STATE = Object.freeze({
     diagnosticsOpen: false,
   }),
 });
+const DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE = Object.freeze({
+  entries: [],
+});
 
 function cloneJsonValue(value) {
   return JSON.parse(JSON.stringify(value));
@@ -178,6 +181,26 @@ function patchMapInputSignalState(patch) {
   const current = currentMapInputSignalState();
   helper.patchSignals({
     _map_input: cloneJsonValue(applyStatePatch(current, patch)),
+  });
+}
+
+function currentMapBookmarksSignalState() {
+  const helper = mapSignalHelper();
+  const raw = helper?.readSignal?.("_map_bookmarks.entries");
+  return normalizeBookmarks(
+    Array.isArray(raw) ? raw : DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE.entries,
+  );
+}
+
+function patchMapBookmarksSignalState(bookmarks) {
+  const helper = mapSignalHelper();
+  if (!helper) {
+    return;
+  }
+  helper.patchSignals({
+    _map_bookmarks: {
+      entries: cloneJsonValue(normalizeBookmarks(bookmarks)),
+    },
   });
 }
 
@@ -1584,24 +1607,6 @@ export function normalizeBookmarks(rawBookmarks, stateBundle = null) {
     });
   }
   return normalized;
-}
-
-function loadPersistedBookmarks(storage = globalThis.localStorage) {
-  try {
-    return normalizeBookmarks(JSON.parse(storage?.getItem?.(FISHYMAP_STORAGE_KEYS.bookmarks) || "[]"));
-  } catch (_) {
-    return [];
-  }
-}
-
-function persistBookmarks(bookmarks, storage = globalThis.localStorage) {
-  try {
-    storage?.setItem?.(FISHYMAP_STORAGE_KEYS.bookmarks, JSON.stringify(normalizeBookmarks(bookmarks)));
-    return true;
-  } catch (error) {
-    console.warn("Failed to persist map bookmarks", error);
-    return false;
-  }
 }
 
 export function createBookmarkFromPlacement(
@@ -3475,7 +3480,6 @@ function persistResolvedBookmarksFromStateBundle(stateBundle, bookmarks, bookmar
   if (bookmarkListSignature(resolvedBookmarks) === bookmarkListSignature(bookmarks)) {
     return bookmarks;
   }
-  persistBookmarks(resolvedBookmarks);
   bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(
     resolvedBookmarks,
     bookmarkUi?.selectedIds,
@@ -6241,7 +6245,7 @@ function bindUi(shell, elements, options = {}) {
   };
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
   let windowUiState = initialMapUiState.windowUi;
-  let bookmarks = loadPersistedBookmarks();
+  let bookmarks = currentMapBookmarksSignalState();
   let bookmarkMetadataRefreshTimer = 0;
   let bookmarkMetadataRefreshAttempts = 0;
   const bookmarkUi = {
@@ -6585,19 +6589,14 @@ function bindUi(shell, elements, options = {}) {
 
   function persistBookmarksAndRender(nextBookmarks, statusMessage = "", options = {}) {
     bookmarks = normalizeBookmarks(nextBookmarks);
+    patchMapBookmarksSignalState(bookmarks);
     setSelectedBookmarkIds(
       Array.isArray(options.selectedIds) ? options.selectedIds : bookmarkUi.selectedIds,
     );
-    const persisted = persistBookmarks(bookmarks);
     syncBookmarksToBridge(bookmarks);
     const normalizedStatusMessage = String(statusMessage || "").trim();
-    if (persisted) {
-      if (normalizedStatusMessage) {
-        showSiteToast(options.toastTone || "success", normalizedStatusMessage);
-      }
-    } else {
-      const storageMessage = `${normalizedStatusMessage || "Bookmark updated."} Browser storage is unavailable, so this will reset on reload.`;
-      showSiteToast("warning", storageMessage);
+    if (normalizedStatusMessage) {
+      showSiteToast(options.toastTone || "success", normalizedStatusMessage);
     }
     renderCurrentState(getLatestStateBundle());
   }
@@ -6824,7 +6823,17 @@ function bindUi(shell, elements, options = {}) {
     });
     publishMapInputSignals(latestStateBundle.inputState);
     publishMapRuntimeSignals(latestStateBundle);
-    bookmarks = persistResolvedBookmarksFromStateBundle(latestStateBundle, bookmarks, bookmarkUi);
+    const resolvedBookmarks = persistResolvedBookmarksFromStateBundle(
+      latestStateBundle,
+      bookmarks,
+      bookmarkUi,
+    );
+    if (bookmarkListSignature(resolvedBookmarks) !== bookmarkListSignature(bookmarks)) {
+      bookmarks = resolvedBookmarks;
+      patchMapBookmarksSignalState(bookmarks);
+    } else {
+      bookmarks = resolvedBookmarks;
+    }
     scheduleBookmarkMetadataRefresh();
     isRendering = true;
     try {
@@ -6848,13 +6857,15 @@ function bindUi(shell, elements, options = {}) {
 
   function syncLocalUiStateFromSignals() {
     const nextSignalUiState = currentMapUiSignalState();
+    const nextSignalBookmarks = currentMapBookmarksSignalState();
     const nextBookmarkSelectedIds = normalizeSelectedBookmarkIds(
-      bookmarks,
+      nextSignalBookmarks,
       nextSignalUiState.bookmarks.selectedIds,
     );
     const currentSignature = JSON.stringify({
       windowUi: windowUiState,
       search: searchUiState,
+      bookmarksList: bookmarks,
       bookmarks: {
         placing: bookmarkUi.placing,
         selectedIds: bookmarkUi.selectedIds,
@@ -6863,6 +6874,7 @@ function bindUi(shell, elements, options = {}) {
     const nextSignature = JSON.stringify({
       windowUi: nextSignalUiState.windowUi,
       search: nextSignalUiState.search,
+      bookmarksList: nextSignalBookmarks,
       bookmarks: {
         placing: nextSignalUiState.bookmarks.placing,
         selectedIds: nextBookmarkSelectedIds,
@@ -6876,8 +6888,10 @@ function bindUi(shell, elements, options = {}) {
     const previousBookmarkPlacing = bookmarkUi.placing;
     windowUiState = nextSignalUiState.windowUi;
     searchUiState.open = nextSignalUiState.search.open;
+    bookmarks = nextSignalBookmarks;
     bookmarkUi.placing = nextSignalUiState.bookmarks.placing;
     bookmarkUi.selectedIds = nextBookmarkSelectedIds;
+    syncBookmarksToBridge(bookmarks);
 
     for (const [toolbarWindowId, windowId] of Object.entries(toolbarTargetToWindowId)) {
       const previousOpen = previousWindowUiState?.[windowId]?.open !== false;

@@ -610,6 +610,53 @@ Why this matters:
 - it makes “shared fish progress state” explicit as a reusable frontend contract
 - it gives the future Datastar map-bridge replacement a cleaner seam to integrate with instead of reaching into duplicated localStorage code
 
+### Step 11
+
+Move map bookmark list state into its own Datastar signal branch.
+
+Work:
+
+- stop treating bookmarks as a loader-owned localStorage side channel
+- add an explicit `_map_bookmarks.entries` branch for bookmark list state
+- restore/persist bookmark entries through the page-owned Datastar graph
+- keep bookmark selection/placement UI in `_map_ui.bookmarks`
+- keep bridge input mirroring in `_map_input.ui.bookmarks`
+
+Status:
+
+- implemented
+
+Implementation:
+
+- map shell now defines:
+  - `_map_bookmarks.entries`
+- `site/assets/js/pages/map-page.js` now:
+  - restores bookmark entries from `fishystuff.map.bookmarks.v1`
+  - persists bookmark entries from the connected Datastar signal graph
+  - listens to `datastar-signal-patch` directly and debounces persistence there
+- `site/assets/map/loader.js` now:
+  - initializes bookmark list state from `_map_bookmarks.entries`
+  - patches `_map_bookmarks.entries` when bookmark CRUD or derived metadata changes
+  - mirrors `_map_bookmarks.entries` back into `_map_input.ui.bookmarks` when signal-owned bookmark state changes
+
+Why this matters:
+
+- bookmark list state is no longer a hidden parallel storage path
+- bookmark persistence is now tied to the same Datastar signal graph as the rest of the page shell
+- the bridge sees bookmark state through a Datastar-owned input branch instead of owning the canonical list itself
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+
+Notes:
+
+- local `devenv up` site serving on `:1990` may lag behind rebuilt `.out` without a site watcher/restart
+- for this slice, source checks and emitted `.out` inspection were used as the reliable validation path
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:
@@ -736,6 +783,9 @@ Current map page signal branches:
     - `filters.fromPatchId`
     - `filters.toPatchId`
     - `ui.diagnosticsOpen`
+- `_map_bookmarks`
+  - canonical page-owned bookmark list state
+  - persisted by `site/assets/js/pages/map-page.js`
 - `_map_runtime`
   - bridge/runtime snapshot published back into Datastar
   - current state/view/selection/hover/diagnostic mirror
@@ -747,9 +797,11 @@ Already implemented:
 - map shell root has Datastar `data-signals`
 - toolbar buttons mutate `_map_ui.windowUi.*.open`
 - loader syncs local window/search/bookmark UI from `_map_ui`
+- loader syncs bookmark list state from `_map_bookmarks`
 - loader publishes runtime snapshot into `_map_runtime`
 - loader now also publishes bridge input state into `_map_input`
 - loader reconciles `_map_input` back into the bridge
+- bookmark persistence now lives in `site/assets/js/pages/map-page.js` as a Datastar signal-patch listener, not a template-side hidden handler
 
 Map controls currently routed through `_map_input`:
 
@@ -785,7 +837,6 @@ The map is not yet fully signal-owned.
 Still imperative / loader-owned today:
 
 - many bridge input controls under layers/settings
-- bookmark CRUD actions
 - detail-pane selection sync
 - view toggle / command dispatch
 - bridge event-to-DOM rendering outside the Datastar signal graph
@@ -793,7 +844,6 @@ Still imperative / loader-owned today:
 Recommended next map slices:
 
 1. Move more settings/layer controls onto `_map_input`
-2. Make bookmark operations mutate Datastar signals first, then reconcile to bridge
-3. Reduce direct DOM state ownership in `loader.js`
-4. Revisit `site/assets/map/map-host.js` as a thinner adapter
-5. Only then assess what Bevy/WASM contract changes are actually necessary
+2. Reduce direct DOM state ownership in `loader.js`
+3. Revisit `site/assets/map/map-host.js` as a thinner adapter
+4. Only then assess what Bevy/WASM contract changes are actually necessary

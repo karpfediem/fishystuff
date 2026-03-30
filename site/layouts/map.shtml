@@ -1106,6 +1106,9 @@
                diagnosticsOpen: false
              }
            },
+           _map_bookmarks: {
+             entries: []
+           },
            _map_runtime: {
              state: {
                ready: false,
@@ -1119,9 +1122,6 @@
          }">
       <div hidden
            data-init="window.__fishystuffMap.restore($)"></div>
-      <div hidden
-           data-on-signal-patch__debounce.120ms="window.__fishystuffMap.persist($)"
-           data-on-signal-patch-filter="window.__fishystuffMap.persistSignalPatchFilter()"></div>
       <canvas id="bevy"></canvas>
       <div id="fishymap-toolbar" class="not-prose" aria-label="Map windows">
         <button
