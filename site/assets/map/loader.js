@@ -7973,18 +7973,6 @@ function bindUi(shell, elements, options = {}) {
     );
   });
 
-  if (elements.autoAdjustView) {
-    elements.autoAdjustView.addEventListener("change", () => {
-      if (isRendering) {
-        return;
-      }
-      if (!updateWindowUiEntry("settings", { autoAdjustView: elements.autoAdjustView.checked })) {
-        return;
-      }
-      renderCurrentState(getLatestStateBundle());
-    });
-  }
-
   elements.layers.addEventListener("click", (event) => {
     const settingsButton = event.target.closest("button[data-layer-settings-toggle]");
     if (!isRendering && settingsButton) {
@@ -8355,20 +8343,6 @@ function bindUi(shell, elements, options = {}) {
         version: 1,
         ui: {
           legendOpen: elements.legend.open,
-        },
-      });
-    });
-  }
-
-  if (elements.diagnostics) {
-    elements.diagnostics.addEventListener("toggle", () => {
-      if (isRendering) {
-        return;
-      }
-      patchMapInputSignalState({
-        version: 1,
-        ui: {
-          diagnosticsOpen: elements.diagnostics.open,
         },
       });
     });

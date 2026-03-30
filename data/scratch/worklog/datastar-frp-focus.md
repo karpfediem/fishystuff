@@ -1115,10 +1115,42 @@ Validation:
   - served `/map/` vs `site/.out/map/index.html`
   - served `/map/loader.js` vs `site/.out/map/loader.js`
 - live Chromium smoke:
+- reload `/map/`
+- verify the page boots in persisted 3D mode cleanly
+- click the view toggle
+- verify bridge input state, `_map_input`, and `_map_runtime.state.view.viewMode` all return to `"2d"`
+
+### Step 20 - Template-Driven Map Settings Toggles
+
+Completed:
+
+- moved the map `Auto-adjust view` checkbox onto direct Datastar binding in `site/layouts/map.shtml`
+- removed the corresponding loader-owned checkbox change listener from `site/assets/map/loader.js`
+- moved the map `Diagnostics` disclosure state update into a Datastar template expression in `site/layouts/map.shtml`
+- removed the corresponding loader-owned diagnostics `toggle` listener from `site/assets/map/loader.js`
+
+Why this matters:
+
+- the settings panel now owns two more controls directly in the Datastar graph instead of mirroring DOM state back into signals
+- `Auto-adjust view` follows the same checkbox binding model as the rest of the Datastar form surface
+- `Diagnostics` now expresses user intent from the template while the bridge/runtime continue to reconcile and mirror actual state
+- this shrinks `loader.js` further toward an adapter role instead of a DOM event owner role
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared:
+  - served `/map/` vs `site/.out/map/index.html`
+  - served `/map/loader.js` vs `site/.out/map/loader.js`
+- live Chromium smoke:
   - reload `/map/`
-  - verify the page boots in persisted 3D mode cleanly
-  - click the view toggle
-  - verify bridge input state, `_map_input`, and `_map_runtime.state.view.viewMode` all return to `"2d"`
+  - verify `_map_ui.windowUi.settings.autoAdjustView === true`
+  - toggle `Auto-adjust view`
+  - verify `_map_ui.windowUi.settings.autoAdjustView === false`
+  - expand `Diagnostics`
+  - verify `_map_input.ui.diagnosticsOpen === true`
+  - verify `_map_runtime.inputState.ui.diagnosticsOpen === true`
 
 ### Step 16 - Shared Datastar State Helper
 
