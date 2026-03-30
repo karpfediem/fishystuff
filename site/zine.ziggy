@@ -43,6 +43,7 @@ Multilingual {
     "js/components/searchable-multiselect.js",
     "js/durationFormatter.js",
     "js/lz-string.min.js",
+    "js/pages/calculator-page.js",
     "js/pages/fishydex.js",
     "js/pages/map-page.js",
     "js/script.js",

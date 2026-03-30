@@ -2223,3 +2223,48 @@ Validation:
   - `/calculator/`
 - `cargo test --offline -p fishystuff_server routes::calculator::tests::init_returns_html_fragment_with_initial_signals -- --exact`
 - extended that init-fragment test to assert the new calculator action-token wiring is present
+
+## Step 45: Extract calculator page helper into a real page module
+
+What changed:
+
+- moved the large inline `window.__fishystuffCalculator` helper out of
+  `site/content/en-US/calculator.smd` into:
+  - `site/assets/js/pages/calculator-page.js`
+- switched the calculator page to load that module with:
+  - `<script src="/js/pages/calculator-page.js"></script>`
+- added focused VM coverage in:
+  - `site/assets/js/pages/calculator-page.test.mjs`
+- added the new page asset to the static site manifest in:
+  - `site/zine.ziggy`
+
+Why this matters:
+
+- the calculator template had become one of the largest remaining inline imperative
+  Datastar glue islands on the site
+- moving it into a real page asset makes it testable, shareable, and much easier to
+  continue refactoring toward a page-owned signal model
+- it also removes a template/runtime split-brain risk where the inline helper could drift
+  away from the shared Datastar helpers already extracted elsewhere
+
+Important details:
+
+- the public `window.__fishystuffCalculator` contract was kept intact so the existing
+  server-rendered Datastar markup continues to work unchanged
+- the extracted module uses the shared `window.__fishystuffDatastarState.createSignalStore()`
+  helper when present, with a tiny internal fallback for test/runtime safety
+- while extracting, the toolbar action-token handler was tightened so actions only fire
+  on token increments, not any token change; this avoids duplicate copy/clear handling
+  after resets rewrite token state
+
+Validation:
+
+- `node --check site/assets/js/pages/calculator-page.js`
+- `node --test site/assets/js/pages/calculator-page.test.mjs`
+- `cargo test --offline -p fishystuff_server routes::calculator::tests::init_returns_html_fragment_with_initial_signals -- --exact`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/calculator/`
+  - `/js/pages/calculator-page.js`
+- confirmed the served calculator HTML now references the external page module and no longer
+  embeds the old inline `window.__fishystuffCalculator = ...` helper
