@@ -2,17 +2,27 @@
 
 Date: 2026-03-30
 Repo: `/home/carp/code/fishystuff`
-Focus: Calculator Datastar state flow
+Focus: Site-wide Datastar FRP refactor
 
 ## Goal
 
-Refactor the calculator to follow Datastar's functional reactive model instead of relying on imperative DOM/event plumbing.
+Refactor Datastar usage across the site to follow Datastar's functional reactive model instead of relying on imperative DOM/event plumbing.
 
 Primary user-visible bug driving this:
 
 - removing food or buff selections does not reliably clear the effective calculator state
 - AFR remains affected after removing a selected food
 - refreshing the page can bring removed selections back
+
+Primary page currently in focus:
+
+- calculator
+
+Additional site areas included in this refactor scope:
+
+- Fishydex page state and persistence
+- Datastar-driven detail/modal fetch flows
+- site custom elements that subscribe to Datastar patch events
 
 ## Relevant Datastar Guidance
 
@@ -36,9 +46,31 @@ Key takeaways:
 - local UI-only state should remain local
 - patching signals and elements from the backend is the normal flow
 
-## Current Calculator Anti-Patterns
+Additional repo-level refactor rule for this effort:
 
-Observed before refactor:
+- when the FRP cleanup reveals repeated UI/dataflow patterns, extract them into reusable components instead of leaving page-specific copies
+
+## Scope Audit
+
+Current Datastar usage found during initial audit:
+
+- Calculator page:
+  - `site/content/en-US/calculator.smd`
+  - `api/fishystuff_server/src/routes/calculator.rs`
+- Fishydex page:
+  - `site/content/en-US/dex.smd`
+  - `site/assets/js/pages/fishydex.js`
+  - `api/fishystuff_server/src/routes/fish.rs`
+- Datastar-aware client components:
+  - `site/assets/js/components/distribution-chart.js`
+  - `site/assets/js/components/loot-sankey.js`
+  - `site/assets/js/components/pmf-chart.js`
+
+The immediate bug is in the calculator, but the target architectural model must cover the whole site.
+
+## Current Anti-Patterns
+
+Observed before refactor, especially in the calculator:
 
 - imperative `requestEval()` path tied to DOM `input` events
 - persistence partially driven from explicit calls instead of purely signal changes
@@ -66,6 +98,22 @@ Two categories of state only:
 - never persisted
 - never sent to eval
 - examples: `_distribution_tab`, dropdown open state, search text
+
+## Component Refactor Principle
+
+This refactor is allowed to introduce or reshape reusable components where useful.
+
+Examples of good extraction candidates:
+
+- generic Datastar-backed search/select controls
+- canonical array multiselect controls
+- shared signal-patch request/persist helpers
+- Datastar-aware chart wrappers
+
+Extraction rule:
+
+- only extract when it reduces page-specific imperative glue and improves reuse
+- do not extract abstractions that merely hide the same incorrect model
 
 ## Request Flow Target
 
@@ -179,10 +227,16 @@ This confirms the bug is structural, not just a last-item edge case.
 
 ## Current Working Changes
 
-Uncommitted calculator-related changes currently in progress:
+Current in-progress changes currently focus on:
 
 - `api/fishystuff_server/src/routes/calculator.rs`
 - `site/content/en-US/calculator.smd`
+
+Planned next audit targets after calculator state is stable:
+
+- `site/content/en-US/dex.smd`
+- `site/assets/js/pages/fishydex.js`
+- Datastar patch-listener custom elements under `site/assets/js/components/`
 
 Unrelated local changes not part of this refactor:
 
@@ -191,8 +245,15 @@ Unrelated local changes not part of this refactor:
 
 ## Next Move
 
-Finish Step 2 cleanly:
+Finish calculator Step 2 cleanly:
 
 - choose a single canonical representation for multiselect state
 - keep transport local or remove it entirely
 - verify live removal for food and buff before committing
+
+Then expand the same analysis to the rest of the site:
+
+- identify canonical backend-owned signals vs local UI signals
+- remove imperative request/persistence plumbing where present
+- align custom component boundaries with Datastar signal flow
+- extract reusable components where the cleaned-up FRP model repeats
