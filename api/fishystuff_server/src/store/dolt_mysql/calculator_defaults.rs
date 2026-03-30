@@ -40,6 +40,7 @@ pub(super) fn build_calculator_default_signals() -> CalculatorSignals {
         backpack: "item:830150".to_string(),
         target_fish: String::new(),
         target_fish_amount: 1.0,
+        target_fish_pmf_count: 0.0,
         outfit: vec![
             "effect:8-piece-outfit-set-effect".to_string(),
             "effect:mainhand-weapon-outfit".to_string(),

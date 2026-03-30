@@ -234,7 +234,10 @@ struct LootSankeySignal {
 #[derive(Debug, Clone)]
 struct TargetFishSummary {
     selected_label: String,
+    target_amount: u32,
     target_amount_text: String,
+    pmf_count_effective_text: String,
+    pmf_count_hint_text: String,
     expected_count_raw: f64,
     expected_count_text: String,
     per_day_text: String,
@@ -1063,6 +1066,7 @@ fn normalize_signals(signals: &mut CalculatorSignals, data: &CalculatorData) {
     signals.catch_time_afk = signals.catch_time_afk.max(0.0);
     signals.timespan_amount = signals.timespan_amount.max(0.0);
     signals.target_fish_amount = signals.target_fish_amount.max(1.0);
+    signals.target_fish_pmf_count = signals.target_fish_pmf_count.max(0.0);
     signals.trade_level = normalize_named_value_with_fuzzy(
         &signals.trade_level,
         &valid_trade_level_keys,
@@ -2584,7 +2588,10 @@ fn derive_target_fish_summary(
     if selected_label.is_empty() {
         return TargetFishSummary {
             selected_label: String::new(),
+            target_amount,
             target_amount_text: trim_float(f64::from(target_amount)),
+            pmf_count_effective_text: "—".to_string(),
+            pmf_count_hint_text: "0 = auto".to_string(),
             expected_count_raw: 0.0,
             expected_count_text: "—".to_string(),
             per_day_text: "—".to_string(),
@@ -2627,6 +2634,13 @@ fn derive_target_fish_summary(
         "Unavailable".to_string()
     };
     let probability_at_least = poisson_probability_at_least(expected_count_raw, target_amount);
+    let pmf_is_auto = signals.target_fish_pmf_count <= 0.0;
+    let pmf_tail_count = if pmf_is_auto {
+        auto_target_fish_pmf_tail_count(expected_count_raw)
+    } else {
+        signals.target_fish_pmf_count.round() as u32
+    }
+    .max(1);
 
     let status_text = if expected_count_raw > 0.0 {
         format!(
@@ -2639,13 +2653,20 @@ fn derive_target_fish_summary(
 
     TargetFishSummary {
         selected_label,
+        target_amount,
         target_amount_text: trim_float(f64::from(target_amount)),
+        pmf_count_effective_text: pmf_tail_count.to_string(),
+        pmf_count_hint_text: if pmf_is_auto {
+            format!("0 = auto. Current final PMF bucket is ≥{pmf_tail_count} (0.5% tail cutoff).")
+        } else {
+            format!("Final PMF bucket is ≥{pmf_tail_count}.")
+        },
         expected_count_raw,
         expected_count_text: trim_float(expected_count_raw),
         per_day_text: trim_float(per_day_raw),
         time_to_target_text,
         probability_at_least_text: percent_value_text(probability_at_least * 100.0),
-        session_distribution: target_fish_session_distribution(expected_count_raw, target_amount),
+        session_distribution: target_fish_session_distribution(expected_count_raw, pmf_tail_count),
         status_text,
     }
 }
@@ -2676,15 +2697,15 @@ fn poisson_probability_below(lambda: f64, exclusive_upper: u32) -> f64 {
 
 fn target_fish_session_distribution(
     lambda: f64,
-    target_amount: u32,
+    pmf_tail_count: u32,
 ) -> Vec<TargetFishDistributionBucket> {
-    if target_amount == 0 {
+    if pmf_tail_count == 0 {
         return Vec::new();
     }
 
     let mut buckets = Vec::new();
-    if target_amount <= 12 {
-        for count in 0..target_amount {
+    if pmf_tail_count <= 12 {
+        for count in 0..pmf_tail_count {
             let probability_pct = poisson_exact_probability(lambda, count) * 100.0;
             buckets.push(TargetFishDistributionBucket {
                 label: count.to_string(),
@@ -2703,11 +2724,11 @@ fn target_fish_session_distribution(
         }
 
         let grouped_start = 6;
-        let grouped_count = target_amount.saturating_sub(grouped_start);
+        let grouped_count = pmf_tail_count.saturating_sub(grouped_start);
         let grouped_bucket_width = ((f64::from(grouped_count) / 8.0).ceil() as u32).max(2);
         let mut start = grouped_start;
-        while start < target_amount {
-            let end = (start + grouped_bucket_width - 1).min(target_amount - 1);
+        while start < pmf_tail_count {
+            let end = (start + grouped_bucket_width - 1).min(pmf_tail_count - 1);
             let probability_pct = poisson_probability_range(lambda, start, end) * 100.0;
             buckets.push(TargetFishDistributionBucket {
                 label: if start == end {
@@ -2722,14 +2743,31 @@ fn target_fish_session_distribution(
         }
     }
 
-    let probability_pct = poisson_probability_at_least(lambda, target_amount) * 100.0;
+    let probability_pct = poisson_probability_at_least(lambda, pmf_tail_count) * 100.0;
     buckets.push(TargetFishDistributionBucket {
-        label: format!("≥{target_amount}"),
+        label: format!("≥{pmf_tail_count}"),
         probability_pct,
         probability_text: percent_value_text(probability_pct),
     });
 
     buckets
+}
+
+fn auto_target_fish_pmf_tail_count(lambda: f64) -> u32 {
+    const TARGET_TAIL_PROBABILITY_PCT: f64 = 0.5;
+    const MAX_AUTO_COUNT: u32 = 200;
+
+    if !lambda.is_finite() || lambda <= 0.0 {
+        return 1;
+    }
+
+    for count in 1..=MAX_AUTO_COUNT {
+        if poisson_probability_at_least(lambda, count) * 100.0 <= TARGET_TAIL_PROBABILITY_PCT {
+            return count;
+        }
+    }
+
+    MAX_AUTO_COUNT
 }
 
 fn poisson_probability_range(lambda: f64, start: u32, end_inclusive: u32) -> f64 {
@@ -3637,11 +3675,34 @@ fn target_fish_pmf_chart(summary: &TargetFishSummary) -> PmfChartSignal {
                 label: bucket.label.clone(),
                 value_text: bucket.probability_text.clone(),
                 probability_pct: bucket.probability_pct,
-                highlight: bucket.label.starts_with('≥'),
+                highlight: pmf_bucket_contains_target(&bucket.label, summary.target_amount),
             })
             .collect(),
         expected_value_text: summary.expected_count_text.clone(),
     }
+}
+
+fn pmf_bucket_contains_target(label: &str, target_amount: u32) -> bool {
+    if let Some(tail_start) = label.strip_prefix('≥') {
+        return tail_start
+            .trim()
+            .parse::<u32>()
+            .map(|start| target_amount >= start)
+            .unwrap_or(false);
+    }
+
+    if let Some((start, end)) = label.split_once('–') {
+        return match (start.trim().parse::<u32>(), end.trim().parse::<u32>()) {
+            (Ok(start), Ok(end)) => (start..=end).contains(&target_amount),
+            _ => false,
+        };
+    }
+
+    label
+        .trim()
+        .parse::<u32>()
+        .map(|value| value == target_amount)
+        .unwrap_or(false)
 }
 
 fn filtered_loot_flow_rows(
@@ -3758,7 +3819,7 @@ fn render_target_fish_panel(
 
     format!(
         "<div id=\"calculator-target-fish-panel\" class=\"grid gap-4\">\
-            <div class=\"grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem]\">\
+            <div class=\"grid gap-3 md:grid-cols-[minmax(0,1fr)_10rem_10rem]\">\
                 <fieldset class=\"fieldset\">\
                     <legend class=\"fieldset-legend\">Target Fish / Loot Item</legend>\
                     {}\
@@ -3767,6 +3828,11 @@ fn render_target_fish_panel(
                     <legend class=\"fieldset-legend\">Target Amount</legend>\
                     <input type=\"number\" min=\"1\" step=\"1\" class=\"input input-sm w-full\" data-bind=\"targetFishAmount\">\
                     <span class=\"label text-xs\">Expected time to reach this amount.</span>\
+                </fieldset>\
+                <fieldset class=\"fieldset\">\
+                    <legend class=\"fieldset-legend\">PMF Max Count</legend>\
+                    <input type=\"number\" min=\"0\" step=\"1\" class=\"input input-sm w-full\" data-bind=\"targetFishPmfCount\">\
+                    <span class=\"label text-xs\">{}</span>\
                 </fieldset>\
             </div>\
             <div class=\"grid gap-3 lg:grid-cols-3\">\
@@ -3789,6 +3855,7 @@ fn render_target_fish_panel(
             {}\
         </div>",
         render_target_fish_select_control(data, signals, target_fish_options),
+        escape_html(&target_fish_summary.pmf_count_hint_text),
         escape_html(&timespan_text(signals.timespan_amount, &signals.timespan_unit)),
         escape_html(&target_fish_summary.expected_count_text),
         escape_html(&target_fish_summary.status_text),
@@ -5079,9 +5146,10 @@ mod tests {
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
         init_signals_patch_map, loot_species_evidence_text, mastery_prize_rate_for_bracket,
         normalize_lookup_value, normalize_named_array, parse_calculator_signals_value,
-        post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
-        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow,
+        pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
+        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
+        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
+        FishGroupChart, FishGroupChartRow,
     };
 
     struct MockStore;
@@ -5250,6 +5318,7 @@ mod tests {
                     backpack: "item:830150".to_string(),
                     target_fish: String::new(),
                     target_fish_amount: 1.0,
+                    target_fish_pmf_count: 0.0,
                     outfit: vec![
                         "effect:8-piece-outfit-set-effect".to_string(),
                         "effect:mainhand-weapon-outfit".to_string(),
@@ -6210,6 +6279,7 @@ mod tests {
         let signals = CalculatorSignals {
             target_fish: "Laila's Petal".to_string(),
             target_fish_amount: 1.0,
+            target_fish_pmf_count: 1.0,
             ..CalculatorSignals::default()
         };
         let fish_group_chart = FishGroupChart {
@@ -6292,6 +6362,7 @@ mod tests {
 
         assert_eq!(summary.selected_label, "Laila's Petal");
         assert_eq!(summary.target_amount_text, "1");
+        assert_eq!(summary.pmf_count_effective_text, "1");
         assert_eq!(summary.expected_count_raw, 4.0);
         assert_eq!(summary.expected_count_text, "4");
         assert_eq!(summary.per_day_text, "48");
@@ -6309,6 +6380,7 @@ mod tests {
         let signals = CalculatorSignals {
             target_fish: "Laila's Petal".to_string(),
             target_fish_amount: 8.0,
+            target_fish_pmf_count: 8.0,
             ..CalculatorSignals::default()
         };
         let fish_group_chart = FishGroupChart {
@@ -6346,6 +6418,7 @@ mod tests {
         let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 7200.0);
 
         assert_eq!(summary.target_amount_text, "8");
+        assert_eq!(summary.pmf_count_effective_text, "8");
         assert_eq!(
             summary
                 .session_distribution
@@ -6361,6 +6434,7 @@ mod tests {
         let signals = CalculatorSignals {
             target_fish: "Laila's Petal".to_string(),
             target_fish_amount: 20.0,
+            target_fish_pmf_count: 20.0,
             ..CalculatorSignals::default()
         };
         let fish_group_chart = FishGroupChart {
@@ -6408,6 +6482,66 @@ mod tests {
                 "18–19", "≥20"
             ]
         );
+    }
+
+    #[test]
+    fn derive_target_fish_summary_auto_pmf_cutoff_uses_tail_probability_threshold() {
+        let signals = CalculatorSignals {
+            target_fish: "Laila's Petal".to_string(),
+            target_fish_amount: 1.0,
+            target_fish_pmf_count: 0.0,
+            ..CalculatorSignals::default()
+        };
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "5%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![FishGroupChartRow {
+                label: "General",
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 0.0,
+                weight_pct: 0.0,
+                current_share_pct: 100.0,
+            }],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 54031,
+                name: "Laila's Petal".to_string(),
+                within_group_rate: 0.1118,
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 3600.0);
+
+        let effective = summary.pmf_count_effective_text.parse::<u32>().unwrap();
+        assert!(poisson_probability_at_least(11.18, effective) * 100.0 <= 0.5);
+        assert!(effective <= 1 || poisson_probability_at_least(11.18, effective - 1) * 100.0 > 0.5);
+        assert!(summary.pmf_count_hint_text.contains("0.5% tail cutoff"));
+    }
+
+    #[test]
+    fn pmf_bucket_contains_target_matches_exact_ranges_and_tail() {
+        assert!(pmf_bucket_contains_target("1", 1));
+        assert!(!pmf_bucket_contains_target("1", 2));
+        assert!(pmf_bucket_contains_target("6–7", 6));
+        assert!(pmf_bucket_contains_target("6–7", 7));
+        assert!(!pmf_bucket_contains_target("6–7", 8));
+        assert!(pmf_bucket_contains_target("≥20", 20));
+        assert!(pmf_bucket_contains_target("≥20", 27));
+        assert!(!pmf_bucket_contains_target("≥20", 19));
     }
 
     #[test]

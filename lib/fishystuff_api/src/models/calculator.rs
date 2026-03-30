@@ -111,6 +111,8 @@ pub struct CalculatorSignals {
     pub target_fish: String,
     #[serde(rename = "targetFishAmount")]
     pub target_fish_amount: f64,
+    #[serde(rename = "targetFishPmfCount")]
+    pub target_fish_pmf_count: f64,
     pub outfit: Vec<String>,
     pub food: Vec<String>,
     pub buff: Vec<String>,
