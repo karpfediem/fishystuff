@@ -1060,6 +1060,39 @@ Validation:
   - click the view toggle
   - verify bridge input state, `_map_input`, and `_map_runtime.state.view.viewMode` all become `"3d"`
 
+### Step 18 - Shared Datastar Signal Store Helper
+
+Completed:
+
+- extended `site/assets/js/datastar-state.js` with `createSignalStore()`
+- moved the repeated page-local Datastar signal plumbing onto that helper:
+  - `site/assets/js/pages/map-page.js`
+  - `site/assets/js/pages/fishydex.js`
+- pages now share one pattern for:
+  - `connect(signals)`
+  - `signalObject()`
+  - `patchSignals(patch)`
+  - `readSignal(path)`
+
+Why this matters:
+
+- this removes another repeated slice of Datastar glue code
+- page modules now rely on the same signal-store semantics instead of each hand-rolling their own minimal variant
+- it makes further extraction easier because signal access/patching is now standardized across pages
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared:
+  - served `/js/datastar-state.js` vs `site/.out/js/datastar-state.js`
+  - served `/js/pages/map-page.js` vs `site/.out/js/pages/map-page.js`
+  - served `/js/pages/fishydex.js` vs `site/.out/js/pages/fishydex.js`
+- live Chromium smoke:
+  - map reloads cleanly and still reflects signal-first view mode
+  - Dex search updates the catalog immediately
+  - after the normal debounce, `fishystuff.fishydex.ui.v1` persists the new `search_query`
+
 ### Step 16 - Shared Datastar State Helper
 
 Completed:

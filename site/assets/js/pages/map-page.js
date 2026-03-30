@@ -3,19 +3,56 @@
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
   const MAP_PERSIST_SIGNAL_FILTER = /^_(?:map_ui|map_bookmarks)(?:\.|$)/;
   const state = {
-    signals: null,
     persistedUiJson: "",
     persistedBookmarksJson: "",
     uiStateRestored: false,
     persistBinding: null,
   };
 
+  function datastarStateHelper() {
+    const helper = window.__fishystuffDatastarState;
+    return helper && typeof helper.createSignalStore === "function" ? helper : null;
+  }
+
+  function createFallbackSignalStore() {
+    let signals = null;
+    return {
+      connect(nextSignals) {
+        signals = nextSignals && typeof nextSignals === "object" ? nextSignals : null;
+        return signals;
+      },
+      signalObject() {
+        return signals && typeof signals === "object" ? signals : null;
+      },
+      patchSignals(patch) {
+        const currentSignals = this.signalObject();
+        if (!currentSignals || !patch || typeof patch !== "object") {
+          return;
+        }
+        Object.assign(currentSignals, patch);
+      },
+      readSignal(path) {
+        return String(path ?? "")
+          .split(".")
+          .filter(Boolean)
+          .reduce((current, key) => {
+            if (current && typeof current === "object" && key in current) {
+              return current[key];
+            }
+            return null;
+          }, this.signalObject());
+      },
+    };
+  }
+
+  const signalStore = datastarStateHelper()?.createSignalStore() || createFallbackSignalStore();
+
   function signalObject() {
-    return state.signals && typeof state.signals === "object" ? state.signals : null;
+    return signalStore.signalObject();
   }
 
   function connect(signals) {
-    state.signals = signals && typeof signals === "object" ? signals : null;
+    signalStore.connect(signals);
   }
 
   function cloneJson(value) {
@@ -27,18 +64,6 @@
     return helper && typeof helper.createDebouncedSignalPatchPersistor === "function"
       ? helper
       : null;
-  }
-
-  function readObjectPath(root, path) {
-    return String(path ?? "")
-      .split(".")
-      .filter(Boolean)
-      .reduce((current, key) => {
-        if (current && typeof current === "object" && key in current) {
-          return current[key];
-        }
-        return null;
-      }, root);
   }
 
   function bindPersistListener() {
@@ -63,11 +88,7 @@
   }
 
   function patchSignals(patch) {
-    const signals = signalObject();
-    if (!signals || !patch || typeof patch !== "object") {
-      return;
-    }
-    Object.assign(signals, patch);
+    signalStore.patchSignals(patch);
   }
 
   function storedUiSignals(signals) {
@@ -162,7 +183,7 @@
     signalObject,
     patchSignals,
     readSignal(path) {
-      return readObjectPath(signalObject(), path);
+      return signalStore.readSignal(path);
     },
     restore,
     persist,

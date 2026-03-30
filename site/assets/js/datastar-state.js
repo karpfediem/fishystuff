@@ -34,7 +34,34 @@
     return setObjectPath(root, path, !Boolean(readObjectPath(root, path)));
   }
 
+  function createSignalStore() {
+    const state = {
+      signals: null,
+    };
+
+    return Object.freeze({
+      connect(signals) {
+        state.signals = signals && typeof signals === "object" ? signals : null;
+        return state.signals;
+      },
+      signalObject() {
+        return state.signals && typeof state.signals === "object" ? state.signals : null;
+      },
+      patchSignals(patch) {
+        const signals = this.signalObject();
+        if (!signals || !patch || typeof patch !== "object") {
+          return;
+        }
+        Object.assign(signals, patch);
+      },
+      readSignal(path) {
+        return readObjectPath(this.signalObject(), path);
+      },
+    });
+  }
+
   window.__fishystuffDatastarState = Object.freeze({
+    createSignalStore,
     readObjectPath,
     setObjectPath,
     toggleBooleanPath,

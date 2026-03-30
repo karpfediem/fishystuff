@@ -50,3 +50,28 @@ test("datastar state helper creates missing intermediate objects", () => {
     },
   });
 });
+
+test("datastar state helper creates a reusable signal store", () => {
+  const helper = createContext();
+  const store = helper.createSignalStore();
+  const signals = {
+    _map_input: {
+      filters: {
+        searchText: "Velia",
+      },
+    },
+  };
+
+  store.connect(signals);
+  store.patchSignals({
+    _map_ui: {
+      search: {
+        open: true,
+      },
+    },
+  });
+
+  assert.equal(store.signalObject(), signals);
+  assert.equal(store.readSignal("_map_input.filters.searchText"), "Velia");
+  assert.equal(signals._map_ui.search.open, true);
+});

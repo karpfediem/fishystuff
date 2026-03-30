@@ -20,7 +20,6 @@
   const SILVER_FORMATTER = new Intl.NumberFormat();
   const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$))/;
   const state = {
-    signals: null,
     uiSettingsUnsubscribe: null,
     persistBinding: null,
     persistedUiJson: "",
@@ -37,6 +36,44 @@
     activeDetailsFishId: 0,
     restoreFocusFishId: 0,
   };
+
+  function datastarStateHelper() {
+    const helper = window.__fishystuffDatastarState;
+    return helper && typeof helper.createSignalStore === "function" ? helper : null;
+  }
+
+  function createFallbackSignalStore() {
+    let signals = null;
+    return {
+      connect(nextSignals) {
+        signals = nextSignals && typeof nextSignals === "object" ? nextSignals : null;
+        return signals;
+      },
+      signalObject() {
+        return signals && typeof signals === "object" ? signals : null;
+      },
+      patchSignals(patch) {
+        const currentSignals = this.signalObject();
+        if (!currentSignals || !patch || typeof patch !== "object") {
+          return;
+        }
+        Object.assign(currentSignals, patch);
+      },
+      readSignal(path) {
+        return String(path ?? "")
+          .split(".")
+          .filter(Boolean)
+          .reduce((current, key) => {
+            if (current && typeof current === "object" && key in current) {
+              return current[key];
+            }
+            return null;
+          }, this.signalObject());
+      },
+    };
+  }
+
+  const signalStore = datastarStateHelper()?.createSignalStore() || createFallbackSignalStore();
 
   function spriteIconMarkup(name, className, inline) {
     const classes = ["fishy-icon"];
@@ -61,15 +98,11 @@
   }
 
   function signalObject() {
-    return state.signals && typeof state.signals === "object" ? state.signals : null;
+    return signalStore.signalObject();
   }
 
   function patchSignals(patch) {
-    const signals = signalObject();
-    if (!signals || !patch || typeof patch !== "object") {
-      return;
-    }
-    Object.assign(signals, patch);
+    signalStore.patchSignals(patch);
   }
 
   function datastarPersistHelper() {
@@ -108,7 +141,7 @@
   }
 
   function connect(signals) {
-    state.signals = signals && typeof signals === "object" ? signals : null;
+    signalStore.connect(signals);
     if (typeof state.uiSettingsUnsubscribe === "function") {
       state.uiSettingsUnsubscribe();
       state.uiSettingsUnsubscribe = null;
