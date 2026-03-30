@@ -2710,3 +2710,35 @@ Validation:
 - compared served vs `.out` for:
   - `/js/pages/fishydex.js`
   - `/dex/`
+
+## Step 59: Trim unused methods from the map page-global bootstrap surface
+
+What changed:
+
+- removed unused methods from `window.__fishystuffMap`:
+  - `connect`
+  - `persist`
+- kept the loader-facing contract intact:
+  - `signalObject`
+  - `patchSignals`
+  - `readSignal`
+  - `restore`
+  - `whenRestored`
+
+Why this matters:
+
+- the map page module already owned its own connection and persistence flow internally
+- exporting those methods globally made the page-global surface look broader than the real
+  runtime contract
+- this matches the same cleanup pattern applied to calculator and Fishydex:
+  keep only the bootstrap/bridge functions that are actually used externally
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js site/assets/js/pages/map-page.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs`
+- rebuilt site output
+- confirmed no remaining references to `window.__fishystuffMap.connect` or `.persist`
+- compared served vs `.out` for:
+  - `/js/pages/map-page.js`
+  - `/map/`

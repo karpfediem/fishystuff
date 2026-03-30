@@ -650,14 +650,12 @@
     }
   }
   window.__fishystuffMap = Object.freeze({
-    connect,
     signalObject,
     patchSignals,
     readSignal(path) {
       return signalStore.readSignal(path);
     },
     restore,
-    persist,
     whenRestored() {
       return state.restorePromise;
     },
