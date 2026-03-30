@@ -44,10 +44,13 @@
     suppressCardAnimation: false,
     activeDetailsFishId: 0,
     restoreFocusFishId: 0,
-    handledActionTokens: { ...FISHYDEX_ACTION_DEFAULTS },
   };
 
   const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
+  const fishydexActionTokens =
+    window.__fishystuffDatastarState.createCounterTokenController(
+      FISHYDEX_ACTION_DEFAULTS,
+    );
 
   function spriteIconMarkup(name, className, inline) {
     const classes = ["fishy-icon"];
@@ -1006,18 +1009,9 @@
     return Number.isInteger(value) && value > 0 ? value : 0;
   }
 
-  function currentActionTokens(snapshot) {
-    const raw = snapshot && typeof snapshot === "object" ? snapshot._fishydex_actions : null;
-    return window.__fishystuffDatastarState.normalizeCounterTokenState(
-      raw,
-      FISHYDEX_ACTION_DEFAULTS,
-    );
-  }
-
   function consumeActionTokens(snapshot) {
-    const consumption = window.__fishystuffDatastarState.consumeIncrementedCounterTokens(
-      state.handledActionTokens,
-      currentActionTokens(snapshot),
+    const consumption = fishydexActionTokens.consume(
+      snapshot && typeof snapshot === "object" ? snapshot._fishydex_actions : null,
       {
         exportCaughtToken: () => {
           void exportCaught(sharedFishSnapshot(snapshot).caughtIds);
@@ -1032,8 +1026,6 @@
         },
       },
     );
-
-    state.handledActionTokens = consumption.handledState;
     return consumption.mutated;
   }
 

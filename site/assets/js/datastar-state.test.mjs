@@ -185,3 +185,48 @@ test("datastar state helper normalizes and consumes incremented action tokens", 
   assert.deepEqual(fired, [["copyToken", 1, 3]]);
   assert.equal(result.mutated, false);
 });
+
+test("datastar state helper creates a reusable counter token controller", () => {
+  const helper = createContext();
+  const controller = helper.createCounterTokenController({
+    copyToken: 0,
+    clearToken: 0,
+  });
+  const fired = [];
+
+  const first = controller.consume(
+    {
+      copyToken: "2",
+      clearToken: 0,
+    },
+    {
+      copyToken(nextValue, previousValue) {
+        fired.push(["copyToken", previousValue, nextValue]);
+      },
+    },
+  );
+
+  const second = controller.consume(
+    {
+      copyToken: 2,
+      clearToken: 1,
+    },
+    {
+      clearToken(nextValue, previousValue) {
+        fired.push(["clearToken", previousValue, nextValue]);
+        return true;
+      },
+    },
+  );
+
+  assert.equal(first.mutated, false);
+  assert.equal(second.mutated, true);
+  assert.deepEqual(fired, [
+    ["copyToken", 0, 2],
+    ["clearToken", 0, 1],
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(controller.handledState())), {
+    copyToken: 2,
+    clearToken: 1,
+  });
+});

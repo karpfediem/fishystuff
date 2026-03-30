@@ -111,6 +111,31 @@
     };
   }
 
+  function createCounterTokenController(defaults = {}) {
+    let handledState = normalizeCounterTokenState({}, defaults);
+
+    return Object.freeze({
+      current(raw) {
+        return normalizeCounterTokenState(raw, defaults);
+      },
+      consume(raw, handlers = {}) {
+        const consumption = consumeIncrementedCounterTokens(
+          handledState,
+          this.current(raw),
+          handlers,
+        );
+        handledState = consumption.handledState;
+        return consumption;
+      },
+      handledState() {
+        return { ...handledState };
+      },
+      reset() {
+        handledState = normalizeCounterTokenState({}, defaults);
+      },
+    });
+  }
+
   function createSignalStore() {
     const state = {
       signals: null,
@@ -143,6 +168,7 @@
 
   window.__fishystuffDatastarState = Object.freeze({
     consumeIncrementedCounterTokens,
+    createCounterTokenController,
     createPageSignalStore,
     createSignalStore,
     mergeObjectPatch,

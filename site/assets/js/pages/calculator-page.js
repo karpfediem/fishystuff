@@ -17,10 +17,13 @@
     persistBinding: null,
     actionBinding: null,
     uiStateRestored: false,
-    handledActionTokens: { ...CALCULATOR_ACTION_DEFAULTS },
   };
 
   const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
+  const calculatorActionTokens =
+    window.__fishystuffDatastarState.createCounterTokenController(
+      CALCULATOR_ACTION_DEFAULTS,
+    );
 
   function datastarPersistHelper() {
     const helper = window.__fishystuffDatastarPersist;
@@ -379,19 +382,6 @@
     Object.assign(current, cloneCalculatorSignals(defaults));
   }
 
-  function calculatorActionState(signals) {
-    const current = signals && typeof signals === "object"
-      ? signals
-      : signalStore.signalObject();
-    const raw = current && typeof current === "object"
-      ? current._calculator_actions
-      : null;
-    return window.__fishystuffDatastarState.normalizeCounterTokenState(
-      raw,
-      CALCULATOR_ACTION_DEFAULTS,
-    );
-  }
-
   function syncCalculatorActions(signals) {
     const current = signals && typeof signals === "object"
       ? signals
@@ -399,9 +389,8 @@
     if (!current || typeof current !== "object") {
       return;
     }
-    const consumption = window.__fishystuffDatastarState.consumeIncrementedCounterTokens(
-      calculatorState.handledActionTokens,
-      calculatorActionState(current),
+    calculatorActionTokens.consume(
+      current._calculator_actions,
       {
         copyUrlToken: () => {
           window.__fishystuffToast.copyText(calculatorPresetUrl(current), {
@@ -419,7 +408,6 @@
         },
       },
     );
-    calculatorState.handledActionTokens = consumption.handledState;
   }
 
   function restoreCalculator(signals) {

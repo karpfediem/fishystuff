@@ -2742,3 +2742,32 @@ Validation:
 - compared served vs `.out` for:
   - `/js/pages/map-page.js`
   - `/map/`
+
+## Step 60: Extract a reusable Datastar counter-token controller
+
+What changed:
+
+- added `createCounterTokenController(defaults)` to
+  `site/assets/js/datastar-state.js`
+- migrated calculator and Fishydex action-token bookkeeping to that shared helper
+- removed the page-local handled-token state duplication from:
+  - `site/assets/js/pages/calculator-page.js`
+  - `site/assets/js/pages/fishydex.js`
+- added helper coverage in `site/assets/js/datastar-state.test.mjs`
+
+Why this matters:
+
+- calculator and Fishydex both had the same wrapper around:
+  - `normalizeCounterTokenState(...)`
+  - `consumeIncrementedCounterTokens(...)`
+- that pattern is now reusable instead of copy-pasted page logic
+- it also makes future action-token migrations on the map side cheaper and more consistent
+
+Validation:
+
+- `node --check site/assets/js/datastar-state.js site/assets/js/pages/calculator-page.js site/assets/js/pages/fishydex.js site/assets/js/datastar-state.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/calculator-page.test.mjs site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/pages/calculator-page.js`
+  - `/js/pages/fishydex.js`
