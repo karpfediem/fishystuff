@@ -1,7 +1,97 @@
 (function () {
-    var KEY = 'theme';
+    var LEGACY_KEY = 'theme';
+    var UI_SETTINGS_KEY = 'fishystuff.ui.settings.v1';
+    var THEME_PATH = ['app', 'theme', 'selected'];
     var EVENT = 'fishystuff:themechange';
     var PROBE_ID = 'fishystuff-theme-probe';
+
+    function isPlainObject(value) {
+        if (!value || typeof value !== 'object') {
+            return false;
+        }
+        var prototype = Object.getPrototypeOf(value);
+        return prototype === Object.prototype || prototype === null;
+    }
+
+    function readJsonStorage(key, fallback) {
+        try {
+            var raw = localStorage.getItem(key);
+            if (!raw) return fallback;
+            var parsed = JSON.parse(raw);
+            return parsed === undefined ? fallback : parsed;
+        } catch (_error) {
+            return fallback;
+        }
+    }
+
+    function readThemeFromSettingsObject(root) {
+        var current = isPlainObject(root) ? root : {};
+        for (var index = 0; index < THEME_PATH.length; index += 1) {
+            var part = THEME_PATH[index];
+            if (!isPlainObject(current) || !(part in current)) {
+                return '';
+            }
+            current = current[part];
+        }
+        return typeof current === 'string' ? current.trim() : '';
+    }
+
+    function readSharedSettings() {
+        return readJsonStorage(UI_SETTINGS_KEY, {});
+    }
+
+    function writeThemeToSettingsObject(root, theme) {
+        var nextRoot = isPlainObject(root) ? Object.assign({}, root) : {};
+        var cursor = nextRoot;
+        for (var index = 0; index < THEME_PATH.length - 1; index += 1) {
+            var part = THEME_PATH[index];
+            var existing = isPlainObject(cursor[part]) ? cursor[part] : {};
+            cursor[part] = Object.assign({}, existing);
+            cursor = cursor[part];
+        }
+        cursor[THEME_PATH[THEME_PATH.length - 1]] = theme;
+        return nextRoot;
+    }
+
+    function sharedUiSettingsStore() {
+        var store = window.__fishystuffUiSettings;
+        return store && typeof store.get === 'function' && typeof store.set === 'function'
+            ? store
+            : null;
+    }
+
+    function persistThemePreference(theme) {
+        var store = sharedUiSettingsStore();
+        if (store) {
+            store.set(THEME_PATH, theme);
+        } else {
+            try {
+                var nextSettings = writeThemeToSettingsObject(readSharedSettings(), theme);
+                localStorage.setItem(UI_SETTINGS_KEY, JSON.stringify(nextSettings));
+            } catch (_error) {}
+        }
+        try {
+            localStorage.removeItem(LEGACY_KEY);
+        } catch (_error) {}
+    }
+
+    function migrateLegacyThemePreference() {
+        var sharedTheme = readThemeFromSettingsObject(readSharedSettings());
+        if (sharedTheme) {
+            return sharedTheme;
+        }
+        var legacyTheme = '';
+        try {
+            legacyTheme = String(localStorage.getItem(LEGACY_KEY) || '').trim();
+        } catch (_error) {
+            legacyTheme = '';
+        }
+        if (!legacyTheme) {
+            return '';
+        }
+        persistThemePreference(legacyTheme);
+        return legacyTheme;
+    }
 
     function ensureProbe() {
         if (!document.body) return null;
@@ -97,7 +187,7 @@
     }
 
     function setTheme(theme) {
-        localStorage.setItem(KEY, theme);
+        persistThemePreference(theme);
         apply(theme);
         if (theme === 'system') {
             try {
@@ -107,9 +197,16 @@
         }
     }
 
-    function getTheme() { return localStorage.getItem(KEY) || 'system'; }
+    function getTheme() {
+        var sharedTheme = readThemeFromSettingsObject(readSharedSettings());
+        if (sharedTheme) {
+            return sharedTheme;
+        }
+        return migrateLegacyThemePreference() || 'system';
+    }
 
     window.__theme = {
+        key: UI_SETTINGS_KEY,
         set: setTheme,
         get: getTheme,
         apply: apply,

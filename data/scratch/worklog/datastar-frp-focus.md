@@ -1344,3 +1344,65 @@ Validation:
   - verify no stack overflow on load
   - toggle Search from the toolbar
   - confirm `_map_ui.windowUi.search.open` drives visibility correctly
+
+### Step 25 - Fishydex Panel State Becomes Page-Owned UI
+
+Completed:
+
+- removed Fishydex panel collapse persistence from the shared `fishystuff.ui.settings.v1` bucket
+- moved Fishydex panel collapse state into the page-owned `fishystuff.fishydex.ui.v1` snapshot alongside:
+  - search
+  - filter/sort controls
+- added `site/assets/js/pages/fishydex.test.mjs` coverage for Fishydex UI restore/persist behavior
+
+Why this matters:
+
+- Fishydex panel collapse state was previously a split-owner case:
+  - page UI mostly lived in `fishystuff.fishydex.ui.v1`
+  - panel collapse lived in `fishystuff.ui.settings.v1`
+- after this slice, Fishydex has one page-owned UI snapshot instead of mixed ownership
+
+Validation:
+
+- `node --check site/assets/js/pages/fishydex.js`
+- `node --check site/assets/js/pages/fishydex.test.mjs`
+- `node --test site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- compare served vs `.out` for:
+  - `/dex/`
+  - `/js/pages/fishydex.js`
+- live Chromium smoke:
+  - collapse Fishydex Progress/Filter panels, reload, verify both restore from `fishystuff.fishydex.ui.v1`
+
+### Step 26 - Shared App Theme Settings
+
+Completed:
+
+- moved theme preference ownership onto the shared `fishystuff.ui.settings.v1` store under:
+  - `app.theme.selected`
+- updated the base template early theme boot script to read the shared app UI theme preference before paint
+- updated `site/assets/js/theme.js` so new writes go through the shared UI settings store
+- removed the nav template’s direct writes to the legacy raw `theme` key
+- kept a one-way legacy fallback from the old raw `theme` key during read, while new writes go only to the shared UI settings store
+
+Why this matters:
+
+- theme preference is app-wide UI state, so it should not live in a page-owned store
+- the previous setup still had a hidden second owner:
+  - the nav template wrote directly to `localStorage['theme']`
+- after this slice:
+  - theme has one app-owned settings path
+  - page templates route through the shared `window.__theme` interface
+
+Validation:
+
+- `node --check site/assets/js/theme.js`
+- rebuilt site output
+- compare served vs `.out` for:
+  - `/dex/`
+  - `/js/theme.js`
+- live Chromium smoke:
+  - set theme to `light`
+  - verify `fishystuff.ui.settings.v1.app.theme.selected === "light"`
+  - verify `localStorage['theme'] === null`
+  - reload and verify `data-theme="light"` persists

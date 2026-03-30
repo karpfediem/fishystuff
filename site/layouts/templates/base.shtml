@@ -26,8 +26,36 @@
   </style>
   <script>
     (function () {
-      var KEY = 'theme'; // 'system' | 'fishy' | 'dark' | 'light'
-      var saved = localStorage.getItem(KEY) || 'system';
+      var LEGACY_KEY = 'theme'; // 'system' | 'fishy' | 'dark' | 'light'
+      var UI_SETTINGS_KEY = 'fishystuff.ui.settings.v1';
+      var THEME_PATH = ['app', 'theme', 'selected'];
+
+      function isPlainObject(value) {
+        if (!value || typeof value !== 'object') {
+          return false;
+        }
+        var prototype = Object.getPrototypeOf(value);
+        return prototype === Object.prototype || prototype === null;
+      }
+
+      function readSharedThemePreference() {
+        try {
+          var parsed = JSON.parse(localStorage.getItem(UI_SETTINGS_KEY) || '{}');
+          var current = isPlainObject(parsed) ? parsed : {};
+          for (var index = 0; index < THEME_PATH.length; index += 1) {
+            var part = THEME_PATH[index];
+            if (!isPlainObject(current) || !(part in current)) {
+              return '';
+            }
+            current = current[part];
+          }
+          return typeof current === 'string' ? current.trim() : '';
+        } catch (_error) {
+          return '';
+        }
+      }
+
+      var saved = readSharedThemePreference() || localStorage.getItem(LEGACY_KEY) || 'system';
 
       function resolve(theme) {
         if (theme === 'system') {

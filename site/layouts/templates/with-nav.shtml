@@ -202,20 +202,15 @@
             </div>
             <script>
                         (function () {
-                            var KEY = 'theme';
                             var root = document.documentElement;
                             var dropdown = document.getElementById('theme-switcher');
+                            var theme = window.__theme;
                             if (!dropdown) return;
-
-                            function resolve(t) {
-                                if (t === 'system') {
-                                    return matchMedia('(prefers-color-scheme: dark)').matches ? 'fishy' : 'light';
-                                }
-                                return t;
+                            if (!theme || typeof theme.get !== 'function' || typeof theme.set !== 'function') {
+                                return;
                             }
-                            function setTheme(name) {
-                                root.setAttribute('data-theme', resolve(name));
-                                localStorage.setItem(KEY, name);
+
+                            function syncActiveState(name) {
                                 // update active state
                                 dropdown.querySelectorAll('.theme-item').forEach(function (el) {
                                     var is = el.getAttribute('data-theme-name') === name;
@@ -224,9 +219,14 @@
                                     el.classList.toggle('outline-base-content', is);
                                 });
                             }
+
+                            function setTheme(name) {
+                                theme.set(name);
+                                root.setAttribute('data-theme', theme.resolve(name));
+                                syncActiveState(name);
+                            }
                             // init
-                            var saved = localStorage.getItem(KEY) || 'system';
-                            setTheme(saved);
+                            syncActiveState(theme.get() || 'system');
 
                             // click handlers
                             dropdown.addEventListener('click', function (e) {
@@ -239,7 +239,7 @@
 
                             // keep “system” in sync while menu is open (optional)
                             matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
-                                if ((localStorage.getItem(KEY) || 'system') === 'system') setTheme('system');
+                                if ((theme.get() || 'system') === 'system') setTheme('system');
                             });
                         })();
                     </script>
