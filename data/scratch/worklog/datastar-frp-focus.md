@@ -2771,3 +2771,31 @@ Validation:
 - compared served vs `.out` for:
   - `/js/pages/calculator-page.js`
   - `/js/pages/fishydex.js`
+
+## Step 61: Guard calculator init markup against stale page-global hooks
+
+What changed:
+
+- strengthened the calculator init route test in
+  `api/fishystuff_server/src/routes/calculator.rs`
+- the regression now asserts the init fragment does not emit the removed global hooks:
+  - `window.__fishystuffCalculator.persist(...)`
+  - `window.__fishystuffCalculator.persistSignalPatchFilter()`
+  - `window.__fishystuffCalculator.presetUrl(...)`
+  - `window.__fishystuffCalculator.shareText(...)`
+  - `window.__fishystuffCalculator.clear(...)`
+
+Why this matters:
+
+- the calculator page shell and the API-sent init fragment are two different served surfaces
+- during this refactor, the site shell can be current while the running API binary still serves
+  stale fragment markup
+- that mismatch is enough to break Datastar at runtime even when the source tree is otherwise
+  correct
+- a fresh session should always validate both:
+  - served site assets vs `site/.out`
+  - served API init/eval fragments vs current route source when debugging Datastar regressions
+
+Validation:
+
+- `cargo test --offline -p fishystuff_server routes::calculator::tests::init_returns_html_fragment_with_initial_signals -- --exact`

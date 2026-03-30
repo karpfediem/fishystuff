@@ -5664,6 +5664,11 @@ mod tests {
         assert!(text.contains("$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1"));
+        assert!(!text.contains("window.__fishystuffCalculator.persist("));
+        assert!(!text.contains("window.__fishystuffCalculator.persistSignalPatchFilter()"));
+        assert!(!text.contains("window.__fishystuffCalculator.presetUrl("));
+        assert!(!text.contains("window.__fishystuffCalculator.shareText("));
+        assert!(!text.contains("window.__fishystuffCalculator.clear("));
         assert!(text.contains(
             "data-computed:outfit=\"Array.isArray($_outfit_slots) ? $_outfit_slots : []\""
         ));
