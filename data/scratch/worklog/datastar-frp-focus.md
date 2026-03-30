@@ -957,6 +957,7 @@ Current map page signal branches:
 Already implemented:
 
 - map shell root has Datastar `data-signals`
+- reusable `window.__fishystuffDatastarState` helper exists for object-path reads/patches from Datastar expressions
 - toolbar buttons mutate `_map_ui.windowUi.*.open`
 - loader syncs local window/search/bookmark UI from `_map_ui`
 - loader syncs bookmark list state from `_map_bookmarks`
@@ -967,6 +968,7 @@ Already implemented:
 - bookmark CRUD and selection/placement paths now patch Datastar state first, then let loader signal sync reconcile local render state
 - search dropdown and reset-time shell state now patch `_map_ui` first instead of mutating loader locals before signal updates
 - managed window open/collapse/drag/resize/reset flows now patch `_map_ui.windowUi` first instead of mutating/persisting window state locally
+- map toolbar buttons now use the shared Datastar state helper directly instead of the page-specific `window.__fishystuffMap.toggleWindow(...)`
 
 Map controls currently routed through `_map_input`:
 
@@ -1023,3 +1025,36 @@ Recommended next map slices:
 2. Reduce direct DOM state ownership in `loader.js`
 3. Revisit `site/assets/map/map-host.js` as a thinner adapter
 4. Only then assess what Bevy/WASM contract changes are actually necessary
+
+### Step 16 - Shared Datastar State Helper
+
+Completed:
+
+- extracted `site/assets/js/datastar-state.js` as a shared helper for Datastar expression-friendly nested object state updates
+- exposed:
+  - `readObjectPath(root, path)`
+  - `setObjectPath(root, path, value)`
+  - `toggleBooleanPath($, path)`
+- added `site/assets/js/datastar-state.test.mjs`
+- loaded the helper from the base template so any page can use it
+- replaced the map page's toolbar-only `window.__fishystuffMap.toggleWindow(...)` helper with direct `data-on:click` calls into `window.__fishystuffDatastarState.toggleBooleanPath(...)`
+
+Why this matters:
+
+- this removes one more page-specific Datastar bridge helper
+- the map toolbar now uses a reusable Datastar-oriented state primitive instead of bespoke map glue
+- it keeps template interactions closer to "mutate signals, let the rest react"
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared:
+  - served `/map/` vs `site/.out/map/index.html`
+  - served `/js/datastar-state.js` vs `site/.out/js/datastar-state.js`
+  - served `/js/pages/map-page.js` vs `site/.out/js/pages/map-page.js`
+- live Chromium smoke:
+  - reload `/map/`
+  - verify no stack overflow on load
+  - toggle Search from the toolbar
+  - confirm `_map_ui.windowUi.search.open` drives visibility correctly

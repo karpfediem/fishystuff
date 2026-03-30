@@ -1127,7 +1127,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="search"
-          data-on:click="window.__fishystuffMap.toggleWindow('search')"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.search.open')"
           type="button"
           aria-pressed="true"
           aria-label="Hide search"
@@ -1138,7 +1138,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="bookmarks"
-          data-on:click="window.__fishystuffMap.toggleWindow('bookmarks')"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.bookmarks.open')"
           type="button"
           aria-pressed="false"
           aria-label="Show bookmarks"
@@ -1149,7 +1149,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="settings"
-          data-on:click="window.__fishystuffMap.toggleWindow('settings')"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.settings.open')"
           type="button"
           aria-pressed="true"
           aria-label="Hide settings"
@@ -1160,7 +1160,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="zone-info"
-          data-on:click="window.__fishystuffMap.toggleWindow('zoneInfo')"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.zoneInfo.open')"
           type="button"
           aria-pressed="true"
           aria-label="Hide zone info"
@@ -1171,7 +1171,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="layers"
-          data-on:click="window.__fishystuffMap.toggleWindow('layers')"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.layers.open')"
           type="button"
           aria-pressed="true"
           aria-label="Hide layers"

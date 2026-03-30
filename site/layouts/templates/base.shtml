@@ -187,6 +187,7 @@
   <script src="$site.asset('js/toast.js').link()"></script>
   <script src="$site.asset('js/ui-settings.js').link()"></script>
   <script src="$site.asset('js/datastar-persist.js').link()"></script>
+  <script src="$site.asset('js/datastar-state.js').link()"></script>
   <script src="$site.asset('js/shared-fish-state.js').link()"></script>
   <!-- Tailwind + daisyUI (compiled) -->
   <link rel="stylesheet" href="$site.asset('css/site.css').link()">
