@@ -3535,6 +3535,14 @@ function bookmarkListSignature(bookmarks) {
   return JSON.stringify(normalizeBookmarks(bookmarks));
 }
 
+function bookmarkSelectionSignature(selectedIds) {
+  return JSON.stringify(
+    Array.isArray(selectedIds)
+      ? selectedIds.map((value) => String(value ?? "").trim()).filter(Boolean)
+      : [],
+  );
+}
+
 export function resolveDisplayBookmarks(stateBundle, bookmarks) {
   const localBookmarks = normalizeBookmarks(bookmarks);
   const snapshotBookmarks = normalizeBookmarks(stateBundle?.state?.ui?.bookmarks || []);
@@ -3560,10 +3568,6 @@ function persistResolvedBookmarksFromStateBundle(stateBundle, bookmarks, bookmar
   if (bookmarkListSignature(resolvedBookmarks) === bookmarkListSignature(bookmarks)) {
     return bookmarks;
   }
-  bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(
-    resolvedBookmarks,
-    bookmarkUi?.selectedIds,
-  );
   return resolvedBookmarks;
 }
 
@@ -3593,9 +3597,6 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
   }
   const normalizedBookmarks = resolveDisplayBookmarks(stateBundle, bookmarks);
   const selectedIds = normalizeSelectedBookmarkIds(normalizedBookmarks, bookmarkUi?.selectedIds);
-  if (bookmarkUi) {
-    bookmarkUi.selectedIds = selectedIds;
-  }
   const selectedIdSet = new Set(selectedIds);
   setBooleanProperty(elements.bookmarkPlace, "disabled", !canPlace && !bookmarkUi?.placing);
   setTextContent(elements.bookmarkPlaceLabel, bookmarkUi?.placing ? "Click map to place" : "New bookmark");
@@ -6325,19 +6326,12 @@ function bindUi(shell, elements, options = {}) {
   let patchRangeSyncPatching = false;
   let latestStateBundle = requestBridgeState(shell);
   const initialMapUiState = currentMapUiSignalState();
-  const searchUiState = {
-    open: initialMapUiState.search.open,
-  };
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
-  let windowUiState = initialMapUiState.windowUi;
-  let bookmarks = currentMapBookmarksSignalState();
-  let mapActionState = currentMapActionSignalState();
+  let previousMapUiState = initialMapUiState;
+  let previousBookmarksSignature = bookmarkListSignature(currentMapBookmarksSignalState());
+  let previousMapActionState = currentMapActionSignalState();
   let bookmarkMetadataRefreshTimer = 0;
   let bookmarkMetadataRefreshAttempts = 0;
-  const bookmarkUi = {
-    placing: initialMapUiState.bookmarks.placing,
-    selectedIds: normalizeSelectedBookmarkIds(bookmarks, initialMapUiState.bookmarks.selectedIds),
-  };
   let nextWindowZIndex = 30;
   const managedWindows = {
     search: {
@@ -6416,8 +6410,88 @@ function bindUi(shell, elements, options = {}) {
   elements.layerPointIconScaleInteraction = layerPointIconScaleInteraction;
   elements.layerSettingsExpanded = layerSettingsExpanded;
 
+  function currentUiState() {
+    return currentMapUiSignalState();
+  }
+
+  function currentWindowUiState() {
+    return currentUiState().windowUi;
+  }
+
+  function currentSearchUiState() {
+    return currentUiState().search;
+  }
+
+  function currentBookmarks() {
+    return currentMapBookmarksSignalState();
+  }
+
+  function currentBookmarkUiState(nextBookmarks = currentBookmarks()) {
+    const bookmarkUi = currentUiState().bookmarks;
+    return {
+      placing: bookmarkUi.placing === true,
+      selectedIds: normalizeSelectedBookmarkIds(nextBookmarks, bookmarkUi.selectedIds),
+    };
+  }
+
+  const windowUiState = new Proxy(DEFAULT_WINDOW_UI_STATE, {
+    get(_target, key) {
+      return currentWindowUiState()?.[key];
+    },
+  });
+
+  const searchUiState = new Proxy({ open: false }, {
+    get(_target, key) {
+      return currentSearchUiState()?.[key];
+    },
+  });
+
+  const bookmarks = new Proxy([], {
+    get(_target, key) {
+      const current = currentBookmarks();
+      const value = current[key];
+      return typeof value === "function" ? value.bind(current) : value;
+    },
+    ownKeys() {
+      return Reflect.ownKeys(currentBookmarks());
+    },
+    getOwnPropertyDescriptor(_target, key) {
+      const current = currentBookmarks();
+      const descriptor = Object.getOwnPropertyDescriptor(current, key);
+      return descriptor ? { ...descriptor, configurable: true } : undefined;
+    },
+  });
+
+  const bookmarkUi = new Proxy({ placing: false, selectedIds: [] }, {
+    get(_target, key) {
+      return currentBookmarkUiState(currentBookmarks())?.[key];
+    },
+    set(_target, key, value) {
+      const current = currentBookmarkUiState(currentBookmarks());
+      if (key === "placing") {
+        patchMapUiSignalState({
+          bookmarks: {
+            ...current,
+            placing: value === true,
+          },
+        });
+        return true;
+      }
+      if (key === "selectedIds") {
+        patchMapUiSignalState({
+          bookmarks: {
+            ...current,
+            selectedIds: normalizeSelectedBookmarkIds(currentBookmarks(), value),
+          },
+        });
+        return true;
+      }
+      return true;
+    },
+  });
+
   function autoAdjustViewEnabled() {
-    return windowUiState?.settings?.autoAdjustView !== false;
+    return currentWindowUiState()?.settings?.autoAdjustView !== false;
   }
 
   function currentViewportSize() {
@@ -6620,6 +6694,8 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function setSelectedBookmarkIds(nextSelectedIds) {
+    const bookmarks = currentBookmarks();
+    const bookmarkUi = currentBookmarkUiState(bookmarks);
     patchMapUiSignalState({
       bookmarks: {
         ...bookmarkUi,
@@ -6629,6 +6705,8 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function selectedBookmarksForCopy() {
+    const bookmarks = currentBookmarks();
+    const bookmarkUi = currentBookmarkUiState(bookmarks);
     return selectedBookmarksInOrder(bookmarks, bookmarkUi.selectedIds);
   }
 
@@ -6637,17 +6715,21 @@ function bindUi(shell, elements, options = {}) {
     return selectedBookmarks.length ? selectedBookmarks : normalizeBookmarks(bookmarks);
   }
 
-  function syncBookmarksToBridge(nextBookmarks = bookmarks) {
+  function syncBookmarksToBridge(
+    nextBookmarks = currentBookmarks(),
+    nextSelectedIds = currentBookmarkUiState(nextBookmarks).selectedIds,
+  ) {
     patchMapInputSignalState({
       version: FISHYMAP_CONTRACT_VERSION,
       ui: {
-        bookmarkSelectedIds: normalizeSelectedBookmarkIds(nextBookmarks, bookmarkUi.selectedIds),
+        bookmarkSelectedIds: normalizeSelectedBookmarkIds(nextBookmarks, nextSelectedIds),
         bookmarks: normalizeBookmarks(nextBookmarks),
       },
     });
   }
 
   function setBookmarkPlacementActive(active) {
+    const bookmarkUi = currentBookmarkUiState();
     patchMapUiSignalState({
       bookmarks: {
         ...bookmarkUi,
@@ -6658,6 +6740,7 @@ function bindUi(shell, elements, options = {}) {
 
   function persistBookmarksAndRender(nextBookmarks, statusMessage = "", options = {}) {
     const normalizedBookmarks = normalizeBookmarks(nextBookmarks);
+    const bookmarkUi = currentBookmarkUiState(normalizedBookmarks);
     patchMapBookmarksSignalState(normalizedBookmarks);
     patchMapUiSignalState({
       bookmarks: {
@@ -6702,6 +6785,7 @@ function bindUi(shell, elements, options = {}) {
     if (!hasOwnKey(managedWindows, windowId)) {
       return null;
     }
+    const windowUiState = currentWindowUiState();
     const currentEntry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
     const nextEntry =
       windowId === "zoneInfo"
@@ -6739,6 +6823,7 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function currentManagedWindowPosition(windowId) {
+    const windowUiState = currentWindowUiState();
     const entry = windowUiState[windowId];
     if (Number.isFinite(entry?.x) && Number.isFinite(entry?.y)) {
       return {
@@ -6781,6 +6866,7 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function clampOpenManagedWindows() {
+    const windowUiState = currentWindowUiState();
     let changed = false;
     for (const windowId of Object.keys(managedWindows)) {
       const entry = windowUiState[windowId];
@@ -6799,13 +6885,15 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function applyManagedWindows() {
+    const windowUiState = currentWindowUiState();
     applyWindowVisibility(elements, windowUiState);
     if (clampOpenManagedWindows()) {
-      applyWindowVisibility(elements, windowUiState);
+      applyWindowVisibility(elements, currentWindowUiState());
     }
   }
 
   function toggleManagedWindowOpen(windowId) {
+    const windowUiState = currentWindowUiState();
     const entry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
     const nextWindowUiState = updateWindowUiEntry(windowId, { open: entry.open === false });
     if (!nextWindowUiState) {
@@ -6828,7 +6916,7 @@ function bindUi(shell, elements, options = {}) {
     const availableTabs = buildPointDetailViewModel(
       selection,
       current,
-      windowUiState,
+      currentWindowUiState(),
     ).panes.map((tab) => tab.id);
     if (!requestedTab || !availableTabs.includes(requestedTab)) {
       return false;
@@ -6841,6 +6929,7 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function toggleManagedWindowCollapsed(windowId) {
+    const windowUiState = currentWindowUiState();
     const entry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
     if (!updateWindowUiEntry(windowId, { collapsed: !entry.collapsed })) {
       return;
@@ -6888,6 +6977,14 @@ function bindUi(shell, elements, options = {}) {
       ...(stateBundle || {}),
       zoneCatalog,
     });
+    let bookmarks = currentBookmarks();
+    const currentUiStateValue = currentUiState();
+    const windowUiState = currentUiStateValue.windowUi;
+    const searchUiState = currentUiStateValue.search;
+    let bookmarkUi = {
+      placing: currentUiStateValue.bookmarks.placing === true,
+      selectedIds: normalizeSelectedBookmarkIds(bookmarks, currentUiStateValue.bookmarks.selectedIds),
+    };
     publishMapInputSignals(latestStateBundle.inputState);
     publishMapRuntimeSignals(latestStateBundle);
     const desiredSessionState = currentMapSessionSignalState();
@@ -6913,6 +7010,19 @@ function bindUi(shell, elements, options = {}) {
     } else {
       bookmarks = resolvedBookmarks;
     }
+    const normalizedSelectedIds = normalizeSelectedBookmarkIds(bookmarks, bookmarkUi.selectedIds);
+    if (bookmarkSelectionSignature(normalizedSelectedIds) !== bookmarkSelectionSignature(bookmarkUi.selectedIds)) {
+      bookmarkUi = {
+        ...bookmarkUi,
+        selectedIds: normalizedSelectedIds,
+      };
+      patchMapUiSignalState({ bookmarks: bookmarkUi });
+    } else {
+      bookmarkUi = {
+        ...bookmarkUi,
+        selectedIds: normalizedSelectedIds,
+      };
+    }
     scheduleBookmarkMetadataRefresh();
     isRendering = true;
     try {
@@ -6927,26 +7037,24 @@ function bindUi(shell, elements, options = {}) {
     }
   }
 
-  function syncLocalUiStateFromSignals() {
-    const nextSignalUiState = currentMapUiSignalState();
-    const nextSignalBookmarks = currentMapBookmarksSignalState();
+  function reconcileUiStateFromSignals() {
+    const previousUiState = previousMapUiState;
+    const nextSignalUiState = currentUiState();
+    const nextSignalBookmarks = currentBookmarks();
     const nextBookmarkSelectedIds = normalizeSelectedBookmarkIds(
       nextSignalBookmarks,
       nextSignalUiState.bookmarks.selectedIds,
     );
     const currentSignature = JSON.stringify({
-      windowUi: windowUiState,
-      search: searchUiState,
-      bookmarksList: bookmarks,
-      bookmarks: {
-        placing: bookmarkUi.placing,
-        selectedIds: bookmarkUi.selectedIds,
-      },
+      windowUi: previousUiState.windowUi,
+      search: previousUiState.search,
+      bookmarksListSignature: previousBookmarksSignature,
+      bookmarks: previousUiState.bookmarks,
     });
     const nextSignature = JSON.stringify({
       windowUi: nextSignalUiState.windowUi,
       search: nextSignalUiState.search,
-      bookmarksList: nextSignalBookmarks,
+      bookmarksListSignature: bookmarkListSignature(nextSignalBookmarks),
       bookmarks: {
         placing: nextSignalUiState.bookmarks.placing,
         selectedIds: nextBookmarkSelectedIds,
@@ -6956,27 +7064,39 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
 
-    const previousWindowUiState = windowUiState;
-    const previousBookmarkPlacing = bookmarkUi.placing;
-    windowUiState = nextSignalUiState.windowUi;
-    searchUiState.open = nextSignalUiState.search.open;
-    bookmarks = nextSignalBookmarks;
-    bookmarkUi.placing = nextSignalUiState.bookmarks.placing;
-    bookmarkUi.selectedIds = nextBookmarkSelectedIds;
-    syncBookmarksToBridge(bookmarks);
+    previousMapUiState = {
+      windowUi: nextSignalUiState.windowUi,
+      search: nextSignalUiState.search,
+      bookmarks: {
+        placing: nextSignalUiState.bookmarks.placing === true,
+        selectedIds: nextBookmarkSelectedIds,
+      },
+    };
+    previousBookmarksSignature = bookmarkListSignature(nextSignalBookmarks);
+    syncBookmarksToBridge(nextSignalBookmarks, nextBookmarkSelectedIds);
 
     for (const [toolbarWindowId, windowId] of Object.entries(toolbarTargetToWindowId)) {
-      const previousOpen = previousWindowUiState?.[windowId]?.open !== false;
-      const nextOpen = windowUiState?.[windowId]?.open !== false;
+      const previousOpen = previousUiState?.windowUi?.[windowId]?.open !== false;
+      const nextOpen = nextSignalUiState?.windowUi?.[windowId]?.open !== false;
       if (!previousOpen && nextOpen) {
         bringManagedWindowToFront(windowId);
       }
       if (toolbarWindowId === "search" && previousOpen && !nextOpen) {
         elements.search?.blur?.();
       }
-      if (toolbarWindowId === "bookmarks" && previousOpen && !nextOpen && previousBookmarkPlacing) {
-        bookmarkUi.placing = false;
-        patchMapUiSignalState({ bookmarks: bookmarkUi });
+      if (
+        toolbarWindowId === "bookmarks" &&
+        previousOpen &&
+        !nextOpen &&
+        previousUiState.bookmarks.placing
+      ) {
+        patchMapUiSignalState({
+          bookmarks: {
+            ...nextSignalUiState.bookmarks,
+            placing: false,
+            selectedIds: nextBookmarkSelectedIds,
+          },
+        });
       }
     }
 
@@ -7030,13 +7150,13 @@ function bindUi(shell, elements, options = {}) {
 
   function syncMapActionsFromSignals() {
     const nextActionState = currentMapActionSignalState();
-    if (nextActionState.resetViewToken !== mapActionState.resetViewToken) {
-      mapActionState = nextActionState;
+    if (nextActionState.resetViewToken !== previousMapActionState.resetViewToken) {
+      previousMapActionState = nextActionState;
       dispatchMapCommand(shell, { resetView: true });
       return;
     }
-    if (nextActionState.resetUiToken !== mapActionState.resetUiToken) {
-      mapActionState = nextActionState;
+    if (nextActionState.resetUiToken !== previousMapActionState.resetUiToken) {
+      previousMapActionState = nextActionState;
       void resetMapUiToInitialState();
     }
   }
@@ -7302,6 +7422,7 @@ function bindUi(shell, elements, options = {}) {
 
   function setSearchDropdownOpen(open) {
     const nextOpen = open === true;
+    const searchUiState = currentSearchUiState();
     if (searchUiState.open === nextOpen) {
       return;
     }
@@ -7322,6 +7443,7 @@ function bindUi(shell, elements, options = {}) {
       stateBundle,
       match,
     );
+    const searchUiState = currentSearchUiState();
     patchMapUiSignalState({
       search: {
         ...searchUiState,
@@ -8413,7 +8535,7 @@ function bindUi(shell, elements, options = {}) {
       latestStateBundle = requestBridgeState(shell, { refresh: true });
       bridgeSessionSignalPublishReady = true;
       bridgeInputSyncReady = true;
-      syncBookmarksToBridge(bookmarks);
+      syncBookmarksToBridge(currentBookmarks(), currentBookmarkUiState(currentBookmarks()).selectedIds);
       renderCurrentState(latestStateBundle);
     } catch (error) {
       console.error("Failed to reset map UI", error);
@@ -8480,7 +8602,7 @@ function bindUi(shell, elements, options = {}) {
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
-  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncLocalUiStateFromSignals);
+  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, reconcileUiStateFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncPatchRangeFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeInputStateFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeSessionStateFromSignals);
@@ -8496,11 +8618,11 @@ function bindUi(shell, elements, options = {}) {
   });
 
   patchMapUiSignalState({
-    windowUi: windowUiState,
-    search: searchUiState,
-    bookmarks: bookmarkUi,
+    windowUi: currentWindowUiState(),
+    search: currentSearchUiState(),
+    bookmarks: currentBookmarkUiState(currentBookmarks()),
   });
-  syncBookmarksToBridge(bookmarks);
+  syncBookmarksToBridge(currentBookmarks(), currentBookmarkUiState(currentBookmarks()).selectedIds);
   renderCurrentState();
   return {
     syncFromMountedBridge(options = {}) {

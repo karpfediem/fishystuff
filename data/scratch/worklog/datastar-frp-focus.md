@@ -1994,3 +1994,59 @@ Note:
 - this slice has not yet been re-run through a live browser reset/remount smoke after moving the
   click path into `_map_actions`; the existing raw-CDP helper needs local socket access that is
   blocked in the current sandbox
+
+### Step 40 - Make Loader Read Page-Owned Map UI State Directly
+
+Completed:
+
+- removed the old loader-owned live mirrors for page-owned map UI branches:
+  - `windowUiState`
+  - `searchUiState`
+  - `bookmarks`
+  - `bookmarkUi`
+  - `mapActionState`
+- replaced those mirrors in `site/assets/map/loader.js` with direct Datastar-backed reads:
+  - `currentUiState()`
+  - `currentWindowUiState()`
+  - `currentSearchUiState()`
+  - `currentBookmarks()`
+  - `currentBookmarkUiState()`
+- converted the remaining broad read sites to treat those branches as live signal-backed state
+  instead of local loader-owned truth:
+  - render paths
+  - bookmark bridge sync
+  - managed-window visibility/position logic
+  - search open/close logic
+  - reset-action handling
+- kept only minimal previous-snapshot bookkeeping for transition side effects:
+  - newly opened windows still come to front
+  - search still blurs when the window closes
+  - closing the bookmark window still clears placement mode
+- renamed the old signal reconciliation hook from a local-state sync model to
+  `reconcileUiStateFromSignals()`
+
+Why this matters:
+
+- until this slice, the page-owned Datastar state existed, but loader still behaved as if it
+  owned the active UI state and merely synchronized it
+- that kept a large feedback-loop surface alive and made the map harder to reason about:
+  - two live copies of the same UI state
+  - reconciliation bugs
+  - bridge publish loops
+- the loader is now closer to its intended role:
+  - read page-owned Datastar state
+  - adapt it into the bridge/runtime
+  - publish runtime output back into Datastar
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/map/loader.js`
+  - `/js/pages/map-page.js`
+- live browser smoke:
+  - `bash tools/scripts/map-browser-smoke.sh /tmp/map-browser.json`
+  - bridge reached ready cleanly with the current dev server stack after the direct-read change
