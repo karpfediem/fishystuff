@@ -3681,14 +3681,9 @@ fn groups_distribution_segments(
             } else {
                 row.weight_pct
             }),
-            detail_text: trim_float(
-                total_catches_raw
-                    * if show_normalized_rates {
-                        row.current_share_pct / 100.0
-                    } else {
-                        row.weight_pct / 100.0
-                    },
-            ),
+            // Expected catches are based on the normalized group share.
+            // The toggle only changes how the rate itself is displayed.
+            detail_text: trim_float(total_catches_raw * (row.current_share_pct / 100.0)),
             width_pct: if show_normalized_rates {
                 row.current_share_pct
             } else {
@@ -6368,10 +6363,10 @@ mod tests {
         assert_eq!(normalized[0].width_pct, 5.81);
 
         assert_eq!(raw[0].value_text, "6.25%");
-        assert_eq!(raw[0].detail_text, "3.25");
+        assert_eq!(raw[0].detail_text, "3.02");
         assert_eq!(raw[0].width_pct, 6.25);
         assert_eq!(raw[1].value_text, "6.25%");
-        assert_eq!(raw[1].detail_text, "3.25");
+        assert_eq!(raw[1].detail_text, "3.02");
     }
 
     #[test]
