@@ -861,6 +861,7 @@ test("buildPointDetailPanes sources zone details from the API catalog", () => {
     panes[0]?.sections?.[0]?.facts?.map((fact) => [fact.key, fact.value]),
     [
       ["zone", "Demi River"],
+      ["rgb", "12,34,56"],
       ["bite_time", "8-12 s"],
     ],
   );

@@ -2809,12 +2809,19 @@ function buildZoneCatalogDetailSection(sample, zoneCatalog) {
     return null;
   }
   const zone = zoneCatalogEntryForRgb(zoneCatalog, zoneRgb);
+  const rgbDisplay = String(zone?.rgbKey || "").trim() || formatZone(zoneRgb);
   const facts = [
     {
       key: "zone",
       label: "Zone",
       value: zoneDisplayNameFromCatalog(zoneCatalog, zoneRgb),
       icon: "hover-zone",
+    },
+    {
+      key: "rgb",
+      label: "RGB",
+      value: rgbDisplay,
+      icon: "theme-palette",
     },
   ];
   const biteTimeRange = formatZoneBiteTimeRange(zone);
