@@ -117,6 +117,7 @@ const DEFAULT_MAP_SESSION_SIGNAL_STATE = Object.freeze({
 });
 const DEFAULT_MAP_ACTION_SIGNAL_STATE = Object.freeze({
   resetViewToken: 0,
+  resetUiToken: 0,
 });
 
 function cloneJsonValue(value) {
@@ -272,6 +273,9 @@ function currentMapActionSignalState() {
     resetViewToken: Number.isFinite(raw?.resetViewToken)
       ? Math.max(0, Math.trunc(raw.resetViewToken))
       : DEFAULT_MAP_ACTION_SIGNAL_STATE.resetViewToken,
+    resetUiToken: Number.isFinite(raw?.resetUiToken)
+      ? Math.max(0, Math.trunc(raw.resetUiToken))
+      : DEFAULT_MAP_ACTION_SIGNAL_STATE.resetUiToken,
   };
 }
 
@@ -7031,6 +7035,10 @@ function bindUi(shell, elements, options = {}) {
       dispatchMapCommand(shell, { resetView: true });
       return;
     }
+    if (nextActionState.resetUiToken !== mapActionState.resetUiToken) {
+      mapActionState = nextActionState;
+      void resetMapUiToInitialState();
+    }
   }
 
   function clearLayerDropState() {
@@ -8416,10 +8424,6 @@ function bindUi(shell, elements, options = {}) {
       setBooleanProperty(resetButton, "disabled", false);
     }
   }
-
-  elements.resetUi?.addEventListener("click", () => {
-    void resetMapUiToInitialState();
-  });
 
   if (elements.legend) {
     elements.legend.addEventListener("toggle", () => {

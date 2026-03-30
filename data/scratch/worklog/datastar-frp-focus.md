@@ -1961,3 +1961,36 @@ Validation:
     - `FishyMapBridge.getCurrentState().view.viewMode === '3d'`
     - `FishyMapBridge.getCurrentState().selection` reflects the stored world point
     - `FishyMapBridge.getCurrentInputState().filters.fishIds` includes the stored fish id
+
+### Step 39 - Route Map Reset UI Through Datastar Actions
+
+Completed:
+
+- expanded `_map_actions` in `site/layouts/map.shtml` with `resetUiToken`
+- moved the `Reset UI` button to a Datastar action-token update in the template instead of a
+  loader-owned direct click listener
+- updated `site/assets/map/loader.js` so `syncMapActionsFromSignals()` now owns both:
+  - `resetViewToken`
+  - `resetUiToken`
+- removed the last direct `elements.resetUi.addEventListener("click", ...)` path from loader
+
+Why this matters:
+
+- `Reset UI` was still bypassing the Datastar signal graph entirely
+- after the session-ownership migration in Step 38, the remount/reset path is now better aligned
+  with page-owned signal state, so routing the action through `_map_actions` removes another
+  imperative DOM island without changing the underlying reset implementation
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/map/loader.js`
+
+Note:
+
+- this slice has not yet been re-run through a live browser reset/remount smoke after moving the
+  click path into `_map_actions`; the existing raw-CDP helper needs local socket access that is
+  blocked in the current sandbox
