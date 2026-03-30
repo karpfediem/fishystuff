@@ -48,6 +48,7 @@ function createContext(localStorageInitial = {}, options = {}) {
   const document = createDocumentStub();
   const window = {};
   const localStorage = new MemoryStorage(localStorageInitial);
+  const sessionStorage = new MemoryStorage(options.sessionStorageInitial || {});
   const location = {
     href: options.locationHref || "https://fishystuff.fish/map/",
   };
@@ -58,6 +59,7 @@ function createContext(localStorageInitial = {}, options = {}) {
     document,
     location,
     localStorage,
+    sessionStorage,
     JSON,
     Object,
     Array,
@@ -82,6 +84,8 @@ function createContext(localStorageInitial = {}, options = {}) {
   };
   context.globalThis = context;
   window.location = location;
+  window.sessionStorage = sessionStorage;
+  window.localStorage = localStorage;
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
   vm.runInNewContext(MAP_PAGE_SOURCE, context, { filename: "map-page.js" });
   return {
@@ -89,6 +93,7 @@ function createContext(localStorageInitial = {}, options = {}) {
     document,
     location,
     localStorage,
+    sessionStorage,
     flushTimers() {
       const pending = Array.from(timers.values());
       timers.clear();
@@ -142,6 +147,13 @@ function defaultSignals() {
         pointIconScale: 1,
       },
     },
+    _map_session: {
+      view: {
+        viewMode: "2d",
+        camera: {},
+      },
+      selection: {},
+    },
     _map_runtime: {},
   };
 }
@@ -158,6 +170,55 @@ test("map-page restore loads persisted bookmark entries into Datastar signals", 
   env.window.__fishystuffMap.restore(signals);
 
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
+});
+
+test("map-page restore loads persisted session into _map_session", () => {
+  const env = createContext(
+    {},
+    {
+      sessionStorageInitial: {
+        "fishystuff.map.session.v1": JSON.stringify({
+          version: 1,
+          view: {
+            viewMode: "3d",
+            camera: {
+              centerWorldX: 100,
+              centerWorldZ: 200,
+              distance: 9000,
+            },
+          },
+          selection: {
+            fishId: 820986,
+            worldX: 123.5,
+            worldZ: -45.25,
+            pointKind: "bookmark",
+            pointLabel: "Pink Dolphin",
+          },
+        }),
+      },
+    },
+  );
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+
+  assert.deepEqual(signals._map_session, {
+    view: {
+      viewMode: "3d",
+      camera: {
+        centerWorldX: 100,
+        centerWorldZ: 200,
+        distance: 9000,
+      },
+    },
+    selection: {
+      fishId: 820986,
+      worldX: 123.5,
+      worldZ: -45.25,
+      pointKind: "bookmark",
+      pointLabel: "Pink Dolphin",
+    },
+  });
 });
 
 test("map-page restore loads persisted window ui into _map_ui", () => {
@@ -575,6 +636,75 @@ test("map-page persists durable _map_input filter state", () => {
         layerPointIconsVisible: { terrain: true },
         layerPointIconScales: { terrain: 1.5 },
       },
+    }),
+  );
+});
+
+test("map-page persists durable _map_session state into sessionStorage", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMap.patchSignals({
+    _map_session: {
+      view: {
+        viewMode: "3d",
+        camera: {
+          centerWorldX: 10,
+          centerWorldZ: 20,
+          distance: 7000,
+        },
+      },
+      selection: {
+        zoneRgb: 12615551,
+        worldX: 321.5,
+        worldZ: -654.25,
+        pointKind: "clicked",
+      },
+    },
+  });
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _map_session: {
+        view: {
+          viewMode: "3d",
+          camera: {
+            centerWorldX: 10,
+            centerWorldZ: 20,
+            distance: 7000,
+          },
+        },
+        selection: {
+          zoneRgb: 12615551,
+          worldX: 321.5,
+          worldZ: -654.25,
+          pointKind: "clicked",
+        },
+      },
+    },
+  });
+  env.flushTimers();
+
+  assert.equal(
+    env.sessionStorage.getItem("fishystuff.map.session.v1"),
+    JSON.stringify({
+      version: 1,
+      view: {
+        viewMode: "3d",
+        camera: {
+          centerWorldX: 10,
+          centerWorldZ: 20,
+          distance: 7000,
+        },
+      },
+      selection: {
+        zoneRgb: 12615551,
+        worldX: 321.5,
+        worldZ: -654.25,
+        pointKind: "clicked",
+      },
+      filters: {},
     }),
   );
 });

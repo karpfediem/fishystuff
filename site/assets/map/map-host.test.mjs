@@ -1331,7 +1331,7 @@ test("canvas sizing falls back to the map container when the canvas rect is not 
   }
 });
 
-test("restore priority is URL over bridge session state", () => {
+test("buildInitialRestorePatch ignores session storage and uses only query-owned restore state", () => {
   const sessionStorage = new MemoryStorage({
     "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
@@ -1373,24 +1373,21 @@ test("restore priority is URL over bridge session state", () => {
   });
 
   assert.deepEqual(patch.filters.layerIdsVisible, ["zones", "terrain"]);
+  assert.deepEqual(patch.filters.fishIds, [77]);
   assert.equal("layerIdsOrdered" in patch.filters, false);
   assert.equal("layerOpacities" in patch.filters, false);
   assert.equal("layerClipMasks" in patch.filters, false);
   assert.equal("patchId" in patch.filters, false);
   assert.equal("fromPatchId" in patch.filters, false);
   assert.equal("toPatchId" in patch.filters, false);
-  assert.deepEqual(patch.filters.fishIds, [77]);
   assert.equal("ui" in patch, false);
-  assert.deepEqual(patch.commands.selectWorldPoint, {
-    worldX: 321.5,
-    worldZ: -654.25,
-  });
+  assert.equal("selectWorldPoint" in patch.commands, false);
   assert.equal("selectZoneRgb" in patch.commands, false);
   assert.equal(patch.commands.setViewMode, "3d");
-  assert.equal(patch.commands.restoreView.viewMode, "3d");
+  assert.equal("restoreView" in patch.commands, false);
 });
 
-test("bridge session storage does not restore page-owned map filters", () => {
+test("buildInitialRestorePatch does not restore page-owned filters from session storage", () => {
   const sessionStorage = new MemoryStorage({
     "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
@@ -1421,22 +1418,8 @@ test("bridge session storage does not restore page-owned map filters", () => {
     sessionStorage,
   });
 
-  assert.equal("searchText" in (patch.filters || {}), false);
-  assert.equal("fishIds" in (patch.filters || {}), false);
-  assert.equal("zoneRgbs" in (patch.filters || {}), false);
-  assert.equal("semanticFieldIdsByLayer" in (patch.filters || {}), false);
-  assert.equal("fishFilterTerms" in (patch.filters || {}), false);
-  assert.equal("patchId" in (patch.filters || {}), false);
-  assert.equal("fromPatchId" in (patch.filters || {}), false);
-  assert.equal("toPatchId" in (patch.filters || {}), false);
-  assert.equal("layerIdsVisible" in (patch.filters || {}), false);
-  assert.equal("layerIdsOrdered" in (patch.filters || {}), false);
-  assert.equal("layerOpacities" in (patch.filters || {}), false);
-  assert.equal("layerClipMasks" in (patch.filters || {}), false);
-  assert.equal("layerWaypointConnectionsVisible" in (patch.filters || {}), false);
-  assert.equal("layerWaypointLabelsVisible" in (patch.filters || {}), false);
-  assert.equal("layerPointIconsVisible" in (patch.filters || {}), false);
-  assert.equal("layerPointIconScales" in (patch.filters || {}), false);
+  assert.deepEqual(patch.filters || {}, {});
+  assert.equal("commands" in patch, false);
 });
 
 test("layer opacity overrides replace the previous map instead of merging stale entries", () => {
@@ -1602,9 +1585,9 @@ test("layer clip mask normalization flattens nested attachments to a single root
   });
 });
 
-test("session restore no longer rehydrates page-owned fish filters", () => {
+test("buildInitialRestorePatch ignores session fish selection state", () => {
   const sessionStorage = new MemoryStorage({
-    [FISHYMAP_STORAGE_KEYS.session]: JSON.stringify({
+    "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
       selection: {
         fishId: 33,
@@ -1617,16 +1600,16 @@ test("session restore no longer rehydrates page-owned fish filters", () => {
 
   const patch = buildInitialRestorePatch({
     locationHref: "https://fishystuff.fish/map/",
-    localStorage: new MemoryStorage(),
     sessionStorage,
   });
 
-  assert.deepEqual(patch.filters.fishIds, [33]);
+  assert.deepEqual(patch.filters || {}, {});
+  assert.equal("commands" in patch, false);
 });
 
-test("session restore no longer rehydrates page-owned zone filters", () => {
+test("buildInitialRestorePatch ignores session zone selection state", () => {
   const sessionStorage = new MemoryStorage({
-    [FISHYMAP_STORAGE_KEYS.session]: JSON.stringify({
+    "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
       selection: {
         zoneRgb: 0xc17f7f,
@@ -1639,17 +1622,16 @@ test("session restore no longer rehydrates page-owned zone filters", () => {
 
   const patch = buildInitialRestorePatch({
     locationHref: "https://fishystuff.fish/map/",
-    localStorage: new MemoryStorage(),
     sessionStorage,
   });
 
-  assert.equal("zoneRgbs" in (patch.filters || {}), false);
-  assert.equal(patch.commands.selectZoneRgb, 0xc17f7f);
+  assert.deepEqual(patch.filters || {}, {});
+  assert.equal("commands" in patch, false);
 });
 
-test("session restore no longer rehydrates page-owned semantic filter sets", () => {
+test("buildInitialRestorePatch ignores session semantic selection state", () => {
   const sessionStorage = new MemoryStorage({
-    [FISHYMAP_STORAGE_KEYS.session]: JSON.stringify({
+    "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
       selection: {
         semanticLayerId: "regions",
@@ -1665,15 +1647,11 @@ test("session restore no longer rehydrates page-owned semantic filter sets", () 
 
   const patch = buildInitialRestorePatch({
     locationHref: "https://fishystuff.fish/map/",
-    localStorage: new MemoryStorage(),
     sessionStorage,
   });
 
-  assert.equal("semanticFieldIdsByLayer" in (patch.filters || {}), false);
-  assert.deepEqual(patch.commands.selectSemanticField, {
-    layerId: "regions",
-    fieldId: 76,
-  });
+  assert.deepEqual(patch.filters || {}, {});
+  assert.equal("commands" in patch, false);
 });
 
 test("state patch normalizes selectWorldPoint commands", () => {

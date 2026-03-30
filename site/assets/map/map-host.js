@@ -1,7 +1,6 @@
 const THEME_EVENT = "fishystuff:themechange";
 const THEME_PROBE_ID = "fishystuff-theme-probe";
 const DEFAULT_PATCH_DEBOUNCE_MS = 48;
-const DEFAULT_SESSION_SAVE_MS = 180;
 const DEFAULT_BOOTSTRAP_SYNC_MS = 96;
 const MIN_BOOTSTRAP_SYNC_PASSES = 4;
 const MAX_BOOTSTRAP_SYNC_PASSES = 120;
@@ -23,7 +22,6 @@ export const FISHYMAP_EVENTS = Object.freeze({
 });
 
 export const FISHYMAP_STORAGE_KEYS = Object.freeze({
-  session: "fishystuff.map.session.v1",
   bookmarks: "fishystuff.map.bookmarks.v1",
   caught: "fishystuff.fishydex.caught.v1",
   favourites: "fishystuff.fishydex.favourites.v1",
@@ -1879,21 +1877,6 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   return normalizeStatePatch(patch);
 }
 
-function readJsonStorage(storage, key) {
-  if (!storage) {
-    return null;
-  }
-  try {
-    const raw = storage.getItem(key);
-    if (!raw) {
-      return null;
-    }
-    return JSON.parse(raw);
-  } catch (_) {
-    return null;
-  }
-}
-
 export function snapshotToRestorePatch(snapshot) {
   if (!isPlainObject(snapshot)) {
     return normalizeStatePatch({});
@@ -1965,19 +1948,36 @@ export function snapshotToRestorePatch(snapshot) {
   return normalizeStatePatch(patch);
 }
 
-export function loadSessionRestorePatch(storage = globalThis.sessionStorage) {
-  return snapshotToRestorePatch(readJsonStorage(storage, FISHYMAP_STORAGE_KEYS.session));
-}
-
 export function buildInitialRestorePatch({
   locationHref = globalThis.location?.href,
-  sessionStorage = globalThis.sessionStorage,
   defaults,
 } = {}) {
   let merged = normalizeStatePatch(defaults || {});
-  merged = mergeStatePatch(merged, loadSessionRestorePatch(sessionStorage));
   merged = mergeStatePatch(merged, parseQueryState(locationHref));
   return merged;
+}
+
+export function createSessionSnapshotFromState(stateInput) {
+  const state = stateInput || createEmptySnapshot();
+  const semanticSelection = semanticFieldSelectionFromLayerSamples(
+    state.selection?.layerSamples,
+  );
+  return {
+    version: FISHYMAP_CONTRACT_VERSION,
+    savedAt: new Date().toISOString(),
+    view: state.view,
+    selection: {
+      fishId: state.selection?.fishId ?? state.filters?.fishIds?.[0] ?? null,
+      zoneRgb: zoneRgbFromLayerSamples(state.selection?.layerSamples),
+      semanticLayerId: semanticSelection?.layerId ?? null,
+      semanticFieldId: semanticSelection?.fieldId ?? null,
+      worldX: state.selection?.worldX ?? null,
+      worldZ: state.selection?.worldZ ?? null,
+      pointKind: normalizeSelectionPointKind(state.selection?.pointKind),
+      pointLabel: normalizeNullableString(state.selection?.pointLabel),
+    },
+    filters: {},
+  };
 }
 
 function stripUndefined(obj) {
@@ -2090,9 +2090,7 @@ class FishyMapBridgeImpl {
     this.pendingStatePatch = normalizeStatePatch({});
     this.pendingCommands = [];
     this.patchDebounceMs = DEFAULT_PATCH_DEBOUNCE_MS;
-    this.sessionSaveDebounceMs = DEFAULT_SESSION_SAVE_MS;
     this.flushPatchTimer = 0;
-    this.flushSessionTimer = 0;
     this.bootstrapSyncTimer = 0;
     this.bootstrapSyncPasses = 0;
     this.resizeObserver = null;
@@ -2117,14 +2115,6 @@ class FishyMapBridgeImpl {
     };
     this.boundResize = () => {
       this.syncCanvasSize();
-    };
-    this.boundPageHide = () => {
-      this.flushSessionStateSave();
-    };
-    this.boundVisibilityChange = () => {
-      if (globalThis.document?.visibilityState === "hidden") {
-        this.flushSessionStateSave();
-      }
     };
     this.performanceOptions = normalizePerformanceOptions({ scenario: "load_map" });
     this.performanceCollector = createPerformanceCollector(this.performanceOptions.scenario);
@@ -2178,10 +2168,6 @@ class FishyMapBridgeImpl {
         Number.isFinite(options.debounceMs) && options.debounceMs >= 0
           ? options.debounceMs
           : DEFAULT_PATCH_DEBOUNCE_MS;
-      this.sessionSaveDebounceMs =
-        Number.isFinite(options.sessionSaveDebounceMs) && options.sessionSaveDebounceMs >= 0
-          ? options.sessionSaveDebounceMs
-          : DEFAULT_SESSION_SAVE_MS;
 
       this.container = container;
       this.canvas =
@@ -2193,7 +2179,6 @@ class FishyMapBridgeImpl {
       this.attachDomListeners();
       this.installCanvasSizeSync();
       this.installThemeSync();
-      this.installPersistenceHooks();
 
       const wasmModule = options.wasmModule || (await loadMapRuntimeModule(options));
       try {
@@ -2237,16 +2222,13 @@ class FishyMapBridgeImpl {
   destroy() {
     this.measurePerformanceSpan("host.destroy", () => {
       globalThis.clearTimeout(this.flushPatchTimer);
-      globalThis.clearTimeout(this.flushSessionTimer);
       globalThis.clearTimeout(this.bootstrapSyncTimer);
       this.flushPatchTimer = 0;
-      this.flushSessionTimer = 0;
       this.bootstrapSyncTimer = 0;
       this.bootstrapSyncPasses = 0;
       this.detachDomListeners();
       this.teardownCanvasSizeSync();
       this.teardownThemeSync();
-      this.teardownPersistenceHooks();
 
       if (this.wasmModule?.fishymap_destroy) {
         this.wasmModule.fishymap_destroy();
@@ -2512,16 +2494,6 @@ class FishyMapBridgeImpl {
     }
   }
 
-  installPersistenceHooks() {
-    globalThis.window?.addEventListener?.("pagehide", this.boundPageHide);
-    globalThis.document?.addEventListener?.("visibilitychange", this.boundVisibilityChange);
-  }
-
-  teardownPersistenceHooks() {
-    globalThis.window?.removeEventListener?.("pagehide", this.boundPageHide);
-    globalThis.document?.removeEventListener?.("visibilitychange", this.boundVisibilityChange);
-  }
-
   syncTheme() {
     const themePatch = buildThemePatch();
     if (themePatch) {
@@ -2619,7 +2591,6 @@ class FishyMapBridgeImpl {
 
       if (bootstrapStateSignature(this.currentState) !== previousSignature) {
         if (becameReady) {
-          this.scheduleSessionStateSave();
           this.emit(FISHYMAP_EVENTS.ready, {
             type: "ready",
             version: this.currentState.version || FISHYMAP_CONTRACT_VERSION,
@@ -2759,7 +2730,6 @@ class FishyMapBridgeImpl {
             viewMode: nextViewMode,
           },
         };
-        this.scheduleSessionStateSave();
         this.emit(FISHYMAP_EVENTS.viewChanged, {
           ...payload,
           state: {
@@ -2792,12 +2762,10 @@ class FishyMapBridgeImpl {
       };
 
       if (type === "selection-changed") {
-        this.scheduleSessionStateSave();
         this.emit(FISHYMAP_EVENTS.selectionChanged, detail);
         return;
       }
       if (type === "ready") {
-        this.scheduleSessionStateSave();
         this.emit(FISHYMAP_EVENTS.ready, detail);
         return;
       }
@@ -2808,50 +2776,7 @@ class FishyMapBridgeImpl {
   }
 
   createSessionSnapshot() {
-    const state = this.currentState || createEmptySnapshot();
-    const semanticSelection = semanticFieldSelectionFromLayerSamples(
-      state.selection?.layerSamples,
-    );
-    return {
-      version: FISHYMAP_CONTRACT_VERSION,
-      savedAt: new Date().toISOString(),
-      view: state.view,
-      selection: {
-        fishId: state.selection?.fishId ?? state.filters?.fishIds?.[0] ?? null,
-        zoneRgb: zoneRgbFromLayerSamples(state.selection?.layerSamples),
-        semanticLayerId: semanticSelection?.layerId ?? null,
-        semanticFieldId: semanticSelection?.fieldId ?? null,
-        worldX: state.selection?.worldX ?? null,
-        worldZ: state.selection?.worldZ ?? null,
-        pointKind: normalizeSelectionPointKind(state.selection?.pointKind),
-        pointLabel: normalizeNullableString(state.selection?.pointLabel),
-      },
-      filters: {
-      },
-    };
-  }
-
-  scheduleSessionStateSave() {
-    if (this.flushSessionTimer) {
-      return;
-    }
-    this.flushSessionTimer = globalThis.setTimeout(() => {
-      this.flushSessionTimer = 0;
-      this.flushSessionStateSave();
-    }, this.sessionSaveDebounceMs);
-  }
-
-  flushSessionStateSave() {
-    if (this.flushSessionTimer) {
-      globalThis.clearTimeout(this.flushSessionTimer);
-      this.flushSessionTimer = 0;
-    }
-    try {
-      globalThis.sessionStorage?.setItem(
-        FISHYMAP_STORAGE_KEYS.session,
-        JSON.stringify(this.createSessionSnapshot()),
-      );
-    } catch (_) {}
+    return createSessionSnapshotFromState(this.currentState);
   }
 
 }

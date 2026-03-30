@@ -1112,6 +1112,10 @@
            _map_bookmarks: {
              entries: []
            },
+           _map_session: {
+             view: { viewMode: '2d', camera: {} },
+             selection: {}
+           },
            _map_runtime: {
              state: {
                ready: false,

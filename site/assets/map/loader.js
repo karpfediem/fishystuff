@@ -5,8 +5,10 @@ import FishyMapBridge, {
   FISHYMAP_POINT_ICON_SCALE_MIN,
   FISHYMAP_STORAGE_KEYS,
   applyStatePatch,
+  createSessionSnapshotFromState,
   resolveApiBaseUrl,
   resolveCdnBaseUrl,
+  snapshotToRestorePatch,
   zoneRgbFromLayerSamples,
 } from "./map-host.js";
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
@@ -106,6 +108,13 @@ const DEFAULT_MAP_INPUT_SIGNAL_STATE = Object.freeze({
 const DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE = Object.freeze({
   entries: [],
 });
+const DEFAULT_MAP_SESSION_SIGNAL_STATE = Object.freeze({
+  view: Object.freeze({
+    viewMode: "2d",
+    camera: {},
+  }),
+  selection: Object.freeze({}),
+});
 const DEFAULT_MAP_ACTION_SIGNAL_STATE = Object.freeze({
   resetViewToken: 0,
 });
@@ -186,6 +195,54 @@ function patchMapInputSignalState(patch) {
   helper.patchSignals({
     _map_input: cloneJsonValue(applyStatePatch(current, patch)),
   });
+}
+
+function currentMapSessionSignalState() {
+  const helper = mapSignalHelper();
+  const raw = helper?.readSignal?.("_map_session");
+  return {
+    view:
+      raw?.view && typeof raw.view === "object" && !Array.isArray(raw.view)
+        ? cloneJsonValue(raw.view)
+        : cloneJsonValue(DEFAULT_MAP_SESSION_SIGNAL_STATE.view),
+    selection:
+      raw?.selection && typeof raw.selection === "object" && !Array.isArray(raw.selection)
+        ? cloneJsonValue(raw.selection)
+        : cloneJsonValue(DEFAULT_MAP_SESSION_SIGNAL_STATE.selection),
+  };
+}
+
+function runtimeMapSessionSignalState(state) {
+  const sessionSnapshot = createSessionSnapshotFromState(state);
+  return {
+    view: cloneJsonValue(sessionSnapshot.view || DEFAULT_MAP_SESSION_SIGNAL_STATE.view),
+    selection: cloneJsonValue(
+      sessionSnapshot.selection || DEFAULT_MAP_SESSION_SIGNAL_STATE.selection,
+    ),
+  };
+}
+
+function publishMapSessionSignals(state) {
+  const helper = mapSignalHelper();
+  if (!helper) {
+    return;
+  }
+  const nextSessionState = runtimeMapSessionSignalState(state);
+  if (JSON.stringify(currentMapSessionSignalState()) === JSON.stringify(nextSessionState)) {
+    return;
+  }
+  publishMapSessionSignals.isPatching = true;
+  try {
+    helper.patchSignals({
+      _map_session: nextSessionState,
+    });
+  } finally {
+    publishMapSessionSignals.isPatching = false;
+  }
+}
+
+function buildInitialBridgeRestorePatchFromSignals() {
+  return snapshotToRestorePatch(currentMapSessionSignalState());
 }
 
 function currentMapBookmarksSignalState() {
@@ -6258,6 +6315,9 @@ function applySearchMatchSelection(
 function bindUi(shell, elements, options = {}) {
   let isRendering = false;
   let bridgeInputSyncReady = false;
+  let bridgeSessionSyncReady = false;
+  let bridgeSessionSignalPublishReady = false;
+  let bridgeSessionRestoreInFlight = false;
   let patchRangeSyncPatching = false;
   let latestStateBundle = requestBridgeState(shell);
   const initialMapUiState = currentMapUiSignalState();
@@ -6826,6 +6886,18 @@ function bindUi(shell, elements, options = {}) {
     });
     publishMapInputSignals(latestStateBundle.inputState);
     publishMapRuntimeSignals(latestStateBundle);
+    const desiredSessionState = currentMapSessionSignalState();
+    const runtimeSessionState = runtimeMapSessionSignalState(latestStateBundle.state);
+    if (
+      bridgeSessionRestoreInFlight === true &&
+      JSON.stringify(desiredSessionState) === JSON.stringify(runtimeSessionState)
+    ) {
+      bridgeSessionRestoreInFlight = false;
+      bridgeSessionSignalPublishReady = true;
+    }
+    if (bridgeSessionSignalPublishReady === true && bridgeSessionRestoreInFlight !== true) {
+      publishMapSessionSignals(latestStateBundle.state);
+    }
     const resolvedBookmarks = persistResolvedBookmarksFromStateBundle(
       latestStateBundle,
       bookmarks,
@@ -6929,6 +7001,27 @@ function bindUi(shell, elements, options = {}) {
       ...getLatestStateBundle(),
       inputState: nextSignalInputState,
     });
+  }
+
+  function syncBridgeSessionStateFromSignals() {
+    if (publishMapSessionSignals.isPatching === true) {
+      return;
+    }
+    if (bridgeSessionSyncReady !== true) {
+      return;
+    }
+    const desiredSessionState = currentMapSessionSignalState();
+    const runtimeSessionState = runtimeMapSessionSignalState(getLatestStateBundle().state);
+    if (JSON.stringify(desiredSessionState) === JSON.stringify(runtimeSessionState)) {
+      bridgeSessionRestoreInFlight = false;
+      bridgeSessionSignalPublishReady = true;
+      return;
+    }
+
+    bridgeSessionRestoreInFlight = true;
+    bridgeSessionSignalPublishReady = false;
+    FishyMapBridge.setState?.(buildInitialBridgeRestorePatchFromSignals());
+    FishyMapBridge.flushPendingPatchNow?.();
   }
 
   function syncMapActionsFromSignals() {
@@ -8294,14 +8387,14 @@ function bindUi(shell, elements, options = {}) {
     applyManagedWindows();
 
     try {
-      globalThis.sessionStorage?.removeItem?.(FISHYMAP_STORAGE_KEYS.session);
-    } catch (_) {}
-    try {
       globalThis.localStorage?.removeItem?.(FISHYMAP_WINDOW_UI_STORAGE_KEY);
     } catch (_) {}
 
     try {
       bridgeInputSyncReady = false;
+      bridgeSessionSyncReady = false;
+      bridgeSessionSignalPublishReady = false;
+      bridgeSessionRestoreInFlight = false;
       FishyMapBridge.destroy?.();
       latestStateBundle = requestBridgeState(shell);
       renderCurrentState(latestStateBundle);
@@ -8310,6 +8403,7 @@ function bindUi(shell, elements, options = {}) {
         ...remountOptions,
       });
       latestStateBundle = requestBridgeState(shell, { refresh: true });
+      bridgeSessionSignalPublishReady = true;
       bridgeInputSyncReady = true;
       syncBookmarksToBridge(bookmarks);
       renderCurrentState(latestStateBundle);
@@ -8366,9 +8460,7 @@ function bindUi(shell, elements, options = {}) {
         ...(nextBundle.state || {}),
       },
     };
-    publishMapRuntimeSignals(latestStateBundle);
-    renderViewState(elements, latestStateBundle.state);
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
+    renderCurrentState(latestStateBundle);
   });
 
   shell.addEventListener(FISHYMAP_EVENTS.hoverChanged, (event) => {
@@ -8387,6 +8479,7 @@ function bindUi(shell, elements, options = {}) {
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncLocalUiStateFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncPatchRangeFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeInputStateFromSignals);
+  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeSessionStateFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncMapActionsFromSignals);
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));
   window.addEventListener("keydown", (event) => {
@@ -8410,6 +8503,8 @@ function bindUi(shell, elements, options = {}) {
       latestStateBundle = requestBridgeState(shell, {
         refresh: options.refresh !== false,
       });
+      bridgeSessionSyncReady = true;
+      syncBridgeSessionStateFromSignals();
       renderCurrentState(latestStateBundle);
       bridgeInputSyncReady = true;
     },
@@ -8421,6 +8516,7 @@ function bindUi(shell, elements, options = {}) {
 }
 
 async function main() {
+  await globalThis.window?.__fishystuffMap?.whenRestored?.();
   const shell = document.getElementById("map-page-shell");
   const canvas = document.getElementById("bevy");
   if (!shell || !canvas) {
@@ -8518,7 +8614,10 @@ async function main() {
   }
 
   try {
-    await FishyMapBridge.mount(shell, { canvas });
+    await FishyMapBridge.mount(shell, {
+      canvas,
+      initialState: buildInitialBridgeRestorePatchFromSignals(),
+    });
     ui.syncFromMountedBridge();
   } catch (error) {
     console.error("Failed to mount FishyMap bridge", error);

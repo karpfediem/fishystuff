@@ -1888,3 +1888,76 @@ Validation:
   - verify the map boots cleanly
   - verify `localStorage['fishystuff.map.prefs.v1'] === null`
   - verify query-owned `_map_input` state still survives startup
+
+### Step 38 - Move Map Session Restore/Persistence into Page-Owned Datastar State
+
+Completed:
+
+- added a page-owned `_map_session` Datastar branch in `site/layouts/map.shtml`
+  for durable map session state:
+  - `view`
+  - `selection`
+- extended `site/assets/js/pages/map-page.js` so map-page restore/persist now also owns:
+  - `sessionStorage['fishystuff.map.session.v1']`
+  - restore into `_map_session`
+  - persistence from `_map_session`
+- added page-level session restore/persist regression coverage in
+  `site/assets/js/pages/map-page.test.mjs`
+- removed bridge-owned session storage restore/write behavior from
+  `site/assets/map/map-host.js`
+  - `buildInitialRestorePatch(...)` is now query/default only
+  - session persistence hooks/timers are gone
+  - bridge session snapshots remain available only as pure derived helpers
+- added `createSessionSnapshotFromState(...)` in `site/assets/map/map-host.js`
+  so the page/loader can reuse the same compact session snapshot shape
+- updated `site/assets/map/loader.js` so Datastar-owned `_map_session` now drives bridge
+  startup/session reconciliation:
+  - build bridge initial restore patch from `_map_session`
+  - wait for `window.__fishystuffMap.restore($)` before mounting the bridge
+  - reconcile restored `_map_session` into the bridge before allowing runtime session
+    mirroring to overwrite it
+  - mirror runtime `view` / `selection` back into `_map_session` once the bridge catches up
+- simplified the `viewChanged` path so it goes back through `renderCurrentState(...)`,
+  keeping runtime/session signal publishing consistent
+- updated `site/assets/map/map-host.test.mjs` to assert the new ownership model:
+  - build-initial-restore ignores session storage entirely
+  - page-owned session restore is no longer bridge-owned
+
+Why this matters:
+
+- before this slice, session restore was double-owned:
+  - page-owned `_map_session` had started persisting
+  - bridge-owned `sessionStorage` restore/save still existed
+- that created a broken startup ordering:
+  - restored Datastar session could be overwritten by stale bridge runtime state
+  - the map could boot in the wrong mode/selection even with valid stored session data
+- the new model is:
+  - page-owned Datastar `_map_session` is the single durable owner
+  - loader adapts `_map_session` into the existing bridge/WASM contract
+  - bridge publishes runtime state back into `_map_session` only after it has reconciled
+    to the desired restored session
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/loader.js`
+- `node --check site/assets/map/map-host.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/js/pages/map-page.js`
+  - `/map/loader.js`
+  - `/map/map-host.js`
+- live Chromium smoke:
+  - seed `sessionStorage['fishystuff.map.session.v1']` with:
+    - 3D view
+    - camera values
+    - bookmark/world-point selection
+    - fish id
+  - reload `/map/`
+  - verify:
+    - `_map_session` still matches the stored session
+    - `FishyMapBridge.getCurrentState().view.viewMode === '3d'`
+    - `FishyMapBridge.getCurrentState().selection` reflects the stored world point
+    - `FishyMapBridge.getCurrentInputState().filters.fishIds` includes the stored fish id

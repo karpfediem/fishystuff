@@ -1,15 +1,23 @@
 (function () {
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
+  const MAP_SESSION_STORAGE_KEY = "fishystuff.map.session.v1";
   const LEGACY_MAP_PREFS_STORAGE_KEY = "fishystuff.map.prefs.v1";
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries)(?:\.|$)/;
+    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
+    persistedSessionJson: "",
     uiStateRestored: false,
     persistBinding: null,
+    restoreResolved: false,
+    restorePromise: null,
+    resolveRestore: null,
   };
+  state.restorePromise = new Promise((resolve) => {
+    state.resolveRestore = resolve;
+  });
 
   function datastarStateHelper() {
     const helper = window.__fishystuffDatastarState;
@@ -203,6 +211,15 @@
       _map_bookmarks: {
         entries: bookmarkEntries,
       },
+      _map_session:
+        signals?._map_session &&
+        typeof signals._map_session === "object" &&
+        !Array.isArray(signals._map_session)
+          ? cloneJson(signals._map_session)
+          : {
+              view: { viewMode: "2d", camera: {} },
+              selection: {},
+            },
     };
   }
 
@@ -393,6 +410,45 @@
     return Object.keys(patch).length ? patch : null;
   }
 
+  function sessionStorageSnapshot(stored) {
+    return {
+      version: 1,
+      view:
+        stored?._map_session?.view &&
+        typeof stored._map_session.view === "object" &&
+        !Array.isArray(stored._map_session.view)
+          ? cloneJson(stored._map_session.view)
+          : { viewMode: "2d", camera: {} },
+      selection:
+        stored?._map_session?.selection &&
+        typeof stored._map_session.selection === "object" &&
+        !Array.isArray(stored._map_session.selection)
+          ? cloneJson(stored._map_session.selection)
+          : {},
+      filters: {},
+    };
+  }
+
+  function restoreSessionPatch(parsed) {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return {
+      _map_session: {
+        view:
+          parsed.view && typeof parsed.view === "object" && !Array.isArray(parsed.view)
+            ? cloneJson(parsed.view)
+            : { viewMode: "2d", camera: {} },
+        selection:
+          parsed.selection &&
+          typeof parsed.selection === "object" &&
+          !Array.isArray(parsed.selection)
+            ? cloneJson(parsed.selection)
+            : {},
+      },
+    };
+  }
+
   function stripEmptyRestorePatchBranches(patch) {
     if (!patch || typeof patch !== "object") {
       return null;
@@ -414,6 +470,14 @@
     }
     if (patch._map_bookmarks?.entries && !patch._map_bookmarks.entries.length) {
       delete patch._map_bookmarks;
+    }
+    if (
+      patch._map_session &&
+      typeof patch._map_session === "object" &&
+      !Array.isArray(patch._map_session) &&
+      !Object.keys(patch._map_session).length
+    ) {
+      delete patch._map_session;
     }
     return Object.keys(patch).length ? patch : null;
   }
@@ -475,6 +539,7 @@
     bindPersistListener();
     let uiPatch = null;
     let bookmarkPatch = null;
+    let sessionPatch = null;
     try {
       globalThis.localStorage?.removeItem?.(LEGACY_MAP_PREFS_STORAGE_KEY);
       const rawUi = globalThis.localStorage?.getItem?.(MAP_UI_STORAGE_KEY);
@@ -500,9 +565,18 @@
           globalThis.localStorage?.removeItem?.(MAP_BOOKMARKS_STORAGE_KEY);
         }
       }
+      const rawSession = globalThis.sessionStorage?.getItem?.(MAP_SESSION_STORAGE_KEY);
+      if (rawSession) {
+        try {
+          sessionPatch = restoreSessionPatch(JSON.parse(rawSession));
+        } catch (_error) {
+          globalThis.sessionStorage?.removeItem?.(MAP_SESSION_STORAGE_KEY);
+        }
+      }
     } catch (_error) {
       uiPatch = null;
       bookmarkPatch = null;
+      sessionPatch = null;
     }
     if (uiPatch) {
       patchSignals(uiPatch);
@@ -510,10 +584,18 @@
     if (bookmarkPatch) {
       patchSignals(bookmarkPatch);
     }
+    if (sessionPatch) {
+      patchSignals(sessionPatch);
+    }
     const stored = storedUiSignals(signals);
     state.persistedUiJson = JSON.stringify(uiStorageSnapshot(stored));
     state.persistedBookmarksJson = JSON.stringify(stored._map_bookmarks.entries);
+    state.persistedSessionJson = JSON.stringify(sessionStorageSnapshot(stored));
     state.uiStateRestored = true;
+    if (!state.restoreResolved) {
+      state.restoreResolved = true;
+      state.resolveRestore?.();
+    }
   }
 
   function persist() {
@@ -533,6 +615,11 @@
         globalThis.localStorage?.setItem?.(MAP_BOOKMARKS_STORAGE_KEY, bookmarksJson);
         state.persistedBookmarksJson = bookmarksJson;
       }
+      const sessionJson = JSON.stringify(sessionStorageSnapshot(stored));
+      if (sessionJson !== state.persistedSessionJson) {
+        globalThis.sessionStorage?.setItem?.(MAP_SESSION_STORAGE_KEY, sessionJson);
+        state.persistedSessionJson = sessionJson;
+      }
     } catch (_error) {
       // Map UI persistence is best-effort only.
     }
@@ -546,5 +633,8 @@
     },
     restore,
     persist,
+    whenRestored() {
+      return state.restorePromise;
+    },
   });
 })();
