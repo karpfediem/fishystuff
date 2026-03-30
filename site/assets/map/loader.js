@@ -7248,28 +7248,44 @@ function bindUi(shell, elements, options = {}) {
     });
   }
 
-  function pushPatchRangePatch() {
-    const current = getLatestStateBundle();
+  function syncPatchRangeFromSignals() {
+    const inputState = currentMapInputSignalState();
+    const currentFromPatchId = inputState.filters?.fromPatchId ?? inputState.filters?.patchId ?? null;
+    const currentToPatchId = inputState.filters?.toPatchId ?? inputState.filters?.patchId ?? null;
+    const currentPatchId = inputState.filters?.patchId ?? null;
+
+    if (!currentFromPatchId && !currentToPatchId && !currentPatchId) {
+      return;
+    }
+
     const patchRange = normalizePatchRangeSelection(
-      current.state.catalog?.patches || [],
-      elements.patchFrom.value || null,
-      elements.patchTo.value || null,
+      getLatestStateBundle().state?.catalog?.patches || [],
+      currentFromPatchId,
+      currentToPatchId,
     );
     if (!patchRange.ordered.length) {
       return;
     }
 
-    elements.patchFrom.value = patchRange.fromPatchId;
-    elements.patchTo.value = patchRange.toPatchId;
+    const nextPatchId =
+      patchRange.fromPatchId &&
+      patchRange.toPatchId &&
+      patchRange.fromPatchId === patchRange.toPatchId
+        ? patchRange.fromPatchId
+        : null;
+
+    if (
+      currentFromPatchId === patchRange.fromPatchId &&
+      currentToPatchId === patchRange.toPatchId &&
+      currentPatchId === nextPatchId
+    ) {
+      return;
+    }
+
     patchMapInputSignalState({
       version: 1,
       filters: {
-        patchId:
-          patchRange.fromPatchId &&
-          patchRange.toPatchId &&
-          patchRange.fromPatchId === patchRange.toPatchId
-            ? patchRange.fromPatchId
-            : null,
+        patchId: nextPatchId,
         fromPatchId: patchRange.fromPatchId,
         toPatchId: patchRange.toPatchId,
       },
@@ -7646,20 +7662,6 @@ function bindUi(shell, elements, options = {}) {
     if (setZoneInfoTab(nextButton?.getAttribute("data-zone-info-tab"))) {
       nextButton?.focus?.();
     }
-  });
-
-  elements.patchFrom.addEventListener("change", () => {
-    if (isRendering) {
-      return;
-    }
-    pushPatchRangePatch();
-  });
-
-  elements.patchTo.addEventListener("change", () => {
-    if (isRendering) {
-      return;
-    }
-    pushPatchRangePatch();
   });
 
   elements.bookmarkPlace?.addEventListener("click", () => {
@@ -8395,6 +8397,7 @@ function bindUi(shell, elements, options = {}) {
   });
 
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncLocalUiStateFromSignals);
+  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncPatchRangeFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeInputStateFromSignals);
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncMapActionsFromSignals);
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));

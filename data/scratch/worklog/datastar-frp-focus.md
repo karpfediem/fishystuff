@@ -1209,9 +1209,39 @@ Validation:
 - live Chromium smoke:
   - reload `/map/`
   - type `manta` into the search field
-  - verify `_map_input.filters.searchText === "manta"`
-  - verify `_map_ui.search.open === true`
-  - verify the results list is visible with `2 matches`
+- verify `_map_input.filters.searchText === "manta"`
+- verify `_map_ui.search.open === true`
+- verify the results list is visible with `2 matches`
+
+### Step 23 - Signal-Driven Map Patch Range Normalization
+
+Completed:
+
+- removed the map patch-window `change` listeners for `from` and `to` from `site/assets/map/loader.js`
+- moved patch-range ordering and `patchId` derivation into a Datastar signal-patch reconciliation step in `site/assets/map/loader.js`
+- the loader now normalizes `_map_input.filters.fromPatchId` / `_map_input.filters.toPatchId` from signal state before bridge sync
+
+Why this matters:
+
+- the patch pickers already bind into canonical Datastar signals through hidden inputs
+- the remaining loader `change` handlers were only there to canonicalize those signal values after the fact
+- canonicalization belongs in the signal reconciliation path, not in DOM event ownership
+- this keeps the bridge fed from normalized Datastar state even when signals are patched programmatically or restored from persisted state
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared:
+  - served `/map/` vs `site/.out/map/index.html`
+  - served `/map/loader.js` vs `site/.out/map/loader.js`
+- live Chromium smoke:
+  - reload `/map/`
+  - patch `_map_input.filters.fromPatchId` / `toPatchId` into reversed order
+  - verify `_map_input.filters` canonicalizes them into chronological order
+  - verify `_map_runtime.inputState.filters` receives the canonical order
+  - patch both to the same patch id
+  - verify `_map_input.filters.patchId` is derived to that same id
 
 ### Step 16 - Shared Datastar State Helper
 
