@@ -1275,6 +1275,20 @@ fn expand_checkbox_group_signal_arrays(
             &item_options_by_type(&data.catalog.items, "outfit"),
         )),
     );
+    patch.insert(
+        "food".to_string(),
+        Value::Array(indexed_checkbox_values(
+            &signals.food,
+            &item_options_by_type(&data.catalog.items, "food"),
+        )),
+    );
+    patch.insert(
+        "buff".to_string(),
+        Value::Array(indexed_checkbox_values(
+            &signals.buff,
+            &item_options_by_type(&data.catalog.items, "buff"),
+        )),
+    );
 
     for (slot, pet) in [
         ("pet1", &signals.pet1),
@@ -1438,6 +1452,9 @@ fn normalize_named_array(
     items_by_key: Option<&HashMap<&str, &CalculatorItemEntry>>,
 ) -> Vec<String> {
     if values.is_empty() {
+        return Vec::new();
+    }
+    if values.iter().all(|value| value.trim().is_empty()) {
         return Vec::new();
     }
     let normalized = values
@@ -3051,6 +3068,9 @@ fn render_calculator_app(
     <div class="hidden"
          data-computed:resources="$_resources"
          data-computed:_live="window.__fishystuffCalculator.liveCalc($level, $_resources, $active, $catchTimeActive, $catchTimeAfk, $timespanAmount, $timespanUnit, $_calc)"></div>
+    <div class="hidden"
+         data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl())"
+         data-on-signal-patch-filter="window.__fishystuffCalculator.evalSignalPatchFilter()"></div>
     <div class="hidden"
          data-on-signal-patch__debounce.150ms="window.__fishystuffCalculator.persist($)"
          data-on-signal-patch-filter="window.__fishystuffCalculator.persistSignalPatchFilter()"></div>
@@ -5079,7 +5099,7 @@ fn render_session_presets(presets: &[CalculatorSessionPresetEntry], id: &str) ->
     for preset in presets {
         write!(
             html,
-            "<button type=\"button\" class=\"btn btn-soft btn-sm join-item\" data-on:click=\"$timespanAmount = {}; $timespanUnit = '{}'; window.__fishystuffCalculator.persist($); window.__fishystuffCalculator.requestEval()\">{}</button>",
+            "<button type=\"button\" class=\"btn btn-soft btn-sm join-item\" data-on:click=\"$timespanAmount = {}; $timespanUnit = '{}'\">{}</button>",
             trim_float(preset.amount),
             escape_html(&preset.unit),
             escape_html(&preset.label)
@@ -5232,11 +5252,11 @@ mod tests {
         discard_grade_enabled, filtered_loot_flow_rows, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
         init_signals_patch_map, loot_species_evidence_text, mastery_prize_rate_for_bracket,
-        normalize_lookup_value, normalize_named_array, parse_calculator_signals_value,
-        pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
-        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
-        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
-        FishGroupChart, FishGroupChartRow,
+        normalize_lookup_value, normalize_named_array, normalize_signals,
+        parse_calculator_signals_value, pmf_bucket_contains_target, poisson_probability_at_least,
+        post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
+        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
+        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow,
     };
 
     struct MockStore;
@@ -5578,9 +5598,10 @@ mod tests {
         assert!(text.contains("calculator-rod-picker"));
         assert!(text.contains("calculator-pet1-tier-picker"));
         assert!(text.contains("<fishy-searchable-multiselect"));
-        assert!(text.contains("data-bind=\"outfit.0\""));
         assert!(text.contains("calculator-food-picker"));
         assert!(text.contains("calculator-buff-picker"));
+        assert!(text.contains("data-bind=\"food\""));
+        assert!(text.contains("data-bind=\"buff\""));
         assert!(text.contains("Search foods by name or effect"));
         assert!(text.contains("data-bind=\"mastery\""));
         assert!(text.contains("step=\"50\""));
@@ -5836,6 +5857,23 @@ mod tests {
     }
 
     #[test]
+    fn normalize_named_array_keeps_all_empty_placeholders_as_cleared_selection() {
+        let valid_keys = std::collections::HashSet::from(["item:1".to_string()]);
+        let lookup = HashMap::from([(normalize_lookup_value("Item One"), "item:1".to_string())]);
+
+        let normalized = normalize_named_array(
+            &["".to_string(), "".to_string()],
+            &valid_keys,
+            &lookup,
+            None,
+            vec!["item:1".to_string()],
+            None,
+        );
+
+        assert!(normalized.is_empty());
+    }
+
+    #[test]
     fn init_signals_patch_map_expands_checkbox_groups_to_option_slots() {
         let data = CalculatorData {
             catalog: CalculatorCatalogResponse {
@@ -5870,6 +5908,30 @@ mod tests {
                         r#type: "outfit".to_string(),
                         ..CalculatorItemEntry::default()
                     },
+                    CalculatorItemEntry {
+                        key: "item:9359".to_string(),
+                        name: "Balacs Lunchbox".to_string(),
+                        r#type: "food".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "item:16716".to_string(),
+                        name: "Seafood Cron Meal".to_string(),
+                        r#type: "food".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "item:721092".to_string(),
+                        name: "Treant's Tear".to_string(),
+                        r#type: "buff".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "item:15229".to_string(),
+                        name: "Life Crystal: Fishing".to_string(),
+                        r#type: "buff".to_string(),
+                        ..CalculatorItemEntry::default()
+                    },
                 ],
                 lifeskill_levels: Vec::new(),
                 mastery_prize_curve: Vec::new(),
@@ -5894,6 +5956,8 @@ mod tests {
                 "effect:mainhand-weapon-outfit".to_string(),
                 "item:14330".to_string(),
             ],
+            food: vec!["item:9359".to_string()],
+            buff: vec!["item:721092".to_string()],
             ..CalculatorSignals::default()
         };
 
@@ -5909,6 +5973,8 @@ mod tests {
                 "item:14330"
             ]))
         );
+        assert_eq!(patch.get("food"), Some(&json!(["item:9359", ""])));
+        assert_eq!(patch.get("buff"), Some(&json!(["item:721092", ""])));
     }
 
     #[test]
@@ -6109,6 +6175,60 @@ mod tests {
             parsed.pet1.skills,
             vec!["life_exp".to_string(), "fishing_exp".to_string()]
         );
+    }
+
+    #[test]
+    fn normalize_signals_keeps_cleared_food_and_buff_arrays_empty() {
+        let mut parsed = parse_calculator_signals_value(
+            serde_json::json!({
+                "food": {
+                    "0": ""
+                },
+                "buff": {
+                    "0": ""
+                }
+            }),
+            &CalculatorSignals::default(),
+            &RequestId("req-test".to_string()),
+        )
+        .expect("cleared food and buff arrays should stay empty");
+
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse {
+                items: vec![
+                    CalculatorItemEntry {
+                        key: "item:9359".to_string(),
+                        name: "Balacs Lunchbox".to_string(),
+                        r#type: "food".to_string(),
+                        buff_category_key: Some("buff-category:1".to_string()),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "item:721092".to_string(),
+                        name: "Treant's Tear".to_string(),
+                        r#type: "buff".to_string(),
+                        buff_category_key: Some("buff-category:6".to_string()),
+                        ..CalculatorItemEntry::default()
+                    },
+                ],
+                defaults: CalculatorSignals {
+                    food: vec!["item:9359".to_string()],
+                    buff: vec!["".to_string(), "item:721092".to_string()],
+                    ..CalculatorSignals::default()
+                },
+                ..CalculatorCatalogResponse::default()
+            },
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: Vec::new(),
+        };
+
+        normalize_signals(&mut parsed, &data);
+
+        assert!(parsed.food.is_empty());
+        assert!(parsed.buff.is_empty());
     }
 
     #[test]
