@@ -25,14 +25,14 @@ To run the local development servers:
 
 ```bash
 just dev-build
-devenv up
+just up
 ```
 
-`devenv up` now supervises only the long-lived local servers:
+`just up` runs `devenv up` and supervises the
+long-lived local servers:
 
 - `db` must become ready before `api`
-- `cdn` serves `data/cdn/public/`
-- `site` serves `site/.out/`
+- `caddy` serves `site/.out/` on `127.0.0.1:1990` and `data/cdn/public/` on `127.0.0.1:4040`
 
 Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
 
@@ -44,6 +44,8 @@ Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
   - restage CDN-owned browser host assets on `site/assets/map` changes
 - `just dev-watch-site`
   - rebuild `site/.out` on site source changes
+- `just dev-watch-builds`
+  - one command for the map/CDN/site rebuild watchers; use it with a running `just up`
 - `just dev-watch-api`
   - restart the API on source changes; use it with `just dev-up-no-api`
 

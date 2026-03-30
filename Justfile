@@ -1,3 +1,12 @@
+# Start the full local dev server stack
+[default]
+up:
+  devenv up
+
+# Stop detached local dev processes started via `devenv up -d`
+down:
+  devenv processes down
+
 # Initialize a clone of our dolt database on http://dolthub.com/repositories/fishystuff/fishystuff
 clone-db:
     dolt clone fishystuff/fishystuff .
@@ -71,6 +80,10 @@ dev-build:
   just dev-build-map
   just dev-build-site
 
+# Watch map/CDN/site build inputs in parallel. Use with a running `just up`.
+dev-watch-builds:
+  ./tools/scripts/dev_watch_builds.sh
+
 # Watch the API in a dedicated terminal. Use with `just dev-up-no-api`.
 dev-watch-api:
   watchexec -r \
@@ -126,10 +139,6 @@ dev-watch-site:
     --ignore site/assets/css/site.css \
     -- just dev-build-site
 
-# Start the full local dev server stack
-dev-up:
-  devenv up
-
 # Start the local dev servers except the API, for use with `just dev-watch-api`
 dev-up-no-api:
-  devenv up db cdn site
+  devenv up db caddy

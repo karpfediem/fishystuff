@@ -19,7 +19,7 @@ Runtime image, terrain, icon, and tile assets are CDN-served from `data/cdn/publ
 For local site and map development, the repo-root flow is now explicit:
 
 - `just dev-build`
-- `devenv up`
+- `just up`
 
 Then add only the rebuild watchers you actually need:
 
@@ -29,10 +29,12 @@ Then add only the rebuild watchers you actually need:
   - rebuild the wasm runtime and refresh the staged CDN payload
 - `just dev-watch-cdn`
   - restage CDN-owned browser host assets from `site/assets/map`
+- `just dev-watch-builds`
+  - run the map/CDN/site rebuild watchers together while `just up` keeps serving the outputs
 - `just dev-watch-api`
   - restart the API on backend changes; use it with `just dev-up-no-api`
 
-`devenv up` now serves the current outputs instead of owning the build graph.
+`just up` now serves the current outputs instead of owning the build graph.
 If `site/.out` or `data/cdn/public/` is stale or missing, that state is visible
 directly instead of being hidden behind nested watchers.
 

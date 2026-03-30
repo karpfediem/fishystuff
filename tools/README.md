@@ -22,14 +22,15 @@ Current contents:
     [`docs/dolt-schema-workflow.md`](/home/carp/code/fishystuff/docs/dolt-schema-workflow.md)
 - `tools/pazifista`
 - `tools/scripts/build_map.sh`
+- `tools/scripts/dev_watch_builds.sh`
+  - runs the map, CDN, and site rebuild watchers together without touching `devenv up`
 - `tools/scripts/stage_cdn_assets.sh`
   - stages CDN-owned site and map assets under `data/cdn/public/`
   - now rebuilds source-backed calculator item icons into `data/cdn/public/images/items/`
 - `tools/scripts/push_bunnycdn.sh`
-- `tools/scripts/run_db_server.sh`
 - `tools/scripts/run_api.sh`
 - `tools/scripts/run_cdn_server.sh`
-- `tools/scripts/run_site_server.sh`
+  - standalone CDN file server helper; `devenv up` now uses `services.caddy` instead
 - `tools/scripts/serve_cdn.py`
 - `tools/scripts/rebuild_detailed_regions_layer.sh`
 - `tools/scripts/rebuild_detailed_regions_layer_from_pabr.sh`

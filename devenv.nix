@@ -1,13 +1,14 @@
 { inputs, pkgs, lib, config, ... }:
 let
   dbHost = "127.0.0.1";
-  dbPort = "3306";
+  dbPort = 3306;
   apiHost = "127.0.0.1";
-  apiPort = "8080";
+  apiPort = 8080;
   cdnHost = "127.0.0.1";
-  cdnPort = "4040";
+  cdnPort = 4040;
   siteHost = "127.0.0.1";
-  sitePort = "1990";
+  sitePort = 1990;
+  toString = builtins.toString;
   rustHookToolchain = pkgs.symlinkJoin {
     name = "fishystuff-rust-hook-toolchain";
     paths = [
@@ -17,6 +18,8 @@ let
   };
 in {
   name = "default";
+
+  process.manager.implementation = "native";
 
   packages = with pkgs;
     [
@@ -106,13 +109,14 @@ in {
   };
 
   env = {
-    FISHYSTUFF_DEV_DB_PORT = dbPort;
-    FISHYSTUFF_DEV_API_PORT = apiPort;
-    FISHYSTUFF_DEV_CDN_PORT = cdnPort;
-    FISHYSTUFF_DEV_SITE_PORT = sitePort;
-    FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${apiPort}";
-    FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${cdnPort}";
-    FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${sitePort}";
+    FISHYSTUFF_DEV_DB_PORT = toString config.processes.db.ports.sql.value;
+    FISHYSTUFF_DEV_API_PORT = toString config.processes.api.ports.http.value;
+    FISHYSTUFF_DEV_CDN_PORT = toString cdnPort;
+    FISHYSTUFF_DEV_SITE_PORT = toString sitePort;
+    FISHYSTUFF_RUNTIME_API_BASE_URL =
+      "http://${apiHost}:${toString config.processes.api.ports.http.value}";
+    FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
+    FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
     LD_LIBRARY_PATH = lib.makeLibraryPath [
       pkgs.libX11
       pkgs.libXcursor
@@ -125,46 +129,61 @@ in {
       pkgs.libxkbfile
     ];
     FISHYSTUFF_CORS_ALLOWED_ORIGINS =
-      "https://fishystuff.fish,https://www.fishystuff.fish,http://${siteHost}:${sitePort},http://localhost:${sitePort}";
+      "https://fishystuff.fish,https://www.fishystuff.fish,http://${siteHost}:${toString sitePort},http://localhost:${toString sitePort}";
+  };
+
+  services.caddy = {
+    enable = true;
+    virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
+      root * ${config.devenv.root}/site/.out
+      try_files {path} {path}.html {path}/index.html =404
+      file_server
+    '';
+    virtualHosts."http://${cdnHost}:${toString cdnPort}".extraConfig = ''
+      root * ${config.devenv.root}/data/cdn/public
+
+      @runtime_manifest path /map/runtime-manifest.json /map/runtime-manifest.*.json
+      @immutable path /map/fishystuff_ui_bevy.*.js /map/fishystuff_ui_bevy_bg.*.wasm
+
+      header Access-Control-Allow-Origin "*"
+
+      handle @runtime_manifest {
+        header Cache-Control "no-store"
+        file_server
+      }
+
+      handle @immutable {
+        header Cache-Control "public, max-age=31536000, immutable"
+        file_server
+      }
+
+      handle {
+        header Cache-Control "public, max-age=3600"
+        file_server
+      }
+    '';
   };
 
   processes.db = {
-    exec = "./tools/scripts/run_db_server.sh";
-    ports.sql.allocate = 3306;
-    env = {
-      DB_HOST = dbHost;
-      DB_PORT = dbPort;
-    };
-  };
-
-  processes.cdn = {
-    exec = "./tools/scripts/run_cdn_server.sh";
-    ports.http.allocate = 4040;
-    env = {
-      CDN_HOST = cdnHost;
-      CDN_PORT = cdnPort;
-    };
+    cwd = config.devenv.root;
+    exec =
+      "exec dolt sql-server --host ${dbHost} --port ${toString config.processes.db.ports.sql.value}";
+    ports.sql.allocate = dbPort;
   };
 
   processes.api = {
-    exec = "./tools/scripts/run_api.sh";
-    ports.http.allocate = 8080;
+    cwd = config.devenv.root;
+    exec = ''
+      exec secretspec run --profile api -- \
+        cargo run --manifest-path ${config.devenv.root}/Cargo.toml -p fishystuff_server -- \
+        --config ${config.devenv.root}/api/config.toml \
+        --bind ${apiHost}:${toString config.processes.api.ports.http.value}
+    '';
+    ports.http.allocate = apiPort;
     after = [ "devenv:processes:db" ];
-    env = {
-      DB_HOST = dbHost;
-      DB_PORT = dbPort;
-      API_BIND_HOST = apiHost;
-      API_PORT = apiPort;
-      SECRETSPEC_API_PROFILE = "api";
-    };
-  };
-
-  processes.site = {
-    exec = "./tools/scripts/run_site_server.sh";
-    ports.http.allocate = 1990;
-    env = {
-      SITE_HOST = siteHost;
-      SITE_PORT = sitePort;
+    ready.http.get = {
+      port = config.processes.api.ports.http.value;
+      path = "/api/v1/meta";
     };
   };
 }
