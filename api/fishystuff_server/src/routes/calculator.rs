@@ -491,7 +491,7 @@ pub async fn post_calculator_datastar_eval(
         .selector("#calculator-target-fish-panel")
         .mode(ElementPatchMode::Outer)
         .into_datastar_event(),
-        PatchElements::new(render_loot_chart(&normalized_signals, &loot_chart))
+        PatchElements::new(render_loot_chart(&loot_chart))
             .selector("#calculator-loot-chart")
             .mode(ElementPatchMode::Outer)
             .into_datastar_event(),
@@ -3782,18 +3782,11 @@ fn filtered_loot_flow_rows(
         .collect()
 }
 
-fn render_loot_sankey(chart: &LootChart, signals: &CalculatorSignals) -> String {
+fn render_loot_sankey(chart: &LootChart) -> String {
     if chart.species_rows.is_empty() {
         return "<div class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">No source-backed loot rows are available for this zone yet.</div>".to_string();
     }
-    format!(
-        "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Loot Flow</div><div class=\"text-xs text-base-content/70\">Each flow starts at a fish group, passes through source-backed species rows, then recombines into silver-weighted group totals. Left-side metrics show droprate composition; right-side metrics show silver contribution.</div></div><div class=\"text-right text-xs text-base-content/70\">left: droprate<br>{}</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"Expected loot flow from groups to loot rows\" signal-path=\"_calc.loot_sankey_chart\"></fishy-loot-sankey></div></div>",
-        if signals.show_normalized_select_rates {
-            "normalized rates"
-        } else {
-            "raw rates"
-        },
-    )
+    "<div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">Loot Flow</div><div class=\"text-xs text-base-content/70\">Each flow starts at a fish group, passes through source-backed species rows, then recombines into silver-weighted group totals. Left-side metrics show droprate composition; right-side metrics show silver contribution.</div></div><div class=\"overflow-x-auto loot-sankey-scroll\"><fishy-loot-sankey class=\"loot-sankey\" aria-label=\"Expected loot flow from groups to loot rows\" signal-path=\"_calc.loot_sankey_chart\"></fishy-loot-sankey></div></div>".to_string()
 }
 
 fn render_fish_group_chart(chart: &FishGroupChart, show_normalized_rates: bool) -> String {
@@ -3805,16 +3798,11 @@ fn render_fish_group_chart(chart: &FishGroupChart, show_normalized_rates: bool) 
     }
 
     format!(
-        "<div id=\"calculator-fish-group-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Group Droprate Distribution</div><div class=\"text-xs text-base-content/70\">{}</div></div><div class=\"text-right text-xs text-base-content/70\">{}</div></div>{}</div></div>",
+        "<div id=\"calculator-fish-group-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">Group Droprate Distribution</div><div class=\"text-xs text-base-content/70\">{}</div></div>{}</div></div>",
         if show_normalized_rates {
             "Current fish-group share after prize, rare, and high-quality weighting."
         } else {
             "Raw fish-group rates after prize, rare, and high-quality weighting. These rates can total above or below 100%."
-        },
-        if show_normalized_rates {
-            "normalized share"
-        } else {
-            "raw rate"
         },
         render_distribution_chart(
             "fish-group-distribution-chart",
@@ -3833,7 +3821,7 @@ fn render_fish_group_silver_chart(chart: &LootChart) -> String {
     }
 
     format!(
-        "<div id=\"calculator-fish-group-silver-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3 flex items-center justify-between gap-3\"><div><div class=\"text-sm font-medium\">Group Silver Distribution</div><div class=\"text-xs text-base-content/70\">Expected silver share by fish group after trade and pricing settings.</div></div><div class=\"text-right text-xs text-base-content/70\">silver share</div></div>{}</div></div>",
+        "<div id=\"calculator-fish-group-silver-chart\"><div class=\"rounded-box border border-base-300 bg-base-200 p-4\"><div class=\"mb-3\"><div class=\"text-sm font-medium\">Group Silver Distribution</div><div class=\"text-xs text-base-content/70\">Expected silver share by fish group after trade and pricing settings.</div></div>{}</div></div>",
         render_distribution_chart(
             "fish-group-silver-distribution-chart",
             "Group Silver Distribution",
@@ -3842,7 +3830,7 @@ fn render_fish_group_silver_chart(chart: &LootChart) -> String {
     )
 }
 
-fn render_loot_chart(signals: &CalculatorSignals, chart: &LootChart) -> String {
+fn render_loot_chart(chart: &LootChart) -> String {
     if !chart.available {
         return format!(
             "<div id=\"calculator-loot-chart\" class=\"rounded-box border border-dashed border-base-300 bg-base-200 p-4 text-sm text-base-content/70\">{}</div>",
@@ -3852,7 +3840,7 @@ fn render_loot_chart(signals: &CalculatorSignals, chart: &LootChart) -> String {
 
     format!(
         "<div id=\"calculator-loot-chart\" class=\"grid gap-4\">{}</div>",
-        render_loot_sankey(chart, signals),
+        render_loot_sankey(chart),
     )
 }
 
@@ -4019,7 +4007,7 @@ fn render_fish_group_window(
         },
         render_fish_group_chart(fish_group_chart, signals.show_normalized_select_rates),
         render_fish_group_silver_chart(loot_chart),
-        render_loot_chart(signals, loot_chart),
+        render_loot_chart(loot_chart),
         render_target_fish_panel(data, signals, target_fish_options, target_fish_summary),
     )
 }
