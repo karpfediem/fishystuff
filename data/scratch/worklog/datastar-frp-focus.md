@@ -991,6 +991,17 @@ Observed live behavior after the `_map_input` seam:
 - diagnostics toggling updates:
   - `_map_input.ui.diagnosticsOpen`
   - `_map_runtime.inputState.ui.diagnosticsOpen`
+
+Important loader guard:
+
+- `publishMapInputSignals(...)` now suppresses `syncBridgeInputStateFromSignals()` re-entry while the loader is mirroring bridge-owned `_map_input` back into Datastar
+- without that guard, the map page can fall into a `_map_input` feedback loop:
+  - bridge/runtime publish
+  - Datastar signal patch
+  - signal-to-bridge sync listener
+  - rerender
+  - bridge/runtime publish again
+- if a future refactor changes `_map_input` publication timing, keep this loop boundary in mind first
 - toolbar toggles now update both:
   - `_map_ui.windowUi.*.open`
   - actual window visibility

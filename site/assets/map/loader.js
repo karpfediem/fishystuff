@@ -222,14 +222,19 @@ function publishMapInputSignals(inputState) {
   if (!helper) {
     return;
   }
-  helper.patchSignals({
-    _map_input: cloneJsonValue(
-      applyStatePatch(
-        DEFAULT_MAP_INPUT_SIGNAL_STATE,
-        inputState && typeof inputState === "object" ? inputState : {},
+  publishMapInputSignals.isPatching = true;
+  try {
+    helper.patchSignals({
+      _map_input: cloneJsonValue(
+        applyStatePatch(
+          DEFAULT_MAP_INPUT_SIGNAL_STATE,
+          inputState && typeof inputState === "object" ? inputState : {},
+        ),
       ),
-    ),
-  });
+    });
+  } finally {
+    publishMapInputSignals.isPatching = false;
+  }
 }
 
 function dispatchMapEvent(target, type, detail) {
@@ -6910,6 +6915,9 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function syncBridgeInputStateFromSignals() {
+    if (publishMapInputSignals.isPatching === true) {
+      return;
+    }
     const nextSignalInputState = currentMapInputSignalState();
     const currentInputState = applyStatePatch(
       DEFAULT_MAP_INPUT_SIGNAL_STATE,
