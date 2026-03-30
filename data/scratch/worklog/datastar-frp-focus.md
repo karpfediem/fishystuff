@@ -1406,3 +1406,72 @@ Validation:
   - verify `fishystuff.ui.settings.v1.app.theme.selected === "light"`
   - verify `localStorage['theme'] === null`
   - reload and verify `data-theme="light"` persists
+
+### Step 27 - Shared Datastar Signal Store Uses Nested Patch Semantics
+
+Completed:
+
+- updated `site/assets/js/datastar-state.js` so `createSignalStore().patchSignals(...)` merges nested object patches in place instead of using a shallow top-level `Object.assign(...)`
+- exported the merge helper from the shared Datastar state module
+- aligned the page-local fallback signal stores in:
+  - `site/assets/js/pages/map-page.js`
+  - `site/assets/js/pages/fishydex.js`
+  with the same nested patch semantics
+- added regression coverage in `site/assets/js/datastar-state.test.mjs`
+
+Why this matters:
+
+- shallow patch semantics were destructive for branch-shaped Datastar state
+- a nested patch like:
+  - `{ _map_ui: { search: { open: true } } }`
+  could replace the entire `_map_ui` branch in fallback/store-helper paths
+- reusable signal patches now behave like state patches, not branch replacement
+- this reduces page-specific defensive code and makes page-owned Datastar state safer to mutate incrementally
+
+Validation:
+
+- `node --check site/assets/js/datastar-state.js`
+- `node --check site/assets/js/datastar-state.test.mjs`
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/js/pages/fishydex.js`
+- `node --test site/assets/js/datastar-state.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/datastar-state.js`
+  - `/js/pages/map-page.js`
+  - `/js/pages/fishydex.js`
+
+### Step 28 - Map Page Persists Only Durable Page-Owned UI
+
+Completed:
+
+- narrowed `site/assets/js/pages/map-page.js` persistence filtering so page-owned map persistence reacts only to:
+  - `_map_ui.windowUi`
+  - `_map_bookmarks.entries`
+- explicitly kept these `_map_ui` branches live-only / ephemeral:
+  - `_map_ui.search`
+  - `_map_ui.bookmarks`
+- added focused tests in `site/assets/js/pages/map-page.test.mjs` for:
+  - ignoring ephemeral `_map_ui.search` patches
+  - persisting durable `_map_ui.windowUi` patches
+
+Why this matters:
+
+- the previous `map-page` signal-patch filter was still too broad at the `_map_ui` branch level
+- page-owned persistence should store durable shell/window state only
+- live UI affordances like search dropdown openness or bookmark placement mode should not dirty durable storage
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.test.mjs`
+- `node --test site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/js/pages/map-page.js`
+- live Chromium smoke:
+  - clear `fishystuff.map.window_ui.v1`
+  - patch `_map_ui.search.open = true`
+  - verify no storage write occurs
+  - patch `_map_ui.windowUi.search.open = false`
+  - verify `fishystuff.map.window_ui.v1` is written with the durable window snapshot

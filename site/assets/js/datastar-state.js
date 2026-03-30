@@ -1,4 +1,8 @@
 (function () {
+  function isPlainObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value);
+  }
+
   function readObjectPath(root, path) {
     return String(path ?? "")
       .split(".")
@@ -34,6 +38,20 @@
     return setObjectPath(root, path, !Boolean(readObjectPath(root, path)));
   }
 
+  function mergeObjectPatch(root, patch) {
+    if (!isPlainObject(root) || !isPlainObject(patch)) {
+      return patch;
+    }
+    for (const [key, value] of Object.entries(patch)) {
+      if (isPlainObject(value) && isPlainObject(root[key])) {
+        mergeObjectPatch(root[key], value);
+        continue;
+      }
+      root[key] = value;
+    }
+    return root;
+  }
+
   function createSignalStore() {
     const state = {
       signals: null,
@@ -52,7 +70,7 @@
         if (!signals || !patch || typeof patch !== "object") {
           return;
         }
-        Object.assign(signals, patch);
+        mergeObjectPatch(signals, patch);
       },
       readSignal(path) {
         return readObjectPath(this.signalObject(), path);
@@ -62,6 +80,7 @@
 
   window.__fishystuffDatastarState = Object.freeze({
     createSignalStore,
+    mergeObjectPatch,
     readObjectPath,
     setObjectPath,
     toggleBooleanPath,

@@ -1,7 +1,7 @@
 (function () {
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
-  const MAP_PERSIST_SIGNAL_FILTER = /^_(?:map_ui|map_bookmarks)(?:\.|$)/;
+  const MAP_PERSIST_SIGNAL_FILTER = /^_(?:map_ui\.windowUi|map_bookmarks\.entries)(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -16,6 +16,22 @@
 
   function createFallbackSignalStore() {
     let signals = null;
+    function isPlainObject(value) {
+      return value && typeof value === "object" && !Array.isArray(value);
+    }
+    function mergeObjectPatch(root, patch) {
+      if (!isPlainObject(root) || !isPlainObject(patch)) {
+        return patch;
+      }
+      for (const [key, value] of Object.entries(patch)) {
+        if (isPlainObject(value) && isPlainObject(root[key])) {
+          mergeObjectPatch(root[key], value);
+          continue;
+        }
+        root[key] = value;
+      }
+      return root;
+    }
     return {
       connect(nextSignals) {
         signals = nextSignals && typeof nextSignals === "object" ? nextSignals : null;
@@ -29,7 +45,7 @@
         if (!currentSignals || !patch || typeof patch !== "object") {
           return;
         }
-        Object.assign(currentSignals, patch);
+        mergeObjectPatch(currentSignals, patch);
       },
       readSignal(path) {
         return String(path ?? "")
@@ -96,6 +112,8 @@
     const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
       ? cloneJson(signals._map_bookmarks.entries)
       : [];
+    // Map-page persistence is intentionally limited to page-owned durable UI state.
+    // Ephemeral locals such as `_map_ui.search` and `_map_ui.bookmarks` stay live-only.
     return {
       _map_ui: {
         windowUi:

@@ -41,6 +41,22 @@
 
   function createFallbackSignalStore() {
     let signals = null;
+    function isPlainObject(value) {
+      return value && typeof value === "object" && !Array.isArray(value);
+    }
+    function mergeObjectPatch(root, patch) {
+      if (!isPlainObject(root) || !isPlainObject(patch)) {
+        return patch;
+      }
+      for (const [key, value] of Object.entries(patch)) {
+        if (isPlainObject(value) && isPlainObject(root[key])) {
+          mergeObjectPatch(root[key], value);
+          continue;
+        }
+        root[key] = value;
+      }
+      return root;
+    }
     return {
       connect(nextSignals) {
         signals = nextSignals && typeof nextSignals === "object" ? nextSignals : null;
@@ -54,7 +70,7 @@
         if (!currentSignals || !patch || typeof patch !== "object") {
           return;
         }
-        Object.assign(currentSignals, patch);
+        mergeObjectPatch(currentSignals, patch);
       },
       readSignal(path) {
         return String(path ?? "")

@@ -75,3 +75,38 @@ test("datastar state helper creates a reusable signal store", () => {
   assert.equal(store.readSignal("_map_input.filters.searchText"), "Velia");
   assert.equal(signals._map_ui.search.open, true);
 });
+
+test("datastar state helper merges nested signal patches without replacing siblings", () => {
+  const helper = createContext();
+  const store = helper.createSignalStore();
+  const signals = {
+    _map_ui: {
+      windowUi: {
+        search: { open: true },
+      },
+      search: {
+        open: false,
+      },
+    },
+  };
+
+  store.connect(signals);
+  store.patchSignals({
+    _map_ui: {
+      search: {
+        open: true,
+      },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(signals)), {
+    _map_ui: {
+      windowUi: {
+        search: { open: true },
+      },
+      search: {
+        open: true,
+      },
+    },
+  });
+});

@@ -151,3 +151,65 @@ test("map-page persists bookmark signal patches through the Datastar patch event
     JSON.stringify(signals._map_bookmarks.entries),
   );
 });
+
+test("map-page ignores ephemeral _map_ui patches for persistence", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMap.patchSignals({
+    _map_ui: {
+      search: { open: true },
+    },
+  });
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _map_ui: {
+        search: { open: true },
+      },
+    },
+  });
+  env.flushTimers();
+
+  assert.equal(env.localStorage.getItem("fishystuff.map.window_ui.v1"), null);
+  assert.equal(env.localStorage.getItem("fishystuff.map.bookmarks.v1"), null);
+});
+
+test("map-page persists durable _map_ui.windowUi patches", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMap.patchSignals({
+    _map_ui: {
+      windowUi: {
+        search: { open: false },
+      },
+    },
+  });
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _map_ui: {
+        windowUi: {
+          search: { open: false },
+        },
+      },
+    },
+  });
+  env.flushTimers();
+
+  assert.equal(
+    env.localStorage.getItem("fishystuff.map.window_ui.v1"),
+    JSON.stringify({
+      windowUi: {
+        search: { open: false, collapsed: false, x: null, y: null },
+        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
+        layers: { open: true, collapsed: false, x: null, y: null },
+        bookmarks: { open: false, collapsed: false, x: null, y: null },
+      },
+    }),
+  );
+});
