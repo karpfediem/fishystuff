@@ -226,6 +226,10 @@ export function projectStateBundleStatePatch(stateBundle, patch) {
 }
 
 function normalizeSharedFishIds(values) {
+  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
+  if (helper && typeof helper.normalizeIds === "function") {
+    return helper.normalizeIds(values);
+  }
   if (!Array.isArray(values)) {
     return [];
   }
@@ -243,6 +247,16 @@ function normalizeSharedFishIds(values) {
 }
 
 function loadSharedFishState(storage = globalThis.localStorage) {
+  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
+  if (helper && typeof helper.loadState === "function") {
+    return helper.loadState(
+      {
+        caught: FISHYMAP_STORAGE_KEYS.caught,
+        favourites: FISHYMAP_STORAGE_KEYS.favourites,
+      },
+      storage,
+    );
+  }
   const read = (key) => {
     try {
       return normalizeSharedFishIds(JSON.parse(storage?.getItem?.(key) || "[]"));

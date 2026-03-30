@@ -54,6 +54,11 @@
   const ICON_CAUGHT_LINE = spriteIconMarkup("check-circle-dash-line", "size-7", true);
   const ICON_COIN_STACK = spriteIconMarkup("coin-stack", "", false);
 
+  function sharedFishStateHelper() {
+    const helper = window.__fishystuffSharedFishState;
+    return helper && typeof helper.normalizeIds === "function" ? helper : null;
+  }
+
   function signalObject() {
     return state.signals && typeof state.signals === "object" ? state.signals : null;
   }
@@ -133,37 +138,21 @@
   }
 
   function normalizeStoredFishIds(value) {
-    let ids = [];
-    if (Array.isArray(value)) {
-      ids = value;
-    } else if (value && typeof value === "object") {
-      ids = Object.entries(value)
-        .filter(function (entry) {
-          return entry[1];
-        })
-        .map(function (entry) {
-          return entry[0];
-        });
+    const helper = sharedFishStateHelper();
+    if (helper) {
+      return helper.normalizeIds(value);
     }
-
-    const unique = new Set();
-    for (const raw of ids) {
-      const fishId = Number.parseInt(String(raw), 10);
-      if (Number.isInteger(fishId) && fishId > 0) {
-        unique.add(fishId);
-      }
-    }
-    return Array.from(unique).sort(function (left, right) {
-      return left - right;
-    });
+    return [];
   }
 
   function parseCaughtJson(raw) {
-    return normalizeStoredFishIds(JSON.parse(raw));
+    const helper = sharedFishStateHelper();
+    return helper ? helper.parse(raw) : normalizeStoredFishIds(JSON.parse(raw));
   }
 
   function parseFavouriteJson(raw) {
-    return normalizeStoredFishIds(JSON.parse(raw));
+    const helper = sharedFishStateHelper();
+    return helper ? helper.parse(raw) : normalizeStoredFishIds(JSON.parse(raw));
   }
 
   function normalizeMethod(value) {
@@ -289,71 +278,65 @@
   }
 
   function loadCaughtIdsFromStorage() {
-    let caughtIds = [];
-    let statusMessage = "";
-    try {
-      const raw = localStorage.getItem(CAUGHT_STORAGE_KEY);
-      if (raw) {
-        try {
-          caughtIds = parseCaughtJson(raw);
-        } catch (_error) {
-          localStorage.removeItem(CAUGHT_STORAGE_KEY);
-          statusMessage = "Reset corrupted local fishydex progress.";
-        }
-      }
-    } catch (_error) {
-      statusMessage = "localStorage is unavailable; progress is not persisted.";
-    }
-    state.persistedCaughtJson = JSON.stringify(normalizeStoredFishIds(caughtIds));
-    return { caughtIds, statusMessage };
+    const helper = sharedFishStateHelper();
+    const result = helper
+      ? helper.loadRecord(CAUGHT_STORAGE_KEY, localStorage)
+      : { ids: [], json: "[]", status: "unavailable" };
+    state.persistedCaughtJson = result.json;
+    return {
+      caughtIds: result.ids,
+      statusMessage: result.status === "corrupted"
+        ? "Reset corrupted local fishydex progress."
+        : result.status === "unavailable"
+          ? "localStorage is unavailable; progress is not persisted."
+          : "",
+    };
   }
 
   function loadFavouriteIdsFromStorage() {
-    let favouriteIds = [];
-    let statusMessage = "";
-    try {
-      const raw = localStorage.getItem(FAVOURITES_STORAGE_KEY);
-      if (raw) {
-        try {
-          favouriteIds = parseFavouriteJson(raw);
-        } catch (_error) {
-          localStorage.removeItem(FAVOURITES_STORAGE_KEY);
-          statusMessage = "Reset corrupted local fishydex favourites.";
-        }
-      }
-    } catch (_error) {
-      statusMessage = "localStorage is unavailable; progress is not persisted.";
-    }
-    state.persistedFavouriteJson = JSON.stringify(normalizeStoredFishIds(favouriteIds));
-    return { favouriteIds, statusMessage };
+    const helper = sharedFishStateHelper();
+    const result = helper
+      ? helper.loadRecord(FAVOURITES_STORAGE_KEY, localStorage)
+      : { ids: [], json: "[]", status: "unavailable" };
+    state.persistedFavouriteJson = result.json;
+    return {
+      favouriteIds: result.ids,
+      statusMessage: result.status === "corrupted"
+        ? "Reset corrupted local fishydex favourites."
+        : result.status === "unavailable"
+          ? "localStorage is unavailable; progress is not persisted."
+          : "",
+    };
   }
 
   function persistCaughtIds(caughtIds) {
-    const normalized = normalizeStoredFishIds(caughtIds);
-    try {
-      const json = JSON.stringify(normalized);
-      if (json === state.persistedCaughtJson) {
-        return;
-      }
-      localStorage.setItem(CAUGHT_STORAGE_KEY, json);
-      state.persistedCaughtJson = json;
-    } catch (_error) {
-      patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+    const helper = sharedFishStateHelper();
+    const result = helper
+      ? helper.persistRecord(CAUGHT_STORAGE_KEY, caughtIds, localStorage)
+      : { ids: normalizeStoredFishIds(caughtIds), json: JSON.stringify(normalizeStoredFishIds(caughtIds)), ok: false };
+    if (result.json === state.persistedCaughtJson) {
+      return;
     }
+    if (!result.ok) {
+      patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+      return;
+    }
+    state.persistedCaughtJson = result.json;
   }
 
   function persistFavouriteIds(favouriteIds) {
-    const normalized = normalizeStoredFishIds(favouriteIds);
-    try {
-      const json = JSON.stringify(normalized);
-      if (json === state.persistedFavouriteJson) {
-        return;
-      }
-      localStorage.setItem(FAVOURITES_STORAGE_KEY, json);
-      state.persistedFavouriteJson = json;
-    } catch (_error) {
-      patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+    const helper = sharedFishStateHelper();
+    const result = helper
+      ? helper.persistRecord(FAVOURITES_STORAGE_KEY, favouriteIds, localStorage)
+      : { ids: normalizeStoredFishIds(favouriteIds), json: JSON.stringify(normalizeStoredFishIds(favouriteIds)), ok: false };
+    if (result.json === state.persistedFavouriteJson) {
+      return;
     }
+    if (!result.ok) {
+      patchSignals({ _status_message: "localStorage is unavailable; progress is not persisted." });
+      return;
+    }
+    state.persistedFavouriteJson = result.json;
   }
 
   function persistSignals(signals) {

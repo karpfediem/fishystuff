@@ -480,6 +480,41 @@ Why this matters:
 - it removes another class of manual rerender coupling
 - it keeps modal selection local and explicitly non-persisted
 
+### Step 10
+
+Extract shared caught/favourite fish-state storage helpers.
+
+Work:
+
+- remove duplicated caught/favourite id normalization and storage parsing logic from:
+  - `site/assets/js/pages/fishydex.js`
+  - `site/assets/map/loader.js`
+  - `site/assets/map/map-host.js`
+- define one shared browser helper around the existing storage keys and normalized fish-id arrays
+- use that helper as the current cross-page seam between Fishydex progress state and map-side shared fish filtering
+
+Status:
+
+- implemented
+
+Implementation:
+
+- added `site/assets/js/shared-fish-state.js`
+- base layout now loads the helper globally as `window.__fishystuffSharedFishState`
+- Fishydex uses it for:
+  - fish id normalization
+  - load/corruption reset handling
+  - persistence of caught/favourite ids
+- map frontend/runtime bridge code uses it for:
+  - shared caught/favourite state loading in `loader.js`
+  - shared filter state loading in `map-host.js`
+
+Why this matters:
+
+- it removes another cross-page duplication point
+- it makes “shared fish progress state” explicit as a reusable frontend contract
+- it gives the future Datastar map-bridge replacement a cleaner seam to integrate with instead of reaching into duplicated localStorage code
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:

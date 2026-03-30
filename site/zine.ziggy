@@ -44,6 +44,7 @@ Multilingual {
     "js/lz-string.min.js",
     "js/pages/fishydex.js",
     "js/script.js",
+    "js/shared-fish-state.js",
     "js/toast.js",
     "js/ui-settings.js",
 

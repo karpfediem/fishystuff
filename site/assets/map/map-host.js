@@ -618,6 +618,10 @@ function readPersistedLayerPointIconScales(filters) {
 }
 
 function normalizeFishIds(values) {
+  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
+  if (helper && typeof helper.normalizeIds === "function") {
+    return helper.normalizeIds(values);
+  }
   if (!Array.isArray(values)) {
     return [];
   }
@@ -635,6 +639,10 @@ function normalizeFishIds(values) {
 }
 
 function readSharedFishIds(storage, key) {
+  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
+  if (helper && typeof helper.loadRecord === "function") {
+    return helper.loadRecord(key, storage).ids;
+  }
   try {
     return normalizeFishIds(JSON.parse(storage?.getItem?.(key) || "[]"));
   } catch (_) {
@@ -643,6 +651,20 @@ function readSharedFishIds(storage, key) {
 }
 
 function loadSharedFishFilterState(storage = globalThis.localStorage) {
+  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
+  if (helper && typeof helper.loadState === "function") {
+    const shared = helper.loadState(
+      {
+        caught: FISHYMAP_STORAGE_KEYS.caught,
+        favourites: FISHYMAP_STORAGE_KEYS.favourites,
+      },
+      storage,
+    );
+    return {
+      caughtSet: shared.caughtSet,
+      favouriteSet: shared.favouriteSet,
+    };
+  }
   const caughtIds = readSharedFishIds(storage, FISHYMAP_STORAGE_KEYS.caught);
   const favouriteIds = readSharedFishIds(storage, FISHYMAP_STORAGE_KEYS.favourites);
   return {
