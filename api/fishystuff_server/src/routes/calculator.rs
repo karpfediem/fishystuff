@@ -468,13 +468,8 @@ pub async fn post_calculator_datastar_eval(
     );
     let target_fishes = target_fish_options(&data);
     let events = vec![
-        calculator_signals_event(
-            &data,
-            &normalized_signals,
-            &derived,
-            CalculatorPatchMode::Eval,
-        )?
-        .into_datastar_event(),
+        calculator_signals_event(&normalized_signals, &derived, CalculatorPatchMode::Eval)?
+            .into_datastar_event(),
         PatchElements::new(render_fish_group_chart(
             &fish_group_chart,
             normalized_signals.show_normalized_select_rates,
@@ -592,13 +587,8 @@ fn calculator_datastar_init_response(
 ) -> AppResult<impl IntoResponse> {
     let app = render_calculator_app(data, &normalized_signals, &derived)?;
     let events = vec![
-        calculator_signals_event(
-            data,
-            &normalized_signals,
-            &derived,
-            CalculatorPatchMode::Init,
-        )?
-        .into_datastar_event(),
+        calculator_signals_event(&normalized_signals, &derived, CalculatorPatchMode::Init)?
+            .into_datastar_event(),
         PatchElements::new(app)
             .selector("#calculator-app")
             .mode(ElementPatchMode::Outer)
@@ -653,13 +643,12 @@ fn parse_calculator_signals_body(
 }
 
 fn calculator_signals_event(
-    data: &CalculatorData,
     signals: &CalculatorSignals,
     derived: &CalculatorDerivedSignals,
     mode: CalculatorPatchMode,
 ) -> AppResult<PatchSignals> {
     let mut patch = match mode {
-        CalculatorPatchMode::Init => init_signals_patch_map(data, signals)?,
+        CalculatorPatchMode::Init => init_signals_patch_map(signals)?,
         CalculatorPatchMode::Eval => serde_json::Map::new(),
     };
     if matches!(mode, CalculatorPatchMode::Init) {
@@ -1248,12 +1237,11 @@ fn signals_patch_map(signals: &CalculatorSignals) -> AppResult<serde_json::Map<S
 }
 
 fn init_signals_patch_map(
-    data: &CalculatorData,
     signals: &CalculatorSignals,
 ) -> AppResult<serde_json::Map<String, Value>> {
     let mut patch = signals_patch_map(signals)?;
     mirror_resources_signal(&mut patch);
-    patch_checkbox_transport_signals(data, signals, &mut patch);
+    patch_checkbox_transport_signals(signals, &mut patch);
     Ok(patch)
 }
 
@@ -1264,16 +1252,19 @@ fn mirror_resources_signal(patch: &mut serde_json::Map<String, Value>) {
 }
 
 fn patch_checkbox_transport_signals(
-    data: &CalculatorData,
     signals: &CalculatorSignals,
     patch: &mut serde_json::Map<String, Value>,
 ) {
     patch.insert(
         "_outfit_slots".to_string(),
-        Value::Array(indexed_checkbox_values(
-            &signals.outfit,
-            &item_options_by_type(&data.catalog.items, "outfit"),
-        )),
+        Value::Array(
+            signals
+                .outfit
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect::<Vec<_>>(),
+        ),
     );
     patch.insert(
         "_food_slots".to_string(),
@@ -1307,36 +1298,22 @@ fn patch_checkbox_transport_signals(
     ] {
         patch.insert(
             format!("_{slot}_skill_slots"),
-            Value::Array(indexed_checkbox_values(
-                &pet.skills,
-                &select_options_from_catalog(&data.catalog.pets.skills),
-            )),
+            Value::Array(
+                pet.skills
+                    .iter()
+                    .cloned()
+                    .map(Value::String)
+                    .collect::<Vec<_>>(),
+            ),
         );
     }
-}
-
-fn indexed_checkbox_values(selected_values: &[String], options: &[SelectOption<'_>]) -> Vec<Value> {
-    let selected = selected_values
-        .iter()
-        .map(String::as_str)
-        .collect::<std::collections::HashSet<_>>();
-    options
-        .iter()
-        .map(|option| {
-            Value::String(if selected.contains(option.value) {
-                option.value.to_string()
-            } else {
-                String::new()
-            })
-        })
-        .collect()
 }
 
 fn render_canonical_checkbox_signal_computeds(pet_slots: usize) -> String {
     let mut html = String::from(
         r#"<div class="hidden"
          data-computed:resources="$_resources"
-         data-computed:outfit="($_outfit_slots || []).filter(Boolean)"
+         data-computed:outfit="Array.isArray($_outfit_slots) ? $_outfit_slots : []"
          data-computed:food="Array.isArray($_food_slots) ? $_food_slots : []"
          data-computed:buff="Array.isArray($_buff_slots) ? $_buff_slots : []""#,
     );
@@ -1344,7 +1321,7 @@ fn render_canonical_checkbox_signal_computeds(pet_slots: usize) -> String {
         write!(
             html,
             r#"
-         data-computed:pet{slot}.skills="($_pet{slot}_skill_slots || []).filter(Boolean)""#,
+         data-computed:pet{slot}.skills="Array.isArray($_pet{slot}_skill_slots) ? $_pet{slot}_skill_slots : []""#,
         )
         .unwrap();
     }
@@ -5073,14 +5050,28 @@ fn render_checkbox_group(
         .collect::<std::collections::HashSet<_>>();
     let mut html = String::new();
     let change_attr = change_attr.unwrap_or("");
+    let bound_inputs_id = format!("{id}-bound-inputs");
     write!(html, "<div id=\"{}\" class=\"block\">", escape_html(id)).unwrap();
+    write!(
+        html,
+        "<div id=\"{}\" data-role=\"bound-inputs-root\" hidden>{}</div>",
+        escape_html(&bound_inputs_id),
+        render_searchable_multiselect_bound_select_html(bind_key, selected_values, options),
+    )
+    .unwrap();
+    write!(
+        html,
+        "<fishy-checkbox-group class=\"block\" bound-select-id=\"{}\">",
+        escape_html(&bound_inputs_id)
+    )
+    .unwrap();
     write!(
         html,
         "<div class=\"grid gap-2 sm:grid-cols-2\" {}>",
         change_attr,
     )
     .unwrap();
-    for (index, option) in options.iter().enumerate() {
+    for option in options.iter() {
         let checked = if selected.contains(option.value) {
             " checked"
         } else {
@@ -5093,9 +5084,7 @@ fn render_checkbox_group(
             .unwrap_or_default();
         write!(
             html,
-            "<label class=\"label cursor-pointer items-start justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input type=\"checkbox\" data-bind=\"{}.{}\" class=\"checkbox checkbox-primary checkbox-sm mt-0.5 shrink-0\" value=\"{}\"{}{}>",
-            escape_html(bind_key),
-            index,
+            "<label class=\"label cursor-pointer items-start justify-start gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-sm\"><input type=\"checkbox\" data-checkbox-group-option class=\"checkbox checkbox-primary checkbox-sm mt-0.5 shrink-0\" value=\"{}\"{}{}>",
             escape_html(option.value),
             checked,
             category_key_attr,
@@ -5122,7 +5111,7 @@ fn render_checkbox_group(
         )
         .unwrap();
     }
-    html.push_str("</div></div>");
+    html.push_str("</div></fishy-checkbox-group></div>");
     html
 }
 
@@ -5642,7 +5631,11 @@ mod tests {
         assert!(text.contains("data-bind=\"_buff_slots\""));
         assert!(text.contains("bound-select-id=\"calculator-food-picker-bound-inputs\""));
         assert!(text.contains("bound-select-id=\"calculator-buff-picker-bound-inputs\""));
-        assert!(text.contains("data-bind=\"_outfit_slots.0\""));
+        assert!(text.contains("data-bind=\"_outfit_slots\""));
+        assert!(text.contains("bound-select-id=\"outfits-bound-inputs\""));
+        assert!(text.contains(
+            "data-computed:outfit=\"Array.isArray($_outfit_slots) ? $_outfit_slots : []\""
+        ));
         assert!(
             text.contains("data-computed:food=\"Array.isArray($_food_slots) ? $_food_slots : []\"")
         );
@@ -5921,8 +5914,8 @@ mod tests {
     }
 
     #[test]
-    fn init_signals_patch_map_expands_checkbox_groups_to_option_slots() {
-        let data = CalculatorData {
+    fn init_signals_patch_map_keeps_checkbox_group_transport_arrays_compact() {
+        let _data = CalculatorData {
             catalog: CalculatorCatalogResponse {
                 items: vec![
                     CalculatorItemEntry {
@@ -6008,7 +6001,7 @@ mod tests {
             ..CalculatorSignals::default()
         };
 
-        let patch = init_signals_patch_map(&data, &signals).unwrap();
+        let patch = init_signals_patch_map(&signals).unwrap();
 
         assert_eq!(
             patch.get("outfit"),
@@ -6025,7 +6018,6 @@ mod tests {
                 "effect:8-piece-outfit-set-effect",
                 "effect:awakening-weapon-outfit",
                 "effect:mainhand-weapon-outfit",
-                "",
                 "item:14330"
             ]))
         );

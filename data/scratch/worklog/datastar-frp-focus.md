@@ -220,18 +220,49 @@ Status:
 
 ### Step 4
 
-Add browser regression coverage for multiselect removal.
+Refactor calculator checkbox groups to the same compact transport model.
 
-Scenarios:
+Work:
 
-- remove only selected food
-- remove one of multiple foods
-- remove only selected buff
-- reload and verify cleared state remains cleared
+- stop binding visible outfit and pet skill checkboxes directly to slot-indexed signals
+- keep compact local transport arrays:
+  - `_outfit_slots`
+  - `_pet{n}_skill_slots`
+- derive canonical domain signals directly from those compact arrays
+- introduce one reusable checkbox-group component instead of repeating page-specific transport glue
 
 Status:
 
-- planned
+- implemented
+
+Implementation:
+
+- added reusable `fishy-checkbox-group`
+- the component binds visible checkbox groups to an external hidden `<select multiple>`
+- visible checkbox state now mirrors selected `<option>` values instead of writing transport slots directly
+
+Validation:
+
+- live Chromium validation confirmed:
+  - removing one outfit effect updates:
+    - `outfit`
+    - `_outfit_slots`
+    - localStorage persistence
+  - reloading restores the compact persisted outfit state
+  - removing the only selected `pet1` skill clears:
+    - `pet1.skills`
+    - `_pet1_skill_slots`
+    - localStorage persistence
+  - reloading restores the cleared pet skill state correctly
+
+Result:
+
+- calculator checkbox transport no longer depends on slot-expanded arrays for:
+  - outfit
+  - pet skills
+- the remaining transport shape is now consistent across:
+  - searchable multiselects
+  - plain checkbox groups
 
 ### Step 5
 
@@ -320,12 +351,6 @@ This confirms the bug was structural and that the current calculator food-remova
 
 ## Current Working Changes
 
-Current in-progress changes currently focus on:
-
-- `api/fishystuff_server/src/routes/calculator.rs`
-- `site/content/en-US/calculator.smd`
-- `site/assets/js/components/searchable-multiselect.js`
-
 Planned next audit targets after calculator state is stable:
 
 - `site/content/en-US/dex.smd`
@@ -339,11 +364,14 @@ Unrelated local changes not part of this refactor:
 
 ## Next Move
 
-Finish calculator Step 3 cleanly:
+Add browser regression coverage for the refactored calculator signal flow:
 
-- audit stored calculator signal canonicalization now that food/buff transport is compact
-- decide whether outfit and pet skill checkbox transport should also move off slot arrays
-- add browser regression coverage for food/buff removal and reload
+- remove only selected food
+- remove one of multiple foods
+- remove only selected buff
+- remove outfit effects
+- remove pet skills
+- reload and verify cleared state remains cleared
 
 Then expand the same analysis to the rest of the site:
 
