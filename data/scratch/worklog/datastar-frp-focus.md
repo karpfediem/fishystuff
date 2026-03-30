@@ -2268,3 +2268,44 @@ Validation:
   - `/js/pages/calculator-page.js`
 - confirmed the served calculator HTML now references the external page module and no longer
   embeds the old inline `window.__fishystuffCalculator = ...` helper
+
+## Step 46: Move calculator client-only Datastar listeners into the page module
+
+What changed:
+
+- moved calculator persistence ownership fully into `site/assets/js/pages/calculator-page.js`
+- moved `_calculator_actions` handling fully into `site/assets/js/pages/calculator-page.js`
+- removed the server-rendered hidden client-only hooks from
+  `api/fishystuff_server/src/routes/calculator.rs`:
+  - hidden debounced persist node
+  - hidden `data-effect="window.__fishystuffCalculator.syncActions($)"` node
+- kept the server-rendered eval hook in place:
+  - hidden debounced `@post(window.__fishystuffCalculator.evalUrl())`
+
+Why this matters:
+
+- persistence and action-token handling are page-local client concerns, not server-rendered UI
+- Fishydex and the map page already moved to page-owned Datastar signal-patch listeners
+- this keeps the calculator aligned with that same pattern and reduces hidden template glue
+
+Implementation notes:
+
+- the page module now binds:
+  - a debounced persist listener via `window.__fishystuffDatastarPersist`
+  - an action listener that reacts only to `_calculator_actions` patches
+- restore now binds those listeners before hydrating stored state, and only enables them after
+  restore completes to avoid startup churn
+- the action handler now treats tokens as monotonic counters and fires only on increments
+  instead of any token change
+
+Validation:
+
+- `node --check site/assets/js/pages/calculator-page.js`
+- `node --test site/assets/js/pages/calculator-page.test.mjs`
+- `cargo test --offline -p fishystuff_server routes::calculator::tests::init_returns_html_fragment_with_initial_signals -- --exact`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/calculator/`
+  - `/js/pages/calculator-page.js`
+- confirmed the served calculator HTML no longer contains the hidden client-only
+  persist/action hooks, while the page module still contains the corresponding listener logic

@@ -7,6 +7,10 @@ const DATASTAR_STATE_SOURCE = fs.readFileSync(
   new URL("../datastar-state.js", import.meta.url),
   "utf8",
 );
+const DATASTAR_PERSIST_SOURCE = fs.readFileSync(
+  new URL("../datastar-persist.js", import.meta.url),
+  "utf8",
+);
 const CALCULATOR_PAGE_SOURCE = fs.readFileSync(
   new URL("./calculator-page.js", import.meta.url),
   "utf8",
@@ -32,6 +36,9 @@ class MemoryStorage {
 
 function createContext(localStorageInitial = {}, options = {}) {
   const localStorage = new MemoryStorage(localStorageInitial);
+  const listeners = new Map();
+  const timers = new Map();
+  let nextTimerId = 1;
   const location = {
     origin: options.origin || "https://fishystuff.fish",
     pathname: options.pathname || "/calculator/",
@@ -44,6 +51,24 @@ function createContext(localStorageInitial = {}, options = {}) {
   const document = {
     documentElement: {
       lang: options.lang || "en-US",
+    },
+    addEventListener(type, listener) {
+      if (!listeners.has(type)) {
+        listeners.set(type, []);
+      }
+      listeners.get(type).push(listener);
+    },
+    removeEventListener(type, listener) {
+      const current = listeners.get(type) || [];
+      listeners.set(
+        type,
+        current.filter((candidate) => candidate !== listener),
+      );
+    },
+    dispatchEvent(event) {
+      for (const listener of listeners.get(event.type) || []) {
+        listener(event);
+      }
     },
   };
   const window = {
@@ -80,6 +105,15 @@ function createContext(localStorageInitial = {}, options = {}) {
     Intl,
     console,
     globalThis: null,
+    setTimeout(callback) {
+      const id = nextTimerId;
+      nextTimerId += 1;
+      timers.set(id, callback);
+      return id;
+    },
+    clearTimeout(id) {
+      timers.delete(id);
+    },
     LZString: {
       compressToEncodedURIComponent(value) {
         return `lz:${value}`;
@@ -91,12 +125,20 @@ function createContext(localStorageInitial = {}, options = {}) {
   };
   context.globalThis = context;
   vm.runInNewContext(DATASTAR_STATE_SOURCE, context, { filename: "datastar-state.js" });
+  vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
   vm.runInNewContext(CALCULATOR_PAGE_SOURCE, context, { filename: "calculator-page.js" });
   return {
     window,
     document,
     localStorage,
     toastCalls,
+    flushTimers() {
+      const pending = Array.from(timers.values());
+      timers.clear();
+      for (const callback of pending) {
+        callback();
+      }
+    },
   };
 }
 
@@ -197,13 +239,19 @@ test("calculator restore canonicalizes stored signals", () => {
 test("calculator persist stores canonical page state and excludes transient branches", () => {
   const env = createContext();
   const signals = defaultSignals();
+  env.window.__fishystuffCalculator.restore(signals);
   Object.assign(signals, {
     food: ["item:9359", "", "item:9359"],
     _live: { total_time: "123.45" },
     _calc: { zone_name: "Velia Beach" },
   });
-
-  env.window.__fishystuffCalculator.persist(signals);
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      food: ["item:9359", "", "item:9359"],
+    },
+  });
+  env.flushTimers();
 
   const persisted = JSON.parse(env.localStorage.getItem("calculator"));
   assert.deepEqual(persisted.food, ["item:9359"]);
@@ -213,7 +261,7 @@ test("calculator persist stores canonical page state and excludes transient bran
   assert.equal("_defaults" in persisted, false);
 });
 
-test("calculator syncActions handles copy and clear tokens once", () => {
+test("calculator action listener handles copy and clear tokens once", () => {
   const env = createContext();
   const signals = defaultSignals();
   Object.assign(signals, {
@@ -228,8 +276,26 @@ test("calculator syncActions handles copy and clear tokens once", () => {
 
   env.localStorage.setItem("calculator", JSON.stringify({ food: ["item:9359"] }));
   env.window.__fishystuffCalculator.restore(signals);
-  env.window.__fishystuffCalculator.syncActions(signals);
-  env.window.__fishystuffCalculator.syncActions(signals);
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_actions: {
+        copyUrlToken: 1,
+        copyShareToken: 1,
+        clearToken: 1,
+      },
+    },
+  });
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _calculator_actions: {
+        copyUrlToken: 0,
+        copyShareToken: 0,
+        clearToken: 0,
+      },
+    },
+  });
 
   assert.equal(env.toastCalls.length, 3);
   assert.equal(env.toastCalls[0].type, "copyText");

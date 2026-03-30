@@ -3106,11 +3106,6 @@ fn render_calculator_app(
     <div class="hidden"
          data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl())"
          data-on-signal-patch-filter="window.__fishystuffCalculator.evalSignalPatchFilter()"></div>
-    <div class="hidden"
-         data-on-signal-patch__debounce.150ms="window.__fishystuffCalculator.persist($)"
-         data-on-signal-patch-filter="window.__fishystuffCalculator.persistSignalPatchFilter()"></div>
-    <div class="hidden"
-         data-effect="window.__fishystuffCalculator.syncActions($)"></div>
 
     <section class="card card-border bg-base-100">
         <div class="card-body gap-5">
@@ -5666,7 +5661,6 @@ mod tests {
         assert!(text.contains("bound-select-id=\"calculator-buff-picker-bound-inputs\""));
         assert!(text.contains("data-bind=\"_outfit_slots\""));
         assert!(text.contains("bound-select-id=\"outfits-bound-inputs\""));
-        assert!(text.contains("data-effect=\"window.__fishystuffCalculator.syncActions($)\""));
         assert!(text.contains("$_calculator_actions.copyUrlToken = (($_calculator_actions && $_calculator_actions.copyUrlToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.copyShareToken = (($_calculator_actions && $_calculator_actions.copyShareToken) || 0) + 1"));
         assert!(text.contains("$_calculator_actions.clearToken = (($_calculator_actions && $_calculator_actions.clearToken) || 0) + 1"));

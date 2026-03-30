@@ -1,12 +1,17 @@
 (function () {
   const ICON_SPRITE_URL = "/img/icons.svg?v=20260330-1";
   const CALCULATOR_STORAGE_KEY = "calculator";
+  const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$))/;
   const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN =
     /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$))/;
+  const CALCULATOR_ACTION_SIGNAL_PATTERN = /^_calculator_actions(?:\.|$)/;
   const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
 
   const calculatorState = {
+    persistBinding: null,
+    actionBinding: null,
+    uiStateRestored: false,
     handledActionTokens: {
       copyUrlToken: 0,
       copyShareToken: 0,
@@ -67,6 +72,73 @@
   }
 
   const signalStore = datastarStateHelper()?.createSignalStore() || createFallbackSignalStore();
+
+  function datastarPersistHelper() {
+    const helper = window.__fishystuffDatastarPersist;
+    return helper && typeof helper.createDebouncedSignalPatchPersistor === "function"
+      ? helper
+      : null;
+  }
+
+  function bindPersistListener() {
+    if (calculatorState.persistBinding) {
+      return;
+    }
+    const helper = datastarPersistHelper();
+    if (!helper) {
+      return;
+    }
+    calculatorState.persistBinding = helper.createDebouncedSignalPatchPersistor({
+      delayMs: 150,
+      isReady() {
+        return calculatorState.uiStateRestored;
+      },
+      filter: {
+        exclude: CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN,
+      },
+      persist() {
+        const signals = signalStore.signalObject();
+        if (!signals) {
+          return;
+        }
+        window.__fishystuffCalculator.persist(signals);
+      },
+    });
+    calculatorState.persistBinding.bind();
+  }
+
+  function bindActionListener() {
+    if (calculatorState.actionBinding) {
+      return;
+    }
+    const helper = datastarPersistHelper();
+    const patchMatches = helper && typeof helper.patchMatchesSignalFilter === "function"
+      ? helper.patchMatchesSignalFilter
+      : null;
+    if (!patchMatches) {
+      return;
+    }
+    const handleSignalPatch = (event) => {
+      if (!calculatorState.uiStateRestored) {
+        return;
+      }
+      const patch = event && event.detail ? event.detail : null;
+      if (!patchMatches(patch, { include: CALCULATOR_ACTION_SIGNAL_PATTERN })) {
+        return;
+      }
+      const signals = signalStore.signalObject();
+      if (!signals) {
+        return;
+      }
+      window.__fishystuffCalculator.syncActions(signals);
+    };
+    document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    calculatorState.actionBinding = {
+      dispose() {
+        document.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+      },
+    };
+  }
 
   const calculatorLang = document.documentElement.lang?.trim().toLowerCase().startsWith("ko")
     ? "ko"
@@ -328,11 +400,6 @@
     signalObject() {
       return signalStore.signalObject();
     },
-    persistSignalPatchFilter() {
-      return {
-        exclude: CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN,
-      };
-    },
     evalSignalPatchFilter() {
       return {
         exclude: CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN,
@@ -412,7 +479,10 @@
     },
     restore(signals) {
       this.connect(signals);
+      bindPersistListener();
+      bindActionListener();
       Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
+      calculatorState.uiStateRestored = true;
     },
     persist(signals) {
       const payload = persistedCalculatorSignals(signals);
