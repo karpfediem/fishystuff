@@ -2677,3 +2677,36 @@ Validation:
 - compared served vs `.out` for:
   - `/js/pages/calculator-page.js`
   - `/calculator/`
+
+## Step 58: Shrink the Fishydex page-global API to the real bootstrap surface
+
+What changed:
+
+- trimmed `window.Fishydex` down to the two members still needed by template bootstrap:
+  - `restore`
+  - `fishApiUrl`
+- removed no-longer-used global exports for internal page behaviors:
+  - `persistSignals`
+  - `toggleFishIds`
+  - `queueStamp`
+  - `toggleCaught`
+  - `toggleFavourite`
+
+Why this matters:
+
+- after Step 56, Fishydex rendering and action handling already lived inside page-owned
+  Datastar listeners
+- the remaining extra exports were only leftover imperative surface, not part of the active
+  template/runtime contract
+- this keeps the page-global API aligned with the minimal bootstrap rule we already applied
+  to the calculator
+
+Validation:
+
+- `node --check site/assets/js/pages/fishydex.js site/assets/js/pages/fishydex.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- confirmed no remaining references to the removed `window.Fishydex.*` methods
+- compared served vs `.out` for:
+  - `/js/pages/fishydex.js`
+  - `/dex/`

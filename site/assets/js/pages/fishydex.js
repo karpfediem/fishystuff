@@ -1654,11 +1654,6 @@
 
   window.Fishydex = {
     restore: restore,
-    persistSignals: persistSignals,
-    toggleFishIds: toggleFishIds,
-    queueStamp: queueStamp,
     fishApiUrl: fishApiUrl,
-    toggleCaught: toggleCaught,
-    toggleFavourite: toggleFavourite,
   };
 })();
