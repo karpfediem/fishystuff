@@ -15,6 +15,11 @@
     const CALCULATOR_STORAGE_KEY = "calculator";
     const calculatorState = {
         signals: null,
+        handledActionTokens: {
+            copyUrlToken: 0,
+            copyShareToken: 0,
+            clearToken: 0,
+        },
     };
     const calculatorLang = document.documentElement.lang?.trim().toLowerCase().startsWith("ko")
         ? "ko"
@@ -348,6 +353,50 @@
             }
             Object.assign(current, cloneCalculatorSignals(defaults));
         },
+        actionState(signals) {
+            const current = signals && typeof signals === "object"
+                ? signals
+                : this.signalObject();
+            const raw = current && typeof current === "object"
+                ? current._calculator_actions
+                : null;
+            return {
+                copyUrlToken: Number.isFinite(raw?.copyUrlToken)
+                    ? Math.max(0, Math.trunc(raw.copyUrlToken))
+                    : 0,
+                copyShareToken: Number.isFinite(raw?.copyShareToken)
+                    ? Math.max(0, Math.trunc(raw.copyShareToken))
+                    : 0,
+                clearToken: Number.isFinite(raw?.clearToken)
+                    ? Math.max(0, Math.trunc(raw.clearToken))
+                    : 0,
+            };
+        },
+        syncActions(signals) {
+            const current = signals && typeof signals === "object"
+                ? signals
+                : this.signalObject();
+            if (!current || typeof current !== "object") {
+                return;
+            }
+            const nextTokens = this.actionState(current);
+            const previousTokens = calculatorState.handledActionTokens;
+            if (nextTokens.copyUrlToken !== previousTokens.copyUrlToken) {
+                window.__fishystuffToast.copyText(this.presetUrl(current), {
+                    success: "Preset URL copied.",
+                });
+            }
+            if (nextTokens.copyShareToken !== previousTokens.copyShareToken) {
+                window.__fishystuffToast.copyText(this.shareText(current), {
+                    success: "Share text copied.",
+                });
+            }
+            if (nextTokens.clearToken !== previousTokens.clearToken) {
+                this.clear(current);
+                window.__fishystuffToast.info("Calculator cleared.");
+            }
+            calculatorState.handledActionTokens = nextTokens;
+        },
         restore(signals) {
             this.connect(signals);
             Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
@@ -457,7 +506,7 @@
 
 <div id="calculator"
      class="not-prose grid gap-6"
-     data-signals="{ _loading: true, _calculator_ui: { distribution_tab: 'groups' } }"
+     data-signals="{ _loading: true, _calculator_ui: { distribution_tab: 'groups' }, _calculator_actions: { copyUrlToken: 0, copyShareToken: 0, clearToken: 0 } }"
      data-init__delay.50ms="window.__fishystuffCalculator.restore($); @get(window.__fishystuffCalculator.initUrl())">
     <section data-show="$_loading" class="card card-border bg-base-100">
         <div class="card-body">

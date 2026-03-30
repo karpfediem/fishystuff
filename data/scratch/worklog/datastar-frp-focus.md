@@ -2182,3 +2182,44 @@ Validation:
   - `/dex/`
   - `/js/pages/fishydex.js`
   - `/js/datastar-state.js`
+
+### Step 44 - Route Calculator Toolbar Actions Through Datastar Signals
+
+Completed:
+
+- added a local `_calculator_actions` branch in `site/content/en-US/calculator.smd`:
+  - `copyUrlToken`
+  - `copyShareToken`
+  - `clearToken`
+- extended `window.__fishystuffCalculator` in the calculator page script with:
+  - `actionState(...)`
+  - `syncActions(...)`
+  - token bookkeeping for handled toolbar actions
+- added a hidden reactive hook in the server-rendered calculator fragment so toolbar actions now
+  flow through the Datastar signal graph:
+  - `data-effect="window.__fishystuffCalculator.syncActions($)"`
+- moved these buttons in `api/fishystuff_server/src/routes/calculator.rs` off direct
+  imperative helper/toast calls and onto token updates:
+  - `Copy URL`
+  - `Copy Share`
+  - `Clear`
+- kept the existing user-visible behavior:
+  - copy URL still copies the preset URL
+  - copy share still copies share text
+  - clear still restores defaults and shows the toast
+
+Why this matters:
+
+- the calculator still had a small but obvious imperative island in the toolbar
+- this keeps the same UX while aligning the toolbar with the same Datastar action-token model now
+  used in Fishydex and the map page
+- it also reduces the amount of direct template glue that a later calculator page-module
+  extraction will need to preserve
+
+Validation:
+
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/calculator/`
+- `cargo test --offline -p fishystuff_server routes::calculator::tests::init_returns_html_fragment_with_initial_signals -- --exact`
+- extended that init-fragment test to assert the new calculator action-token wiring is present
