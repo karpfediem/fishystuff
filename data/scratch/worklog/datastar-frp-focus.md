@@ -687,6 +687,48 @@ Why this matters:
 - it keeps map shell state changes aligned with the same Datastar-first pattern already used for bookmark state
 - it narrows the loader’s role toward reconciliation/rendering instead of canonical state ownership
 
+### Step 13
+
+Make map managed-window state signal-first.
+
+Work:
+
+- stop mutating `windowUiState` locally before patching `_map_ui.windowUi`
+- remove the separate `persistWindowUiState()` helper from `loader.js`
+- make open/collapse/drag/resize/reset window flows patch `_map_ui.windowUi` first
+- let the existing `syncLocalUiStateFromSignals()` path reconcile local window state and rerender
+
+Status:
+
+- implemented
+
+Implementation:
+
+- `updateWindowUiEntry()` now computes the next window state and patches `_map_ui.windowUi`
+  instead of mutating `windowUiState` directly
+- `applyManagedWindows()` is now purely a visibility/clamping pass
+- open/collapse/drag-finish flows no longer request persistence separately
+- reset UI and resize flows now patch/reset the Datastar window state and then apply the
+  managed windows without any extra persistence hook
+
+Why this matters:
+
+- it removes another remaining local-first state island in `loader.js`
+- map window state now follows the same signal-first ownership model as bookmarks and search
+- it narrows `loader.js` further toward rendering/reconciliation instead of canonical shell-state ownership
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served-vs-`.out` spot checks matched for:
+  - `http://127.0.0.1:1990/map/`
+  - `http://127.0.0.1:1990/map/loader.js`
+- live Chromium validation confirmed:
+  - toggling Settings updates the visible window state cleanly
+  - the managed window hides/shows without relying on a separate persistence path
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:
@@ -834,6 +876,7 @@ Already implemented:
 - bookmark persistence now lives in `site/assets/js/pages/map-page.js` as a Datastar signal-patch listener, not a template-side hidden handler
 - bookmark CRUD and selection/placement paths now patch Datastar state first, then let loader signal sync reconcile local render state
 - search dropdown and reset-time shell state now patch `_map_ui` first instead of mutating loader locals before signal updates
+- managed window open/collapse/drag/resize/reset flows now patch `_map_ui.windowUi` first instead of mutating/persisting window state locally
 
 Map controls currently routed through `_map_input`:
 

@@ -6629,13 +6629,9 @@ function bindUi(shell, elements, options = {}) {
     }, 150);
   }
 
-  function persistWindowUiState() {
-    patchMapUiSignalState({ windowUi: windowUiState });
-  }
-
   function updateWindowUiEntry(windowId, patch) {
     if (!hasOwnKey(managedWindows, windowId)) {
-      return false;
+      return null;
     }
     const currentEntry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
     const nextEntry =
@@ -6654,14 +6650,14 @@ function bindUi(shell, elements, options = {}) {
             DEFAULT_WINDOW_UI_STATE[windowId],
           );
     if (windowUiEntriesEqual(currentEntry, nextEntry)) {
-      return false;
+      return null;
     }
-    windowUiState = {
+    const nextWindowUiState = {
       ...windowUiState,
       [windowId]: nextEntry,
     };
-    patchMapUiSignalState({ windowUi: windowUiState });
-    return true;
+    patchMapUiSignalState({ windowUi: nextWindowUiState });
+    return nextWindowUiState;
   }
 
   function bringManagedWindowToFront(windowId) {
@@ -6733,30 +6729,27 @@ function bindUi(shell, elements, options = {}) {
     return changed;
   }
 
-  function applyManagedWindows({ persist = false } = {}) {
+  function applyManagedWindows() {
     applyWindowVisibility(elements, windowUiState);
     if (clampOpenManagedWindows()) {
       applyWindowVisibility(elements, windowUiState);
-      persist = true;
-    }
-    if (persist) {
-      persistWindowUiState();
     }
   }
 
   function toggleManagedWindowOpen(windowId) {
     const entry = windowUiState[windowId] || DEFAULT_WINDOW_UI_STATE[windowId];
-    if (!updateWindowUiEntry(windowId, { open: entry.open === false })) {
+    const nextWindowUiState = updateWindowUiEntry(windowId, { open: entry.open === false });
+    if (!nextWindowUiState) {
       return;
     }
-    if (windowUiState[windowId].open !== false) {
+    if (nextWindowUiState[windowId].open !== false) {
       bringManagedWindowToFront(windowId);
     } else if (windowId === "search") {
       elements.search?.blur?.();
     } else if (windowId === "bookmarks") {
       setBookmarkPlacementActive(false);
     }
-    applyManagedWindows({ persist: true });
+    applyManagedWindows();
   }
 
   function setZoneInfoTab(nextTab) {
@@ -6774,7 +6767,6 @@ function bindUi(shell, elements, options = {}) {
     if (!updateWindowUiEntry("zoneInfo", { tab: requestedTab })) {
       return false;
     }
-    persistWindowUiState();
     renderCurrentState(current);
     return true;
   }
@@ -6785,7 +6777,7 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     bringManagedWindowToFront(windowId);
-    applyManagedWindows({ persist: true });
+    applyManagedWindows();
   }
 
   function clearManagedWindowDrag() {
@@ -6817,7 +6809,9 @@ function bindUi(shell, elements, options = {}) {
       toggleManagedWindowCollapsed(windowId);
       return;
     }
-    applyManagedWindows({ persist: moved });
+    if (moved) {
+      applyManagedWindows();
+    }
   }
 
   function renderCurrentState(stateBundle = latestStateBundle || requestBridgeState(shell)) {
@@ -7988,7 +7982,6 @@ function bindUi(shell, elements, options = {}) {
       if (!updateWindowUiEntry("settings", { autoAdjustView: elements.autoAdjustView.checked })) {
         return;
       }
-      persistWindowUiState();
       renderCurrentState(getLatestStateBundle());
     });
   }
@@ -8317,7 +8310,7 @@ function bindUi(shell, elements, options = {}) {
       search: resetSearchUiState,
       bookmarks: resetBookmarkUiState,
     });
-    applyManagedWindows({ persist: true });
+    applyManagedWindows();
 
     try {
       globalThis.sessionStorage?.removeItem?.(FISHYMAP_STORAGE_KEYS.session);
@@ -8434,7 +8427,7 @@ function bindUi(shell, elements, options = {}) {
     }
   });
   window.addEventListener("resize", () => {
-    applyManagedWindows({ persist: true });
+    applyManagedWindows();
   });
 
   patchMapUiSignalState({
