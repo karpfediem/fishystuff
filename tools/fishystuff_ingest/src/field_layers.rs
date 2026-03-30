@@ -70,7 +70,6 @@ pub fn build_region_groups_field_hover_metadata(
 
 pub fn build_zone_mask_field_hover_metadata(
     field_path: &Path,
-    _zones_csv_path: &Path,
     out_path: &Path,
 ) -> Result<FieldHoverMetadataBuildSummary> {
     let field = load_field(field_path)?;

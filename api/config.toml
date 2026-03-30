@@ -3,7 +3,6 @@
 [paths]
 db = "../data/fishystuff.db"
 fish_names = "../data/fish_names.tsv" # optional if dolt_sql is configured
-zones_merged_csv = "../data/zones_merged.csv"
 patches_csv = "../data/patches.csv"
 images_dir = "../data/cdn/public/images"
 # Canonical packed RGB24 height tiles derived directly from whole_fullres.png.

@@ -32,7 +32,6 @@ Seed patches table with `api/sql/patches_seed.csv` (derived from curated patch n
 ### Option A: CLI export on demand (legacy)
 At server start (or per request), run:
 
-- `dolt sql -r csv -q "SELECT * FROM zones_merged;" > zones_merged.csv`
 - `dolt sql -r csv -q "SELECT * FROM patches;" > patches.csv`
 
 If historical commit `ref` is specified:

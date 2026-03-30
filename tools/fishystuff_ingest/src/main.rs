@@ -28,7 +28,7 @@ use fishystuff_core::tile::{pixel_to_tile, tile_dimensions};
 use fishystuff_core::transform::TransformKind;
 use fishystuff_store::sqlite::SqliteStore;
 use fishystuff_store::{Event, WaterTile};
-use fishystuff_zones_meta::{CsvZonesMetaProvider, DoltZonesMetaProvider, ZonesMetaProvider};
+use fishystuff_zones_meta::{DoltZonesMetaProvider, ZonesMetaProvider};
 use ranking::{parse_datetime_utc, RankingRow};
 
 const SOURCE_KIND_RANKING: u8 = 1;
@@ -264,8 +264,6 @@ enum Commands {
         #[arg(long)]
         field: PathBuf,
         #[arg(long)]
-        zones_csv: PathBuf,
-        #[arg(long)]
         out: PathBuf,
     },
     DebugWatermapProjection {
@@ -312,8 +310,6 @@ enum Commands {
         #[arg(long)]
         fish_names: Option<PathBuf>,
         #[arg(long)]
-        zones_merged_csv: Option<PathBuf>,
-        #[arg(long)]
         dolt_repo: Option<PathBuf>,
         #[arg(long)]
         dolt_ref: Option<String>,
@@ -346,7 +342,6 @@ struct ZoneStatsCommand {
     alpha0: f64,
     top_k: usize,
     fish_names: Option<PathBuf>,
-    zones_merged_csv: Option<PathBuf>,
     dolt_repo: Option<PathBuf>,
     dolt_ref: Option<String>,
     half_life_days: Option<f64>,
@@ -570,11 +565,9 @@ fn main() -> Result<()> {
             waypoint_xml,
             out,
         ),
-        Commands::BuildZoneMaskFieldMetadata {
-            field,
-            zones_csv,
-            out,
-        } => run_build_zone_mask_field_metadata(field, zones_csv, out),
+        Commands::BuildZoneMaskFieldMetadata { field, out } => {
+            run_build_zone_mask_field_metadata(field, out)
+        }
         Commands::DebugWatermapProjection {
             watermap,
             out,
@@ -611,7 +604,6 @@ fn main() -> Result<()> {
             alpha0,
             top_k,
             fish_names,
-            zones_merged_csv,
             dolt_repo,
             dolt_ref,
             half_life_days,
@@ -628,7 +620,6 @@ fn main() -> Result<()> {
             alpha0,
             top_k,
             fish_names,
-            zones_merged_csv,
             dolt_repo,
             dolt_ref,
             half_life_days,
@@ -1278,12 +1269,8 @@ fn run_build_region_groups_field_metadata(
     Ok(())
 }
 
-fn run_build_zone_mask_field_metadata(
-    field: PathBuf,
-    zones_csv: PathBuf,
-    out: PathBuf,
-) -> Result<()> {
-    let summary = field_layers::build_zone_mask_field_hover_metadata(&field, &zones_csv, &out)?;
+fn run_build_zone_mask_field_metadata(field: PathBuf, out: PathBuf) -> Result<()> {
+    let summary = field_layers::build_zone_mask_field_hover_metadata(&field, &out)?;
     println!(
         "build-zone-mask-field-metadata: out={} field_ids={} entries={}",
         out.display(),
@@ -1942,7 +1929,6 @@ fn run_zone_stats(command: ZoneStatsCommand) -> Result<()> {
         alpha0,
         top_k,
         fish_names,
-        zones_merged_csv,
         dolt_repo,
         dolt_ref,
         half_life_days,
@@ -1975,8 +1961,6 @@ fn run_zone_stats(command: ZoneStatsCommand) -> Result<()> {
     let store = SqliteStore::open(&db).context("open db")?;
     let fish_names = load_fish_names(&fish_names)?;
     let zones_meta = load_zones_meta(
-        zones_merged_csv
-            .or_else(|| cfg_paths.and_then(|p| p.zones_merged_csv.as_ref().map(PathBuf::from))),
         dolt_repo.or_else(|| cfg_paths.and_then(|p| p.dolt_repo.as_ref().map(PathBuf::from))),
         dolt_ref.as_deref(),
     )?;
@@ -2055,19 +2039,14 @@ fn load_fish_names(path: &PathBuf) -> Result<std::collections::HashMap<i32, Stri
 }
 
 fn load_zones_meta(
-    zones_merged_csv: Option<PathBuf>,
     dolt_repo: Option<PathBuf>,
     dolt_ref: Option<&str>,
 ) -> Result<std::collections::HashMap<u32, fishystuff_zones_meta::ZoneMeta>> {
-    if let Some(path) = zones_merged_csv {
-        let provider = CsvZonesMetaProvider::new(path);
-        return provider.load(None);
-    }
     if let Some(repo) = dolt_repo {
         let provider = DoltZonesMetaProvider::new(repo);
         return provider.load(dolt_ref);
     }
-    bail!("zones metadata not provided: pass --zones-merged-csv or --dolt-repo");
+    bail!("zones metadata not provided: pass --dolt-repo");
 }
 
 fn parse_rgb_string(input: &str) -> Result<u32> {
