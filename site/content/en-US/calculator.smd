@@ -21,7 +21,9 @@
         : "en";
     const urlParams = new URLSearchParams(window.location.search);
     const presetQueryParam = urlParams.get("preset");
-    const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_distribution_tab(?:\.|$)|_defaults(?:\.|$))/;
+    const CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$))/;
+    const CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_defaults(?:\.|$)|_calculator_ui(?:\.|$))/;
+    const CALCULATOR_DISTRIBUTION_TABS = new Set(["groups", "silver", "loot_flow", "target_fish"]);
     const loadStoredSignals = () => {
         const raw = localStorage.getItem(CALCULATOR_STORAGE_KEY);
         if (!raw) {
@@ -71,6 +73,24 @@
             }
             delete current[legacyKey];
         }
+        const legacyDistributionTab = String(current._distribution_tab ?? "").trim();
+        delete current._distribution_tab;
+        if (
+            !current._calculator_ui ||
+            typeof current._calculator_ui !== "object" ||
+            Array.isArray(current._calculator_ui)
+        ) {
+            current._calculator_ui = {};
+        }
+        const distributionTab = String(
+            current._calculator_ui.distribution_tab || legacyDistributionTab || "groups"
+        ).trim();
+        current._calculator_ui = {
+            ...current._calculator_ui,
+            distribution_tab: CALCULATOR_DISTRIBUTION_TABS.has(distributionTab)
+                ? distributionTab
+                : "groups",
+        };
         if (!("discardGrade" in current)) {
             if (current.discardRareFish || current.discardPrizeFish) {
                 current.discardGrade = "yellow";
@@ -142,17 +162,21 @@
         return current;
     };
 
-    const storedCalculatorSignals = (signals) =>
-        Object.fromEntries(
-            Object.entries(canonicalizeStoredSignals(signals)).filter(
+    const persistedCalculatorSignals = (signals) => {
+        const current = canonicalizeStoredSignals(signals);
+        const persisted = Object.fromEntries(
+            Object.entries(current).filter(
                 ([key]) => !key.startsWith("_"),
             )
         );
+        persisted._calculator_ui = cloneCalculatorSignals(current._calculator_ui);
+        return persisted;
+    };
 
     const sharedCalculatorSignals = (signals) =>
         Object.fromEntries(
-            Object.entries(storedCalculatorSignals(signals)).filter(
-                ([key]) => key !== "debug",
+            Object.entries(canonicalizeStoredSignals(signals)).filter(
+                ([key]) => !key.startsWith("_") && key !== "debug",
             )
         );
 
@@ -288,12 +312,12 @@
         },
         persistSignalPatchFilter() {
             return {
-                exclude: CALCULATOR_EPHEMERAL_SIGNAL_PATTERN,
+                exclude: CALCULATOR_PERSIST_EXCLUDE_SIGNAL_PATTERN,
             };
         },
         evalSignalPatchFilter() {
             return {
-                exclude: CALCULATOR_EPHEMERAL_SIGNAL_PATTERN,
+                exclude: CALCULATOR_EVAL_EXCLUDE_SIGNAL_PATTERN,
             };
         },
         presetUrl(signals) {
@@ -329,7 +353,7 @@
             Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
         },
         persist(signals) {
-            const payload = storedCalculatorSignals(signals);
+            const payload = persistedCalculatorSignals(signals);
             localStorage.setItem(CALCULATOR_STORAGE_KEY, JSON.stringify(payload));
         },
         syncInput(signals) {
@@ -433,7 +457,7 @@
 
 <div id="calculator"
      class="not-prose grid gap-6"
-     data-signals="{ _loading: true }"
+     data-signals="{ _loading: true, _calculator_ui: { distribution_tab: 'groups' } }"
      data-init__delay.50ms="window.__fishystuffCalculator.restore($); @get(window.__fishystuffCalculator.initUrl())">
     <section data-show="$_loading" class="card card-border bg-base-100">
         <div class="card-body">

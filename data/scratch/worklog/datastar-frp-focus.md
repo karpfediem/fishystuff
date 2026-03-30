@@ -153,9 +153,47 @@ Two categories of state only:
 2. Local UI signals
 
 - frontend-only
-- never persisted
-- never sent to eval
+- some user-facing UI state may be persisted when it is durable and page-owned
+- never sent to eval unless it is actually part of backend-owned domain input
 - examples: `_distribution_tab`, dropdown open state, search text
+
+## UI Persistence Policy
+
+Persist UI state explicitly, not by accident.
+
+Rules:
+
+1. Persist durable user-facing UI settings and view choices.
+
+Examples:
+
+- selected calculator distribution tab
+- map window open/collapsed/position state
+- Fishydex search/filter/sort choices
+- panel collapsed/expanded preferences
+
+2. Do not persist runtime/transport/ephemeral state.
+
+Examples:
+
+- loading flags
+- computed `_calc` / `_live` state
+- one-shot action tokens
+- transient animation/focus state
+
+3. Keep one owner per persisted key.
+
+- do not persist the same semantic state from both page shell and bridge/runtime layers
+- when host/runtime already owns persistence, page-level state should mirror it instead of writing a second copy
+
+4. Prefer explicit snapshot shaping over broad include/exclude heuristics.
+
+- page modules should define which UI branches are durable
+- avoid “all underscore signals are ephemeral” and avoid “persist every non-underscore signal” as the only rule
+
+5. Keep share/export payloads separate from persisted local UI state.
+
+- local view state should not leak into preset/share URLs unless explicitly desired
 
 ## Component Refactor Principle
 
@@ -1240,8 +1278,39 @@ Validation:
   - patch `_map_input.filters.fromPatchId` / `toPatchId` into reversed order
   - verify `_map_input.filters` canonicalizes them into chronological order
   - verify `_map_runtime.inputState.filters` receives the canonical order
-  - patch both to the same patch id
-  - verify `_map_input.filters.patchId` is derived to that same id
+- patch both to the same patch id
+- verify `_map_input.filters.patchId` is derived to that same id
+
+### Step 24 - Explicit Calculator UI Persistence Branch
+
+Completed:
+
+- moved calculator distribution tab ownership off the server-rendered fragment-local `_distribution_tab`
+- introduced a page-owned `_calculator_ui.distribution_tab` branch in `site/content/en-US/calculator.smd`
+- updated `api/fishystuff_server/src/routes/calculator.rs` to bind tabs against `$_calculator_ui.distribution_tab`
+- changed calculator persistence shaping so `_calculator_ui` is stored explicitly
+- kept `_calculator_ui` excluded from eval traffic and from preset/share payloads
+- added legacy normalization from `_distribution_tab` into `_calculator_ui.distribution_tab`
+
+Why this matters:
+
+- the selected calculator tab is durable user-facing UI state and should persist cleanly
+- it should not be owned by a server-rendered fragment-local signal that can be reintroduced on each patch
+- the page shell now owns calculator-local UI state, while the backend continues to own canonical calculator inputs and computed outputs
+- this matches the broader persistence policy:
+  - persist durable page-owned UI state explicitly
+  - do not send it to eval
+  - do not leak it into share/preset payloads
+
+Validation:
+
+- `cargo test --offline -p fishystuff_server`
+- rebuilt site output
+- compared:
+  - served `/calculator/` vs `site/.out/calculator/index.html`
+- note:
+  - the local API watcher was still serving the old calculator fragment during this slice
+  - route/source changes and tests are current, but live browser validation of the new tab binding needs a fresh API rebuild serving the updated fragment
 
 ### Step 16 - Shared Datastar State Helper
 

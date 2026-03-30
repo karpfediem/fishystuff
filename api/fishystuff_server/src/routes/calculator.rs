@@ -1267,8 +1267,10 @@ fn default_reset_signals_patch_map(
 ) -> AppResult<serde_json::Map<String, Value>> {
     let mut patch = init_signals_patch_map(defaults)?;
     patch.insert(
-        "_distribution_tab".to_string(),
-        Value::String("groups".to_string()),
+        "_calculator_ui".to_string(),
+        json!({
+            "distribution_tab": "groups",
+        }),
     );
     Ok(patch)
 }
@@ -4006,7 +4008,7 @@ fn render_fish_group_window(
             <legend class=\"fieldset-legend ml-6 px-2\">Distribution</legend>\
             <div class=\"card-body gap-4 pt-0\">\
                 {}\
-                <div class=\"grid gap-4\" data-signals='{{ _distribution_tab: \"groups\" }}'>\
+                <div class=\"grid gap-4\">\
                     <div class=\"grid gap-3 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:items-start\">\
                         <fieldset class=\"fieldset\">\
                             <legend class=\"fieldset-legend\">Mastery</legend>\
@@ -4039,18 +4041,18 @@ fn render_fish_group_window(
                             </div>\
                         </div>\
                         <div role=\"tablist\" class=\"tabs tabs-box bg-base-200/80 p-1\" aria-label=\"Distribution tabs\">\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'groups'\" data-attr:aria-selected=\"($_distribution_tab === 'groups').toString()\" data-on:click=\"$_distribution_tab = 'groups'\">Groups</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'silver'\" data-attr:aria-selected=\"($_distribution_tab === 'silver').toString()\" data-on:click=\"$_distribution_tab = 'silver'\">Silver</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_distribution_tab = 'loot_flow'\">Loot Flow</button>\
-                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_distribution_tab === 'target_fish').toString()\" data-on:click=\"$_distribution_tab = 'target_fish'\">Target Fish</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'groups'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'groups').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'groups'\">Groups</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'silver'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'silver').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'silver'\">Silver</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'loot_flow'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'loot_flow').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'loot_flow'\">Loot Flow</button>\
+                            <button type=\"button\" class=\"tab\" data-class:tab-active=\"$_calculator_ui.distribution_tab === 'target_fish'\" data-attr:aria-selected=\"($_calculator_ui.distribution_tab === 'target_fish').toString()\" data-on:click=\"$_calculator_ui.distribution_tab = 'target_fish'\">Target Fish</button>\
                         </div>\
-                        <div data-show=\"$_distribution_tab === 'groups'\">{}\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'groups'\">{}\
                         </div>\
-                        <div data-show=\"$_distribution_tab === 'silver'\">{}\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'silver'\">{}\
                         </div>\
-                        <div data-show=\"$_distribution_tab === 'loot_flow'\">{}\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'loot_flow'\">{}\
                         </div>\
-                        <div data-show=\"$_distribution_tab === 'target_fish'\">{}\
+                        <div data-show=\"$_calculator_ui.distribution_tab === 'target_fish'\">{}\
                         </div>\
                     </div>\
                 </div>\
@@ -6079,7 +6081,12 @@ mod tests {
             patch.get("_outfit_slots"),
             Some(&json!(["effect:8-piece-outfit-set-effect"]))
         );
-        assert_eq!(patch.get("_distribution_tab"), Some(&json!("groups")));
+        assert_eq!(
+            patch.get("_calculator_ui"),
+            Some(&json!({
+                "distribution_tab": "groups",
+            }))
+        );
     }
 
     #[test]
