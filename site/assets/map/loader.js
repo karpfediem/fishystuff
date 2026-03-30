@@ -7197,9 +7197,12 @@ function bindUi(shell, elements, options = {}) {
     if (searchUiState.open === nextOpen) {
       return;
     }
-    searchUiState.open = nextOpen;
-    patchMapUiSignalState({ search: searchUiState });
-    renderCurrentState(getLatestStateBundle());
+    patchMapUiSignalState({
+      search: {
+        ...searchUiState,
+        open: nextOpen,
+      },
+    });
   }
 
   function applySearchMatchAndClose(stateBundle, match) {
@@ -7211,9 +7214,12 @@ function bindUi(shell, elements, options = {}) {
       stateBundle,
       match,
     );
-    searchUiState.open = false;
-    patchMapUiSignalState({ search: searchUiState });
-    renderCurrentState(getLatestStateBundle());
+    patchMapUiSignalState({
+      search: {
+        ...searchUiState,
+        open: false,
+      },
+    });
   }
 
   function pushPatchRangePatch() {
@@ -7248,8 +7254,12 @@ function bindUi(shell, elements, options = {}) {
     if (isRendering) {
       return;
     }
-    searchUiState.open = true;
-    patchMapUiSignalState({ search: searchUiState });
+    patchMapUiSignalState({
+      search: {
+        ...searchUiState,
+        open: true,
+      },
+    });
   });
 
   elements.search.addEventListener("focus", () => {
@@ -8295,18 +8305,17 @@ function bindUi(shell, elements, options = {}) {
     const defaultWindowUiState = buildDefaultWindowUiStateSerialized();
     const remountOptions = buildMapUiResetMountOptions(getLatestStateBundle().state);
     const originalLabel = resetButton.textContent;
+    const resetWindowUiState = parseWindowUiState(defaultWindowUiState);
+    const resetSearchUiState = { open: false };
+    const resetBookmarkUiState = { placing: false, selectedIds: [] };
 
     setBooleanProperty(resetButton, "disabled", true);
     setTextContent(resetButton, "Resetting...");
 
-    windowUiState = parseWindowUiState(defaultWindowUiState);
-    searchUiState.open = false;
-    bookmarkUi.placing = false;
-    bookmarkUi.selectedIds = [];
     patchMapUiSignalState({
-      windowUi: windowUiState,
-      search: searchUiState,
-      bookmarks: bookmarkUi,
+      windowUi: resetWindowUiState,
+      search: resetSearchUiState,
+      bookmarks: resetBookmarkUiState,
     });
     applyManagedWindows({ persist: true });
 

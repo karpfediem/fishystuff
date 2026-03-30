@@ -658,6 +658,35 @@ Notes:
 - local `devenv up` site serving on `:1990` may lag behind rebuilt `.out` without a site watcher/restart
 - for this slice, source checks and emitted `.out` inspection were used as the reliable validation path
 
+### Step 12
+
+Make map search-open and reset shell state signal-first.
+
+Work:
+
+- stop mutating `searchUiState.open` directly in event handlers before patching `_map_ui.search`
+- stop assigning reset-time window/search/bookmark shell state locally before patching `_map_ui`
+- let the existing loader signal-sync path own the local reconciliation/render pass
+
+Status:
+
+- implemented
+
+Implementation:
+
+- search input/focus/selection-close paths now patch `_map_ui.search` first
+- reset UI now patches:
+  - `_map_ui.windowUi`
+  - `_map_ui.search`
+  - `_map_ui.bookmarks`
+  from reset snapshots instead of assigning loader locals first
+
+Why this matters:
+
+- it reduces another class of local-first shell state mutation in `loader.js`
+- it keeps map shell state changes aligned with the same Datastar-first pattern already used for bookmark state
+- it narrows the loader’s role toward reconciliation/rendering instead of canonical state ownership
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:
@@ -804,6 +833,7 @@ Already implemented:
 - loader reconciles `_map_input` back into the bridge
 - bookmark persistence now lives in `site/assets/js/pages/map-page.js` as a Datastar signal-patch listener, not a template-side hidden handler
 - bookmark CRUD and selection/placement paths now patch Datastar state first, then let loader signal sync reconcile local render state
+- search dropdown and reset-time shell state now patch `_map_ui` first instead of mutating loader locals before signal updates
 
 Map controls currently routed through `_map_input`:
 
