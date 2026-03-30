@@ -1575,3 +1575,41 @@ Validation:
     - `_map_ui.windowUi.search.open === false`
     - `_map_ui.windowUi.zoneInfo.tab === "zone_info"`
     - no stray top-level `windowUi` branch is used
+
+### Step 32 - Make Map Diagnostics Toggle Page-Owned
+
+Completed:
+
+- expanded page-owned map UI persistence in `site/assets/js/pages/map-page.js` to include:
+  - `_map_input.ui.diagnosticsOpen`
+- kept that value in the same page-owned UI storage snapshot alongside `windowUi`
+- removed `diagnosticsOpen` from bridge session snapshot persistence in:
+  - `site/assets/map/map-host.js`
+- added regression coverage in `site/assets/js/pages/map-page.test.mjs`
+
+Why this matters:
+
+- the Diagnostics pane was already signal-driven in the template, but persistence still lived in the bridge session snapshot
+- this was another split-owner UI setting:
+  - live owner: Datastar `_map_input.ui.diagnosticsOpen`
+  - persisted owner: bridge session storage
+- after this slice, Diagnostics open/closed state has one persistence owner:
+  - page-owned map UI storage
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/js/pages/map-page.test.mjs`
+- `node --check site/assets/map/map-host.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/js/pages/map-page.js`
+  - `/map/map-host.js`
+- live Chromium smoke:
+  - patch `_map_input.ui.diagnosticsOpen = true`
+  - verify `fishystuff.map.window_ui.v1` stores `inputUi.diagnosticsOpen === true`
+  - verify `FishyMapBridge.createSessionSnapshot().ui` omits `diagnosticsOpen`
+  - reload `/map/`
+  - verify `_map_input.ui.diagnosticsOpen === true`

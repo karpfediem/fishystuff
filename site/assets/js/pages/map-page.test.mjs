@@ -107,7 +107,11 @@ function defaultSignals() {
     _map_bookmarks: {
       entries: [],
     },
-    _map_input: {},
+    _map_input: {
+      ui: {
+        diagnosticsOpen: false,
+      },
+    },
     _map_runtime: {},
   };
 }
@@ -136,6 +140,9 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
         layers: { open: true, collapsed: false, x: null, y: null },
         bookmarks: { open: false, collapsed: false, x: null, y: null },
       },
+      inputUi: {
+        diagnosticsOpen: true,
+      },
     }),
   });
   const signals = defaultSignals();
@@ -144,6 +151,7 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
 
   assert.equal(signals._map_ui.windowUi.search.open, false);
   assert.equal(signals._map_ui.windowUi.zoneInfo.tab, "zone_info");
+  assert.equal(signals._map_input.ui.diagnosticsOpen, true);
   assert.equal("windowUi" in signals, false);
 });
 
@@ -230,6 +238,50 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
         zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
         layers: { open: true, collapsed: false, x: null, y: null },
         bookmarks: { open: false, collapsed: false, x: null, y: null },
+      },
+      inputUi: {
+        diagnosticsOpen: false,
+      },
+    }),
+  );
+});
+
+test("map-page persists durable _map_input diagnostics state", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMap.patchSignals({
+    _map_input: {
+      ui: {
+        diagnosticsOpen: true,
+      },
+    },
+  });
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _map_input: {
+        ui: {
+          diagnosticsOpen: true,
+        },
+      },
+    },
+  });
+  env.flushTimers();
+
+  assert.equal(
+    env.localStorage.getItem("fishystuff.map.window_ui.v1"),
+    JSON.stringify({
+      windowUi: {
+        search: { open: true, collapsed: false, x: null, y: null },
+        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
+        layers: { open: true, collapsed: false, x: null, y: null },
+        bookmarks: { open: false, collapsed: false, x: null, y: null },
+      },
+      inputUi: {
+        diagnosticsOpen: true,
       },
     }),
   );

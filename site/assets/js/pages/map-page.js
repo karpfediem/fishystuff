@@ -1,7 +1,8 @@
 (function () {
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
-  const MAP_PERSIST_SIGNAL_FILTER = /^_(?:map_ui\.windowUi|map_bookmarks\.entries)(?:\.|$)/;
+  const MAP_PERSIST_SIGNAL_FILTER =
+    /^_(?:map_ui\.windowUi|map_input\.ui\.diagnosticsOpen|map_bookmarks\.entries)(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -109,6 +110,7 @@
 
   function storedUiSignals(signals) {
     const windowUi = signals?._map_ui?.windowUi;
+    const diagnosticsOpen = signals?._map_input?.ui?.diagnosticsOpen === true;
     const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
       ? cloneJson(signals._map_bookmarks.entries)
       : [];
@@ -121,10 +123,49 @@
             ? cloneJson(windowUi)
             : {},
       },
+      _map_input: {
+        ui: {
+          diagnosticsOpen,
+        },
+      },
       _map_bookmarks: {
         entries: bookmarkEntries,
       },
     };
+  }
+
+  function uiStorageSnapshot(stored) {
+    return {
+      windowUi:
+        stored?._map_ui?.windowUi &&
+        typeof stored._map_ui.windowUi === "object" &&
+        !Array.isArray(stored._map_ui.windowUi)
+          ? cloneJson(stored._map_ui.windowUi)
+          : {},
+      inputUi: {
+        diagnosticsOpen: stored?._map_input?.ui?.diagnosticsOpen === true,
+      },
+    };
+  }
+
+  function restoreUiPatch(parsed) {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    const patch = {};
+    if (parsed.windowUi && typeof parsed.windowUi === "object" && !Array.isArray(parsed.windowUi)) {
+      patch._map_ui = {
+        windowUi: cloneJson(parsed.windowUi),
+      };
+    }
+    if (parsed.inputUi && typeof parsed.inputUi === "object" && !Array.isArray(parsed.inputUi)) {
+      patch._map_input = {
+        ui: {
+          diagnosticsOpen: parsed.inputUi.diagnosticsOpen === true,
+        },
+      };
+    }
+    return Object.keys(patch).length ? patch : null;
   }
 
   function restore(signals) {
@@ -136,12 +177,7 @@
       const rawUi = globalThis.localStorage?.getItem?.(MAP_UI_STORAGE_KEY);
       if (rawUi) {
         try {
-          const parsed = JSON.parse(rawUi);
-          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            uiPatch = {
-              _map_ui: parsed,
-            };
-          }
+          uiPatch = restoreUiPatch(JSON.parse(rawUi));
         } catch (_error) {
           globalThis.localStorage?.removeItem?.(MAP_UI_STORAGE_KEY);
         }
@@ -166,13 +202,13 @@
       bookmarkPatch = null;
     }
     if (uiPatch) {
-      Object.assign(signals, uiPatch);
+      patchSignals(uiPatch);
     }
     if (bookmarkPatch) {
-      Object.assign(signals, bookmarkPatch);
+      patchSignals(bookmarkPatch);
     }
     const stored = storedUiSignals(signals);
-    state.persistedUiJson = JSON.stringify(stored._map_ui);
+    state.persistedUiJson = JSON.stringify(uiStorageSnapshot(stored));
     state.persistedBookmarksJson = JSON.stringify(stored._map_bookmarks.entries);
     state.uiStateRestored = true;
   }
@@ -184,7 +220,7 @@
     }
     try {
       const stored = storedUiSignals(snapshot);
-      const uiJson = JSON.stringify(stored._map_ui);
+      const uiJson = JSON.stringify(uiStorageSnapshot(stored));
       const bookmarksJson = JSON.stringify(stored._map_bookmarks.entries);
       if (uiJson !== state.persistedUiJson) {
         globalThis.localStorage?.setItem?.(MAP_UI_STORAGE_KEY, uiJson);

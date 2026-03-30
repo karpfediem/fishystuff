@@ -1977,9 +1977,6 @@ export function snapshotToRestorePatch(snapshot) {
     }
   }
   if (isPlainObject(snapshot.ui)) {
-    if (hasOwn(snapshot.ui, "diagnosticsOpen")) {
-      patch.ui.diagnosticsOpen = Boolean(snapshot.ui.diagnosticsOpen);
-    }
     if (hasOwn(snapshot.ui, "legendOpen")) {
       patch.ui.legendOpen = Boolean(snapshot.ui.legendOpen);
     }
@@ -3014,7 +3011,6 @@ class FishyMapBridgeImpl {
           : {}),
       },
       ui: {
-        diagnosticsOpen: this.inputState.ui.diagnosticsOpen,
         legendOpen: this.inputState.ui.legendOpen,
         leftPanelOpen: this.inputState.ui.leftPanelOpen,
         showPoints: this.inputState.ui.showPoints,
