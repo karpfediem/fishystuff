@@ -3,6 +3,10 @@
 up:
   devenv up
 
+# Start the local dev stack plus rebuild/restart watchers via the `watch` profile
+up-watch:
+  devenv up --profile watch
+
 # Stop detached local dev processes started via `devenv up -d`
 down:
   devenv processes down

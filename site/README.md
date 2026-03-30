@@ -21,6 +21,10 @@ For local site and map development, the repo-root flow is now explicit:
 - `just dev-build`
 - `just up`
 
+Or, if you want `devenv` itself to own rebuild/restart behavior:
+
+- `just up-watch`
+
 Then add only the rebuild watchers you actually need:
 
 - `just dev-watch-site`
@@ -37,6 +41,10 @@ Then add only the rebuild watchers you actually need:
 `just up` now serves the current outputs instead of owning the build graph.
 If `site/.out` or `data/cdn/public/` is stale or missing, that state is visible
 directly instead of being hidden behind nested watchers.
+
+`just up-watch` is the opt-in alternative where `devenv` runs the initial
+builds, watches source inputs, rebuilds outputs, and restarts the API on
+changes.
 
 ## Browser smoke check
 

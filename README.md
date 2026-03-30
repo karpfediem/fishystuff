@@ -49,6 +49,20 @@ Builds and rebuilds are now explicit instead of being hidden inside `devenv up`:
 - `just dev-watch-api`
   - restart the API on source changes; use it with `just dev-up-no-api`
 
+If you want `devenv` to own the local rebuild/restart loop too, use the opt-in
+watch profile instead of the default stack:
+
+```bash
+just up-watch
+```
+
+`just up-watch` runs `devenv up --profile watch` and adds:
+
+- API auto-restart on backend changes
+- map runtime rebuild plus CDN restaging on map/lib changes
+- CDN host asset restaging on `site/assets/map` changes
+- site output rebuilds on site source changes
+
 The site build still emits `.out/runtime-config.js` from the current
 environment. That file is the single local-development source of truth for the
 site/API/CDN base URLs consumed by the browser host and Bevy runtime.

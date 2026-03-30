@@ -186,4 +186,81 @@ in {
       path = "/api/v1/meta";
     };
   };
+
+  profiles.watch.module = {
+    processes = {
+      api = {
+        restart.on = "never";
+        watch = {
+          paths = [
+            ./api
+            ./lib
+            ./Cargo.toml
+            ./Cargo.lock
+            ./secretspec.toml
+            ./tools/scripts/run_api.sh
+          ];
+          ignore = [ "target" ];
+        };
+      };
+
+      map-build = {
+        cwd = config.devenv.root;
+        exec = "exec just dev-build-map";
+        restart.on = "never";
+        watch = {
+          paths = [
+            ./map/fishystuff_ui_bevy
+            ./lib/fishystuff_api
+            ./lib/fishystuff_client
+            ./lib/fishystuff_core
+            ./Cargo.toml
+            ./Cargo.lock
+            ./tools/scripts/build_map.sh
+          ];
+          ignore = [ "target" ];
+        };
+      };
+
+      cdn-stage = {
+        cwd = config.devenv.root;
+        exec = "exec just cdn-stage";
+        restart.on = "never";
+        watch.paths = [
+          ./site/assets/map
+          ./tools/scripts/stage_cdn_assets.sh
+          ./tools/scripts/build_item_icons_from_source.mjs
+        ];
+      };
+
+      site-build = {
+        cwd = config.devenv.root;
+        exec = "exec just dev-build-site";
+        restart.on = "never";
+        watch = {
+          paths = [
+            ./site/content
+            ./site/layouts
+            ./site/assets
+            ./site/scripts
+            ./site/tailwind.input.css
+            ./site/zine.ziggy
+          ];
+          ignore = [
+            "site/assets/js/datastar.js"
+            "site/assets/js/d3.js"
+            "site/assets/img/icons.svg"
+            "site/assets/img/guides/*-320.webp"
+            "site/assets/img/guides/*-640.webp"
+            "site/assets/img/favicon-16x16.png"
+            "site/assets/img/favicon-32x32.png"
+            "site/assets/img/logo-32.png"
+            "site/assets/img/logo-64.png"
+            "site/assets/css/fonts/**/*.site.woff2"
+            "site/assets/css/site.css"
+          ];
+        };
+      };
+    };
+  };
 }
