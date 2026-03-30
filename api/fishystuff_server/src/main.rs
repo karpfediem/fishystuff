@@ -6,6 +6,7 @@ mod state;
 mod store;
 
 use anyhow::{Context, Result};
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -14,8 +15,20 @@ async fn main() -> Result<()> {
     let state = state::AppState::new(config)?;
     let startup_store = state.store.clone();
     tokio::spawn(async move {
-        if let Err(err) = startup_store.prime_startup_caches().await {
-            eprintln!("startup cache prewarm failed: {:?}", err);
+        let mut last_err = None;
+        for attempt in 0..5 {
+            match startup_store.prime_startup_caches().await {
+                Ok(()) => return,
+                Err(err) => {
+                    last_err = Some(err);
+                    if attempt < 4 {
+                        tokio::time::sleep(Duration::from_millis(250 * (attempt + 1) as u64)).await;
+                    }
+                }
+            }
+        }
+        if let Some(err) = last_err {
+            eprintln!("startup cache prewarm failed after retries: {:?}", err);
         }
     });
     let app = app::build_router(state);

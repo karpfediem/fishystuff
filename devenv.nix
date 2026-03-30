@@ -2,6 +2,8 @@
 let
   dbHost = "127.0.0.1";
   dbPort = 3306;
+  dbUser = "root";
+  dbName = "fishystuff";
   apiHost = "127.0.0.1";
   apiPort = 8080;
   cdnHost = "127.0.0.1";
@@ -9,6 +11,7 @@ let
   siteHost = "127.0.0.1";
   sitePort = 1990;
   toString = builtins.toString;
+  databaseUrl = "mysql://${dbUser}@${dbHost}:${toString dbPort}/${dbName}";
   rustHookToolchain = pkgs.symlinkJoin {
     name = "fishystuff-rust-hook-toolchain";
     paths = [
@@ -109,12 +112,12 @@ in {
   };
 
   env = {
-    FISHYSTUFF_DEV_DB_PORT = toString config.processes.db.ports.sql.value;
-    FISHYSTUFF_DEV_API_PORT = toString config.processes.api.ports.http.value;
+    FISHYSTUFF_DATABASE_URL = databaseUrl;
+    FISHYSTUFF_DEV_DB_PORT = toString dbPort;
+    FISHYSTUFF_DEV_API_PORT = toString apiPort;
     FISHYSTUFF_DEV_CDN_PORT = toString cdnPort;
     FISHYSTUFF_DEV_SITE_PORT = toString sitePort;
-    FISHYSTUFF_RUNTIME_API_BASE_URL =
-      "http://${apiHost}:${toString config.processes.api.ports.http.value}";
+    FISHYSTUFF_RUNTIME_API_BASE_URL = "http://${apiHost}:${toString apiPort}";
     FISHYSTUFF_RUNTIME_CDN_BASE_URL = "http://${cdnHost}:${toString cdnPort}";
     FISHYSTUFF_RUNTIME_SITE_BASE_URL = "http://${siteHost}:${toString sitePort}";
     LD_LIBRARY_PATH = lib.makeLibraryPath [
@@ -166,9 +169,16 @@ in {
 
   processes.db = {
     cwd = config.devenv.root;
-    exec =
-      "exec dolt sql-server --host ${dbHost} --port ${toString config.processes.db.ports.sql.value}";
-    ports.sql.allocate = dbPort;
+    exec = "exec dolt sql-server --host ${dbHost} --port ${toString dbPort}";
+    ready = {
+      exec = ''
+        mysql --protocol tcp --host ${dbHost} --port ${toString dbPort} --user ${dbUser} ${dbName} --execute "select 1" >/dev/null
+      '';
+      success_threshold = 3;
+      period = 1;
+      probe_timeout = 1;
+      timeout = 30;
+    };
   };
 
   processes.api = {
@@ -177,13 +187,18 @@ in {
       exec secretspec run --profile api -- \
         cargo run --manifest-path ${config.devenv.root}/Cargo.toml -p fishystuff_server -- \
         --config ${config.devenv.root}/api/config.toml \
-        --bind ${apiHost}:${toString config.processes.api.ports.http.value}
+        --database-url ${databaseUrl} \
+        --bind ${apiHost}:${toString apiPort}
     '';
-    ports.http.allocate = apiPort;
     after = [ "devenv:processes:db" ];
-    ready.http.get = {
-      port = config.processes.api.ports.http.value;
-      path = "/api/v1/meta";
+    ready = {
+      exec = ''
+        curl -fsS http://${apiHost}:${toString apiPort}/api/v1/meta >/dev/null
+      '';
+      initial_delay = 1;
+      period = 1;
+      probe_timeout = 1;
+      timeout = 30;
     };
   };
 

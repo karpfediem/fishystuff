@@ -16,4 +16,3 @@ inputs:
     inputs:
       nixpkgs:
         follows: nixpkgs
-strictPorts: true
