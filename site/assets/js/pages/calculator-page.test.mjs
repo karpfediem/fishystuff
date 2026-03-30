@@ -234,6 +234,7 @@ test("calculator restore canonicalizes stored signals", () => {
       basePrice: 8800000,
     },
   });
+  assert.equal(env.window.__fishystuffCalculator.signalObject(), signals);
 });
 
 test("calculator persist stores canonical page state and excludes transient branches", () => {

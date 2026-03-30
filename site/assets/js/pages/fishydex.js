@@ -44,6 +44,7 @@
     suppressCardAnimation: false,
     activeDetailsFishId: 0,
     restoreFocusFishId: 0,
+    syncing: false,
   };
 
   const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
@@ -183,6 +184,9 @@
     }
     const handleSignalPatch = (event) => {
       if (!state.uiStateRestored) {
+        return;
+      }
+      if (state.syncing) {
         return;
       }
       const patch = event && event.detail ? event.detail : null;
@@ -1315,202 +1319,210 @@
   }
 
   function sync(snapshot) {
-    bindGridClicks();
-    bindDetailsControls();
-
-    if (consumeActionTokens(snapshot)) {
+    if (state.syncing) {
       return;
     }
+    state.syncing = true;
+    try {
+      bindGridClicks();
+      bindDetailsControls();
 
-    const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
-    const sharedFish = sharedFishSnapshot(snapshot);
-    const caughtIds = sharedFish.caughtIds;
-    const favouriteIds = sharedFish.favouriteIds;
-    const caughtFilter = normalizeCaughtFilter(snapshot.caught_filter);
-    const favouriteFilter = normalizeBooleanFlag(snapshot.favourite_filter);
-    const gradeFilters = normalizeGradeFilters(snapshot.grade_filters);
-    const methodFilters = normalizeMethodFilters(snapshot.method_filters);
-    const showDried = normalizeBooleanFlag(snapshot.show_dried);
-    const sortField = normalizeSortField(snapshot.sort_field);
-    const sortDirection = normalizeSortDirection(snapshot.sort_direction);
-    const searchQuery = String(snapshot.search_query || "").trim().toLowerCase();
-    const isLoading = normalizeBooleanFlag(snapshot._loading);
+      if (consumeActionTokens(snapshot)) {
+        return;
+      }
 
-    state.fishById = new Map(
-      fish
-        .filter(function (entry) {
-          return entry && Number.isInteger(entry.item_id);
-        })
-        .map(function (entry) {
-          return [entry.item_id, entry];
-        })
-    );
+      const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
+      const sharedFish = sharedFishSnapshot(snapshot);
+      const caughtIds = sharedFish.caughtIds;
+      const favouriteIds = sharedFish.favouriteIds;
+      const caughtFilter = normalizeCaughtFilter(snapshot.caught_filter);
+      const favouriteFilter = normalizeBooleanFlag(snapshot.favourite_filter);
+      const gradeFilters = normalizeGradeFilters(snapshot.grade_filters);
+      const methodFilters = normalizeMethodFilters(snapshot.method_filters);
+      const showDried = normalizeBooleanFlag(snapshot.show_dried);
+      const sortField = normalizeSortField(snapshot.sort_field);
+      const sortDirection = normalizeSortDirection(snapshot.sort_direction);
+      const searchQuery = String(snapshot.search_query || "").trim().toLowerCase();
+      const isLoading = normalizeBooleanFlag(snapshot._loading);
 
-    const catalogEntries = fish.filter(function (entry) {
-      return entry && (showDried || !entryIsDried(entry));
-    });
-    const filtered = catalogEntries.filter(function (entry) {
-      const haystack = `${fishItemId(entry)} ${entry.name || ""}`.toLowerCase();
-      if (searchQuery && !haystack.includes(searchQuery)) {
-        return false;
-      }
-      if (caughtFilter === "caught" && !caughtIds.includes(fishItemId(entry))) {
-        return false;
-      }
-      if (caughtFilter === "missing" && caughtIds.includes(fishItemId(entry))) {
-        return false;
-      }
-      if (favouriteFilter && !favouriteIds.includes(fishItemId(entry))) {
-        return false;
-      }
-      if (gradeFilters.length > 0 && !gradeFilters.includes(filterGradeForEntry(entry))) {
-        return false;
-      }
-      if (methodFilters.length > 0) {
-        const methods = entryCatchMethods(entry);
-        if (!methodFilters.every(function (method) { return methods.includes(method); })) {
+      state.fishById = new Map(
+        fish
+          .filter(function (entry) {
+            return entry && Number.isInteger(entry.item_id);
+          })
+          .map(function (entry) {
+            return [entry.item_id, entry];
+          })
+      );
+
+      const catalogEntries = fish.filter(function (entry) {
+        return entry && (showDried || !entryIsDried(entry));
+      });
+      const filtered = catalogEntries.filter(function (entry) {
+        const haystack = `${fishItemId(entry)} ${entry.name || ""}`.toLowerCase();
+        if (searchQuery && !haystack.includes(searchQuery)) {
           return false;
         }
-      }
-      return true;
-    });
-
-    const sorted = filtered.slice().sort(function (left, right) {
-      return compareFishEntries(left, right, sortField, sortDirection);
-    });
-
-    const supportsGradeFilter = fish.some(function (entry) {
-      return entry && (entry.is_prize !== null || entry.grade);
-    });
-    const supportsMethodFilter = fish.some(function (entry) {
-      return entry && entryCatchMethods(entry).length > 0;
-    });
-    const supportsDriedFilter = fish.some(function (entry) {
-      return entry && entryIsDried(entry);
-    });
-
-    const gradeProgress = {
-      red: { total: 0, caught: 0 },
-      yellow: { total: 0, caught: 0 },
-      blue: { total: 0, caught: 0 },
-      green: { total: 0, caught: 0 },
-      white: { total: 0, caught: 0 },
-    };
-    for (const entry of catalogEntries) {
-      const grade = filterGradeForEntry(entry);
-      if (!gradeProgress[grade]) {
-        continue;
-      }
-      gradeProgress[grade].total += 1;
-      if (caughtIds.includes(fishItemId(entry))) {
-        gradeProgress[grade].caught += 1;
-      }
-    }
-
-    const renderKey = [
-      snapshot.revision || "",
-      fishRenderSignature(fish),
-      searchQuery,
-      caughtFilter,
-      favouriteFilter ? "1" : "0",
-      gradeFilters.join(","),
-      methodFilters.join(","),
-      showDried ? "1" : "0",
-      sortField,
-      sortDirection,
-      caughtFilter !== "all" ? caughtIds.join(",") : "",
-      favouriteFilter ? favouriteIds.join(",") : "",
-    ].join("|");
-
-    if (renderKey !== state.renderKey) {
-      state.renderKey = renderKey;
-      const grid = document.getElementById("fishydex-grid");
-      if (grid instanceof HTMLElement) {
-        const fragment = document.createDocumentFragment();
-        const animateCards = !state.suppressCardAnimation;
-        let animationIndex = 0;
-        for (const grade of GRADE_COLOR_ORDER) {
-          const groupEntries = sorted.filter(function (entry) {
-            return filterGradeForEntry(entry) === grade;
-          });
-          const rendered = renderGroup(
-            grade,
-            groupEntries,
-            new Set(caughtIds),
-            new Set(favouriteIds),
-            snapshot,
-            animationIndex,
-            animateCards
-          );
-          if (rendered) {
-            fragment.appendChild(rendered.section);
-            animationIndex = rendered.nextAnimationIndex;
+        if (caughtFilter === "caught" && !caughtIds.includes(fishItemId(entry))) {
+          return false;
+        }
+        if (caughtFilter === "missing" && caughtIds.includes(fishItemId(entry))) {
+          return false;
+        }
+        if (favouriteFilter && !favouriteIds.includes(fishItemId(entry))) {
+          return false;
+        }
+        if (gradeFilters.length > 0 && !gradeFilters.includes(filterGradeForEntry(entry))) {
+          return false;
+        }
+        if (methodFilters.length > 0) {
+          const methods = entryCatchMethods(entry);
+          if (!methodFilters.every(function (method) { return methods.includes(method); })) {
+            return false;
           }
         }
-        if (!sorted.length && !isLoading) {
-          fragment.appendChild(
-            renderEmptyState(
-              Boolean(searchQuery)
-              || caughtFilter !== "all"
-              || favouriteFilter
-              || gradeFilters.length > 0
-              || methodFilters.length > 0
-            )
-          );
+        return true;
+      });
+
+      const sorted = filtered.slice().sort(function (left, right) {
+        return compareFishEntries(left, right, sortField, sortDirection);
+      });
+
+      const supportsGradeFilter = fish.some(function (entry) {
+        return entry && (entry.is_prize !== null || entry.grade);
+      });
+      const supportsMethodFilter = fish.some(function (entry) {
+        return entry && entryCatchMethods(entry).length > 0;
+      });
+      const supportsDriedFilter = fish.some(function (entry) {
+        return entry && entryIsDried(entry);
+      });
+
+      const gradeProgress = {
+        red: { total: 0, caught: 0 },
+        yellow: { total: 0, caught: 0 },
+        blue: { total: 0, caught: 0 },
+        green: { total: 0, caught: 0 },
+        white: { total: 0, caught: 0 },
+      };
+      for (const entry of catalogEntries) {
+        const grade = filterGradeForEntry(entry);
+        if (!gradeProgress[grade]) {
+          continue;
         }
-        grid.replaceChildren(fragment);
+        gradeProgress[grade].total += 1;
+        if (caughtIds.includes(fishItemId(entry))) {
+          gradeProgress[grade].caught += 1;
+        }
       }
-      state.suppressCardAnimation = false;
-    }
 
-    syncRenderedCardState(snapshot, new Set(caughtIds), new Set(favouriteIds));
+      const renderKey = [
+        snapshot.revision || "",
+        fishRenderSignature(fish),
+        searchQuery,
+        caughtFilter,
+        favouriteFilter ? "1" : "0",
+        gradeFilters.join(","),
+        methodFilters.join(","),
+        showDried ? "1" : "0",
+        sortField,
+        sortDirection,
+        caughtFilter !== "all" ? caughtIds.join(",") : "",
+        favouriteFilter ? favouriteIds.join(",") : "",
+      ].join("|");
 
-    const caughtCount = catalogEntries.reduce(function (count, entry) {
-      return count + (caughtIds.includes(fishItemId(entry)) ? 1 : 0);
-    }, 0);
-
-    patchSignals({
-      catalog_count: catalogEntries.length,
-      total_count: fish.length,
-      visible_count: sorted.length,
-      caught_count: caughtCount,
-      completion_percent: completionPercent(caughtCount, catalogEntries.length),
-      red_total_count: gradeProgress.red.total,
-      red_caught_count: gradeProgress.red.caught,
-      red_completion_percent: completionPercent(gradeProgress.red.caught, gradeProgress.red.total),
-      yellow_total_count: gradeProgress.yellow.total,
-      yellow_caught_count: gradeProgress.yellow.caught,
-      yellow_completion_percent: completionPercent(gradeProgress.yellow.caught, gradeProgress.yellow.total),
-      blue_total_count: gradeProgress.blue.total,
-      blue_caught_count: gradeProgress.blue.caught,
-      blue_completion_percent: completionPercent(gradeProgress.blue.caught, gradeProgress.blue.total),
-      green_total_count: gradeProgress.green.total,
-      green_caught_count: gradeProgress.green.caught,
-      green_completion_percent: completionPercent(gradeProgress.green.caught, gradeProgress.green.total),
-      white_total_count: gradeProgress.white.total,
-      white_caught_count: gradeProgress.white.caught,
-      white_completion_percent: completionPercent(gradeProgress.white.caught, gradeProgress.white.total),
-      supports_grade_filter: supportsGradeFilter,
-      supports_method_filter: supportsMethodFilter,
-      supports_dried_filter: supportsDriedFilter,
-      _api_error_message: fish.length > 0 ? "" : snapshot._api_error_message,
-      _api_error_hint: fish.length > 0 ? "" : snapshot._api_error_hint,
-    });
-
-    const currentSelectedFishId = selectedFishId(snapshot);
-    const previousSelectedFishId = state.activeDetailsFishId;
-    state.activeDetailsFishId = currentSelectedFishId;
-
-    renderDetails(snapshot);
-
-    if (currentSelectedFishId > 0) {
-      const meta = fishMetaById(currentSelectedFishId);
-      if (meta) {
-        void ensureBestSpots(meta);
+      if (renderKey !== state.renderKey) {
+        state.renderKey = renderKey;
+        const grid = document.getElementById("fishydex-grid");
+        if (grid instanceof HTMLElement) {
+          const fragment = document.createDocumentFragment();
+          const animateCards = !state.suppressCardAnimation;
+          let animationIndex = 0;
+          for (const grade of GRADE_COLOR_ORDER) {
+            const groupEntries = sorted.filter(function (entry) {
+              return filterGradeForEntry(entry) === grade;
+            });
+            const rendered = renderGroup(
+              grade,
+              groupEntries,
+              new Set(caughtIds),
+              new Set(favouriteIds),
+              snapshot,
+              animationIndex,
+              animateCards
+            );
+            if (rendered) {
+              fragment.appendChild(rendered.section);
+              animationIndex = rendered.nextAnimationIndex;
+            }
+          }
+          if (!sorted.length && !isLoading) {
+            fragment.appendChild(
+              renderEmptyState(
+                Boolean(searchQuery)
+                || caughtFilter !== "all"
+                || favouriteFilter
+                || gradeFilters.length > 0
+                || methodFilters.length > 0
+              )
+            );
+          }
+          grid.replaceChildren(fragment);
+        }
+        state.suppressCardAnimation = false;
       }
-    } else if (previousSelectedFishId > 0 && state.restoreFocusFishId > 0) {
-      restoreDetailsFocus(state.restoreFocusFishId);
-      state.restoreFocusFishId = 0;
+
+      syncRenderedCardState(snapshot, new Set(caughtIds), new Set(favouriteIds));
+
+      const caughtCount = catalogEntries.reduce(function (count, entry) {
+        return count + (caughtIds.includes(fishItemId(entry)) ? 1 : 0);
+      }, 0);
+
+      patchSignals({
+        catalog_count: catalogEntries.length,
+        total_count: fish.length,
+        visible_count: sorted.length,
+        caught_count: caughtCount,
+        completion_percent: completionPercent(caughtCount, catalogEntries.length),
+        red_total_count: gradeProgress.red.total,
+        red_caught_count: gradeProgress.red.caught,
+        red_completion_percent: completionPercent(gradeProgress.red.caught, gradeProgress.red.total),
+        yellow_total_count: gradeProgress.yellow.total,
+        yellow_caught_count: gradeProgress.yellow.caught,
+        yellow_completion_percent: completionPercent(gradeProgress.yellow.caught, gradeProgress.yellow.total),
+        blue_total_count: gradeProgress.blue.total,
+        blue_caught_count: gradeProgress.blue.caught,
+        blue_completion_percent: completionPercent(gradeProgress.blue.caught, gradeProgress.blue.total),
+        green_total_count: gradeProgress.green.total,
+        green_caught_count: gradeProgress.green.caught,
+        green_completion_percent: completionPercent(gradeProgress.green.caught, gradeProgress.green.total),
+        white_total_count: gradeProgress.white.total,
+        white_caught_count: gradeProgress.white.caught,
+        white_completion_percent: completionPercent(gradeProgress.white.caught, gradeProgress.white.total),
+        supports_grade_filter: supportsGradeFilter,
+        supports_method_filter: supportsMethodFilter,
+        supports_dried_filter: supportsDriedFilter,
+        _api_error_message: fish.length > 0 ? "" : snapshot._api_error_message,
+        _api_error_hint: fish.length > 0 ? "" : snapshot._api_error_hint,
+      });
+
+      const currentSelectedFishId = selectedFishId(snapshot);
+      const previousSelectedFishId = state.activeDetailsFishId;
+      state.activeDetailsFishId = currentSelectedFishId;
+
+      renderDetails(snapshot);
+
+      if (currentSelectedFishId > 0) {
+        const meta = fishMetaById(currentSelectedFishId);
+        if (meta) {
+          void ensureBestSpots(meta);
+        }
+      } else if (previousSelectedFishId > 0 && state.restoreFocusFishId > 0) {
+        restoreDetailsFocus(state.restoreFocusFishId);
+        state.restoreFocusFishId = 0;
+      }
+    } finally {
+      state.syncing = false;
     }
   }
 

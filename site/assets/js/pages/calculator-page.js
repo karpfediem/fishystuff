@@ -531,6 +531,9 @@
     initUrl: calculatorInitUrl,
     evalUrl: calculatorEvalUrl,
     evalSignalPatchFilter: calculatorEvalSignalPatchFilter,
+    signalObject() {
+      return signalStore.signalObject();
+    },
     restore: restoreCalculator,
     liveCalc: liveCalculator,
   };

@@ -75,7 +75,7 @@ function createDocumentStub() {
   };
 }
 
-function createContext(localStorageInitial = {}) {
+function createContext(localStorageInitial = {}, options = {}) {
   const document = createDocumentStub();
   const window = {};
   const localStorage = new MemoryStorage(localStorageInitial);
@@ -117,6 +117,26 @@ function createContext(localStorageInitial = {}) {
   };
   context.globalThis = context;
   vm.runInNewContext(DATASTAR_STATE_SOURCE, context, { filename: "datastar-state.js" });
+  if (options.emitSignalPatchOnPatchSignals) {
+    const originalCreatePageSignalStore =
+      context.window.__fishystuffDatastarState.createPageSignalStore;
+    context.window.__fishystuffDatastarState = {
+      ...context.window.__fishystuffDatastarState,
+      createPageSignalStore() {
+        const store = originalCreatePageSignalStore();
+        return {
+          ...store,
+          patchSignals(patch) {
+            store.patchSignals(patch);
+            document.dispatchEvent({
+              type: "datastar-signal-patch",
+              detail: patch,
+            });
+          },
+        };
+      },
+    };
+  }
   window.prompt = () => null;
   window.requestAnimationFrame = (callback) => callback();
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
@@ -325,4 +345,39 @@ test("fishydex clears transient feedback on filter signal patches", () => {
   assert.equal(signals._status_message, "");
   assert.equal(signals._api_error_message, "");
   assert.equal(signals._api_error_hint, "");
+});
+
+test("fishydex sync ignores reentrant derived signal patches", () => {
+  const env = createContext({}, { emitSignalPatchOnPatchSignals: true });
+  const signals = defaultSignals();
+
+  env.window.Fishydex.restore(signals);
+  Object.assign(signals, {
+    _loading: false,
+    revision: "rev-1",
+    fish: [
+      {
+        item_id: 8473,
+        encyclopedia_id: 1,
+        name: "Yellow Corvina",
+        grade: "Prize",
+        is_prize: true,
+        catch_method: "rod",
+      },
+    ],
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      fish: signals.fish,
+      revision: "rev-1",
+      _loading: false,
+    },
+  });
+
+  assert.equal(signals.catalog_count, 1);
+  assert.equal(signals.total_count, 1);
+  assert.equal(signals.visible_count, 1);
+  assert.equal(signals.red_total_count, 1);
 });

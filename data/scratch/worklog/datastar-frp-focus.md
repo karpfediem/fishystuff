@@ -2799,3 +2799,52 @@ Why this matters:
 Validation:
 
 - `cargo test --offline -p fishystuff_server routes::calculator::tests::init_returns_html_fragment_with_initial_signals -- --exact`
+
+## Step 62: Restore the calculator chart signal contract
+
+What changed:
+
+- restored `signalObject()` on `window.__fishystuffCalculator` in
+  `site/assets/js/pages/calculator-page.js`
+- added coverage in `site/assets/js/pages/calculator-page.test.mjs` asserting the
+  calculator bootstrap still exposes the connected page signal object after restore
+
+Why this matters:
+
+- the shared Datastar chart components still read calculator signals through
+  `window.__fishystuffCalculator.signalObject()`
+- shrinking the calculator bootstrap surface too far broke that contract and left the
+  Distribution / Loot Flow charts with no signal source
+- the bootstrap can stay small, but it still has to preserve the external contracts that
+  shared components depend on
+
+Validation:
+
+- `node --check site/assets/js/pages/calculator-page.js`
+- `node --test site/assets/js/pages/calculator-page.test.mjs`
+
+## Step 63: Prevent Fishydex sync from re-entering on derived signal patches
+
+What changed:
+
+- added a re-entrancy guard around `sync(...)` in `site/assets/js/pages/fishydex.js`
+- the Fishydex signal-patch listener now ignores patch events while a sync pass is already
+  running
+- added a test harness in `site/assets/js/pages/fishydex.test.mjs` that emulates
+  Datastar-style nested patch events during `patchSignals(...)`
+
+Why this matters:
+
+- Fishydex computes derived counts and support flags inside `sync(...)` and writes them back
+  into signals
+- once sync was moved into Datastar signal-patch listeners, those derived writes could
+  re-trigger the same listener and recurse until the browser hit a maximum call stack error
+- this is exactly the kind of FRP regression that needs a harness which models nested
+  signal patches, not just plain object mutation
+
+Validation:
+
+- `node --check site/assets/js/pages/fishydex.js`
+- `node --test site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- compared served `/js/pages/fishydex.js` and `/js/pages/calculator-page.js` against `site/.out`
