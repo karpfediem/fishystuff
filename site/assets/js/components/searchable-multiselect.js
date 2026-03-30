@@ -27,7 +27,7 @@ function uniqueValues(values) {
 
 export class FishySearchableMultiselect extends HTMLElement {
     static get observedAttributes() {
-        return ["placeholder"];
+        return ["bound-select-id", "placeholder"];
     }
 
     constructor() {
@@ -58,11 +58,20 @@ export class FishySearchableMultiselect extends HTMLElement {
         return getStringAttribute(this, "placeholder");
     }
 
+    get boundSelectId() {
+        return getStringAttribute(this, "bound-select-id");
+    }
+
+    set boundSelectId(value) {
+        setStringAttribute(this, "bound-select-id", value);
+    }
+
     set placeholder(value) {
         setStringAttribute(this, "placeholder", value);
     }
 
     connectedCallback() {
+        upgradeProperty(this, "boundSelectId");
         upgradeProperty(this, "placeholder");
         this._bindInputs();
         queueMicrotask(() => {
@@ -84,6 +93,13 @@ export class FishySearchableMultiselect extends HTMLElement {
 
     attributeChangedCallback(name, oldValue, newValue) {
         if (oldValue === newValue) {
+            return;
+        }
+        if (name === "bound-select-id") {
+            this._bindInputs();
+            this._lastSearchKey = "";
+            this._syncSelection();
+            this.search(this.searchInputElement()?.value ?? "");
             return;
         }
         if (name === "placeholder") {
@@ -134,10 +150,21 @@ export class FishySearchableMultiselect extends HTMLElement {
         return this.querySelector('[data-role="selection"]');
     }
 
-    boundInputElements() {
-        return Array.from(
-            this.querySelectorAll('input[data-role="bound-option"]'),
-        ).filter((element) => element instanceof HTMLInputElement);
+    boundSelectElement() {
+        const id = this.boundSelectId;
+        if (id) {
+            const root = this.ownerDocument?.getElementById(id) ?? null;
+            return root?.querySelector('select[data-role="bound-select"]') ?? null;
+        }
+        return this.querySelector('select[data-role="bound-select"]');
+    }
+
+    boundOptionElements() {
+        const select = this.boundSelectElement();
+        if (!(select instanceof HTMLSelectElement)) {
+            return [];
+        }
+        return Array.from(select.options).filter((element) => element instanceof HTMLOptionElement);
     }
 
     catalogTemplates() {
@@ -159,47 +186,50 @@ export class FishySearchableMultiselect extends HTMLElement {
 
     selectedValues() {
         return uniqueValues(
-            this.boundInputElements()
-                .filter((input) => input.checked)
-                .map((input) => input.value),
+            this.boundOptionElements()
+                .filter((option) => option.selected)
+                .map((option) => option.value),
         );
     }
 
     select(value) {
-        const input = this._findBoundInputByValue(value);
-        if (!(input instanceof HTMLInputElement)) {
+        const select = this.boundSelectElement();
+        const option = this._findBoundOptionByValue(value);
+        if (!(select instanceof HTMLSelectElement) || !(option instanceof HTMLOptionElement)) {
             return;
         }
 
-        const changedInputs = [];
-        const categoryKey = getStringAttribute(input, "data-category-key");
+        let changed = false;
+        const categoryKey = getStringAttribute(option, "data-category-key");
         if (categoryKey) {
-            for (const candidate of this.boundInputElements()) {
+            for (const candidate of this.boundOptionElements()) {
                 if (
-                    candidate !== input
-                    && candidate.checked
+                    candidate !== option
+                    && candidate.selected
                     && getStringAttribute(candidate, "data-category-key") === categoryKey
                 ) {
-                    candidate.checked = false;
-                    changedInputs.push(candidate);
+                    candidate.selected = false;
+                    changed = true;
                 }
             }
         }
 
-        if (!input.checked) {
-            input.checked = true;
-            changedInputs.push(input);
-        }
-
-        if (!changedInputs.length) {
+        if (option.selected && !changed) {
             this._clearSearch();
             return;
         }
 
-        for (const changedInput of changedInputs) {
-            dispatchValueEvents(changedInput);
+        if (!option.selected) {
+            option.selected = true;
+            changed = true;
         }
 
+        if (!changed) {
+            this._clearSearch();
+            return;
+        }
+
+        dispatchValueEvents(select);
         this._clearSearch();
         this._syncSelection();
         this.search("");
@@ -211,13 +241,14 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     remove(value) {
-        const input = this._findBoundInputByValue(value);
-        if (!(input instanceof HTMLInputElement) || !input.checked) {
+        const select = this.boundSelectElement();
+        const option = this._findBoundOptionByValue(value);
+        if (!(select instanceof HTMLSelectElement) || !(option instanceof HTMLOptionElement) || !option.selected) {
             return;
         }
 
-        input.checked = false;
-        dispatchValueEvents(input);
+        option.selected = false;
+        dispatchValueEvents(select);
         this._syncSelection();
         this._lastSearchKey = "";
         this.search(this.searchInputElement()?.value ?? "");
@@ -234,40 +265,45 @@ export class FishySearchableMultiselect extends HTMLElement {
     _bindInputs() {
         this._unbindInputs();
         const releases = [];
-        for (const input of this.boundInputElements()) {
-            input.addEventListener("input", this._handleBoundInputEvent);
-            input.addEventListener("change", this._handleBoundInputEvent);
+        const select = this.boundSelectElement();
+        if (select instanceof HTMLSelectElement) {
+            select.addEventListener("input", this._handleBoundInputEvent);
+            select.addEventListener("change", this._handleBoundInputEvent);
+            releases.push(() => {
+                select.removeEventListener("input", this._handleBoundInputEvent);
+                select.removeEventListener("change", this._handleBoundInputEvent);
+            });
+        }
 
-            let releaseCheckedObserver = () => {};
-            if (!Object.prototype.hasOwnProperty.call(input, "checked")) {
-                const descriptor = findPropertyDescriptor(input, "checked");
+        for (const option of this.boundOptionElements()) {
+            let releaseSelectedObserver = () => {};
+            if (!Object.prototype.hasOwnProperty.call(option, "selected")) {
+                const descriptor = findPropertyDescriptor(option, "selected");
                 if (descriptor?.get && descriptor?.set) {
-                    Object.defineProperty(input, "checked", {
+                    Object.defineProperty(option, "selected", {
                         configurable: true,
                         enumerable: descriptor.enumerable ?? true,
                         get() {
                             return descriptor.get.call(this);
                         },
                         set: (nextValue) => {
-                            const previousValue = descriptor.get.call(input);
-                            descriptor.set.call(input, nextValue);
-                            const currentValue = descriptor.get.call(input);
+                            const previousValue = descriptor.get.call(option);
+                            descriptor.set.call(option, nextValue);
+                            const currentValue = descriptor.get.call(option);
                             if (currentValue === previousValue) {
                                 return;
                             }
                             this._handleBoundInputEvent();
                         },
                     });
-                    releaseCheckedObserver = () => {
-                        delete input.checked;
+                    releaseSelectedObserver = () => {
+                        delete option.selected;
                     };
                 }
             }
 
             releases.push(() => {
-                input.removeEventListener("input", this._handleBoundInputEvent);
-                input.removeEventListener("change", this._handleBoundInputEvent);
-                releaseCheckedObserver();
+                releaseSelectedObserver();
             });
         }
         this._releaseInputs = releases;
@@ -297,8 +333,8 @@ export class FishySearchableMultiselect extends HTMLElement {
         this._outsideListenerAttached = false;
     }
 
-    _findBoundInputByValue(value) {
-        return this.boundInputElements().find((input) => input.value === value) ?? null;
+    _findBoundOptionByValue(value) {
+        return this.boundOptionElements().find((option) => option.value === value) ?? null;
     }
 
     _findCatalogTemplateByValue(value) {
@@ -547,7 +583,7 @@ export class FishySearchableMultiselect extends HTMLElement {
                 const template = this._findCatalogTemplateByValue(value);
                 const label = String(
                     template?.getAttribute("data-label")
-                        ?? this._findBoundInputByValue(value)?.getAttribute("data-label")
+                        ?? this._findBoundOptionByValue(value)?.getAttribute("data-label")
                         ?? value,
                 ).trim();
 
@@ -577,8 +613,8 @@ export class FishySearchableMultiselect extends HTMLElement {
     }
 
     _syncBoundInputsFromMarkup() {
-        for (const input of this.boundInputElements()) {
-            input.checked = input.hasAttribute("checked");
+        for (const option of this.boundOptionElements()) {
+            option.selected = option.hasAttribute("selected");
         }
     }
 

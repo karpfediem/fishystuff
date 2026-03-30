@@ -1253,7 +1253,7 @@ fn init_signals_patch_map(
 ) -> AppResult<serde_json::Map<String, Value>> {
     let mut patch = signals_patch_map(signals)?;
     mirror_resources_signal(&mut patch);
-    expand_checkbox_group_signal_arrays(data, signals, &mut patch);
+    patch_checkbox_transport_signals(data, signals, &mut patch);
     Ok(patch)
 }
 
@@ -1263,31 +1263,39 @@ fn mirror_resources_signal(patch: &mut serde_json::Map<String, Value>) {
     }
 }
 
-fn expand_checkbox_group_signal_arrays(
+fn patch_checkbox_transport_signals(
     data: &CalculatorData,
     signals: &CalculatorSignals,
     patch: &mut serde_json::Map<String, Value>,
 ) {
     patch.insert(
-        "outfit".to_string(),
+        "_outfit_slots".to_string(),
         Value::Array(indexed_checkbox_values(
             &signals.outfit,
             &item_options_by_type(&data.catalog.items, "outfit"),
         )),
     );
     patch.insert(
-        "food".to_string(),
-        Value::Array(indexed_checkbox_values(
-            &signals.food,
-            &item_options_by_type(&data.catalog.items, "food"),
-        )),
+        "_food_slots".to_string(),
+        Value::Array(
+            signals
+                .food
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect::<Vec<_>>(),
+        ),
     );
     patch.insert(
-        "buff".to_string(),
-        Value::Array(indexed_checkbox_values(
-            &signals.buff,
-            &item_options_by_type(&data.catalog.items, "buff"),
-        )),
+        "_buff_slots".to_string(),
+        Value::Array(
+            signals
+                .buff
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect::<Vec<_>>(),
+        ),
     );
 
     for (slot, pet) in [
@@ -1297,11 +1305,8 @@ fn expand_checkbox_group_signal_arrays(
         ("pet4", &signals.pet4),
         ("pet5", &signals.pet5),
     ] {
-        let Some(Value::Object(pet_patch)) = patch.get_mut(slot) else {
-            continue;
-        };
-        pet_patch.insert(
-            "skills".to_string(),
+        patch.insert(
+            format!("_{slot}_skill_slots"),
             Value::Array(indexed_checkbox_values(
                 &pet.skills,
                 &select_options_from_catalog(&data.catalog.pets.skills),
@@ -1325,6 +1330,29 @@ fn indexed_checkbox_values(selected_values: &[String], options: &[SelectOption<'
             })
         })
         .collect()
+}
+
+fn render_canonical_checkbox_signal_computeds(pet_slots: usize) -> String {
+    let mut html = String::from(
+        r#"<div class="hidden"
+         data-computed:resources="$_resources"
+         data-computed:outfit="($_outfit_slots || []).filter(Boolean)"
+         data-computed:food="Array.isArray($_food_slots) ? $_food_slots : []"
+         data-computed:buff="Array.isArray($_buff_slots) ? $_buff_slots : []""#,
+    );
+    for slot in 1..=pet_slots.max(1) {
+        write!(
+            html,
+            r#"
+         data-computed:pet{slot}.skills="($_pet{slot}_skill_slots || []).filter(Boolean)""#,
+        )
+        .unwrap();
+    }
+    html.push_str(
+        r#"
+         data-computed:_live="window.__fishystuffCalculator.liveCalc($level, $_resources, $active, $catchTimeActive, $catchTimeAfk, $timespanAmount, $timespanUnit, $_calc)"></div>"#,
+    );
+    html
 }
 
 fn normalize_pet(
@@ -3063,11 +3091,11 @@ fn render_calculator_app(
         },
         &zone_results,
     );
+    let canonical_signal_computeds =
+        render_canonical_checkbox_signal_computeds(data.catalog.pets.slots as usize);
     let mut html = r####"
 <div id="calculator-app" class="grid gap-6">
-    <div class="hidden"
-         data-computed:resources="$_resources"
-         data-computed:_live="window.__fishystuffCalculator.liveCalc($level, $_resources, $active, $catchTimeActive, $catchTimeAfk, $timespanAmount, $timespanUnit, $_calc)"></div>
+    __CANONICAL_SIGNAL_COMPUTEDS__
     <div class="hidden"
          data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl())"
          data-on-signal-patch-filter="window.__fishystuffCalculator.evalSignalPatchFilter()"></div>
@@ -3495,7 +3523,7 @@ fn render_calculator_app(
             render_checkbox_group(
                 data.cdn_base_url.as_str(),
                 "outfits",
-                "outfit",
+                "_outfit_slots",
                 &signals.outfit,
                 &outfits,
                 None,
@@ -3507,7 +3535,7 @@ fn render_calculator_app(
                 data.cdn_base_url.as_str(),
                 &SearchableMultiselectConfig {
                     root_id: "calculator-food-picker",
-                    bind_key: "food",
+                    bind_key: "_food_slots",
                     search_placeholder: "Search foods by name or effect",
                     helper_text: Some(
                         "Only one food family applies at a time. Higher-tier foods replace lower-tier ones in the same family.",
@@ -3523,7 +3551,7 @@ fn render_calculator_app(
                 data.cdn_base_url.as_str(),
                 &SearchableMultiselectConfig {
                     root_id: "calculator-buff-picker",
-                    bind_key: "buff",
+                    bind_key: "_buff_slots",
                     search_placeholder: "Search buffs by name or effect",
                     helper_text: Some(
                         "Selecting another buff in the same buff group replaces the previous one.",
@@ -3547,6 +3575,10 @@ fn render_calculator_app(
     for (token, replacement) in replacements {
         html = html.replace(token, &replacement);
     }
+    html = html.replace(
+        "__CANONICAL_SIGNAL_COMPUTEDS__",
+        &canonical_signal_computeds,
+    );
     html = html.replace("__ACTIVE_CHECKED__", active_checked);
     html = html.replace("__DEBUG_CHECKED__", debug_checked);
     Ok(html)
@@ -4648,7 +4680,7 @@ fn render_searchable_multiselect_catalog_html(
     html
 }
 
-fn render_searchable_multiselect_inputs_html(
+fn render_searchable_multiselect_bound_select_html(
     bind_key: &str,
     selected_values: &[String],
     options: &[SelectOption<'_>],
@@ -4657,11 +4689,13 @@ fn render_searchable_multiselect_inputs_html(
         .iter()
         .map(|value| value.as_str())
         .collect::<std::collections::HashSet<_>>();
-    let mut html = String::new();
-    html.push_str("<div data-role=\"bound-inputs\" hidden>");
+    let mut html = format!(
+        "<select data-role=\"bound-select\" data-bind=\"{}\" multiple>",
+        escape_html(bind_key)
+    );
     for option in options {
-        let checked_attr = if selected.contains(option.value) {
-            " checked"
+        let selected_attr = if selected.contains(option.value) {
+            " selected"
         } else {
             ""
         };
@@ -4672,16 +4706,16 @@ fn render_searchable_multiselect_inputs_html(
             .unwrap_or_default();
         write!(
             html,
-            "<input data-role=\"bound-option\" data-bind=\"{}\" data-label=\"{}\" type=\"checkbox\" value=\"{}\"{}{}>",
-            escape_html(bind_key),
+            "<option data-role=\"bound-option\" data-label=\"{}\" value=\"{}\"{}{}>{}</option>",
             escape_html(option.label),
             escape_html(option.value),
-            checked_attr,
+            selected_attr,
             category_key_attr,
+            escape_html(option.label),
         )
         .unwrap();
     }
-    html.push_str("</div>");
+    html.push_str("</select>");
     html
 }
 
@@ -4781,13 +4815,14 @@ fn render_searchable_multiselect_control(
 
     let panel_id = format!("{}-panel", config.root_id);
     let search_input_id = format!("{}-search-input", config.root_id);
+    let bound_inputs_id = format!("{}-bound-inputs", config.root_id);
     let selection_html =
         render_searchable_multiselect_selection_html(cdn_base_url, selected_values, &options);
     let results_html =
         render_searchable_multiselect_results_html(cdn_base_url, &options, selected_values, "");
     let catalog_html = render_searchable_multiselect_catalog_html(cdn_base_url, &options);
-    let inputs_html =
-        render_searchable_multiselect_inputs_html(config.bind_key, selected_values, &options);
+    let bound_select_html =
+        render_searchable_multiselect_bound_select_html(config.bind_key, selected_values, &options);
     let selection_hidden_attr = if selection_html.is_empty() {
         " hidden"
     } else {
@@ -4804,7 +4839,9 @@ fn render_searchable_multiselect_control(
         .unwrap_or_default();
 
     format!(
-        r#"<fishy-searchable-multiselect id="{root_id}" class="relative block w-full" placeholder="{search_placeholder}">
+        r#"<div class="grid gap-2">
+    <div id="{bound_inputs_id}" data-role="bound-inputs-root" hidden>{bound_select_html}</div>
+    <fishy-searchable-multiselect id="{root_id}" class="relative block w-full" placeholder="{search_placeholder}" bound-select-id="{bound_inputs_id}">
     <div data-role="shell" class="flex min-h-11 w-full flex-wrap items-center gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm">
         <div data-role="selection" class="flex flex-wrap gap-2"{selection_hidden_attr}>{selection_html}</div>
         <label class="flex min-w-[12rem] flex-1 items-center gap-2 text-sm">
@@ -4828,8 +4865,9 @@ fn render_searchable_multiselect_control(
     </div>
     {helper_text_html}
     {catalog_html}
-    {inputs_html}
-</fishy-searchable-multiselect>"#,
+</fishy-searchable-multiselect>
+</div>"#,
+        bound_inputs_id = escape_html(&bound_inputs_id),
         root_id = escape_html(config.root_id),
         panel_id = escape_html(&panel_id),
         search_input_id = escape_html(&search_input_id),
@@ -4839,7 +4877,7 @@ fn render_searchable_multiselect_control(
         results_html = results_html,
         helper_text_html = helper_text_html,
         catalog_html = catalog_html,
-        inputs_html = inputs_html,
+        bound_select_html = bound_select_html,
     )
 }
 
@@ -5131,7 +5169,7 @@ fn render_pet_cards(
             _ => &signals.pet5,
         };
         let bind_prefix = format!("pet{slot}");
-        let skill_bind = format!("{}.skills", bind_prefix);
+        let skill_bind = format!("_pet{slot}_skill_slots");
         let skills_id = format!("pet{slot}_skills");
         write!(
             html,
@@ -5600,8 +5638,17 @@ mod tests {
         assert!(text.contains("<fishy-searchable-multiselect"));
         assert!(text.contains("calculator-food-picker"));
         assert!(text.contains("calculator-buff-picker"));
-        assert!(text.contains("data-bind=\"food\""));
-        assert!(text.contains("data-bind=\"buff\""));
+        assert!(text.contains("data-bind=\"_food_slots\""));
+        assert!(text.contains("data-bind=\"_buff_slots\""));
+        assert!(text.contains("bound-select-id=\"calculator-food-picker-bound-inputs\""));
+        assert!(text.contains("bound-select-id=\"calculator-buff-picker-bound-inputs\""));
+        assert!(text.contains("data-bind=\"_outfit_slots.0\""));
+        assert!(
+            text.contains("data-computed:food=\"Array.isArray($_food_slots) ? $_food_slots : []\"")
+        );
+        assert!(
+            text.contains("data-computed:buff=\"Array.isArray($_buff_slots) ? $_buff_slots : []\"")
+        );
         assert!(text.contains("Search foods by name or effect"));
         assert!(text.contains("data-bind=\"mastery\""));
         assert!(text.contains("step=\"50\""));
@@ -5969,12 +6016,23 @@ mod tests {
                 "effect:8-piece-outfit-set-effect",
                 "effect:awakening-weapon-outfit",
                 "effect:mainhand-weapon-outfit",
+                "item:14330"
+            ]))
+        );
+        assert_eq!(
+            patch.get("_outfit_slots"),
+            Some(&json!([
+                "effect:8-piece-outfit-set-effect",
+                "effect:awakening-weapon-outfit",
+                "effect:mainhand-weapon-outfit",
                 "",
                 "item:14330"
             ]))
         );
-        assert_eq!(patch.get("food"), Some(&json!(["item:9359", ""])));
-        assert_eq!(patch.get("buff"), Some(&json!(["item:721092", ""])));
+        assert_eq!(patch.get("food"), Some(&json!(["item:9359"])));
+        assert_eq!(patch.get("_food_slots"), Some(&json!(["item:9359"])));
+        assert_eq!(patch.get("buff"), Some(&json!(["item:721092"])));
+        assert_eq!(patch.get("_buff_slots"), Some(&json!(["item:721092"])));
     }
 
     #[test]

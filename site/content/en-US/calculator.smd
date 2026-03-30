@@ -21,7 +21,7 @@
         : "en";
     const urlParams = new URLSearchParams(window.location.search);
     const presetQueryParam = urlParams.get("preset");
-    const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_live(\.|$)|_calc(\.|$))$/;
+    const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_distribution_tab(?:\.|$))/;
     const loadStoredSignals = () => {
         const raw = localStorage.getItem(CALCULATOR_STORAGE_KEY);
         if (!raw) {
@@ -34,6 +34,23 @@
             console.error("Error parsing stored calculator state:", error);
             return null;
         }
+    };
+
+    const compactStringArray = (value) => {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+        const seen = new Set();
+        const out = [];
+        for (const entry of value) {
+            const normalized = String(entry ?? "").trim();
+            if (!normalized || seen.has(normalized)) {
+                continue;
+            }
+            seen.add(normalized);
+            out.push(normalized);
+        }
+        return out;
     };
 
     const canonicalizeStoredSignals = (signals) => {
@@ -110,6 +127,18 @@
                 })
                 .filter(Boolean)
         );
+        current.outfit = compactStringArray(current.outfit);
+        current.food = compactStringArray(current.food);
+        current.buff = compactStringArray(current.buff);
+        for (const petKey of ["pet1", "pet2", "pet3", "pet4", "pet5"]) {
+            if (!current[petKey] || typeof current[petKey] !== "object" || Array.isArray(current[petKey])) {
+                continue;
+            }
+            current[petKey] = {
+                ...current[petKey],
+                skills: compactStringArray(current[petKey].skills),
+            };
+        }
         return current;
     };
 
@@ -261,7 +290,7 @@
         },
         evalSignalPatchFilter() {
             return {
-                exclude: /^(_loading|_live(\.|$)|_calc(\.|$)|_distribution_tab$)$/,
+                exclude: CALCULATOR_EPHEMERAL_SIGNAL_PATTERN,
             };
         },
         presetUrl(signals) {

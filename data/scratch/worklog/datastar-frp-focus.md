@@ -180,8 +180,29 @@ Work:
 
 Status:
 
-- partially investigated
-- not solved yet
+- implemented for calculator food and buff multiselects
+- broader outfit/pet checkbox transport still remains for now
+
+Resolution:
+
+- the searchable multiselect now uses an external hidden `<select multiple>` transport
+- local transport signals stay compact:
+  - `_food_slots = ["item:9359"]`
+  - `_buff_slots = ["item:721092"]`
+- canonical domain signals are derived directly:
+  - `food = Array.isArray($_food_slots) ? $_food_slots : []`
+  - `buff = Array.isArray($_buff_slots) ? $_buff_slots : []`
+
+Follow-up:
+
+- the original broad underscore-based patch filter was too aggressive
+- computed canonical signals do not emit a usable follow-on patch for eval/persist
+- eval/persist now exclude only true ephemeral locals:
+  - `_loading`
+  - `_calc`
+  - `_live`
+  - `_distribution_tab`
+- transport locals such as `_food_slots`, `_buff_slots`, `_outfit_slots`, `_pet*_skill_slots`, and `_resources` are now allowed to drive eval/persist
 
 ### Step 3
 
@@ -214,16 +235,28 @@ Status:
 
 ## Current Evidence
 
-Live browser probe revealed duplicated canonical food state before the latest server-side patch:
+Earlier live browser probe revealed duplicated canonical food state:
 
 - `food: ["item:9359", "item:9359", "", ...]`
 
-That explains why removing one visible selection did not clear AFR:
+That explained why removing one visible selection did not clear AFR:
 
 - one duplicate remained active in the actual signal state
 - persistence then wrote the wrong state back to localStorage
 
-This confirms the bug is structural, not just a last-item edge case.
+Current clean-profile browser probe after the select-based transport refactor:
+
+- before:
+  - `food = ["item:9359"]`
+  - `_food_slots = ["item:9359"]`
+  - `afr = "72%"`
+- after removing Balacs Lunchbox:
+  - `food = []`
+  - `_food_slots = []`
+  - `afr = "65%"`
+  - persisted storage contains `"food":[]`
+
+This confirms the bug was structural and that the current calculator food-removal path is fixed in the live signal graph.
 
 ## Current Working Changes
 
@@ -231,6 +264,7 @@ Current in-progress changes currently focus on:
 
 - `api/fishystuff_server/src/routes/calculator.rs`
 - `site/content/en-US/calculator.smd`
+- `site/assets/js/components/searchable-multiselect.js`
 
 Planned next audit targets after calculator state is stable:
 
@@ -245,11 +279,11 @@ Unrelated local changes not part of this refactor:
 
 ## Next Move
 
-Finish calculator Step 2 cleanly:
+Finish calculator Step 3 cleanly:
 
-- choose a single canonical representation for multiselect state
-- keep transport local or remove it entirely
-- verify live removal for food and buff before committing
+- audit stored calculator signal canonicalization now that food/buff transport is compact
+- decide whether outfit and pet skill checkbox transport should also move off slot arrays
+- add browser regression coverage for food/buff removal and reload
 
 Then expand the same analysis to the rest of the site:
 
