@@ -7,6 +7,7 @@ mod calculator_pets;
 mod calculator_progression;
 mod calculator_sources;
 mod catalog;
+mod fish_best_spots;
 mod stats;
 mod util;
 mod zone_profile_v2;
@@ -26,7 +27,7 @@ use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{
     EventPointCompact, EventSourceKind, EventsSnapshotMetaResponse, EventsSnapshotResponse,
 };
-use fishystuff_api::models::fish::{FishEntry, FishListResponse};
+use fishystuff_api::models::fish::{FishBestSpotsResponse, FishEntry, FishListResponse};
 use fishystuff_api::models::meta::{
     CanonicalMapInfo, MapVersionInfo, MetaDefaults, MetaResponse, PatchInfo,
 };
@@ -1553,6 +1554,20 @@ impl Store for DoltMySqlStore {
                 count: entries.len(),
                 fish: entries,
             })
+        })
+        .await
+        .map_err(|err| AppError::internal(err.to_string()))?
+    }
+
+    async fn fish_best_spots(
+        &self,
+        lang: FishLang,
+        ref_id: Option<String>,
+        item_id: i32,
+    ) -> AppResult<FishBestSpotsResponse> {
+        let this = self.clone();
+        tokio::task::spawn_blocking(move || {
+            this.query_fish_best_spots(lang, ref_id.as_deref(), item_id)
         })
         .await
         .map_err(|err| AppError::internal(err.to_string()))?

@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use fishystuff_api::models::calculator::CalculatorCatalogResponse;
 use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
 use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
-use fishystuff_api::models::fish::FishListResponse;
+use fishystuff_api::models::fish::{FishBestSpotsResponse, FishListResponse};
 use fishystuff_api::models::meta::MetaResponse;
 use fishystuff_api::models::region_groups::RegionGroupsResponse;
 use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
@@ -75,6 +75,17 @@ pub trait Store: Send + Sync {
         lang: FishLang,
         ref_id: Option<String>,
     ) -> AppResult<FishListResponse>;
+    async fn fish_best_spots(
+        &self,
+        _lang: FishLang,
+        _ref_id: Option<String>,
+        item_id: i32,
+    ) -> AppResult<FishBestSpotsResponse> {
+        Ok(FishBestSpotsResponse {
+            item_id,
+            ..FishBestSpotsResponse::default()
+        })
+    }
     async fn calculator_catalog(
         &self,
         lang: FishLang,

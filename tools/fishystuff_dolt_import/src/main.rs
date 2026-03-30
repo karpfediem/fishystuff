@@ -145,20 +145,10 @@ const FISHING_MG_COLS: [usize; 8] = [3, 4, 5, 7, 9, 11, 13, 15];
 const MAIN_GROUP_KEY_COL: usize = 0;
 const MAIN_GROUP_SG_COLS: [usize; 4] = [7, 10, 13, 16];
 const SUB_GROUP_KEY_COL: usize = 0;
-const COMMUNITY_PRIZE_SOURCE_ID: &str = "community_prize_fish_workbook";
-const COMMUNITY_PRIZE_SOURCE_LABEL: &str = "Curated community prize-fish workbook";
 const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
 const COMMUNITY_PRIZE_GUESS_SOURCE_LABEL: &str = "Updated Fishing Setup guessed prize-fish rates";
 const FLOCKFISH_SOURCE_ID: &str = "flockfish_workbook";
 const FLOCKFISH_ZONE_GROUP_SOURCE_LABEL: &str = "Flockfish final combined zone group table";
-const COMMUNITY_REMARK_COL: usize = 0;
-const COMMUNITY_R_COL: usize = 1;
-const COMMUNITY_G_COL: usize = 2;
-const COMMUNITY_B_COL: usize = 3;
-const COMMUNITY_REGION_COL: usize = 4;
-const COMMUNITY_ZONE_NAME_COL: usize = 5;
-const COMMUNITY_ITEM_NAME_COL: usize = 9;
-const COMMUNITY_FISH_NAME_COL: usize = 14;
 const SETUP_SPOT_NAME_COL: usize = 0;
 const SETUP_SPOT_R_COL: usize = 1;
 const SETUP_SPOT_G_COL: usize = 2;
@@ -216,8 +206,6 @@ enum Commands {
     ImportCommunityPrizeFishXlsx {
         #[arg(long)]
         dolt_repo: PathBuf,
-        #[arg(long)]
-        workbook_xlsx: PathBuf,
         #[arg(long)]
         guessed_rates_workbook_xlsx: Option<PathBuf>,
         #[arg(long)]
@@ -339,14 +327,6 @@ struct ImportOutputs {
     languagedata_csv: PathBuf,
 }
 
-struct CommunityPrizeImport {
-    emitted_rows: usize,
-    matched_names: usize,
-    unresolved_names: usize,
-    skipped_missing_rgb_rows: usize,
-    skipped_placeholder_names: usize,
-}
-
 struct CommunityPrizeGuessImport {
     emitted_rows: usize,
     resolved_item_keys: usize,
@@ -358,7 +338,6 @@ struct CommunityPrizeGuessImport {
 
 struct CommunityPrizeImportCommand {
     dolt_repo: PathBuf,
-    workbook_xlsx: PathBuf,
     guessed_rates_workbook_xlsx: Option<PathBuf>,
     output_dir: Option<PathBuf>,
     commit: bool,
@@ -506,27 +485,6 @@ struct CalculatorProgressionDigests {
     translate_stat_sha: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum CommunitySupportStatus {
-    DataIncomplete,
-    Unconfirmed,
-    Confirmed,
-}
-
-#[derive(Debug, Clone)]
-struct CommunitySupportRow {
-    zone_rgb: u32,
-    zone_r: u8,
-    zone_g: u8,
-    zone_b: u8,
-    region_name: String,
-    zone_name: String,
-    item_id: i64,
-    fish_name: String,
-    support_status: CommunitySupportStatus,
-    claim_count: u32,
-}
-
 struct ImportReport<'a> {
     subset: SubsetMode,
     fishing: &'a FishingImport,
@@ -571,14 +529,12 @@ fn main() -> Result<()> {
         }),
         Commands::ImportCommunityPrizeFishXlsx {
             dolt_repo,
-            workbook_xlsx,
             guessed_rates_workbook_xlsx,
             output_dir,
             commit,
             commit_msg,
         } => run_community_prize_import(CommunityPrizeImportCommand {
             dolt_repo,
-            workbook_xlsx,
             guessed_rates_workbook_xlsx,
             output_dir,
             commit,
@@ -758,7 +714,6 @@ fn run_import(command: ImportCommand) -> Result<()> {
 fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()> {
     let CommunityPrizeImportCommand {
         dolt_repo,
-        workbook_xlsx,
         guessed_rates_workbook_xlsx,
         output_dir,
         commit,
@@ -772,16 +727,12 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
     fs::create_dir_all(&output_dir)
         .with_context(|| format!("create output dir: {}", output_dir.display()))?;
 
-    let workbook_sha = sha256_file(&workbook_xlsx)?;
     let outputs = CommunityPrizeOutputs {
         community_csv: output_dir.join("community_zone_fish_support.csv"),
     };
-    let stats = import_community_prize_fish_xlsx(
-        &dolt_repo,
-        &workbook_xlsx,
-        &workbook_sha,
-        &outputs.community_csv,
-    )?;
+    let mut writer = build_csv_writer(&outputs.community_csv)?;
+    writer.write_record(COMMUNITY_ZONE_FISH_SUPPORT_HEADERS)?;
+    writer.flush()?;
     let guessed_sha = match guessed_rates_workbook_xlsx.as_ref() {
         Some(path) => Some(sha256_file(path)?),
         None => None,
@@ -803,32 +754,15 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
 
     if commit {
         let msg = match commit_msg {
-            Some(msg) => {
-                build_community_prize_commit_message(&msg, &workbook_sha, guessed_sha.as_deref())
-            }
+            Some(msg) => build_community_prize_commit_message(&msg, guessed_sha.as_deref()),
             None => build_community_prize_commit_message(
                 "Import community zone fish support",
-                &workbook_sha,
                 guessed_sha.as_deref(),
             ),
         };
         run_dolt_commit(&dolt_repo, &msg)?;
     }
 
-    println!("community support rows emitted: {}", stats.emitted_rows);
-    println!("community fish names matched: {}", stats.matched_names);
-    println!(
-        "community fish names unresolved/skipped: {}",
-        stats.unresolved_names
-    );
-    println!(
-        "community rows skipped due to missing RGB: {}",
-        stats.skipped_missing_rgb_rows
-    );
-    println!(
-        "community placeholder names skipped: {}",
-        stats.skipped_placeholder_names
-    );
     if let Some(stats) = guess_stats.as_ref() {
         println!(
             "community guessed prize rows emitted: {}",
@@ -860,16 +794,10 @@ fn run_community_prize_import(command: CommunityPrizeImportCommand) -> Result<()
     Ok(())
 }
 
-fn build_community_prize_commit_message(
-    prefix: &str,
-    workbook_sha: &str,
-    guessed_sha: Option<&str>,
-) -> String {
+fn build_community_prize_commit_message(prefix: &str, guessed_sha: Option<&str>) -> String {
     match guessed_sha {
-        Some(guessed_sha) => format!(
-            "{prefix} (PrizeFishWorkbook={workbook_sha}, FishingSetupWorkbook={guessed_sha})"
-        ),
-        None => format!("{prefix} (PrizeFishWorkbook={workbook_sha})"),
+        Some(guessed_sha) => format!("{prefix} (FishingSetupWorkbook={guessed_sha})"),
+        None => prefix.to_string(),
     }
 }
 
@@ -1999,139 +1927,6 @@ fn import_languagedata_en_csv(path: &Path, output_csv: &Path) -> Result<Language
     Ok(LanguageDataImport { row_count })
 }
 
-fn import_community_prize_fish_xlsx(
-    dolt_repo: &Path,
-    workbook_xlsx: &Path,
-    workbook_sha: &str,
-    output_csv: &Path,
-) -> Result<CommunityPrizeImport> {
-    let range = read_sheet(workbook_xlsx, "DATA")?;
-    let rows = range.rows().collect::<Vec<_>>();
-    if rows.is_empty() {
-        bail!("{}:DATA has no rows", workbook_xlsx.display());
-    }
-    validate_community_prize_headers(rows[0], workbook_xlsx)?;
-
-    let fish_names = load_fish_name_lookup(dolt_repo)?;
-    let mut aggregate: BTreeMap<(u32, i64), CommunitySupportRow> = BTreeMap::new();
-    let mut matched_names = 0usize;
-    let mut unresolved_names = 0usize;
-    let mut skipped_missing_rgb_rows = 0usize;
-    let mut skipped_placeholder_names = 0usize;
-
-    for row in rows.into_iter().skip(1) {
-        if row_is_empty(row) {
-            continue;
-        }
-
-        let Some(remark) = cell_to_string_opt(row.get(COMMUNITY_REMARK_COL))? else {
-            continue;
-        };
-        let Some(support_status) = parse_community_support_status(&remark) else {
-            continue;
-        };
-
-        let Some(zone_r_i64) = cell_to_i64_opt(row.get(COMMUNITY_R_COL))? else {
-            skipped_missing_rgb_rows += 1;
-            continue;
-        };
-        let Some(zone_g_i64) = cell_to_i64_opt(row.get(COMMUNITY_G_COL))? else {
-            skipped_missing_rgb_rows += 1;
-            continue;
-        };
-        let Some(zone_b_i64) = cell_to_i64_opt(row.get(COMMUNITY_B_COL))? else {
-            skipped_missing_rgb_rows += 1;
-            continue;
-        };
-
-        let zone_r = u8::try_from(zone_r_i64)
-            .with_context(|| format!("zone R out of range: {zone_r_i64}"))?;
-        let zone_g = u8::try_from(zone_g_i64)
-            .with_context(|| format!("zone G out of range: {zone_g_i64}"))?;
-        let zone_b = u8::try_from(zone_b_i64)
-            .with_context(|| format!("zone B out of range: {zone_b_i64}"))?;
-        let zone_rgb = (u32::from(zone_r) << 16) | (u32::from(zone_g) << 8) | u32::from(zone_b);
-        let region_name = cell_to_string_opt(row.get(COMMUNITY_REGION_COL))?.unwrap_or_default();
-        let zone_name = cell_to_string_opt(row.get(COMMUNITY_ZONE_NAME_COL))?.unwrap_or_default();
-
-        for &name_col in &[COMMUNITY_ITEM_NAME_COL, COMMUNITY_FISH_NAME_COL] {
-            let Some(raw_name) = cell_to_string_opt(row.get(name_col))? else {
-                continue;
-            };
-            if is_placeholder_community_name(&raw_name) {
-                skipped_placeholder_names += 1;
-                continue;
-            }
-
-            let normalized_name = normalize_lookup_name(&raw_name);
-            let Some((item_id, canonical_name)) = fish_names.get(&normalized_name) else {
-                unresolved_names += 1;
-                continue;
-            };
-            matched_names += 1;
-
-            let entry =
-                aggregate
-                    .entry((zone_rgb, *item_id))
-                    .or_insert_with(|| CommunitySupportRow {
-                        zone_rgb,
-                        zone_r,
-                        zone_g,
-                        zone_b,
-                        region_name: region_name.clone(),
-                        zone_name: zone_name.clone(),
-                        item_id: *item_id,
-                        fish_name: canonical_name.clone(),
-                        support_status,
-                        claim_count: 0,
-                    });
-            if support_status > entry.support_status {
-                entry.support_status = support_status;
-            }
-            if entry.region_name.is_empty() {
-                entry.region_name = region_name.clone();
-            }
-            if entry.zone_name.is_empty() {
-                entry.zone_name = zone_name.clone();
-            }
-            if entry.fish_name.is_empty() {
-                entry.fish_name = canonical_name.clone();
-            }
-            entry.claim_count = entry.claim_count.saturating_add(1);
-        }
-    }
-
-    let mut writer = build_csv_writer(output_csv)?;
-    writer.write_record(COMMUNITY_ZONE_FISH_SUPPORT_HEADERS)?;
-    for row in aggregate.values() {
-        writer.write_record([
-            COMMUNITY_PRIZE_SOURCE_ID.to_string(),
-            COMMUNITY_PRIZE_SOURCE_LABEL.to_string(),
-            workbook_sha.to_string(),
-            row.zone_rgb.to_string(),
-            row.zone_r.to_string(),
-            row.zone_g.to_string(),
-            row.zone_b.to_string(),
-            row.region_name.clone(),
-            row.zone_name.clone(),
-            row.item_id.to_string(),
-            row.fish_name.clone(),
-            community_support_status_str(row.support_status).to_string(),
-            row.claim_count.to_string(),
-            String::new(),
-        ])?;
-    }
-    writer.flush()?;
-
-    Ok(CommunityPrizeImport {
-        emitted_rows: aggregate.len(),
-        matched_names,
-        unresolved_names,
-        skipped_missing_rgb_rows,
-        skipped_placeholder_names,
-    })
-}
-
 fn append_community_prize_guess_rows(
     _dolt_repo: &Path,
     workbook_xlsx: &Path,
@@ -2371,143 +2166,6 @@ where
         }
     }
     Ok(row_count)
-}
-
-fn validate_community_prize_headers(row: &[Data], workbook_xlsx: &Path) -> Result<()> {
-    let headers: Vec<String> = row.iter().map(header_cell_to_string).collect();
-    let expected = [
-        (COMMUNITY_REMARK_COL, "REMARK"),
-        (COMMUNITY_R_COL, "R"),
-        (COMMUNITY_G_COL, "G"),
-        (COMMUNITY_B_COL, "B"),
-        (COMMUNITY_REGION_COL, "REGION"),
-        (COMMUNITY_ZONE_NAME_COL, "ZONE NAME"),
-        (COMMUNITY_ITEM_NAME_COL, "ITEM NAME"),
-        (COMMUNITY_FISH_NAME_COL, "FISH"),
-    ];
-    for (idx, expected_value) in expected {
-        let actual = headers.get(idx).map(|value| value.trim()).unwrap_or("");
-        if actual != expected_value {
-            bail!(
-                "unexpected community workbook headers in {}:DATA at column {}. expected '{}' got '{}'",
-                workbook_xlsx.display(),
-                idx,
-                expected_value,
-                actual
-            );
-        }
-    }
-    Ok(())
-}
-
-fn parse_community_support_status(value: &str) -> Option<CommunitySupportStatus> {
-    match value.trim().to_ascii_uppercase().as_str() {
-        "CONFIRMED" => Some(CommunitySupportStatus::Confirmed),
-        "UNCONFIRMED" => Some(CommunitySupportStatus::Unconfirmed),
-        "DATA INCOMPLETE" => Some(CommunitySupportStatus::DataIncomplete),
-        _ => None,
-    }
-}
-
-fn community_support_status_str(status: CommunitySupportStatus) -> &'static str {
-    match status {
-        CommunitySupportStatus::Confirmed => "confirmed",
-        CommunitySupportStatus::Unconfirmed => "unconfirmed",
-        CommunitySupportStatus::DataIncomplete => "data_incomplete",
-    }
-}
-
-fn normalize_lookup_name(value: &str) -> String {
-    let mut normalized = String::with_capacity(value.len());
-    let mut last_was_space = false;
-    for ch in value.trim().chars() {
-        let mapped = match ch {
-            '-' => ' ',
-            '\'' => continue,
-            _ => ch.to_ascii_lowercase(),
-        };
-        if mapped.is_whitespace() {
-            if !last_was_space {
-                normalized.push(' ');
-                last_was_space = true;
-            }
-        } else {
-            normalized.push(mapped);
-            last_was_space = false;
-        }
-    }
-    normalized.trim().to_string()
-}
-
-fn is_placeholder_community_name(value: &str) -> bool {
-    let trimmed = value.trim();
-    trimmed.is_empty()
-        || is_null_marker(trimmed)
-        || trimmed.starts_with("UNCONFIRMED")
-        || trimmed == "❔❔"
-}
-
-fn load_fish_name_lookup(repo_path: &Path) -> Result<HashMap<String, (i64, String)>> {
-    let output = Command::new("dolt")
-        .current_dir(repo_path)
-        .args([
-            "sql",
-            "-r",
-            "csv",
-            "-q",
-            "SELECT CAST(ft.item_key AS SIGNED) AS fish_id, ft.name AS fish_name \
-             FROM fish_table ft \
-             UNION \
-             SELECT CAST(it.`Index` AS SIGNED) AS fish_id, it.`ItemName` AS fish_name \
-             FROM item_table it \
-             INNER JOIN fish_table ft ON ft.item_key = it.`Index` \
-             UNION \
-             SELECT CAST(en.`id` AS SIGNED) AS fish_id, en.`text` AS fish_name \
-             FROM languagedata_en en \
-             INNER JOIN fish_table ft ON ft.item_key = en.`id` \
-             WHERE en.`format` = 'A' \
-               AND COALESCE(en.`unk`, '') = '' \
-               AND NULLIF(TRIM(en.`text`), '') IS NOT NULL",
-        ])
-        .output()
-        .context("query fish names from dolt")?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("dolt fish-name lookup failed: {stderr}");
-    }
-
-    let mut reader = csv::ReaderBuilder::new().from_reader(output.stdout.as_slice());
-    let mut lookup = HashMap::new();
-    for row in reader.records() {
-        let record = row.context("read fish-name lookup row")?;
-        let Some(fish_id_raw) = record.get(0) else {
-            continue;
-        };
-        let Some(fish_name_raw) = record.get(1) else {
-            continue;
-        };
-        let fish_name = fish_name_raw.trim();
-        if fish_name.is_empty() || is_null_marker(fish_name) {
-            continue;
-        }
-        let fish_id = fish_id_raw
-            .trim()
-            .parse::<i64>()
-            .with_context(|| format!("parse fish id in lookup: {}", fish_id_raw.trim()))?;
-        let normalized = normalize_lookup_name(fish_name);
-        if normalized.is_empty() {
-            continue;
-        }
-        lookup
-            .entry(normalized)
-            .and_modify(|entry: &mut (i64, String)| {
-                if fish_id < entry.0 {
-                    *entry = (fish_id, fish_name.to_string());
-                }
-            })
-            .or_insert_with(|| (fish_id, fish_name.to_string()));
-    }
-    Ok(lookup)
 }
 
 fn process_main_group_rows<'a, W, I>(
@@ -3406,38 +3064,6 @@ mod tests {
         assert_eq!(count, 1);
         assert!(matched.contains(&901));
         assert!(!matched.contains(&900));
-    }
-
-    #[test]
-    fn normalize_lookup_name_collapses_hyphens_and_apostrophes() {
-        assert_eq!(
-            normalize_lookup_name("Ransonnet's Surf-Perch"),
-            "ransonnets surf perch"
-        );
-    }
-
-    #[test]
-    fn parse_community_support_status_maps_known_values() {
-        assert_eq!(
-            parse_community_support_status("CONFIRMED"),
-            Some(CommunitySupportStatus::Confirmed)
-        );
-        assert_eq!(
-            parse_community_support_status("UNCONFIRMED"),
-            Some(CommunitySupportStatus::Unconfirmed)
-        );
-        assert_eq!(
-            parse_community_support_status("DATA INCOMPLETE"),
-            Some(CommunitySupportStatus::DataIncomplete)
-        );
-    }
-
-    #[test]
-    fn placeholder_community_names_are_skipped() {
-        assert!(is_placeholder_community_name("UNCONFIRMED (1)"));
-        assert!(is_placeholder_community_name("❔❔"));
-        assert!(is_placeholder_community_name("NULL"));
-        assert!(!is_placeholder_community_name("Mudskipper"));
     }
 
     #[test]

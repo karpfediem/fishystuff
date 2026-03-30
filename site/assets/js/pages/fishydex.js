@@ -25,6 +25,7 @@
     uiStateRestored: false,
     stampTimers: new Map(),
     fishById: new Map(),
+    bestSpotsByFish: new Map(),
     renderKey: "",
     gridBound: false,
     detailsBound: false,
@@ -926,6 +927,120 @@
     };
   }
 
+  function bestSpotsStateByItemId(itemId) {
+    return Number.isInteger(itemId) && itemId > 0 ? state.bestSpotsByFish.get(itemId) || null : null;
+  }
+
+  function createBestSpotBadge(label, className) {
+    const badge = createElement("span", `badge badge-soft ${className}`.trim(), label);
+    return badge;
+  }
+
+  function renderBestSpots(noteElement, listElement, meta) {
+    if (!(noteElement instanceof HTMLElement) || !(listElement instanceof HTMLElement)) {
+      return;
+    }
+
+    noteElement.classList.remove("is-error");
+    listElement.replaceChildren();
+
+    const spotState = bestSpotsStateByItemId(meta.itemId);
+    if (!spotState || spotState.status === "loading") {
+      noteElement.textContent = "Loading evidence-backed spots…";
+      return;
+    }
+
+    if (spotState.status === "error") {
+      noteElement.classList.add("is-error");
+      noteElement.textContent = spotState.message || "Best spot data could not be loaded.";
+      return;
+    }
+
+    const spots = Array.isArray(spotState.spots) ? spotState.spots : [];
+    if (!spots.length) {
+      noteElement.textContent = "No zone evidence is currently attached to this fish.";
+      return;
+    }
+
+    noteElement.textContent = `Showing ${spots.length} known zones, ordered by strongest evidence first.`;
+
+    for (const spot of spots) {
+      const card = createElement("article", "fishydex-details-spot rounded-box border border-base-300 bg-base-100");
+      const head = createElement("div", "fishydex-details-spot-head");
+      head.appendChild(createElement("div", "fishydex-details-spot-name", spot.zone_name || "Unknown zone"));
+      head.appendChild(createElement("div", "fishydex-details-spot-rgb", String(spot.zone_rgb || "")));
+
+      const badges = createElement("div", "fishydex-details-spot-badges");
+      for (const group of Array.isArray(spot.db_groups) ? spot.db_groups : []) {
+        const tone = group === "Prize"
+          ? "badge-error"
+          : group === "Rare"
+            ? "badge-warning"
+            : group === "High-Quality"
+              ? "badge-info"
+              : group === "General"
+                ? "badge-success"
+                : "badge-neutral";
+        badges.appendChild(createBestSpotBadge(`DB ${group}`, tone));
+      }
+      for (const group of Array.isArray(spot.community_groups) ? spot.community_groups : []) {
+        badges.appendChild(createBestSpotBadge(`Community ${group}`, "badge-secondary"));
+      }
+      if (spot.has_ranking_presence) {
+        const count = Number(spot.ranking_observation_count);
+        badges.appendChild(
+          createBestSpotBadge(
+            count > 0 ? `Ranking presence×${count}` : "Ranking presence",
+            "badge-ghost"
+          )
+        );
+      }
+
+      card.append(head, badges);
+      listElement.appendChild(card);
+    }
+  }
+
+  async function ensureBestSpots(meta) {
+    if (!meta || !Number.isInteger(meta.itemId) || meta.itemId <= 0) {
+      return;
+    }
+    const existing = bestSpotsStateByItemId(meta.itemId);
+    if (existing && (existing.status === "loading" || existing.status === "ready")) {
+      return;
+    }
+
+    state.bestSpotsByFish.set(meta.itemId, { status: "loading", spots: [] });
+    renderDetails();
+
+    try {
+      const response = await fetch(bestSpotsApiUrl(meta.itemId), {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      state.bestSpotsByFish.set(meta.itemId, {
+        status: "ready",
+        spots: Array.isArray(payload && payload.spots) ? payload.spots : [],
+      });
+    } catch (error) {
+      state.bestSpotsByFish.set(meta.itemId, {
+        status: "error",
+        message:
+          error && error.message
+            ? `Best spot data could not be loaded (${error.message}).`
+            : "Best spot data could not be loaded.",
+      });
+    }
+
+    const signals = signalObject();
+    if (signals && signals.selected_fish_id === meta.fishId) {
+      renderDetails();
+    }
+  }
+
   function renderDetails() {
     const modal = document.getElementById("fishydex-details");
     if (!(modal instanceof HTMLElement)) {
@@ -957,6 +1072,7 @@
     const itemKey = document.getElementById("fishydex-details-item-key");
     const vendorPrice = document.getElementById("fishydex-details-vendor-price");
     const spotsNote = document.getElementById("fishydex-details-spots-note");
+    const spotsList = document.getElementById("fishydex-details-spots-list");
     const iconFrame = document.getElementById("fishydex-details-icon-frame");
     const icon = document.getElementById("fishydex-details-icon");
     const iconPlaceholder = document.getElementById("fishydex-details-placeholder");
@@ -1013,10 +1129,7 @@
       vendorPrice.className = "fishydex-price fishydex-details-price";
       populateVendorPrice(vendorPrice, meta.vendorPrice);
     }
-    setElementText(
-      spotsNote,
-      "Planned input: evidence locations mapped back to fishing zones, then ranked by rarity and bite-time behavior in each zone."
-    );
+    renderBestSpots(spotsNote, spotsList, meta);
 
     if (iconFrame instanceof HTMLElement) {
       iconFrame.className = `fishydex-details-icon-wrap grade-${meta.grade}`;
@@ -1032,6 +1145,8 @@
         `${meta.name} guide image`
       );
     }
+
+    void ensureBestSpots(meta);
   }
 
   function closeDetails(options) {
@@ -1376,6 +1491,10 @@
 
   function fishApiUrl() {
     return apiUrl("/api/v1/fish");
+  }
+
+  function bestSpotsApiUrl(itemId) {
+    return apiUrl(`/api/v1/fish/${itemId}/spots`);
   }
 
   function handleDatastarEvent(event) {

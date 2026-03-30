@@ -1,10 +1,10 @@
-use axum::extract::{rejection::QueryRejection, Extension, Query, State};
+use axum::extract::{rejection::QueryRejection, Extension, Path, Query, State};
 use axum::http::{header, HeaderMap, HeaderValue};
 use axum::response::IntoResponse;
 use axum::Json;
 use serde::Deserialize;
 
-use fishystuff_api::models::fish::FishListResponse;
+use fishystuff_api::models::fish::{FishBestSpotsResponse, FishListResponse};
 
 use crate::error::{with_timeout, AppError, AppResult};
 use crate::routes::meta::map_request_id;
@@ -34,6 +34,25 @@ pub async fn list_fish(
     Ok((response_headers, Json(response)))
 }
 
+pub async fn fish_best_spots(
+    State(state): State<SharedState>,
+    Path(item_id): Path<i32>,
+    query: Result<Query<FishQuery>, QueryRejection>,
+    Extension(request_id): Extension<RequestId>,
+) -> AppResult<(HeaderMap, Json<FishBestSpotsResponse>)> {
+    let Query(query) = query.map_err(|err| {
+        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
+    })?;
+
+    let lang = FishLang::from_param(query.lang.as_deref());
+    let response =
+        load_fish_best_spots_response(&state, lang, query.r#ref, item_id, &request_id).await?;
+
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok((response_headers, Json(response)))
+}
+
 async fn load_fish_response(
     state: &SharedState,
     lang: FishLang,
@@ -43,6 +62,21 @@ async fn load_fish_response(
     with_timeout(
         state.config.request_timeout_secs,
         state.store.list_fish(lang, ref_id),
+    )
+    .await
+    .map_err(|err| map_request_id(err, request_id))
+}
+
+async fn load_fish_best_spots_response(
+    state: &SharedState,
+    lang: FishLang,
+    ref_id: Option<String>,
+    item_id: i32,
+    request_id: &RequestId,
+) -> AppResult<FishBestSpotsResponse> {
+    with_timeout(
+        state.config.request_timeout_secs,
+        state.store.fish_best_spots(lang, ref_id, item_id),
     )
     .await
     .map_err(|err| map_request_id(err, request_id))
@@ -59,7 +93,9 @@ mod tests {
     use fishystuff_api::models::calculator::CalculatorCatalogResponse;
     use fishystuff_api::models::effort::{EffortGridRequest, EffortGridResponse};
     use fishystuff_api::models::events::{EventsSnapshotMetaResponse, EventsSnapshotResponse};
-    use fishystuff_api::models::fish::{FishEntry, FishListResponse};
+    use fishystuff_api::models::fish::{
+        FishBestSpotEntry, FishBestSpotsResponse, FishEntry, FishListResponse,
+    };
     use fishystuff_api::models::meta::{MetaDefaults, MetaResponse};
     use fishystuff_api::models::region_groups::RegionGroupsResponse;
     use fishystuff_api::models::zone_profile_v2::{ZoneProfileV2Request, ZoneProfileV2Response};
@@ -116,6 +152,37 @@ mod tests {
                         is_dried: true,
                         catch_methods: vec!["rod".to_string()],
                         vendor_price: Some(16_560),
+                    },
+                ],
+            })
+        }
+
+        async fn fish_best_spots(
+            &self,
+            _lang: FishLang,
+            _ref_id: Option<String>,
+            item_id: i32,
+        ) -> AppResult<FishBestSpotsResponse> {
+            Ok(FishBestSpotsResponse {
+                revision: "dolt:test-fish-rev".to_string(),
+                item_id,
+                count: 2,
+                spots: vec![
+                    FishBestSpotEntry {
+                        zone_rgb: "240,74,74".to_string(),
+                        zone_name: "Velia Beach".to_string(),
+                        db_groups: vec!["Prize".to_string()],
+                        community_groups: vec!["Prize".to_string()],
+                        has_ranking_presence: true,
+                        ranking_observation_count: Some(8),
+                        ..FishBestSpotEntry::default()
+                    },
+                    FishBestSpotEntry {
+                        zone_rgb: "10,20,30".to_string(),
+                        zone_name: "Ancado".to_string(),
+                        has_ranking_presence: true,
+                        ranking_observation_count: Some(2),
+                        ..FishBestSpotEntry::default()
                     },
                 ],
             })
@@ -226,5 +293,40 @@ mod tests {
         assert_eq!(fish.len(), 2);
         assert_eq!(fish[0]["item_id"], 8474);
         assert_eq!(fish[1]["is_dried"], true);
+    }
+
+    #[tokio::test]
+    async fn fish_best_spots_route_returns_revisioned_json_and_no_store_headers() {
+        let response = fish_best_spots(
+            State(test_state()),
+            Path(8474),
+            Ok(Query(FishQuery {
+                lang: None,
+                r#ref: None,
+            })),
+            Extension(RequestId("req-test".to_string())),
+        )
+        .await
+        .expect("fish best spots response")
+        .into_response();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CACHE_CONTROL)
+                .and_then(|value| value.to_str().ok()),
+            Some("no-store")
+        );
+
+        let body = to_bytes(response.into_body()).await.expect("body bytes");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json body");
+        assert_eq!(payload["revision"], "dolt:test-fish-rev");
+        assert_eq!(payload["item_id"], 8474);
+        assert_eq!(payload["count"], 2);
+        let spots = payload["spots"].as_array().expect("spots array");
+        assert_eq!(spots[0]["zone_name"], "Velia Beach");
+        assert_eq!(spots[0]["db_groups"][0], "Prize");
+        assert_eq!(spots[1]["has_ranking_presence"], true);
     }
 }

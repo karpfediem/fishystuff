@@ -18,6 +18,29 @@ pub struct FishEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FishBestSpotEntry {
+    pub zone_rgb: String,
+    pub zone_name: String,
+    #[serde(default)]
+    pub db_groups: Vec<String>,
+    #[serde(default)]
+    pub community_groups: Vec<String>,
+    #[serde(default)]
+    pub has_ranking_presence: bool,
+    #[serde(default)]
+    pub ranking_observation_count: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FishBestSpotsResponse {
+    pub revision: String,
+    pub item_id: i32,
+    pub count: usize,
+    #[serde(default)]
+    pub spots: Vec<FishBestSpotEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FishListResponse {
     pub revision: String,
     pub count: usize,

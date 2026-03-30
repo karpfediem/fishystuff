@@ -1108,6 +1108,42 @@
     font-size: 0.92rem;
   }
 
+  .fishydex-details-spot-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .fishydex-details-spot {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .fishydex-details-spot-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .fishydex-details-spot-name {
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .fishydex-details-spot-rgb {
+    color: var(--dex-text-muted);
+    font-size: 0.8rem;
+  }
+
+  .fishydex-details-spot-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
   .fishydex-details-note.is-error {
     color: color-mix(in oklab, var(--color-error, #d64545) 62%, var(--color-base-content, #1f2937) 38%);
   }
@@ -1582,6 +1618,7 @@
         <section class="fishydex-details-section card card-border bg-base-200">
           <h4>Best Spots</h4>
           <p id="fishydex-details-spots-note" class="fishydex-details-note"></p>
+          <div id="fishydex-details-spots-list" class="fishydex-details-spot-list"></div>
         </section>
       </div>
     </section>
