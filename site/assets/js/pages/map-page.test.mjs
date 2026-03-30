@@ -44,20 +44,26 @@ function createDocumentStub() {
   };
 }
 
-function createContext(localStorageInitial = {}) {
+function createContext(localStorageInitial = {}, options = {}) {
   const document = createDocumentStub();
   const window = {};
   const localStorage = new MemoryStorage(localStorageInitial);
+  const location = {
+    href: options.locationHref || "https://fishystuff.fish/map/",
+  };
   const timers = new Map();
   let nextTimerId = 1;
   const context = {
     window,
     document,
+    location,
     localStorage,
     JSON,
     Object,
     Array,
     String,
+    URL,
+    URLSearchParams,
     RegExp,
     Error,
     Map,
@@ -75,11 +81,13 @@ function createContext(localStorageInitial = {}) {
     },
   };
   context.globalThis = context;
+  window.location = location;
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
   vm.runInNewContext(MAP_PAGE_SOURCE, context, { filename: "map-page.js" });
   return {
     window,
     document,
+    location,
     localStorage,
     flushTimers() {
       const pending = Array.from(timers.values());
@@ -221,6 +229,67 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.deepEqual(signals._map_input.filters.layerPointIconsVisible, { terrain: true });
   assert.deepEqual(signals._map_input.filters.layerPointIconScales, { terrain: 1.5 });
   assert.equal("windowUi" in signals, false);
+});
+
+test("map-page restore does not let stored filters override query-owned input state", () => {
+  const env = createContext(
+    {
+      "fishystuff.map.window_ui.v1": JSON.stringify({
+        windowUi: {
+          search: { open: false, collapsed: false, x: null, y: null },
+          settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+          zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
+          layers: { open: true, collapsed: false, x: null, y: null },
+          bookmarks: { open: false, collapsed: false, x: null, y: null },
+        },
+        inputUi: {
+          diagnosticsOpen: true,
+          legendOpen: true,
+          leftPanelOpen: false,
+          showPoints: false,
+          showPointIcons: false,
+          pointIconScale: 1.5,
+        },
+        inputFilters: {
+          fishIds: [77],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: ["favourite"],
+          searchText: "stored-search",
+          fromPatchId: "stored-from",
+          toPatchId: "stored-to",
+          layerIdsVisible: ["terrain"],
+          layerIdsOrdered: ["terrain", "minimap"],
+          layerOpacities: { terrain: 0.35 },
+          layerClipMasks: { terrain: "zones" },
+          layerWaypointConnectionsVisible: {},
+          layerWaypointLabelsVisible: {},
+          layerPointIconsVisible: {},
+          layerPointIconScales: {},
+        },
+      }),
+    },
+    {
+      locationHref:
+        "https://fishystuff.fish/map/?fish=91&fishTerms=missing&search=url-search&fromPatch=url-from&toPatch=url-to&layers=zones,terrain&diagnostics=true&legend=true",
+    },
+  );
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+
+  assert.deepEqual(signals._map_input.filters.fishIds, []);
+  assert.deepEqual(signals._map_input.filters.fishFilterTerms, []);
+  assert.equal(signals._map_input.filters.searchText, "");
+  assert.equal(signals._map_input.filters.fromPatchId, null);
+  assert.equal(signals._map_input.filters.toPatchId, null);
+  assert.deepEqual(signals._map_input.filters.layerIdsVisible, []);
+  assert.equal(signals._map_input.ui.diagnosticsOpen, false);
+  assert.equal(signals._map_input.ui.legendOpen, false);
+  assert.equal(signals._map_input.ui.leftPanelOpen, false);
+  assert.equal(signals._map_input.ui.showPoints, false);
+  assert.equal(signals._map_input.ui.showPointIcons, false);
+  assert.equal(signals._map_input.ui.pointIconScale, 1.5);
 });
 
 test("map-page persists bookmark signal patches through the Datastar patch event", () => {

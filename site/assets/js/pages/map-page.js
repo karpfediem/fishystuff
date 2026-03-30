@@ -76,6 +76,10 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function currentLocationHref() {
+    return globalThis.location?.href || globalThis.window?.location?.href || "";
+  }
+
   function datastarPersistHelper() {
     const helper = window.__fishystuffDatastarPersist;
     return helper && typeof helper.createDebouncedSignalPatchPersistor === "function"
@@ -388,6 +392,83 @@
     return Object.keys(patch).length ? patch : null;
   }
 
+  function stripEmptyRestorePatchBranches(patch) {
+    if (!patch || typeof patch !== "object") {
+      return null;
+    }
+    if (patch._map_input?.ui && !Object.keys(patch._map_input.ui).length) {
+      delete patch._map_input.ui;
+    }
+    if (patch._map_input?.filters && !Object.keys(patch._map_input.filters).length) {
+      delete patch._map_input.filters;
+    }
+    if (patch._map_input && !Object.keys(patch._map_input).length) {
+      delete patch._map_input;
+    }
+    if (patch._map_ui?.windowUi && !Object.keys(patch._map_ui.windowUi).length) {
+      delete patch._map_ui.windowUi;
+    }
+    if (patch._map_ui && !Object.keys(patch._map_ui).length) {
+      delete patch._map_ui;
+    }
+    if (patch._map_bookmarks?.entries && !patch._map_bookmarks.entries.length) {
+      delete patch._map_bookmarks;
+    }
+    return Object.keys(patch).length ? patch : null;
+  }
+
+  function stripQueryOwnedRestoreFields(patch, locationHref = currentLocationHref()) {
+    if (!patch || typeof patch !== "object" || !locationHref) {
+      return patch;
+    }
+    let params;
+    try {
+      params = new URL(locationHref, "https://fishystuff.fish").searchParams;
+    } catch (_error) {
+      return patch;
+    }
+    const nextPatch = cloneJson(patch);
+    const inputUi = nextPatch._map_input?.ui;
+    const inputFilters = nextPatch._map_input?.filters;
+
+    if (inputUi) {
+      if (params.has("diagnostics")) {
+        delete inputUi.diagnosticsOpen;
+      }
+      if (params.has("legend")) {
+        delete inputUi.legendOpen;
+      }
+    }
+
+    if (inputFilters) {
+      if (params.has("focusFish") || params.has("fish")) {
+        delete inputFilters.fishIds;
+      }
+      if (params.has("fishTerms") || params.has("fishFilterTerms")) {
+        delete inputFilters.fishFilterTerms;
+      }
+      if (params.has("search")) {
+        delete inputFilters.searchText;
+      }
+      if (
+        params.has("patch") ||
+        params.has("fromPatch") ||
+        params.has("patchFrom") ||
+        params.has("toPatch") ||
+        params.has("untilPatch") ||
+        params.has("patchTo")
+      ) {
+        delete inputFilters.fromPatchId;
+        delete inputFilters.toPatchId;
+      }
+      if (params.has("layers") || params.has("layerSet")) {
+        delete inputFilters.layerIdsVisible;
+      }
+    }
+
+    return stripEmptyRestorePatchBranches(nextPatch);
+  }
+
   function restore(signals) {
     connect(signals);
     bindPersistListener();
@@ -397,7 +478,7 @@
       const rawUi = globalThis.localStorage?.getItem?.(MAP_UI_STORAGE_KEY);
       if (rawUi) {
         try {
-          uiPatch = restoreUiPatch(JSON.parse(rawUi));
+          uiPatch = stripQueryOwnedRestoreFields(restoreUiPatch(JSON.parse(rawUi)));
         } catch (_error) {
           globalThis.localStorage?.removeItem?.(MAP_UI_STORAGE_KEY);
         }

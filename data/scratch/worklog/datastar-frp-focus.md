@@ -1780,3 +1780,61 @@ Validation:
   - verify `FishyMapBridge.createSessionSnapshot().filters` is now empty for these page-owned filter fields
   - reload `/map/`
   - verify the stored selected-filter values rehydrate into `_map_input.filters`
+
+### Step 36 - Fix Map Query-Precedence and Startup Signal Sync
+
+Completed:
+
+- tightened page-owned restore precedence in `site/assets/js/pages/map-page.js` so stored
+  `fishystuff.map.window_ui.v1` state does not override query-owned map input on load
+- added query-aware stripping for page-owned restore fields under:
+  - `_map_input.ui.diagnosticsOpen`
+  - `_map_input.ui.legendOpen`
+  - `_map_input.filters.fishIds`
+  - `_map_input.filters.fishFilterTerms`
+  - `_map_input.filters.searchText`
+  - `_map_input.filters.fromPatchId`
+  - `_map_input.filters.toPatchId`
+  - `_map_input.filters.layerIdsVisible`
+- added a regression in `site/assets/js/pages/map-page.test.mjs` proving that stored page UI
+  state does not overwrite query-owned map input fields during restore
+- fixed loader startup ordering in `site/assets/map/loader.js` so signal-to-bridge `_map_input`
+  sync stays disabled until after the bridge has mounted and the initial bridge state has been
+  pulled back into Datastar state
+- fixed a re-entrant Datastar patch loop in `syncPatchRangeFromSignals()` by guarding canonical
+  patch-range rewrites while they are being applied
+
+Why this matters:
+
+- after moving more map filter state into page-owned Datastar storage, startup precedence became
+  wrong in two ways:
+  - stored page UI state could beat query-string state on first load
+  - loader-side canonicalization of patch ranges could recursively patch `_map_input` and blow
+    the Datastar stack
+- the new model is:
+  - query string owns query-owned startup state
+  - page-owned Datastar storage fills only the remaining non-query-owned UI state
+  - signal-to-bridge sync only starts after the bridge has published authoritative input state
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/`
+  - `/js/pages/map-page.js`
+  - `/map/loader.js`
+- live Chromium smoke:
+  - seed `fishystuff.map.window_ui.v1` with conflicting stored filter/ui values
+  - navigate to `/map/?fish=91&fishTerms=missing&search=url-search&fromPatch=2023-04-06-trade-price-x2&toPatch=2025-04-30-tidal-draughts&layers=zones,terrain&diagnostics=true&legend=true`
+  - verify `_map_input` and `FishyMapBridge.getCurrentInputState()` both keep the query-owned:
+    - `fishIds`
+    - `fishFilterTerms`
+    - `searchText`
+    - `fromPatchId`
+    - `toPatchId`
+    - `layerIdsVisible`
+    - `diagnosticsOpen`
+    - `legendOpen`
+  - verify no `Maximum call stack size exceeded` errors remain during startup

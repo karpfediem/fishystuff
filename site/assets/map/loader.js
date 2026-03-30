@@ -6257,6 +6257,8 @@ function applySearchMatchSelection(
 
 function bindUi(shell, elements, options = {}) {
   let isRendering = false;
+  let bridgeInputSyncReady = false;
+  let patchRangeSyncPatching = false;
   let latestStateBundle = requestBridgeState(shell);
   const initialMapUiState = currentMapUiSignalState();
   const searchUiState = {
@@ -6909,6 +6911,9 @@ function bindUi(shell, elements, options = {}) {
     if (publishMapInputSignals.isPatching === true) {
       return;
     }
+    if (bridgeInputSyncReady !== true) {
+      return;
+    }
     const nextSignalInputState = currentMapInputSignalState();
     const currentInputState = applyStatePatch(
       DEFAULT_MAP_INPUT_SIGNAL_STATE,
@@ -7225,6 +7230,9 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function syncPatchRangeFromSignals() {
+    if (patchRangeSyncPatching) {
+      return;
+    }
     const inputState = currentMapInputSignalState();
     const currentFromPatchId = inputState.filters?.fromPatchId ?? inputState.filters?.patchId ?? null;
     const currentToPatchId = inputState.filters?.toPatchId ?? inputState.filters?.patchId ?? null;
@@ -7258,14 +7266,19 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
 
-    patchMapInputSignalState({
-      version: 1,
-      filters: {
-        patchId: nextPatchId,
-        fromPatchId: patchRange.fromPatchId,
-        toPatchId: patchRange.toPatchId,
-      },
-    });
+    patchRangeSyncPatching = true;
+    try {
+      patchMapInputSignalState({
+        version: 1,
+        filters: {
+          patchId: nextPatchId,
+          fromPatchId: patchRange.fromPatchId,
+          toPatchId: patchRange.toPatchId,
+        },
+      });
+    } finally {
+      patchRangeSyncPatching = false;
+    }
   }
 
   elements.search.addEventListener("keydown", (event) => {
@@ -8291,6 +8304,7 @@ function bindUi(shell, elements, options = {}) {
     } catch (_) {}
 
     try {
+      bridgeInputSyncReady = false;
       FishyMapBridge.destroy?.();
       latestStateBundle = requestBridgeState(shell);
       renderCurrentState(latestStateBundle);
@@ -8299,6 +8313,7 @@ function bindUi(shell, elements, options = {}) {
         ...remountOptions,
       });
       latestStateBundle = requestBridgeState(shell, { refresh: true });
+      bridgeInputSyncReady = true;
       syncBookmarksToBridge(bookmarks);
       renderCurrentState(latestStateBundle);
     } catch (error) {
@@ -8394,6 +8409,13 @@ function bindUi(shell, elements, options = {}) {
   syncBookmarksToBridge(bookmarks);
   renderCurrentState();
   return {
+    syncFromMountedBridge(options = {}) {
+      latestStateBundle = requestBridgeState(shell, {
+        refresh: options.refresh !== false,
+      });
+      renderCurrentState(latestStateBundle);
+      bridgeInputSyncReady = true;
+    },
     setZoneCatalog(nextZoneCatalog) {
       zoneCatalog = normalizeZoneCatalog(nextZoneCatalog);
       renderCurrentState(getLatestStateBundle());
@@ -8500,6 +8522,7 @@ async function main() {
 
   try {
     await FishyMapBridge.mount(shell, { canvas });
+    ui.syncFromMountedBridge();
   } catch (error) {
     console.error("Failed to mount FishyMap bridge", error);
     setMapError(elements, error);
