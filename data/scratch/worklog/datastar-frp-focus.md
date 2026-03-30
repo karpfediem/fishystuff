@@ -266,6 +266,33 @@ Validation:
   - caught/favourite toggles persisted through their existing storage keys
   - all of the above restored correctly after reload
 
+### Step 6
+
+Make Fishydex `sync()` consume the actual Datastar signal graph directly.
+
+Work:
+
+- remove the large template-side pseudo-snapshot object in `dex.smd`
+- replace it with `data-effect="window.Fishydex.sync($)"`
+- keep normalization inside `fishydex.js`, where it already belongs
+
+Status:
+
+- implemented
+
+Why this matters:
+
+- it removes a broad template-side transport layer
+- it reduces the risk of template and JS state models drifting apart
+- it makes Fishydex closer to the same “signals first” model already used by the calculator
+
+Validation:
+
+- live Chromium validation confirmed the page still:
+  - restores persisted filters and panel state
+  - renders the catalog correctly
+  - keeps caught/favourite state and card state in sync after reload
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:

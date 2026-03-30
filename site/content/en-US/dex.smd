@@ -1218,27 +1218,7 @@
      data-indicator:_loading
      data-init="window.Fishydex.restore($); @get(window.Fishydex.fishApiUrl())">
   <div hidden
-       data-effect="window.Fishydex.sync({
-         fish: $fish || [],
-         revision: $revision || '',
-         count: $count || 0,
-         search_query: $search_query || '',
-         caught_filter: $caught_filter || 'all',
-         favourite_filter: $favourite_filter === true,
-         grade_filters: $grade_filters || [],
-         method_filters: $method_filters || [],
-         show_dried: $show_dried === true,
-         sort_field: $sort_field || 'price',
-         sort_direction: $sort_direction || 'desc',
-         caught_ids: $caught_ids || [],
-         favourite_ids: $favourite_ids || [],
-         selected_fish_id: Number.isInteger($selected_fish_id) && $selected_fish_id > 0 ? $selected_fish_id : 0,
-         _loading: $_loading === true,
-         _caught_stamp_fish_id: $_caught_stamp_fish_id,
-         _favourite_stamp_fish_id: $_favourite_stamp_fish_id,
-         _api_error_message: $_api_error_message || '',
-         _api_error_hint: $_api_error_hint || '',
-       })"></div>
+       data-effect="window.Fishydex.sync($)"></div>
   <div hidden
        data-on-signal-patch__debounce.150ms="window.Fishydex.persistSignals($)"
        data-on-signal-patch-filter="window.Fishydex.persistSignalPatchFilter()"></div>
