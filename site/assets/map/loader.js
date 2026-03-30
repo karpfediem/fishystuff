@@ -181,6 +181,33 @@ function currentMapUiSignalState() {
   };
 }
 
+function withDerivedSharedFishInputState(inputState) {
+  const current = applyStatePatch(
+    DEFAULT_MAP_INPUT_SIGNAL_STATE,
+    inputState && typeof inputState === "object" ? inputState : {},
+  );
+  const sharedFishState = loadSharedFishState();
+  return {
+    ...current,
+    ui: {
+      ...(current.ui || {}),
+      sharedFishState: {
+        caughtIds: normalizeSharedFishIds(sharedFishState?.caughtIds),
+        favouriteIds: normalizeSharedFishIds(sharedFishState?.favouriteIds),
+      },
+    },
+  };
+}
+
+function currentRawMapInputSignalState() {
+  const helper = mapSignalHelper();
+  const raw = helper?.readSignal?.("_map_input");
+  return applyStatePatch(
+    DEFAULT_MAP_INPUT_SIGNAL_STATE,
+    raw && typeof raw === "object" ? raw : {},
+  );
+}
+
 function patchMapUiSignalState(patch) {
   const helper = mapSignalHelper();
   if (!helper) {
@@ -214,12 +241,7 @@ function patchMapUiSignalState(patch) {
 }
 
 function currentMapInputSignalState() {
-  const helper = mapSignalHelper();
-  const raw = helper?.readSignal?.("_map_input");
-  return applyStatePatch(
-    DEFAULT_MAP_INPUT_SIGNAL_STATE,
-    raw && typeof raw === "object" ? raw : {},
-  );
+  return withDerivedSharedFishInputState(currentRawMapInputSignalState());
 }
 
 function patchMapInputSignalState(patch) {
@@ -227,7 +249,7 @@ function patchMapInputSignalState(patch) {
   if (!helper) {
     return;
   }
-  const current = currentMapInputSignalState();
+  const current = currentRawMapInputSignalState();
   helper.patchSignals({
     _map_input: cloneJsonValue(applyStatePatch(current, patch)),
   });
@@ -7150,10 +7172,7 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     const nextSignalInputState = currentMapInputSignalState();
-    const currentInputState = applyStatePatch(
-      DEFAULT_MAP_INPUT_SIGNAL_STATE,
-      getLatestStateBundle().inputState || {},
-    );
+    const currentInputState = withDerivedSharedFishInputState(getLatestStateBundle().inputState || {});
     if (JSON.stringify(currentInputState) === JSON.stringify(nextSignalInputState)) {
       return;
     }

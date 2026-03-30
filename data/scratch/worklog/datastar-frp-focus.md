@@ -2472,3 +2472,34 @@ Validation:
   - `/map/loader.js`
   - `/js/pages/map-page.js`
 - `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-layer-ui.json`
+
+## Step 52: Let the page own shared fish filter state for the map bridge
+
+What changed:
+
+- moved the map bridge boundary toward page-owned state for favourite/missing fish filters
+- `site/assets/map/loader.js` now injects the current shared fish state into the effective
+  map input state before bridge synchronization
+- `site/assets/map/map-host.js` now accepts `ui.sharedFishState` in the input-state contract
+  and uses it to resolve fish filter terms
+- storage reads remain only as a fallback when page-provided shared fish state is absent
+- added host coverage in `site/assets/map/map-host.test.mjs` for:
+  - shared fish state normalization
+  - page-provided shared fish state overriding storage fallback for fish filter resolution
+
+Why this matters:
+
+- previously `map-host.js` still owned the shared-fish storage read itself
+- that made the bridge responsible for state the page had already derived
+- this change makes the page the preferred owner and leaves bridge storage access as a legacy
+  compatibility fallback instead of the primary source of truth
+
+Validation:
+
+- `node --check site/assets/map/loader.js site/assets/map/map-host.js site/assets/map/map-host.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/loader.js`
+  - `/map/map-host.js`
+- `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-shared-fish-state.json`

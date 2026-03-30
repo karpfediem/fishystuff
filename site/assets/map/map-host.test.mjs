@@ -451,6 +451,23 @@ test("fish filter term patches normalize favourite and missing aliases", () => {
   assert.deepEqual(next.filters.fishFilterTerms, ["favourite", "missing"]);
 });
 
+test("shared fish state input patches are normalized in host input state", () => {
+  const next = applyStatePatch(undefined, {
+    version: 1,
+    ui: {
+      sharedFishState: {
+        caughtIds: ["912", 912, "bad"],
+        favouriteIds: ["77", 77, 0],
+      },
+    },
+  });
+
+  assert.deepEqual(next.ui.sharedFishState, {
+    caughtIds: [912],
+    favouriteIds: [77],
+  });
+});
+
 test("fish filter terms derive outbound fishIds for the wasm point filter", async () => {
   const env = installDomGlobals();
   let bridge;
@@ -522,6 +539,29 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["favourite"]);
     assert.equal(wasm.calls.applied.length, 1);
     assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77]);
+
+    wasm.calls.applied.length = 0;
+    bridge.setState({
+      version: 1,
+      ui: {
+        sharedFishState: {
+          caughtIds: [77],
+          favouriteIds: [912],
+        },
+      },
+      filters: {
+        fishFilterTerms: ["missing"],
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(bridge.getCurrentInputState().ui.sharedFishState, {
+      caughtIds: [77],
+      favouriteIds: [912],
+    });
+    assert.equal(wasm.calls.applied.length, 1);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [912]);
   } finally {
     bridge?.destroy();
     env.restore();

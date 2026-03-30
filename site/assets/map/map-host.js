@@ -80,6 +80,10 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     showPointIcons?: boolean,
  *     viewMode?: "2d" | "3d" | null,
  *     pointIconScale?: number,
+ *     sharedFishState?: {
+ *       caughtIds?: number[],
+ *       favouriteIds?: number[]
+ *     },
  *     bookmarkSelectedIds?: string[],
  *     bookmarks?: Array<{
  *       id?: string,
@@ -630,7 +634,7 @@ function normalizeFishIds(values) {
   const seen = new Set();
   for (const value of values) {
     const number = Number.parseInt(value, 10);
-    if (!Number.isFinite(number) || seen.has(number)) {
+    if (!Number.isFinite(number) || number <= 0 || seen.has(number)) {
       continue;
     }
     seen.add(number);
@@ -674,6 +678,27 @@ function loadSharedFishFilterState(storage = globalThis.localStorage) {
   };
 }
 
+function normalizeSharedFishFilterStateValue(value) {
+  const caughtIds = normalizeFishIds(value?.caughtIds);
+  const favouriteIds = normalizeFishIds(value?.favouriteIds);
+  return {
+    caughtIds,
+    favouriteIds,
+  };
+}
+
+function resolveSharedFishFilterState(inputState, storage = globalThis.localStorage) {
+  if (isPlainObject(inputState?.ui) && hasOwn(inputState.ui, "sharedFishState")) {
+    const sharedFishState = normalizeSharedFishFilterStateValue(inputState.ui.sharedFishState);
+    return {
+      ...sharedFishState,
+      caughtSet: new Set(sharedFishState.caughtIds),
+      favouriteSet: new Set(sharedFishState.favouriteIds),
+    };
+  }
+  return loadSharedFishFilterState(storage);
+}
+
 function fishMatchesSharedFilterTerms(fishId, filterTerms, sharedFishState) {
   for (const term of filterTerms) {
     if (term === "favourite" && !sharedFishState.favouriteSet.has(fishId)) {
@@ -698,7 +723,7 @@ function resolveEffectiveFishIdsForWasm(inputState, currentState, storage = glob
     return selectedFishIds.length ? selectedFishIds : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
   }
 
-  const sharedFishState = loadSharedFishFilterState(storage);
+  const sharedFishState = resolveSharedFishFilterState(inputState, storage);
   const matchingFishIds = [];
   const seen = new Set();
   for (const fish of catalogFish) {
@@ -1131,6 +1156,13 @@ export function normalizeStatePatch(patch = {}) {
         normalized.ui.pointIconScale = pointIconScale;
       }
     }
+    if (hasOwn(patch.ui, "sharedFishState")) {
+      const sharedFishState = normalizeSharedFishFilterStateValue(patch.ui.sharedFishState);
+      normalized.ui.sharedFishState = {
+        caughtIds: sharedFishState.caughtIds,
+        favouriteIds: sharedFishState.favouriteIds,
+      };
+    }
     if (hasOwn(patch.ui, "viewMode")) {
       const viewMode = normalizeNullableViewMode(patch.ui.viewMode);
       if (viewMode !== undefined) {
@@ -1339,6 +1371,9 @@ export function applyStatePatch(inputState, patch) {
     bookmarkSelectedIds: normalizeStringList(current.ui?.bookmarkSelectedIds),
     bookmarks: normalizeBookmarksState(current.ui?.bookmarks),
   };
+  if (hasOwn(current.ui || {}, "sharedFishState")) {
+    next.ui.sharedFishState = normalizeSharedFishFilterStateValue(current.ui?.sharedFishState);
+  }
 
   if (normalized.theme) {
     if (hasOwn(normalized.theme, "name")) {
@@ -1451,6 +1486,9 @@ export function applyStatePatch(inputState, patch) {
     if (hasOwn(normalized.ui, "pointIconScale")) {
       next.ui.pointIconScale =
         normalizePointIconScale(normalized.ui.pointIconScale) ?? next.ui.pointIconScale;
+    }
+    if (hasOwn(normalized.ui, "sharedFishState")) {
+      next.ui.sharedFishState = normalizeSharedFishFilterStateValue(normalized.ui.sharedFishState);
     }
     if (hasOwn(normalized.ui, "viewMode")) {
       next.ui.viewMode = normalizeNullableViewMode(normalized.ui.viewMode) ?? null;
