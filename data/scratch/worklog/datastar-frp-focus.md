@@ -23,6 +23,10 @@ Additional site areas included in this refactor scope:
 - Fishydex page state and persistence
 - Datastar-driven detail/modal fetch flows
 - site custom elements that subscribe to Datastar patch events
+- eventual replacement of the site custom map bridge with Datastar-compatible state flow across:
+  - `site/assets/map/loader.js`
+  - `site/assets/map/map-host.js`
+  - the Bevy WASM map backend
 
 ## Relevant Datastar Guidance
 
@@ -164,8 +168,8 @@ Work:
 
 Status:
 
-- implemented in current working tree
-- not yet committed
+- implemented
+- committed in `e53f8bcd` `Drive calculator evals from Datastar signal patches`
 
 ### Step 2
 
@@ -216,7 +220,13 @@ Work:
 
 Status:
 
-- planned
+- implemented in part, still needs final site-wide closeout
+
+Current calculator result:
+
+- persisted calculator state now round-trips as compact canonical domain arrays
+- local transport arrays remain underscore-prefixed and are excluded from storage
+- this still needs a final audit across other Datastar pages and future map-related state flows
 
 ### Step 4
 
@@ -470,6 +480,16 @@ Planned next audit targets after calculator state is stable:
 - `site/assets/js/pages/fishydex.js`
 - remaining Datastar-triggered UI event glue in `site/content/en-US/calculator.smd`
 - broader Fishydex render/event flow beyond persistence
+- eventual map bridge replacement planning:
+  - identify the current bridge contract in `site/assets/map/map-host.js`
+  - identify which frontend-side map state should become Datastar-visible canonical or local signals
+  - identify how the Bevy WASM runtime can consume state patches and emit state snapshots without the current custom event bridge
+
+Most recent completed calculator slice:
+
+- `Clear` now resets the live calculator signal graph from a backend-sourced default snapshot instead of deleting storage and reloading the whole page
+- the reset snapshot is patched into local signal state as `_defaults` during calculator init
+- existing signal-patch-driven eval and persistence then recompute/persist the cleared state naturally
 
 Unrelated local changes not part of this refactor:
 
@@ -478,18 +498,14 @@ Unrelated local changes not part of this refactor:
 
 ## Next Move
 
-Add browser regression coverage for the refactored calculator signal flow:
-
-- remove only selected food
-- remove one of multiple foods
-- remove only selected buff
-- remove outfit effects
-- remove pet skills
-- reload and verify cleared state remains cleared
-
-Then expand the same analysis to the rest of the site:
+Expand the same analysis to the rest of the site:
 
 - identify canonical backend-owned signals vs local UI signals
 - remove imperative request/persistence plumbing where present
 - align custom component boundaries with Datastar signal flow
 - extract reusable components where the cleaned-up FRP model repeats
+- continue with Fishydex detail/modal flows
+- then start the map bridge audit/refactor plan in earnest:
+  - frontend map host state
+  - bridge events/commands
+  - Bevy WASM patch/snapshot interface

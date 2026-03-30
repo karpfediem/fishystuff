@@ -468,8 +468,13 @@ pub async fn post_calculator_datastar_eval(
     );
     let target_fishes = target_fish_options(&data);
     let events = vec![
-        calculator_signals_event(&normalized_signals, &derived, CalculatorPatchMode::Eval)?
-            .into_datastar_event(),
+        calculator_signals_event(
+            &normalized_signals,
+            &derived,
+            CalculatorPatchMode::Eval,
+            None,
+        )?
+        .into_datastar_event(),
         PatchElements::new(render_fish_group_chart(
             &fish_group_chart,
             normalized_signals.show_normalized_select_rates,
@@ -587,8 +592,13 @@ fn calculator_datastar_init_response(
 ) -> AppResult<impl IntoResponse> {
     let app = render_calculator_app(data, &normalized_signals, &derived)?;
     let events = vec![
-        calculator_signals_event(&normalized_signals, &derived, CalculatorPatchMode::Init)?
-            .into_datastar_event(),
+        calculator_signals_event(
+            &normalized_signals,
+            &derived,
+            CalculatorPatchMode::Init,
+            Some(&data.catalog.defaults),
+        )?
+        .into_datastar_event(),
         PatchElements::new(app)
             .selector("#calculator-app")
             .mode(ElementPatchMode::Outer)
@@ -646,6 +656,7 @@ fn calculator_signals_event(
     signals: &CalculatorSignals,
     derived: &CalculatorDerivedSignals,
     mode: CalculatorPatchMode,
+    defaults: Option<&CalculatorSignals>,
 ) -> AppResult<PatchSignals> {
     let mut patch = match mode {
         CalculatorPatchMode::Init => init_signals_patch_map(signals)?,
@@ -653,6 +664,12 @@ fn calculator_signals_event(
     };
     if matches!(mode, CalculatorPatchMode::Init) {
         patch.insert("_loading".to_string(), Value::Bool(false));
+        if let Some(defaults) = defaults {
+            patch.insert(
+                "_defaults".to_string(),
+                Value::Object(default_reset_signals_patch_map(defaults)?),
+            );
+        }
     }
     patch.insert(
         "_calc".to_string(),
@@ -1242,6 +1259,17 @@ fn init_signals_patch_map(
     let mut patch = signals_patch_map(signals)?;
     mirror_resources_signal(&mut patch);
     patch_checkbox_transport_signals(signals, &mut patch);
+    Ok(patch)
+}
+
+fn default_reset_signals_patch_map(
+    defaults: &CalculatorSignals,
+) -> AppResult<serde_json::Map<String, Value>> {
+    let mut patch = init_signals_patch_map(defaults)?;
+    patch.insert(
+        "_distribution_tab".to_string(),
+        Value::String("groups".to_string()),
+    );
     Ok(patch)
 }
 
@@ -3106,7 +3134,7 @@ fn render_calculator_app(
                         Copy Share
                     </button>
                     <button class="btn btn-dash btn-error"
-                            data-on:click="window.__fishystuffCalculator.clear(); window.__fishystuffToast.info('Calculator cleared.')">
+                            data-on:click="window.__fishystuffCalculator.clear($); window.__fishystuffToast.info('Calculator cleared.')">
                         <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-x-circle"></use></svg>
                         Clear
                     </button>
@@ -5275,15 +5303,16 @@ mod tests {
 
     use super::{
         base_price_for_species, buff_category_label, build_pet_value_aliases,
-        derive_fish_group_chart, derive_loot_chart, derive_target_fish_summary,
-        discard_grade_enabled, filtered_loot_flow_rows, get_calculator_datastar_init,
-        get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
-        init_signals_patch_map, loot_species_evidence_text, mastery_prize_rate_for_bracket,
-        normalize_lookup_value, normalize_named_array, normalize_signals,
-        parse_calculator_signals_value, pmf_bucket_contains_target, poisson_probability_at_least,
-        post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
-        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow,
+        default_reset_signals_patch_map, derive_fish_group_chart, derive_loot_chart,
+        derive_target_fish_summary, discard_grade_enabled, filtered_loot_flow_rows,
+        get_calculator_datastar_init, get_calculator_datastar_option_search,
+        get_calculator_datastar_zone_search, init_signals_patch_map, loot_species_evidence_text,
+        mastery_prize_rate_for_bracket, normalize_lookup_value, normalize_named_array,
+        normalize_signals, parse_calculator_signals_value, pmf_bucket_contains_target,
+        poisson_probability_at_least, post_calculator_datastar_eval,
+        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
+        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
+        FishGroupChart, FishGroupChartRow,
     };
 
     struct MockStore;
@@ -6025,6 +6054,32 @@ mod tests {
         assert_eq!(patch.get("_food_slots"), Some(&json!(["item:9359"])));
         assert_eq!(patch.get("buff"), Some(&json!(["item:721092"])));
         assert_eq!(patch.get("_buff_slots"), Some(&json!(["item:721092"])));
+    }
+
+    #[test]
+    fn default_reset_signals_patch_map_includes_transport_arrays_and_groups_tab() {
+        let defaults = CalculatorSignals {
+            food: vec!["item:9359".to_string()],
+            buff: vec!["item:721092".to_string()],
+            outfit: vec!["effect:8-piece-outfit-set-effect".to_string()],
+            ..CalculatorSignals::default()
+        };
+
+        let patch = default_reset_signals_patch_map(&defaults).unwrap();
+
+        assert_eq!(patch.get("food"), Some(&json!(["item:9359"])));
+        assert_eq!(patch.get("_food_slots"), Some(&json!(["item:9359"])));
+        assert_eq!(patch.get("buff"), Some(&json!(["item:721092"])));
+        assert_eq!(patch.get("_buff_slots"), Some(&json!(["item:721092"])));
+        assert_eq!(
+            patch.get("outfit"),
+            Some(&json!(["effect:8-piece-outfit-set-effect"]))
+        );
+        assert_eq!(
+            patch.get("_outfit_slots"),
+            Some(&json!(["effect:8-piece-outfit-set-effect"]))
+        );
+        assert_eq!(patch.get("_distribution_tab"), Some(&json!("groups")));
     }
 
     #[test]

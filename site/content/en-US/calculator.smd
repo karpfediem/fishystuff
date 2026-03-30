@@ -21,7 +21,7 @@
         : "en";
     const urlParams = new URLSearchParams(window.location.search);
     const presetQueryParam = urlParams.get("preset");
-    const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_distribution_tab(?:\.|$))/;
+    const CALCULATOR_EPHEMERAL_SIGNAL_PATTERN = /^(_loading|_calc(?:\.|$)|_live(?:\.|$)|_distribution_tab(?:\.|$)|_defaults(?:\.|$))/;
     const loadStoredSignals = () => {
         const raw = localStorage.getItem(CALCULATOR_STORAGE_KEY);
         if (!raw) {
@@ -166,9 +166,12 @@
         );
     };
 
+    const cloneCalculatorSignals = (value) => {
+        return JSON.parse(JSON.stringify(value));
+    };
+
     const clearSignals = () => {
         localStorage.removeItem(CALCULATOR_STORAGE_KEY);
-        window.location.reload();
     };
 
     if (presetQueryParam) {
@@ -308,8 +311,18 @@
                 ")"
             );
         },
-        clear() {
+        clear(signals) {
             clearSignals();
+            const current = signals && typeof signals === "object"
+                ? signals
+                : this.signalObject();
+            const defaults = current && typeof current === "object"
+                ? current._defaults
+                : null;
+            if (!defaults || typeof defaults !== "object" || Array.isArray(defaults)) {
+                return;
+            }
+            Object.assign(current, cloneCalculatorSignals(defaults));
         },
         restore(signals) {
             this.connect(signals);
