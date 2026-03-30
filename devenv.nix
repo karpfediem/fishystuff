@@ -12,6 +12,8 @@ let
   sitePort = 1990;
   toString = builtins.toString;
   databaseUrl = "mysql://${dbUser}@${dbHost}:${toString dbPort}/${dbName}";
+  logTimestampRunner =
+    "${pkgs.bash}/bin/bash ${config.devenv.root}/tools/scripts/with_log_timestamps.sh";
   rustHookToolchain = pkgs.symlinkJoin {
     name = "fishystuff-rust-hook-toolchain";
     paths = [
@@ -199,7 +201,10 @@ in {
 
   processes.db = {
     cwd = config.devenv.root;
-    exec = "exec dolt sql-server --host ${dbHost} --port ${toString dbPort}";
+    exec = ''
+      exec env LOG_TS_LABEL=db ${logTimestampRunner} \
+        dolt sql-server --host ${dbHost} --port ${toString dbPort}
+    '';
     ready = {
       exec = ''
         mysql --protocol tcp --host ${dbHost} --port ${toString dbPort} --user ${dbUser} ${dbName} --execute "select 1" >/dev/null
@@ -214,7 +219,8 @@ in {
   processes.api = {
     cwd = config.devenv.root;
     exec = ''
-      exec secretspec run --profile api -- \
+      exec env LOG_TS_LABEL=api ${logTimestampRunner} \
+        secretspec run --profile api -- \
         cargo run --manifest-path ${config.devenv.root}/Cargo.toml -p fishystuff_server -- \
         --config ${config.devenv.root}/api/config.toml \
         --database-url ${databaseUrl} \
@@ -251,7 +257,7 @@ in {
 
       map-build = {
         cwd = config.devenv.root;
-        exec = "exec just dev-build-map";
+        exec = "exec env LOG_TS_LABEL=map-build ${logTimestampRunner} just dev-build-map";
         restart.on = "never";
         watch = {
           paths = [
@@ -269,7 +275,7 @@ in {
 
       cdn-stage = {
         cwd = config.devenv.root;
-        exec = "exec just cdn-stage";
+        exec = "exec env LOG_TS_LABEL=cdn-stage ${logTimestampRunner} just cdn-stage";
         restart.on = "never";
         watch.paths = [
           ./site/assets/map
@@ -280,7 +286,7 @@ in {
 
       site-build = {
         cwd = config.devenv.root;
-        exec = "exec just dev-build-site";
+        exec = "exec env LOG_TS_LABEL=site-build ${logTimestampRunner} just dev-build-site";
         restart.on = "never";
         watch = {
           paths = [

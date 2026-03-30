@@ -8,7 +8,8 @@ SECRETSPEC_API_PROFILE="${SECRETSPEC_API_PROFILE:-api}"
 
 cd "$ROOT_DIR"
 
-exec secretspec run --profile "$SECRETSPEC_API_PROFILE" -- \
+exec env LOG_TS_LABEL=api bash "$ROOT_DIR/tools/scripts/with_log_timestamps.sh" \
+  secretspec run --profile "$SECRETSPEC_API_PROFILE" -- \
   cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -p fishystuff_server -- \
   --config "$ROOT_DIR/api/config.toml" \
   --bind "${API_BIND_HOST}:${API_PORT}"
