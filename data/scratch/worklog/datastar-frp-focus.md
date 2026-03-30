@@ -2572,3 +2572,36 @@ Validation:
 - compared served vs `.out` for:
   - `/js/pages/fishydex.js`
   - `/dex/`
+
+## Step 55: Remove map shared fish storage fallback from the loader and host
+
+What changed:
+
+- `site/assets/map/loader.js` no longer reads shared fish progress directly from localStorage
+  or the shared helper fallback
+- `site/assets/map/map-host.js` no longer resolves fish-filter terms from storage when
+  `ui.sharedFishState` is absent
+- the loader and host now treat page-provided `_shared_fish` / `ui.sharedFishState` as the
+  only shared-fish source for map filtering
+- updated `site/assets/map/map-host.test.mjs` to provide shared fish state through the
+  input contract instead of storage side effects
+
+Why this matters:
+
+- after Steps 53 and 54, the page already restores shared fish progress into Datastar signals
+- keeping storage fallback in the runtime layer left a second owner in place and weakened the
+  signal-first contract
+- this slice makes the map bridge boundary simpler and more honest:
+  - page restores `_shared_fish`
+  - loader derives effective map input
+  - host consumes page-provided input
+
+Validation:
+
+- `node --check site/assets/map/loader.js site/assets/map/map-host.js site/assets/map/map-host.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/loader.js`
+  - `/map/map-host.js`
+- `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-no-storage-fallback.json`

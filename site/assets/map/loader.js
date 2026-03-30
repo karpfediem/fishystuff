@@ -3,7 +3,6 @@ import FishyMapBridge, {
   FISHYMAP_EVENTS,
   FISHYMAP_POINT_ICON_SCALE_MAX,
   FISHYMAP_POINT_ICON_SCALE_MIN,
-  FISHYMAP_STORAGE_KEYS,
   applyStatePatch,
   createSessionSnapshotFromState,
   resolveApiBaseUrl,
@@ -523,7 +522,7 @@ function normalizeSharedFishIds(values) {
   return ids;
 }
 
-function loadSharedFishState(storage = globalThis.localStorage) {
+function loadSharedFishState() {
   const rawSignalState = mapSignalHelper()?.readSignal?.("_shared_fish");
   if (
     rawSignalState
@@ -543,30 +542,11 @@ function loadSharedFishState(storage = globalThis.localStorage) {
       favouriteSet: new Set(favouriteIds),
     };
   }
-  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
-  if (helper && typeof helper.loadState === "function") {
-    return helper.loadState(
-      {
-        caught: FISHYMAP_STORAGE_KEYS.caught,
-        favourites: FISHYMAP_STORAGE_KEYS.favourites,
-      },
-      storage,
-    );
-  }
-  const read = (key) => {
-    try {
-      return normalizeSharedFishIds(JSON.parse(storage?.getItem?.(key) || "[]"));
-    } catch (_) {
-      return [];
-    }
-  };
-  const caughtIds = read(FISHYMAP_STORAGE_KEYS.caught);
-  const favouriteIds = read(FISHYMAP_STORAGE_KEYS.favourites);
   return {
-    caughtIds,
-    favouriteIds,
-    caughtSet: new Set(caughtIds),
-    favouriteSet: new Set(favouriteIds),
+    caughtIds: [],
+    favouriteIds: [],
+    caughtSet: new Set(),
+    favouriteSet: new Set(),
   };
 }
 

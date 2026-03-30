@@ -23,8 +23,6 @@ export const FISHYMAP_EVENTS = Object.freeze({
 
 export const FISHYMAP_STORAGE_KEYS = Object.freeze({
   bookmarks: "fishystuff.map.bookmarks.v1",
-  caught: "fishystuff.fishydex.caught.v1",
-  favourites: "fishystuff.fishydex.favourites.v1",
 });
 
 /**
@@ -643,41 +641,6 @@ function normalizeFishIds(values) {
   return out;
 }
 
-function readSharedFishIds(storage, key) {
-  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
-  if (helper && typeof helper.loadRecord === "function") {
-    return helper.loadRecord(key, storage).ids;
-  }
-  try {
-    return normalizeFishIds(JSON.parse(storage?.getItem?.(key) || "[]"));
-  } catch (_) {
-    return [];
-  }
-}
-
-function loadSharedFishFilterState(storage = globalThis.localStorage) {
-  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
-  if (helper && typeof helper.loadState === "function") {
-    const shared = helper.loadState(
-      {
-        caught: FISHYMAP_STORAGE_KEYS.caught,
-        favourites: FISHYMAP_STORAGE_KEYS.favourites,
-      },
-      storage,
-    );
-    return {
-      caughtSet: shared.caughtSet,
-      favouriteSet: shared.favouriteSet,
-    };
-  }
-  const caughtIds = readSharedFishIds(storage, FISHYMAP_STORAGE_KEYS.caught);
-  const favouriteIds = readSharedFishIds(storage, FISHYMAP_STORAGE_KEYS.favourites);
-  return {
-    caughtSet: new Set(caughtIds),
-    favouriteSet: new Set(favouriteIds),
-  };
-}
-
 function normalizeSharedFishFilterStateValue(value) {
   const caughtIds = normalizeFishIds(value?.caughtIds);
   const favouriteIds = normalizeFishIds(value?.favouriteIds);
@@ -687,7 +650,7 @@ function normalizeSharedFishFilterStateValue(value) {
   };
 }
 
-function resolveSharedFishFilterState(inputState, storage = globalThis.localStorage) {
+function resolveSharedFishFilterState(inputState) {
   if (isPlainObject(inputState?.ui) && hasOwn(inputState.ui, "sharedFishState")) {
     const sharedFishState = normalizeSharedFishFilterStateValue(inputState.ui.sharedFishState);
     return {
@@ -696,7 +659,12 @@ function resolveSharedFishFilterState(inputState, storage = globalThis.localStor
       favouriteSet: new Set(sharedFishState.favouriteIds),
     };
   }
-  return loadSharedFishFilterState(storage);
+  return {
+    caughtIds: [],
+    favouriteIds: [],
+    caughtSet: new Set(),
+    favouriteSet: new Set(),
+  };
 }
 
 function fishMatchesSharedFilterTerms(fishId, filterTerms, sharedFishState) {
@@ -711,7 +679,7 @@ function fishMatchesSharedFilterTerms(fishId, filterTerms, sharedFishState) {
   return true;
 }
 
-function resolveEffectiveFishIdsForWasm(inputState, currentState, storage = globalThis.localStorage) {
+function resolveEffectiveFishIdsForWasm(inputState, currentState) {
   const selectedFishIds = normalizeFishIds(inputState?.filters?.fishIds);
   const filterTerms = normalizeFishFilterTerms(inputState?.filters?.fishFilterTerms);
   if (!filterTerms.length) {
@@ -723,7 +691,7 @@ function resolveEffectiveFishIdsForWasm(inputState, currentState, storage = glob
     return selectedFishIds.length ? selectedFishIds : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
   }
 
-  const sharedFishState = resolveSharedFishFilterState(inputState, storage);
+  const sharedFishState = resolveSharedFishFilterState(inputState);
   const matchingFishIds = [];
   const seen = new Set();
   for (const fish of catalogFish) {
@@ -771,7 +739,7 @@ function buildEffectiveOutboundStatePatch(
     ...normalized,
     filters: {
       ...(normalizedFilters || {}),
-      fishIds: resolveEffectiveFishIdsForWasm(inputState, currentState, storage),
+      fishIds: resolveEffectiveFishIdsForWasm(inputState, currentState),
     },
   });
 }

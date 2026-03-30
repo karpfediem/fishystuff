@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 
 import {
   FISHYMAP_EVENTS,
-  FISHYMAP_STORAGE_KEYS,
   applyStatePatch,
   buildInitialRestorePatch,
   createFishyMapBridge,
@@ -472,9 +471,6 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
   const env = installDomGlobals();
   let bridge;
   try {
-    env.localStorage.setItem(FISHYMAP_STORAGE_KEYS.caught, JSON.stringify([912]));
-    env.localStorage.setItem(FISHYMAP_STORAGE_KEYS.favourites, JSON.stringify([77]));
-
     const canvas = new FakeCanvas();
     const container = new FakeContainer(canvas);
     const snapshotRef = {
@@ -512,6 +508,12 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
 
     bridge.setState({
       version: 1,
+      ui: {
+        sharedFishState: {
+          caughtIds: [912],
+          favouriteIds: [77],
+        },
+      },
       filters: {
         fishFilterTerms: ["missing"],
       },
@@ -527,6 +529,12 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     wasm.calls.applied.length = 0;
     bridge.setState({
       version: 1,
+      ui: {
+        sharedFishState: {
+          caughtIds: [912],
+          favouriteIds: [77],
+        },
+      },
       filters: {
         fishIds: [77, 912],
         fishFilterTerms: ["favourite"],
