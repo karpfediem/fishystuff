@@ -264,6 +264,8 @@ struct CalculatorData {
     zone_loot_entries: Vec<CalculatorZoneLootEntry>,
 }
 
+const CALCULATOR_ICON_SPRITE_URL: &str = "/img/icons.svg?v=20260330-1";
+
 #[derive(Debug, Clone, Copy)]
 struct SelectOption<'a> {
     value: &'a str,
@@ -3066,17 +3068,17 @@ fn render_calculator_app(
                 <div class="flex flex-wrap gap-2">
                     <button class="btn btn-soft btn-secondary"
                             data-on:click="window.__fishystuffToast.copyText(window.__fishystuffCalculator.presetUrl($), { success: 'Preset URL copied.' })">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-link"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-link"></use></svg>
                         Copy URL
                     </button>
                     <button class="btn btn-soft btn-secondary"
                             data-on:click="window.__fishystuffToast.copyText(window.__fishystuffCalculator.shareText($), { success: 'Share text copied.' })">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-share-nodes"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-share-nodes"></use></svg>
                         Copy Share
                     </button>
                     <button class="btn btn-dash btn-error"
                             data-on:click="window.__fishystuffCalculator.clear(); window.__fishystuffToast.info('Calculator cleared.')">
-                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-x-circle"></use></svg>
+                        <svg class="fishy-icon size-6" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-x-circle"></use></svg>
                         Clear
                     </button>
                 </div>
@@ -3942,6 +3944,7 @@ fn render_fish_group_window(
         "<fieldset id=\"calculator-fish-group-window\" class=\"card card-border bg-base-100\">\
             <legend class=\"fieldset-legend ml-6 px-2\">Distribution</legend>\
             <div class=\"card-body gap-4 pt-0\">\
+                {}\
                 <div class=\"grid gap-4\" data-signals='{{ _distribution_tab: \"groups\" }}'>\
                     <div class=\"grid gap-3 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] md:items-start\">\
                         <fieldset class=\"fieldset\">\
@@ -3992,6 +3995,7 @@ fn render_fish_group_window(
                 </div>\
             </div>\
         </fieldset>",
+        render_calculator_data_disclaimer(),
         escape_html(&trim_float(mastery)),
         escape_html(&fish_group_chart.mastery_text),
         escape_html(&fish_group_chart.raw_prize_rate_text),
@@ -4017,6 +4021,7 @@ fn render_loot_window(
         "<fieldset id=\"calculator-loot-window\" class=\"card card-border bg-base-100 xl:col-span-2\">\
             <legend class=\"fieldset-legend ml-6 px-2\">Loot</legend>\
             <div class=\"card-body gap-4 pt-0\">\
+                {}\
                 <div class=\"grid gap-4\">\
                         <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none\">\
                             <div class=\"stat\">\
@@ -4070,6 +4075,7 @@ fn render_loot_window(
                 </div>\
             </div>\
         </fieldset>",
+        render_calculator_data_disclaimer(),
         render_searchable_select_control(
             data.cdn_base_url.as_str(),
             data.lang,
@@ -4083,6 +4089,29 @@ fn render_loot_window(
             "Search trade levels",
             false,
         ),
+    )
+}
+
+fn render_calculator_data_disclaimer() -> String {
+    format!(
+        "<div class=\"rounded-box border px-4 py-4\" style=\"border-color: color-mix(in oklab, var(--color-warning, #c77d19) 56%, var(--color-base-300, #d4d4d8) 44%); background: color-mix(in oklab, var(--color-warning, #c77d19) 14%, var(--color-base-100, #ffffff) 86%);\">\
+            <div class=\"flex items-start gap-3\">\
+                <div class=\"shrink-0 pt-0.5\" style=\"color: var(--color-warning, #f59e0b);\">\
+                    <svg class=\"fishy-icon size-6\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><use width=\"100%\" height=\"100%\" href=\"{}#fishy-alert-fill\"></use></svg>\
+                </div>\
+                <div class=\"min-w-0\">\
+                    <div class=\"text-sm font-semibold uppercase tracking-widest\" style=\"color: color-mix(in oklab, var(--color-warning, #c77d19) 78%, var(--color-base-content, #1f2937) 22%);\">Data Quality Warning</div>\
+                    <div class=\"mt-2 space-y-2 text-sm leading-relaxed text-base-content/85\">\
+                        <p>The data we currently have is <strong>INCOMPLETE</strong> and some data may be <strong>MISSING</strong> entirely.</p>\
+                        <p>Info about group-rates is based on older data and is <strong>OUTDATED</strong>.</p>\
+                        <p>In particular: Prize Fish info is based purely on community estimates and may be totally off. True rates are <strong>UNKNOWN</strong>.</p>\
+                        <p>So while this aims to be as accurate as we can be, for now please do not take any of this at face value.</p>\
+                        <p>Going forward, we will try to crowdsource data and appreciate any future contributions.</p>\
+                    </div>\
+                </div>\
+            </div>\
+        </div>",
+        CALCULATOR_ICON_SPRITE_URL,
     )
 }
 
@@ -4755,7 +4784,7 @@ fn render_searchable_multiselect_control(
     <div data-role="shell" class="flex min-h-11 w-full flex-wrap items-center gap-2 rounded-box border border-base-300 bg-base-100 px-3 py-2 shadow-sm">
         <div data-role="selection" class="flex flex-wrap gap-2"{selection_hidden_attr}>{selection_html}</div>
         <label class="flex min-w-[12rem] flex-1 items-center gap-2 text-sm">
-            <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
+            <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-search-field"></use></svg>
             <input id="{search_input_id}"
                    data-role="search-input"
                    type="search"
@@ -4872,13 +4901,13 @@ fn render_searchable_dropdown(config: &SearchableDropdownConfig<'_>, results_htm
             aria-expanded="false"
             aria-controls="{panel_id}">
         <span data-role="selected-content" class="{selected_content_class}">{selected_content_html}</span>
-        <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
+        <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-caret-down"></use></svg>
     </button>
 
     <div id="{panel_id}" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
         <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
             <label class="{search_shell_class}">
-                <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
+                <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260330-1#fishy-search-field"></use></svg>
                 <input id="{search_input_id}"
                        data-role="search-input"
                        type="search"
