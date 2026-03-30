@@ -76,6 +76,27 @@ test("datastar state helper creates a reusable signal store", () => {
   assert.equal(signals._map_ui.search.open, true);
 });
 
+test("datastar state helper creates a page signal store", () => {
+  const helper = createContext();
+  const store = helper.createPageSignalStore();
+  const signals = {
+    _calculator_ui: {
+      distribution_tab: "groups",
+    },
+  };
+
+  store.connect(signals);
+  store.patchSignals({
+    _calculator_actions: {
+      clearToken: 1,
+    },
+  });
+
+  assert.equal(store.signalObject(), signals);
+  assert.equal(store.readSignal("_calculator_ui.distribution_tab"), "groups");
+  assert.equal(signals._calculator_actions.clearToken, 1);
+});
+
 test("datastar state helper merges nested signal patches without replacing siblings", () => {
   const helper = createContext();
   const store = helper.createSignalStore();

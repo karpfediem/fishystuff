@@ -19,59 +19,7 @@
     state.resolveRestore = resolve;
   });
 
-  function datastarStateHelper() {
-    const helper = window.__fishystuffDatastarState;
-    return helper && typeof helper.createSignalStore === "function" ? helper : null;
-  }
-
-  function createFallbackSignalStore() {
-    let signals = null;
-    function isPlainObject(value) {
-      return value && typeof value === "object" && !Array.isArray(value);
-    }
-    function mergeObjectPatch(root, patch) {
-      if (!isPlainObject(root) || !isPlainObject(patch)) {
-        return patch;
-      }
-      for (const [key, value] of Object.entries(patch)) {
-        if (isPlainObject(value) && isPlainObject(root[key])) {
-          mergeObjectPatch(root[key], value);
-          continue;
-        }
-        root[key] = value;
-      }
-      return root;
-    }
-    return {
-      connect(nextSignals) {
-        signals = nextSignals && typeof nextSignals === "object" ? nextSignals : null;
-        return signals;
-      },
-      signalObject() {
-        return signals && typeof signals === "object" ? signals : null;
-      },
-      patchSignals(patch) {
-        const currentSignals = this.signalObject();
-        if (!currentSignals || !patch || typeof patch !== "object") {
-          return;
-        }
-        mergeObjectPatch(currentSignals, patch);
-      },
-      readSignal(path) {
-        return String(path ?? "")
-          .split(".")
-          .filter(Boolean)
-          .reduce((current, key) => {
-            if (current && typeof current === "object" && key in current) {
-              return current[key];
-            }
-            return null;
-          }, this.signalObject());
-      },
-    };
-  }
-
-  const signalStore = datastarStateHelper()?.createSignalStore() || createFallbackSignalStore();
+  const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
 
   function signalObject() {
     return signalStore.signalObject();

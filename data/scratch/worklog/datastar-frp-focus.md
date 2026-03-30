@@ -2309,3 +2309,36 @@ Validation:
   - `/js/pages/calculator-page.js`
 - confirmed the served calculator HTML no longer contains the hidden client-only
   persist/action hooks, while the page module still contains the corresponding listener logic
+
+## Step 47: Share page signal-store bootstrapping across Datastar page modules
+
+What changed:
+
+- added `createPageSignalStore()` to `site/assets/js/datastar-state.js`
+- switched all Datastar page modules to use that shared helper:
+  - `site/assets/js/pages/calculator-page.js`
+  - `site/assets/js/pages/fishydex.js`
+  - `site/assets/js/pages/map-page.js`
+- removed the duplicated per-page fallback signal-store bootstrap implementations
+- extended `site/assets/js/datastar-state.test.mjs` to cover the new page-store helper
+- updated the Fishydex and map-page VM harnesses to load `datastar-state.js` explicitly,
+  matching real page boot order
+
+Why this matters:
+
+- calculator, Fishydex, and map page were still each carrying their own copy of the same
+  signal-store bootstrap code
+- centralizing that bootstrap reduces drift and makes future changes to page-owned Datastar
+  state behavior happen in one place
+- it also makes the tests reflect the actual page dependency chain more faithfully
+
+Validation:
+
+- `node --check site/assets/js/datastar-state.js site/assets/js/pages/calculator-page.js site/assets/js/pages/fishydex.js site/assets/js/pages/map-page.js`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/calculator-page.test.mjs site/assets/js/pages/fishydex.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/datastar-state.js`
+  - `/js/pages/calculator-page.js`
+  - `/js/pages/fishydex.js`
+  - `/js/pages/map-page.js`

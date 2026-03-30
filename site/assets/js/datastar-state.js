@@ -93,7 +93,12 @@
     });
   }
 
+  function createPageSignalStore() {
+    return createSignalStore();
+  }
+
   window.__fishystuffDatastarState = Object.freeze({
+    createPageSignalStore,
     createSignalStore,
     mergeObjectPatch,
     readObjectPath,

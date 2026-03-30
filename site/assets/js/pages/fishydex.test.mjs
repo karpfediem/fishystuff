@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+const DATASTAR_STATE_SOURCE = fs.readFileSync(
+  new URL("../datastar-state.js", import.meta.url),
+  "utf8",
+);
 const DATASTAR_PERSIST_SOURCE = fs.readFileSync(
   new URL("../datastar-persist.js", import.meta.url),
   "utf8",
@@ -112,6 +116,7 @@ function createContext(localStorageInitial = {}) {
     },
   };
   context.globalThis = context;
+  vm.runInNewContext(DATASTAR_STATE_SOURCE, context, { filename: "datastar-state.js" });
   window.prompt = () => null;
   window.requestAnimationFrame = (callback) => callback();
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
