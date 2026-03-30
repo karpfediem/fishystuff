@@ -975,6 +975,7 @@ Map controls currently routed through `_map_input`:
 - search text
 - patch range hidden inputs
 - legend/diagnostics visibility
+- desired view mode
 - search selection chip removals
 - zone-evidence fish selection rows
 - detail-pane active id
@@ -1025,6 +1026,39 @@ Recommended next map slices:
 2. Reduce direct DOM state ownership in `loader.js`
 3. Revisit `site/assets/map/map-host.js` as a thinner adapter
 4. Only then assess what Bevy/WASM contract changes are actually necessary
+
+### Step 17 - Signal-First Map View Mode
+
+Completed:
+
+- moved the map view-mode toggle off direct bridge commands and onto `_map_input.ui.viewMode`
+- extended `site/assets/map/map-host.js` so host input state understands `ui.viewMode`
+- host now translates desired `ui.viewMode` changes into `setViewMode` commands
+- host also mirrors actual runtime mode back into `inputState.ui.viewMode` on `view-changed`
+- loader view button now patches `_map_input` instead of calling `dispatchMapCommand(...)` directly
+
+Why this matters:
+
+- the 2D/3D button is now in the Datastar state flow instead of bypassing it
+- the desired mode and actual runtime mode can both be inspected through signals
+- this is the right pattern for stateful map controls:
+  - UI mutates signals
+  - host reconciles signals to the bridge/runtime contract
+  - runtime mirrors final state back into signals
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/datastar-persist.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared:
+  - served `/map/loader.js` vs `site/.out/map/loader.js`
+  - served `/map/map-host.js` vs `site/.out/map/map-host.js`
+- live Chromium smoke:
+  - reload `/map/`
+  - verify `FishyMapBridge.getCurrentInputState().ui.viewMode === "2d"`
+  - verify `_map_input.ui.viewMode === "2d"`
+  - click the view toggle
+  - verify bridge input state, `_map_input`, and `_map_runtime.state.view.viewMode` all become `"3d"`
 
 ### Step 16 - Shared Datastar State Helper
 

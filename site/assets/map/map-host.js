@@ -81,6 +81,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     leftPanelOpen?: boolean,
  *     showPoints?: boolean,
  *     showPointIcons?: boolean,
+ *     viewMode?: "2d" | "3d" | null,
  *     pointIconScale?: number,
  *     bookmarkSelectedIds?: string[],
  *     bookmarks?: Array<{
@@ -157,6 +158,7 @@ export function createEmptyInputState() {
       leftPanelOpen: true,
       showPoints: true,
       showPointIcons: true,
+      viewMode: null,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
       activeDetailPaneId: null,
       bookmarkSelectedIds: [],
@@ -236,6 +238,10 @@ export function zoneRgbFromLayerSamples(layerSamples) {
   );
   const zoneRgb = Number(zoneSample?.rgbU32);
   return Number.isFinite(zoneRgb) ? zoneRgb : null;
+}
+
+function resolvedCurrentViewMode(state) {
+  return state?.view?.viewMode === "3d" ? "3d" : "2d";
 }
 
 function semanticFieldSelectionFromLayerSamples(layerSamples) {
@@ -887,6 +893,16 @@ function normalizeRestoreView(value) {
   };
 }
 
+function normalizeNullableViewMode(value) {
+  if (value == null || value === "") {
+    return null;
+  }
+  if (value === "2d" || value === "3d") {
+    return value;
+  }
+  return undefined;
+}
+
 function normalizePointIconScale(value) {
   if (value == null || value === "") {
     return undefined;
@@ -1120,6 +1136,12 @@ export function normalizeStatePatch(patch = {}) {
         normalized.ui.pointIconScale = pointIconScale;
       }
     }
+    if (hasOwn(patch.ui, "viewMode")) {
+      const viewMode = normalizeNullableViewMode(patch.ui.viewMode);
+      if (viewMode !== undefined) {
+        normalized.ui.viewMode = viewMode;
+      }
+    }
     if (hasOwn(patch.ui, "activeDetailPaneId")) {
       normalized.ui.activeDetailPaneId = normalizeNullableString(patch.ui.activeDetailPaneId);
     }
@@ -1319,6 +1341,7 @@ export function applyStatePatch(inputState, patch) {
     leftPanelOpen: current.ui?.leftPanelOpen !== false,
     showPoints: current.ui?.showPoints !== false,
     showPointIcons: current.ui?.showPointIcons !== false,
+    viewMode: normalizeNullableViewMode(current.ui?.viewMode) ?? null,
     pointIconScale:
       normalizePointIconScale(current.ui?.pointIconScale) ?? FISHYMAP_POINT_ICON_SCALE_MIN,
     activeDetailPaneId: normalizeNullableString(current.ui?.activeDetailPaneId),
@@ -1437,6 +1460,9 @@ export function applyStatePatch(inputState, patch) {
     if (hasOwn(normalized.ui, "pointIconScale")) {
       next.ui.pointIconScale =
         normalizePointIconScale(normalized.ui.pointIconScale) ?? next.ui.pointIconScale;
+    }
+    if (hasOwn(normalized.ui, "viewMode")) {
+      next.ui.viewMode = normalizeNullableViewMode(normalized.ui.viewMode) ?? null;
     }
     if (hasOwn(normalized.ui, "activeDetailPaneId")) {
       next.ui.activeDetailPaneId = normalizeNullableString(normalized.ui.activeDetailPaneId);
@@ -2306,6 +2332,7 @@ class FishyMapBridgeImpl {
       this.wasmReady = true;
       this.syncWasmProfiling();
       this.refreshCurrentStateFromWasm();
+      this.inputState.ui.viewMode = this.currentState.view?.viewMode === "3d" ? "3d" : "2d";
 
       const initialRestorePatch = mergeStatePatch(
         options.initialState,
@@ -2362,6 +2389,8 @@ class FishyMapBridgeImpl {
 
       if (patchHasStateFields(normalized)) {
         const nextInputState = applyStatePatch(this.inputState, normalized);
+        const previousDesiredViewMode = this.inputState.ui?.viewMode ?? null;
+        const nextDesiredViewMode = nextInputState.ui?.viewMode ?? null;
         if (stableStringify(nextInputState) !== stableStringify(this.inputState)) {
           this.inputState = nextInputState;
           this.pendingStatePatch = mergeStatePatch(
@@ -2371,6 +2400,14 @@ class FishyMapBridgeImpl {
           this.addPerformanceCounter("host.patches.queued");
           this.saveLocalPrefsNow();
           this.schedulePatchFlush();
+        }
+        if (
+          nextDesiredViewMode &&
+          nextDesiredViewMode !== previousDesiredViewMode &&
+          nextDesiredViewMode !== (this.currentState.view?.viewMode === "3d" ? "3d" : "2d") &&
+          !(normalized.commands && normalized.commands.setViewMode)
+        ) {
+          this.sendCommand({ setViewMode: nextDesiredViewMode });
         }
       }
 
@@ -2405,6 +2442,7 @@ class FishyMapBridgeImpl {
   }
 
   getCurrentInputState() {
+    this.syncInputViewModeFromCurrentState();
     return cloneJson(this.inputState);
   }
 
@@ -2730,6 +2768,7 @@ class FishyMapBridgeImpl {
   refreshCurrentStateFromWasm() {
     return this.measurePerformanceSpan("host.state_pull", () => {
       if (!this.wasmReady || !this.wasmModule?.fishymap_get_current_state_json) {
+        this.syncInputViewModeFromCurrentState();
         return this.currentState;
       }
       this.addPerformanceCounter("host.wasm.state_reads");
@@ -2747,6 +2786,7 @@ class FishyMapBridgeImpl {
       } catch (_) {
         this.currentState = createEmptySnapshot();
       }
+      this.syncInputViewModeFromCurrentState();
       return this.currentState;
     });
   }
@@ -2754,6 +2794,7 @@ class FishyMapBridgeImpl {
   refreshBootstrapStateFromWasm() {
     return this.measurePerformanceSpan("host.bootstrap_pull", () => {
       if (!this.wasmReady) {
+        this.syncInputViewModeFromCurrentState();
         return this.currentState;
       }
       if (!this.wasmModule?.fishymap_get_bootstrap_state_json) {
@@ -2766,8 +2807,16 @@ class FishyMapBridgeImpl {
       } catch (_) {
         this.currentState = mergeBootstrapSnapshot(this.currentState, createEmptySnapshot());
       }
+      this.syncInputViewModeFromCurrentState();
       return this.currentState;
     });
+  }
+
+  syncInputViewModeFromCurrentState() {
+    if (!this.inputState?.ui || this.inputState.ui.viewMode != null) {
+      return;
+    }
+    this.inputState.ui.viewMode = resolvedCurrentViewMode(this.currentState);
   }
 
   handleWasmEvent(json) {
@@ -2810,12 +2859,20 @@ class FishyMapBridgeImpl {
       }
 
       if (type === "view-changed") {
+        const nextViewMode = payload.viewMode ?? resolvedCurrentViewMode(this.currentState);
         this.currentState = {
           ...this.currentState,
           view: {
             ...this.currentState.view,
-            viewMode: payload.viewMode ?? this.currentState.view?.viewMode ?? "2d",
+            viewMode: nextViewMode,
             camera: payload.camera ? cloneJson(payload.camera) : this.currentState.view?.camera,
+          },
+        };
+        this.inputState = {
+          ...this.inputState,
+          ui: {
+            ...this.inputState.ui,
+            viewMode: nextViewMode,
           },
         };
         this.scheduleSessionStateSave();

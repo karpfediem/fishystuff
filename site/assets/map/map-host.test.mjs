@@ -381,6 +381,65 @@ test("search text patches preserve trailing spaces while typing", () => {
   assert.equal(next.filters.searchText, "Zenato Sea ");
 });
 
+test("view mode patches are preserved in host input state", () => {
+  const next = applyStatePatch(undefined, {
+    version: 1,
+    ui: {
+      viewMode: "3d",
+    },
+  });
+
+  assert.equal(next.ui.viewMode, "3d");
+});
+
+test("view mode input patches send setViewMode when runtime differs", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+        statuses: {},
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      debounceMs: 0,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+    wasm.calls.commands.length = 0;
+
+    bridge.setState({
+      version: 1,
+      ui: {
+        viewMode: "3d",
+      },
+    });
+
+    assert.equal(bridge.getCurrentInputState().ui.viewMode, "3d");
+    assert.deepEqual(wasm.calls.commands.at(-1), {
+      setViewMode: "3d",
+    });
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("fish filter term patches normalize favourite and missing aliases", () => {
   const next = applyStatePatch(undefined, {
     version: 1,
@@ -640,6 +699,7 @@ test("wasm output events are redispatched as DOM CustomEvents", async () => {
 
     assert.equal(received.type, "view-changed");
     assert.equal(received.state.view.viewMode, "3d");
+    assert.equal(received.inputState.ui.viewMode, "3d");
     assert.equal(received.state.view.camera.distance, 5000);
     assert.equal(wasm.calls.stateReads, 0);
   } finally {

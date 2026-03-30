@@ -100,6 +100,7 @@ const DEFAULT_MAP_INPUT_SIGNAL_STATE = Object.freeze({
   }),
   ui: Object.freeze({
     diagnosticsOpen: false,
+    viewMode: null,
   }),
 });
 const DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE = Object.freeze({
@@ -7658,8 +7659,10 @@ function bindUi(shell, elements, options = {}) {
     elements.viewToggle.addEventListener("click", () => {
       const current = getLatestStateBundle().state;
       const nextViewMode = current?.view?.viewMode === "3d" ? "2d" : "3d";
-      dispatchMapCommand(shell, {
-        setViewMode: nextViewMode,
+      patchMapInputSignalState({
+        ui: {
+          viewMode: nextViewMode,
+        },
       });
     });
   }
