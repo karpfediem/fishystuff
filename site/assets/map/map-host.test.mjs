@@ -631,10 +631,12 @@ test("bookmark ui patches are normalized in input state and omitted from persist
 
   const bridge = createFishyMapBridge();
   bridge.inputState = next;
-  assert.equal("bookmarkSelectedIds" in bridge.createSessionSnapshot().ui, false);
-  assert.equal("bookmarks" in bridge.createSessionSnapshot().ui, false);
-  assert.equal("bookmarkSelectedIds" in bridge.createPrefsSnapshot().ui, false);
-  assert.equal("bookmarks" in bridge.createPrefsSnapshot().ui, false);
+  const sessionUi = bridge.createSessionSnapshot().ui || {};
+  const prefsUi = bridge.createPrefsSnapshot().ui || {};
+  assert.equal("bookmarkSelectedIds" in sessionUi, false);
+  assert.equal("bookmarks" in sessionUi, false);
+  assert.equal("bookmarkSelectedIds" in prefsUi, false);
+  assert.equal("bookmarks" in prefsUi, false);
 });
 
 test("wasm output events are redispatched as DOM CustomEvents", async () => {
@@ -1361,10 +1363,7 @@ test("restore priority is URL over session over local preferences", () => {
   assert.deepEqual(patch.filters.layerOpacities, { zones: 0.6 });
   assert.deepEqual(patch.filters.layerClipMasks, { terrain: "zones" });
   assert.deepEqual(patch.filters.fishIds, [77]);
-  assert.equal(patch.ui.legendOpen, false);
-  assert.equal(patch.ui.showPoints, false);
-  assert.equal(patch.ui.showPointIcons, false);
-  assert.equal(patch.ui.pointIconScale, 1.8);
+  assert.equal("ui" in patch, false);
   assert.deepEqual(patch.commands.selectWorldPoint, {
     worldX: 321.5,
     worldZ: -654.25,

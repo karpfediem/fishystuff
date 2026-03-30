@@ -110,6 +110,11 @@ function defaultSignals() {
     _map_input: {
       ui: {
         diagnosticsOpen: false,
+        legendOpen: false,
+        leftPanelOpen: true,
+        showPoints: true,
+        showPointIcons: true,
+        pointIconScale: 1,
       },
     },
     _map_runtime: {},
@@ -142,6 +147,11 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
       },
       inputUi: {
         diagnosticsOpen: true,
+        legendOpen: true,
+        leftPanelOpen: false,
+        showPoints: false,
+        showPointIcons: false,
+        pointIconScale: 1.5,
       },
     }),
   });
@@ -152,6 +162,11 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal(signals._map_ui.windowUi.search.open, false);
   assert.equal(signals._map_ui.windowUi.zoneInfo.tab, "zone_info");
   assert.equal(signals._map_input.ui.diagnosticsOpen, true);
+  assert.equal(signals._map_input.ui.legendOpen, true);
+  assert.equal(signals._map_input.ui.leftPanelOpen, false);
+  assert.equal(signals._map_input.ui.showPoints, false);
+  assert.equal(signals._map_input.ui.showPointIcons, false);
+  assert.equal(signals._map_input.ui.pointIconScale, 1.5);
   assert.equal("windowUi" in signals, false);
 });
 
@@ -241,6 +256,11 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
       },
       inputUi: {
         diagnosticsOpen: false,
+        legendOpen: false,
+        leftPanelOpen: true,
+        showPoints: true,
+        showPointIcons: true,
+        pointIconScale: 1,
       },
     }),
   );
@@ -282,6 +302,11 @@ test("map-page persists durable _map_input diagnostics state", () => {
       },
       inputUi: {
         diagnosticsOpen: true,
+        legendOpen: false,
+        leftPanelOpen: true,
+        showPoints: true,
+        showPointIcons: true,
+        pointIconScale: 1,
       },
     }),
   );

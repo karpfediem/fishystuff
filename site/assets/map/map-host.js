@@ -1976,27 +1976,6 @@ export function snapshotToRestorePatch(snapshot) {
       patch.filters.layerPointIconScales = layerPointIconScales;
     }
   }
-  if (isPlainObject(snapshot.ui)) {
-    if (hasOwn(snapshot.ui, "legendOpen")) {
-      patch.ui.legendOpen = Boolean(snapshot.ui.legendOpen);
-    }
-    if (hasOwn(snapshot.ui, "leftPanelOpen")) {
-      patch.ui.leftPanelOpen = Boolean(snapshot.ui.leftPanelOpen);
-    }
-    if (hasOwn(snapshot.ui, "showPoints")) {
-      patch.ui.showPoints = Boolean(snapshot.ui.showPoints);
-    }
-    if (hasOwn(snapshot.ui, "showPointIcons")) {
-      patch.ui.showPointIcons = Boolean(snapshot.ui.showPointIcons);
-    }
-    if (hasOwn(snapshot.ui, "pointIconScale")) {
-      const pointIconScale = normalizePointIconScale(snapshot.ui.pointIconScale);
-      if (pointIconScale !== undefined) {
-        patch.ui.pointIconScale = pointIconScale;
-      }
-    }
-  }
-
   if (patch.filters && !Object.keys(patch.filters).length) {
     delete patch.filters;
   }
@@ -3010,13 +2989,6 @@ class FishyMapBridgeImpl {
             }
           : {}),
       },
-      ui: {
-        legendOpen: this.inputState.ui.legendOpen,
-        leftPanelOpen: this.inputState.ui.leftPanelOpen,
-        showPoints: this.inputState.ui.showPoints,
-        showPointIcons: this.inputState.ui.showPointIcons,
-        pointIconScale: this.inputState.ui.pointIconScale,
-      },
     };
   }
 
@@ -3102,13 +3074,6 @@ class FishyMapBridgeImpl {
               ),
             }
           : {}),
-      },
-      ui: {
-        legendOpen: this.inputState.ui.legendOpen,
-        leftPanelOpen: this.inputState.ui.leftPanelOpen,
-        showPoints: this.inputState.ui.showPoints,
-        showPointIcons: this.inputState.ui.showPointIcons,
-        pointIconScale: this.inputState.ui.pointIconScale,
       },
     };
   }

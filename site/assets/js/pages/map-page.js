@@ -2,7 +2,7 @@
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.windowUi|map_input\.ui\.diagnosticsOpen|map_bookmarks\.entries)(?:\.|$)/;
+    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_bookmarks\.entries)(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -110,7 +110,7 @@
 
   function storedUiSignals(signals) {
     const windowUi = signals?._map_ui?.windowUi;
-    const diagnosticsOpen = signals?._map_input?.ui?.diagnosticsOpen === true;
+    const inputUi = signals?._map_input?.ui;
     const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
       ? cloneJson(signals._map_bookmarks.entries)
       : [];
@@ -125,7 +125,14 @@
       },
       _map_input: {
         ui: {
-          diagnosticsOpen,
+          diagnosticsOpen: inputUi?.diagnosticsOpen === true,
+          legendOpen: inputUi?.legendOpen === true,
+          leftPanelOpen: inputUi?.leftPanelOpen !== false,
+          showPoints: inputUi?.showPoints !== false,
+          showPointIcons: inputUi?.showPointIcons !== false,
+          pointIconScale: Number.isFinite(inputUi?.pointIconScale)
+            ? Number(inputUi.pointIconScale)
+            : 1,
         },
       },
       _map_bookmarks: {
@@ -144,6 +151,13 @@
           : {},
       inputUi: {
         diagnosticsOpen: stored?._map_input?.ui?.diagnosticsOpen === true,
+        legendOpen: stored?._map_input?.ui?.legendOpen === true,
+        leftPanelOpen: stored?._map_input?.ui?.leftPanelOpen !== false,
+        showPoints: stored?._map_input?.ui?.showPoints !== false,
+        showPointIcons: stored?._map_input?.ui?.showPointIcons !== false,
+        pointIconScale: Number.isFinite(stored?._map_input?.ui?.pointIconScale)
+          ? Number(stored._map_input.ui.pointIconScale)
+          : 1,
       },
     };
   }
@@ -162,6 +176,13 @@
       patch._map_input = {
         ui: {
           diagnosticsOpen: parsed.inputUi.diagnosticsOpen === true,
+          legendOpen: parsed.inputUi.legendOpen === true,
+          leftPanelOpen: parsed.inputUi.leftPanelOpen !== false,
+          showPoints: parsed.inputUi.showPoints !== false,
+          showPointIcons: parsed.inputUi.showPointIcons !== false,
+          pointIconScale: Number.isFinite(parsed.inputUi.pointIconScale)
+            ? Number(parsed.inputUi.pointIconScale)
+            : 1,
         },
       };
     }
