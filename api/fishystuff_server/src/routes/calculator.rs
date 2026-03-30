@@ -2714,21 +2714,14 @@ fn target_fish_session_distribution(
             });
         }
     } else {
-        for count in 0..=5 {
-            let probability_pct = poisson_exact_probability(lambda, count) * 100.0;
-            buckets.push(TargetFishDistributionBucket {
-                label: count.to_string(),
-                probability_pct,
-                probability_text: percent_value_text(probability_pct),
-            });
-        }
-
-        let grouped_start = 6;
-        let grouped_count = pmf_tail_count.saturating_sub(grouped_start);
-        let grouped_bucket_width = ((f64::from(grouped_count) / 8.0).ceil() as u32).max(2);
-        let mut start = grouped_start;
-        while start < pmf_tail_count {
-            let end = (start + grouped_bucket_width - 1).min(pmf_tail_count - 1);
+        let desired_bucket_count =
+            (((f64::from(pmf_tail_count)).sqrt() * 2.0).round() as u32).clamp(6, 10);
+        let probabilities = (0..pmf_tail_count)
+            .map(|count| poisson_exact_probability(lambda, count))
+            .collect::<Vec<_>>();
+        let bounds = quantile_bucket_bounds(&probabilities, desired_bucket_count);
+        let mut start = 0u32;
+        for end in bounds {
             let probability_pct = poisson_probability_range(lambda, start, end) * 100.0;
             buckets.push(TargetFishDistributionBucket {
                 label: if start == end {
@@ -2741,6 +2734,19 @@ fn target_fish_session_distribution(
             });
             start = end + 1;
         }
+        if start < pmf_tail_count {
+            let end = pmf_tail_count - 1;
+            let probability_pct = poisson_probability_range(lambda, start, end) * 100.0;
+            buckets.push(TargetFishDistributionBucket {
+                label: if start == end {
+                    start.to_string()
+                } else {
+                    format!("{start}–{end}")
+                },
+                probability_pct,
+                probability_text: percent_value_text(probability_pct),
+            });
+        }
     }
 
     let probability_pct = poisson_probability_at_least(lambda, pmf_tail_count) * 100.0;
@@ -2751,6 +2757,36 @@ fn target_fish_session_distribution(
     });
 
     buckets
+}
+
+fn quantile_bucket_bounds(probabilities: &[f64], desired_bucket_count: u32) -> Vec<u32> {
+    if probabilities.is_empty() || desired_bucket_count <= 1 {
+        return Vec::new();
+    }
+
+    let total_mass = probabilities.iter().sum::<f64>();
+    if total_mass <= 0.0 {
+        return Vec::new();
+    }
+
+    let bucket_mass_target = total_mass / f64::from(desired_bucket_count);
+    let mut next_target = bucket_mass_target;
+    let mut cumulative = 0.0;
+    let mut boundaries = Vec::new();
+
+    for (index, probability) in probabilities.iter().enumerate() {
+        cumulative += *probability;
+        while cumulative + f64::EPSILON >= next_target
+            && boundaries.len() + 1 < desired_bucket_count as usize
+        {
+            if index + 1 < probabilities.len() && boundaries.last().copied() != Some(index as u32) {
+                boundaries.push(index as u32);
+            }
+            next_target += bucket_mass_target;
+        }
+    }
+
+    boundaries
 }
 
 fn auto_target_fish_pmf_tail_count(lambda: f64) -> u32 {
@@ -6470,18 +6506,16 @@ mod tests {
         };
 
         let summary = derive_target_fish_summary(&signals, &data, &fish_group_chart, 100.0, 3600.0);
+        let labels = summary
+            .session_distribution
+            .iter()
+            .map(|bucket| bucket.label.as_str())
+            .collect::<Vec<_>>();
 
-        assert_eq!(
-            summary
-                .session_distribution
-                .iter()
-                .map(|bucket| bucket.label.as_str())
-                .collect::<Vec<_>>(),
-            vec![
-                "0", "1", "2", "3", "4", "5", "6–7", "8–9", "10–11", "12–13", "14–15", "16–17",
-                "18–19", "≥20"
-            ]
-        );
+        assert_eq!(labels.last().copied(), Some("≥20"));
+        assert!(labels.iter().any(|label| label.contains('–')));
+        assert!(labels.len() <= 11);
+        assert!(!labels.iter().any(|label| *label == "6–19"));
     }
 
     #[test]
