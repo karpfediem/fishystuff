@@ -4,7 +4,7 @@
   const MAP_SESSION_STORAGE_KEY = "fishystuff.map.session.v1";
   const LEGACY_MAP_PREFS_STORAGE_KEY = "fishystuff.map.prefs.v1";
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.windowUi|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -84,6 +84,11 @@
           windowUi && typeof windowUi === "object" && !Array.isArray(windowUi)
             ? cloneJson(windowUi)
             : {},
+        layers: {
+          expandedLayerIds: Array.isArray(signals?._map_ui?.layers?.expandedLayerIds)
+            ? cloneJson(signals._map_ui.layers.expandedLayerIds)
+            : [],
+        },
       },
       _map_input: {
         ui: {
@@ -179,6 +184,11 @@
         !Array.isArray(stored._map_ui.windowUi)
           ? cloneJson(stored._map_ui.windowUi)
           : {},
+      layers: {
+        expandedLayerIds: Array.isArray(stored?._map_ui?.layers?.expandedLayerIds)
+          ? cloneJson(stored._map_ui.layers.expandedLayerIds)
+          : [],
+      },
       inputUi: {
         diagnosticsOpen: stored?._map_input?.ui?.diagnosticsOpen === true,
         legendOpen: stored?._map_input?.ui?.legendOpen === true,
@@ -268,6 +278,14 @@
     if (parsed.windowUi && typeof parsed.windowUi === "object" && !Array.isArray(parsed.windowUi)) {
       patch._map_ui = {
         windowUi: cloneJson(parsed.windowUi),
+      };
+    }
+    if (parsed.layers && typeof parsed.layers === "object" && !Array.isArray(parsed.layers)) {
+      patch._map_ui = patch._map_ui || {};
+      patch._map_ui.layers = {
+        expandedLayerIds: Array.isArray(parsed.layers.expandedLayerIds)
+          ? cloneJson(parsed.layers.expandedLayerIds)
+          : [],
       };
     }
     if (parsed.inputUi && typeof parsed.inputUi === "object" && !Array.isArray(parsed.inputUi)) {

@@ -121,6 +121,7 @@ function defaultSignals() {
       },
       search: { open: false },
       bookmarks: { placing: false, selectedIds: [] },
+      layers: { expandedLayerIds: [] },
     },
     _map_bookmarks: {
       entries: [],
@@ -236,6 +237,9 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
         layers: { open: true, collapsed: false, x: null, y: null },
         bookmarks: { open: false, collapsed: false, x: null, y: null },
       },
+      layers: {
+        expandedLayerIds: ["terrain"],
+      },
       inputUi: {
         diagnosticsOpen: true,
         legendOpen: true,
@@ -271,6 +275,7 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
 
   assert.equal(signals._map_ui.windowUi.search.open, false);
   assert.equal(signals._map_ui.windowUi.zoneInfo.tab, "zone_info");
+  assert.deepEqual(signals._map_ui.layers.expandedLayerIds, ["terrain"]);
   assert.equal(signals._map_input.ui.diagnosticsOpen, true);
   assert.equal(signals._map_input.ui.legendOpen, true);
   assert.equal(signals._map_input.ui.leftPanelOpen, false);
@@ -456,6 +461,75 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
         layers: { open: true, collapsed: false, x: null, y: null },
         bookmarks: { open: false, collapsed: false, x: null, y: null },
       },
+      layers: {
+        expandedLayerIds: [],
+      },
+      inputUi: {
+        diagnosticsOpen: false,
+        legendOpen: false,
+        leftPanelOpen: true,
+        showPoints: true,
+        showPointIcons: true,
+        pointIconScale: 1,
+      },
+      inputFilters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
+        searchText: "",
+        fromPatchId: null,
+        toPatchId: null,
+        layerIdsVisible: [],
+        layerIdsOrdered: [],
+        layerOpacities: {},
+        layerClipMasks: {},
+        layerWaypointConnectionsVisible: {},
+        layerWaypointLabelsVisible: {},
+        layerPointIconsVisible: {},
+        layerPointIconScales: {},
+      },
+    }),
+  );
+});
+
+test("map-page persists durable _map_ui.layers patches", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMap.patchSignals({
+    _map_ui: {
+      layers: {
+        expandedLayerIds: ["terrain", "resources"],
+      },
+    },
+  });
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _map_ui: {
+        layers: {
+          expandedLayerIds: ["terrain", "resources"],
+        },
+      },
+    },
+  });
+  env.flushTimers();
+
+  assert.equal(
+    env.localStorage.getItem("fishystuff.map.window_ui.v1"),
+    JSON.stringify({
+      windowUi: {
+        search: { open: true, collapsed: false, x: null, y: null },
+        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
+        layers: { open: true, collapsed: false, x: null, y: null },
+        bookmarks: { open: false, collapsed: false, x: null, y: null },
+      },
+      layers: {
+        expandedLayerIds: ["terrain", "resources"],
+      },
       inputUi: {
         diagnosticsOpen: false,
         legendOpen: false,
@@ -518,6 +592,9 @@ test("map-page persists durable _map_input diagnostics state", () => {
         zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
         layers: { open: true, collapsed: false, x: null, y: null },
         bookmarks: { open: false, collapsed: false, x: null, y: null },
+      },
+      layers: {
+        expandedLayerIds: [],
       },
       inputUi: {
         diagnosticsOpen: true,
@@ -613,6 +690,9 @@ test("map-page persists durable _map_input filter state", () => {
         zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
         layers: { open: true, collapsed: false, x: null, y: null },
         bookmarks: { open: false, collapsed: false, x: null, y: null },
+      },
+      layers: {
+        expandedLayerIds: [],
       },
       inputUi: {
         diagnosticsOpen: false,

@@ -91,6 +91,7 @@ const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   windowUi: DEFAULT_WINDOW_UI_STATE,
   search: Object.freeze({ open: false }),
   bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
+  layers: Object.freeze({ expandedLayerIds: [] }),
 });
 const DEFAULT_MAP_INPUT_SIGNAL_STATE = Object.freeze({
   filters: Object.freeze({
@@ -135,11 +136,31 @@ function datastarStateHelper() {
     : null;
 }
 
+function normalizeExpandedLayerIds(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  const next = [];
+  const seen = new Set();
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    next.push(normalized);
+  }
+  return next;
+}
+
 function currentMapUiSignalState() {
   const helper = mapSignalHelper();
   const raw = helper?.readSignal?.("_map_ui");
   const normalizedBookmarks = raw?.bookmarks && typeof raw.bookmarks === "object"
     ? raw.bookmarks
+    : {};
+  const normalizedLayers = raw?.layers && typeof raw.layers === "object"
+    ? raw.layers
     : {};
   return {
     windowUi: normalizeWindowUiState(raw?.windowUi),
@@ -153,6 +174,9 @@ function currentMapUiSignalState() {
             .map((value) => String(value ?? "").trim())
             .filter(Boolean)
         : [],
+    },
+    layers: {
+      expandedLayerIds: normalizeExpandedLayerIds(normalizedLayers.expandedLayerIds),
     },
   };
 }
@@ -179,6 +203,11 @@ function patchMapUiSignalState(patch) {
         patch?.bookmarks && typeof patch.bookmarks === "object"
           ? patch.bookmarks
           : current.bookmarks || DEFAULT_MAP_UI_SIGNAL_STATE.bookmarks,
+      ),
+      layers: cloneJsonValue(
+        patch?.layers && typeof patch.layers === "object"
+          ? patch.layers
+          : current.layers || DEFAULT_MAP_UI_SIGNAL_STATE.layers,
       ),
     },
   });
@@ -6146,6 +6175,7 @@ function renderPanel(
   zoneCatalog = [],
   windowUiState = DEFAULT_WINDOW_UI_STATE,
   searchUiState = { open: false },
+  layerUiState = DEFAULT_MAP_UI_SIGNAL_STATE.layers,
 ) {
   const state = stateBundle.state || {};
   const inputState = stateBundle.inputState || {};
@@ -6227,7 +6257,7 @@ function renderPanel(
     renderLayerStack(
       elements.layers,
       isReady ? stateBundle : { state: { catalog: { layers: [] } }, inputState: {} },
-      { expandedLayerIds: elements.layerSettingsExpanded || new Set() },
+      { expandedLayerIds: new Set(normalizeExpandedLayerIds(layerUiState?.expandedLayerIds)) },
     );
   }
   if (elements.layersCount) {
@@ -6405,10 +6435,8 @@ function bindUi(shell, elements, options = {}) {
     activeLayerId: null,
     activeValue: null,
   };
-  const layerSettingsExpanded = new Set();
   elements.layerOpacityInteraction = layerOpacityInteraction;
   elements.layerPointIconScaleInteraction = layerPointIconScaleInteraction;
-  elements.layerSettingsExpanded = layerSettingsExpanded;
 
   function currentUiState() {
     return currentMapUiSignalState();
@@ -6981,6 +7009,7 @@ function bindUi(shell, elements, options = {}) {
     const currentUiStateValue = currentUiState();
     const windowUiState = currentUiStateValue.windowUi;
     const searchUiState = currentUiStateValue.search;
+    const layerUiState = currentUiStateValue.layers;
     let bookmarkUi = {
       placing: currentUiStateValue.bookmarks.placing === true,
       selectedIds: normalizeSelectedBookmarkIds(bookmarks, currentUiStateValue.bookmarks.selectedIds),
@@ -7026,7 +7055,14 @@ function bindUi(shell, elements, options = {}) {
     scheduleBookmarkMetadataRefresh();
     isRendering = true;
     try {
-      renderPanel(elements, latestStateBundle, zoneCatalog, windowUiState, searchUiState);
+      renderPanel(
+        elements,
+        latestStateBundle,
+        zoneCatalog,
+        windowUiState,
+        searchUiState,
+        layerUiState,
+      );
       renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
       applyManagedWindows();
     } finally {
@@ -7048,12 +7084,14 @@ function bindUi(shell, elements, options = {}) {
     const currentSignature = JSON.stringify({
       windowUi: previousUiState.windowUi,
       search: previousUiState.search,
+      layers: previousUiState.layers,
       bookmarksListSignature: previousBookmarksSignature,
       bookmarks: previousUiState.bookmarks,
     });
     const nextSignature = JSON.stringify({
       windowUi: nextSignalUiState.windowUi,
       search: nextSignalUiState.search,
+      layers: nextSignalUiState.layers,
       bookmarksListSignature: bookmarkListSignature(nextSignalBookmarks),
       bookmarks: {
         placing: nextSignalUiState.bookmarks.placing,
@@ -7067,6 +7105,7 @@ function bindUi(shell, elements, options = {}) {
     previousMapUiState = {
       windowUi: nextSignalUiState.windowUi,
       search: nextSignalUiState.search,
+      layers: nextSignalUiState.layers,
       bookmarks: {
         placing: nextSignalUiState.bookmarks.placing === true,
         selectedIds: nextBookmarkSelectedIds,
@@ -7261,8 +7300,14 @@ function bindUi(shell, elements, options = {}) {
     if (!layerId) {
       return;
     }
-    if (layerSettingsExpanded.has(layerId)) {
-      layerSettingsExpanded.delete(layerId);
+    const currentLayers = currentUiState().layers;
+    const expandedLayerIds = normalizeExpandedLayerIds(currentLayers?.expandedLayerIds);
+    if (expandedLayerIds.includes(layerId)) {
+      patchMapUiSignalState({
+        layers: {
+          expandedLayerIds: expandedLayerIds.filter((currentLayerId) => currentLayerId !== layerId),
+        },
+      });
       if (layerOpacityInteraction.activeLayerId === layerId) {
         layerOpacityInteraction.activeLayerId = null;
         layerOpacityInteraction.activeValue = null;
@@ -7272,7 +7317,11 @@ function bindUi(shell, elements, options = {}) {
         layerPointIconScaleInteraction.activeValue = null;
       }
     } else {
-      layerSettingsExpanded.add(layerId);
+      patchMapUiSignalState({
+        layers: {
+          expandedLayerIds: expandedLayerIds.concat(layerId),
+        },
+      });
     }
     renderCurrentState(getLatestStateBundle());
   }
@@ -8509,14 +8558,20 @@ function bindUi(shell, elements, options = {}) {
     const resetWindowUiState = parseWindowUiState(defaultWindowUiState);
     const resetSearchUiState = { open: false };
     const resetBookmarkUiState = { placing: false, selectedIds: [] };
+    const resetLayerUiState = { expandedLayerIds: [] };
 
     setBooleanProperty(resetButton, "disabled", true);
     setTextContent(resetButton, "Resetting...");
+    layerOpacityInteraction.activeLayerId = null;
+    layerOpacityInteraction.activeValue = null;
+    layerPointIconScaleInteraction.activeLayerId = null;
+    layerPointIconScaleInteraction.activeValue = null;
 
     patchMapUiSignalState({
       windowUi: resetWindowUiState,
       search: resetSearchUiState,
       bookmarks: resetBookmarkUiState,
+      layers: resetLayerUiState,
     });
     applyManagedWindows();
 
@@ -8621,6 +8676,7 @@ function bindUi(shell, elements, options = {}) {
     windowUi: currentWindowUiState(),
     search: currentSearchUiState(),
     bookmarks: currentBookmarkUiState(currentBookmarks()),
+    layers: currentUiState().layers,
   });
   syncBookmarksToBridge(currentBookmarks(), currentBookmarkUiState(currentBookmarks()).selectedIds);
   renderCurrentState();

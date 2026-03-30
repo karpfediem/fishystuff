@@ -2414,3 +2414,61 @@ Validation:
 - compared served vs `.out` for:
   - `/map/loader.js`
 - `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-datastar-frp.json`
+
+## Step 50: Remove stale map reset storage ownership from the loader
+
+What changed:
+
+- removed the last direct `fishystuff.map.window_ui.v1` storage mutation from
+  `site/assets/map/loader.js`
+- `Reset UI` now relies on the page-owned Datastar persistence flow in
+  `site/assets/js/pages/map-page.js` instead of trying to clear localStorage itself
+
+Why this matters:
+
+- map UI persistence is already owned by the page-level Datastar module
+- letting the loader clear storage directly created a second owner for the same persisted
+  state
+- this keeps reset behavior aligned with the FRP model:
+  - patch signal state to defaults
+  - let the debounced persistence layer write that state
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/loader.js`
+
+## Step 51: Persist map layer-settings expansion through Datastar UI state
+
+What changed:
+
+- moved layer-settings expansion out of the loader-local `Set` in `site/assets/map/loader.js`
+- added durable page-owned Datastar state under:
+  - `_map_ui.layers.expandedLayerIds`
+- wired loader rendering, reconciliation, and `Reset UI` to read/write that signal-owned
+  layer expansion state
+- extended `site/assets/js/pages/map-page.js` persistence/restore shaping so
+  `fishystuff.map.window_ui.v1` now includes:
+  - `layers.expandedLayerIds`
+- added VM coverage in `site/assets/js/pages/map-page.test.mjs`
+
+Why this matters:
+
+- expanded layer settings are durable user-facing UI state, not loader-internal runtime state
+- persisting them through the page-owned Datastar graph matches the repo-wide UI-state policy:
+  - durable view choices persist
+  - ephemeral interaction state does not
+- it also removes another local-first state pocket from the loader
+
+Validation:
+
+- `node --check site/assets/map/loader.js site/assets/js/pages/map-page.js site/assets/js/pages/map-page.test.mjs`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/loader.js`
+  - `/js/pages/map-page.js`
+- `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-layer-ui.json`
