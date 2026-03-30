@@ -1427,31 +1427,31 @@
                         data-class:is-active="($grade_filters || []).includes('red')"
                         data-class:btn-active="($grade_filters || []).includes('red')"
                         data-attr:aria-pressed="(($grade_filters || []).includes('red')).toString()"
-                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'red')">Red</button>
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'red', ['red', 'yellow', 'blue', 'green', 'white'])">Red</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-yellow"
                         data-class:is-active="($grade_filters || []).includes('yellow')"
                         data-class:btn-active="($grade_filters || []).includes('yellow')"
                         data-attr:aria-pressed="(($grade_filters || []).includes('yellow')).toString()"
-                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'yellow')">Yellow</button>
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'yellow', ['red', 'yellow', 'blue', 'green', 'white'])">Yellow</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-blue"
                         data-class:is-active="($grade_filters || []).includes('blue')"
                         data-class:btn-active="($grade_filters || []).includes('blue')"
                         data-attr:aria-pressed="(($grade_filters || []).includes('blue')).toString()"
-                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'blue')">Blue</button>
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'blue', ['red', 'yellow', 'blue', 'green', 'white'])">Blue</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-green"
                         data-class:is-active="($grade_filters || []).includes('green')"
                         data-class:btn-active="($grade_filters || []).includes('green')"
                         data-attr:aria-pressed="(($grade_filters || []).includes('green')).toString()"
-                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'green')">Green</button>
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'green', ['red', 'yellow', 'blue', 'green', 'white'])">Green</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip grade-white"
                         data-class:is-active="($grade_filters || []).includes('white')"
                         data-class:btn-active="($grade_filters || []).includes('white')"
                         data-attr:aria-pressed="(($grade_filters || []).includes('white')).toString()"
-                        data-on:click="$grade_filters = window.Fishydex.toggleGradeFilters($grade_filters, 'white')">White</button>
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'white', ['red', 'yellow', 'blue', 'green', 'white'])">White</button>
               </div>
             </fieldset>
 
@@ -1472,14 +1472,14 @@
                         data-class:is-active="($method_filters || []).includes('rod')"
                         data-class:btn-active="($method_filters || []).includes('rod')"
                         data-attr:aria-pressed="(($method_filters || []).includes('rod')).toString()"
-                        data-on:click="$method_filters = window.Fishydex.toggleMethodFilters($method_filters, 'rod')">Rod</button>
+                        data-on:click="$method_filters = window.__fishystuffDatastarState.toggleOrderedValue($method_filters, 'rod', ['rod', 'harpoon'])">Rod</button>
                 <button type="button"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-harpoon"
                         data-show="$supports_method_filter"
                         data-class:is-active="($method_filters || []).includes('harpoon')"
                         data-class:btn-active="($method_filters || []).includes('harpoon')"
                         data-attr:aria-pressed="(($method_filters || []).includes('harpoon')).toString()"
-                        data-on:click="$method_filters = window.Fishydex.toggleMethodFilters($method_filters, 'harpoon')">Harpoon</button>
+                        data-on:click="$method_filters = window.__fishystuffDatastarState.toggleOrderedValue($method_filters, 'harpoon', ['rod', 'harpoon'])">Harpoon</button>
                 <button type="button"
                         data-show="$supports_dried_filter"
                         class="btn btn-sm btn-outline fishydex-filter-chip filter-show-dried"

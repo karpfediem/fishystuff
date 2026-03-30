@@ -2142,3 +2142,43 @@ Validation:
 - compared served vs `.out` for:
   - `/dex/`
   - `/js/pages/fishydex.js`
+
+### Step 43 - Move Fishydex Filter Toggles Into Shared Datastar Helpers
+
+Completed:
+
+- added a reusable `toggleOrderedValue(...)` helper to
+  `site/assets/js/datastar-state.js`
+- added shared regression coverage in `site/assets/js/datastar-state.test.mjs`
+  for deterministic ordered toggling
+- updated `site/content/en-US/dex.smd` so Fishydex grade/method filter chips now use:
+  - `window.__fishystuffDatastarState.toggleOrderedValue(...)`
+  instead of page-specific `window.Fishydex` helpers
+- removed the now-unused page-specific pure helpers from
+  `site/assets/js/pages/fishydex.js`:
+  - `toggleGradeFilters`
+  - `toggleMethodFilters`
+- trimmed the `window.Fishydex` global surface further so it only exposes the
+  remaining page-level entry points still needed by the template
+
+Why this matters:
+
+- these filter toggles were pure ordered-array state transforms, not Fishydex-specific
+  side effects
+- keeping them on `window.Fishydex` made the page template depend on a larger global API
+  than necessary
+- moving them into the shared Datastar state helper:
+  - reduces Fishydex-specific glue
+  - gives other pages/components a reusable ordered-toggle primitive
+  - keeps the remaining `window.Fishydex` surface focused on actual page orchestration
+
+Validation:
+
+- `node --check site/assets/js/datastar-state.js`
+- `node --check site/assets/js/pages/fishydex.js`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/fishydex.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/dex/`
+  - `/js/pages/fishydex.js`
+  - `/js/datastar-state.js`

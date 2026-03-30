@@ -110,3 +110,16 @@ test("datastar state helper merges nested signal patches without replacing sibli
     },
   });
 });
+
+test("datastar state helper toggles ordered selection values deterministically", () => {
+  const helper = createContext();
+
+  assert.deepEqual(
+    helper.toggleOrderedValue(["yellow", "blue"], "red", ["red", "yellow", "blue", "green"]),
+    ["red", "yellow", "blue"],
+  );
+  assert.deepEqual(
+    helper.toggleOrderedValue(["red", "yellow", "blue"], "yellow", ["red", "yellow", "blue", "green"]),
+    ["red", "blue"],
+  );
+});

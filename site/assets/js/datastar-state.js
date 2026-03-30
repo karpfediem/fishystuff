@@ -38,6 +38,21 @@
     return setObjectPath(root, path, !Boolean(readObjectPath(root, path)));
   }
 
+  function toggleOrderedValue(values, candidate, order = []) {
+    const next = new Set(Array.isArray(values) ? values.map(String) : []);
+    const normalizedCandidate = String(candidate ?? "");
+    if (next.has(normalizedCandidate)) {
+      next.delete(normalizedCandidate);
+    } else {
+      next.add(normalizedCandidate);
+    }
+    const normalizedOrder = Array.isArray(order) ? order.map(String) : [];
+    if (!normalizedOrder.length) {
+      return Array.from(next);
+    }
+    return normalizedOrder.filter((value) => next.has(value));
+  }
+
   function mergeObjectPatch(root, patch) {
     if (!isPlainObject(root) || !isPlainObject(patch)) {
       return patch;
@@ -84,5 +99,6 @@
     readObjectPath,
     setObjectPath,
     toggleBooleanPath,
+    toggleOrderedValue,
   });
 })();

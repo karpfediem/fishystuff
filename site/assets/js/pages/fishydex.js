@@ -449,30 +449,6 @@
     });
   }
 
-  function toggleGradeFilters(values, grade) {
-    const next = new Set(normalizeGradeFilters(values));
-    if (next.has(grade)) {
-      next.delete(grade);
-    } else {
-      next.add(grade);
-    }
-    return GRADE_FILTER_COLOR_ORDER.filter(function (value) {
-      return next.has(value);
-    });
-  }
-
-  function toggleMethodFilters(values, method) {
-    const next = new Set(normalizeMethodFilters(values));
-    if (next.has(method)) {
-      next.delete(method);
-    } else {
-      next.add(method);
-    }
-    return METHOD_ORDER.filter(function (value) {
-      return next.has(value);
-    });
-  }
-
   function queueStamp(key, fishId) {
     const signals = signalObject();
     if (!signals || !key || typeof key !== "string") {
@@ -1676,8 +1652,6 @@
     restore: restore,
     persistSignals: persistSignals,
     toggleFishIds: toggleFishIds,
-    toggleGradeFilters: toggleGradeFilters,
-    toggleMethodFilters: toggleMethodFilters,
     queueStamp: queueStamp,
     sync: sync,
     fishApiUrl: fishApiUrl,
