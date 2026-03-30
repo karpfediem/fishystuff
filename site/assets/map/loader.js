@@ -524,6 +524,25 @@ function normalizeSharedFishIds(values) {
 }
 
 function loadSharedFishState(storage = globalThis.localStorage) {
+  const rawSignalState = mapSignalHelper()?.readSignal?.("_shared_fish");
+  if (
+    rawSignalState
+    && typeof rawSignalState === "object"
+    && !Array.isArray(rawSignalState)
+    && (
+      Object.prototype.hasOwnProperty.call(rawSignalState, "caughtIds")
+      || Object.prototype.hasOwnProperty.call(rawSignalState, "favouriteIds")
+    )
+  ) {
+    const caughtIds = normalizeSharedFishIds(rawSignalState.caughtIds);
+    const favouriteIds = normalizeSharedFishIds(rawSignalState.favouriteIds);
+    return {
+      caughtIds,
+      favouriteIds,
+      caughtSet: new Set(caughtIds),
+      favouriteSet: new Set(favouriteIds),
+    };
+  }
   const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
   if (helper && typeof helper.loadState === "function") {
     return helper.loadState(

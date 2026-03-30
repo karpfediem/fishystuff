@@ -3,6 +3,10 @@
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
   const MAP_SESSION_STORAGE_KEY = "fishystuff.map.session.v1";
   const LEGACY_MAP_PREFS_STORAGE_KEY = "fishystuff.map.prefs.v1";
+  const SHARED_FISH_STORAGE_KEYS = Object.freeze({
+    caught: "fishystuff.fishydex.caught.v1",
+    favourites: "fishystuff.fishydex.favourites.v1",
+  });
   const MAP_PERSIST_SIGNAL_FILTER =
     /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const state = {
@@ -67,6 +71,59 @@
 
   function patchSignals(patch) {
     signalStore.patchSignals(patch);
+  }
+
+  function sharedFishStateHelper() {
+    const helper = window.__fishystuffSharedFishState;
+    return helper && typeof helper.loadState === "function" ? helper : null;
+  }
+
+  function normalizeFallbackFishIds(values) {
+    if (!Array.isArray(values)) {
+      return [];
+    }
+    const next = [];
+    const seen = new Set();
+    for (const value of values) {
+      const fishId = Number.parseInt(String(value), 10);
+      if (!Number.isInteger(fishId) || fishId <= 0 || seen.has(fishId)) {
+        continue;
+      }
+      seen.add(fishId);
+      next.push(fishId);
+    }
+    return next.sort((left, right) => left - right);
+  }
+
+  function restoreSharedFishPatch() {
+    const helper = sharedFishStateHelper();
+    if (helper) {
+      const shared = helper.loadState(SHARED_FISH_STORAGE_KEYS, globalThis.localStorage);
+      return {
+        _shared_fish: {
+          caughtIds: cloneJson(shared.caughtIds || []),
+          favouriteIds: cloneJson(shared.favouriteIds || []),
+        },
+      };
+    }
+    let caughtIds = [];
+    let favouriteIds = [];
+    try {
+      caughtIds = JSON.parse(globalThis.localStorage?.getItem?.(SHARED_FISH_STORAGE_KEYS.caught) || "[]");
+    } catch (_error) {
+      caughtIds = [];
+    }
+    try {
+      favouriteIds = JSON.parse(globalThis.localStorage?.getItem?.(SHARED_FISH_STORAGE_KEYS.favourites) || "[]");
+    } catch (_error) {
+      favouriteIds = [];
+    }
+    return {
+      _shared_fish: {
+        caughtIds: normalizeFallbackFishIds(caughtIds),
+        favouriteIds: normalizeFallbackFishIds(favouriteIds),
+      },
+    };
   }
 
   function storedUiSignals(signals) {
@@ -503,6 +560,7 @@
   function restore(signals) {
     connect(signals);
     bindPersistListener();
+    const sharedFishPatch = restoreSharedFishPatch();
     let uiPatch = null;
     let bookmarkPatch = null;
     let sessionPatch = null;
@@ -544,6 +602,7 @@
       bookmarkPatch = null;
       sessionPatch = null;
     }
+    patchSignals(sharedFishPatch);
     if (uiPatch) {
       patchSignals(uiPatch);
     }

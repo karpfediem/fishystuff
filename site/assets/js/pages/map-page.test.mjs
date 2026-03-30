@@ -178,6 +178,21 @@ test("map-page restore loads persisted bookmark entries into Datastar signals", 
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
 });
 
+test("map-page restore loads shared fish state into Datastar signals", () => {
+  const env = createContext({
+    "fishystuff.fishydex.caught.v1": JSON.stringify([77, 912]),
+    "fishystuff.fishydex.favourites.v1": JSON.stringify([912]),
+  });
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(signals._shared_fish)), {
+    caughtIds: [77, 912],
+    favouriteIds: [912],
+  });
+});
+
 test("map-page restore loads persisted session into _map_session", () => {
   const env = createContext(
     {},

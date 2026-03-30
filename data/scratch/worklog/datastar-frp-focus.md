@@ -2503,3 +2503,36 @@ Validation:
   - `/map/loader.js`
   - `/map/map-host.js`
 - `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-shared-fish-state.json`
+
+## Step 53: Restore shared fish filter state into Datastar signals on the map page
+
+What changed:
+
+- `site/assets/js/pages/map-page.js` now restores shared fish state into a dedicated
+  Datastar branch:
+  - `_shared_fish.caughtIds`
+  - `_shared_fish.favouriteIds`
+- the restore path prefers the shared helper from `site/assets/js/shared-fish-state.js`
+  and falls back to the legacy Fishydex storage keys only when that helper is unavailable
+- `site/assets/map/loader.js` now prefers `_shared_fish` from the Datastar signal graph
+  before falling back to storage reads
+- added restore coverage in `site/assets/js/pages/map-page.test.mjs`
+
+Why this matters:
+
+- Step 52 made the page the preferred owner of shared fish filter state at the bridge boundary,
+  but restore still depended on storage being read ad hoc at runtime
+- this slice completes that handoff by materializing shared fish state inside the page-owned
+  Datastar graph during restore
+- the loader can now treat `_shared_fish` as the canonical shared-fish input source for the map
+  page instead of reaching for storage first
+
+Validation:
+
+- `node --check site/assets/js/pages/map-page.js site/assets/js/pages/map-page.test.mjs site/assets/map/loader.js`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/js/pages/map-page.js`
+  - `/map/loader.js`
+- `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-shared-fish-signals.json`
