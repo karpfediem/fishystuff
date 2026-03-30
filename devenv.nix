@@ -139,10 +139,40 @@ in {
     enable = true;
     virtualHosts."http://${siteHost}:${toString sitePort}".extraConfig = ''
       root * ${config.devenv.root}/site/.out
+      header Cache-Control "no-store"
+      try_files {path} {path}.html {path}/index.html =404
+      file_server
+    '';
+    virtualHosts."http://localhost:${toString sitePort}".extraConfig = ''
+      root * ${config.devenv.root}/site/.out
+      header Cache-Control "no-store"
       try_files {path} {path}.html {path}/index.html =404
       file_server
     '';
     virtualHosts."http://${cdnHost}:${toString cdnPort}".extraConfig = ''
+      root * ${config.devenv.root}/data/cdn/public
+
+      @runtime_manifest path /map/runtime-manifest.json /map/runtime-manifest.*.json
+      @immutable path /map/fishystuff_ui_bevy.*.js /map/fishystuff_ui_bevy_bg.*.wasm
+
+      header Access-Control-Allow-Origin "*"
+
+      handle @runtime_manifest {
+        header Cache-Control "no-store"
+        file_server
+      }
+
+      handle @immutable {
+        header Cache-Control "public, max-age=31536000, immutable"
+        file_server
+      }
+
+      handle {
+        header Cache-Control "public, max-age=3600"
+        file_server
+      }
+    '';
+    virtualHosts."http://localhost:${toString cdnPort}".extraConfig = ''
       root * ${config.devenv.root}/data/cdn/public
 
       @runtime_manifest path /map/runtime-manifest.json /map/runtime-manifest.*.json
