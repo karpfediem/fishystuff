@@ -29,7 +29,6 @@ const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"])
 const TERRITORY_SUMMARY_FACT_KEYS = Object.freeze(["resources", "origin"]);
 const DEFAULT_ZONE_INFO_TAB = "";
 const DEFAULT_AUTO_ADJUST_VIEW = true;
-const FISHYMAP_WINDOW_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
 const FISH_FILTER_TERM_ORDER = Object.freeze(["favourite", "missing"]);
 const FISH_FILTER_TERM_METADATA = Object.freeze({
   favourite: Object.freeze({
@@ -8520,10 +8519,6 @@ function bindUi(shell, elements, options = {}) {
       bookmarks: resetBookmarkUiState,
     });
     applyManagedWindows();
-
-    try {
-      globalThis.localStorage?.removeItem?.(FISHYMAP_WINDOW_UI_STORAGE_KEY);
-    } catch (_) {}
 
     try {
       bridgeInputSyncReady = false;
