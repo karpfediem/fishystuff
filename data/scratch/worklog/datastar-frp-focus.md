@@ -447,6 +447,39 @@ Validation:
     compact and in sync
   - reload restores the same compact persisted state
 
+### Step 9
+
+Make Fishydex details selection local and signal-driven.
+
+Work:
+
+- move detail selection from persisted/canonical page state to local UI signal state
+- let `sync($)` own modal open/close rendering again
+- stop imperative `openDetails()` / `closeDetails()` paths from forcing rerenders directly
+- keep async best-spot fetching as an implementation detail keyed off the selected fish signal
+
+Status:
+
+- implemented
+
+Implementation:
+
+- Fishydex detail selection now uses `_selected_fish_id`
+- `sync($)` now:
+  - renders the modal from the current selected fish signal
+  - triggers best-spot loading when a fish is selected
+  - restores focus to the last card when the modal closes
+- imperative helpers now mutate signal state only:
+  - `openDetails()` patches `_selected_fish_id`
+  - `closeDetails()` patches `_selected_fish_id = 0`
+- the detail modal no longer depends on direct `renderDetails()` calls from open/close helpers
+
+Why this matters:
+
+- it pushes Fishydex closer to the same “signals drive UI” model as the calculator
+- it removes another class of manual rerender coupling
+- it keeps modal selection local and explicitly non-persisted
+
 ## Current Evidence
 
 Earlier live browser probe revealed duplicated canonical food state:

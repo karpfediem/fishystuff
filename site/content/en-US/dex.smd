@@ -1182,7 +1182,7 @@
        sort_direction: 'desc',
        caught_ids: [],
        favourite_ids: [],
-       selected_fish_id: 0,
+       _selected_fish_id: 0,
        _progress_panel_collapsed: false,
        _filter_panel_collapsed: false,
        catalog_count: 0,

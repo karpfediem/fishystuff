@@ -18,7 +18,7 @@
   const SORT_FIELD_ORDER = ["name", "price"];
   const SORT_DIRECTION_ORDER = ["asc", "desc"];
   const SILVER_FORMATTER = new Intl.NumberFormat();
-  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$))/;
+  const DEX_PERSIST_EPHEMERAL_SIGNAL_PATTERN = /^(fish(?:\.|$)|count(?:\.|$)|revision(?:\.|$)|catalog_count(?:\.|$)|total_count(?:\.|$)|visible_count(?:\.|$)|caught_count(?:\.|$)|completion_percent(?:\.|$)|(?:red|yellow|blue|green|white)_(?:total_count|caught_count|completion_percent)(?:\.|$)|supports_(?:grade_filter|method_filter|dried_filter)(?:\.|$)|_selected_fish_id(?:\.|$)|_loading(?:\.|$)|_caught_stamp_fish_id(?:\.|$)|_favourite_stamp_fish_id(?:\.|$)|_status_message(?:\.|$)|_api_error_message(?:\.|$)|_api_error_hint(?:\.|$))/;
   const state = {
     signals: null,
     uiSettingsUnsubscribe: null,
@@ -33,6 +33,8 @@
     gridBound: false,
     detailsBound: false,
     suppressCardAnimation: false,
+    activeDetailsFishId: 0,
+    restoreFocusFishId: 0,
   };
 
   function spriteIconMarkup(name, className, inline) {
@@ -376,7 +378,7 @@
       revision: "",
       caught_ids: caughtState.caughtIds,
       favourite_ids: favouriteState.favouriteIds,
-      selected_fish_id: 0,
+      _selected_fish_id: 0,
       _progress_panel_collapsed: readPanelCollapsedState("progress"),
       _filter_panel_collapsed: readPanelCollapsedState("filter"),
       _status_message:
@@ -972,6 +974,23 @@
     };
   }
 
+  function selectedFishId(snapshot) {
+    const value = Number(snapshot && snapshot._selected_fish_id);
+    return Number.isInteger(value) && value > 0 ? value : 0;
+  }
+
+  function restoreDetailsFocus(fishId) {
+    if (!Number.isInteger(fishId) || fishId <= 0) {
+      return;
+    }
+    window.requestAnimationFrame(function () {
+      const target = document.querySelector(`[data-fish-id="${fishId}"] [data-action="open-details"]`);
+      if (target instanceof HTMLElement) {
+        target.focus({ preventScroll: true });
+      }
+    });
+  }
+
   function bestSpotsStateByItemId(itemId) {
     return Number.isInteger(itemId) && itemId > 0 ? state.bestSpotsByFish.get(itemId) || null : null;
   }
@@ -1081,21 +1100,19 @@
     }
 
     const signals = signalObject();
-    if (signals && signals.selected_fish_id === meta.fishId) {
-      renderDetails();
+    if (signals && selectedFishId(signals) === meta.fishId) {
+      renderDetails(signals);
     }
   }
 
-  function renderDetails() {
+  function renderDetails(snapshot) {
     const modal = document.getElementById("fishydex-details");
     if (!(modal instanceof HTMLElement)) {
       return;
     }
-    const signals = signalObject();
-    const selectedFishId = signals && Number.isInteger(signals.selected_fish_id) && signals.selected_fish_id > 0
-      ? signals.selected_fish_id
-      : 0;
-    const meta = fishMetaById(selectedFishId);
+    const signals = snapshot && typeof snapshot === "object" ? snapshot : signalObject();
+    const currentSelectedFishId = selectedFishId(signals);
+    const meta = fishMetaById(currentSelectedFishId);
     if (!meta) {
       modal.classList.remove("modal-open");
       modal.hidden = true;
@@ -1191,34 +1208,22 @@
       );
     }
 
-    void ensureBestSpots(meta);
   }
 
   function closeDetails(options) {
     const restoreFocus = !options || options.restoreFocus !== false;
     const signals = signalObject();
-    const fishId = signals && Number.isInteger(signals.selected_fish_id) && signals.selected_fish_id > 0
-      ? signals.selected_fish_id
-      : 0;
-    patchSignals({ selected_fish_id: 0 });
-    renderDetails();
-    if (!restoreFocus || !Number.isInteger(fishId) || fishId <= 0) {
-      return;
-    }
-    window.requestAnimationFrame(function () {
-      const target = document.querySelector(`[data-fish-id="${fishId}"] [data-action="open-details"]`);
-      if (target instanceof HTMLElement) {
-        target.focus({ preventScroll: true });
-      }
-    });
+    const fishId = selectedFishId(signals);
+    state.restoreFocusFishId = restoreFocus ? fishId : 0;
+    patchSignals({ _selected_fish_id: 0 });
   }
 
   function openDetails(fishId) {
     if (!fishMetaById(fishId)) {
       return;
     }
-    patchSignals({ selected_fish_id: fishId });
-    renderDetails();
+    state.restoreFocusFishId = 0;
+    patchSignals({ _selected_fish_id: fishId });
   }
 
   function bindDetailsControls() {
@@ -1236,9 +1241,7 @@
       }
       if (target.closest("[data-action='toggle-favourite-details']")) {
         const signals = signalObject();
-        const fishId = signals && Number.isInteger(signals.selected_fish_id) && signals.selected_fish_id > 0
-          ? signals.selected_fish_id
-          : 0;
+        const fishId = selectedFishId(signals);
         if (Number.isInteger(fishId) && fishId > 0) {
           toggleFavourite(fishId);
         }
@@ -1246,9 +1249,7 @@
       }
       if (target.closest("[data-action='toggle-caught-details']")) {
         const signals = signalObject();
-        const fishId = signals && Number.isInteger(signals.selected_fish_id) && signals.selected_fish_id > 0
-          ? signals.selected_fish_id
-          : 0;
+        const fishId = selectedFishId(signals);
         if (Number.isInteger(fishId) && fishId > 0) {
           toggleCaught(fishId);
         }
@@ -1256,12 +1257,7 @@
     });
     document.addEventListener("keydown", function (event) {
       const signals = signalObject();
-      if (
-        event.key === "Escape"
-        && signals
-        && Number.isInteger(signals.selected_fish_id)
-        && signals.selected_fish_id > 0
-      ) {
+      if (event.key === "Escape" && selectedFishId(signals) > 0) {
         closeDetails();
       }
     });
@@ -1446,7 +1442,21 @@
       _api_error_hint: fish.length > 0 ? "" : snapshot._api_error_hint,
     });
 
-    renderDetails();
+    const currentSelectedFishId = selectedFishId(snapshot);
+    const previousSelectedFishId = state.activeDetailsFishId;
+    state.activeDetailsFishId = currentSelectedFishId;
+
+    renderDetails(snapshot);
+
+    if (currentSelectedFishId > 0) {
+      const meta = fishMetaById(currentSelectedFishId);
+      if (meta) {
+        void ensureBestSpots(meta);
+      }
+    } else if (previousSelectedFishId > 0 && state.restoreFocusFishId > 0) {
+      restoreDetailsFocus(state.restoreFocusFishId);
+      state.restoreFocusFishId = 0;
+    }
   }
 
   function downloadJson(filename, text) {
