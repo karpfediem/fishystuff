@@ -2380,3 +2380,37 @@ Validation:
   - `/js/datastar-state.js`
   - `/js/pages/calculator-page.js`
   - `/js/pages/fishydex.js`
+
+## Step 49: Share monotonic Datastar action-token handling with the map loader
+
+What changed:
+
+- added a small `datastarStateHelper()` bridge in `site/assets/map/loader.js`
+- moved the map loader's `_map_actions` normalization onto the shared helper:
+  - `normalizeCounterTokenState(...)`
+- moved map action-token consumption onto the shared helper:
+  - `consumeIncrementedCounterTokens(...)`
+- `syncMapActionsFromSignals()` now consumes:
+  - `resetViewToken`
+  - `resetUiToken`
+  using the same monotonic counter semantics already shared by calculator and Fishydex
+
+Why this matters:
+
+- the map loader still had the last bespoke action-token implementation on the site
+- centralizing that logic keeps the Datastar action model consistent across:
+  - calculator
+  - Fishydex
+  - map
+- it also fixes a subtle behavioral edge:
+  - the old map path returned early after handling `resetViewToken`
+  - if both tokens incremented in the same patch, `resetUiToken` could be skipped
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- compared served vs `.out` for:
+  - `/map/loader.js`
+- `bash tools/scripts/map-browser-smoke.sh /tmp/map-smoke-datastar-frp.json`

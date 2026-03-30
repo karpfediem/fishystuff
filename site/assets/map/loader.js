@@ -129,6 +129,13 @@ function mapSignalHelper() {
   return helper && typeof helper.signalObject === "function" ? helper : null;
 }
 
+function datastarStateHelper() {
+  const helper = globalThis.window?.__fishystuffDatastarState || globalThis.__fishystuffDatastarState;
+  return helper && typeof helper.normalizeCounterTokenState === "function"
+    ? helper
+    : null;
+}
+
 function currentMapUiSignalState() {
   const helper = mapSignalHelper();
   const raw = helper?.readSignal?.("_map_ui");
@@ -269,14 +276,8 @@ function patchMapBookmarksSignalState(bookmarks) {
 function currentMapActionSignalState() {
   const helper = mapSignalHelper();
   const raw = helper?.readSignal?.("_map_actions");
-  return {
-    resetViewToken: Number.isFinite(raw?.resetViewToken)
-      ? Math.max(0, Math.trunc(raw.resetViewToken))
-      : DEFAULT_MAP_ACTION_SIGNAL_STATE.resetViewToken,
-    resetUiToken: Number.isFinite(raw?.resetUiToken)
-      ? Math.max(0, Math.trunc(raw.resetUiToken))
-      : DEFAULT_MAP_ACTION_SIGNAL_STATE.resetUiToken,
-  };
+  return datastarStateHelper()?.normalizeCounterTokenState(raw, DEFAULT_MAP_ACTION_SIGNAL_STATE)
+    || DEFAULT_MAP_ACTION_SIGNAL_STATE;
 }
 
 function publishMapRuntimeSignals(stateBundle) {
@@ -7150,15 +7151,19 @@ function bindUi(shell, elements, options = {}) {
 
   function syncMapActionsFromSignals() {
     const nextActionState = currentMapActionSignalState();
-    if (nextActionState.resetViewToken !== previousMapActionState.resetViewToken) {
-      previousMapActionState = nextActionState;
-      dispatchMapCommand(shell, { resetView: true });
-      return;
-    }
-    if (nextActionState.resetUiToken !== previousMapActionState.resetUiToken) {
-      previousMapActionState = nextActionState;
-      void resetMapUiToInitialState();
-    }
+    const consumption = datastarStateHelper()?.consumeIncrementedCounterTokens(
+      previousMapActionState,
+      nextActionState,
+      {
+        resetViewToken: () => {
+          dispatchMapCommand(shell, { resetView: true });
+        },
+        resetUiToken: () => {
+          void resetMapUiToInitialState();
+        },
+      },
+    );
+    previousMapActionState = consumption?.handledState || nextActionState;
   }
 
   function clearLayerDropState() {
