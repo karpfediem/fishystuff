@@ -99,6 +99,37 @@
     };
   }
 
+  function toggleWindow(windowId) {
+    const signals = signalObject();
+    if (!signals) {
+      return;
+    }
+    const mapUi =
+      signals._map_ui && typeof signals._map_ui === "object" && !Array.isArray(signals._map_ui)
+        ? cloneJson(signals._map_ui)
+        : {};
+    const windowUi =
+      mapUi.windowUi && typeof mapUi.windowUi === "object" && !Array.isArray(mapUi.windowUi)
+        ? mapUi.windowUi
+        : {};
+    const currentEntry =
+      windowUi[windowId] && typeof windowUi[windowId] === "object" && !Array.isArray(windowUi[windowId])
+        ? windowUi[windowId]
+        : {};
+    patchSignals({
+      _map_ui: {
+        ...mapUi,
+        windowUi: {
+          ...windowUi,
+          [windowId]: {
+            ...currentEntry,
+            open: currentEntry.open === false,
+          },
+        },
+      },
+    });
+  }
+
   window.__fishystuffMap = Object.freeze({
     connect,
     signalObject,
@@ -109,5 +140,6 @@
     restore,
     persist,
     persistSignalPatchFilter,
+    toggleWindow,
   });
 })();

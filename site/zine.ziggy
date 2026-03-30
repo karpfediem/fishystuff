@@ -31,6 +31,7 @@ Multilingual {
 
     "js/datastar.js",
     "js/d3.js",
+    "js/datastar-signals.js",
     "js/components/registry.js",
     "js/components/bound-select.js",
     "js/components/checkbox-group.js",

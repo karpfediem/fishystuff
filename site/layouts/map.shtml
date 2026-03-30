@@ -1095,6 +1095,17 @@
              search: { open: false },
              bookmarks: { placing: false, selectedIds: [] }
            },
+           _map_input: {
+             filters: {
+               searchText: '',
+               patchId: null,
+               fromPatchId: null,
+               toPatchId: null
+             },
+             ui: {
+               diagnosticsOpen: false
+             }
+           },
            _map_runtime: {
              state: {
                ready: false,
@@ -1116,6 +1127,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="search"
+          data-on:click="window.__fishystuffMap.toggleWindow('search')"
           type="button"
           aria-pressed="true"
           aria-label="Hide search"
@@ -1126,6 +1138,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="bookmarks"
+          data-on:click="window.__fishystuffMap.toggleWindow('bookmarks')"
           type="button"
           aria-pressed="false"
           aria-label="Show bookmarks"
@@ -1136,6 +1149,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="settings"
+          data-on:click="window.__fishystuffMap.toggleWindow('settings')"
           type="button"
           aria-pressed="true"
           aria-label="Hide settings"
@@ -1146,6 +1160,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="zone-info"
+          data-on:click="window.__fishystuffMap.toggleWindow('zoneInfo')"
           type="button"
           aria-pressed="true"
           aria-label="Hide zone info"
@@ -1156,6 +1171,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="layers"
+          data-on:click="window.__fishystuffMap.toggleWindow('layers')"
           type="button"
           aria-pressed="true"
           aria-label="Hide layers"
@@ -1175,7 +1191,7 @@
             <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
           </div>
           <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
-            <input id="fishymap-search" class="grow" type="search" placeholder="Search fish, zone, or filter term" autocomplete="off">
+            <input id="fishymap-search" class="grow" type="search" placeholder="Search fish, zone, or filter term" autocomplete="off" data-bind="_map_input.filters.searchText">
             <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
           </label>
         </div>
@@ -1320,7 +1336,7 @@
               <div class="grid grid-cols-2 gap-3">
                 <label class="form-control gap-2">
                   <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">From</span>
-                  <input id="fishymap-patch-from" type="hidden" value="">
+                  <input id="fishymap-patch-from" type="hidden" value="" data-bind="_map_input.filters.fromPatchId">
                   <fishy-searchable-dropdown
                     id="fishymap-patch-from-picker"
                     class="relative block w-full"
@@ -1369,7 +1385,7 @@
 
                 <label class="form-control gap-2">
                   <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">Until (incl.)</span>
-                  <input id="fishymap-patch-to" type="hidden" value="">
+                  <input id="fishymap-patch-to" type="hidden" value="" data-bind="_map_input.filters.toPatchId">
                   <fishy-searchable-dropdown
                     id="fishymap-patch-to-picker"
                     class="relative block w-full"

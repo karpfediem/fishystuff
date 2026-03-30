@@ -9,6 +9,7 @@ import FishyMapBridge, {
   resolveCdnBaseUrl,
   zoneRgbFromLayerSamples,
 } from "./map-host.js";
+import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 
 const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
 const DEFAULT_ZONE_CATALOG_PATH = "/api/v1/zones";
@@ -90,6 +91,17 @@ const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   search: Object.freeze({ open: false }),
   bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
 });
+const DEFAULT_MAP_INPUT_SIGNAL_STATE = Object.freeze({
+  filters: Object.freeze({
+    searchText: "",
+    patchId: null,
+    fromPatchId: null,
+    toPatchId: null,
+  }),
+  ui: Object.freeze({
+    diagnosticsOpen: false,
+  }),
+});
 
 function cloneJsonValue(value) {
   return JSON.parse(JSON.stringify(value));
@@ -149,6 +161,26 @@ function patchMapUiSignalState(patch) {
   });
 }
 
+function currentMapInputSignalState() {
+  const helper = mapSignalHelper();
+  const raw = helper?.readSignal?.("_map_input");
+  return applyStatePatch(
+    DEFAULT_MAP_INPUT_SIGNAL_STATE,
+    raw && typeof raw === "object" ? raw : {},
+  );
+}
+
+function patchMapInputSignalState(patch) {
+  const helper = mapSignalHelper();
+  if (!helper) {
+    return;
+  }
+  const current = currentMapInputSignalState();
+  helper.patchSignals({
+    _map_input: cloneJsonValue(applyStatePatch(current, patch)),
+  });
+}
+
 function publishMapRuntimeSignals(stateBundle) {
   const helper = mapSignalHelper();
   if (!helper) {
@@ -159,6 +191,21 @@ function publishMapRuntimeSignals(stateBundle) {
       state: cloneJsonValue(stateBundle?.state || {}),
       inputState: cloneJsonValue(stateBundle?.inputState || {}),
     },
+  });
+}
+
+function publishMapInputSignals(inputState) {
+  const helper = mapSignalHelper();
+  if (!helper) {
+    return;
+  }
+  helper.patchSignals({
+    _map_input: cloneJsonValue(
+      applyStatePatch(
+        DEFAULT_MAP_INPUT_SIGNAL_STATE,
+        inputState && typeof inputState === "object" ? inputState : {},
+      ),
+    ),
   });
 }
 
@@ -6781,6 +6828,7 @@ function bindUi(shell, elements, options = {}) {
       ...(stateBundle || {}),
       zoneCatalog,
     });
+    publishMapInputSignals(latestStateBundle.inputState);
     publishMapRuntimeSignals(latestStateBundle);
     bookmarks = persistResolvedBookmarksFromStateBundle(latestStateBundle, bookmarks, bookmarkUi);
     scheduleBookmarkMetadataRefresh();
@@ -6802,6 +6850,75 @@ function bindUi(shell, elements, options = {}) {
     if (latestStateBundle?.state?.ready === true) {
       scheduleWaypointFocusIndexPreload(globalThis.window?.location);
     }
+  }
+
+  function syncLocalUiStateFromSignals() {
+    const nextSignalUiState = currentMapUiSignalState();
+    const nextBookmarkSelectedIds = normalizeSelectedBookmarkIds(
+      bookmarks,
+      nextSignalUiState.bookmarks.selectedIds,
+    );
+    const currentSignature = JSON.stringify({
+      windowUi: windowUiState,
+      search: searchUiState,
+      bookmarks: {
+        placing: bookmarkUi.placing,
+        selectedIds: bookmarkUi.selectedIds,
+      },
+    });
+    const nextSignature = JSON.stringify({
+      windowUi: nextSignalUiState.windowUi,
+      search: nextSignalUiState.search,
+      bookmarks: {
+        placing: nextSignalUiState.bookmarks.placing,
+        selectedIds: nextBookmarkSelectedIds,
+      },
+    });
+    if (currentSignature === nextSignature) {
+      return;
+    }
+
+    const previousWindowUiState = windowUiState;
+    const previousBookmarkPlacing = bookmarkUi.placing;
+    windowUiState = nextSignalUiState.windowUi;
+    searchUiState.open = nextSignalUiState.search.open;
+    bookmarkUi.placing = nextSignalUiState.bookmarks.placing;
+    bookmarkUi.selectedIds = nextBookmarkSelectedIds;
+
+    for (const [toolbarWindowId, windowId] of Object.entries(toolbarTargetToWindowId)) {
+      const previousOpen = previousWindowUiState?.[windowId]?.open !== false;
+      const nextOpen = windowUiState?.[windowId]?.open !== false;
+      if (!previousOpen && nextOpen) {
+        bringManagedWindowToFront(windowId);
+      }
+      if (toolbarWindowId === "search" && previousOpen && !nextOpen) {
+        elements.search?.blur?.();
+      }
+      if (toolbarWindowId === "bookmarks" && previousOpen && !nextOpen && previousBookmarkPlacing) {
+        bookmarkUi.placing = false;
+        patchMapUiSignalState({ bookmarks: bookmarkUi });
+      }
+    }
+
+    renderCurrentState(getLatestStateBundle());
+  }
+
+  function syncBridgeInputStateFromSignals() {
+    const nextSignalInputState = currentMapInputSignalState();
+    const currentInputState = applyStatePatch(
+      DEFAULT_MAP_INPUT_SIGNAL_STATE,
+      getLatestStateBundle().inputState || {},
+    );
+    if (JSON.stringify(currentInputState) === JSON.stringify(nextSignalInputState)) {
+      return;
+    }
+
+    FishyMapBridge.setState?.(nextSignalInputState);
+    FishyMapBridge.flushPendingPatchNow?.();
+    renderCurrentState({
+      ...getLatestStateBundle(),
+      inputState: nextSignalInputState,
+    });
   }
 
   function clearLayerDropState() {
@@ -7063,16 +7180,6 @@ function bindUi(shell, elements, options = {}) {
     });
   }
 
-  function pushSearchPatch() {
-    const searchText = elements.search.value;
-    dispatchStatePatchAndRender({
-      version: 1,
-      filters: {
-        searchText,
-      },
-    });
-  }
-
   function setSearchDropdownOpen(open) {
     const nextOpen = open === true;
     if (searchUiState.open === nextOpen) {
@@ -7103,9 +7210,15 @@ function bindUi(shell, elements, options = {}) {
 
     elements.patchFrom.value = patchRange.fromPatchId;
     elements.patchTo.value = patchRange.toPatchId;
-    dispatchStatePatchAndRender({
+    patchMapInputSignalState({
       version: 1,
       filters: {
+        patchId:
+          patchRange.fromPatchId &&
+          patchRange.toPatchId &&
+          patchRange.fromPatchId === patchRange.toPatchId
+            ? patchRange.fromPatchId
+            : null,
         fromPatchId: patchRange.fromPatchId,
         toPatchId: patchRange.toPatchId,
       },
@@ -7118,7 +7231,6 @@ function bindUi(shell, elements, options = {}) {
     }
     searchUiState.open = true;
     patchMapUiSignalState({ search: searchUiState });
-    pushSearchPatch();
   });
 
   elements.search.addEventListener("focus", () => {
@@ -7518,20 +7630,6 @@ function bindUi(shell, elements, options = {}) {
       dispatchMapCommand(shell, {
         setViewMode: nextViewMode,
       });
-    });
-  }
-
-  if (elements.toolbar) {
-    elements.toolbar.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-window-toggle]");
-      if (!button) {
-        return;
-      }
-      const windowId = toolbarTargetToWindowId[button.getAttribute("data-window-toggle") || ""];
-      if (!windowId) {
-        return;
-      }
-      toggleManagedWindowOpen(windowId);
     });
   }
 
@@ -8252,7 +8350,7 @@ function bindUi(shell, elements, options = {}) {
       if (isRendering) {
         return;
       }
-      dispatchStatePatchAndRender({
+      patchMapInputSignalState({
         version: 1,
         ui: {
           diagnosticsOpen: elements.diagnostics.open,
@@ -8304,6 +8402,8 @@ function bindUi(shell, elements, options = {}) {
     renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
+  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncLocalUiStateFromSignals);
+  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeInputStateFromSignals);
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && bookmarkUi.placing) {

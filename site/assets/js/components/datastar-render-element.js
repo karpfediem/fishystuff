@@ -1,14 +1,7 @@
-export function readObjectPath(root, path) {
-    return String(path ?? "")
-        .split(".")
-        .filter(Boolean)
-        .reduce((current, key) => {
-            if (current && typeof current === "object" && key in current) {
-                return current[key];
-            }
-            return null;
-        }, root);
-}
+import {
+    DATASTAR_SIGNAL_PATCH_EVENT,
+    readObjectPath,
+} from "../datastar-signals.js";
 
 export function readCalculatorSignal(path) {
     return readObjectPath(window.__fishystuffCalculator?.signalObject?.() ?? null, path);
@@ -34,7 +27,7 @@ export class FishyDatastarRenderElement extends HTMLElement {
             this._resizeObserver.observe(this);
         }
         document.addEventListener(
-            "datastar-patch-signals",
+            DATASTAR_SIGNAL_PATCH_EVENT,
             this._handleSignalPatchBound,
         );
     }
@@ -53,7 +46,7 @@ export class FishyDatastarRenderElement extends HTMLElement {
             this._rafId = 0;
         }
         document.removeEventListener(
-            "datastar-patch-signals",
+            DATASTAR_SIGNAL_PATCH_EVENT,
             this._handleSignalPatchBound,
         );
     }

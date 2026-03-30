@@ -672,3 +672,119 @@ Expand the same analysis to the rest of the site:
   - frontend map host state
   - bridge events/commands
   - Bevy WASM patch/snapshot interface
+
+## Current Architecture Snapshot
+
+This section is the current handoff snapshot for a fresh Codex session.
+
+### Datastar Event Contract
+
+Important distinction:
+
+- server-sent SSE event type remains `datastar-patch-signals`
+- client-side reactive signal patch event is `datastar-signal-patch`
+
+The client event name matters for:
+
+- `site/assets/js/components/datastar-render-element.js`
+- `site/assets/map/loader.js`
+- any future custom element or page helper that wants to react to local signal mutation
+
+Do not listen for `datastar-patch-signals` in browser-side reactivity helpers.
+
+### Rust / Datastar Boundary
+
+Current intended model:
+
+- Axum/API-side Datastar responses should use the Rust `datastar` crate
+  - current example:
+    - `api/fishystuff_server/src/routes/calculator.rs`
+- browser page state should use Datastar client signals as the single page-level graph
+- the map Bevy/WASM runtime does **not** directly use the server-side Rust Datastar crate
+
+Current map direction:
+
+- Datastar owns browser page state
+- `site/assets/map/loader.js` is the current adapter between:
+  - Datastar signals
+  - `site/assets/map/map-host.js`
+  - the existing Bevy JSON patch/snapshot contract
+
+So for the map stack:
+
+- use Datastar as the page state model
+- keep the host/wasm bridge as a temporary transport adapter
+- progressively replace imperative host DOM ownership with Datastar-owned state
+- only after that revisit whether the Bevy/WASM side itself should expose a more Datastar-native contract
+
+### Map Signal Domains
+
+Current map page signal branches:
+
+- `_map_ui`
+  - page-local shell state
+  - window open/collapsed/position
+  - search dropdown open state
+  - bookmark placement + selected bookmark ids
+  - persisted by `site/assets/js/pages/map-page.js`
+- `_map_input`
+  - current bridge input state made Datastar-visible
+  - should become the canonical page-side source for map controls
+  - currently includes the first migrated controls:
+    - `filters.searchText`
+    - `filters.patchId`
+    - `filters.fromPatchId`
+    - `filters.toPatchId`
+    - `ui.diagnosticsOpen`
+- `_map_runtime`
+  - bridge/runtime snapshot published back into Datastar
+  - current state/view/selection/hover/diagnostic mirror
+
+### Map Refactor State
+
+Already implemented:
+
+- map shell root has Datastar `data-signals`
+- toolbar buttons mutate `_map_ui.windowUi.*.open`
+- loader syncs local window/search/bookmark UI from `_map_ui`
+- loader publishes runtime snapshot into `_map_runtime`
+- loader now also publishes bridge input state into `_map_input`
+- loader reconciles `_map_input` back into the bridge
+
+First migrated map controls now round-trip through `_map_input`:
+
+- search text
+- patch range hidden inputs
+- diagnostics open state
+
+Observed live behavior after the `_map_input` seam:
+
+- typing in search updates:
+  - `_map_input.filters.searchText`
+  - `_map_runtime.inputState.filters.searchText`
+- diagnostics toggling updates:
+  - `_map_input.ui.diagnosticsOpen`
+  - `_map_runtime.inputState.ui.diagnosticsOpen`
+- toolbar toggles now update both:
+  - `_map_ui.windowUi.*.open`
+  - actual window visibility
+
+### Immediate Remaining Map Migration Inventory
+
+The map is not yet fully signal-owned.
+
+Still imperative / loader-owned today:
+
+- many bridge input controls under layers/settings
+- bookmark CRUD actions
+- detail-pane selection sync
+- view toggle / command dispatch
+- bridge event-to-DOM rendering outside the Datastar signal graph
+
+Recommended next map slices:
+
+1. Move more settings/layer controls onto `_map_input`
+2. Make bookmark operations mutate Datastar signals first, then reconcile to bridge
+3. Reduce direct DOM state ownership in `loader.js`
+4. Revisit `site/assets/map/map-host.js` as a thinner adapter
+5. Only then assess what Bevy/WASM contract changes are actually necessary
