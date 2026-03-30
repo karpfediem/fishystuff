@@ -100,6 +100,8 @@ struct CalculatorDerivedSignals {
     loot_profit_per_hour: String,
     trade_bargain_bonus_text: String,
     trade_sale_multiplier_text: String,
+    raw_prize_rate_text: String,
+    raw_prize_mastery_text: String,
     fish_group_distribution_chart: DistributionChartSignal,
     fish_group_silver_distribution_chart: DistributionChartSignal,
     target_fish_pmf_chart: PmfChartSignal,
@@ -1820,6 +1822,8 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         loot_profit_per_hour: loot_chart.profit_per_hour_text.clone(),
         trade_bargain_bonus_text: loot_chart.trade_bargain_bonus_text.clone(),
         trade_sale_multiplier_text: loot_chart.trade_sale_multiplier_text.clone(),
+        raw_prize_rate_text: fish_group_chart.raw_prize_rate_text.clone(),
+        raw_prize_mastery_text: fish_group_chart.mastery_text.clone(),
         fish_group_distribution_chart,
         fish_group_silver_distribution_chart,
         target_fish_pmf_chart,
@@ -3954,8 +3958,8 @@ fn render_fish_group_window(
                         </fieldset>\
                         <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
                             <div class=\"text-sm font-medium\">Raw Prize Catch Rate</div>\
-                            <div class=\"mt-1 text-xs text-base-content/70\">Mastery {} drives the direct prize-rate formula before normalization.</div>\
-                            <div class=\"mt-3 text-2xl font-semibold\">{}</div>\
+                            <div class=\"mt-1 text-xs text-base-content/70\">Mastery <span data-text=\"$_calc.raw_prize_mastery_text\">{}</span> drives the direct prize-rate formula before normalization.</div>\
+                            <div class=\"mt-3 text-2xl font-semibold\" data-text=\"$_calc.raw_prize_rate_text\">{}</div>\
                             <div class=\"text-xs text-base-content/70\">before zone-group normalization</div>\
                         </div>\
                     </div>\
@@ -5581,6 +5585,8 @@ mod tests {
         assert!(text.contains("data-bind=\"mastery\""));
         assert!(text.contains("step=\"50\""));
         assert!(text.contains("Raw Prize Catch Rate"));
+        assert!(text.contains("data-text=\"$_calc.raw_prize_mastery_text\""));
+        assert!(text.contains("data-text=\"$_calc.raw_prize_rate_text\""));
         assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
@@ -5630,6 +5636,8 @@ mod tests {
         assert!(text.contains("data:selector #calculator-target-fish-panel"));
         assert!(text.contains("data:selector #calculator-loot-chart"));
         assert!(text.contains("\"zone_name\":\"Velia Beach\""));
+        assert!(text.contains("\"raw_prize_rate_text\":\""));
+        assert!(text.contains("\"raw_prize_mastery_text\":\""));
         assert!(!text.contains("\"zone\":\"240,74,74\""));
         assert!(!text.contains("\"rod\":\"item:16162\""));
         assert!(!text.contains("\"_resources\":0.0"));
