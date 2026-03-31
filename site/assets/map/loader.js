@@ -502,11 +502,12 @@ function patchMapUiSignalState(patch) {
         : current.layers || DEFAULT_MAP_UI_SIGNAL_STATE.layers,
     ),
   };
-  if (jsonSignature(current) === jsonSignature(nextState)) {
+  const minimalPatch = buildMinimalJsonPatch(current, nextState);
+  if (!minimalPatch) {
     return;
   }
   helper.patchSignals({
-    _map_ui: nextState,
+    _map_ui: minimalPatch,
   });
 }
 
@@ -7550,8 +7551,19 @@ function bindUi(shell, elements, options = {}) {
         selectedIds: nextBookmarkSelectedIds,
       },
     };
-    previousBookmarksSignature = bookmarkListSignature(nextSignalBookmarks);
-    syncBookmarksToBridge(nextSignalBookmarks, nextBookmarkSelectedIds);
+    const nextBookmarksSignature = bookmarkListSignature(nextSignalBookmarks);
+    const previousBookmarkBridgeSignature = JSON.stringify({
+      bookmarksListSignature: previousBookmarksSignature,
+      selectedIds: previousUiState.bookmarks.selectedIds,
+    });
+    const nextBookmarkBridgeSignature = JSON.stringify({
+      bookmarksListSignature: nextBookmarksSignature,
+      selectedIds: nextBookmarkSelectedIds,
+    });
+    previousBookmarksSignature = nextBookmarksSignature;
+    if (previousBookmarkBridgeSignature !== nextBookmarkBridgeSignature) {
+      syncBookmarksToBridge(nextSignalBookmarks, nextBookmarkSelectedIds);
+    }
 
     for (const [toolbarWindowId, windowId] of Object.entries(toolbarTargetToWindowId)) {
       const previousOpen = previousUiState?.windowUi?.[windowId]?.open !== false;

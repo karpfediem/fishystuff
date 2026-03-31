@@ -3166,3 +3166,30 @@ Open note:
 
 - raw `readSignal()` output for object branches can still contain blank-string/theme/commands
   pollution, so normalization remains mandatory at the Datastar↔bridge boundary
+
+## Step 65: Keep page-only `_map_ui` changes out of bookmark bridge sync
+
+What changed:
+
+- `site/assets/map/loader.js`
+  - `patchMapUiSignalState(...)` now emits minimal `_map_ui` deltas instead of the whole branch
+  - `reconcileUiStateFromSignals()` now synchronizes bookmarks to the bridge only when the
+    bookmark list or selected bookmark ids actually changed
+
+Why this matters:
+
+- window chrome, search-open state, and expanded layer-panel state are page-only UI concerns
+- those `_map_ui` changes were still passing through `reconcileUiStateFromSignals()` and always
+  calling `syncBookmarksToBridge(...)`, even when the bookmark bridge payload was unchanged
+- that extra work did not always cross the bridge thanks to later diff checks, but it still
+  widened the loader’s hot UI path unnecessarily
+
+Validation:
+
+- `node --test site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs site/assets/js/pages/map-page.test.mjs`
+- `node --check site/assets/map/loader.js`
+- rebuilt site output
+- served `/map/loader.js` contains the `_map_ui: minimalPatch` path
+- live browser smoke:
+  - toggling the Search window updated page UI state
+  - bridge `setState` / `flushPendingPatchNow` stayed at `0`
