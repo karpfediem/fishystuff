@@ -20,6 +20,7 @@ const {
   buildSelectionOverviewRows,
   buildZoneEvidenceListMarkup,
   buildMapUiResetMountOptions,
+  buildMinimalJsonPatch,
   buildPointDetailPanes,
   buildPointDetailViewModel,
   pointDetailPaneMarkupKey,
@@ -937,6 +938,28 @@ test("moveLayerIdBefore can reposition minimap in the ordered layer list", () =>
   );
 
   assert.deepEqual(nextOrder, ["minimap", "regions", "zone_mask"]);
+});
+
+test("buildMinimalJsonPatch preserves object-map clears", () => {
+  assert.deepEqual(
+    buildMinimalJsonPatch(
+      {
+        filters: {
+          layerWaypointConnectionsVisible: { region_nodes: false },
+        },
+      },
+      {
+        filters: {
+          layerWaypointConnectionsVisible: {},
+        },
+      },
+    ),
+    {
+      filters: {
+        layerWaypointConnectionsVisible: {},
+      },
+    },
+  );
 });
 
 test("normalizeMapBridgedSignalState strips host-only shape pollution", () => {

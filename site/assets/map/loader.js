@@ -213,14 +213,19 @@ function jsonSignature(value) {
   return JSON.stringify(value);
 }
 
-function buildMinimalJsonPatch(current, next) {
+export function buildMinimalJsonPatch(current, next) {
   if (jsonSignature(current) === jsonSignature(next)) {
     return null;
   }
   if (isPlainObject(current) && isPlainObject(next)) {
+    const currentKeys = Object.keys(current);
+    const nextKeys = Object.keys(next);
+    if (currentKeys.some((key) => !hasOwnKey(next, key))) {
+      return cloneJsonValue(next);
+    }
     const patch = {};
     let changed = false;
-    for (const key of Object.keys(next)) {
+    for (const key of nextKeys) {
       const childPatch = buildMinimalJsonPatch(current[key], next[key]);
       if (childPatch == null) {
         continue;
@@ -510,13 +515,10 @@ function patchMapUiSignalState(patch) {
         : current.layers || DEFAULT_MAP_UI_SIGNAL_STATE.layers,
     ),
   };
-  const minimalPatch = buildMinimalJsonPatch(current, nextState);
-  if (!minimalPatch) {
+  if (jsonSignature(current) === jsonSignature(nextState)) {
     return;
   }
-  helper.patchSignals({
-    _map_ui: minimalPatch,
-  });
+  helper.writeSignal?.("_map_ui", nextState);
 }
 
 function patchMapControlSignalState(patch) {
@@ -526,13 +528,10 @@ function patchMapControlSignalState(patch) {
   }
   const current = currentMapControlSignalState();
   const nextState = normalizeMapControlSignalState(applyStatePatch(current, patch));
-  const minimalPatch = buildMinimalJsonPatch(current, nextState);
-  if (!minimalPatch) {
+  if (jsonSignature(current) === jsonSignature(nextState)) {
     return;
   }
-  helper.patchSignals({
-    _map_controls: minimalPatch,
-  });
+  helper.writeSignal?.("_map_controls", nextState);
 }
 
 function currentMapSessionSignalState() {
@@ -571,9 +570,7 @@ function publishMapSessionSignals(state) {
   }
   publishMapSessionSignals.isPatching = true;
   try {
-    helper.patchSignals({
-      _map_session: nextSessionState,
-    });
+    helper.writeSignal?.("_map_session", nextSessionState);
   } finally {
     publishMapSessionSignals.isPatching = false;
   }
@@ -600,11 +597,7 @@ function patchMapBookmarksSignalState(bookmarks) {
   if (jsonSignature(currentMapBookmarksSignalState()) === jsonSignature(nextEntries)) {
     return;
   }
-  helper.patchSignals({
-    _map_bookmarks: {
-      entries: nextEntries,
-    },
-  });
+  helper.writeSignal?.("_map_bookmarks.entries", nextEntries);
 }
 
 function currentMapActionSignalState() {
@@ -681,9 +674,7 @@ function patchMapBridgedSignalState(nextState) {
   }
   patchMapBridgedSignalState.isPatching = true;
   try {
-    helper.patchSignals({
-      _map_bridged: normalizedNextState,
-    });
+    helper.writeSignal?.("_map_bridged", normalizedNextState);
   } finally {
     patchMapBridgedSignalState.isPatching = false;
   }

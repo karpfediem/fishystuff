@@ -3407,3 +3407,87 @@ Validation:
     - `fish_evidence: 39`
     - ...
   - confirming the Bevy draw stack now follows the reordered layer list
+
+## Step 71: Replace merge-only map signal writes for clearable layer override maps
+
+What changed:
+
+- `site/assets/js/datastar-state.js`
+  - added `writeSignal(path, value)` to the shared Datastar signal store helper
+- `site/assets/js/pages/map-page.js`
+  - exposed `window.__fishystuffMap.writeSignal(...)` on top of the shared signal store
+- `site/assets/map/loader.js`
+  - map-owned exact-state branches now use `writeSignal(...)` instead of merge-only
+    `patchSignals(...)` for:
+    - `_map_ui`
+    - `_map_controls`
+    - `_map_session`
+    - `_map_bookmarks.entries`
+    - `_map_bridged`
+
+Why this matters:
+
+- the repo's Datastar page helper intentionally uses merge semantics for `patchSignals(...)`
+- that is correct for additive patches, but it is wrong for object-map state that sometimes needs
+  to clear keys back to an empty object
+- the layer override controls exposed that flaw:
+  - `layerWaypointConnectionsVisible`
+  - `layerWaypointLabelsVisible`
+  - `layerPointIconsVisible`
+- toggling a default-true setting OFF created an override like:
+  - `{ region_nodes: false }`
+- toggling it back ON computed the correct normalized next state:
+  - `{}`
+- but merge-only writes could not clear the nested key back out of the signal graph
+- the practical symptom was:
+  - the checkbox looked checked in the DOM
+  - `_map_controls` and `_map_bridged` still retained `{ region_nodes: false }`
+  - Bevy kept receiving the stale override
+  - refresh brought the "unset" or hidden state back
+
+Design note:
+
+- this keeps the Datastar contract explicit and FRP-shaped:
+  - page-owned durable state remains in signals
+  - bridge sync still reads from the explicit whitelist
+  - but branch writes that represent canonical full state now replace the branch value exactly
+    instead of pretending a deep merge can express key deletion
+
+Validation:
+
+- `node --test site/assets/js/datastar-state.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output
+- served `/map/loader.js` and `/js/pages/map-page.js` match `site/.out`
+- live DevTools check:
+  - after toggling `Node Waypoints -> Connections` OFF:
+    - `_map_controls.filters.layerWaypointConnectionsVisible = { region_nodes: false }`
+    - `_map_bridged.filters.layerWaypointConnectionsVisible = { region_nodes: false }`
+  - after toggling it back ON:
+    - `_map_controls.filters.layerWaypointConnectionsVisible = {}`
+    - `_map_bridged.filters.layerWaypointConnectionsVisible = {}`
+    - `FishyMapBridge.getCurrentInputState().filters.layerWaypointConnectionsVisible = {}`
+    - runtime catalog reported `waypointConnectionsVisible = true`
+  - the same clear-to-default behavior now works for `Fish Evidence -> Icons`
+
+## Step 72: Decouple waypoint marker sizing from fish evidence icon scale
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/plugins/waypoint_layers.rs`
+  - waypoint marker size, marker screen size, and connection thickness no longer multiply by
+    `MapDisplayState.point_icon_scale`
+
+Why this matters:
+
+- `point_icon_scale` is the fish-evidence icon UI control
+- waypoint/node marker rendering had regressed into reading the same scalar
+- that meant moving the fish evidence icon-size slider also resized waypoint/node markers, which is
+  the wrong ownership model and a visible UI bug
+- waypoint layers have their own runtime visibility controls, but they do not have a shared
+  cross-layer icon-size control, so they should remain stable under the fish-evidence slider
+
+Validation:
+
+- `cargo check -p fishystuff_ui_bevy`
+- rebuilt the map runtime bundle
+- live served map now keeps the fish-evidence icon-size slider confined to fish-evidence rendering

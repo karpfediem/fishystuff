@@ -76,6 +76,33 @@ test("datastar state helper creates a reusable signal store", () => {
   assert.equal(signals._map_ui.search.open, true);
 });
 
+test("datastar state helper can replace an entire signal branch", () => {
+  const helper = createContext();
+  const store = helper.createSignalStore();
+  const signals = {
+    _map_controls: {
+      filters: {
+        layerWaypointConnectionsVisible: { region_nodes: false },
+      },
+    },
+  };
+
+  store.connect(signals);
+  store.writeSignal("_map_controls", {
+    filters: {
+      layerWaypointConnectionsVisible: {},
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(signals)), {
+    _map_controls: {
+      filters: {
+        layerWaypointConnectionsVisible: {},
+      },
+    },
+  });
+});
+
 test("datastar state helper creates a page signal store", () => {
   const helper = createContext();
   const store = helper.createPageSignalStore();

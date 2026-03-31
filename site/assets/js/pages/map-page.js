@@ -661,6 +661,9 @@
   window.__fishystuffMap = Object.freeze({
     signalObject,
     patchSignals,
+    writeSignal(path, value) {
+      signalStore.writeSignal(path, value);
+    },
     readSignal(path) {
       return signalStore.readSignal(path);
     },

@@ -13,7 +13,7 @@ use crate::map::layers::{
 };
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::MapPoint;
-use crate::plugins::api::{MapDisplayState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN};
+use crate::plugins::api::MapDisplayState;
 use crate::plugins::camera::CameraZoomBounds;
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
@@ -237,7 +237,7 @@ fn update_waypoint_layers(
 }
 
 fn sync_waypoint_entities(
-    display_state: Res<MapDisplayState>,
+    _display_state: Res<MapDisplayState>,
     view_mode: Res<ViewModeState>,
     zoom_bounds: Res<CameraZoomBounds>,
     layer_runtime: Res<LayerRuntime>,
@@ -301,12 +301,9 @@ fn sync_waypoint_entities(
         Projection::Orthographic(ortho) => ortho.scale.max(f32::EPSILON),
         _ => 1.0,
     };
-    let user_scale = display_state
-        .point_icon_scale
-        .clamp(POINT_ICON_SCALE_MIN, POINT_ICON_SCALE_MAX);
-    let marker_size = WAYPOINT_MARKER_SIZE_SCREEN_PX * camera_scale * user_scale;
-    let marker_screen_size = WAYPOINT_MARKER_SIZE_SCREEN_PX * user_scale;
-    let connection_thickness = WAYPOINT_CONNECTION_THICKNESS_SCREEN_PX * camera_scale * user_scale;
+    let marker_size = WAYPOINT_MARKER_SIZE_SCREEN_PX * camera_scale;
+    let marker_screen_size = WAYPOINT_MARKER_SIZE_SCREEN_PX;
+    let connection_thickness = WAYPOINT_CONNECTION_THICKNESS_SCREEN_PX * camera_scale;
     let ui_visible = view_mode.mode == ViewMode::Map2D;
     let label_max_scale = (zoom_bounds.fit_scale * WAYPOINT_LABEL_MAX_ZOOM_OUT_RATIO_OF_FIT)
         .max(zoom_bounds.min_scale);

@@ -156,6 +156,13 @@
         }
         mergeObjectPatch(signals, patch);
       },
+      writeSignal(path, value) {
+        const signals = this.signalObject();
+        if (!signals) {
+          return;
+        }
+        setObjectPath(signals, path, value);
+      },
       readSignal(path) {
         return readObjectPath(this.signalObject(), path);
       },
