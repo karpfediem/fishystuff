@@ -3231,3 +3231,66 @@ Validation:
   - result:
     - `frame_avg_ms=5.100`
     - `p95_ms=6.900`
+
+## Step 67: Keep the map bridge contract explicit and refresh runtime state after actual apply
+
+Shared contract clarification:
+
+- `_map_controls` is page-owned control state.
+- `_map_bridged` is the explicit Bevy-facing subset only.
+- `_map_bookmarks.entries` is page-owned bookmark persistence.
+- bookmark manager UI state stays outside the bridge except for the minimal bookmark payload the
+  runtime actually needs:
+  - bookmark `id`
+  - `label`
+  - `worldX`
+  - `worldZ`
+- page-only state must not cross the Bevy boundary:
+  - search box text
+  - legend/window chrome
+  - expanded layer cards
+  - shared-fish progress
+
+What changed:
+
+- `site/assets/map/loader.js`
+  - bridge startup now seeds its previous `_map_bridged` / `_map_session` signatures from the
+    mounted runtime snapshot rather than the page signals, so persisted signal state is correctly
+    replayed into the runtime on mount/remount
+  - `syncBridgeInputStateFromSignals()` now does two phases:
+    - immediate optimistic render with the new bridged input
+    - deferred `request-state` refresh on the next animation frame
+  - the deferred refresh exists because `fishymap_apply_state_patch_json` only queues the patch;
+    the Bevy runtime applies it on the next frame, so an immediate state pull is too early
+  - reset/remount now cancels any pending deferred bridge-state refresh frame before finishing
+
+Why this matters:
+
+- We reproduced a concrete stale-state bug live:
+  - page signals and bridge input updated when Fish Evidence was toggled
+  - but `FishyMapBridge.getCurrentState()` still reported the previous visibility and
+    `pointsStatus`
+- That caused two user-visible failures:
+  - Fish Evidence could remain rendered even while its layer toggle said hidden
+  - initial/runtime page state could drift from the actual Bevy state until some unrelated event
+    forced a refresh
+- The root cause was timing, not ownership:
+  - the contract is correct as an explicit whitelist
+  - but the loader was pulling runtime state before Bevy had consumed the patch
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output and confirmed served `/map/loader.js` matched `site/.out`
+- live DevTools smoke:
+  - reload with Fish Evidence hidden persisted correctly keeps:
+    - `_map_controls.filters.layerIdsVisible = ["bookmarks","zone_mask","minimap"]`
+    - `_map_bridged.filters.layerIdsVisible = ["bookmarks","zone_mask","minimap"]`
+    - `FishyMapBridge.getCurrentState().catalog.layers["fish_evidence"].visible = false`
+    - `pointsStatus = "points: hidden"`
+  - toggling Fish Evidence back on updates both:
+    - bridge input state
+    - cached runtime snapshot
+  - toggling it off again updates both immediately without requiring a manual
+    `fishymap:request-state`

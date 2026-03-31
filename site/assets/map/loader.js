@@ -6811,8 +6811,11 @@ function bindUi(shell, elements, options = {}) {
   let previousMapUiState = initialMapUiState;
   let previousBookmarksSignature = bookmarkListSignature(currentMapBookmarksSignalState());
   let previousMapActionState = currentMapActionSignalState();
-  let previousMapBridgedSignalSignature = jsonSignature(currentMapBridgedSignalState());
-  let previousMapSessionSignalSignature = jsonSignature(currentMapSessionSignalState());
+  let previousMapBridgedSignalSignature = jsonSignature(runtimeMapBridgedInputState(latestStateBundle));
+  let previousMapSessionSignalSignature = jsonSignature(
+    runtimeMapSessionSignalState(latestStateBundle.state),
+  );
+  let pendingBridgeStateRefreshFrame = 0;
   let bookmarkMetadataRefreshTimer = 0;
   let bookmarkMetadataRefreshAttempts = 0;
   let nextWindowZIndex = 30;
@@ -6893,6 +6896,17 @@ function bindUi(shell, elements, options = {}) {
 
   function currentUiState() {
     return currentMapUiSignalState();
+  }
+
+  function scheduleBridgeStateRefresh() {
+    if (pendingBridgeStateRefreshFrame) {
+      globalThis.cancelAnimationFrame?.(pendingBridgeStateRefreshFrame);
+    }
+    pendingBridgeStateRefreshFrame = globalThis.requestAnimationFrame?.(() => {
+      pendingBridgeStateRefreshFrame = 0;
+      latestStateBundle = buildDisplayStateBundle(requestBridgeState(shell, { refresh: true }));
+      renderCurrentState(latestStateBundle);
+    }) || 0;
   }
 
   function currentWindowUiState() {
@@ -7622,6 +7636,7 @@ function bindUi(shell, elements, options = {}) {
       ...getLatestStateBundle(),
       bridgeInputState: nextSignalInputState,
     });
+    scheduleBridgeStateRefresh();
   }
 
   function syncBridgeSessionStateFromSignals() {
@@ -9051,8 +9066,15 @@ function bindUi(shell, elements, options = {}) {
         ...remountOptions,
       });
       latestStateBundle = requestBridgeState(shell, { refresh: true });
+      previousMapBridgedSignalSignature = jsonSignature(runtimeMapBridgedInputState(latestStateBundle));
+      previousMapSessionSignalSignature = jsonSignature(
+        runtimeMapSessionSignalState(latestStateBundle.state),
+      );
       bridgeSessionSignalPublishReady = true;
+      bridgeSessionSyncReady = true;
       bridgeInputSyncReady = true;
+      syncBridgeSessionStateFromSignals();
+      syncBridgeInputStateFromSignals();
       syncBookmarksToBridge(currentBookmarks(), currentBookmarkUiState(currentBookmarks()).selectedIds);
       renderCurrentState(latestStateBundle);
     } catch (error) {
@@ -9062,6 +9084,10 @@ function bindUi(shell, elements, options = {}) {
     } finally {
       setTextContent(resetButton, originalLabel || "Reset UI");
       setBooleanProperty(resetButton, "disabled", false);
+      if (pendingBridgeStateRefreshFrame) {
+        globalThis.cancelAnimationFrame?.(pendingBridgeStateRefreshFrame);
+        pendingBridgeStateRefreshFrame = 0;
+      }
     }
   }
 
@@ -9176,10 +9202,15 @@ function bindUi(shell, elements, options = {}) {
       latestStateBundle = requestBridgeState(shell, {
         refresh: options.refresh !== false,
       });
+      previousMapBridgedSignalSignature = jsonSignature(runtimeMapBridgedInputState(latestStateBundle));
+      previousMapSessionSignalSignature = jsonSignature(
+        runtimeMapSessionSignalState(latestStateBundle.state),
+      );
       bridgeSessionSyncReady = true;
-      syncBridgeSessionStateFromSignals();
-      renderCurrentState(latestStateBundle);
       bridgeInputSyncReady = true;
+      syncBridgeSessionStateFromSignals();
+      syncBridgeInputStateFromSignals();
+      renderCurrentState(getLatestStateBundle());
     },
     setZoneCatalog(nextZoneCatalog) {
       zoneCatalog = normalizeZoneCatalog(nextZoneCatalog);

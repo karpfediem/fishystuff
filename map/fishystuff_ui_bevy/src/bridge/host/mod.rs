@@ -240,8 +240,85 @@ fn event_counter_name(event: &FishyMapOutputEvent) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_theme_background_color, FishyMapThemeColors};
+    use super::{parse_theme_background_color, *};
     use crate::bridge::theme::parse_css_color;
+    use crate::map::layers::{build_local_layer_specs, AvailableLayerCatalog};
+    use crate::plugins::api::{
+        FishFilterState, MapDisplayState, PatchFilterState, SemanticFieldFilterState,
+    };
+    use crate::plugins::bookmarks::BookmarkState;
+    use bevy::prelude::*;
+
+    fn clear_pending_patches() {
+        PENDING_PATCHES.with(|pending| pending.borrow_mut().clear());
+    }
+
+    fn seed_layer_resources(world: &mut World) {
+        let available_layers = AvailableLayerCatalog::default();
+        let (revision, layers) = build_local_layer_specs(available_layers.entries(), Some("v1"));
+        let mut registry = LayerRegistry::default();
+        registry.apply_layer_specs(revision, Some("v1".to_string()), layers);
+        let mut runtime = LayerRuntime::default();
+        runtime.sync_to_registry(&registry);
+        world.insert_resource(registry);
+        world.insert_resource(runtime);
+    }
+
+    #[test]
+    fn browser_patch_hides_fish_evidence_layer_from_runtime() {
+        clear_pending_patches();
+
+        let mut app = App::new();
+        app.insert_resource(BrowserBridgeState::default());
+        app.insert_resource(PatchFilterState::default());
+        app.insert_resource(FishFilterState::default());
+        app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(BookmarkState::default());
+        app.insert_resource(MapDisplayState::default());
+        app.insert_resource(LayerDebugSettings::default());
+        app.insert_resource(ClearColor(Color::BLACK));
+        seed_layer_resources(&mut app.world_mut());
+        app.add_systems(
+            Update,
+            (
+                input::ingest_pending_browser_patches,
+                input::apply_browser_input_state,
+            )
+                .chain(),
+        );
+
+        fishymap_apply_state_patch_json(
+            r#"{
+                "version": 1,
+                "filters": {
+                    "layerIdsVisible": ["bookmarks", "zone_mask", "minimap"]
+                }
+            }"#,
+        )
+        .expect("queue patch");
+
+        app.update();
+
+        let bridge = app.world().resource::<BrowserBridgeState>();
+        assert_eq!(
+            bridge.input.filters.layer_ids_visible,
+            Some(vec![
+                "bookmarks".to_string(),
+                "zone_mask".to_string(),
+                "minimap".to_string(),
+            ])
+        );
+
+        let registry = app.world().resource::<LayerRegistry>();
+        let runtime = app.world().resource::<LayerRuntime>();
+        let fish_evidence_id = registry
+            .id_by_key(FISH_EVIDENCE_LAYER_KEY)
+            .expect("fish evidence layer");
+        assert!(!runtime.visible(fish_evidence_id));
+
+        let display = app.world().resource::<MapDisplayState>();
+        assert!(!display.show_points);
+    }
 
     #[test]
     fn prefers_base200_for_theme_background_color() {
