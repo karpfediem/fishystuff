@@ -1855,3 +1855,48 @@ Validation for this slice:
 - `node --test site/assets/map/map-zone-info-state.test.mjs site/assets/map/map-bookmark-state.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-app.test.mjs site/assets/js/pages/map-page.test.mjs`
 - rebuild site output
 - compare served `/map/`, `/map/map-app-live.js`, `/map/map-zone-info-state.js`, and `/map/map-zone-info-panel-live.js` against `site/.out`
+
+## Seventeenth implementation slice landed
+
+The map page’s restore/persist contract now has its own clean-slate state module instead of living inline inside the large page bootstrap script.
+
+What changed:
+
+- `site/assets/map/map-page-state.js`
+  - new pure page-state helper module for:
+    - durable UI snapshot extraction
+    - UI/session storage snapshot serialization
+    - UI/session restore patch generation
+    - stripping query-owned restore fields
+  - now owns the map page’s default enabled layer fallback for persisted bridged filters
+- `site/assets/js/pages/map-page.js`
+  - no longer carries the restore/persist shape logic inline
+  - now delegates those transforms to `window.__fishystuffMapPageState`
+- `site/layouts/map.shtml`
+  - loads the new page-state asset before `map-page.js`
+- `site/assets/js/pages/map-page.test.mjs`
+  - now loads the extracted helper before the bootstrap script
+- `site/assets/map/map-page-state.test.mjs`
+  - adds direct coverage for the new helper module
+
+Why this slice matters:
+
+- it continues the clean-slate remediation outside `loader.js`, not just around the live shell
+- it reduces the amount of implicit page-global state logic hidden inside `map-page.js`
+- it gives the map page a more explicit functional boundary:
+  - shell signal graph stays live
+  - restore/persist transforms live in a dedicated state helper
+
+What still remains after this slice:
+
+- `map-page.js` still owns patch filtering, restore sequencing, and the `window.__fishystuffMap` bootstrap surface
+- the shell still depends on `window.__fishystuffMap.applyPatch(...)` for external shell-scoped patch events
+- more of the bootstrap surface can still move into smaller dedicated modules over time
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-page-state.js`
+- `node --check site/assets/js/pages/map-page.js`
+- `node --test site/assets/map/map-page-state.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- rebuild site output
+- compare served `/map/`, `/map/map-page-state.js`, and `/js/pages/map-page.js` against `site/.out`
