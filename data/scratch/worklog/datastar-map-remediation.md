@@ -859,6 +859,74 @@ Validation for this slice:
 
 ## Third implementation slice landed
 
+## 2026-03-31: Live-path cutover landed
+
+The remediation pivot is now explicit:
+
+- `site/layouts/map.shtml` no longer boots the live map through `site/assets/map/loader.js`
+- the live page now loads:
+  - `site/assets/map/map-app-live.js`
+
+This is the first intentionally breaking step that changes the design center of the map runtime.
+
+### What changed
+
+- Added a new live bootstrap module:
+  - `site/assets/map/map-app-live.js`
+- That module mounts the Bevy bridge directly through the clean-slate app contract:
+  - `site/assets/map/map-app.js`
+  - `site/assets/map/map-runtime-adapter.js`
+- The map shell now seeds a coarse `_map_runtime` signal branch up front so the new live app can
+  project runtime snapshots without relying on loader-owned bootstrap behavior.
+
+### Why this is important
+
+This is the first slice that stops treating `loader.js` as the thing to improve.
+
+Instead:
+
+- `loader.js` is now legacy implementation baggage
+- new work should target:
+  - the signal contract
+  - the runtime adapter
+  - the clean-slate map app
+
+That is a better match for Datastar's intended design:
+
+- explicit ownership
+- sparse shared signals
+- thin side-effect seams
+- bridge logic isolated from page UI logic
+
+### Current state after the cutover
+
+- the live page is no longer bootstrapped by `loader.js`
+- `loader.js` still exists in the repo, but is no longer the live entrypoint
+- page UI behavior is expected to regress temporarily while the clean-slate path replaces the old
+  imperative renderer piece by piece
+
+This tradeoff is intentional.
+
+The objective is not "keep shrinking the old loader carefully". The objective is to stop adding
+design weight to the old loader and migrate from a new, Datastar-aligned center.
+
+### New rule going forward
+
+For map remediation work:
+
+- do not move responsibilities into `loader.js`
+- do not keep extracting 1:1 legacy behavior merely to preserve the old architecture
+- prefer implementing behavior in:
+  - `map.shtml`
+  - `map-page.js`
+  - `map-signal-contract.js`
+  - `map-runtime-adapter.js`
+  - `map-app.js`
+  - dedicated small panel/component modules
+
+`loader.js` should only survive temporarily as dead/legacy code until the new path fully
+supersedes it.
+
 The next clean-slate extraction moved the bridge projection logic into a dedicated module:
 
 - `site/assets/map/map-bridge-projection.js`

@@ -1143,6 +1143,15 @@
              view: { viewMode: '2d', camera: {} },
              selection: {}
            },
+           _map_runtime: {
+             ready: false,
+             theme: {},
+             view: { viewMode: '2d', camera: {} },
+             selection: {},
+             catalog: { layers: [], patches: [], fish: [], semanticTerms: [] },
+             statuses: {},
+             lastDiagnostic: null
+           },
            _shared_fish: {
              caughtIds: [],
              favouriteIds: []
@@ -1531,6 +1540,6 @@
     </div>
     <script src="$site.asset('js/pages/map-page.js').link()"></script>
     <script src="$site.asset('js/datastar.js').link()"></script>
-    <script type="module" src="$site.asset('map/loader.js').link()"></script>
+    <script type="module" src="$site.asset('map/map-app-live.js').link()"></script>
     </div>
   </div>
