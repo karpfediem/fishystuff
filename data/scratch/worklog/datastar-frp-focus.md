@@ -3331,3 +3331,32 @@ Validation:
     - `catalog.layers["fish_evidence"].visible = true`
     - `pointsStatus` switched directly to a loaded clustered state
     - no extra snapshot fetch was required at toggle time
+
+## Step 69: Keep fish evidence point markers dirty across deferred entity spawns
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/plugins/points/render.rs`
+  - `sync_point_markers(...)` now keeps `PointsState.dirty = true` for one more frame when it had
+    to grow the marker pool with `Commands::spawn(...)`
+
+Why this matters:
+
+- fish evidence point markers are spawned through deferred Bevy commands
+- newly spawned entities do not exist in the query world until the next frame
+- before this fix, the render system:
+  - spawned new ring/icon entities
+  - immediately tried to update them in the same pass
+  - then cleared `points.dirty = false`
+- that meant the first visible frame after hidden startup or hidden -> visible toggle could miss
+  the newly spawned markers entirely
+- an unrelated later trigger like pan/zoom would then retrigger the render pass and make the
+  evidence suddenly appear
+
+Validation:
+
+- `cargo check -p fishystuff_ui_bevy`
+- full `cargo test --offline -p fishystuff_ui_bevy` still reports one unrelated pre-existing
+  failure in `map::terrain::drape::tests::tile_corners_follow_tile_space_orientation`
+- rebuilt the map runtime bundle
+- served `runtime-manifest.json` matches the rebuilt local manifest

@@ -212,7 +212,9 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
         return;
     }
 
+    let mut spawned_markers = false;
     while context.pool.markers.len() < context.points.points.len() {
+        spawned_markers = true;
         let ring = context
             .commands
             .spawn((
@@ -327,7 +329,10 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     context.icon_cache.visible_icon_count = visible_icon_count;
     context.icon_cache.visible_fish_ids_sample = visible_fish_ids;
 
-    context.points.dirty = false;
+    // New markers spawned through `Commands` do not appear in the query world until the
+    // next frame. Keep the points dirty so the following frame positions and shows them
+    // without needing an unrelated camera movement to retrigger the render pass.
+    context.points.dirty = spawned_markers;
 }
 
 pub(super) fn mark_points_dirty_on_remote_image_update(
