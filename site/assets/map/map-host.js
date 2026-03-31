@@ -1946,6 +1946,13 @@ function fishCatalogPending(state) {
     .toLowerCase() === "fish: pending";
 }
 
+function shouldRefreshStateOnRead(state) {
+  if (!isPlainObject(state)) {
+    return true;
+  }
+  return state.ready !== true;
+}
+
 function mergeBootstrapSnapshot(currentState, bootstrapState) {
   const current = currentState || createEmptySnapshot();
   const parsed = bootstrapState || {};
@@ -2188,6 +2195,9 @@ class FishyMapBridgeImpl {
   }
 
   getCurrentState() {
+    if (this.wasmReady && shouldRefreshStateOnRead(this.currentState)) {
+      return cloneJson(this.refreshCurrentStateFromWasm());
+    }
     return cloneJson(this.currentState);
   }
 

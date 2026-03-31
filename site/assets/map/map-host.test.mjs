@@ -1151,6 +1151,66 @@ test("refreshCurrentStateNow forces a wasm read and updates the cached snapshot"
   }
 });
 
+test("getCurrentState refreshes incomplete bootstrap snapshots from wasm", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: ["zone_mask"] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: {
+          capabilities: [],
+          layers: [{ layerId: "zone_mask", name: "Zone Mask" }],
+          patches: [],
+          fish: [{ fishId: 1, name: "A" }],
+        },
+        statuses: { metaStatus: "meta: loaded", fishStatus: "fish: 1" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+
+    bridge.currentState = {
+      version: 1,
+      ready: false,
+      filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+      ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+      view: { viewMode: "2d", camera: {} },
+      selection: {},
+      hover: {},
+      catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+      statuses: { metaStatus: "meta: pending", fishStatus: "fish: pending" },
+    };
+    wasm.calls.stateReads = 0;
+
+    const current = bridge.getCurrentState();
+
+    assert.equal(wasm.calls.stateReads, 1);
+    assert.equal(current.ready, true);
+    assert.equal(current.statuses.metaStatus, "meta: loaded");
+    assert.equal(current.catalog.layers.length, 1);
+    assert.equal(current.catalog.fish.length, 1);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
 test("bootstrap sync uses lightweight polling until the map becomes ready", async () => {
   const env = installDomGlobals();
   let bridge;

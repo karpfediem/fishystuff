@@ -2526,3 +2526,58 @@ Validation for this slice:
     - the runtime layer `visible` flag
   - toggling `Fish Evidence` hidden/visible now keeps signal state, bridge input, and runtime state
     in sync
+
+## Thirty-third implementation slice landed
+
+The bridge now refreshes its own cached snapshot when callers read state during incomplete
+bootstrap, so fresh browsers no longer get stranded on stale pending snapshots.
+
+What changed:
+
+- `site/assets/map/map-host.js`
+  - added `shouldRefreshStateOnRead(...)`
+  - `getCurrentState()` now forces a full Wasm state read while bootstrap is still incomplete
+    (`ready !== true`)
+- `site/assets/map/map-host.test.mjs`
+  - added regression coverage for reading current state while the cached snapshot is still in the
+    incomplete bootstrap phase
+
+Why this slice matters:
+
+- the clean-slate live app was already working in an interactive page, but fresh headless browsers
+  could still time out reading a stale pending `currentState`
+- this was also the root cause of the earlier initial layer-state mismatches:
+  shell state and bridge input could be current while `getCurrentState()` still served an older
+  bootstrap snapshot
+- fixing the freshness at the host boundary is cleaner than teaching each caller or smoke harness
+  to force-refresh manually
+
+Validation for this slice:
+
+- `node --test site/assets/map/map-host.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-search-state.test.mjs site/assets/map/map-zone-catalog.test.mjs`
+- `node --check site/assets/map/map-host.js`
+- rebuild site output
+- restore tracked font artifacts after rebuild
+- headless validation:
+  - `bash tools/scripts/map-browser-smoke.sh`
+    - `PASS`
+    - `bridge reached ready with fish catalog`
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_sweep --timeout-seconds 90 --output-json /tmp/map-hover.current.json`
+    - `PASS`
+    - `frame_avg_ms=7.644`
+    - `p95_ms=11.400`
+- live Chromium checks:
+  - fresh `/map/` reload reaches:
+    - `_map_runtime.ready === true`
+    - `_map_runtime.catalog.layers.length === 7`
+    - `_map_runtime.catalog.fish.length === 496`
+  - `Node Waypoints` toggles cleanly from hidden -> visible -> hidden with signal state, bridge
+    input state, and runtime state staying aligned
+  - `Reset UI` still returns the page to `Ready` with `7` layers
+
+Next tasks from here:
+
+- continue deleting transitional duplication around page bootstrap state now that the live map is
+  functionally restored again
+- keep replacing remaining imperative helper calls in the raw map shell with direct Datastar
+  expressions or narrowly scoped clean-slate modules
