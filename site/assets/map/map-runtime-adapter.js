@@ -121,6 +121,9 @@ function normalizeBridgedUi(signals) {
 
 export function normalizeMapActionState(raw) {
   const source = isPlainObject(raw) ? raw : {};
+  const focusWorldPoint = isPlainObject(source.focusWorldPoint) ? source.focusWorldPoint : null;
+  const focusWorldPointWorldX = Number(focusWorldPoint?.worldX);
+  const focusWorldPointWorldZ = Number(focusWorldPoint?.worldZ);
   return {
     resetViewToken: Number.isFinite(Number(source.resetViewToken))
       ? Number(source.resetViewToken)
@@ -128,6 +131,24 @@ export function normalizeMapActionState(raw) {
     resetUiToken: Number.isFinite(Number(source.resetUiToken))
       ? Number(source.resetUiToken)
       : 0,
+    focusWorldPointToken: Number.isFinite(Number(source.focusWorldPointToken))
+      ? Number(source.focusWorldPointToken)
+      : 0,
+    focusWorldPoint:
+      focusWorldPoint &&
+      Number.isFinite(focusWorldPointWorldX) &&
+      Number.isFinite(focusWorldPointWorldZ)
+        ? {
+            worldX: focusWorldPointWorldX,
+            worldZ: focusWorldPointWorldZ,
+            ...(typeof focusWorldPoint.pointKind === "string" && focusWorldPoint.pointKind.trim()
+              ? { pointKind: focusWorldPoint.pointKind.trim() }
+              : {}),
+            ...(typeof focusWorldPoint.pointLabel === "string" && focusWorldPoint.pointLabel.trim()
+              ? { pointLabel: focusWorldPoint.pointLabel.trim() }
+              : {}),
+          }
+        : null,
   };
 }
 
@@ -193,6 +214,12 @@ export function buildBridgeCommandPatchFromSignals(signals, previousActionState 
   const commands = {};
   if (current.resetViewToken > previous.resetViewToken) {
     commands.resetView = true;
+  }
+  if (
+    current.focusWorldPointToken > previous.focusWorldPointToken &&
+    current.focusWorldPoint
+  ) {
+    commands.selectWorldPoint = cloneJson(current.focusWorldPoint);
   }
   return Object.keys(commands).length ? { version: FISHYMAP_CONTRACT_VERSION, commands } : null;
 }

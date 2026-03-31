@@ -115,16 +115,16 @@ test("buildBridgeInputPatchFromSignals ignores transitional control filters", ()
 test("buildBridgeCommandPatchFromSignals only emits resetView on token increase", () => {
   assert.equal(
     buildBridgeCommandPatchFromSignals(
-      { _map_actions: { resetViewToken: 3, resetUiToken: 7 } },
-      { resetViewToken: 3, resetUiToken: 6 },
+      { _map_actions: { resetViewToken: 3, resetUiToken: 7, focusWorldPointToken: 0 } },
+      { resetViewToken: 3, resetUiToken: 6, focusWorldPointToken: 0 },
     ),
     null,
   );
 
   assert.deepEqual(
     buildBridgeCommandPatchFromSignals(
-      { _map_actions: { resetViewToken: 4, resetUiToken: 7 } },
-      { resetViewToken: 3, resetUiToken: 7 },
+      { _map_actions: { resetViewToken: 4, resetUiToken: 7, focusWorldPointToken: 0 } },
+      { resetViewToken: 3, resetUiToken: 7, focusWorldPointToken: 0 },
     ),
     { version: 1, commands: { resetView: true } },
   );
@@ -134,7 +134,46 @@ test("normalizeMapActionState defaults missing tokens to zero", () => {
   assert.deepEqual(normalizeMapActionState(null), {
     resetViewToken: 0,
     resetUiToken: 0,
+    focusWorldPointToken: 0,
+    focusWorldPoint: null,
   });
+});
+
+test("buildBridgeCommandPatchFromSignals emits selectWorldPoint on focus token increase", () => {
+  assert.deepEqual(
+    buildBridgeCommandPatchFromSignals(
+      {
+        _map_actions: {
+          resetViewToken: 0,
+          resetUiToken: 0,
+          focusWorldPointToken: 2,
+          focusWorldPoint: {
+            worldX: 12,
+            worldZ: 34,
+            pointKind: "bookmark",
+            pointLabel: "Cron",
+          },
+        },
+      },
+      {
+        resetViewToken: 0,
+        resetUiToken: 0,
+        focusWorldPointToken: 1,
+        focusWorldPoint: null,
+      },
+    ),
+    {
+      version: 1,
+      commands: {
+        selectWorldPoint: {
+          worldX: 12,
+          worldZ: 34,
+          pointKind: "bookmark",
+          pointLabel: "Cron",
+        },
+      },
+    },
+  );
 });
 
 test("projectRuntimeSnapshotToSignals keeps only coarse runtime fields", () => {

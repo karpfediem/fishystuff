@@ -82,7 +82,12 @@ export const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
   }),
   actions: Object.freeze({
     branch: "_map_actions",
-    fields: Object.freeze(["resetViewToken", "resetUiToken"]),
+    fields: Object.freeze([
+      "resetViewToken",
+      "resetUiToken",
+      "focusWorldPointToken",
+      "focusWorldPoint",
+    ]),
   }),
 });
 
@@ -149,6 +154,8 @@ export const DEFAULT_MAP_SESSION_SIGNAL_STATE = Object.freeze({
 export const DEFAULT_MAP_ACTION_SIGNAL_STATE = Object.freeze({
   resetViewToken: 0,
   resetUiToken: 0,
+  focusWorldPointToken: 0,
+  focusWorldPoint: null,
 });
 
 function cloneJsonValue(value) {

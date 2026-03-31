@@ -13,6 +13,7 @@ import {
   DEFAULT_MAP_UI_SIGNAL_STATE,
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
+import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
 import { createMapLayerPanelController } from "./map-layer-panel-live.js";
 import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
@@ -109,6 +110,10 @@ async function start() {
     shell,
     getSignals: signals,
   });
+  const bookmarkPanel = createMapBookmarkPanelController({
+    shell,
+    getSignals: signals,
+  });
   const layerPanel = createMapLayerPanelController({
     shell,
     getSignals: signals,
@@ -163,6 +168,10 @@ async function start() {
     } finally {
       syncingFromBridge = false;
     }
+    windowManager.scheduleApplyFromSignals();
+    bookmarkPanel.scheduleRender();
+    layerPanel.scheduleRender();
+    searchPanel.scheduleRender();
   }
 
   function handleBridgeStateEvent(event) {
@@ -248,6 +257,7 @@ async function start() {
   );
   patchSignalsFromBridge(currentBridgeState());
   windowManager.applyFromSignals();
+  bookmarkPanel.render();
   layerPanel.render();
   searchPanel.render();
 }

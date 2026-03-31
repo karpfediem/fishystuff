@@ -273,6 +273,75 @@ Validation:
   - selecting a semantic result patches `_map_bridged.filters.semanticFieldIdsByLayer`
   - selecting and removing a fish-filter chip patches `_map_bridged.filters.fishFilterTerms`
 
+### 2026-03-31: Live bookmarks moved onto Datastar state
+
+Added a new clean-slate bookmark path:
+
+- `site/assets/map/map-bookmark-state.js`
+- `site/assets/map/map-bookmark-panel-live.js`
+
+This replaces another loader-owned UI island with explicit page-owned signals.
+
+What the new bookmark path owns:
+
+- deriving bookmark panel state directly from:
+  - `_map_bookmarks.entries`
+  - `_map_ui.bookmarks`
+  - `_map_runtime.view`
+  - `_map_runtime.selection`
+- placing a bookmark from the next runtime selection while `placing = true`
+- bookmark-local management:
+  - select / clear selection
+  - delete selected
+  - rename
+  - reorder
+- map-facing bookmark inspect intent via explicit action signals:
+  - `_map_actions.focusWorldPointToken`
+  - `_map_actions.focusWorldPoint`
+
+Important note:
+
+- bookmark manager UI state remains page-owned
+- only minimal bookmark geometry and selected bookmark ids still cross the bridge
+- legacy copy/export/import affordances are intentionally disabled in this slice instead of
+  remaining visible-but-dead while the format migration is still unresolved
+
+Bridge/app follow-up found during this slice:
+
+- clean-slate controllers were listening to Datastar patch events only
+- bridge-originated `fishymap-signals-patch` updates mutate the live shell through
+  `window.__fishystuffMap.applyPatch(...)`, but they do not naturally fan out to those
+  controllers
+- `map-app-live.js` now explicitly schedules:
+  - window manager
+  - bookmarks
+  - layers
+  - search
+  after each bridge-to-shell signal patch
+
+Why this matters:
+
+- bookmarks are now another real live subsystem running off canonical signals instead of loader
+  locals
+- bookmark inspect is now represented as an explicit FRP action token rather than bookmark glue
+  hidden in the bridge
+- the app-level controller fan-out makes the live clean-slate modules react consistently to
+  bridge-driven state changes
+
+Validation:
+
+- `node --check site/assets/map/map-bookmark-state.js`
+- `node --check site/assets/map/map-bookmark-panel-live.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --check site/assets/map/map-runtime-adapter.js`
+- `node --test site/assets/map/map-bookmark-state.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-app.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output
+- served asset checks matched `.out`
+- live DevTools checks confirmed:
+  - bookmark inspect patches `_map_actions.focusWorldPoint*`
+  - bookmark toolbar controls now render from live Datastar state
+  - copy/export/import buttons are explicitly disabled instead of remaining inert
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.
