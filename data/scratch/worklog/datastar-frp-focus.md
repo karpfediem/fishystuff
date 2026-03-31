@@ -3563,3 +3563,150 @@ Validation:
 - live DevTools check confirmed:
   - spinner-backed loading placeholders are present in served HTML
   - after `Reset UI`, the shell returns to `Ready` instead of remaining on loading text
+
+## Step 75: Datastar design drift review against official guidance
+
+Reference docs reviewed:
+
+- <https://data-star.dev/guide/getting_started>
+- <https://data-star.dev/guide/reactive_signals>
+- <https://data-star.dev/guide/datastar_expressions>
+- <https://data-star.dev/guide/backend_requests>
+- <https://data-star.dev/guide/the_tao_of_datastar>
+- <https://data-star.dev/reference/attributes>
+- <https://data-star.dev/reference/actions>
+- <https://data-star.dev/reference/sse_events>
+- <https://data-star.dev/examples/>
+
+High-level conclusion:
+
+- The calculator request model is now much closer to the intended Datastar shape.
+- The main remaining conceptual drift is no longer "too little Datastar", but "too much custom JS
+  wrapped around Datastar".
+- The map was previously the worst offender because broad runtime mirroring through Datastar hurt
+  FPS and bridge behavior; the newer `_map_bridged` whitelist has improved that substantially, but
+  the loader is still more imperative than Datastar's intended design.
+
+What is currently aligned with Datastar's intended design:
+
+- backend-driven patching remains the core model for server-backed pages
+  - `api/fishystuff_server/src/routes/calculator.rs`
+  - init/eval still arrive as backend patches rather than client-owned view rendering
+- signal-patch-driven backend requests are in place for the calculator
+  - `api/fishystuff_server/src/routes/calculator.rs`
+  - `data-on-signal-patch__debounce.150ms="@post(window.__fishystuffCalculator.evalUrl())"`
+- local/ephemeral state is generally kept under underscore-prefixed branches
+  - `_calculator_ui`
+  - `_map_ui`
+  - `_map_actions`
+  - `_selected_fish_id`
+- nested signals are being used meaningfully rather than flattening everything into ad hoc keys
+- the explicit map bridge whitelist is conceptually correct
+  - `site/assets/map/loader.js`
+  - `_map_bridged` now acts as the coarse JS <-> Bevy contract instead of the broader runtime
+    mirroring that previously caused perf regressions
+
+Where we still drift from intended Datastar design:
+
+1. We built a second mini-framework on top of Datastar.
+
+- `site/assets/js/datastar-state.js`
+  - `createSignalStore()`
+  - `patchSignals()`
+  - `writeSignal()`
+  - `readSignal()`
+  - `window.__fishystuffDatastarState`
+- This helper layer is useful, but it also means much of the app now talks to our own signal API
+  instead of directly to Datastar's expression model.
+
+2. Templates still mutate signals through global JS helpers instead of direct Datastar expressions.
+
+- `site/layouts/map.shtml`
+  - toolbar buttons still call:
+    - `window.__fishystuffDatastarState.toggleBooleanPath(...)`
+    - `window.__fishystuffDatastarState.setObjectPath(...)`
+- This works, but it drifts from the docs/examples' preferred direct expression style where
+  possible.
+
+3. Page modules still use document-level `datastar-signal-patch` listeners as orchestration glue.
+
+- `site/assets/js/pages/calculator-page.js`
+- `site/assets/js/pages/fishydex.js`
+- `site/assets/js/pages/map-page.js`
+- `site/assets/map/loader.js`
+- These listeners are currently doing persistence, action dispatch, sync, and reconciliation.
+- Datastar supports `data-on-signal-patch`, but the docs position it as a narrow reactive hook,
+  not the backbone of a custom client-side orchestration layer.
+
+4. Render components are still coupled to page globals.
+
+- `site/assets/js/components/datastar-render-element.js`
+  - `readCalculatorSignal(path)` reaches into:
+    - `window.__fishystuffCalculator.signalObject()`
+- This is the opposite of the Datastar/web-component "props down, events up" direction.
+- The component should ideally receive its state contract declaratively rather than know about a
+  specific page-global calculator object.
+
+5. The map loader is still too imperative.
+
+- `site/assets/map/loader.js`
+  - listens globally for `datastar-signal-patch`
+  - branches manually across:
+    - `_map_ui`
+    - `_map_controls`
+    - `_map_bridged`
+    - `_map_session`
+    - `_map_actions`
+  - then runs targeted reconciliation functions
+- The newer `_map_bridged` contract is the right direction, but the loader still behaves like a
+  signal graph interpreter more than a thin Datastar adapter.
+
+6. Bootstrap globals are still broader than they ideally need to be.
+
+- `site/assets/js/pages/calculator-page.js`
+  - `window.__fishystuffCalculator`
+- `site/assets/js/pages/fishydex.js`
+  - `window.Fishydex`
+- `site/assets/js/pages/map-page.js`
+  - `window.__fishystuffMap`
+- These have been reduced over time, but the remaining globals still expose more helper surface
+  than pure bootstrap should require.
+
+Important nuance:
+
+- `site/assets/js/datastar-persist.js` is not itself a design mistake.
+- Datastar's built-in `data-persist` is a Pro feature, so having an OSS persistence helper is a
+  reasonable local adaptation.
+- The drift is not "custom persistence exists"; the drift is "large amounts of page behavior now
+  rely on custom patch listeners and helper APIs around Datastar".
+
+Comparison with `main`:
+
+- `main` had the opposite problem in some areas:
+  - much more imperative browser glue
+  - much weaker explicit signal ownership
+- this branch improved ownership and persistence boundaries significantly
+- however, we overshot at times by pushing too much runtime/bridge behavior through Datastar
+- the corrected target is:
+  - Datastar owns durable page state and explicit user intent
+  - `_map_bridged` owns the minimal coarse bridge contract
+  - hover and other high-frequency runtime state stay out of Datastar
+  - page globals become bootstrap-only or disappear entirely
+
+Current cleanup priorities derived from this review:
+
+1. Remove `window.__fishystuffDatastarState.*` calls from templates where direct Datastar
+   expressions are sufficient.
+2. Shrink page globals further so they become bootstrap-only.
+3. Decouple render components from calculator-specific global state.
+4. Keep tightening `site/assets/map/loader.js` so it becomes a thin bridge adapter rather than a
+   second reactive runtime.
+5. Use `data-on-signal-patch` and `data-effect` only at narrow seams, not as a page-wide
+   orchestration bus.
+
+Bottom line:
+
+- calculator: mostly aligned now
+- Fishydex: better, but still too listener/global-heavy
+- map: the explicit bridge whitelist is the right architectural direction, but loader remains the
+  biggest remaining conceptual drift point
