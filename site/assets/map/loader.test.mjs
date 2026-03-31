@@ -831,9 +831,6 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
     layerPointIconScales: { fish_evidence: 2 },
   });
   assert.deepEqual(projected.ui, {
-    showPoints: false,
-    showPointIcons: false,
-    pointIconScale: 2,
     bookmarkSelectedIds: ["bm-1"],
     bookmarks: [
       {

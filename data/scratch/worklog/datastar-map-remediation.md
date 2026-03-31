@@ -790,3 +790,39 @@ Validation for this slice:
 - `node --test site/assets/map/loader.test.mjs site/assets/js/pages/map-page.test.mjs`
 - rebuild site output
 - verify served loader/module assets match `site/.out`
+
+## Fourth implementation slice landed
+
+The next ownership cleanup moved the remaining global display toggles to bridged ownership:
+
+- `_map_bridged.ui.showPoints`
+- `_map_bridged.ui.showPointIcons`
+- `_map_bridged.ui.pointIconScale`
+
+What changed:
+
+- map-page persist/restore now reads and writes those values from `_map_bridged.ui`
+  while keeping the existing persisted `inputUi` storage shape stable
+- the bridge projection no longer derives those values from `_map_controls.ui`
+- the `_map_controls` bridge-relevant patch whitelist no longer includes them
+
+Why this slice matters:
+
+- these fields are part of the Bevy contract today, so they should not stay in the
+  transitional page-owned branch
+- it shrinks `_map_controls.ui` further down toward truly page-local leftovers
+- it removes one more source of dual ownership and silent fallback behavior
+
+What still remains after this slice:
+
+- `_map_controls.filters` still contains the majority of bridged layer/filter inputs
+- loader still owns most DOM rendering and event wiring
+- bookmark manager, layer panel, and search UI still need extraction from loader
+
+Validation for this slice:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/map-bridge-projection.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs`
+- rebuild site output
+- verify served assets match `site/.out`

@@ -318,9 +318,9 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal(signals._map_bridged.ui.diagnosticsOpen, true);
   assert.equal(signals._map_controls.ui.legendOpen, true);
   assert.equal(signals._map_controls.ui.leftPanelOpen, false);
-  assert.equal(signals._map_controls.ui.showPoints, false);
-  assert.equal(signals._map_controls.ui.showPointIcons, false);
-  assert.equal(signals._map_controls.ui.pointIconScale, 1.5);
+  assert.equal(signals._map_bridged.ui.showPoints, false);
+  assert.equal(signals._map_bridged.ui.showPointIcons, false);
+  assert.equal(signals._map_bridged.ui.pointIconScale, 1.5);
   assert.equal(signals._map_bridged.ui.viewMode, "2d");
   assert.equal(signals._map_controls.filters.searchText, "velia");
   assert.equal(signals._map_bridged.filters.fromPatchId, "2026-02-26");
@@ -413,9 +413,9 @@ test("map-page restore does not let stored filters override query-owned input st
   assert.equal(signals._map_bridged.ui.diagnosticsOpen, false);
   assert.equal(signals._map_controls.ui.legendOpen, false);
   assert.equal(signals._map_controls.ui.leftPanelOpen, false);
-  assert.equal(signals._map_controls.ui.showPoints, false);
-  assert.equal(signals._map_controls.ui.showPointIcons, false);
-  assert.equal(signals._map_controls.ui.pointIconScale, 1.5);
+  assert.equal(signals._map_bridged.ui.showPoints, false);
+  assert.equal(signals._map_bridged.ui.showPointIcons, false);
+  assert.equal(signals._map_bridged.ui.pointIconScale, 1.5);
 });
 
 test("map-page persists bookmark signal patches through the Datastar patch event", () => {

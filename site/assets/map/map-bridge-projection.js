@@ -1,8 +1,4 @@
-import {
-  FISHYMAP_POINT_ICON_SCALE_MIN,
-  applyStatePatch,
-  resolveEffectiveFishIdsForWasm,
-} from "./map-host.js";
+import { applyStatePatch, resolveEffectiveFishIdsForWasm } from "./map-host.js";
 import {
   DEFAULT_MAP_CONTROL_SIGNAL_STATE,
   MAP_BRIDGE_SHARED_SIGNAL_WHITELIST,
@@ -93,9 +89,6 @@ export const MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS = Object.freeze([
   ["filters", "layerWaypointLabelsVisible"],
   ["filters", "layerPointIconsVisible"],
   ["filters", "layerPointIconScales"],
-  ["ui", "showPoints"],
-  ["ui", "showPointIcons"],
-  ["ui", "pointIconScale"],
 ]);
 
 export function projectBridgeSharedInputState(controlState, options = {}) {
@@ -199,15 +192,6 @@ export function projectBridgeSharedInputState(controlState, options = {}) {
         : {}),
     },
     ui: {
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("showPoints")
-        ? { showPoints: current.ui?.showPoints !== false }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("showPointIcons")
-        ? { showPointIcons: current.ui?.showPointIcons !== false }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("pointIconScale")
-        ? { pointIconScale: current.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN }
-        : {}),
       ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("bookmarkSelectedIds")
         ? { bookmarkSelectedIds: cloneJsonValue(bookmarkSelectedIds) }
         : {}),

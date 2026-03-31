@@ -14,7 +14,7 @@
     "minimap",
   ]);
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_controls\.ui\.(?:legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_controls\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bridged\.ui\.(?:diagnosticsOpen|viewMode)|map_bridged\.filters\.(?:fromPatchId|toPatchId)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_controls\.ui\.(?:legendOpen|leftPanelOpen)|map_controls\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fromPatchId|toPatchId)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -159,11 +159,6 @@
         ui: {
           legendOpen: inputUi?.legendOpen === true,
           leftPanelOpen: inputUi?.leftPanelOpen !== false,
-          showPoints: inputUi?.showPoints !== false,
-          showPointIcons: inputUi?.showPointIcons !== false,
-          pointIconScale: Number.isFinite(inputUi?.pointIconScale)
-            ? Number(inputUi.pointIconScale)
-            : 1,
         },
         filters: {
           fishIds: Array.isArray(inputFilters?.fishIds) ? cloneJson(inputFilters.fishIds) : [],
@@ -226,8 +221,17 @@
         ui: {
           diagnosticsOpen:
             bridgedUi?.diagnosticsOpen === true || inputUi?.diagnosticsOpen === true,
+          showPoints:
+            bridgedUi?.showPoints !== false && inputUi?.showPoints !== false,
+          showPointIcons:
+            bridgedUi?.showPointIcons !== false && inputUi?.showPointIcons !== false,
           viewMode:
             bridgedUi?.viewMode === "3d" || inputUi?.viewMode === "3d" ? "3d" : "2d",
+          pointIconScale: Number.isFinite(bridgedUi?.pointIconScale)
+            ? Number(bridgedUi.pointIconScale)
+            : Number.isFinite(inputUi?.pointIconScale)
+              ? Number(inputUi.pointIconScale)
+              : 1,
         },
         filters: {
           fromPatchId:
@@ -270,16 +274,22 @@
           || stored?._map_controls?.ui?.diagnosticsOpen === true,
         legendOpen: stored?._map_controls?.ui?.legendOpen === true,
         leftPanelOpen: stored?._map_controls?.ui?.leftPanelOpen !== false,
-        showPoints: stored?._map_controls?.ui?.showPoints !== false,
-        showPointIcons: stored?._map_controls?.ui?.showPointIcons !== false,
+        showPoints:
+          stored?._map_bridged?.ui?.showPoints !== false
+          && stored?._map_controls?.ui?.showPoints !== false,
+        showPointIcons:
+          stored?._map_bridged?.ui?.showPointIcons !== false
+          && stored?._map_controls?.ui?.showPointIcons !== false,
         viewMode:
           stored?._map_bridged?.ui?.viewMode === "3d"
           || stored?._map_controls?.ui?.viewMode === "3d"
             ? "3d"
             : "2d",
-        pointIconScale: Number.isFinite(stored?._map_controls?.ui?.pointIconScale)
-          ? Number(stored._map_controls.ui.pointIconScale)
-          : 1,
+        pointIconScale: Number.isFinite(stored?._map_bridged?.ui?.pointIconScale)
+          ? Number(stored._map_bridged.ui.pointIconScale)
+          : Number.isFinite(stored?._map_controls?.ui?.pointIconScale)
+            ? Number(stored._map_controls.ui.pointIconScale)
+            : 1,
       },
       inputFilters: {
         fishIds: Array.isArray(stored?._map_controls?.filters?.fishIds)
@@ -379,17 +389,17 @@
         ui: {
           legendOpen: parsed.inputUi.legendOpen === true,
           leftPanelOpen: parsed.inputUi.leftPanelOpen !== false,
-          showPoints: parsed.inputUi.showPoints !== false,
-          showPointIcons: parsed.inputUi.showPointIcons !== false,
-          pointIconScale: Number.isFinite(parsed.inputUi.pointIconScale)
-            ? Number(parsed.inputUi.pointIconScale)
-            : 1,
         },
       };
       patch._map_bridged = {
         ui: {
           diagnosticsOpen: parsed.inputUi.diagnosticsOpen === true,
+          showPoints: parsed.inputUi.showPoints !== false,
+          showPointIcons: parsed.inputUi.showPointIcons !== false,
           viewMode: parsed.inputUi.viewMode === "3d" ? "3d" : "2d",
+          pointIconScale: Number.isFinite(parsed.inputUi.pointIconScale)
+            ? Number(parsed.inputUi.pointIconScale)
+            : 1,
         },
       };
     }
