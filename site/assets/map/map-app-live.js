@@ -1,10 +1,6 @@
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { createMapApp } from "./map-app.js";
-import {
-  createFishyMapBridge,
-  createEmptySnapshot,
-  snapshotToRestorePatch,
-} from "./map-host.js";
+import FishyMapBridge, { createEmptySnapshot, snapshotToRestorePatch } from "./map-host.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
   DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE,
@@ -106,7 +102,7 @@ async function start() {
   }
 
   const app = createMapApp();
-  const bridge = createFishyMapBridge();
+  const bridge = FishyMapBridge;
   const windowManager = createMapWindowManager({
     shell,
     getSignals: signals,

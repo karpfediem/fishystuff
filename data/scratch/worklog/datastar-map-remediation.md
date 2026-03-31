@@ -2118,3 +2118,50 @@ Validation for this slice:
     - the visible shell state
     back to `2d`
   - canvas drag no longer kicked the Layers or Settings panes back into indefinite loading
+
+## Twenty-third implementation slice landed
+
+The clean-slate live app now mounts the canonical global bridge singleton again, so the rest of the
+repo and the browser profiling harness can see the real active runtime state.
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - now uses the default exported `FishyMapBridge` singleton from `map-host.js` instead of
+    creating a private bridge instance with `createFishyMapBridge()`
+
+Why this slice matters:
+
+- the live map shell and the external tooling now agree on the active runtime instance
+- this restores the documented bridge contract used by:
+  - `site/README.md`
+  - `tools/scripts/map_browser_smoke.py`
+  - `tools/scripts/map_browser_profile.py`
+- it keeps the clean-slate app explicit:
+  - one mounted bridge
+  - one observable runtime state
+  - no hidden second bridge instance behind the shell
+
+Validation for this slice:
+
+- `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-shell.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- live Chromium checks confirmed that:
+  - `window.FishyMapBridge.getCurrentState()` now reflects the mounted runtime
+  - search selection, bookmark placing, layer toggles, window state, and reset still work
+- browser profiling harness:
+  - `python3 tools/scripts/map_browser_profile.py load_map --output-json /tmp/map-load.json`
+    - `PASS`
+    - `frame_avg_ms=107.646`
+    - `p95_ms=120.700`
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_sweep --timeout-seconds 90 --output-json /tmp/map-hover.json`
+    - `PASS`
+    - `frame_avg_ms=6.561`
+    - `p95_ms=10.700`
+
+Next recommended tasks from here:
+
+- keep replacing remaining page-global bootstrap seams in `map-page.js` with smaller map-specific
+  modules
+- continue deleting legacy loader-era assumptions from tests/docs now that the live page no longer
+  depends on `loader.js`
