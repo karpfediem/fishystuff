@@ -99,18 +99,10 @@ export const DEFAULT_MAP_CONTROL_SIGNAL_STATE = Object.freeze({
   filters: Object.freeze({
     searchText: "",
     patchId: null,
-    fromPatchId: null,
-    toPatchId: null,
-    layerIdsVisible: DEFAULT_ENABLED_LAYER_IDS,
   }),
   ui: Object.freeze({
-    diagnosticsOpen: false,
     legendOpen: false,
     leftPanelOpen: true,
-    showPoints: true,
-    showPointIcons: true,
-    viewMode: null,
-    pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
   }),
 });
 
@@ -123,6 +115,13 @@ export const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
     fromPatchId: null,
     toPatchId: null,
     layerIdsVisible: DEFAULT_ENABLED_LAYER_IDS,
+    layerIdsOrdered: [],
+    layerOpacities: {},
+    layerClipMasks: {},
+    layerWaypointConnectionsVisible: {},
+    layerWaypointLabelsVisible: {},
+    layerPointIconsVisible: {},
+    layerPointIconScales: {},
   }),
   ui: Object.freeze({
     diagnosticsOpen: false,

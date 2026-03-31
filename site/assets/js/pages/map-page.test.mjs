@@ -133,25 +133,10 @@ function defaultSignals() {
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
         searchText: "",
-        fromPatchId: null,
-        toPatchId: null,
-        layerIdsVisible: [],
-        layerIdsOrdered: [],
-        layerOpacities: {},
-        layerClipMasks: {},
-        layerWaypointConnectionsVisible: {},
-        layerWaypointLabelsVisible: {},
-        layerPointIconsVisible: {},
-        layerPointIconScales: {},
       },
       ui: {
-        diagnosticsOpen: false,
         legendOpen: false,
         leftPanelOpen: true,
-        showPoints: true,
-        showPointIcons: true,
-        viewMode: "2d",
-        pointIconScale: 1,
       },
     },
     _map_bridged: {
@@ -162,6 +147,14 @@ function defaultSignals() {
         patchId: null,
         fromPatchId: null,
         toPatchId: null,
+        layerIdsVisible: [],
+        layerIdsOrdered: [],
+        layerOpacities: {},
+        layerClipMasks: {},
+        layerWaypointConnectionsVisible: {},
+        layerWaypointLabelsVisible: {},
+        layerPointIconsVisible: {},
+        layerPointIconScales: {},
       },
       ui: {
         diagnosticsOpen: false,
@@ -331,14 +324,14 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
     region_groups: [295],
   });
   assert.deepEqual(signals._map_controls.filters.fishFilterTerms, ["favourite", "missing"]);
-  assert.deepEqual(signals._map_controls.filters.layerIdsVisible, ["zones", "terrain"]);
-  assert.deepEqual(signals._map_controls.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
-  assert.deepEqual(signals._map_controls.filters.layerOpacities, { terrain: 0.35 });
-  assert.deepEqual(signals._map_controls.filters.layerClipMasks, { terrain: "zones" });
-  assert.deepEqual(signals._map_controls.filters.layerWaypointConnectionsVisible, { terrain: true });
-  assert.deepEqual(signals._map_controls.filters.layerWaypointLabelsVisible, { terrain: false });
-  assert.deepEqual(signals._map_controls.filters.layerPointIconsVisible, { terrain: true });
-  assert.deepEqual(signals._map_controls.filters.layerPointIconScales, { terrain: 1.5 });
+  assert.deepEqual(signals._map_bridged.filters.layerIdsVisible, ["zones", "terrain"]);
+  assert.deepEqual(signals._map_bridged.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
+  assert.deepEqual(signals._map_bridged.filters.layerOpacities, { terrain: 0.35 });
+  assert.deepEqual(signals._map_bridged.filters.layerClipMasks, { terrain: "zones" });
+  assert.deepEqual(signals._map_bridged.filters.layerWaypointConnectionsVisible, { terrain: true });
+  assert.deepEqual(signals._map_bridged.filters.layerWaypointLabelsVisible, { terrain: false });
+  assert.deepEqual(signals._map_bridged.filters.layerPointIconsVisible, { terrain: true });
+  assert.deepEqual(signals._map_bridged.filters.layerPointIconScales, { terrain: 1.5 });
   assert.equal("windowUi" in signals, false);
 });
 
@@ -409,7 +402,7 @@ test("map-page restore does not let stored filters override query-owned input st
   assert.equal(signals._map_controls.filters.searchText, "");
   assert.equal(signals._map_bridged.filters.fromPatchId, null);
   assert.equal(signals._map_bridged.filters.toPatchId, null);
-  assert.deepEqual(signals._map_controls.filters.layerIdsVisible, []);
+  assert.deepEqual(signals._map_bridged.filters.layerIdsVisible, []);
   assert.equal(signals._map_bridged.ui.diagnosticsOpen, false);
   assert.equal(signals._map_controls.ui.legendOpen, false);
   assert.equal(signals._map_controls.ui.leftPanelOpen, false);
@@ -669,7 +662,7 @@ test("map-page persists durable _map_bridged diagnostics state", () => {
   );
 });
 
-test("map-page persists durable _map_controls filter state", () => {
+test("map-page persists durable bridged layer filter state", () => {
   const env = createContext();
   const signals = defaultSignals();
 
@@ -684,6 +677,12 @@ test("map-page persists durable _map_controls filter state", () => {
         },
         fishFilterTerms: ["favourite", "missing"],
         searchText: "velia",
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fromPatchId: "2026-02-26",
+        toPatchId: "2026-03-12",
         layerIdsVisible: ["zones", "terrain"],
         layerIdsOrdered: ["zones", "terrain", "minimap"],
         layerOpacities: { terrain: 0.35 },
@@ -692,12 +691,6 @@ test("map-page persists durable _map_controls filter state", () => {
         layerWaypointLabelsVisible: { terrain: false },
         layerPointIconsVisible: { terrain: true },
         layerPointIconScales: { terrain: 1.5 },
-      },
-    },
-    _map_bridged: {
-      filters: {
-        fromPatchId: "2026-02-26",
-        toPatchId: "2026-03-12",
       },
     },
   });
@@ -713,6 +706,12 @@ test("map-page persists durable _map_controls filter state", () => {
           },
           fishFilterTerms: ["favourite", "missing"],
           searchText: "velia",
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fromPatchId: "2026-02-26",
+          toPatchId: "2026-03-12",
           layerIdsVisible: ["zones", "terrain"],
           layerIdsOrdered: ["zones", "terrain", "minimap"],
           layerOpacities: { terrain: 0.35 },
@@ -721,12 +720,6 @@ test("map-page persists durable _map_controls filter state", () => {
           layerWaypointLabelsVisible: { terrain: false },
           layerPointIconsVisible: { terrain: true },
           layerPointIconScales: { terrain: 1.5 },
-        },
-      },
-      _map_bridged: {
-        filters: {
-          fromPatchId: "2026-02-26",
-          toPatchId: "2026-03-12",
         },
       },
     },

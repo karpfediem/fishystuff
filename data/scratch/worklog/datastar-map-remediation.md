@@ -16,6 +16,62 @@ current responsibilities with:
 This document should be sufficient context for a fresh Codex session without relying on prior
 conversation history.
 
+## Progress log
+
+### 2026-03-31: Slice 1 landed
+
+- Created a new pure signal-contract module in:
+  - `site/assets/map/map-signal-contract.js`
+- Moved map defaults and signal normalizers out of the imperative loader.
+- Added:
+  - `site/assets/map/map-signal-contract.test.mjs`
+
+This established the clean-slate destination for subsequent migrations.
+
+### 2026-03-31: Slice 2 landed
+
+- Moved the first bridge-owned fields off transitional `_map_controls` and onto `_map_bridged`:
+  - `ui.diagnosticsOpen`
+  - `ui.viewMode`
+  - `filters.fromPatchId`
+  - `filters.toPatchId`
+- Updated page persistence/restore so those fields are now sourced from `_map_bridged`.
+- Kept the stored JSON shape stable under `inputUi` / `inputFilters` for backwards compatibility.
+
+### 2026-03-31: Slice 3 landed
+
+- Extracted bridge projection rules from `loader.js` into:
+  - `site/assets/map/map-bridge-projection.js`
+- This moved the bridge whitelist/projection logic into a smaller pure module.
+
+### 2026-03-31: Slice 4 landed
+
+- Moved the global point display toggles into `_map_bridged.ui`:
+  - `showPoints`
+  - `showPointIcons`
+  - `pointIconScale`
+- Updated persistence/restore to match that ownership.
+
+### 2026-03-31: Slice 5 landed
+
+- Moved the durable layer-override cluster to `_map_bridged.filters` for persistence/restore:
+  - `layerIdsVisible`
+  - `layerIdsOrdered`
+  - `layerOpacities`
+  - `layerClipMasks`
+  - `layerWaypointConnectionsVisible`
+  - `layerWaypointLabelsVisible`
+  - `layerPointIconsVisible`
+  - `layerPointIconScales`
+- Cleaned the initial signal shape so `_map_controls` is now page-only again for:
+  - `filters.searchText`
+  - `filters.patchId`
+  - `ui.legendOpen`
+  - `ui.leftPanelOpen`
+- Expanded `_map_bridged.filters` defaults in the new signal-contract module and shell bootstrap to reflect the new ownership.
+- Kept storage backwards-compatible by still reading legacy layer overrides from `_map_controls.filters` when restoring older snapshots.
+- This slice only changes durable ownership at rest; live layer interaction handlers still patch `_map_controls` and will be migrated next.
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.

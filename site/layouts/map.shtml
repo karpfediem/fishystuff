@@ -1098,13 +1098,11 @@
            _map_controls: {
              filters: {
                searchText: '',
-               patchId: null,
-               fromPatchId: null,
-               toPatchId: null,
-               layerIdsVisible: ['bookmarks', 'fish_evidence', 'zone_mask', 'minimap']
+               patchId: null
              },
              ui: {
-               diagnosticsOpen: false
+               legendOpen: false,
+               leftPanelOpen: true
              }
            },
            _map_bridged: {
@@ -1115,7 +1113,14 @@
                patchId: null,
                fromPatchId: null,
                toPatchId: null,
-               layerIdsVisible: ['bookmarks', 'fish_evidence', 'zone_mask', 'minimap']
+               layerIdsVisible: ['bookmarks', 'fish_evidence', 'zone_mask', 'minimap'],
+               layerIdsOrdered: [],
+               layerOpacities: {},
+               layerClipMasks: {},
+               layerWaypointConnectionsVisible: {},
+               layerWaypointLabelsVisible: {},
+               layerPointIconsVisible: {},
+               layerPointIconScales: {}
              },
              ui: {
                diagnosticsOpen: false,
