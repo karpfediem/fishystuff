@@ -177,6 +177,46 @@ Why this matters:
 - canonical object-map clears back to `{}` work correctly
 - this avoids having new modules accidentally depend on loader-style mirrored state
 
+### 2026-03-31: Partial bridge-event regression fixed
+
+The first live clean-slate controllers exposed a bridge-event assumption bug in
+`site/assets/map/map-app-live.js`.
+
+Problem:
+
+- the live app treated every incoming bridge event as if `event.detail.state` were a full runtime
+  snapshot
+- `fishymap:view-changed` only carries a partial payload:
+  - `state.view`
+- that partial payload replaced `_map_runtime` on the page side and cleared:
+  - `ready`
+  - `catalog`
+  - `statuses`
+
+Visible symptom:
+
+- dragging the map could make the Layers window fall back to:
+  - `Layer registry is loading…`
+- Settings could fall back to:
+  - `Loading`
+- clicking a point recovered the UI because `selection-changed` emits a full snapshot again
+
+Fix:
+
+- added `resolveBridgeSnapshot(...)` in `site/assets/map/map-app-live.js`
+- live bridge events are now resolved against the bridge's current full snapshot before
+  projecting into `_map_runtime` / `_map_session`
+
+Validation:
+
+- `node --check site/assets/map/map-app-live.js`
+- `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-app.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output and reloaded the served `/map/`
+- live DevTools check:
+  - dispatched a synthetic `fishymap:view-changed` carrying only `state.view`
+  - `_map_runtime.ready` stayed `true`
+  - `_map_runtime.catalog.layers.length` stayed `7`
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.

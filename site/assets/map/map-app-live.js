@@ -25,6 +25,42 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function mergeSnapshotBranch(baseValue, patchValue) {
+  if (isPlainObject(baseValue) || isPlainObject(patchValue)) {
+    return {
+      ...(isPlainObject(baseValue) ? cloneJson(baseValue) : {}),
+      ...(isPlainObject(patchValue) ? cloneJson(patchValue) : {}),
+    };
+  }
+  if (Array.isArray(patchValue)) {
+    return cloneJson(patchValue);
+  }
+  if (patchValue !== undefined) {
+    return cloneJson(patchValue);
+  }
+  return baseValue === undefined ? undefined : cloneJson(baseValue);
+}
+
+export function resolveBridgeSnapshot(eventDetail, readCurrentState) {
+  const currentSnapshot =
+    typeof readCurrentState === "function" ? readCurrentState() : createEmptySnapshot();
+  const baseSnapshot = isPlainObject(currentSnapshot) ? currentSnapshot : createEmptySnapshot();
+  const patchSnapshot = isPlainObject(eventDetail?.state) ? eventDetail.state : null;
+  if (!patchSnapshot) {
+    return cloneJson(baseSnapshot);
+  }
+  return {
+    ...cloneJson(baseSnapshot),
+    ...cloneJson(patchSnapshot),
+    theme: mergeSnapshotBranch(baseSnapshot.theme, patchSnapshot.theme),
+    view: mergeSnapshotBranch(baseSnapshot.view, patchSnapshot.view),
+    selection: mergeSnapshotBranch(baseSnapshot.selection, patchSnapshot.selection),
+    hover: mergeSnapshotBranch(baseSnapshot.hover, patchSnapshot.hover),
+    catalog: mergeSnapshotBranch(baseSnapshot.catalog, patchSnapshot.catalog),
+    statuses: mergeSnapshotBranch(baseSnapshot.statuses, patchSnapshot.statuses),
+  };
+}
+
 function patchTouchesLiveBridgeInputs(patch) {
   if (!isPlainObject(patch)) {
     return false;
@@ -125,7 +161,7 @@ async function start() {
   }
 
   function handleBridgeStateEvent(event) {
-    const snapshot = event?.detail?.state || currentBridgeState();
+    const snapshot = resolveBridgeSnapshot(event?.detail, currentBridgeState);
     patchSignalsFromBridge(snapshot);
   }
 
