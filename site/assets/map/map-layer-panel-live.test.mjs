@@ -89,6 +89,16 @@ test("patchTouchesLayerPanelSignals only reacts to layer-relevant branches", () 
   );
   assert.equal(
     patchTouchesLayerPanelSignals({
+      _map_runtime: {
+        selection: {
+          pointKind: "clicked",
+        },
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    patchTouchesLayerPanelSignals({
       _map_ui: {
         windowUi: {
           layers: { open: false },

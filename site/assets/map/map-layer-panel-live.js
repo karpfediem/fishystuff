@@ -1,5 +1,6 @@
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { FISHYMAP_POINT_ICON_SCALE_MAX, FISHYMAP_POINT_ICON_SCALE_MIN } from "./map-host.js";
+import { nextHoverFactVisibilityByLayer } from "./map-hover-facts.js";
 import { renderLayerStack } from "./map-layer-panel.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 import {
@@ -111,6 +112,9 @@ export function patchTouchesLayerPanelSignals(patch) {
   if (patch._map_runtime?.catalog?.layers != null) {
     return true;
   }
+  if (patch._map_runtime?.selection != null) {
+    return true;
+  }
   if (patch._map_bridged?.filters != null) {
     return true;
   }
@@ -215,6 +219,7 @@ export function createMapLayerPanelController({
     overLayerId: "",
     dropMode: "",
   };
+  let currentZoneCatalog = [];
 
   function signals() {
     return getSignals() || null;
@@ -301,6 +306,10 @@ export function createMapLayerPanelController({
         bundle.state.ready === true ? bundle : { state: { catalog: { layers: [] } }, inputState: {} },
         {
           expandedLayerIds,
+          selection: liveSignals?._map_runtime?.selection || {},
+          zoneCatalog: currentZoneCatalog,
+          hoverFactVisibilityByLayer:
+            liveSignals?._map_ui?.layers?.hoverFactsVisibleByLayer || {},
           renderLoadingPanelMarkup,
           escapeHtml,
           dragHandleIcon,
@@ -419,6 +428,31 @@ export function createMapLayerPanelController({
       writeBridgedFilters((filters) => {
         filters.layerPointIconsVisible = next;
       });
+      return;
+    }
+
+    const hoverFactToggle = event.target.closest("input[data-layer-hover-fact-key]");
+    if (hoverFactToggle) {
+      const layerId = String(
+        hoverFactToggle.getAttribute("data-layer-hover-fact-layer-id") || "",
+      ).trim();
+      const factKey = String(hoverFactToggle.getAttribute("data-layer-hover-fact-key") || "").trim();
+      if (!layerId || !factKey) {
+        return;
+      }
+      dispatchPatch(shell, {
+        _map_ui: {
+          layers: {
+            hoverFactsVisibleByLayer: nextHoverFactVisibilityByLayer(
+              signals()?._map_ui?.layers?.hoverFactsVisibleByLayer,
+              layerId,
+              factKey,
+              hoverFactToggle.checked,
+            ),
+          },
+        },
+      });
+      scheduleRender();
       return;
     }
 
@@ -602,5 +636,9 @@ export function createMapLayerPanelController({
   return Object.freeze({
     render,
     scheduleRender,
+    setZoneCatalog(nextZoneCatalog) {
+      currentZoneCatalog = Array.isArray(nextZoneCatalog) ? cloneJson(nextZoneCatalog) : [];
+      scheduleRender();
+    },
   });
 }

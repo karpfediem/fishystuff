@@ -9,12 +9,14 @@ import {
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
+import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
 import { createMapLayerPanelController, patchTouchesLayerPanelSignals } from "./map-layer-panel-live.js";
 import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
 import { createMapZoneInfoPanelController } from "./map-zone-info-panel-live.js";
 import { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
+import { patchTouchesHoverTooltipSignals } from "./map-hover-facts.js";
 import { patchTouchesSearchPanelSignals } from "./map-search-state.js";
 import { patchTouchesZoneInfoSignals } from "./map-zone-info-state.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
@@ -199,6 +201,11 @@ async function start() {
     getSignals: signals,
     listenToSignalPatches: false,
   });
+  const hoverTooltip = createMapHoverTooltipController({
+    shell,
+    getSignals: signals,
+    listenToSignalPatches: false,
+  });
   const zoneInfoPanel = createMapZoneInfoPanelController({
     shell,
     getSignals: signals,
@@ -285,6 +292,7 @@ async function start() {
   function scheduleShellControllers() {
     windowManager.scheduleApplyFromSignals();
     bookmarkPanel.scheduleRender();
+    hoverTooltip.scheduleRender();
     zoneInfoPanel.scheduleRender();
     layerPanel.scheduleRender();
     searchPanel.scheduleRender();
@@ -299,6 +307,9 @@ async function start() {
     }
     if (patchTouchesBookmarkSignals(patch)) {
       bookmarkPanel.scheduleRender();
+    }
+    if (patchTouchesHoverTooltipSignals(patch)) {
+      hoverTooltip.scheduleRender();
     }
     if (patchTouchesZoneInfoSignals(patch)) {
       zoneInfoPanel.scheduleRender();
@@ -394,10 +405,13 @@ async function start() {
   patchSignalsFromBridge(currentBridgeState());
   windowManager.applyFromSignals();
   bookmarkPanel.render();
+  hoverTooltip.render();
   zoneInfoPanel.render();
   layerPanel.render();
   searchPanel.render();
   void loadZoneCatalog().then((zoneCatalog) => {
+    hoverTooltip.setZoneCatalog(zoneCatalog);
+    layerPanel.setZoneCatalog(zoneCatalog);
     searchPanel.setZoneCatalog(zoneCatalog);
   });
 }

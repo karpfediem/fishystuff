@@ -442,6 +442,83 @@ Why this matters:
 Validation:
 
 - `node --check site/assets/map/map-page-live.js`
+
+### 2026-03-31: Restored page-owned hover facts with per-layer toggles
+
+The clean-slate live map now restores hover facts without pushing transient hover data through the
+Datastar signal graph.
+
+What changed:
+
+- added:
+  - `site/assets/map/map-hover-facts.js`
+  - `site/assets/map/map-hover-tooltip-live.js`
+- `site/assets/map/map-shell.html`
+  - `_map_ui.layers` now includes:
+    - `hoverFactsVisibleByLayer`
+- `site/assets/map/map-page-live.js`
+  - persists/restores `_map_ui.layers.hoverFactsVisibleByLayer`
+- `site/assets/map/map-layer-panel.js`
+  - layer settings now render a `Hover facts` table per layer when that layer can contribute facts
+- `site/assets/map/map-layer-panel-live.js`
+  - toggle interactions now patch `_map_ui.layers.hoverFactsVisibleByLayer`
+- `site/assets/map/map-app-live.js`
+  - boots the new hover tooltip controller
+  - wires zone-catalog data into both the layer settings preview and hover tooltip controller
+
+Signal/bridge contract decisions:
+
+- hover remains transient and **does not** enter `_map_runtime`
+- fact visibility is page-owned UI state and **does not** cross `_map_bridged`
+- the runtime/host still emits coarse `fishymap:hover-changed` events
+- the shell hover controller consumes that coarse event directly and renders the tooltip locally
+
+Current supported fact toggles:
+
+- `zone_mask`
+  - `Zone Name`
+  - `RGB`
+- `region_groups`
+  - `Resources`
+- `regions`
+  - `Origin`
+
+Design notes:
+
+- fact toggles are intentionally per-layer and per-fact so more layer-specific facts can be added
+  later without changing the bridge contract
+- hover rows are ordered by layer stack using the same layer ordering helper as the rest of the
+  clean-slate map, with the lowest layer rendered first
+- the settings preview is derived from current selection/runtime sample data rather than hover so
+  it stays deterministic and avoids reintroducing hover-driven bridge churn
+
+Validation:
+
+- `node --check site/assets/map/map-hover-facts.js`
+- `node --check site/assets/map/map-hover-tooltip-live.js`
+- `node --check site/assets/map/map-layer-panel-live.js`
+- `node --check site/assets/map/map-layer-panel.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --check site/assets/map/map-page-live.js`
+- `node --test site/assets/map/map-hover-facts.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt site output
+- restored tracked font artifacts after rebuild
+- verified served:
+  - `/map/map-app-live.js`
+  - `/map/map-hover-facts.js`
+  - `/map/map-hover-tooltip-live.js`
+  - `/map/map-layer-panel-live.js`
+  - `/map/map.css`
+  match `site/.out`
+- `bash tools/scripts/map-browser-smoke.sh`
+  - `PASS`
+
+Remaining follow-up from this slice:
+
+- verify the live hover/settings behavior end-to-end in a browser probe once the current DevTools
+  transport/socket issue is clear again
+- if needed, add more layer-specific facts from the runtime detail sections without widening the
+  bridged contract
 - `node --check site/assets/map/map-app-live.js`
 - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
 - rebuilt site output

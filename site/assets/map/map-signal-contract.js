@@ -36,7 +36,7 @@ export const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   windowUi: DEFAULT_WINDOW_UI_STATE,
   search: Object.freeze({ open: false, query: "" }),
   bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
-  layers: Object.freeze({ expandedLayerIds: [] }),
+  layers: Object.freeze({ expandedLayerIds: [], hoverFactsVisibleByLayer: {} }),
 });
 
 export const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
@@ -325,6 +325,9 @@ export function normalizeMapUiSignalState(raw) {
     },
     layers: {
       expandedLayerIds: normalizeExpandedLayerIds(normalizedLayers.expandedLayerIds),
+      hoverFactsVisibleByLayer: isPlainObject(normalizedLayers.hoverFactsVisibleByLayer)
+        ? cloneJsonValue(normalizedLayers.hoverFactsVisibleByLayer)
+        : {},
     },
   };
 }

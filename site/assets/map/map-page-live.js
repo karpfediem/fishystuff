@@ -16,6 +16,7 @@
     /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.query)|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const EXACT_PATCH_PATHS = Object.freeze([
     "_map_ui.layers.expandedLayerIds",
+    "_map_ui.layers.hoverFactsVisibleByLayer",
     "_map_bridged.filters.semanticFieldIdsByLayer",
     "_map_bridged.filters.layerOpacities",
     "_map_bridged.filters.layerClipMasks",
@@ -194,6 +195,9 @@
           expandedLayerIds: Array.isArray(signals?._map_ui?.layers?.expandedLayerIds)
             ? cloneJson(signals._map_ui.layers.expandedLayerIds)
             : [],
+          hoverFactsVisibleByLayer: isPlainObject(signals?._map_ui?.layers?.hoverFactsVisibleByLayer)
+            ? cloneJson(signals._map_ui.layers.hoverFactsVisibleByLayer)
+            : {},
         },
         search: {
           query: String(search?.query || ""),
@@ -274,6 +278,9 @@
         expandedLayerIds: Array.isArray(stored?._map_ui?.layers?.expandedLayerIds)
           ? cloneJson(stored._map_ui.layers.expandedLayerIds)
           : [],
+        hoverFactsVisibleByLayer: isPlainObject(stored?._map_ui?.layers?.hoverFactsVisibleByLayer)
+          ? cloneJson(stored._map_ui.layers.hoverFactsVisibleByLayer)
+          : {},
       },
       search: {
         query: String(stored?._map_ui?.search?.query || ""),
@@ -345,6 +352,9 @@
         expandedLayerIds: Array.isArray(parsed.layers.expandedLayerIds)
           ? cloneJson(parsed.layers.expandedLayerIds)
           : [],
+        hoverFactsVisibleByLayer: isPlainObject(parsed.layers.hoverFactsVisibleByLayer)
+          ? cloneJson(parsed.layers.hoverFactsVisibleByLayer)
+          : {},
       };
     }
     const search = isPlainObject(parsed.search)
@@ -583,7 +593,7 @@
       ? stored
       : {
           windowUi: {},
-          layers: { expandedLayerIds: [] },
+          layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {} },
           search: { query: "" },
           bridgedUi: {
             diagnosticsOpen: false,

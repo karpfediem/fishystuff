@@ -62,6 +62,8 @@ Multilingual {
     "map/map-bookmark-io.js",
     "map/map-runtime-adapter.js",
     "map/map-layer-state.js",
+    "map/map-hover-facts.js",
+    "map/map-hover-tooltip-live.js",
     "map/map-layer-panel.js",
     "map/map-layer-panel-live.js",
     "map/map-bookmark-state.js",

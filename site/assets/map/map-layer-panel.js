@@ -2,6 +2,7 @@ import {
   FISHYMAP_POINT_ICON_SCALE_MAX,
   FISHYMAP_POINT_ICON_SCALE_MIN,
 } from "./map-host.js";
+import { buildLayerPanelHoverFactPreview } from "./map-hover-facts.js";
 import {
   clampLayerOpacity,
   clampPointIconScale,
@@ -34,6 +35,21 @@ function escapeAttribute(value) {
   return String(value || "").replace(/"/g, "&quot;");
 }
 
+function hoverFactIconMarkup(row, escapeHtml) {
+  if (String(row?.swatchRgb || "").trim()) {
+    return `<span class="fishymap-layer-fact-swatch" style="--fishymap-layer-fact-rgb:${escapeAttribute(row.swatchRgb)};" aria-hidden="true"></span>`;
+  }
+  return `<svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg#fishy-${escapeAttribute(row?.icon || "information-circle")}"></use></svg>`;
+}
+
+function hoverFactValueMarkup(row, escapeHtml) {
+  const value = String(row?.value || "").trim();
+  if (!value) {
+    return '<span class="text-base-content/35">Unavailable</span>';
+  }
+  return escapeHtml(value);
+}
+
 export function renderLayerStack(container, stateBundle, options = {}) {
   const layers = resolveLayerEntries(stateBundle);
   const expandedLayerIds =
@@ -49,6 +65,13 @@ export function renderLayerStack(container, stateBundle, options = {}) {
   const layerSettingsIcon =
     typeof options.layerSettingsIcon === "function" ? options.layerSettingsIcon : () => "";
   const eyeIcon = typeof options.eyeIcon === "function" ? options.eyeIcon : () => "";
+  const selection =
+    options.selection && typeof options.selection === "object" ? options.selection : null;
+  const zoneCatalog = Array.isArray(options.zoneCatalog) ? options.zoneCatalog : [];
+  const hoverFactVisibilityByLayer =
+    options.hoverFactVisibilityByLayer && typeof options.hoverFactVisibilityByLayer === "object"
+      ? options.hoverFactVisibilityByLayer
+      : {};
 
   if (!layers.length) {
     const loadingKey = "__loading__";
@@ -197,6 +220,12 @@ export function renderLayerStack(container, stateBundle, options = {}) {
           </label>
         `);
       }
+      const hoverFactRows = buildLayerPanelHoverFactPreview({
+        layerId: layer.layerId,
+        selection,
+        zoneCatalog,
+        visibilityByLayer: hoverFactVisibilityByLayer,
+      });
       return `
         <article
           class="fishymap-layer-card card card-border bg-base-200"
@@ -269,6 +298,50 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                             <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Waypoints</span>
                             <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                               ${waypointControls.join("")}
+                            </div>
+                          </fieldset>
+                        `
+                        : ""
+                    }
+                    ${
+                      hoverFactRows.length
+                        ? `
+                          <fieldset class="fieldset">
+                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Hover facts</span>
+                            <div class="overflow-x-auto rounded-box border border-base-300/60 bg-base-100/60">
+                              <table class="table table-xs fishymap-layer-facts-table">
+                                <thead>
+                                  <tr>
+                                    <th class="w-8">Icon</th>
+                                    <th>Name</th>
+                                    <th>Fact</th>
+                                    <th class="w-14 text-right">Show</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  ${hoverFactRows
+                                    .map(
+                                      (row) => `
+                                        <tr>
+                                          <td class="align-middle">${hoverFactIconMarkup(row, escapeHtml)}</td>
+                                          <td class="align-middle text-xs font-semibold text-base-content/80">${escapeHtml(row.name || row.label || row.key)}</td>
+                                          <td class="align-middle text-xs text-base-content/60">${hoverFactValueMarkup(row, escapeHtml)}</td>
+                                          <td class="align-middle text-right">
+                                            <input
+                                              class="toggle toggle-xs toggle-primary"
+                                              data-layer-hover-fact-layer-id="${escapeAttribute(layer.layerId)}"
+                                              data-layer-hover-fact-key="${escapeAttribute(row.key)}"
+                                              type="checkbox"
+                                              ${row.enabled ? "checked" : ""}
+                                              aria-label="Show ${escapeHtml(row.name || row.label || row.key)} while hovering ${escapeHtml(layer.name)}"
+                                            >
+                                          </td>
+                                        </tr>
+                                      `,
+                                    )
+                                    .join("")}
+                                </tbody>
+                              </table>
                             </div>
                           </fieldset>
                         `

@@ -139,7 +139,7 @@ function defaultSignals() {
       },
       search: { open: false, query: "" },
       bookmarks: { placing: false, selectedIds: [] },
-      layers: { expandedLayerIds: [] },
+      layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {} },
     },
     _map_bookmarks: {
       entries: [],
@@ -277,6 +277,13 @@ test("map-page-live persists durable map signal patches", () => {
       windowUi: {
         search: { open: false, collapsed: true, x: 20, y: 30 },
       },
+      layers: {
+        hoverFactsVisibleByLayer: {
+          regions: {
+            origin_region: true,
+          },
+        },
+      },
     },
     _map_bridged: {
       filters: {
@@ -290,6 +297,13 @@ test("map-page-live persists durable map signal patches", () => {
       _map_ui: {
         windowUi: {
           search: { open: false, collapsed: true, x: 20, y: 30 },
+        },
+        layers: {
+          hoverFactsVisibleByLayer: {
+            regions: {
+              origin_region: true,
+            },
+          },
         },
       },
       _map_bridged: {
@@ -307,6 +321,11 @@ test("map-page-live persists durable map signal patches", () => {
     collapsed: true,
     x: 20,
     y: 30,
+  });
+  assert.deepEqual(storedUi.layers.hoverFactsVisibleByLayer, {
+    regions: {
+      origin_region: true,
+    },
   });
   assert.deepEqual(storedUi.bridgedFilters.layerIdsVisible, ["bookmarks", "zone_mask"]);
 });
