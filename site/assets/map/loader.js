@@ -29,6 +29,12 @@ const PRIMARY_SEMANTIC_ROW_KEYS = Object.freeze(["zone", "resources", "origin"])
 const TERRITORY_SUMMARY_FACT_KEYS = Object.freeze(["resources", "origin"]);
 const DEFAULT_ZONE_INFO_TAB = "";
 const DEFAULT_AUTO_ADJUST_VIEW = true;
+const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
+  "bookmarks",
+  "fish_evidence",
+  "zone_mask",
+  "minimap",
+]);
 const FISH_FILTER_TERM_ORDER = Object.freeze(["favourite", "missing"]);
 const FISH_FILTER_TERM_METADATA = Object.freeze({
   favourite: Object.freeze({
@@ -152,6 +158,7 @@ const DEFAULT_MAP_CONTROL_SIGNAL_STATE = Object.freeze({
     patchId: null,
     fromPatchId: null,
     toPatchId: null,
+    layerIdsVisible: DEFAULT_ENABLED_LAYER_IDS,
   }),
   ui: Object.freeze({
     diagnosticsOpen: false,
@@ -171,6 +178,7 @@ const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
     patchId: null,
     fromPatchId: null,
     toPatchId: null,
+    layerIdsVisible: DEFAULT_ENABLED_LAYER_IDS,
   }),
   ui: Object.freeze({
     diagnosticsOpen: false,
@@ -441,7 +449,7 @@ export function normalizeMapControlSignalState(raw) {
       patchId: normalizeNullableString(current.filters?.patchId),
       fromPatchId: normalizeNullableString(current.filters?.fromPatchId),
       toPatchId: normalizeNullableString(current.filters?.toPatchId),
-      layerIdsVisible: cloneJsonValue(current.filters?.layerIdsVisible || []),
+      layerIdsVisible: cloneJsonValue(current.filters?.layerIdsVisible || DEFAULT_ENABLED_LAYER_IDS),
       layerIdsOrdered: cloneJsonValue(current.filters?.layerIdsOrdered || []),
       layerOpacities: cloneJsonValue(current.filters?.layerOpacities || {}),
       layerClipMasks: cloneJsonValue(current.filters?.layerClipMasks || {}),
@@ -620,7 +628,7 @@ export function normalizeMapBridgedSignalState(raw) {
       patchId: normalizeNullableString(current.filters?.patchId),
       fromPatchId: normalizeNullableString(current.filters?.fromPatchId),
       toPatchId: normalizeNullableString(current.filters?.toPatchId),
-      layerIdsVisible: cloneJsonValue(current.filters?.layerIdsVisible || []),
+      layerIdsVisible: cloneJsonValue(current.filters?.layerIdsVisible || DEFAULT_ENABLED_LAYER_IDS),
       layerIdsOrdered: cloneJsonValue(current.filters?.layerIdsOrdered || []),
       layerOpacities: cloneJsonValue(current.filters?.layerOpacities || {}),
       layerClipMasks: cloneJsonValue(current.filters?.layerClipMasks || {}),

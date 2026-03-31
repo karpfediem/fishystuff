@@ -7,6 +7,12 @@
     caught: "fishystuff.fishydex.caught.v1",
     favourites: "fishystuff.fishydex.favourites.v1",
   });
+  const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
+    "bookmarks",
+    "fish_evidence",
+    "zone_mask",
+    "minimap",
+  ]);
   const MAP_PERSIST_SIGNAL_FILTER =
     /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_controls\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale|viewMode)|map_controls\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const state = {
@@ -177,7 +183,7 @@
           toPatchId: inputFilters?.toPatchId == null ? null : String(inputFilters.toPatchId),
           layerIdsVisible: Array.isArray(inputFilters?.layerIdsVisible)
             ? cloneJson(inputFilters.layerIdsVisible)
-            : [],
+            : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
           layerIdsOrdered: Array.isArray(inputFilters?.layerIdsOrdered)
             ? cloneJson(inputFilters.layerIdsOrdered)
             : [],
@@ -285,7 +291,7 @@
             : String(stored._map_controls.filters.toPatchId),
         layerIdsVisible: Array.isArray(stored?._map_controls?.filters?.layerIdsVisible)
           ? cloneJson(stored._map_controls.filters.layerIdsVisible)
-          : [],
+          : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
         layerIdsOrdered: Array.isArray(stored?._map_controls?.filters?.layerIdsOrdered)
           ? cloneJson(stored._map_controls.filters.layerIdsOrdered)
           : [],
@@ -391,7 +397,7 @@
           parsed.inputFilters.toPatchId == null ? null : String(parsed.inputFilters.toPatchId),
         layerIdsVisible: Array.isArray(parsed.inputFilters.layerIdsVisible)
           ? cloneJson(parsed.inputFilters.layerIdsVisible)
-          : [],
+          : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
         layerIdsOrdered: Array.isArray(parsed.inputFilters.layerIdsOrdered)
           ? cloneJson(parsed.inputFilters.layerIdsOrdered)
           : [],

@@ -1100,7 +1100,8 @@
                searchText: '',
                patchId: null,
                fromPatchId: null,
-               toPatchId: null
+               toPatchId: null,
+               layerIdsVisible: ['bookmarks', 'fish_evidence', 'zone_mask', 'minimap']
              },
              ui: {
                diagnosticsOpen: false
@@ -1113,7 +1114,8 @@
                semanticFieldIdsByLayer: {},
                patchId: null,
                fromPatchId: null,
-               toPatchId: null
+               toPatchId: null,
+               layerIdsVisible: ['bookmarks', 'fish_evidence', 'zone_mask', 'minimap']
              },
              ui: {
                diagnosticsOpen: false,

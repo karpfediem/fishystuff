@@ -8,6 +8,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use fishystuff_api::models::events::MapBboxPx;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::layers::{LayerRegistry, LayerRuntime, FISH_EVIDENCE_LAYER_KEY};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, WorldPoint};
 use crate::plugins::api::{
@@ -147,7 +148,20 @@ where
 
 pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     crate::perf_scope!("events.point_entity_update");
-    if !context.display_state.show_points || context.view_mode.mode != ViewMode::Map2D {
+    let fish_evidence_visible = context
+        .layer_registry
+        .id_by_key(FISH_EVIDENCE_LAYER_KEY)
+        .map(|id| context.layer_runtime.visible(id))
+        .unwrap_or(context.display_state.show_points);
+    let fish_evidence_icons_visible = context
+        .layer_registry
+        .id_by_key(FISH_EVIDENCE_LAYER_KEY)
+        .map(|id| context.layer_runtime.point_icons_visible(id))
+        .unwrap_or(context.display_state.show_point_icons);
+    if !context.display_state.show_points
+        || !fish_evidence_visible
+        || context.view_mode.mode != ViewMode::Map2D
+    {
         context.icon_cache.visible_icon_count = 0;
         context.icon_cache.visible_fish_ids_sample.clear();
         if !context.pool.markers.is_empty() {
@@ -167,8 +181,10 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
         context.icon_cache.failed_ids.clear();
     }
 
-    let icons_mode_changed = context.points.icons_enabled != context.display_state.show_point_icons;
-    context.points.icons_enabled = context.display_state.show_point_icons;
+    let effective_show_point_icons =
+        context.display_state.show_point_icons && fish_evidence_icons_visible;
+    let icons_mode_changed = context.points.icons_enabled != effective_show_point_icons;
+    context.points.icons_enabled = effective_show_point_icons;
     let icon_size_world_units = point_icon_world_size(&context.display_state, &context.camera_q);
     let icon_size_changed =
         (context.points.icon_size_world_units - icon_size_world_units).abs() > 0.01;
@@ -328,6 +344,8 @@ pub(super) struct PointMarkerSync<'w, 's> {
     commands: Commands<'w, 's>,
     display_state: Res<'w, MapDisplayState>,
     view_mode: Res<'w, ViewModeState>,
+    layer_registry: Res<'w, LayerRegistry>,
+    layer_runtime: Res<'w, LayerRuntime>,
     fish: Res<'w, FishCatalog>,
     points: ResMut<'w, PointsState>,
     ring_assets: Res<'w, PointRingAssets>,

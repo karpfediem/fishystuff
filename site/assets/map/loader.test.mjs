@@ -31,6 +31,7 @@ const {
   moveBookmarkBefore,
   normalizeZoneCatalog,
   normalizeBookmarks,
+  normalizeMapControlSignalState,
   normalizeBookmarkCoordinate,
   normalizeZoneInfoTab,
   normalizeWindowUiState,
@@ -852,6 +853,24 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
   assert.equal("fishFilterTerms" in projected.filters, false);
   assert.equal("legendOpen" in projected.ui, false);
   assert.equal("leftPanelOpen" in projected.ui, false);
+});
+
+test("normalizeMapControlSignalState defaults visible layers to the expected startup set", () => {
+  const normalized = normalizeMapControlSignalState({
+    filters: {
+      searchText: "",
+    },
+    ui: {
+      diagnosticsOpen: false,
+    },
+  });
+
+  assert.deepEqual(normalized.filters.layerIdsVisible, [
+    "bookmarks",
+    "fish_evidence",
+    "zone_mask",
+    "minimap",
+  ]);
 });
 
 test("normalizeMapBridgedSignalState strips host-only shape pollution", () => {

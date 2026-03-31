@@ -7,6 +7,7 @@ use crate::map::events::{
     cluster_view_events, suggested_cluster_bucket_px, EventsSnapshotState, LocalEventQuery,
     VisibleTileScope, VISIBLE_TILE_SCOPE_PX,
 };
+use crate::map::layers::{LayerRegistry, LayerRuntime, FISH_EVIDENCE_LAYER_KEY};
 use crate::plugins::api::{FishFilterState, MapDisplayState, PatchFilterState};
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::points::EvidenceZoneFilter;
@@ -21,7 +22,15 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     mut refresh: LocalSnapshotRefresh<'_, '_>,
 ) {
     crate::perf_scope!("events.snapshot_query_refresh");
-    if !refresh.display_state.show_points || refresh.view_mode.mode != ViewMode::Map2D {
+    let fish_evidence_visible = refresh
+        .layer_registry
+        .id_by_key(FISH_EVIDENCE_LAYER_KEY)
+        .map(|id| refresh.layer_runtime.visible(id))
+        .unwrap_or(refresh.display_state.show_points);
+    if !refresh.display_state.show_points
+        || !fish_evidence_visible
+        || refresh.view_mode.mode != ViewMode::Map2D
+    {
         refresh.points.status = "points: hidden".to_string();
         refresh.points.request_sig = None;
         return;
@@ -168,6 +177,8 @@ pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     zone_filter: Res<'w, EvidenceZoneFilter>,
     display_state: Res<'w, MapDisplayState>,
     view_mode: Res<'w, ViewModeState>,
+    layer_registry: Res<'w, LayerRegistry>,
+    layer_runtime: Res<'w, LayerRuntime>,
     snapshot: Res<'w, EventsSnapshotState>,
     windows: Query<'w, 's, &'static Window>,
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
