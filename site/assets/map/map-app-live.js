@@ -173,7 +173,7 @@ export function createDeferredBridgeStateRefresher({
   });
 }
 
-async function start() {
+export async function start() {
   const shell = document.getElementById("map-page-shell");
   const canvas = document.getElementById("bevy");
   if (!(shell instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) {
@@ -416,7 +416,7 @@ async function start() {
   });
 }
 
-function startWhenDomReady() {
+export function startWhenDomReady() {
   const run = () => {
     start().catch((error) => {
       console.error("Fishy map app bootstrap failed", error);
@@ -429,8 +429,4 @@ function startWhenDomReady() {
   }
 
   run();
-}
-
-if (globalThis.__fishystuffMapAppAutoStart !== false) {
-  startWhenDomReady();
 }

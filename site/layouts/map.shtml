@@ -4,7 +4,7 @@
     <link rel="stylesheet" href="$site.asset('map/map.css').link()">
     <script src="$site.asset('map/map-page-live.js').link()" defer></script>
     <script src="$site.asset('js/datastar.js').link()" defer></script>
-    <script type="module" src="$site.asset('map/map-app-live.js').link()"></script>
+    <script type="module" src="$site.asset('map/map-app-live-entry.js').link()"></script>
   </head>
 
   <div id="content">

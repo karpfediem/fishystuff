@@ -3220,3 +3220,24 @@ Next cleanup priorities after restoration:
     - `_map_actions`
     - `_map_session`
     - `_map_runtime`
+
+### 2026-03-31: Slice 9 landed
+
+- Removed the production-side `__fishystuffMapAppAutoStart` test hook from the live map module.
+- Added a dedicated side-effectful entry module:
+  - `site/assets/map/map-app-live-entry.js`
+- `site/assets/map/map-app-live.js` is now a side-effect-free module exporting:
+  - `start()`
+  - `startWhenDomReady()`
+- `site/layouts/map.shtml` now loads the entry module instead of the implementation module directly.
+
+Why this matters:
+
+- the clean-slate live map module no longer needs a global test-only escape hatch
+- tests can import the implementation module directly without influencing production boot behavior
+- production keeps an explicit entrypoint and implementation split, matching the broader remediation goal of smaller, clearer responsibilities
+
+Validation:
+
+- `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-host.test.mjs site/assets/map/map-shell.test.mjs`
+- `devenv shell -- bash -lc '''cd site && just build-release-no-tailwind'''`

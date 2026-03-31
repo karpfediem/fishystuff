@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-globalThis.__fishystuffMapAppAutoStart = false;
 const {
   createDeferredBridgeStateRefresher,
   resolveBridgeSnapshot,
+  startWhenDomReady,
+  start,
   waitForMapPageBootstrap,
 } = await import("./map-app-live.js");
-delete globalThis.__fishystuffMapAppAutoStart;
 
 test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge events", () => {
   const currentSnapshot = {
@@ -125,4 +125,9 @@ test("createDeferredBridgeStateRefresher refreshes once on the next frame", () =
   nextFrame();
 
   assert.deepEqual(snapshots, [{ ready: true, filters: { layerIdsVisible: ["zone_mask"] } }]);
+});
+
+test("map-app-live exports explicit start hooks", () => {
+  assert.equal(typeof start, "function");
+  assert.equal(typeof startWhenDomReady, "function");
 });
