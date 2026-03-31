@@ -342,6 +342,78 @@ Validation:
   - bookmark toolbar controls now render from live Datastar state
   - copy/export/import buttons are explicitly disabled instead of remaining inert
 
+### 2026-03-31: Clean-slate live map restored to product parity
+
+The live `/map/` page is now running on the clean-slate Datastar path instead of relying on the
+legacy `loader.js` page bootstrap.
+
+Current live shape:
+
+- shell:
+  - `site/assets/map/map-shell.html`
+- page bootstrap:
+  - `site/assets/map/map-page-live.js`
+- live app orchestration:
+  - `site/assets/map/map-app-live.js`
+- live controllers:
+  - `site/assets/map/map-window-manager.js`
+  - `site/assets/map/map-layer-panel-live.js`
+  - `site/assets/map/map-search-panel-live.js`
+  - `site/assets/map/map-bookmark-panel-live.js`
+  - `site/assets/map/map-zone-info-panel-live.js`
+
+Important restoration fixes that landed during this phase:
+
+- shell-originated signal patches are re-emitted as `datastar-signal-patch` so live controllers
+  stay in sync with ordinary Datastar patch flow
+- bookmark placement now consumes coarse runtime selection changes without reintroducing
+  hover-driven shared state
+- bridge events that only carry partial state, such as `fishymap:view-changed`, are resolved
+  against the current full bridge snapshot before projecting back into `_map_runtime`
+
+Validation checkpoint:
+
+- served assets matched `site/.out` for the active map runtime files:
+  - `/map/map-app-live.js`
+  - `/map/map-page-live.js`
+  - `/map/map.css`
+- live DevTools checks confirmed:
+  - map boots to `Ready`
+  - layer catalog reaches `7`
+  - fish catalog reaches `496`
+  - toolbar window visibility state is reflected immediately
+  - layer toggles and per-layer settings update runtime state immediately
+  - fish-evidence icon size updates the fish-evidence runtime path without mutating waypoint icon
+    rendering
+  - search results render live and selecting a result updates `_map_bridged.filters`
+  - zone info updates from runtime selection on the live shell
+  - bookmark placement and bookmark focus work again
+  - `Reset UI` returns to `Ready`
+- sequential browser scenarios passed:
+  - `bash tools/scripts/map-browser-smoke.sh`
+  - `python3 tools/scripts/map_browser_profile.py load_map --output-json /tmp/map-load.current.json`
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_sweep --timeout-seconds 90 --output-json /tmp/map-hover.current.json`
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_far_jumps --output-json /tmp/map-hover-far-jumps.current.json`
+  - `python3 tools/scripts/map_browser_profile.py minimap_enable --output-json /tmp/map-minimap-enable.current.json`
+  - `python3 tools/scripts/map_browser_profile.py vector_regions_enable --output-json /tmp/map-vector-regions-enable.current.json`
+  - `python3 tools/scripts/map_browser_profile.py vector_region_groups_enable --output-json /tmp/map-vector-region-groups-enable.current.json`
+  - `python3 tools/scripts/map_browser_profile.py vector_region_groups_dom_toggle --output-json /tmp/map-vector-region-groups-dom-toggle.current.json`
+
+Profiling note:
+
+- `minimap_pan_zoom` passed with a larger timeout:
+  - `python3 tools/scripts/map_browser_profile.py minimap_pan_zoom --timeout-seconds 90 --output-json /tmp/map-minimap-pan-zoom.long.json`
+- default-timeout failures here look like harness timing rather than a live map regression
+- concurrent profile runs can still exhaust headless Chromium shared-image resources, so the
+  restoration sweep should stay sequential
+
+Current conclusion:
+
+- map functionality is restored on the clean-slate Datastar path
+- the next work is no longer parity restoration
+- the next work is simplifying the remaining bootstrap/orchestration seams without widening the
+  bridge contract again
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.
