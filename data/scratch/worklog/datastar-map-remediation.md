@@ -2673,3 +2673,94 @@ Next tasks from here:
   - `_map_runtime`
 - only add new runtime event consumers when a page module genuinely needs a coarse event boundary,
   as with bookmark placement
+
+## Thirty-fifth implementation slice landed
+
+Shell-originated live map patches now re-enter the same reactive path as native Datastar patches.
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - shell-dispatched `fishymap-signals-patch` updates now also emit a document-level
+    `datastar-signal-patch` event after mutating the live signal graph
+  - this keeps controller-originated writes aligned with the live app layer that:
+    - persists durable state
+    - projects `_map_bridged` into the bridge
+    - schedules bridge snapshot refreshes back into `_map_runtime`
+- `site/assets/map/map-page-live.test.mjs`
+  - added regression coverage proving that a shell-originated patch is re-emitted as a Datastar
+    signal patch event
+
+Why this slice matters:
+
+- the clean-slate live shell had a split-brain reactive model:
+  - native Datastar signal mutations emitted `datastar-signal-patch`
+  - shell/controller mutations emitted only `fishymap-signals-patch`
+- that meant controller actions could update the signal graph without necessarily driving the same
+  bridge refresh/runtime projection path
+- the concrete symptom was stale runtime/catalog state after shell-originated interactions unless a
+  manual refresh happened later
+- the clearest reproduced case was layer reordering:
+  - `_map_bridged.filters.layerIdsOrdered` changed
+  - `FishyMapBridge.getCurrentInputState()` changed
+  - but `FishyMapBridge.getCurrentState().catalog.layers[*].displayOrder` could remain stale until
+    `refreshCurrentStateNow()` was forced
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-page-live.js`
+- `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-zone-catalog.test.mjs site/assets/map/map-host.test.mjs`
+- rebuild site output
+- restore tracked font artifacts after rebuild
+- served asset verification:
+  - `/map/map-page-live.js`
+  - `/map/map-bookmark-panel-live.js`
+  - both match `site/.out`
+- live Chromium checks:
+  - shell-originated layer reorder patch now updates:
+    - `_map_bridged.filters.layerIdsOrdered`
+    - `FishyMapBridge.getCurrentInputState().filters.layerIdsOrdered`
+    - `FishyMapBridge.getCurrentState().catalog.layers[*].displayOrder`
+    without manual runtime refresh
+  - `Reset UI` returns to:
+    - `_map_runtime.ready === true`
+    - `catalog.layers.length === 7`
+  - explicit shell patch bookmark placement still works end-to-end:
+    - bookmark count increments
+    - placement mode exits
+    - new bookmark becomes selected
+- headless validation:
+  - `python3 tools/scripts/map_browser_profile.py load_map --output-json /tmp/map-load.current.json`
+    - `PASS`
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_sweep --timeout-seconds 90 --output-json /tmp/map-hover.current.json`
+    - `PASS`
+  - `bash tools/scripts/map-browser-smoke.sh`
+    - clean retry `PASS`
+    - the earlier failing run was accompanied by Chromium shared-image allocation errors and did not
+      reproduce on a clean rerun
+
+Current restored interaction sweep after the fix:
+
+- boot:
+  - ready pill reaches `Ready`
+  - runtime catalogs populate
+  - layer count reaches `7`
+- shell/controller interactions:
+  - layer ordering updates runtime draw order immediately
+  - bookmark placement updates signals, runtime-facing bookmark input, and selection cleanly
+  - `Reset UI` rehydrates runtime/output state cleanly
+- profiling/smoke:
+  - clean headless load smoke passes
+  - hover sweep remains within the expected band
+
+Next tasks from here:
+
+- keep deleting remaining legacy/bootstrap-only duplication now that the live shell patch path is
+  unified again
+- continue replacing old page-global seams with direct Datastar expressions or narrowly scoped
+  clean-slate modules
+- keep using the explicit bridge contract as the guardrail:
+  - `_map_bridged`
+  - `_map_actions`
+  - `_map_session`
+  - `_map_runtime`

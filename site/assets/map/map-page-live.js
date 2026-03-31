@@ -670,8 +670,26 @@
     state.signalPatchListenerBound = true;
   }
 
+  function emitDatastarSignalPatch(patch) {
+    if (
+      !patch ||
+      typeof patch !== "object" ||
+      typeof globalThis.CustomEvent !== "function" ||
+      typeof globalThis.document?.dispatchEvent !== "function"
+    ) {
+      return;
+    }
+    globalThis.document.dispatchEvent(
+      new globalThis.CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
+        bubbles: true,
+        detail: cloneJson(patch),
+      }),
+    );
+  }
+
   function handleShellSignalPatch(event) {
     applyPatch(state.liveSignals, event?.detail);
+    emitDatastarSignalPatch(event?.detail);
   }
 
   function bindShellPatchListener() {

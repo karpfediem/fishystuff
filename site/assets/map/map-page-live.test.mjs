@@ -230,6 +230,35 @@ test("map-page-live applies fishymap shell patches into the live signal graph", 
   ]);
 });
 
+test("map-page-live re-emits shell patches as datastar signal patches", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+  const received = [];
+
+  env.window.__fishystuffMap.restore(signals);
+  env.document.addEventListener("datastar-signal-patch", (event) => {
+    received.push(event.detail);
+  });
+
+  dispatchShellPatch(env, {
+    _map_bridged: {
+      filters: {
+        layerIdsOrdered: ["minimap", "fish_evidence"],
+      },
+    },
+  });
+
+  assert.deepEqual(received, [
+    {
+      _map_bridged: {
+        filters: {
+          layerIdsOrdered: ["minimap", "fish_evidence"],
+        },
+      },
+    },
+  ]);
+});
+
 test("map-page-live persists durable map signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
