@@ -106,6 +106,8 @@ Net effect:
   - clip-mask normalization helpers
   - per-layer toggle patch builders
 - `loader.js` now imports those helpers instead of defining them inline.
+- Follow-up stabilization:
+  - kept `flattenLayerClipMasks(...)` and the point-scale constants flowing through the new module boundary so the layer panel markup stays self-consistent after extraction.
 
 Why this matters:
 

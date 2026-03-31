@@ -294,7 +294,7 @@ function resolveTopClipMaskLayerId(clipMasks, layerId) {
   return "";
 }
 
-function flattenLayerClipMasks(clipMasks) {
+export function flattenLayerClipMasks(clipMasks) {
   const flattened = {};
   for (const [layerId, maskLayerId] of Object.entries(clipMasks || {})) {
     const normalizedLayerId = String(layerId || "").trim();

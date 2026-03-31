@@ -1,6 +1,8 @@
 import FishyMapBridge, {
   FISHYMAP_CONTRACT_VERSION,
   FISHYMAP_EVENTS,
+  FISHYMAP_POINT_ICON_SCALE_MAX,
+  FISHYMAP_POINT_ICON_SCALE_MIN,
   applyStatePatch,
   createSessionSnapshotFromState,
   resolveEffectiveFishIdsForWasm,
@@ -44,6 +46,7 @@ import {
   buildLayerWaypointLabelsPatch,
   clampLayerOpacity,
   clampPointIconScale,
+  flattenLayerClipMasks,
   isFixedGroundLayer,
   layerOpacityLabel,
   layerOpacityValue,
