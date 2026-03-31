@@ -1,0 +1,179 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  buildBridgeCommandPatchFromSignals,
+  buildBridgeInputPatchFromSignals,
+  normalizeMapActionState,
+  projectRuntimeSnapshotToSignals,
+  projectSessionSnapshotToSignals,
+} from "./map-runtime-adapter.js";
+import { createEmptySnapshot } from "./map-host.js";
+
+test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () => {
+  const patch = buildBridgeInputPatchFromSignals(
+    {
+      _map_ui: {
+        windowUi: {
+          search: { open: false },
+        },
+        bookmarks: {
+          selectedIds: ["bookmark-a", "missing"],
+        },
+      },
+      _map_controls: {
+        filters: {
+          searchText: "cron",
+          fishFilterTerms: ["favourite"],
+        },
+        ui: {
+          legendOpen: true,
+          leftPanelOpen: false,
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [77],
+          zoneRgbs: [123456],
+          semanticFieldIdsByLayer: { regions: [11] },
+          patchId: "p1",
+          fromPatchId: "a",
+          toPatchId: "b",
+          layerIdsVisible: ["bookmarks", "fish_evidence"],
+          layerIdsOrdered: ["fish_evidence", "bookmarks"],
+          layerOpacities: { fish_evidence: 0.5 },
+          layerClipMasks: { fish_evidence: "zone_mask" },
+          layerWaypointConnectionsVisible: { bookmarks: true },
+          layerWaypointLabelsVisible: { bookmarks: false },
+          layerPointIconsVisible: { fish_evidence: true },
+          layerPointIconScales: { fish_evidence: 1.4 },
+        },
+        ui: {
+          diagnosticsOpen: true,
+          showPoints: false,
+          showPointIcons: true,
+          viewMode: "3d",
+          pointIconScale: 1.8,
+        },
+      },
+      _map_bookmarks: {
+        entries: [
+          { id: "bookmark-a", label: "Cron", worldX: 12.5, worldZ: 34.5, layerSamples: [{ nope: 1 }] },
+          { id: "bookmark-b", worldX: 1, worldZ: 2 },
+          { id: "", worldX: 9, worldZ: 9 },
+        ],
+      },
+      _shared_fish: {
+        caughtIds: [5],
+        favouriteIds: [77],
+      },
+    },
+    { currentState: createEmptySnapshot() },
+  );
+
+  assert.equal(patch.version, 1);
+  assert.deepEqual(patch.filters.fishIds, [77]);
+  assert.deepEqual(patch.filters.zoneRgbs, [123456]);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, { regions: [11] });
+  assert.equal(patch.filters.patchId, "p1");
+  assert.equal(patch.filters.fromPatchId, "a");
+  assert.equal(patch.filters.toPatchId, "b");
+  assert.deepEqual(patch.filters.layerIdsVisible, ["bookmarks", "fish_evidence"]);
+  assert.deepEqual(patch.ui.bookmarkSelectedIds, ["bookmark-a"]);
+  assert.deepEqual(patch.ui.bookmarks, [
+    { id: "bookmark-a", label: "Cron", worldX: 12.5, worldZ: 34.5 },
+    { id: "bookmark-b", worldX: 1, worldZ: 2 },
+  ]);
+  assert.equal("searchText" in patch.filters, false);
+  assert.equal("legendOpen" in patch.ui, false);
+  assert.equal("leftPanelOpen" in patch.ui, false);
+  assert.equal("windowUi" in patch.ui, false);
+});
+
+test("buildBridgeInputPatchFromSignals still falls back to transitional control filters", () => {
+  const patch = buildBridgeInputPatchFromSignals(
+    {
+      _map_controls: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [654321],
+          semanticFieldIdsByLayer: { region_groups: [22] },
+          fishFilterTerms: ["uncaught"],
+          patchId: "legacy-patch",
+        },
+      },
+    },
+    { currentState: createEmptySnapshot() },
+  );
+
+  assert.deepEqual(patch.filters.fishIds, [912]);
+  assert.deepEqual(patch.filters.zoneRgbs, [654321]);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, { region_groups: [22] });
+  assert.equal(patch.filters.patchId, "legacy-patch");
+});
+
+test("buildBridgeCommandPatchFromSignals only emits resetView on token increase", () => {
+  assert.equal(
+    buildBridgeCommandPatchFromSignals(
+      { _map_actions: { resetViewToken: 3, resetUiToken: 7 } },
+      { resetViewToken: 3, resetUiToken: 6 },
+    ),
+    null,
+  );
+
+  assert.deepEqual(
+    buildBridgeCommandPatchFromSignals(
+      { _map_actions: { resetViewToken: 4, resetUiToken: 7 } },
+      { resetViewToken: 3, resetUiToken: 7 },
+    ),
+    { version: 1, commands: { resetView: true } },
+  );
+});
+
+test("normalizeMapActionState defaults missing tokens to zero", () => {
+  assert.deepEqual(normalizeMapActionState(null), {
+    resetViewToken: 0,
+    resetUiToken: 0,
+  });
+});
+
+test("projectRuntimeSnapshotToSignals keeps only coarse runtime fields", () => {
+  const patch = projectRuntimeSnapshotToSignals({
+    ready: true,
+    theme: { name: "night" },
+    view: { viewMode: "3d" },
+    selection: { pointKind: "clicked" },
+    catalog: { layers: [{ layerId: "zone_mask" }] },
+    statuses: { layersStatus: "ready" },
+    lastDiagnostic: { note: "ok" },
+    hover: { shouldNotLeak: true },
+    filters: { shouldNotLeak: true },
+  });
+
+  assert.deepEqual(patch, {
+    _map_runtime: {
+      ready: true,
+      theme: { name: "night" },
+      view: { viewMode: "3d" },
+      selection: { pointKind: "clicked" },
+      catalog: { layers: [{ layerId: "zone_mask" }] },
+      statuses: { layersStatus: "ready" },
+      lastDiagnostic: { note: "ok" },
+    },
+  });
+});
+
+test("projectSessionSnapshotToSignals keeps only restorable session fields", () => {
+  const patch = projectSessionSnapshotToSignals({
+    view: { viewMode: "2d", camera: { zoom: 2 } },
+    selection: { pointKind: "bookmark" },
+    hover: { shouldNotLeak: true },
+  });
+
+  assert.deepEqual(patch, {
+    _map_session: {
+      view: { viewMode: "2d", camera: { zoom: 2 } },
+      selection: { pointKind: "bookmark" },
+    },
+  });
+});

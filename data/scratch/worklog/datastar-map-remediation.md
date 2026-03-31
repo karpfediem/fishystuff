@@ -1022,3 +1022,73 @@ Validation for this slice:
 - `node --test site/assets/map/loader.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-signal-contract.test.mjs`
 - rebuild site output
 - verify served `/map/loader.js` and `/map/map-search-panel.js` match `site/.out`
+
+## Architectural reset
+
+We are explicitly changing approach here.
+
+The goal is no longer "keep shrinking `loader.js`" or to continue a long series of
+1:1 extractions from a legacy imperative file.
+
+The goal is:
+
+- treat `site/assets/map/loader.js` as legacy compatibility code
+- define a replacement architecture from the Datastar signal graph outward
+- keep the Bevy bridge on a strict explicit whitelist
+- move toward a new clean-slate map app path that eventually makes the loader unnecessary
+
+Why this pivot is necessary:
+
+- the remaining bulk of `loader.js` is still imperative orchestration glue
+- continuing to prettify or split that glue 1:1 would preserve the wrong design center
+- Datastar best practices push us toward sparse explicit signal ownership and narrow side-effect seams, not toward a second client framework wrapped around the signal graph
+
+Replacement direction from this point:
+
+- `map-page.js`
+  - restore/persist/bootstrap of durable page-owned signals
+- `map-runtime-adapter.js`
+  - pure bridge-facing Datastar contract
+  - explicit bridge input projection
+  - explicit one-shot command projection
+  - explicit coarse runtime/session projection
+- `map-app.js`
+  - clean replacement entrypoint that wires Datastar state to the adapter and the bridge
+  - no page UI rendering logic
+- legacy `loader.js`
+  - compatibility path only until the clean replacement is ready
+
+## Eighth implementation slice landed
+
+The first real clean-slate replacement module is now in place:
+
+- `site/assets/map/map-runtime-adapter.js`
+- `site/assets/map/map-app.js`
+
+What this module establishes:
+
+- the Bevy-facing input patch is built from an explicit Datastar signal subset
+- bookmark sharing is minimal and independent from hover/runtime snapshots
+- bridge commands are derived from action-token state only
+- runtime snapshots project back only coarse `_map_runtime` state
+- restorable state projects back only `_map_session.view` and `_map_session.selection`
+- a clean replacement app entry surface now exists that composes those pure adapter pieces without depending on `loader.js`
+
+Why this slice matters:
+
+- it stops using `loader.js` as the design center for the replacement path
+- it gives the future clean `map-app.js` a pure tested contract to build around
+- it makes the intended shared-signal boundary explicit and testable
+
+What still remains after this slice:
+
+- the new adapter is not wired into the live map boot path yet
+- `_map_controls` still exists as a transitional compatibility branch
+- the future `map-app.js` entrypoint does not exist yet
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-runtime-adapter.js`
+- `node --check site/assets/map/map-app.js`
+- `node --test site/assets/map/map-runtime-adapter.test.mjs`
+- `node --test site/assets/map/map-app.test.mjs`
