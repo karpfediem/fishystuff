@@ -1379,7 +1379,7 @@ test("canvas sizing falls back to the map container when the canvas rect is not 
   }
 });
 
-test("buildInitialRestorePatch ignores session storage and uses only query-owned restore state", () => {
+test("buildInitialRestorePatch ignores session storage and page-owned query state", () => {
   const sessionStorage = new MemoryStorage({
     "fishystuff.map.session.v1": JSON.stringify({
       version: 1,
@@ -1420,19 +1420,20 @@ test("buildInitialRestorePatch ignores session storage and uses only query-owned
     sessionStorage,
   });
 
-  assert.deepEqual(patch.filters.layerIdsVisible, ["zones", "terrain"]);
-  assert.deepEqual(patch.filters.fishIds, [77]);
-  assert.equal("layerIdsOrdered" in patch.filters, false);
-  assert.equal("layerOpacities" in patch.filters, false);
-  assert.equal("layerClipMasks" in patch.filters, false);
-  assert.equal("patchId" in patch.filters, false);
-  assert.equal("fromPatchId" in patch.filters, false);
-  assert.equal("toPatchId" in patch.filters, false);
+  const filters = patch.filters || {};
+  const commands = patch.commands || {};
+  assert.deepEqual(filters, {});
+  assert.equal("layerIdsOrdered" in filters, false);
+  assert.equal("layerOpacities" in filters, false);
+  assert.equal("layerClipMasks" in filters, false);
+  assert.equal("patchId" in filters, false);
+  assert.equal("fromPatchId" in filters, false);
+  assert.equal("toPatchId" in filters, false);
   assert.equal("ui" in patch, false);
-  assert.equal("selectWorldPoint" in patch.commands, false);
-  assert.equal("selectZoneRgb" in patch.commands, false);
-  assert.equal(patch.commands.setViewMode, "3d");
-  assert.equal("restoreView" in patch.commands, false);
+  assert.equal("selectWorldPoint" in commands, false);
+  assert.equal("selectZoneRgb" in commands, false);
+  assert.equal("setViewMode" in commands, false);
+  assert.equal("restoreView" in commands, false);
 });
 
 test("normalizeStatePatch keeps minimap layer opacity and clip mask overrides", () => {
@@ -1756,30 +1757,32 @@ test("state patch normalizes selectSemanticField commands", () => {
   });
 });
 
-test("legacy patch query alias expands to an exact range", () => {
+test("host query parsing ignores page-owned patch params", () => {
   const patch = parseQueryState("https://fishystuff.fish/map/?patch=2026-02-26");
 
-  assert.equal(patch.filters.patchId, "2026-02-26");
-  assert.equal(patch.filters.fromPatchId, "2026-02-26");
-  assert.equal(patch.filters.toPatchId, "2026-02-26");
+  assert.equal("filters" in patch, false);
+  assert.equal("ui" in patch, false);
+  assert.equal("commands" in patch, false);
 });
 
-test("explicit query range keeps the canonical patch id empty", () => {
+test("host query parsing ignores page-owned range params", () => {
   const patch = parseQueryState(
     "https://fishystuff.fish/map/?fromPatch=2026-02-26&toPatch=2026-03-12",
   );
 
-  assert.equal(patch.filters.patchId, null);
-  assert.equal(patch.filters.fromPatchId, "2026-02-26");
-  assert.equal(patch.filters.toPatchId, "2026-03-12");
+  assert.equal("filters" in patch, false);
+  assert.equal("ui" in patch, false);
+  assert.equal("commands" in patch, false);
 });
 
-test("query state supports fish filter terms", () => {
+test("host query parsing ignores page-owned shared filters", () => {
   const patch = parseQueryState(
-    "https://fishystuff.fish/map/?fishTerms=favourite,missing",
+    "https://fishystuff.fish/map/?fish=77&fishTerms=favourite,missing&search=velia&layers=zones,terrain&diagnostics=true&view=3d",
   );
 
-  assert.deepEqual(patch.filters.fishFilterTerms, ["favourite", "missing"]);
+  assert.equal("filters" in patch, false);
+  assert.equal("ui" in patch, false);
+  assert.equal("commands" in patch, false);
 });
 
 test("query state supports direct world-point selection", () => {

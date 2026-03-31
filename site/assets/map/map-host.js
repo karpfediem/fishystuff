@@ -1752,23 +1752,6 @@ function parseIntegerParam(value) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function parseLayerSetParam(value) {
-  const normalized = String(value ?? "").trim();
-  if (!normalized || normalized === "default") {
-    return undefined;
-  }
-  return normalizeStringList(normalized.split(/[,+]/g));
-}
-
-function parseFishFilterTermsParam(value) {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) {
-    return undefined;
-  }
-  const terms = normalizeFishFilterTerms(normalized.split(/[\s,]+/g));
-  return terms.length ? terms : undefined;
-}
-
 export function parseQueryState(locationHref = globalThis.location?.href) {
   if (!locationHref) {
     return normalizeStatePatch({});
@@ -1780,21 +1763,6 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
     version: FISHYMAP_CONTRACT_VERSION,
   };
 
-  const fishId =
-    parseIntegerParam(params.get("focusFish")) ?? parseIntegerParam(params.get("fish"));
-  const patchId = params.get("patch");
-  const fromPatchId = params.get("fromPatch") ?? params.get("patchFrom");
-  const toPatchId =
-    params.get("toPatch") ?? params.get("untilPatch") ?? params.get("patchTo");
-  const fishFilterTerms =
-    parseFishFilterTermsParam(params.get("fishTerms"))
-    ?? parseFishFilterTermsParam(params.get("fishFilterTerms"));
-  const searchText = params.get("search");
-  const diagnosticsOpen = parseBooleanParam(params.get("diagnostics"));
-  const legendOpen = parseBooleanParam(params.get("legend"));
-  const layers =
-    parseLayerSetParam(params.get("layers")) ?? parseLayerSetParam(params.get("layerSet"));
-  const viewMode = params.get("view") === "3d" || params.get("mode") === "3d" ? "3d" : undefined;
   const zoneRgb = parseIntegerParam(params.get("zone"));
   const semanticLayerId = normalizeNullableString(params.get("semanticLayer"));
   const semanticFieldId = parseIntegerParam(params.get("semanticField"));
@@ -1804,59 +1772,11 @@ export function parseQueryState(locationHref = globalThis.location?.href) {
   const pointLabel = normalizeNullableString(params.get("pointLabel"));
 
   if (
-    fishId != null ||
-    patchId != null ||
-    fromPatchId != null ||
-    toPatchId != null ||
-    fishFilterTerms != null ||
-    searchText != null ||
-    layers != null
-  ) {
-    patch.filters = {};
-  }
-  if (fishId != null) {
-    patch.filters.fishIds = [fishId];
-  }
-  if (fromPatchId != null || toPatchId != null) {
-    if (fromPatchId != null) {
-      patch.filters.fromPatchId = fromPatchId || null;
-    }
-    if (toPatchId != null) {
-      patch.filters.toPatchId = toPatchId || null;
-    }
-  } else if (patchId != null) {
-    patch.filters.patchId = patchId || null;
-  }
-  if (fishFilterTerms != null) {
-    patch.filters.fishFilterTerms = fishFilterTerms;
-  }
-  if (searchText != null) {
-    patch.filters.searchText = searchText;
-  }
-  if (layers != null) {
-    patch.filters.layerIdsVisible = layers;
-  }
-
-  if (diagnosticsOpen != null || legendOpen != null) {
-    patch.ui = {};
-  }
-  if (diagnosticsOpen != null) {
-    patch.ui.diagnosticsOpen = diagnosticsOpen;
-  }
-  if (legendOpen != null) {
-    patch.ui.legendOpen = legendOpen;
-  }
-
-  if (
-    viewMode
-    || zoneRgb != null
+    zoneRgb != null
     || (semanticLayerId && semanticFieldId != null)
     || (worldX !== undefined && worldZ !== undefined)
   ) {
     patch.commands = { ...(patch.commands || {}) };
-  }
-  if (viewMode) {
-    patch.commands.setViewMode = viewMode;
   }
   if (worldX !== undefined && worldZ !== undefined) {
     patch.commands.selectWorldPoint = {

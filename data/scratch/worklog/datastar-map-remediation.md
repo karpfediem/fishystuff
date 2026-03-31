@@ -1359,3 +1359,44 @@ Validation for this slice:
 - `node --test site/assets/map/map-query-state.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/js/pages/map-page.test.mjs`
 - rebuild site output
 - compare served `/map/`, `/map/map-app-live.js`, and `/map/map-query-state.js` against `site/.out`
+
+## Eleventh implementation slice landed
+
+The host-side query parser is now trimmed to true runtime command ownership only.
+
+What changed:
+
+- `site/assets/map/map-host.js`
+  - `parseQueryState()` no longer reads page-owned/shared URL fields such as:
+    - fish filters
+    - patch range
+    - search text
+    - diagnostics
+    - visible layers
+    - view mode
+  - it now keeps only command-style selection parsing:
+    - `zone`
+    - `semanticLayer` + `semanticField`
+    - `worldX` / `worldZ`
+- `site/assets/map/map-host.test.mjs`
+  - updated to assert that page-owned/shared query params are ignored by the host
+  - kept direct command-query coverage in place
+
+Why this slice matters:
+
+- it removes duplicated ownership between `map-app-live.js` page-side query patching and the host bootstrap path
+- it narrows the bridge contract toward explicit runtime concerns
+- it makes the startup flow more Datastar-aligned: page/shared URL state first, bridge commands second
+
+What still remains after this slice:
+
+- `map-host.js` still carries stale contract fields in its broader input-state model
+- selection/world-point query commands are still host-owned
+- the live shell still needs clean-slate replacements for more interactive panel behavior
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-host.js`
+- `node --test site/assets/map/map-host.test.mjs site/assets/map/map-query-state.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- compare served `/map/`, `/map/map-app-live.js`, `/map/map-host.js`, and `/map/map-query-state.js` against `site/.out`
