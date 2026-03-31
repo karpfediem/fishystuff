@@ -29,8 +29,7 @@ function patchTouchesLiveBridgeInputs(patch) {
     "_map_bridged" in patch ||
     "_map_actions" in patch ||
     "_map_bookmarks" in patch ||
-    "_shared_fish" in patch ||
-    "_map_controls" in patch
+    "_shared_fish" in patch
   );
 }
 

@@ -927,6 +927,42 @@ For map remediation work:
 `loader.js` should only survive temporarily as dead/legacy code until the new path fully
 supersedes it.
 
+## 2026-03-31: New live bridge path no longer reads `_map_controls`
+
+After the live cutover, the next clean-slate tightening step was to remove transitional
+`_map_controls` fallback from the new runtime adapter path.
+
+Updated:
+
+- `site/assets/map/map-runtime-adapter.js`
+- `site/assets/map/map-app-live.js`
+- `site/assets/map/map-runtime-adapter.test.mjs`
+
+What changed:
+
+- `buildBridgeInputPatchFromSignals(...)` now reads bridge inputs only from:
+  - `_map_bridged`
+  - `_map_bookmarks`
+  - `_map_ui.bookmarks.selectedIds`
+  - `_shared_fish`
+- `map-app-live.js` now only reacts to live signal patches from:
+  - `_map_bridged`
+  - `_map_actions`
+  - `_map_bookmarks`
+  - `_shared_fish`
+
+What it no longer does:
+
+- it does not inherit bridge inputs from `_map_controls`
+- it does not treat `_map_controls` patches as Bevy-facing live updates
+
+Why this matters:
+
+- it makes the clean-slate path more honest
+- it flushes out any features that still depend on the transitional branch
+- it keeps the new live bootstrap aligned with the explicit shared-signal contract rather than
+  silently preserving legacy ownership rules
+
 The next clean-slate extraction moved the bridge projection logic into a dedicated module:
 
 - `site/assets/map/map-bridge-projection.js`

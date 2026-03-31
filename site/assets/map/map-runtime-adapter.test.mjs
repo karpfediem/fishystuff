@@ -90,7 +90,7 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
   assert.equal("windowUi" in patch.ui, false);
 });
 
-test("buildBridgeInputPatchFromSignals still falls back to transitional control filters", () => {
+test("buildBridgeInputPatchFromSignals ignores transitional control filters", () => {
   const patch = buildBridgeInputPatchFromSignals(
     {
       _map_controls: {
@@ -106,10 +106,10 @@ test("buildBridgeInputPatchFromSignals still falls back to transitional control 
     { currentState: createEmptySnapshot() },
   );
 
-  assert.deepEqual(patch.filters.fishIds, [912]);
-  assert.deepEqual(patch.filters.zoneRgbs, [654321]);
-  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, { region_groups: [22] });
-  assert.equal(patch.filters.patchId, "legacy-patch");
+  assert.deepEqual(patch.filters.fishIds, []);
+  assert.deepEqual(patch.filters.zoneRgbs, []);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
+  assert.equal(patch.filters.patchId, null);
 });
 
 test("buildBridgeCommandPatchFromSignals only emits resetView on token increase", () => {

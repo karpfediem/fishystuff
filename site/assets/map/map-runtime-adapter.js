@@ -83,15 +83,12 @@ function normalizeRecordObject(value) {
 
 function normalizeBridgedFilters(signals) {
   const bridged = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
-  const legacy = isPlainObject(signals?._map_controls?.filters) ? signals._map_controls.filters : {};
   return {
-    fishIds: normalizeIntegerList(bridged.fishIds ?? legacy.fishIds),
-    zoneRgbs: normalizeIntegerList(bridged.zoneRgbs ?? legacy.zoneRgbs),
-    semanticFieldIdsByLayer: normalizeRecordObject(
-      bridged.semanticFieldIdsByLayer ?? legacy.semanticFieldIdsByLayer,
-    ),
-    fishFilterTerms: normalizeStringList(bridged.fishFilterTerms ?? legacy.fishFilterTerms),
-    patchId: bridged.patchId ?? legacy.patchId ?? null,
+    fishIds: normalizeIntegerList(bridged.fishIds),
+    zoneRgbs: normalizeIntegerList(bridged.zoneRgbs),
+    semanticFieldIdsByLayer: normalizeRecordObject(bridged.semanticFieldIdsByLayer),
+    fishFilterTerms: normalizeStringList(bridged.fishFilterTerms),
+    patchId: bridged.patchId ?? null,
     fromPatchId: bridged.fromPatchId ?? null,
     toPatchId: bridged.toPatchId ?? null,
     layerIdsVisible: normalizeStringList(bridged.layerIdsVisible).length
