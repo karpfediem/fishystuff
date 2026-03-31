@@ -56,6 +56,7 @@ Multilingual {
     "map/map-app-live.js",
     "map/map.css",
     "map/map-page-state.js",
+    "map/map-page-signals.js",
     "map/map-query-state.js",
     "map/map-shell.html",
     "map/map-signal-patch.js",

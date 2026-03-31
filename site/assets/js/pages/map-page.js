@@ -7,25 +7,6 @@
     caught: "fishystuff.fishydex.caught.v1",
     favourites: "fishystuff.fishydex.favourites.v1",
   });
-  const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.query)|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
-  const EXACT_PATCH_PATHS = Object.freeze([
-    "_map_ui.layers.expandedLayerIds",
-    "_map_bridged.filters.semanticFieldIdsByLayer",
-    "_map_bridged.filters.layerOpacities",
-    "_map_bridged.filters.layerClipMasks",
-    "_map_bridged.filters.layerWaypointConnectionsVisible",
-    "_map_bridged.filters.layerWaypointLabelsVisible",
-    "_map_bridged.filters.layerPointIconsVisible",
-    "_map_bridged.filters.layerPointIconScales",
-    "_map_runtime.theme",
-    "_map_runtime.view",
-    "_map_runtime.selection",
-    "_map_runtime.catalog",
-    "_map_runtime.statuses",
-    "_map_session.view",
-    "_map_session.selection",
-  ]);
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const FISHYMAP_SIGNAL_PATCH_EVENT = "fishymap-signals-patch";
   const state = {
@@ -49,67 +30,6 @@
     return JSON.parse(JSON.stringify(value));
   }
 
-  function readObjectPath(root, path) {
-    return String(path ?? "")
-      .split(".")
-      .filter(Boolean)
-      .reduce((current, key) => {
-        if (current && typeof current === "object" && key in current) {
-          return current[key];
-        }
-        return undefined;
-      }, root);
-  }
-
-  function hasObjectPath(root, path) {
-    if (!root || typeof root !== "object") {
-      return false;
-    }
-    const parts = String(path ?? "").split(".").filter(Boolean);
-    if (!parts.length) {
-      return false;
-    }
-    let current = root;
-    for (const key of parts) {
-      if (!current || typeof current !== "object" || !(key in current)) {
-        return false;
-      }
-      current = current[key];
-    }
-    return true;
-  }
-
-  function setObjectPath(root, path, value) {
-    if (!root || typeof root !== "object") {
-      return root;
-    }
-    const parts = String(path ?? "").split(".").filter(Boolean);
-    if (!parts.length) {
-      return root;
-    }
-    let current = root;
-    for (const key of parts.slice(0, -1)) {
-      if (!current[key] || typeof current[key] !== "object" || Array.isArray(current[key])) {
-        current[key] = {};
-      }
-      current = current[key];
-    }
-    current[parts[parts.length - 1]] = value;
-    return root;
-  }
-
-  function applyExactPatchReplacements(signals, patch) {
-    if (!signals || typeof signals !== "object" || !patch || typeof patch !== "object") {
-      return;
-    }
-    for (const path of EXACT_PATCH_PATHS) {
-      if (!hasObjectPath(patch, path)) {
-        continue;
-      }
-      setObjectPath(signals, path, cloneJson(readObjectPath(patch, path)));
-    }
-  }
-
   function signalObject() {
     return state.liveSignals && typeof state.liveSignals === "object" ? state.liveSignals : null;
   }
@@ -129,29 +49,95 @@
     return globalThis.location?.href || globalThis.window?.location?.href || "";
   }
 
-  function patchMatchesSignalFilter(patch, filter, prefix = "") {
-    if (!patch || typeof patch !== "object") {
-      return false;
+  function mapPageSignalsHelper() {
+    return window.__fishystuffMapPageSignals || null;
+  }
+
+  function patchMatchesPersistFilter(patch) {
+    const helper = mapPageSignalsHelper();
+    return helper ? helper.patchMatchesPersistFilter(patch) : false;
+  }
+
+  function applySignalsPatch(signals, patch) {
+    const helper = mapPageSignalsHelper();
+    if (!helper) {
+      return;
     }
-    const include = filter?.include && typeof filter.include.test === "function"
-      ? filter.include
-      : null;
-    const exclude = filter?.exclude && typeof filter.exclude.test === "function"
-      ? filter.exclude
-      : null;
-    return Object.entries(patch).some(([key, value]) => {
-      const path = prefix ? `${prefix}.${key}` : key;
-      if (include) {
-        if (include.test(path)) {
-          return true;
-        }
-      } else if (exclude) {
-        if (!exclude.test(path)) {
-          return true;
-        }
-      }
-      return value && typeof value === "object" && patchMatchesSignalFilter(value, filter, path);
-    });
+    helper.applyPatchToSignals(signals, patch);
+  }
+
+  function mapPageStateHelper() {
+    return window.__fishystuffMapPageState || null;
+  }
+
+  function storedUiSignals(signals) {
+    const helper = mapPageStateHelper();
+    return helper ? helper.storedUiSignals(signals) : null;
+  }
+
+  function uiStorageSnapshot(stored) {
+    const helper = mapPageStateHelper();
+    return helper ? helper.uiStorageSnapshot(stored) : null;
+  }
+
+  function restoreUiPatch(parsed) {
+    const helper = mapPageStateHelper();
+    return helper ? helper.restoreUiPatch(parsed) : null;
+  }
+
+  function sessionStorageSnapshot(stored) {
+    const helper = mapPageStateHelper();
+    return helper ? helper.sessionStorageSnapshot(stored) : null;
+  }
+
+  function restoreSessionPatch(parsed) {
+    const helper = mapPageStateHelper();
+    return helper ? helper.restoreSessionPatch(parsed) : null;
+  }
+
+  function stripQueryOwnedRestoreFields(patch, locationHref = currentLocationHref()) {
+    const helper = mapPageStateHelper();
+    return helper ? helper.stripQueryOwnedRestoreFields(patch, locationHref) : patch;
+  }
+
+  function ensureStoredSignals(stored) {
+    return stored && typeof stored === "object"
+      ? stored
+      : {
+          _map_ui: {},
+          _map_bridged: {},
+          _map_bookmarks: { entries: [] },
+          _map_session: { view: { viewMode: "2d", camera: {} }, selection: {} },
+        };
+  }
+
+  function ensureUiSnapshot(stored) {
+    return stored && typeof stored === "object"
+      ? stored
+      : {
+          windowUi: {},
+          layers: { expandedLayerIds: [] },
+          search: { query: "" },
+          bridgedUi: {
+            diagnosticsOpen: false,
+            showPoints: true,
+            showPointIcons: true,
+            viewMode: "2d",
+            pointIconScale: 1,
+          },
+          bridgedFilters: {},
+        };
+  }
+
+  function ensureSessionSnapshot(stored) {
+    return stored && typeof stored === "object"
+      ? stored
+      : {
+          version: 1,
+          view: { viewMode: "2d", camera: {} },
+          selection: {},
+          filters: {},
+        };
   }
 
   function clearPersistTimer() {
@@ -174,7 +160,7 @@
     if (!state.uiStateRestored) {
       return;
     }
-    if (!patchMatchesSignalFilter(event?.detail, { include: MAP_PERSIST_SIGNAL_FILTER })) {
+    if (!patchMatchesPersistFilter(event?.detail)) {
       return;
     }
     schedulePersist();
@@ -193,10 +179,9 @@
     if (!liveSignals || !patch || typeof patch !== "object") {
       return;
     }
-    window.__fishystuffDatastarState.mergeObjectPatch(liveSignals, cloneJson(patch));
-    applyExactPatchReplacements(liveSignals, patch);
+    applySignalsPatch(liveSignals, patch);
     connect(liveSignals);
-    if (state.uiStateRestored && patchMatchesSignalFilter(patch, { include: MAP_PERSIST_SIGNAL_FILTER })) {
+    if (state.uiStateRestored && patchMatchesPersistFilter(patch)) {
       schedulePersist();
     }
   }
@@ -274,40 +259,6 @@
     };
   }
 
-  function mapPageStateHelper() {
-    return window.__fishystuffMapPageState || null;
-  }
-
-  function storedUiSignals(signals) {
-    const helper = mapPageStateHelper();
-    return helper ? helper.storedUiSignals(signals) : null;
-  }
-
-  function uiStorageSnapshot(stored) {
-    const helper = mapPageStateHelper();
-    return helper ? helper.uiStorageSnapshot(stored) : null;
-  }
-
-  function restoreUiPatch(parsed) {
-    const helper = mapPageStateHelper();
-    return helper ? helper.restoreUiPatch(parsed) : null;
-  }
-
-  function sessionStorageSnapshot(stored) {
-    const helper = mapPageStateHelper();
-    return helper ? helper.sessionStorageSnapshot(stored) : null;
-  }
-
-  function restoreSessionPatch(parsed) {
-    const helper = mapPageStateHelper();
-    return helper ? helper.restoreSessionPatch(parsed) : null;
-  }
-
-  function stripQueryOwnedRestoreFields(patch, locationHref = currentLocationHref()) {
-    const helper = mapPageStateHelper();
-    return helper ? helper.stripQueryOwnedRestoreFields(patch, locationHref) : patch;
-  }
-
   function restore(signals) {
     connect(signals);
     bindSignalPatchListener();
@@ -363,10 +314,10 @@
     if (sessionPatch) {
       patchSignals(sessionPatch);
     }
-    const stored = storedUiSignals(signals);
-    state.persistedUiJson = JSON.stringify(uiStorageSnapshot(stored));
+    const stored = ensureStoredSignals(storedUiSignals(signals));
+    state.persistedUiJson = JSON.stringify(ensureUiSnapshot(uiStorageSnapshot(stored)));
     state.persistedBookmarksJson = JSON.stringify(stored._map_bookmarks.entries);
-    state.persistedSessionJson = JSON.stringify(sessionStorageSnapshot(stored));
+    state.persistedSessionJson = JSON.stringify(ensureSessionSnapshot(sessionStorageSnapshot(stored)));
     state.uiStateRestored = true;
     if (!state.restoreResolved) {
       state.restoreResolved = true;
@@ -380,8 +331,8 @@
       return;
     }
     try {
-      const stored = storedUiSignals(snapshot);
-      const uiJson = JSON.stringify(uiStorageSnapshot(stored));
+      const stored = ensureStoredSignals(storedUiSignals(snapshot));
+      const uiJson = JSON.stringify(ensureUiSnapshot(uiStorageSnapshot(stored)));
       const bookmarksJson = JSON.stringify(stored._map_bookmarks.entries);
       if (uiJson !== state.persistedUiJson) {
         globalThis.localStorage?.setItem?.(MAP_UI_STORAGE_KEY, uiJson);
@@ -391,7 +342,7 @@
         globalThis.localStorage?.setItem?.(MAP_BOOKMARKS_STORAGE_KEY, bookmarksJson);
         state.persistedBookmarksJson = bookmarksJson;
       }
-      const sessionJson = JSON.stringify(sessionStorageSnapshot(stored));
+      const sessionJson = JSON.stringify(ensureSessionSnapshot(sessionStorageSnapshot(stored)));
       if (sessionJson !== state.persistedSessionJson) {
         globalThis.sessionStorage?.setItem?.(MAP_SESSION_STORAGE_KEY, sessionJson);
         state.persistedSessionJson = sessionJson;

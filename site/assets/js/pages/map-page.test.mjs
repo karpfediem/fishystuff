@@ -15,6 +15,10 @@ const MAP_PAGE_STATE_SOURCE = fs.readFileSync(
   new URL("../../map/map-page-state.js", import.meta.url),
   "utf8",
 );
+const MAP_PAGE_SIGNALS_SOURCE = fs.readFileSync(
+  new URL("../../map/map-page-signals.js", import.meta.url),
+  "utf8",
+);
 const MAP_PAGE_SOURCE = fs.readFileSync(new URL("./map-page.js", import.meta.url), "utf8");
 const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
   "bookmarks",
@@ -103,6 +107,7 @@ function createContext(localStorageInitial = {}, options = {}) {
   window.localStorage = localStorage;
   vm.runInNewContext(DATASTAR_PERSIST_SOURCE, context, { filename: "datastar-persist.js" });
   vm.runInNewContext(MAP_PAGE_STATE_SOURCE, context, { filename: "map-page-state.js" });
+  vm.runInNewContext(MAP_PAGE_SIGNALS_SOURCE, context, { filename: "map-page-signals.js" });
   vm.runInNewContext(MAP_PAGE_SOURCE, context, { filename: "map-page.js" });
   return {
     window,

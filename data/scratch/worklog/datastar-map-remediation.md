@@ -1900,3 +1900,45 @@ Validation for this slice:
 - `node --test site/assets/map/map-page-state.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
 - rebuild site output
 - compare served `/map/`, `/map/map-page-state.js`, and `/js/pages/map-page.js` against `site/.out`
+
+## Eighteenth implementation slice landed
+
+The map page bootstrap no longer depends directly on the shared Datastar helper for signal patch application and persistence filtering.
+
+What changed:
+
+- `site/assets/map/map-page-signals.js`
+  - new clean-slate signal-ops helper for the map page bootstrap
+  - now owns:
+    - deep patch application into the live shell signal graph
+    - exact-path replacements for array/object branches that must replace, not merge
+    - persistence-filter matching for the map page’s durable signal subset
+- `site/assets/js/pages/map-page.js`
+  - now delegates signal patch application and persistence filtering to `window.__fishystuffMapPageSignals`
+  - no longer reaches into `window.__fishystuffDatastarState.mergeObjectPatch(...)`
+- `site/layouts/map.shtml`
+  - loads the new signal-ops asset before `map-page.js`
+- `site/assets/map/map-page-signals.test.mjs`
+  - adds direct coverage for the new signal-ops helper
+- `site/assets/js/pages/map-page.test.mjs`
+  - now boots the extracted signal-ops helper alongside the extracted page-state helper
+
+Why this slice matters:
+
+- it removes one more piece of generic helper indirection from the live map bootstrap
+- it makes the map page’s signal mutation rules explicit and local to the map remediation path
+- it keeps the clean-slate work focused on the live map surface instead of relying on legacy shared helper behavior
+
+What still remains after this slice:
+
+- `map-page.js` still owns restore sequencing, persistence scheduling, and the `window.__fishystuffMap` bootstrap surface
+- the shell still routes external shell-scoped patches through `window.__fishystuffMap.applyPatch(...)`
+- more of the bootstrap surface can still move into smaller map-specific modules
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-page-signals.js`
+- `node --check site/assets/js/pages/map-page.js`
+- `node --test site/assets/map/map-page-signals.test.mjs site/assets/map/map-page-state.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- rebuild site output
+- compare served `/map/`, `/map/map-page-signals.js`, and `/js/pages/map-page.js` against `site/.out`
