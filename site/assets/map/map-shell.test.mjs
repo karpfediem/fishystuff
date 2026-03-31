@@ -19,10 +19,15 @@ test("map shell windows are Datastar-driven for open and collapsed state", () =>
 
 test("map shell toolbar and status affordances derive from Datastar signals", () => {
   assert.match(shellHtml, /id="map-page-shell"[\s\S]*data-on:fishymap-signals-patch="window\.__fishystuffMap\.applyPatch\(\$, evt\.detail\)"/);
+  assert.match(shellHtml, /data-window-toggle="search"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.search\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="search"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.search\.open"/);
+  assert.match(shellHtml, /data-window-toggle="bookmarks"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.bookmarks\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="bookmarks"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.bookmarks\.open"/);
+  assert.match(shellHtml, /data-window-toggle="settings"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.settings\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="settings"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.settings\.open"/);
+  assert.match(shellHtml, /data-window-toggle="zone-info"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.zoneInfo\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="zone-info"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.zoneInfo\.open"/);
+  assert.match(shellHtml, /data-window-toggle="layers"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.layers\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="layers"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.layers\.open"/);
   assert.match(shellHtml, /id="fishymap-ready-pill"[\s\S]*data-class:badge-success="\$_map_runtime\.ready"/);
   assert.match(shellHtml, /id="fishymap-diagnostics"[\s\S]*data-attr:open="\$_map_bridged\.ui\.diagnosticsOpen"/);
