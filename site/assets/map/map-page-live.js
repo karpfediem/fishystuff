@@ -8,7 +8,6 @@
   const MAP_UI_STORAGE_KEY = "fishystuff.map.window_ui.v1";
   const MAP_BOOKMARKS_STORAGE_KEY = "fishystuff.map.bookmarks.v1";
   const MAP_SESSION_STORAGE_KEY = "fishystuff.map.session.v1";
-  const LEGACY_MAP_PREFS_STORAGE_KEY = "fishystuff.map.prefs.v1";
   const SHARED_FISH_STORAGE_KEYS = Object.freeze({
     caught: "fishystuff.fishydex.caught.v1",
     favourites: "fishystuff.fishydex.favourites.v1",
@@ -264,8 +263,6 @@
   }
 
   function uiStorageSnapshot(stored) {
-    const legacyInputUi = isPlainObject(stored?.inputUi) ? stored.inputUi : {};
-    const legacyInputFilters = isPlainObject(stored?.inputFilters) ? stored.inputFilters : {};
     const bridgedUi = isPlainObject(stored?._map_bridged?.ui) ? stored._map_bridged.ui : {};
     const bridgedFilters = isPlainObject(stored?._map_bridged?.filters)
       ? stored._map_bridged.filters
@@ -281,97 +278,54 @@
         query: String(stored?._map_ui?.search?.query || ""),
       },
       bridgedUi: {
-        diagnosticsOpen: bridgedUi.diagnosticsOpen === true || legacyInputUi.diagnosticsOpen === true,
-        showPoints: bridgedUi.showPoints !== false && legacyInputUi.showPoints !== false,
-        showPointIcons:
-          bridgedUi.showPointIcons !== false && legacyInputUi.showPointIcons !== false,
-        viewMode:
-          bridgedUi.viewMode === "3d" || legacyInputUi.viewMode === "3d" ? "3d" : "2d",
+        diagnosticsOpen: bridgedUi.diagnosticsOpen === true,
+        showPoints: bridgedUi.showPoints !== false,
+        showPointIcons: bridgedUi.showPointIcons !== false,
+        viewMode: bridgedUi.viewMode === "3d" ? "3d" : "2d",
         pointIconScale: Number.isFinite(bridgedUi.pointIconScale)
           ? Number(bridgedUi.pointIconScale)
-          : Number.isFinite(legacyInputUi.pointIconScale)
-            ? Number(legacyInputUi.pointIconScale)
-            : 1,
+          : 1,
       },
       bridgedFilters: {
         fishIds: Array.isArray(bridgedFilters.fishIds)
           ? cloneJson(bridgedFilters.fishIds)
-          : Array.isArray(legacyInputFilters.fishIds)
-            ? cloneJson(legacyInputFilters.fishIds)
-            : [],
+          : [],
         zoneRgbs: Array.isArray(bridgedFilters.zoneRgbs)
           ? cloneJson(bridgedFilters.zoneRgbs)
-          : Array.isArray(legacyInputFilters.zoneRgbs)
-            ? cloneJson(legacyInputFilters.zoneRgbs)
-            : [],
+          : [],
         semanticFieldIdsByLayer: isPlainObject(bridgedFilters.semanticFieldIdsByLayer)
           ? cloneJson(bridgedFilters.semanticFieldIdsByLayer)
-          : isPlainObject(legacyInputFilters.semanticFieldIdsByLayer)
-            ? cloneJson(legacyInputFilters.semanticFieldIdsByLayer)
-            : {},
+          : {},
         fishFilterTerms: Array.isArray(bridgedFilters.fishFilterTerms)
           ? cloneJson(bridgedFilters.fishFilterTerms)
-          : Array.isArray(legacyInputFilters.fishFilterTerms)
-            ? cloneJson(legacyInputFilters.fishFilterTerms)
-            : [],
-        patchId:
-          bridgedFilters.patchId == null
-            ? legacyInputFilters.patchId == null
-              ? null
-              : String(legacyInputFilters.patchId)
-            : String(bridgedFilters.patchId),
-        fromPatchId:
-          bridgedFilters.fromPatchId == null
-            ? legacyInputFilters.fromPatchId == null
-              ? null
-              : String(legacyInputFilters.fromPatchId)
-            : String(bridgedFilters.fromPatchId),
-        toPatchId:
-          bridgedFilters.toPatchId == null
-            ? legacyInputFilters.toPatchId == null
-              ? null
-              : String(legacyInputFilters.toPatchId)
-            : String(bridgedFilters.toPatchId),
+          : [],
+        patchId: bridgedFilters.patchId == null ? null : String(bridgedFilters.patchId),
+        fromPatchId: bridgedFilters.fromPatchId == null ? null : String(bridgedFilters.fromPatchId),
+        toPatchId: bridgedFilters.toPatchId == null ? null : String(bridgedFilters.toPatchId),
         layerIdsVisible: Array.isArray(bridgedFilters.layerIdsVisible)
           ? cloneJson(bridgedFilters.layerIdsVisible)
-          : Array.isArray(legacyInputFilters.layerIdsVisible)
-            ? cloneJson(legacyInputFilters.layerIdsVisible)
-            : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
+          : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
         layerIdsOrdered: Array.isArray(bridgedFilters.layerIdsOrdered)
           ? cloneJson(bridgedFilters.layerIdsOrdered)
-          : Array.isArray(legacyInputFilters.layerIdsOrdered)
-            ? cloneJson(legacyInputFilters.layerIdsOrdered)
-            : [],
+          : [],
         layerOpacities: isPlainObject(bridgedFilters.layerOpacities)
           ? cloneJson(bridgedFilters.layerOpacities)
-          : isPlainObject(legacyInputFilters.layerOpacities)
-            ? cloneJson(legacyInputFilters.layerOpacities)
-            : {},
+          : {},
         layerClipMasks: isPlainObject(bridgedFilters.layerClipMasks)
           ? cloneJson(bridgedFilters.layerClipMasks)
-          : isPlainObject(legacyInputFilters.layerClipMasks)
-            ? cloneJson(legacyInputFilters.layerClipMasks)
-            : {},
+          : {},
         layerWaypointConnectionsVisible: isPlainObject(bridgedFilters.layerWaypointConnectionsVisible)
           ? cloneJson(bridgedFilters.layerWaypointConnectionsVisible)
-          : isPlainObject(legacyInputFilters.layerWaypointConnectionsVisible)
-            ? cloneJson(legacyInputFilters.layerWaypointConnectionsVisible)
-            : {},
+          : {},
         layerWaypointLabelsVisible: isPlainObject(bridgedFilters.layerWaypointLabelsVisible)
           ? cloneJson(bridgedFilters.layerWaypointLabelsVisible)
-          : isPlainObject(legacyInputFilters.layerWaypointLabelsVisible)
-            ? cloneJson(legacyInputFilters.layerWaypointLabelsVisible)
-            : {},
+          : {},
         layerPointIconsVisible: isPlainObject(bridgedFilters.layerPointIconsVisible)
           ? cloneJson(bridgedFilters.layerPointIconsVisible)
-          : isPlainObject(legacyInputFilters.layerPointIconsVisible)
-            ? cloneJson(legacyInputFilters.layerPointIconsVisible)
-            : {},
+          : {},
         layerPointIconScales: isPlainObject(bridgedFilters.layerPointIconScales)
           ? cloneJson(bridgedFilters.layerPointIconScales)
-          : isPlainObject(legacyInputFilters.layerPointIconScales)
-            ? cloneJson(legacyInputFilters.layerPointIconScales)
-            : {},
+          : {},
       },
     };
   }
@@ -815,7 +769,6 @@
     let bookmarkPatch = null;
     let sessionPatch = null;
     try {
-      globalThis.localStorage?.removeItem?.(LEGACY_MAP_PREFS_STORAGE_KEY);
       const rawUi = globalThis.localStorage?.getItem?.(MAP_UI_STORAGE_KEY);
       if (rawUi) {
         try {

@@ -467,6 +467,34 @@ Next tasks from here:
 - restore any still-unverified live bookmark affordances, especially import, under the clean-slate
   controller path
 
+### 2026-03-31: Dropped legacy loader-era map storage fallback from the live path
+
+The live clean-slate map no longer reads the old loader-era `inputUi` / `inputFilters` shape when
+serializing its persisted UI snapshot.
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - removed the dead `legacyInputUi` / `legacyInputFilters` merge path from
+    `uiStorageSnapshot(...)`
+  - removed the old `fishystuff.map.prefs.v1` cleanup call from the live restore path
+
+Why this matters:
+
+- the clean-slate live map should not keep carrying forward the old transitional storage schema
+- this removes loader-shaped compatibility logic from the main live persistence path
+- it keeps the current storage source of truth explicit:
+  - `_map_ui`
+  - `_map_bridged`
+  - `_map_bookmarks`
+  - `_map_session`
+
+Validation:
+
+- `node --check site/assets/map/map-page-live.js`
+- `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs`
+- served `/map/map-page-live.js` still matches `site/.out`
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.
