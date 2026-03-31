@@ -3110,3 +3110,59 @@ Validation:
 - `node --test site/assets/js/pages/fishydex.test.mjs`
 - rebuilt site output
 - compared served `/js/pages/fishydex.js` and `/js/pages/calculator-page.js` against `site/.out`
+
+## Step 64: Narrow map bridge sync to actual shared-control patches
+
+What changed:
+
+- `site/assets/map/loader.js`
+  - added `buildMinimalJsonPatch(current, next)`
+  - `patchMapControlSignalState(...)` now emits minimal `_map_controls` deltas instead of the
+    whole normalized branch
+  - added `patchTouchesMapControlBridgeProjection(...)`
+  - `_map_controls` patch handling now only calls
+    `syncMapBridgedSignalsFromPageState(...)` when the patch touches the explicit bridge-facing
+    subset or `_shared_fish`
+  - `scheduleWaypointFocusIndexPreload(...)` no longer preloads fish-evidence snapshots
+  - fish-evidence snapshot fetches remain on-demand in `buildFishFocusCommandFromId(...)`
+- `site/assets/map/loader.test.mjs`
+  - added coverage for the new bridge-relevant controls whitelist
+
+Why this matters:
+
+- the first `_map_controls` / `_map_bridged` split fixed ownership, but the loader was still
+  publishing the full `_map_controls` branch on every control change
+- that made Datastar signal-patch events too broad to tell whether a control change was actually
+  bridge-relevant
+- page-only control changes like:
+  - `searchText`
+  - `legendOpen`
+  - `leftPanelOpen`
+  were still capable of triggering unnecessary bridge re-derivation work
+- generic startup preload was also still pulling fish-evidence snapshot data even though only
+  fish-focus actions need it
+
+Validation:
+
+- unit tests:
+  - `node --test site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs site/assets/js/pages/map-page.test.mjs`
+- syntax:
+  - `node --check site/assets/map/loader.js`
+- browser profile:
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_sweep --output /tmp/zone_mask_hover_sweep.current.json`
+  - result:
+    - `frame_avg_ms=5.300`
+    - `p95_ms=7.700`
+    - top spans remained bridge-visible but not bridge-dominated
+- served-shell spot checks:
+  - served `/map/loader.js` contains `patchTouchesMapControlBridgeProjection`
+  - served generic preload no longer includes `loadFishEvidenceSnapshot(...)`
+  - typing into the map search box produced Datastar patch traffic but zero bridge
+    `setState` / `flushPendingPatchNow` calls
+  - startup network dropped back to one `events_snapshot_meta` plus one `events_snapshot`
+    request instead of the extra loader-side fish-evidence duplicate
+
+Open note:
+
+- raw `readSignal()` output for object branches can still contain blank-string/theme/commands
+  pollution, so normalization remains mandatory at the Datastar↔bridge boundary

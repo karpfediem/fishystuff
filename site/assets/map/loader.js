@@ -205,6 +205,26 @@ function jsonSignature(value) {
   return JSON.stringify(value);
 }
 
+function buildMinimalJsonPatch(current, next) {
+  if (jsonSignature(current) === jsonSignature(next)) {
+    return null;
+  }
+  if (isPlainObject(current) && isPlainObject(next)) {
+    const patch = {};
+    let changed = false;
+    for (const key of Object.keys(next)) {
+      const childPatch = buildMinimalJsonPatch(current[key], next[key]);
+      if (childPatch == null) {
+        continue;
+      }
+      patch[key] = childPatch;
+      changed = true;
+    }
+    return changed ? patch : null;
+  }
+  return cloneJsonValue(next);
+}
+
 function mapSignalHelper() {
   const helper = globalThis.window?.__fishystuffMap || globalThis.__fishystuffMap;
   return helper && typeof helper.signalObject === "function" ? helper : null;
@@ -497,11 +517,12 @@ function patchMapControlSignalState(patch) {
   }
   const current = currentMapControlSignalState();
   const nextState = normalizeMapControlSignalState(applyStatePatch(current, patch));
-  if (jsonSignature(current) === jsonSignature(nextState)) {
+  const minimalPatch = buildMinimalJsonPatch(current, nextState);
+  if (!minimalPatch) {
     return;
   }
   helper.patchSignals({
-    _map_controls: nextState,
+    _map_controls: minimalPatch,
   });
 }
 
@@ -709,6 +730,52 @@ function patchTouchesTopLevelBranch(patch, branchName) {
       && typeof patch === "object"
       && !Array.isArray(patch)
       && Object.prototype.hasOwnProperty.call(patch, branchName),
+  );
+}
+
+function patchTouchesNestedBranchPath(patch, branchName, path) {
+  if (!patchTouchesTopLevelBranch(patch, branchName)) {
+    return false;
+  }
+  let cursor = patch[branchName];
+  for (const segment of Array.isArray(path) ? path : []) {
+    if (!cursor || typeof cursor !== "object" || Array.isArray(cursor)) {
+      return false;
+    }
+    if (!Object.prototype.hasOwnProperty.call(cursor, segment)) {
+      return false;
+    }
+    cursor = cursor[segment];
+  }
+  return true;
+}
+
+const MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS = Object.freeze([
+  ["filters", "fishIds"],
+  ["filters", "zoneRgbs"],
+  ["filters", "semanticFieldIdsByLayer"],
+  ["filters", "fishFilterTerms"],
+  ["filters", "patchId"],
+  ["filters", "fromPatchId"],
+  ["filters", "toPatchId"],
+  ["filters", "layerIdsVisible"],
+  ["filters", "layerIdsOrdered"],
+  ["filters", "layerOpacities"],
+  ["filters", "layerClipMasks"],
+  ["filters", "layerWaypointConnectionsVisible"],
+  ["filters", "layerWaypointLabelsVisible"],
+  ["filters", "layerPointIconsVisible"],
+  ["filters", "layerPointIconScales"],
+  ["ui", "diagnosticsOpen"],
+  ["ui", "showPoints"],
+  ["ui", "showPointIcons"],
+  ["ui", "viewMode"],
+  ["ui", "pointIconScale"],
+]);
+
+export function patchTouchesMapControlBridgeProjection(patch) {
+  return MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS.some((path) =>
+    patchTouchesNestedBranchPath(patch, "_map_controls", path)
   );
 }
 
@@ -1711,7 +1778,6 @@ function scheduleWaypointFocusIndexPreload(locationLike = globalThis.window?.loc
     void Promise.all([
       loadWaypointFocusIndex(locationLike),
       loadZoneFocusIndex(locationLike),
-      loadFishEvidenceSnapshot(locationLike),
     ]).catch((error) => {
       console.warn("Failed to preload focus data", error);
     });
@@ -9049,7 +9115,12 @@ function bindUi(shell, elements, options = {}) {
       || patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.sharedFish)
     ) {
       syncPatchRangeFromSignals();
-      syncMapBridgedSignalsFromPageState(getLatestStateBundle());
+      if (
+        patchTouchesMapControlBridgeProjection(patch)
+        || patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.sharedFish)
+      ) {
+        syncMapBridgedSignalsFromPageState(getLatestStateBundle());
+      }
       renderCurrentState(getLatestStateBundle());
     }
     if (patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.bridged)) {

@@ -39,6 +39,7 @@ const {
   parseWindowUiState,
   projectBridgeSharedInputState,
   projectStateBundleStatePatch,
+  patchTouchesMapControlBridgeProjection,
   renameBookmark,
   resolveHoveredBookmark,
   resolveDisplayBookmarks,
@@ -934,6 +935,53 @@ test("normalizeMapBridgedSignalState strips host-only shape pollution", () => {
       ],
     },
   });
+});
+
+test("patchTouchesMapControlBridgeProjection ignores page-only control patches", () => {
+  assert.equal(
+    patchTouchesMapControlBridgeProjection({
+      _map_controls: {
+        filters: {
+          searchText: "velia",
+        },
+      },
+    }),
+    false,
+  );
+  assert.equal(
+    patchTouchesMapControlBridgeProjection({
+      _map_controls: {
+        ui: {
+          legendOpen: true,
+          leftPanelOpen: false,
+        },
+      },
+    }),
+    false,
+  );
+});
+
+test("patchTouchesMapControlBridgeProjection keeps derived and bridged map inputs", () => {
+  assert.equal(
+    patchTouchesMapControlBridgeProjection({
+      _map_controls: {
+        filters: {
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    patchTouchesMapControlBridgeProjection({
+      _map_controls: {
+        ui: {
+          viewMode: "3d",
+        },
+      },
+    }),
+    true,
+  );
 });
 
 test("resolveZoneInfoActiveTab falls back to the first sampled layer", () => {
