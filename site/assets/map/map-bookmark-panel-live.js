@@ -81,10 +81,11 @@ function overviewRowMarkup(row) {
   const icon = String(row?.icon || "information-circle").trim();
   const label = String(row?.label || "").trim();
   const value = String(row?.value || "").trim();
+  const hideLabel = row?.hideLabel === true;
   return `
-    <div class="fishymap-overview-row">
+    <div class="fishymap-overview-row${hideLabel ? " fishymap-overview-row--label-less" : ""}">
       <span class="fishymap-overview-row-icon" aria-hidden="true">${spriteIcon(icon, "size-4")}</span>
-      <span class="fishymap-overview-row-label">${escapeHtml(label)}</span>
+      ${hideLabel ? "" : `<span class="fishymap-overview-row-label">${escapeHtml(label)}</span>`}
       <span class="fishymap-overview-row-value">${escapeHtml(value)}</span>
     </div>
   `;
@@ -183,6 +184,7 @@ export function createMapBookmarkPanelController({
     draggingBookmarkId: "",
     dropBookmarkId: "",
     dropPosition: "",
+    zoneCatalog: [],
   };
 
   function showSiteToast(tone, message, options = {}) {
@@ -208,7 +210,10 @@ export function createMapBookmarkPanelController({
   }
 
   function bundle() {
-    return buildBookmarkPanelStateBundle(signals());
+    return {
+      ...buildBookmarkPanelStateBundle(signals()),
+      zoneCatalog: cloneJson(state.zoneCatalog),
+    };
   }
 
   function writeBookmarkState(mutator) {
@@ -635,5 +640,9 @@ export function createMapBookmarkPanelController({
   return Object.freeze({
     render,
     scheduleRender,
+    setZoneCatalog(nextZoneCatalog) {
+      state.zoneCatalog = Array.isArray(nextZoneCatalog) ? cloneJson(nextZoneCatalog) : [];
+      scheduleRender();
+    },
   });
 }

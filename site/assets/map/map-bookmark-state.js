@@ -1,3 +1,8 @@
+import {
+  buildOverviewRowsForLayerSamples,
+  preferredOverviewRow,
+} from "./map-overview-facts.js";
+
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -136,25 +141,40 @@ export function normalizeSelectedBookmarkIds(bookmarks, selectedIds) {
   return next;
 }
 
-export function bookmarkDisplayLabel(bookmark, fallbackIndex = 0) {
+export function bookmarkDisplayLabel(bookmark, fallbackIndex = 0, stateBundle = null) {
   const explicitLabel = trimString(bookmark?.label);
   if (explicitLabel) {
     return explicitLabel;
   }
-  const fallbackLabel = preferredSelectionLabel(bookmark);
+  const fallbackLabel =
+    preferredOverviewRow(bookmark?.layerSamples, {
+      zoneCatalog: stateBundle?.zoneCatalog,
+      runtimeLayers: stateBundle?.state?.catalog?.layers,
+    })?.value || preferredSelectionLabel(bookmark);
   if (fallbackLabel) {
     return fallbackLabel;
   }
   return `Bookmark ${fallbackIndex + 1}`;
 }
 
-export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
-  const displayLabel = bookmarkDisplayLabel(bookmark, fallbackIndex);
+export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0, stateBundle = null) {
+  const displayLabel = bookmarkDisplayLabel(bookmark, fallbackIndex, stateBundle);
+  const overviewRows = buildOverviewRowsForLayerSamples(bookmark?.layerSamples, {
+    zoneCatalog: stateBundle?.zoneCatalog,
+    runtimeLayers: stateBundle?.state?.catalog?.layers,
+  }).filter(
+    (row) =>
+      !(
+        trimString(row?.key) === "zone" &&
+        trimString(row?.value).toLowerCase() === trimString(displayLabel).toLowerCase()
+      ),
+  );
   const rows = [
     {
       icon: "bookmark",
       label: "Bookmark",
       value: displayLabel,
+      hideLabel: true,
     },
     {
       icon: "map-pin",
@@ -162,16 +182,7 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0) {
       value: `${Number(bookmark?.worldX ?? 0).toLocaleString("en-US")}, ${Number(bookmark?.worldZ ?? 0).toLocaleString("en-US")}`,
     },
   ];
-  const zoneRgb =
-    normalizeInteger(bookmark?.zoneRgb) ?? zoneRgbFromLayerSamples(bookmark?.layerSamples);
-  if (zoneRgb != null) {
-    rows.push({
-      icon: "squares-2x2",
-      label: "Zone",
-      value: `#${zoneRgb.toString(16).padStart(6, "0")}`,
-    });
-  }
-  return rows;
+  return rows.concat(overviewRows);
 }
 
 export function createBookmarkFromSelection(selection, existingBookmarks = []) {
@@ -234,7 +245,8 @@ export function patchTouchesBookmarkSignals(patch) {
       patch._map_ui?.bookmarks != null ||
       patch._map_runtime?.ready != null ||
       patch._map_runtime?.view != null ||
-      patch._map_runtime?.selection != null,
+      patch._map_runtime?.selection != null ||
+      patch._map_runtime?.catalog?.layers != null,
   );
 }
 
@@ -247,6 +259,9 @@ export function buildBookmarkPanelStateBundle(signals) {
       ready: runtime.ready === true,
       view: cloneJson(runtime.view || {}),
       selection: cloneJson(runtime.selection || {}),
+      catalog: {
+        layers: Array.isArray(runtime.catalog?.layers) ? cloneJson(runtime.catalog.layers) : [],
+      },
     },
     bookmarks,
     bookmarkUi: {

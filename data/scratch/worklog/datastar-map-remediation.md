@@ -3284,3 +3284,58 @@ Validation:
 
 - `node --test site/assets/map/map-hover-tooltip-live.test.mjs site/assets/map/map-hover-facts.test.mjs site/assets/map/map-layer-panel.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-host.test.mjs`
 - `devenv shell -- bash -lc '''cd site && just build-release-no-tailwind'''`
+
+### 2026-04-01: Slice 12 in progress
+
+- Added a new clean-slate shared overview fact module:
+  - `site/assets/map/map-overview-facts.js`
+- Added a new clean-slate generic info state module:
+  - `site/assets/map/map-info-state.js`
+- Replaced the old live zone-info controller with a generic Info controller:
+  - `site/assets/map/map-info-panel-live.js`
+- Reworked bookmark overview rows to show semantic facts instead of only world coordinates:
+  - folded zone title by default
+  - `Resources`
+  - `Origin`
+- Updated the live map app to load the new bookmark/info modules and zone-catalog dependency.
+
+What changed conceptually:
+
+- bookmarks now consume the same ordered overview-fact derivation used by the Info window
+- the Info window is no longer modeled as per-layer tabs
+- the clean-slate pane model is now:
+  - `Zone`
+  - `Territory`
+  - `Trade`
+- fish presence evidence is carried as a dedicated section in the `Zone` pane instead of being mixed
+  into the old layer-tab rendering
+
+Live validation findings:
+
+- served `/map/`, `/map/map-app-live.js`, `/map/map-bookmark-panel-live.js`,
+  `/map/map-info-panel-live.js`, `/map/map-info-state.js`, and `/map/map-overview-facts.js`
+  matched `site/.out`
+- live bookmark rendering now shows:
+  - folded zone title
+  - `World`
+  - `Resources`
+  - `Origin`
+- live generic Info rendering works on the real runtime-selection path:
+  - a synthetic `fishymap:selection-changed` bridge event produced the new `Zone` / `Territory` /
+    `Trade` tabs and pane content
+  - bookmark inspect now drives runtime selection and the generic Info pane content again
+
+Bug found during live validation:
+
+- `map-info-panel-live.js` was calling `cloneJson(...)` in `setZoneCatalog(...)` without defining it,
+  which caused a live promise rejection when the zone catalog finished loading
+- fixed locally so the controller no longer throws during startup
+
+Next tasks from here:
+
+- commit the bookmark/info restoration slice
+- start the clean-slate search/filter/clipping contract in a new module instead of extending the
+  old ad hoc search semantics
+- keep the bridge contract explicit:
+  - page-only search UX and bookmark manager state stay out of `_map_bridged`
+  - only layer-relevant filter/clipping outputs cross into Bevy

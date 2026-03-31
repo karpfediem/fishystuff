@@ -10,15 +10,15 @@ import {
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
 import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
+import { createMapInfoPanelController } from "./map-info-panel-live.js";
 import { createMapLayerPanelController, patchTouchesLayerPanelSignals } from "./map-layer-panel-live.js";
 import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
-import { createMapZoneInfoPanelController } from "./map-zone-info-panel-live.js";
 import { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
 import { patchTouchesHoverTooltipSignals } from "./map-hover-facts.js";
+import { patchTouchesInfoSignals } from "./map-info-state.js";
 import { patchTouchesSearchPanelSignals } from "./map-search-state.js";
-import { patchTouchesZoneInfoSignals } from "./map-zone-info-state.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
 
 const FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT = "fishymap:datastar-signal-patch";
@@ -206,7 +206,7 @@ export async function start() {
     getSignals: signals,
     listenToSignalPatches: false,
   });
-  const zoneInfoPanel = createMapZoneInfoPanelController({
+  const zoneInfoPanel = createMapInfoPanelController({
     shell,
     getSignals: signals,
     listenToSignalPatches: false,
@@ -311,7 +311,7 @@ export async function start() {
     if (patchTouchesHoverTooltipSignals(patch)) {
       hoverTooltip.scheduleRender();
     }
-    if (patchTouchesZoneInfoSignals(patch)) {
+    if (patchTouchesInfoSignals(patch)) {
       zoneInfoPanel.scheduleRender();
     }
     if (patchTouchesLayerPanelSignals(patch)) {
@@ -412,6 +412,8 @@ export async function start() {
   void loadZoneCatalog().then((zoneCatalog) => {
     hoverTooltip.setZoneCatalog(zoneCatalog);
     layerPanel.setZoneCatalog(zoneCatalog);
+    bookmarkPanel.setZoneCatalog(zoneCatalog);
+    zoneInfoPanel.setZoneCatalog(zoneCatalog);
     searchPanel.setZoneCatalog(zoneCatalog);
   });
 }
