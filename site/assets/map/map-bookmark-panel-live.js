@@ -2,6 +2,17 @@ import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { renderBookmarkManager } from "./map-bookmark-panel.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 import {
+  buildBookmarkExportMessage,
+  buildBookmarkImportMessage,
+  buildBookmarkSelectionCopyMessage,
+  copyTextToClipboard,
+  downloadBookmarkExport,
+  mergeImportedBookmarks,
+  parseImportedBookmarks,
+  readBookmarkImportFile,
+  serializeBookmarksForExport,
+} from "./map-bookmark-io.js";
+import {
   bookmarkDisplayLabel,
   buildBookmarkOverviewRows,
   buildBookmarkPanelStateBundle,
@@ -141,6 +152,24 @@ export function createMapBookmarkPanelController({
     dropPosition: "",
   };
 
+  function showSiteToast(tone, message, options = {}) {
+    const text = String(message || "").trim();
+    if (!text) {
+      return;
+    }
+    const toast = globalThis.__fishystuffToast;
+    if (!toast) {
+      return;
+    }
+    const handler =
+      typeof toast[tone] === "function"
+        ? toast[tone]
+        : typeof toast.show === "function"
+          ? (value, extra) => toast.show({ tone, message: value, ...(extra || {}) })
+          : null;
+    handler?.(text, options);
+  }
+
   function signals() {
     return getSignals() || null;
   }
@@ -190,14 +219,6 @@ export function createMapBookmarkPanelController({
         spriteIcon,
       },
     );
-    setBooleanProperty(elements.bookmarkCopySelected, "disabled", true);
-    setBooleanProperty(elements.bookmarkExport, "disabled", true);
-    setBooleanProperty(elements.bookmarkImportTrigger, "disabled", true);
-    elements.bookmarksList
-      .querySelectorAll("button[data-bookmark-copy]")
-      .forEach((button) => {
-        button.disabled = true;
-      });
   }
 
   function scheduleRender() {
@@ -290,6 +311,23 @@ export function createMapBookmarkPanelController({
     });
   });
 
+  elements.bookmarkCopySelected?.addEventListener("click", async () => {
+    const current = bundle();
+    const selectedBookmarks = current.bookmarks.filter((bookmark) =>
+      current.bookmarkUi.selectedIds.includes(bookmark.id),
+    );
+    if (!selectedBookmarks.length) {
+      showSiteToast("warning", "Select one or more bookmarks to copy.");
+      return;
+    }
+    try {
+      await copyTextToClipboard(serializeBookmarksForExport(selectedBookmarks));
+      showSiteToast("success", buildBookmarkSelectionCopyMessage(selectedBookmarks.length));
+    } catch (_error) {
+      showSiteToast("error", "Clipboard access is unavailable in this browser.");
+    }
+  });
+
   elements.bookmarksList.addEventListener("change", (event) => {
     const checkbox = event.target.closest("input[data-bookmark-select]");
     if (!checkbox) {
@@ -362,6 +400,92 @@ export function createMapBookmarkPanelController({
       }
       dispatchPatch(shell, buildFocusBookmarkPatch(bookmark, signals()?._map_actions));
       return;
+    }
+
+    const copyButton = event.target.closest("button[data-bookmark-copy]");
+    if (copyButton) {
+      const bookmarkId = String(copyButton.getAttribute("data-bookmark-copy") || "").trim();
+      const current = bundle();
+      const bookmark = current.bookmarks.find((candidate) => candidate.id === bookmarkId);
+      if (!bookmark) {
+        return;
+      }
+      void copyTextToClipboard(serializeBookmarksForExport([bookmark]))
+        .then(() => {
+          showSiteToast("success", "Copied bookmark XML.");
+        })
+        .catch(() => {
+          showSiteToast("error", "Clipboard access is unavailable in this browser.");
+        });
+      return;
+    }
+  });
+
+  elements.bookmarkExport?.addEventListener("click", () => {
+    const current = bundle();
+    const selectedBookmarks = current.bookmarks.filter((bookmark) =>
+      current.bookmarkUi.selectedIds.includes(bookmark.id),
+    );
+    const exportBookmarks = selectedBookmarks.length ? selectedBookmarks : current.bookmarks;
+    if (!exportBookmarks.length) {
+      showSiteToast("warning", "There are no bookmarks to export yet.");
+      return;
+    }
+    try {
+      downloadBookmarkExport(exportBookmarks);
+      showSiteToast(
+        "info",
+        buildBookmarkExportMessage(exportBookmarks.length, selectedBookmarks.length),
+      );
+    } catch (_error) {
+      showSiteToast("error", "Bookmark export is unavailable in this browser.");
+    }
+  });
+
+  elements.bookmarkImportTrigger?.addEventListener("click", () => {
+    if (!elements.bookmarkImportInput) {
+      showSiteToast("error", "Bookmark import is unavailable in this browser.");
+      return;
+    }
+    elements.bookmarkImportInput.value = "";
+    elements.bookmarkImportInput.click();
+  });
+
+  elements.bookmarkImportInput?.addEventListener("change", async () => {
+    const file = elements.bookmarkImportInput?.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      const importedBookmarks = parseImportedBookmarks(await readBookmarkImportFile(file));
+      if (!importedBookmarks.length) {
+        showSiteToast("warning", "The selected file did not contain any bookmark XML.");
+        return;
+      }
+      const current = bundle();
+      const merged = mergeImportedBookmarks(current.bookmarks, importedBookmarks);
+      const importedCount = merged.length - current.bookmarks.length;
+      const skippedCount = importedBookmarks.length - importedCount;
+      const importedIds = merged.slice(current.bookmarks.length).map((bookmark) => bookmark.id);
+      writeBookmarkState((bookmarks, bookmarkUi) => {
+        bookmarks.splice(0, bookmarks.length, ...merged);
+        bookmarkUi.placing = false;
+        if (importedIds.length) {
+          bookmarkUi.selectedIds = normalizeSelectedBookmarkIds(
+            merged,
+            bookmarkUi.selectedIds.concat(importedIds),
+          );
+        }
+      });
+      showSiteToast(
+        importedCount ? "success" : "info",
+        buildBookmarkImportMessage(importedCount, skippedCount),
+      );
+    } catch (error) {
+      console.warn("Failed to import map bookmarks", error);
+      showSiteToast("error", "Bookmark import failed. Choose a valid WorldmapBookMark XML file.");
+    } finally {
+      elements.bookmarkImportInput.value = "";
     }
   });
 

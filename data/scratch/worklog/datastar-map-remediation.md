@@ -1984,3 +1984,86 @@ Validation for this slice:
   - no new console errors
   - map shell windows render normally
   - `Layers 7` and `Zone Info` are present immediately after boot
+
+## Twentieth implementation slice landed
+
+The live bookmark panel now owns copy/export/import again through a clean-slate module instead of
+leaving those flows disabled while the old loader path is being retired.
+
+What changed:
+
+- `site/assets/map/map-bookmark-io.js`
+  - new pure bookmark I/O helper for:
+    - WorldmapBookMark XML serialization
+    - XML / JSON import parsing
+    - duplicate-aware bookmark merging
+    - clipboard export
+    - browser download export
+    - file import reads
+    - small user-facing status message builders
+- `site/assets/map/map-bookmark-panel-live.js`
+  - now wires the live Bookmark Manager to:
+    - copy selected bookmarks as XML
+    - copy a single bookmark as XML
+    - export selected or all bookmarks as XML
+    - import bookmark XML and merge it into the live Datastar bookmark state
+  - newly imported bookmarks are selected immediately
+  - import cancels placing mode so the panel stays internally consistent after merge
+- `site/assets/map/map-bookmark-io.test.mjs`
+  - adds direct coverage for the new bookmark I/O helper
+
+Why this slice matters:
+
+- bookmark manager behavior is now restored without routing back through `loader.js`
+- bookmark copy/export/import are again owned by Datastar-backed page state
+- the live panel can now replace more of the old imperative bookmark toolchain instead of only
+  rendering cards
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-bookmark-io.js`
+- `node --check site/assets/map/map-bookmark-panel-live.js`
+- `node --test site/assets/map/map-bookmark-io.test.mjs site/assets/map/map-bookmark-state.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- compare served `/map/map-bookmark-io.js` and `/map/map-bookmark-panel-live.js` against `site/.out`
+- live Chromium checks confirmed:
+  - `Export` is enabled when bookmarks exist
+  - `Import` is enabled
+  - per-bookmark `Copy bookmark XML` is enabled
+  - top-level `Copy` remains correctly disabled until something is selected
+
+## Twenty-first implementation slice landed
+
+The live map shell now treats runtime view mode as authoritative again, which fixes startup drift
+between persisted desired view state and the actual mounted runtime snapshot.
+
+What changed:
+
+- `site/assets/map/map-runtime-adapter.js`
+  - `projectRuntimeSnapshotToSignals(...)` now mirrors the runtime view mode back into:
+    - `_map_bridged.ui.viewMode`
+- `site/assets/map/map-runtime-adapter.test.mjs`
+  - now asserts that runtime snapshot projection keeps `_map_bridged.ui.viewMode` aligned with the
+    actual mounted runtime
+
+Why this slice matters:
+
+- the live shell no longer starts in a contradictory state where:
+  - the toolbar says `3D`
+  - `_map_bridged.ui.viewMode` says `3d`
+  - the actual runtime is still in `2d`
+- this keeps the Datastar signal graph aligned with the mounted Bevy runtime after restore
+- it prevents clean-slate shell controls from presenting stale desired state as if it were already
+  acknowledged
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-runtime-adapter.js`
+- `node --test site/assets/map/map-runtime-adapter.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- compare served `/map/map-runtime-adapter.js` against `site/.out`
+- live Chromium probe with intentionally conflicting persisted state confirmed that after reload:
+  - `_map_bridged.ui.viewMode`
+  - `_map_runtime.view.viewMode`
+  - `_map_session.view.viewMode`
+  all converge on the actual runtime-mounted view mode

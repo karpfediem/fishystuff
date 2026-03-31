@@ -62,6 +62,7 @@ Multilingual {
     "map/map-signal-patch.js",
     "map/map-window-manager.js",
     "map/map-bookmark-panel.js",
+    "map/map-bookmark-io.js",
     "map/map-runtime-adapter.js",
     "map/map-layer-state.js",
     "map/map-layer-panel.js",

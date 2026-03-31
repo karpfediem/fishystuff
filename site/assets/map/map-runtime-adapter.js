@@ -226,6 +226,7 @@ export function buildBridgeCommandPatchFromSignals(signals, previousActionState 
 
 export function projectRuntimeSnapshotToSignals(snapshot) {
   const current = isPlainObject(snapshot) ? snapshot : createEmptySnapshot();
+  const currentViewMode = current.view?.viewMode === "3d" ? "3d" : "2d";
   return {
     _map_runtime: {
       ready: current.ready === true,
@@ -235,6 +236,11 @@ export function projectRuntimeSnapshotToSignals(snapshot) {
       catalog: cloneJson(current.catalog || {}),
       statuses: cloneJson(current.statuses || {}),
       lastDiagnostic: cloneJson(current.lastDiagnostic || null),
+    },
+    _map_bridged: {
+      ui: {
+        viewMode: currentViewMode,
+      },
     },
   };
 }
