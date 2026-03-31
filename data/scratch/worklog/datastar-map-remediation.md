@@ -3262,3 +3262,25 @@ Validation:
 - `node --test site/assets/map/map-hover-facts.test.mjs site/assets/map/map-layer-panel.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-host.test.mjs`
 - `devenv shell -- bash -lc '''cd site && just build-release-no-tailwind'''`
 - served `/map/map-layer-panel.js`, `/map/map-layer-panel-live.js`, and `/map/map-hover-facts.js` matched `site/.out`
+
+### 2026-03-31: Slice 11 landed
+
+- Added direct clean-slate controller coverage for the live hover tooltip in:
+  - `site/assets/map/map-hover-tooltip-live.test.mjs`
+- The test exercises the real live controller path:
+  - synthetic pointer activation
+  - `fishymap:hover-changed` event input
+  - ordered tooltip row rendering
+  - per-layer fact visibility overrides
+  - pointerleave hide behavior
+
+Why this matters:
+
+- restores confidence in the live hover path itself, not just the pure helper functions
+- anchors the old hover-facts UX on the clean-slate modules
+- keeps future remediation work from silently regressing tooltip behavior while replacing the remaining imperative seams
+
+Validation:
+
+- `node --test site/assets/map/map-hover-tooltip-live.test.mjs site/assets/map/map-hover-facts.test.mjs site/assets/map/map-layer-panel.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-host.test.mjs`
+- `devenv shell -- bash -lc '''cd site && just build-release-no-tailwind'''`
