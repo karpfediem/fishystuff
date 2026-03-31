@@ -369,7 +369,7 @@ test("DOM state patches are forwarded to the wasm bridge", async () => {
   }
 });
 
-test("search text patches preserve trailing spaces while typing", () => {
+test("search text patches are ignored by the bridge input state", () => {
   const next = applyStatePatch(undefined, {
     version: 1,
     filters: {
@@ -377,7 +377,7 @@ test("search text patches preserve trailing spaces while typing", () => {
     },
   });
 
-  assert.equal(next.filters.searchText, "Zenato Sea ");
+  assert.equal("searchText" in next.filters, false);
 });
 
 test("view mode patches are preserved in host input state", () => {
@@ -633,7 +633,7 @@ test("setState updates cached input state without forcing a wasm state read", as
       },
     });
 
-    assert.equal(bridge.getCurrentInputState().filters.searchText, "Padjal");
+    assert.equal("searchText" in bridge.getCurrentInputState().filters, false);
     assert.equal(wasm.calls.stateReads, 0);
   } finally {
     bridge?.destroy();
@@ -1037,7 +1037,7 @@ test("selection output events include semantic payload and refreshed state", asy
     });
     assert.deepEqual(received.inputState.filters.fishIds, [77]);
     assert.deepEqual(received.inputState.filters.zoneRgbs, [0xc17f7f]);
-    assert.equal(received.inputState.filters.searchText, "coastal");
+    assert.equal("searchText" in received.inputState.filters, false);
   } finally {
     bridge?.destroy();
     env.restore();

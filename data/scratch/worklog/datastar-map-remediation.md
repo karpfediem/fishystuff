@@ -1400,3 +1400,42 @@ Validation for this slice:
 - `node --test site/assets/map/map-host.test.mjs site/assets/map/map-query-state.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/js/pages/map-page.test.mjs`
 - rebuild site output
 - compare served `/map/`, `/map/map-app-live.js`, `/map/map-host.js`, and `/map/map-query-state.js` against `site/.out`
+
+## Twelfth implementation slice landed
+
+The host input/snapshot model no longer carries stale page-only fields.
+
+What changed:
+
+- `site/assets/map/map-host.js`
+  - removed `filters.searchText`
+  - removed `ui.legendOpen`
+  - removed `ui.leftPanelOpen`
+  - cut those fields out of:
+    - typedef documentation
+    - `createEmptyInputState()`
+    - `createEmptySnapshot()`
+    - `normalizeStatePatch()`
+    - `applyStatePatch()`
+    - host diagnostic input-state summaries
+- `site/assets/map/map-host.test.mjs`
+  - updated assertions so those fields are now explicitly absent from bridge-owned input state
+
+Why this slice matters:
+
+- it removes phantom bridge state that no longer belongs to the explicit shared-signal whitelist
+- it tightens the host contract beyond startup parsing and into the actual runtime model
+- it makes the clean-slate map path less likely to regress by accidentally reusing page-only fields at the bridge layer
+
+What still remains after this slice:
+
+- `map-host.js` still owns some compatibility behaviors beyond the strict clean-slate target
+- selection/world-point query commands are still host-owned
+- more shell behavior still needs to move out of legacy imperative handling into clean Datastar-owned modules
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-host.js`
+- `node --test site/assets/map/map-host.test.mjs site/assets/map/map-query-state.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- compare served `/map/`, `/map/map-app-live.js`, `/map/map-host.js`, and `/map/map-query-state.js` against `site/.out`

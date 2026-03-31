@@ -57,7 +57,6 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     zoneRgbs?: number[],
  *     semanticFieldIdsByLayer?: Record<string, number[]>,
  *     fishFilterTerms?: string[],
- *     searchText?: string,
  *     patchId?: string | null,
  *     fromPatchId?: string | null,
  *     toPatchId?: string | null,
@@ -72,8 +71,6 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *   },
  *   ui?: {
  *     diagnosticsOpen?: boolean,
- *     legendOpen?: boolean,
- *     leftPanelOpen?: boolean,
  *     showPoints?: boolean,
  *     showPointIcons?: boolean,
  *     viewMode?: "2d" | "3d" | null,
@@ -138,7 +135,6 @@ export function createEmptyInputState() {
       zoneRgbs: [],
       semanticFieldIdsByLayer: {},
       fishFilterTerms: [],
-      searchText: "",
       patchId: null,
       fromPatchId: null,
       toPatchId: null,
@@ -153,8 +149,6 @@ export function createEmptyInputState() {
     },
     ui: {
       diagnosticsOpen: false,
-      legendOpen: false,
-      leftPanelOpen: true,
       showPoints: true,
       showPointIcons: true,
       viewMode: null,
@@ -178,7 +172,6 @@ export function createEmptySnapshot() {
       zoneRgbs: [],
       semanticFieldIdsByLayer: {},
       fishFilterTerms: [],
-      searchText: "",
       patchId: null,
       fromPatchId: null,
       toPatchId: null,
@@ -193,8 +186,6 @@ export function createEmptySnapshot() {
     },
     ui: {
       diagnosticsOpen: false,
-      legendOpen: false,
-      leftPanelOpen: true,
       showPoints: true,
       showPointIcons: true,
       pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
@@ -1036,9 +1027,6 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "fishFilterTerms")) {
       normalized.filters.fishFilterTerms = normalizeFishFilterTerms(patch.filters.fishFilterTerms);
     }
-    if (hasOwn(patch.filters, "searchText")) {
-      normalized.filters.searchText = String(patch.filters.searchText ?? "");
-    }
     const hasPatchId = hasOwn(patch.filters, "patchId");
     const hasFromPatchId = hasOwn(patch.filters, "fromPatchId");
     const hasToPatchId = hasOwn(patch.filters, "toPatchId");
@@ -1101,13 +1089,7 @@ export function normalizeStatePatch(patch = {}) {
 
   if (isPlainObject(patch.ui)) {
     normalized.ui = {};
-    for (const key of [
-      "diagnosticsOpen",
-      "legendOpen",
-      "leftPanelOpen",
-      "showPoints",
-      "showPointIcons",
-    ]) {
+    for (const key of ["diagnosticsOpen", "showPoints", "showPointIcons"]) {
       if (typeof patch.ui[key] === "boolean") {
         normalized.ui[key] = patch.ui[key];
       }
@@ -1292,7 +1274,6 @@ export function applyStatePatch(inputState, patch) {
       current.filters?.semanticFieldIdsByLayer,
     ),
     fishFilterTerms: normalizeFishFilterTerms(current.filters?.fishFilterTerms),
-    searchText: String(current.filters?.searchText || ""),
     patchId: current.filters?.patchId ?? null,
     fromPatchId: current.filters?.fromPatchId ?? null,
     toPatchId: current.filters?.toPatchId ?? null,
@@ -1323,8 +1304,6 @@ export function applyStatePatch(inputState, patch) {
   };
   next.ui = {
     diagnosticsOpen: Boolean(current.ui?.diagnosticsOpen),
-    legendOpen: Boolean(current.ui?.legendOpen),
-    leftPanelOpen: current.ui?.leftPanelOpen !== false,
     showPoints: current.ui?.showPoints !== false,
     showPointIcons: current.ui?.showPointIcons !== false,
     viewMode: normalizeNullableViewMode(current.ui?.viewMode) ?? null,
@@ -1370,9 +1349,6 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.filters, "fishFilterTerms")) {
       next.filters.fishFilterTerms = normalizeFishFilterTerms(normalized.filters.fishFilterTerms);
-    }
-    if (hasOwn(normalized.filters, "searchText")) {
-      next.filters.searchText = normalized.filters.searchText || "";
     }
     if (hasOwn(normalized.filters, "patchId")) {
       next.filters.patchId = normalized.filters.patchId ?? null;
@@ -1432,12 +1408,6 @@ export function applyStatePatch(inputState, patch) {
   if (normalized.ui) {
     if (hasOwn(normalized.ui, "diagnosticsOpen")) {
       next.ui.diagnosticsOpen = Boolean(normalized.ui.diagnosticsOpen);
-    }
-    if (hasOwn(normalized.ui, "legendOpen")) {
-      next.ui.legendOpen = Boolean(normalized.ui.legendOpen);
-    }
-    if (hasOwn(normalized.ui, "leftPanelOpen")) {
-      next.ui.leftPanelOpen = Boolean(normalized.ui.leftPanelOpen);
     }
     if (hasOwn(normalized.ui, "showPoints")) {
       next.ui.showPoints = Boolean(normalized.ui.showPoints);
@@ -1948,8 +1918,6 @@ function bootstrapStateSignature(state) {
     },
       ui: {
         diagnosticsOpen: Boolean(ui.diagnosticsOpen),
-        legendOpen: Boolean(ui.legendOpen),
-        leftPanelOpen: Boolean(ui.leftPanelOpen),
         showPoints: Boolean(ui.showPoints),
         showPointIcons: Boolean(ui.showPointIcons),
         pointIconScale: Number(ui.pointIconScale || 0),
