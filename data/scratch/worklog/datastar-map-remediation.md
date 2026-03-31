@@ -93,6 +93,26 @@ Net effect:
 - `_map_controls` no longer owns or derives layer override state
 - the transitional bridge projection is materially smaller again
 
+### 2026-03-31: Slice 7 landed
+
+- Extracted the pure layer-state helpers from `loader.js` into:
+  - `site/assets/map/map-layer-state.js`
+- Migrated into that module:
+  - layer ordering resolution
+  - visible-layer derivation
+  - opacity helpers
+  - point-icon scale helpers
+  - drag-drop ordering helpers
+  - clip-mask normalization helpers
+  - per-layer toggle patch builders
+- `loader.js` now imports those helpers instead of defining them inline.
+
+Why this matters:
+
+- this is a clean-slate migration out of the imperative monolith, not another ownership tweak inside it
+- it removes a coherent responsibility cluster from `loader.js`
+- it gives future map work a smaller pure module as the place to continue moving layer behavior
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.
