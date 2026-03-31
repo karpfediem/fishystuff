@@ -757,3 +757,36 @@ Validation for this slice:
 - `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs`
 - rebuild site output
 - verify served `/map/` assets match `site/.out`
+
+## Third implementation slice landed
+
+The next clean-slate extraction moved the bridge projection logic into a dedicated module:
+
+- `site/assets/map/map-bridge-projection.js`
+
+What moved out of `loader.js`:
+
+- the explicit `_map_controls -> _map_bridged` projection whitelist
+- bookmark projection for bridged bookmark payloads
+- the pure `projectBridgeSharedInputState(...)` function
+
+Why this extraction matters:
+
+- it gives the bridge-facing input contract its own home instead of burying it in the loader
+- it makes later `_map_controls` removal work happen in a focused module instead of the monolith
+- it keeps the projection rules explicit and testable
+
+What still remains in `loader.js` after this slice:
+
+- patch listening and dispatch
+- bridge mount lifecycle
+- large DOM rendering responsibilities
+- remaining transitional control ownership
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-bridge-projection.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/loader.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- verify served loader/module assets match `site/.out`

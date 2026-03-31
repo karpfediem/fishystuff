@@ -52,6 +52,7 @@ Multilingual {
     "js/ui-settings.js",
 
     "map/loader.js",
+    "map/map-bridge-projection.js",
     "map/map-host.js",
     "map/map-signal-contract.js",
     "map/ui/fishystuff.css",

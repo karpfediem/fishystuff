@@ -33,11 +33,16 @@ import {
   normalizeWindowUiState,
   normalizeZoneInfoTab,
 } from "./map-signal-contract.js";
+import {
+  MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS,
+  projectBridgeSharedInputState,
+} from "./map-bridge-projection.js";
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 
 export {
   normalizeMapBridgedSignalState,
   normalizeMapControlSignalState,
+  projectBridgeSharedInputState,
   normalizeWindowUiState,
   normalizeZoneInfoTab,
 };
@@ -145,138 +150,6 @@ function currentMapUiSignalState() {
   const helper = mapSignalHelper();
   const raw = helper?.readSignal?.("_map_ui");
   return normalizeMapUiSignalState(raw);
-}
-
-function projectBridgeBookmarkEntries(bookmarks) {
-  return normalizeBookmarks(bookmarks).map((bookmark) => ({
-    id: bookmark.id,
-    ...(typeof bookmark.label === "string" && bookmark.label.trim()
-      ? { label: bookmark.label.trim() }
-      : {}),
-    worldX: bookmark.worldX,
-    worldZ: bookmark.worldZ,
-  }));
-}
-
-export function projectBridgeSharedInputState(controlState, options = {}) {
-  const current = applyStatePatch(
-    DEFAULT_MAP_CONTROL_SIGNAL_STATE,
-    controlState && typeof controlState === "object" ? controlState : {},
-  );
-  const sharedFishState = options.sharedFishState || loadSharedFishState();
-  const currentState = options.currentState && typeof options.currentState === "object"
-    ? options.currentState
-    : {};
-  const bookmarks = Array.isArray(options.bookmarks) ? options.bookmarks : [];
-  const bookmarkSelectedIds = normalizeSelectedBookmarkIds(
-    bookmarks,
-    Array.isArray(options.bookmarkSelectedIds) ? options.bookmarkSelectedIds : [],
-  );
-  const effectiveFishIds = resolveEffectiveFishIdsForWasm(
-    {
-      filters: {
-        fishIds: current.filters?.fishIds || [],
-        fishFilterTerms: current.filters?.fishFilterTerms || [],
-      },
-      ui: {
-        sharedFishState: {
-          caughtIds: normalizeSharedFishIds(sharedFishState?.caughtIds),
-          favouriteIds: normalizeSharedFishIds(sharedFishState?.favouriteIds),
-        },
-      },
-    },
-    currentState,
-  );
-  return {
-    version: FISHYMAP_CONTRACT_VERSION,
-    filters: {
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("fishIds")
-        ? { fishIds: cloneJsonValue(effectiveFishIds) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("zoneRgbs")
-        ? { zoneRgbs: cloneJsonValue(current.filters?.zoneRgbs || []) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("semanticFieldIdsByLayer")
-        ? {
-            semanticFieldIdsByLayer: cloneJsonValue(
-              current.filters?.semanticFieldIdsByLayer || {},
-            ),
-          }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("patchId")
-        ? { patchId: current.filters?.patchId ?? null }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerIdsVisible")
-        && Array.isArray(current.filters?.layerIdsVisible)
-        ? { layerIdsVisible: cloneJsonValue(current.filters.layerIdsVisible) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerIdsOrdered")
-        && Array.isArray(current.filters?.layerIdsOrdered)
-        ? { layerIdsOrdered: cloneJsonValue(current.filters.layerIdsOrdered) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerOpacities")
-        && current.filters?.layerOpacities
-        && typeof current.filters.layerOpacities === "object"
-        ? { layerOpacities: cloneJsonValue(current.filters.layerOpacities) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerClipMasks")
-        && current.filters?.layerClipMasks
-        && typeof current.filters.layerClipMasks === "object"
-        ? { layerClipMasks: cloneJsonValue(current.filters.layerClipMasks) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes(
-        "layerWaypointConnectionsVisible",
-      )
-        && current.filters?.layerWaypointConnectionsVisible
-        && typeof current.filters.layerWaypointConnectionsVisible === "object"
-        ? {
-            layerWaypointConnectionsVisible: cloneJsonValue(
-              current.filters.layerWaypointConnectionsVisible,
-            ),
-          }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerWaypointLabelsVisible")
-        && current.filters?.layerWaypointLabelsVisible
-        && typeof current.filters.layerWaypointLabelsVisible === "object"
-        ? {
-            layerWaypointLabelsVisible: cloneJsonValue(
-              current.filters.layerWaypointLabelsVisible,
-            ),
-          }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerPointIconsVisible")
-        && current.filters?.layerPointIconsVisible
-        && typeof current.filters.layerPointIconsVisible === "object"
-        ? {
-            layerPointIconsVisible: cloneJsonValue(current.filters.layerPointIconsVisible),
-          }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerPointIconScales")
-        && current.filters?.layerPointIconScales
-        && typeof current.filters.layerPointIconScales === "object"
-        ? {
-            layerPointIconScales: cloneJsonValue(current.filters.layerPointIconScales),
-          }
-        : {}),
-    },
-    ui: {
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("showPoints")
-        ? { showPoints: current.ui?.showPoints !== false }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("showPointIcons")
-        ? { showPointIcons: current.ui?.showPointIcons !== false }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("pointIconScale")
-        ? { pointIconScale: current.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("bookmarkSelectedIds")
-        ? { bookmarkSelectedIds: cloneJsonValue(bookmarkSelectedIds) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("bookmarks")
-        ? { bookmarks: cloneJsonValue(projectBridgeBookmarkEntries(bookmarks)) }
-        : {}),
-    },
-  };
 }
 
 function currentMapControlSignalState() {
@@ -513,25 +386,6 @@ function patchTouchesNestedBranchPath(patch, branchName, path) {
   }
   return true;
 }
-
-const MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS = Object.freeze([
-  ["filters", "fishIds"],
-  ["filters", "zoneRgbs"],
-  ["filters", "semanticFieldIdsByLayer"],
-  ["filters", "fishFilterTerms"],
-  ["filters", "patchId"],
-  ["filters", "layerIdsVisible"],
-  ["filters", "layerIdsOrdered"],
-  ["filters", "layerOpacities"],
-  ["filters", "layerClipMasks"],
-  ["filters", "layerWaypointConnectionsVisible"],
-  ["filters", "layerWaypointLabelsVisible"],
-  ["filters", "layerPointIconsVisible"],
-  ["filters", "layerPointIconScales"],
-  ["ui", "showPoints"],
-  ["ui", "showPointIcons"],
-  ["ui", "pointIconScale"],
-]);
 
 export function patchTouchesMapControlBridgeProjection(patch) {
   return MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS.some((path) =>
