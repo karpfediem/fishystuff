@@ -2403,3 +2403,38 @@ Validation for this slice:
     - `PASS`
     - `frame_avg_ms=7.761`
     - `p95_ms=14.000`
+
+## Thirtieth implementation slice landed
+
+The old live page bootstrap files are no longer published. Just like `loader.js`, they now exist
+only as in-repo legacy/migration sources and tests, not as served runtime entrypoints.
+
+What changed:
+
+- `site/zine.ziggy`
+  - removed publication of:
+    - `js/pages/map-page.js`
+    - `map/map-page-state.js`
+    - `map/map-page-signals.js`
+
+Why this slice matters:
+
+- the served map runtime now has a single page bootstrap path:
+  - `map-page-live.js`
+- it prevents accidental live regressions from the old three-script page bootstrap stack
+- it makes the runtime boundary clearer:
+  - page bootstrap
+  - Datastar
+  - clean-slate map app
+
+Validation for this slice:
+
+- rebuild site output
+- served assets now return `404` for:
+  - `/js/pages/map-page.js`
+  - `/map/map-page-state.js`
+  - `/map/map-page-signals.js`
+- live Chromium reload still reached:
+  - `window.FishyMapBridge.getCurrentState().ready === true`
+  - layer catalog length `7`
+  - no old helper globals present on `window`
