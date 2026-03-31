@@ -958,3 +958,35 @@ Validation for this slice:
 - `node --test site/assets/map/loader.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-signal-contract.test.mjs`
 - rebuild site output
 - verify served `/map/loader.js` and `/map/map-layer-panel.js` match `site/.out`
+
+## Sixth implementation slice landed
+
+The next clean-slate extraction moved bookmark manager rendering out of the loader:
+
+- `site/assets/map/map-bookmark-panel.js`
+
+What moved out of `loader.js`:
+
+- bookmark manager card list markup rendering
+- bookmark manager control-label rendering
+- bookmark empty-state rendering
+
+Why this extraction matters:
+
+- bookmark manager UI is page-side state and should not stay buried in the bridge adapter
+- it removes another large DOM-rendering block from the loader monolith
+- it keeps the bookmark view as a pure rendering module over bookmark/page state plus shared markup callbacks
+
+What still remains after this slice:
+
+- bookmark drag/click/change event wiring still lives in `loader.js`
+- bookmark derived metadata helpers still live in `loader.js`
+- search UI rendering is still loader-owned
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-bookmark-panel.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/loader.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-signal-contract.test.mjs`
+- rebuild site output
+- verify served `/map/loader.js` and `/map/map-bookmark-panel.js` match `site/.out`

@@ -52,6 +52,7 @@ Multilingual {
     "js/ui-settings.js",
 
     "map/loader.js",
+    "map/map-bookmark-panel.js",
     "map/map-layer-state.js",
     "map/map-layer-panel.js",
     "map/map-bridge-projection.js",
