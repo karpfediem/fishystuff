@@ -315,15 +315,16 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal(signals._map_ui.windowUi.search.open, false);
   assert.equal(signals._map_ui.windowUi.zoneInfo.tab, "zone_info");
   assert.deepEqual(signals._map_ui.layers.expandedLayerIds, ["terrain"]);
-  assert.equal(signals._map_controls.ui.diagnosticsOpen, true);
+  assert.equal(signals._map_bridged.ui.diagnosticsOpen, true);
   assert.equal(signals._map_controls.ui.legendOpen, true);
   assert.equal(signals._map_controls.ui.leftPanelOpen, false);
   assert.equal(signals._map_controls.ui.showPoints, false);
   assert.equal(signals._map_controls.ui.showPointIcons, false);
   assert.equal(signals._map_controls.ui.pointIconScale, 1.5);
+  assert.equal(signals._map_bridged.ui.viewMode, "2d");
   assert.equal(signals._map_controls.filters.searchText, "velia");
-  assert.equal(signals._map_controls.filters.fromPatchId, "2026-02-26");
-  assert.equal(signals._map_controls.filters.toPatchId, "2026-03-12");
+  assert.equal(signals._map_bridged.filters.fromPatchId, "2026-02-26");
+  assert.equal(signals._map_bridged.filters.toPatchId, "2026-03-12");
   assert.deepEqual(signals._map_controls.filters.fishIds, [77, 91]);
   assert.deepEqual(signals._map_controls.filters.zoneRgbs, [12615551, 3972668]);
   assert.deepEqual(signals._map_controls.filters.semanticFieldIdsByLayer, {
@@ -406,10 +407,10 @@ test("map-page restore does not let stored filters override query-owned input st
   assert.deepEqual(signals._map_controls.filters.fishIds, []);
   assert.deepEqual(signals._map_controls.filters.fishFilterTerms, []);
   assert.equal(signals._map_controls.filters.searchText, "");
-  assert.equal(signals._map_controls.filters.fromPatchId, null);
-  assert.equal(signals._map_controls.filters.toPatchId, null);
+  assert.equal(signals._map_bridged.filters.fromPatchId, null);
+  assert.equal(signals._map_bridged.filters.toPatchId, null);
   assert.deepEqual(signals._map_controls.filters.layerIdsVisible, []);
-  assert.equal(signals._map_controls.ui.diagnosticsOpen, false);
+  assert.equal(signals._map_bridged.ui.diagnosticsOpen, false);
   assert.equal(signals._map_controls.ui.legendOpen, false);
   assert.equal(signals._map_controls.ui.leftPanelOpen, false);
   assert.equal(signals._map_controls.ui.showPoints, false);
@@ -601,13 +602,13 @@ test("map-page persists durable _map_ui.layers patches", () => {
   );
 });
 
-test("map-page persists durable _map_controls diagnostics state", () => {
+test("map-page persists durable _map_bridged diagnostics state", () => {
   const env = createContext();
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
   env.window.__fishystuffMap.patchSignals({
-    _map_controls: {
+    _map_bridged: {
       ui: {
         diagnosticsOpen: true,
       },
@@ -616,7 +617,7 @@ test("map-page persists durable _map_controls diagnostics state", () => {
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
-      _map_controls: {
+      _map_bridged: {
         ui: {
           diagnosticsOpen: true,
         },
@@ -683,8 +684,6 @@ test("map-page persists durable _map_controls filter state", () => {
         },
         fishFilterTerms: ["favourite", "missing"],
         searchText: "velia",
-        fromPatchId: "2026-02-26",
-        toPatchId: "2026-03-12",
         layerIdsVisible: ["zones", "terrain"],
         layerIdsOrdered: ["zones", "terrain", "minimap"],
         layerOpacities: { terrain: 0.35 },
@@ -693,6 +692,12 @@ test("map-page persists durable _map_controls filter state", () => {
         layerWaypointLabelsVisible: { terrain: false },
         layerPointIconsVisible: { terrain: true },
         layerPointIconScales: { terrain: 1.5 },
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fromPatchId: "2026-02-26",
+        toPatchId: "2026-03-12",
       },
     },
   });
@@ -708,8 +713,6 @@ test("map-page persists durable _map_controls filter state", () => {
           },
           fishFilterTerms: ["favourite", "missing"],
           searchText: "velia",
-          fromPatchId: "2026-02-26",
-          toPatchId: "2026-03-12",
           layerIdsVisible: ["zones", "terrain"],
           layerIdsOrdered: ["zones", "terrain", "minimap"],
           layerOpacities: { terrain: 0.35 },
@@ -718,6 +721,12 @@ test("map-page persists durable _map_controls filter state", () => {
           layerWaypointLabelsVisible: { terrain: false },
           layerPointIconsVisible: { terrain: true },
           layerPointIconScales: { terrain: 1.5 },
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fromPatchId: "2026-02-26",
+          toPatchId: "2026-03-12",
         },
       },
     },

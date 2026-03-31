@@ -716,3 +716,44 @@ Validation for this slice:
 - `node --test site/assets/map/map-signal-contract.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs site/assets/js/pages/map-page.test.mjs`
 - rebuilt site output
 - verified served `loader.js` and served `map-signal-contract.js` both match `site/.out`
+
+## Second implementation slice landed
+
+The next migration step moved the first live control subset away from the transitional
+`_map_controls` branch and into `_map_bridged`:
+
+- `_map_bridged.ui.diagnosticsOpen`
+- `_map_bridged.ui.viewMode`
+- `_map_bridged.filters.fromPatchId`
+- `_map_bridged.filters.toPatchId`
+
+What changed:
+
+- the map template now binds those controls directly to `_map_bridged`
+- map-page persistence/restore now treats those fields as bridged-owned while keeping the
+  existing storage JSON shape stable
+- loader render input now merges `_map_bridged` over `_map_controls`, so migrated fields
+  behave immediately in the page without waiting for bridge echo
+- the `_map_controls -> _map_bridged` projection no longer overwrites those fields
+- patch-range normalization now reads and writes `_map_bridged`
+
+Why this slice matters:
+
+- it removes dual ownership for a small, real, bridge-relevant subset
+- it proves the transition strategy without needing a big-bang schema rewrite
+- it keeps page-only fields like `searchText`, `legendOpen`, and `leftPanelOpen` out of the
+  bridged ownership path
+
+What still has not moved yet:
+
+- most layer/filter controls still originate in `_map_controls`
+- bookmark manager UI is still page-local but not yet extracted from loader rendering
+- `_map_controls` still exists as a transitional branch
+
+Validation for this slice:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs`
+- rebuild site output
+- verify served `/map/` assets match `site/.out`

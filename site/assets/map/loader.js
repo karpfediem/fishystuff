@@ -206,12 +206,6 @@ export function projectBridgeSharedInputState(controlState, options = {}) {
       ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("patchId")
         ? { patchId: current.filters?.patchId ?? null }
         : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("fromPatchId")
-        ? { fromPatchId: current.filters?.fromPatchId ?? null }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("toPatchId")
-        ? { toPatchId: current.filters?.toPatchId ?? null }
-        : {}),
       ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerIdsVisible")
         && Array.isArray(current.filters?.layerIdsVisible)
         ? { layerIdsVisible: cloneJsonValue(current.filters.layerIdsVisible) }
@@ -266,17 +260,11 @@ export function projectBridgeSharedInputState(controlState, options = {}) {
         : {}),
     },
     ui: {
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("diagnosticsOpen")
-        ? { diagnosticsOpen: current.ui?.diagnosticsOpen === true }
-        : {}),
       ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("showPoints")
         ? { showPoints: current.ui?.showPoints !== false }
         : {}),
       ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("showPointIcons")
         ? { showPointIcons: current.ui?.showPointIcons !== false }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("viewMode")
-        ? { viewMode: current.ui?.viewMode ?? null }
         : {}),
       ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("pointIconScale")
         ? { pointIconScale: current.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN }
@@ -451,10 +439,11 @@ function patchMapBridgedSignalState(nextState) {
 
 function currentMapRenderInputState() {
   const controls = currentMapControlSignalState();
+  const bridged = currentMapBridgedSignalState();
   const bookmarks = currentMapBookmarksSignalState();
   const bookmarkUi = currentMapUiSignalState().bookmarks;
   const sharedFishState = loadSharedFishState();
-  return applyStatePatch(controls, {
+  return applyStatePatch(applyStatePatch(controls, bridged), {
     ui: {
       bookmarkSelectedIds: normalizeSelectedBookmarkIds(bookmarks, bookmarkUi.selectedIds),
       bookmarks: normalizeBookmarks(bookmarks),
@@ -473,12 +462,18 @@ function buildMapBridgedSignalState(stateBundle = null) {
   const currentState = stateBundle?.state && typeof stateBundle.state === "object"
     ? stateBundle.state
     : {};
-  return projectBridgeSharedInputState(currentMapControlSignalState(), {
-    currentState,
-    bookmarks,
-    bookmarkSelectedIds: bookmarkUi.selectedIds,
-    sharedFishState,
-  });
+  const current = currentMapBridgedSignalState();
+  return normalizeMapBridgedSignalState(
+    applyStatePatch(
+      current,
+      projectBridgeSharedInputState(currentMapControlSignalState(), {
+        currentState,
+        bookmarks,
+        bookmarkSelectedIds: bookmarkUi.selectedIds,
+        sharedFishState,
+      }),
+    ),
+  );
 }
 
 function syncMapBridgedSignalsFromPageState(stateBundle = null) {
@@ -525,8 +520,6 @@ const MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS = Object.freeze([
   ["filters", "semanticFieldIdsByLayer"],
   ["filters", "fishFilterTerms"],
   ["filters", "patchId"],
-  ["filters", "fromPatchId"],
-  ["filters", "toPatchId"],
   ["filters", "layerIdsVisible"],
   ["filters", "layerIdsOrdered"],
   ["filters", "layerOpacities"],
@@ -535,10 +528,8 @@ const MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS = Object.freeze([
   ["filters", "layerWaypointLabelsVisible"],
   ["filters", "layerPointIconsVisible"],
   ["filters", "layerPointIconScales"],
-  ["ui", "diagnosticsOpen"],
   ["ui", "showPoints"],
   ["ui", "showPointIcons"],
-  ["ui", "viewMode"],
   ["ui", "pointIconScale"],
 ]);
 
@@ -7736,7 +7727,7 @@ function bindUi(shell, elements, options = {}) {
     if (patchRangeSyncPatching) {
       return;
     }
-    const inputState = currentMapControlSignalState();
+    const inputState = currentMapBridgedSignalState();
     const currentFromPatchId = inputState.filters?.fromPatchId ?? inputState.filters?.patchId ?? null;
     const currentToPatchId = inputState.filters?.toPatchId ?? inputState.filters?.patchId ?? null;
     const currentPatchId = inputState.filters?.patchId ?? null;
@@ -7771,14 +7762,16 @@ function bindUi(shell, elements, options = {}) {
 
     patchRangeSyncPatching = true;
     try {
-      patchMapControlSignalState({
-        version: 1,
-        filters: {
-          patchId: nextPatchId,
-          fromPatchId: patchRange.fromPatchId,
-          toPatchId: patchRange.toPatchId,
-        },
-      });
+      patchMapBridgedSignalState(
+        applyStatePatch(currentMapBridgedSignalState(), {
+          version: 1,
+          filters: {
+            patchId: nextPatchId,
+            fromPatchId: patchRange.fromPatchId,
+            toPatchId: patchRange.toPatchId,
+          },
+        }),
+      );
     } finally {
       patchRangeSyncPatching = false;
     }
@@ -8919,6 +8912,7 @@ function bindUi(shell, elements, options = {}) {
       renderCurrentState(getLatestStateBundle());
     }
     if (patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.bridged)) {
+      syncPatchRangeFromSignals();
       syncBridgeInputStateFromSignals();
     }
     if (patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.session)) {

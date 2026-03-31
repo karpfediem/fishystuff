@@ -1337,7 +1337,7 @@
         id="fishymap-view-toggle"
         class="btn btn-primary"
         type="button"
-        data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_controls.ui.viewMode', (($_map_controls.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? '2d' : '3d')"
+        data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_bridged.ui.viewMode', (($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? '2d' : '3d')"
         aria-label="View mode: 2D. Click to switch to 3D."
         title="View mode: 2D. Click to switch to 3D."
       >
@@ -1369,7 +1369,7 @@
               <div class="grid grid-cols-2 gap-3">
                 <label class="form-control gap-2">
                   <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">From</span>
-                  <input id="fishymap-patch-from" type="hidden" value="" data-bind="_map_controls.filters.fromPatchId">
+                  <input id="fishymap-patch-from" type="hidden" value="" data-bind="_map_bridged.filters.fromPatchId">
                   <fishy-searchable-dropdown
                     id="fishymap-patch-from-picker"
                     class="relative block w-full"
@@ -1418,7 +1418,7 @@
 
                 <label class="form-control gap-2">
                   <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">Until (incl.)</span>
-                  <input id="fishymap-patch-to" type="hidden" value="" data-bind="_map_controls.filters.toPatchId">
+                  <input id="fishymap-patch-to" type="hidden" value="" data-bind="_map_bridged.filters.toPatchId">
                   <fishy-searchable-dropdown
                     id="fishymap-patch-to-picker"
                     class="relative block w-full"
@@ -1496,7 +1496,7 @@
           <details
             id="fishymap-diagnostics"
             class="collapse collapse-arrow border border-base-300/70 bg-base-200"
-            data-on:toggle="window.__fishystuffDatastarState.setObjectPath($, '_map_controls.ui.diagnosticsOpen', event.currentTarget.open)"
+            data-on:toggle="window.__fishystuffDatastarState.setObjectPath($, '_map_bridged.ui.diagnosticsOpen', event.currentTarget.open)"
           >
             <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Diagnostics</summary>
             <div class="collapse-content space-y-3">

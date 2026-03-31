@@ -14,7 +14,7 @@
     "minimap",
   ]);
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_controls\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale|viewMode)|map_controls\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_controls\.ui\.(?:legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_controls\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bridged\.ui\.(?:diagnosticsOpen|viewMode)|map_bridged\.filters\.(?:fromPatchId|toPatchId)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -136,6 +136,8 @@
     const windowUi = signals?._map_ui?.windowUi;
     const inputUi = signals?._map_controls?.ui;
     const inputFilters = signals?._map_controls?.filters;
+    const bridgedUi = signals?._map_bridged?.ui;
+    const bridgedFilters = signals?._map_bridged?.filters;
     const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
       ? cloneJson(signals._map_bookmarks.entries)
       : [];
@@ -155,12 +157,10 @@
       },
       _map_controls: {
         ui: {
-          diagnosticsOpen: inputUi?.diagnosticsOpen === true,
           legendOpen: inputUi?.legendOpen === true,
           leftPanelOpen: inputUi?.leftPanelOpen !== false,
           showPoints: inputUi?.showPoints !== false,
           showPointIcons: inputUi?.showPointIcons !== false,
-          viewMode: inputUi?.viewMode === "3d" ? "3d" : "2d",
           pointIconScale: Number.isFinite(inputUi?.pointIconScale)
             ? Number(inputUi.pointIconScale)
             : 1,
@@ -178,9 +178,6 @@
             ? cloneJson(inputFilters.fishFilterTerms)
             : [],
           searchText: String(inputFilters?.searchText || ""),
-          fromPatchId:
-            inputFilters?.fromPatchId == null ? null : String(inputFilters.fromPatchId),
-          toPatchId: inputFilters?.toPatchId == null ? null : String(inputFilters.toPatchId),
           layerIdsVisible: Array.isArray(inputFilters?.layerIdsVisible)
             ? cloneJson(inputFilters.layerIdsVisible)
             : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
@@ -225,6 +222,20 @@
               : {},
         },
       },
+      _map_bridged: {
+        ui: {
+          diagnosticsOpen:
+            bridgedUi?.diagnosticsOpen === true || inputUi?.diagnosticsOpen === true,
+          viewMode:
+            bridgedUi?.viewMode === "3d" || inputUi?.viewMode === "3d" ? "3d" : "2d",
+        },
+        filters: {
+          fromPatchId:
+            bridgedFilters?.fromPatchId ?? inputFilters?.fromPatchId ?? null,
+          toPatchId:
+            bridgedFilters?.toPatchId ?? inputFilters?.toPatchId ?? null,
+        },
+      },
       _map_bookmarks: {
         entries: bookmarkEntries,
       },
@@ -254,12 +265,18 @@
           : [],
       },
       inputUi: {
-        diagnosticsOpen: stored?._map_controls?.ui?.diagnosticsOpen === true,
+        diagnosticsOpen:
+          stored?._map_bridged?.ui?.diagnosticsOpen === true
+          || stored?._map_controls?.ui?.diagnosticsOpen === true,
         legendOpen: stored?._map_controls?.ui?.legendOpen === true,
         leftPanelOpen: stored?._map_controls?.ui?.leftPanelOpen !== false,
         showPoints: stored?._map_controls?.ui?.showPoints !== false,
         showPointIcons: stored?._map_controls?.ui?.showPointIcons !== false,
-        viewMode: stored?._map_controls?.ui?.viewMode === "3d" ? "3d" : "2d",
+        viewMode:
+          stored?._map_bridged?.ui?.viewMode === "3d"
+          || stored?._map_controls?.ui?.viewMode === "3d"
+            ? "3d"
+            : "2d",
         pointIconScale: Number.isFinite(stored?._map_controls?.ui?.pointIconScale)
           ? Number(stored._map_controls.ui.pointIconScale)
           : 1,
@@ -282,13 +299,17 @@
           : [],
         searchText: String(stored?._map_controls?.filters?.searchText || ""),
         fromPatchId:
-          stored?._map_controls?.filters?.fromPatchId == null
-            ? null
-            : String(stored._map_controls.filters.fromPatchId),
+          stored?._map_bridged?.filters?.fromPatchId == null
+            ? stored?._map_controls?.filters?.fromPatchId == null
+              ? null
+              : String(stored._map_controls.filters.fromPatchId)
+            : String(stored._map_bridged.filters.fromPatchId),
         toPatchId:
-          stored?._map_controls?.filters?.toPatchId == null
-            ? null
-            : String(stored._map_controls.filters.toPatchId),
+          stored?._map_bridged?.filters?.toPatchId == null
+            ? stored?._map_controls?.filters?.toPatchId == null
+              ? null
+              : String(stored._map_controls.filters.toPatchId)
+            : String(stored._map_bridged.filters.toPatchId),
         layerIdsVisible: Array.isArray(stored?._map_controls?.filters?.layerIdsVisible)
           ? cloneJson(stored._map_controls.filters.layerIdsVisible)
           : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
@@ -356,15 +377,19 @@
     if (parsed.inputUi && typeof parsed.inputUi === "object" && !Array.isArray(parsed.inputUi)) {
       patch._map_controls = {
         ui: {
-          diagnosticsOpen: parsed.inputUi.diagnosticsOpen === true,
           legendOpen: parsed.inputUi.legendOpen === true,
           leftPanelOpen: parsed.inputUi.leftPanelOpen !== false,
           showPoints: parsed.inputUi.showPoints !== false,
           showPointIcons: parsed.inputUi.showPointIcons !== false,
-          viewMode: parsed.inputUi.viewMode === "3d" ? "3d" : "2d",
           pointIconScale: Number.isFinite(parsed.inputUi.pointIconScale)
             ? Number(parsed.inputUi.pointIconScale)
             : 1,
+        },
+      };
+      patch._map_bridged = {
+        ui: {
+          diagnosticsOpen: parsed.inputUi.diagnosticsOpen === true,
+          viewMode: parsed.inputUi.viewMode === "3d" ? "3d" : "2d",
         },
       };
     }
@@ -391,10 +416,6 @@
           ? cloneJson(parsed.inputFilters.fishFilterTerms)
           : [],
         searchText: String(parsed.inputFilters.searchText || ""),
-        fromPatchId:
-          parsed.inputFilters.fromPatchId == null ? null : String(parsed.inputFilters.fromPatchId),
-        toPatchId:
-          parsed.inputFilters.toPatchId == null ? null : String(parsed.inputFilters.toPatchId),
         layerIdsVisible: Array.isArray(parsed.inputFilters.layerIdsVisible)
           ? cloneJson(parsed.inputFilters.layerIdsVisible)
           : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
@@ -437,6 +458,13 @@
           !Array.isArray(parsed.inputFilters.layerPointIconScales)
             ? cloneJson(parsed.inputFilters.layerPointIconScales)
             : {},
+      };
+      patch._map_bridged = patch._map_bridged || {};
+      patch._map_bridged.filters = {
+        fromPatchId:
+          parsed.inputFilters.fromPatchId == null ? null : String(parsed.inputFilters.fromPatchId),
+        toPatchId:
+          parsed.inputFilters.toPatchId == null ? null : String(parsed.inputFilters.toPatchId),
       };
     }
     return Object.keys(patch).length ? patch : null;
@@ -494,6 +522,15 @@
     if (patch._map_controls && !Object.keys(patch._map_controls).length) {
       delete patch._map_controls;
     }
+    if (patch._map_bridged?.ui && !Object.keys(patch._map_bridged.ui).length) {
+      delete patch._map_bridged.ui;
+    }
+    if (patch._map_bridged?.filters && !Object.keys(patch._map_bridged.filters).length) {
+      delete patch._map_bridged.filters;
+    }
+    if (patch._map_bridged && !Object.keys(patch._map_bridged).length) {
+      delete patch._map_bridged;
+    }
     if (patch._map_ui?.windowUi && !Object.keys(patch._map_ui.windowUi).length) {
       delete patch._map_ui.windowUi;
     }
@@ -527,14 +564,16 @@
     const nextPatch = cloneJson(patch);
     const inputUi = nextPatch._map_controls?.ui;
     const inputFilters = nextPatch._map_controls?.filters;
+    const bridgedUi = nextPatch._map_bridged?.ui;
+    const bridgedFilters = nextPatch._map_bridged?.filters;
 
     if (inputUi) {
-      if (params.has("diagnostics")) {
-        delete inputUi.diagnosticsOpen;
-      }
       if (params.has("legend")) {
         delete inputUi.legendOpen;
       }
+    }
+    if (bridgedUi && params.has("diagnostics")) {
+      delete bridgedUi.diagnosticsOpen;
     }
 
     if (inputFilters) {
@@ -547,20 +586,23 @@
       if (params.has("search")) {
         delete inputFilters.searchText;
       }
-      if (
+      if (params.has("layers") || params.has("layerSet")) {
+        delete inputFilters.layerIdsVisible;
+      }
+    }
+    if (
+      bridgedFilters &&
+      (
         params.has("patch") ||
         params.has("fromPatch") ||
         params.has("patchFrom") ||
         params.has("toPatch") ||
         params.has("untilPatch") ||
         params.has("patchTo")
-      ) {
-        delete inputFilters.fromPatchId;
-        delete inputFilters.toPatchId;
-      }
-      if (params.has("layers") || params.has("layerSet")) {
-        delete inputFilters.layerIdsVisible;
-      }
+      )
+    ) {
+      delete bridgedFilters.fromPatchId;
+      delete bridgedFilters.toPatchId;
     }
 
     return stripEmptyRestorePatchBranches(nextPatch);

@@ -778,8 +778,6 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
         fishFilterTerms: ["favourite"],
         searchText: "velia",
         patchId: "2026-01-29-inland-prize-buff",
-        fromPatchId: "2026-01-29-inland-prize-buff",
-        toPatchId: "2026-02-06-valencia-inland-prize-fish",
         layerIdsVisible: ["zone_mask", "fish_evidence"],
         layerIdsOrdered: ["fish_evidence", "zone_mask"],
         layerOpacities: { zone_mask: 0.5 },
@@ -790,12 +788,10 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
         layerPointIconScales: { fish_evidence: 2 },
       },
       ui: {
-        diagnosticsOpen: true,
         legendOpen: true,
         leftPanelOpen: false,
         showPoints: false,
         showPointIcons: false,
-        viewMode: "3d",
         pointIconScale: 2,
       },
     },
@@ -824,9 +820,7 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
     fishIds: [77],
     zoneRgbs: [0xc17f7f],
     semanticFieldIdsByLayer: { zone_mask: [0xc17f7f] },
-    patchId: null,
-    fromPatchId: "2026-01-29-inland-prize-buff",
-    toPatchId: "2026-02-06-valencia-inland-prize-fish",
+    patchId: "2026-01-29-inland-prize-buff",
     layerIdsVisible: ["zone_mask", "fish_evidence"],
     layerIdsOrdered: ["fish_evidence", "zone_mask"],
     layerOpacities: { zone_mask: 0.5 },
@@ -837,10 +831,8 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
     layerPointIconScales: { fish_evidence: 2 },
   });
   assert.deepEqual(projected.ui, {
-    diagnosticsOpen: true,
     showPoints: false,
     showPointIcons: false,
-    viewMode: "3d",
     pointIconScale: 2,
     bookmarkSelectedIds: ["bm-1"],
     bookmarks: [
@@ -1088,7 +1080,7 @@ test("patchTouchesMapControlBridgeProjection keeps derived and bridged map input
         },
       },
     }),
-    true,
+    false,
   );
 });
 
