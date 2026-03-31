@@ -963,6 +963,37 @@ Why this matters:
 - it keeps the new live bootstrap aligned with the explicit shared-signal contract rather than
   silently preserving legacy ownership rules
 
+## 2026-03-31: Map shell moved out of SuperHTML
+
+The next major remediation step was to stop defining the interactive map shell inside
+`site/layouts/map.shtml`.
+
+New structure:
+
+- `site/layouts/map.shtml`
+  - now acts as a thin wrapper:
+    - page chrome
+    - styles
+    - script tags
+    - raw shell include
+- `site/assets/map/map-shell.html`
+  - now contains the interactive map shell markup
+- `site/content/en-US/map.smd`
+  - is back to frontmatter-only page metadata
+
+The shell is now included with:
+
+- `:html="$site.asset('map/map-shell.html').bytes()"`
+
+Why this matters:
+
+- SuperHTML was conflicting with literal Datastar `$...` expressions in the shell
+- a plain HTML asset gives us a literal DOM source for the interactive shell
+- the shell can now evolve toward direct Datastar expressions without fighting the template engine
+
+This is closer to the intended architecture than keeping the shell embedded in a large `.shtml`
+layout file.
+
 The next clean-slate extraction moved the bridge projection logic into a dedicated module:
 
 - `site/assets/map/map-bridge-projection.js`

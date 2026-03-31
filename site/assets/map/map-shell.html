@@ -1,0 +1,456 @@
+<div id="map-page-shell"
+         data-signals="{
+           _map_ui: {
+             windowUi: {
+               search: { open: true, collapsed: false, x: null, y: null },
+               settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+               zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: '' },
+               layers: { open: true, collapsed: false, x: null, y: null },
+               bookmarks: { open: false, collapsed: false, x: null, y: null }
+             },
+             search: { open: false },
+             bookmarks: { placing: false, selectedIds: [] }
+           },
+           _map_controls: {
+             filters: {
+               searchText: '',
+               patchId: null
+             },
+             ui: {
+               legendOpen: false,
+               leftPanelOpen: true
+             }
+           },
+           _map_bridged: {
+             filters: {
+               fishIds: [],
+               zoneRgbs: [],
+               semanticFieldIdsByLayer: {},
+               patchId: null,
+               fromPatchId: null,
+               toPatchId: null,
+               layerIdsVisible: ['bookmarks', 'fish_evidence', 'zone_mask', 'minimap'],
+               layerIdsOrdered: [],
+               layerOpacities: {},
+               layerClipMasks: {},
+               layerWaypointConnectionsVisible: {},
+               layerWaypointLabelsVisible: {},
+               layerPointIconsVisible: {},
+               layerPointIconScales: {}
+             },
+             ui: {
+               diagnosticsOpen: false,
+               showPoints: true,
+               showPointIcons: true,
+               viewMode: null,
+               pointIconScale: 1,
+               bookmarkSelectedIds: [],
+               bookmarks: []
+             }
+           },
+           _map_actions: {
+             resetViewToken: 0,
+             resetUiToken: 0
+           },
+           _map_bookmarks: {
+             entries: []
+           },
+           _map_session: {
+             view: { viewMode: '2d', camera: {} },
+             selection: {}
+           },
+           _map_runtime: {
+             ready: false,
+             theme: {},
+             view: { viewMode: '2d', camera: {} },
+             selection: {},
+             catalog: { layers: [], patches: [], fish: [], semanticTerms: [] },
+             statuses: {},
+             lastDiagnostic: null
+           },
+           _shared_fish: {
+             caughtIds: [],
+             favouriteIds: []
+           }
+         }">
+      <div hidden
+           data-init="window.__fishystuffMap.restore($)"></div>
+      <canvas id="bevy"></canvas>
+      <div id="fishymap-toolbar" class="not-prose" aria-label="Map windows">
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="search"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.search.open')"
+          type="button"
+          aria-pressed="true"
+          aria-label="Hide search"
+          title="Hide search"
+        >
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-magnifying-glass"></use></svg>
+        </button>
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="bookmarks"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.bookmarks.open')"
+          type="button"
+          aria-pressed="false"
+          aria-label="Show bookmarks"
+          title="Show bookmarks"
+        >
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-bookmarks"></use></svg>
+        </button>
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="settings"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.settings.open')"
+          type="button"
+          aria-pressed="true"
+          aria-label="Hide settings"
+          title="Hide settings"
+        >
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-adjustments-horizontal"></use></svg>
+        </button>
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="zone-info"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.zoneInfo.open')"
+          type="button"
+          aria-pressed="true"
+          aria-label="Hide zone info"
+          title="Hide zone info"
+        >
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-information-circle"></use></svg>
+        </button>
+        <button
+          class="fishymap-toolbar-button btn btn-circle"
+          data-window-toggle="layers"
+          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.layers.open')"
+          type="button"
+          aria-pressed="true"
+          aria-label="Hide layers"
+          title="Hide layers"
+        >
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-squares-2x2"></use></svg>
+        </button>
+      </div>
+      <aside id="fishymap-search-window" class="fishymap-window not-prose" data-window-id="search">
+        <div
+          class="fishymap-window-header"
+          id="fishymap-search-titlebar"
+          data-window-titlebar="search"
+        >
+          <div class="fishymap-window-header-content">
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-magnifying-glass"></use></svg>
+            <span id="fishymap-search-title-text" class="fishymap-window-title text-lg leading-tight">Search</span>
+          </div>
+          <label class="fishymap-search-title-input input input-bordered input-sm rounded-full" data-window-drag-ignore="true">
+            <input
+              id="fishymap-search"
+              class="grow"
+              type="search"
+              placeholder="Search fish, zone, or filter term"
+              autocomplete="off"
+              data-bind="_map_controls.filters.searchText"
+              data-on:input="window.__fishystuffDatastarState.setObjectPath($, '_map_ui.search.open', true)"
+              data-on:focus="window.__fishystuffDatastarState.setObjectPath($, '_map_ui.search.open', true)"
+            >
+            <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
+          </label>
+        </div>
+        <div id="fishymap-search-body" class="fishymap-window-body">
+          <div id="fishymap-search-selection-shell" class="not-prose" hidden>
+            <div id="fishymap-search-selection" hidden></div>
+          </div>
+
+          <div id="fishymap-search-results-shell" class="card card-border bg-base-100 overflow-hidden" hidden>
+            <ul id="fishymap-search-results" class="menu menu-sm max-h-64 overflow-auto gap-1 p-2"></ul>
+          </div>
+        </div>
+      </aside>
+      <aside id="fishymap-bookmarks-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="bookmarks">
+        <div
+          class="fishymap-window-header"
+          id="fishymap-bookmarks-titlebar"
+          data-window-titlebar="bookmarks"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+        >
+          <div class="fishymap-window-header-content">
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-bookmarks"></use></svg>
+            <span class="fishymap-window-title text-lg leading-tight">Bookmarks</span>
+          </div>
+          <button id="fishymap-bookmark-place" class="btn btn-primary btn-sm" type="button">
+            <svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-bookmark-add"></use></svg>
+            <span id="fishymap-bookmark-place-label">New bookmark</span>
+          </button>
+        </div>
+        <div id="fishymap-bookmarks-body" class="fishymap-window-body">
+          <div id="fishymap-bookmarks-controls">
+            <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--primary">
+              <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-copy"></use></svg>Copy</button>
+              <button id="fishymap-bookmark-export" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-export"></use></svg>Export</button>
+              <button id="fishymap-bookmark-import-trigger" class="btn btn-soft btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-import"></use></svg>Import</button>
+              <button id="fishymap-bookmark-cancel" class="btn btn-ghost btn-sm" type="button" hidden><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-clear"></use></svg>Cancel</button>
+            </div>
+            <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--secondary">
+              <button id="fishymap-bookmark-select-all" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-select-all"></use></svg>Select all</button>
+              <button id="fishymap-bookmark-clear-selection" class="btn btn-ghost btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-clear"></use></svg><span id="fishymap-bookmark-clear-selection-label">Clear</span></button>
+              <button id="fishymap-bookmark-delete-selected" class="btn btn-ghost btn-error btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-trash"></use></svg>Delete</button>
+            </div>
+            <input id="fishymap-bookmark-import-input" class="hidden" type="file" accept=".xml,.txt,text/xml,application/xml">
+          </div>
+          <div id="fishymap-bookmarks-list" class="rounded-box border border-base-300/70 bg-base-200 p-1">
+            <div class="fishymap-bookmark-empty text-sm text-base-content/65">
+              No bookmarks yet.
+            </div>
+          </div>
+        </div>
+      </aside>
+      <aside id="fishymap-zone-info-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="zoneInfo">
+        <div
+          class="fishymap-window-header"
+          id="fishymap-zone-info-titlebar"
+          data-window-titlebar="zoneInfo"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+        >
+          <div class="fishymap-window-header-content">
+            <span id="fishymap-zone-info-title-icon" class="fishy-icon fishymap-window-title-icon size-5" aria-hidden="true">
+              <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-information-circle"></use></svg>
+            </span>
+            <span id="fishymap-zone-info-title" class="fishymap-window-title truncate text-lg leading-tight">Zone Info</span>
+          </div>
+          <span id="fishymap-zone-info-status" class="inline-flex min-w-0 items-center gap-2 text-xs text-base-content/60">
+            <span id="fishymap-zone-info-status-icon" class="inline-flex text-base-content/55" aria-hidden="true">
+              <svg class="size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-information-circle"></use></svg>
+            </span>
+            <span id="fishymap-zone-info-status-text" class="truncate">no selection</span>
+          </span>
+        </div>
+        <div id="fishymap-zone-info-body" class="fishymap-window-body">
+          <div
+            id="fishymap-zone-info-tabs"
+            role="tablist"
+            class="tabs tabs-box bg-base-200/80 p-1"
+            aria-label="Point layer tabs"
+            hidden
+          ></div>
+          <div id="fishymap-zone-info-panel" class="space-y-3">
+            <div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">
+              Click the map, use a waypoint target, or select a bookmark to inspect layers at a world point.
+            </div>
+          </div>
+        </div>
+      </aside>
+      <aside id="fishymap-layers-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="layers">
+        <div
+          class="fishymap-window-header"
+          id="fishymap-layers-titlebar"
+          data-window-titlebar="layers"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+        >
+          <div class="fishymap-window-header-content">
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-squares-2x2"></use></svg>
+            <p class="fishymap-window-title text-lg leading-tight">Layers</p>
+          </div>
+          <span id="fishymap-layers-count" class="badge badge-outline badge-sm">0</span>
+        </div>
+        <div id="fishymap-layers-body" class="fishymap-window-body">
+          <div id="fishymap-layers"></div>
+        </div>
+      </aside>
+      <button
+        id="fishymap-view-toggle"
+        class="btn btn-primary"
+        type="button"
+        data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_bridged.ui.viewMode', (($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? '2d' : '3d')"
+        aria-label="View mode: 2D. Click to switch to 3D."
+        title="View mode: 2D. Click to switch to 3D."
+      >
+        <span id="fishymap-view-toggle-icon" aria-hidden="true">
+          <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-map-view"></use></svg>
+        </span>
+      </button>
+      <aside id="fishymap-panel" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="settings">
+        <div
+          class="fishymap-window-header"
+          id="fishymap-panel-titlebar"
+          data-window-titlebar="settings"
+          role="button"
+          tabindex="0"
+          aria-expanded="true"
+        >
+          <div class="fishymap-window-header-content">
+            <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-adjustments-horizontal"></use></svg>
+            <p class="fishymap-window-title text-lg leading-tight">Settings</p>
+          </div>
+          <span id="fishymap-ready-pill" class="badge badge-outline badge-sm gap-2 text-base-content/80"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading</span></span>
+        </div>
+
+        <div id="fishymap-panel-body" class="fishymap-window-body flex flex-col gap-4 px-4 py-4">
+          <div class="space-y-3">
+            <fieldset class="fieldset rounded-box border border-base-300/70 bg-base-200 p-4">
+              <legend class="fieldset-legend px-1 text-sm font-semibold">Patch window</legend>
+              <span class="label px-1 pt-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Inclusive</span>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="form-control gap-2">
+                  <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">From</span>
+                  <input id="fishymap-patch-from" type="hidden" value="" data-bind="_map_bridged.filters.fromPatchId">
+                  <fishy-searchable-dropdown
+                    id="fishymap-patch-from-picker"
+                    class="relative block w-full"
+                    input-id="fishymap-patch-from"
+                    label="Loading patches…"
+                    value=""
+                    placeholder="Search patches"
+                  >
+                    <button
+                      type="button"
+                      data-role="trigger"
+                      class="flex min-h-10 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-left text-sm shadow-sm"
+                      aria-haspopup="listbox"
+                      aria-expanded="false"
+                      aria-controls="fishymap-patch-from-panel"
+                    >
+                      <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">Loading patches…</span></span></span>
+                      <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
+                    </button>
+
+                    <div id="fishymap-patch-from-panel" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
+                      <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
+                        <label class="flex min-h-10 w-full min-w-full items-center gap-3 bg-base-100 px-3 py-2 text-sm">
+                          <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
+                          <input
+                            id="fishymap-patch-from-search-input"
+                            data-role="search-input"
+                            type="search"
+                            class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
+                            style="outline: none; box-shadow: none;"
+                            placeholder="Search patches"
+                            autocomplete="off"
+                            spellcheck="false"
+                          >
+                        </label>
+                        <div class="px-1 pb-1">
+                          <ul id="fishymap-patch-from-results" tabindex="-1" data-role="results" class="menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1">
+                            <li class="menu-disabled"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading patches…</span></span></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                    <div data-role="selected-content-catalog" hidden></div>
+                  </fishy-searchable-dropdown>
+                </label>
+
+                <label class="form-control gap-2">
+                  <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">Until (incl.)</span>
+                  <input id="fishymap-patch-to" type="hidden" value="" data-bind="_map_bridged.filters.toPatchId">
+                  <fishy-searchable-dropdown
+                    id="fishymap-patch-to-picker"
+                    class="relative block w-full"
+                    input-id="fishymap-patch-to"
+                    label="Loading patches…"
+                    value=""
+                    placeholder="Search patches"
+                  >
+                    <button
+                      type="button"
+                      data-role="trigger"
+                      class="flex min-h-10 w-full items-center justify-between gap-3 rounded-box border border-base-300 bg-base-100 px-3 py-2 text-left text-sm shadow-sm"
+                      aria-haspopup="listbox"
+                      aria-expanded="false"
+                      aria-controls="fishymap-patch-to-panel"
+                    >
+                      <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">Loading patches…</span></span></span>
+                      <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
+                    </button>
+
+                    <div id="fishymap-patch-to-panel" data-role="panel" class="absolute left-0 top-0 z-50 w-full min-w-full max-w-full" hidden>
+                      <div class="grid w-full min-w-full overflow-hidden rounded-box border border-base-300 bg-base-100 shadow-lg">
+                        <label class="flex min-h-10 w-full min-w-full items-center gap-3 bg-base-100 px-3 py-2 text-sm">
+                          <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-search-field"></use></svg>
+                          <input
+                            id="fishymap-patch-to-search-input"
+                            data-role="search-input"
+                            type="search"
+                            class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
+                            style="outline: none; box-shadow: none;"
+                            placeholder="Search patches"
+                            autocomplete="off"
+                            spellcheck="false"
+                          >
+                        </label>
+                        <div class="px-1 pb-1">
+                          <ul id="fishymap-patch-to-results" tabindex="-1" data-role="results" class="menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1">
+                            <li class="menu-disabled"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading patches…</span></span></li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                    <div data-role="selected-content-catalog" hidden></div>
+                  </fishy-searchable-dropdown>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="flex flex-col gap-2">
+              <button
+                id="fishymap-reset-view"
+                class="btn btn-outline btn-secondary btn-sm w-full"
+                type="button"
+                data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_actions.resetViewToken', (($_map_actions && $_map_actions.resetViewToken) || 0) + 1)"
+              >Reset view</button>
+              <button
+                id="fishymap-reset-ui"
+                class="btn btn-outline btn-sm w-full"
+                type="button"
+                data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_actions.resetUiToken', (($_map_actions && $_map_actions.resetUiToken) || 0) + 1)"
+              >Reset UI</button>
+            </div>
+
+            <fieldset class="fieldset rounded-box border border-base-300/70 bg-base-200 p-4">
+              <legend class="fieldset-legend px-1 text-sm font-semibold">Display</legend>
+              <div class="space-y-3 pt-1">
+                <label class="flex items-center justify-between gap-3 text-sm">
+                  <span class="font-semibold">Auto-adjust view</span>
+                  <input id="fishymap-auto-adjust-view" class="checkbox checkbox-sm checkbox-primary" type="checkbox" checked data-bind="_map_ui.windowUi.settings.autoAdjustView">
+                </label>
+              </div>
+            </fieldset>
+          </div>
+
+          <details
+            id="fishymap-diagnostics"
+            class="collapse collapse-arrow border border-base-300/70 bg-base-200"
+            data-on:toggle="window.__fishystuffDatastarState.setObjectPath($, '_map_bridged.ui.diagnosticsOpen', event.currentTarget.open)"
+          >
+            <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Diagnostics</summary>
+            <div class="collapse-content space-y-3">
+              <div id="fishymap-status-lines" class="space-y-1 text-xs text-base-content/70"></div>
+              <pre id="fishymap-diagnostic-json" class="rounded-box border border-neutral/20 bg-neutral text-neutral-content p-3 text-[11px] leading-5">Waiting for bridge events…</pre>
+            </div>
+          </details>
+        </div>
+      </aside>
+
+      <div id="fishymap-hover-tooltip" class="card card-border bg-base-100 not-prose" hidden>
+        <div id="fishymap-hover-layers" hidden></div>
+      </div>
+
+      <div id="fishymap-error-overlay" class="card card-border border-error/40 bg-base-100 not-prose" hidden>
+        <div class="space-y-3 px-4 py-4">
+          <div class="flex items-center justify-between gap-3">
+            <p class="fishymap-window-title text-lg leading-tight text-error">Map renderer unavailable</p>
+            <span class="badge badge-error badge-sm">Error</span>
+          </div>
+          <p class="text-sm text-base-content/80">
+            The webpage loaded, but the Bevy/WebGL renderer could not start.
+          </p>
+          <pre id="fishymap-error-message" class="rounded-box bg-neutral text-neutral-content p-3 text-[11px] leading-5"></pre>
+        </div>
+      </div>
+    </div>
