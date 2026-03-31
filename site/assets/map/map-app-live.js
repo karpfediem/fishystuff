@@ -84,17 +84,10 @@ function buildResetUiPatch() {
 
 function currentPageBootstrap() {
   const page = window.__fishystuffMap;
-  const pageSignals = window.__fishystuffMapPageSignals;
   if (!page || typeof page.whenRestored !== "function") {
     return null;
   }
-  if (!pageSignals || typeof pageSignals.applyPatchToSignals !== "function") {
-    return null;
-  }
-  return {
-    page,
-    applyPageSignalPatch: pageSignals.applyPatchToSignals,
-  };
+  return { page };
 }
 
 function wait(delayMs) {
@@ -120,7 +113,7 @@ export async function waitForMapPageBootstrap({
 }
 
 async function start() {
-  const { page, applyPageSignalPatch } = await waitForMapPageBootstrap();
+  const { page } = await waitForMapPageBootstrap();
 
   await page.whenRestored();
 
@@ -192,12 +185,12 @@ async function start() {
   }
 
   function applyInternalSignalPatch(patch) {
-    if (!applyPageSignalPatch || applyingInternalSignalPatch) {
+    if (applyingInternalSignalPatch) {
       return;
     }
     applyingInternalSignalPatch = true;
     try {
-      applyPageSignalPatch(signals(), patch);
+      dispatchShellSignalPatch(shell, patch);
     } finally {
       applyingInternalSignalPatch = false;
     }

@@ -2282,3 +2282,38 @@ Open follow-up after this slice:
   - `points: snapshot loading`
 - because this remained unchanged after the bootstrap wait fix, the remaining issue is now more
   likely inside the headless runtime mount / WebGL path than in the page-global boot order
+
+## Twenty-seventh implementation slice landed
+
+The live map app no longer reaches through `window.__fishystuffMapPageSignals` to mutate the shell.
+Internal live-map patches now go through the same shell signal-patch event contract as every other
+live map patch.
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - removed the live dependency on `window.__fishystuffMapPageSignals`
+  - `applyInternalSignalPatch(...)` now dispatches `fishymap-signals-patch` on the shell instead of
+    calling the helper global directly
+  - `waitForMapPageBootstrap(...)` now only waits for `window.__fishystuffMap.whenRestored`
+- `site/assets/map/map-app-live.test.mjs`
+  - updated to reflect the smaller bootstrap dependency
+
+Why this slice matters:
+
+- the live app now uses one consistent shell patch path:
+  - shell event
+  - page-owned signal application
+  - Datastar signal graph update
+- this removes another loader-era escape hatch from the clean-slate path
+- the remaining helper global is now page-internal rather than part of the live map app contract
+
+Validation for this slice:
+
+- `node --test site/assets/map/map-app-live.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- `node --check site/assets/map/map-app-live.js`
+- rebuild site output
+- live Chromium reload confirmed:
+  - `window.FishyMapBridge.getCurrentState().ready === true`
+  - layer catalog length remained `7`
+  - the live shell still booted with no new console errors
