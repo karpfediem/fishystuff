@@ -2581,3 +2581,95 @@ Next tasks from here:
   functionally restored again
 - keep replacing remaining imperative helper calls in the raw map shell with direct Datastar
   expressions or narrowly scoped clean-slate modules
+
+## Thirty-fourth implementation slice landed
+
+Bookmark placement is restored on the clean-slate live map path without reintroducing hover as a
+shared Datastar signal.
+
+What changed:
+
+- `site/assets/map/map-bookmark-panel-live.js`
+  - added `buildBookmarkPlacementSelectionResult(...)` as the clean-slate placement decision helper
+  - bookmark placement still ignores passive unchanged selection signal patches
+  - bookmark placement now also consumes explicit `fishymap:selection-changed` runtime events
+  - explicit clicked-point selection events are allowed to place a bookmark even when the clicked
+    world point matches the currently selected point
+  - placement stays scoped to real clicked map points:
+    - `pointKind === "clicked"`
+    - no dependency on runtime hover mirrors
+- `site/assets/map/map-bookmark-panel-live.test.mjs`
+  - added regression coverage for:
+    - explicit same-point clicked selection placement
+    - ignoring unchanged passive signal patches
+    - rejecting non-clicked focus selections for placement mode
+
+Why this slice matters:
+
+- the clean-slate bookmark panel had drifted into a weaker model than `main`:
+  - it only reacted to a changed selection key
+  - so clicking the already-selected map point while in placement mode did nothing
+- the fix stays aligned with the intended Datastar contract:
+  - hover remains out of shared Datastar runtime state
+  - the bookmark panel responds only to the coarse runtime event it actually cares about:
+    `fishymap:selection-changed`
+- this restores the practical user flow:
+  - click map to select a point
+  - click `New bookmark`
+  - click the map point again
+  - bookmark is created immediately and placement mode exits
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-bookmark-panel-live.js`
+- `node --test site/assets/map/map-bookmark-panel-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-zone-catalog.test.mjs site/assets/map/map-host.test.mjs`
+- rebuild site output
+- restore tracked font artifacts after rebuild
+- live Chromium checks on the served build:
+  - boot reaches:
+    - `_map_runtime.ready === true`
+    - `catalog.layers.length === 7`
+    - `catalog.fish.length === 496`
+  - search still resolves `Depth 4` zone matches
+  - zone info tabs still switch correctly after canvas click
+  - `Reset UI` still returns to `Ready`
+  - bookmark placement now succeeds from the live shell when a `fishymap:selection-changed`
+    clicked-point event arrives while placement mode is armed:
+    - `_map_bookmarks.entries.length` increments
+    - `_map_ui.bookmarks.placing` becomes `false`
+    - `_map_ui.bookmarks.selectedIds` selects the new bookmark
+- smoke:
+  - `bash tools/scripts/map-browser-smoke.sh`
+    - `PASS`
+
+Current restored interaction sweep:
+
+- boot:
+  - ready pill reaches `Ready`
+  - live runtime catalogs load
+- toolbar:
+  - window visibility buttons reflect open state immediately
+- search:
+  - zone-name queries work again
+  - applying a search result updates bridged filter signals
+- layers:
+  - visibility/settings toggles stay aligned between shell, bridge input, and runtime
+- zone info:
+  - canvas clicks populate details and tabs switch correctly
+- settings:
+  - no indefinite `Loading`
+  - `Reset view` / `Reset UI` complete cleanly
+- bookmarks:
+  - placement mode can create a bookmark again on the live shell
+
+Next tasks from here:
+
+- continue replacing remaining imperative page bootstrap seams with direct Datastar expressions or
+  narrowly scoped clean-slate modules
+- keep the bridge contract explicit and coarse:
+  - `_map_bridged`
+  - `_map_actions`
+  - `_map_session`
+  - `_map_runtime`
+- only add new runtime event consumers when a page module genuinely needs a coarse event boundary,
+  as with bookmark placement

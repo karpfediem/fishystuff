@@ -109,6 +109,38 @@ function buildFocusBookmarkPatch(bookmark, currentActions) {
   };
 }
 
+export function buildBookmarkPlacementSelectionResult({
+  selection,
+  bookmarks = [],
+  placing = false,
+  lastPlacementKey = "",
+  allowSameSelection = false,
+  requireClickedPoint = false,
+} = {}) {
+  if (placing !== true) {
+    return null;
+  }
+  const nextPlacementKey = selectionBookmarkKey(selection);
+  if (!nextPlacementKey) {
+    return null;
+  }
+  const pointKind = String(selection?.pointKind || "").trim();
+  if (requireClickedPoint && pointKind !== "clicked") {
+    return null;
+  }
+  if (!allowSameSelection && nextPlacementKey === String(lastPlacementKey || "")) {
+    return null;
+  }
+  const bookmark = createBookmarkFromSelection(selection, bookmarks);
+  if (!bookmark) {
+    return null;
+  }
+  return {
+    bookmark,
+    placementKey: nextPlacementKey,
+  };
+}
+
 export function createMapBookmarkPanelController({
   shell,
   getSignals,
@@ -241,21 +273,43 @@ export function createMapBookmarkPanelController({
       state.lastPlacementKey = "";
       return false;
     }
-    const nextPlacementKey = selectionBookmarkKey(current.state.selection);
-    if (!nextPlacementKey || nextPlacementKey === state.lastPlacementKey) {
+    const result = buildBookmarkPlacementSelectionResult({
+      selection: current.state.selection,
+      bookmarks: current.bookmarks,
+      placing: current.bookmarkUi.placing,
+      lastPlacementKey: state.lastPlacementKey,
+    });
+    if (!result) {
       return false;
     }
-    state.lastPlacementKey = nextPlacementKey;
-    const bookmark = createBookmarkFromSelection(current.state.selection, current.bookmarks);
-    if (!bookmark) {
-      return false;
-    }
+    state.lastPlacementKey = result.placementKey;
     writeBookmarkState((bookmarks, bookmarkUi) => {
-      bookmarks.push(bookmark);
+      bookmarks.push(result.bookmark);
       bookmarkUi.placing = false;
-      bookmarkUi.selectedIds = [bookmark.id];
+      bookmarkUi.selectedIds = [result.bookmark.id];
     });
     return true;
+  }
+
+  function handleSelectionChanged(event) {
+    const current = bundle();
+    const result = buildBookmarkPlacementSelectionResult({
+      selection: event?.detail?.state?.selection,
+      bookmarks: current.bookmarks,
+      placing: current.bookmarkUi.placing,
+      lastPlacementKey: state.lastPlacementKey,
+      allowSameSelection: true,
+      requireClickedPoint: true,
+    });
+    if (!result) {
+      return;
+    }
+    state.lastPlacementKey = result.placementKey;
+    writeBookmarkState((bookmarks, bookmarkUi) => {
+      bookmarks.push(result.bookmark);
+      bookmarkUi.placing = false;
+      bookmarkUi.selectedIds = [result.bookmark.id];
+    });
   }
 
   function handleSignalPatch(event) {
@@ -576,6 +630,7 @@ export function createMapBookmarkPanelController({
   if (listenToSignalPatches) {
     documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
   }
+  shell.addEventListener("fishymap:selection-changed", handleSelectionChanged);
 
   return Object.freeze({
     render,
