@@ -925,3 +925,36 @@ Validation for this slice:
 - `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/loader.test.mjs`
 - rebuild site output
 - verify served assets match `site/.out`
+
+## Fifth implementation slice landed
+
+The next clean-slate extraction moved the layer panel renderer/markup out of the loader:
+
+- `site/assets/map/map-layer-panel.js`
+
+What moved out of `loader.js`:
+
+- the full layer stack card markup renderer
+- loading fallback rendering for the layer stack container
+- layer-kind labeling for rendered layer cards
+- layer settings / visibility / fish-evidence control markup generation
+
+Why this extraction matters:
+
+- it removes one of the largest DOM-rendering blocks from the loader monolith
+- it keeps layer panel rendering as a pure function over a state bundle plus icon/loading callbacks
+- it sets up the next step where layer panel event wiring can also be reduced or extracted without re-entangling the loader
+
+What still remains after this slice:
+
+- layer panel event delegation still lives in `loader.js`
+- bookmark manager and search UI rendering are still loader-owned
+- bridge mount/sync lifecycle is still loader-owned
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-layer-panel.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/loader.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-signal-contract.test.mjs`
+- rebuild site output
+- verify served `/map/loader.js` and `/map/map-layer-panel.js` match `site/.out`

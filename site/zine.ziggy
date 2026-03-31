@@ -53,6 +53,7 @@ Multilingual {
 
     "map/loader.js",
     "map/map-layer-state.js",
+    "map/map-layer-panel.js",
     "map/map-bridge-projection.js",
     "map/map-host.js",
     "map/map-signal-contract.js",
