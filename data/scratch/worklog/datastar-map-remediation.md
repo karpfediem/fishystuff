@@ -2237,3 +2237,48 @@ Validation for this slice:
 - `node --check site/assets/js/pages/map-page.js`
 - rebuild site output
 - spot-check served `/js/pages/map-page.js` against `site/.out`
+
+## Twenty-sixth implementation slice landed
+
+The clean-slate live map app now waits explicitly for the page bootstrap contract instead of
+assuming the head module runs after the deferred page bootstrap scripts.
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - added `waitForMapPageBootstrap(...)`
+  - `start()` now waits for:
+    - `window.__fishystuffMap.whenRestored`
+    - `window.__fishystuffMapPageSignals.applyPatchToSignals`
+  - this removes another piece of accidental script-order coupling between the head module and the
+    Datastar/page bootstrap scripts
+- `site/assets/map/map-app-live.test.mjs`
+  - now covers delayed appearance of the page bootstrap globals
+
+Why this slice matters:
+
+- the clean-slate app should not rely on classic-defer vs module execution timing luck
+- this makes the live page more robust after moving map scripts into the head
+- it narrows the remaining fresh-boot failures to the runtime/headless path rather than the page
+  bootstrap path
+
+Validation for this slice:
+
+- `node --test site/assets/map/map-app-live.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- `node --check site/assets/map/map-app-live.js`
+- rebuild site output
+- live Chromium reload still reached:
+  - `window.FishyMapBridge.getCurrentState().ready === true`
+  - `window.__fishystuffMap` keys limited to:
+    - `signalObject`
+    - `restore`
+    - `whenRestored`
+
+Open follow-up after this slice:
+
+- headless `map-browser-smoke` / `load_map` still time out with:
+  - `ready=false`
+  - layer/meta/fish catalogs pending
+  - `points: snapshot loading`
+- because this remained unchanged after the bootstrap wait fix, the remaining issue is now more
+  likely inside the headless runtime mount / WebGL path than in the page-global boot order

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 globalThis.__fishystuffMapAppAutoStart = false;
-const { resolveBridgeSnapshot } = await import("./map-app-live.js");
+const { resolveBridgeSnapshot, waitForMapPageBootstrap } = await import("./map-app-live.js");
 delete globalThis.__fishystuffMapAppAutoStart;
 
 test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge events", () => {
@@ -60,4 +60,47 @@ test("resolveBridgeSnapshot falls back to the current full snapshot when event s
   };
 
   assert.deepEqual(resolveBridgeSnapshot({}, () => currentSnapshot), currentSnapshot);
+});
+
+test("waitForMapPageBootstrap waits for page bootstrap globals to appear", async () => {
+  const previousMap = globalThis.window?.__fishystuffMap;
+  const previousSignals = globalThis.window?.__fishystuffMapPageSignals;
+  if (!globalThis.window) {
+    globalThis.window = globalThis;
+  }
+  try {
+    delete globalThis.window.__fishystuffMap;
+    delete globalThis.window.__fishystuffMapPageSignals;
+
+    const bootstrapPromise = waitForMapPageBootstrap({
+      timeoutMs: 200,
+      pollIntervalMs: 1,
+    });
+
+    setTimeout(() => {
+      globalThis.window.__fishystuffMap = {
+        whenRestored() {
+          return Promise.resolve();
+        },
+      };
+      globalThis.window.__fishystuffMapPageSignals = {
+        applyPatchToSignals() {},
+      };
+    }, 5);
+
+    const bootstrap = await bootstrapPromise;
+    assert.equal(typeof bootstrap.page.whenRestored, "function");
+    assert.equal(typeof bootstrap.applyPageSignalPatch, "function");
+  } finally {
+    if (previousMap === undefined) {
+      delete globalThis.window.__fishystuffMap;
+    } else {
+      globalThis.window.__fishystuffMap = previousMap;
+    }
+    if (previousSignals === undefined) {
+      delete globalThis.window.__fishystuffMapPageSignals;
+    } else {
+      globalThis.window.__fishystuffMapPageSignals = previousSignals;
+    }
+  }
 });

@@ -82,11 +82,45 @@ function buildResetUiPatch() {
   };
 }
 
-async function start() {
+function currentPageBootstrap() {
   const page = window.__fishystuffMap;
+  const pageSignals = window.__fishystuffMapPageSignals;
   if (!page || typeof page.whenRestored !== "function") {
-    return;
+    return null;
   }
+  if (!pageSignals || typeof pageSignals.applyPatchToSignals !== "function") {
+    return null;
+  }
+  return {
+    page,
+    applyPageSignalPatch: pageSignals.applyPatchToSignals,
+  };
+}
+
+function wait(delayMs) {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, delayMs);
+  });
+}
+
+export async function waitForMapPageBootstrap({
+  timeoutMs = 5000,
+  pollIntervalMs = 16,
+} = {}) {
+  const deadline = Date.now() + timeoutMs;
+  let bootstrap = currentPageBootstrap();
+  while (!bootstrap) {
+    if (Date.now() >= deadline) {
+      throw new Error("timed out waiting for map page bootstrap globals");
+    }
+    await wait(pollIntervalMs);
+    bootstrap = currentPageBootstrap();
+  }
+  return bootstrap;
+}
+
+async function start() {
+  const { page, applyPageSignalPatch } = await waitForMapPageBootstrap();
 
   await page.whenRestored();
 
@@ -128,10 +162,6 @@ async function start() {
   let mounted = false;
   let lastBridgePatchJson = "";
   let actionState = app.readLastActionState();
-  const applyPageSignalPatch =
-    typeof window.__fishystuffMapPageSignals?.applyPatchToSignals === "function"
-      ? window.__fishystuffMapPageSignals.applyPatchToSignals
-      : null;
 
   function signals() {
     return page.signalObject?.() || null;
