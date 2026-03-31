@@ -51,7 +51,6 @@ Multilingual {
     "js/toast.js",
     "js/ui-settings.js",
 
-    "map/loader.js",
     "map/map-app.js",
     "map/map-app-live.js",
     "map/map.css",

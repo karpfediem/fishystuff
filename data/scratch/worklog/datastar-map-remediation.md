@@ -2317,3 +2317,29 @@ Validation for this slice:
   - `window.FishyMapBridge.getCurrentState().ready === true`
   - layer catalog length remained `7`
   - the live shell still booted with no new console errors
+
+## Twenty-eighth implementation slice landed
+
+The site no longer publishes the legacy `loader.js` asset. The live map is now shipped only
+through the clean-slate shell/app path.
+
+What changed:
+
+- `site/zine.ziggy`
+  - removed `map/loader.js` from the published map asset set
+
+Why this slice matters:
+
+- it turns the clean-slate path into the only runtime-served path instead of just the preferred one
+- it prevents accidental reintroduction of the legacy loader in live pages or manual debugging
+- it makes the remediation concrete:
+  - the live map runs on `map-shell.html` + `map-app-live.js`
+  - `loader.js` is now legacy-only source, not a served runtime entrypoint
+
+Validation for this slice:
+
+- rebuild site output
+- served `/map/loader.js` now returns `404`
+- live Chromium reload still reached:
+  - `window.FishyMapBridge.getCurrentState().ready === true`
+  - layer catalog length `7`
