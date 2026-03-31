@@ -2343,3 +2343,63 @@ Validation for this slice:
 - live Chromium reload still reached:
   - `window.FishyMapBridge.getCurrentState().ready === true`
   - layer catalog length `7`
+
+## Twenty-ninth implementation slice landed
+
+The live map page bootstrap is now a single clean-slate script. The live page no longer loads the
+old `map-page-state.js`, `map-page-signals.js`, or `js/pages/map-page.js` helper stack.
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - new self-contained page bootstrap script for:
+    - restore
+    - persist
+    - shell signal patch application
+    - query-aware restore filtering
+    - shared-fish restore
+- `site/assets/map/map-page-live.test.mjs`
+  - focused restore / shell patch / persist coverage for the new live bootstrap
+- `site/layouts/map.shtml`
+  - now loads only:
+    - `map/map-page-live.js`
+    - `js/datastar.js`
+    - `map/map-app-live.js`
+- `site/zine.ziggy`
+  - publishes `map/map-page-live.js`
+
+Why this slice matters:
+
+- it removes two more live helper globals from the page:
+  - `window.__fishystuffMapPageState`
+  - `window.__fishystuffMapPageSignals`
+- it reduces the live bootstrap to one Datastar-facing page script plus one clean-slate map app
+- it further decouples the live runtime from the legacy loader-era bootstrap files
+
+Validation for this slice:
+
+- `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- `node --check site/assets/map/map-page-live.js`
+- rebuild site output
+- served `/map/` now includes:
+  - `/map/map-page-live.js`
+  - `/js/datastar.js`
+  - `/map/map-app-live.js`
+  - and no longer includes the three old page bootstrap scripts
+- live Chromium reload confirmed:
+  - `window.FishyMapBridge.getCurrentState().ready === true`
+  - layer catalog length `7`
+  - `window.__fishystuffMapPageState === undefined`
+  - `window.__fishystuffMapPageSignals === undefined`
+- repeatable browser validation recovered:
+  - `bash tools/scripts/map-browser-smoke.sh`
+    - `PASS`
+    - `bridge reached ready with fish catalog`
+  - `python3 tools/scripts/map_browser_profile.py load_map --output-json /tmp/map-load.current.json`
+    - `PASS`
+    - `frame_avg_ms=110.217`
+    - `p95_ms=117.700`
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_sweep --timeout-seconds 90 --output-json /tmp/map-hover.current.json`
+    - `PASS`
+    - `frame_avg_ms=7.761`
+    - `p95_ms=14.000`
