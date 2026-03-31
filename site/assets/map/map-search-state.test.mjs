@@ -9,6 +9,7 @@ import {
   buildSearchSelectionRemovalSignalPatch,
   normalizeFishFilterTerms,
 } from "./map-search-state.js";
+import { normalizeZoneCatalog } from "./map-zone-catalog.js";
 
 function baseSignals() {
   return {
@@ -108,6 +109,33 @@ test("buildSearchMatches returns fish filters, fish, and semantic matches from l
 
   const filterMatches = buildSearchMatches(bundle, "favorite");
   assert.equal(filterMatches.some((match) => match.kind === "fish-filter" && match.term === "favourite"), true);
+});
+
+test("buildSearchMatches returns matched zones instead of dropping zone-name queries", () => {
+  const bundle = buildSearchPanelStateBundle({
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "Depth 4",
+        open: true,
+      },
+    },
+  });
+  const zoneCatalog = normalizeZoneCatalog([
+    {
+      r: 112,
+      g: 167,
+      b: 193,
+      name: "Zenato Sea - Depth 4",
+      confirmed: true,
+      order: 1,
+    },
+  ]);
+
+  const matches = buildSearchMatches(bundle, "Depth 4", zoneCatalog);
+
+  assert.equal(matches.some((match) => match.kind === "zone" && match.zoneRgb === 7382977), true);
+  assert.equal(matches[0]?.kind, "zone");
 });
 
 test("buildDefaultFishFilterMatches omits already-selected filter terms", () => {

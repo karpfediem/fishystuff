@@ -2,7 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 globalThis.__fishystuffMapAppAutoStart = false;
-const { resolveBridgeSnapshot, waitForMapPageBootstrap } = await import("./map-app-live.js");
+const {
+  createDeferredBridgeStateRefresher,
+  resolveBridgeSnapshot,
+  waitForMapPageBootstrap,
+} = await import("./map-app-live.js");
 delete globalThis.__fishystuffMapAppAutoStart;
 
 test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge events", () => {
@@ -92,4 +96,38 @@ test("waitForMapPageBootstrap waits for page bootstrap globals to appear", async
       globalThis.window.__fishystuffMap = previousMap;
     }
   }
+});
+
+test("createDeferredBridgeStateRefresher refreshes once on the next frame", () => {
+  const snapshots = [];
+  const scheduled = [];
+  const cancelled = [];
+  const refresher = createDeferredBridgeStateRefresher({
+    bridge: {
+      refreshCurrentStateNow() {
+        return { ready: true, filters: { layerIdsVisible: ["zone_mask"] } };
+      },
+    },
+    onSnapshot(snapshot) {
+      snapshots.push(snapshot);
+    },
+    requestAnimationFrameImpl(callback) {
+      scheduled.push(callback);
+      return scheduled.length;
+    },
+    cancelAnimationFrameImpl(frameId) {
+      cancelled.push(frameId);
+    },
+  });
+
+  refresher.schedule();
+  refresher.schedule();
+
+  assert.equal(cancelled.length, 1);
+  assert.equal(snapshots.length, 0);
+
+  const nextFrame = scheduled.at(-1);
+  nextFrame();
+
+  assert.deepEqual(snapshots, [{ ready: true, filters: { layerIdsVisible: ["zone_mask"] } }]);
 });

@@ -18,6 +18,7 @@ import { createMapZoneInfoPanelController } from "./map-zone-info-panel-live.js"
 import { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
 import { patchTouchesSearchPanelSignals } from "./map-search-state.js";
 import { patchTouchesZoneInfoSignals } from "./map-zone-info-state.js";
+import { loadZoneCatalog } from "./map-zone-catalog.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -115,6 +116,53 @@ export async function waitForMapPageBootstrap({
   return bootstrap;
 }
 
+export function createDeferredBridgeStateRefresher({
+  bridge,
+  onSnapshot,
+  requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
+  cancelAnimationFrameImpl = globalThis.cancelAnimationFrame?.bind(globalThis),
+} = {}) {
+  let frameId = 0;
+
+  function cancel() {
+    if (!frameId || typeof cancelAnimationFrameImpl !== "function") {
+      frameId = 0;
+      return;
+    }
+    cancelAnimationFrameImpl(frameId);
+    frameId = 0;
+  }
+
+  function run() {
+    frameId = 0;
+    const snapshot =
+      typeof bridge?.refreshCurrentStateNow === "function"
+        ? bridge.refreshCurrentStateNow()
+        : typeof bridge?.getCurrentState === "function"
+          ? bridge.getCurrentState()
+          : null;
+    if (!snapshot || typeof onSnapshot !== "function") {
+      return;
+    }
+    onSnapshot(snapshot);
+  }
+
+  return Object.freeze({
+    schedule() {
+      cancel();
+      if (typeof requestAnimationFrameImpl !== "function") {
+        run();
+        return;
+      }
+      frameId = requestAnimationFrameImpl(run) || 0;
+      if (!frameId) {
+        run();
+      }
+    },
+    cancel,
+  });
+}
+
 async function start() {
   const { page } = await waitForMapPageBootstrap();
 
@@ -163,6 +211,10 @@ async function start() {
   let mounted = false;
   let lastBridgePatchJson = "";
   let actionState = app.readLastActionState();
+  const bridgeStateRefresher = createDeferredBridgeStateRefresher({
+    bridge,
+    onSnapshot: patchSignalsFromBridge,
+  });
 
   function signals() {
     return page.signalObject?.() || null;
@@ -189,7 +241,9 @@ async function start() {
     }
     lastBridgePatchJson = patchJson;
     bridge.setState(patch);
+    bridge.flushPendingPatchNow?.();
     actionState = app.consumeSignals(signals());
+    bridgeStateRefresher.schedule();
   }
 
   function applyInternalSignalPatch(patch) {
@@ -335,6 +389,9 @@ async function start() {
   zoneInfoPanel.render();
   layerPanel.render();
   searchPanel.render();
+  void loadZoneCatalog().then((zoneCatalog) => {
+    searchPanel.setZoneCatalog(zoneCatalog);
+  });
 }
 
 function startWhenDomReady() {

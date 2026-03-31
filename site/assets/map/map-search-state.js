@@ -1,3 +1,5 @@
+import { findZoneMatches } from "./map-zone-catalog.js";
+
 const FISH_FILTER_TERM_ORDER = Object.freeze(["favourite", "missing"]);
 const FISH_FILTER_TERM_METADATA = Object.freeze({
   favourite: Object.freeze({
@@ -486,10 +488,10 @@ function searchMatchPriority(match) {
   if (match?.kind === "fish") {
     return 0;
   }
-  if (match?.kind === "semantic") {
+  if (match?.kind === "zone") {
     return 1;
   }
-  if (match?.kind === "zone") {
+  if (match?.kind === "semantic") {
     return 2;
   }
   return 9;
@@ -513,9 +515,9 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
     filterTerms: effectiveFishFilterTerms,
     sharedFishState,
   }).filter((fish) => !selectedFishIds.has(fish.fishId));
-  const zoneMatches = []
-    .concat(zoneCatalog || [])
-    .filter((zone) => !selectedZoneRgbs.has(zone.zoneRgb));
+  const zoneMatches = findZoneMatches(zoneCatalog, filterDirectives.remainingQuery).filter(
+    (zone) => !selectedZoneRgbs.has(zone.zoneRgb),
+  );
   const semanticMatches = findSemanticMatches(semanticTerms, filterDirectives.remainingQuery).filter(
     (term) => !(selectedSemanticFieldIdsByLayer[term.layerId] || []).includes(term.fieldId),
   );

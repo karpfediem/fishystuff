@@ -1,6 +1,7 @@
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
+import { normalizeZoneCatalog } from "./map-zone-catalog.js";
 import {
   buildDefaultFishFilterMatches,
   buildSearchMatches,
@@ -119,6 +120,8 @@ export function createMapSearchPanelController({
   const state = {
     frameId: 0,
   };
+  let currentZoneCatalog = normalizeZoneCatalog(zoneCatalog);
+  elements.zoneCatalog = currentZoneCatalog;
 
   function signals() {
     return getSignals() || null;
@@ -140,7 +143,7 @@ export function createMapSearchPanelController({
     const matches =
       bundle.state.ready === true && searchOpen
         ? query
-          ? buildSearchMatches(bundle, query, zoneCatalog)
+          ? buildSearchMatches(bundle, query, currentZoneCatalog)
           : buildDefaultFishFilterMatches(bundle)
         : [];
 
@@ -290,5 +293,10 @@ export function createMapSearchPanelController({
   return Object.freeze({
     render,
     scheduleRender,
+    setZoneCatalog(nextZoneCatalog) {
+      currentZoneCatalog = normalizeZoneCatalog(nextZoneCatalog);
+      elements.zoneCatalog = currentZoneCatalog;
+      scheduleRender();
+    },
   });
 }

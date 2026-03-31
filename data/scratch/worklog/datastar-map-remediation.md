@@ -2479,3 +2479,50 @@ Validation for this slice:
   - canvas click still updates Zone Info immediately:
     - `selection.pointKind === "clicked"`
     - zone info status becomes `Clicked point`
+
+## Thirty-second implementation slice landed
+
+Live zone-name search is restored on the clean-slate map app, and shell-driven bridge writes now
+refresh runtime state after the deferred Wasm apply.
+
+What changed:
+
+- `site/assets/map/map-zone-catalog.js`
+  - new clean-slate zone catalog loader + normalizer from `/api/v1/zones`
+- `site/assets/map/map-search-state.js`
+  - search now uses zone-name matching from the loaded zone catalog instead of dropping
+    zone-name-only queries like `Depth 4`
+  - zone matches are ranked ahead of semantic fallback matches
+- `site/assets/map/map-search-panel-live.js`
+  - now accepts late zone-catalog injection and rerenders once the catalog arrives
+- `site/assets/map/map-app-live.js`
+  - loads the zone catalog asynchronously on startup and hands it to the search controller
+  - after shell-driven bridge input patches, now flushes the pending state patch immediately and
+    schedules a next-frame bridge snapshot refresh
+- `site/zine.ziggy`
+  - publishes `map/map-zone-catalog.js`
+
+Why this slice matters:
+
+- clean-slate map search can now resolve actual zone names again without falling back through the
+  legacy loader behavior
+- the live shell no longer waits for an unrelated later interaction before runtime state catches up
+  to a shell-driven bridge patch
+- this restored the practical layer-toggle path on the clean-slate live app:
+  signal state, bridge input state, and runtime state converge again after a direct shell action
+
+Validation for this slice:
+
+- `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-search-state.test.mjs site/assets/map/map-zone-catalog.test.mjs`
+- `node --check site/assets/map/map-app-live.js site/assets/map/map-zone-catalog.js site/assets/map/map-search-panel-live.js site/assets/map/map-search-state.js`
+- rebuild site output
+- live Chromium checks:
+  - focusing the search box and typing `Depth 4` shows `17 matches`
+  - clicking `Zenato Sea - Depth 4` updates `_map_bridged.filters.semanticFieldIdsByLayer.zone_mask`
+  - toggling `Node Waypoints` now updates:
+    - `_map_bridged.filters.layerIdsVisible`
+    - `FishyMapBridge.getCurrentInputState().filters.layerIdsVisible`
+    - `FishyMapBridge.getCurrentState().filters.layerIdsVisible`
+    - the runtime layer `visible` flag
+  - toggling `Fish Evidence` hidden/visible now keeps signal state, bridge input, and runtime state
+    in sync
