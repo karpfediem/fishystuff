@@ -1,6 +1,7 @@
 <extend template="with-nav.shtml">
 
   <title id="title" :text="$page.title"></title>
+  <head id="head"></head>
 
   <div id="content">
     <div class="mx-auto grid max-w-5xl gap-6">

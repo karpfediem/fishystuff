@@ -204,8 +204,21 @@ async function start() {
   patchSignalsFromBridge(currentBridgeState());
 }
 
+function startWhenDomReady() {
+  const run = () => {
+    start().catch((error) => {
+      console.error("Fishy map app bootstrap failed", error);
+    });
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", run, { once: true });
+    return;
+  }
+
+  run();
+}
+
 if (globalThis.__fishystuffMapAppAutoStart !== false) {
-  start().catch((error) => {
-    console.error("Fishy map app bootstrap failed", error);
-  });
+  startWhenDomReady();
 }

@@ -1,5 +1,6 @@
 <extend template="with-nav.shtml">
   <title id="title" :text="$page.title"></title>
+  <head id="head"></head>
 
   <div id="content">
     <style>

@@ -1,6 +1,7 @@
 <extend template="with-nav.shtml">
 
     <title id="title"><super></title>
+    <head id="head"></head>
 
     <div id="content">
         <style>

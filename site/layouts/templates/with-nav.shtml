@@ -76,6 +76,7 @@
             <meta property="article:modified_time" content="$page.custom.get('updated').format('2006-01-02T15:04:05Z07:00')">
         </ctx>
 
+        <super>
     </head>
 
     <body id="body" class="bg-base-100">
