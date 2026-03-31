@@ -990,3 +990,35 @@ Validation for this slice:
 - `node --test site/assets/map/loader.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-signal-contract.test.mjs`
 - rebuild site output
 - verify served `/map/loader.js` and `/map/map-bookmark-panel.js` match `site/.out`
+
+## Seventh implementation slice landed
+
+The next clean-slate extraction moved the map search UI renderer out of the loader:
+
+- `site/assets/map/map-search-panel.js`
+
+What moved out of `loader.js`:
+
+- selected-search-chip rendering
+- search result list rendering
+- search empty/show-hide rendering behavior
+
+Why this extraction matters:
+
+- search panel UI is page-side state and should not remain coupled to the bridge adapter
+- it removes another substantial DOM-rendering block from the loader monolith
+- it keeps the search panel renderer as a pure function over signal state plus identity/icon callbacks
+
+What still remains after this slice:
+
+- search matching/query logic still lives in `loader.js`
+- search click/keyboard event wiring still lives in `loader.js`
+- bookmark and zone-info event wiring still remain loader-owned
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-search-panel.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/loader.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-signal-contract.test.mjs`
+- rebuild site output
+- verify served `/map/loader.js` and `/map/map-search-panel.js` match `site/.out`
