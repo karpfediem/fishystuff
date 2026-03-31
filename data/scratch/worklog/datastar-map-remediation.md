@@ -495,6 +495,38 @@ Validation:
 - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs`
 - served `/map/map-page-live.js` still matches `site/.out`
 
+### 2026-03-31: Localized live map patch orchestration to the shell subtree
+
+The live map app no longer reacts to the document-wide `datastar-signal-patch` bus directly.
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - mirrors Datastar patch events onto the shell subtree as:
+    - `fishymap:datastar-signal-patch`
+- `site/assets/map/map-app-live.js`
+  - now listens to that shell-local patch event instead of a document listener
+
+Why this matters:
+
+- it narrows the clean-slate reactive surface to the map shell itself
+- it keeps the live map controllers and bridge orchestration local to the subtree they own
+- it is a better fit for the Datastar design goal here:
+  - page signals are still global in the Datastar graph
+  - map runtime orchestration no longer depends on a document-level patch bus
+
+Validation:
+
+- `node --check site/assets/map/map-page-live.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs`
+- served:
+  - `/map/map-page-live.js`
+  - `/map/map-app-live.js`
+  still match `site/.out`
+- `bash tools/scripts/map-browser-smoke.sh`
+  - `PASS`
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.

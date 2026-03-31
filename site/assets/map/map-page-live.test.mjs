@@ -236,10 +236,14 @@ test("map-page-live re-emits shell patches as datastar signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
   const received = [];
+  const shellReceived = [];
 
   env.window.__fishystuffMapLiveRestore(signals);
   env.document.addEventListener("datastar-signal-patch", (event) => {
     received.push(event.detail);
+  });
+  env.shell.addEventListener("fishymap:datastar-signal-patch", (event) => {
+    shellReceived.push(event.detail);
   });
 
   dispatchShellPatch(env, {
@@ -259,6 +263,7 @@ test("map-page-live re-emits shell patches as datastar signal patches", () => {
       },
     },
   ]);
+  assert.deepEqual(shellReceived, received);
 });
 
 test("map-page-live persists durable map signal patches", () => {

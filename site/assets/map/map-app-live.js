@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { createMapApp } from "./map-app.js";
 import FishyMapBridge, { createEmptySnapshot, snapshotToRestorePatch } from "./map-host.js";
 import {
@@ -19,6 +18,8 @@ import { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
 import { patchTouchesSearchPanelSignals } from "./map-search-state.js";
 import { patchTouchesZoneInfoSignals } from "./map-zone-info-state.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
+
+const FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT = "fishymap:datastar-signal-patch";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -321,7 +322,7 @@ async function start() {
   shell.addEventListener("fishymap:selection-changed", handleBridgeStateEvent);
   shell.addEventListener("fishymap:diagnostic", handleBridgeStateEvent);
 
-  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
+  shell.addEventListener(FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
     const patch = event?.detail || null;
     if (applyingInternalSignalPatch) {
       scheduleControllersForPatch(patch);

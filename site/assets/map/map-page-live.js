@@ -32,6 +32,7 @@
     "_map_session.selection",
   ]);
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
+  const FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT = "fishymap:datastar-signal-patch";
   const FISHYMAP_SIGNAL_PATCH_EVENT = "fishymap-signals-patch";
   const SHELL_SIGNAL_API_KEY = "__fishystuffMapPage";
   const state = {
@@ -623,6 +624,7 @@
   }
 
   function handleSignalPatch(event) {
+    emitShellDatastarSignalPatch(event?.detail);
     if (!state.uiStateRestored) {
       return;
     }
@@ -651,6 +653,24 @@
     }
     globalThis.document.dispatchEvent(
       new globalThis.CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
+        bubbles: true,
+        detail: cloneJson(patch),
+      }),
+    );
+  }
+
+  function emitShellDatastarSignalPatch(patch) {
+    const shell = state.shell || ensureShellApi();
+    if (
+      !shell ||
+      !patch ||
+      typeof patch !== "object" ||
+      typeof globalThis.CustomEvent !== "function"
+    ) {
+      return;
+    }
+    shell.dispatchEvent(
+      new globalThis.CustomEvent(FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT, {
         bubbles: true,
         detail: cloneJson(patch),
       }),
