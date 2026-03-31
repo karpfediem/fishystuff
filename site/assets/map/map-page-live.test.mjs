@@ -202,16 +202,18 @@ test("map-page-live restore loads persisted bookmark entries into Datastar signa
   });
   const signals = defaultSignals();
 
-  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMapLiveRestore(signals);
 
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
+  assert.equal(typeof env.shell.__fishystuffMapPage?.signalObject, "function");
+  assert.equal(env.shell.__fishystuffMapPage.signalObject(), signals);
 });
 
 test("map-page-live applies fishymap shell patches into the live signal graph", () => {
   const env = createContext();
   const signals = defaultSignals();
 
-  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMapLiveRestore(signals);
 
   dispatchShellPatch(env, {
     _map_ui: {
@@ -235,7 +237,7 @@ test("map-page-live re-emits shell patches as datastar signal patches", () => {
   const signals = defaultSignals();
   const received = [];
 
-  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMapLiveRestore(signals);
   env.document.addEventListener("datastar-signal-patch", (event) => {
     received.push(event.detail);
   });
@@ -263,7 +265,7 @@ test("map-page-live persists durable map signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
 
-  env.window.__fishystuffMap.restore(signals);
+  env.window.__fishystuffMapLiveRestore(signals);
 
   dispatchShellPatch(env, {
     _map_ui: {

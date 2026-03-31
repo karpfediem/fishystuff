@@ -18,6 +18,7 @@ test("map shell windows are Datastar-driven for open and collapsed state", () =>
 });
 
 test("map shell toolbar and status affordances derive from Datastar signals", () => {
+  assert.match(shellHtml, /data-init="window\.__fishystuffMapLiveRestore\(\$\)"/);
   assert.doesNotMatch(shellHtml, /data-on:fishymap-signals-patch=/);
   assert.match(shellHtml, /data-window-toggle="search"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.search\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="search"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.search\.open"/);

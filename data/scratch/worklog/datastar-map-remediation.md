@@ -414,6 +414,59 @@ Current conclusion:
 - the next work is simplifying the remaining bootstrap/orchestration seams without widening the
   bridge contract again
 
+### 2026-03-31: Live map bootstrap moved off the broader page-global surface
+
+The clean-slate live map no longer depends on the broader `window.__fishystuffMap` bootstrap
+global.
+
+What changed:
+
+- `site/assets/map/map-shell.html`
+  - the Datastar init hook now calls:
+    - `window.__fishystuffMapLiveRestore($)`
+- `site/assets/map/map-page-live.js`
+  - the restore hook now attaches a shell-scoped signal API on `#map-page-shell`:
+    - `shell.__fishystuffMapPage.signalObject()`
+    - `shell.__fishystuffMapPage.whenRestored()`
+  - removed the old broader page-global live API surface
+- `site/assets/map/map-app-live.js`
+  - now waits for the shell-scoped signal API instead of polling `window.__fishystuffMap`
+
+Why this matters:
+
+- it keeps the live Datastar signal graph owned by the shell subtree instead of the page global
+- it narrows the clean-slate bootstrap surface to the one hook still needed for Datastar init
+- it makes the runtime app depend on the shell contract directly, which is closer to the intended
+  FRP shape than a page-global helper object
+
+Validation:
+
+- `node --check site/assets/map/map-page-live.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
+- rebuilt site output
+- served checks confirmed:
+  - `/map/map-page-live.js`
+  - `/map/map-app-live.js`
+  - `/map/`
+  all match `site/.out`
+- live DevTools checks confirmed:
+  - `window.__fishystuffMap === undefined`
+  - `window.__fishystuffMapLiveRestore` exists
+  - `document.getElementById('map-page-shell').__fishystuffMapPage` exists
+  - the map still reaches:
+    - `ready === true`
+    - `catalog.layers.length === 7`
+
+Next tasks from here:
+
+- keep shrinking the remaining bootstrap surface until the live shell depends only on:
+  - Datastar local signals
+  - shell-scoped live controllers
+  - the explicit bridge contract
+- restore any still-unverified live bookmark affordances, especially import, under the clean-slate
+  controller path
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.

@@ -67,20 +67,19 @@ test("resolveBridgeSnapshot falls back to the current full snapshot when event s
 });
 
 test("waitForMapPageBootstrap waits for page bootstrap globals to appear", async () => {
-  const previousMap = globalThis.window?.__fishystuffMap;
-  if (!globalThis.window) {
-    globalThis.window = globalThis;
-  }
+  const shell = {};
   try {
-    delete globalThis.window.__fishystuffMap;
-
     const bootstrapPromise = waitForMapPageBootstrap({
+      shell,
       timeoutMs: 200,
       pollIntervalMs: 1,
     });
 
     setTimeout(() => {
-      globalThis.window.__fishystuffMap = {
+      shell.__fishystuffMapPage = {
+        signalObject() {
+          return {};
+        },
         whenRestored() {
           return Promise.resolve();
         },
@@ -90,11 +89,7 @@ test("waitForMapPageBootstrap waits for page bootstrap globals to appear", async
     const bootstrap = await bootstrapPromise;
     assert.equal(typeof bootstrap.page.whenRestored, "function");
   } finally {
-    if (previousMap === undefined) {
-      delete globalThis.window.__fishystuffMap;
-    } else {
-      globalThis.window.__fishystuffMap = previousMap;
-    }
+    delete shell.__fishystuffMapPage;
   }
 });
 

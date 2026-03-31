@@ -86,12 +86,16 @@ function buildResetUiPatch() {
   };
 }
 
-function currentPageBootstrap() {
-  const page = window.__fishystuffMap;
-  if (!page || typeof page.whenRestored !== "function") {
+function currentPageBootstrap(shell) {
+  const page = shell?.__fishystuffMapPage;
+  if (
+    !page ||
+    typeof page.whenRestored !== "function" ||
+    typeof page.signalObject !== "function"
+  ) {
     return null;
   }
-  return { page };
+  return { shell, page };
 }
 
 function wait(delayMs) {
@@ -101,17 +105,20 @@ function wait(delayMs) {
 }
 
 export async function waitForMapPageBootstrap({
+  shell = globalThis.document?.getElementById?.("map-page-shell") || null,
   timeoutMs = 5000,
   pollIntervalMs = 16,
 } = {}) {
   const deadline = Date.now() + timeoutMs;
-  let bootstrap = currentPageBootstrap();
+  let bootstrap = currentPageBootstrap(shell);
   while (!bootstrap) {
     if (Date.now() >= deadline) {
-      throw new Error("timed out waiting for map page bootstrap globals");
+      throw new Error("timed out waiting for map shell signal bootstrap");
     }
     await wait(pollIntervalMs);
-    bootstrap = currentPageBootstrap();
+    bootstrap = currentPageBootstrap(
+      shell || globalThis.document?.getElementById?.("map-page-shell") || null,
+    );
   }
   return bootstrap;
 }
@@ -164,15 +171,15 @@ export function createDeferredBridgeStateRefresher({
 }
 
 async function start() {
-  const { page } = await waitForMapPageBootstrap();
-
-  await page.whenRestored();
-
   const shell = document.getElementById("map-page-shell");
   const canvas = document.getElementById("bevy");
   if (!(shell instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) {
     return;
   }
+
+  const { page } = await waitForMapPageBootstrap({ shell });
+
+  await page.whenRestored();
 
   const queryPatch = parseQuerySignalPatch(globalThis.location?.href);
   if (queryPatch) {

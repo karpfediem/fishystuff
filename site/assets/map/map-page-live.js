@@ -34,6 +34,7 @@
   ]);
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const FISHYMAP_SIGNAL_PATCH_EVENT = "fishymap-signals-patch";
+  const SHELL_SIGNAL_API_KEY = "__fishystuffMapPage";
   const state = {
     shell: null,
     liveSignals: null,
@@ -585,9 +586,24 @@
     return shell && typeof shell.dispatchEvent === "function" ? shell : null;
   }
 
+  function ensureShellApi() {
+    const shell = state.shell || resolveShell();
+    if (!shell) {
+      return null;
+    }
+    shell[SHELL_SIGNAL_API_KEY] = Object.freeze({
+      signalObject,
+      whenRestored() {
+        return state.restorePromise;
+      },
+    });
+    state.shell = shell;
+    return shell;
+  }
+
   function connect(signals) {
     state.liveSignals = signals && typeof signals === "object" ? signals : null;
-    state.shell = resolveShell();
+    state.shell = ensureShellApi();
     bindShellPatchListener();
     return state.liveSignals;
   }
@@ -884,11 +900,5 @@
     }
   }
 
-  window.__fishystuffMap = Object.freeze({
-    signalObject,
-    restore,
-    whenRestored() {
-      return state.restorePromise;
-    },
-  });
+  window.__fishystuffMapLiveRestore = restore;
 })();
