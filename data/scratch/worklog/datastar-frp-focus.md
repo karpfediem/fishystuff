@@ -3294,3 +3294,40 @@ Validation:
     - cached runtime snapshot
   - toggling it off again updates both immediately without requiring a manual
     `fishymap:request-state`
+
+## Step 68: Preload fish evidence snapshot independent of current layer visibility
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/plugins/points/loading.rs`
+  - `ensure_events_snapshot_loaded(...)` no longer depends on `MapDisplayState.show_points`
+  - the events snapshot meta/snapshot preload now runs as part of normal startup even if the Fish
+    Evidence layer is currently hidden
+
+Why this matters:
+
+- Fish Evidence visibility is a page/runtime display choice, not a data-availability contract
+- when preload was visibility-gated:
+  - starting with Fish Evidence hidden prevented the snapshot from loading
+  - turning Fish Evidence on later had to begin meta/snapshot fetches first
+  - this made the layer feel delayed or “empty until fetched”
+- the desired behavior is:
+  - preload the coarse evidence dataset once
+  - only query/render it when visible
+  - keep the bridge contract unchanged and sparse
+
+Validation:
+
+- `cargo test --offline -p fishystuff_ui_bevy plugins::points::loading::tests::snapshot_preload_no_longer_depends_on_layer_visibility -- --exact`
+- `cargo check -p fishystuff_ui_bevy`
+- rebuilt the map runtime bundle
+- live DevTools smoke with Fish Evidence hidden on startup:
+  - startup still fetched:
+    - `GET /api/v1/events_snapshot_meta`
+    - `GET /api/v1/events_snapshot?...`
+  - before toggling visible:
+    - `FishyMapBridge.getCurrentState().statuses.pointsStatus = "points: hidden"`
+  - immediately after toggling visible:
+    - `catalog.layers["fish_evidence"].visible = true`
+    - `pointsStatus` switched directly to a loaded clustered state
+    - no extra snapshot fetch was required at toggle time

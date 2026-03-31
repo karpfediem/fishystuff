@@ -2,7 +2,6 @@ use bevy::image::Image;
 use bevy::prelude::*;
 
 use crate::map::events::{EventsSnapshotState, SnapshotMetaAction};
-use crate::plugins::api::MapDisplayState;
 
 use super::render::{build_ring_texture, PointRingAssets};
 
@@ -20,16 +19,23 @@ pub(super) fn ensure_point_ring_assets(
 }
 
 pub(super) fn ensure_events_snapshot_loaded(
-    display_state: Res<MapDisplayState>,
     time: Res<Time>,
     mut snapshot: ResMut<EventsSnapshotState>,
 ) {
-    if !display_state.show_points {
-        return;
-    }
     let now = time.elapsed_secs_f64();
     if snapshot.should_poll_meta(now) {
         snapshot.start_meta_poll(now);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_preload_no_longer_depends_on_layer_visibility() {
+        let snapshot = EventsSnapshotState::default();
+        assert!(snapshot.should_poll_meta(0.0));
     }
 }
 
