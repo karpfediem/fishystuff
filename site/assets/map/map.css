@@ -173,11 +173,17 @@ body:has(#map-page-shell) #content > .site-content-clip {
   transform: translateY(-50%);
 }
 
-.fishymap-toolbar-button {
+#fishymap-toolbar .fishymap-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
   width: 2.9rem;
   height: 2.9rem;
   min-height: 0;
   padding: 0;
+  cursor: pointer;
+  appearance: none;
   border-radius: 999px;
   border: 1px solid color-mix(in oklab, var(--color-base-300, #d6d3d1) 78%, var(--color-base-content, #1f2937) 22%);
   background: color-mix(in oklab, var(--color-base-100, #ffffff) 84%, transparent);
@@ -186,23 +192,30 @@ body:has(#map-page-shell) #content > .site-content-clip {
   box-shadow: 0 14px 32px -24px color-mix(in oklab, var(--color-base-content, #1f2937) 44%, transparent);
 }
 
-.fishymap-toolbar-button:hover {
+#fishymap-toolbar .fishymap-toolbar-button:not([data-open="true"]):is(:hover, :focus-visible, :active) {
+  background: color-mix(in oklab, var(--color-base-100, #ffffff) 84%, transparent) !important;
+  border-color: color-mix(in oklab, var(--color-primary, #2563eb) 42%, var(--color-base-300, #d6d3d1) 58%) !important;
+  color: var(--color-primary, #2563eb) !important;
+}
+
+#fishymap-toolbar .fishymap-toolbar-button:hover {
   border-color: color-mix(in oklab, var(--color-primary, #2563eb) 42%, var(--color-base-300, #d6d3d1) 58%);
   color: var(--color-primary, #2563eb);
 }
 
-.fishymap-toolbar-button[data-open="true"] {
-  border-color: color-mix(in oklab, var(--color-primary, #2563eb) 52%, var(--color-base-300, #d6d3d1) 48%);
-  background: color-mix(in oklab, var(--color-primary, #2563eb) 18%, var(--color-base-100, #ffffff) 82%);
-  color: var(--color-primary, #2563eb);
+#fishymap-toolbar .fishymap-toolbar-button[data-open="true"],
+#fishymap-toolbar .fishymap-toolbar-button[data-open="true"]:is(:hover, :focus-visible, :active) {
+  border-color: color-mix(in oklab, var(--color-primary, #2563eb) 52%, var(--color-base-300, #d6d3d1) 48%) !important;
+  background: color-mix(in oklab, var(--color-primary, #2563eb) 18%, var(--color-base-100, #ffffff) 82%) !important;
+  color: var(--color-primary, #2563eb) !important;
 }
 
-.fishymap-toolbar-button .fishy-icon {
+#fishymap-toolbar .fishymap-toolbar-button .fishy-icon {
   width: 1.35rem;
   height: 1.35rem;
 }
 
-.fishymap-toolbar-button > * {
+#fishymap-toolbar .fishymap-toolbar-button > * {
   pointer-events: none;
 }
 
