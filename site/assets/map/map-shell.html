@@ -469,13 +469,13 @@
                 id="fishymap-reset-view"
                 class="btn btn-outline btn-secondary btn-sm w-full"
                 type="button"
-                data-on:click="$_map_actions.resetViewToken = (($_map_actions && $_map_actions.resetViewToken) || 0) + 1"
+                data-on:click="$_map_actions.resetViewToken = ($_map_actions.resetViewToken || 0) + 1"
               >Reset view</button>
               <button
                 id="fishymap-reset-ui"
                 class="btn btn-outline btn-sm w-full"
                 type="button"
-                data-on:click="$_map_actions.resetUiToken = (($_map_actions && $_map_actions.resetUiToken) || 0) + 1"
+                data-on:click="$_map_actions.resetUiToken = ($_map_actions.resetUiToken || 0) + 1"
               >Reset UI</button>
             </div>
 

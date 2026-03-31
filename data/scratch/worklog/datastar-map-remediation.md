@@ -2034,27 +2034,24 @@ Validation for this slice:
 
 ## Twenty-first implementation slice landed
 
-The live map shell now treats runtime view mode as authoritative again, which fixes startup drift
-between persisted desired view state and the actual mounted runtime snapshot.
+This approach was reverted in the next slice. Treating runtime view mode as authoritative by
+writing it back into `_map_bridged.ui.viewMode` was conceptually wrong for the clean-slate
+contract because `_map_bridged` is input-owned and should not be mutated from runtime output.
 
 What changed:
 
 - `site/assets/map/map-runtime-adapter.js`
-  - `projectRuntimeSnapshotToSignals(...)` now mirrors the runtime view mode back into:
-    - `_map_bridged.ui.viewMode`
+  - runtime view mode was temporarily mirrored back into `_map_bridged.ui.viewMode`
 - `site/assets/map/map-runtime-adapter.test.mjs`
-  - now asserts that runtime snapshot projection keeps `_map_bridged.ui.viewMode` aligned with the
-    actual mounted runtime
+  - temporarily asserted that runtime snapshot projection kept `_map_bridged.ui.viewMode`
+    aligned with the mounted runtime
 
 Why this slice matters:
 
-- the live shell no longer starts in a contradictory state where:
-  - the toolbar says `3D`
-  - `_map_bridged.ui.viewMode` says `3d`
-  - the actual runtime is still in `2d`
-- this keeps the Datastar signal graph aligned with the mounted Bevy runtime after restore
-- it prevents clean-slate shell controls from presenting stale desired state as if it were already
-  acknowledged
+- it exposed that input-vs-output ownership was still muddy around map view mode
+- that directly informed the next corrective slice, which restores the explicit Datastar contract:
+  - `_map_bridged` stays input-owned
+  - `_map_runtime` and `_map_session` stay output/session-owned
 
 Validation for this slice:
 
@@ -2067,3 +2064,57 @@ Validation for this slice:
   - `_map_runtime.view.viewMode`
   - `_map_session.view.viewMode`
   all converge on the actual runtime-mounted view mode
+
+## Twenty-second implementation slice landed
+
+The clean-slate map app now resets safely and keeps runtime view state aligned without mutating
+the explicit input-owned `_map_bridged` branch from runtime snapshots.
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - added an explicit internal signal-patch guard so `Reset UI` can apply a full reset patch
+    without recursively re-entering the document-level Datastar signal listener
+  - reset now applies the clean-slate signal patch directly, then performs one bridge sync from the
+    resulting signal graph
+- `site/assets/map/map-runtime-adapter.js`
+  - `projectRuntimeSnapshotToSignals(...)` no longer writes runtime view mode into
+    `_map_bridged.ui.viewMode`
+  - runtime output stays in `_map_runtime`, and restorable runtime state stays in `_map_session`
+- `site/assets/map/map-shell.html`
+  - `Reset view` / `Reset UI` action-token expressions now use direct Datastar field increments
+- `site/assets/map/map-shell.test.mjs`
+  - updated for the new direct signal helper path and reset token expressions
+- `site/assets/map/map-runtime-adapter.test.mjs`
+  - updated to assert the corrected runtime projection contract
+- `site/assets/map/map-signal-contract.js`
+  - page-local search state now keeps its `query` field in the normalized default shape
+- `site/assets/map/map-signal-contract.test.mjs`
+  - updated to assert that normalized map UI state preserves `search.query`
+
+Why this slice matters:
+
+- it fixes the live recursion flood (`Maximum call stack size exceeded`) on map boot
+- it restores the intended Datastar ownership model:
+  - `_map_bridged` = page/user intent into Bevy
+  - `_map_runtime` = coarse current runtime snapshot out of Bevy
+  - `_map_session` = coarse restorable runtime snapshot
+- it fixes the previously broken reset flow where:
+  - the shell reset to 2D
+  - but the runtime could stay stuck in 3D
+- it removes a major source of stale loading state drift in the live map shell
+
+Validation for this slice:
+
+- `node --test site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- live Chromium checks confirmed:
+  - no recursion errors on reload
+  - `Layers 7` and `Settings Ready` stay present after boot
+  - 2D/3D toggle is acknowledged by the runtime
+  - `Reset UI` now returns:
+    - `_map_runtime.view.viewMode`
+    - `_map_session.view.viewMode`
+    - the visible shell state
+    back to `2d`
+  - canvas drag no longer kicked the Layers or Settings panes back into indefinite loading

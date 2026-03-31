@@ -199,11 +199,6 @@ test("projectRuntimeSnapshotToSignals keeps only coarse runtime fields", () => {
       statuses: { layersStatus: "ready" },
       lastDiagnostic: { note: "ok" },
     },
-    _map_bridged: {
-      ui: {
-        viewMode: "3d",
-      },
-    },
   });
 });
 

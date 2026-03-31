@@ -128,9 +128,14 @@ async function start() {
     getSignals: signals,
   });
   let syncingFromBridge = false;
+  let applyingInternalSignalPatch = false;
   let mounted = false;
   let lastBridgePatchJson = "";
   let actionState = app.readLastActionState();
+  const applyPageSignalPatch =
+    typeof window.__fishystuffMapPageSignals?.applyPatchToSignals === "function"
+      ? window.__fishystuffMapPageSignals.applyPatchToSignals
+      : null;
 
   function signals() {
     return page.signalObject?.() || null;
@@ -160,6 +165,18 @@ async function start() {
     actionState = app.consumeSignals(signals());
   }
 
+  function applyInternalSignalPatch(patch) {
+    if (!applyPageSignalPatch || applyingInternalSignalPatch) {
+      return;
+    }
+    applyingInternalSignalPatch = true;
+    try {
+      applyPageSignalPatch(signals(), patch);
+    } finally {
+      applyingInternalSignalPatch = false;
+    }
+  }
+
   function patchSignalsFromBridge(snapshot) {
     syncingFromBridge = true;
     try {
@@ -173,6 +190,10 @@ async function start() {
     } finally {
       syncingFromBridge = false;
     }
+    scheduleShellControllers();
+  }
+
+  function scheduleShellControllers() {
     windowManager.scheduleApplyFromSignals();
     bookmarkPanel.scheduleRender();
     zoneInfoPanel.scheduleRender();
@@ -193,6 +214,12 @@ async function start() {
 
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
     const patch = event?.detail || null;
+    if (applyingInternalSignalPatch) {
+      if (patch?._map_ui?.windowUi) {
+        windowManager.scheduleApplyFromSignals();
+      }
+      return;
+    }
     if (!patchTouchesLiveBridgeInputs(patch)) {
       if (patch?._map_ui?.windowUi) {
         windowManager.scheduleApplyFromSignals();
@@ -204,12 +231,8 @@ async function start() {
     const resetUiToken = Number(nextActionState.resetUiToken || 0);
     const previousResetUiToken = Number(actionState.resetUiToken || 0);
     if (resetUiToken > previousResetUiToken) {
-      syncingFromBridge = true;
-      try {
-        dispatchShellSignalPatch(shell, buildResetUiPatch());
-      } finally {
-        syncingFromBridge = false;
-      }
+      applyInternalSignalPatch(buildResetUiPatch());
+      scheduleShellControllers();
     }
 
     patchBridgeFromSignals();

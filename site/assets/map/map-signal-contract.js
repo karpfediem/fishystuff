@@ -34,7 +34,7 @@ export const DEFAULT_WINDOW_UI_STATE = Object.freeze({
 
 export const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   windowUi: DEFAULT_WINDOW_UI_STATE,
-  search: Object.freeze({ open: false }),
+  search: Object.freeze({ open: false, query: "" }),
   bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
   layers: Object.freeze({ expandedLayerIds: [] }),
 });
@@ -313,6 +313,7 @@ export function normalizeMapUiSignalState(raw) {
     windowUi: normalizeWindowUiState(raw?.windowUi),
     search: {
       open: raw?.search?.open === true,
+      query: String(raw?.search?.query || ""),
     },
     bookmarks: {
       placing: normalizedBookmarks.placing === true,
