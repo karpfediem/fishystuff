@@ -14,6 +14,7 @@ import {
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import { createMapLayerPanelController } from "./map-layer-panel-live.js";
+import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
 
@@ -109,6 +110,10 @@ async function start() {
     getSignals: signals,
   });
   const layerPanel = createMapLayerPanelController({
+    shell,
+    getSignals: signals,
+  });
+  const searchPanel = createMapSearchPanelController({
     shell,
     getSignals: signals,
   });
@@ -244,6 +249,7 @@ async function start() {
   patchSignalsFromBridge(currentBridgeState());
   windowManager.applyFromSignals();
   layerPanel.render();
+  searchPanel.render();
 }
 
 function startWhenDomReady() {

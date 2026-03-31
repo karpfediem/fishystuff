@@ -217,6 +217,62 @@ Validation:
   - `_map_runtime.ready` stayed `true`
   - `_map_runtime.catalog.layers.length` stayed `7`
 
+### 2026-03-31: Live search moved onto Datastar state
+
+Added a new clean-slate search path:
+
+- `site/assets/map/map-search-state.js`
+- `site/assets/map/map-search-panel-live.js`
+
+This moves the live search window off the legacy loader path.
+
+What the new search path owns:
+
+- deriving a search-state bundle directly from:
+  - `_map_ui.search`
+  - `_map_bridged.filters`
+  - `_shared_fish`
+  - `_map_runtime.catalog`
+- building live matches for:
+  - fish
+  - fish filter terms
+  - semantic terms
+- rendering:
+  - active search chips
+  - live result rows
+- mutating only the canonical signal branches:
+  - `_map_ui.search`
+  - `_map_bridged.filters`
+
+Important note:
+
+- this clean-slate slice does **not** reintroduce the old loader-owned external zone-catalog path
+- fish/filter/semantic search now works live from the runtime-owned catalog
+- dedicated zone-catalog search can be reintroduced later from a clean source if still wanted
+
+Why this matters:
+
+- the search window is now another real live shell subsystem that no longer depends on
+  `loader.js`
+- it continues the pattern:
+  - pure state derivation module
+  - small live controller
+  - Datastar-owned page signals
+  - no intermediate mirrored control branch
+
+Validation:
+
+- `node --check site/assets/map/map-search-state.js`
+- `node --check site/assets/map/map-search-panel-live.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --test site/assets/map/map-search-state.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-app.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output
+- verified served search modules are present in the live map page
+- live DevTools checks confirmed:
+  - typing into the search box populates live results
+  - selecting a semantic result patches `_map_bridged.filters.semanticFieldIdsByLayer`
+  - selecting and removing a fish-filter chip patches `_map_bridged.filters.fishFilterTerms`
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.
