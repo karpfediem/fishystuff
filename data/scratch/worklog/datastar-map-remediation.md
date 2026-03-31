@@ -115,6 +115,68 @@ Why this matters:
 - it removes a coherent responsibility cluster from `loader.js`
 - it gives future map work a smaller pure module as the place to continue moving layer behavior
 
+### 2026-03-31: Slice 8 landed
+
+- Added a new live layer panel controller in:
+  - `site/assets/map/map-layer-panel-live.js`
+- The live map app now boots that controller from:
+  - `site/assets/map/map-app-live.js`
+- This is the first live shell controller that renders and mutates a substantial map UI subtree
+  without going through `loader.js`.
+
+What the controller owns:
+
+- rendering the live layer stack via the already-extracted `map-layer-panel.js`
+- settings expansion state via `_map_ui.layers.expandedLayerIds`
+- visibility toggles via `_map_bridged.filters.layerIdsVisible`
+- per-layer waypoint/icon toggles
+- per-layer opacity/icon-scale sliders
+- drag/drop reordering and clip-mask attachment
+
+Why this matters:
+
+- the live Layers window is no longer a placeholder while `loader.js` still exists in the repo
+- it proves the clean-slate path can own a real UI window end-to-end
+- it materially reduces the reason to keep any layer UI behavior in the legacy loader
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-layer-panel-live.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --check site/assets/js/pages/map-page.js`
+- `node --test site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-app.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output
+- verified served:
+  - `/map/map-layer-panel-live.js`
+  - `/map/map-app-live.js`
+  - `/js/pages/map-page.js`
+  match `site/.out`
+- live DevTools checks confirmed:
+  - clicking a layer settings button dispatches `_map_ui.layers.expandedLayerIds`
+  - expanded fish-evidence controls become visible
+  - fish-evidence icon toggle writes `_map_bridged.filters.layerPointIconsVisible`
+
+### 2026-03-31: Supporting signal-store fix landed
+
+The live layer panel exposed an important page-store issue:
+
+- `window.__fishystuffMap.signalObject()` still returned a disconnected cloned snapshot
+- deep merge alone could not clear canonical object-map branches like:
+  - `layerPointIconsVisible`
+  - `layerWaypointLabelsVisible`
+  - `layerClipMasks`
+
+What changed in `site/assets/js/pages/map-page.js`:
+
+- `signalObject()` now returns the live Datastar-backed object instead of a stale snapshot clone
+- exact branch replacement is now applied for a small explicit whitelist of canonical branches
+
+Why this matters:
+
+- clean-slate controllers can now read/write the live shell state directly
+- canonical object-map clears back to `{}` work correctly
+- this avoids having new modules accidentally depend on loader-style mirrored state
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.

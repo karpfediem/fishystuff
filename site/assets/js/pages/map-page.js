@@ -15,12 +15,28 @@
   ]);
   const MAP_PERSIST_SIGNAL_FILTER =
     /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.query)|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+  const EXACT_PATCH_PATHS = Object.freeze([
+    "_map_ui.layers.expandedLayerIds",
+    "_map_bridged.filters.semanticFieldIdsByLayer",
+    "_map_bridged.filters.layerOpacities",
+    "_map_bridged.filters.layerClipMasks",
+    "_map_bridged.filters.layerWaypointConnectionsVisible",
+    "_map_bridged.filters.layerWaypointLabelsVisible",
+    "_map_bridged.filters.layerPointIconsVisible",
+    "_map_bridged.filters.layerPointIconScales",
+    "_map_runtime.theme",
+    "_map_runtime.view",
+    "_map_runtime.selection",
+    "_map_runtime.catalog",
+    "_map_runtime.statuses",
+    "_map_session.view",
+    "_map_session.selection",
+  ]);
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const FISHYMAP_SIGNAL_PATCH_EVENT = "fishymap-signals-patch";
   const state = {
     shell: null,
     liveSignals: null,
-    snapshot: null,
     persistedUiJson: "",
     persistedBookmarksJson: "",
     persistedSessionJson: "",
@@ -39,13 +55,69 @@
     return JSON.parse(JSON.stringify(value));
   }
 
-  function signalObject() {
-    return state.snapshot;
+  function readObjectPath(root, path) {
+    return String(path ?? "")
+      .split(".")
+      .filter(Boolean)
+      .reduce((current, key) => {
+        if (current && typeof current === "object" && key in current) {
+          return current[key];
+        }
+        return undefined;
+      }, root);
   }
 
-  function refreshSnapshot(signals = state.liveSignals) {
-    state.snapshot = signals && typeof signals === "object" ? cloneJson(signals) : null;
-    return state.snapshot;
+  function hasObjectPath(root, path) {
+    if (!root || typeof root !== "object") {
+      return false;
+    }
+    const parts = String(path ?? "").split(".").filter(Boolean);
+    if (!parts.length) {
+      return false;
+    }
+    let current = root;
+    for (const key of parts) {
+      if (!current || typeof current !== "object" || !(key in current)) {
+        return false;
+      }
+      current = current[key];
+    }
+    return true;
+  }
+
+  function setObjectPath(root, path, value) {
+    if (!root || typeof root !== "object") {
+      return root;
+    }
+    const parts = String(path ?? "").split(".").filter(Boolean);
+    if (!parts.length) {
+      return root;
+    }
+    let current = root;
+    for (const key of parts.slice(0, -1)) {
+      if (!current[key] || typeof current[key] !== "object" || Array.isArray(current[key])) {
+        current[key] = {};
+      }
+      current = current[key];
+    }
+    current[parts[parts.length - 1]] = value;
+    return root;
+  }
+
+  function applyExactPatchReplacements(signals, patch) {
+    if (!signals || typeof signals !== "object" || !patch || typeof patch !== "object") {
+      return;
+    }
+    for (const path of EXACT_PATCH_PATHS) {
+      if (!hasObjectPath(patch, path)) {
+        continue;
+      }
+      setObjectPath(signals, path, cloneJson(readObjectPath(patch, path)));
+    }
+  }
+
+  function signalObject() {
+    return state.liveSignals && typeof state.liveSignals === "object" ? state.liveSignals : null;
   }
 
   function resolveShell() {
@@ -56,7 +128,6 @@
   function connect(signals) {
     state.liveSignals = signals && typeof signals === "object" ? signals : null;
     state.shell = resolveShell();
-    refreshSnapshot();
     return state.liveSignals;
   }
 
@@ -106,7 +177,6 @@
   }
 
   function handleSignalPatch(event) {
-    refreshSnapshot();
     if (!state.uiStateRestored) {
       return;
     }
@@ -130,6 +200,7 @@
       return;
     }
     window.__fishystuffDatastarState.mergeObjectPatch(liveSignals, cloneJson(patch));
+    applyExactPatchReplacements(liveSignals, patch);
     connect(liveSignals);
     if (state.uiStateRestored && patchMatchesSignalFilter(patch, { include: MAP_PERSIST_SIGNAL_FILTER })) {
       schedulePersist();
@@ -799,7 +870,6 @@
     state.persistedBookmarksJson = JSON.stringify(stored._map_bookmarks.entries);
     state.persistedSessionJson = JSON.stringify(sessionStorageSnapshot(stored));
     state.uiStateRestored = true;
-    refreshSnapshot(signals);
     if (!state.restoreResolved) {
       state.restoreResolved = true;
       state.resolveRestore?.();

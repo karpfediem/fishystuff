@@ -13,6 +13,7 @@ import {
   DEFAULT_MAP_UI_SIGNAL_STATE,
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
+import { createMapLayerPanelController } from "./map-layer-panel-live.js";
 import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
 
@@ -68,6 +69,10 @@ async function start() {
   const app = createMapApp();
   const bridge = createFishyMapBridge();
   const windowManager = createMapWindowManager({
+    shell,
+    getSignals: signals,
+  });
+  const layerPanel = createMapLayerPanelController({
     shell,
     getSignals: signals,
   });
@@ -202,6 +207,7 @@ async function start() {
   );
   patchSignalsFromBridge(currentBridgeState());
   windowManager.applyFromSignals();
+  layerPanel.render();
 }
 
 function startWhenDomReady() {
