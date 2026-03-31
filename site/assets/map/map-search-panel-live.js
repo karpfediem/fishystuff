@@ -93,6 +93,7 @@ export function createMapSearchPanelController({
   zoneCatalog = [],
   documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
+  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapSearchPanelController requires a shell element");
@@ -277,12 +278,14 @@ export function createMapSearchPanelController({
     }, 0);
   });
 
-  documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
-    if (!patchTouchesSearchPanelSignals(event?.detail)) {
-      return;
-    }
-    scheduleRender();
-  });
+  if (listenToSignalPatches) {
+    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
+      if (!patchTouchesSearchPanelSignals(event?.detail)) {
+        return;
+      }
+      scheduleRender();
+    });
+  }
 
   return Object.freeze({
     render,

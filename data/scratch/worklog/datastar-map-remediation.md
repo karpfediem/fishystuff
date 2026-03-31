@@ -2438,3 +2438,44 @@ Validation for this slice:
   - `window.FishyMapBridge.getCurrentState().ready === true`
   - layer catalog length `7`
   - no old helper globals present on `window`
+
+## Thirty-first implementation slice landed
+
+`map-app-live` is now the single Datastar patch-dispatch point for the live map controllers. The
+live controllers no longer need to each subscribe to `datastar-signal-patch` on `document`.
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - now imports the controller patch-match helpers
+  - routes incoming Datastar patch details to the relevant controller schedules in one place
+- `site/assets/map/map-window-manager.js`
+- `site/assets/map/map-layer-panel-live.js`
+- `site/assets/map/map-bookmark-panel-live.js`
+- `site/assets/map/map-search-panel-live.js`
+- `site/assets/map/map-zone-info-panel-live.js`
+  - each now accepts `listenToSignalPatches`
+  - the live app passes `false`, so their document-level Datastar listeners are disabled in the
+    real page while remaining available for isolated tests or standalone use
+
+Why this slice matters:
+
+- the clean-slate live path now has one orchestration point for shell patch reactions
+- it removes another batch of implicit global listeners from the live runtime
+- this keeps controller modules focused on:
+  - DOM behavior
+  - render scheduling
+  - local interactions
+  rather than each owning their own page-global Datastar listener
+
+Validation for this slice:
+
+- `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-window-manager.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-shell.test.mjs`
+- `node --check site/assets/map/map-app-live.js site/assets/map/map-window-manager.js site/assets/map/map-layer-panel-live.js site/assets/map/map-bookmark-panel-live.js site/assets/map/map-search-panel-live.js site/assets/map/map-zone-info-panel-live.js`
+- rebuild site output
+- live Chromium reload confirmed:
+  - `window.FishyMapBridge.getCurrentState().ready === true`
+  - layer catalog length `7`
+  - canvas click still updates Zone Info immediately:
+    - `selection.pointKind === "clicked"`
+    - zone info status becomes `Clicked point`

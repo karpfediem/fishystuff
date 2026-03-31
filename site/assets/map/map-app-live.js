@@ -10,11 +10,14 @@ import {
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
-import { createMapLayerPanelController } from "./map-layer-panel-live.js";
+import { createMapLayerPanelController, patchTouchesLayerPanelSignals } from "./map-layer-panel-live.js";
 import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
 import { createMapZoneInfoPanelController } from "./map-zone-info-panel-live.js";
+import { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
+import { patchTouchesSearchPanelSignals } from "./map-search-state.js";
+import { patchTouchesZoneInfoSignals } from "./map-zone-info-state.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -133,22 +136,27 @@ async function start() {
   const windowManager = createMapWindowManager({
     shell,
     getSignals: signals,
+    listenToSignalPatches: false,
   });
   const bookmarkPanel = createMapBookmarkPanelController({
     shell,
     getSignals: signals,
+    listenToSignalPatches: false,
   });
   const zoneInfoPanel = createMapZoneInfoPanelController({
     shell,
     getSignals: signals,
+    listenToSignalPatches: false,
   });
   const layerPanel = createMapLayerPanelController({
     shell,
     getSignals: signals,
+    listenToSignalPatches: false,
   });
   const searchPanel = createMapSearchPanelController({
     shell,
     getSignals: signals,
+    listenToSignalPatches: false,
   });
   let syncingFromBridge = false;
   let applyingInternalSignalPatch = false;
@@ -220,6 +228,27 @@ async function start() {
     searchPanel.scheduleRender();
   }
 
+  function scheduleControllersForPatch(patch) {
+    if (!patch || typeof patch !== "object") {
+      return;
+    }
+    if (patch._map_ui?.windowUi) {
+      windowManager.scheduleApplyFromSignals();
+    }
+    if (patchTouchesBookmarkSignals(patch)) {
+      bookmarkPanel.scheduleRender();
+    }
+    if (patchTouchesZoneInfoSignals(patch)) {
+      zoneInfoPanel.scheduleRender();
+    }
+    if (patchTouchesLayerPanelSignals(patch)) {
+      layerPanel.scheduleRender();
+    }
+    if (patchTouchesSearchPanelSignals(patch)) {
+      searchPanel.scheduleRender();
+    }
+  }
+
   function handleBridgeStateEvent(event) {
     const snapshot = resolveBridgeSnapshot(event?.detail, currentBridgeState);
     patchSignalsFromBridge(snapshot);
@@ -234,15 +263,11 @@ async function start() {
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
     const patch = event?.detail || null;
     if (applyingInternalSignalPatch) {
-      if (patch?._map_ui?.windowUi) {
-        windowManager.scheduleApplyFromSignals();
-      }
+      scheduleControllersForPatch(patch);
       return;
     }
     if (!patchTouchesLiveBridgeInputs(patch)) {
-      if (patch?._map_ui?.windowUi) {
-        windowManager.scheduleApplyFromSignals();
-      }
+      scheduleControllersForPatch(patch);
       return;
     }
 
@@ -255,6 +280,7 @@ async function start() {
     }
 
     patchBridgeFromSignals();
+    scheduleControllersForPatch(patch);
   });
 
   const initialPatch = app.nextBridgePatch(signals(), {

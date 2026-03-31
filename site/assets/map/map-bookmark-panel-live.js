@@ -117,6 +117,7 @@ export function createMapBookmarkPanelController({
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
   promptImpl = globalThis.prompt?.bind(globalThis),
   confirmImpl = globalThis.confirm?.bind(globalThis),
+  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapBookmarkPanelController requires a shell element");
@@ -572,7 +573,9 @@ export function createMapBookmarkPanelController({
       });
   });
 
-  documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+  if (listenToSignalPatches) {
+    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+  }
 
   return Object.freeze({
     render,

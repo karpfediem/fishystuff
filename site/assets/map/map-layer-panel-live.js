@@ -190,6 +190,7 @@ export function createMapLayerPanelController({
   dispatchPatch = dispatchShellSignalPatch,
   documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
+  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapLayerPanelController requires a shell element");
@@ -594,7 +595,9 @@ export function createMapLayerPanelController({
     clearDropState();
   });
 
-  documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+  if (listenToSignalPatches) {
+    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+  }
 
   return Object.freeze({
     render,

@@ -89,6 +89,7 @@ export function createMapZoneInfoPanelController({
   dispatchPatch = dispatchShellSignalPatch,
   documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
+  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapZoneInfoPanelController requires a shell element");
@@ -189,7 +190,9 @@ export function createMapZoneInfoPanelController({
     scheduleRender();
   });
 
-  documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+  if (listenToSignalPatches) {
+    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+  }
 
   return Object.freeze({
     render,
