@@ -1444,6 +1444,52 @@ Validation for this slice:
   - dispatching `fishymap-signals-patch` on `#map-page-shell` updates the live DOM
   - Bevy/runtime sync still flows through the shell after reload
 
+## Fifteenth implementation slice landed
+
+Managed window behavior now has its own clean-slate module instead of remaining an implicit loader-era gap.
+
+What changed:
+
+- `site/assets/map/map-window-manager.js`
+  - new dedicated window manager for the live map shell
+  - owns:
+    - bringing windows to front
+    - drag titlebar handling
+    - persisting dragged `x/y` back into `_map_ui.windowUi`
+    - collapse-on-tap for non-search windows
+    - applying `_map_ui.windowUi` positions back onto the real shell elements
+- `site/assets/map/map-window-manager.test.mjs`
+  - added helper coverage for:
+    - bounds clamping
+    - normalized window-ui patch generation
+- `site/assets/map/map-app-live.js`
+  - now boots the new window manager
+  - live shell no longer depends on loader-era window management behavior
+
+Why this slice matters:
+
+- it replaces one more concrete loader responsibility with a focused clean-slate module
+- it makes `_map_ui.windowUi` meaningful again in the live shell
+- it keeps managed-window behavior aligned with Datastar ownership:
+  - shell state lives in signals
+  - the window manager just interprets pointer intent and patches those signals
+
+What still remains after this slice:
+
+- bookmark, search-result, and zone-info result rendering still rely on imperative modules
+- the new window manager is still JS-owned behavior rather than declarative shell expressions, though that is appropriate for drag interaction
+- the page-global bootstrap surface can still be reduced further over time
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-window-manager.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --test site/assets/map/map-window-manager.test.mjs site/assets/map/map-signal-patch.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-shell.test.mjs`
+- rebuild site output
+- live browser checks:
+  - shell patching `_map_ui.windowUi.settings.{x,y}` moves the Settings window after the next animation frame
+  - shell patching `_map_ui.windowUi.layers.collapsed = true` hides the Layers body
+
 ## Thirteenth implementation slice landed
 
 The map page no longer uses a disconnected JS-owned signal store as its source of truth.

@@ -14,6 +14,7 @@ import {
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
+import { createMapWindowManager } from "./map-window-manager.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -66,6 +67,10 @@ async function start() {
 
   const app = createMapApp();
   const bridge = createFishyMapBridge();
+  const windowManager = createMapWindowManager({
+    shell,
+    getSignals: signals,
+  });
   let syncingFromBridge = false;
   let mounted = false;
   let lastBridgePatchJson = "";
@@ -128,6 +133,9 @@ async function start() {
   document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
     const patch = event?.detail || null;
     if (!patchTouchesLiveBridgeInputs(patch)) {
+      if (patch?._map_ui?.windowUi) {
+        windowManager.scheduleApplyFromSignals();
+      }
       return;
     }
 
@@ -193,6 +201,7 @@ async function start() {
     }),
   );
   patchSignalsFromBridge(currentBridgeState());
+  windowManager.applyFromSignals();
 }
 
 function startWhenDomReady() {
