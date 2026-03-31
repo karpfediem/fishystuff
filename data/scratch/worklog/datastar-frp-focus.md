@@ -3193,3 +3193,41 @@ Validation:
 - live browser smoke:
   - toggling the Search window updated page UI state
   - bridge `setState` / `flushPendingPatchNow` stayed at `0`
+
+## Step 66: Fix managed window titlebar proxies after `_map_ui` minimization
+
+What changed:
+
+- `site/assets/map/loader.js`
+  - changed `windowUiState` from `new Proxy(DEFAULT_WINDOW_UI_STATE, ...)` to
+    `new Proxy({}, ...)`
+
+Why this matters:
+
+- `DEFAULT_WINDOW_UI_STATE` is frozen and its properties are non-configurable data properties
+- once `_map_ui` changes were minimized and reconciled more often, the `windowUiState` proxy
+  started violating JS proxy invariants by returning live signal-backed values instead of the
+  frozen target's own property values
+- Chromium then threw:
+  - `TypeError: 'get' on proxy: property 'layers' is a read-only and non-configurable data property...`
+  - same for `zoneInfo` and `settings`
+- that broke exactly the managed-window features hanging off titlebar state:
+  - toolbar show/hide toggles
+  - titlebar collapse
+  - titlebar drag/move
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- rebuilt site output
+- served `/map/loader.js` contains `const windowUiState = new Proxy({}, {`
+- live DevTools smoke:
+  - no JS errors on reload
+  - Search toolbar toggle works
+  - Layers titlebar collapse works
+  - dragging the Settings titlebar changes managed window position again
+- browser profile:
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_sweep --output /tmp/zone_mask_hover_sweep.livecheck.json`
+  - result:
+    - `frame_avg_ms=5.100`
+    - `p95_ms=6.900`

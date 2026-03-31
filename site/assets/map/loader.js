@@ -6907,7 +6907,7 @@ function bindUi(shell, elements, options = {}) {
     };
   }
 
-  const windowUiState = new Proxy(DEFAULT_WINDOW_UI_STATE, {
+  const windowUiState = new Proxy({}, {
     get(_target, key) {
       return currentWindowUiState()?.[key];
     },
