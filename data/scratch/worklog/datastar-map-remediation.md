@@ -994,6 +994,33 @@ Why this matters:
 This is closer to the intended architecture than keeping the shell embedded in a large `.shtml`
 layout file.
 
+## 2026-03-31: Raw shell now uses direct Datastar expressions
+
+With the shell living in `site/assets/map/map-shell.html`, ordinary shell interactions no longer
+need to route through `window.__fishystuffDatastarState.toggleBooleanPath(...)` and
+`setObjectPath(...)`.
+
+Updated in `site/assets/map/map-shell.html`:
+
+- toolbar window toggles
+- search-open-on-input / focus
+- 2D/3D mode toggle
+- reset action tokens
+- diagnostics details toggle
+
+These now use direct Datastar expressions such as:
+
+- `$_map_ui.windowUi.search.open = !$_map_ui.windowUi.search.open`
+- `$_map_actions.resetUiToken = ... + 1`
+- `$_map_bridged.ui.diagnosticsOpen = event.currentTarget.open`
+
+Why this matters:
+
+- it is closer to Datastar's intended FRP style
+- it reduces dependence on our custom helper globals for ordinary page mutations
+- it validates that moving the shell out of SuperHTML unlocked the exact cleanup the old layout
+  structure prevented
+
 The next clean-slate extraction moved the bridge projection logic into a dedicated module:
 
 - `site/assets/map/map-bridge-projection.js`

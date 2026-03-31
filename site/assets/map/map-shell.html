@@ -80,7 +80,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="search"
-          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.search.open')"
+          data-on:click="$_map_ui.windowUi.search.open = !$_map_ui.windowUi.search.open"
           type="button"
           aria-pressed="true"
           aria-label="Hide search"
@@ -91,7 +91,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="bookmarks"
-          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.bookmarks.open')"
+          data-on:click="$_map_ui.windowUi.bookmarks.open = !$_map_ui.windowUi.bookmarks.open"
           type="button"
           aria-pressed="false"
           aria-label="Show bookmarks"
@@ -102,7 +102,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="settings"
-          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.settings.open')"
+          data-on:click="$_map_ui.windowUi.settings.open = !$_map_ui.windowUi.settings.open"
           type="button"
           aria-pressed="true"
           aria-label="Hide settings"
@@ -113,7 +113,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="zone-info"
-          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.zoneInfo.open')"
+          data-on:click="$_map_ui.windowUi.zoneInfo.open = !$_map_ui.windowUi.zoneInfo.open"
           type="button"
           aria-pressed="true"
           aria-label="Hide zone info"
@@ -124,7 +124,7 @@
         <button
           class="fishymap-toolbar-button btn btn-circle"
           data-window-toggle="layers"
-          data-on:click="window.__fishystuffDatastarState.toggleBooleanPath($, '_map_ui.windowUi.layers.open')"
+          data-on:click="$_map_ui.windowUi.layers.open = !$_map_ui.windowUi.layers.open"
           type="button"
           aria-pressed="true"
           aria-label="Hide layers"
@@ -151,8 +151,8 @@
               placeholder="Search fish, zone, or filter term"
               autocomplete="off"
               data-bind="_map_controls.filters.searchText"
-              data-on:input="window.__fishystuffDatastarState.setObjectPath($, '_map_ui.search.open', true)"
-              data-on:focus="window.__fishystuffDatastarState.setObjectPath($, '_map_ui.search.open', true)"
+              data-on:input="$_map_ui.search.open = true"
+              data-on:focus="$_map_ui.search.open = true"
             >
             <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
           </label>
@@ -267,7 +267,7 @@
         id="fishymap-view-toggle"
         class="btn btn-primary"
         type="button"
-        data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_bridged.ui.viewMode', (($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? '2d' : '3d')"
+        data-on:click="$_map_bridged.ui.viewMode = (($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? '2d' : '3d'"
         aria-label="View mode: 2D. Click to switch to 3D."
         title="View mode: 2D. Click to switch to 3D."
       >
@@ -402,13 +402,13 @@
                 id="fishymap-reset-view"
                 class="btn btn-outline btn-secondary btn-sm w-full"
                 type="button"
-                data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_actions.resetViewToken', (($_map_actions && $_map_actions.resetViewToken) || 0) + 1)"
+                data-on:click="$_map_actions.resetViewToken = (($_map_actions && $_map_actions.resetViewToken) || 0) + 1"
               >Reset view</button>
               <button
                 id="fishymap-reset-ui"
                 class="btn btn-outline btn-sm w-full"
                 type="button"
-                data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_actions.resetUiToken', (($_map_actions && $_map_actions.resetUiToken) || 0) + 1)"
+                data-on:click="$_map_actions.resetUiToken = (($_map_actions && $_map_actions.resetUiToken) || 0) + 1"
               >Reset UI</button>
             </div>
 
@@ -426,7 +426,7 @@
           <details
             id="fishymap-diagnostics"
             class="collapse collapse-arrow border border-base-300/70 bg-base-200"
-            data-on:toggle="window.__fishystuffDatastarState.setObjectPath($, '_map_bridged.ui.diagnosticsOpen', event.currentTarget.open)"
+            data-on:toggle="$_map_bridged.ui.diagnosticsOpen = event.currentTarget.open"
           >
             <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Diagnostics</summary>
             <div class="collapse-content space-y-3">
