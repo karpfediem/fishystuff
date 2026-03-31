@@ -1802,3 +1802,56 @@ Validation for this slice:
 - `node --test site/assets/map/map-host.test.mjs site/assets/map/map-query-state.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/js/pages/map-page.test.mjs`
 - rebuild site output
 - compare served `/map/`, `/map/map-app-live.js`, `/map/map-host.js`, and `/map/map-query-state.js` against `site/.out`
+
+## Sixteenth implementation slice landed
+
+Zone Info now runs through the clean-slate live map app instead of relying on the legacy loader-era rendering path.
+
+What changed:
+
+- `site/assets/map/map-zone-info-state.js`
+  - added a pure zone-info view-model builder driven from:
+    - `_map_runtime.selection`
+    - `_map_runtime.catalog.layers`
+    - `_map_ui.windowUi.zoneInfo.tab`
+  - derives:
+    - title / status text
+    - active tab selection
+    - a generic facts list for the active layer sample
+  - ignores empty default runtime coordinates unless there is a meaningful `pointKind`
+- `site/assets/map/map-zone-info-panel-live.js`
+  - added a focused live controller for:
+    - tab rendering
+    - facts rendering
+    - active-tab updates back into `_map_ui.windowUi.zoneInfo.tab`
+- `site/assets/map/map-app-live.js`
+  - now boots the zone-info controller
+  - schedules it after bridge-originated shell patches alongside the other clean-slate live panels
+- `site/zine.ziggy`
+  - now publishes the zone-info live modules
+
+Why this slice matters:
+
+- it removes another visible shell responsibility from the legacy loader path
+- it keeps zone inspection aligned with the Datastar ownership model:
+  - Bevy publishes coarse selection/runtime state
+  - the shell derives presentation from signals
+  - tab choice is page-owned UI state
+- it confirms the live shell is stable across selection updates:
+  - current live build keeps the layer catalog present before and after point selection
+  - the old “selection click repopulates Layers” regression was not present in the validated served build
+
+What still remains after this slice:
+
+- `map-page.js` still exposes a broader bootstrap/global surface than the final target
+- the live path still depends on custom panel controllers instead of more direct Datastar-owned shell markup
+- some shell behaviors still need to move from JS controllers toward direct signal expressions or smaller dedicated modules
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-zone-info-state.js`
+- `node --check site/assets/map/map-zone-info-panel-live.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --test site/assets/map/map-zone-info-state.test.mjs site/assets/map/map-bookmark-state.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-app.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- compare served `/map/`, `/map/map-app-live.js`, `/map/map-zone-info-state.js`, and `/map/map-zone-info-panel-live.js` against `site/.out`

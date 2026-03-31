@@ -66,6 +66,8 @@ Multilingual {
     "map/map-layer-panel-live.js",
     "map/map-bookmark-state.js",
     "map/map-bookmark-panel-live.js",
+    "map/map-zone-info-state.js",
+    "map/map-zone-info-panel-live.js",
     "map/map-search-state.js",
     "map/map-search-panel-live.js",
     "map/map-search-panel.js",

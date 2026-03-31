@@ -18,6 +18,7 @@ import { createMapLayerPanelController } from "./map-layer-panel-live.js";
 import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
+import { createMapZoneInfoPanelController } from "./map-zone-info-panel-live.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -114,6 +115,10 @@ async function start() {
     shell,
     getSignals: signals,
   });
+  const zoneInfoPanel = createMapZoneInfoPanelController({
+    shell,
+    getSignals: signals,
+  });
   const layerPanel = createMapLayerPanelController({
     shell,
     getSignals: signals,
@@ -170,6 +175,7 @@ async function start() {
     }
     windowManager.scheduleApplyFromSignals();
     bookmarkPanel.scheduleRender();
+    zoneInfoPanel.scheduleRender();
     layerPanel.scheduleRender();
     searchPanel.scheduleRender();
   }
@@ -258,6 +264,7 @@ async function start() {
   patchSignalsFromBridge(currentBridgeState());
   windowManager.applyFromSignals();
   bookmarkPanel.render();
+  zoneInfoPanel.render();
   layerPanel.render();
   searchPanel.render();
 }
