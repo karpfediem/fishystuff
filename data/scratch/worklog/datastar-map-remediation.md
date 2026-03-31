@@ -1401,6 +1401,49 @@ Validation for this slice:
 - rebuild site output
 - compare served `/map/`, `/map/map-app-live.js`, `/map/map-host.js`, and `/map/map-query-state.js` against `site/.out`
 
+## Fourteenth implementation slice landed
+
+The live bridge path no longer writes back through the page global.
+
+What changed:
+
+- `site/assets/map/map-signal-patch.js`
+  - new dedicated shell patch module for the clean-slate map path
+  - exports:
+    - `FISHYMAP_SIGNAL_PATCH_EVENT`
+    - `dispatchShellSignalPatch(...)`
+    - `combineSignalPatches(...)`
+- `site/assets/map/map-app-live.js`
+  - query-state patches now dispatch directly to the shell
+  - runtime/session projections from Bevy now dispatch directly to the shell
+  - reset-UI signal handling now dispatches the reset patch directly to the shell
+  - the live write path no longer depends on `window.__fishystuffMap.patchSignals(...)`
+- `site/assets/map/map-signal-patch.test.mjs`
+  - added coverage for shell patch event dispatch and patch combination
+
+Why this slice matters:
+
+- it reduces the `window.__fishystuffMap` global surface in the live map path
+- it makes the shell, not the page-global helper, the one explicit write boundary for live signal updates
+- it keeps the clean-slate architecture moving away from the old "global helper as app bus" pattern
+
+What still remains after this slice:
+
+- `window.__fishystuffMap` is still needed for restore/bootstrap and snapshot reads
+- `map-app-live.js` still owns a fair amount of orchestration that could later move into smaller shell/runtime controller modules
+- substantial panel/result markup is still rendered by imperative helper modules rather than fully declarative shell bindings
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-app-live.js`
+- `node --check site/assets/map/map-signal-patch.js`
+- `node --test site/assets/map/map-signal-patch.test.mjs site/assets/map/map-app.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-shell.test.mjs`
+- rebuild site output
+- live browser checks:
+  - map boots without console errors
+  - dispatching `fishymap-signals-patch` on `#map-page-shell` updates the live DOM
+  - Bevy/runtime sync still flows through the shell after reload
+
 ## Thirteenth implementation slice landed
 
 The map page no longer uses a disconnected JS-owned signal store as its source of truth.

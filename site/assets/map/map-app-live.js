@@ -13,6 +13,7 @@ import {
   DEFAULT_MAP_UI_SIGNAL_STATE,
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
+import { combineSignalPatches, dispatchShellSignalPatch } from "./map-signal-patch.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -32,17 +33,6 @@ function patchTouchesLiveBridgeInputs(patch) {
     "_map_bookmarks" in patch ||
     "_shared_fish" in patch
   );
-}
-
-function combineSignalPatches(...patches) {
-  const next = {};
-  for (const patch of patches) {
-    if (!isPlainObject(patch)) {
-      continue;
-    }
-    Object.assign(next, cloneJson(patch));
-  }
-  return next;
 }
 
 function buildResetUiPatch() {
@@ -71,7 +61,7 @@ async function start() {
 
   const queryPatch = parseQuerySignalPatch(globalThis.location?.href);
   if (queryPatch) {
-    page.patchSignals?.(queryPatch);
+    dispatchShellSignalPatch(shell, queryPatch);
   }
 
   const app = createMapApp();
@@ -112,7 +102,8 @@ async function start() {
   function patchSignalsFromBridge(snapshot) {
     syncingFromBridge = true;
     try {
-      page.patchSignals?.(
+      dispatchShellSignalPatch(
+        shell,
         combineSignalPatches(
           app.projectRuntimeSnapshot(snapshot),
           app.projectSessionSnapshot(snapshot),
@@ -146,7 +137,7 @@ async function start() {
     if (resetUiToken > previousResetUiToken) {
       syncingFromBridge = true;
       try {
-        page.patchSignals?.(buildResetUiPatch());
+        dispatchShellSignalPatch(shell, buildResetUiPatch());
       } finally {
         syncingFromBridge = false;
       }
