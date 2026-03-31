@@ -519,6 +519,34 @@ Remaining follow-up from this slice:
   transport/socket issue is clear again
 - if needed, add more layer-specific facts from the runtime detail sections without widening the
   bridged contract
+
+### 2026-03-31: Removed the obsolete pre-live map page bootstrap stack
+
+Deleted the dead map page implementation that was no longer on the published/live path:
+
+- `site/assets/js/pages/map-page.js`
+- `site/assets/js/pages/map-page.test.mjs`
+- `site/assets/map/map-page-state.js`
+- `site/assets/map/map-page-state.test.mjs`
+- `site/assets/map/map-page-signals.js`
+- `site/assets/map/map-page-signals.test.mjs`
+
+Why this matters:
+
+- the live map now boots only through:
+  - `site/assets/map/map-page-live.js`
+  - `site/assets/map/map-app-live.js`
+  - `site/assets/map/map-shell.html`
+- keeping the old page bootstrap/state/signal layer around made the remediation harder to reason
+  about because the repo still looked like it had two supported map page architectures
+- deleting the dead stack makes the clean-slate path the only page-side map implementation left in
+  the tree
+
+Follow-up note:
+
+- `site/assets/map/loader.js` still exists for now as a non-live historical implementation
+- the next meaningful cleanup target after this is the remaining loader-only support surface, not
+  resurrecting a second page bootstrap path
 - `node --check site/assets/map/map-app-live.js`
 - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
 - rebuilt site output
