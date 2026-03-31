@@ -53,6 +53,7 @@ Multilingual {
 
     "map/loader.js",
     "map/map-host.js",
+    "map/map-signal-contract.js",
     "map/ui/fishystuff.css",
 
     "img/favicon-16x16.png",

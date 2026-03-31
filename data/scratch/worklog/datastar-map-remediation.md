@@ -1,0 +1,718 @@
+# Datastar Map Remediation
+
+Last updated: 2026-03-31
+
+This document isolates the map-specific Datastar remediation plan from the broader
+`datastar-frp-focus` worklog.
+
+The goal is not to "polish" `site/assets/map/loader.js`. The goal is to replace most of its
+current responsibilities with:
+
+- declarative Datastar bindings in the map shell
+- signal-owned page state
+- small reusable UI components/modules
+- a thin JS <-> Bevy bridge adapter
+
+This document should be sufficient context for a fresh Codex session without relying on prior
+conversation history.
+
+## Why this exists
+
+The map is now the biggest remaining area where we drift from Datastar's intended design.
+
+The current architecture has improved since earlier revisions:
+
+- there is now an explicit `_map_bridged` bridge contract
+- runtime mirroring was narrowed compared with earlier broad state sync
+- page persistence boundaries are cleaner than before
+
+But the core problem remains:
+
+- `site/assets/map/loader.js` is still about 9k lines
+- it still acts as:
+  - page UI state reconciler
+  - renderer for multiple windows/panels
+  - bookmark manager
+  - search UI controller
+  - layers UI controller
+  - Datastar patch event router
+  - JS <-> Bevy bridge adapter
+
+That is not the end state Datastar is designed to support.
+
+## Datastar guidance that matters here
+
+Reference docs:
+
+- <https://data-star.dev/guide/getting_started>
+- <https://data-star.dev/guide/reactive_signals>
+- <https://data-star.dev/guide/datastar_expressions>
+- <https://data-star.dev/guide/backend_requests>
+- <https://data-star.dev/guide/the_tao_of_datastar>
+- <https://data-star.dev/reference/attributes>
+- <https://data-star.dev/reference/actions>
+- <https://data-star.dev/reference/sse_events>
+- <https://data-star.dev/examples/>
+
+The key guidance to follow for the map:
+
+1. State should live in the right place.
+
+- Datastar's Tao explicitly says most state should live in the backend, and the backend should
+  drive the frontend by patching elements and signals.
+- For the map page, the practical analogue is:
+  - durable page UI state belongs in the Datastar signal graph
+  - Bevy runtime state should cross the boundary only when the page truly needs it
+  - transient internal runtime state should stay inside the runtime
+
+2. Signals should be sparse and intentional.
+
+- Datastar supports nested signal graphs and underscore-prefixed local state.
+- That does not imply "mirror everything into signals".
+- For the map, this means:
+  - page UI state must be explicit
+  - Bevy-shared state must be whitelisted
+  - hover and per-frame runtime churn must stay out of Datastar
+
+3. Expressions and bindings should do most of the page-local work.
+
+- Datastar's model favors declarative `data-*` attributes and expressions.
+- `data-effect` exists for side effects.
+- `data-on-signal-patch` exists for narrow reactive seams.
+- This pushes us away from:
+  - global helper calls from templates
+  - document-wide custom patch orchestration as the default mechanism
+
+4. External JavaScript should be minimal and boundary-focused.
+
+- Some JS is still appropriate:
+  - bridge adaptation
+  - reusable UI components
+  - persistence helpers where Datastar OSS lacks built-ins
+- But JS should not become a second application framework layered on top of Datastar.
+
+## Current diagnosis
+
+### What is already good
+
+- `_map_bridged` is now a real explicit shared branch.
+- `_map_session` and `_map_actions` are clearer than earlier ad hoc bridge state.
+- page-owned persistence for map UI/bookmarks/session is cleaner than before.
+- hover is no longer mirrored broadly through Datastar, which was the right correction.
+
+### What is still wrong
+
+1. `loader.js` owns too many responsibilities.
+
+Current major responsibilities still in `site/assets/map/loader.js`:
+
+- current page state projection:
+  - `currentMapUiSignalState()`
+  - `currentMapControlSignalState()`
+  - `currentMapSessionSignalState()`
+  - `currentMapBookmarksSignalState()`
+  - `currentMapActionSignalState()`
+  - `currentMapBridgedSignalState()`
+- page UI rendering:
+  - `renderBookmarkManager(...)`
+  - `renderSearchSelection(...)`
+  - `renderSearchResults(...)`
+  - `renderCurrentState(...)`
+- managed-window behavior:
+  - `applyManagedWindows()`
+  - `toggleManagedWindowOpen(...)`
+  - `toggleManagedWindowCollapsed(...)`
+- bridge sync:
+  - `syncMapBridgedSignalsFromPageState(...)`
+  - `syncBridgeInputStateFromSignals()`
+  - `syncBridgeSessionStateFromSignals()`
+  - `syncMapActionsFromSignals()`
+- Datastar event routing:
+  - the document-level `datastar-signal-patch` listener
+
+2. The schema still mixes concerns.
+
+Current branches:
+
+- `_map_ui`
+- `_map_controls`
+- `_map_bridged`
+- `_map_session`
+- `_map_bookmarks`
+- `_shared_fish`
+
+Problem:
+
+- `_map_controls` still mixes:
+  - page-only control state
+  - bridge-relevant rendering state
+- this causes duplication and reconciliation:
+  - page state -> control state -> bridged state -> runtime
+
+That is unnecessary churn.
+
+3. Templates still depend on JS helper globals for ordinary state mutation.
+
+Current examples in `site/layouts/map.shtml`:
+
+- `window.__fishystuffDatastarState.toggleBooleanPath(...)`
+- `window.__fishystuffDatastarState.setObjectPath(...)`
+
+This is workable but not ideal.
+
+The better Datastar-shaped end state is:
+
+- direct signal expressions where possible
+- helper JS only where the interaction is genuinely too complex for inline expressions
+
+4. The bookmark manager is not yet sufficiently isolated from bridge concerns.
+
+Design requirement:
+
+- bookmark manager should be entirely independent from hover info
+- only bookmark data that Bevy actually needs should cross the bridge
+
+That means:
+
+- page-side bookmark UI/edit/select state should not be part of the shared bridge contract
+- only a minimal bookmark projection should cross if required:
+  - id
+  - label
+  - world position
+  - selected ids if the runtime truly needs selected bookmark context
+
+5. The bridge boundary must remain coarse.
+
+This is reinforced by local map perf guidance:
+
+- `map/docs/web-threading-readiness.md`
+  - "The JS↔Wasm boundary must stay coarse."
+  - "Batched commands in, compact events out."
+- `map/docs/perf-workstream.md`
+  - bridge work should stay coarse and batched
+  - exact hover/click must stay out of the visual transport path
+  - host/bridge work is measurable, but not something to make noisier
+
+So the remediation must not reintroduce:
+
+- broad runtime mirroring into Datastar
+- fine-grained per-frame signal churn
+- hover-derived signal traffic
+
+## Target architecture
+
+The target is a strict separation of responsibilities.
+
+### 1. Page-owned signal state
+
+#### `_map_ui`
+
+Page-only UI state.
+
+Examples:
+
+- window open/collapsed/x/y
+- search panel open
+- expanded layer cards
+- bookmark placement/edit mode
+- selected zone-info tab
+- diagnostics panel open if page-only
+
+#### `_map_bookmarks`
+
+Page-owned canonical bookmark state.
+
+Examples:
+
+- full bookmark entries
+- local ordering
+- editor-local metadata if needed
+
+#### `_map_session`
+
+Durable/restorable coarse runtime session snapshot.
+
+Examples:
+
+- view mode
+- camera snapshot
+- stable selection snapshot
+
+Not:
+
+- per-frame camera drift
+- hover
+
+#### `_map_actions`
+
+Explicit one-shot commands only.
+
+Examples:
+
+- `resetViewToken`
+- `resetUiToken`
+
+### 2. Shared Bevy-facing signal state
+
+#### `_map_bridged`
+
+This is the only intentional page -> Bevy shared input branch.
+
+It should contain only the minimal runtime-relevant state.
+
+Examples:
+
+- fish/zone/semantic filters
+- patch range
+- layer visibility/order/opacity/clip toggles
+- evidence/icon visibility toggles
+- point icon scale
+- view mode if it is runtime-owned
+- minimal bookmark projection if Bevy needs it
+
+### 3. Runtime -> page outputs
+
+#### `_map_runtime`
+
+Coarse runtime outputs only.
+
+Examples:
+
+- `ready`
+- status/error fields
+- stable layer catalog
+- patch catalog
+- stable selection/detail payload
+- settled camera/view snapshot if needed for persistence
+
+Not:
+
+- hover spam
+- full input mirrors
+- broad internal runtime snapshots
+
+## Proposed signal cleanup
+
+### Remove `_map_controls`
+
+Long-term, `_map_controls` should disappear.
+
+Reason:
+
+- it is an intermediate staging branch that duplicates ownership
+- it mixes page-local and bridge-shared concerns
+- it forces loader reconciliation logic
+
+Replacement:
+
+- page-only controls move under `_map_ui`
+- bridge-relevant controls move directly under `_map_bridged`
+
+This is the most important schema simplification.
+
+### Rename and clarify shared state
+
+This repo already moved toward `_map_bridged`.
+
+Keep pushing that naming discipline:
+
+- `_map_ui` = page-only UI
+- `_map_bookmarks` = page-owned canonical bookmarks
+- `_map_bridged` = only values Bevy actually consumes
+- `_map_runtime` = only values the page actually consumes from Bevy
+
+## Explicit whitelist for bridge crossing
+
+This should be treated as the authoritative design target.
+
+### Page -> Bevy
+
+Should cross:
+
+- fish ids filter
+- zone RGB filter
+- semantic field filter map
+- patch id / fromPatchId / toPatchId
+- layerIdsVisible
+- layerIdsOrdered
+- layerOpacities
+- layerClipMasks
+- layerWaypointConnectionsVisible
+- layerWaypointLabelsVisible
+- layerPointIconsVisible
+- layerPointIconScales
+- diagnostics visibility only if runtime rendering actually depends on it
+- showPoints
+- showPointIcons
+- pointIconScale
+- viewMode
+- minimal bookmark projection:
+  - bookmark id
+  - label
+  - world coordinates
+  - selected bookmark ids only if runtime needs them
+- coarse session restore data:
+  - camera/view
+  - stable selection
+
+Should not cross:
+
+- search input open/closed state
+- search box text unless search execution really happens in Bevy
+- window positions/open states
+- expanded layer cards
+- bookmark placement/edit UI state
+- legend open/closed
+- left panel open/closed
+- hover tooltip state
+- generic loading indicators
+- shared fish progress unless runtime rendering actually depends on it
+
+### Bevy -> page
+
+Should cross:
+
+- `ready`
+- bridge/runtime errors
+- stable layer registry/catalog
+- patch catalog
+- stable selection payload
+- zone/fish detail payloads needed for page rendering
+- settled camera/view snapshot if used for persistence
+
+Should not cross:
+
+- hover
+- per-frame camera changes
+- broad internal runtime snapshots
+- full echoed input state
+
+## Loader replacement strategy
+
+The objective is to replace most of `loader.js`, not merely subdivide it.
+
+### Loader's future role
+
+`site/assets/map/loader.js` should become:
+
+- bootstrap
+- bridge mount/unmount
+- bridge input projection from `_map_bridged` / `_map_session` / `_map_actions`
+- runtime output projection into `_map_runtime`
+- nothing else
+
+### What should move out of loader
+
+1. Managed windows
+
+Move out:
+
+- open/collapse/position logic
+- toolbar state rendering
+- titlebar interactions
+
+Target:
+
+- Datastar-owned `_map_ui.windowUi`
+- reusable managed-window component/module
+
+2. Bookmark manager
+
+Move out:
+
+- bookmark list rendering
+- selection logic
+- import/export UI
+- drag/drop reorder UI
+- rename/delete/copy UI
+
+Target:
+
+- page-owned `_map_bookmarks`
+- page-owned bookmark UI state under `_map_ui`
+- bridge only receives minimal bookmark projection
+
+3. Layer panel
+
+Move out:
+
+- layer list rendering
+- drag/drop reorder UI
+- per-layer toggles/sliders/expanded-state rendering
+
+Target:
+
+- page-owned UI under `_map_ui`
+- bridge-relevant controls under `_map_bridged`
+- reusable layer panel module/component
+
+4. Search panel
+
+Move out:
+
+- search result rendering
+- search selection shell rendering
+- local open/close behavior
+
+Target:
+
+- page-owned `_map_ui.search`
+- page-owned search state
+- bridge only receives actual runtime-relevant search-derived filters if necessary
+
+5. Zone-info tab UI
+
+Move out:
+
+- selected tab state
+- tab rendering and switching logic
+
+Target:
+
+- `_map_ui.zoneInfo.tab`
+- page-side rendering using coarse `_map_runtime.selection`
+
+## Best-practice phased plan
+
+### Phase 1: Freeze the signal contract
+
+Goal:
+
+- define the final map signal schema before more implementation work
+
+Tasks:
+
+- formally deprecate `_map_controls`
+- document exact field ownership under:
+  - `_map_ui`
+  - `_map_bookmarks`
+  - `_map_bridged`
+  - `_map_session`
+  - `_map_runtime`
+  - `_map_actions`
+
+Acceptance:
+
+- no ambiguity about whether a given field is page-only, bridge-shared, or runtime output
+
+### Phase 2: Remove template dependence on helper globals
+
+Goal:
+
+- replace routine `window.__fishystuffDatastarState.*` usage with direct Datastar expressions
+
+Tasks:
+
+- migrate toolbar toggle buttons
+- migrate search-open expressions
+- migrate reset-action token increments
+- migrate diagnostics toggle expressions
+
+Acceptance:
+
+- map shell mostly uses direct Datastar expressions for ordinary state mutation
+
+### Phase 3: Evict `_map_controls`
+
+Goal:
+
+- stop duplicating control state between page and bridge branches
+
+Tasks:
+
+- move page-only controls into `_map_ui`
+- move bridge-relevant controls directly into `_map_bridged`
+- remove reconciliation paths that only exist to keep `_map_controls` in sync
+
+Acceptance:
+
+- loader no longer needs "controls -> bridged" projection logic
+
+### Phase 4: Extract bookmark manager
+
+Goal:
+
+- make bookmarks page-owned and independent from hover/runtime churn
+
+Tasks:
+
+- move bookmark UI rendering out of loader
+- move bookmark UI interactions into a page component/module
+- keep only minimal bookmark projection in `_map_bridged`
+
+Acceptance:
+
+- bookmark manager works without loader rendering the list UI
+
+### Phase 5: Extract layer panel
+
+Goal:
+
+- make the layer UI declarative/page-owned
+
+Tasks:
+
+- move layer card rendering and local UI state out of loader
+- keep only runtime-relevant layer values in `_map_bridged`
+
+Acceptance:
+
+- loader no longer renders the layer list or owns layer UI interactions
+
+### Phase 6: Extract search and zone-info UI
+
+Goal:
+
+- make search and detail UI page-side
+
+Tasks:
+
+- move search results rendering out of loader
+- move selected zone-info tab state/rendering out of loader
+- keep only stable selection/detail payloads from runtime in `_map_runtime`
+
+Acceptance:
+
+- loader no longer renders page panels
+
+### Phase 7: Collapse loader into a thin bridge adapter
+
+Goal:
+
+- leave only bridge code in `loader.js`
+
+Tasks:
+
+- keep:
+  - mount/unmount
+  - `_map_bridged` -> Bevy projection
+  - `_map_session` -> Bevy restore projection
+  - `_map_actions` -> Bevy command dispatch
+  - Bevy events -> `_map_runtime` projection
+- remove:
+  - page UI renderers
+  - local page UI reconcilers
+  - panel/window/business logic not strictly required for bridge operation
+
+Acceptance:
+
+- `loader.js` becomes a small bridge-oriented module instead of a monolith
+
+## Anti-goals
+
+These are explicitly not the target:
+
+- mirroring broad runtime state into Datastar
+- sending hover through Datastar
+- per-frame signal patch churn
+- replacing one monolith with several tightly coupled helper monoliths
+- using Datastar as a generic event bus for everything
+
+## Performance constraints
+
+This remediation must obey existing map perf guidance.
+
+Important local constraints:
+
+- `map/docs/web-threading-readiness.md`
+  - production performance must be acceptable on single-threaded Wasm
+  - JS↔Wasm boundary must stay coarse
+- `map/docs/perf-workstream.md`
+  - bridge work should stay coarse and batched
+  - exact hover/click must not be coupled to display transport
+
+So every phase must preserve:
+
+- no hover-through-Datastar regression
+- no broad runtime mirroring regression
+- no increase in bridge chatter from ordinary UI interactions
+
+## Validation criteria
+
+Every phase should be checked against:
+
+1. Correctness
+
+- map loads
+- 2D/3D toggles work
+- filters work
+- layers work
+- bookmarks work
+- reset flows work
+- selection/detail panels work
+
+2. Contract discipline
+
+- page-only state remains page-only
+- `_map_bridged` contains only the explicit whitelist
+- `_map_runtime` remains coarse
+
+3. Performance
+
+- no new hover FPS collapse
+- no new bridge call amplification
+- no unnecessary runtime reloads from page-only UI changes
+
+4. Served asset correctness
+
+- compare served files against `site/.out` before trusting browser validation
+
+## Recommended first implementation slice
+
+The first best slice is:
+
+- formally remove `_map_controls` from the schema
+
+Reason:
+
+- it is the highest-leverage structural simplification
+- it will reduce both template helper usage and loader reconciliation code
+- it clarifies what is page-only vs bridge-shared before extracting larger UI modules
+
+Concrete immediate next steps:
+
+1. write the final field-by-field schema mapping
+2. rebind shell controls from `_map_controls` to `_map_ui` or `_map_bridged`
+3. delete the control-to-bridged projection paths that become obsolete
+
+Once that lands, bookmark and layer extraction become much cleaner.
+
+## First implementation slice landed
+
+The first clean-slate extraction started with a new pure contract module:
+
+- `site/assets/map/map-signal-contract.js`
+
+What moved into it:
+
+- map signal defaults
+- bridge/shared branch constants
+- page UI signal defaults
+- bridged signal defaults
+- session/action defaults
+- pure normalization helpers for:
+  - window UI state
+  - page UI state
+  - transitional `_map_controls`
+  - `_map_bridged`
+
+Why this is the right first cut:
+
+- it creates a new clean functional core outside `loader.js`
+- it removes some schema/default/normalization ownership from `loader.js`
+- it gives later migration slices a stable place to move logic into without continuing to grow
+  the imperative monolith
+
+What did **not** happen yet:
+
+- `_map_controls` still exists
+- loader still owns major UI/render responsibilities
+- the bridge adapter is not yet isolated
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-signal-contract.js`
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/map-signal-contract.test.mjs site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output
+- verified served `loader.js` and served `map-signal-contract.js` both match `site/.out`
