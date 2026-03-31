@@ -216,6 +216,19 @@ test("map-page-live restore loads persisted bookmark entries into Datastar signa
   assert.equal(env.shell.__fishystuffMapPage.signalObject(), signals);
 });
 
+test("map-page-live restore loads shared fish state without the site-global helper", () => {
+  const env = createContext({
+    "fishystuff.fishydex.caught.v1": JSON.stringify({ "912": true, "77": false, "5": 1 }),
+    "fishystuff.fishydex.favourites.v1": JSON.stringify(["77", 77, "bad"]),
+  });
+  const signals = defaultSignals();
+
+  dispatchLiveInit(env, signals);
+
+  assert.deepEqual(signals._shared_fish.caughtIds, [5, 912]);
+  assert.deepEqual(signals._shared_fish.favouriteIds, [77]);
+});
+
 test("map-page-live applies fishymap shell patches into the live signal graph", () => {
   const env = createContext();
   const signals = defaultSignals();

@@ -606,16 +606,19 @@ function readPersistedLayerPointIconScales(filters) {
 }
 
 function normalizeFishIds(values) {
-  const helper = globalThis.window?.__fishystuffSharedFishState || globalThis.__fishystuffSharedFishState;
-  if (helper && typeof helper.normalizeIds === "function") {
-    return helper.normalizeIds(values);
-  }
-  if (!Array.isArray(values)) {
+  let ids = [];
+  if (Array.isArray(values)) {
+    ids = values;
+  } else if (values && typeof values === "object") {
+    ids = Object.entries(values)
+      .filter((entry) => entry[1])
+      .map((entry) => entry[0]);
+  } else {
     return [];
   }
   const out = [];
   const seen = new Set();
-  for (const value of values) {
+  for (const value of ids) {
     const number = Number.parseInt(value, 10);
     if (!Number.isFinite(number) || number <= 0 || seen.has(number)) {
       continue;

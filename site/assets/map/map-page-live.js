@@ -754,18 +754,20 @@
     applyPatch(state.liveSignals, patch);
   }
 
-  function sharedFishStateHelper() {
-    const helper = window.__fishystuffSharedFishState;
-    return helper && typeof helper.loadState === "function" ? helper : null;
-  }
-
   function normalizeFallbackFishIds(values) {
-    if (!Array.isArray(values)) {
+    let ids = [];
+    if (Array.isArray(values)) {
+      ids = values;
+    } else if (values && typeof values === "object") {
+      ids = Object.entries(values)
+        .filter((entry) => entry[1])
+        .map((entry) => entry[0]);
+    } else {
       return [];
     }
     const next = [];
     const seen = new Set();
-    for (const value of values) {
+    for (const value of ids) {
       const fishId = Number.parseInt(String(value), 10);
       if (!Number.isInteger(fishId) || fishId <= 0 || seen.has(fishId)) {
         continue;
@@ -777,36 +779,28 @@
   }
 
   function restoreSharedFishPatch() {
-    const helper = sharedFishStateHelper();
-    if (helper) {
-      const shared = helper.loadState(SHARED_FISH_STORAGE_KEYS, globalThis.localStorage);
-      return {
-        _shared_fish: {
-          caughtIds: cloneJson(shared.caughtIds || []),
-          favouriteIds: cloneJson(shared.favouriteIds || []),
-        },
-      };
-    }
     let caughtIds = [];
     let favouriteIds = [];
     try {
-      caughtIds = JSON.parse(
+      caughtIds = normalizeFallbackFishIds(JSON.parse(
         globalThis.localStorage?.getItem?.(SHARED_FISH_STORAGE_KEYS.caught) || "[]",
-      );
+      ));
     } catch (_error) {
       caughtIds = [];
+      globalThis.localStorage?.removeItem?.(SHARED_FISH_STORAGE_KEYS.caught);
     }
     try {
-      favouriteIds = JSON.parse(
+      favouriteIds = normalizeFallbackFishIds(JSON.parse(
         globalThis.localStorage?.getItem?.(SHARED_FISH_STORAGE_KEYS.favourites) || "[]",
-      );
+      ));
     } catch (_error) {
       favouriteIds = [];
+      globalThis.localStorage?.removeItem?.(SHARED_FISH_STORAGE_KEYS.favourites);
     }
     return {
       _shared_fish: {
-        caughtIds: normalizeFallbackFishIds(caughtIds),
-        favouriteIds: normalizeFallbackFishIds(favouriteIds),
+        caughtIds,
+        favouriteIds,
       },
     };
   }

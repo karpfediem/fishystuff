@@ -635,6 +635,37 @@ Validation:
   - `fishymap-live-init`
 - served `/map/` no longer contains:
   - `__fishystuffMapLiveRestore`
+
+### 2026-03-31: Removed the map-side shared fish global dependency
+
+The clean-slate map no longer reaches through `window.__fishystuffSharedFishState`.
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - now restores `_shared_fish` directly from local/session storage using its own normalization
+    logic
+  - corrupted shared-fish storage is cleared directly during restore
+- `site/assets/map/map-host.js`
+  - now normalizes shared fish id inputs locally instead of consulting the site-global helper
+- `site/assets/map/map-page-live.test.mjs`
+  - added regression coverage proving shared-fish restore works without the site-global helper
+
+Why this matters:
+
+- the map clean-slate path is now more self-contained
+- it removes another unnecessary global dependency from the live map runtime path
+- it keeps shared fish state as plain data crossing into the map, not as a global service that map
+  modules need to discover at runtime
+
+Validation:
+
+- `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-host.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- rebuilt site output
+- served `/map/map-page-live.js` contains:
+  - `fishymap-live-init`
+- served `/map/map-page-live.js` no longer contains:
+  - `__fishystuffSharedFishState`
 - `node --check site/assets/map/map-app-live.js`
 - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
 - rebuilt site output
