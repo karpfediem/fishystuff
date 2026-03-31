@@ -8,7 +8,5 @@
   </head>
 
   <div id="content">
-    <div class="site-content-clip">
-    <div :html="$site.asset('map/map-shell.html').bytes()"></div>
-    </div>
+    <div class="site-content-clip" :html="$site.asset('map/map-shell.html').bytes()"></div>
   </div>

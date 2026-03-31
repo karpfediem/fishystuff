@@ -15,14 +15,11 @@ body:has(#map-page-shell) #menu {
 
 body:has(#map-page-shell) #content {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  inset: var(--site-nav-offset, 0px) 0 0;
   z-index: 0;
   width: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
+  height: calc(100dvh - var(--site-nav-offset, 0px));
+  min-height: calc(100dvh - var(--site-nav-offset, 0px));
   max-width: none;
   margin: 0;
   padding: 0;
