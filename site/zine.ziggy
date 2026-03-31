@@ -52,9 +52,11 @@ Multilingual {
     "js/ui-settings.js",
 
     "map/loader.js",
+    "map/map-app.js",
     "map/map-app-live.js",
     "map/map-shell.html",
     "map/map-bookmark-panel.js",
+    "map/map-runtime-adapter.js",
     "map/map-layer-state.js",
     "map/map-layer-panel.js",
     "map/map-search-panel.js",

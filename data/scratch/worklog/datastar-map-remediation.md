@@ -1021,6 +1021,23 @@ Why this matters:
 - it validates that moving the shell out of SuperHTML unlocked the exact cleanup the old layout
   structure prevented
 
+## 2026-03-31: Published clean-slate live module chain
+
+After switching the live map bootstrap to `map-app-live.js`, the site initially still failed to
+boot because the imported clean-slate modules were not being published as static assets.
+
+Fixed in `site/zine.ziggy`:
+
+- `map/map-app.js`
+- `map/map-runtime-adapter.js`
+
+Validation:
+
+- `curl -sSI http://127.0.0.1:1990/map/map-app-live.js`
+- `curl -sSI http://127.0.0.1:1990/map/map-app.js`
+- `curl -sSI http://127.0.0.1:1990/map/map-runtime-adapter.js`
+- live Chromium reload of `/map/` with no module-load errors in the console
+
 The next clean-slate extraction moved the bridge projection logic into a dedicated module:
 
 - `site/assets/map/map-bridge-projection.js`
