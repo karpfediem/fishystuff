@@ -45,7 +45,7 @@ class MemoryStorage {
   }
 }
 
-function createDocumentStub() {
+function createEventTarget() {
   const listeners = new Map();
   return {
     addEventListener(type, listener) {
@@ -58,12 +58,27 @@ function createDocumentStub() {
       for (const listener of listeners.get(event.type) || []) {
         listener(event);
       }
+      return true;
+    },
+  };
+}
+
+function createDocumentStub(shell = null) {
+  return {
+    ...createEventTarget(),
+    getElementById(id) {
+      if (id === "map-page-shell") {
+        return shell;
+      }
+      return null;
     },
   };
 }
 
 function createContext(localStorageInitial = {}, options = {}) {
-  const document = createDocumentStub();
+  const shell = createEventTarget();
+  shell.id = "map-page-shell";
+  const document = createDocumentStub(shell);
   const window = {};
   const localStorage = new MemoryStorage(localStorageInitial);
   const sessionStorage = new MemoryStorage(options.sessionStorageInitial || {});
@@ -99,6 +114,13 @@ function createContext(localStorageInitial = {}, options = {}) {
     clearTimeout(id) {
       timers.delete(id);
     },
+    CustomEvent: class CustomEvent {
+      constructor(type, options = {}) {
+        this.type = type;
+        this.detail = options.detail;
+        this.bubbles = options.bubbles === true;
+      }
+    },
   };
   context.globalThis = context;
   vm.runInNewContext(DATASTAR_STATE_SOURCE, context, { filename: "datastar-state.js" });
@@ -112,6 +134,7 @@ function createContext(localStorageInitial = {}, options = {}) {
   return {
     window,
     document,
+    shell,
     location,
     localStorage,
     sessionStorage,
@@ -238,6 +261,31 @@ test("map-page restore loads persisted bookmark entries into Datastar signals", 
   env.window.__fishystuffMap.restore(signals);
 
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
+});
+
+test("map-page applies fishymap shell patches into the live signal graph", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  env.window.__fishystuffMap.restore(signals);
+  env.shell.dispatchEvent({
+    type: "fishymap-signals-patch",
+    detail: {
+      _map_ui: {
+        windowUi: {
+          bookmarks: { open: true },
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [77],
+        },
+      },
+    },
+  });
+
+  assert.equal(signals._map_ui.windowUi.bookmarks.open, true);
+  assert.deepEqual(signals._map_bridged.filters.fishIds, [77]);
 });
 
 test("map-page restore loads shared fish state into Datastar signals", () => {

@@ -2165,3 +2165,42 @@ Next recommended tasks from here:
   modules
 - continue deleting legacy loader-era assumptions from tests/docs now that the live page no longer
   depends on `loader.js`
+
+## Twenty-fourth implementation slice landed
+
+The shell no longer owns custom `fishymap-signals-patch` application through a global template
+hook. That responsibility now lives in `map-page.js`, where the page-owned signal graph already
+handles restore/persist logic.
+
+What changed:
+
+- `site/assets/js/pages/map-page.js`
+  - now binds a `fishymap-signals-patch` listener on `#map-page-shell`
+  - shell-dispatched patches are applied into the live Datastar signal graph there, instead of
+    through a template-level global expression
+- `site/assets/map/map-shell.html`
+  - removed:
+    - `data-on:fishymap-signals-patch="window.__fishystuffMapPageSignals.applyPatchToSignals($, evt.detail)"`
+- `site/assets/js/pages/map-page.test.mjs`
+  - now covers shell-dispatched map patches flowing into the live signal graph
+- `site/assets/map/map-shell.test.mjs`
+  - now asserts that the shell no longer carries that global patch-application attribute
+
+Why this slice matters:
+
+- it removes one more imperative/global hook from the raw shell HTML
+- it keeps signal mutation inside the page-owned module instead of the template
+- it makes the shell more purely declarative:
+  - `data-signals`
+  - direct Datastar expressions
+  - no custom signal-application global in markup
+
+Validation for this slice:
+
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- rebuild site output
+- live Chromium reload confirmed:
+  - no new console errors
+  - `window.FishyMapBridge.getCurrentState().ready === true`
+  - `Layers 7` and `Settings Ready` still render immediately
+  - persisted shell state still restores correctly after reload

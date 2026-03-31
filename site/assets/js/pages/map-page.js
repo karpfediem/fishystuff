@@ -18,6 +18,7 @@
     uiStateRestored: false,
     persistTimer: 0,
     signalPatchListenerBound: false,
+    shellPatchListenerBound: false,
     restoreResolved: false,
     restorePromise: null,
     resolveRestore: null,
@@ -42,6 +43,7 @@
   function connect(signals) {
     state.liveSignals = signals && typeof signals === "object" ? signals : null;
     state.shell = resolveShell();
+    bindShellPatchListener();
     return state.liveSignals;
   }
 
@@ -172,6 +174,20 @@
     }
     globalThis.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
     state.signalPatchListenerBound = true;
+  }
+
+  function handleShellSignalPatch(event) {
+    applyPatch(state.liveSignals, event?.detail);
+  }
+
+  function bindShellPatchListener() {
+    const shell = state.shell || resolveShell();
+    if (!shell || state.shellPatchListenerBound) {
+      return;
+    }
+    shell.addEventListener(FISHYMAP_SIGNAL_PATCH_EVENT, handleShellSignalPatch);
+    state.shell = shell;
+    state.shellPatchListenerBound = true;
   }
 
   function applyPatch(signals, patch) {
