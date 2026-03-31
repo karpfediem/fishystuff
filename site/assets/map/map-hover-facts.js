@@ -339,15 +339,30 @@ export function buildHoverTooltipRows({
   });
 }
 
+function previewSampleForLayer(layerId, sources = []) {
+  const normalizedLayerId = trimString(layerId);
+  if (!normalizedLayerId) {
+    return null;
+  }
+  for (const source of sources) {
+    const sample = (Array.isArray(source?.layerSamples) ? source.layerSamples : []).find(
+      (candidate) => trimString(candidate?.layerId) === normalizedLayerId,
+    );
+    if (sample) {
+      return sample;
+    }
+  }
+  return null;
+}
+
 export function buildLayerPanelHoverFactPreview({
   layerId,
+  hover = null,
   selection = null,
   zoneCatalog = [],
   visibilityByLayer = {},
 } = {}) {
-  const sample = (Array.isArray(selection?.layerSamples) ? selection.layerSamples : []).find(
-    (candidate) => trimString(candidate?.layerId) === trimString(layerId),
-  ) || null;
+  const sample = previewSampleForLayer(layerId, [hover, selection]);
   return buildLayerHoverSettingsRows({
     layerId,
     sample,

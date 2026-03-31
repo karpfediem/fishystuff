@@ -3241,3 +3241,24 @@ Validation:
 
 - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-host.test.mjs site/assets/map/map-shell.test.mjs`
 - `devenv shell -- bash -lc '''cd site && just build-release-no-tailwind'''`
+
+### 2026-03-31: Slice 10 landed
+
+- Kept hover facts page-owned and local to the live shell controllers instead of reintroducing hover into shared Datastar runtime signals.
+- The live layer settings preview now prefers current hover samples, with selection as the fallback preview source.
+- Fixed the clean-slate layer panel render key so hover fact tables rerender when preview values or per-fact visibility change.
+- Added focused coverage in:
+  - `site/assets/map/map-hover-facts.test.mjs`
+  - `site/assets/map/map-layer-panel.test.mjs`
+
+Why this matters:
+
+- restores the old hover-fact UX direction without broad hover-to-signal churn
+- keeps bookmark management independent from hover data
+- lets per-layer fact toggles remain cheap page-owned configuration while hover stays transient
+
+Validation:
+
+- `node --test site/assets/map/map-hover-facts.test.mjs site/assets/map/map-layer-panel.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-host.test.mjs`
+- `devenv shell -- bash -lc '''cd site && just build-release-no-tailwind'''`
+- served `/map/map-layer-panel.js`, `/map/map-layer-panel-live.js`, and `/map/map-hover-facts.js` matched `site/.out`

@@ -67,11 +67,24 @@ export function renderLayerStack(container, stateBundle, options = {}) {
   const eyeIcon = typeof options.eyeIcon === "function" ? options.eyeIcon : () => "";
   const selection =
     options.selection && typeof options.selection === "object" ? options.selection : null;
+  const hover = options.hover && typeof options.hover === "object" ? options.hover : null;
   const zoneCatalog = Array.isArray(options.zoneCatalog) ? options.zoneCatalog : [];
   const hoverFactVisibilityByLayer =
     options.hoverFactVisibilityByLayer && typeof options.hoverFactVisibilityByLayer === "object"
       ? options.hoverFactVisibilityByLayer
       : {};
+  const hoverFactPreviewByLayer = new Map(
+    layers.map((layer) => [
+      layer.layerId,
+      buildLayerPanelHoverFactPreview({
+        layerId: layer.layerId,
+        hover,
+        selection,
+        zoneCatalog,
+        visibilityByLayer: hoverFactVisibilityByLayer,
+      }),
+    ]),
+  );
 
   if (!layers.length) {
     const loadingKey = "__loading__";
@@ -102,6 +115,17 @@ export function renderLayerStack(container, stateBundle, options = {}) {
       Number.isFinite(layer.displayOrder) ? layer.displayOrder : 0,
       layer.locked ? 1 : 0,
       expandedLayerIds.has(layer.layerId) ? 1 : 0,
+      expandedLayerIds.has(layer.layerId)
+        ? (hoverFactPreviewByLayer.get(layer.layerId) || []).map((row) => [
+            row.key,
+            row.value,
+            row.enabled ? 1 : 0,
+            row.swatchRgb || "",
+            row.icon || "",
+            row.statusIcon || "",
+            row.statusIconTone || "",
+          ])
+        : [],
     ]),
   );
   if (container.dataset.renderKey === renderKey) {
@@ -220,12 +244,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
           </label>
         `);
       }
-      const hoverFactRows = buildLayerPanelHoverFactPreview({
-        layerId: layer.layerId,
-        selection,
-        zoneCatalog,
-        visibilityByLayer: hoverFactVisibilityByLayer,
-      });
+      const hoverFactRows = hoverFactPreviewByLayer.get(layer.layerId) || [];
       return `
         <article
           class="fishymap-layer-card card card-border bg-base-200"

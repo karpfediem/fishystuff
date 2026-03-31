@@ -218,8 +218,10 @@ export function createMapLayerPanelController({
     draggingLayerId: "",
     overLayerId: "",
     dropMode: "",
+    hover: null,
   };
   let currentZoneCatalog = [];
+  const canvas = shell.querySelector("#bevy");
 
   function signals() {
     return getSignals() || null;
@@ -306,6 +308,7 @@ export function createMapLayerPanelController({
         bundle.state.ready === true ? bundle : { state: { catalog: { layers: [] } }, inputState: {} },
         {
           expandedLayerIds,
+          hover: state.hover,
           selection: liveSignals?._map_runtime?.selection || {},
           zoneCatalog: currentZoneCatalog,
           hoverFactVisibilityByLayer:
@@ -355,6 +358,28 @@ export function createMapLayerPanelController({
     }
     scheduleRender();
   }
+
+  function hasExpandedLayerSettings() {
+    return normalizeExpandedLayerIds(signals()?._map_ui?.layers?.expandedLayerIds).length > 0;
+  }
+
+  shell.addEventListener("fishymap:hover-changed", (event) => {
+    state.hover =
+      event?.detail?.hover && typeof event.detail.hover === "object" ? cloneJson(event.detail.hover) : null;
+    if (hasExpandedLayerSettings()) {
+      scheduleRender();
+    }
+  });
+
+  canvas?.addEventListener?.("pointerleave", () => {
+    if (!state.hover) {
+      return;
+    }
+    state.hover = null;
+    if (hasExpandedLayerSettings()) {
+      scheduleRender();
+    }
+  });
 
   container.addEventListener("click", (event) => {
     const settingsButton = event.target.closest("button[data-layer-settings-toggle]");

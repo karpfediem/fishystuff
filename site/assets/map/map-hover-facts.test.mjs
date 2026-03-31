@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildHoverTooltipRows,
   buildLayerHoverSettingsRows,
+  buildLayerPanelHoverFactPreview,
   patchTouchesHoverTooltipSignals,
 } from "./map-hover-facts.js";
 
@@ -88,6 +89,44 @@ test("buildLayerHoverSettingsRows keeps page-owned defaults and preview values",
       ],
     },
     visibilityByLayer: {},
+  });
+
+  assert.deepEqual(rows, [
+    {
+      key: "origin_region",
+      name: "Origin",
+      label: "Origin",
+      value: "(R430|Hakoven Islands)",
+      icon: "trade-origin",
+      defaultVisible: false,
+      enabled: false,
+    },
+  ]);
+});
+
+test("buildLayerPanelHoverFactPreview prefers live hover samples over selection fallback", () => {
+  const rows = buildLayerPanelHoverFactPreview({
+    layerId: "regions",
+    hover: {
+      layerSamples: [
+        {
+          layerId: "regions",
+          detailSections: [
+            detailSectionFact("origin_region", "Origin", "(R430|Hakoven Islands)", "trade-origin"),
+          ],
+        },
+      ],
+    },
+    selection: {
+      layerSamples: [
+        {
+          layerId: "regions",
+          detailSections: [
+            detailSectionFact("origin_region", "Origin", "(R17|Altinova)", "trade-origin"),
+          ],
+        },
+      ],
+    },
   });
 
   assert.deepEqual(rows, [
