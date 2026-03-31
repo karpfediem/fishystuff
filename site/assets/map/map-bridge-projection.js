@@ -81,14 +81,6 @@ export const MAP_CONTROL_BRIDGE_RELEVANT_PATCH_PATHS = Object.freeze([
   ["filters", "semanticFieldIdsByLayer"],
   ["filters", "fishFilterTerms"],
   ["filters", "patchId"],
-  ["filters", "layerIdsVisible"],
-  ["filters", "layerIdsOrdered"],
-  ["filters", "layerOpacities"],
-  ["filters", "layerClipMasks"],
-  ["filters", "layerWaypointConnectionsVisible"],
-  ["filters", "layerWaypointLabelsVisible"],
-  ["filters", "layerPointIconsVisible"],
-  ["filters", "layerPointIconScales"],
 ]);
 
 export function projectBridgeSharedInputState(controlState, options = {}) {
@@ -137,58 +129,6 @@ export function projectBridgeSharedInputState(controlState, options = {}) {
         : {}),
       ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("patchId")
         ? { patchId: current.filters?.patchId ?? null }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerIdsVisible")
-        && Array.isArray(current.filters?.layerIdsVisible)
-        ? { layerIdsVisible: cloneJsonValue(current.filters.layerIdsVisible) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerIdsOrdered")
-        && Array.isArray(current.filters?.layerIdsOrdered)
-        ? { layerIdsOrdered: cloneJsonValue(current.filters.layerIdsOrdered) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerOpacities")
-        && current.filters?.layerOpacities
-        && typeof current.filters.layerOpacities === "object"
-        ? { layerOpacities: cloneJsonValue(current.filters.layerOpacities) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerClipMasks")
-        && current.filters?.layerClipMasks
-        && typeof current.filters.layerClipMasks === "object"
-        ? { layerClipMasks: cloneJsonValue(current.filters.layerClipMasks) }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes(
-        "layerWaypointConnectionsVisible",
-      )
-        && current.filters?.layerWaypointConnectionsVisible
-        && typeof current.filters.layerWaypointConnectionsVisible === "object"
-        ? {
-            layerWaypointConnectionsVisible: cloneJsonValue(
-              current.filters.layerWaypointConnectionsVisible,
-            ),
-          }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerWaypointLabelsVisible")
-        && current.filters?.layerWaypointLabelsVisible
-        && typeof current.filters.layerWaypointLabelsVisible === "object"
-        ? {
-            layerWaypointLabelsVisible: cloneJsonValue(
-              current.filters.layerWaypointLabelsVisible,
-            ),
-          }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerPointIconsVisible")
-        && current.filters?.layerPointIconsVisible
-        && typeof current.filters.layerPointIconsVisible === "object"
-        ? {
-            layerPointIconsVisible: cloneJsonValue(current.filters.layerPointIconsVisible),
-          }
-        : {}),
-      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerPointIconScales")
-        && current.filters?.layerPointIconScales
-        && typeof current.filters.layerPointIconScales === "object"
-        ? {
-            layerPointIconScales: cloneJsonValue(current.filters.layerPointIconScales),
-          }
         : {}),
     },
     ui: {

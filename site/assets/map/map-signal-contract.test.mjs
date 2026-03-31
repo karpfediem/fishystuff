@@ -40,23 +40,23 @@ test("normalizeMapUiSignalState normalizes page-owned local UI state", () => {
   assert.deepEqual(state.layers.expandedLayerIds, ["fish_evidence", "zone_mask"]);
 });
 
-test("normalizeMapControlSignalState preserves legacy transitional branch defaults", () => {
+test("normalizeMapControlSignalState keeps only transitional page-owned fields", () => {
   const state = normalizeMapControlSignalState({
     filters: {
       patchId: " 123 ",
-      layerIdsVisible: ["zone_mask"],
+      fishIds: [77],
     },
     ui: {
-      viewMode: "3d",
-      pointIconScale: "2.5",
+      legendOpen: true,
     },
   });
 
   assert.equal(state.filters.patchId, "123");
-  assert.deepEqual(state.filters.layerIdsVisible, ["zone_mask"]);
-  assert.equal(state.ui.viewMode, "3d");
-  assert.equal(state.ui.pointIconScale, 2.5);
-  assert.equal(state.ui.showPoints, true);
+  assert.deepEqual(state.filters.fishIds, [77]);
+  assert.equal(state.ui.legendOpen, true);
+  assert.equal(state.ui.leftPanelOpen, true);
+  assert.equal("layerIdsVisible" in state.filters, false);
+  assert.equal("viewMode" in state.ui, false);
 });
 
 test("normalizeMapBridgedSignalState keeps the bridge contract explicit and normalized", () => {

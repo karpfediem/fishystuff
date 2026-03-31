@@ -72,6 +72,27 @@ This established the clean-slate destination for subsequent migrations.
 - Kept storage backwards-compatible by still reading legacy layer overrides from `_map_controls.filters` when restoring older snapshots.
 - This slice only changes durable ownership at rest; live layer interaction handlers still patch `_map_controls` and will be migrated next.
 
+### 2026-03-31: Slice 6 landed
+
+- Moved live layer interaction patches to `_map_bridged`:
+  - visibility toggles
+  - waypoint connection/label toggles
+  - point-icon toggles
+  - point-icon scales
+  - layer opacity sliders
+  - drag-drop reordering / clip mask attachment
+- Removed the layer-override fields from the transitional `_map_controls -> _map_bridged` projection in:
+  - `site/assets/map/map-bridge-projection.js`
+- Tightened `normalizeMapControlSignalState(...)` so the transitional control branch now only normalizes page-owned control fields plus still-transitional fish/zone/semantic filter inputs.
+
+Net effect:
+
+- layer stack and layer override state is now bridged-owned both:
+  - at rest
+  - during live interaction
+- `_map_controls` no longer owns or derives layer override state
+- the transitional bridge projection is materially smaller again
+
 ## Why this exists
 
 The map is now the biggest remaining area where we drift from Datastar's intended design.

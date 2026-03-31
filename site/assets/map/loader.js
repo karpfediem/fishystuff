@@ -6760,6 +6760,12 @@ function bindUi(shell, elements, options = {}) {
     patchMapControlSignalState(patch);
   }
 
+  function dispatchBridgedStatePatchAndRender(patch) {
+    patchMapBridgedSignalState(
+      applyStatePatch(currentMapBridgedSignalState(), patch),
+    );
+  }
+
   function activateBookmarkSelection(bookmark) {
     if (!bookmark) {
       return;
@@ -8342,7 +8348,7 @@ function bindUi(shell, elements, options = {}) {
     } else {
       visibleIds.add(layerId);
     }
-    dispatchStatePatchAndRender({
+    dispatchBridgedStatePatchAndRender({
       version: 1,
       filters: {
         layerIdsVisible: resolveLayerEntries(current)
@@ -8360,7 +8366,7 @@ function bindUi(shell, elements, options = {}) {
         return;
       }
       const current = getLatestStateBundle();
-      dispatchStatePatchAndRender({
+      dispatchBridgedStatePatchAndRender({
         version: 1,
         filters: {
           layerWaypointConnectionsVisible: buildLayerWaypointConnectionsPatch(
@@ -8380,7 +8386,7 @@ function bindUi(shell, elements, options = {}) {
         return;
       }
       const current = getLatestStateBundle();
-      dispatchStatePatchAndRender({
+      dispatchBridgedStatePatchAndRender({
         version: 1,
         filters: {
           layerWaypointLabelsVisible: buildLayerWaypointLabelsPatch(
@@ -8402,7 +8408,7 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     const current = getLatestStateBundle();
-    dispatchStatePatchAndRender({
+    dispatchBridgedStatePatchAndRender({
       version: 1,
       filters: {
         layerPointIconsVisible: buildLayerPointIconsPatch(current, layerId, pointIconsToggle.checked),
@@ -8428,7 +8434,7 @@ function bindUi(shell, elements, options = {}) {
           ),
         },
       };
-      patchMapControlSignalState(patch);
+      dispatchBridgedStatePatchAndRender(patch);
       return;
     }
 
@@ -8448,7 +8454,7 @@ function bindUi(shell, elements, options = {}) {
         layerOpacities: buildLayerOpacityPatch(current, layerId, slider.value),
       },
     };
-    patchMapControlSignalState(patch);
+    dispatchBridgedStatePatchAndRender(patch);
   });
 
   elements.layers.addEventListener("pointerdown", (event) => {
@@ -8592,7 +8598,7 @@ function bindUi(shell, elements, options = {}) {
     stopDragAutoScroll();
     clearLayerDropState();
     layerDragState.draggingLayerId = null;
-    dispatchStatePatchAndRender({
+    dispatchBridgedStatePatchAndRender({
       version: 1,
       filters: {
         layerIdsOrdered: nextOrder,

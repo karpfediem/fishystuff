@@ -778,14 +778,6 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
         fishFilterTerms: ["favourite"],
         searchText: "velia",
         patchId: "2026-01-29-inland-prize-buff",
-        layerIdsVisible: ["zone_mask", "fish_evidence"],
-        layerIdsOrdered: ["fish_evidence", "zone_mask"],
-        layerOpacities: { zone_mask: 0.5 },
-        layerClipMasks: { zone_mask: "regions" },
-        layerWaypointConnectionsVisible: { region_nodes: true },
-        layerWaypointLabelsVisible: { region_nodes: false },
-        layerPointIconsVisible: { fish_evidence: true },
-        layerPointIconScales: { fish_evidence: 2 },
       },
       ui: {
         legendOpen: true,
@@ -821,14 +813,6 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
     zoneRgbs: [0xc17f7f],
     semanticFieldIdsByLayer: { zone_mask: [0xc17f7f] },
     patchId: "2026-01-29-inland-prize-buff",
-    layerIdsVisible: ["zone_mask", "fish_evidence"],
-    layerIdsOrdered: ["fish_evidence", "zone_mask"],
-    layerOpacities: { zone_mask: 0.5 },
-    layerClipMasks: { zone_mask: "regions" },
-    layerWaypointConnectionsVisible: { region_nodes: true },
-    layerWaypointLabelsVisible: { region_nodes: false },
-    layerPointIconsVisible: { fish_evidence: true },
-    layerPointIconScales: { fish_evidence: 2 },
   });
   assert.deepEqual(projected.ui, {
     bookmarkSelectedIds: ["bm-1"],
@@ -847,22 +831,28 @@ test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", (
   assert.equal("leftPanelOpen" in projected.ui, false);
 });
 
-test("normalizeMapControlSignalState defaults visible layers to the expected startup set", () => {
+test("normalizeMapControlSignalState keeps only page-owned control defaults", () => {
   const normalized = normalizeMapControlSignalState({
     filters: {
       searchText: "",
     },
     ui: {
-      diagnosticsOpen: false,
+      legendOpen: false,
     },
   });
 
-  assert.deepEqual(normalized.filters.layerIdsVisible, [
-    "bookmarks",
-    "fish_evidence",
-    "zone_mask",
-    "minimap",
-  ]);
+  assert.deepEqual(normalized.filters, {
+    fishIds: [],
+    zoneRgbs: [],
+    semanticFieldIdsByLayer: {},
+    fishFilterTerms: [],
+    searchText: "",
+    patchId: null,
+  });
+  assert.deepEqual(normalized.ui, {
+    legendOpen: false,
+    leftPanelOpen: true,
+  });
 });
 
 test("resolveLayerEntries keeps minimap in the explicit ordered layer stack", () => {
@@ -1072,8 +1062,8 @@ test("patchTouchesMapControlBridgeProjection keeps derived and bridged map input
   assert.equal(
     patchTouchesMapControlBridgeProjection({
       _map_controls: {
-        ui: {
-          viewMode: "3d",
+        filters: {
+          layerIdsVisible: ["fish_evidence"],
         },
       },
     }),

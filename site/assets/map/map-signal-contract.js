@@ -323,7 +323,6 @@ export function normalizeMapUiSignalState(raw) {
 
 export function normalizeMapControlSignalState(raw) {
   const current = mergeDefaults(DEFAULT_MAP_CONTROL_SIGNAL_STATE, raw);
-  const pointIconScale = Number(current.ui?.pointIconScale);
   return {
     filters: {
       fishIds: cloneJsonValue(current.filters?.fishIds || []),
@@ -332,31 +331,10 @@ export function normalizeMapControlSignalState(raw) {
       fishFilterTerms: cloneJsonValue(current.filters?.fishFilterTerms || []),
       searchText: String(current.filters?.searchText || ""),
       patchId: normalizeNullableString(current.filters?.patchId),
-      fromPatchId: normalizeNullableString(current.filters?.fromPatchId),
-      toPatchId: normalizeNullableString(current.filters?.toPatchId),
-      layerIdsVisible: cloneJsonValue(current.filters?.layerIdsVisible || DEFAULT_ENABLED_LAYER_IDS),
-      layerIdsOrdered: cloneJsonValue(current.filters?.layerIdsOrdered || []),
-      layerOpacities: cloneJsonValue(current.filters?.layerOpacities || {}),
-      layerClipMasks: cloneJsonValue(current.filters?.layerClipMasks || {}),
-      layerWaypointConnectionsVisible: cloneJsonValue(
-        current.filters?.layerWaypointConnectionsVisible || {},
-      ),
-      layerWaypointLabelsVisible: cloneJsonValue(
-        current.filters?.layerWaypointLabelsVisible || {},
-      ),
-      layerPointIconsVisible: cloneJsonValue(current.filters?.layerPointIconsVisible || {}),
-      layerPointIconScales: cloneJsonValue(current.filters?.layerPointIconScales || {}),
     },
     ui: {
-      diagnosticsOpen: current.ui?.diagnosticsOpen === true,
       legendOpen: current.ui?.legendOpen === true,
       leftPanelOpen: current.ui?.leftPanelOpen !== false,
-      showPoints: current.ui?.showPoints !== false,
-      showPointIcons: current.ui?.showPointIcons !== false,
-      viewMode: current.ui?.viewMode === "3d" ? "3d" : "2d",
-      pointIconScale: Number.isFinite(pointIconScale)
-        ? pointIconScale
-        : FISHYMAP_POINT_ICON_SCALE_MIN,
     },
   };
 }
