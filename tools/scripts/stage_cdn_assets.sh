@@ -24,7 +24,6 @@ has_matching_file() {
   [ -n "$first_match" ]
 }
 
-require_path "$SITE_MAP_ASSETS_DIR/loader.js"
 require_path "$SITE_MAP_ASSETS_DIR/map-host.js"
 require_path "$SITE_MAP_ASSETS_DIR/ui/fishystuff.css"
 require_path "$CDN_ROOT/images"
@@ -50,7 +49,6 @@ fi
 mkdir -p "$CDN_ROOT/map/ui" "$CDN_ROOT/logs"
 
 rsync -a \
-  "$SITE_MAP_ASSETS_DIR/loader.js" \
   "$SITE_MAP_ASSETS_DIR/map-host.js" \
   "$CDN_ROOT/map/"
 

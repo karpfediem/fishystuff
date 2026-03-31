@@ -74,7 +74,6 @@ Multilingual {
     "map/map-search-state.js",
     "map/map-search-panel-live.js",
     "map/map-search-panel.js",
-    "map/map-bridge-projection.js",
     "map/map-host.js",
     "map/map-signal-contract.js",
     "map/ui/fishystuff.css",

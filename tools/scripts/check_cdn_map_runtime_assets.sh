@@ -129,7 +129,6 @@ required_urls=(
   "$stable_manifest_url"
   "$(join_url "$CDN_BASE_URL" "/map/${current_module}")"
   "$(join_url "$CDN_BASE_URL" "/map/${current_wasm}")"
-  "$(join_url "$CDN_BASE_URL" "/map/loader.js")"
   "$(join_url "$CDN_BASE_URL" "/map/map-host.js")"
   "$(join_url "$CDN_BASE_URL" "/map/ui/fishystuff.css")"
   "$(join_url "$CDN_BASE_URL" "/fields/regions.v1.bin")"

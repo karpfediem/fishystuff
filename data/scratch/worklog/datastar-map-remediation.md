@@ -547,6 +547,59 @@ Follow-up note:
 - `site/assets/map/loader.js` still exists for now as a non-live historical implementation
 - the next meaningful cleanup target after this is the remaining loader-only support surface, not
   resurrecting a second page bootstrap path
+
+### 2026-03-31: Deleted the legacy loader stack from the repo
+
+Removed the old non-live loader path entirely:
+
+- `site/assets/map/loader.js`
+- `site/assets/map/loader.test.mjs`
+- `site/assets/map/map-bridge-projection.js`
+
+Also updated stale tooling that still assumed `/map/loader.js` existed:
+
+- `tools/scripts/stage_cdn_assets.sh`
+- `tools/scripts/check_cdn_map_runtime_assets.sh`
+- `site/zine.ziggy`
+
+Why this matters:
+
+- the repo now matches the architectural reality:
+  - the live map does not boot through `loader.js`
+  - the repo no longer keeps a 10k-line dead implementation around as if it were still relevant
+- it removes the biggest remaining source of conceptual drift for future map work
+- staging/check scripts no longer pretend the deleted `/map/loader.js` asset is part of the
+  supported runtime contract
+
+Current clean-slate runtime contract after this deletion:
+
+- page shell:
+  - `site/assets/map/map-shell.html`
+- page bootstrap:
+  - `site/assets/map/map-page-live.js`
+- app orchestration:
+  - `site/assets/map/map-app-live.js`
+- bridge/runtime adapter:
+  - `site/assets/map/map-app.js`
+  - `site/assets/map/map-runtime-adapter.js`
+  - `site/assets/map/map-host.js`
+- live shell controllers:
+  - window manager
+  - search
+  - layers
+  - hover tooltip
+  - bookmarks
+  - zone info
+
+Next tasks from here:
+
+- keep removing stale legacy assumptions from tooling/worklogs as needed
+- continue restoring or tightening any remaining map features only on the clean-slate path
+- keep the bridge contract explicit and narrow:
+  - `_map_bridged`
+  - `_map_actions`
+  - `_map_session`
+  - `_map_runtime`
 - `node --check site/assets/map/map-app-live.js`
 - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
 - rebuilt site output
