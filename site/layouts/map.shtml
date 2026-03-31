@@ -1095,7 +1095,7 @@
              search: { open: false },
              bookmarks: { placing: false, selectedIds: [] }
            },
-           _map_input: {
+           _map_controls: {
              filters: {
                searchText: '',
                patchId: null,
@@ -1104,6 +1104,25 @@
              },
              ui: {
                diagnosticsOpen: false
+             }
+           },
+           _map_bridged: {
+             filters: {
+               fishIds: [],
+               zoneRgbs: [],
+               semanticFieldIdsByLayer: {},
+               patchId: null,
+               fromPatchId: null,
+               toPatchId: null
+             },
+             ui: {
+               diagnosticsOpen: false,
+               showPoints: true,
+               showPointIcons: true,
+               viewMode: null,
+               pointIconScale: 1,
+               bookmarkSelectedIds: [],
+               bookmarks: []
              }
            },
            _map_actions: {
@@ -1117,15 +1136,9 @@
              view: { viewMode: '2d', camera: {} },
              selection: {}
            },
-           _map_runtime: {
-             state: {
-               ready: false,
-               view: { viewMode: '2d', camera: {} },
-               selection: {},
-               hover: {},
-               lastDiagnostic: null
-             },
-             inputState: {}
+           _shared_fish: {
+             caughtIds: [],
+             favouriteIds: []
            }
          }">
       <div hidden
@@ -1205,7 +1218,7 @@
               type="search"
               placeholder="Search fish, zone, or filter term"
               autocomplete="off"
-              data-bind="_map_input.filters.searchText"
+              data-bind="_map_controls.filters.searchText"
               data-on:input="window.__fishystuffDatastarState.setObjectPath($, '_map_ui.search.open', true)"
               data-on:focus="window.__fishystuffDatastarState.setObjectPath($, '_map_ui.search.open', true)"
             >
@@ -1322,7 +1335,7 @@
         id="fishymap-view-toggle"
         class="btn btn-primary"
         type="button"
-        data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_input.ui.viewMode', $_map_runtime.state.view.viewMode === '3d' ? '2d' : '3d')"
+        data-on:click="window.__fishystuffDatastarState.setObjectPath($, '_map_controls.ui.viewMode', (($_map_controls.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? '2d' : '3d')"
         aria-label="View mode: 2D. Click to switch to 3D."
         title="View mode: 2D. Click to switch to 3D."
       >
@@ -1354,7 +1367,7 @@
               <div class="grid grid-cols-2 gap-3">
                 <label class="form-control gap-2">
                   <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">From</span>
-                  <input id="fishymap-patch-from" type="hidden" value="" data-bind="_map_input.filters.fromPatchId">
+                  <input id="fishymap-patch-from" type="hidden" value="" data-bind="_map_controls.filters.fromPatchId">
                   <fishy-searchable-dropdown
                     id="fishymap-patch-from-picker"
                     class="relative block w-full"
@@ -1403,7 +1416,7 @@
 
                 <label class="form-control gap-2">
                   <span class="label-text text-xs font-semibold uppercase tracking-[0.18em] text-base-content/60">Until (incl.)</span>
-                  <input id="fishymap-patch-to" type="hidden" value="" data-bind="_map_input.filters.toPatchId">
+                  <input id="fishymap-patch-to" type="hidden" value="" data-bind="_map_controls.filters.toPatchId">
                   <fishy-searchable-dropdown
                     id="fishymap-patch-to-picker"
                     class="relative block w-full"
@@ -1481,7 +1494,7 @@
           <details
             id="fishymap-diagnostics"
             class="collapse collapse-arrow border border-base-300/70 bg-base-200"
-            data-on:toggle="window.__fishystuffDatastarState.setObjectPath($, '_map_input.ui.diagnosticsOpen', event.currentTarget.open)"
+            data-on:toggle="window.__fishystuffDatastarState.setObjectPath($, '_map_controls.ui.diagnosticsOpen', event.currentTarget.open)"
           >
             <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Diagnostics</summary>
             <div class="collapse-content space-y-3">

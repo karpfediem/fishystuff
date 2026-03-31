@@ -679,7 +679,7 @@ function fishMatchesSharedFilterTerms(fishId, filterTerms, sharedFishState) {
   return true;
 }
 
-function resolveEffectiveFishIdsForWasm(inputState, currentState) {
+export function resolveEffectiveFishIdsForWasm(inputState, currentState) {
   const selectedFishIds = normalizeFishIds(inputState?.filters?.fishIds);
   const filterTerms = normalizeFishFilterTerms(inputState?.filters?.fishFilterTerms);
   if (!filterTerms.length) {

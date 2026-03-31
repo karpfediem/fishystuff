@@ -8,7 +8,7 @@
     favourites: "fishystuff.fishydex.favourites.v1",
   });
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_input\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale)|map_input\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_controls\.ui\.(?:diagnosticsOpen|legendOpen|leftPanelOpen|showPoints|showPointIcons|pointIconScale|viewMode)|map_controls\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -128,8 +128,8 @@
 
   function storedUiSignals(signals) {
     const windowUi = signals?._map_ui?.windowUi;
-    const inputUi = signals?._map_input?.ui;
-    const inputFilters = signals?._map_input?.filters;
+    const inputUi = signals?._map_controls?.ui;
+    const inputFilters = signals?._map_controls?.filters;
     const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
       ? cloneJson(signals._map_bookmarks.entries)
       : [];
@@ -147,13 +147,14 @@
             : [],
         },
       },
-      _map_input: {
+      _map_controls: {
         ui: {
           diagnosticsOpen: inputUi?.diagnosticsOpen === true,
           legendOpen: inputUi?.legendOpen === true,
           leftPanelOpen: inputUi?.leftPanelOpen !== false,
           showPoints: inputUi?.showPoints !== false,
           showPointIcons: inputUi?.showPointIcons !== false,
+          viewMode: inputUi?.viewMode === "3d" ? "3d" : "2d",
           pointIconScale: Number.isFinite(inputUi?.pointIconScale)
             ? Number(inputUi.pointIconScale)
             : 1,
@@ -247,81 +248,82 @@
           : [],
       },
       inputUi: {
-        diagnosticsOpen: stored?._map_input?.ui?.diagnosticsOpen === true,
-        legendOpen: stored?._map_input?.ui?.legendOpen === true,
-        leftPanelOpen: stored?._map_input?.ui?.leftPanelOpen !== false,
-        showPoints: stored?._map_input?.ui?.showPoints !== false,
-        showPointIcons: stored?._map_input?.ui?.showPointIcons !== false,
-        pointIconScale: Number.isFinite(stored?._map_input?.ui?.pointIconScale)
-          ? Number(stored._map_input.ui.pointIconScale)
+        diagnosticsOpen: stored?._map_controls?.ui?.diagnosticsOpen === true,
+        legendOpen: stored?._map_controls?.ui?.legendOpen === true,
+        leftPanelOpen: stored?._map_controls?.ui?.leftPanelOpen !== false,
+        showPoints: stored?._map_controls?.ui?.showPoints !== false,
+        showPointIcons: stored?._map_controls?.ui?.showPointIcons !== false,
+        viewMode: stored?._map_controls?.ui?.viewMode === "3d" ? "3d" : "2d",
+        pointIconScale: Number.isFinite(stored?._map_controls?.ui?.pointIconScale)
+          ? Number(stored._map_controls.ui.pointIconScale)
           : 1,
       },
       inputFilters: {
-        fishIds: Array.isArray(stored?._map_input?.filters?.fishIds)
-          ? cloneJson(stored._map_input.filters.fishIds)
+        fishIds: Array.isArray(stored?._map_controls?.filters?.fishIds)
+          ? cloneJson(stored._map_controls.filters.fishIds)
           : [],
-        zoneRgbs: Array.isArray(stored?._map_input?.filters?.zoneRgbs)
-          ? cloneJson(stored._map_input.filters.zoneRgbs)
+        zoneRgbs: Array.isArray(stored?._map_controls?.filters?.zoneRgbs)
+          ? cloneJson(stored._map_controls.filters.zoneRgbs)
           : [],
         semanticFieldIdsByLayer:
-          stored?._map_input?.filters?.semanticFieldIdsByLayer &&
-          typeof stored._map_input.filters.semanticFieldIdsByLayer === "object" &&
-          !Array.isArray(stored._map_input.filters.semanticFieldIdsByLayer)
-            ? cloneJson(stored._map_input.filters.semanticFieldIdsByLayer)
+          stored?._map_controls?.filters?.semanticFieldIdsByLayer &&
+          typeof stored._map_controls.filters.semanticFieldIdsByLayer === "object" &&
+          !Array.isArray(stored._map_controls.filters.semanticFieldIdsByLayer)
+            ? cloneJson(stored._map_controls.filters.semanticFieldIdsByLayer)
             : {},
-        fishFilterTerms: Array.isArray(stored?._map_input?.filters?.fishFilterTerms)
-          ? cloneJson(stored._map_input.filters.fishFilterTerms)
+        fishFilterTerms: Array.isArray(stored?._map_controls?.filters?.fishFilterTerms)
+          ? cloneJson(stored._map_controls.filters.fishFilterTerms)
           : [],
-        searchText: String(stored?._map_input?.filters?.searchText || ""),
+        searchText: String(stored?._map_controls?.filters?.searchText || ""),
         fromPatchId:
-          stored?._map_input?.filters?.fromPatchId == null
+          stored?._map_controls?.filters?.fromPatchId == null
             ? null
-            : String(stored._map_input.filters.fromPatchId),
+            : String(stored._map_controls.filters.fromPatchId),
         toPatchId:
-          stored?._map_input?.filters?.toPatchId == null
+          stored?._map_controls?.filters?.toPatchId == null
             ? null
-            : String(stored._map_input.filters.toPatchId),
-        layerIdsVisible: Array.isArray(stored?._map_input?.filters?.layerIdsVisible)
-          ? cloneJson(stored._map_input.filters.layerIdsVisible)
+            : String(stored._map_controls.filters.toPatchId),
+        layerIdsVisible: Array.isArray(stored?._map_controls?.filters?.layerIdsVisible)
+          ? cloneJson(stored._map_controls.filters.layerIdsVisible)
           : [],
-        layerIdsOrdered: Array.isArray(stored?._map_input?.filters?.layerIdsOrdered)
-          ? cloneJson(stored._map_input.filters.layerIdsOrdered)
+        layerIdsOrdered: Array.isArray(stored?._map_controls?.filters?.layerIdsOrdered)
+          ? cloneJson(stored._map_controls.filters.layerIdsOrdered)
           : [],
         layerOpacities:
-          stored?._map_input?.filters?.layerOpacities &&
-          typeof stored._map_input.filters.layerOpacities === "object" &&
-          !Array.isArray(stored._map_input.filters.layerOpacities)
-            ? cloneJson(stored._map_input.filters.layerOpacities)
+          stored?._map_controls?.filters?.layerOpacities &&
+          typeof stored._map_controls.filters.layerOpacities === "object" &&
+          !Array.isArray(stored._map_controls.filters.layerOpacities)
+            ? cloneJson(stored._map_controls.filters.layerOpacities)
             : {},
         layerClipMasks:
-          stored?._map_input?.filters?.layerClipMasks &&
-          typeof stored._map_input.filters.layerClipMasks === "object" &&
-          !Array.isArray(stored._map_input.filters.layerClipMasks)
-            ? cloneJson(stored._map_input.filters.layerClipMasks)
+          stored?._map_controls?.filters?.layerClipMasks &&
+          typeof stored._map_controls.filters.layerClipMasks === "object" &&
+          !Array.isArray(stored._map_controls.filters.layerClipMasks)
+            ? cloneJson(stored._map_controls.filters.layerClipMasks)
             : {},
         layerWaypointConnectionsVisible:
-          stored?._map_input?.filters?.layerWaypointConnectionsVisible &&
-          typeof stored._map_input.filters.layerWaypointConnectionsVisible === "object" &&
-          !Array.isArray(stored._map_input.filters.layerWaypointConnectionsVisible)
-            ? cloneJson(stored._map_input.filters.layerWaypointConnectionsVisible)
+          stored?._map_controls?.filters?.layerWaypointConnectionsVisible &&
+          typeof stored._map_controls.filters.layerWaypointConnectionsVisible === "object" &&
+          !Array.isArray(stored._map_controls.filters.layerWaypointConnectionsVisible)
+            ? cloneJson(stored._map_controls.filters.layerWaypointConnectionsVisible)
             : {},
         layerWaypointLabelsVisible:
-          stored?._map_input?.filters?.layerWaypointLabelsVisible &&
-          typeof stored._map_input.filters.layerWaypointLabelsVisible === "object" &&
-          !Array.isArray(stored._map_input.filters.layerWaypointLabelsVisible)
-            ? cloneJson(stored._map_input.filters.layerWaypointLabelsVisible)
+          stored?._map_controls?.filters?.layerWaypointLabelsVisible &&
+          typeof stored._map_controls.filters.layerWaypointLabelsVisible === "object" &&
+          !Array.isArray(stored._map_controls.filters.layerWaypointLabelsVisible)
+            ? cloneJson(stored._map_controls.filters.layerWaypointLabelsVisible)
             : {},
         layerPointIconsVisible:
-          stored?._map_input?.filters?.layerPointIconsVisible &&
-          typeof stored._map_input.filters.layerPointIconsVisible === "object" &&
-          !Array.isArray(stored._map_input.filters.layerPointIconsVisible)
-            ? cloneJson(stored._map_input.filters.layerPointIconsVisible)
+          stored?._map_controls?.filters?.layerPointIconsVisible &&
+          typeof stored._map_controls.filters.layerPointIconsVisible === "object" &&
+          !Array.isArray(stored._map_controls.filters.layerPointIconsVisible)
+            ? cloneJson(stored._map_controls.filters.layerPointIconsVisible)
             : {},
         layerPointIconScales:
-          stored?._map_input?.filters?.layerPointIconScales &&
-          typeof stored._map_input.filters.layerPointIconScales === "object" &&
-          !Array.isArray(stored._map_input.filters.layerPointIconScales)
-            ? cloneJson(stored._map_input.filters.layerPointIconScales)
+          stored?._map_controls?.filters?.layerPointIconScales &&
+          typeof stored._map_controls.filters.layerPointIconScales === "object" &&
+          !Array.isArray(stored._map_controls.filters.layerPointIconScales)
+            ? cloneJson(stored._map_controls.filters.layerPointIconScales)
             : {},
       },
     };
@@ -346,13 +348,14 @@
       };
     }
     if (parsed.inputUi && typeof parsed.inputUi === "object" && !Array.isArray(parsed.inputUi)) {
-      patch._map_input = {
+      patch._map_controls = {
         ui: {
           diagnosticsOpen: parsed.inputUi.diagnosticsOpen === true,
           legendOpen: parsed.inputUi.legendOpen === true,
           leftPanelOpen: parsed.inputUi.leftPanelOpen !== false,
           showPoints: parsed.inputUi.showPoints !== false,
           showPointIcons: parsed.inputUi.showPointIcons !== false,
+          viewMode: parsed.inputUi.viewMode === "3d" ? "3d" : "2d",
           pointIconScale: Number.isFinite(parsed.inputUi.pointIconScale)
             ? Number(parsed.inputUi.pointIconScale)
             : 1,
@@ -364,8 +367,8 @@
       typeof parsed.inputFilters === "object" &&
       !Array.isArray(parsed.inputFilters)
     ) {
-      patch._map_input = patch._map_input || {};
-      patch._map_input.filters = {
+      patch._map_controls = patch._map_controls || {};
+      patch._map_controls.filters = {
         fishIds: Array.isArray(parsed.inputFilters.fishIds)
           ? cloneJson(parsed.inputFilters.fishIds)
           : [],
@@ -476,14 +479,14 @@
     if (!patch || typeof patch !== "object") {
       return null;
     }
-    if (patch._map_input?.ui && !Object.keys(patch._map_input.ui).length) {
-      delete patch._map_input.ui;
+    if (patch._map_controls?.ui && !Object.keys(patch._map_controls.ui).length) {
+      delete patch._map_controls.ui;
     }
-    if (patch._map_input?.filters && !Object.keys(patch._map_input.filters).length) {
-      delete patch._map_input.filters;
+    if (patch._map_controls?.filters && !Object.keys(patch._map_controls.filters).length) {
+      delete patch._map_controls.filters;
     }
-    if (patch._map_input && !Object.keys(patch._map_input).length) {
-      delete patch._map_input;
+    if (patch._map_controls && !Object.keys(patch._map_controls).length) {
+      delete patch._map_controls;
     }
     if (patch._map_ui?.windowUi && !Object.keys(patch._map_ui.windowUi).length) {
       delete patch._map_ui.windowUi;
@@ -516,8 +519,8 @@
       return patch;
     }
     const nextPatch = cloneJson(patch);
-    const inputUi = nextPatch._map_input?.ui;
-    const inputFilters = nextPatch._map_input?.filters;
+    const inputUi = nextPatch._map_controls?.ui;
+    const inputFilters = nextPatch._map_controls?.filters;
 
     if (inputUi) {
       if (params.has("diagnostics")) {

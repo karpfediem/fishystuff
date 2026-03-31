@@ -37,11 +37,13 @@ const {
   parseZoneRgbSearch,
   parseImportedBookmarks,
   parseWindowUiState,
+  projectBridgeSharedInputState,
   projectStateBundleStatePatch,
   renameBookmark,
   resolveHoveredBookmark,
   resolveDisplayBookmarks,
   resolveZoneInfoActiveTab,
+  normalizeMapBridgedSignalState,
   renderSearchSelection,
   renderSearchResults,
   selectionHasZoneEvidence,
@@ -759,6 +761,179 @@ test("selectionHasZoneEvidence distinguishes zone-backed selections", () => {
     ),
     true,
   );
+});
+
+test("projectBridgeSharedInputState keeps only explicit bridge-shared fields", () => {
+  const projected = projectBridgeSharedInputState(
+    {
+      filters: {
+        fishIds: [77],
+        zoneRgbs: [0xc17f7f],
+        semanticFieldIdsByLayer: { zone_mask: [0xc17f7f] },
+        fishFilterTerms: ["favourite"],
+        searchText: "velia",
+        patchId: "2026-01-29-inland-prize-buff",
+        fromPatchId: "2026-01-29-inland-prize-buff",
+        toPatchId: "2026-02-06-valencia-inland-prize-fish",
+        layerIdsVisible: ["zone_mask", "fish_evidence"],
+        layerIdsOrdered: ["fish_evidence", "zone_mask"],
+        layerOpacities: { zone_mask: 0.5 },
+        layerClipMasks: { zone_mask: "regions" },
+        layerWaypointConnectionsVisible: { region_nodes: true },
+        layerWaypointLabelsVisible: { region_nodes: false },
+        layerPointIconsVisible: { fish_evidence: true },
+        layerPointIconScales: { fish_evidence: 2 },
+      },
+      ui: {
+        diagnosticsOpen: true,
+        legendOpen: true,
+        leftPanelOpen: false,
+        showPoints: false,
+        showPointIcons: false,
+        viewMode: "3d",
+        pointIconScale: 2,
+      },
+    },
+    {
+      currentState: buildStateBundle().state,
+      sharedFishState: {
+        caughtIds: [77],
+        favouriteIds: [77],
+      },
+      bookmarks: [
+        {
+          id: "bm-1",
+          label: "Velia",
+          worldX: 123.456,
+          worldZ: 789.123,
+          layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }],
+          zoneRgb: 0xc17f7f,
+          createdAt: "2026-03-31T00:00:00.000Z",
+        },
+      ],
+      bookmarkSelectedIds: ["bm-1"],
+    },
+  );
+
+  assert.deepEqual(projected.filters, {
+    fishIds: [77],
+    zoneRgbs: [0xc17f7f],
+    semanticFieldIdsByLayer: { zone_mask: [0xc17f7f] },
+    patchId: null,
+    fromPatchId: "2026-01-29-inland-prize-buff",
+    toPatchId: "2026-02-06-valencia-inland-prize-fish",
+    layerIdsVisible: ["zone_mask", "fish_evidence"],
+    layerIdsOrdered: ["fish_evidence", "zone_mask"],
+    layerOpacities: { zone_mask: 0.5 },
+    layerClipMasks: { zone_mask: "regions" },
+    layerWaypointConnectionsVisible: { region_nodes: true },
+    layerWaypointLabelsVisible: { region_nodes: false },
+    layerPointIconsVisible: { fish_evidence: true },
+    layerPointIconScales: { fish_evidence: 2 },
+  });
+  assert.deepEqual(projected.ui, {
+    diagnosticsOpen: true,
+    showPoints: false,
+    showPointIcons: false,
+    viewMode: "3d",
+    pointIconScale: 2,
+    bookmarkSelectedIds: ["bm-1"],
+    bookmarks: [
+      {
+        id: "bm-1",
+        label: "Velia",
+        worldX: 123.456,
+        worldZ: 789.123,
+      },
+    ],
+  });
+  assert.equal("searchText" in projected.filters, false);
+  assert.equal("fishFilterTerms" in projected.filters, false);
+  assert.equal("legendOpen" in projected.ui, false);
+  assert.equal("leftPanelOpen" in projected.ui, false);
+});
+
+test("normalizeMapBridgedSignalState strips host-only shape pollution", () => {
+  const normalized = normalizeMapBridgedSignalState({
+    version: 1,
+    theme: "",
+    commands: "",
+    filters: {
+      fishIds: [77],
+      zoneRgbs: [0xc17f7f],
+      semanticFieldIdsByLayer: { zone_mask: [0xc17f7f] },
+      searchText: "velia",
+      fishFilterTerms: ["favourite"],
+      patchId: "2026-01-29-inland-prize-buff",
+      fromPatchId: "2026-01-29-inland-prize-buff",
+      toPatchId: "2026-02-06-valencia-inland-prize-fish",
+      layerIdsVisible: ["zone_mask"],
+      layerIdsOrdered: ["zone_mask"],
+      layerOpacities: { zone_mask: 0.5 },
+      layerClipMasks: { zone_mask: "regions" },
+      layerWaypointConnectionsVisible: { region_nodes: true },
+      layerWaypointLabelsVisible: { region_nodes: false },
+      layerPointIconsVisible: { fish_evidence: true },
+      layerPointIconScales: { fish_evidence: 2 },
+    },
+    ui: {
+      diagnosticsOpen: true,
+      legendOpen: true,
+      leftPanelOpen: false,
+      showPoints: false,
+      showPointIcons: false,
+      viewMode: "3d",
+      pointIconScale: 2,
+      bookmarkSelectedIds: ["bm-1"],
+      bookmarks: [
+        {
+          id: "bm-1",
+          label: "Velia",
+          worldX: 123.456,
+          worldZ: 789.123,
+          layerSamples: [{ layerId: "zone_mask", rgbU32: 0xc17f7f }],
+          zoneRgb: 0xc17f7f,
+          createdAt: "2026-03-31T00:00:00.000Z",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(normalized, {
+    version: 1,
+    filters: {
+      fishIds: [77],
+      zoneRgbs: [0xc17f7f],
+      semanticFieldIdsByLayer: { zone_mask: [0xc17f7f] },
+      patchId: null,
+      fromPatchId: "2026-01-29-inland-prize-buff",
+      toPatchId: "2026-02-06-valencia-inland-prize-fish",
+      layerIdsVisible: ["zone_mask"],
+      layerIdsOrdered: ["zone_mask"],
+      layerOpacities: { zone_mask: 0.5 },
+      layerClipMasks: { zone_mask: "regions" },
+      layerWaypointConnectionsVisible: { region_nodes: true },
+      layerWaypointLabelsVisible: { region_nodes: false },
+      layerPointIconsVisible: { fish_evidence: true },
+      layerPointIconScales: { fish_evidence: 2 },
+    },
+    ui: {
+      diagnosticsOpen: true,
+      showPoints: false,
+      showPointIcons: false,
+      viewMode: "3d",
+      pointIconScale: 2,
+      bookmarkSelectedIds: ["bm-1"],
+      bookmarks: [
+        {
+          id: "bm-1",
+          label: "Velia",
+          worldX: 123.456,
+          worldZ: 789.123,
+        },
+      ],
+    },
+  });
 });
 
 test("resolveZoneInfoActiveTab falls back to the first sampled layer", () => {

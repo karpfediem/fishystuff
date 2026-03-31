@@ -126,7 +126,7 @@ function defaultSignals() {
     _map_bookmarks: {
       entries: [],
     },
-    _map_input: {
+    _map_controls: {
       filters: {
         fishIds: [],
         zoneRgbs: [],
@@ -150,7 +150,27 @@ function defaultSignals() {
         leftPanelOpen: true,
         showPoints: true,
         showPointIcons: true,
+        viewMode: "2d",
         pointIconScale: 1,
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
+      },
+      ui: {
+        diagnosticsOpen: false,
+        showPoints: true,
+        showPointIcons: true,
+        viewMode: null,
+        pointIconScale: 1,
+        bookmarkSelectedIds: [],
+        bookmarks: [],
       },
     },
     _map_session: {
@@ -160,7 +180,10 @@ function defaultSignals() {
       },
       selection: {},
     },
-    _map_runtime: {},
+    _shared_fish: {
+      caughtIds: [],
+      favouriteIds: [],
+    },
   };
 }
 
@@ -261,6 +284,7 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
         leftPanelOpen: false,
         showPoints: false,
         showPointIcons: false,
+        viewMode: "2d",
         pointIconScale: 1.5,
       },
       inputFilters: {
@@ -291,29 +315,29 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal(signals._map_ui.windowUi.search.open, false);
   assert.equal(signals._map_ui.windowUi.zoneInfo.tab, "zone_info");
   assert.deepEqual(signals._map_ui.layers.expandedLayerIds, ["terrain"]);
-  assert.equal(signals._map_input.ui.diagnosticsOpen, true);
-  assert.equal(signals._map_input.ui.legendOpen, true);
-  assert.equal(signals._map_input.ui.leftPanelOpen, false);
-  assert.equal(signals._map_input.ui.showPoints, false);
-  assert.equal(signals._map_input.ui.showPointIcons, false);
-  assert.equal(signals._map_input.ui.pointIconScale, 1.5);
-  assert.equal(signals._map_input.filters.searchText, "velia");
-  assert.equal(signals._map_input.filters.fromPatchId, "2026-02-26");
-  assert.equal(signals._map_input.filters.toPatchId, "2026-03-12");
-  assert.deepEqual(signals._map_input.filters.fishIds, [77, 91]);
-  assert.deepEqual(signals._map_input.filters.zoneRgbs, [12615551, 3972668]);
-  assert.deepEqual(signals._map_input.filters.semanticFieldIdsByLayer, {
+  assert.equal(signals._map_controls.ui.diagnosticsOpen, true);
+  assert.equal(signals._map_controls.ui.legendOpen, true);
+  assert.equal(signals._map_controls.ui.leftPanelOpen, false);
+  assert.equal(signals._map_controls.ui.showPoints, false);
+  assert.equal(signals._map_controls.ui.showPointIcons, false);
+  assert.equal(signals._map_controls.ui.pointIconScale, 1.5);
+  assert.equal(signals._map_controls.filters.searchText, "velia");
+  assert.equal(signals._map_controls.filters.fromPatchId, "2026-02-26");
+  assert.equal(signals._map_controls.filters.toPatchId, "2026-03-12");
+  assert.deepEqual(signals._map_controls.filters.fishIds, [77, 91]);
+  assert.deepEqual(signals._map_controls.filters.zoneRgbs, [12615551, 3972668]);
+  assert.deepEqual(signals._map_controls.filters.semanticFieldIdsByLayer, {
     region_groups: [295],
   });
-  assert.deepEqual(signals._map_input.filters.fishFilterTerms, ["favourite", "missing"]);
-  assert.deepEqual(signals._map_input.filters.layerIdsVisible, ["zones", "terrain"]);
-  assert.deepEqual(signals._map_input.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
-  assert.deepEqual(signals._map_input.filters.layerOpacities, { terrain: 0.35 });
-  assert.deepEqual(signals._map_input.filters.layerClipMasks, { terrain: "zones" });
-  assert.deepEqual(signals._map_input.filters.layerWaypointConnectionsVisible, { terrain: true });
-  assert.deepEqual(signals._map_input.filters.layerWaypointLabelsVisible, { terrain: false });
-  assert.deepEqual(signals._map_input.filters.layerPointIconsVisible, { terrain: true });
-  assert.deepEqual(signals._map_input.filters.layerPointIconScales, { terrain: 1.5 });
+  assert.deepEqual(signals._map_controls.filters.fishFilterTerms, ["favourite", "missing"]);
+  assert.deepEqual(signals._map_controls.filters.layerIdsVisible, ["zones", "terrain"]);
+  assert.deepEqual(signals._map_controls.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
+  assert.deepEqual(signals._map_controls.filters.layerOpacities, { terrain: 0.35 });
+  assert.deepEqual(signals._map_controls.filters.layerClipMasks, { terrain: "zones" });
+  assert.deepEqual(signals._map_controls.filters.layerWaypointConnectionsVisible, { terrain: true });
+  assert.deepEqual(signals._map_controls.filters.layerWaypointLabelsVisible, { terrain: false });
+  assert.deepEqual(signals._map_controls.filters.layerPointIconsVisible, { terrain: true });
+  assert.deepEqual(signals._map_controls.filters.layerPointIconScales, { terrain: 1.5 });
   assert.equal("windowUi" in signals, false);
 });
 
@@ -343,13 +367,14 @@ test("map-page restore does not let stored filters override query-owned input st
           bookmarks: { open: false, collapsed: false, x: null, y: null },
         },
         inputUi: {
-          diagnosticsOpen: true,
-          legendOpen: true,
-          leftPanelOpen: false,
-          showPoints: false,
-          showPointIcons: false,
-          pointIconScale: 1.5,
-        },
+        diagnosticsOpen: true,
+        legendOpen: true,
+        leftPanelOpen: false,
+        showPoints: false,
+        showPointIcons: false,
+        viewMode: "2d",
+        pointIconScale: 1.5,
+      },
         inputFilters: {
           fishIds: [77],
           zoneRgbs: [],
@@ -378,18 +403,18 @@ test("map-page restore does not let stored filters override query-owned input st
 
   env.window.__fishystuffMap.restore(signals);
 
-  assert.deepEqual(signals._map_input.filters.fishIds, []);
-  assert.deepEqual(signals._map_input.filters.fishFilterTerms, []);
-  assert.equal(signals._map_input.filters.searchText, "");
-  assert.equal(signals._map_input.filters.fromPatchId, null);
-  assert.equal(signals._map_input.filters.toPatchId, null);
-  assert.deepEqual(signals._map_input.filters.layerIdsVisible, []);
-  assert.equal(signals._map_input.ui.diagnosticsOpen, false);
-  assert.equal(signals._map_input.ui.legendOpen, false);
-  assert.equal(signals._map_input.ui.leftPanelOpen, false);
-  assert.equal(signals._map_input.ui.showPoints, false);
-  assert.equal(signals._map_input.ui.showPointIcons, false);
-  assert.equal(signals._map_input.ui.pointIconScale, 1.5);
+  assert.deepEqual(signals._map_controls.filters.fishIds, []);
+  assert.deepEqual(signals._map_controls.filters.fishFilterTerms, []);
+  assert.equal(signals._map_controls.filters.searchText, "");
+  assert.equal(signals._map_controls.filters.fromPatchId, null);
+  assert.equal(signals._map_controls.filters.toPatchId, null);
+  assert.deepEqual(signals._map_controls.filters.layerIdsVisible, []);
+  assert.equal(signals._map_controls.ui.diagnosticsOpen, false);
+  assert.equal(signals._map_controls.ui.legendOpen, false);
+  assert.equal(signals._map_controls.ui.leftPanelOpen, false);
+  assert.equal(signals._map_controls.ui.showPoints, false);
+  assert.equal(signals._map_controls.ui.showPointIcons, false);
+  assert.equal(signals._map_controls.ui.pointIconScale, 1.5);
 });
 
 test("map-page persists bookmark signal patches through the Datastar patch event", () => {
@@ -485,6 +510,7 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
         leftPanelOpen: true,
         showPoints: true,
         showPointIcons: true,
+        viewMode: "2d",
         pointIconScale: 1,
       },
       inputFilters: {
@@ -551,6 +577,7 @@ test("map-page persists durable _map_ui.layers patches", () => {
         leftPanelOpen: true,
         showPoints: true,
         showPointIcons: true,
+        viewMode: "2d",
         pointIconScale: 1,
       },
       inputFilters: {
@@ -574,13 +601,13 @@ test("map-page persists durable _map_ui.layers patches", () => {
   );
 });
 
-test("map-page persists durable _map_input diagnostics state", () => {
+test("map-page persists durable _map_controls diagnostics state", () => {
   const env = createContext();
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
   env.window.__fishystuffMap.patchSignals({
-    _map_input: {
+    _map_controls: {
       ui: {
         diagnosticsOpen: true,
       },
@@ -589,7 +616,7 @@ test("map-page persists durable _map_input diagnostics state", () => {
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
-      _map_input: {
+      _map_controls: {
         ui: {
           diagnosticsOpen: true,
         },
@@ -617,6 +644,7 @@ test("map-page persists durable _map_input diagnostics state", () => {
         leftPanelOpen: true,
         showPoints: true,
         showPointIcons: true,
+        viewMode: "2d",
         pointIconScale: 1,
       },
       inputFilters: {
@@ -640,13 +668,13 @@ test("map-page persists durable _map_input diagnostics state", () => {
   );
 });
 
-test("map-page persists durable _map_input filter state", () => {
+test("map-page persists durable _map_controls filter state", () => {
   const env = createContext();
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
   env.window.__fishystuffMap.patchSignals({
-    _map_input: {
+    _map_controls: {
       filters: {
         fishIds: [77, 91],
         zoneRgbs: [12615551, 3972668],
@@ -671,7 +699,7 @@ test("map-page persists durable _map_input filter state", () => {
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
-      _map_input: {
+      _map_controls: {
         filters: {
           fishIds: [77, 91],
           zoneRgbs: [12615551, 3972668],
@@ -715,6 +743,7 @@ test("map-page persists durable _map_input filter state", () => {
         leftPanelOpen: true,
         showPoints: true,
         showPointIcons: true,
+        viewMode: "2d",
         pointIconScale: 1,
       },
       inputFilters: {

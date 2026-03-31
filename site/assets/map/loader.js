@@ -5,6 +5,7 @@ import FishyMapBridge, {
   FISHYMAP_POINT_ICON_SCALE_MIN,
   applyStatePatch,
   createSessionSnapshotFromState,
+  resolveEffectiveFishIdsForWasm,
   resolveApiBaseUrl,
   resolveCdnBaseUrl,
   snapshotToRestorePatch,
@@ -92,7 +93,60 @@ const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
   layers: Object.freeze({ expandedLayerIds: [] }),
 });
-const DEFAULT_MAP_INPUT_SIGNAL_STATE = Object.freeze({
+const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
+  bridged: Object.freeze({
+    branch: "_map_bridged",
+    filters: Object.freeze([
+      "fishIds",
+      "zoneRgbs",
+      "semanticFieldIdsByLayer",
+      "patchId",
+      "fromPatchId",
+      "toPatchId",
+      "layerIdsVisible",
+      "layerIdsOrdered",
+      "layerOpacities",
+      "layerClipMasks",
+      "layerWaypointConnectionsVisible",
+      "layerWaypointLabelsVisible",
+      "layerPointIconsVisible",
+      "layerPointIconScales",
+    ]),
+    ui: Object.freeze([
+      "diagnosticsOpen",
+      "showPoints",
+      "showPointIcons",
+      "viewMode",
+      "pointIconScale",
+      "bookmarkSelectedIds",
+      "bookmarks",
+    ]),
+  }),
+  session: Object.freeze({
+    branch: "_map_session",
+    fields: Object.freeze(["view", "selection"]),
+  }),
+  bookmarks: Object.freeze({
+    branch: "_map_bookmarks",
+    fields: Object.freeze(["entries"]),
+  }),
+  sharedFish: Object.freeze({
+    branch: "_shared_fish",
+    fields: Object.freeze(["caughtIds", "favouriteIds"]),
+  }),
+  actions: Object.freeze({
+    branch: "_map_actions",
+    fields: Object.freeze(["resetViewToken", "resetUiToken"]),
+  }),
+});
+const MAP_BRIDGE_SHARED_SIGNAL_BRANCHES = Object.freeze({
+  bridged: MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.branch,
+  session: MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.session.branch,
+  bookmarks: MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bookmarks.branch,
+  sharedFish: MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.sharedFish.branch,
+  actions: MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.actions.branch,
+});
+const DEFAULT_MAP_CONTROL_SIGNAL_STATE = Object.freeze({
   filters: Object.freeze({
     searchText: "",
     patchId: null,
@@ -101,7 +155,31 @@ const DEFAULT_MAP_INPUT_SIGNAL_STATE = Object.freeze({
   }),
   ui: Object.freeze({
     diagnosticsOpen: false,
+    legendOpen: false,
+    leftPanelOpen: true,
+    showPoints: true,
+    showPointIcons: true,
     viewMode: null,
+    pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+  }),
+});
+const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
+  filters: Object.freeze({
+    fishIds: [],
+    zoneRgbs: [],
+    semanticFieldIdsByLayer: {},
+    patchId: null,
+    fromPatchId: null,
+    toPatchId: null,
+  }),
+  ui: Object.freeze({
+    diagnosticsOpen: false,
+    showPoints: true,
+    showPointIcons: true,
+    viewMode: null,
+    pointIconScale: FISHYMAP_POINT_ICON_SCALE_MIN,
+    bookmarkSelectedIds: [],
+    bookmarks: [],
   }),
 });
 const DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE = Object.freeze({
@@ -121,6 +199,10 @@ const DEFAULT_MAP_ACTION_SIGNAL_STATE = Object.freeze({
 
 function cloneJsonValue(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function jsonSignature(value) {
+  return JSON.stringify(value);
 }
 
 function mapSignalHelper() {
@@ -180,31 +262,196 @@ function currentMapUiSignalState() {
   };
 }
 
-function withDerivedSharedFishInputState(inputState) {
+function projectBridgeBookmarkEntries(bookmarks) {
+  return normalizeBookmarks(bookmarks).map((bookmark) => ({
+    id: bookmark.id,
+    ...(typeof bookmark.label === "string" && bookmark.label.trim()
+      ? { label: bookmark.label.trim() }
+      : {}),
+    worldX: bookmark.worldX,
+    worldZ: bookmark.worldZ,
+  }));
+}
+
+export function projectBridgeSharedInputState(controlState, options = {}) {
   const current = applyStatePatch(
-    DEFAULT_MAP_INPUT_SIGNAL_STATE,
-    inputState && typeof inputState === "object" ? inputState : {},
+    DEFAULT_MAP_CONTROL_SIGNAL_STATE,
+    controlState && typeof controlState === "object" ? controlState : {},
   );
-  const sharedFishState = loadSharedFishState();
-  return {
-    ...current,
-    ui: {
-      ...(current.ui || {}),
-      sharedFishState: {
-        caughtIds: normalizeSharedFishIds(sharedFishState?.caughtIds),
-        favouriteIds: normalizeSharedFishIds(sharedFishState?.favouriteIds),
+  const sharedFishState = options.sharedFishState || loadSharedFishState();
+  const currentState = options.currentState && typeof options.currentState === "object"
+    ? options.currentState
+    : {};
+  const bookmarks = Array.isArray(options.bookmarks) ? options.bookmarks : [];
+  const bookmarkSelectedIds = normalizeSelectedBookmarkIds(
+    bookmarks,
+    Array.isArray(options.bookmarkSelectedIds) ? options.bookmarkSelectedIds : [],
+  );
+  const effectiveFishIds = resolveEffectiveFishIdsForWasm(
+    {
+      filters: {
+        fishIds: current.filters?.fishIds || [],
+        fishFilterTerms: current.filters?.fishFilterTerms || [],
       },
+      ui: {
+        sharedFishState: {
+          caughtIds: normalizeSharedFishIds(sharedFishState?.caughtIds),
+          favouriteIds: normalizeSharedFishIds(sharedFishState?.favouriteIds),
+        },
+      },
+    },
+    currentState,
+  );
+  return {
+    version: FISHYMAP_CONTRACT_VERSION,
+    filters: {
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("fishIds")
+        ? { fishIds: cloneJsonValue(effectiveFishIds) }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("zoneRgbs")
+        ? { zoneRgbs: cloneJsonValue(current.filters?.zoneRgbs || []) }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("semanticFieldIdsByLayer")
+        ? {
+            semanticFieldIdsByLayer: cloneJsonValue(
+              current.filters?.semanticFieldIdsByLayer || {},
+            ),
+          }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("patchId")
+        ? { patchId: current.filters?.patchId ?? null }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("fromPatchId")
+        ? { fromPatchId: current.filters?.fromPatchId ?? null }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("toPatchId")
+        ? { toPatchId: current.filters?.toPatchId ?? null }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerIdsVisible")
+        && Array.isArray(current.filters?.layerIdsVisible)
+        ? { layerIdsVisible: cloneJsonValue(current.filters.layerIdsVisible) }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerIdsOrdered")
+        && Array.isArray(current.filters?.layerIdsOrdered)
+        ? { layerIdsOrdered: cloneJsonValue(current.filters.layerIdsOrdered) }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerOpacities")
+        && current.filters?.layerOpacities
+        && typeof current.filters.layerOpacities === "object"
+        ? { layerOpacities: cloneJsonValue(current.filters.layerOpacities) }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerClipMasks")
+        && current.filters?.layerClipMasks
+        && typeof current.filters.layerClipMasks === "object"
+        ? { layerClipMasks: cloneJsonValue(current.filters.layerClipMasks) }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes(
+        "layerWaypointConnectionsVisible",
+      )
+        && current.filters?.layerWaypointConnectionsVisible
+        && typeof current.filters.layerWaypointConnectionsVisible === "object"
+        ? {
+            layerWaypointConnectionsVisible: cloneJsonValue(
+              current.filters.layerWaypointConnectionsVisible,
+            ),
+          }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerWaypointLabelsVisible")
+        && current.filters?.layerWaypointLabelsVisible
+        && typeof current.filters.layerWaypointLabelsVisible === "object"
+        ? {
+            layerWaypointLabelsVisible: cloneJsonValue(
+              current.filters.layerWaypointLabelsVisible,
+            ),
+          }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerPointIconsVisible")
+        && current.filters?.layerPointIconsVisible
+        && typeof current.filters.layerPointIconsVisible === "object"
+        ? {
+            layerPointIconsVisible: cloneJsonValue(current.filters.layerPointIconsVisible),
+          }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.filters.includes("layerPointIconScales")
+        && current.filters?.layerPointIconScales
+        && typeof current.filters.layerPointIconScales === "object"
+        ? {
+            layerPointIconScales: cloneJsonValue(current.filters.layerPointIconScales),
+          }
+        : {}),
+    },
+    ui: {
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("diagnosticsOpen")
+        ? { diagnosticsOpen: current.ui?.diagnosticsOpen === true }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("showPoints")
+        ? { showPoints: current.ui?.showPoints !== false }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("showPointIcons")
+        ? { showPointIcons: current.ui?.showPointIcons !== false }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("viewMode")
+        ? { viewMode: current.ui?.viewMode ?? null }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("pointIconScale")
+        ? { pointIconScale: current.ui?.pointIconScale ?? FISHYMAP_POINT_ICON_SCALE_MIN }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("bookmarkSelectedIds")
+        ? { bookmarkSelectedIds: cloneJsonValue(bookmarkSelectedIds) }
+        : {}),
+      ...(MAP_BRIDGE_SHARED_SIGNAL_WHITELIST.bridged.ui.includes("bookmarks")
+        ? { bookmarks: cloneJsonValue(projectBridgeBookmarkEntries(bookmarks)) }
+        : {}),
     },
   };
 }
 
-function currentRawMapInputSignalState() {
-  const helper = mapSignalHelper();
-  const raw = helper?.readSignal?.("_map_input");
-  return applyStatePatch(
-    DEFAULT_MAP_INPUT_SIGNAL_STATE,
+export function normalizeMapControlSignalState(raw) {
+  const current = applyStatePatch(
+    DEFAULT_MAP_CONTROL_SIGNAL_STATE,
     raw && typeof raw === "object" ? raw : {},
   );
+  return {
+    filters: {
+      fishIds: cloneJsonValue(current.filters?.fishIds || []),
+      zoneRgbs: cloneJsonValue(current.filters?.zoneRgbs || []),
+      semanticFieldIdsByLayer: cloneJsonValue(current.filters?.semanticFieldIdsByLayer || {}),
+      fishFilterTerms: cloneJsonValue(current.filters?.fishFilterTerms || []),
+      searchText: String(current.filters?.searchText || ""),
+      patchId: normalizeNullableString(current.filters?.patchId),
+      fromPatchId: normalizeNullableString(current.filters?.fromPatchId),
+      toPatchId: normalizeNullableString(current.filters?.toPatchId),
+      layerIdsVisible: cloneJsonValue(current.filters?.layerIdsVisible || []),
+      layerIdsOrdered: cloneJsonValue(current.filters?.layerIdsOrdered || []),
+      layerOpacities: cloneJsonValue(current.filters?.layerOpacities || {}),
+      layerClipMasks: cloneJsonValue(current.filters?.layerClipMasks || {}),
+      layerWaypointConnectionsVisible: cloneJsonValue(
+        current.filters?.layerWaypointConnectionsVisible || {},
+      ),
+      layerWaypointLabelsVisible: cloneJsonValue(
+        current.filters?.layerWaypointLabelsVisible || {},
+      ),
+      layerPointIconsVisible: cloneJsonValue(current.filters?.layerPointIconsVisible || {}),
+      layerPointIconScales: cloneJsonValue(current.filters?.layerPointIconScales || {}),
+    },
+    ui: {
+      diagnosticsOpen: current.ui?.diagnosticsOpen === true,
+      legendOpen: current.ui?.legendOpen === true,
+      leftPanelOpen: current.ui?.leftPanelOpen !== false,
+      showPoints: current.ui?.showPoints !== false,
+      showPointIcons: current.ui?.showPointIcons !== false,
+      viewMode: current.ui?.viewMode === "3d" ? "3d" : "2d",
+      pointIconScale: Number.isFinite(current.ui?.pointIconScale)
+        ? Number(current.ui.pointIconScale)
+        : FISHYMAP_POINT_ICON_SCALE_MIN,
+    },
+  };
+}
+
+function currentMapControlSignalState() {
+  const helper = mapSignalHelper();
+  const raw = helper?.readSignal?.("_map_controls");
+  return normalizeMapControlSignalState(raw);
 }
 
 function patchMapUiSignalState(patch) {
@@ -213,44 +460,48 @@ function patchMapUiSignalState(patch) {
     return;
   }
   const current = currentMapUiSignalState();
+  const nextState = {
+    windowUi: cloneJsonValue(
+      patch?.windowUi && typeof patch.windowUi === "object"
+        ? patch.windowUi
+        : current.windowUi || DEFAULT_MAP_UI_SIGNAL_STATE.windowUi,
+    ),
+    search: cloneJsonValue(
+      patch?.search && typeof patch.search === "object"
+        ? patch.search
+        : current.search || DEFAULT_MAP_UI_SIGNAL_STATE.search,
+    ),
+    bookmarks: cloneJsonValue(
+      patch?.bookmarks && typeof patch.bookmarks === "object"
+        ? patch.bookmarks
+        : current.bookmarks || DEFAULT_MAP_UI_SIGNAL_STATE.bookmarks,
+    ),
+    layers: cloneJsonValue(
+      patch?.layers && typeof patch.layers === "object"
+        ? patch.layers
+        : current.layers || DEFAULT_MAP_UI_SIGNAL_STATE.layers,
+    ),
+  };
+  if (jsonSignature(current) === jsonSignature(nextState)) {
+    return;
+  }
   helper.patchSignals({
-    _map_ui: {
-      windowUi: cloneJsonValue(
-        patch?.windowUi && typeof patch.windowUi === "object"
-          ? patch.windowUi
-          : current.windowUi || DEFAULT_MAP_UI_SIGNAL_STATE.windowUi,
-      ),
-      search: cloneJsonValue(
-        patch?.search && typeof patch.search === "object"
-          ? patch.search
-          : current.search || DEFAULT_MAP_UI_SIGNAL_STATE.search,
-      ),
-      bookmarks: cloneJsonValue(
-        patch?.bookmarks && typeof patch.bookmarks === "object"
-          ? patch.bookmarks
-          : current.bookmarks || DEFAULT_MAP_UI_SIGNAL_STATE.bookmarks,
-      ),
-      layers: cloneJsonValue(
-        patch?.layers && typeof patch.layers === "object"
-          ? patch.layers
-          : current.layers || DEFAULT_MAP_UI_SIGNAL_STATE.layers,
-      ),
-    },
+    _map_ui: nextState,
   });
 }
 
-function currentMapInputSignalState() {
-  return withDerivedSharedFishInputState(currentRawMapInputSignalState());
-}
-
-function patchMapInputSignalState(patch) {
+function patchMapControlSignalState(patch) {
   const helper = mapSignalHelper();
   if (!helper) {
     return;
   }
-  const current = currentRawMapInputSignalState();
+  const current = currentMapControlSignalState();
+  const nextState = normalizeMapControlSignalState(applyStatePatch(current, patch));
+  if (jsonSignature(current) === jsonSignature(nextState)) {
+    return;
+  }
   helper.patchSignals({
-    _map_input: cloneJsonValue(applyStatePatch(current, patch)),
+    _map_controls: nextState,
   });
 }
 
@@ -315,9 +566,13 @@ function patchMapBookmarksSignalState(bookmarks) {
   if (!helper) {
     return;
   }
+  const nextEntries = cloneJsonValue(normalizeBookmarks(bookmarks));
+  if (jsonSignature(currentMapBookmarksSignalState()) === jsonSignature(nextEntries)) {
+    return;
+  }
   helper.patchSignals({
     _map_bookmarks: {
-      entries: cloneJsonValue(normalizeBookmarks(bookmarks)),
+      entries: nextEntries,
     },
   });
 }
@@ -329,41 +584,132 @@ function currentMapActionSignalState() {
     || DEFAULT_MAP_ACTION_SIGNAL_STATE;
 }
 
-function publishMapRuntimeSignals(stateBundle) {
+export function normalizeMapBridgedSignalState(raw) {
+  const current = applyStatePatch(
+    DEFAULT_MAP_BRIDGED_SIGNAL_STATE,
+    raw && typeof raw === "object" ? raw : {},
+  );
+  return {
+    version: FISHYMAP_CONTRACT_VERSION,
+    filters: {
+      fishIds: cloneJsonValue(current.filters?.fishIds || []),
+      zoneRgbs: cloneJsonValue(current.filters?.zoneRgbs || []),
+      semanticFieldIdsByLayer: cloneJsonValue(current.filters?.semanticFieldIdsByLayer || {}),
+      patchId: normalizeNullableString(current.filters?.patchId),
+      fromPatchId: normalizeNullableString(current.filters?.fromPatchId),
+      toPatchId: normalizeNullableString(current.filters?.toPatchId),
+      layerIdsVisible: cloneJsonValue(current.filters?.layerIdsVisible || []),
+      layerIdsOrdered: cloneJsonValue(current.filters?.layerIdsOrdered || []),
+      layerOpacities: cloneJsonValue(current.filters?.layerOpacities || {}),
+      layerClipMasks: cloneJsonValue(current.filters?.layerClipMasks || {}),
+      layerWaypointConnectionsVisible: cloneJsonValue(
+        current.filters?.layerWaypointConnectionsVisible || {},
+      ),
+      layerWaypointLabelsVisible: cloneJsonValue(
+        current.filters?.layerWaypointLabelsVisible || {},
+      ),
+      layerPointIconsVisible: cloneJsonValue(current.filters?.layerPointIconsVisible || {}),
+      layerPointIconScales: cloneJsonValue(current.filters?.layerPointIconScales || {}),
+    },
+    ui: {
+      diagnosticsOpen: current.ui?.diagnosticsOpen === true,
+      showPoints: current.ui?.showPoints !== false,
+      showPointIcons: current.ui?.showPointIcons !== false,
+      viewMode: current.ui?.viewMode === "3d" ? "3d" : normalizeNullableString(current.ui?.viewMode),
+      pointIconScale: Number.isFinite(current.ui?.pointIconScale)
+        ? Number(current.ui.pointIconScale)
+        : FISHYMAP_POINT_ICON_SCALE_MIN,
+      bookmarkSelectedIds: cloneJsonValue(current.ui?.bookmarkSelectedIds || []),
+      bookmarks: cloneJsonValue(projectBridgeBookmarkEntries(current.ui?.bookmarks || [])),
+    },
+  };
+}
+
+function currentMapBridgedSignalState() {
+  const helper = mapSignalHelper();
+  const raw = helper?.readSignal?.("_map_bridged");
+  return normalizeMapBridgedSignalState(raw);
+}
+
+function runtimeMapBridgedInputState(stateBundle = null) {
+  return normalizeMapBridgedSignalState(
+    stateBundle?.bridgeInputState
+      || stateBundle?.inputState
+      || getLatestStateBundle().bridgeInputState
+      || {},
+  );
+}
+
+function patchMapBridgedSignalState(nextState) {
   const helper = mapSignalHelper();
   if (!helper) {
     return;
   }
-  helper.patchSignals({
-    _map_runtime: {
-      state: cloneJsonValue(stateBundle?.state || {}),
-      inputState: cloneJsonValue(stateBundle?.inputState || {}),
+  const normalizedNextState = normalizeMapBridgedSignalState(nextState);
+  if (jsonSignature(currentMapBridgedSignalState()) === jsonSignature(normalizedNextState)) {
+    return;
+  }
+  patchMapBridgedSignalState.isPatching = true;
+  try {
+    helper.patchSignals({
+      _map_bridged: normalizedNextState,
+    });
+  } finally {
+    patchMapBridgedSignalState.isPatching = false;
+  }
+}
+
+function currentMapRenderInputState() {
+  const controls = currentMapControlSignalState();
+  const bookmarks = currentMapBookmarksSignalState();
+  const bookmarkUi = currentMapUiSignalState().bookmarks;
+  const sharedFishState = loadSharedFishState();
+  return applyStatePatch(controls, {
+    ui: {
+      bookmarkSelectedIds: normalizeSelectedBookmarkIds(bookmarks, bookmarkUi.selectedIds),
+      bookmarks: normalizeBookmarks(bookmarks),
+      sharedFishState: {
+        caughtIds: normalizeSharedFishIds(sharedFishState.caughtIds),
+        favouriteIds: normalizeSharedFishIds(sharedFishState.favouriteIds),
+      },
     },
   });
 }
 
-function publishMapInputSignals(inputState) {
-  const helper = mapSignalHelper();
-  if (!helper) {
+function buildMapBridgedSignalState(stateBundle = null) {
+  const bookmarks = currentMapBookmarksSignalState();
+  const bookmarkUi = currentMapUiSignalState().bookmarks;
+  const sharedFishState = loadSharedFishState();
+  const currentState = stateBundle?.state && typeof stateBundle.state === "object"
+    ? stateBundle.state
+    : {};
+  return projectBridgeSharedInputState(currentMapControlSignalState(), {
+    currentState,
+    bookmarks,
+    bookmarkSelectedIds: bookmarkUi.selectedIds,
+    sharedFishState,
+  });
+}
+
+function syncMapBridgedSignalsFromPageState(stateBundle = null) {
+  if (patchMapBridgedSignalState.isPatching === true) {
     return;
   }
-  publishMapInputSignals.isPatching = true;
-  try {
-    helper.patchSignals({
-      _map_input: cloneJsonValue(
-        applyStatePatch(
-          DEFAULT_MAP_INPUT_SIGNAL_STATE,
-          inputState && typeof inputState === "object" ? inputState : {},
-        ),
-      ),
-    });
-  } finally {
-    publishMapInputSignals.isPatching = false;
-  }
+  const nextState = buildMapBridgedSignalState(stateBundle);
+  patchMapBridgedSignalState(nextState);
 }
 
 function dispatchMapEvent(target, type, detail) {
   target.dispatchEvent(new CustomEvent(type, { detail }));
+}
+
+function patchTouchesTopLevelBranch(patch, branchName) {
+  return Boolean(
+    patch
+      && typeof patch === "object"
+      && !Array.isArray(patch)
+      && Object.prototype.hasOwnProperty.call(patch, branchName),
+  );
 }
 
 function dispatchMapState(target, patch) {
@@ -493,11 +839,22 @@ function requestBridgeState(target, options = {}) {
   });
 }
 
+function buildDisplayStateBundle(bridgeStateBundle = {}) {
+  const runtimeBundle = withSharedFishState(bridgeStateBundle || {});
+  const runtimeInputState = runtimeBundle.bridgeInputState || runtimeBundle.inputState || {};
+  return {
+    ...runtimeBundle,
+    bridgeInputState: cloneJsonValue(runtimeInputState),
+    inputState: currentMapRenderInputState(),
+  };
+}
+
 export function projectStateBundleStatePatch(stateBundle, patch) {
   return withSharedFishState({
     ...(stateBundle || {}),
     state: stateBundle?.state || {},
     inputState: applyStatePatch(stateBundle?.inputState, patch),
+    bridgeInputState: stateBundle?.bridgeInputState || stateBundle?.inputState || {},
   });
 }
 
@@ -3757,8 +4114,6 @@ function renderBookmarkManager(elements, stateBundle, bookmarks, bookmarkUi) {
         </div>
       `,
   );
-
-  renderHoverTooltip(elements, state.hover || null, stateBundle);
 }
 
 function renderFishAvatar(fish, sizeClass = "size-6", options = {}) {
@@ -6375,12 +6730,14 @@ function bindUi(shell, elements, options = {}) {
   let bridgeSessionSignalPublishReady = false;
   let bridgeSessionRestoreInFlight = false;
   let patchRangeSyncPatching = false;
-  let latestStateBundle = requestBridgeState(shell);
+  let latestStateBundle = buildDisplayStateBundle(requestBridgeState(shell));
   const initialMapUiState = currentMapUiSignalState();
   let zoneCatalog = normalizeZoneCatalog(options.zoneCatalog);
   let previousMapUiState = initialMapUiState;
   let previousBookmarksSignature = bookmarkListSignature(currentMapBookmarksSignalState());
   let previousMapActionState = currentMapActionSignalState();
+  let previousMapBridgedSignalSignature = jsonSignature(currentMapBridgedSignalState());
+  let previousMapSessionSignalSignature = jsonSignature(currentMapSessionSignalState());
   let bookmarkMetadataRefreshTimer = 0;
   let bookmarkMetadataRefreshAttempts = 0;
   let nextWindowZIndex = 30;
@@ -6698,7 +7055,7 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function stateBundleFromEvent(event) {
-    return withSharedFishState({
+    return buildDisplayStateBundle({
       state: event.detail?.state || FishyMapBridge.getCurrentState(),
       inputState:
         event.detail?.inputState ||
@@ -6710,15 +7067,14 @@ function bindUi(shell, elements, options = {}) {
 
   function getLatestStateBundle(options = {}) {
     if (options.refresh !== true && latestStateBundle) {
-      latestStateBundle = withSharedFishState(latestStateBundle);
       return latestStateBundle;
     }
-    latestStateBundle = withSharedFishState(requestBridgeState(shell, options));
+    latestStateBundle = buildDisplayStateBundle(requestBridgeState(shell, options));
     return latestStateBundle;
   }
 
   function dispatchStatePatchAndRender(patch) {
-    patchMapInputSignalState(patch);
+    patchMapControlSignalState(patch);
   }
 
   function activateBookmarkSelection(bookmark) {
@@ -6768,12 +7124,10 @@ function bindUi(shell, elements, options = {}) {
     nextBookmarks = currentBookmarks(),
     nextSelectedIds = currentBookmarkUiState(nextBookmarks).selectedIds,
   ) {
-    patchMapInputSignalState({
-      version: FISHYMAP_CONTRACT_VERSION,
-      ui: {
-        bookmarkSelectedIds: normalizeSelectedBookmarkIds(nextBookmarks, nextSelectedIds),
-        bookmarks: normalizeBookmarks(nextBookmarks),
-      },
+    syncMapBridgedSignalsFromPageState({
+      ...getLatestStateBundle(),
+      inputState: currentMapRenderInputState(),
+      state: getLatestStateBundle().state,
     });
   }
 
@@ -7022,10 +7376,10 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function renderCurrentState(stateBundle = latestStateBundle || requestBridgeState(shell)) {
-    latestStateBundle = withSharedFishState({
-      ...(stateBundle || {}),
+    latestStateBundle = {
+      ...buildDisplayStateBundle(stateBundle || requestBridgeState(shell)),
       zoneCatalog,
-    });
+    };
     let bookmarks = currentBookmarks();
     const currentUiStateValue = currentUiState();
     const windowUiState = currentUiStateValue.windowUi;
@@ -7035,8 +7389,6 @@ function bindUi(shell, elements, options = {}) {
       placing: currentUiStateValue.bookmarks.placing === true,
       selectedIds: normalizeSelectedBookmarkIds(bookmarks, currentUiStateValue.bookmarks.selectedIds),
     };
-    publishMapInputSignals(latestStateBundle.inputState);
-    publishMapRuntimeSignals(latestStateBundle);
     const desiredSessionState = currentMapSessionSignalState();
     const runtimeSessionState = runtimeMapSessionSignalState(latestStateBundle.state);
     if (
@@ -7164,15 +7516,17 @@ function bindUi(shell, elements, options = {}) {
   }
 
   function syncBridgeInputStateFromSignals() {
-    if (publishMapInputSignals.isPatching === true) {
-      return;
-    }
     if (bridgeInputSyncReady !== true) {
       return;
     }
-    const nextSignalInputState = currentMapInputSignalState();
-    const currentInputState = withDerivedSharedFishInputState(getLatestStateBundle().inputState || {});
-    if (JSON.stringify(currentInputState) === JSON.stringify(nextSignalInputState)) {
+    const nextSignalInputState = currentMapBridgedSignalState();
+    const nextSignalSignature = jsonSignature(nextSignalInputState);
+    if (nextSignalSignature === previousMapBridgedSignalSignature) {
+      return;
+    }
+    previousMapBridgedSignalSignature = nextSignalSignature;
+    const currentInputState = runtimeMapBridgedInputState(getLatestStateBundle());
+    if (jsonSignature(currentInputState) === nextSignalSignature) {
       return;
     }
 
@@ -7180,7 +7534,7 @@ function bindUi(shell, elements, options = {}) {
     FishyMapBridge.flushPendingPatchNow?.();
     renderCurrentState({
       ...getLatestStateBundle(),
-      inputState: nextSignalInputState,
+      bridgeInputState: nextSignalInputState,
     });
   }
 
@@ -7192,8 +7546,13 @@ function bindUi(shell, elements, options = {}) {
       return;
     }
     const desiredSessionState = currentMapSessionSignalState();
+    const desiredSessionSignature = jsonSignature(desiredSessionState);
+    if (desiredSessionSignature === previousMapSessionSignalSignature) {
+      return;
+    }
+    previousMapSessionSignalSignature = desiredSessionSignature;
     const runtimeSessionState = runtimeMapSessionSignalState(getLatestStateBundle().state);
-    if (JSON.stringify(desiredSessionState) === JSON.stringify(runtimeSessionState)) {
+    if (desiredSessionSignature === jsonSignature(runtimeSessionState)) {
       bridgeSessionRestoreInFlight = false;
       bridgeSessionSignalPublishReady = true;
       return;
@@ -7510,7 +7869,7 @@ function bindUi(shell, elements, options = {}) {
       shell,
       elements,
       renderCurrentState,
-      patchMapInputSignalState,
+      patchMapControlSignalState,
       stateBundle,
       match,
     );
@@ -7527,7 +7886,7 @@ function bindUi(shell, elements, options = {}) {
     if (patchRangeSyncPatching) {
       return;
     }
-    const inputState = currentMapInputSignalState();
+    const inputState = currentMapControlSignalState();
     const currentFromPatchId = inputState.filters?.fromPatchId ?? inputState.filters?.patchId ?? null;
     const currentToPatchId = inputState.filters?.toPatchId ?? inputState.filters?.patchId ?? null;
     const currentPatchId = inputState.filters?.patchId ?? null;
@@ -7562,7 +7921,7 @@ function bindUi(shell, elements, options = {}) {
 
     patchRangeSyncPatching = true;
     try {
-      patchMapInputSignalState({
+      patchMapControlSignalState({
         version: 1,
         filters: {
           patchId: nextPatchId,
@@ -8372,7 +8731,7 @@ function bindUi(shell, elements, options = {}) {
           ),
         },
       };
-      patchMapInputSignalState(patch);
+      patchMapControlSignalState(patch);
       return;
     }
 
@@ -8392,7 +8751,7 @@ function bindUi(shell, elements, options = {}) {
         layerOpacities: buildLayerOpacityPatch(current, layerId, slider.value),
       },
     };
-    patchMapInputSignalState(patch);
+    patchMapControlSignalState(patch);
   });
 
   elements.layers.addEventListener("pointerdown", (event) => {
@@ -8635,11 +8994,15 @@ function bindUi(shell, elements, options = {}) {
   }
 
   shell.addEventListener(FISHYMAP_EVENTS.ready, (event) => {
-    renderCurrentState(stateBundleFromEvent(event));
+    const nextBundle = stateBundleFromEvent(event);
+    syncMapBridgedSignalsFromPageState(nextBundle);
+    renderCurrentState(nextBundle);
   });
 
   shell.addEventListener(FISHYMAP_EVENTS.stateChanged, (event) => {
-    renderCurrentState(stateBundleFromEvent(event));
+    const nextBundle = stateBundleFromEvent(event);
+    syncMapBridgedSignalsFromPageState(nextBundle);
+    renderCurrentState(nextBundle);
   });
 
   shell.addEventListener(FISHYMAP_EVENTS.selectionChanged, (event) => {
@@ -8670,16 +9033,35 @@ function bindUi(shell, elements, options = {}) {
         hover,
       };
     }
-    publishMapRuntimeSignals(latestStateBundle);
     renderHoverTooltip(elements, hover, latestStateBundle);
-    renderBookmarkManager(elements, latestStateBundle, bookmarks, bookmarkUi);
   });
 
-  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, reconcileUiStateFromSignals);
-  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncPatchRangeFromSignals);
-  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeInputStateFromSignals);
-  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncBridgeSessionStateFromSignals);
-  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, syncMapActionsFromSignals);
+  document.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
+    const patch = event?.detail || null;
+    if (
+      patchTouchesTopLevelBranch(patch, "_map_ui")
+      || patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.bookmarks)
+    ) {
+      reconcileUiStateFromSignals();
+    }
+    if (
+      patchTouchesTopLevelBranch(patch, "_map_controls")
+      || patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.sharedFish)
+    ) {
+      syncPatchRangeFromSignals();
+      syncMapBridgedSignalsFromPageState(getLatestStateBundle());
+      renderCurrentState(getLatestStateBundle());
+    }
+    if (patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.bridged)) {
+      syncBridgeInputStateFromSignals();
+    }
+    if (patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.session)) {
+      syncBridgeSessionStateFromSignals();
+    }
+    if (patchTouchesTopLevelBranch(patch, MAP_BRIDGE_SHARED_SIGNAL_BRANCHES.actions)) {
+      syncMapActionsFromSignals();
+    }
+  });
   window.addEventListener("fishystuff:themechange", () => applyThemeToShell(elements.shell));
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && bookmarkUi.placing) {
@@ -8696,7 +9078,7 @@ function bindUi(shell, elements, options = {}) {
     bookmarks: currentBookmarkUiState(currentBookmarks()),
     layers: currentUiState().layers,
   });
-  syncBookmarksToBridge(currentBookmarks(), currentBookmarkUiState(currentBookmarks()).selectedIds);
+  syncMapBridgedSignalsFromPageState(getLatestStateBundle());
   renderCurrentState();
   return {
     syncFromMountedBridge(options = {}) {

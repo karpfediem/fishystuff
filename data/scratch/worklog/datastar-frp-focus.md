@@ -82,6 +82,268 @@ That does not require rewriting the entire Bevy contract first. The first useful
 - publish bridge runtime state back into Datastar signals
 - then progressively replace imperative DOM ownership with Datastar ownership
 
+## Map Contract Correction
+
+The current refactor branch drifted too far from the original working contract by treating
+Datastar as a broad runtime mirror bus.
+
+That is not the right target.
+
+The corrected target is:
+
+1. Datastar owns durable page state and explicit user intent.
+2. The JS loader/host derives the small subset that actually needs to cross into Bevy/WASM.
+3. High-frequency runtime state stays local to the loader unless the shell/template truly needs it.
+
+In particular:
+
+- hover must not flow through Datastar
+- broad `_map_runtime` mirrors are not the target
+- `_shared_fish` and fish filter terms should remain frontend/host-owned inputs unless Bevy
+  directly consumes them
+
+### Current Explicit Map Signal Contract
+
+Current page-owned signal branches:
+
+- `_map_ui`
+  - shell/window chrome state
+  - search-open state
+  - bookmark-manager local UI state
+  - expanded layer panel state
+- `_map_controls`
+  - canonical durable map page inputs
+  - includes page filter state such as:
+    - selected fish ids
+    - selected zone RGBs
+    - selected semantic field ids
+    - fish filter terms
+    - search text
+    - patch range ids
+    - layer visibility/order/opacity/clip/icon controls
+  - includes page UI inputs that matter to page rendering but not necessarily to Bevy:
+    - diagnostics open
+    - legend open
+    - left panel open
+    - show points
+    - show point icons
+    - desired view mode
+    - point icon scale
+- `_map_bookmarks`
+  - canonical bookmark manager state
+  - full bookmark entries stay here
+- `_map_session`
+  - coarse session restore state only
+  - view snapshot
+  - selection snapshot
+- `_shared_fish`
+  - page-owned Fishydex progress state
+  - caught ids
+  - favourite ids
+- `_map_actions`
+  - local action tokens only
+  - reset view
+  - reset UI
+
+Current explicit bridge-shared signal branch:
+
+- `_map_bridged`
+  - this is the only Datastar branch that should be compared against and synchronized into the
+    Bevy/WASM bridge as state
+  - its contents must stay on an explicit whitelist and be normalized before comparison
+
+Current `_map_bridged` whitelist:
+
+- filters:
+  - `fishIds`
+  - `zoneRgbs`
+  - `semanticFieldIdsByLayer`
+  - `patchId`
+  - `fromPatchId`
+  - `toPatchId`
+  - `layerIdsVisible`
+  - `layerIdsOrdered`
+  - `layerOpacities`
+  - `layerClipMasks`
+  - `layerWaypointConnectionsVisible`
+  - `layerWaypointLabelsVisible`
+  - `layerPointIconsVisible`
+  - `layerPointIconScales`
+- ui:
+  - `diagnosticsOpen`
+  - `showPoints`
+  - `showPointIcons`
+  - `viewMode`
+  - `pointIconScale`
+  - `bookmarkSelectedIds`
+  - `bookmarks`
+
+Important bookmark rule:
+
+- bookmark manager state is independent from hover/runtime state
+- `_map_bookmarks.entries` remains canonical
+- `_map_bridged.ui.bookmarks` is only a minimal projection:
+  - `id`
+  - `label`
+  - `worldX`
+  - `worldZ`
+
+Important separation rules:
+
+- hover must stay loader/runtime-local unless a specific template actually needs it
+- `_map_controls.filters.searchText` is page-owned only and does not cross the bridge
+- `_map_controls.filters.fishFilterTerms` is page-owned only; the loader derives effective
+  fish ids for `_map_bridged.filters.fishIds`
+- `_shared_fish` stays page-owned; it is only used loader-side to derive effective fish ids
+- `readSignal()` on Datastar object branches can surface host-shape pollution such as blank-string
+  placeholders or unrelated `theme` / `commands` keys, so the loader must always normalize
+  `_map_controls` and `_map_bridged` before diffing or syncing
+
+### Exact Main-Branch Data Flow
+
+The `main` branch had almost no Datastar involvement on the map page. The practical contract was:
+
+1. Page/loader local state
+
+- window chrome state
+- search dropdown open state
+- bookmark placement state
+- toolbar state
+
+2. Loader -> host JS patch/command traffic
+
+State patches sent from the loader included:
+
+- `filters.fishIds`
+- `filters.zoneRgbs`
+- `filters.semanticFieldIdsByLayer`
+- `filters.fishFilterTerms`
+- `filters.searchText`
+- `filters.patchId`
+- `filters.fromPatchId`
+- `filters.toPatchId`
+- `filters.layerIdsVisible`
+- `filters.layerIdsOrdered`
+- `filters.layerOpacities`
+- `filters.layerClipMasks`
+- `filters.layerWaypointConnectionsVisible`
+- `filters.layerWaypointLabelsVisible`
+- `filters.layerPointIconsVisible`
+- `filters.layerPointIconScales`
+- `ui.diagnosticsOpen`
+- `ui.legendOpen`
+- `ui.activeDetailPaneId`
+- `ui.bookmarkSelectedIds`
+- `ui.bookmarks`
+
+Explicit commands sent from the loader included:
+
+- `setViewMode`
+- `resetView`
+- `selectZoneRgb`
+- `selectSemanticField`
+- `selectWorldPoint`
+- `restoreView`
+
+3. Host -> Bevy/WASM effective contract
+
+The host/bridge normalized a broad patch shape, but Bevy actually consumed a narrower subset:
+
+- `filters.fishIds`
+- `filters.zoneRgbs`
+- `filters.semanticFieldIdsByLayer`
+- `filters.patchId`
+- `filters.fromPatchId`
+- `filters.toPatchId`
+- `filters.layerIdsVisible`
+- `filters.layerIdsOrdered`
+- `filters.layerOpacities`
+- `filters.layerClipMasks`
+- `filters.layerWaypointConnectionsVisible`
+- `filters.layerWaypointLabelsVisible`
+- `filters.layerPointIconsVisible`
+- `filters.layerPointIconScales`
+- `ui.diagnosticsOpen`
+- `ui.showPoints`
+- `ui.showPointIcons`
+- `ui.pointIconScale`
+- `ui.activeDetailPaneId`
+- `ui.bookmarkSelectedIds`
+- `ui.bookmarks`
+- desired view mode only indirectly, via commands
+- restored selection/view only via commands/session restore
+
+The following existed in the host contract but are not direct Bevy-shared necessities:
+
+- `filters.searchText`
+- `filters.fishFilterTerms`
+- `ui.legendOpen`
+- `ui.leftPanelOpen`
+- `_shared_fish.*`
+- any hover/runtime mirror state
+
+### Explicit Shared-Signal Plan
+
+The refactor target should keep three categories separate:
+
+1. Page-only Datastar signals
+
+Examples:
+
+- `_map_ui.windowUi.*`
+- `_map_ui.search.open`
+- `_map_ui.layers.expandedLayerIds`
+- `_map_input.filters.searchText`
+- `_map_input.filters.fishFilterTerms`
+- `_map_input.ui.legendOpen`
+- `_map_input.ui.leftPanelOpen`
+- `_shared_fish.*`
+
+These are durable or useful UI signals, but they are not part of the Bevy-facing contract.
+
+2. Datastar signals that the loader projects into the Bevy contract
+
+Recommended page-owned source paths:
+
+- `_map_input.filters.fishIds`
+- `_map_input.filters.zoneRgbs`
+- `_map_input.filters.semanticFieldIdsByLayer`
+- `_map_input.filters.patchId`
+- `_map_input.filters.fromPatchId`
+- `_map_input.filters.toPatchId`
+- `_map_input.filters.layerIdsVisible`
+- `_map_input.filters.layerIdsOrdered`
+- `_map_input.filters.layerOpacities`
+- `_map_input.filters.layerClipMasks`
+- `_map_input.filters.layerWaypointConnectionsVisible`
+- `_map_input.filters.layerWaypointLabelsVisible`
+- `_map_input.filters.layerPointIconsVisible`
+- `_map_input.filters.layerPointIconScales`
+- `_map_input.ui.diagnosticsOpen`
+- `_map_input.ui.showPoints`
+- `_map_input.ui.showPointIcons`
+- `_map_input.ui.pointIconScale`
+- `_map_input.ui.activeDetailPaneId`
+- `_map_input.ui.viewMode`
+- `_map_bookmarks.entries`
+- `_map_ui.bookmarks.selectedIds`
+- `_map_session.view`
+- `_map_session.selection`
+
+The loader should own the projection from these signals into the concrete bridge patch shape.
+
+3. Local runtime state that should stay out of Datastar unless a template explicitly needs it
+
+Examples:
+
+- hover
+- broad `state.statuses`
+- diagnostics payloads
+- full bridge `inputState` mirrors
+- full bridge `state` mirrors
+
+If the shell needs a specific coarse runtime fact, expose only that fact, not the whole snapshot.
+
 ## Relevant Datastar Guidance
 
 Read:
