@@ -67,7 +67,7 @@
            }
          }">
       <div hidden
-           data-init="window.__fishystuffMapLiveRestore($)"></div>
+           data-init="el.closest('#map-page-shell').dispatchEvent(new CustomEvent('fishymap-live-init', { bubbles: true, detail: $ }))"></div>
       <canvas id="bevy"></canvas>
       <div id="fishymap-toolbar" class="not-prose" aria-label="Map windows">
         <button

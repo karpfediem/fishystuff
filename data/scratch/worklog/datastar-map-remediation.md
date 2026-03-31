@@ -600,6 +600,41 @@ Next tasks from here:
   - `_map_actions`
   - `_map_session`
   - `_map_runtime`
+
+### 2026-03-31: Replaced the last map-specific restore global with a shell-local init event
+
+The clean-slate map no longer needs `window.__fishystuffMapLiveRestore`.
+
+What changed:
+
+- `site/assets/map/map-shell.html`
+  - the hidden Datastar init node now dispatches a shell-local custom event:
+    - `fishymap-live-init`
+  - the event payload is the live Datastar signal object from `$`
+- `site/assets/map/map-page-live.js`
+  - binds a shell-local listener for `fishymap-live-init`
+  - restores/persists exactly as before, but without exposing a project-specific global restore
+    function on `window`
+- updated:
+  - `site/assets/map/map-page-live.test.mjs`
+  - `site/assets/map/map-shell.test.mjs`
+
+Why this matters:
+
+- it is closer to Datastar’s intended model than a page-global imperative bootstrap hook
+- the shell now owns its own init handshake through DOM events instead of a custom project global
+- it shrinks the remaining global map bootstrap surface to the generic runtime hooks that still
+  make sense
+
+Validation:
+
+- `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-hover-facts.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-host.test.mjs`
+- rebuilt site output
+- served `/map/` now contains:
+  - `/map/map-page-live.js`
+  - `fishymap-live-init`
+- served `/map/` no longer contains:
+  - `__fishystuffMapLiveRestore`
 - `node --check site/assets/map/map-app-live.js`
 - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
 - rebuilt site output

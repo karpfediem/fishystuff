@@ -35,6 +35,7 @@
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT = "fishymap:datastar-signal-patch";
   const FISHYMAP_SIGNAL_PATCH_EVENT = "fishymap-signals-patch";
+  const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
   const SHELL_SIGNAL_API_KEY = "__fishystuffMapPage";
   const state = {
     shell: null,
@@ -46,6 +47,7 @@
     persistTimer: 0,
     signalPatchListenerBound: false,
     shellPatchListenerBound: false,
+    initListenerBound: false,
     restoreResolved: false,
     restorePromise: null,
     resolveRestore: null,
@@ -702,6 +704,24 @@
     state.shellPatchListenerBound = true;
   }
 
+  function handleLiveInit(event) {
+    const signals = event?.detail;
+    if (!signals || typeof signals !== "object") {
+      return;
+    }
+    restore(signals);
+  }
+
+  function bindInitListener() {
+    const shell = state.shell || resolveShell();
+    if (!shell || state.initListenerBound) {
+      return;
+    }
+    shell.addEventListener(FISHYMAP_LIVE_INIT_EVENT, handleLiveInit);
+    state.shell = shell;
+    state.initListenerBound = true;
+  }
+
   function applyPatch(signals, patch) {
     const liveSignals = signals && typeof signals === "object" ? signals : state.liveSignals;
     if (!liveSignals || !patch || typeof patch !== "object") {
@@ -883,5 +903,6 @@
     }
   }
 
-  window.__fishystuffMapLiveRestore = restore;
+  state.shell = resolveShell();
+  bindInitListener();
 })();
