@@ -13,7 +13,7 @@ import FishyMapBridge, {
 } from "./map-host.js";
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 
-const FIXED_GROUND_LAYER_IDS = new Set(["minimap"]);
+const FIXED_GROUND_LAYER_IDS = new Set();
 const DEFAULT_ZONE_CATALOG_PATH = "/api/v1/zones";
 const ICON_SPRITE_URL = "/img/icons.svg?v=20260326-2";
 let currentZoneCatalog = [];
@@ -2926,7 +2926,7 @@ function cubeViewIcon() {
   return spriteIcon("cube-view");
 }
 
-function resolveLayerEntries(stateBundle) {
+export function resolveLayerEntries(stateBundle) {
   const layers = Array.isArray(stateBundle.state?.catalog?.layers)
     ? stateBundle.state.catalog.layers.slice()
     : [];
@@ -3133,7 +3133,7 @@ function resolveVisibleLayerIds(stateBundle) {
     .map((layer) => layer.layerId);
 }
 
-function moveLayerIdBefore(entries, draggedLayerId, targetLayerId, position) {
+export function moveLayerIdBefore(entries, draggedLayerId, targetLayerId, position) {
   const movableIds = entries.filter((layer) => !layer.locked).map((layer) => layer.layerId);
   const fromIndex = movableIds.indexOf(draggedLayerId);
   const targetIndex = movableIds.indexOf(targetLayerId);

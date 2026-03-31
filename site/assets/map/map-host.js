@@ -525,13 +525,7 @@ function normalizeLayerClipMaskMap(values) {
   for (const [key, value] of Object.entries(values)) {
     const layerId = String(key ?? "").trim();
     const maskLayerId = String(value ?? "").trim();
-    if (
-      !layerId ||
-      !maskLayerId ||
-      layerId === maskLayerId ||
-      layerId === "minimap" ||
-      maskLayerId === "minimap"
-    ) {
+    if (!layerId || !maskLayerId || layerId === maskLayerId) {
       continue;
     }
     out[layerId] = maskLayerId;
@@ -542,13 +536,13 @@ function normalizeLayerClipMaskMap(values) {
     let cursor = out[layerId];
     let topMaskLayerId = "";
     while (cursor) {
-      if (seen.has(cursor) || cursor === "minimap") {
+      if (seen.has(cursor)) {
         topMaskLayerId = "";
         break;
       }
       seen.add(cursor);
       const nextMaskLayerId = out[cursor];
-      if (!nextMaskLayerId || nextMaskLayerId === cursor || nextMaskLayerId === "minimap") {
+      if (!nextMaskLayerId || nextMaskLayerId === cursor) {
         topMaskLayerId = cursor;
         break;
       }

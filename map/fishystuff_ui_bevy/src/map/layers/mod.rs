@@ -321,6 +321,27 @@ mod tests {
     }
 
     #[test]
+    fn sync_to_registry_preserves_runtime_stack_overrides() {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![vector_descriptor(true)],
+        });
+        let layer = registry.ordered().first().expect("vector layer").id;
+
+        let mut runtime = LayerRuntime::default();
+        runtime.sync_to_registry(&registry);
+        runtime.set_stack(layer, 999, 1234.5);
+
+        runtime.sync_to_registry(&registry);
+
+        let state = runtime.get(layer).expect("layer state");
+        assert_eq!(state.display_order, 999);
+        assert!((state.z_base - 1234.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
     fn vector_layer_uses_vector_render_kind() {
         let mut registry = LayerRegistry::default();
         registry.apply_layers_response(LayersResponse {

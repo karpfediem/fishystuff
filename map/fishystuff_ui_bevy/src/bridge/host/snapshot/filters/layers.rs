@@ -173,9 +173,6 @@ pub(in crate::bridge::host::snapshot::filters) fn current_layer_opacity_override
 ) -> Option<BTreeMap<String, f32>> {
     let mut overrides = BTreeMap::new();
     for layer in current_layer_order(layer_registry, layer_runtime) {
-        if layer.key == "minimap" {
-            continue;
-        }
         let opacity = layer_runtime.opacity(layer.id).clamp(0.0, 1.0);
         if (opacity - layer.opacity_default).abs() <= f32::EPSILON {
             continue;
@@ -191,9 +188,6 @@ pub(in crate::bridge::host::snapshot::filters) fn current_layer_clip_mask_overri
 ) -> Option<BTreeMap<String, String>> {
     let mut overrides = BTreeMap::new();
     for layer in current_layer_order(layer_registry, layer_runtime) {
-        if layer.key == "minimap" {
-            continue;
-        }
         let Some(mask_layer_id) = layer_runtime.clip_mask_layer(layer.id) else {
             continue;
         };

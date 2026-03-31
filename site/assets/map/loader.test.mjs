@@ -35,6 +35,7 @@ const {
   normalizeBookmarkCoordinate,
   normalizeZoneInfoTab,
   normalizeWindowUiState,
+  resolveLayerEntries,
   parseZoneRgbSearch,
   parseImportedBookmarks,
   parseWindowUiState,
@@ -51,6 +52,7 @@ const {
   selectionHasZoneEvidence,
   serializeBookmarksForExport,
   serializeWindowUiState,
+  moveLayerIdBefore,
 } = await import("./loader.js");
 delete globalThis.__fishystuffLoaderAutoStart;
 
@@ -871,6 +873,70 @@ test("normalizeMapControlSignalState defaults visible layers to the expected sta
     "zone_mask",
     "minimap",
   ]);
+});
+
+test("resolveLayerEntries keeps minimap in the explicit ordered layer stack", () => {
+  const entries = resolveLayerEntries({
+    state: {
+      catalog: {
+        layers: [
+          {
+            layerId: "regions",
+            name: "Regions",
+            visible: true,
+            opacity: 1,
+            opacityDefault: 1,
+            displayOrder: 40,
+            kind: "vector-geojson",
+          },
+          {
+            layerId: "zone_mask",
+            name: "Zone Mask",
+            visible: true,
+            opacity: 1,
+            opacityDefault: 1,
+            displayOrder: 20,
+            kind: "tiled-raster",
+          },
+          {
+            layerId: "minimap",
+            name: "Minimap",
+            visible: true,
+            opacity: 1,
+            opacityDefault: 1,
+            displayOrder: 0,
+            kind: "tiled-raster",
+          },
+        ],
+      },
+    },
+    inputState: {
+      filters: {
+        layerIdsOrdered: ["zone_mask", "minimap", "regions"],
+      },
+    },
+  });
+
+  assert.deepEqual(
+    entries.map((entry) => entry.layerId),
+    ["zone_mask", "minimap", "regions"],
+  );
+  assert.equal(entries.find((entry) => entry.layerId === "minimap")?.locked, false);
+});
+
+test("moveLayerIdBefore can reposition minimap in the ordered layer list", () => {
+  const nextOrder = moveLayerIdBefore(
+    [
+      { layerId: "regions", locked: false },
+      { layerId: "zone_mask", locked: false },
+      { layerId: "minimap", locked: false },
+    ],
+    "minimap",
+    "regions",
+    "before",
+  );
+
+  assert.deepEqual(nextOrder, ["minimap", "regions", "zone_mask"]);
 });
 
 test("normalizeMapBridgedSignalState strips host-only shape pollution", () => {

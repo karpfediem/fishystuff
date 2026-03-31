@@ -109,8 +109,9 @@ impl LayerRuntime {
                     .point_icon_scale
                     .clamp(POINT_ICON_SCALE_MIN, POINT_ICON_SCALE_MAX);
             }
-            state.z_base = spec.z_base;
-            state.display_order = spec.display_order;
+            // Preserve runtime stack overrides across repeated syncs. Browser-applied
+            // layer order/stack changes are stored in runtime state and should not be
+            // reset to catalog defaults by unrelated per-frame registry syncs.
         }
     }
 

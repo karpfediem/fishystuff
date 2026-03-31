@@ -12,7 +12,7 @@ pub(in crate::bridge::host) fn apply_layer_order_override(
 
     for layer_id in ordered_layer_ids {
         let trimmed = layer_id.trim();
-        if trimmed.is_empty() || trimmed == "minimap" || !seen.insert(trimmed.to_string()) {
+        if trimmed.is_empty() || !seen.insert(trimmed.to_string()) {
             continue;
         }
         if layer_registry.id_by_key(trimmed).is_some() {
@@ -21,15 +21,11 @@ pub(in crate::bridge::host) fn apply_layer_order_override(
     }
 
     for layer in &current_order {
-        if layer.key == "minimap" || seen.contains(&layer.key) {
+        if seen.contains(&layer.key) {
             continue;
         }
         seen.insert(layer.key.clone());
         top_first_ids.push(layer.key.clone());
-    }
-
-    if let Some(minimap) = layer_registry.get_by_key("minimap") {
-        top_first_ids.push(minimap.key.clone());
     }
 
     let mut slots = layer_registry.ordered().iter().collect::<Vec<_>>();
@@ -53,7 +49,7 @@ pub(in crate::bridge::host) fn apply_layer_opacity_override(
 ) {
     for (layer_id, opacity) in layer_opacities {
         let trimmed = layer_id.trim();
-        if trimmed.is_empty() || trimmed == "minimap" {
+        if trimmed.is_empty() {
             continue;
         }
         if let Some(layer) = layer_registry.get_by_key(trimmed) {
@@ -79,7 +75,7 @@ pub(in crate::bridge::host) fn apply_layer_clip_mask_override(
     for (layer_id, mask_layer_id) in layer_clip_masks {
         let layer_id = layer_id.trim();
         let mask_layer_id = mask_layer_id.trim();
-        if layer_id.is_empty() || mask_layer_id.is_empty() || layer_id == "minimap" {
+        if layer_id.is_empty() || mask_layer_id.is_empty() {
             continue;
         }
         let Some(layer) = layer_registry.get_by_key(layer_id) else {
@@ -226,5 +222,74 @@ pub(in crate::bridge::host) fn reset_layer_point_icon_scale_override(
             layer.id,
             crate::bridge::contract::FISHYMAP_POINT_ICON_SCALE_MIN,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::apply_layer_order_override;
+    use crate::bridge::host::snapshot::current_layer_order;
+    use crate::map::layers::{LayerRegistry, LayerRuntime};
+    use fishystuff_api::models::layers::{
+        LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayersResponse,
+        LodPolicyDto, TilesetRef,
+    };
+
+    fn raster_descriptor(layer_id: &str, name: &str, display_order: i32) -> LayerDescriptor {
+        LayerDescriptor {
+            layer_id: layer_id.to_string(),
+            name: name.to_string(),
+            enabled: true,
+            kind: LayerKindDto::TiledRaster,
+            transform: LayerTransformDto::IdentityMapSpace,
+            tileset: TilesetRef {
+                manifest_url: format!("/images/tiles/{layer_id}/v1/tileset.json"),
+                tile_url_template: format!("/images/tiles/{layer_id}/v1/{{z}}/{{x}}_{{y}}.png"),
+                version: "v1".to_string(),
+            },
+            tile_px: 512,
+            max_level: 0,
+            y_flip: false,
+            field_source: None,
+            field_metadata_source: None,
+            vector_source: None,
+            lod_policy: LodPolicyDto::default(),
+            request_weight: 1.0,
+            ui: fishystuff_api::models::layers::LayerUiInfo { display_order },
+            pick_mode: fishystuff_api::models::layers::LayerPickMode::None,
+        }
+    }
+
+    #[test]
+    fn layer_order_override_can_reposition_minimap() {
+        let mut registry = LayerRegistry::default();
+        registry.apply_layers_response(LayersResponse {
+            revision: "rev".to_string(),
+            map_version_id: None,
+            layers: vec![
+                raster_descriptor("minimap", "Minimap", 0),
+                raster_descriptor("zone_mask", "Zone Mask", 20),
+                raster_descriptor("regions", "Regions", 40),
+            ],
+        });
+
+        let mut runtime = LayerRuntime::default();
+        runtime.sync_to_registry(&registry);
+
+        apply_layer_order_override(
+            &registry,
+            &mut runtime,
+            &[
+                "zone_mask".to_string(),
+                "minimap".to_string(),
+                "regions".to_string(),
+            ],
+        );
+
+        let ordered = current_layer_order(&registry, &runtime)
+            .into_iter()
+            .map(|layer| layer.key.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(ordered, vec!["zone_mask", "minimap", "regions"]);
     }
 }

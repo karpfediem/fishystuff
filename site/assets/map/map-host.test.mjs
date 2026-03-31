@@ -1435,6 +1435,22 @@ test("buildInitialRestorePatch ignores session storage and uses only query-owned
   assert.equal("restoreView" in patch.commands, false);
 });
 
+test("normalizeStatePatch keeps minimap layer opacity and clip mask overrides", () => {
+  const patch = normalizeStatePatch({
+    filters: {
+      layerOpacities: {
+        minimap: 0.4,
+      },
+      layerClipMasks: {
+        minimap: "zone_mask",
+      },
+    },
+  });
+
+  assert.deepEqual(patch.filters.layerOpacities, { minimap: 0.4 });
+  assert.deepEqual(patch.filters.layerClipMasks, { minimap: "zone_mask" });
+});
+
 test("buildInitialRestorePatch does not restore page-owned filters from session storage", () => {
   const sessionStorage = new MemoryStorage({
     "fishystuff.map.session.v1": JSON.stringify({

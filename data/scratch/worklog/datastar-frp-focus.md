@@ -3360,3 +3360,50 @@ Validation:
   failure in `map::terrain::drape::tests::tile_corners_follow_tile_space_orientation`
 - rebuilt the map runtime bundle
 - served `runtime-manifest.json` matches the rebuilt local manifest
+
+## Step 70: Preserve map layer stack overrides and unpin minimap ordering
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/map/layers/runtime.rs`
+  - `LayerRuntime::sync_to_registry(...)` now preserves runtime `display_order` / `z_base`
+    overrides instead of resetting them back to catalog defaults on every sync
+- `map/fishystuff_ui_bevy/src/bridge/host/persistence/layers.rs`
+  - layer order override no longer forces `minimap` to the bottom of the stack
+- `site/assets/map/loader.js`
+  - minimap is no longer treated as a pinned "ground" layer in the reorder UI
+- `site/assets/map/map-host.js`
+  - clip-mask normalization no longer drops minimap solely because it is minimap
+
+Why this matters:
+
+- a real regression had crept into the layer system:
+  - the UI allowed drag-reordering
+  - `_map_controls.filters.layerIdsOrdered` and `_map_bridged.filters.layerIdsOrdered` updated
+  - but Bevy drawing order stayed unchanged
+- the root cause was `sync_to_registry(...)`:
+  - multiple runtime systems call it during normal updates
+  - it was resetting `display_order` and `z_base` from the catalog defaults each time
+  - browser-applied stack overrides were therefore wiped almost immediately
+- minimap had also remained arbitrarily pinned in both the page ordering model and the Bevy
+  ordering override path, even though it should participate in the same stack model
+
+Validation:
+
+- `node --test site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs`
+- `cargo test --offline -p fishystuff_ui_bevy sync_to_registry_preserves_runtime_stack_overrides`
+- rebuilt site output and map runtime bundle
+- served `/map/loader.js` matches `site/.out`
+- live DevTools smoke:
+  - initial runtime stack showed the default order
+  - patching `_map_controls.filters.layerIdsOrdered` to
+    `["minimap","zone_mask","fish_evidence","bookmarks","region_nodes","regions","region_groups"]`
+    updated both:
+    - `_map_bridged.filters.layerIdsOrdered`
+    - `FishyMapBridge.getCurrentState().catalog.layers[*].displayOrder`
+  - runtime order then reported:
+    - `minimap: 41`
+    - `zone_mask: 40`
+    - `fish_evidence: 39`
+    - ...
+  - confirming the Bevy draw stack now follows the reordered layer list
