@@ -75,10 +75,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
 
     CURRENT_SNAPSHOT.with(|snapshot| {
         let mut snapshot = snapshot.borrow_mut();
-        if ready_changed {
-            snapshot.ready =
-                context.bootstrap.meta.is_some() && !context.layer_registry.ordered().is_empty();
-        }
+        snapshot.ready =
+            context.bootstrap.meta.is_some() && !context.layer_registry.ordered().is_empty();
         if theme_changed {
             snapshot.theme = context.bridge.input.theme.clone();
         }

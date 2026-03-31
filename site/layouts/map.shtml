@@ -1358,7 +1358,7 @@
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-adjustments-horizontal"></use></svg>
             <p class="fishymap-window-title text-lg leading-tight">Settings</p>
           </div>
-          <span id="fishymap-ready-pill" class="badge badge-outline badge-sm">Loading</span>
+          <span id="fishymap-ready-pill" class="badge badge-outline badge-sm gap-2 text-base-content/80"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading</span></span>
         </div>
 
         <div id="fishymap-panel-body" class="fishymap-window-body flex flex-col gap-4 px-4 py-4">
@@ -1386,7 +1386,7 @@
                       aria-expanded="false"
                       aria-controls="fishymap-patch-from-panel"
                     >
-                      <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="truncate font-medium">Loading patches…</span></span>
+                      <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">Loading patches…</span></span></span>
                       <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
                     </button>
 
@@ -1407,7 +1407,7 @@
                         </label>
                         <div class="px-1 pb-1">
                           <ul id="fishymap-patch-from-results" tabindex="-1" data-role="results" class="menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1">
-                            <li class="menu-disabled"><span>Loading patches…</span></li>
+                            <li class="menu-disabled"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading patches…</span></span></li>
                           </ul>
                         </div>
                       </div>
@@ -1435,7 +1435,7 @@
                       aria-expanded="false"
                       aria-controls="fishymap-patch-to-panel"
                     >
-                      <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="truncate font-medium">Loading patches…</span></span>
+                      <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-3 text-sm"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span class="truncate font-medium">Loading patches…</span></span></span>
                       <svg class="fishy-icon size-4 opacity-60" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260325-2#fishy-caret-down"></use></svg>
                     </button>
 
@@ -1456,7 +1456,7 @@
                         </label>
                         <div class="px-1 pb-1">
                           <ul id="fishymap-patch-to-results" tabindex="-1" data-role="results" class="menu menu-sm max-h-96 w-full gap-1 overflow-auto p-1">
-                            <li class="menu-disabled"><span>Loading patches…</span></li>
+                            <li class="menu-disabled"><span class="inline-flex items-center gap-2 text-base-content/70"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading patches…</span></span></li>
                           </ul>
                         </div>
                       </div>

@@ -3491,3 +3491,75 @@ Validation:
 - `cargo check -p fishystuff_ui_bevy`
 - rebuilt the map runtime bundle
 - live served map now keeps the fish-evidence icon-size slider confined to fish-evidence rendering
+
+## Step 73: Make bridge readiness recompute from current resources after map remounts
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/bridge/host/snapshot/mod.rs`
+  - `snapshot.ready` is now recomputed from the current bootstrap + layer-registry resources on
+    every snapshot sync pass instead of only when `bootstrap` or `layer_registry` were the
+    resources flagged as changed
+- `map/fishystuff_ui_bevy/src/bridge/host/mod.rs`
+  - added a regression test covering the remount-like case where:
+    - `CURRENT_SNAPSHOT` starts at `ready = false`
+    - bootstrap metadata and layer registry are already present
+    - a different changed resource is what causes the next snapshot sync
+  - in that case `ready` must still become `true`
+
+Why this matters:
+
+- `Reset UI` does a destroy + remount cycle
+- after that remount, the runtime could have:
+  - `catalog.layers` populated
+  - `catalog.patches` populated
+  - `metaStatus = "meta: loaded"`
+  - but `snapshot.ready` still stranded at `false`
+- the old code path was too dependent on Bevy change-tracking for the exact resources used to
+  derive `ready`
+- that made the shell look permanently broken after remount even though the runtime had actually
+  finished reloading
+
+Design note:
+
+- `ready` is derived state, not source-of-truth state
+- derived state that gates the shell should be recomputed from the current resources whenever a
+  snapshot sync occurs, not only when one narrow subset of resources happened to be marked changed
+
+Validation:
+
+- `cargo check -p fishystuff_ui_bevy`
+- live DevTools check after `Reset UI`:
+  - `FishyMapBridge.getCurrentState().ready === true`
+  - `catalog.layers.length === 7`
+  - shell no longer sticks on loading placeholders
+
+## Step 74: Replace dead map loading text with DaisyUI loading indicators
+
+What changed:
+
+- `site/assets/map/loader.js`
+  - added spinner-backed loading markup helpers
+  - layer registry loading placeholder now renders as a proper loading panel
+  - patch dropdown loading placeholders now render with animated loading indicators
+  - the settings ready pill now renders as:
+    - spinner-backed `Loading` when not ready
+    - plain `Ready` when ready
+- `site/layouts/map.shtml`
+  - updated the shell's initial HTML placeholders to match the runtime-rendered loading states
+    before JS hydration
+
+Why this matters:
+
+- after tightening the Datastar ownership model, remount/reset flows are more visible to the user
+- if loading is legitimate, it should look active and intentional rather than like the UI is dead
+- this also makes the temporary loading states much easier to distinguish from a real stall
+
+Validation:
+
+- `node --check site/assets/map/loader.js`
+- `node --test site/assets/map/loader.test.mjs site/assets/map/map-host.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuilt site output and spot-checked the served `/map/` and `/map/loader.js`
+- live DevTools check confirmed:
+  - spinner-backed loading placeholders are present in served HTML
+  - after `Reset UI`, the shell returns to `Ready` instead of remaining on loading text

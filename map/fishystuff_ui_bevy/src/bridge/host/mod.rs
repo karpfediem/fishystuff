@@ -242,12 +242,19 @@ fn event_counter_name(event: &FishyMapOutputEvent) -> &'static str {
 mod tests {
     use super::{parse_theme_background_color, *};
     use crate::bridge::theme::parse_css_color;
+    use crate::map::camera::map2d::Map2dViewState;
+    use crate::map::camera::mode::ViewModeState;
+    use crate::map::camera::terrain3d::Terrain3dViewState;
     use crate::map::layers::{build_local_layer_specs, AvailableLayerCatalog};
+    use crate::map::{exact_lookup::ExactLookupCache, field_metadata::FieldMetadataCache};
     use crate::plugins::api::{
-        FishFilterState, MapDisplayState, PatchFilterState, SemanticFieldFilterState,
+        ApiBootstrapState, FishCatalog, FishFilterState, HoverState, MapDisplayState,
+        PatchFilterState, SelectionState, SemanticFieldFilterState,
     };
     use crate::plugins::bookmarks::BookmarkState;
+    use crate::plugins::points::PointsState;
     use bevy::prelude::*;
+    use fishystuff_api::models::meta::MetaResponse;
 
     fn clear_pending_patches() {
         PENDING_PATCHES.with(|pending| pending.borrow_mut().clear());
@@ -262,6 +269,51 @@ mod tests {
         runtime.sync_to_registry(&registry);
         world.insert_resource(registry);
         world.insert_resource(runtime);
+    }
+
+    #[test]
+    fn snapshot_ready_recomputes_from_current_resources_after_remount_like_reset() {
+        clear_pending_patches();
+        CURRENT_SNAPSHOT.with(|snapshot| {
+            *snapshot.borrow_mut() = snapshot::initial_snapshot();
+        });
+        READY_EMITTED.with(|value| *value.borrow_mut() = false);
+
+        let mut app = App::new();
+        app.insert_resource(BrowserBridgeState::default());
+        app.insert_resource(ApiBootstrapState {
+            meta_status: "meta: loaded".to_string(),
+            layers_status: "layers: local (7, v1)".to_string(),
+            zones_status: "zones: 287".to_string(),
+            meta: Some(MetaResponse::default()),
+            ..Default::default()
+        });
+        app.insert_resource(PatchFilterState::default());
+        app.insert_resource(FishFilterState::default());
+        app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(MapDisplayState::default());
+        app.insert_resource(FishCatalog::default());
+        app.insert_resource(PointsState::default());
+        app.insert_resource(BookmarkState::default());
+        app.insert_resource(SelectionState::default());
+        app.insert_resource(HoverState::default());
+        app.insert_resource(LayerDebugSettings::default());
+        app.insert_resource(ExactLookupCache::default());
+        app.insert_resource(FieldMetadataCache::default());
+        app.insert_resource(ViewModeState::default());
+        app.insert_resource(Map2dViewState::default());
+        app.insert_resource(Terrain3dViewState::default());
+        seed_layer_resources(&mut app.world_mut());
+        app.add_systems(PostUpdate, snapshot::sync_current_snapshot);
+
+        app.world_mut().clear_trackers();
+        app.world_mut().resource_mut::<FishCatalog>().status = "fish: loaded".to_string();
+
+        app.update();
+
+        CURRENT_SNAPSHOT.with(|snapshot| {
+            assert!(snapshot.borrow().ready);
+        });
     }
 
     #[test]

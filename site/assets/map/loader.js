@@ -1066,6 +1066,24 @@ function setMarkup(element, renderKey, html) {
   return true;
 }
 
+function renderLoadingInlineMarkup(label, { size = "xs", toneClass = "text-base-content/70" } = {}) {
+  return `<span class="inline-flex items-center gap-2 ${toneClass}"><span class="loading loading-spinner loading-${escapeHtml(size)}" aria-hidden="true"></span><span>${escapeHtml(label)}</span></span>`;
+}
+
+function renderReadyPillMarkup(isReady) {
+  if (isReady) {
+    return "<span>Ready</span>";
+  }
+  return renderLoadingInlineMarkup("Loading", {
+    size: "xs",
+    toneClass: "text-base-content/80",
+  });
+}
+
+function renderLoadingPanelMarkup(label) {
+  return `<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3"><div class="flex items-center gap-2 text-xs text-base-content/60">${renderLoadingInlineMarkup(label)}</div></div>`;
+}
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -5556,15 +5574,21 @@ function renderPatchDropdown(dropdown, input, orderedPatches, selectedPatchId, e
   const catalog = dropdown.querySelector("[data-role='selected-content-catalog']");
   const selectedContent = dropdown.querySelector("[data-role='selected-content']");
   if (!orderedPatches.length) {
+    const emptyContentHtml = String(emptyLabel || "").includes("Loading")
+      ? renderLoadingInlineMarkup(emptyLabel)
+      : renderSearchableDropdownTextContent(emptyLabel);
+    const emptyResultsHtml = String(emptyLabel || "").includes("Loading")
+      ? `<li class="menu-disabled"><span>${renderLoadingInlineMarkup(emptyLabel)}</span></li>`
+      : `<li class="menu-disabled"><span>${escapeHtml(emptyLabel)}</span></li>`;
     dropdown.label = emptyLabel;
     dropdown.value = "";
     input.value = "";
     setMarkup(
       selectedContent,
       `empty:${emptyLabel}`,
-      renderSearchableDropdownTextContent(emptyLabel),
+      emptyContentHtml,
     );
-    setMarkup(results, `empty:${emptyLabel}`, `<li class="menu-disabled"><span>${escapeHtml(emptyLabel)}</span></li>`);
+    setMarkup(results, `empty:${emptyLabel}`, emptyResultsHtml);
     setMarkup(catalog, `empty:${emptyLabel}`, "");
     return;
   }
@@ -5626,8 +5650,7 @@ function renderLayerStack(container, stateBundle, options = {}) {
     const loadingKey = "__loading__";
     if (container.dataset.renderKey !== loadingKey) {
       container.dataset.renderKey = loadingKey;
-      container.innerHTML =
-        '<p class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-xs text-base-content/60">Layer registry is loading…</p>';
+      container.innerHTML = renderLoadingPanelMarkup("Layer registry is loading…");
     }
     return;
   }
@@ -6648,10 +6671,10 @@ function renderPanel(
 
   applyThemeToShell(elements.shell);
 
-  setTextContent(elements.readyPill, state.ready ? "Ready" : "Loading");
+  setMarkup(elements.readyPill, state.ready ? "ready" : "loading", renderReadyPillMarkup(state.ready === true));
   setClassName(
     elements.readyPill,
-    `badge badge-sm ${state.ready ? "badge-success" : "badge-outline"}`,
+    `badge badge-sm gap-2 ${state.ready ? "badge-success" : "badge-outline text-base-content/80"}`,
   );
   renderViewState(elements, state);
   if (elements.autoAdjustView) {
