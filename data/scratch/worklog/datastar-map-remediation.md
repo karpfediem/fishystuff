@@ -2764,3 +2764,50 @@ Next tasks from here:
   - `_map_actions`
   - `_map_session`
   - `_map_runtime`
+
+## Thirty-sixth restoration sweep completed
+
+The clean-slate live map is back in a restored state for the currently migrated surface area.
+
+Restoration status at this checkpoint:
+
+- boot:
+  - ready pill reaches `Ready`
+  - runtime catalog layer count reaches `7`
+  - fish catalog reaches `496`
+- live shell interactions:
+  - toolbar visibility state stays aligned with open/hidden windows
+  - layer ordering updates runtime draw order without manual refresh
+  - bookmark placement works again through the clean-slate controller path
+  - `Reset UI` returns the map to a ready runtime state
+  - zone search and zone info work again on the live shell
+- validation:
+  - `bash tools/scripts/map-browser-smoke.sh`
+    - `PASS`
+  - `python3 tools/scripts/map_browser_profile.py load_map --output-json /tmp/map-load.current.json`
+    - `PASS`
+  - `python3 tools/scripts/map_browser_profile.py zone_mask_hover_sweep --timeout-seconds 90 --output-json /tmp/map-hover.current.json`
+    - `PASS`
+  - `python3 tools/scripts/map_browser_profile.py vector_region_groups_dom_toggle --output-json /tmp/map-vector-region-groups-dom-toggle.current.json`
+    - `PASS`
+
+Notes from the validation sweep:
+
+- concurrent headless profile runs can still exhaust Chromium's SwiftShader/shared-image path and
+  fail before bridge readiness
+- those failures did not reproduce on clean single-scenario reruns and are currently treated as
+  harness contention rather than product regressions
+
+Next cleanup priorities after restoration:
+
+- keep migrating functionality away from legacy loader assumptions instead of extracting old logic
+  1:1
+- reduce the remaining page-global/bootstrap surface further
+- continue replacing old imperative seams with:
+  - direct Datastar expressions in the shell
+  - narrow clean-slate modules
+  - the explicit bridge contract only:
+    - `_map_bridged`
+    - `_map_actions`
+    - `_map_session`
+    - `_map_runtime`
