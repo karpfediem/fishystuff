@@ -2204,3 +2204,36 @@ Validation for this slice:
   - `window.FishyMapBridge.getCurrentState().ready === true`
   - `Layers 7` and `Settings Ready` still render immediately
   - persisted shell state still restores correctly after reload
+
+## Twenty-fifth implementation slice landed
+
+The map page bootstrap global is smaller again. Shell-dispatched signal patches still flow into the
+live Datastar graph, but the public `window.__fishystuffMap` surface no longer exports a direct
+`patchSignals(...)` mutator.
+
+What changed:
+
+- `site/assets/js/pages/map-page.js`
+  - kept `patchSignals(...)` as an internal helper only
+  - narrowed `window.__fishystuffMap` back to:
+    - `signalObject`
+    - `restore`
+    - `whenRestored`
+- `site/assets/js/pages/map-page.test.mjs`
+  - now dispatches `fishymap-signals-patch` directly on the shell instead of calling the page
+    global
+
+Why this slice matters:
+
+- the live shell now depends on the actual Datastar/event contract instead of a wider page-global
+  escape hatch
+- tests exercise the same signal-patch path the live shell uses
+- this keeps the clean-slate map app aligned with the goal of deleting imperative loader-era glue
+  instead of preserving it behind page globals
+
+Validation for this slice:
+
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- `node --check site/assets/js/pages/map-page.js`
+- rebuild site output
+- spot-check served `/js/pages/map-page.js` against `site/.out`

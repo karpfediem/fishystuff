@@ -249,6 +249,13 @@ function defaultStoredUiSnapshot() {
   };
 }
 
+function dispatchShellPatch(env, detail) {
+  env.shell.dispatchEvent({
+    type: "fishymap-signals-patch",
+    detail,
+  });
+}
+
 test("map-page restore loads persisted bookmark entries into Datastar signals", () => {
   const persistedBookmarks = [
     { id: "bookmark-1", label: "Persisted", worldX: 10, worldZ: 20, layerSamples: [] },
@@ -507,7 +514,7 @@ test("map-page persists bookmark signal patches through the Datastar patch event
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
-  env.window.__fishystuffMap.patchSignals({
+  dispatchShellPatch(env, {
     _map_bookmarks: {
       entries: [{ id: "bookmark-2", label: "Signal Owned", worldX: 1, worldZ: 2, layerSamples: [] }],
     },
@@ -533,7 +540,7 @@ test("map-page ignores ephemeral _map_ui patches for persistence", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
-  env.window.__fishystuffMap.patchSignals({
+  dispatchShellPatch(env, {
     _map_ui: {
       search: { open: true },
     },
@@ -557,7 +564,7 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
-  env.window.__fishystuffMap.patchSignals({
+  dispatchShellPatch(env, {
     _map_ui: {
       windowUi: {
         search: { open: false },
@@ -589,7 +596,7 @@ test("map-page persists durable _map_ui.layers patches", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
-  env.window.__fishystuffMap.patchSignals({
+  dispatchShellPatch(env, {
     _map_ui: {
       layers: {
         expandedLayerIds: ["terrain", "resources"],
@@ -621,7 +628,7 @@ test("map-page persists durable _map_bridged diagnostics state", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
-  env.window.__fishystuffMap.patchSignals({
+  dispatchShellPatch(env, {
     _map_bridged: {
       ui: {
         diagnosticsOpen: true,
@@ -653,7 +660,7 @@ test("map-page persists durable bridged layer filter state", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
-  env.window.__fishystuffMap.patchSignals({
+  dispatchShellPatch(env, {
     _map_ui: {
       search: {
         query: "velia",
@@ -741,7 +748,7 @@ test("map-page persists durable _map_session state into sessionStorage", () => {
   const signals = defaultSignals();
 
   env.window.__fishystuffMap.restore(signals);
-  env.window.__fishystuffMap.patchSignals({
+  dispatchShellPatch(env, {
     _map_session: {
       view: {
         viewMode: "3d",
