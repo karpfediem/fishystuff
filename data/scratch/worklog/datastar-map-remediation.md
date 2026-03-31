@@ -1271,3 +1271,48 @@ Validation for this slice:
 - `node --check site/assets/map/map-app.js`
 - `node --test site/assets/map/map-runtime-adapter.test.mjs`
 - `node --test site/assets/map/map-app.test.mjs`
+
+## Ninth implementation slice landed
+
+The live shell and page persistence model are now aligned to the clean-slate signal schema.
+
+What changed:
+
+- `site/assets/map/map-shell.html`
+  - removed `_map_controls` from live shell signals
+  - search input now binds directly to `_map_ui.search.query`
+- `site/assets/js/pages/map-page.js`
+  - page persistence now stores only:
+    - `_map_ui.windowUi`
+    - `_map_ui.layers`
+    - `_map_ui.search.query`
+    - `_map_bridged.ui`
+    - `_map_bridged.filters`
+    - `_map_bookmarks.entries`
+    - `_map_session`
+  - restore now patches only `_map_ui` and `_map_bridged`
+  - legacy `inputUi` / `inputFilters` are accepted only as read-time fallback for existing local storage
+  - query-owned restore stripping now targets `_map_ui.search.query` and `_map_bridged.*`, not `_map_controls`
+- `site/assets/js/pages/map-page.test.mjs`
+  - updated to the canonical storage shape
+  - still keeps a legacy-storage restore regression
+
+Why this slice matters:
+
+- it removes `_map_controls` from the live map shell entirely
+- it makes page-owned persistence match the actual live signal graph
+- it narrows the transitional compatibility surface to legacy local-storage reads only
+
+What still remains after this slice:
+
+- other map modules may still reference `_map_controls` as compatibility input
+- the live map shell still uses imperative DOM/event behavior outside the bridge contract
+- the clean-slate `map-app.js` path still needs to replace the remaining live loader-owned behavior
+
+Validation for this slice:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --test site/assets/js/pages/map-page.test.mjs`
+- `node --test site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-signal-contract.test.mjs`
+- rebuild site output
+- compare served map shell and page module against `site/.out`

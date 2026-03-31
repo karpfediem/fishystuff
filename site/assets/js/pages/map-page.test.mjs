@@ -12,6 +12,12 @@ const DATASTAR_PERSIST_SOURCE = fs.readFileSync(
   "utf8",
 );
 const MAP_PAGE_SOURCE = fs.readFileSync(new URL("./map-page.js", import.meta.url), "utf8");
+const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
+  "bookmarks",
+  "fish_evidence",
+  "zone_mask",
+  "minimap",
+]);
 
 class MemoryStorage {
   constructor(initial = {}) {
@@ -119,35 +125,23 @@ function defaultSignals() {
         layers: { open: true, collapsed: false, x: null, y: null },
         bookmarks: { open: false, collapsed: false, x: null, y: null },
       },
-      search: { open: false },
+      search: { open: false, query: "" },
       bookmarks: { placing: false, selectedIds: [] },
       layers: { expandedLayerIds: [] },
     },
     _map_bookmarks: {
       entries: [],
     },
-    _map_controls: {
-      filters: {
-        fishIds: [],
-        zoneRgbs: [],
-        semanticFieldIdsByLayer: {},
-        fishFilterTerms: [],
-        searchText: "",
-      },
-      ui: {
-        legendOpen: false,
-        leftPanelOpen: true,
-      },
-    },
     _map_bridged: {
       filters: {
         fishIds: [],
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
         patchId: null,
         fromPatchId: null,
         toPatchId: null,
-        layerIdsVisible: [],
+        layerIdsVisible: [...DEFAULT_ENABLED_LAYER_IDS],
         layerIdsOrdered: [],
         layerOpacities: {},
         layerClipMasks: {},
@@ -176,6 +170,48 @@ function defaultSignals() {
     _shared_fish: {
       caughtIds: [],
       favouriteIds: [],
+    },
+  };
+}
+
+function defaultStoredUiSnapshot() {
+  return {
+    windowUi: {
+      search: { open: true, collapsed: false, x: null, y: null },
+      settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
+      zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
+      layers: { open: true, collapsed: false, x: null, y: null },
+      bookmarks: { open: false, collapsed: false, x: null, y: null },
+    },
+    layers: {
+      expandedLayerIds: [],
+    },
+    search: {
+      query: "",
+    },
+    bridgedUi: {
+      diagnosticsOpen: false,
+      showPoints: true,
+      showPointIcons: true,
+      viewMode: "2d",
+      pointIconScale: 1,
+    },
+    bridgedFilters: {
+      fishIds: [],
+      zoneRgbs: [],
+      semanticFieldIdsByLayer: {},
+      fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
+        layerIdsVisible: [...DEFAULT_ENABLED_LAYER_IDS],
+        layerIdsOrdered: [],
+        layerOpacities: {},
+        layerClipMasks: {},
+        layerWaypointConnectionsVisible: {},
+        layerWaypointLabelsVisible: {},
+        layerPointIconsVisible: {},
+        layerPointIconScales: {},
     },
   };
 }
@@ -271,23 +307,21 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
       layers: {
         expandedLayerIds: ["terrain"],
       },
-      inputUi: {
+      bridgedUi: {
         diagnosticsOpen: true,
-        legendOpen: true,
-        leftPanelOpen: false,
         showPoints: false,
         showPointIcons: false,
         viewMode: "2d",
         pointIconScale: 1.5,
       },
-      inputFilters: {
+      bridgedFilters: {
         fishIds: [77, 91],
         zoneRgbs: [12615551, 3972668],
         semanticFieldIdsByLayer: {
           region_groups: [295],
         },
         fishFilterTerms: ["favourite", "missing"],
-        searchText: "velia",
+        patchId: null,
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
         layerIdsVisible: ["zones", "terrain"],
@@ -299,6 +333,9 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
         layerPointIconsVisible: { terrain: true },
         layerPointIconScales: { terrain: 1.5 },
       },
+      search: {
+        query: "velia",
+      },
     }),
   });
   const signals = defaultSignals();
@@ -308,22 +345,20 @@ test("map-page restore loads persisted window ui into _map_ui", () => {
   assert.equal(signals._map_ui.windowUi.search.open, false);
   assert.equal(signals._map_ui.windowUi.zoneInfo.tab, "zone_info");
   assert.deepEqual(signals._map_ui.layers.expandedLayerIds, ["terrain"]);
+  assert.equal(signals._map_ui.search.query, "velia");
   assert.equal(signals._map_bridged.ui.diagnosticsOpen, true);
-  assert.equal(signals._map_controls.ui.legendOpen, true);
-  assert.equal(signals._map_controls.ui.leftPanelOpen, false);
   assert.equal(signals._map_bridged.ui.showPoints, false);
   assert.equal(signals._map_bridged.ui.showPointIcons, false);
   assert.equal(signals._map_bridged.ui.pointIconScale, 1.5);
   assert.equal(signals._map_bridged.ui.viewMode, "2d");
-  assert.equal(signals._map_controls.filters.searchText, "velia");
   assert.equal(signals._map_bridged.filters.fromPatchId, "2026-02-26");
   assert.equal(signals._map_bridged.filters.toPatchId, "2026-03-12");
-  assert.deepEqual(signals._map_controls.filters.fishIds, [77, 91]);
-  assert.deepEqual(signals._map_controls.filters.zoneRgbs, [12615551, 3972668]);
-  assert.deepEqual(signals._map_controls.filters.semanticFieldIdsByLayer, {
+  assert.deepEqual(signals._map_bridged.filters.fishIds, [77, 91]);
+  assert.deepEqual(signals._map_bridged.filters.zoneRgbs, [12615551, 3972668]);
+  assert.deepEqual(signals._map_bridged.filters.semanticFieldIdsByLayer, {
     region_groups: [295],
   });
-  assert.deepEqual(signals._map_controls.filters.fishFilterTerms, ["favourite", "missing"]);
+  assert.deepEqual(signals._map_bridged.filters.fishFilterTerms, ["favourite", "missing"]);
   assert.deepEqual(signals._map_bridged.filters.layerIdsVisible, ["zones", "terrain"]);
   assert.deepEqual(signals._map_bridged.filters.layerIdsOrdered, ["zones", "terrain", "minimap"]);
   assert.deepEqual(signals._map_bridged.filters.layerOpacities, { terrain: 0.35 });
@@ -361,14 +396,14 @@ test("map-page restore does not let stored filters override query-owned input st
           bookmarks: { open: false, collapsed: false, x: null, y: null },
         },
         inputUi: {
-        diagnosticsOpen: true,
-        legendOpen: true,
-        leftPanelOpen: false,
-        showPoints: false,
-        showPointIcons: false,
-        viewMode: "2d",
-        pointIconScale: 1.5,
-      },
+          diagnosticsOpen: true,
+          legendOpen: true,
+          leftPanelOpen: false,
+          showPoints: false,
+          showPointIcons: false,
+          viewMode: "2d",
+          pointIconScale: 1.5,
+        },
         inputFilters: {
           fishIds: [77],
           zoneRgbs: [],
@@ -397,15 +432,13 @@ test("map-page restore does not let stored filters override query-owned input st
 
   env.window.__fishystuffMap.restore(signals);
 
-  assert.deepEqual(signals._map_controls.filters.fishIds, []);
-  assert.deepEqual(signals._map_controls.filters.fishFilterTerms, []);
-  assert.equal(signals._map_controls.filters.searchText, "");
+  assert.deepEqual(signals._map_bridged.filters.fishIds, []);
+  assert.deepEqual(signals._map_bridged.filters.fishFilterTerms, []);
+  assert.equal(signals._map_ui.search.query, "");
   assert.equal(signals._map_bridged.filters.fromPatchId, null);
   assert.equal(signals._map_bridged.filters.toPatchId, null);
-  assert.deepEqual(signals._map_bridged.filters.layerIdsVisible, []);
+  assert.deepEqual(signals._map_bridged.filters.layerIdsVisible, DEFAULT_ENABLED_LAYER_IDS);
   assert.equal(signals._map_bridged.ui.diagnosticsOpen, false);
-  assert.equal(signals._map_controls.ui.legendOpen, false);
-  assert.equal(signals._map_controls.ui.leftPanelOpen, false);
   assert.equal(signals._map_bridged.ui.showPoints, false);
   assert.equal(signals._map_bridged.ui.showPointIcons, false);
   assert.equal(signals._map_bridged.ui.pointIconScale, 1.5);
@@ -485,46 +518,11 @@ test("map-page persists durable _map_ui.windowUi patches", () => {
   });
   env.flushTimers();
 
+  const expected = defaultStoredUiSnapshot();
+  expected.windowUi.search.open = false;
   assert.equal(
     env.localStorage.getItem("fishystuff.map.window_ui.v1"),
-    JSON.stringify({
-      windowUi: {
-        search: { open: false, collapsed: false, x: null, y: null },
-        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
-        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
-        layers: { open: true, collapsed: false, x: null, y: null },
-        bookmarks: { open: false, collapsed: false, x: null, y: null },
-      },
-      layers: {
-        expandedLayerIds: [],
-      },
-      inputUi: {
-        diagnosticsOpen: false,
-        legendOpen: false,
-        leftPanelOpen: true,
-        showPoints: true,
-        showPointIcons: true,
-        viewMode: "2d",
-        pointIconScale: 1,
-      },
-      inputFilters: {
-        fishIds: [],
-        zoneRgbs: [],
-        semanticFieldIdsByLayer: {},
-        fishFilterTerms: [],
-        searchText: "",
-        fromPatchId: null,
-        toPatchId: null,
-        layerIdsVisible: [],
-        layerIdsOrdered: [],
-        layerOpacities: {},
-        layerClipMasks: {},
-        layerWaypointConnectionsVisible: {},
-        layerWaypointLabelsVisible: {},
-        layerPointIconsVisible: {},
-        layerPointIconScales: {},
-      },
-    }),
+    JSON.stringify(expected),
   );
 });
 
@@ -552,46 +550,11 @@ test("map-page persists durable _map_ui.layers patches", () => {
   });
   env.flushTimers();
 
+  const expected = defaultStoredUiSnapshot();
+  expected.layers.expandedLayerIds = ["terrain", "resources"];
   assert.equal(
     env.localStorage.getItem("fishystuff.map.window_ui.v1"),
-    JSON.stringify({
-      windowUi: {
-        search: { open: true, collapsed: false, x: null, y: null },
-        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
-        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
-        layers: { open: true, collapsed: false, x: null, y: null },
-        bookmarks: { open: false, collapsed: false, x: null, y: null },
-      },
-      layers: {
-        expandedLayerIds: ["terrain", "resources"],
-      },
-      inputUi: {
-        diagnosticsOpen: false,
-        legendOpen: false,
-        leftPanelOpen: true,
-        showPoints: true,
-        showPointIcons: true,
-        viewMode: "2d",
-        pointIconScale: 1,
-      },
-      inputFilters: {
-        fishIds: [],
-        zoneRgbs: [],
-        semanticFieldIdsByLayer: {},
-        fishFilterTerms: [],
-        searchText: "",
-        fromPatchId: null,
-        toPatchId: null,
-        layerIdsVisible: [],
-        layerIdsOrdered: [],
-        layerOpacities: {},
-        layerClipMasks: {},
-        layerWaypointConnectionsVisible: {},
-        layerWaypointLabelsVisible: {},
-        layerPointIconsVisible: {},
-        layerPointIconScales: {},
-      },
-    }),
+    JSON.stringify(expected),
   );
 });
 
@@ -619,46 +582,11 @@ test("map-page persists durable _map_bridged diagnostics state", () => {
   });
   env.flushTimers();
 
+  const expected = defaultStoredUiSnapshot();
+  expected.bridgedUi.diagnosticsOpen = true;
   assert.equal(
     env.localStorage.getItem("fishystuff.map.window_ui.v1"),
-    JSON.stringify({
-      windowUi: {
-        search: { open: true, collapsed: false, x: null, y: null },
-        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
-        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
-        layers: { open: true, collapsed: false, x: null, y: null },
-        bookmarks: { open: false, collapsed: false, x: null, y: null },
-      },
-      layers: {
-        expandedLayerIds: [],
-      },
-      inputUi: {
-        diagnosticsOpen: true,
-        legendOpen: false,
-        leftPanelOpen: true,
-        showPoints: true,
-        showPointIcons: true,
-        viewMode: "2d",
-        pointIconScale: 1,
-      },
-      inputFilters: {
-        fishIds: [],
-        zoneRgbs: [],
-        semanticFieldIdsByLayer: {},
-        fishFilterTerms: [],
-        searchText: "",
-        fromPatchId: null,
-        toPatchId: null,
-        layerIdsVisible: [],
-        layerIdsOrdered: [],
-        layerOpacities: {},
-        layerClipMasks: {},
-        layerWaypointConnectionsVisible: {},
-        layerWaypointLabelsVisible: {},
-        layerPointIconsVisible: {},
-        layerPointIconScales: {},
-      },
-    }),
+    JSON.stringify(expected),
   );
 });
 
@@ -668,7 +596,12 @@ test("map-page persists durable bridged layer filter state", () => {
 
   env.window.__fishystuffMap.restore(signals);
   env.window.__fishystuffMap.patchSignals({
-    _map_controls: {
+    _map_ui: {
+      search: {
+        query: "velia",
+      },
+    },
+    _map_bridged: {
       filters: {
         fishIds: [77, 91],
         zoneRgbs: [12615551, 3972668],
@@ -676,11 +609,6 @@ test("map-page persists durable bridged layer filter state", () => {
           region_groups: [295],
         },
         fishFilterTerms: ["favourite", "missing"],
-        searchText: "velia",
-      },
-    },
-    _map_bridged: {
-      filters: {
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
         layerIdsVisible: ["zones", "terrain"],
@@ -697,7 +625,12 @@ test("map-page persists durable bridged layer filter state", () => {
   env.document.dispatchEvent({
     type: "datastar-signal-patch",
     detail: {
-      _map_controls: {
+      _map_ui: {
+        search: {
+          query: "velia",
+        },
+      },
+      _map_bridged: {
         filters: {
           fishIds: [77, 91],
           zoneRgbs: [12615551, 3972668],
@@ -705,11 +638,6 @@ test("map-page persists durable bridged layer filter state", () => {
             region_groups: [295],
           },
           fishFilterTerms: ["favourite", "missing"],
-          searchText: "velia",
-        },
-      },
-      _map_bridged: {
-        filters: {
           fromPatchId: "2026-02-26",
           toPatchId: "2026-03-12",
           layerIdsVisible: ["zones", "terrain"],
@@ -726,48 +654,27 @@ test("map-page persists durable bridged layer filter state", () => {
   });
   env.flushTimers();
 
+  const expected = defaultStoredUiSnapshot();
+  expected.search.query = "velia";
+  expected.bridgedFilters.fishIds = [77, 91];
+  expected.bridgedFilters.zoneRgbs = [12615551, 3972668];
+  expected.bridgedFilters.semanticFieldIdsByLayer = {
+    region_groups: [295],
+  };
+  expected.bridgedFilters.fishFilterTerms = ["favourite", "missing"];
+  expected.bridgedFilters.fromPatchId = "2026-02-26";
+  expected.bridgedFilters.toPatchId = "2026-03-12";
+  expected.bridgedFilters.layerIdsVisible = ["zones", "terrain"];
+  expected.bridgedFilters.layerIdsOrdered = ["zones", "terrain", "minimap"];
+  expected.bridgedFilters.layerOpacities = { terrain: 0.35 };
+  expected.bridgedFilters.layerClipMasks = { terrain: "zones" };
+  expected.bridgedFilters.layerWaypointConnectionsVisible = { terrain: true };
+  expected.bridgedFilters.layerWaypointLabelsVisible = { terrain: false };
+  expected.bridgedFilters.layerPointIconsVisible = { terrain: true };
+  expected.bridgedFilters.layerPointIconScales = { terrain: 1.5 };
   assert.equal(
     env.localStorage.getItem("fishystuff.map.window_ui.v1"),
-    JSON.stringify({
-      windowUi: {
-        search: { open: true, collapsed: false, x: null, y: null },
-        settings: { open: true, collapsed: false, x: null, y: null, autoAdjustView: true },
-        zoneInfo: { open: true, collapsed: false, x: null, y: null, tab: "" },
-        layers: { open: true, collapsed: false, x: null, y: null },
-        bookmarks: { open: false, collapsed: false, x: null, y: null },
-      },
-      layers: {
-        expandedLayerIds: [],
-      },
-      inputUi: {
-        diagnosticsOpen: false,
-        legendOpen: false,
-        leftPanelOpen: true,
-        showPoints: true,
-        showPointIcons: true,
-        viewMode: "2d",
-        pointIconScale: 1,
-      },
-      inputFilters: {
-        fishIds: [77, 91],
-        zoneRgbs: [12615551, 3972668],
-        semanticFieldIdsByLayer: {
-          region_groups: [295],
-        },
-        fishFilterTerms: ["favourite", "missing"],
-        searchText: "velia",
-        fromPatchId: "2026-02-26",
-        toPatchId: "2026-03-12",
-        layerIdsVisible: ["zones", "terrain"],
-        layerIdsOrdered: ["zones", "terrain", "minimap"],
-        layerOpacities: { terrain: 0.35 },
-        layerClipMasks: { terrain: "zones" },
-        layerWaypointConnectionsVisible: { terrain: true },
-        layerWaypointLabelsVisible: { terrain: false },
-        layerPointIconsVisible: { terrain: true },
-        layerPointIconScales: { terrain: 1.5 },
-      },
-    }),
+    JSON.stringify(expected),
   );
 });
 

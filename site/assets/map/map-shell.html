@@ -8,18 +8,8 @@
                layers: { open: true, collapsed: false, x: null, y: null },
                bookmarks: { open: false, collapsed: false, x: null, y: null }
              },
-             search: { open: false },
+             search: { open: false, query: '' },
              bookmarks: { placing: false, selectedIds: [] }
-           },
-           _map_controls: {
-             filters: {
-               searchText: '',
-               patchId: null
-             },
-             ui: {
-               legendOpen: false,
-               leftPanelOpen: true
-             }
            },
            _map_bridged: {
              filters: {
@@ -150,7 +140,7 @@
               type="search"
               placeholder="Search fish, zone, or filter term"
               autocomplete="off"
-              data-bind="_map_controls.filters.searchText"
+              data-bind="_map_ui.search.query"
               data-on:input="$_map_ui.search.open = true"
               data-on:focus="$_map_ui.search.open = true"
             >

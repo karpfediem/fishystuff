@@ -14,7 +14,7 @@
     "minimap",
   ]);
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$))|map_controls\.ui\.(?:legendOpen|leftPanelOpen)|map_controls\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|searchText)|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.query)|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const state = {
     persistedUiJson: "",
     persistedBookmarksJson: "",
@@ -134,15 +134,14 @@
 
   function storedUiSignals(signals) {
     const windowUi = signals?._map_ui?.windowUi;
-    const inputUi = signals?._map_controls?.ui;
-    const inputFilters = signals?._map_controls?.filters;
+    const search = signals?._map_ui?.search;
     const bridgedUi = signals?._map_bridged?.ui;
     const bridgedFilters = signals?._map_bridged?.filters;
     const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
       ? cloneJson(signals._map_bookmarks.entries)
       : [];
     // Map-page persistence is intentionally limited to page-owned durable UI state.
-    // Ephemeral locals such as `_map_ui.search` and `_map_ui.bookmarks` stay live-only.
+    // Ephemeral locals such as `_map_ui.search.open` and `_map_ui.bookmarks` stay live-only.
     return {
       _map_ui: {
         windowUi:
@@ -154,118 +153,77 @@
             ? cloneJson(signals._map_ui.layers.expandedLayerIds)
             : [],
         },
-      },
-      _map_controls: {
-        ui: {
-          legendOpen: inputUi?.legendOpen === true,
-          leftPanelOpen: inputUi?.leftPanelOpen !== false,
-        },
-        filters: {
-          fishIds: Array.isArray(inputFilters?.fishIds) ? cloneJson(inputFilters.fishIds) : [],
-          zoneRgbs: Array.isArray(inputFilters?.zoneRgbs) ? cloneJson(inputFilters.zoneRgbs) : [],
-          semanticFieldIdsByLayer:
-            inputFilters?.semanticFieldIdsByLayer &&
-            typeof inputFilters.semanticFieldIdsByLayer === "object" &&
-            !Array.isArray(inputFilters.semanticFieldIdsByLayer)
-              ? cloneJson(inputFilters.semanticFieldIdsByLayer)
-              : {},
-          fishFilterTerms: Array.isArray(inputFilters?.fishFilterTerms)
-            ? cloneJson(inputFilters.fishFilterTerms)
-            : [],
-          searchText: String(inputFilters?.searchText || ""),
+        search: {
+          query: String(search?.query || ""),
         },
       },
       _map_bridged: {
         ui: {
-          diagnosticsOpen:
-            bridgedUi?.diagnosticsOpen === true || inputUi?.diagnosticsOpen === true,
-          showPoints:
-            bridgedUi?.showPoints !== false && inputUi?.showPoints !== false,
-          showPointIcons:
-            bridgedUi?.showPointIcons !== false && inputUi?.showPointIcons !== false,
-          viewMode:
-            bridgedUi?.viewMode === "3d" || inputUi?.viewMode === "3d" ? "3d" : "2d",
+          diagnosticsOpen: bridgedUi?.diagnosticsOpen === true,
+          showPoints: bridgedUi?.showPoints !== false,
+          showPointIcons: bridgedUi?.showPointIcons !== false,
+          viewMode: bridgedUi?.viewMode === "3d" ? "3d" : "2d",
           pointIconScale: Number.isFinite(bridgedUi?.pointIconScale)
             ? Number(bridgedUi.pointIconScale)
-            : Number.isFinite(inputUi?.pointIconScale)
-              ? Number(inputUi.pointIconScale)
-              : 1,
+            : 1,
         },
         filters: {
-          fromPatchId:
-            bridgedFilters?.fromPatchId ?? inputFilters?.fromPatchId ?? null,
-          toPatchId:
-            bridgedFilters?.toPatchId ?? inputFilters?.toPatchId ?? null,
+          fishIds: Array.isArray(bridgedFilters?.fishIds) ? cloneJson(bridgedFilters.fishIds) : [],
+          zoneRgbs: Array.isArray(bridgedFilters?.zoneRgbs) ? cloneJson(bridgedFilters.zoneRgbs) : [],
+          semanticFieldIdsByLayer:
+            bridgedFilters?.semanticFieldIdsByLayer &&
+            typeof bridgedFilters.semanticFieldIdsByLayer === "object" &&
+            !Array.isArray(bridgedFilters.semanticFieldIdsByLayer)
+              ? cloneJson(bridgedFilters.semanticFieldIdsByLayer)
+              : {},
+          fishFilterTerms: Array.isArray(bridgedFilters?.fishFilterTerms)
+            ? cloneJson(bridgedFilters.fishFilterTerms)
+            : [],
+          patchId: bridgedFilters?.patchId ?? null,
+          fromPatchId: bridgedFilters?.fromPatchId ?? null,
+          toPatchId: bridgedFilters?.toPatchId ?? null,
           layerIdsVisible: Array.isArray(bridgedFilters?.layerIdsVisible)
             ? cloneJson(bridgedFilters.layerIdsVisible)
-            : Array.isArray(inputFilters?.layerIdsVisible)
-              ? cloneJson(inputFilters.layerIdsVisible)
-              : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
+            : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
           layerIdsOrdered: Array.isArray(bridgedFilters?.layerIdsOrdered)
             ? cloneJson(bridgedFilters.layerIdsOrdered)
-            : Array.isArray(inputFilters?.layerIdsOrdered)
-              ? cloneJson(inputFilters.layerIdsOrdered)
-              : [],
+            : [],
           layerOpacities:
             bridgedFilters?.layerOpacities &&
             typeof bridgedFilters.layerOpacities === "object" &&
             !Array.isArray(bridgedFilters.layerOpacities)
               ? cloneJson(bridgedFilters.layerOpacities)
-              : inputFilters?.layerOpacities &&
-                  typeof inputFilters.layerOpacities === "object" &&
-                  !Array.isArray(inputFilters.layerOpacities)
-                ? cloneJson(inputFilters.layerOpacities)
-                : {},
+              : {},
           layerClipMasks:
             bridgedFilters?.layerClipMasks &&
             typeof bridgedFilters.layerClipMasks === "object" &&
             !Array.isArray(bridgedFilters.layerClipMasks)
               ? cloneJson(bridgedFilters.layerClipMasks)
-              : inputFilters?.layerClipMasks &&
-                  typeof inputFilters.layerClipMasks === "object" &&
-                  !Array.isArray(inputFilters.layerClipMasks)
-                ? cloneJson(inputFilters.layerClipMasks)
-                : {},
+              : {},
           layerWaypointConnectionsVisible:
             bridgedFilters?.layerWaypointConnectionsVisible &&
             typeof bridgedFilters.layerWaypointConnectionsVisible === "object" &&
             !Array.isArray(bridgedFilters.layerWaypointConnectionsVisible)
               ? cloneJson(bridgedFilters.layerWaypointConnectionsVisible)
-              : inputFilters?.layerWaypointConnectionsVisible &&
-                  typeof inputFilters.layerWaypointConnectionsVisible === "object" &&
-                  !Array.isArray(inputFilters.layerWaypointConnectionsVisible)
-                ? cloneJson(inputFilters.layerWaypointConnectionsVisible)
-                : {},
+              : {},
           layerWaypointLabelsVisible:
             bridgedFilters?.layerWaypointLabelsVisible &&
             typeof bridgedFilters.layerWaypointLabelsVisible === "object" &&
             !Array.isArray(bridgedFilters.layerWaypointLabelsVisible)
               ? cloneJson(bridgedFilters.layerWaypointLabelsVisible)
-              : inputFilters?.layerWaypointLabelsVisible &&
-                  typeof inputFilters.layerWaypointLabelsVisible === "object" &&
-                  !Array.isArray(inputFilters.layerWaypointLabelsVisible)
-                ? cloneJson(inputFilters.layerWaypointLabelsVisible)
-                : {},
+              : {},
           layerPointIconsVisible:
             bridgedFilters?.layerPointIconsVisible &&
             typeof bridgedFilters.layerPointIconsVisible === "object" &&
             !Array.isArray(bridgedFilters.layerPointIconsVisible)
               ? cloneJson(bridgedFilters.layerPointIconsVisible)
-              : inputFilters?.layerPointIconsVisible &&
-                  typeof inputFilters.layerPointIconsVisible === "object" &&
-                  !Array.isArray(inputFilters.layerPointIconsVisible)
-                ? cloneJson(inputFilters.layerPointIconsVisible)
-                : {},
+              : {},
           layerPointIconScales:
             bridgedFilters?.layerPointIconScales &&
             typeof bridgedFilters.layerPointIconScales === "object" &&
             !Array.isArray(bridgedFilters.layerPointIconScales)
               ? cloneJson(bridgedFilters.layerPointIconScales)
-              : inputFilters?.layerPointIconScales &&
-                  typeof inputFilters.layerPointIconScales === "object" &&
-                  !Array.isArray(inputFilters.layerPointIconScales)
-                ? cloneJson(inputFilters.layerPointIconScales)
-                : {},
+              : {},
         },
       },
       _map_bookmarks: {
@@ -284,6 +242,28 @@
   }
 
   function uiStorageSnapshot(stored) {
+    const legacyInputUi =
+      stored?.inputUi && typeof stored.inputUi === "object" && !Array.isArray(stored.inputUi)
+        ? stored.inputUi
+        : {};
+    const legacyInputFilters =
+      stored?.inputFilters &&
+      typeof stored.inputFilters === "object" &&
+      !Array.isArray(stored.inputFilters)
+        ? stored.inputFilters
+        : {};
+    const bridgedUi =
+      stored?._map_bridged?.ui &&
+      typeof stored._map_bridged.ui === "object" &&
+      !Array.isArray(stored._map_bridged.ui)
+        ? stored._map_bridged.ui
+        : {};
+    const bridgedFilters =
+      stored?._map_bridged?.filters &&
+      typeof stored._map_bridged.filters === "object" &&
+      !Array.isArray(stored._map_bridged.filters)
+        ? stored._map_bridged.filters
+        : {};
     return {
       windowUi:
         stored?._map_ui?.windowUi &&
@@ -296,127 +276,135 @@
           ? cloneJson(stored._map_ui.layers.expandedLayerIds)
           : [],
       },
-      inputUi: {
-        diagnosticsOpen:
-          stored?._map_bridged?.ui?.diagnosticsOpen === true
-          || stored?._map_controls?.ui?.diagnosticsOpen === true,
-        legendOpen: stored?._map_controls?.ui?.legendOpen === true,
-        leftPanelOpen: stored?._map_controls?.ui?.leftPanelOpen !== false,
-        showPoints:
-          stored?._map_bridged?.ui?.showPoints !== false
-          && stored?._map_controls?.ui?.showPoints !== false,
+      search: {
+        query: String(stored?._map_ui?.search?.query || ""),
+      },
+      bridgedUi: {
+        diagnosticsOpen: bridgedUi.diagnosticsOpen === true || legacyInputUi.diagnosticsOpen === true,
+        showPoints: bridgedUi.showPoints !== false && legacyInputUi.showPoints !== false,
         showPointIcons:
-          stored?._map_bridged?.ui?.showPointIcons !== false
-          && stored?._map_controls?.ui?.showPointIcons !== false,
+          bridgedUi.showPointIcons !== false && legacyInputUi.showPointIcons !== false,
         viewMode:
-          stored?._map_bridged?.ui?.viewMode === "3d"
-          || stored?._map_controls?.ui?.viewMode === "3d"
-            ? "3d"
-            : "2d",
-        pointIconScale: Number.isFinite(stored?._map_bridged?.ui?.pointIconScale)
-          ? Number(stored._map_bridged.ui.pointIconScale)
-          : Number.isFinite(stored?._map_controls?.ui?.pointIconScale)
-            ? Number(stored._map_controls.ui.pointIconScale)
+          bridgedUi.viewMode === "3d" || legacyInputUi.viewMode === "3d" ? "3d" : "2d",
+        pointIconScale: Number.isFinite(bridgedUi.pointIconScale)
+          ? Number(bridgedUi.pointIconScale)
+          : Number.isFinite(legacyInputUi.pointIconScale)
+            ? Number(legacyInputUi.pointIconScale)
             : 1,
       },
-      inputFilters: {
-        fishIds: Array.isArray(stored?._map_controls?.filters?.fishIds)
-          ? cloneJson(stored._map_controls.filters.fishIds)
-          : [],
-        zoneRgbs: Array.isArray(stored?._map_controls?.filters?.zoneRgbs)
-          ? cloneJson(stored._map_controls.filters.zoneRgbs)
-          : [],
+      bridgedFilters: {
+        fishIds: Array.isArray(bridgedFilters.fishIds)
+          ? cloneJson(bridgedFilters.fishIds)
+          : Array.isArray(legacyInputFilters.fishIds)
+            ? cloneJson(legacyInputFilters.fishIds)
+            : [],
+        zoneRgbs: Array.isArray(bridgedFilters.zoneRgbs)
+          ? cloneJson(bridgedFilters.zoneRgbs)
+          : Array.isArray(legacyInputFilters.zoneRgbs)
+            ? cloneJson(legacyInputFilters.zoneRgbs)
+            : [],
         semanticFieldIdsByLayer:
-          stored?._map_controls?.filters?.semanticFieldIdsByLayer &&
-          typeof stored._map_controls.filters.semanticFieldIdsByLayer === "object" &&
-          !Array.isArray(stored._map_controls.filters.semanticFieldIdsByLayer)
-            ? cloneJson(stored._map_controls.filters.semanticFieldIdsByLayer)
-            : {},
-        fishFilterTerms: Array.isArray(stored?._map_controls?.filters?.fishFilterTerms)
-          ? cloneJson(stored._map_controls.filters.fishFilterTerms)
-          : [],
-        searchText: String(stored?._map_controls?.filters?.searchText || ""),
+          bridgedFilters.semanticFieldIdsByLayer &&
+          typeof bridgedFilters.semanticFieldIdsByLayer === "object" &&
+          !Array.isArray(bridgedFilters.semanticFieldIdsByLayer)
+            ? cloneJson(bridgedFilters.semanticFieldIdsByLayer)
+            : legacyInputFilters.semanticFieldIdsByLayer &&
+                typeof legacyInputFilters.semanticFieldIdsByLayer === "object" &&
+                !Array.isArray(legacyInputFilters.semanticFieldIdsByLayer)
+              ? cloneJson(legacyInputFilters.semanticFieldIdsByLayer)
+              : {},
+        fishFilterTerms: Array.isArray(bridgedFilters.fishFilterTerms)
+          ? cloneJson(bridgedFilters.fishFilterTerms)
+          : Array.isArray(legacyInputFilters.fishFilterTerms)
+            ? cloneJson(legacyInputFilters.fishFilterTerms)
+            : [],
+        patchId:
+          bridgedFilters.patchId == null
+            ? legacyInputFilters.patchId == null
+              ? null
+              : String(legacyInputFilters.patchId)
+            : String(bridgedFilters.patchId),
         fromPatchId:
-          stored?._map_bridged?.filters?.fromPatchId == null
-            ? stored?._map_controls?.filters?.fromPatchId == null
+          bridgedFilters.fromPatchId == null
+            ? legacyInputFilters.fromPatchId == null
               ? null
-              : String(stored._map_controls.filters.fromPatchId)
-            : String(stored._map_bridged.filters.fromPatchId),
+              : String(legacyInputFilters.fromPatchId)
+            : String(bridgedFilters.fromPatchId),
         toPatchId:
-          stored?._map_bridged?.filters?.toPatchId == null
-            ? stored?._map_controls?.filters?.toPatchId == null
+          bridgedFilters.toPatchId == null
+            ? legacyInputFilters.toPatchId == null
               ? null
-              : String(stored._map_controls.filters.toPatchId)
-            : String(stored._map_bridged.filters.toPatchId),
-        layerIdsVisible: Array.isArray(stored?._map_bridged?.filters?.layerIdsVisible)
-          ? cloneJson(stored._map_bridged.filters.layerIdsVisible)
-          : Array.isArray(stored?._map_controls?.filters?.layerIdsVisible)
-            ? cloneJson(stored._map_controls.filters.layerIdsVisible)
+              : String(legacyInputFilters.toPatchId)
+            : String(bridgedFilters.toPatchId),
+        layerIdsVisible: Array.isArray(bridgedFilters.layerIdsVisible)
+          ? cloneJson(bridgedFilters.layerIdsVisible)
+          : Array.isArray(legacyInputFilters.layerIdsVisible)
+            ? cloneJson(legacyInputFilters.layerIdsVisible)
             : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
-        layerIdsOrdered: Array.isArray(stored?._map_bridged?.filters?.layerIdsOrdered)
-          ? cloneJson(stored._map_bridged.filters.layerIdsOrdered)
-          : Array.isArray(stored?._map_controls?.filters?.layerIdsOrdered)
-            ? cloneJson(stored._map_controls.filters.layerIdsOrdered)
+        layerIdsOrdered: Array.isArray(bridgedFilters.layerIdsOrdered)
+          ? cloneJson(bridgedFilters.layerIdsOrdered)
+          : Array.isArray(legacyInputFilters.layerIdsOrdered)
+            ? cloneJson(legacyInputFilters.layerIdsOrdered)
             : [],
         layerOpacities:
-          stored?._map_bridged?.filters?.layerOpacities &&
-          typeof stored._map_bridged.filters.layerOpacities === "object" &&
-          !Array.isArray(stored._map_bridged.filters.layerOpacities)
-            ? cloneJson(stored._map_bridged.filters.layerOpacities)
-            : stored?._map_controls?.filters?.layerOpacities &&
-                typeof stored._map_controls.filters.layerOpacities === "object" &&
-                !Array.isArray(stored._map_controls.filters.layerOpacities)
-              ? cloneJson(stored._map_controls.filters.layerOpacities)
+          bridgedFilters.layerOpacities &&
+          typeof bridgedFilters.layerOpacities === "object" &&
+          !Array.isArray(bridgedFilters.layerOpacities)
+            ? cloneJson(bridgedFilters.layerOpacities)
+            : legacyInputFilters.layerOpacities &&
+                typeof legacyInputFilters.layerOpacities === "object" &&
+                !Array.isArray(legacyInputFilters.layerOpacities)
+              ? cloneJson(legacyInputFilters.layerOpacities)
               : {},
         layerClipMasks:
-          stored?._map_bridged?.filters?.layerClipMasks &&
-          typeof stored._map_bridged.filters.layerClipMasks === "object" &&
-          !Array.isArray(stored._map_bridged.filters.layerClipMasks)
-            ? cloneJson(stored._map_bridged.filters.layerClipMasks)
-            : stored?._map_controls?.filters?.layerClipMasks &&
-                typeof stored._map_controls.filters.layerClipMasks === "object" &&
-                !Array.isArray(stored._map_controls.filters.layerClipMasks)
-              ? cloneJson(stored._map_controls.filters.layerClipMasks)
+          bridgedFilters.layerClipMasks &&
+          typeof bridgedFilters.layerClipMasks === "object" &&
+          !Array.isArray(bridgedFilters.layerClipMasks)
+            ? cloneJson(bridgedFilters.layerClipMasks)
+            : legacyInputFilters.layerClipMasks &&
+                typeof legacyInputFilters.layerClipMasks === "object" &&
+                !Array.isArray(legacyInputFilters.layerClipMasks)
+              ? cloneJson(legacyInputFilters.layerClipMasks)
               : {},
         layerWaypointConnectionsVisible:
-          stored?._map_bridged?.filters?.layerWaypointConnectionsVisible &&
-          typeof stored._map_bridged.filters.layerWaypointConnectionsVisible === "object" &&
-          !Array.isArray(stored._map_bridged.filters.layerWaypointConnectionsVisible)
-            ? cloneJson(stored._map_bridged.filters.layerWaypointConnectionsVisible)
-            : stored?._map_controls?.filters?.layerWaypointConnectionsVisible &&
-                typeof stored._map_controls.filters.layerWaypointConnectionsVisible === "object" &&
-                !Array.isArray(stored._map_controls.filters.layerWaypointConnectionsVisible)
-              ? cloneJson(stored._map_controls.filters.layerWaypointConnectionsVisible)
+          bridgedFilters.layerWaypointConnectionsVisible &&
+          typeof bridgedFilters.layerWaypointConnectionsVisible === "object" &&
+          !Array.isArray(bridgedFilters.layerWaypointConnectionsVisible)
+            ? cloneJson(bridgedFilters.layerWaypointConnectionsVisible)
+            : legacyInputFilters.layerWaypointConnectionsVisible &&
+                typeof legacyInputFilters.layerWaypointConnectionsVisible === "object" &&
+                !Array.isArray(legacyInputFilters.layerWaypointConnectionsVisible)
+              ? cloneJson(legacyInputFilters.layerWaypointConnectionsVisible)
               : {},
         layerWaypointLabelsVisible:
-          stored?._map_bridged?.filters?.layerWaypointLabelsVisible &&
-          typeof stored._map_bridged.filters.layerWaypointLabelsVisible === "object" &&
-          !Array.isArray(stored._map_bridged.filters.layerWaypointLabelsVisible)
-            ? cloneJson(stored._map_bridged.filters.layerWaypointLabelsVisible)
-            : stored?._map_controls?.filters?.layerWaypointLabelsVisible &&
-                typeof stored._map_controls.filters.layerWaypointLabelsVisible === "object" &&
-                !Array.isArray(stored._map_controls.filters.layerWaypointLabelsVisible)
-              ? cloneJson(stored._map_controls.filters.layerWaypointLabelsVisible)
+          bridgedFilters.layerWaypointLabelsVisible &&
+          typeof bridgedFilters.layerWaypointLabelsVisible === "object" &&
+          !Array.isArray(bridgedFilters.layerWaypointLabelsVisible)
+            ? cloneJson(bridgedFilters.layerWaypointLabelsVisible)
+            : legacyInputFilters.layerWaypointLabelsVisible &&
+                typeof legacyInputFilters.layerWaypointLabelsVisible === "object" &&
+                !Array.isArray(legacyInputFilters.layerWaypointLabelsVisible)
+              ? cloneJson(legacyInputFilters.layerWaypointLabelsVisible)
               : {},
         layerPointIconsVisible:
-          stored?._map_bridged?.filters?.layerPointIconsVisible &&
-          typeof stored._map_bridged.filters.layerPointIconsVisible === "object" &&
-          !Array.isArray(stored._map_bridged.filters.layerPointIconsVisible)
-            ? cloneJson(stored._map_bridged.filters.layerPointIconsVisible)
-            : stored?._map_controls?.filters?.layerPointIconsVisible &&
-                typeof stored._map_controls.filters.layerPointIconsVisible === "object" &&
-                !Array.isArray(stored._map_controls.filters.layerPointIconsVisible)
-              ? cloneJson(stored._map_controls.filters.layerPointIconsVisible)
+          bridgedFilters.layerPointIconsVisible &&
+          typeof bridgedFilters.layerPointIconsVisible === "object" &&
+          !Array.isArray(bridgedFilters.layerPointIconsVisible)
+            ? cloneJson(bridgedFilters.layerPointIconsVisible)
+            : legacyInputFilters.layerPointIconsVisible &&
+                typeof legacyInputFilters.layerPointIconsVisible === "object" &&
+                !Array.isArray(legacyInputFilters.layerPointIconsVisible)
+              ? cloneJson(legacyInputFilters.layerPointIconsVisible)
               : {},
         layerPointIconScales:
-          stored?._map_bridged?.filters?.layerPointIconScales &&
-          typeof stored._map_bridged.filters.layerPointIconScales === "object" &&
-          !Array.isArray(stored._map_bridged.filters.layerPointIconScales)
-            ? cloneJson(stored._map_bridged.filters.layerPointIconScales)
-            : stored?._map_controls?.filters?.layerPointIconScales &&
-                typeof stored._map_controls.filters.layerPointIconScales === "object" &&
-                !Array.isArray(stored._map_controls.filters.layerPointIconScales)
-              ? cloneJson(stored._map_controls.filters.layerPointIconScales)
+          bridgedFilters.layerPointIconScales &&
+          typeof bridgedFilters.layerPointIconScales === "object" &&
+          !Array.isArray(bridgedFilters.layerPointIconScales)
+            ? cloneJson(bridgedFilters.layerPointIconScales)
+            : legacyInputFilters.layerPointIconScales &&
+                typeof legacyInputFilters.layerPointIconScales === "object" &&
+                !Array.isArray(legacyInputFilters.layerPointIconScales)
+              ? cloneJson(legacyInputFilters.layerPointIconScales)
               : {},
       },
     };
@@ -440,96 +428,106 @@
           : [],
       };
     }
-    if (parsed.inputUi && typeof parsed.inputUi === "object" && !Array.isArray(parsed.inputUi)) {
-      patch._map_controls = {
-        ui: {
-          legendOpen: parsed.inputUi.legendOpen === true,
-          leftPanelOpen: parsed.inputUi.leftPanelOpen !== false,
-        },
-      };
-      patch._map_bridged = {
-        ui: {
-          diagnosticsOpen: parsed.inputUi.diagnosticsOpen === true,
-          showPoints: parsed.inputUi.showPoints !== false,
-          showPointIcons: parsed.inputUi.showPointIcons !== false,
-          viewMode: parsed.inputUi.viewMode === "3d" ? "3d" : "2d",
-          pointIconScale: Number.isFinite(parsed.inputUi.pointIconScale)
-            ? Number(parsed.inputUi.pointIconScale)
-            : 1,
-        },
+    const search = parsed.search && typeof parsed.search === "object" && !Array.isArray(parsed.search)
+      ? parsed.search
+      : parsed.inputFilters &&
+          typeof parsed.inputFilters === "object" &&
+          !Array.isArray(parsed.inputFilters)
+        ? { query: parsed.inputFilters.searchText }
+        : {};
+    const bridgedUi =
+      parsed.bridgedUi && typeof parsed.bridgedUi === "object" && !Array.isArray(parsed.bridgedUi)
+        ? parsed.bridgedUi
+        : parsed.inputUi && typeof parsed.inputUi === "object" && !Array.isArray(parsed.inputUi)
+          ? parsed.inputUi
+          : null;
+    const bridgedFilters =
+      parsed.bridgedFilters &&
+      typeof parsed.bridgedFilters === "object" &&
+      !Array.isArray(parsed.bridgedFilters)
+        ? parsed.bridgedFilters
+        : parsed.inputFilters &&
+            typeof parsed.inputFilters === "object" &&
+            !Array.isArray(parsed.inputFilters)
+          ? parsed.inputFilters
+          : null;
+
+    if (Object.keys(search).length) {
+      patch._map_ui = patch._map_ui || {};
+      patch._map_ui.search = {
+        query: String(search.query || ""),
       };
     }
-    if (
-      parsed.inputFilters &&
-      typeof parsed.inputFilters === "object" &&
-      !Array.isArray(parsed.inputFilters)
-    ) {
-      patch._map_controls = patch._map_controls || {};
-      patch._map_controls.filters = {
-        fishIds: Array.isArray(parsed.inputFilters.fishIds)
-          ? cloneJson(parsed.inputFilters.fishIds)
-          : [],
-        zoneRgbs: Array.isArray(parsed.inputFilters.zoneRgbs)
-          ? cloneJson(parsed.inputFilters.zoneRgbs)
-          : [],
-        semanticFieldIdsByLayer:
-          parsed.inputFilters.semanticFieldIdsByLayer &&
-          typeof parsed.inputFilters.semanticFieldIdsByLayer === "object" &&
-          !Array.isArray(parsed.inputFilters.semanticFieldIdsByLayer)
-            ? cloneJson(parsed.inputFilters.semanticFieldIdsByLayer)
-            : {},
-        fishFilterTerms: Array.isArray(parsed.inputFilters.fishFilterTerms)
-          ? cloneJson(parsed.inputFilters.fishFilterTerms)
-          : [],
-        searchText: String(parsed.inputFilters.searchText || ""),
+    if (bridgedUi) {
+      patch._map_bridged = patch._map_bridged || {};
+      patch._map_bridged.ui = {
+        diagnosticsOpen: bridgedUi.diagnosticsOpen === true,
+        showPoints: bridgedUi.showPoints !== false,
+        showPointIcons: bridgedUi.showPointIcons !== false,
+        viewMode: bridgedUi.viewMode === "3d" ? "3d" : "2d",
+        pointIconScale: Number.isFinite(bridgedUi.pointIconScale)
+          ? Number(bridgedUi.pointIconScale)
+          : 1,
       };
+    }
+    if (bridgedFilters) {
       patch._map_bridged = patch._map_bridged || {};
       patch._map_bridged.filters = {
-        fromPatchId:
-          parsed.inputFilters.fromPatchId == null ? null : String(parsed.inputFilters.fromPatchId),
-        toPatchId:
-          parsed.inputFilters.toPatchId == null ? null : String(parsed.inputFilters.toPatchId),
-        layerIdsVisible: Array.isArray(parsed.inputFilters.layerIdsVisible)
-          ? cloneJson(parsed.inputFilters.layerIdsVisible)
+        fishIds: Array.isArray(bridgedFilters.fishIds) ? cloneJson(bridgedFilters.fishIds) : [],
+        zoneRgbs: Array.isArray(bridgedFilters.zoneRgbs) ? cloneJson(bridgedFilters.zoneRgbs) : [],
+        semanticFieldIdsByLayer:
+          bridgedFilters.semanticFieldIdsByLayer &&
+          typeof bridgedFilters.semanticFieldIdsByLayer === "object" &&
+          !Array.isArray(bridgedFilters.semanticFieldIdsByLayer)
+            ? cloneJson(bridgedFilters.semanticFieldIdsByLayer)
+            : {},
+        fishFilterTerms: Array.isArray(bridgedFilters.fishFilterTerms)
+          ? cloneJson(bridgedFilters.fishFilterTerms)
+          : [],
+        patchId: bridgedFilters.patchId == null ? null : String(bridgedFilters.patchId),
+        fromPatchId: bridgedFilters.fromPatchId == null ? null : String(bridgedFilters.fromPatchId),
+        toPatchId: bridgedFilters.toPatchId == null ? null : String(bridgedFilters.toPatchId),
+        layerIdsVisible: Array.isArray(bridgedFilters.layerIdsVisible)
+          ? cloneJson(bridgedFilters.layerIdsVisible)
           : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
-        layerIdsOrdered: Array.isArray(parsed.inputFilters.layerIdsOrdered)
-          ? cloneJson(parsed.inputFilters.layerIdsOrdered)
+        layerIdsOrdered: Array.isArray(bridgedFilters.layerIdsOrdered)
+          ? cloneJson(bridgedFilters.layerIdsOrdered)
           : [],
         layerOpacities:
-          parsed.inputFilters.layerOpacities &&
-          typeof parsed.inputFilters.layerOpacities === "object" &&
-          !Array.isArray(parsed.inputFilters.layerOpacities)
-            ? cloneJson(parsed.inputFilters.layerOpacities)
+          bridgedFilters.layerOpacities &&
+          typeof bridgedFilters.layerOpacities === "object" &&
+          !Array.isArray(bridgedFilters.layerOpacities)
+            ? cloneJson(bridgedFilters.layerOpacities)
             : {},
         layerClipMasks:
-          parsed.inputFilters.layerClipMasks &&
-          typeof parsed.inputFilters.layerClipMasks === "object" &&
-          !Array.isArray(parsed.inputFilters.layerClipMasks)
-            ? cloneJson(parsed.inputFilters.layerClipMasks)
+          bridgedFilters.layerClipMasks &&
+          typeof bridgedFilters.layerClipMasks === "object" &&
+          !Array.isArray(bridgedFilters.layerClipMasks)
+            ? cloneJson(bridgedFilters.layerClipMasks)
             : {},
         layerWaypointConnectionsVisible:
-          parsed.inputFilters.layerWaypointConnectionsVisible &&
-          typeof parsed.inputFilters.layerWaypointConnectionsVisible === "object" &&
-          !Array.isArray(parsed.inputFilters.layerWaypointConnectionsVisible)
-            ? cloneJson(parsed.inputFilters.layerWaypointConnectionsVisible)
+          bridgedFilters.layerWaypointConnectionsVisible &&
+          typeof bridgedFilters.layerWaypointConnectionsVisible === "object" &&
+          !Array.isArray(bridgedFilters.layerWaypointConnectionsVisible)
+            ? cloneJson(bridgedFilters.layerWaypointConnectionsVisible)
             : {},
         layerWaypointLabelsVisible:
-          parsed.inputFilters.layerWaypointLabelsVisible &&
-          typeof parsed.inputFilters.layerWaypointLabelsVisible === "object" &&
-          !Array.isArray(parsed.inputFilters.layerWaypointLabelsVisible)
-            ? cloneJson(parsed.inputFilters.layerWaypointLabelsVisible)
+          bridgedFilters.layerWaypointLabelsVisible &&
+          typeof bridgedFilters.layerWaypointLabelsVisible === "object" &&
+          !Array.isArray(bridgedFilters.layerWaypointLabelsVisible)
+            ? cloneJson(bridgedFilters.layerWaypointLabelsVisible)
             : {},
         layerPointIconsVisible:
-          parsed.inputFilters.layerPointIconsVisible &&
-          typeof parsed.inputFilters.layerPointIconsVisible === "object" &&
-          !Array.isArray(parsed.inputFilters.layerPointIconsVisible)
-            ? cloneJson(parsed.inputFilters.layerPointIconsVisible)
+          bridgedFilters.layerPointIconsVisible &&
+          typeof bridgedFilters.layerPointIconsVisible === "object" &&
+          !Array.isArray(bridgedFilters.layerPointIconsVisible)
+            ? cloneJson(bridgedFilters.layerPointIconsVisible)
             : {},
         layerPointIconScales:
-          parsed.inputFilters.layerPointIconScales &&
-          typeof parsed.inputFilters.layerPointIconScales === "object" &&
-          !Array.isArray(parsed.inputFilters.layerPointIconScales)
-            ? cloneJson(parsed.inputFilters.layerPointIconScales)
+          bridgedFilters.layerPointIconScales &&
+          typeof bridgedFilters.layerPointIconScales === "object" &&
+          !Array.isArray(bridgedFilters.layerPointIconScales)
+            ? cloneJson(bridgedFilters.layerPointIconScales)
             : {},
       };
     }
@@ -579,15 +577,6 @@
     if (!patch || typeof patch !== "object") {
       return null;
     }
-    if (patch._map_controls?.ui && !Object.keys(patch._map_controls.ui).length) {
-      delete patch._map_controls.ui;
-    }
-    if (patch._map_controls?.filters && !Object.keys(patch._map_controls.filters).length) {
-      delete patch._map_controls.filters;
-    }
-    if (patch._map_controls && !Object.keys(patch._map_controls).length) {
-      delete patch._map_controls;
-    }
     if (patch._map_bridged?.ui && !Object.keys(patch._map_bridged.ui).length) {
       delete patch._map_bridged.ui;
     }
@@ -599,6 +588,12 @@
     }
     if (patch._map_ui?.windowUi && !Object.keys(patch._map_ui.windowUi).length) {
       delete patch._map_ui.windowUi;
+    }
+    if (patch._map_ui?.layers && !Object.keys(patch._map_ui.layers).length) {
+      delete patch._map_ui.layers;
+    }
+    if (patch._map_ui?.search && !Object.keys(patch._map_ui.search).length) {
+      delete patch._map_ui.search;
     }
     if (patch._map_ui && !Object.keys(patch._map_ui).length) {
       delete patch._map_ui;
@@ -628,32 +623,25 @@
       return patch;
     }
     const nextPatch = cloneJson(patch);
-    const inputUi = nextPatch._map_controls?.ui;
-    const inputFilters = nextPatch._map_controls?.filters;
+    const search = nextPatch._map_ui?.search;
     const bridgedUi = nextPatch._map_bridged?.ui;
     const bridgedFilters = nextPatch._map_bridged?.filters;
 
-    if (inputUi) {
-      if (params.has("legend")) {
-        delete inputUi.legendOpen;
-      }
-    }
     if (bridgedUi && params.has("diagnostics")) {
       delete bridgedUi.diagnosticsOpen;
     }
-
-    if (inputFilters) {
+    if (search && params.has("search")) {
+      delete search.query;
+    }
+    if (bridgedFilters) {
       if (params.has("focusFish") || params.has("fish")) {
-        delete inputFilters.fishIds;
+        delete bridgedFilters.fishIds;
       }
       if (params.has("fishTerms") || params.has("fishFilterTerms")) {
-        delete inputFilters.fishFilterTerms;
-      }
-      if (params.has("search")) {
-        delete inputFilters.searchText;
+        delete bridgedFilters.fishFilterTerms;
       }
       if (params.has("layers") || params.has("layerSet")) {
-        delete bridgedFilters?.layerIdsVisible;
+        delete bridgedFilters.layerIdsVisible;
       }
     }
     if (
