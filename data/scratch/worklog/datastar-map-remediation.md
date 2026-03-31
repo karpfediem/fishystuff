@@ -1942,3 +1942,45 @@ Validation for this slice:
 - `node --test site/assets/map/map-page-signals.test.mjs site/assets/map/map-page-state.test.mjs site/assets/js/pages/map-page.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
 - rebuild site output
 - compare served `/map/`, `/map/map-page-signals.js`, and `/js/pages/map-page.js` against `site/.out`
+
+## Nineteenth implementation slice landed
+
+The live shell no longer routes custom shell patch events back through `window.__fishystuffMap.applyPatch(...)`.
+
+What changed:
+
+- `site/assets/map/map-shell.html`
+  - now applies `fishymap-signals-patch` events directly through:
+    - `window.__fishystuffMapPageSignals.applyPatchToSignals($, evt.detail)`
+- `site/assets/js/pages/map-page.js`
+  - no longer exposes `applyPatch` on `window.__fishystuffMap`
+  - keeps the public bootstrap surface smaller:
+    - `signalObject`
+    - `patchSignals`
+    - `restore`
+    - `whenRestored`
+
+Why this slice matters:
+
+- it removes one more unnecessary callback through the page bootstrap global
+- it makes the shell’s live patch handling use the dedicated map signal-ops helper directly
+- it continues the Datastar-aligned direction:
+  - shell event -> signal helper -> live signal graph
+  - no extra page-global indirection in the middle
+
+What still remains after this slice:
+
+- `map-page.js` still owns restore sequencing, persistence scheduling, and the remaining bootstrap global
+- `map-app-live.js` still depends on `window.__fishystuffMap` for restore readiness and signal access
+- more of the bootstrap can still be split into smaller map-specific modules if needed
+
+Validation for this slice:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --test site/assets/map/map-page-signals.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- compare served `/map/` and `/map/map-shell.html` against `site/.out`
+- live Chromium reload showed:
+  - no new console errors
+  - map shell windows render normally
+  - `Layers 7` and `Zone Info` are present immediately after boot

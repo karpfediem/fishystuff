@@ -354,7 +354,6 @@
   window.__fishystuffMap = Object.freeze({
     signalObject,
     patchSignals,
-    applyPatch,
     restore,
     whenRestored() {
       return state.restorePromise;
