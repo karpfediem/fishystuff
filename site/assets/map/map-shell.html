@@ -1,4 +1,5 @@
 <div id="map-page-shell"
+         data-on:fishymap-signals-patch="window.__fishystuffMap.applyPatch($, evt.detail)"
          data-signals="{
            _map_ui: {
              windowUi: {
@@ -72,9 +73,9 @@
           data-window-toggle="search"
           data-on:click="$_map_ui.windowUi.search.open = !$_map_ui.windowUi.search.open"
           type="button"
-          aria-pressed="true"
-          aria-label="Hide search"
-          title="Hide search"
+          data-attr:aria-pressed="$_map_ui.windowUi.search.open"
+          data-attr:aria-label="$_map_ui.windowUi.search.open ? 'Hide search' : 'Show search'"
+          data-attr:title="$_map_ui.windowUi.search.open ? 'Hide search' : 'Show search'"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-magnifying-glass"></use></svg>
         </button>
@@ -83,9 +84,9 @@
           data-window-toggle="bookmarks"
           data-on:click="$_map_ui.windowUi.bookmarks.open = !$_map_ui.windowUi.bookmarks.open"
           type="button"
-          aria-pressed="false"
-          aria-label="Show bookmarks"
-          title="Show bookmarks"
+          data-attr:aria-pressed="$_map_ui.windowUi.bookmarks.open"
+          data-attr:aria-label="$_map_ui.windowUi.bookmarks.open ? 'Hide bookmarks' : 'Show bookmarks'"
+          data-attr:title="$_map_ui.windowUi.bookmarks.open ? 'Hide bookmarks' : 'Show bookmarks'"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-bookmarks"></use></svg>
         </button>
@@ -94,9 +95,9 @@
           data-window-toggle="settings"
           data-on:click="$_map_ui.windowUi.settings.open = !$_map_ui.windowUi.settings.open"
           type="button"
-          aria-pressed="true"
-          aria-label="Hide settings"
-          title="Hide settings"
+          data-attr:aria-pressed="$_map_ui.windowUi.settings.open"
+          data-attr:aria-label="$_map_ui.windowUi.settings.open ? 'Hide settings' : 'Show settings'"
+          data-attr:title="$_map_ui.windowUi.settings.open ? 'Hide settings' : 'Show settings'"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-adjustments-horizontal"></use></svg>
         </button>
@@ -105,9 +106,9 @@
           data-window-toggle="zone-info"
           data-on:click="$_map_ui.windowUi.zoneInfo.open = !$_map_ui.windowUi.zoneInfo.open"
           type="button"
-          aria-pressed="true"
-          aria-label="Hide zone info"
-          title="Hide zone info"
+          data-attr:aria-pressed="$_map_ui.windowUi.zoneInfo.open"
+          data-attr:aria-label="$_map_ui.windowUi.zoneInfo.open ? 'Hide zone info' : 'Show zone info'"
+          data-attr:title="$_map_ui.windowUi.zoneInfo.open ? 'Hide zone info' : 'Show zone info'"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-information-circle"></use></svg>
         </button>
@@ -116,18 +117,26 @@
           data-window-toggle="layers"
           data-on:click="$_map_ui.windowUi.layers.open = !$_map_ui.windowUi.layers.open"
           type="button"
-          aria-pressed="true"
-          aria-label="Hide layers"
-          title="Hide layers"
+          data-attr:aria-pressed="$_map_ui.windowUi.layers.open"
+          data-attr:aria-label="$_map_ui.windowUi.layers.open ? 'Hide layers' : 'Show layers'"
+          data-attr:title="$_map_ui.windowUi.layers.open ? 'Hide layers' : 'Show layers'"
         >
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-squares-2x2"></use></svg>
         </button>
       </div>
-      <aside id="fishymap-search-window" class="fishymap-window not-prose" data-window-id="search">
+      <aside
+        id="fishymap-search-window"
+        class="fishymap-window not-prose"
+        data-window-id="search"
+        data-show="$_map_ui.windowUi.search.open"
+        data-attr:data-collapsed="$_map_ui.windowUi.search.collapsed ? 'true' : 'false'"
+        style="display: none"
+      >
         <div
           class="fishymap-window-header"
           id="fishymap-search-titlebar"
           data-window-titlebar="search"
+          data-attr:aria-expanded="!$_map_ui.windowUi.search.collapsed"
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-magnifying-glass"></use></svg>
@@ -147,7 +156,12 @@
             <span id="fishymap-search-count" class="badge badge-soft badge-primary badge-sm" hidden>0 matches</span>
           </label>
         </div>
-        <div id="fishymap-search-body" class="fishymap-window-body">
+        <div
+          id="fishymap-search-body"
+          class="fishymap-window-body"
+          data-show="!$_map_ui.windowUi.search.collapsed"
+          style="display: none"
+        >
           <div id="fishymap-search-selection-shell" class="not-prose" hidden>
             <div id="fishymap-search-selection" hidden></div>
           </div>
@@ -157,14 +171,21 @@
           </div>
         </div>
       </aside>
-      <aside id="fishymap-bookmarks-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="bookmarks">
+      <aside
+        id="fishymap-bookmarks-window"
+        class="fishymap-window card card-border bg-base-100 not-prose"
+        data-window-id="bookmarks"
+        data-show="$_map_ui.windowUi.bookmarks.open"
+        data-attr:data-collapsed="$_map_ui.windowUi.bookmarks.collapsed ? 'true' : 'false'"
+        style="display: none"
+      >
         <div
           class="fishymap-window-header"
           id="fishymap-bookmarks-titlebar"
           data-window-titlebar="bookmarks"
           role="button"
           tabindex="0"
-          aria-expanded="true"
+          data-attr:aria-expanded="!$_map_ui.windowUi.bookmarks.collapsed"
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-bookmarks"></use></svg>
@@ -175,7 +196,12 @@
             <span id="fishymap-bookmark-place-label">New bookmark</span>
           </button>
         </div>
-        <div id="fishymap-bookmarks-body" class="fishymap-window-body">
+        <div
+          id="fishymap-bookmarks-body"
+          class="fishymap-window-body"
+          data-show="!$_map_ui.windowUi.bookmarks.collapsed"
+          style="display: none"
+        >
           <div id="fishymap-bookmarks-controls">
             <div class="fishymap-bookmarks-controls-row fishymap-bookmarks-controls-row--primary">
               <button id="fishymap-bookmark-copy-selected" class="btn btn-primary btn-sm" type="button"><svg class="fishy-icon size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-copy"></use></svg>Copy</button>
@@ -197,14 +223,21 @@
           </div>
         </div>
       </aside>
-      <aside id="fishymap-zone-info-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="zoneInfo">
+      <aside
+        id="fishymap-zone-info-window"
+        class="fishymap-window card card-border bg-base-100 not-prose"
+        data-window-id="zoneInfo"
+        data-show="$_map_ui.windowUi.zoneInfo.open"
+        data-attr:data-collapsed="$_map_ui.windowUi.zoneInfo.collapsed ? 'true' : 'false'"
+        style="display: none"
+      >
         <div
           class="fishymap-window-header"
           id="fishymap-zone-info-titlebar"
           data-window-titlebar="zoneInfo"
           role="button"
           tabindex="0"
-          aria-expanded="true"
+          data-attr:aria-expanded="!$_map_ui.windowUi.zoneInfo.collapsed"
         >
           <div class="fishymap-window-header-content">
             <span id="fishymap-zone-info-title-icon" class="fishy-icon fishymap-window-title-icon size-5" aria-hidden="true">
@@ -219,7 +252,12 @@
             <span id="fishymap-zone-info-status-text" class="truncate">no selection</span>
           </span>
         </div>
-        <div id="fishymap-zone-info-body" class="fishymap-window-body">
+        <div
+          id="fishymap-zone-info-body"
+          class="fishymap-window-body"
+          data-show="!$_map_ui.windowUi.zoneInfo.collapsed"
+          style="display: none"
+        >
           <div
             id="fishymap-zone-info-tabs"
             role="tablist"
@@ -234,14 +272,21 @@
           </div>
         </div>
       </aside>
-      <aside id="fishymap-layers-window" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="layers">
+      <aside
+        id="fishymap-layers-window"
+        class="fishymap-window card card-border bg-base-100 not-prose"
+        data-window-id="layers"
+        data-show="$_map_ui.windowUi.layers.open"
+        data-attr:data-collapsed="$_map_ui.windowUi.layers.collapsed ? 'true' : 'false'"
+        style="display: none"
+      >
         <div
           class="fishymap-window-header"
           id="fishymap-layers-titlebar"
           data-window-titlebar="layers"
           role="button"
           tabindex="0"
-          aria-expanded="true"
+          data-attr:aria-expanded="!$_map_ui.windowUi.layers.collapsed"
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-squares-2x2"></use></svg>
@@ -249,7 +294,12 @@
           </div>
           <span id="fishymap-layers-count" class="badge badge-outline badge-sm">0</span>
         </div>
-        <div id="fishymap-layers-body" class="fishymap-window-body">
+        <div
+          id="fishymap-layers-body"
+          class="fishymap-window-body"
+          data-show="!$_map_ui.windowUi.layers.collapsed"
+          style="display: none"
+        >
           <div id="fishymap-layers"></div>
         </div>
       </aside>
@@ -258,30 +308,50 @@
         class="btn btn-primary"
         type="button"
         data-on:click="$_map_bridged.ui.viewMode = (($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? '2d' : '3d'"
-        aria-label="View mode: 2D. Click to switch to 3D."
-        title="View mode: 2D. Click to switch to 3D."
+        data-attr:aria-label="(($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? 'View mode: 3D. Click to switch to 2D.' : 'View mode: 2D. Click to switch to 3D.'"
+        data-attr:title="(($_map_bridged.ui.viewMode || $_map_session.view.viewMode || '2d') === '3d') ? 'View mode: 3D. Click to switch to 2D.' : 'View mode: 2D. Click to switch to 3D.'"
       >
         <span id="fishymap-view-toggle-icon" aria-hidden="true">
           <svg class="fishy-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-map-view"></use></svg>
         </span>
       </button>
-      <aside id="fishymap-panel" class="fishymap-window card card-border bg-base-100 not-prose" data-window-id="settings">
+      <aside
+        id="fishymap-panel"
+        class="fishymap-window card card-border bg-base-100 not-prose"
+        data-window-id="settings"
+        data-show="$_map_ui.windowUi.settings.open"
+        data-attr:data-collapsed="$_map_ui.windowUi.settings.collapsed ? 'true' : 'false'"
+        style="display: none"
+      >
         <div
           class="fishymap-window-header"
           id="fishymap-panel-titlebar"
           data-window-titlebar="settings"
           role="button"
           tabindex="0"
-          aria-expanded="true"
+          data-attr:aria-expanded="!$_map_ui.windowUi.settings.collapsed"
         >
           <div class="fishymap-window-header-content">
             <svg class="fishy-icon fishymap-window-title-icon size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260324-9#fishy-adjustments-horizontal"></use></svg>
             <p class="fishymap-window-title text-lg leading-tight">Settings</p>
           </div>
-          <span id="fishymap-ready-pill" class="badge badge-outline badge-sm gap-2 text-base-content/80"><span class="loading loading-spinner loading-xs" aria-hidden="true"></span><span>Loading</span></span>
+          <span
+            id="fishymap-ready-pill"
+            class="badge badge-sm gap-2 text-base-content/80"
+            data-class:badge-success="$_map_runtime.ready"
+            data-class:badge-outline="!$_map_runtime.ready"
+          >
+            <span class="loading loading-spinner loading-xs" aria-hidden="true" data-show="!$_map_runtime.ready" style="display: none"></span>
+            <span data-text="$_map_runtime.ready ? 'Ready' : 'Loading'">Loading</span>
+          </span>
         </div>
 
-        <div id="fishymap-panel-body" class="fishymap-window-body flex flex-col gap-4 px-4 py-4">
+        <div
+          id="fishymap-panel-body"
+          class="fishymap-window-body flex flex-col gap-4 px-4 py-4"
+          data-show="!$_map_ui.windowUi.settings.collapsed"
+          style="display: none"
+        >
           <div class="space-y-3">
             <fieldset class="fieldset rounded-box border border-base-300/70 bg-base-200 p-4">
               <legend class="fieldset-legend px-1 text-sm font-semibold">Patch window</legend>
@@ -416,7 +486,8 @@
           <details
             id="fishymap-diagnostics"
             class="collapse collapse-arrow border border-base-300/70 bg-base-200"
-            data-on:toggle="$_map_bridged.ui.diagnosticsOpen = event.currentTarget.open"
+            data-attr:open="$_map_bridged.ui.diagnosticsOpen"
+            data-on:toggle="$_map_bridged.ui.diagnosticsOpen = evt.currentTarget.open"
           >
             <summary class="collapse-title min-h-0 py-3 text-sm font-semibold">Diagnostics</summary>
             <div class="collapse-content space-y-3">

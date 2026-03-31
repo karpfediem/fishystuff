@@ -1401,6 +1401,53 @@ Validation for this slice:
 - rebuild site output
 - compare served `/map/`, `/map/map-app-live.js`, `/map/map-host.js`, and `/map/map-query-state.js` against `site/.out`
 
+## Thirteenth implementation slice landed
+
+The map page no longer uses a disconnected JS-owned signal store as its source of truth.
+
+What changed:
+
+- `site/assets/js/pages/map-page.js`
+  - removed the page-local Datastar signal store as the live owner
+  - `restore($)` now connects to the actual shell signal graph and keeps only:
+    - a cloned snapshot cache for JS consumers
+    - restore logic
+    - persistence logic
+  - `patchSignals(...)` now prefers dispatching a shell-scoped custom event instead of mutating a fake store
+  - `applyPatch($, patch)` now mutates the live Datastar signal object passed from the shell
+- `site/assets/map/map-shell.html`
+  - root shell now handles `fishymap-signals-patch` declaratively:
+    - `data-on:fishymap-signals-patch="window.__fishystuffMap.applyPatch($, evt.detail)"`
+- `site/assets/map/map-shell.test.mjs`
+  - added shell-level assertions for the new live patch hook
+
+Why this slice matters:
+
+- it restores the shell as the real owner of live UI state
+- it fixes the concrete regression where:
+  - `window.__fishystuffMap.patchSignals(...)` changed JS state
+  - but bound Datastar DOM did not update
+- it replaces a major conceptual drift point with a cleaner Datastar-aligned seam:
+  - page JS emits intent to the shell
+  - the shell mutates the live signal graph
+  - Datastar propagates DOM updates and signal-patch events from there
+
+What still remains after this slice:
+
+- `map-app-live.js` still depends on the legacy `window.__fishystuffMap` bootstrap surface
+- the shell still contains substantial imperative subtrees rendered by legacy modules
+- more shell behavior still needs to move from extracted legacy renderers toward truly Datastar-owned UI
+
+Validation for this slice:
+
+- `node --check site/assets/js/pages/map-page.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --test site/assets/js/pages/map-page.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs`
+- rebuild site output
+- live browser checks:
+  - `window.__fishystuffMap.patchSignals({ _map_ui.windowUi.search.open = true })` now opens the real Search window
+  - clicking the Search toolbar button updates both the Datastar snapshot and the DOM
+
 ## Twelfth implementation slice landed
 
 The host input/snapshot model no longer carries stale page-only fields.

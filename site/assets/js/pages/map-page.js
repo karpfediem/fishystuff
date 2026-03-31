@@ -15,12 +15,18 @@
   ]);
   const MAP_PERSIST_SIGNAL_FILTER =
     /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.query)|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+  const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
+  const FISHYMAP_SIGNAL_PATCH_EVENT = "fishymap-signals-patch";
   const state = {
+    shell: null,
+    liveSignals: null,
+    snapshot: null,
     persistedUiJson: "",
     persistedBookmarksJson: "",
     persistedSessionJson: "",
     uiStateRestored: false,
-    persistBinding: null,
+    persistTimer: 0,
+    signalPatchListenerBound: false,
     restoreResolved: false,
     restorePromise: null,
     resolveRestore: null,
@@ -29,54 +35,125 @@
     state.resolveRestore = resolve;
   });
 
-  const signalStore = window.__fishystuffDatastarState.createPageSignalStore();
+  function cloneJson(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
 
   function signalObject() {
-    return signalStore.signalObject();
+    return state.snapshot;
+  }
+
+  function refreshSnapshot(signals = state.liveSignals) {
+    state.snapshot = signals && typeof signals === "object" ? cloneJson(signals) : null;
+    return state.snapshot;
+  }
+
+  function resolveShell() {
+    const shell = globalThis.document?.getElementById?.("map-page-shell");
+    return shell && typeof shell.dispatchEvent === "function" ? shell : null;
   }
 
   function connect(signals) {
-    signalStore.connect(signals);
-  }
-
-  function cloneJson(value) {
-    return JSON.parse(JSON.stringify(value));
+    state.liveSignals = signals && typeof signals === "object" ? signals : null;
+    state.shell = resolveShell();
+    refreshSnapshot();
+    return state.liveSignals;
   }
 
   function currentLocationHref() {
     return globalThis.location?.href || globalThis.window?.location?.href || "";
   }
 
-  function datastarPersistHelper() {
-    const helper = window.__fishystuffDatastarPersist;
-    return helper && typeof helper.createDebouncedSignalPatchPersistor === "function"
-      ? helper
+  function patchMatchesSignalFilter(patch, filter, prefix = "") {
+    if (!patch || typeof patch !== "object") {
+      return false;
+    }
+    const include = filter?.include && typeof filter.include.test === "function"
+      ? filter.include
       : null;
+    const exclude = filter?.exclude && typeof filter.exclude.test === "function"
+      ? filter.exclude
+      : null;
+    return Object.entries(patch).some(([key, value]) => {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (include) {
+        if (include.test(path)) {
+          return true;
+        }
+      } else if (exclude) {
+        if (!exclude.test(path)) {
+          return true;
+        }
+      }
+      return value && typeof value === "object" && patchMatchesSignalFilter(value, filter, path);
+    });
   }
 
-  function bindPersistListener() {
-    if (state.persistBinding) {
+  function clearPersistTimer() {
+    if (!state.persistTimer) {
       return;
     }
-    const helper = datastarPersistHelper();
-    if (!helper) {
+    globalThis.clearTimeout?.(state.persistTimer);
+    state.persistTimer = 0;
+  }
+
+  function schedulePersist() {
+    clearPersistTimer();
+    state.persistTimer = globalThis.setTimeout?.(() => {
+      state.persistTimer = 0;
+      persist();
+    }, 120);
+  }
+
+  function handleSignalPatch(event) {
+    refreshSnapshot();
+    if (!state.uiStateRestored) {
       return;
     }
-    state.persistBinding = helper.createDebouncedSignalPatchPersistor({
-      delayMs: 120,
-      isReady() {
-        return state.uiStateRestored;
-      },
-      filter: {
-        include: MAP_PERSIST_SIGNAL_FILTER,
-      },
-      persist,
-    });
-    state.persistBinding.bind();
+    if (!patchMatchesSignalFilter(event?.detail, { include: MAP_PERSIST_SIGNAL_FILTER })) {
+      return;
+    }
+    schedulePersist();
+  }
+
+  function bindSignalPatchListener() {
+    if (state.signalPatchListenerBound) {
+      return;
+    }
+    globalThis.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    state.signalPatchListenerBound = true;
+  }
+
+  function applyPatch(signals, patch) {
+    const liveSignals = signals && typeof signals === "object" ? signals : state.liveSignals;
+    if (!liveSignals || !patch || typeof patch !== "object") {
+      return;
+    }
+    window.__fishystuffDatastarState.mergeObjectPatch(liveSignals, cloneJson(patch));
+    connect(liveSignals);
+    if (state.uiStateRestored && patchMatchesSignalFilter(patch, { include: MAP_PERSIST_SIGNAL_FILTER })) {
+      schedulePersist();
+    }
   }
 
   function patchSignals(patch) {
-    signalStore.patchSignals(patch);
+    const shell = state.shell || resolveShell();
+    if (
+      shell &&
+      typeof globalThis.CustomEvent === "function" &&
+      patch &&
+      typeof patch === "object"
+    ) {
+      state.shell = shell;
+      shell.dispatchEvent(
+        new globalThis.CustomEvent(FISHYMAP_SIGNAL_PATCH_EVENT, {
+          bubbles: true,
+          detail: cloneJson(patch),
+        }),
+      );
+      return;
+    }
+    applyPatch(state.liveSignals, patch);
   }
 
   function sharedFishStateHelper() {
@@ -664,7 +741,7 @@
 
   function restore(signals) {
     connect(signals);
-    bindPersistListener();
+    bindSignalPatchListener();
     const sharedFishPatch = restoreSharedFishPatch();
     let uiPatch = null;
     let bookmarkPatch = null;
@@ -722,6 +799,7 @@
     state.persistedBookmarksJson = JSON.stringify(stored._map_bookmarks.entries);
     state.persistedSessionJson = JSON.stringify(sessionStorageSnapshot(stored));
     state.uiStateRestored = true;
+    refreshSnapshot(signals);
     if (!state.restoreResolved) {
       state.restoreResolved = true;
       state.resolveRestore?.();
@@ -757,12 +835,7 @@
   window.__fishystuffMap = Object.freeze({
     signalObject,
     patchSignals,
-    writeSignal(path, value) {
-      signalStore.writeSignal(path, value);
-    },
-    readSignal(path) {
-      return signalStore.readSignal(path);
-    },
+    applyPatch,
     restore,
     whenRestored() {
       return state.restorePromise;
