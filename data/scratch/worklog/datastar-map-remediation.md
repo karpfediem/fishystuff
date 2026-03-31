@@ -1316,3 +1316,46 @@ Validation for this slice:
 - `node --test site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-signal-contract.test.mjs`
 - rebuild site output
 - compare served map shell and page module against `site/.out`
+
+## Tenth implementation slice landed
+
+Startup query parsing for page-owned/shared state now lives in a new clean-slate module:
+
+- `site/assets/map/map-query-state.js`
+
+What changed:
+
+- `map-query-state.js` parses the URL into signal patches for:
+  - `_map_ui.search.query`
+  - `_map_bridged.filters.fishIds`
+  - `_map_bridged.filters.fishFilterTerms`
+  - `_map_bridged.filters.patchId`
+  - `_map_bridged.filters.fromPatchId`
+  - `_map_bridged.filters.toPatchId`
+  - `_map_bridged.filters.layerIdsVisible`
+  - `_map_bridged.ui.diagnosticsOpen`
+  - `_map_bridged.ui.viewMode`
+- `site/assets/map/map-app-live.js`
+  - applies that query-derived signal patch before bridge mount
+- `site/zine.ziggy`
+  - now publishes `map/map-query-state.js`
+
+Why this slice matters:
+
+- it moves another ownership seam out of the bridge and into Datastar-owned page state
+- it keeps query-driven page state aligned with the same signal graph as restore/persist
+- it prepares the host contract for a later removal of page-owned query parsing
+
+What still remains after this slice:
+
+- `map-host.js` still parses some overlapping query params as legacy compatibility behavior
+- selection/semantic/world-point query commands are still host-owned
+- the live map shell still needs more clean-slate replacement of panel behavior beyond bootstrap
+
+Validation for this slice:
+
+- `node --check site/assets/map/map-query-state.js`
+- `node --check site/assets/map/map-app-live.js`
+- `node --test site/assets/map/map-query-state.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/js/pages/map-page.test.mjs`
+- rebuild site output
+- compare served `/map/`, `/map/map-app-live.js`, and `/map/map-query-state.js` against `site/.out`

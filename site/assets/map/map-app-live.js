@@ -12,6 +12,7 @@ import {
   DEFAULT_MAP_SESSION_SIGNAL_STATE,
   DEFAULT_MAP_UI_SIGNAL_STATE,
 } from "./map-signal-contract.js";
+import { parseQuerySignalPatch } from "./map-query-state.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -66,6 +67,11 @@ async function start() {
   const canvas = document.getElementById("bevy");
   if (!(shell instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) {
     return;
+  }
+
+  const queryPatch = parseQuerySignalPatch(globalThis.location?.href);
+  if (queryPatch) {
+    page.patchSignals?.(queryPatch);
   }
 
   const app = createMapApp();
