@@ -9,7 +9,7 @@ build-release-no-tailwind:
     bun run datastar:build; \
     bun run d3:build; \
     bun run images:build; \
-    bun run fonts:build; \
+    bash ./scripts/build-web-fonts.sh; \
     zine release --output "$build_dir"; \
     bun run ./scripts/write-runtime-config.mjs --out "$build_dir/runtime-config.js"; \
     ln -sfn "$build_dir" .out.next; \
