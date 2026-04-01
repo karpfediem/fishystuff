@@ -1,7 +1,5 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import {
   buildHoverTooltipRows,
-  patchTouchesHoverTooltipSignals,
 } from "./map-hover-facts.js";
 
 const ICON_SPRITE_URL = "/img/icons.svg";
@@ -115,9 +113,7 @@ export function createMapHoverTooltipController({
   shell,
   getSignals,
   canvas = shell?.querySelector?.("#bevy") || globalThis.document?.getElementById?.("bevy"),
-  documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
-  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapHoverTooltipController requires a shell element");
@@ -186,13 +182,6 @@ export function createMapHoverTooltipController({
     render();
   }
 
-  function handleSignalPatch(event) {
-    if (!patchTouchesHoverTooltipSignals(event?.detail)) {
-      return;
-    }
-    scheduleRender();
-  }
-
   canvas?.addEventListener?.("pointermove", (event) => {
     state.pointerActive = true;
     writePointerPosition(event.clientX, event.clientY);
@@ -211,10 +200,6 @@ export function createMapHoverTooltipController({
     state.hover = normalizeHoverEventDetail(event?.detail);
     scheduleRender();
   });
-
-  if (listenToSignalPatches) {
-    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-  }
 
   return Object.freeze({
     render,

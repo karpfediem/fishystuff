@@ -5361,3 +5361,59 @@ Next:
 - likely next candidates:
   - `map-zone-info-panel-live.js`
   - `map-info-panel-live.js`
+
+## 2026-04-01: make the live hover tooltip app-driven
+
+The hover tooltip was another controller with a split responsibility:
+
+- it already had the correct imperative input for hover itself:
+  - `fishymap:hover-changed`
+  - canvas `pointermove` / `pointerleave`
+- but it still owned a separate `datastar-signal-patch` subscription just to rerender when
+  visibility or catalog state changed
+
+That second subscription was not necessary once the live app already had the global view of signal
+patches.
+
+What changed:
+
+- `site/assets/map/map-hover-tooltip-live.js`
+  - no longer imports `DATASTAR_SIGNAL_PATCH_EVENT`
+  - no longer listens to document-level Datastar patch events
+  - now focuses only on:
+    - pointer activity
+    - shell hover-change events
+    - rendering the hover rows
+- `site/assets/map/map-app-live.js`
+  - now imports `patchTouchesHoverTooltipSignals(...)`
+  - schedules `hoverTooltip.render()` whenever:
+    - a direct controller patch changes hover-tooltip-relevant signal branches
+    - a real Datastar signal patch changes those branches
+
+Why this matters:
+
+- it removes one more controller-owned Datastar listener
+- the hover tooltip now has a cleaner boundary:
+  - hover events and pointer positioning stay local to the tooltip controller
+  - Datastar signal orchestration stays in the app
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js`
+  - `node --check site/assets/map/map-hover-tooltip-live.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-hover-facts.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-hover-tooltip-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Settings Ready`
+  - `Layers 7`
+
+Next:
+
+- keep working through the remaining live panel controllers by size and coupling
+- current likely next candidates:
+  - `map-info-panel-live.js`
+  - `map-search-panel-live.js`

@@ -23,6 +23,7 @@ import { combineSignalPatches } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
 import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
+import { patchTouchesHoverTooltipSignals } from "./map-hover-facts.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -218,6 +219,7 @@ export async function start() {
   await page.whenRestored();
   let windowManager = null;
   let patchPicker = null;
+  let hoverTooltip = null;
 
   function dispatchSignalPatch(patch) {
     if (!patch || typeof patch !== "object") {
@@ -229,6 +231,9 @@ export async function start() {
     }
     if (patchPicker && patchTouchesPatchPickerSignals(patch)) {
       patchPicker.scheduleRender();
+    }
+    if (hoverTooltip && patchTouchesHoverTooltipSignals(patch)) {
+      hoverTooltip.scheduleRender();
     }
   }
 
@@ -253,7 +258,7 @@ export async function start() {
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
-  const hoverTooltip = createMapHoverTooltipController({
+  hoverTooltip = createMapHoverTooltipController({
     shell,
     getSignals: signals,
   });
@@ -370,6 +375,9 @@ export async function start() {
     }
     if (patchPicker && patchTouchesPatchPickerSignals(effectivePatch)) {
       patchPicker.scheduleRender();
+    }
+    if (hoverTooltip && patchTouchesHoverTooltipSignals(effectivePatch)) {
+      hoverTooltip.scheduleRender();
     }
     if (searchProjectionPatch) {
       applyInternalSignalPatch(searchProjectionPatch);
