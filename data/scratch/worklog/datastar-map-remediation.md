@@ -4587,3 +4587,39 @@ Next:
   live again
 - validate the remaining intended cross-layer behaviors, especially fish-term and zone-term driven
   visibility/clipping on the clean-slate page
+
+## 2026-04-01: attachment graph helper coverage for the clean-slate layer panel
+
+Follow-up hardening:
+
+- after the redraw fix, the live clean-slate page now shows the intended clipping behavior for:
+  - `region_groups -> zone_mask`
+  - `regions -> zone_mask`
+- the next risk was not a live runtime bug but a regression in the page-side attachment graph
+  helpers that power drag/drop and detached state
+- those helpers were still only indirectly covered through broader panel/runtime tests
+
+What changed:
+
+- added `site/assets/map/map-layer-state.test.mjs`
+  - verifies live bridged clip-mask overrides are reflected by `resolveLayerEntries(...)`
+  - verifies `buildLayerClipMaskPatch(...)` detaches a single layer without disturbing siblings
+  - verifies subtree reattachment rewrites descendants to the new top-level mask
+  - verifies `flattenLayerClipMasks(...)` collapses nested attachment chains to the root mask
+
+Validation:
+
+- `node --test site/assets/map/map-layer-state.test.mjs`
+
+Why this matters:
+
+- the clean-slate layer panel now has direct unit coverage for the user-facing clipping model:
+  drag/drop attachment and detach are just transformations of the canonical `_map_bridged` graph
+- this keeps the remediation aligned with the goal of replacing loader-era imperative glue with
+  small, functional signal helpers
+
+Next:
+
+- continue validating the remaining intended search/filter combinations on the live clean-slate map
+  page, especially fish-term driven zone membership and any remaining gaps between the support
+  matrix and actual runtime behavior
