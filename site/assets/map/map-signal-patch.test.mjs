@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   combineSignalPatches,
+  dispatchShellPatchedSignalEvent,
   dispatchShellSignalPatch,
+  FISHYMAP_SIGNAL_PATCHED_EVENT,
   FISHYMAP_SIGNAL_PATCH_EVENT,
 } from "./map-signal-patch.js";
 
@@ -55,4 +57,32 @@ test("dispatchShellSignalPatch emits a cloned bubbling custom event", () => {
   assert.deepEqual(dispatchedEvent.detail, {
     _map_ui: { windowUi: { search: { open: true } } },
   });
+});
+
+test("dispatchShellPatchedSignalEvent emits the shell-local applied patch event", () => {
+  let dispatchedEvent = null;
+  class CustomEventStub {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.detail = init.detail;
+      this.bubbles = init.bubbles;
+    }
+  }
+  const shell = {
+    dispatchEvent(event) {
+      dispatchedEvent = event;
+      return true;
+    },
+  };
+
+  const result = dispatchShellPatchedSignalEvent(
+    shell,
+    { _map_runtime: { ready: true } },
+    CustomEventStub,
+  );
+
+  assert.equal(result, true);
+  assert.equal(dispatchedEvent.type, FISHYMAP_SIGNAL_PATCHED_EVENT);
+  assert.equal(dispatchedEvent.bubbles, true);
+  assert.deepEqual(dispatchedEvent.detail, { _map_runtime: { ready: true } });
 });

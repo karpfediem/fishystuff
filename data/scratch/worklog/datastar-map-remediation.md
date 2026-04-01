@@ -5887,3 +5887,73 @@ Next:
 - continue collapsing the remaining bootstrap/controller glue in `map-app-live.js`
 - especially:
   - the remaining centralized patch fan-out for the controller modules
+
+## 2026-04-01: move live map persistence out of `map-page-live`
+
+With the shell-local patch loop in place, `map-page-live.js` was still carrying one piece of
+non-bootstrap behavior:
+
+- persistence scheduling through `map-page-persist.js`
+
+That meant the page bootstrap module still owned a side-effect path even though `map-app-live.js`
+already owns the live patch loop.
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - no longer imports `createMapPagePersistController(...)`
+  - no longer seeds or forwards persistence work
+  - now exposes only:
+    - `start`
+    - `whenRestored`
+    - `signalObject`
+    - `patchSignals`
+- `site/assets/map/map-app-live.js`
+  - now creates and seeds the page persist controller after restore completes
+  - now forwards shell-local applied patches into that controller
+- `site/assets/map/map-page-live.test.mjs`
+  - updated to reflect the smaller bootstrap surface
+- `site/assets/map/map-signal-patch.js`
+  - now exports `dispatchShellPatchedSignalEvent(...)`
+
+Important regression/fix discovered in this slice:
+
+- shell `data-on-signal-patch` only observes Datastar-native signal mutations
+- app/bridge-driven `page.patchSignals(...)` updates do not reliably re-enter that hook
+- this caused the live map to regress to:
+  - `Layers 0`
+  - `Layer registry is loading…`
+- fix:
+  - `map-app-live.js` now explicitly emits the shell-local applied-patch event after
+    app/bridge-driven signal patches
+  - the shell `data-on-signal-patch` remains in place for template-native Datastar mutations
+
+Why this matters:
+
+- `map-page-live.js` is now closer to a true restore/connect bootstrap only
+- persistence is now owned by the same app module that owns the live patch loop
+- the shell-local event contract now consistently covers:
+  - controller intent patches
+  - app/bridge-applied signal patches
+  - native Datastar element mutations
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js site/assets/map/map-page-live.js site/assets/map/map-page-persist.js site/assets/map/map-signal-patch.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-page-persist.test.mjs site/assets/map/map-signal-patch.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+  - `/map/map-page-live.js`
+  - `/map/map-signal-patch.js`
+- live DevTools reload on `/map/` confirmed recovery after the regression fix:
+  - `Layers 7`
+  - no new console errors
+
+Next:
+
+- keep shrinking `map-app-live.js`
+- likely target:
+  - the remaining centralized controller rerender fan-out

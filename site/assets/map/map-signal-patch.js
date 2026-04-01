@@ -25,6 +25,33 @@ export function dispatchShellSignalPatch(
   patch,
   customEventConstructor = globalThis.CustomEvent,
 ) {
+  return dispatchShellCustomPatchEvent(
+    shell,
+    FISHYMAP_SIGNAL_PATCH_EVENT,
+    patch,
+    customEventConstructor,
+  );
+}
+
+export function dispatchShellPatchedSignalEvent(
+  shell,
+  patch,
+  customEventConstructor = globalThis.CustomEvent,
+) {
+  return dispatchShellCustomPatchEvent(
+    shell,
+    FISHYMAP_SIGNAL_PATCHED_EVENT,
+    patch,
+    customEventConstructor,
+  );
+}
+
+function dispatchShellCustomPatchEvent(
+  shell,
+  eventType,
+  patch,
+  customEventConstructor = globalThis.CustomEvent,
+) {
   if (
     !shell ||
     typeof shell.dispatchEvent !== "function" ||
@@ -34,7 +61,7 @@ export function dispatchShellSignalPatch(
     return false;
   }
   shell.dispatchEvent(
-    new customEventConstructor(FISHYMAP_SIGNAL_PATCH_EVENT, {
+    new customEventConstructor(eventType, {
       bubbles: true,
       detail: cloneJson(patch),
     }),

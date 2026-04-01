@@ -1,6 +1,7 @@
 import { createMapApp } from "./map-app.js";
 import FishyMapBridge, { createEmptySnapshot, snapshotToRestorePatch } from "./map-host.js";
 import { createMapPageLive } from "./map-page-live.js";
+import { createMapPagePersistController } from "./map-page-persist.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
   DEFAULT_MAP_BOOKMARKS_SIGNAL_STATE,
@@ -28,6 +29,7 @@ import {
   patchTouchesSearchPanelSignals,
 } from "./map-search-panel-live.js";
 import {
+  dispatchShellPatchedSignalEvent,
   FISHYMAP_SIGNAL_PATCHED_EVENT,
   FISHYMAP_SIGNAL_PATCH_EVENT,
   combineSignalPatches,
@@ -262,6 +264,12 @@ export async function start() {
   const page = createMapPageLive();
   page.start();
   await page.whenRestored();
+  const pagePersistor = createMapPagePersistController({
+    globalRef: globalThis,
+    isReady: () => true,
+    readSnapshot: () => page.signalObject?.() || null,
+  });
+  pagePersistor.seed(page.signalObject?.() || null);
   let windowManager = null;
   let patchPicker = null;
   let hoverTooltip = null;
@@ -275,6 +283,7 @@ export async function start() {
       return;
     }
     page.patchSignals(patch);
+    dispatchShellPatchedSignalEvent(shell, patch);
   }
 
   const queryPatch = parseQuerySignalPatch(globalThis.location?.href);
@@ -402,7 +411,7 @@ export async function start() {
   });
   shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
     const patch = event?.detail || null;
-    page.handleSignalPatch?.(patch);
+    pagePersistor.handleSignalPatch(patch);
     const searchProjectionPatch = buildSearchProjectionPatchForSignalPatch(signals(), patch);
     const effectivePatch = searchProjectionPatch
       ? combineSignalPatches(patch, searchProjectionPatch)

@@ -265,51 +265,9 @@ test("map-page-live exposes only the live bootstrap surface", () => {
   assert.equal(typeof env.pageLive.whenRestored, "function");
   assert.equal(typeof env.pageLive.signalObject, "function");
   assert.equal(typeof env.pageLive.patchSignals, "function");
-  assert.equal(typeof env.pageLive.handleSignalPatch, "function");
+  assert.equal("handleSignalPatch" in env.pageLive, false);
   assert.equal("connect" in env.pageLive, false);
   assert.equal("persist" in env.pageLive, false);
   assert.equal("restore" in env.pageLive, false);
   assert.equal("state" in env.pageLive, false);
-});
-
-test("map-page-live persists durable map signal patches", () => {
-  const env = createContext();
-  const signals = defaultSignals();
-
-  dispatchLiveInit(env, signals);
-
-  env.pageLive.patchSignals({
-    _map_ui: {
-      windowUi: {
-        search: { open: false, collapsed: true, x: 20, y: 30 },
-      },
-      layers: {
-        hoverFactsVisibleByLayer: {
-          regions: {
-            origin_region: true,
-          },
-        },
-      },
-    },
-    _map_bridged: {
-      filters: {
-        layerIdsVisible: ["bookmarks", "zone_mask"],
-      },
-    },
-  });
-  env.flushTimers();
-
-  const storedUi = JSON.parse(env.localStorage.getItem("fishystuff.map.window_ui.v1"));
-  assert.deepEqual(storedUi.windowUi.search, {
-    open: false,
-    collapsed: true,
-    x: 20,
-    y: 30,
-  });
-  assert.deepEqual(storedUi.layers.hoverFactsVisibleByLayer, {
-    regions: {
-      origin_region: true,
-    },
-  });
-  assert.deepEqual(storedUi.bridgedFilters.layerIdsVisible, ["bookmarks", "zone_mask"]);
 });

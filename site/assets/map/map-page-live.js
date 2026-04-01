@@ -4,7 +4,6 @@ import {
 import {
   applyMapPageSignalsPatch,
 } from "./map-page-signals.js";
-import { createMapPagePersistController } from "./map-page-persist.js";
 export const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 
 export function createMapPageLive({ globalRef = globalThis } = {}) {
@@ -49,12 +48,6 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     return globalRef.location?.href || globalRef.window?.location?.href || "";
   }
 
-  const persistor = createMapPagePersistController({
-    globalRef,
-    isReady: () => state.uiStateRestored,
-    readSnapshot: signalObject,
-  });
-
   function handleLiveInit(event) {
     if (event?.currentTarget && "__fishymapInitialSignals" in event.currentTarget) {
       delete event.currentTarget.__fishymapInitialSignals;
@@ -83,15 +76,10 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     }
     applyMapPageSignalsPatch(liveSignals, patch);
     connect(liveSignals);
-    persistor.handleSignalPatch(patch);
   }
 
   function patchSignals(patch) {
     applyPatch(state.liveSignals, patch);
-  }
-
-  function handleSignalPatch(patch) {
-    persistor.handleSignalPatch(patch);
   }
 
   function restore(signals) {
@@ -111,7 +99,6 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     if (restoreState.sessionPatch) {
       patchSignals(restoreState.sessionPatch);
     }
-    persistor.seed(signals);
     state.uiStateRestored = true;
     if (!state.restoreResolved) {
       state.restoreResolved = true;
@@ -129,7 +116,6 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   }
 
   return Object.freeze({
-    handleSignalPatch,
     patchSignals,
     signalObject,
     start,
