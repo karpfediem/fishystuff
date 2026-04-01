@@ -68,6 +68,7 @@ Multilingual {
     "map/map-layer-panel.js",
     "map/map-layer-panel-live.js",
     "map/map-layer-search-effects.js",
+    "map/map-patch-picker-live.js",
     "map/map-bookmark-state.js",
     "map/map-bookmark-panel-live.js",
     "map/map-overview-facts.js",

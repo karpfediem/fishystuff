@@ -13,6 +13,7 @@ import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
 import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
 import { createMapInfoPanelController } from "./map-info-panel-live.js";
 import { createMapLayerPanelController } from "./map-layer-panel-live.js";
+import { createMapPatchPickerController } from "./map-patch-picker-live.js";
 import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import { combineSignalPatches } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
@@ -283,6 +284,10 @@ export async function start() {
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
+  const patchPicker = createMapPatchPickerController({
+    shell,
+    getSignals: signals,
+  });
   const layerPanel = createMapLayerPanelController({
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
@@ -456,6 +461,7 @@ export async function start() {
   hoverTooltip.render();
   zoneInfoPanel.render();
   void zoneInfoPanel.refreshZoneLootSummary();
+  patchPicker.render();
   layerPanel.render();
   searchPanel.render();
   void loadZoneCatalog().then((zoneCatalog) => {

@@ -4837,3 +4837,56 @@ Next:
 - continue reducing `map-page-live.js` until the remaining shell bootstrap surface is smaller and
   less framework-like
 - after that, start collapsing the most imperative remaining live panel/controller seams
+
+## 2026-04-01: restore live patch pickers from runtime catalog
+
+The patch-window dropdowns were stuck at `Loading patches…` on the live map even though the
+runtime had already loaded patch metadata.
+
+What I found:
+
+- the live runtime snapshot already contained `_map_runtime.catalog.patches`
+- the shell showed the static loading placeholder only because nothing was projecting that
+  catalog into the `fishy-searchable-dropdown` local catalog
+- this was a shell/controller gap, not an API or Bevy data-loading problem
+
+What changed:
+
+- added `site/assets/map/map-patch-picker-live.js`
+  - normalizes runtime patch summaries
+  - listens only to patch-relevant `datastar-signal-patch` branches
+  - projects `_map_runtime.catalog.patches` into each dropdown's
+    `data-role="selected-content-catalog"`
+  - keeps selected labels in sync with `_map_bridged.filters.fromPatchId` /
+    `_map_bridged.filters.toPatchId`
+- wired the controller into `site/assets/map/map-app-live.js`
+- published the new module in `site/zine.ziggy`
+
+Why this direction:
+
+- it restores the broken UI without reintroducing a loader-style monolith
+- it keeps the bridge/runtime contract unchanged
+- it uses a narrow controller seam around an existing custom dropdown component instead of adding
+  more global orchestration
+
+Validation:
+
+- JS validation passed:
+  - `node --test site/assets/map/map-patch-picker-live.test.mjs site/assets/map/map-app-live.test.mjs`
+  - `node --check site/assets/map/map-patch-picker-live.js`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+  - `/map/map-patch-picker-live.js`
+- live DevTools check on `/map/` confirmed:
+  - `_map_runtime.catalog.patches` contained 36 patches
+  - both dropdowns now had 36 local catalog templates
+  - selected patch labels updated when `_map_bridged.filters.fromPatchId` /
+    `_map_bridged.filters.toPatchId` changed
+
+Next:
+
+- restore default patch-range selection cleanly on the live path so the patch window has a
+  sensible initial selection instead of blank `Select patch` placeholders
+- continue trimming remaining custom bootstrap/orchestration around the live map shell
