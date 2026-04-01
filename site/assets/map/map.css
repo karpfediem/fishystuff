@@ -863,14 +863,17 @@ body:has(#map-page-shell) #content > .site-content-clip {
 
 .fishymap-zone-loot-row {
   display: grid;
-  grid-template-columns: minmax(4.9rem, auto) minmax(0, 1fr);
-  align-items: center;
+  grid-template-columns: minmax(4.9rem, auto) minmax(0, 1fr) 0.48rem;
+  align-items: stretch;
   gap: 0.6rem;
   min-width: 0;
 }
 
 .fishymap-zone-loot-item {
   display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
   min-width: 0;
 }
 
@@ -903,15 +906,93 @@ body:has(#map-page-shell) #content > .site-content-clip {
   color: color-mix(in srgb, currentColor 72%, transparent);
 }
 
-.fishymap-zone-loot-dot {
-  position: absolute;
-  top: 0.38rem;
-  right: 0.38rem;
-  width: 0.46rem;
-  height: 0.46rem;
+.fishy-provenance-rail {
+  display: flex;
+  min-width: 0.48rem;
+  width: 0.48rem;
+  flex-direction: column;
+  align-self: stretch;
+  overflow: hidden;
+  border-radius: calc(var(--radius-box, 1rem) * 0.6);
+  background: color-mix(in srgb, var(--color-base-300, #d6d3d1) 68%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-base-content, #1f2937) 12%, transparent);
+}
+
+.fishy-provenance-rail__segment {
+  flex: 1 1 50%;
+  min-height: 0;
+  cursor: help;
+  background: var(--fishy-provenance-color, var(--color-neutral, #737373));
+}
+
+.fishy-provenance-rail__segment + .fishy-provenance-rail__segment {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-base-100, #ffffff) 46%, transparent);
+}
+
+.fishy-provenance-rail__segment.is-inactive {
+  opacity: 0.65;
+}
+
+.fishy-provenance-rail__segment:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--color-base-content, #1f2937) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.fishy-provenance-tooltip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 42;
+  display: flex;
+  min-width: 12rem;
+  max-width: min(20rem, calc(100vw - 1.5rem));
+  flex-direction: column;
+  gap: 0.22rem;
+  padding: 0.6rem 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--color-base-content, #1f2937) 14%, transparent);
+  border-radius: calc(var(--radius-box, 1rem) * 0.9);
+  background: color-mix(in oklab, var(--color-base-100, #ffffff) 94%, var(--color-base-200, #f3f4f6) 6%);
+  box-shadow:
+    0 16px 42px color-mix(in srgb, black 16%, transparent),
+    0 2px 8px color-mix(in srgb, black 10%, transparent);
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+}
+
+.fishy-provenance-tooltip[hidden] {
+  display: none !important;
+}
+
+.fishy-provenance-tooltip__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-base-content, #1f2937) 52%, transparent);
+}
+
+.fishy-provenance-tooltip__swatch {
+  width: 0.42rem;
+  height: 0.42rem;
   border-radius: 999px;
-  background: var(--fishymap-zone-loot-dot, var(--color-info, #6b8afd));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100, #ffffff) 85%, transparent);
+  background: var(--fishy-provenance-tooltip-color, var(--color-info, #6b8afd));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100, #ffffff) 70%, transparent);
+}
+
+.fishy-provenance-tooltip__source {
+  font-size: 0.83rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--color-base-content, #1f2937) 88%, transparent);
+}
+
+.fishy-provenance-tooltip__detail {
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--color-base-content, #1f2937) 74%, transparent);
 }
 
 .fishymap-overview-row {
@@ -1163,8 +1244,21 @@ body:has(#map-page-shell) #content > .site-content-clip {
   }
 
   .fishymap-zone-loot-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) 0.48rem;
     align-items: stretch;
+  }
+
+  .fishymap-zone-loot-metric {
+    grid-column: 1;
+  }
+
+  .fishymap-zone-loot-item {
+    grid-column: 1;
+  }
+
+  .fishy-provenance-rail {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
 
   .fishymap-zone-loot-group-header {

@@ -1,5 +1,10 @@
 import * as d3 from "../d3.js";
 import {
+    attachProvenanceTooltip,
+    buildProvenanceSegments,
+    provenanceAriaLabel,
+} from "./provenance-indicator.js";
+import {
     FishyDatastarRenderElement,
     readCalculatorSignal,
 } from "./datastar-render-element.js";
@@ -37,16 +42,9 @@ const MIN_INTERNAL_WIDTH =
     + SILVER_TO_GROUP_GAP
     + SILVER_GROUP_WIDTH
     + RIGHT_MARGIN;
-
-function provenanceDotColor(kind) {
-    if (kind === "database") {
-        return "color-mix(in oklab, var(--color-info) 72%, var(--color-base-content) 28%)";
-    }
-    if (kind === "community") {
-        return "color-mix(in oklab, var(--color-warning) 78%, var(--color-base-content) 22%)";
-    }
-    return "color-mix(in oklab, var(--color-neutral) 72%, var(--color-base-content) 28%)";
-}
+const PROVENANCE_RAIL_WIDTH = 7;
+const PROVENANCE_RAIL_INSET = 8;
+const PROVENANCE_RAIL_GAP = 1.5;
 
 function gradeRingColor(tone) {
     switch (String(tone || "").trim().toLowerCase()) {
@@ -191,6 +189,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
     }
 
     renderFromSignals() {
+        attachProvenanceTooltip(this);
         const chart = readCalculatorSignal(this.getAttribute("signal-path"));
         const rows = Array.isArray(chart?.rows) ? chart.rows : [];
         const speciesRows = Array.isArray(chart?.species_rows) ? chart.species_rows : [];
@@ -438,8 +437,6 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             const connectorHeight = RIGHT_LABEL_HEIGHT - SPECIES_BOX_CONNECTOR_INSET * 2;
             const dropMetricText = String(row.drop_rate_text ?? "");
             const dropValueText = String(row.expected_count_text ?? "");
-            const dropRateTooltip = String(row.drop_rate_tooltip ?? "");
-            const dropDotColor = provenanceDotColor(String(row.drop_rate_source_kind ?? ""));
             const silverMetricText = String(row.silver_share_text ?? "");
             const silverValueText = compactSilverText(row.expected_profit_text);
             const iconRing = gradeRingColor(row.icon_grade_tone);
@@ -457,12 +454,26 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             const iconFrameX = centerBoxX + 12;
             const iconFrameY = labelTop + (RIGHT_LABEL_HEIGHT - iconFrameSize) / 2;
             const labelTextX = hasIcon ? iconFrameX + iconFrameSize + 10 : centerBoxX + 12;
-            const labelTextMaxChars = hasIcon ? 18 : 24;
+            const labelTextMaxChars = hasIcon ? 16 : 22;
             const speciesProfitTop = profitSpeciesTop[index];
             const profitHeight = Math.max(
                 MIN_SILVER_NODE_HEIGHT,
                 profitSpeciesHeights[index] ?? 0,
             );
+            const provenanceSegments = buildProvenanceSegments({
+                rateSourceKind: String(row.drop_rate_source_kind ?? ""),
+                rateDetail: String(row.drop_rate_tooltip ?? ""),
+                rateValueText: dropMetricText,
+                presenceSourceKind: String(row.presence_source_kind ?? ""),
+                presenceDetail: String(row.presence_tooltip ?? ""),
+                presenceValueText: String(row.presence_text ?? ""),
+            });
+            const provenanceRailX =
+                centerBoxX + speciesCenterWidth - PROVENANCE_RAIL_INSET - PROVENANCE_RAIL_WIDTH;
+            const provenanceRailY = labelTop + 4;
+            const provenanceRailHeight = RIGHT_LABEL_HEIGHT - 8;
+            const provenanceSegmentHeight =
+                Math.max(0, provenanceRailHeight - PROVENANCE_RAIL_GAP) / provenanceSegments.length;
 
             rightNodes.append("rect")
                 .attr("x", countBarX)
@@ -568,17 +579,6 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("font-variant-numeric", "tabular-nums")
                 .text(dropValueText);
 
-            const infoDot = rightNodes.append("circle")
-                .attr("cx", leftBoxX + SPECIES_METRIC_WIDTH - 10)
-                .attr("cy", labelTop + 10)
-                .attr("r", 3.5)
-                .style("fill", dropDotColor)
-                .style("stroke", row.text_color)
-                .style("stroke-width", 1);
-            if (dropRateTooltip) {
-                infoDot.append("title").text(dropRateTooltip);
-            }
-
             rightNodes.append("rect")
                 .attr("x", centerBoxX)
                 .attr("y", labelTop)
@@ -625,6 +625,28 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .text(truncateText(row.label, labelTextMaxChars))
                 .append("title")
                 .text(String(row.label ?? ""));
+
+            const provenanceRail = rightNodes.append("g")
+                .attr("aria-label", "Fact provenance");
+            provenanceSegments.forEach((segment, segmentIndex) => {
+                const segmentY = provenanceRailY
+                    + segmentIndex * (provenanceSegmentHeight + PROVENANCE_RAIL_GAP);
+                provenanceRail.append("rect")
+                    .attr("x", provenanceRailX)
+                    .attr("y", segmentY)
+                    .attr("width", PROVENANCE_RAIL_WIDTH)
+                    .attr("height", provenanceSegmentHeight)
+                    .attr("rx", Math.min(PROVENANCE_RAIL_WIDTH / 2, 3))
+                    .attr("ry", Math.min(PROVENANCE_RAIL_WIDTH / 2, 3))
+                    .attr("tabindex", 0)
+                    .attr("aria-label", provenanceAriaLabel(segment))
+                    .attr("data-fishy-provenance-label", segment.label)
+                    .attr("data-fishy-provenance-source", segment.sourceLabel)
+                    .attr("data-fishy-provenance-detail", segment.detail)
+                    .attr("data-fishy-provenance-color", segment.color)
+                    .style("fill", segment.color)
+                    .style("opacity", segment.active ? 1 : 0.65);
+            });
 
             rightNodes.append("rect")
                 .attr("x", rightBoxX)

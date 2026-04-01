@@ -212,6 +212,9 @@ test("createMapInfoPanelController refreshes zone loot on selection patches thro
   assert.match(panel.innerHTML, /Catch Profile/);
   assert.match(panel.innerHTML, /Sea Eel/);
   assert.match(panel.innerHTML, /80%/);
+  assert.match(panel.innerHTML, /fishy-provenance-rail/);
+  assert.match(panel.innerHTML, /data-fishy-provenance-label="Rate"/);
+  assert.match(panel.innerHTML, /data-fishy-provenance-source="Database"/);
   assert.equal(statusText.textContent, "Clicked point");
 });
 

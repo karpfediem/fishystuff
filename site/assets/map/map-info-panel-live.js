@@ -5,6 +5,11 @@ import {
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
+import {
+  attachProvenanceTooltip,
+  buildProvenanceSegments,
+  provenanceAriaLabel,
+} from "../js/components/provenance-indicator.js";
 
 const ICON_SPRITE_URL = "/img/icons.svg";
 
@@ -145,37 +150,54 @@ function zoneLootMetricTone(entry) {
   };
 }
 
+function provenanceRailMarkup(entry) {
+  const segments = buildProvenanceSegments({
+    rateSourceKind: trimString(entry?.dropRateSourceKind),
+    rateDetail: trimString(entry?.dropRateTooltip),
+    rateValueText: trimString(entry?.dropRateText),
+    presenceSourceKind: trimString(entry?.presenceSourceKind),
+    presenceDetail: trimString(entry?.presenceTooltip),
+    presenceValueText: trimString(entry?.presenceText),
+  });
+  return `
+    <div class="fishy-provenance-rail" aria-label="Fact provenance">
+      ${segments
+        .map(
+          (segment) => `
+            <span
+              class="fishy-provenance-rail__segment${segment.active ? "" : " is-inactive"}"
+              style="--fishy-provenance-color:${escapeHtml(segment.color)};"
+              tabindex="0"
+              aria-label="${escapeHtml(provenanceAriaLabel(segment))}"
+              data-fishy-provenance-label="${escapeHtml(segment.label)}"
+              data-fishy-provenance-source="${escapeHtml(segment.sourceLabel)}"
+              data-fishy-provenance-detail="${escapeHtml(segment.detail)}"
+              data-fishy-provenance-color="${escapeHtml(segment.color)}"
+            ></span>
+          `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function zoneLootRowMarkup(entry) {
   const metric = zoneLootMetricTone(entry);
-  const tooltip = trimString(entry?.dropRateTooltip);
   const presenceText = trimString(entry?.presenceText);
-  const presenceTooltip = trimString(entry?.presenceTooltip);
-  const dropDotColor =
-    trimString(entry?.dropRateSourceKind) === "database"
-      ? "var(--color-success)"
-      : trimString(entry?.dropRateSourceKind) === "community"
-        ? "var(--color-warning)"
-        : "var(--color-info)";
   return `
     <div class="fishymap-zone-loot-row">
       <div class="fishymap-zone-loot-metric" style="--fishymap-zone-loot-fill:${escapeHtml(metric.fillColor)};--fishymap-zone-loot-stroke:${escapeHtml(metric.strokeColor)};--fishymap-zone-loot-text:${escapeHtml(metric.textColor)};">
         <div class="fishymap-zone-loot-metric-primary">${escapeHtml(entry.dropRateText || "—")}</div>
-        ${
-          tooltip
-            ? `<span class="fishymap-zone-loot-dot" style="--fishymap-zone-loot-dot:${escapeHtml(dropDotColor)};" aria-hidden="true" title="${escapeHtml(tooltip)}"></span>`
-            : ""
-        }
       </div>
       <div class="fishymap-zone-loot-item">
         ${fishIdentityMarkup(entry)}
         ${
           presenceText
-            ? `<div class="pl-9 text-[11px] text-base-content/60" ${
-                presenceTooltip ? `title="${escapeHtml(presenceTooltip)}"` : ""
-              }>${escapeHtml(presenceText)}</div>`
+            ? `<div class="pl-9 text-[11px] text-base-content/60">${escapeHtml(presenceText)}</div>`
             : ""
         }
       </div>
+      ${provenanceRailMarkup(entry)}
     </div>
   `;
 }
@@ -415,6 +437,7 @@ export function createMapInfoPanelController({
     scheduleRender();
     void refreshZoneLootSummary();
   });
+  attachProvenanceTooltip(shell);
 
   scheduleRender();
 

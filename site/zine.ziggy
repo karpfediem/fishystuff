@@ -39,6 +39,7 @@ Multilingual {
     "js/components/distribution-chart.js",
     "js/components/loot-sankey.js",
     "js/components/pmf-chart.js",
+    "js/components/provenance-indicator.js",
     "js/components/searchable-dropdown.js",
     "js/components/searchable-multiselect.js",
     "js/durationFormatter.js",

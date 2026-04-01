@@ -1,0 +1,46 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+    buildProvenanceSegments,
+    provenanceAriaLabel,
+    provenanceIndicatorColor,
+} from "./provenance-indicator.js";
+
+test("buildProvenanceSegments distinguishes database, community presence, and community rate colors", () => {
+    const [rateSegment, presenceSegment] = buildProvenanceSegments({
+        rateSourceKind: "community",
+        rateDetail: "Community guess · Prize subgroup 11054",
+        rateValueText: "1.00%",
+        presenceSourceKind: "community",
+        presenceDetail: "Community confirmed×2 · Prize subgroup 11054",
+        presenceValueText: "Community confirmed×2",
+    });
+
+    assert.equal(rateSegment.sourceLabel, "Community guess");
+    assert.equal(presenceSegment.sourceLabel, "Community");
+    assert.equal(rateSegment.color, provenanceIndicatorColor("rate", "community"));
+    assert.equal(presenceSegment.color, provenanceIndicatorColor("presence", "community"));
+    assert.match(provenanceAriaLabel(rateSegment), /Rate: Community guess/);
+    assert.match(provenanceAriaLabel(presenceSegment), /Presence: Community/);
+});
+
+test("buildProvenanceSegments falls back to neutral inactive facts when provenance is missing", () => {
+    const [rateSegment, presenceSegment] = buildProvenanceSegments({});
+
+    assert.equal(rateSegment.active, false);
+    assert.equal(presenceSegment.active, false);
+    assert.match(rateSegment.detail, /No rate provenance recorded yet\./);
+    assert.match(presenceSegment.detail, /No presence provenance recorded yet\./);
+});
+
+test("buildProvenanceSegments keeps database presence blue and preserves presence text fallback", () => {
+    const [, presenceSegment] = buildProvenanceSegments({
+        presenceSourceKind: "database",
+        presenceValueText: "Ranking presence",
+    });
+
+    assert.equal(presenceSegment.sourceLabel, "Database");
+    assert.equal(presenceSegment.detail, "Ranking presence");
+    assert.equal(presenceSegment.color, provenanceIndicatorColor("presence", "database"));
+});
