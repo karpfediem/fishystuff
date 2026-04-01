@@ -17,6 +17,8 @@ import {
   resolveSelectedZoneRgbs,
 } from "./map-search-state.js";
 
+export { patchTouchesSearchPanelSignals } from "./map-search-state.js";
+
 const ICON_SPRITE_URL = "/img/icons.svg";
 
 function escapeHtml(value) {

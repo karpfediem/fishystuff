@@ -10,15 +10,24 @@ import {
   DEFAULT_MAP_UI_SIGNAL_STATE,
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
-import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
+import {
+  createMapBookmarkPanelController,
+  patchTouchesBookmarkSignals,
+} from "./map-bookmark-panel-live.js";
 import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
 import { createMapInfoPanelController } from "./map-info-panel-live.js";
-import { createMapLayerPanelController } from "./map-layer-panel-live.js";
+import {
+  createMapLayerPanelController,
+  patchTouchesLayerPanelSignals,
+} from "./map-layer-panel-live.js";
 import {
   createMapPatchPickerController,
   patchTouchesPatchPickerSignals,
 } from "./map-patch-picker-live.js";
-import { createMapSearchPanelController } from "./map-search-panel-live.js";
+import {
+  createMapSearchPanelController,
+  patchTouchesSearchPanelSignals,
+} from "./map-search-panel-live.js";
 import { combineSignalPatches } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
 import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
@@ -207,6 +216,35 @@ export function createDeferredBridgeStateRefresher({
   });
 }
 
+export function routeLiveControllerPatch({
+  patch,
+  windowManager = null,
+  patchPicker = null,
+  hoverTooltip = null,
+  layerPanel = null,
+  searchPanel = null,
+  bookmarkPanel = null,
+} = {}) {
+  if (windowManager && patchTouchesWindowUi(patch)) {
+    windowManager.scheduleApplyFromSignals();
+  }
+  if (patchPicker && patchTouchesPatchPickerSignals(patch)) {
+    patchPicker.scheduleRender();
+  }
+  if (hoverTooltip && patchTouchesHoverTooltipSignals(patch)) {
+    hoverTooltip.scheduleRender();
+  }
+  if (layerPanel && patchTouchesLayerPanelSignals(patch)) {
+    layerPanel.scheduleRender();
+  }
+  if (searchPanel && patchTouchesSearchPanelSignals(patch)) {
+    searchPanel.scheduleRender();
+  }
+  if (bookmarkPanel && patchTouchesBookmarkSignals(patch)) {
+    bookmarkPanel.scheduleRender();
+  }
+}
+
 export async function start() {
   const shell = document.getElementById("map-page-shell");
   const canvas = document.getElementById("bevy");
@@ -220,21 +258,24 @@ export async function start() {
   let windowManager = null;
   let patchPicker = null;
   let hoverTooltip = null;
+  let bookmarkPanel = null;
+  let layerPanel = null;
+  let searchPanel = null;
 
   function dispatchSignalPatch(patch) {
     if (!patch || typeof patch !== "object") {
       return;
     }
     page.patchSignals(patch);
-    if (windowManager && patchTouchesWindowUi(patch)) {
-      windowManager.scheduleApplyFromSignals();
-    }
-    if (patchPicker && patchTouchesPatchPickerSignals(patch)) {
-      patchPicker.scheduleRender();
-    }
-    if (hoverTooltip && patchTouchesHoverTooltipSignals(patch)) {
-      hoverTooltip.scheduleRender();
-    }
+    routeLiveControllerPatch({
+      patch,
+      windowManager,
+      patchPicker,
+      hoverTooltip,
+      layerPanel,
+      searchPanel,
+      bookmarkPanel,
+    });
   }
 
   const queryPatch = parseQuerySignalPatch(globalThis.location?.href);
@@ -253,10 +294,11 @@ export async function start() {
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
-  const bookmarkPanel = createMapBookmarkPanelController({
+  bookmarkPanel = createMapBookmarkPanelController({
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
+    listenToSignalPatches: false,
   });
   hoverTooltip = createMapHoverTooltipController({
     shell,
@@ -272,15 +314,17 @@ export async function start() {
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
-  const layerPanel = createMapLayerPanelController({
+  layerPanel = createMapLayerPanelController({
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
+    listenToSignalPatches: false,
   });
-  const searchPanel = createMapSearchPanelController({
+  searchPanel = createMapSearchPanelController({
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
+    listenToSignalPatches: false,
   });
   let syncingFromBridge = false;
   let applyingInternalSignalPatch = false;
@@ -370,15 +414,15 @@ export async function start() {
     const effectivePatch = searchProjectionPatch
       ? combineSignalPatches(patch, searchProjectionPatch)
       : patch;
-    if (patchTouchesWindowUi(effectivePatch)) {
-      windowManager.scheduleApplyFromSignals();
-    }
-    if (patchPicker && patchTouchesPatchPickerSignals(effectivePatch)) {
-      patchPicker.scheduleRender();
-    }
-    if (hoverTooltip && patchTouchesHoverTooltipSignals(effectivePatch)) {
-      hoverTooltip.scheduleRender();
-    }
+    routeLiveControllerPatch({
+      patch: effectivePatch,
+      windowManager,
+      patchPicker,
+      hoverTooltip,
+      layerPanel,
+      searchPanel,
+      bookmarkPanel,
+    });
     if (searchProjectionPatch) {
       applyInternalSignalPatch(searchProjectionPatch);
     }

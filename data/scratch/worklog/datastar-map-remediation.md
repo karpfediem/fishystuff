@@ -5417,3 +5417,84 @@ Next:
 - current likely next candidates:
   - `map-info-panel-live.js`
   - `map-search-panel-live.js`
+
+## 2026-04-01: route live layer, search, and bookmark rerenders through `map-app-live`
+
+The next remaining live-map drift was that several controllers still owned their own
+document-level `datastar-signal-patch` listeners even though the live app already had the patch
+stream:
+
+- `map-layer-panel-live.js`
+- `map-search-panel-live.js`
+- `map-bookmark-panel-live.js`
+
+That kept duplicate Datastar subscriptions alive across the live map subtree and blurred the
+boundary between:
+
+- imperative local controller behavior
+- app-level signal orchestration
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - now imports:
+    - `patchTouchesLayerPanelSignals(...)`
+    - `patchTouchesSearchPanelSignals(...)`
+    - `patchTouchesBookmarkSignals(...)`
+  - added `routeLiveControllerPatch(...)` as the single scheduler for:
+    - window manager sync
+    - patch picker rerenders
+    - hover tooltip rerenders
+    - layer panel rerenders
+    - search panel rerenders
+    - bookmark panel rerenders
+  - now instantiates:
+    - `createMapLayerPanelController(...)`
+    - `createMapSearchPanelController(...)`
+    - `createMapBookmarkPanelController(...)`
+    with `listenToSignalPatches: false`
+- `site/assets/map/map-search-panel-live.js`
+  - re-exports `patchTouchesSearchPanelSignals(...)` for the live app scheduler
+- `site/assets/map/map-bookmark-panel-live.js`
+  - re-exports `patchTouchesBookmarkSignals(...)` for the live app scheduler
+
+Why this matters:
+
+- it removes three more controller-owned Datastar subscriptions from the live map path
+- it keeps those controllers focused on:
+  - rendering
+  - local DOM events
+  - local imperative behavior such as drag/drop or focus handling
+- it keeps the app as the single place that decides when signal patches should fan out into those
+  rerenders
+
+This is still compatible with the remediation goal:
+
+- `map-app-live.js` remains the live shell orchestrator for Datastar patch flow
+- controllers keep only the imperative seams they actually need
+- the next cleanup target remains the truly larger island:
+  - `map-info-panel-live.js`
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js`
+  - `node --check site/assets/map/map-bookmark-panel-live.js`
+  - `node --check site/assets/map/map-search-panel-live.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+  - `/map/map-bookmark-panel-live.js`
+  - `/map/map-search-panel-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Search` window present
+  - `Info` window present
+  - `Layers 7`
+
+Next:
+
+- continue reducing the remaining imperative live controller islands
+- current highest-value target:
+  - `map-info-panel-live.js`

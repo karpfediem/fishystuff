@@ -26,6 +26,8 @@ import {
   selectionBookmarkKey,
 } from "./map-bookmark-state.js";
 
+export { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
+
 const ICON_SPRITE_URL = "/img/icons.svg";
 
 function cloneJson(value) {

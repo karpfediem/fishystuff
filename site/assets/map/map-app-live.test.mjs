@@ -6,6 +6,7 @@ const {
   createDeferredBridgeStateRefresher,
   deferAfterAnimationFrames,
   resolveBridgeSnapshot,
+  routeLiveControllerPatch,
   startWhenDomReady,
   start,
 } = await import("./map-app-live.js");
@@ -176,6 +177,49 @@ test("deferAfterAnimationFrames waits for the requested number of animation fram
   assert.equal(scheduled.length, 1);
   scheduled.shift()();
   assert.deepEqual(calls, ["done"]);
+});
+
+test("routeLiveControllerPatch schedules only the relevant live controllers", () => {
+  const calls = [];
+  const controller = (name, method) => ({
+    [method]() {
+      calls.push(name);
+    },
+  });
+
+  routeLiveControllerPatch({
+    patch: {
+      _map_ui: {
+        windowUi: {
+          settings: { open: false },
+        },
+        search: {
+          open: true,
+        },
+      },
+      _map_bridged: {
+        filters: {
+          layerIdsVisible: ["zone_mask"],
+        },
+      },
+      _map_bookmarks: {
+        entries: [{ id: "bookmark-a" }],
+      },
+      _map_runtime: {
+        catalog: {
+          layers: [{ layerId: "zone_mask" }],
+        },
+      },
+    },
+    windowManager: controller("window", "scheduleApplyFromSignals"),
+    patchPicker: controller("patch-picker", "scheduleRender"),
+    hoverTooltip: controller("hover", "scheduleRender"),
+    layerPanel: controller("layer", "scheduleRender"),
+    searchPanel: controller("search", "scheduleRender"),
+    bookmarkPanel: controller("bookmark", "scheduleRender"),
+  });
+
+  assert.deepEqual(calls, ["window", "hover", "layer", "search", "bookmark"]);
 });
 
 test("map-app-live exports explicit start hooks", () => {
