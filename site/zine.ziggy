@@ -89,6 +89,11 @@ Multilingual {
     "map/map-signal-contract.js",
     "map/ui/fishystuff.css",
 
+    "calculator/calculator.css",
+    "calculator/calculator-shell.html",
+    "fishydex/fishydex.css",
+    "fishydex/fishydex-shell.html",
+
     "img/favicon-16x16.png",
     "img/favicon-32x32.png",
     "img/embed.png",

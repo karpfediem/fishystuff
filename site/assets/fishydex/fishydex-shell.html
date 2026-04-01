@@ -1,0 +1,448 @@
+<div id="fishydex-app" class="not-prose"
+     data-signals="{
+       fish: [],
+       revision: '',
+       count: 0,
+       search_query: '',
+       caught_filter: 'all',
+       favourite_filter: false,
+       grade_filters: [],
+       method_filters: [],
+       show_dried: false,
+       sort_field: 'price',
+       sort_direction: 'desc',
+       _shared_fish: {
+         caughtIds: [],
+         favouriteIds: [],
+       },
+       _selected_fish_id: 0,
+       _progress_panel_collapsed: false,
+       _filter_panel_collapsed: false,
+       catalog_count: 0,
+       total_count: 0,
+       visible_count: 0,
+       caught_count: 0,
+       completion_percent: 0,
+       red_total_count: 0,
+       red_caught_count: 0,
+       red_completion_percent: 0,
+       yellow_total_count: 0,
+       yellow_caught_count: 0,
+       yellow_completion_percent: 0,
+       blue_total_count: 0,
+       blue_caught_count: 0,
+       blue_completion_percent: 0,
+       green_total_count: 0,
+       green_caught_count: 0,
+       green_completion_percent: 0,
+       white_total_count: 0,
+       white_caught_count: 0,
+       white_completion_percent: 0,
+       supports_grade_filter: false,
+       supports_method_filter: false,
+       supports_dried_filter: false,
+       _loading: true,
+       _caught_stamp_fish_id: null,
+       _favourite_stamp_fish_id: null,
+       _fishydex_actions: {
+         exportCaughtToken: 0,
+         importCaughtToken: 0,
+         closeDetailsToken: 0,
+       },
+       _status_message: '',
+       _api_error_message: '',
+       _api_error_hint: '',
+     }"
+     data-indicator:_loading
+     data-init="window.Fishydex.restore($); @get(window.Fishydex.fishApiUrl())">
+  <section class="fishydex-shell">
+    <div class="fishydex-bento">
+      <fieldset class="fishydex-stats card card-border bg-base-100">
+        <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
+          <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-chart-pie-2-fill"></use></svg><span>Progress</span></span>
+          <button type="button"
+                  class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle"
+                  data-panel-toggle="progress"
+                  aria-controls="fishydex-progress-body"
+                  data-class:is-collapsed="$_progress_panel_collapsed"
+                  data-attr:aria-expanded="(!$_progress_panel_collapsed).toString()"
+                  data-attr:aria-label="$_progress_panel_collapsed ? 'Expand progress panel' : 'Collapse progress panel'"
+                  data-attr:title="$_progress_panel_collapsed ? 'Expand progress panel' : 'Collapse progress panel'"
+                  data-on:click="$_progress_panel_collapsed = !$_progress_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
+        </legend>
+        <div id="fishydex-progress-body" class="card-body fishydex-stats-body pt-0" data-show="!$_progress_panel_collapsed">
+        <div class="fishydex-progress-overview rounded-box border border-base-300 bg-base-200">
+          <div class="fishydex-progress-overview-chart">
+            <div class="radial-progress fishydex-progress-pie is-overall"
+                 role="progressbar"
+                 aria-valuemin="0"
+                 aria-valuemax="100"
+                 data-attr:style="'--value:' + ($completion_percent || 0) + '; --size:7.5rem; --thickness:0.72rem;'"
+                 data-attr:aria-valuenow="String($completion_percent || 0)"
+                 data-attr:aria-label="'Catalog completion: ' + ($caught_count || 0) + ' of ' + ($catalog_count || 0) + ' fish caught (' + ($completion_percent || 0) + '%)'">
+              <span class="fishydex-progress-pie-value" data-text="($completion_percent || 0) + '%'"></span>
+            </div>
+          </div>
+          <div class="fishydex-progress-overview-copy">
+            <span class="fishydex-progress-kicker">Overall</span>
+            <span class="fishydex-progress-title">Catalog Completion</span>
+            <span class="fishydex-progress-count" data-text="($caught_count || 0) + ' / ' + ($catalog_count || 0)"></span>
+            <span class="fishydex-subtle"
+                  data-text="($catalog_count || 0) > 0 ? (Math.max(($catalog_count || 0) - ($caught_count || 0), 0) + ' remaining') : 'No catalog entries yet'"></span>
+          </div>
+        </div>
+          <div class="fishydex-grade-stats" data-show="$supports_grade_filter">
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-red"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($red_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($red_completion_percent || 0)"
+                   data-attr:aria-label="'Red completion: ' + ($red_caught_count || 0) + ' of ' + ($red_total_count || 0) + ' fish caught (' + ($red_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($red_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-red">Red</div>
+                <div class="fishydex-grade-progress-value" data-text="($red_caught_count || 0) + ' / ' + ($red_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($red_total_count || 0) > 0 ? (Math.max(($red_total_count || 0) - ($red_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-yellow"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($yellow_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($yellow_completion_percent || 0)"
+                   data-attr:aria-label="'Yellow completion: ' + ($yellow_caught_count || 0) + ' of ' + ($yellow_total_count || 0) + ' fish caught (' + ($yellow_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($yellow_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-yellow">Yellow</div>
+                <div class="fishydex-grade-progress-value" data-text="($yellow_caught_count || 0) + ' / ' + ($yellow_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($yellow_total_count || 0) > 0 ? (Math.max(($yellow_total_count || 0) - ($yellow_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-blue"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($blue_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($blue_completion_percent || 0)"
+                   data-attr:aria-label="'Blue completion: ' + ($blue_caught_count || 0) + ' of ' + ($blue_total_count || 0) + ' fish caught (' + ($blue_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($blue_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-blue">Blue</div>
+                <div class="fishydex-grade-progress-value" data-text="($blue_caught_count || 0) + ' / ' + ($blue_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($blue_total_count || 0) > 0 ? (Math.max(($blue_total_count || 0) - ($blue_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-green"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($green_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($green_completion_percent || 0)"
+                   data-attr:aria-label="'Green completion: ' + ($green_caught_count || 0) + ' of ' + ($green_total_count || 0) + ' fish caught (' + ($green_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($green_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-green">Green</div>
+                <div class="fishydex-grade-progress-value" data-text="($green_caught_count || 0) + ' / ' + ($green_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($green_total_count || 0) > 0 ? (Math.max(($green_total_count || 0) - ($green_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+            <div class="fishydex-grade-progress-card rounded-box border border-base-300 bg-base-200">
+              <div class="radial-progress fishydex-progress-pie grade-white"
+                   role="progressbar"
+                   aria-valuemin="0"
+                   aria-valuemax="100"
+                   data-attr:style="'--value:' + ($white_completion_percent || 0) + '; --size:4.85rem; --thickness:0.48rem;'"
+                   data-attr:aria-valuenow="String($white_completion_percent || 0)"
+                   data-attr:aria-label="'White completion: ' + ($white_caught_count || 0) + ' of ' + ($white_total_count || 0) + ' fish caught (' + ($white_completion_percent || 0) + '%)'">
+                <span class="fishydex-grade-progress-percent" data-text="($white_completion_percent || 0) + '%'"></span>
+              </div>
+              <div class="fishydex-grade-progress-copy">
+                <div class="fishydex-grade-progress-title grade-white">White</div>
+                <div class="fishydex-grade-progress-value" data-text="($white_caught_count || 0) + ' / ' + ($white_total_count || 0)"></div>
+                <div class="fishydex-grade-progress-meta"
+                     data-text="($white_total_count || 0) > 0 ? (Math.max(($white_total_count || 0) - ($white_caught_count || 0), 0) + ' remaining') : 'No catalog fish'"></div>
+              </div>
+            </div>
+          </div>
+        <div class="fishydex-actions">
+          <button type="button"
+                  class="btn btn-sm btn-soft btn-primary fishydex-button"
+                  data-on:click="$_fishydex_actions.exportCaughtToken = ($_fishydex_actions.exportCaughtToken || 0) + 1">Export</button>
+          <button type="button"
+                  class="btn btn-sm btn-outline fishydex-button"
+                  data-on:click="$_fishydex_actions.importCaughtToken = ($_fishydex_actions.importCaughtToken || 0) + 1">Import</button>
+        </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="fishydex-screen card card-border bg-base-100">
+        <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
+          <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-filter-2-fill"></use></svg><span>Filter</span></span>
+          <button type="button"
+                  class="fishydex-panel-toggle btn btn-ghost btn-xs btn-circle"
+                  data-panel-toggle="filter"
+                  aria-controls="fishydex-filter-body"
+                  data-class:is-collapsed="$_filter_panel_collapsed"
+                  data-attr:aria-expanded="(!$_filter_panel_collapsed).toString()"
+                  data-attr:aria-label="$_filter_panel_collapsed ? 'Expand filter panel' : 'Collapse filter panel'"
+                  data-attr:title="$_filter_panel_collapsed ? 'Expand filter panel' : 'Collapse filter panel'"
+                  data-on:click="$_filter_panel_collapsed = !$_filter_panel_collapsed"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-caret-down"></use></svg></button>
+        </legend>
+        <div id="fishydex-filter-body" class="card-body fishydex-panel-body pt-0" data-show="!$_filter_panel_collapsed">
+        <div class="fishydex-controls">
+          <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
+            <legend class="fieldset-legend">Search</legend>
+            <label class="fishydex-search-field input input-bordered">
+              <svg class="fishy-icon fishy-icon--inline h-[1em] opacity-50" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-search-field"></use></svg>
+              <span class="sr-only">Search fish</span>
+              <input class="fishydex-search"
+                     type="search"
+                     autocomplete="off"
+                     placeholder="Search by fish name or ID"
+                     data-bind:search_query>
+            </label>
+          </fieldset>
+
+          <div class="fishydex-filter-stack">
+            <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4">
+              <legend class="fieldset-legend">Status</legend>
+              <div class="fishydex-filter-chips" role="group" aria-label="Status filters">
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip"
+                        data-class:is-active="$caught_filter === 'all'"
+                        data-class:btn-active="$caught_filter === 'all'"
+                        data-attr:aria-pressed="($caught_filter === 'all').toString()"
+                        data-on:click="$caught_filter = 'all'">All</button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip filter-caught"
+                        data-class:is-active="$caught_filter === 'caught'"
+                        data-class:btn-active="$caught_filter === 'caught'"
+                        data-attr:aria-pressed="($caught_filter === 'caught').toString()"
+                        data-on:click="$caught_filter = 'caught'"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-check-badge-solid"></use></svg><span>Caught</span></button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip filter-missing"
+                        data-class:is-active="$caught_filter === 'missing'"
+                        data-class:btn-active="$caught_filter === 'missing'"
+                        data-attr:aria-pressed="($caught_filter === 'missing').toString()"
+                        data-on:click="$caught_filter = 'missing'"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-check-circle-dash-fill"></use></svg><span>Missing</span></button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip filter-favourite"
+                        data-class:is-active="$favourite_filter"
+                        data-class:btn-active="$favourite_filter"
+                        data-attr:aria-pressed="$favourite_filter.toString()"
+                        data-on:click="$favourite_filter = !$favourite_filter"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-heart-fill"></use></svg><span>Favourite</span></button>
+              </div>
+            </fieldset>
+
+            <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4"
+                      data-show="$supports_grade_filter">
+              <legend class="fieldset-legend">Grade</legend>
+              <div class="fishydex-filter-chips" role="group" aria-label="Grade color filters">
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-red"
+                        data-class:is-active="($grade_filters || []).includes('red')"
+                        data-class:btn-active="($grade_filters || []).includes('red')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('red')).toString()"
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'red', ['red', 'yellow', 'blue', 'green', 'white'])">Red</button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-yellow"
+                        data-class:is-active="($grade_filters || []).includes('yellow')"
+                        data-class:btn-active="($grade_filters || []).includes('yellow')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('yellow')).toString()"
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'yellow', ['red', 'yellow', 'blue', 'green', 'white'])">Yellow</button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-blue"
+                        data-class:is-active="($grade_filters || []).includes('blue')"
+                        data-class:btn-active="($grade_filters || []).includes('blue')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('blue')).toString()"
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'blue', ['red', 'yellow', 'blue', 'green', 'white'])">Blue</button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-green"
+                        data-class:is-active="($grade_filters || []).includes('green')"
+                        data-class:btn-active="($grade_filters || []).includes('green')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('green')).toString()"
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'green', ['red', 'yellow', 'blue', 'green', 'white'])">Green</button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip grade-white"
+                        data-class:is-active="($grade_filters || []).includes('white')"
+                        data-class:btn-active="($grade_filters || []).includes('white')"
+                        data-attr:aria-pressed="(($grade_filters || []).includes('white')).toString()"
+                        data-on:click="$grade_filters = window.__fishystuffDatastarState.toggleOrderedValue($grade_filters, 'white', ['red', 'yellow', 'blue', 'green', 'white'])">White</button>
+              </div>
+            </fieldset>
+
+            <fieldset class="fishydex-filter-group fieldset rounded-box border border-base-300 bg-base-200 p-4"
+                      data-show="$supports_method_filter || $supports_dried_filter">
+              <legend class="fieldset-legend">Method</legend>
+              <div class="fishydex-filter-chips" role="group" aria-label="Catch method and dried filters">
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip"
+                        data-show="$supports_method_filter"
+                        data-class:is-active="($method_filters || []).length === 0"
+                        data-class:btn-active="($method_filters || []).length === 0"
+                        data-attr:aria-pressed="(($method_filters || []).length === 0).toString()"
+                        data-on:click="$method_filters = []">All</button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip filter-rod"
+                        data-show="$supports_method_filter"
+                        data-class:is-active="($method_filters || []).includes('rod')"
+                        data-class:btn-active="($method_filters || []).includes('rod')"
+                        data-attr:aria-pressed="(($method_filters || []).includes('rod')).toString()"
+                        data-on:click="$method_filters = window.__fishystuffDatastarState.toggleOrderedValue($method_filters, 'rod', ['rod', 'harpoon'])">Rod</button>
+                <button type="button"
+                        class="btn btn-sm btn-outline fishydex-filter-chip filter-harpoon"
+                        data-show="$supports_method_filter"
+                        data-class:is-active="($method_filters || []).includes('harpoon')"
+                        data-class:btn-active="($method_filters || []).includes('harpoon')"
+                        data-attr:aria-pressed="(($method_filters || []).includes('harpoon')).toString()"
+                        data-on:click="$method_filters = window.__fishystuffDatastarState.toggleOrderedValue($method_filters, 'harpoon', ['rod', 'harpoon'])">Harpoon</button>
+                <button type="button"
+                        data-show="$supports_dried_filter"
+                        class="btn btn-sm btn-outline fishydex-filter-chip filter-show-dried"
+                        data-class:is-active="$show_dried"
+                        data-class:btn-active="$show_dried"
+                        data-attr:aria-pressed="$show_dried.toString()"
+                        data-on:click="$show_dried = !$show_dried">Show Dried</button>
+              </div>
+            </fieldset>
+
+            <div class="fishydex-filter-meta">
+              <span class="fishydex-filter-count"
+                    data-text="'Showing ' + ($visible_count || 0) + '/' + ($catalog_count || 0) + ' matches'"></span>
+              <button type="button"
+                      class="btn btn-sm btn-soft fishydex-filter-clear"
+                      data-on:click="$search_query = ''; $caught_filter = 'all'; $favourite_filter = false; $grade_filters = []; $method_filters = []; $show_dried = false">Clear filters</button>
+            </div>
+          </div>
+
+          <div class="fishydex-status" data-show="($_status_message || '').length > 0">
+            <strong>Status:</strong>
+            <span data-text="$_status_message"></span>
+          </div>
+
+          <div class="fishydex-error" data-show="($_api_error_message || '').length > 0">
+            <strong data-text="$_api_error_message"></strong>
+            <div class="fishydex-subtle" data-show="($_api_error_hint || '').length > 0" data-text="$_api_error_hint"></div>
+          </div>
+        </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <fieldset class="fishydex-grid-shell card card-border bg-base-100">
+      <legend class="fishydex-panel-legend fieldset-legend ml-6 px-2">
+        <span class="fishydex-panel-label"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-nav-dex"></use></svg><span>Catalog</span></span>
+        <span class="fishydex-panel-controls" role="group" aria-label="Catalog sort controls">
+          <button type="button"
+                  class="btn btn-sm btn-ghost fishydex-sort-button"
+                  data-class:is-active="$sort_field === 'price'"
+                  data-attr:aria-pressed="($sort_field === 'price').toString()"
+                  data-attr:aria-label="$sort_field === 'price' ? 'Toggle price sort direction. Current: ' + ($sort_direction === 'desc' ? 'descending.' : 'ascending.') : 'Sort catalog by price ascending.'"
+                  data-on:click="$sort_direction = $sort_field === 'price' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'price'"><span class="fishydex-sort-price-icon" aria-hidden="true"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-coin-2-fill"></use></svg><span class="fishydex-sort-price-arrow"><span data-show="$sort_field === 'price' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-up-fill"></use></svg></span><span data-show="$sort_field === 'price' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-4" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-arrow-down-fill"></use></svg></span></span></span><span>Price</span></button>
+          <button type="button"
+                  class="btn btn-sm btn-ghost fishydex-sort-button"
+                  data-class:is-active="$sort_field === 'name'"
+                  data-attr:aria-pressed="($sort_field === 'name').toString()"
+                  data-attr:aria-label="$sort_field === 'name' ? 'Toggle name sort direction. Current: ' + ($sort_direction === 'desc' ? 'descending.' : 'ascending.') : 'Sort catalog by name ascending.'"
+                  data-on:click="$sort_direction = $sort_field === 'name' ? ($sort_direction === 'desc' ? 'asc' : 'desc') : 'asc'; $sort_field = 'name'"><span data-show="$sort_field === 'name' ? $sort_direction === 'asc' : true" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-az-sort-ascending-letters-fill"></use></svg></span><span data-show="$sort_field === 'name' && $sort_direction === 'desc'" style="display: none;"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-za-sort-descending-letters-fill"></use></svg></span><span>Name</span></button>
+          <span class="loading loading-spinner loading-xs fishydex-panel-spinner" data-show="$_loading"></span>
+        </span>
+      </legend>
+      <div class="card-body fishydex-grid-body">
+      <div id="fishydex-grid" class="fishydex-groups"></div>
+      </div>
+    </fieldset>
+  </section>
+
+  <div id="fishydex-details" class="fishydex-details-modal modal" hidden>
+    <section class="fishydex-details-panel modal-box card card-border bg-base-100 w-11/12 max-w-5xl"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="fishydex-details-title">
+      <div class="fishydex-details-header">
+        <div class="fishydex-details-header-main">
+          <div id="fishydex-details-icon-frame" class="fishydex-details-icon-wrap grade-unknown">
+            <img id="fishydex-details-icon" class="fishydex-details-icon" hidden>
+            <div id="fishydex-details-placeholder" class="fishydex-placeholder">?</div>
+          </div>
+
+          <div class="fishydex-details-copy">
+            <div class="fishydex-details-title-row">
+              <h3 id="fishydex-details-title" class="fishydex-details-title">Fish</h3>
+              <button type="button"
+                      id="fishydex-details-favourite-toggle"
+                      class="fishydex-favourite-button btn btn-sm btn-circle btn-ghost"
+                      data-action="toggle-favourite-details"
+                      aria-pressed="false"
+                      aria-label="Mark fish as favourite"></button>
+              <button type="button"
+                      id="fishydex-details-caught-toggle"
+                      class="fishydex-caught-button btn btn-sm btn-circle btn-ghost"
+                      data-action="toggle-caught-details"
+                      aria-pressed="false"
+                      aria-label="Mark fish as caught"></button>
+            </div>
+
+            <div class="fishydex-details-badges">
+              <span id="fishydex-details-favourite" class="badge badge-soft badge-error" hidden>Favourite</span>
+              <span id="fishydex-details-caught" class="fishydex-caught badge badge-soft badge-success">Caught</span>
+              <span id="fishydex-details-grade" class="fishydex-grade badge badge-soft grade-unknown">Unknown</span>
+              <span id="fishydex-details-method-rod" class="fishydex-method badge badge-soft method-rod" hidden>Rod</span>
+              <span id="fishydex-details-method-harpoon" class="fishydex-method badge badge-soft method-harpoon" hidden>Harpoon</span>
+              <span id="fishydex-details-dried-badge" class="fishydex-method badge badge-soft method-dried" hidden>Dried</span>
+            </div>
+          </div>
+        </div>
+        <button type="button"
+                class="btn btn-sm btn-circle btn-ghost fishydex-details-close"
+                data-on:click="$_fishydex_actions.closeDetailsToken = ($_fishydex_actions.closeDetailsToken || 0) + 1"
+                aria-label="Close fish details"
+                title="Close fish details"><svg class="fishy-icon fishy-icon--inline size-5" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="/img/icons.svg?v=20260326-6#fishy-x-circle"></use></svg><span class="sr-only">Close</span></button>
+      </div>
+
+      <div class="fishydex-details-guide">
+        <div class="fishydex-details-guide-frame rounded-box border border-base-300 bg-base-200">
+          <img id="fishydex-details-guide-image" class="fishydex-details-guide-image" hidden>
+          <div id="fishydex-details-guide-placeholder" class="fishydex-placeholder">?</div>
+        </div>
+      </div>
+
+      <dl class="fishydex-details-meta">
+        <div class="fishydex-details-meta-card card card-border bg-base-200">
+          <dt>Item Key</dt>
+          <dd id="fishydex-details-item-key"></dd>
+        </div>
+        <div class="fishydex-details-meta-card card card-border bg-base-200">
+          <dt>Vendor Price</dt>
+          <dd id="fishydex-details-vendor-price"></dd>
+        </div>
+      </dl>
+
+      <div class="fishydex-details-stack">
+        <section class="fishydex-details-section card card-border bg-base-200">
+          <h4>Best Spots</h4>
+          <p id="fishydex-details-spots-note" class="fishydex-details-note"></p>
+          <div id="fishydex-details-spots-list" class="fishydex-details-spot-list"></div>
+        </section>
+      </div>
+    </section>
+    <button type="button"
+            class="fishydex-details-backdrop modal-backdrop"
+            data-on:click="$_fishydex_actions.closeDetailsToken = ($_fishydex_actions.closeDetailsToken || 0) + 1"
+            aria-label="Close fish details"></button>
+  </div>
+</div>

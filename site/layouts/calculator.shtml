@@ -1,15 +1,14 @@
 <extend template="with-nav.shtml">
 
   <title id="title" :text="$page.title"></title>
-  <head id="head"></head>
+  <head id="head">
+    <link rel="stylesheet" href="$site.asset('calculator/calculator.css').link()">
+    <script src="$site.asset('js/lz-string.min.js').link()" defer></script>
+    <script src="$site.asset('js/pages/calculator-page.js').link()" defer></script>
+    <script src="$site.asset('js/datastar.js').link()" defer></script>
+  </head>
 
 
   <div id="content">
-  <!-- These must exist in assets/js/ and be listed in .static_assets -->
-  <script src="$site.asset('js/lz-string.min.js').link()"></script>
-
-  <!-- Page content (SuperMD can include the form / markup you need) -->
-  <div id="page" :html="$page.content()"></div>
-
-  <script src="$site.asset('js/datastar.js').link()"></script>
+  <div id="page" :html="$site.asset('calculator/calculator-shell.html').bytes()"></div>
   </div>

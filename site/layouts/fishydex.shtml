@@ -1,0 +1,12 @@
+<extend template="with-nav.shtml">
+
+  <title id="title" :text="$page.title"></title>
+  <head id="head">
+    <link rel="stylesheet" href="$site.asset('fishydex/fishydex.css').link()">
+    <script src="$site.asset('js/pages/fishydex.js').link()" defer></script>
+    <script src="$site.asset('js/datastar.js').link()" defer></script>
+  </head>
+
+  <div id="content">
+    <div id="page" :html="$site.asset('fishydex/fishydex-shell.html').bytes()"></div>
+  </div>

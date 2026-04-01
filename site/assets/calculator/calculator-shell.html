@@ -1,0 +1,13 @@
+<div id="calculator"
+     class="not-prose grid gap-6"
+     data-signals="{ _loading: true, _calculator_ui: { distribution_tab: 'groups' }, _calculator_actions: { copyUrlToken: 0, copyShareToken: 0, clearToken: 0 } }"
+     data-init__delay.50ms="window.__fishystuffCalculator.restore($); @get(window.__fishystuffCalculator.initUrl())">
+    <section data-show="$_loading" class="card card-border bg-base-100">
+        <div class="card-body">
+            <span class="loading loading-spinner loading-md"></span>
+            <p class="text-sm text-base-content/70">Loading calculator...</p>
+        </div>
+    </section>
+
+    <div id="calculator-app"></div>
+</div>

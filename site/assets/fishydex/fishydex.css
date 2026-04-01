@@ -1,0 +1,1100 @@
+#fishydex-app {
+    --dex-screen: var(--color-base-100, #fffdf4);
+    --dex-screen-border: color-mix(in srgb, var(--color-base-content, #1f2937) 14%, transparent);
+    --dex-line: color-mix(in srgb, var(--color-base-content, #1f2937) 14%, transparent);
+    --dex-highlight: var(--color-primary, #e07a5f);
+    --dex-grade-red: var(--color-error, #d64545);
+    --dex-grade-red-surface: color-mix(in srgb, var(--color-error, #d64545) 10%, var(--color-base-100, #fffdf4));
+    --dex-grade-yellow: var(--color-warning, #f59e0b);
+    --dex-grade-yellow-surface: color-mix(in srgb, var(--color-warning, #f59e0b) 12%, var(--color-base-100, #fffdf4));
+    --dex-grade-blue: var(--color-info, #6b8afd);
+    --dex-grade-blue-surface: color-mix(in srgb, var(--color-info, #6b8afd) 12%, var(--color-base-100, #fffdf4));
+    --dex-grade-green: var(--color-success, #2f855a);
+    --dex-grade-green-surface: color-mix(in srgb, var(--color-success, #2f855a) 12%, var(--color-base-100, #fffdf4));
+    --dex-grade-white: var(--color-base-content, #1f2937);
+    --dex-grade-white-surface: var(--color-base-200, #efe7d6);
+    --dex-grade-unknown: var(--color-neutral, #1f2937);
+    --dex-grade-unknown-surface: var(--color-base-200, #efe7d6);
+    --dex-caught: var(--color-success, #2f855a);
+    --dex-surface: var(--color-base-200, #efe7d6);
+    --dex-surface-strong: var(--color-base-100, #fffdf4);
+    --dex-surface-soft: var(--color-base-200, #efe7d6);
+    --dex-card: color-mix(in oklab, var(--dex-surface) 68%, var(--dex-surface-strong) 32%);
+    --dex-card-hover: color-mix(in oklab, var(--dex-surface) 80%, var(--dex-surface-strong) 20%);
+    --dex-field: var(--color-base-100, #fffdf4);
+    --dex-focus: color-mix(in srgb, var(--color-primary, #e07a5f) 28%, transparent);
+    --dex-text-muted: color-mix(in srgb, var(--color-base-content, #1f2937) 68%, transparent);
+    display: grid;
+    gap: 1.5rem;
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-shell {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .fishydex-bento {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .fishydex-screen,
+  .fishydex-stats,
+  .fishydex-grid-shell {
+    min-width: 0;
+  }
+
+  .fishydex-panel-body,
+  .fishydex-stats-body,
+  .fishydex-grid-body {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .fishydex-subtle {
+    color: var(--dex-text-muted);
+    font-size: 0.95rem;
+  }
+
+  .fishydex-controls {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .fishydex-search-field {
+    width: 100%;
+  }
+
+  .fishydex-search-field input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .fishydex-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .fishydex-filter-stack {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 900px) {
+    .fishydex-filter-stack {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .fishydex-filter-group {
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .fishydex-filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+  }
+
+  .fishydex-filter-chip {
+    white-space: nowrap;
+  }
+
+  .fishydex-sort-price-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.02rem;
+    width: auto;
+    height: 1.4rem;
+  }
+
+  .fishydex-sort-price-icon .fishy-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .fishydex-sort-price-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.95rem;
+    height: 0.95rem;
+    margin-left: -0.2rem;
+  }
+
+  .fishydex-sort-price-arrow .fishy-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+  }
+
+  .fishydex-filter-chip.is-active {
+    border-color: color-mix(in srgb, var(--dex-highlight) 28%, var(--color-base-content, #1f2937));
+    background: var(--dex-surface);
+  }
+
+  .fishydex-filter-chip.filter-caught.is-active {
+    border-color: color-mix(in oklab, var(--dex-caught) 56%, var(--dex-line) 44%);
+    background: color-mix(in oklab, var(--dex-caught) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-success, #2f855a) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .fishydex-filter-chip.filter-missing.is-active {
+    border-color: color-mix(in oklab, var(--color-base-content, #1f2937) 32%, transparent);
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 10%, var(--dex-surface-strong) 90%);
+  }
+
+  .fishydex-filter-chip.filter-favourite.is-active {
+    border-color: color-mix(in oklab, var(--color-error, #d64545) 56%, var(--dex-line) 44%);
+    background: color-mix(in oklab, var(--color-error, #d64545) 14%, var(--dex-surface-strong) 86%);
+    color: color-mix(in oklab, var(--color-error, #d64545) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .fishydex-filter-chip.filter-rod.is-active {
+    border-color: color-mix(in oklab, var(--color-info, #6b8afd) 56%, var(--dex-line) 44%);
+    background: color-mix(in oklab, var(--color-info, #6b8afd) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-info, #6b8afd) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-filter-chip.filter-harpoon.is-active {
+    border-color: color-mix(in oklab, var(--color-secondary, #e07a5f) 56%, var(--dex-line) 44%);
+    background: color-mix(in oklab, var(--color-secondary, #e07a5f) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-secondary, #e07a5f) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-filter-chip.filter-show-dried.is-active {
+    border-color: color-mix(in oklab, var(--color-warning, #c77d19) 56%, var(--dex-line) 44%);
+    background: color-mix(in oklab, var(--color-warning, #c77d19) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-warning, #c77d19) 76%, var(--color-base-content, #1f2937) 24%);
+  }
+
+  .fishydex-filter-chip.grade-red.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-red) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-red-surface);
+    color: color-mix(in oklab, var(--color-error, #d64545) 62%, var(--color-base-content, #1f2937) 38%);
+  }
+
+  .fishydex-filter-chip.grade-yellow.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-yellow) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-yellow-surface);
+    color: color-mix(in oklab, var(--dex-grade-yellow) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-filter-chip.grade-blue.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-blue) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-blue-surface);
+    color: color-mix(in oklab, var(--dex-grade-blue) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-filter-chip.grade-green.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-green) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-green-surface);
+    color: color-mix(in oklab, var(--dex-grade-green) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-filter-chip.grade-white.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-white) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-white-surface);
+    color: color-mix(in oklab, var(--dex-grade-white) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-filter-chip.grade-unknown.is-active {
+    border-color: color-mix(in oklab, var(--dex-grade-unknown) 56%, var(--dex-line) 44%);
+    background: var(--dex-grade-unknown-surface);
+    color: color-mix(in oklab, var(--dex-grade-unknown) 68%, var(--color-base-content, #1f2937) 32%);
+  }
+
+  .fishydex-filter-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .fishydex-filter-clear {
+    white-space: nowrap;
+  }
+
+  .fishydex-filter-count {
+    color: var(--dex-text-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .fishydex-button {
+    white-space: nowrap;
+  }
+
+  .fishydex-stats-body {
+    align-content: start;
+  }
+
+  .fishydex-progress-overview {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    align-items: center;
+    width: 100%;
+    padding: 1rem 1.1rem;
+  }
+
+  .fishydex-progress-overview-chart {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fishydex-progress-overview-copy {
+    display: grid;
+    gap: 0.2rem;
+    align-content: center;
+    min-width: 0;
+  }
+
+  .fishydex-progress-kicker {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--dex-text-muted);
+  }
+
+  .fishydex-progress-title {
+    display: block;
+    font-size: clamp(1.15rem, 2vw, 1.65rem);
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  .fishydex-progress-count {
+    display: block;
+    font-size: clamp(1.25rem, 2vw, 1.95rem);
+    font-weight: 800;
+    line-height: 1.05;
+  }
+
+  .fishydex-progress-pie {
+    flex: none;
+    color: var(--dex-caught);
+  }
+
+  .fishydex-progress-pie.is-overall {
+    color: color-mix(in oklab, var(--dex-caught) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .fishydex-progress-pie-value {
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .fishydex-grade-stats {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  }
+
+  .fishydex-grade-progress-card {
+    display: grid;
+    gap: 0.85rem;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    align-items: center;
+    width: 100%;
+    padding: 0.95rem 1rem;
+  }
+
+  .fishydex-grade-progress-copy {
+    display: grid;
+    gap: 0.14rem;
+    min-width: 0;
+  }
+
+  .fishydex-grade-progress-percent {
+    font-size: 0.78rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .fishydex-grade-progress-title {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .fishydex-grade-progress-value {
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  .fishydex-grade-progress-meta {
+    color: var(--dex-text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .fishydex-progress-pie.grade-red,
+  .fishydex-grade-progress-title.grade-red {
+    color: color-mix(in oklab, var(--dex-grade-red) 78%, var(--color-base-content, #1f2937) 22%);
+  }
+
+  .fishydex-progress-pie.grade-yellow,
+  .fishydex-grade-progress-title.grade-yellow {
+    color: color-mix(in oklab, var(--dex-grade-yellow) 78%, var(--color-base-content, #1f2937) 22%);
+  }
+
+  .fishydex-progress-pie.grade-blue,
+  .fishydex-grade-progress-title.grade-blue {
+    color: color-mix(in oklab, var(--dex-grade-blue) 78%, var(--color-base-content, #1f2937) 22%);
+  }
+
+  .fishydex-progress-pie.grade-green,
+  .fishydex-grade-progress-title.grade-green {
+    color: color-mix(in oklab, var(--dex-grade-green) 78%, var(--color-base-content, #1f2937) 22%);
+  }
+
+  .fishydex-progress-pie.grade-white,
+  .fishydex-grade-progress-title.grade-white {
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 82%, transparent);
+  }
+
+  @media (max-width: 720px) {
+    .fishydex-progress-overview {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      text-align: center;
+    }
+
+    .fishydex-progress-overview-copy {
+      justify-items: center;
+    }
+  }
+
+  .fishydex-status,
+  .fishydex-error {
+    border-radius: 1rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .fishydex-status {
+    background: var(--dex-surface);
+    border: 1px solid color-mix(in srgb, var(--color-info, #6b8afd) 30%, transparent);
+  }
+
+  .fishydex-error {
+    background: var(--dex-surface);
+    border: 1px solid color-mix(in srgb, var(--color-error, #d64545) 34%, transparent);
+  }
+
+  .fishydex-status strong {
+    color: color-mix(in oklab, var(--color-info, #6b8afd) 54%, var(--color-base-content, #1f2937) 46%);
+  }
+
+  .fishydex-error strong {
+    color: color-mix(in oklab, var(--color-error, #d64545) 60%, var(--color-base-content, #1f2937) 40%);
+  }
+
+  .fishydex-grid-shell {
+    overflow-anchor: none;
+  }
+
+  .fishydex-groups {
+    display: grid;
+    gap: 1rem;
+    overflow-anchor: none;
+  }
+
+  .fishydex-group {
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-empty-title {
+    margin: 0;
+    font-size: clamp(1.25rem, 2vw, 1.9rem);
+    font-weight: 700;
+  }
+
+  .fishydex-group-header {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    align-items: baseline;
+    margin-bottom: 0.9rem;
+  }
+
+  .fishydex-group-title.fieldset-legend,
+  .fishydex-panel-legend.fieldset-legend,
+  .fishydex-filter-group .fieldset-legend {
+    letter-spacing: normal;
+    text-transform: none;
+  }
+
+  .fishydex-panel-legend.fieldset-legend,
+  .fishydex-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .fishydex-panel-legend .fishy-icon,
+  .fishydex-filter-chip .fishy-icon {
+    flex: none;
+  }
+
+  .fishydex-panel-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .fishydex-panel-spinner {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    color: var(--dex-text-muted);
+    transition: opacity 120ms ease;
+  }
+
+  .fishydex-panel-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .fishydex-sort-button.btn {
+    min-height: 2rem;
+    padding-inline: 0.65rem;
+    border-color: transparent;
+    color: var(--dex-text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    white-space: nowrap;
+  }
+
+  .fishydex-sort-button.btn:hover,
+  .fishydex-sort-button.btn:focus-visible {
+    color: var(--color-base-content, #1f2937);
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 6%, transparent);
+  }
+
+  .fishydex-sort-button.is-active {
+    color: var(--color-base-content, #1f2937);
+    background: transparent;
+    box-shadow: inset 0 -2px 0 0 color-mix(in oklab, var(--dex-highlight) 42%, transparent);
+  }
+
+  .fishydex-sort-button .fishy-icon {
+    flex: none;
+  }
+
+  .fishydex-sort-button.is-active .fishy-icon {
+    color: color-mix(in oklab, var(--dex-highlight) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-panel-toggle {
+    pointer-events: auto;
+    width: 1.85rem;
+    height: 1.85rem;
+    min-height: 1.85rem;
+    padding: 0;
+    color: var(--dex-text-muted);
+    transition: color 120ms ease, background 120ms ease;
+  }
+
+  .fishydex-panel-toggle:hover,
+  .fishydex-panel-toggle:focus-visible {
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-panel-toggle .fishy-icon {
+    transition: transform 120ms ease;
+  }
+
+  .fishydex-panel-toggle.is-collapsed .fishy-icon {
+    transform: rotate(-90deg);
+  }
+
+  .fishydex-group-count {
+    color: var(--dex-text-muted);
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .fishydex-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 0.85rem;
+  }
+
+  .fishydex-card {
+    display: grid;
+    min-height: 12rem;
+    border: 2px solid var(--dex-line);
+    border-radius: 1rem;
+    background: var(--dex-card);
+    color: var(--color-base-content, #1f2937);
+    overflow: hidden;
+    padding: 0;
+    position: relative;
+    transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+  }
+
+  .fishydex-card.is-entering {
+    animation: fishydex-card-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--fishydex-card-delay, 0ms);
+  }
+
+  .fishydex-card:hover {
+    border-color: color-mix(in srgb, var(--dex-highlight) 28%, var(--color-base-content, #1f2937));
+    background: var(--dex-card-hover);
+    transform: translateY(-1px);
+  }
+
+  .fishydex-card:focus-within {
+    border-color: color-mix(in srgb, var(--dex-highlight) 28%, var(--color-base-content, #1f2937));
+    background: var(--dex-card-hover);
+    transform: translateY(-1px);
+  }
+
+  .fishydex-card.is-caught {
+    border-color: color-mix(in oklab, var(--dex-caught) 70%, var(--color-base-content, #1f2937) 30%);
+  }
+
+  .fishydex-card-top {
+    position: absolute;
+    top: 0.85rem;
+    right: 0.85rem;
+    z-index: 2;
+  }
+
+  .fishydex-card-open {
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: transparent;
+    border-radius: inherit;
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+  }
+
+  .fishydex-card-open:focus-visible {
+    outline: none;
+  }
+
+  .fishydex-card-content {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    height: 100%;
+    padding: 0.95rem;
+    pointer-events: none;
+    transition: transform 90ms ease;
+  }
+
+  .fishydex-card-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem;
+  }
+
+  .fishydex-caught-button,
+  .fishydex-favourite-button {
+    pointer-events: auto;
+    width: 2.25rem;
+    height: 2.25rem;
+    min-height: 2.25rem;
+    padding: 0;
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 60%, transparent);
+    transition: color 120ms ease, background 120ms ease, outline-color 120ms ease;
+  }
+
+  .fishydex-caught-button:hover,
+  .fishydex-favourite-button:hover {
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-caught-button:focus-visible,
+  .fishydex-favourite-button:focus-visible {
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-caught-button.is-caught {
+    color: color-mix(in oklab, var(--color-success, #2f855a) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .fishydex-caught-button.is-caught:hover,
+  .fishydex-caught-button.is-caught:focus-visible {
+    background: color-mix(in oklab, var(--dex-caught) 16%, var(--dex-surface-soft) 84%);
+  }
+
+  .fishydex-favourite-button.is-favourite {
+    color: color-mix(in oklab, var(--color-error, #d64545) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .fishydex-favourite-button.is-favourite:hover,
+  .fishydex-favourite-button.is-favourite:focus-visible {
+    background: color-mix(in oklab, var(--color-error, #d64545) 14%, var(--dex-surface-soft) 86%);
+  }
+
+  .fishydex-caught-button .fishy-icon,
+  .fishydex-favourite-button .fishy-icon {
+    inline-size: 2rem;
+    block-size: 2rem;
+    flex: none;
+    transform-origin: 50% 60%;
+  }
+
+  .fishydex-caught-button.is-stamping .fishy-icon,
+  .fishydex-favourite-button.is-stamping .fishy-icon {
+    animation: fishydex-caught-stamp 360ms cubic-bezier(0.2, 0.9, 0.25, 1.15);
+  }
+
+  .fishydex-grade,
+  .fishydex-caught,
+  .fishydex-method {
+    align-self: start;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .fishydex-grade {
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 10%, var(--dex-surface-soft) 90%);
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-grade.grade-red {
+    background: color-mix(in oklab, var(--dex-grade-red) 38%, var(--dex-surface-strong) 62%);
+    color: color-mix(in oklab, var(--color-error, #d64545) 62%, var(--color-base-content, #1f2937) 38%);
+  }
+
+  .fishydex-grade.grade-yellow {
+    background: var(--dex-grade-yellow-surface);
+    color: color-mix(in oklab, var(--dex-grade-yellow) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-grade.grade-blue {
+    background: var(--dex-grade-blue-surface);
+    color: color-mix(in oklab, var(--dex-grade-blue) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-grade.grade-green {
+    background: var(--dex-grade-green-surface);
+    color: color-mix(in oklab, var(--dex-grade-green) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-grade.grade-white {
+    background: var(--dex-grade-white-surface);
+    color: color-mix(in oklab, var(--dex-grade-white) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-grade.grade-unknown {
+    background: var(--dex-grade-unknown-surface);
+    color: color-mix(in oklab, var(--dex-grade-unknown) 68%, var(--color-base-content, #1f2937) 32%);
+  }
+
+  .fishydex-caught {
+    background: color-mix(in oklab, var(--dex-caught) 24%, var(--dex-surface-strong) 76%);
+    color: color-mix(in oklab, var(--color-success, #2f855a) 62%, var(--color-base-content, #1f2937) 38%);
+  }
+
+  .fishydex-method {
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 10%, var(--dex-surface-soft) 90%);
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-method.method-rod {
+    background: color-mix(in oklab, var(--color-info, #6b8afd) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-info, #6b8afd) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-method.method-harpoon {
+    background: color-mix(in oklab, var(--color-secondary, #e07a5f) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-secondary, #e07a5f) 72%, var(--color-base-content, #1f2937) 28%);
+  }
+
+  .fishydex-method.method-dried {
+    background: color-mix(in oklab, var(--color-warning, #c77d19) 18%, var(--dex-surface-strong) 82%);
+    color: color-mix(in oklab, var(--color-warning, #c77d19) 76%, var(--color-base-content, #1f2937) 24%);
+  }
+
+  .fishydex-caught-placeholder {
+    visibility: hidden;
+  }
+
+  .fishydex-card-main {
+    display: grid;
+    height: 100%;
+    align-content: center;
+    justify-items: center;
+    gap: 0.75rem;
+    min-height: 0;
+    padding: 0.35rem 0.25rem 0.15rem;
+    transition: transform 120ms ease;
+  }
+
+  .fishydex-card:hover .fishydex-card-main,
+  .fishydex-card:focus-within .fishydex-card-main {
+    transform: translateY(-2px);
+  }
+
+  .fishydex-card-open:active + .fishydex-card-content {
+    transform: translateY(1px);
+  }
+
+  .fishydex-card-open:active + .fishydex-card-content .fishydex-card-main {
+    transform: translateY(0);
+  }
+
+  .fishydex-icon-wrap {
+    width: 4.75rem;
+    height: 4.75rem;
+  }
+
+  .fishydex-icon {
+    object-fit: contain;
+    image-rendering: auto;
+  }
+
+  .fishydex-placeholder {
+    font-size: 2rem;
+  }
+
+  .fishydex-name {
+    max-width: 100%;
+    font-weight: 800;
+    line-height: 1.25;
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .fishydex-price {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    color: var(--dex-text-muted);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  .fishydex-card-price {
+    align-items: baseline;
+    justify-content: center;
+    font-size: 0.88rem;
+    text-align: center;
+    text-wrap: balance;
+  }
+
+  .fishydex-details-price {
+    font-size: 1rem;
+  }
+
+  .fishydex-price-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
+  .fishydex-price-icon .fishy-icon {
+    display: block;
+    width: 1.1rem;
+    height: 1.1rem;
+    transform: translateY(0.16em);
+  }
+
+  .fishydex-price-value {
+    min-width: 0;
+  }
+
+  .fishydex-empty {
+    color: var(--color-base-content, #1f2937);
+    text-align: center;
+  }
+
+  @keyframes fishydex-card-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.5rem);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fishydex-caught-stamp {
+    0% {
+      transform: translateY(0) scale(1) rotate(0deg);
+    }
+
+    35% {
+      transform: translateY(-0.42rem) scale(1.34) rotate(-13deg);
+    }
+
+    72% {
+      transform: translateY(0.08rem) scale(0.94) rotate(0deg);
+    }
+
+    100% {
+      transform: translateY(0) scale(1) rotate(0deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fishydex-card.is-entering {
+      animation: none;
+    }
+
+    .fishydex-caught-button.is-stamping .fishy-icon,
+    .fishydex-favourite-button.is-stamping .fishy-icon {
+      animation: none;
+    }
+  }
+
+  .fishydex-details-modal[hidden] {
+    display: none;
+  }
+
+  .fishydex-details-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: grid;
+    place-items: center;
+  }
+
+  .fishydex-details-backdrop {
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--color-base-content, #1f2937) 24%, transparent);
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+  }
+
+  .fishydex-details-panel {
+    position: relative;
+    z-index: 1;
+    max-height: min(90vh, 46rem);
+    overflow: auto;
+    color: var(--color-base-content, #1f2937);
+  }
+
+  .fishydex-details-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .fishydex-details-header-main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+    min-width: 0;
+  }
+
+  .fishydex-details-title {
+    margin: 0;
+    font-size: clamp(1.25rem, 2.2vw, 1.85rem);
+    font-weight: 700;
+  }
+
+  .fishydex-details-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
+  }
+
+  .fishydex-details-close {
+    flex: none;
+  }
+
+  #fishydex-details-caught-toggle {
+    transition: background 120ms ease, outline-color 120ms ease;
+  }
+
+  #fishydex-details-caught-toggle[data-caught-state="uncaught"] {
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 60%, transparent);
+  }
+
+  #fishydex-details-caught-toggle[data-caught-state="caught"] {
+    color: color-mix(in oklab, var(--color-success, #2f855a) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  #fishydex-details-favourite-toggle[data-favourite-state="active"] {
+    color: color-mix(in oklab, var(--color-error, #d64545) 82%, var(--color-base-content, #1f2937) 18%);
+  }
+
+  .fishydex-details-icon-wrap {
+    width: 5.5rem;
+    height: 5.5rem;
+  }
+
+  .fishydex-details-icon {
+    object-fit: contain;
+  }
+
+  .fishydex-details-copy {
+    display: grid;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  .fishydex-details-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .fishydex-details-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    gap: 0.75rem;
+  }
+
+  .fishydex-details-guide {
+    margin-bottom: 1rem;
+  }
+
+  .fishydex-details-guide-frame {
+    display: grid;
+    place-items: center;
+    min-height: 14rem;
+    padding: 1rem;
+  }
+
+  .fishydex-details-guide-image {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 16rem;
+    object-fit: contain;
+  }
+
+  .fishydex-details-meta-card,
+  .fishydex-details-section {
+    padding: 0.85rem 0.95rem;
+  }
+
+  .fishydex-details-meta-card dt {
+    margin: 0 0 0.35rem;
+    color: var(--dex-text-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .fishydex-details-meta-card dd {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .fishydex-details-link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--dex-highlight) 52%, transparent);
+    text-underline-offset: 0.14em;
+  }
+
+  .fishydex-details-link:hover,
+  .fishydex-details-link:focus-visible {
+    color: var(--color-primary, #e07a5f);
+    text-decoration-color: currentColor;
+  }
+
+  .fishydex-details-stack {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  .fishydex-details-section h4 {
+    margin: 0 0 0.45rem;
+    font-size: 1rem;
+  }
+
+  .fishydex-details-note {
+    margin: 0.6rem 0 0;
+    color: var(--dex-text-muted);
+    font-size: 0.92rem;
+  }
+
+  .fishydex-details-spot-list {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  .fishydex-details-spot {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .fishydex-details-spot-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .fishydex-details-spot-name {
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .fishydex-details-spot-rgb {
+    color: var(--dex-text-muted);
+    font-size: 0.8rem;
+  }
+
+  .fishydex-details-spot-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+  }
+
+  .fishydex-details-note.is-error {
+    color: color-mix(in oklab, var(--color-error, #d64545) 62%, var(--color-base-content, #1f2937) 38%);
+  }
+
+  @media (max-width: 900px) {
+    .fishydex-details-header {
+      grid-template-columns: 1fr;
+    }
+
+    .fishydex-details-header-main {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .fishydex-card-grid {
+      grid-template-columns: repeat(auto-fill, minmax(9.75rem, 1fr));
+    }
+  }
