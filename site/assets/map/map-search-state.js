@@ -5,10 +5,10 @@ import {
   buildSearchSelectionStatePatch,
   normalizeFishFilterTerm,
   normalizeFishFilterTerms,
-  projectSelectedSearchTermsToBridgedFilters,
   removeSelectedSearchTerm,
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
+import { resolveSearchProjection } from "./map-search-projection.js";
 
 export { normalizeFishFilterTerm, normalizeFishFilterTerms } from "./map-search-contract.js";
 const FISH_FILTER_TERM_METADATA = Object.freeze({
@@ -114,10 +114,12 @@ function normalizeSharedFishState(value) {
 
 export function buildSearchPanelStateBundle(signals) {
   const runtime = isPlainObject(signals?._map_runtime) ? signals._map_runtime : {};
-  const bridgedFilters = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
-  const selectedTerms = resolveSelectedSearchTerms(search.selectedTerms, bridgedFilters);
-  const projectedFilters = projectSelectedSearchTermsToBridgedFilters(selectedTerms);
+  const selectedTerms = resolveSelectedSearchTerms(
+    search.selectedTerms,
+    signals?._map_bridged?.filters,
+  );
+  const projectedFilters = resolveSearchProjection(signals);
   return {
     state: {
       ready: runtime.ready === true,
@@ -154,16 +156,11 @@ export function resolveSelectedSearchTermsFromBundle(stateBundle) {
 }
 
 export function resolveSelectedFishIds(stateBundle) {
-  return normalizeIntegerList(
-    projectSelectedSearchTermsToBridgedFilters(resolveSelectedSearchTermsFromBundle(stateBundle)).fishIds,
-  );
+  return normalizeIntegerList(stateBundle?.inputState?.filters?.fishIds);
 }
 
 export function resolveSelectedSemanticFieldIdsByLayer(stateBundle) {
-  return normalizeSemanticFieldIdsByLayer(
-    projectSelectedSearchTermsToBridgedFilters(resolveSelectedSearchTermsFromBundle(stateBundle))
-      .semanticFieldIdsByLayer,
-  );
+  return normalizeSemanticFieldIdsByLayer(stateBundle?.inputState?.filters?.semanticFieldIdsByLayer);
 }
 
 export function resolveSelectedZoneRgbs(stateBundle) {
@@ -172,10 +169,7 @@ export function resolveSelectedZoneRgbs(stateBundle) {
 }
 
 export function resolveSelectedFishFilterTerms(stateBundle) {
-  return normalizeFishFilterTerms(
-    projectSelectedSearchTermsToBridgedFilters(resolveSelectedSearchTermsFromBundle(stateBundle))
-      .fishFilterTerms,
-  );
+  return normalizeFishFilterTerms(stateBundle?.inputState?.filters?.fishFilterTerms);
 }
 
 export function parseFishFilterDirectives(searchText) {

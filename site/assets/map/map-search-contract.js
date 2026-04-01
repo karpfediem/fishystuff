@@ -185,6 +185,9 @@ export function selectedSearchTermsFromLegacyFilters(filters) {
   for (const fishId of normalizeIntegerList(source.fishIds)) {
     terms.push({ kind: "fish", fishId });
   }
+  for (const zoneRgb of normalizeIntegerList(source.zoneRgbs)) {
+    terms.push({ kind: "zone", zoneRgb });
+  }
   const byLayer = isPlainObject(source.semanticFieldIdsByLayer)
     ? source.semanticFieldIdsByLayer
     : {};
@@ -307,4 +310,3 @@ export function layerSupportsClipMode(layerId, clipMode) {
   const layerSupport = MAP_SEARCH_LAYER_SUPPORT[normalizedLayerId];
   return !!layerSupport?.clipModes?.includes(normalizedClipMode);
 }
-

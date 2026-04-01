@@ -4049,3 +4049,70 @@ Why this is aligned with the remediation:
 - the `Info` window remains a concise fact pane instead of inheriting calculator presentation
 - calculator-backed grouping and rates are still reused, but only the minimal world-map-relevant
   subset crosses into the map UI
+
+## 2026-04-01: selected search terms are canonical again
+
+Observed drift:
+
+- the clean-slate shell had already moved search selection ownership to `_map_ui.search.selectedTerms`
+- but the live map still depended on imperative search UI actions patching `_map_bridged.filters`
+  at the same time
+- that meant a direct signal-level `selectedTerms` patch did not actually reach Bevy
+  - `_map_ui.search.selectedTerms` changed
+  - `_map_bridged.filters` stayed stale
+  - bridge input stayed stale too
+- this was exactly the kind of FRP drift the remediation is supposed to remove
+
+What changed:
+
+- added `site/assets/map/map-search-projection.js`
+  - pure search-term projection from page-owned selected terms into the bridged runtime filter subset
+  - canonicalized comparison so the patch is only emitted when the projected bridged filters
+    actually differ
+- `site/assets/map/map-runtime-adapter.js`
+  - bridge input patch generation now derives search filters from the canonical selected-term
+    projection instead of trusting `_map_bridged.filters` blindly
+- `site/assets/map/map-app-live.js`
+  - on any shell patch that changes `_map_ui.search.selectedTerms`, the clean-slate shell now emits
+    an internal `_map_bridged.filters` projection patch before reconciling bridge input
+  - the same projection is also applied once during initial bootstrap, so query/restore state does
+    not depend on the search UI having been used interactively
+- `site/assets/map/map-search-contract.js`
+  - legacy fallback now also treats top-level `zoneRgbs` as canonical zone terms when restoring
+    older storage/query state
+
+Validation:
+
+- focused JS tests passed for:
+  - `map-search-contract`
+  - `map-search-projection`
+  - `map-search-state`
+  - `map-runtime-adapter`
+  - `map-app-live`
+- served assets were checked against `site/.out` for:
+  - `/map/map-search-projection.js`
+  - `/map/map-app-live.js`
+- live DevTools validation:
+  - direct shell patch with `{ _map_ui.search.selectedTerms: [{ kind: 'zone', zoneRgb: 3793 }] }`
+    now updates:
+    - `_map_bridged.filters.zoneRgbs`
+    - `FishyMapBridge.getCurrentInputState().filters.zoneRgbs`
+    - `FishyMapBridge.getCurrentState().filters.zoneRgbs`
+  - direct shell patch with `{ kind: 'semantic', layerId: 'regions', fieldId: 430 }`
+    now updates the semantic bridged filter path the same way
+  - direct shell patch with `{ kind: 'fish-filter', term: 'missing' }` now resolves through the
+    live fish catalog/shared-fish state into a large effective `fishIds` set for the bridge input
+- live runtime clipping proof:
+  - baseline Fish Evidence query:
+    - `represented=26938`
+  - `Margoria South` zone term (`zoneRgb=16742655`) with Fish Evidence visible:
+    - `represented=433`
+  - this confirms the selected-term projection now reaches the runtime and the zone-membership
+    filter path is active on the live map
+
+Next:
+
+- continue the still-dirty runtime-side semantic/vector filtering slice and validate it as directly
+  as the points zone-membership path
+- keep attachment-driven clipping as the primary user model and avoid reintroducing redundant
+  explicit clipping settings

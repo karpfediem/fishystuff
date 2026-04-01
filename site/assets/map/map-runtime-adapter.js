@@ -11,6 +11,7 @@ import {
   buildLayerSearchEffects,
   DEFAULT_LAYER_SEARCH_CLIPS,
 } from "./map-layer-search-effects.js";
+import { resolveSearchProjection } from "./map-search-projection.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -87,11 +88,12 @@ function normalizeRecordObject(value) {
 
 function normalizeBridgedFilters(signals) {
   const bridged = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
+  const searchProjection = resolveSearchProjection(signals);
   return {
-    fishIds: normalizeIntegerList(bridged.fishIds),
-    zoneRgbs: normalizeIntegerList(bridged.zoneRgbs),
-    semanticFieldIdsByLayer: normalizeRecordObject(bridged.semanticFieldIdsByLayer),
-    fishFilterTerms: normalizeStringList(bridged.fishFilterTerms),
+    fishIds: cloneJson(searchProjection.fishIds),
+    zoneRgbs: cloneJson(searchProjection.zoneRgbs),
+    semanticFieldIdsByLayer: cloneJson(searchProjection.semanticFieldIdsByLayer),
+    fishFilterTerms: cloneJson(searchProjection.fishFilterTerms),
     patchId: bridged.patchId ?? null,
     fromPatchId: bridged.fromPatchId ?? null,
     toPatchId: bridged.toPatchId ?? null,

@@ -78,6 +78,7 @@ Multilingual {
     "map/map-zone-info-panel-live.js",
     "map/map-zone-catalog.js",
     "map/map-search-contract.js",
+    "map/map-search-projection.js",
     "map/map-search-state.js",
     "map/map-search-panel-live.js",
     "map/map-search-panel.js",

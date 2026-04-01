@@ -19,6 +19,7 @@ import { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
 import { patchTouchesHoverTooltipSignals } from "./map-hover-facts.js";
 import { patchTouchesInfoSignals } from "./map-info-state.js";
 import { patchTouchesSearchPanelSignals } from "./map-search-state.js";
+import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
 
 const FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT = "fishymap:datastar-signal-patch";
@@ -224,6 +225,10 @@ export async function start() {
   if (queryPatch) {
     dispatchShellSignalPatch(shell, queryPatch);
   }
+  const initialSearchProjectionPatch = buildSearchProjectionSignalPatch(page.signalObject?.() || {});
+  if (initialSearchProjectionPatch) {
+    dispatchShellSignalPatch(shell, initialSearchProjectionPatch);
+  }
 
   const app = createMapApp();
   const bridge = FishyMapBridge;
@@ -382,12 +387,22 @@ export async function start() {
 
   shell.addEventListener(FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
     const patch = event?.detail || null;
+    const searchProjectionPatch =
+      patch?._map_ui?.search?.selectedTerms != null
+        ? buildSearchProjectionSignalPatch(signals())
+        : null;
+    const effectivePatch = searchProjectionPatch
+      ? combineSignalPatches(patch, searchProjectionPatch)
+      : patch;
+    if (searchProjectionPatch) {
+      applyInternalSignalPatch(searchProjectionPatch);
+    }
     if (applyingInternalSignalPatch) {
-      scheduleControllersForPatch(patch);
+      scheduleControllersForPatch(effectivePatch);
       return;
     }
-    if (!patchTouchesLiveBridgeInputs(patch)) {
-      scheduleControllersForPatch(patch);
+    if (!patchTouchesLiveBridgeInputs(effectivePatch)) {
+      scheduleControllersForPatch(effectivePatch);
       return;
     }
 
@@ -400,10 +415,10 @@ export async function start() {
     }
 
     patchBridgeFromSignals();
-    if (!syncingFromBridge && patch?._map_bookmarks?.entries != null) {
+    if (!syncingFromBridge && effectivePatch?._map_bookmarks?.entries != null) {
       scheduleBookmarkDetailsRefresh();
     }
-    scheduleControllersForPatch(patch);
+    scheduleControllersForPatch(effectivePatch);
   });
 
   const initialPatch = app.nextBridgePatch(signals(), {

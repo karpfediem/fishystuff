@@ -75,13 +75,23 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
         favouriteIds: [77],
       },
     },
-    { currentState: createEmptySnapshot() },
+    {
+      currentState: {
+        ...createEmptySnapshot(),
+        catalog: {
+          fish: [{ fishId: 912 }],
+        },
+      },
+    },
   );
 
   assert.equal(patch.version, 1);
   assert.deepEqual(patch.filters.fishIds, [77]);
   assert.deepEqual(patch.filters.zoneRgbs, [123456]);
-  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, { regions: [11] });
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
+    regions: [11],
+    zone_mask: [123456],
+  });
   assert.equal(patch.filters.patchId, "p1");
   assert.equal(patch.filters.fromPatchId, "a");
   assert.equal(patch.filters.toPatchId, "b");
@@ -99,6 +109,50 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
   assert.equal("legendOpen" in patch.ui, false);
   assert.equal("leftPanelOpen" in patch.ui, false);
   assert.equal("windowUi" in patch.ui, false);
+});
+
+test("buildBridgeInputPatchFromSignals derives search filters from selected terms", () => {
+  const patch = buildBridgeInputPatchFromSignals(
+    {
+      _map_ui: {
+        search: {
+          selectedTerms: [
+            { kind: "zone", zoneRgb: 123456 },
+            { kind: "semantic", layerId: "regions", fieldId: 11 },
+            { kind: "fish-filter", term: "favorite" },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [77],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+        },
+      },
+      _shared_fish: {
+        caughtIds: [],
+        favouriteIds: [912],
+      },
+    },
+    {
+      currentState: {
+        ...createEmptySnapshot(),
+        catalog: {
+          fish: [{ fishId: 912 }],
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(patch.filters.zoneRgbs, [123456]);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
+    regions: [11],
+    zone_mask: [123456],
+  });
+  assert.deepEqual(patch.filters.fishIds, [912]);
+  assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
 });
 
 test("buildBridgeInputPatchFromSignals ignores transitional control filters", () => {

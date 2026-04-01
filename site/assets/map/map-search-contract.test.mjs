@@ -35,9 +35,9 @@ test("resolveSelectedSearchTerms falls back to legacy bridged filters", () => {
   assert.deepEqual(
     resolveSelectedSearchTerms(undefined, {
       fishIds: [912],
+      zoneRgbs: [123],
       fishFilterTerms: ["missing"],
       semanticFieldIdsByLayer: {
-        zone_mask: [123],
         regions: [22],
       },
     }),
@@ -125,4 +125,3 @@ test("normalizeFishFilterTerms preserves canonical term order", () => {
     "missing",
   ]);
 });
-
