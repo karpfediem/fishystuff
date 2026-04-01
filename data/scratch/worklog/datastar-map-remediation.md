@@ -4778,3 +4778,62 @@ Next:
 - then take the next larger remaining Datastar drift:
   - either the shell bootstrap global itself
   - or one of the imperative live map panel controllers
+
+## 2026-04-01: stop central controller fan-out in `map-app-live.js`
+
+Follow-up cleanup after switching the live map to direct signal patching:
+
+- `map-app-live.js` was still acting like a mini reactive runtime in one important way
+- after every signal patch, it manually decided which controller to poke:
+  - window manager
+  - bookmarks
+  - hover tooltip
+  - info panel
+  - layer panel
+  - search panel
+- but those controllers already supported narrow `datastar-signal-patch` listeners of their own
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - no longer imports the per-controller `patchTouches...` helpers
+  - no longer instantiates the live controllers with `listenToSignalPatches: false`
+  - no longer keeps:
+    - `scheduleShellControllers()`
+    - `scheduleControllersForPatch(...)`
+  - now lets the controllers react through their own narrow Datastar listeners while the app stays
+    focused on:
+    - bridge patch derivation
+    - bridge mount/state refresh
+    - derived search projection patches
+    - bookmark-detail refresh timing
+
+Why this matters:
+
+- it removes another layer of central orchestration from the live clean-slate map path
+- it moves the architecture closer to the intended Datastar shape:
+  - local controller logic listens only to the patches it cares about
+  - `map-app-live.js` no longer acts as a page-wide render fan-out bus
+- it also makes the remaining drift more explicit:
+  - the controllers themselves are now the main imperative islands left to simplify over time
+
+Validation:
+
+- JS validation passed:
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-window-manager.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-search-panel-live.test.mjs site/assets/map/map-zone-info-panel-live.test.mjs`
+  - `node --check site/assets/map/map-app-live.js`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+- live DevTools check on `/map/` confirmed:
+  - no new console errors
+  - `Ready`
+  - `Layers 7`
+  - windows/panels still rendered correctly after reload
+
+Next:
+
+- continue reducing `map-page-live.js` until the remaining shell bootstrap surface is smaller and
+  less framework-like
+- after that, start collapsing the most imperative remaining live panel/controller seams
