@@ -271,6 +271,11 @@ body:has(#map-page-shell) #content > .site-content-clip {
   overflow: visible;
 }
 
+fishymap-search-panel {
+  display: block;
+  min-width: 0;
+}
+
 #fishymap-search-selection-shell {
   padding: 0;
 }

@@ -6235,3 +6235,85 @@ Next:
 - reassess whether the next best cleanup is:
   - trimming `map-page-live.js`/bootstrap further
   - or starting to replace the larger imperative panel renderers with more signal-owned DOM
+
+## 2026-04-01: start the clean-slate search panel component and move it onto real Datastar patch seams
+
+The next highest-value panel after the docs reread was Search. It is mostly view/render logic,
+and it is a good fit for the Datastar guidance of:
+
+- signals for durable state and interaction state
+- web components for isolated frontend behavior that does not fit cleanly in inline `data-*`
+- narrow side-effect seams instead of app-wide orchestration
+
+What changed:
+
+- introduced a real search-panel custom element:
+  - `site/assets/map/map-search-panel-element.js`
+  - `site/assets/map/map-search-panel-element.test.mjs`
+- moved the Search window body in `site/assets/map/map-shell.html` to:
+  - `<fishymap-search-panel id="fishymap-search-panel" class="not-prose"></fishymap-search-panel>`
+- published the new asset in `site/zine.ziggy`
+- removed the live app dependency on the old imperative search controller:
+  - `site/assets/map/map-app-live.js`
+    - now side-effect imports the custom element module
+- kept `site/assets/map/map-search-panel.js` as the pure render helper layer for now
+
+Important event-flow finding:
+
+- direct Datastar-bound user input, like typing in the search box, emits the native document event:
+  - `datastar-signal-patch`
+- app-driven bridge/runtime patches still come through the live shell seam:
+  - `fishymap:signal-patched`
+- relying on only one of those broke half the behavior:
+  - shell-only missed direct query typing
+  - Datastar-only missed app-driven runtime/catalog updates
+
+So the search component now listens to both:
+
+- native Datastar signal patches for direct UI mutations
+- shell-local applied patches for bridge/runtime projections
+
+Related persistence fix:
+
+- `site/assets/map/map-page-persist.js`
+  - now also listens to both patch seams
+  - this restores persistence for direct Datastar-owned UI input like search query changes
+- `site/assets/map/map-page-persist.test.mjs`
+  - now covers the dual-subscription behavior
+
+Live validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-search-panel-element.js site/assets/map/map-page-persist.js`
+  - `node --test site/assets/map/map-search-panel-element.test.mjs site/assets/map/map-page-persist.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for spot-checked live assets:
+  - `/map/map-search-panel-element.js`
+  - `/map/map-page-persist.js`
+  - `/map/`
+- live DevTools on `/map/` confirmed:
+  - typing `eel` updates the custom element immediately
+  - the result list opens and renders `11 matches`
+  - query persistence updates `fishystuff.map.window_ui.v1`
+  - after reload, the query restores correctly
+
+Clarification from live validation:
+
+- after reload, persisted search query does not automatically imply the live result list is open
+- that remains controlled by `_map_ui.search.open`
+- so a restored query can legitimately show with the list closed until the search is reopened
+
+Why this matters:
+
+- Search is now on the intended clean-slate path:
+  - raw shell HTML
+  - page-owned Datastar signals
+  - component-local behavior
+  - no dependency on `loader.js`
+- this is a better pattern to copy for the next panel than continuing to shave small amounts off app bootstrap
+
+Next:
+
+- continue replacing the remaining imperative panel islands with component/local-controller patterns
+- best next target remains the Info panel, because it is mostly presentational and state-driven

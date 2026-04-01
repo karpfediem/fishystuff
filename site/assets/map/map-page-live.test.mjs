@@ -218,6 +218,7 @@ test("map-page-live consumes shell-sticky initial signals when init event was mi
   const env = createContext({}, { initialSignals: signals });
 
   assert.equal(env.pageLive.signalObject(), signals);
+  assert.equal(env.shell.__fishymapLiveSignals, signals);
   assert.equal(signals._map_ui.windowUi.search.open, true);
   assert.equal("__fishymapInitialSignals" in env.shell, false);
 });

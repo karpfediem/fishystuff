@@ -41,6 +41,9 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   function connect(signals) {
     state.liveSignals = signals && typeof signals === "object" ? signals : null;
     state.shell = resolveShell() || state.shell;
+    if (state.shell && state.liveSignals) {
+      state.shell.__fishymapLiveSignals = state.liveSignals;
+    }
     return state.liveSignals;
   }
 

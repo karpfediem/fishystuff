@@ -15,7 +15,7 @@ import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
 import { createMapInfoPanelController } from "./map-info-panel-live.js";
 import { createMapLayerPanelController } from "./map-layer-panel-live.js";
 import { createMapPatchPickerController } from "./map-patch-picker-live.js";
-import { createMapSearchPanelController } from "./map-search-panel-live.js";
+import "./map-search-panel-element.js";
 import {
   dispatchShellPatchedSignalEvent,
   FISHYMAP_SIGNAL_PATCHED_EVENT,
@@ -227,7 +227,6 @@ export async function start() {
   let hoverTooltip = null;
   let bookmarkPanel = null;
   let layerPanel = null;
-  let searchPanel = null;
   let zoneInfoPanel = null;
 
   function dispatchSignalPatch(patch) {
@@ -270,10 +269,6 @@ export async function start() {
     getSignals: signals,
   });
   layerPanel = createMapLayerPanelController({
-    shell,
-    getSignals: signals,
-  });
-  searchPanel = createMapSearchPanelController({
     shell,
     getSignals: signals,
   });
