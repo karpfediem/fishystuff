@@ -44,3 +44,27 @@ test("buildProvenanceSegments keeps database presence blue and preserves presenc
     assert.equal(presenceSegment.detail, "Ranking presence");
     assert.equal(presenceSegment.color, provenanceIndicatorColor("presence", "database"));
 });
+
+test("buildProvenanceSegments recognizes ranking presence provenance", () => {
+    const [, presenceSegment] = buildProvenanceSegments({
+        presenceSourceKind: "ranking",
+        presenceDetail: "Ranking ring fully inside zone ×8",
+    });
+
+    assert.equal(presenceSegment.sourceLabel, "Ranking ring");
+    assert.equal(presenceSegment.color, provenanceIndicatorColor("presence", "ranking"));
+    assert.match(provenanceAriaLabel(presenceSegment), /Presence: Ranking ring/);
+});
+
+test("buildProvenanceSegments uses mixed presence provenance when multiple sources contribute", () => {
+    const [, presenceSegment] = buildProvenanceSegments({
+        presenceSourceKind: "mixed",
+        presenceDetail: "Ranking ring fully inside zone ×8 | Community confirmed ×2",
+    });
+
+    assert.equal(presenceSegment.sourceLabel, "Mixed support");
+    assert.match(
+        presenceSegment.color,
+        /linear-gradient\(180deg,/,
+    );
+});

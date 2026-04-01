@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::error::{AppError, AppResult};
 use crate::store::{
-    validate_dolt_ref, CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang,
+    queries, validate_dolt_ref, CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang,
 };
 
 use super::catalog::{item_grade_from_db, parse_positive_i64};
@@ -47,6 +47,12 @@ struct CommunityPresenceMeta {
     slot_idx: Option<u8>,
     item_main_group_key: Option<i64>,
     subgroup_key: Option<i64>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct RankingPresenceMeta {
+    full_count: u32,
+    partial_count: u32,
 }
 
 fn parse_community_support_notes(notes: &str) -> CommunitySupportMeta {
@@ -480,6 +486,43 @@ impl DoltMySqlStore {
                 subgroup_key: meta.subgroup_key,
             });
         }
+        let fish_identities = self.query_fish_identities(ref_id)?;
+        let layer_revision_id = self
+            .defaults
+            .map_version_id
+            .as_ref()
+            .map(|id| id.0.clone())
+            .unwrap_or_else(|| "v1".to_string());
+        let ranking_presence_rows: Vec<(i64, i64, i64)> = match conn.exec(
+            queries::RANKING_RING_SUPPORT_BY_ZONE_SQL,
+            (
+                &layer_revision_id,
+                super::SOURCE_KIND_RANKING,
+                zone_rgb.to_u32(),
+            ),
+        ) {
+            Ok(rows) => rows,
+            Err(err) if is_missing_table(&err, "event_zone_ring_support") => Vec::new(),
+            Err(err) => return Err(db_unavailable(err)),
+        };
+        let mut ranking_presence_by_item = HashMap::<i32, RankingPresenceMeta>::new();
+        for (fish_id, full_count, partial_count) in ranking_presence_rows {
+            let Ok(fish_id) = i32::try_from(fish_id) else {
+                continue;
+            };
+            let item_id = fish_identities
+                .by_encyclopedia
+                .get(&fish_id)
+                .map(|entry| entry.item_id)
+                .unwrap_or(fish_id);
+            let meta = ranking_presence_by_item.entry(item_id).or_default();
+            meta.full_count = meta
+                .full_count
+                .saturating_add(u32::try_from(full_count.max(0)).unwrap_or(u32::MAX));
+            meta.partial_count = meta
+                .partial_count
+                .saturating_add(u32::try_from(partial_count.max(0)).unwrap_or(u32::MAX));
+        }
 
         let community_guess_meta_by_key = community_guess_by_key
             .iter()
@@ -678,6 +721,34 @@ impl DoltMySqlStore {
                         subgroup_key: meta.subgroup_key,
                         ..CalculatorZoneLootEvidence::default()
                     });
+                }
+                if let Some(meta) = ranking_presence_by_item.get(&item_id).copied() {
+                    if meta.full_count > 0 {
+                        evidence.push(CalculatorZoneLootEvidence {
+                            source_family: "ranking".to_string(),
+                            claim_kind: "presence".to_string(),
+                            scope: "ring_full".to_string(),
+                            rate: None,
+                            normalized_rate: None,
+                            status: Some("observed".to_string()),
+                            claim_count: Some(meta.full_count),
+                            source_id: Some(format!("layer_revision:{layer_revision_id}")),
+                            ..CalculatorZoneLootEvidence::default()
+                        });
+                    }
+                    if meta.partial_count > 0 {
+                        evidence.push(CalculatorZoneLootEvidence {
+                            source_family: "ranking".to_string(),
+                            claim_kind: "presence".to_string(),
+                            scope: "ring_partial".to_string(),
+                            rate: None,
+                            normalized_rate: None,
+                            status: Some("observed".to_string()),
+                            claim_count: Some(meta.partial_count),
+                            source_id: Some(format!("layer_revision:{layer_revision_id}")),
+                            ..CalculatorZoneLootEvidence::default()
+                        });
+                    }
                 }
                 Some(CalculatorZoneLootEntry {
                     slot_idx,

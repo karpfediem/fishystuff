@@ -188,6 +188,20 @@ At minimum, the system should distinguish between:
 
 The system must not collapse these into one fake “exact point” model.
 
+When the attribution model is `PlayerPositionRing`, fish presence support for a zone is positive as
+soon as the ring overlaps that zone at all.
+
+However, the system should preserve two distinct strengths of ring-based support:
+
+* **Ring fully contained in zone**
+  The entire implied catch ring stays inside the zone.
+
+* **Ring partially overlaps zone**
+  The implied catch ring touches the zone, but also crosses into one or more neighboring zones.
+
+Both are valid positive presence support. They are not equally strong, and they must not be merged
+into one undifferentiated “ranking observed here” claim.
+
 ---
 
 ## 5.7 Effective sample size (ESS)
@@ -448,6 +462,17 @@ The system should be able to distinguish at least these categories:
 
 The exact final labels may vary, but the distinction between strong, weak, historical, and unknown support must remain explicit.
 
+For ranking-derived presence specifically, the system should also be able to preserve whether the
+support came from:
+
+* ring observations fully contained in the zone,
+* ring observations only partially overlapping the zone,
+* or a mixture of both.
+
+This nuance is important for border interpretation and redraw QA. A partial-overlap-only ranking
+signal may still be valid positive support, but it should communicate that the evidence may be a
+border case or that the current zone boundary may be under stress.
+
 ## 9.4 Critical guardrail
 
 **Missing evidence is not evidence of absence.**
@@ -607,8 +632,19 @@ Must represent:
 * which fish are supported,
 * support state per fish,
 * which source families support that claim,
+* for ring-attributed ranking evidence, whether support is fully contained, partially overlapping, or mixed,
 * optional time/freshness context,
 * and explicit uncertainty states.
+
+Presence support should preserve claim-level provenance rather than collapsing all support for a fish
+into one flat badge. In particular, a zone may simultaneously have:
+
+* ranking ring support,
+* curated community support,
+* and legacy/reference support,
+
+and the user should be able to understand which part of the support is strong spatial evidence
+versus which part is a maintained reference or hint.
 
 ## 13.3 Ranking evidence
 
@@ -666,6 +702,14 @@ The system must support distinct sample attribution models such as:
 
 and not pretend they are all exact points.
 
+If `PlayerPositionRing` is used for ranking evidence, the product must preserve whether a zone claim
+comes from:
+
+* a ring fully contained in the zone,
+* or a ring that only partially overlaps the zone.
+
+This distinction is part of provenance, not an optional cosmetic detail.
+
 ## 14.5 Click assignment and sample evidence are distinct
 
 The clicked point belonging to a zone is not the same thing as a ranking sample being exactly attributable to that zone.
@@ -698,6 +742,7 @@ If a capability is not yet modeled or not supported by current evidence, the sys
 
 * Add explicit sample attribution models.
 * Support exact and ring-based evidence attribution.
+* Preserve full-ring vs partial-ring zone support as distinct ranking-presence strengths.
 
 ## Phase 5 — Player-tracked quantitative pipeline
 
@@ -749,6 +794,7 @@ The product may use these assumptions, but it should avoid presenting them as st
     * and boundary stress.
 * The system must preserve source provenance.
 * The system must preserve time attribution for evidence.
+* The system must preserve ranking ring-presence provenance, including the distinction between fully contained and partially overlapping zone support.
 * The system must not treat missing evidence as absence.
 * The system must not present ranking evidence share as a drop/catch rate.
 * The system must support setup-scoped quantitative analysis for future player tracking.

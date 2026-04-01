@@ -8,8 +8,14 @@ function normalizeSourceKind(value) {
     if (normalized === "database") {
         return "database";
     }
+    if (normalized === "ranking") {
+        return "ranking";
+    }
     if (normalized === "community") {
         return "community";
+    }
+    if (normalized === "mixed") {
+        return "mixed";
     }
     return "unknown";
 }
@@ -18,8 +24,14 @@ function sourceLabel(channel, sourceKind) {
     if (sourceKind === "database") {
         return "Database";
     }
+    if (sourceKind === "ranking") {
+        return channel === "presence" ? "Ranking ring" : "Ranking";
+    }
     if (sourceKind === "community") {
         return channel === "rate" ? "Community guess" : "Community";
+    }
+    if (sourceKind === "mixed") {
+        return channel === "presence" ? "Mixed support" : "Mixed provenance";
     }
     return "Unspecified";
 }
@@ -32,26 +44,53 @@ function defaultDetail(channel, sourceKind, valueText) {
                 : "Database-backed rate."
             : "Database-backed presence.";
     }
+    if (sourceKind === "ranking") {
+        return channel === "presence"
+            ? "Ranking ring overlap support from observed player positions."
+            : "Ranking-derived provenance.";
+    }
     if (sourceKind === "community") {
         return channel === "rate"
             ? "Community-maintained guessed rate."
             : "Community-maintained presence support.";
     }
+    if (sourceKind === "mixed") {
+        return channel === "presence"
+            ? "Multiple presence provenance sources support this row."
+            : "Multiple provenance sources support this row.";
+    }
     return `No ${channel} provenance recorded yet.`;
 }
 
 export function provenanceIndicatorColor(channel, sourceKind, { active = true } = {}) {
+    const databaseColor =
+        "color-mix(in oklab, var(--color-info) 76%, var(--color-base-content) 24%)";
+    const rankingColor =
+        "color-mix(in oklab, var(--color-info) 46%, var(--color-success) 54%)";
+    const communityPresenceColor =
+        "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
+    const communityRateColor =
+        "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
     if (!active) {
         return "color-mix(in oklab, var(--color-neutral) 28%, var(--color-base-300) 72%)";
     }
     if (sourceKind === "database") {
-        return "color-mix(in oklab, var(--color-info) 76%, var(--color-base-content) 24%)";
+        return databaseColor;
+    }
+    if (sourceKind === "ranking") {
+        return rankingColor;
     }
     if (sourceKind === "community") {
         if (channel === "presence") {
-            return "color-mix(in oklab, var(--color-success) 78%, var(--color-base-content) 22%)";
+            return communityPresenceColor;
         }
-        return "color-mix(in oklab, var(--color-warning) 80%, var(--color-base-content) 20%)";
+        return communityRateColor;
+    }
+    if (sourceKind === "mixed") {
+        if (channel === "presence") {
+            return `linear-gradient(180deg, ${rankingColor} 0 50%, ${communityPresenceColor} 50% 100%)`;
+        }
+        return `linear-gradient(180deg, ${databaseColor} 0 50%, ${communityRateColor} 50% 100%)`;
     }
     return "color-mix(in oklab, var(--color-neutral) 62%, var(--color-base-content) 38%)";
 }

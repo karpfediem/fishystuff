@@ -54,4 +54,16 @@ WHERE e.water_ok = 1
   AND e.ts_utc >= ?
   AND e.ts_utc < ?";
 
+pub const RANKING_RING_SUPPORT_BY_ZONE_SQL: &str = "
+SELECT
+  e.fish_id,
+  CAST(SUM(CASE WHEN ring.ring_fully_contained = 1 THEN 1 ELSE 0 END) AS SIGNED) AS full_count,
+  CAST(SUM(CASE WHEN ring.ring_fully_contained = 0 THEN 1 ELSE 0 END) AS SIGNED) AS partial_count
+FROM events e
+JOIN event_zone_ring_support ring ON ring.event_id = e.event_id AND ring.layer_revision_id = ?
+WHERE e.water_ok = 1
+  AND e.source_kind = ?
+  AND ring.zone_rgb = ?
+GROUP BY e.fish_id";
+
 pub const HEALTHCHECK_SQL: &str = "SELECT 1";

@@ -2420,6 +2420,13 @@ fn loot_species_presence_scope_text(
     evidence: &CalculatorZoneLootEvidence,
     include_structural_ids: bool,
 ) -> String {
+    if evidence.source_family == "ranking" {
+        return match evidence.scope.as_str() {
+            "ring_full" => "ring fully inside zone".to_string(),
+            "ring_partial" => "ring overlaps zone edge".to_string(),
+            _ => "ring overlaps zone".to_string(),
+        };
+    }
     if let Some(subgroup_key) = evidence.subgroup_key {
         if let Some(slot_idx) = evidence.slot_idx.and_then(fish_group_label) {
             if include_structural_ids {
@@ -2453,52 +2460,125 @@ fn loot_species_presence_scope_text(
     }
 }
 
-fn loot_species_presence_text(entry: &CalculatorZoneLootEntry) -> Option<String> {
-    entry.evidence.iter().find_map(|evidence| {
-        if evidence.source_family != "community" || evidence.claim_kind != "presence" {
-            return None;
-        }
-        let status = match evidence.status.as_deref().unwrap_or_default() {
-            "confirmed" => "Community confirmed",
-            "data_incomplete" => "Community incomplete",
-            _ => "Community unconfirmed",
-        };
-        let claims = evidence
-            .claim_count
-            .map(|count| format!("×{count}"))
-            .unwrap_or_default();
-        let scope = loot_species_presence_scope_text(evidence, false);
-        Some(format!("{status}{claims} · {scope}"))
-    })
+fn loot_species_presence_priority(evidence: &CalculatorZoneLootEvidence) -> u8 {
+    match (
+        evidence.source_family.as_str(),
+        evidence.scope.as_str(),
+        evidence.status.as_deref(),
+    ) {
+        ("ranking", "ring_full", _) => 5,
+        ("community", _, Some("confirmed")) => 4,
+        ("ranking", "ring_partial", _) => 3,
+        ("community", _, Some("unconfirmed")) => 2,
+        ("community", _, Some("data_incomplete")) => 1,
+        _ => 0,
+    }
 }
 
-fn loot_species_presence_tooltip(entry: &CalculatorZoneLootEntry) -> Option<String> {
-    let parts = entry
-        .evidence
-        .iter()
-        .filter(|evidence| {
-            evidence.source_family == "community" && evidence.claim_kind == "presence"
-        })
-        .map(|evidence| {
+fn loot_species_presence_evidence(
+    entry: &CalculatorZoneLootEntry,
+) -> Vec<&CalculatorZoneLootEvidence> {
+    let mut evidence = entry.evidence.iter().collect::<Vec<_>>();
+    evidence.retain(|evidence| evidence.claim_kind == "presence");
+    evidence.sort_by(|left, right| {
+        loot_species_presence_priority(right)
+            .cmp(&loot_species_presence_priority(left))
+            .then_with(|| {
+                right
+                    .claim_count
+                    .unwrap_or_default()
+                    .cmp(&left.claim_count.unwrap_or_default())
+            })
+            .then_with(|| left.source_family.cmp(&right.source_family))
+            .then_with(|| left.scope.cmp(&right.scope))
+    });
+    evidence
+}
+
+fn loot_species_presence_line(
+    evidence: &CalculatorZoneLootEvidence,
+    include_structural_ids: bool,
+    include_source_id: bool,
+) -> String {
+    let compact_claims = evidence
+        .claim_count
+        .map(|count| format!("×{count}"))
+        .unwrap_or_default();
+    let spaced_claims = evidence
+        .claim_count
+        .map(|count| format!(" ×{count}"))
+        .unwrap_or_default();
+    match evidence.source_family.as_str() {
+        "ranking" => {
+            let scope = loot_species_presence_scope_text(evidence, include_structural_ids);
+            let mut text = format!("Ranking {scope}{spaced_claims}");
+            if include_source_id {
+                if let Some(source_id) = evidence
+                    .source_id
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                {
+                    text.push_str(&format!(" · source {source_id}"));
+                }
+            }
+            text
+        }
+        "community" => {
             let status = match evidence.status.as_deref().unwrap_or_default() {
                 "confirmed" => "Community confirmed",
                 "data_incomplete" => "Community incomplete",
                 _ => "Community unconfirmed",
             };
-            let claims = evidence
-                .claim_count
-                .map(|count| format!("×{count}"))
-                .unwrap_or_default();
-            let scope = loot_species_presence_scope_text(evidence, true);
-            match evidence.source_id.as_deref() {
-                Some(source_id) if !source_id.trim().is_empty() => {
-                    format!("{status}{claims} · {scope} · source {source_id}")
+            let scope = loot_species_presence_scope_text(evidence, include_structural_ids);
+            let mut text = format!("{status}{compact_claims} · {scope}");
+            if include_source_id {
+                if let Some(source_id) = evidence
+                    .source_id
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                {
+                    text.push_str(&format!(" · source {source_id}"));
                 }
-                _ => format!("{status}{claims} · {scope}"),
             }
-        })
+            text
+        }
+        _ => {
+            let scope = loot_species_presence_scope_text(evidence, include_structural_ids);
+            format!("Presence{compact_claims} · {scope}")
+        }
+    }
+}
+
+fn loot_species_presence_text(entry: &CalculatorZoneLootEntry) -> Option<String> {
+    loot_species_presence_evidence(entry)
+        .into_iter()
+        .next()
+        .map(|evidence| loot_species_presence_line(evidence, false, false))
+}
+
+fn loot_species_presence_tooltip(entry: &CalculatorZoneLootEntry) -> Option<String> {
+    let parts = loot_species_presence_evidence(entry)
+        .into_iter()
+        .map(|evidence| loot_species_presence_line(evidence, true, true))
         .collect::<Vec<_>>();
     (!parts.is_empty()).then_some(parts.join(" | "))
+}
+
+fn loot_species_presence_source_kind(entry: &CalculatorZoneLootEntry) -> String {
+    let mut families = loot_species_presence_evidence(entry)
+        .into_iter()
+        .map(|evidence| evidence.source_family.as_str())
+        .collect::<Vec<_>>();
+    families.sort_unstable();
+    families.dedup();
+    match families.as_slice() {
+        [] => String::new(),
+        ["community"] => "community".to_string(),
+        ["ranking"] => "ranking".to_string(),
+        ["database"] => "database".to_string(),
+        [_] => families[0].to_string(),
+        _ => "mixed".to_string(),
+    }
 }
 
 fn loot_species_drop_rate_text(
@@ -2543,9 +2623,6 @@ fn loot_species_drop_rate_tooltip(
         .and_then(|evidence| evidence_display_rate(signals, evidence))
         .map(|rate| format!("Community guess {}%", format_evidence_percent(rate)));
 
-    let community_presence_text =
-        loot_species_presence_tooltip(entry).or_else(|| loot_species_presence_text(entry));
-
     let mut parts = Vec::new();
     if let Some(text) = db_rate_text {
         parts.push(text);
@@ -2553,11 +2630,11 @@ fn loot_species_drop_rate_tooltip(
     if let Some(text) = guessed_rate_text {
         parts.push(text);
     }
-    if let Some(text) = community_presence_text {
-        parts.push(text);
-    }
     if parts.is_empty() {
-        return format!("DB {}%", format_evidence_percent(entry.within_group_rate));
+        return format!(
+            "Derived {}% from current group weights",
+            format_evidence_percent(entry.within_group_rate)
+        );
     }
     parts.join(" · ")
 }
@@ -2566,7 +2643,21 @@ fn loot_species_evidence_text(
     signals: &CalculatorSignals,
     entry: &CalculatorZoneLootEntry,
 ) -> String {
-    loot_species_drop_rate_tooltip(signals, entry)
+    let mut parts = Vec::new();
+    if loot_species_drop_rate_source_kind(entry) != "derived"
+        || loot_species_presence_evidence(entry).is_empty()
+    {
+        parts.push(loot_species_drop_rate_tooltip(signals, entry));
+    }
+    if let Some(presence_text) =
+        loot_species_presence_tooltip(entry).or_else(|| loot_species_presence_text(entry))
+    {
+        parts.push(presence_text);
+    }
+    if parts.is_empty() {
+        parts.push(loot_species_drop_rate_tooltip(signals, entry));
+    }
+    parts.join(" · ")
 }
 
 fn percent_value_text(value_pct: f64) -> String {
@@ -2681,13 +2772,9 @@ fn derive_loot_chart(
             drop_rate_source_kind,
             drop_rate_tooltip,
             presence_text: presence_text.clone(),
-            presence_source_kind: if presence_text.is_some() {
-                "community".to_string()
-            } else {
-                String::new()
-            },
+            presence_source_kind: loot_species_presence_source_kind(entry),
             presence_tooltip,
-            evidence_text: loot_species_drop_rate_tooltip(signals, entry),
+            evidence_text: loot_species_evidence_text(signals, entry),
         });
     }
     species_rows.sort_by(|left, right| {
@@ -5576,7 +5663,8 @@ mod tests {
         derive_target_fish_summary, discard_grade_enabled, filtered_loot_flow_rows,
         get_calculator_datastar_init, get_calculator_datastar_option_search,
         get_calculator_datastar_zone_search, init_signals_patch_map, loot_species_evidence_text,
-        loot_species_presence_text, mastery_prize_rate_for_bracket, normalize_lookup_value,
+        loot_species_presence_source_kind, loot_species_presence_text,
+        loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
         normalize_named_array, normalize_signals, parse_calculator_signals_value,
         pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
         trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
@@ -6802,6 +6890,57 @@ mod tests {
         assert_eq!(
             loot_species_presence_text(&entry),
             Some("Community confirmed×2 · Prize subgroup".to_string())
+        );
+    }
+
+    #[test]
+    fn loot_species_presence_prefers_full_ranking_ring_and_marks_mixed_sources() {
+        let entry = CalculatorZoneLootEntry {
+            within_group_rate: 0.02,
+            evidence: vec![
+                CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "group".to_string(),
+                    status: Some("confirmed".to_string()),
+                    claim_count: Some(2),
+                    source_id: Some("community_zone_fish_support".to_string()),
+                    slot_idx: Some(1),
+                    item_main_group_key: Some(11056),
+                    ..CalculatorZoneLootEvidence::default()
+                },
+                CalculatorZoneLootEvidence {
+                    source_family: "ranking".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "ring_partial".to_string(),
+                    status: Some("observed".to_string()),
+                    claim_count: Some(3),
+                    source_id: Some("layer_revision:v1".to_string()),
+                    ..CalculatorZoneLootEvidence::default()
+                },
+                CalculatorZoneLootEvidence {
+                    source_family: "ranking".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "ring_full".to_string(),
+                    status: Some("observed".to_string()),
+                    claim_count: Some(8),
+                    source_id: Some("layer_revision:v1".to_string()),
+                    ..CalculatorZoneLootEvidence::default()
+                },
+            ],
+            ..CalculatorZoneLootEntry::default()
+        };
+
+        assert_eq!(
+            loot_species_presence_text(&entry),
+            Some("Ranking ring fully inside zone ×8".to_string())
+        );
+        assert_eq!(loot_species_presence_source_kind(&entry), "mixed");
+        assert_eq!(
+            loot_species_presence_tooltip(&entry),
+            Some(
+                "Ranking ring fully inside zone ×8 · source layer_revision:v1 | Community confirmed×2 · Prize group 11056 · source community_zone_fish_support | Ranking ring overlaps zone edge ×3 · source layer_revision:v1".to_string()
+            )
         );
     }
 

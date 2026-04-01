@@ -4,6 +4,7 @@ mod ranking;
 mod region_groups;
 mod region_layers;
 
+use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -15,12 +16,14 @@ use csv::{ReaderBuilder, StringRecord};
 use fishystuff_config::DoltSqlConfig;
 use sha2::{Digest, Sha256};
 
-use crate::mysql_store::{EventZoneInsertRow, MySqlIngestStore, RankingEventRow};
+use crate::mysql_store::{
+    EventZoneInsertRow, EventZoneRingSupportInsertRow, MySqlIngestStore, RankingEventRow,
+};
 use fishystuff_analytics::{
     compute_zone_stats, compute_zone_stats_with_config, zone_stats_to_json, QueryParams,
     ZoneStatusConfig,
 };
-use fishystuff_core::constants::{MAP_HEIGHT, MAP_WIDTH, SECTOR_SCALE};
+use fishystuff_core::constants::{DISTANCE_PER_PIXEL, MAP_HEIGHT, MAP_WIDTH, SECTOR_SCALE};
 use fishystuff_core::coord::{pixel_if_in_bounds, world_to_pixel_f, world_to_pixel_round};
 use fishystuff_core::masks::{pack_rgb_u32, WaterSampler, ZoneMask};
 use fishystuff_core::snap::snap_to_water;
@@ -32,6 +35,8 @@ use fishystuff_zones_meta::{DoltZonesMetaProvider, ZonesMetaProvider};
 use ranking::{parse_datetime_utc, RankingRow};
 
 const SOURCE_KIND_RANKING: u8 = 1;
+const RANKING_RING_RADIUS_WORLD_UNITS: f64 = 500.0;
+const RANKING_RING_SAMPLE_COUNT: usize = 64;
 
 #[derive(Parser)]
 #[command(name = "fishystuff_ingest")]
@@ -1046,43 +1051,100 @@ fn run_build_event_zone_assignment_mysql(
     let start = std::time::Instant::now();
     let mut total = 0usize;
     let mut assigned_total = 0u64;
+    let mut ring_support_total = 0u64;
     loop {
         let samples = store
-            .load_events_missing_zone(&layer_revision_id, batch_size)
-            .context("load events missing event_zone_assignment")?;
+            .load_events_missing_zone_support(&layer_revision_id, batch_size)
+            .context("load events missing zone support rows")?;
         if samples.is_empty() {
             break;
         }
         total += samples.len();
         let mut rows = Vec::with_capacity(samples.len());
+        let mut ring_rows = Vec::new();
         for sample in samples {
-            let zone_rgb = mask.sample_rgb_u32_clamped(sample.sample_px_x, sample.sample_px_y);
+            let zone_rgb = mask.sample_rgb_u32_clamped(
+                sample.assignment_sample_px_x,
+                sample.assignment_sample_px_y,
+            );
             rows.push(EventZoneInsertRow {
                 event_id: sample.event_id,
                 zone_rgb,
-                sample_px_x: sample.sample_px_x,
-                sample_px_y: sample.sample_px_y,
+                sample_px_x: sample.assignment_sample_px_x,
+                sample_px_y: sample.assignment_sample_px_y,
             });
+            ring_rows.extend(build_event_zone_ring_support_rows(
+                &mask,
+                sample.event_id,
+                sample.ring_center_px_x,
+                sample.ring_center_px_y,
+            ));
         }
         let assigned = store
             .insert_event_zones(&layer_revision_id, &rows)
             .context("insert event zone assignments")?;
+        let ring_assigned = store
+            .insert_event_zone_ring_support(&layer_revision_id, &ring_rows)
+            .context("insert event zone ring support rows")?;
         assigned_total += assigned;
+        ring_support_total += ring_assigned;
         if rows.len() < batch_size {
             break;
         }
     }
     let skipped = total.saturating_sub(assigned_total as usize);
     println!(
-        "build-event-zone-assignment: layer_revision_id={} layer_id={} total={} assigned={} skipped={} elapsed_ms={}",
+        "build-event-zone-assignment: layer_revision_id={} layer_id={} total={} assigned={} ring_support={} skipped={} elapsed_ms={}",
         layer_revision_id,
         layer_id,
         total,
         assigned_total,
+        ring_support_total,
         skipped,
         start.elapsed().as_millis()
     );
     Ok(())
+}
+
+fn build_event_zone_ring_support_rows(
+    mask: &ZoneMask,
+    event_id: i64,
+    ring_center_px_x: i32,
+    ring_center_px_y: i32,
+) -> Vec<EventZoneRingSupportInsertRow> {
+    let touched_zones = ranking_ring_zone_overlaps(mask, ring_center_px_x, ring_center_px_y);
+    if touched_zones.is_empty() {
+        return Vec::new();
+    }
+    let fully_contained = touched_zones.len() == 1;
+    touched_zones
+        .into_iter()
+        .map(|zone_rgb| EventZoneRingSupportInsertRow {
+            event_id,
+            zone_rgb,
+            ring_fully_contained: fully_contained,
+            ring_center_px_x,
+            ring_center_px_y,
+        })
+        .collect()
+}
+
+fn ranking_ring_zone_overlaps(
+    mask: &ZoneMask,
+    ring_center_px_x: i32,
+    ring_center_px_y: i32,
+) -> Vec<u32> {
+    let radius_px = RANKING_RING_RADIUS_WORLD_UNITS / DISTANCE_PER_PIXEL;
+    let mut zones = BTreeSet::new();
+    for idx in 0..RANKING_RING_SAMPLE_COUNT {
+        let theta = (idx as f64 / RANKING_RING_SAMPLE_COUNT as f64) * std::f64::consts::TAU;
+        let sample_px_x = ring_center_px_x as f64 + radius_px * theta.cos();
+        let sample_px_y = ring_center_px_y as f64 + radius_px * theta.sin();
+        let zone_rgb =
+            mask.sample_rgb_u32_clamped(sample_px_x.round() as i32, sample_px_y.round() as i32);
+        zones.insert(zone_rgb);
+    }
+    zones.into_iter().collect()
 }
 
 fn resolve_zone_mask_path(zone_mask_root: &Path, map_version: &str) -> Result<PathBuf> {
@@ -2241,5 +2303,56 @@ mod tests {
         assert_eq!(event.snap_dist_px, 0);
         assert!(event.water_ok);
         assert_eq!(event.length_milli, 12345);
+    }
+
+    #[test]
+    fn ranking_ring_zone_overlaps_marks_fully_contained_zone() {
+        let width = 12u32;
+        let height = 12u32;
+        let mut data = vec![0u8; (width * height * 3) as usize];
+        for y in 0..height {
+            for x in 0..width {
+                if x < 6 {
+                    set_pixel(&mut data, width, x, y, 255, 0, 0);
+                } else {
+                    set_pixel(&mut data, width, x, y, 0, 255, 0);
+                }
+            }
+        }
+        let mask = ZoneMask::from_rgb(width, height, data).expect("mask");
+
+        let rows = build_event_zone_ring_support_rows(&mask, 42, 3, 6);
+
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].event_id, 42);
+        assert_eq!(rows[0].zone_rgb, pack_rgb_u32(255, 0, 0));
+        assert!(rows[0].ring_fully_contained);
+    }
+
+    #[test]
+    fn ranking_ring_zone_overlaps_marks_partial_border_crossings() {
+        let width = 12u32;
+        let height = 12u32;
+        let mut data = vec![0u8; (width * height * 3) as usize];
+        for y in 0..height {
+            for x in 0..width {
+                if x < 6 {
+                    set_pixel(&mut data, width, x, y, 255, 0, 0);
+                } else {
+                    set_pixel(&mut data, width, x, y, 0, 255, 0);
+                }
+            }
+        }
+        let mask = ZoneMask::from_rgb(width, height, data).expect("mask");
+
+        let rows = build_event_zone_ring_support_rows(&mask, 77, 5, 6);
+
+        assert_eq!(rows.len(), 2);
+        assert!(rows.iter().all(|row| !row.ring_fully_contained));
+        let touched = rows.iter().map(|row| row.zone_rgb).collect::<BTreeSet<_>>();
+        assert_eq!(
+            touched,
+            BTreeSet::from([pack_rgb_u32(255, 0, 0), pack_rgb_u32(0, 255, 0)])
+        );
     }
 }
