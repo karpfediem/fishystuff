@@ -408,7 +408,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
 }
 
 fn should_activate_vector_layer(
-    layer: &crate::map::layers::LayerSpec,
+    _layer: &crate::map::layers::LayerSpec,
     layer_visible: bool,
     required_for_clip_mask: bool,
     view_mode: ViewMode,
@@ -422,7 +422,7 @@ fn should_activate_vector_layer(
     if !layer_visible {
         return false;
     }
-    !matches!(view_mode, ViewMode::Map2D) || layer.field_url().is_none()
+    true
 }
 
 fn should_render_vector_layer(
@@ -430,9 +430,8 @@ fn should_render_vector_layer(
     layer_visible: bool,
     view_mode: ViewMode,
 ) -> bool {
-    layer_visible
-        && matches!(view_mode, ViewMode::Map2D | ViewMode::Terrain3D)
-        && (!matches!(view_mode, ViewMode::Map2D) || layer.field_url().is_none())
+    let _ = layer;
+    layer_visible && matches!(view_mode, ViewMode::Map2D | ViewMode::Terrain3D)
 }
 
 fn prune_stale_runtime_data(
@@ -654,8 +653,15 @@ fn vector_build_state_needs_frame_updates(state: &VectorBuildState) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{vector_build_state_needs_frame_updates, VectorBuildState, VectorLayerRuntime};
-    use crate::map::layers::{GeometrySpace, LayerId, StyleMode, VectorSourceSpec};
+    use super::{
+        should_activate_vector_layer, should_render_vector_layer,
+        vector_build_state_needs_frame_updates, VectorBuildState, VectorLayerRuntime,
+    };
+    use crate::map::camera::mode::ViewMode;
+    use crate::map::layers::{
+        build_local_layer_specs, AvailableLayerCatalog, GeometrySpace, LayerId, StyleMode,
+        VectorSourceSpec,
+    };
     use bevy::platform::time::Instant;
     use std::collections::HashMap;
 
@@ -707,5 +713,27 @@ mod tests {
             },
         );
         assert!(runtime.has_pending_work());
+    }
+
+    fn field_backed_vector_layer() -> crate::map::layers::LayerSpec {
+        let catalog = AvailableLayerCatalog::default();
+        let (_, layers) = build_local_layer_specs(catalog.entries(), None);
+        layers
+            .into_iter()
+            .find(|layer| layer.key == "regions")
+            .expect("regions layer")
+    }
+
+    #[test]
+    fn field_backed_vector_layers_still_render_in_2d() {
+        let layer = field_backed_vector_layer();
+
+        assert!(should_activate_vector_layer(
+            &layer,
+            true,
+            false,
+            ViewMode::Map2D,
+        ));
+        assert!(should_render_vector_layer(&layer, true, ViewMode::Map2D));
     }
 }

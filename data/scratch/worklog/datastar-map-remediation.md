@@ -4372,3 +4372,70 @@ Next:
   and mask clipping beyond Fish Evidence
 - keep the attachment graph as the only clipping source of truth while making more of the default
   layer graph intentionally useful
+
+## 2026-04-01: field-backed semantic vector layers render again in 2D
+
+Observed blocker:
+
+- after the search/clipping contract fixes, the next live validation target was:
+  - attach `regions -> zone_mask`
+  - attach `region_groups -> zone_mask`
+  - enable those layers and validate semantic clipping visually
+- local runtime inputs were initially missing because the CDN field/vector assets had not been
+  regenerated yet
+- after rebuilding the map assets, the required local inputs were present again under:
+  - `data/cdn/public/fields/regions.v1.bin`
+  - `data/cdn/public/fields/region_groups.v1.bin`
+  - `data/cdn/public/region_groups/regions.v1.geojson`
+  - `data/cdn/public/region_groups/v1.geojson`
+- but even with those assets restored, the live map still reported:
+  - `regions.vectorStatus = "not-requested"`
+  - `region_groups.vectorStatus = "not-requested"`
+- the cause was in `map/fishystuff_ui_bevy/src/plugins/vector_layers.rs`:
+  - 2D vector activation/rendering still treated `layer.field_url().is_some()` as a reason to
+    suppress vector rendering
+- that was the wrong rule for `regions` / `region_groups`
+  - these layers are intentionally field-backed for hover/selection semantics
+  - but they still need to render visually in 2D so clipping and semantic filtering can be seen
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/plugins/vector_layers.rs`
+  - removed the 2D `field_url()` gate from:
+    - `should_activate_vector_layer(...)`
+    - `should_render_vector_layer(...)`
+  - field-backed semantic vector layers now follow the normal visible/clip-required activation path
+    in 2D just like other vector overlays
+  - added a regression test proving a field-backed `regions` layer still activates and renders in
+    `ViewMode::Map2D`
+
+Validation:
+
+- Rust validation passed:
+  - `cargo test --offline -p fishystuff_ui_bevy plugins::vector_layers::tests::field_backed_vector_layers_still_render_in_2d -- --exact`
+  - `cargo check -p fishystuff_ui_bevy`
+- rebuilt the map runtime:
+  - `./tools/scripts/build_map.sh`
+- live DevTools validation on the isolated `/map/` page after rebuild:
+  - enabling `regions` / `region_groups` and attaching both to `zone_mask` no longer leaves them
+    at `vectorStatus = "not-requested"`
+  - both layers now enter the active 2D vector pipeline:
+    - `regions.vectorStatus = "building"`
+    - `region_groups.vectorStatus = "building"`
+    - with non-zero `vectorFeatureCount`
+
+Why this matters:
+
+- semantic clipping/filtering validation was previously blocked by a dead render path
+- the clean-slate page can now drive those semantic layers visually again
+- this aligns the runtime with existing profiling scenarios such as:
+  - `vector_region_groups_enable`
+  - `vector_regions_enable`
+  which already assume these layers participate in the 2D vector pipeline
+
+Next:
+
+- continue live validation of semantic clipping/filtering now that the layers actually enter the
+  2D render path again
+- check whether build completion/ready latency for `regions` / `region_groups` needs a separate
+  follow-up, or whether it simply reflects the expected chunked vector build budget
