@@ -11,9 +11,9 @@ import {
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
-import { createMapInfoPanelController } from "./map-info-panel-live.js";
 import { createMapLayerPanelController } from "./map-layer-panel-live.js";
 import "./map-hover-tooltip-element.js";
+import "./map-info-panel-element.js";
 import "./map-patch-picker-element.js";
 import "./map-search-panel-element.js";
 import {
@@ -225,7 +225,6 @@ export async function start() {
   let windowManager = null;
   let bookmarkPanel = null;
   let layerPanel = null;
-  let zoneInfoPanel = null;
 
   function dispatchSignalPatch(patch) {
     if (!patch || typeof patch !== "object") {
@@ -251,10 +250,6 @@ export async function start() {
     getSignals: signals,
   });
   bookmarkPanel = createMapBookmarkPanelController({
-    shell,
-    getSignals: signals,
-  });
-  zoneInfoPanel = createMapInfoPanelController({
     shell,
     getSignals: signals,
   });

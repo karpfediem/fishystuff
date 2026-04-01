@@ -1,7 +1,5 @@
-import {
-  dispatchShellSignalPatch,
-  FISHYMAP_SIGNAL_PATCHED_EVENT,
-} from "./map-signal-patch.js";
+import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
+import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
@@ -11,7 +9,10 @@ import {
   provenanceAriaLabel,
 } from "../js/components/provenance-indicator.js";
 
+const INFO_PANEL_TAG_NAME = "fishymap-info-panel";
+const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 const ICON_SPRITE_URL = "/img/icons.svg";
+const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -19,18 +20,32 @@ function cloneJson(value) {
 
 function escapeHtml(value) {
   return String(value ?? "").replace(
-    /[&<>"']/g,
+    /[&<>\"']/g,
     (char) =>
-      (
-        {
-          "&": "&amp;",
-          "<": "&lt;",
-          ">": "&gt;",
-          '"': "&quot;",
-          "'": "&#39;",
-        }[char] || char
-      ),
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[char] || char,
   );
+}
+
+function readMapShellSignals(shell) {
+  if (!shell || typeof shell !== "object") {
+    return null;
+  }
+  const liveSignals = shell.__fishymapLiveSignals;
+  if (liveSignals && typeof liveSignals === "object") {
+    return liveSignals;
+  }
+  const initialSignals = shell.__fishymapInitialSignals;
+  return initialSignals && typeof initialSignals === "object" ? initialSignals : null;
+}
+
+export function readMapInfoPanelShellSignals(shell) {
+  return readMapShellSignals(shell);
 }
 
 function setBooleanProperty(element, propertyName, value) {
@@ -63,16 +78,16 @@ function spriteIcon(name, sizeClass = "size-5") {
   return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${ICON_SPRITE_URL}#fishy-${name}"></use></svg>`;
 }
 
+function trimString(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || "";
+}
+
 function factIconMarkup(fact) {
   if (trimString(fact?.swatchRgb)) {
     return `<span class="fishymap-layer-fact-swatch" style="--fishymap-layer-fact-rgb:${escapeHtml(fact.swatchRgb)};" aria-hidden="true"></span>`;
   }
   return spriteIcon(fact?.icon || "information-circle", "size-4");
-}
-
-function trimString(value) {
-  const normalized = String(value ?? "").trim();
-  return normalized || "";
 }
 
 function tabButtonMarkup(tab, activePaneId) {
@@ -269,71 +284,140 @@ function emptyPanelMarkup() {
   return '<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3 text-sm text-base-content/60">Click the map, use a waypoint target, or select a bookmark to inspect facts at a world point.</div>';
 }
 
-export function createMapInfoPanelController({
-  shell,
-  getSignals,
-  dispatchPatch = dispatchShellSignalPatch,
-  requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
-} = {}) {
-  if (!shell || typeof shell.querySelector !== "function") {
-    throw new Error("createMapInfoPanelController requires a shell element");
+function ensureInfoPanelMarkup(host) {
+  if (host.querySelector("#fishymap-zone-info-tabs")) {
+    return;
   }
-  if (typeof getSignals !== "function") {
-    throw new Error("createMapInfoPanelController requires getSignals()");
+  host.innerHTML = `
+    <div
+      id="fishymap-zone-info-tabs"
+      role="tablist"
+      class="tabs tabs-box bg-base-200/80 p-1"
+      aria-label="Point layer tabs"
+      hidden
+    ></div>
+    <div id="fishymap-zone-info-panel" class="space-y-3">
+      ${emptyPanelMarkup()}
+    </div>
+  `;
+}
+
+export class FishyMapInfoPanelElement extends HTMLElementBase {
+  constructor() {
+    super();
+    this._shell = null;
+    this._signalPatchTarget = null;
+    this._rafId = 0;
+    this._elements = null;
+    this._state = {
+      zoneCatalog: [],
+      zoneLootStatus: "idle",
+      zoneLootSummary: null,
+      zoneLootRgb: null,
+      zoneLootRequestToken: 0,
+    };
+    this._handleSignalPatched = (event) => {
+      this.handleSignalPatch(event?.detail || null);
+    };
+    this._handleZoneCatalogReady = (event) => {
+      this._state.zoneCatalog = Array.isArray(event?.detail?.zoneCatalog)
+        ? cloneJson(event.detail.zoneCatalog)
+        : [];
+      this.scheduleRender();
+      void this.refreshZoneLootSummary();
+    };
+    this._handleLiveInit = () => {
+      this.scheduleRender();
+      void this.refreshZoneLootSummary();
+    };
+    this._handleClick = (event) => {
+      const button = event.target.closest("button[data-zone-info-tab]");
+      if (!button) {
+        return;
+      }
+      const paneId = trimString(button.getAttribute("data-zone-info-tab"));
+      dispatchShellSignalPatch(this._shell, {
+        _map_ui: {
+          windowUi: {
+            zoneInfo: {
+              tab: paneId,
+            },
+          },
+        },
+      });
+    };
   }
 
-  const elements = {
-    title: shell.querySelector("#fishymap-zone-info-title"),
-    titleIcon: shell.querySelector("#fishymap-zone-info-title-icon"),
-    statusIcon: shell.querySelector("#fishymap-zone-info-status-icon"),
-    statusText: shell.querySelector("#fishymap-zone-info-status-text"),
-    tabs: shell.querySelector("#fishymap-zone-info-tabs"),
-    panel: shell.querySelector("#fishymap-zone-info-panel"),
-  };
-  if (!(elements.tabs instanceof HTMLElement) || !(elements.panel instanceof HTMLElement)) {
-    throw new Error("createMapInfoPanelController requires info panel elements");
+  connectedCallback() {
+    this._shell = this.closest?.("#map-page-shell") || null;
+    ensureInfoPanelMarkup(this);
+    this._elements = {
+      title: this._shell?.querySelector?.("#fishymap-zone-info-title") || null,
+      titleIcon: this._shell?.querySelector?.("#fishymap-zone-info-title-icon") || null,
+      statusIcon: this._shell?.querySelector?.("#fishymap-zone-info-status-icon") || null,
+      statusText: this._shell?.querySelector?.("#fishymap-zone-info-status-text") || null,
+      tabs: this.querySelector("#fishymap-zone-info-tabs"),
+      panel: this.querySelector("#fishymap-zone-info-panel"),
+    };
+    this._signalPatchTarget =
+      globalThis.document && typeof globalThis.document.addEventListener === "function"
+        ? globalThis.document
+        : this._shell;
+    this.addEventListener("click", this._handleClick);
+    this._signalPatchTarget?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
+    this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
+    this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
+    this._shell?.addEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
+    attachProvenanceTooltip(this._shell);
+    this.render();
   }
 
-  const state = {
-    frameId: 0,
-    zoneCatalog: [],
-    zoneLootStatus: "idle",
-    zoneLootSummary: null,
-    zoneLootRgb: null,
-    zoneLootRequestToken: 0,
-  };
-
-  function signals() {
-    return getSignals() || null;
+  disconnectedCallback() {
+    this.removeEventListener("click", this._handleClick);
+    this._signalPatchTarget?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
+    this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
+    this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
+    this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
+    if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
+      globalThis.cancelAnimationFrame(this._rafId);
+    }
+    this._rafId = 0;
+    this._shell = null;
+    this._signalPatchTarget = null;
+    this._elements = null;
   }
 
-  function render() {
-    state.frameId = 0;
-    const viewModel = buildInfoViewModel(signals(), {
-      zoneCatalog: state.zoneCatalog,
-      zoneLootSummary: state.zoneLootSummary,
-      zoneLootStatus: state.zoneLootStatus,
+  signals() {
+    return readMapShellSignals(this._shell);
+  }
+
+  render() {
+    this._rafId = 0;
+    const viewModel = buildInfoViewModel(this.signals(), {
+      zoneCatalog: this._state.zoneCatalog,
+      zoneLootSummary: this._state.zoneLootSummary,
+      zoneLootStatus: this._state.zoneLootStatus,
     });
-    setTextContent(elements.title, viewModel.descriptor.title);
-    setTextContent(elements.statusText, viewModel.descriptor.statusText);
+    setTextContent(this._elements?.title, viewModel.descriptor.title);
+    setTextContent(this._elements?.statusText, viewModel.descriptor.statusText);
     setMarkup(
-      elements.titleIcon,
+      this._elements?.titleIcon,
       viewModel.descriptor.titleIcon,
       spriteIcon(viewModel.descriptor.titleIcon || "information-circle", "size-5"),
     );
     setMarkup(
-      elements.statusIcon,
+      this._elements?.statusIcon,
       viewModel.descriptor.statusIcon,
       spriteIcon(viewModel.descriptor.statusIcon || "information-circle", "size-4"),
     );
-    setBooleanProperty(elements.tabs, "hidden", viewModel.panes.length === 0);
+    setBooleanProperty(this._elements?.tabs, "hidden", viewModel.panes.length === 0);
     setMarkup(
-      elements.tabs,
+      this._elements?.tabs,
       JSON.stringify(viewModel.panes.map((pane) => [pane.id, pane.label, pane.id === viewModel.activePaneId ? 1 : 0])),
       viewModel.panes.map((pane) => tabButtonMarkup(pane, viewModel.activePaneId)).join(""),
     );
     setMarkup(
-      elements.panel,
+      this._elements?.panel,
       JSON.stringify({
         empty: viewModel.empty,
         activePaneId: viewModel.activePaneId,
@@ -345,67 +429,69 @@ export function createMapInfoPanelController({
     );
   }
 
-  function scheduleRender() {
-    if (state.frameId) {
-      return;
+  scheduleRender() {
+    if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
+      globalThis.cancelAnimationFrame(this._rafId);
     }
-    if (typeof requestAnimationFrameImpl === "function") {
-      state.frameId = requestAnimationFrameImpl(() => {
-        render();
-      });
-      return;
+    if (typeof globalThis.requestAnimationFrame === "function") {
+      this._rafId = globalThis.requestAnimationFrame(() => {
+        this.render();
+      }) || 0;
+      if (this._rafId) {
+        return;
+      }
     }
-    render();
+    this.render();
   }
 
-  function handleSignalPatch(patch) {
+  handleSignalPatch(patch) {
     if (!patchTouchesInfoSignals(patch)) {
       return;
     }
     if (patch?._map_runtime?.selection != null) {
-      void refreshZoneLootSummary();
+      void this.refreshZoneLootSummary();
     }
-    scheduleRender();
+    this.scheduleRender();
   }
 
-  async function refreshZoneLootSummary() {
-    const selection = signals()?._map_runtime?.selection || null;
+  async refreshZoneLootSummary() {
+    const selection = this.signals()?._map_runtime?.selection || null;
     const zoneRgb = zoneRgbFromSelection(selection);
     if (!Number.isInteger(zoneRgb) || zoneRgb < 0) {
-      state.zoneLootRequestToken += 1;
-      state.zoneLootRgb = null;
-      state.zoneLootStatus = "idle";
-      state.zoneLootSummary = null;
-      scheduleRender();
+      this._state.zoneLootRequestToken += 1;
+      this._state.zoneLootRgb = null;
+      this._state.zoneLootStatus = "idle";
+      this._state.zoneLootSummary = null;
+      this.scheduleRender();
       return;
     }
     if (
-      state.zoneLootRgb === zoneRgb &&
-      (state.zoneLootStatus === "loading" ||
-        state.zoneLootStatus === "loaded" ||
-        state.zoneLootStatus === "error")
+      this._state.zoneLootRgb === zoneRgb &&
+      (this._state.zoneLootStatus === "loading" ||
+        this._state.zoneLootStatus === "loaded" ||
+        this._state.zoneLootStatus === "error")
     ) {
       return;
     }
-    state.zoneLootRgb = zoneRgb;
-    state.zoneLootStatus = "loading";
-    state.zoneLootSummary = null;
-    scheduleRender();
+    this._state.zoneLootRgb = zoneRgb;
+    this._state.zoneLootStatus = "loading";
+    this._state.zoneLootSummary = null;
+    this.scheduleRender();
 
-    const requestToken = state.zoneLootRequestToken + 1;
-    state.zoneLootRequestToken = requestToken;
+    const requestToken = this._state.zoneLootRequestToken + 1;
+    this._state.zoneLootRequestToken = requestToken;
     try {
       const summary = await loadZoneLootSummary(zoneRgb);
-      if (state.zoneLootRequestToken !== requestToken || state.zoneLootRgb !== zoneRgb) {
+      if (this._state.zoneLootRequestToken !== requestToken || this._state.zoneLootRgb !== zoneRgb) {
         return;
       }
-      state.zoneLootSummary = summary;
-      state.zoneLootStatus = "loaded";
+      this._state.zoneLootSummary = summary;
+      this._state.zoneLootStatus = "loaded";
     } catch (error) {
-      if (state.zoneLootRequestToken !== requestToken || state.zoneLootRgb !== zoneRgb) {
+      if (this._state.zoneLootRequestToken !== requestToken || this._state.zoneLootRgb !== zoneRgb) {
         return;
       }
-      state.zoneLootSummary = {
+      this._state.zoneLootSummary = {
         available: false,
         zoneName: "",
         profileLabel: "",
@@ -413,46 +499,21 @@ export function createMapInfoPanelController({
         groups: [],
         speciesRows: [],
       };
-      state.zoneLootStatus = "error";
+      this._state.zoneLootStatus = "error";
     }
-    scheduleRender();
+    this.scheduleRender();
   }
-
-  elements.tabs.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-zone-info-tab]");
-    if (!button) {
-      return;
-    }
-    const paneId = trimString(button.getAttribute("data-zone-info-tab"));
-    dispatchPatch(shell, {
-      _map_ui: {
-        windowUi: {
-          zoneInfo: {
-            tab: paneId,
-          },
-        },
-      },
-    });
-    scheduleRender();
-  });
-  shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
-    handleSignalPatch(event?.detail || null);
-  });
-  shell.addEventListener(FISHYMAP_ZONE_CATALOG_READY_EVENT, (event) => {
-    state.zoneCatalog = Array.isArray(event?.detail?.zoneCatalog)
-      ? cloneJson(event.detail.zoneCatalog)
-      : [];
-    scheduleRender();
-    void refreshZoneLootSummary();
-  });
-  attachProvenanceTooltip(shell);
-
-  scheduleRender();
-
-  return Object.freeze({
-    handleSignalPatch,
-    render,
-    scheduleRender,
-    refreshZoneLootSummary,
-  });
 }
+
+export function registerFishyMapInfoPanelElement(registry = globalThis.customElements) {
+  if (!registry || typeof registry.get !== "function" || typeof registry.define !== "function") {
+    return false;
+  }
+  if (registry.get(INFO_PANEL_TAG_NAME)) {
+    return true;
+  }
+  registry.define(INFO_PANEL_TAG_NAME, FishyMapInfoPanelElement);
+  return true;
+}
+
+registerFishyMapInfoPanelElement();

@@ -6431,3 +6431,65 @@ Why this is closer to Datastar:
 - durable state remains signal-owned
 - local behavior stays encapsulated in a custom element with props down / events up
 - no new app-wide orchestration seam was added
+
+## 2026-04-01: move the live Info panel onto a custom element
+
+With the zone-profile surface cleared again, the next best move was finally the Info panel.
+
+Why this was the right next step:
+
+- it was still a sizable app-instantiated controller island
+- the shell/body split was stable enough to move now
+- unlike the window manager, it is mostly render/state logic plus one narrow async seam
+
+What changed:
+
+- introduced a real info-panel custom element:
+  - `site/assets/map/map-info-panel-element.js`
+  - `site/assets/map/map-info-panel-element.test.mjs`
+- moved the Zone/Info body in `site/assets/map/map-shell.html` to:
+  - `<fishymap-info-panel id="fishymap-info-panel" class="space-y-3 not-prose"></fishymap-info-panel>`
+- `site/assets/map/map-app-live.js`
+  - no longer imports or instantiates the old info controller
+  - now side-effect imports the custom element module
+- unpublished and removed the old controller path:
+  - `site/assets/map/map-info-panel-live.js`
+  - `site/assets/map/map-info-panel-live.test.mjs`
+- published the new asset in `site/zine.ziggy`
+
+Design notes:
+
+- the custom element owns:
+  - tab rendering
+  - pane content rendering
+  - the zone-loot async fetch seam
+- it still updates the existing shell titlebar/title/status nodes directly
+  - this keeps the window chrome markup stable while removing the controller
+- it listens to both patch seams:
+  - native `datastar-signal-patch`
+  - shell-local `fishymap:signal-patched`
+- zone catalog updates still arrive through:
+  - `fishymap:zone-catalog-ready`
+
+Why this is closer to Datastar:
+
+- `map-app-live.js` loses another controller instantiation
+- panel behavior is now localized to the element instead of being app-managed
+- signal-owned state stays outside the component, while the component handles rendering and the small imperative async seam
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-info-panel-element.js site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-info-panel-element.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for:
+  - `/map/map-info-panel-element.js`
+  - `/map/map-app-live.js`
+  - `/map/`
+- live DevTools validation on `/map/` confirmed:
+  - the custom element mounted
+  - titlebar title/status updated from a live selection patch
+  - tabs and facts rendered in the pane
+  - no new console errors

@@ -78,7 +78,7 @@ Multilingual {
     "map/map-bookmark-panel-live.js",
     "map/map-overview-facts.js",
     "map/map-info-state.js",
-    "map/map-info-panel-live.js",
+    "map/map-info-panel-element.js",
     "map/map-zone-loot-summary.js",
     "map/map-zone-catalog.js",
     "map/map-zone-catalog-live.js",
