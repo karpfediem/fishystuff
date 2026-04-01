@@ -4988,3 +4988,61 @@ Next:
 
 - continue reducing the framework-like restore/persist logic in `map-page-live.js`
 - after that, revisit which remaining panel controllers can be pushed closer to signal-owned DOM
+
+## 2026-04-01: extract live map page persistence helpers
+
+The next remaining live-map drift after removing the shell bootstrap global was the amount of
+restore/persist logic still concentrated in `site/assets/map/map-page-live.js`.
+
+What changed:
+
+- added a new clean-slate state helper asset:
+  - `site/assets/map/map-page-state.js`
+- moved the pure page persistence helpers there:
+  - durable snapshot building for `_map_ui`, `_map_bridged`, `_map_bookmarks`, and `_map_session`
+  - restore patch loading from local/session storage
+  - shared fish fallback restore
+  - query-owned restore stripping
+- `site/assets/map/map-page-live.js`
+  - now depends on the extracted helper for restore/persist state shaping
+  - keeps only the live bootstrap responsibilities:
+    - shell handshake
+    - direct Datastar patch application
+    - debounced persistence scheduling
+- `site/layouts/map.shtml`
+  - now loads `map-page-state.js` before `map-page-live.js`
+- tests added/updated:
+  - `site/assets/map/map-page-state.test.mjs`
+  - `site/assets/map/map-page-live.test.mjs`
+
+Why this matters:
+
+- it removes another large chunk of framework-like behavior from `map-page-live.js`
+- it gives the live map a smaller bootstrap script and a separate state-focused module
+- it keeps moving toward the intended end state:
+  - live bootstrap code stays thin
+  - state shaping becomes reusable and testable in isolation
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-state.js`
+  - `node --check site/assets/map/map-page-live.js`
+  - `node --test site/assets/map/map-page-state.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/`
+  - `/map/map-page-state.js`
+  - `/map/map-page-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - no new console errors
+  - `Ready`
+  - `Layers 7`
+  - patch picker defaults still behaved correctly
+
+Next:
+
+- continue reducing the remaining framework-like behavior in `map-page-live.js`
+- likely next target: move more of the persistence/orchestration contract into pure modules so the
+  live bootstrap becomes almost entirely event wiring plus direct Datastar patching

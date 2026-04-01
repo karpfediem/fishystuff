@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
+const MAP_PAGE_STATE_SOURCE = fs.readFileSync(new URL("./map-page-state.js", import.meta.url), "utf8");
 const MAP_PAGE_LIVE_SOURCE = fs.readFileSync(new URL("./map-page-live.js", import.meta.url), "utf8");
 const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
   "bookmarks",
@@ -110,6 +111,8 @@ function createContext(localStorageInitial = {}, options = {}) {
   window.location = location;
   window.localStorage = localStorage;
   window.sessionStorage = sessionStorage;
+  vm.runInNewContext(MAP_PAGE_STATE_SOURCE, context, { filename: "map-page-state.js" });
+  context.__fishystuffMapPageState = window.__fishystuffMapPageState;
   vm.runInNewContext(MAP_PAGE_LIVE_SOURCE, context, { filename: "map-page-live.js" });
   return {
     window,
