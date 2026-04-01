@@ -128,7 +128,9 @@ export function createMapWindowManager({
     for (const [windowId, part] of Object.entries(parts)) {
       const nextEntry = nextWindowUi[windowId];
       const previousEntry = state.previousWindowUi?.[windowId];
-      applyManagedWindowPosition(part.root, nextEntry);
+      if (state.drag.windowId !== windowId) {
+        applyManagedWindowPosition(part.root, nextEntry);
+      }
       if (nextEntry?.open !== false && previousEntry?.open === false) {
         bringToFront(windowId);
       }

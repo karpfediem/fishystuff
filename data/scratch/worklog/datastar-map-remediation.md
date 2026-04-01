@@ -3912,3 +3912,37 @@ Next:
 - continue restoring remaining map behavior on top of this lower-churn bridge path
 - when touching bridge snapshot state in the future, prefer explicit revisions or output
   comparison over raw `is_changed()` for resources that are polled every frame
+
+## 2026-04-01: clean-slate window drag jitter regression
+
+Observed regression:
+
+- window dragging felt jittery even when the Bevy canvas was no longer the main FPS bottleneck
+- this was especially confusing because it looked like another runtime perf problem while the
+  actual regression lived entirely in the page-side clean-slate window manager
+
+Root cause:
+
+- the clean-slate `map-window-manager.js` drag path updates the active window position directly in
+  the DOM during `pointermove`
+- but `applyFromSignals()` still reapplied signal-owned `x/y` for every window whenever shell or
+  bridge-driven controller work scheduled a window sync
+- during an active drag, that means stale signal coordinates can briefly overwrite the live drag
+  position until `pointerup` finally persists the new coordinates
+
+What changed:
+
+- `site/assets/map/map-window-manager.js`
+  - `applyFromSignals()` now skips the actively dragged window
+  - the drag path remains authoritative until the final `pointerup` patch commits the new
+    coordinates
+- `site/assets/map/map-window-manager.test.mjs`
+  - added a regression harness that simulates an in-progress drag and verifies that a stale
+    signal apply does not snap the active window back to its old coordinates
+
+Why this matters for the remediation:
+
+- this is a concrete example of why the clean-slate page controllers must treat direct local UI
+  interaction as authoritative while it is in progress
+- Datastar-owned durable state should persist the result of the interaction, but it must not fight
+  the interaction itself frame-by-frame
