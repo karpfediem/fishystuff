@@ -5774,3 +5774,116 @@ Next:
 - continue reducing the remaining framework-like behavior in `map-page-live.js`
 - after that, the main remaining imperative island is still:
   - `map-info-panel-live.js`
+
+## 2026-04-01: route live info panel updates through `map-app-live`
+
+The live info panel was still half-owned by its own patch listener model.
+
+Before this slice:
+
+- `site/assets/map/map-info-panel-live.js`
+  - still imported the Datastar patch event constant
+  - still had optional document-level listener wiring
+  - expected raw event objects instead of ordinary patch payloads
+- `site/assets/map/map-app-live.js`
+  - already centralized the live patch stream for the other controllers
+  - but did not yet forward info-panel-relevant patches into the info panel
+
+What changed:
+
+- `site/assets/map/map-info-panel-live.js`
+  - dropped the direct Datastar event import/listener path
+  - `handleSignalPatch(...)` now consumes a patch payload directly
+  - selection patches still trigger `refreshZoneLootSummary()`
+  - the controller now exposes `handleSignalPatch(...)` in its public API
+- `site/assets/map/map-app-live.js`
+  - `routeLiveControllerPatch(...)` now forwards relevant patches to `infoPanel.handleSignalPatch(...)`
+  - the live app passes the created info-panel controller into that routing path
+- added focused coverage in:
+  - `site/assets/map/map-info-panel-live.test.mjs`
+  - `site/assets/map/map-app-live.test.mjs`
+
+Why this matters:
+
+- it removes another controller-owned Datastar patch listener from the live map
+- it keeps the app as the owner of the global patch stream
+- it preserves the info panel's selection-driven zone-loot refresh path without reintroducing a
+  second listener bus
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js`
+  - `node --check site/assets/map/map-info-panel-live.js`
+  - `node --check site/assets/map/map-info-panel-live.test.mjs`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-info-panel-live.test.mjs site/assets/map/map-info-state.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+  - `/map/map-info-panel-live.js`
+- live DevTools reload on `/map/` stayed healthy:
+  - no new console errors
+  - `Info` window present
+  - `Layers 7`
+
+Next:
+
+- keep shrinking the remaining app/bootstrap orchestration surface
+- then revisit whether the info panel itself can become more declarative instead of controller-rendered
+
+## 2026-04-01: localize the live Datastar patch loop to the map shell
+
+The next remaining drift was that `map-app-live.js` still listened to Datastar's global
+document-level patch event directly.
+
+That kept the live map coupled to the page-wide patch bus even though the live map is already
+scoped to `#map-page-shell`.
+
+What changed:
+
+- `site/assets/map/map-shell.html`
+  - now emits a shell-local `fishymap:signal-patched` event from
+    `data-on-signal-patch`
+  - that binding is filtered to the map/shared-fish branches only
+- `site/assets/map/map-signal-patch.js`
+  - now exports:
+    - `FISHYMAP_SIGNAL_PATCHED_EVENT`
+- `site/assets/map/map-app-live.js`
+  - no longer imports the Datastar document event name directly
+  - now listens on the shell for:
+    - `fishymap-signals-patch`
+      - controller patch intent
+    - `fishymap:signal-patched`
+      - actual applied live-signal patch
+  - no longer injects `dispatchPatch` overrides into the live controllers; they can use the
+    default shell-local signal patch event path again
+
+Why this matters:
+
+- it scopes the live map FRP loop back down to the shell subtree
+- it removes another direct dependency on Datastar's global event plumbing from the live app
+- controller intent and applied-signal observation now both happen through shell-local events
+- this is closer to the Datastar guidance of element-owned reactive seams instead of a page-wide
+  orchestration bus
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js site/assets/map/map-signal-patch.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-patch-picker-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/`
+  - `/map/map-app-live.js`
+- live DevTools reload on `/map/` stayed healthy:
+  - no new console errors
+  - `Info` window present
+  - `Layers 7`
+
+Next:
+
+- continue collapsing the remaining bootstrap/controller glue in `map-app-live.js`
+- especially:
+  - the remaining centralized patch fan-out for the controller modules

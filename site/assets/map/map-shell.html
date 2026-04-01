@@ -1,4 +1,6 @@
 <div id="map-page-shell"
+         data-on-signal-patch-filter="{include: /^_(?:map_|shared_fish)(?:\.|$)/}"
+         data-on-signal-patch="el.dispatchEvent(new CustomEvent('fishymap:signal-patched', { bubbles: true, detail: patch }))"
          data-signals="{
            _map_ui: {
              windowUi: {

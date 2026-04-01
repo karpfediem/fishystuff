@@ -1,6 +1,5 @@
 import { createMapApp } from "./map-app.js";
 import FishyMapBridge, { createEmptySnapshot, snapshotToRestorePatch } from "./map-host.js";
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { createMapPageLive } from "./map-page-live.js";
 import {
   DEFAULT_MAP_ACTION_SIGNAL_STATE,
@@ -28,7 +27,11 @@ import {
   createMapSearchPanelController,
   patchTouchesSearchPanelSignals,
 } from "./map-search-panel-live.js";
-import { combineSignalPatches } from "./map-signal-patch.js";
+import {
+  FISHYMAP_SIGNAL_PATCHED_EVENT,
+  FISHYMAP_SIGNAL_PATCH_EVENT,
+  combineSignalPatches,
+} from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
 import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
@@ -272,16 +275,6 @@ export async function start() {
       return;
     }
     page.patchSignals(patch);
-    routeLiveControllerPatch({
-      patch,
-      windowManager,
-      patchPicker,
-      hoverTooltip,
-      layerPanel,
-      searchPanel,
-      bookmarkPanel,
-      infoPanel: zoneInfoPanel,
-    });
   }
 
   const queryPatch = parseQuerySignalPatch(globalThis.location?.href);
@@ -297,12 +290,10 @@ export async function start() {
   const bridge = FishyMapBridge;
   windowManager = createMapWindowManager({
     shell,
-    dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
   bookmarkPanel = createMapBookmarkPanelController({
     shell,
-    dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
   hoverTooltip = createMapHoverTooltipController({
@@ -311,22 +302,18 @@ export async function start() {
   });
   zoneInfoPanel = createMapInfoPanelController({
     shell,
-    dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
   patchPicker = createMapPatchPickerController({
     shell,
-    dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
   layerPanel = createMapLayerPanelController({
     shell,
-    dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
   searchPanel = createMapSearchPanelController({
     shell,
-    dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
   let syncingFromBridge = false;
@@ -410,8 +397,10 @@ export async function start() {
   shell.addEventListener("fishymap:view-changed", handleBridgeStateEvent);
   shell.addEventListener("fishymap:selection-changed", handleBridgeStateEvent);
   shell.addEventListener("fishymap:diagnostic", handleBridgeStateEvent);
-
-  globalThis.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
+  shell.addEventListener(FISHYMAP_SIGNAL_PATCH_EVENT, (event) => {
+    dispatchSignalPatch(event?.detail || null);
+  });
+  shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
     const patch = event?.detail || null;
     page.handleSignalPatch?.(patch);
     const searchProjectionPatch = buildSearchProjectionPatchForSignalPatch(signals(), patch);

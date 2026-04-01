@@ -23,6 +23,10 @@ test("map shell toolbar and status affordances derive from Datastar signals", ()
     shellHtml,
     /data-init="const shell = el\.closest\('#map-page-shell'\); shell\.__fishymapInitialSignals = \$; shell\.dispatchEvent\(new CustomEvent\('fishymap-live-init', \{ bubbles: true, detail: \$ \}\)\)"/,
   );
+  assert.match(
+    shellHtml,
+    /id="map-page-shell"[\s\S]*data-on-signal-patch-filter="\{include: \/\^_\(\?:map_\|shared_fish\)\(\?:\\\.\|\$\)\/\}"[\s\S]*data-on-signal-patch="el\.dispatchEvent\(new CustomEvent\('fishymap:signal-patched', \{ bubbles: true, detail: patch \}\)\)"/,
+  );
   assert.doesNotMatch(shellHtml, /data-on:fishymap-signals-patch=/);
   assert.match(shellHtml, /data-window-toggle="search"[\s\S]*data-attr:data-open="\$_map_ui\.windowUi\.search\.open \? 'true' : 'false'"/);
   assert.match(shellHtml, /data-window-toggle="search"[\s\S]*data-attr:aria-pressed="\$_map_ui\.windowUi\.search\.open"/);

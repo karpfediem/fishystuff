@@ -1,4 +1,5 @@
 export const FISHYMAP_SIGNAL_PATCH_EVENT = "fishymap-signals-patch";
+export const FISHYMAP_SIGNAL_PATCHED_EVENT = "fishymap:signal-patched";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
