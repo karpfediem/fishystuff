@@ -50,6 +50,7 @@ function provenanceDotColor(kind) {
 
 function gradeRingColor(tone) {
     switch (String(tone || "").trim().toLowerCase()) {
+        case "red":
         case "prize":
             return "color-mix(in oklab, var(--color-error) 76%, var(--color-base-content) 24%)";
         case "yellow":
@@ -63,6 +64,18 @@ function gradeRingColor(tone) {
         default:
             return "color-mix(in oklab, var(--color-neutral) 72%, var(--color-base-content) 28%)";
     }
+}
+
+function gradeLabelColor(tone) {
+    return `color-mix(in oklab, ${gradeRingColor(tone)} 84%, var(--color-base-content) 16%)`;
+}
+
+function gradeSurfaceFill(tone) {
+    return `color-mix(in oklab, var(--color-base-100) 90%, ${gradeRingColor(tone)} 10%)`;
+}
+
+function gradeSurfaceStroke(tone) {
+    return `color-mix(in oklab, ${gradeRingColor(tone)} 62%, var(--color-base-300) 38%)`;
 }
 
 function positiveNumber(value) {
@@ -430,6 +443,9 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             const silverMetricText = String(row.silver_share_text ?? "");
             const silverValueText = compactSilverText(row.expected_profit_text);
             const iconRing = gradeRingColor(row.icon_grade_tone);
+            const itemLabelColor = gradeLabelColor(row.icon_grade_tone);
+            const itemSurfaceFill = gradeSurfaceFill(row.icon_grade_tone);
+            const itemSurfaceStroke = gradeSurfaceStroke(row.icon_grade_tone);
             const hasIcon = Boolean(row.icon_url);
             const leftBoxX = labelX;
             const centerBoxX = leftBoxX + SPECIES_METRIC_WIDTH + SPECIES_BOX_CONNECTOR_GAP;
@@ -570,26 +586,24 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .attr("height", RIGHT_LABEL_HEIGHT)
                 .attr("rx", NODE_RADIUS)
                 .attr("ry", NODE_RADIUS)
-                .style("fill", row.fill_color)
-                .style("stroke", row.stroke_color)
+                .style("fill", itemSurfaceFill)
+                .style("stroke", itemSurfaceStroke)
                 .style("stroke-width", 1.5)
                 .append("title")
                 .text(String(row.label ?? ""));
 
             if (hasIcon) {
+                const iconFrameRadius = Math.round(iconFrameSize * 0.34);
                 rightNodes.append("rect")
                     .attr("x", iconFrameX)
                     .attr("y", iconFrameY)
                     .attr("width", iconFrameSize)
                     .attr("height", iconFrameSize)
-                    .attr("rx", iconFrameSize / 2)
-                    .attr("ry", iconFrameSize / 2)
-                    .style("fill", row.fill_color)
-                    .style(
-                        "stroke",
-                        `color-mix(in oklab, ${iconRing} 76%, ${row.stroke_color} 24%)`,
-                    )
-                    .style("stroke-width", 1.5);
+                    .attr("rx", iconFrameRadius)
+                    .attr("ry", iconFrameRadius)
+                    .style("fill", "color-mix(in oklab, var(--color-base-100) 94%, transparent)")
+                    .style("stroke", iconRing)
+                    .style("stroke-width", 2.5);
 
                 rightNodes.append("image")
                     .attr("x", iconFrameX + 5)
@@ -605,9 +619,9 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .attr("y", labelTop + RIGHT_LABEL_HEIGHT / 2 + 1)
                 .attr("dominant-baseline", "middle")
                 .attr("text-anchor", "start")
-                .style("fill", row.text_color)
+                .style("fill", itemLabelColor)
                 .style("font-size", "13px")
-                .style("font-weight", "700")
+                .style("font-weight", "800")
                 .text(truncateText(row.label, labelTextMaxChars))
                 .append("title")
                 .text(String(row.label ?? ""));
