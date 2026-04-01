@@ -1,4 +1,5 @@
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
+import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 
 function cloneNodeList(nodes) {
   return Array.from(nodes, (node) => node.cloneNode(true));
@@ -198,9 +199,32 @@ export function patchTouchesPatchPickerSignals(patch) {
   );
 }
 
+export function buildPatchPickerDefaultSignalPatch(signals) {
+  const bundle = buildPatchPickerStateBundle(signals);
+  if (!bundle.state.ready || !bundle.state.catalog.patches.length) {
+    return null;
+  }
+  const fromPatchId = selectedPatchId(bundle.inputState.filters, "from");
+  if (fromPatchId) {
+    return null;
+  }
+  const oldestPatchId = bundle.state.catalog.patches.at(-1)?.patchId;
+  if (!oldestPatchId) {
+    return null;
+  }
+  return {
+    _map_bridged: {
+      filters: {
+        fromPatchId: oldestPatchId,
+      },
+    },
+  };
+}
+
 export function createMapPatchPickerController({
   shell,
   getSignals,
+  dispatchPatch = dispatchShellSignalPatch,
   documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
   listenToSignalPatches = true,
@@ -272,7 +296,13 @@ export function createMapPatchPickerController({
 
   function render() {
     state.frameId = 0;
-    const bundle = buildPatchPickerStateBundle(signals());
+    const currentSignals = signals();
+    const defaultPatch = buildPatchPickerDefaultSignalPatch(currentSignals);
+    if (defaultPatch) {
+      dispatchPatch(shell, defaultPatch);
+      return;
+    }
+    const bundle = buildPatchPickerStateBundle(currentSignals);
     renderPicker("from", pickers.from, bundle);
     renderPicker("to", pickers.to, bundle);
   }

@@ -4890,3 +4890,50 @@ Next:
 - restore default patch-range selection cleanly on the live path so the patch window has a
   sensible initial selection instead of blank `Select patch` placeholders
 - continue trimming remaining custom bootstrap/orchestration around the live map shell
+
+## 2026-04-01: seed live patch defaults from the runtime catalog
+
+The previous patch-picker fix restored the live patch catalog, but a clean page load still left
+the `From` picker blank until a saved state or manual selection existed.
+
+What changed:
+
+- `site/assets/map/map-patch-picker-live.js`
+  - now computes a narrow default patch signal patch
+  - when the runtime catalog is ready and `fromPatchId` is still unset, it seeds
+    `_map_bridged.filters.fromPatchId` with the oldest available patch id
+  - it leaves `toPatchId` unset so the end bound remains the open-ended `Now` option
+- `site/assets/map/map-app-live.js`
+  - passes direct live Datastar patching into the patch-picker controller so that default seeding
+    stays on the clean-slate signal path
+- `site/assets/map/map-patch-picker-live.test.mjs`
+  - covers the seeded-oldest default and the non-overwrite case
+
+Why this matters:
+
+- the clean-slate shell now owns a sensible default patch window without depending on stale
+  persisted state
+- `From` is explicit and stable in the Datastar signal graph
+- `Until` keeps the intended semantic of `Now` instead of being forced to the latest explicit
+  patch id in the picker UI
+
+Validation:
+
+- JS validation passed:
+  - `node --test site/assets/map/map-patch-picker-live.test.mjs site/assets/map/map-app-live.test.mjs`
+  - `node --check site/assets/map/map-patch-picker-live.js`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-patch-picker-live.js`
+- live DevTools check on a storage-cleared isolated `/map/` page confirmed:
+  - `_map_bridged.filters.fromPatchId = "2019-02-08-node-connection"`
+  - `_map_bridged.filters.toPatchId = ""`
+  - `From` showed `Node Connection`
+  - `Until (incl.)` showed `Now`
+
+Next:
+
+- continue trimming remaining custom bootstrap/orchestration around the live map shell
+- likely next target: reduce the `__fishystuffMapPage` bootstrap surface and the framework-like
+  restore/persist logic in `map-page-live.js`

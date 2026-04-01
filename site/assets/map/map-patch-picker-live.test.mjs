@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildPatchPickerDefaultSignalPatch,
   buildPatchPickerStateBundle,
   normalizePatchCatalog,
   patchTouchesPatchPickerSignals,
@@ -90,6 +91,55 @@ test("buildPatchPickerStateBundle preserves an open-ended until selection as nul
         },
       },
     },
+  );
+});
+
+test("buildPatchPickerDefaultSignalPatch seeds the oldest patch when from is unset", () => {
+  assert.deepEqual(
+    buildPatchPickerDefaultSignalPatch({
+      _map_runtime: {
+        ready: true,
+        catalog: {
+          patches: [
+            { patchId: "2026-03-12", patchName: "New Era", startTsUtc: 200 },
+            { patchId: "2026-02-26", patchName: "Old Guard", startTsUtc: 100 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fromPatchId: null,
+          toPatchId: null,
+        },
+      },
+    }),
+    {
+      _map_bridged: {
+        filters: {
+          fromPatchId: "2026-02-26",
+        },
+      },
+    },
+  );
+});
+
+test("buildPatchPickerDefaultSignalPatch does not override an existing from selection", () => {
+  assert.equal(
+    buildPatchPickerDefaultSignalPatch({
+      _map_runtime: {
+        ready: true,
+        catalog: {
+          patches: [{ patchId: "2026-03-12", patchName: "New Era", startTsUtc: 200 }],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fromPatchId: "2026-03-12",
+          toPatchId: null,
+        },
+      },
+    }),
+    null,
   );
 });
 

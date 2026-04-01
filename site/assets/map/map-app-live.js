@@ -286,6 +286,7 @@ export async function start() {
   });
   const patchPicker = createMapPatchPickerController({
     shell,
+    dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
   const layerPanel = createMapLayerPanelController({
