@@ -650,6 +650,7 @@ test("bookmark ui patches are normalized in input state and omitted from bridge 
         {
           id: " bookmark-a ",
           label: " Velia ",
+          pointLabel: " Coastal Cliff ",
           worldX: 123.5,
           worldZ: -45.25,
         },
@@ -667,14 +668,15 @@ test("bookmark ui patches are normalized in input state and omitted from bridge 
     },
   });
 
-  assert.deepEqual(next.ui.bookmarks, [
-    {
-      id: "bookmark-a",
-      label: "Velia",
-      worldX: 123.5,
-      worldZ: -45.25,
-    },
-  ]);
+    assert.deepEqual(next.ui.bookmarks, [
+      {
+        id: "bookmark-a",
+        label: "Velia",
+        pointLabel: "Coastal Cliff",
+        worldX: 123.5,
+        worldZ: -45.25,
+      },
+    ]);
   assert.deepEqual(next.ui.bookmarkSelectedIds, ["bookmark-a", "bookmark-b"]);
 
   const bridge = createFishyMapBridge();
@@ -1205,6 +1207,83 @@ test("getCurrentState refreshes incomplete bootstrap snapshots from wasm", async
     assert.equal(current.statuses.metaStatus, "meta: loaded");
     assert.equal(current.catalog.layers.length, 1);
     assert.equal(current.catalog.fish.length, 1);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
+test("getCurrentState refreshes dirty snapshots after live input patches", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
+          layerIdsVisible: ["zone_mask", "fish_evidence"],
+          layerIdsOrdered: ["bookmarks", "fish_evidence", "zone_mask", "minimap"],
+          zoneMembershipLayerIds: [],
+        },
+        ui: {
+          diagnosticsOpen: false,
+          showPoints: true,
+          showPointIcons: true,
+          pointIconScale: 0.5,
+          bookmarkSelectedIds: [],
+          bookmarks: [],
+        },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: { capabilities: [], layers: [], patches: [], fish: [] },
+        statuses: { metaStatus: "meta: loaded", fishStatus: "fish: loaded" },
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      debounceMs: 0,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+
+    wasm.calls.stateReads = 0;
+    snapshotRef.current = {
+      ...snapshotRef.current,
+      filters: {
+        ...snapshotRef.current.filters,
+        zoneMembershipLayerIds: ["fish_evidence"],
+      },
+    };
+
+    bridge.setState({
+      version: 1,
+      filters: {
+        zoneMembershipLayerIds: ["fish_evidence"],
+      },
+    });
+
+    const current = bridge.getCurrentState();
+
+    assert.equal(wasm.calls.stateReads, 1);
+    assert.deepEqual(current.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+    assert.deepEqual(bridge.getCurrentInputState().filters.zoneMembershipLayerIds, [
+      "fish_evidence",
+    ]);
   } finally {
     bridge?.destroy();
     env.restore();

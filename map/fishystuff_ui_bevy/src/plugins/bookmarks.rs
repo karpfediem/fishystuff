@@ -639,6 +639,7 @@ mod tests {
             FishyMapBookmarkEntry {
                 id: "bookmark-a".to_string(),
                 label: Some("A".to_string()),
+                point_label: None,
                 world_x: 100.0,
                 world_z: 100.0,
                 layer_samples: Vec::new(),
@@ -648,6 +649,7 @@ mod tests {
             FishyMapBookmarkEntry {
                 id: "bookmark-b".to_string(),
                 label: Some("B".to_string()),
+                point_label: None,
                 world_x: 108.0,
                 world_z: 108.0,
                 layer_samples: Vec::new(),

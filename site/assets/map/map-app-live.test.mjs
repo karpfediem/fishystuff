@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 const {
   createDeferredBridgeStateRefresher,
+  deferAfterAnimationFrames,
   resolveBridgeSnapshot,
   startWhenDomReady,
   start,
@@ -136,6 +137,32 @@ test("createDeferredBridgeStateRefresher refreshes once on the next frame", () =
   nextFrame();
 
   assert.deepEqual(snapshots, [{ ready: true, filters: { layerIdsVisible: ["zone_mask"] } }]);
+});
+
+test("deferAfterAnimationFrames waits for the requested number of animation frames", () => {
+  const scheduled = [];
+  const calls = [];
+
+  deferAfterAnimationFrames(
+    () => {
+      calls.push("done");
+    },
+    {
+      frames: 2,
+      requestAnimationFrameImpl(callback) {
+        scheduled.push(callback);
+        return scheduled.length;
+      },
+    },
+  );
+
+  assert.deepEqual(calls, []);
+  assert.equal(scheduled.length, 1);
+  scheduled.shift()();
+  assert.deepEqual(calls, []);
+  assert.equal(scheduled.length, 1);
+  scheduled.shift()();
+  assert.deepEqual(calls, ["done"]);
 });
 
 test("map-app-live exports explicit start hooks", () => {

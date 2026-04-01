@@ -137,6 +137,7 @@ pub struct FishyMapFiltersPatch {
     pub to_patch_id: Option<Option<String>>,
     pub layer_ids_visible: Option<Vec<String>>,
     pub layer_ids_ordered: Option<Vec<String>>,
+    pub zone_membership_layer_ids: Option<Vec<String>>,
     pub layer_opacities: Option<BTreeMap<String, f32>>,
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
     pub layer_waypoint_connections_visible: Option<BTreeMap<String, bool>>,
@@ -158,6 +159,7 @@ pub struct FishyMapFiltersState {
     pub to_patch_id: Option<String>,
     pub layer_ids_visible: Option<Vec<String>>,
     pub layer_ids_ordered: Option<Vec<String>>,
+    pub zone_membership_layer_ids: Option<Vec<String>>,
     pub layer_opacities: Option<BTreeMap<String, f32>>,
     pub layer_clip_masks: Option<BTreeMap<String, String>>,
     pub layer_waypoint_connections_visible: Option<BTreeMap<String, bool>>,
@@ -171,6 +173,7 @@ pub struct FishyMapFiltersState {
 pub struct FishyMapBookmarkEntry {
     pub id: String,
     pub label: Option<String>,
+    pub point_label: Option<String>,
     pub world_x: f64,
     pub world_z: f64,
     pub layer_samples: Vec<FishyMapHoverLayerSampleSnapshot>,
@@ -193,6 +196,7 @@ impl FishyMapBookmarkEntry {
         Some(Self {
             id,
             label: normalize_optional(self.label),
+            point_label: normalize_optional(self.point_label),
             world_x: self.world_x,
             world_z: self.world_z,
             layer_samples: self.layer_samples,
@@ -404,6 +408,11 @@ impl FishyMapInputState {
             }
             if let Some(layer_ids_ordered) = filters.layer_ids_ordered {
                 self.filters.layer_ids_ordered = Some(normalize_string_list(layer_ids_ordered));
+            }
+            if let Some(zone_membership_layer_ids) = filters.zone_membership_layer_ids {
+                let normalized = normalize_string_list(zone_membership_layer_ids);
+                self.filters.zone_membership_layer_ids =
+                    (!normalized.is_empty()).then_some(normalized);
             }
             if let Some(layer_opacities) = filters.layer_opacities {
                 let normalized = normalize_layer_opacity_map(layer_opacities);

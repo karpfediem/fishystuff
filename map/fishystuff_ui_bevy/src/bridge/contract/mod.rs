@@ -47,6 +47,7 @@ mod tests {
                     "fromPatchId": "2026-02-26",
                     "toPatchId": "2026-03-12",
                     "layerIdsOrdered": ["zones", "terrain", "minimap"],
+                    "zoneMembershipLayerIds": ["fish_evidence", "regions"],
                     "layerOpacities": {
                         "zones": 0.8,
                         "terrain": 0.35
@@ -119,6 +120,13 @@ mod tests {
             patch
                 .filters
                 .as_ref()
+                .and_then(|filters| filters.zone_membership_layer_ids.clone()),
+            Some(vec!["fish_evidence".to_string(), "regions".to_string()])
+        );
+        assert_eq!(
+            patch
+                .filters
+                .as_ref()
                 .and_then(|filters| filters.layer_opacities.clone()),
             Some(BTreeMap::from([
                 ("terrain".to_string(), 0.35),
@@ -156,6 +164,7 @@ mod tests {
             Some(Some(vec![FishyMapBookmarkEntry {
                 id: "bookmark-a".to_string(),
                 label: Some("Marker A".to_string()),
+                point_label: None,
                 world_x: 123.5,
                 world_z: -456.25,
                 layer_samples: Vec::new(),
@@ -221,6 +230,7 @@ mod tests {
                     "zoneRgbs": [1193046, 1193046, 6636321],
                     "layerIdsVisible": ["zones", "zones", "terrain"],
                     "layerIdsOrdered": ["zones", "terrain", "zones", "minimap"],
+                    "zoneMembershipLayerIds": ["fish_evidence", "fish_evidence", "regions"],
                     "layerOpacities": {
                         "zones": 1.2,
                         " terrain ": 0.25,
@@ -255,6 +265,10 @@ mod tests {
                 "terrain".to_string(),
                 "minimap".to_string(),
             ])
+        );
+        assert_eq!(
+            state.filters.zone_membership_layer_ids,
+            Some(vec!["fish_evidence".to_string(), "regions".to_string()])
         );
         assert_eq!(
             state.filters.layer_opacities,
@@ -313,6 +327,26 @@ mod tests {
         );
 
         assert_eq!(state.filters.layer_clip_masks, None);
+    }
+
+    #[test]
+    fn empty_zone_membership_layer_ids_clear_existing_overrides() {
+        let mut state = FishyMapInputState::default();
+        state.filters.zone_membership_layer_ids = Some(vec!["fish_evidence".to_string()]);
+
+        state.apply_patch(
+            serde_json::from_str(
+                r#"{
+                    "version": 1,
+                    "filters": {
+                        "zoneMembershipLayerIds": []
+                    }
+                }"#,
+            )
+            .expect("patch"),
+        );
+
+        assert_eq!(state.filters.zone_membership_layer_ids, None);
     }
 
     #[test]
@@ -391,6 +425,7 @@ mod tests {
         state.ui.bookmarks = vec![FishyMapBookmarkEntry {
             id: "existing".to_string(),
             label: Some("Existing".to_string()),
+            point_label: None,
             world_x: 10.0,
             world_z: 20.0,
             layer_samples: Vec::new(),
@@ -432,6 +467,7 @@ mod tests {
             vec![FishyMapBookmarkEntry {
                 id: "bookmark-a".to_string(),
                 label: Some("Marker A".to_string()),
+                point_label: None,
                 world_x: 123.5,
                 world_z: -456.25,
                 layer_samples: Vec::new(),

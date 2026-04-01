@@ -62,6 +62,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     toPatchId?: string | null,
  *     layerIdsVisible?: string[],
  *     layerIdsOrdered?: string[],
+ *     zoneMembershipLayerIds?: string[],
  *     layerOpacities?: Record<string, number>,
  *     layerClipMasks?: Record<string, string>,
  *     layerWaypointConnectionsVisible?: Record<string, boolean>,
@@ -83,6 +84,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     bookmarks?: Array<{
  *       id?: string,
  *       label?: string | null,
+ *       pointLabel?: string | null,
  *       worldX?: number,
  *       worldZ?: number,
  *       layerSamples?: Array<object>,
@@ -140,6 +142,7 @@ export function createEmptyInputState() {
       toPatchId: null,
       layerIdsVisible: undefined,
       layerIdsOrdered: undefined,
+      zoneMembershipLayerIds: undefined,
       layerOpacities: undefined,
       layerClipMasks: undefined,
       layerWaypointConnectionsVisible: undefined,
@@ -177,6 +180,7 @@ export function createEmptySnapshot() {
       toPatchId: null,
       layerIdsVisible: undefined,
       layerIdsOrdered: undefined,
+      zoneMembershipLayerIds: undefined,
       layerOpacities: undefined,
       layerClipMasks: undefined,
       layerWaypointConnectionsVisible: undefined,
@@ -978,12 +982,14 @@ function normalizeBookmarksState(values) {
     }
     seen.add(id);
     const label = normalizeNullableString(entry?.label);
+    const pointLabel = normalizeNullableString(entry?.pointLabel);
     const layerSamples = normalizeBookmarkLayerSamplesState(entry?.layerSamples);
     const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
     const createdAt = normalizeNullableString(entry?.createdAt);
     normalized.push({
       id,
       ...(label != null ? { label } : {}),
+      ...(pointLabel != null ? { pointLabel } : {}),
       worldX,
       worldZ,
       ...(layerSamples.length ? { layerSamples } : {}),
@@ -1058,6 +1064,11 @@ export function normalizeStatePatch(patch = {}) {
     }
     if (hasOwn(patch.filters, "layerIdsOrdered")) {
       normalized.filters.layerIdsOrdered = normalizeStringList(patch.filters.layerIdsOrdered);
+    }
+    if (hasOwn(patch.filters, "zoneMembershipLayerIds")) {
+      normalized.filters.zoneMembershipLayerIds = normalizeStringList(
+        patch.filters.zoneMembershipLayerIds,
+      );
     }
     if (hasOwn(patch.filters, "layerOpacities")) {
       normalized.filters.layerOpacities = normalizeLayerOpacityMap(patch.filters.layerOpacities);
@@ -1286,6 +1297,9 @@ export function applyStatePatch(inputState, patch) {
     layerIdsOrdered: Array.isArray(current.filters?.layerIdsOrdered)
       ? normalizeStringList(current.filters.layerIdsOrdered)
       : undefined,
+    zoneMembershipLayerIds: Array.isArray(current.filters?.zoneMembershipLayerIds)
+      ? normalizeStringList(current.filters.zoneMembershipLayerIds)
+      : undefined,
     layerOpacities: isPlainObject(current.filters?.layerOpacities)
       ? normalizeLayerOpacityMap(current.filters.layerOpacities)
       : undefined,
@@ -1367,6 +1381,11 @@ export function applyStatePatch(inputState, patch) {
     }
     if (hasOwn(normalized.filters, "layerIdsOrdered")) {
       next.filters.layerIdsOrdered = normalizeStringList(normalized.filters.layerIdsOrdered);
+    }
+    if (hasOwn(normalized.filters, "zoneMembershipLayerIds")) {
+      next.filters.zoneMembershipLayerIds = normalizeStringList(
+        normalized.filters.zoneMembershipLayerIds,
+      );
     }
     if (hasOwn(normalized.filters, "layerOpacities")) {
       next.filters.layerOpacities = normalizeLayerOpacityMap(normalized.filters.layerOpacities);
@@ -1985,6 +2004,7 @@ class FishyMapBridgeImpl {
     this.wasmReady = false;
     this.inputState = createEmptyInputState();
     this.currentState = createEmptySnapshot();
+    this.stateSnapshotDirty = false;
     this.pendingStatePatch = normalizeStatePatch({});
     this.pendingCommands = [];
     this.patchDebounceMs = DEFAULT_PATCH_DEBOUNCE_MS;
@@ -2142,6 +2162,7 @@ class FishyMapBridgeImpl {
       this.pendingCommands = [];
       this.inputState = createEmptyInputState();
       this.currentState = createEmptySnapshot();
+      this.stateSnapshotDirty = false;
     });
   }
 
@@ -2158,6 +2179,7 @@ class FishyMapBridgeImpl {
         const nextDesiredViewMode = nextInputState.ui?.viewMode ?? null;
         if (stableStringify(nextInputState) !== stableStringify(this.inputState)) {
           this.inputState = nextInputState;
+          this.stateSnapshotDirty = true;
           this.pendingStatePatch = mergeStatePatch(
             this.pendingStatePatch,
             patchWithoutCommands(normalized),
@@ -2198,7 +2220,10 @@ class FishyMapBridgeImpl {
   }
 
   getCurrentState() {
-    if (this.wasmReady && shouldRefreshStateOnRead(this.currentState)) {
+    if (
+      this.wasmReady &&
+      (this.stateSnapshotDirty || shouldRefreshStateOnRead(this.currentState))
+    ) {
       return cloneJson(this.refreshCurrentStateFromWasm());
     }
     return cloneJson(this.currentState);
@@ -2542,6 +2567,7 @@ class FishyMapBridgeImpl {
       } catch (_) {
         this.currentState = createEmptySnapshot();
       }
+      this.stateSnapshotDirty = false;
       this.syncInputViewModeFromCurrentState();
       return this.currentState;
     });

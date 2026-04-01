@@ -1,6 +1,6 @@
 # Datastar Map Remediation
 
-Last updated: 2026-03-31
+Last updated: 2026-04-01
 
 This document isolates the map-specific Datastar remediation plan from the broader
 `datastar-frp-focus` worklog.
@@ -3634,3 +3634,67 @@ Next:
 - fold the combined zone fish/group view into the Zone pane
 - continue the clean-slate search/filter/clipping work without reintroducing bookmark/title
   heuristics on the JS side
+
+
+## Slice 17 — Runtime bookmark labels and immediate bookmark enrichment
+
+Two bookmark regressions remained on the clean-slate map path:
+
+- imported bookmarks only showed `Resources` / `Origin` after some unrelated later interaction
+  such as `Clear selection`
+- bookmark subtitles were still derived from frontend heuristics instead of a runtime-owned
+  current label, so they could drift from the actual live layer order
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/bridge/contract/input.rs`
+  - added `point_label` to `FishyMapBookmarkEntry`
+- `map/fishystuff_ui_bevy/src/bridge/host/snapshot/state/ui.rs`
+  - bookmark snapshot enrichment now also computes a runtime-owned bookmark `point_label`
+  - that label is derived from the current live layer stack order, not the static registry order
+  - the same bookmark snapshot continues to carry sampled `layer_samples`
+- `map/fishystuff_ui_bevy/src/bridge/host/snapshot/mod.rs`
+  - passes both bootstrap zone names and live `LayerRuntime` into bookmark UI snapshot enrichment
+- `site/assets/map/map-host.js`
+  - preserves bookmark `pointLabel` when normalizing bridge snapshots
+- `site/assets/map/map-bookmark-state.js`
+  - bookmark subtitle/current-label logic now prefers runtime `pointLabel`
+  - runtime bookmark merges now update:
+    - `pointLabel`
+    - `layerSamples`
+    - `zoneRgb`
+- `site/assets/map/map-app-live.js`
+  - bookmark writes now schedule one extra deferred bridge snapshot refresh
+  - this gives Bevy time to enrich imported bookmarks before the page consumes the runtime snapshot
+
+Why:
+
+- bookmark titles remain the saved user-facing label
+- bookmark subtitles should represent the current runtime-resolved point label for that world
+  point, and that label must follow the current layer order
+- imported bookmarks should become first-class semantic bookmarks immediately after import,
+  without waiting for a later unrelated selection or hover event
+
+Validation:
+
+- JS:
+  - `node --test site/assets/map/map-bookmark-state.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-host.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs`
+- Rust/build:
+  - rebuilt the Wasm runtime via `./tools/scripts/build_map.sh`
+- live DevTools checks on served `/map/`:
+  - dispatching a bare imported bookmark patch produced bookmark card facts immediately:
+    - `Resources`
+    - `Origin`
+  - no `Clear selection` or extra click was needed
+  - changing `_map_bridged.filters.layerIdsOrdered` changed the runtime bookmark `pointLabel`
+    for the same bookmark entry, proving the current-label path now follows live layer order
+
+Next:
+
+- restore the generic Info window panes:
+  - `Zone`
+  - `Territory`
+  - `Trade`
+- integrate the combined zone fish/group fact pane
+- continue the clean-slate search/filter/clipping work with runtime-owned semantic filtering and
+  attachment-driven clipping

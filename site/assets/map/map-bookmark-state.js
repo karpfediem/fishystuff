@@ -71,12 +71,14 @@ function normalizedLabelKey(value) {
 }
 
 export function bookmarkCurrentPointLabel(bookmark, stateBundle = null) {
-  return (
-    preferredPointLabelForLayerSamples(bookmark?.layerSamples, {
-      zoneCatalog: stateBundle?.zoneCatalog,
-      runtimeLayers: stateBundle?.state?.catalog?.layers,
-    }) || ""
-  );
+  const runtimePointLabel = trimString(bookmark?.pointLabel);
+  if (runtimePointLabel) {
+    return runtimePointLabel;
+  }
+  return preferredPointLabelForLayerSamples(bookmark?.layerSamples, {
+    zoneCatalog: stateBundle?.zoneCatalog,
+    runtimeLayers: stateBundle?.state?.catalog?.layers,
+  }) || "";
 }
 
 function nextBookmarkId(existingBookmarks) {
@@ -126,6 +128,10 @@ export function normalizeBookmarks(values) {
     const label = trimString(value.label);
     if (label) {
       bookmark.label = label;
+    }
+    const pointLabel = trimString(value.pointLabel);
+    if (pointLabel) {
+      bookmark.pointLabel = pointLabel;
     }
     const layerSamples = normalizeLayerSamples(value.layerSamples);
     if (layerSamples.length) {
@@ -253,11 +259,26 @@ export function mergeRuntimeBookmarkDetails(bookmarks, runtimeBookmarks) {
     }
     const nextBookmark = { ...bookmark };
     if (
-      (!Array.isArray(bookmark.layerSamples) || !bookmark.layerSamples.length) &&
       Array.isArray(runtimeBookmark.layerSamples) &&
-      runtimeBookmark.layerSamples.length
+      runtimeBookmark.layerSamples.length &&
+      JSON.stringify(normalizeLayerSamples(bookmark.layerSamples)) !==
+        JSON.stringify(normalizeLayerSamples(runtimeBookmark.layerSamples))
     ) {
       nextBookmark.layerSamples = cloneJson(runtimeBookmark.layerSamples);
+      changed = true;
+    }
+    if (
+      trimString(bookmark.pointLabel) !== trimString(runtimeBookmark.pointLabel) &&
+      trimString(runtimeBookmark.pointLabel)
+    ) {
+      nextBookmark.pointLabel = trimString(runtimeBookmark.pointLabel);
+      changed = true;
+    }
+    if (
+      trimString(bookmark.pointLabel) &&
+      !trimString(runtimeBookmark.pointLabel)
+    ) {
+      delete nextBookmark.pointLabel;
       changed = true;
     }
     if (

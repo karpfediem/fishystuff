@@ -65,7 +65,14 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
       },
       _map_bookmarks: {
         entries: [
-          { id: "bookmark-a", label: "Cron", worldX: 12.5, worldZ: 34.5, layerSamples: [{ nope: 1 }] },
+          {
+            id: "bookmark-a",
+            label: "Cron",
+            pointLabel: "Cron Islands",
+            worldX: 12.5,
+            worldZ: 34.5,
+            layerSamples: [{ nope: 1 }],
+          },
           { id: "bookmark-b", worldX: 1, worldZ: 2 },
           { id: "", worldX: 9, worldZ: 9 },
         ],

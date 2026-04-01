@@ -20,12 +20,12 @@ import {
 test("normalizeBookmarks keeps only valid bookmark entries", () => {
   assert.deepEqual(
     normalizeBookmarks([
-      { id: "a", label: "Alpha", worldX: 12.4, worldZ: 88.9 },
+      { id: "a", label: "Alpha", pointLabel: "Velia", worldX: 12.4, worldZ: 88.9 },
       { id: "b", worldX: 1, worldZ: 2, zoneRgb: 123 },
       { id: "", worldX: 9, worldZ: 9 },
     ]),
     [
-      { id: "a", label: "Alpha", worldX: 12, worldZ: 89 },
+      { id: "a", label: "Alpha", pointLabel: "Velia", worldX: 12, worldZ: 89 },
       { id: "b", worldX: 1, worldZ: 2, zoneRgb: 123 },
     ],
   );
@@ -194,6 +194,7 @@ test("bookmarkCurrentPointSubtitle exposes the current point label when a saved 
   const bookmark = {
     id: "probe",
     label: "Margoria (RG218)",
+    pointLabel: "Margoria South",
     worldX: 12,
     worldZ: 34,
     layerSamples: [
@@ -240,6 +241,7 @@ test("buildRuntimeBookmarkDetailsPatch enriches imported bookmarks with runtime 
       {
         id: "bookmark-a",
         label: "Imported",
+        pointLabel: "Valencia Sea - Depth 5",
         worldX: 12,
         worldZ: 34,
         zoneRgb: 0x39e58d,
@@ -267,6 +269,7 @@ test("buildRuntimeBookmarkDetailsPatch enriches imported bookmarks with runtime 
         {
           id: "bookmark-a",
           label: "Imported",
+          pointLabel: "Valencia Sea - Depth 5",
           worldX: 12,
           worldZ: 34,
           zoneRgb: 0x39e58d,
@@ -288,6 +291,45 @@ test("buildRuntimeBookmarkDetailsPatch enriches imported bookmarks with runtime 
       ],
     },
   });
+});
+
+test("buildRuntimeBookmarkDetailsPatch updates current point labels when runtime ordering changes", () => {
+  const patch = buildRuntimeBookmarkDetailsPatch(
+    [
+      {
+        id: "bookmark-a",
+        label: "Margoria South",
+        pointLabel: "Margoria South",
+        worldX: 12,
+        worldZ: 34,
+      },
+    ],
+    [
+      {
+        id: "bookmark-a",
+        label: "Margoria South",
+        pointLabel: "Margoria (RG218)",
+        worldX: 12,
+        worldZ: 34,
+        layerSamples: [
+          {
+            layerId: "region_groups",
+            detailSections: [
+              {
+                id: "resource-group",
+                kind: "facts",
+                title: "Resources",
+                facts: [{ key: "resource_group", label: "Resources", value: "Margoria (RG218)" }],
+                targets: [],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  );
+
+  assert.deepEqual(patch?._map_bookmarks?.entries?.[0]?.pointLabel, "Margoria (RG218)");
 });
 
 test("buildBookmarkPanelStateBundle derives bookmark ui from canonical signals", () => {

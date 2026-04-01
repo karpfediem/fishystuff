@@ -109,6 +109,41 @@ function wait(delayMs) {
   });
 }
 
+export function deferAfterAnimationFrames(
+  callback,
+  {
+    frames = 1,
+    requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
+    setTimeoutImpl = globalThis.setTimeout?.bind(globalThis),
+  } = {},
+) {
+  const remainingFrames = Math.max(0, Number.parseInt(frames, 10) || 0);
+  const invoke = () => {
+    if (typeof callback === "function") {
+      callback();
+    }
+  };
+
+  const step = (remaining) => {
+    if (remaining <= 0) {
+      invoke();
+      return;
+    }
+    const next = () => step(remaining - 1);
+    if (typeof requestAnimationFrameImpl === "function") {
+      requestAnimationFrameImpl(next);
+      return;
+    }
+    if (typeof setTimeoutImpl === "function") {
+      setTimeoutImpl(next, 16);
+      return;
+    }
+    next();
+  };
+
+  step(remainingFrames);
+}
+
 export async function waitForMapPageBootstrap({
   shell = globalThis.document?.getElementById?.("map-page-shell") || null,
   timeoutMs = 5000,
@@ -232,6 +267,14 @@ export async function start() {
     bridge,
     onSnapshot: patchSignalsFromBridge,
   });
+  const scheduleBookmarkDetailsRefresh = () => {
+    deferAfterAnimationFrames(
+      () => {
+        bridgeStateRefresher.schedule();
+      },
+      { frames: 2 },
+    );
+  };
 
   function signals() {
     return page.signalObject?.() || null;
@@ -357,6 +400,9 @@ export async function start() {
     }
 
     patchBridgeFromSignals();
+    if (!syncingFromBridge && patch?._map_bookmarks?.entries != null) {
+      scheduleBookmarkDetailsRefresh();
+    }
     scheduleControllersForPatch(patch);
   });
 

@@ -97,8 +97,10 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
                 context.debug_layers.enabled,
                 &context.bookmarks,
                 &context.layer_registry,
+                &context.layer_runtime,
                 &context.exact_lookups,
                 &context.field_metadata,
+                Some(&context.bootstrap.zones),
             );
         }
         if view_changed {
