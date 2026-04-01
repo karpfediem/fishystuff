@@ -130,6 +130,7 @@ test("waitForMapPageBootstrap waits for page bootstrap globals to appear", async
 
     setTimeout(() => {
       shell.__fishystuffMapPage = {
+        patchSignals() {},
         signalObject() {
           return {};
         },

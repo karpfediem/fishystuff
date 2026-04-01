@@ -33,8 +33,6 @@
     "_map_session.selection",
   ]);
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
-  const FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT = "fishymap:datastar-signal-patch";
-  const FISHYMAP_SIGNAL_PATCH_EVENT = "fishymap-signals-patch";
   const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
   const SHELL_SIGNAL_API_KEY = "__fishystuffMapPage";
   const state = {
@@ -46,7 +44,6 @@
     uiStateRestored: false,
     persistTimer: 0,
     signalPatchListenerBound: false,
-    shellPatchListenerBound: false,
     initListenerBound: false,
     restoreResolved: false,
     restorePromise: null,
@@ -570,6 +567,7 @@
       return null;
     }
     shell[SHELL_SIGNAL_API_KEY] = Object.freeze({
+      patchSignals,
       signalObject,
       whenRestored() {
         return state.restorePromise;
@@ -582,7 +580,6 @@
   function connect(signals) {
     state.liveSignals = signals && typeof signals === "object" ? signals : null;
     state.shell = ensureShellApi();
-    bindShellPatchListener();
     return state.liveSignals;
   }
 
@@ -650,7 +647,6 @@
   }
 
   function handleSignalPatch(event) {
-    emitShellDatastarSignalPatch(event?.detail);
     if (!state.uiStateRestored) {
       return;
     }
@@ -666,56 +662,6 @@
     }
     globalThis.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
     state.signalPatchListenerBound = true;
-  }
-
-  function emitDatastarSignalPatch(patch) {
-    if (
-      !patch ||
-      typeof patch !== "object" ||
-      typeof globalThis.CustomEvent !== "function" ||
-      typeof globalThis.document?.dispatchEvent !== "function"
-    ) {
-      return;
-    }
-    globalThis.document.dispatchEvent(
-      new globalThis.CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
-        bubbles: true,
-        detail: cloneJson(patch),
-      }),
-    );
-  }
-
-  function emitShellDatastarSignalPatch(patch) {
-    const shell = state.shell || ensureShellApi();
-    if (
-      !shell ||
-      !patch ||
-      typeof patch !== "object" ||
-      typeof globalThis.CustomEvent !== "function"
-    ) {
-      return;
-    }
-    shell.dispatchEvent(
-      new globalThis.CustomEvent(FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT, {
-        bubbles: true,
-        detail: cloneJson(patch),
-      }),
-    );
-  }
-
-  function handleShellSignalPatch(event) {
-    applyPatch(state.liveSignals, event?.detail);
-    emitDatastarSignalPatch(event?.detail);
-  }
-
-  function bindShellPatchListener() {
-    const shell = state.shell || resolveShell();
-    if (!shell || state.shellPatchListenerBound) {
-      return;
-    }
-    shell.addEventListener(FISHYMAP_SIGNAL_PATCH_EVENT, handleShellSignalPatch);
-    state.shell = shell;
-    state.shellPatchListenerBound = true;
   }
 
   function handleLiveInit(event) {
@@ -749,22 +695,6 @@
   }
 
   function patchSignals(patch) {
-    const shell = state.shell || resolveShell();
-    if (
-      shell &&
-      typeof globalThis.CustomEvent === "function" &&
-      patch &&
-      typeof patch === "object"
-    ) {
-      state.shell = shell;
-      shell.dispatchEvent(
-        new globalThis.CustomEvent(FISHYMAP_SIGNAL_PATCH_EVENT, {
-          bubbles: true,
-          detail: cloneJson(patch),
-        }),
-      );
-      return;
-    }
     applyPatch(state.liveSignals, patch);
   }
 

@@ -189,13 +189,6 @@ function defaultSignals() {
   };
 }
 
-function dispatchShellPatch(env, detail) {
-  env.shell.dispatchEvent({
-    type: "fishymap-signals-patch",
-    detail,
-  });
-}
-
 function dispatchLiveInit(env, detail) {
   env.shell.dispatchEvent({
     type: "fishymap-live-init",
@@ -214,6 +207,7 @@ test("map-page-live restore loads persisted bookmark entries into Datastar signa
 
   dispatchLiveInit(env, signals);
 
+  assert.equal(typeof env.shell.__fishystuffMapPage?.patchSignals, "function");
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
   assert.equal(typeof env.shell.__fishystuffMapPage?.signalObject, "function");
   assert.equal(env.shell.__fishystuffMapPage.signalObject(), signals);
@@ -232,13 +226,13 @@ test("map-page-live restore loads shared fish state without the site-global help
   assert.deepEqual(signals._shared_fish.favouriteIds, [77]);
 });
 
-test("map-page-live applies fishymap shell patches into the live signal graph", () => {
+test("map-page-live exposes direct signal patching on the shell api", () => {
   const env = createContext();
   const signals = defaultSignals();
 
   dispatchLiveInit(env, signals);
 
-  dispatchShellPatch(env, {
+  env.shell.__fishystuffMapPage.patchSignals({
     _map_ui: {
       search: {
         query: "tuna",
@@ -255,47 +249,13 @@ test("map-page-live applies fishymap shell patches into the live signal graph", 
   ]);
 });
 
-test("map-page-live re-emits shell patches as datastar signal patches", () => {
-  const env = createContext();
-  const signals = defaultSignals();
-  const received = [];
-  const shellReceived = [];
-
-  dispatchLiveInit(env, signals);
-  env.document.addEventListener("datastar-signal-patch", (event) => {
-    received.push(event.detail);
-  });
-  env.shell.addEventListener("fishymap:datastar-signal-patch", (event) => {
-    shellReceived.push(event.detail);
-  });
-
-  dispatchShellPatch(env, {
-    _map_bridged: {
-      filters: {
-        layerIdsOrdered: ["minimap", "fish_evidence"],
-      },
-    },
-  });
-
-  assert.deepEqual(received, [
-    {
-      _map_bridged: {
-        filters: {
-          layerIdsOrdered: ["minimap", "fish_evidence"],
-        },
-      },
-    },
-  ]);
-  assert.deepEqual(shellReceived, received);
-});
-
 test("map-page-live persists durable map signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
 
   dispatchLiveInit(env, signals);
 
-  dispatchShellPatch(env, {
+  env.shell.__fishystuffMapPage.patchSignals({
     _map_ui: {
       windowUi: {
         search: { open: false, collapsed: true, x: 20, y: 30 },
@@ -311,28 +271,6 @@ test("map-page-live persists durable map signal patches", () => {
     _map_bridged: {
       filters: {
         layerIdsVisible: ["bookmarks", "zone_mask"],
-      },
-    },
-  });
-  env.document.dispatchEvent({
-    type: "datastar-signal-patch",
-    detail: {
-      _map_ui: {
-        windowUi: {
-          search: { open: false, collapsed: true, x: 20, y: 30 },
-        },
-        layers: {
-          hoverFactsVisibleByLayer: {
-            regions: {
-              origin_region: true,
-            },
-          },
-        },
-      },
-      _map_bridged: {
-        filters: {
-          layerIdsVisible: ["bookmarks", "zone_mask"],
-        },
       },
     },
   });

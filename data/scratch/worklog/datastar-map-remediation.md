@@ -4698,3 +4698,83 @@ Next:
 - continue from a restored clipping/filtering baseline rather than a broken one
 - use the support matrix and live contract as the source of truth for any remaining UX refinements
   instead of reintroducing loader-era special cases
+
+## 2026-04-01: remove the live map custom signal-patch bus
+
+Follow-up remediation after the clipping/filtering baseline was restored:
+
+- the clean-slate map no longer depends on `loader.js`, but the live bootstrap still had an extra
+  event layer wrapped around Datastar:
+  - `fishymap-signals-patch`
+  - `fishymap:datastar-signal-patch`
+- `map-page-live.js` was mutating the live Datastar signal object, then rebroadcasting custom
+  shell/document events so `map-app-live.js` could react
+- this was cleaner than the old loader, but it was still a second patch bus instead of using the
+  real Datastar signal graph directly
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - the shell bootstrap API now exposes:
+    - `signalObject()`
+    - `patchSignals(patch)`
+    - `whenRestored()`
+  - direct patching now mutates the live shell signal object without routing through
+    `fishymap-signals-patch`
+  - the page still listens to the real `datastar-signal-patch` event for persistence, but it no
+    longer emits shell-local rebroadcast events
+- `site/assets/map/map-app-live.js`
+  - now waits for `patchSignals()` on the shell bootstrap API
+  - applies query, derived search-projection, and bridge snapshot patches through that direct API
+  - now reacts to the real `datastar-signal-patch` event instead of
+    `fishymap:datastar-signal-patch`
+  - panel controllers and the window manager now receive an injected direct patch function in the
+    live app path instead of defaulting to shell patch events
+- tests updated:
+  - `site/assets/map/map-page-live.test.mjs`
+  - `site/assets/map/map-app-live.test.mjs`
+
+Why this matters:
+
+- it removes one of the biggest remaining clean-slate drifts on the live map path
+- live map behavior now flows more directly through Datastar itself:
+  - shell expressions mutate signals
+  - direct JS callers patch the same live signal object
+  - the real `datastar-signal-patch` event is the reactive seam
+- it narrows the remaining custom orchestration to:
+  - persistence/restore sequencing
+  - bridge projection
+  - imperative controllers that still need to be reduced over time
+
+Validation:
+
+- focused JS validation passed:
+  - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
+  - `node --check site/assets/map/map-page-live.js`
+  - `node --check site/assets/map/map-app-live.js`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-page-live.js`
+  - `/map/map-app-live.js`
+- live DevTools check on `/map/` showed:
+  - no new console errors
+  - the map still booted cleanly
+  - windows, layers, bookmarks, and the search shell were still present and reactive
+
+Current remaining remediation gaps after this slice:
+
+- the map still has a shell bootstrap global:
+  - `__fishystuffMapPage`
+- `map-page-live.js` still owns a fair amount of restore/persist/filtering logic
+- the live panel/window controllers are still imperative JS islands
+- site-wide, calculator and Fishydex still depend on:
+  - `window.__fishystuffDatastarState`
+  - page globals like `window.__fishystuffCalculator` / `window.Fishydex`
+
+Next:
+
+- keep reducing map bootstrap/orchestration responsibility in `map-page-live.js`
+- then take the next larger remaining Datastar drift:
+  - either the shell bootstrap global itself
+  - or one of the imperative live map panel controllers
