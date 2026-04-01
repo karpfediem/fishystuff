@@ -5666,3 +5666,60 @@ Next:
 - continue trimming the remaining framework-like page bootstrap behavior in `map-page-live.js`
 - especially:
   - document-level persistence/orchestration
+
+## 2026-04-01: extract `map-page-live` persistence into its own module
+
+The next remaining framework-like seam in `map-page-live.js` was the persistence controller logic:
+
+- debounce timer ownership
+- persisted JSON dedupe state
+- storage write coordination
+- direct use of the page persist filter
+
+That logic did not need to stay inside the live page bootstrap itself.
+
+What changed:
+
+- added:
+  - `site/assets/map/map-page-persist.js`
+  - `site/assets/map/map-page-persist.test.mjs`
+- `site/assets/map/map-page-live.js`
+  - now imports `createMapPagePersistController(...)`
+  - no longer owns:
+    - debounce timer state
+    - persisted JSON bookkeeping
+    - direct storage write loops
+  - now delegates persistence scheduling and dedupe to the extracted controller
+- `site/zine.ziggy`
+  - now publishes:
+    - `map/map-page-persist.js`
+
+Why this matters:
+
+- it keeps `map-page-live.js` closer to the actual live bootstrap role:
+  - restore init
+  - connect to the live Datastar signal object
+  - apply direct signal patches
+- it moves one more chunk of page-side orchestration into a dedicated pure-ish helper module with
+  direct coverage
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-live.js site/assets/map/map-page-persist.js`
+  - `node --test site/assets/map/map-page-persist.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-page-live.js`
+  - `/map/map-page-persist.js`
+- live DevTools reload on `/map/` still confirmed:
+  - `Search` window present
+  - `Info` window present
+  - `Layers 7`
+
+Next:
+
+- keep reducing the remaining page bootstrap orchestration in `map-page-live.js`
+- especially:
+  - document-level `datastar-signal-patch` persistence binding

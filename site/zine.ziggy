@@ -55,6 +55,7 @@ Multilingual {
     "map/map-app-live-entry.js",
     "map/map.css",
     "map/map-page-state.js",
+    "map/map-page-persist.js",
     "map/map-page-live.js",
     "map/map-page-signals.js",
     "map/map-query-state.js",

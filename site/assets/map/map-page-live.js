@@ -1,14 +1,10 @@
 import {
-  MAP_BOOKMARKS_STORAGE_KEY,
-  MAP_SESSION_STORAGE_KEY,
-  MAP_UI_STORAGE_KEY,
-  createPersistedState,
   loadRestoreState,
 } from "./map-page-state.js";
 import {
   applyMapPageSignalsPatch,
-  patchMatchesMapPagePersistFilter,
 } from "./map-page-signals.js";
+import { createMapPagePersistController } from "./map-page-persist.js";
 
 export const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
 export const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
@@ -17,11 +13,7 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   const state = {
     shell: null,
     liveSignals: null,
-    persistedUiJson: "",
-    persistedBookmarksJson: "",
-    persistedSessionJson: "",
     uiStateRestored: false,
-    persistTimer: 0,
     signalPatchListenerBound: false,
     initListenerBound: false,
     restoreResolved: false,
@@ -60,37 +52,17 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     return globalRef.location?.href || globalRef.window?.location?.href || "";
   }
 
-  function clearPersistTimer() {
-    if (!state.persistTimer) {
-      return;
-    }
-    globalRef.clearTimeout?.(state.persistTimer);
-    state.persistTimer = 0;
-  }
-
-  function schedulePersist() {
-    clearPersistTimer();
-    state.persistTimer = globalRef.setTimeout?.(() => {
-      state.persistTimer = 0;
-      persist();
-    }, 120);
-  }
-
-  function handleSignalPatch(event) {
-    if (!state.uiStateRestored) {
-      return;
-    }
-    if (!patchMatchesMapPagePersistFilter(event?.detail)) {
-      return;
-    }
-    schedulePersist();
-  }
+  const persistor = createMapPagePersistController({
+    globalRef,
+    isReady: () => state.uiStateRestored,
+    readSnapshot: signalObject,
+  });
 
   function bindSignalPatchListener() {
     if (state.signalPatchListenerBound) {
       return;
     }
-    globalRef.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
+    globalRef.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, persistor.handleSignalPatch);
     state.signalPatchListenerBound = true;
   }
 
@@ -122,9 +94,7 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     }
     applyMapPageSignalsPatch(liveSignals, patch);
     connect(liveSignals);
-    if (state.uiStateRestored && patchMatchesMapPagePersistFilter(patch)) {
-      schedulePersist();
-    }
+    persistor.handleSignalPatch(patch);
   }
 
   function patchSignals(patch) {
@@ -149,38 +119,11 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     if (restoreState.sessionPatch) {
       patchSignals(restoreState.sessionPatch);
     }
-    const persistedState = createPersistedState(signals);
-    state.persistedUiJson = persistedState.uiJson;
-    state.persistedBookmarksJson = persistedState.bookmarksJson;
-    state.persistedSessionJson = persistedState.sessionJson;
+    persistor.seed(signals);
     state.uiStateRestored = true;
     if (!state.restoreResolved) {
       state.restoreResolved = true;
       state.resolveRestore?.();
-    }
-  }
-
-  function persist() {
-    const snapshot = signalObject();
-    if (!snapshot || !state.uiStateRestored) {
-      return;
-    }
-    try {
-      const persistedState = createPersistedState(snapshot);
-      if (persistedState.uiJson !== state.persistedUiJson) {
-        globalRef.localStorage?.setItem?.(MAP_UI_STORAGE_KEY, persistedState.uiJson);
-        state.persistedUiJson = persistedState.uiJson;
-      }
-      if (persistedState.bookmarksJson !== state.persistedBookmarksJson) {
-        globalRef.localStorage?.setItem?.(MAP_BOOKMARKS_STORAGE_KEY, persistedState.bookmarksJson);
-        state.persistedBookmarksJson = persistedState.bookmarksJson;
-      }
-      if (persistedState.sessionJson !== state.persistedSessionJson) {
-        globalRef.sessionStorage?.setItem?.(MAP_SESSION_STORAGE_KEY, persistedState.sessionJson);
-        state.persistedSessionJson = persistedState.sessionJson;
-      }
-    } catch (_error) {
-      // Map UI persistence is best-effort only.
     }
   }
 
