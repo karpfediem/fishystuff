@@ -318,14 +318,12 @@ export async function start() {
   }
 
   function patchSignalsFromBridge(snapshot) {
-    const currentSignals = signals();
     syncingFromBridge = true;
     try {
       dispatchShellSignalPatch(
         shell,
         combineSignalPatches(
           app.projectRuntimeSnapshot(snapshot),
-          app.projectRuntimeBookmarkDetails(snapshot, currentSignals),
           app.projectSessionSnapshot(snapshot),
         ),
       );

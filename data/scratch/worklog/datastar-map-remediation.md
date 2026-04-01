@@ -3946,3 +3946,64 @@ Why this matters for the remediation:
   interaction as authoritative while it is in progress
 - Datastar-owned durable state should persist the result of the interaction, but it must not fight
   the interaction itself frame-by-frame
+
+## 2026-04-01: bookmark detail feedback caused delivered FPS drop
+
+Observed regression:
+
+- with active bookmark entries present, delivered FPS on the live `/map/` page dropped from the
+  expected ~60 back down into the high-40s even though Bevy CPU frame cost stayed low
+- hiding the bookmark layer did not help
+- clearing bookmark entries entirely restored delivered FPS immediately
+
+Measured on the served page:
+
+- with one bookmark entry present:
+  - delivered FPS was about `48.6`
+  - average Bevy CPU frame cost stayed around `4.8ms`
+- with bookmark layer hidden but bookmark entries still present:
+  - delivered FPS stayed around `46.3`
+- with bookmark entries cleared:
+  - delivered FPS returned to about `60.0`
+
+Root cause:
+
+- the clean-slate path was merging runtime-enriched bookmark details back into durable
+  `_map_bookmarks.entries`
+- those patches were re-entering the full Datastar shell/persist/render path even though the
+  runtime bookmark detail payload is ephemeral UI state, not canonical bookmark input
+- this was the wrong ownership model:
+  - bookmark coordinates/titles belong in canonical bookmark state
+  - runtime layer samples / point labels / enriched facts belong in runtime state only
+
+What changed:
+
+- `site/assets/map/map-runtime-adapter.js`
+  - runtime snapshot projection now exposes `ui.bookmarks` under `_map_runtime.ui.bookmarks`
+  - stopped projecting runtime bookmark details back into `_map_bookmarks`
+- `site/assets/map/map-app.js`
+  - removed the separate `projectRuntimeBookmarkDetails(...)` path
+- `site/assets/map/map-app-live.js`
+  - stopped combining a `_map_bookmarks` patch into every bridge snapshot projection
+- `site/assets/map/map-bookmark-state.js`
+  - bookmark panel state now merges canonical bookmarks with `_map_runtime.ui.bookmarks`
+    ephemerally at read time
+  - bookmark signal invalidation now watches `_map_runtime.ui.bookmarks`
+
+Validation:
+
+- focused JS tests passed for:
+  - `map-runtime-adapter`
+  - `map-app`
+  - `map-bookmark-state`
+- live page measurement after the fix:
+  - one live bookmark entry present
+  - delivered FPS returned to about `59.95`
+  - average Bevy CPU frame cost stayed around `4.1ms`
+
+Why this is aligned with the remediation:
+
+- runtime-enriched bookmark facts are now treated as ephemeral runtime output instead of durable
+  Datastar page input
+- this keeps the bookmark UI functional while removing a large, high-churn feedback path from the
+  clean-slate shell

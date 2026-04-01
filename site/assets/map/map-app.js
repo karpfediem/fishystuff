@@ -2,7 +2,6 @@ import {
   buildBridgeCommandPatchFromSignals,
   buildBridgeInputPatchFromSignals,
   normalizeMapActionState,
-  projectRuntimeBookmarkDetailsToSignals,
   projectRuntimeSnapshotToSignals,
   projectSessionSnapshotToSignals,
 } from "./map-runtime-adapter.js";
@@ -72,11 +71,6 @@ export function createMapApp(options = {}) {
     projectRuntimeSnapshot(snapshot) {
       return projectRuntimeSnapshotToSignals(snapshot);
     },
-
-    projectRuntimeBookmarkDetails(snapshot, signals) {
-      return projectRuntimeBookmarkDetailsToSignals(snapshot, signals?._map_bookmarks?.entries);
-    },
-
     projectSessionSnapshot(snapshot) {
       return projectSessionSnapshotToSignals(snapshot);
     },

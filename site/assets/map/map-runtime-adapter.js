@@ -7,7 +7,6 @@ import {
 import {
   DEFAULT_ENABLED_LAYER_IDS,
 } from "./map-signal-contract.js";
-import { buildRuntimeBookmarkDetailsPatch } from "./map-bookmark-state.js";
 import {
   buildLayerSearchEffects,
   DEFAULT_LAYER_SEARCH_CLIPS,
@@ -240,6 +239,9 @@ export function projectRuntimeSnapshotToSignals(snapshot) {
     _map_runtime: {
       ready: current.ready === true,
       theme: cloneJson(current.theme || {}),
+      ui: {
+        bookmarks: cloneJson(current.ui?.bookmarks || []),
+      },
       view: cloneJson(current.view || {}),
       selection: cloneJson(current.selection || {}),
       catalog: cloneJson(current.catalog || {}),
@@ -257,9 +259,4 @@ export function projectSessionSnapshotToSignals(snapshot) {
       selection: cloneJson(current.selection || {}),
     },
   };
-}
-
-export function projectRuntimeBookmarkDetailsToSignals(snapshot, bookmarks) {
-  const current = isPlainObject(snapshot) ? snapshot : createEmptySnapshot();
-  return buildRuntimeBookmarkDetailsPatch(bookmarks, current.ui?.bookmarks);
 }

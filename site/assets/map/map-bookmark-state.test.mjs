@@ -338,6 +338,17 @@ test("buildBookmarkPanelStateBundle derives bookmark ui from canonical signals",
       ready: true,
       view: { viewMode: "2d" },
       selection: { worldX: 1, worldZ: 2 },
+      ui: {
+        bookmarks: [
+          {
+            id: "a",
+            worldX: 5,
+            worldZ: 6,
+            pointLabel: "Margoria South",
+            layerSamples: [{ layerId: "zone_mask", rgbU32: 0x39e58d }],
+          },
+        ],
+      },
     },
     _map_bookmarks: {
       entries: [{ id: "a", worldX: 5, worldZ: 6 }],
@@ -352,11 +363,16 @@ test("buildBookmarkPanelStateBundle derives bookmark ui from canonical signals",
   assert.equal(bundle.state.ready, true);
   assert.equal(bundle.bookmarkUi.placing, true);
   assert.deepEqual(bundle.bookmarkUi.selectedIds, ["a"]);
+  assert.equal(bundle.bookmarks[0].pointLabel, "Margoria South");
 });
 
 test("bookmark signal helpers stay scoped to bookmark-related branches", () => {
   assert.equal(
     patchTouchesBookmarkSignals({ _map_runtime: { selection: { worldX: 1 } } }),
+    true,
+  );
+  assert.equal(
+    patchTouchesBookmarkSignals({ _map_runtime: { ui: { bookmarks: [{ id: "a" }] } } }),
     true,
   );
   assert.equal(

@@ -5,7 +5,6 @@ import {
   buildBridgeCommandPatchFromSignals,
   buildBridgeInputPatchFromSignals,
   normalizeMapActionState,
-  projectRuntimeBookmarkDetailsToSignals,
   projectRuntimeSnapshotToSignals,
   projectSessionSnapshotToSignals,
 } from "./map-runtime-adapter.js";
@@ -205,6 +204,7 @@ test("projectRuntimeSnapshotToSignals keeps only coarse runtime fields", () => {
     _map_runtime: {
       ready: true,
       theme: { name: "night" },
+      ui: { bookmarks: [] },
       view: { viewMode: "3d" },
       selection: { pointKind: "clicked" },
       catalog: { layers: [{ layerId: "zone_mask" }] },
@@ -229,9 +229,26 @@ test("projectSessionSnapshotToSignals keeps only restorable session fields", () 
   });
 });
 
-test("projectRuntimeBookmarkDetailsToSignals enriches canonical bookmarks from runtime ui state", () => {
-  const patch = projectRuntimeBookmarkDetailsToSignals(
-    {
+test("projectRuntimeSnapshotToSignals keeps runtime bookmark details ephemeral", () => {
+  const patch = projectRuntimeSnapshotToSignals({
+    ui: {
+      bookmarks: [
+        {
+          id: "bookmark-a",
+          label: "Imported",
+          worldX: 12,
+          worldZ: 34,
+          zoneRgb: 0x39e58d,
+          layerSamples: [{ layerId: "zone_mask" }],
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(patch, {
+    _map_runtime: {
+      ready: false,
+      theme: {},
       ui: {
         bookmarks: [
           {
@@ -244,22 +261,11 @@ test("projectRuntimeBookmarkDetailsToSignals enriches canonical bookmarks from r
           },
         ],
       },
-    },
-    [{ id: "bookmark-a", label: "Imported", worldX: 12, worldZ: 34 }],
-  );
-
-  assert.deepEqual(patch, {
-    _map_bookmarks: {
-      entries: [
-        {
-          id: "bookmark-a",
-          label: "Imported",
-          worldX: 12,
-          worldZ: 34,
-          zoneRgb: 0x39e58d,
-          layerSamples: [{ layerId: "zone_mask" }],
-        },
-      ],
+      view: {},
+      selection: {},
+      catalog: {},
+      statuses: {},
+      lastDiagnostic: null,
     },
   });
 });

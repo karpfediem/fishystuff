@@ -345,6 +345,7 @@ export function patchTouchesBookmarkSignals(patch) {
     patch._map_bookmarks?.entries != null ||
       patch._map_ui?.bookmarks != null ||
       patch._map_runtime?.ready != null ||
+      patch._map_runtime?.ui?.bookmarks != null ||
       patch._map_runtime?.view != null ||
       patch._map_runtime?.selection != null ||
       patch._map_runtime?.catalog?.layers != null,
@@ -353,7 +354,10 @@ export function patchTouchesBookmarkSignals(patch) {
 
 export function buildBookmarkPanelStateBundle(signals) {
   const runtime = isPlainObject(signals?._map_runtime) ? signals._map_runtime : {};
-  const bookmarks = normalizeBookmarks(signals?._map_bookmarks?.entries);
+  const bookmarks = mergeRuntimeBookmarkDetails(
+    normalizeBookmarks(signals?._map_bookmarks?.entries),
+    normalizeBookmarks(runtime.ui?.bookmarks),
+  );
   const bookmarkUi = isPlainObject(signals?._map_ui?.bookmarks) ? signals._map_ui.bookmarks : {};
   return {
     state: {
