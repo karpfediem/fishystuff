@@ -6673,3 +6673,29 @@ Validation:
   - the Layers count still rendered as `7`
   - expanded settings still stayed functional
   - no new console errors appeared
+
+## 2026-04-01: remove the dead live Search controller path
+
+After the Search panel moved to `site/assets/map/map-search-panel-element.js`, the old `site/assets/map/map-search-panel-live.js` controller path remained in the tree even though it was no longer imported or published.
+
+What changed:
+
+- deleted the dead legacy controller:
+  - `site/assets/map/map-search-panel-live.js`
+
+Why this is closer to Datastar:
+
+- the Search panel now has one live path only:
+  - shell markup
+  - `fishymap-search-panel` custom element
+  - pure search state/render helpers
+- there is less ambiguity about which file owns the live Search behavior
+- the cleanup reduces the amount of dead controller code left in the map tree
+
+Validation:
+
+- code search confirmed the old file had no live imports and was not published in `site/zine.ziggy`
+- the live map path still remains:
+  - `site/assets/map/map-search-panel-element.js`
+  - `site/assets/map/map-search-state.js`
+  - `site/assets/map/map-search-panel.js`
