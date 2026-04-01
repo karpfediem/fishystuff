@@ -9,6 +9,7 @@ test("map shell windows are Datastar-driven for open and collapsed state", () =>
   assert.match(shellHtml, /id="fishymap-search-window"[\s\S]*data-show="\$_map_ui\.windowUi\.search\.open"/);
   assert.match(shellHtml, /<fishymap-search-panel id="fishymap-search-panel" class="not-prose"><\/fishymap-search-panel>/);
   assert.match(shellHtml, /id="fishymap-bookmarks-window"[\s\S]*data-show="\$_map_ui\.windowUi\.bookmarks\.open"/);
+  assert.match(shellHtml, /<fishymap-bookmark-panel id="fishymap-bookmark-panel" class="not-prose"><\/fishymap-bookmark-panel>/);
   assert.match(shellHtml, /id="fishymap-zone-info-window"[\s\S]*data-show="\$_map_ui\.windowUi\.zoneInfo\.open"/);
   assert.match(shellHtml, /id="fishymap-layers-window"[\s\S]*data-show="\$_map_ui\.windowUi\.layers\.open"/);
   assert.match(shellHtml, /id="fishymap-panel"[\s\S]*data-show="\$_map_ui\.windowUi\.settings\.open"/);

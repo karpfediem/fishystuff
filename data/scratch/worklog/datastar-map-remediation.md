@@ -6493,3 +6493,68 @@ Validation:
   - titlebar title/status updated from a live selection patch
   - tabs and facts rendered in the pane
   - no new console errors
+
+## 2026-04-01: move the live Bookmark panel onto a custom element
+
+With Search, Hover, Patch Picker, and Info moved, the next best remaining UI island was the Bookmark panel.
+
+Why this was the right next step:
+
+- it was still one of the largest app-instantiated controller surfaces
+- it does not overlap the more sensitive layer drag/attach logic
+- it already had a clean state bundle and pure render helper path to build on
+
+What changed:
+
+- introduced a real bookmark-panel custom element:
+  - `site/assets/map/map-bookmark-panel-element.js`
+  - `site/assets/map/map-bookmark-panel-element.test.mjs`
+- moved the Bookmarks window body in `site/assets/map/map-shell.html` to:
+  - `<fishymap-bookmark-panel id="fishymap-bookmark-panel" class="not-prose"></fishymap-bookmark-panel>`
+- `site/assets/map/map-app-live.js`
+  - no longer imports or instantiates the old bookmark controller
+  - now side-effect imports the custom element module
+- unpublished and removed the old controller path:
+  - `site/assets/map/map-bookmark-panel-live.js`
+  - `site/assets/map/map-bookmark-panel-live.test.mjs`
+- published the new asset in `site/zine.ziggy`
+
+Design notes:
+
+- the custom element owns:
+  - body controls
+  - import/export/copy actions
+  - selection checkboxes
+  - drag/drop reorder behavior
+  - the file input
+- the titlebar `New bookmark` button stays in the shell
+  - the element updates and listens to that shell button directly
+- it continues to consume the existing bookmark state bundle:
+  - durable bookmark entries from `_map_bookmarks`
+  - runtime-enriched bookmark details from `_map_runtime.ui.bookmarks`
+- like the other components, it listens to both:
+  - native `datastar-signal-patch`
+  - shell-local `fishymap:signal-patched`
+
+Why this is closer to Datastar:
+
+- `map-app-live.js` loses another imperative controller instantiation
+- durable state remains signal-owned
+- complex local behavior stays encapsulated in the component
+- the app no longer needs to manually wire bookmark panel render/update flow
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-bookmark-panel-element.js site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-bookmark-panel-element.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for:
+  - `/map/map-bookmark-panel-element.js`
+  - `/map/`
+- live DevTools validation on `/map/` confirmed:
+  - the custom element mounted when the Bookmarks window opened
+  - body controls were present and enabled/disabled correctly
+  - a live bookmark patch rendered a bookmark card
+  - bookmark fact rows still rendered, including `Resources` and `Origin`

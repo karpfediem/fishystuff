@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildBookmarkPlacementSelectionResult } from "./map-bookmark-panel-live.js";
+import {
+  buildBookmarkPlacementSelectionResult,
+  readMapBookmarkPanelShellSignals,
+  registerFishyMapBookmarkPanelElement,
+} from "./map-bookmark-panel-element.js";
 
 function clickedSelection(overrides = {}) {
   return {
@@ -18,6 +22,34 @@ function clickedSelection(overrides = {}) {
     ...overrides,
   };
 }
+
+test("readMapBookmarkPanelShellSignals prefers live shell signals over initial signals", () => {
+  const initialSignals = { _map_bookmarks: { entries: [{ id: "a" }] } };
+  const liveSignals = { _map_bookmarks: { entries: [{ id: "b" }] } };
+  const shell = {
+    __fishymapInitialSignals: initialSignals,
+    __fishymapLiveSignals: liveSignals,
+  };
+
+  assert.equal(readMapBookmarkPanelShellSignals(shell), liveSignals);
+});
+
+test("registerFishyMapBookmarkPanelElement defines the custom element once", () => {
+  const registry = {
+    definitions: new Map(),
+    get(name) {
+      return this.definitions.get(name) || null;
+    },
+    define(name, constructor) {
+      this.definitions.set(name, constructor);
+    },
+  };
+
+  assert.equal(registerFishyMapBookmarkPanelElement(registry), true);
+  assert.equal(registerFishyMapBookmarkPanelElement(registry), true);
+  assert.equal(registry.definitions.size, 1);
+  assert.ok(registry.get("fishymap-bookmark-panel"));
+});
 
 test("buildBookmarkPlacementSelectionResult allows explicit clicked-point placement even for the current selection key", () => {
   const selection = clickedSelection();
