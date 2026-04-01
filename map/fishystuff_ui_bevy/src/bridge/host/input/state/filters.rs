@@ -3,7 +3,7 @@ use crate::bridge::contract::FishyMapInputState;
 use crate::map::ui_layers::LayerDebugSettings;
 use crate::plugins::api::{
     FishFilterState, MapDisplayState, PatchFilterState, SemanticFieldFilterState,
-    POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    ZoneMembershipLayerFilterState, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
 };
 
 pub(super) fn apply_display_flags(
@@ -55,4 +55,17 @@ pub(super) fn apply_patch_filters(input: &FishyMapInputState, patch_filter: &mut
     if from_patch_id.is_some() || to_patch_id.is_some() {
         apply_patch_range_override(patch_filter, from_patch_id, to_patch_id);
     }
+}
+
+pub(super) fn apply_zone_membership_layer_filters(
+    input: &FishyMapInputState,
+    zone_membership_filter: &mut ZoneMembershipLayerFilterState,
+) {
+    zone_membership_filter.set_layer_ids(
+        input
+            .filters
+            .zone_membership_layer_ids
+            .clone()
+            .unwrap_or_default(),
+    );
 }

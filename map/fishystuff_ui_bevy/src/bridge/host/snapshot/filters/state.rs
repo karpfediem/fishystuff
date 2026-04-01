@@ -50,6 +50,7 @@ pub(in crate::bridge::host) fn effective_filters(
                 .map(|layer| layer.key.clone())
                 .collect()
         }),
+        zone_membership_layer_ids: bridge_input.filters.zone_membership_layer_ids.clone(),
         layer_opacities: current_layer_opacity_overrides(layer_registry, layer_runtime),
         layer_clip_masks: current_layer_clip_mask_overrides(layer_registry, layer_runtime),
         layer_waypoint_connections_visible: current_layer_waypoint_connection_overrides(

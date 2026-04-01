@@ -249,7 +249,7 @@ mod tests {
     use crate::map::{exact_lookup::ExactLookupCache, field_metadata::FieldMetadataCache};
     use crate::plugins::api::{
         ApiBootstrapState, FishCatalog, FishFilterState, HoverState, MapDisplayState,
-        PatchFilterState, SelectionState, SemanticFieldFilterState,
+        PatchFilterState, SelectionState, SemanticFieldFilterState, ZoneMembershipLayerFilterState,
     };
     use crate::plugins::bookmarks::BookmarkState;
     use crate::plugins::points::PointsState;
@@ -291,6 +291,7 @@ mod tests {
         app.insert_resource(PatchFilterState::default());
         app.insert_resource(FishFilterState::default());
         app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(ZoneMembershipLayerFilterState::default());
         app.insert_resource(MapDisplayState::default());
         app.insert_resource(FishCatalog::default());
         app.insert_resource(PointsState::default());
@@ -325,6 +326,7 @@ mod tests {
         app.insert_resource(PatchFilterState::default());
         app.insert_resource(FishFilterState::default());
         app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(ZoneMembershipLayerFilterState::default());
         app.insert_resource(BookmarkState::default());
         app.insert_resource(MapDisplayState::default());
         app.insert_resource(LayerDebugSettings::default());

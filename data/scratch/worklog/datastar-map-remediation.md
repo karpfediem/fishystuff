@@ -4116,3 +4116,50 @@ Next:
   as the points zone-membership path
 - keep attachment-driven clipping as the primary user model and avoid reintroducing redundant
   explicit clipping settings
+
+## 2026-04-01: runtime zone-membership and semantic filter hooks
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/plugins/api/state/filters.rs`
+  - added `ZoneMembershipLayerFilterState`
+- `map/fishystuff_ui_bevy/src/bridge/host/input/state/filters.rs`
+  - browser input now applies `filters.zone_membership_layer_ids` into that resource
+- `map/fishystuff_ui_bevy/src/plugins/points/query/refresh.rs`
+  - Fish Evidence now only consumes the zone filter when `zoneMembershipLayerIds` includes
+    `fish_evidence`
+- `map/fishystuff_ui_bevy/src/map/vector/build.rs`
+  - vector build jobs can now filter features by selected semantic field ids using the source’s
+    `feature_id_property`
+- `map/fishystuff_ui_bevy/src/plugins/vector_layers.rs`
+  - vector cache revisions now include selected semantic field ids
+  - visible cache keys and build jobs are keyed off that semantic selection too
+
+Validation:
+
+- `cargo check -p fishystuff_ui_bevy`
+- targeted Rust tests passed:
+  - `filters_features_by_selected_feature_ids`
+  - `zone_membership_layer_filter_state_normalizes_and_clears_layer_ids`
+  - `empty_zone_membership_layer_ids_clear_existing_overrides`
+- live runtime proof for zone-membership clipping:
+  - baseline Fish Evidence:
+    - `represented=26938`
+  - with `Margoria South` (`zoneRgb=16742655`) selected and Fish Evidence visible:
+    - `represented=433`
+
+Notes:
+
+- local `regions` / `region_groups` vector overlays currently report `manifestStatus="missing"` in
+  the live dev page, so semantic vector-filtering could not be visually verified there yet
+- the semantic path is therefore currently validated by:
+  - bridge state inspection
+  - vector-build unit coverage
+  - revision/build-path wiring
+
+Next:
+
+- investigate why the local dev page has missing vector manifests for `regions` and
+  `region_groups`, because that blocks direct live visual validation of the semantic filter path
+- after that, validate attachment-driven clipping for raster/vector layers with the same directness
+  as the Fish Evidence zone-membership proof

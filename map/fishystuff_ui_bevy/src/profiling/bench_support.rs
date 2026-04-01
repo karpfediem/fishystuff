@@ -405,8 +405,13 @@ pub fn vector_pipeline_build(fixture: &VectorBenchFixture) -> usize {
         feature_id_property: Some("id".to_string()),
         color_property: Some("c".to_string()),
     };
-    let mut job = parse_into_job(source, "bench-rg-v1".to_string(), fixture.bytes.clone())
-        .expect("build synthetic vector job");
+    let mut job = parse_into_job(
+        source,
+        "bench-rg-v1".to_string(),
+        fixture.bytes.clone(),
+        &[],
+    )
+    .expect("build synthetic vector job");
     let limits = VectorBuildLimits {
         max_features_per_frame: usize::MAX,
         max_build_ms_per_frame: f64::MAX,

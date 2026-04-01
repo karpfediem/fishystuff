@@ -8,6 +8,7 @@ use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::ui_layers::LayerDebugSettings;
 use crate::plugins::api::{
     FishFilterState, MapDisplayState, PatchFilterState, SemanticFieldFilterState,
+    ZoneMembershipLayerFilterState,
 };
 use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::{Map2dCamera, Terrain3dCamera};
@@ -19,6 +20,7 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
     mut patch_filter: ResMut<PatchFilterState>,
     mut fish_filter: ResMut<FishFilterState>,
     mut semantic_filter: ResMut<SemanticFieldFilterState>,
+    mut zone_membership_filter: ResMut<ZoneMembershipLayerFilterState>,
     mut bookmarks: ResMut<BookmarkState>,
     mut display_state: ResMut<MapDisplayState>,
     mut debug_layers: ResMut<LayerDebugSettings>,
@@ -40,6 +42,7 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
     filters::apply_fish_filters(&bridge.input, &mut fish_filter);
     filters::apply_semantic_field_filters(&bridge.input, &mut semantic_filter);
     filters::apply_patch_filters(&bridge.input, &mut patch_filter);
+    filters::apply_zone_membership_layer_filters(&bridge.input, &mut zone_membership_filter);
     layers::apply_layer_filters(&bridge.input, &layer_registry, &mut layer_runtime);
     sync_display_layer_controls(&mut display_state, &layer_registry, &layer_runtime);
     theme::apply_theme_background(

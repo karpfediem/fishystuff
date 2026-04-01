@@ -1,5 +1,5 @@
 use fishystuff_api::models::meta::PatchInfo;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::prelude::*;
 
@@ -23,6 +23,29 @@ pub struct FishFilterState {
 #[derive(Resource, Default)]
 pub struct SemanticFieldFilterState {
     pub selected_field_ids_by_layer: BTreeMap<String, Vec<u32>>,
+}
+
+#[derive(Resource, Default)]
+pub struct ZoneMembershipLayerFilterState {
+    pub selected_layer_ids: BTreeSet<String>,
+}
+
+impl ZoneMembershipLayerFilterState {
+    pub fn set_layer_ids(&mut self, layer_ids: Vec<String>) {
+        self.selected_layer_ids = layer_ids
+            .into_iter()
+            .map(|layer_id| layer_id.trim().to_string())
+            .filter(|layer_id| !layer_id.is_empty())
+            .collect();
+    }
+
+    pub fn layer_ids(&self) -> Vec<String> {
+        self.selected_layer_ids.iter().cloned().collect()
+    }
+
+    pub fn includes(&self, layer_id: &str) -> bool {
+        self.selected_layer_ids.contains(layer_id.trim())
+    }
 }
 
 impl SemanticFieldFilterState {
@@ -57,7 +80,7 @@ impl SemanticFieldFilterState {
 
 #[cfg(test)]
 mod tests {
-    use super::SemanticFieldFilterState;
+    use super::{SemanticFieldFilterState, ZoneMembershipLayerFilterState};
 
     #[test]
     fn semantic_field_filter_state_normalizes_and_clears_layer_ids() {
@@ -74,6 +97,27 @@ mod tests {
         let mut filter = SemanticFieldFilterState::default();
         filter.set_field_ids_for_layer(SemanticFieldFilterState::ZONE_MASK_LAYER_ID, vec![9, 4]);
         assert_eq!(filter.selected_zone_rgbs(), &[4, 9]);
+    }
+
+    #[test]
+    fn zone_membership_layer_filter_state_normalizes_and_clears_layer_ids() {
+        let mut filter = ZoneMembershipLayerFilterState::default();
+        filter.set_layer_ids(vec![
+            " fish_evidence ".to_string(),
+            "".to_string(),
+            "regions".to_string(),
+            "fish_evidence".to_string(),
+        ]);
+
+        assert_eq!(
+            filter.layer_ids(),
+            vec!["fish_evidence".to_string(), "regions".to_string()]
+        );
+        assert!(filter.includes("fish_evidence"));
+        assert!(!filter.includes("bookmarks"));
+
+        filter.set_layer_ids(Vec::new());
+        assert!(filter.layer_ids().is_empty());
     }
 }
 

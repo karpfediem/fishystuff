@@ -20,6 +20,7 @@ use crate::map::vector::build::{
 };
 use crate::map::vector::cache::{VectorFinishedCache, VectorLayerStats};
 use crate::map::vector::render::{spawn_vector_meshes, VECTOR_3D_BASE_Y};
+use crate::plugins::api::SemanticFieldFilterState;
 
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct VectorBuildConfig {
@@ -171,7 +172,12 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             )
         })
         .collect();
-    let visible_cache_keys = collect_visible_cache_keys(registry, &active_by_layer, map_version_id);
+    let visible_cache_keys = collect_visible_cache_keys(
+        registry,
+        &active_by_layer,
+        map_version_id,
+        &update.semantic_filter,
+    );
     for evicted in vector_runtime
         .finished
         .evict_lru_non_visible(|key| visible_cache_keys.contains(key))
@@ -212,7 +218,11 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             continue;
         }
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
-        let revision = effective_revision(&source);
+        let selected_field_ids = update
+            .semantic_filter
+            .field_ids_for_layer(layer.key.as_str())
+            .to_vec();
+        let revision = effective_revision(&source, &selected_field_ids);
         invalidate_non_active_revisions(vector_runtime, layer.id, &revision, &mut commands);
 
         hide_non_active_finished(
@@ -309,7 +319,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
                 revision,
                 bytes,
                 ..
-            } => match parse_into_job(source, revision.clone(), bytes) {
+            } => match parse_into_job(source, revision.clone(), bytes, &selected_field_ids) {
                 Ok(job) => VectorBuildState::Building { job },
                 Err(err) => VectorBuildState::Failed {
                     revision,
@@ -478,6 +488,7 @@ fn collect_visible_cache_keys(
     registry: &LayerRegistry,
     visible_by_layer: &HashMap<LayerId, bool>,
     map_version_id: Option<&str>,
+    semantic_filter: &SemanticFieldFilterState,
 ) -> HashSet<(LayerId, String)> {
     let mut out = HashSet::new();
     for layer in registry.ordered() {
@@ -491,7 +502,10 @@ fn collect_visible_cache_keys(
             continue;
         };
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
-        out.insert((layer.id, effective_revision(&source)));
+        let selected_field_ids = semantic_filter
+            .field_ids_for_layer(layer.key.as_str())
+            .to_vec();
+        out.insert((layer.id, effective_revision(&source, &selected_field_ids)));
     }
     out
 }
@@ -574,6 +588,7 @@ struct VectorLayerUpdate<'w, 's> {
     registry: Res<'w, LayerRegistry>,
     layer_runtime: ResMut<'w, LayerRuntime>,
     vector_runtime: ResMut<'w, VectorLayerRuntime>,
+    semantic_filter: Res<'w, SemanticFieldFilterState>,
     build_config: Res<'w, VectorBuildConfig>,
     cache_config: Res<'w, VectorCacheConfig>,
     view_mode: Res<'w, ViewModeState>,
@@ -610,13 +625,22 @@ fn apply_stats(
     runtime_state.vector_last_frame_build_ms = stats.last_frame_build_ms;
 }
 
-fn effective_revision(source: &VectorSourceSpec) -> String {
+fn effective_revision(source: &VectorSourceSpec, selected_feature_ids: &[u32]) -> String {
     let revision = source.revision.trim();
-    if revision.is_empty() {
+    let base_revision = if revision.is_empty() {
         format!("url:{}", source.url)
     } else {
         revision.to_string()
+    };
+    if selected_feature_ids.is_empty() {
+        return base_revision;
     }
+    let selected_suffix = selected_feature_ids
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("{base_revision}|field_ids:{selected_suffix}")
 }
 
 fn vector_build_state_needs_frame_updates(state: &VectorBuildState) -> bool {

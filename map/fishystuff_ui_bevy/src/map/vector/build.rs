@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::Duration;
 
 use async_channel::Receiver;
@@ -164,12 +165,22 @@ pub fn parse_into_job(
     source: VectorSourceSpec,
     revision: String,
     bytes: Vec<u8>,
+    selected_feature_ids: &[u32],
 ) -> Result<VectorBuildJob, String> {
     let parsed = parse_geojson(&bytes)?;
     let mut features = Vec::with_capacity(parsed.features.len());
+    let selected_feature_ids = (!selected_feature_ids.is_empty())
+        .then(|| selected_feature_ids.iter().copied().collect::<HashSet<_>>());
 
     crate::perf_scope!("vector.feature_iteration");
     for (feature_index, feature) in parsed.features.into_iter().enumerate() {
+        if !feature_matches_selected_feature_ids(
+            &source,
+            &feature.properties,
+            selected_feature_ids.as_ref(),
+        ) {
+            continue;
+        }
         let bucket = style_bucket_key(&source, &feature.properties, feature_index);
         let polygons: Vec<Vec<Vec<[f64; 2]>>> = feature
             .polygons
@@ -207,6 +218,40 @@ pub fn parse_into_job(
         },
         started_at: Instant::now(),
     })
+}
+
+fn feature_matches_selected_feature_ids(
+    source: &VectorSourceSpec,
+    properties: &Map<String, Value>,
+    selected_feature_ids: Option<&HashSet<u32>>,
+) -> bool {
+    let Some(selected_feature_ids) = selected_feature_ids else {
+        return true;
+    };
+    if selected_feature_ids.is_empty() {
+        return true;
+    }
+    let Some(feature_id_property) = source.feature_id_property.as_deref() else {
+        return false;
+    };
+    let Some(value) = properties.get(feature_id_property) else {
+        return false;
+    };
+    let Some(feature_id) = feature_id_from_value(value) else {
+        return false;
+    };
+    selected_feature_ids.contains(&feature_id)
+}
+
+fn feature_id_from_value(value: &Value) -> Option<u32> {
+    if let Some(number) = value.as_u64() {
+        return u32::try_from(number).ok();
+    }
+    if let Some(number) = value.as_i64() {
+        return u32::try_from(number).ok();
+    }
+    let text = value.as_str()?.trim();
+    (!text.is_empty()).then_some(text)?.parse::<u32>().ok()
 }
 
 pub fn advance_job(
@@ -434,7 +479,8 @@ mod tests {
     #[test]
     fn tiny_fixture_build_completes_incrementally() {
         let bytes = include_bytes!("../../../tests/fixtures/tiny_vector.geojson").to_vec();
-        let mut job = parse_into_job(tiny_source(), "tiny-v1".to_string(), bytes).expect("parse");
+        let mut job =
+            parse_into_job(tiny_source(), "tiny-v1".to_string(), bytes, &[]).expect("parse");
         let limits = VectorBuildLimits {
             max_features_per_frame: 1,
             max_build_ms_per_frame: 10.0,
@@ -462,7 +508,8 @@ mod tests {
     #[test]
     fn advance_job_respects_zero_feature_budget() {
         let bytes = include_bytes!("../../../tests/fixtures/tiny_vector.geojson").to_vec();
-        let mut job = parse_into_job(tiny_source(), "tiny-v1".to_string(), bytes).expect("parse");
+        let mut job =
+            parse_into_job(tiny_source(), "tiny-v1".to_string(), bytes, &[]).expect("parse");
         let limits = VectorBuildLimits {
             max_features_per_frame: 0,
             max_build_ms_per_frame: 5.0,
@@ -479,7 +526,8 @@ mod tests {
     #[test]
     fn advance_job_respects_zero_time_budget() {
         let bytes = include_bytes!("../../../tests/fixtures/tiny_vector.geojson").to_vec();
-        let mut job = parse_into_job(tiny_source(), "tiny-v1".to_string(), bytes).expect("parse");
+        let mut job =
+            parse_into_job(tiny_source(), "tiny-v1".to_string(), bytes, &[]).expect("parse");
         let limits = VectorBuildLimits {
             max_features_per_frame: 32,
             max_build_ms_per_frame: 0.0,
@@ -496,7 +544,8 @@ mod tests {
     #[test]
     fn tiny_fixture_map_pixels_smoke_aligns_with_map_to_world() {
         let bytes = include_bytes!("../../../tests/fixtures/tiny_vector.geojson").to_vec();
-        let mut job = parse_into_job(tiny_source(), "tiny-v1".to_string(), bytes).expect("parse");
+        let mut job =
+            parse_into_job(tiny_source(), "tiny-v1".to_string(), bytes, &[]).expect("parse");
         let limits = VectorBuildLimits {
             max_features_per_frame: 64,
             max_build_ms_per_frame: 20.0,
@@ -568,7 +617,7 @@ mod tests {
             .expect("vector source from metadata");
 
         let bytes = include_bytes!("../../../tests/fixtures/tiny_vector.geojson").to_vec();
-        let mut job = parse_into_job(source, "tiny-v1".to_string(), bytes).expect("parse");
+        let mut job = parse_into_job(source, "tiny-v1".to_string(), bytes, &[]).expect("parse");
         let limits = VectorBuildLimits {
             max_features_per_frame: 1,
             max_build_ms_per_frame: 8.0,
@@ -589,5 +638,46 @@ mod tests {
         assert_eq!(built.stats.progress, 1.0);
         assert_eq!(built.stats.feature_count, built.stats.features_processed);
         assert!(built.stats.mesh_count > 0);
+    }
+
+    #[test]
+    fn parse_into_job_filters_features_by_selected_feature_ids() {
+        let source = VectorSourceSpec {
+            url: "/tests/semantic.geojson".to_string(),
+            revision: "semantic-v1".to_string(),
+            geometry_space: GeometrySpace::MapPixels,
+            style_mode: StyleMode::FeaturePropertyPalette,
+            feature_id_property: Some("r".to_string()),
+            color_property: Some("c".to_string()),
+        };
+        let bytes = br#"{
+          "type":"FeatureCollection",
+          "features":[
+            {
+              "type":"Feature",
+              "properties":{"r":295,"c":[120,190,255]},
+              "geometry":{"type":"Polygon","coordinates":[[[5100,8200],[5120,8200],[5120,8220],[5100,8220],[5100,8200]]]}
+            },
+            {
+              "type":"Feature",
+              "properties":{"r":430,"c":[255,160,120]},
+              "geometry":{"type":"Polygon","coordinates":[[[5200,8300],[5220,8300],[5220,8320],[5200,8320],[5200,8300]]]}
+            }
+          ]
+        }"#
+        .to_vec();
+
+        let all = parse_into_job(
+            source.clone(),
+            "semantic-v1".to_string(),
+            bytes.clone(),
+            &[],
+        )
+        .expect("parse all");
+        let filtered = parse_into_job(source, "semantic-v1".to_string(), bytes, &[295])
+            .expect("parse filtered");
+
+        assert_eq!(all.stats.feature_count, 2);
+        assert_eq!(filtered.stats.feature_count, 1);
     }
 }
