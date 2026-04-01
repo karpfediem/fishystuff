@@ -204,13 +204,18 @@ test("map-page-live restore loads persisted bookmark entries into Datastar signa
     "fishystuff.map.bookmarks.v1": JSON.stringify(persistedBookmarks),
   });
   const signals = defaultSignals();
+  let readyDetail = null;
+  env.shell.addEventListener("fishymap-live-ready", (event) => {
+    readyDetail = event.detail;
+  });
 
   dispatchLiveInit(env, signals);
+  env.shell.dispatchEvent({ type: "fishymap-live-bootstrap-request" });
 
-  assert.equal(typeof env.shell.__fishystuffMapPage?.patchSignals, "function");
+  assert.equal(typeof readyDetail?.patchSignals, "function");
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
-  assert.equal(typeof env.shell.__fishystuffMapPage?.signalObject, "function");
-  assert.equal(env.shell.__fishystuffMapPage.signalObject(), signals);
+  assert.equal(typeof readyDetail?.signalObject, "function");
+  assert.equal(readyDetail.signalObject(), signals);
 });
 
 test("map-page-live restore loads shared fish state without the site-global helper", () => {
@@ -229,10 +234,15 @@ test("map-page-live restore loads shared fish state without the site-global help
 test("map-page-live exposes direct signal patching on the shell api", () => {
   const env = createContext();
   const signals = defaultSignals();
+  let readyDetail = null;
+  env.shell.addEventListener("fishymap-live-ready", (event) => {
+    readyDetail = event.detail;
+  });
 
   dispatchLiveInit(env, signals);
+  env.shell.dispatchEvent({ type: "fishymap-live-bootstrap-request" });
 
-  env.shell.__fishystuffMapPage.patchSignals({
+  readyDetail.patchSignals({
     _map_ui: {
       search: {
         query: "tuna",
@@ -252,10 +262,15 @@ test("map-page-live exposes direct signal patching on the shell api", () => {
 test("map-page-live persists durable map signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
+  let readyDetail = null;
+  env.shell.addEventListener("fishymap-live-ready", (event) => {
+    readyDetail = event.detail;
+  });
 
   dispatchLiveInit(env, signals);
+  env.shell.dispatchEvent({ type: "fishymap-live-bootstrap-request" });
 
-  env.shell.__fishystuffMapPage.patchSignals({
+  readyDetail.patchSignals({
     _map_ui: {
       windowUi: {
         search: { open: false, collapsed: true, x: 20, y: 30 },

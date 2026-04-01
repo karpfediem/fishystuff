@@ -119,17 +119,11 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
   });
 });
 
-test("waitForMapPageBootstrap waits for page bootstrap globals to appear", async () => {
-  const shell = {};
-  try {
-    const bootstrapPromise = waitForMapPageBootstrap({
-      shell,
-      timeoutMs: 200,
-      pollIntervalMs: 1,
-    });
-
-    setTimeout(() => {
-      shell.__fishystuffMapPage = {
+test("waitForMapPageBootstrap waits for the shell ready event", async () => {
+  const shell = new EventTarget();
+  shell.addEventListener("fishymap-live-bootstrap-request", () => {
+    shell.dispatchEvent(new CustomEvent("fishymap-live-ready", {
+      detail: {
         patchSignals() {},
         signalObject() {
           return {};
@@ -137,14 +131,16 @@ test("waitForMapPageBootstrap waits for page bootstrap globals to appear", async
         whenRestored() {
           return Promise.resolve();
         },
-      };
-    }, 5);
+      },
+    }));
+  });
 
-    const bootstrap = await bootstrapPromise;
-    assert.equal(typeof bootstrap.page.whenRestored, "function");
-  } finally {
-    delete shell.__fishystuffMapPage;
-  }
+  const bootstrap = await waitForMapPageBootstrap({
+    shell,
+    timeoutMs: 200,
+    pollIntervalMs: 1,
+  });
+  assert.equal(typeof bootstrap.page.whenRestored, "function");
 });
 
 test("createDeferredBridgeStateRefresher refreshes once on the next frame", () => {

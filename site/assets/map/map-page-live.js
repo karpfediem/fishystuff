@@ -34,7 +34,8 @@
   ]);
   const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
   const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
-  const SHELL_SIGNAL_API_KEY = "__fishystuffMapPage";
+  const FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT = "fishymap-live-bootstrap-request";
+  const FISHYMAP_LIVE_READY_EVENT = "fishymap-live-ready";
   const state = {
     shell: null,
     liveSignals: null,
@@ -45,6 +46,7 @@
     persistTimer: 0,
     signalPatchListenerBound: false,
     initListenerBound: false,
+    bootstrapRequestListenerBound: false,
     restoreResolved: false,
     restorePromise: null,
     resolveRestore: null,
@@ -566,7 +568,7 @@
     if (!shell) {
       return null;
     }
-    shell[SHELL_SIGNAL_API_KEY] = Object.freeze({
+    const api = Object.freeze({
       patchSignals,
       signalObject,
       whenRestored() {
@@ -574,12 +576,16 @@
       },
     });
     state.shell = shell;
-    return shell;
+    shell.dispatchEvent(new globalThis.CustomEvent(FISHYMAP_LIVE_READY_EVENT, {
+      detail: api,
+    }));
+    return api;
   }
 
   function connect(signals) {
     state.liveSignals = signals && typeof signals === "object" ? signals : null;
-    state.shell = ensureShellApi();
+    state.shell = resolveShell() || state.shell;
+    ensureShellApi();
     return state.liveSignals;
   }
 
@@ -680,6 +686,20 @@
     shell.addEventListener(FISHYMAP_LIVE_INIT_EVENT, handleLiveInit);
     state.shell = shell;
     state.initListenerBound = true;
+  }
+
+  function handleBootstrapRequest() {
+    ensureShellApi();
+  }
+
+  function bindBootstrapRequestListener() {
+    const shell = state.shell || resolveShell();
+    if (!shell || state.bootstrapRequestListenerBound) {
+      return;
+    }
+    shell.addEventListener(FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT, handleBootstrapRequest);
+    state.shell = shell;
+    state.bootstrapRequestListenerBound = true;
   }
 
   function applyPatch(signals, patch) {
@@ -843,4 +863,5 @@
 
   state.shell = resolveShell();
   bindInitListener();
+  bindBootstrapRequestListener();
 })();

@@ -4937,3 +4937,54 @@ Next:
 - continue trimming remaining custom bootstrap/orchestration around the live map shell
 - likely next target: reduce the `__fishystuffMapPage` bootstrap surface and the framework-like
   restore/persist logic in `map-page-live.js`
+
+## 2026-04-01: remove the live map shell bootstrap global
+
+The remaining bootstrap drift after the clean-slate map work was the shell bootstrap global used
+to hand `patchSignals`, `signalObject`, and `whenRestored` from `map-page-live.js` to
+`map-app-live.js`.
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - no longer writes `__fishystuffMapPage` to the shell
+  - now answers a narrow shell-local bootstrap request event:
+    - `fishymap-live-bootstrap-request`
+  - and emits a narrow shell-local ready event:
+    - `fishymap-live-ready`
+- `site/assets/map/map-app-live.js`
+  - no longer polls the shell for a bootstrap property
+  - now waits for the `fishymap-live-ready` response after dispatching a
+    `fishymap-live-bootstrap-request`
+- tests updated:
+  - `site/assets/map/map-page-live.test.mjs`
+  - `site/assets/map/map-app-live.test.mjs`
+
+Why this matters:
+
+- it removes another framework-like shell-global seam from the live map
+- bootstrap is now a narrow event handshake instead of a mutable public property
+- the live map keeps using direct Datastar patching after bootstrap, but the bootstrap itself is
+  now easier to reason about and less coupled
+
+Validation:
+
+- JS validation passed:
+  - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs`
+  - `node --check site/assets/map/map-page-live.js`
+  - `node --check site/assets/map/map-app-live.js`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-page-live.js`
+  - `/map/map-app-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Ready`
+  - no `__fishystuffMapPage`
+  - no `__fishystuffMapLiveBootstrap`
+  - patch picker still seeded correctly from the live runtime state
+
+Next:
+
+- continue reducing the framework-like restore/persist logic in `map-page-live.js`
+- after that, revisit which remaining panel controllers can be pushed closer to signal-owned DOM

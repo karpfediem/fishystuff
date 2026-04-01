@@ -116,19 +116,6 @@ function buildResetUiPatch() {
   };
 }
 
-function currentPageBootstrap(shell) {
-  const page = shell?.__fishystuffMapPage;
-  if (
-    !page ||
-    typeof page.patchSignals !== "function" ||
-    typeof page.whenRestored !== "function" ||
-    typeof page.signalObject !== "function"
-  ) {
-    return null;
-  }
-  return { shell, page };
-}
-
 function wait(delayMs) {
   return new Promise((resolve) => {
     globalThis.setTimeout(resolve, delayMs);
@@ -175,18 +162,55 @@ export async function waitForMapPageBootstrap({
   timeoutMs = 5000,
   pollIntervalMs = 16,
 } = {}) {
-  const deadline = Date.now() + timeoutMs;
-  let bootstrap = currentPageBootstrap(shell);
-  while (!bootstrap) {
-    if (Date.now() >= deadline) {
-      throw new Error("timed out waiting for map shell signal bootstrap");
-    }
-    await wait(pollIntervalMs);
-    bootstrap = currentPageBootstrap(
-      shell || globalThis.document?.getElementById?.("map-page-shell") || null,
-    );
+  const resolvedShell = shell || globalThis.document?.getElementById?.("map-page-shell") || null;
+  if (!resolvedShell || typeof resolvedShell.addEventListener !== "function") {
+    throw new Error("timed out waiting for map shell signal bootstrap");
   }
-  return bootstrap;
+
+  return await new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeoutMs;
+    let settled = false;
+    let timerId = 0;
+
+    function cleanup() {
+      settled = true;
+      resolvedShell.removeEventListener?.("fishymap-live-ready", handleReady);
+      if (timerId) {
+        globalThis.clearTimeout?.(timerId);
+        timerId = 0;
+      }
+    }
+
+    function handleReady(event) {
+      const page = event?.detail;
+      if (
+        !page ||
+        typeof page.patchSignals !== "function" ||
+        typeof page.whenRestored !== "function" ||
+        typeof page.signalObject !== "function"
+      ) {
+        return;
+      }
+      cleanup();
+      resolve({ shell: resolvedShell, page });
+    }
+
+    function requestBootstrap() {
+      if (settled) {
+        return;
+      }
+      if (Date.now() >= deadline) {
+        cleanup();
+        reject(new Error("timed out waiting for map shell signal bootstrap"));
+        return;
+      }
+      resolvedShell.dispatchEvent(new globalThis.CustomEvent("fishymap-live-bootstrap-request"));
+      timerId = globalThis.setTimeout?.(requestBootstrap, pollIntervalMs) || 0;
+    }
+
+    resolvedShell.addEventListener("fishymap-live-ready", handleReady);
+    requestBootstrap();
+  });
 }
 
 export function createDeferredBridgeStateRefresher({
