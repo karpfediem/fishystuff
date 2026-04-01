@@ -8,7 +8,6 @@ const {
   resolveBridgeSnapshot,
   startWhenDomReady,
   start,
-  waitForMapPageBootstrap,
 } = await import("./map-app-live.js");
 
 test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge events", () => {
@@ -117,30 +116,6 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
       },
     },
   });
-});
-
-test("waitForMapPageBootstrap waits for the shell ready event", async () => {
-  const shell = new EventTarget();
-  shell.addEventListener("fishymap-live-bootstrap-request", () => {
-    shell.dispatchEvent(new CustomEvent("fishymap-live-ready", {
-      detail: {
-        patchSignals() {},
-        signalObject() {
-          return {};
-        },
-        whenRestored() {
-          return Promise.resolve();
-        },
-      },
-    }));
-  });
-
-  const bootstrap = await waitForMapPageBootstrap({
-    shell,
-    timeoutMs: 200,
-    pollIntervalMs: 1,
-  });
-  assert.equal(typeof bootstrap.page.whenRestored, "function");
 });
 
 test("createDeferredBridgeStateRefresher refreshes once on the next frame", () => {

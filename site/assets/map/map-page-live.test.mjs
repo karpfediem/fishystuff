@@ -2,9 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT,
   FISHYMAP_LIVE_INIT_EVENT,
-  FISHYMAP_LIVE_READY_EVENT,
   createMapPageLive,
 } from "./map-page-live.js";
 
@@ -117,6 +115,7 @@ function createContext(localStorageInitial = {}, options = {}) {
     document,
     globalRef,
     localStorage,
+    pageLive,
     sessionStorage,
     shell,
     flushTimers() {
@@ -198,7 +197,7 @@ function dispatchLiveInit(env, detail) {
   });
 }
 
-test("map-page-live restore loads persisted bookmark entries into Datastar signals", () => {
+test("map-page-live restore loads persisted bookmark entries into Datastar signals", async () => {
   const persistedBookmarks = [
     { id: "bookmark:1", label: "Alpha", worldX: 10, worldZ: 20, note: "" },
   ];
@@ -206,32 +205,19 @@ test("map-page-live restore loads persisted bookmark entries into Datastar signa
     "fishystuff.map.bookmarks.v1": JSON.stringify(persistedBookmarks),
   });
   const signals = defaultSignals();
-  let readyDetail = null;
-  env.shell.addEventListener(FISHYMAP_LIVE_READY_EVENT, (event) => {
-    readyDetail = event.detail;
-  });
 
   dispatchLiveInit(env, signals);
-  env.shell.dispatchEvent({ type: FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT });
+  await env.pageLive.whenRestored();
 
-  assert.equal(typeof readyDetail?.patchSignals, "function");
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
-  assert.equal(typeof readyDetail?.signalObject, "function");
-  assert.equal(readyDetail.signalObject(), signals);
+  assert.equal(env.pageLive.signalObject(), signals);
 });
 
 test("map-page-live consumes shell-sticky initial signals when init event was missed", () => {
   const signals = defaultSignals();
   const env = createContext({}, { initialSignals: signals });
-  let readyDetail = null;
-  env.shell.addEventListener(FISHYMAP_LIVE_READY_EVENT, (event) => {
-    readyDetail = event.detail;
-  });
 
-  env.shell.dispatchEvent({ type: FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT });
-
-  assert.equal(typeof readyDetail?.patchSignals, "function");
-  assert.equal(readyDetail.signalObject(), signals);
+  assert.equal(env.pageLive.signalObject(), signals);
   assert.equal(signals._map_ui.windowUi.search.open, true);
   assert.equal("__fishymapInitialSignals" in env.shell, false);
 });
@@ -249,18 +235,13 @@ test("map-page-live restore loads shared fish state without the site-global help
   assert.deepEqual(signals._shared_fish.favouriteIds, [77]);
 });
 
-test("map-page-live exposes direct signal patching on the shell api", () => {
+test("map-page-live exposes direct signal patching on the page controller", () => {
   const env = createContext();
   const signals = defaultSignals();
-  let readyDetail = null;
-  env.shell.addEventListener(FISHYMAP_LIVE_READY_EVENT, (event) => {
-    readyDetail = event.detail;
-  });
 
   dispatchLiveInit(env, signals);
-  env.shell.dispatchEvent({ type: FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT });
 
-  readyDetail.patchSignals({
+  env.pageLive.patchSignals({
     _map_ui: {
       search: {
         query: "tuna",
@@ -280,15 +261,10 @@ test("map-page-live exposes direct signal patching on the shell api", () => {
 test("map-page-live persists durable map signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
-  let readyDetail = null;
-  env.shell.addEventListener(FISHYMAP_LIVE_READY_EVENT, (event) => {
-    readyDetail = event.detail;
-  });
 
   dispatchLiveInit(env, signals);
-  env.shell.dispatchEvent({ type: FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT });
 
-  readyDetail.patchSignals({
+  env.pageLive.patchSignals({
     _map_ui: {
       windowUi: {
         search: { open: false, collapsed: true, x: 20, y: 30 },

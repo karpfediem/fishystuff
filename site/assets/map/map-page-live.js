@@ -12,8 +12,6 @@ import {
 
 export const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
 export const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
-export const FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT = "fishymap-live-bootstrap-request";
-export const FISHYMAP_LIVE_READY_EVENT = "fishymap-live-ready";
 
 export function createMapPageLive({ globalRef = globalThis } = {}) {
   const state = {
@@ -26,7 +24,6 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     persistTimer: 0,
     signalPatchListenerBound: false,
     initListenerBound: false,
-    bootstrapRequestListenerBound: false,
     restoreResolved: false,
     restorePromise: null,
     resolveRestore: null,
@@ -53,29 +50,9 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     return signals && typeof signals === "object" ? signals : null;
   }
 
-  function ensureShellApi() {
-    const shell = state.shell || resolveShell();
-    if (!shell) {
-      return null;
-    }
-    const api = Object.freeze({
-      patchSignals,
-      signalObject,
-      whenRestored() {
-        return state.restorePromise;
-      },
-    });
-    state.shell = shell;
-    shell.dispatchEvent(new globalRef.CustomEvent(FISHYMAP_LIVE_READY_EVENT, {
-      detail: api,
-    }));
-    return api;
-  }
-
   function connect(signals) {
     state.liveSignals = signals && typeof signals === "object" ? signals : null;
     state.shell = resolveShell() || state.shell;
-    ensureShellApi();
     return state.liveSignals;
   }
 
@@ -136,20 +113,6 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     shell.addEventListener(FISHYMAP_LIVE_INIT_EVENT, handleLiveInit);
     state.shell = shell;
     state.initListenerBound = true;
-  }
-
-  function handleBootstrapRequest() {
-    ensureShellApi();
-  }
-
-  function bindBootstrapRequestListener() {
-    const shell = state.shell || resolveShell();
-    if (!shell || state.bootstrapRequestListenerBound) {
-      return;
-    }
-    shell.addEventListener(FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT, handleBootstrapRequest);
-    state.shell = shell;
-    state.bootstrapRequestListenerBound = true;
   }
 
   function applyPatch(signals, patch) {
@@ -224,7 +187,6 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   function start() {
     state.shell = resolveShell();
     bindInitListener();
-    bindBootstrapRequestListener();
     const initialSignals = consumeInitialSignals(state.shell);
     if (initialSignals) {
       restore(initialSignals);
@@ -238,6 +200,9 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     restore,
     signalObject,
     start,
+    whenRestored() {
+      return state.restorePromise;
+    },
     state,
   });
 }

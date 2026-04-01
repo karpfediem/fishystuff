@@ -5183,3 +5183,71 @@ Next:
 
 - keep collapsing `map-page-live.js` toward pure bootstrap/event wiring
 - then shift attention to the larger imperative islands still left in the live panel controllers
+
+## 2026-04-01: collapse live map page bootstrap into the app entry
+
+The live map still had one leftover bootstrap layer between `map-page-live` and
+`map-app-live`:
+
+- `map-page-live-entry.js`
+- `fishymap-live-bootstrap-request`
+- `fishymap-live-ready`
+
+That shell handshake was no longer buying anything. It just recreated a mini bootstrap bus after
+we had already removed the broader page-global bootstrap surface.
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - now imports `createMapPageLive(...)` directly
+  - creates and starts the page controller itself before waiting on `whenRestored()`
+  - no longer exports or depends on `waitForMapPageBootstrap(...)`
+- `site/assets/map/map-page-live.js`
+  - no longer exports or uses:
+    - `FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT`
+    - `FISHYMAP_LIVE_READY_EVENT`
+  - no longer dispatches a shell-ready API event
+  - now simply exposes the controller API directly from the module:
+    - `patchSignals(...)`
+    - `signalObject()`
+    - `whenRestored()`
+- removed:
+  - `site/assets/map/map-page-live-entry.js`
+- updated:
+  - `site/layouts/map.shtml`
+  - `site/zine.ziggy`
+  - map page/app tests
+
+Why this matters:
+
+- it removes another custom event seam around Datastar
+- the live map bootstrap is now simpler and easier to reason about:
+  - shell markup provides the sticky init payload
+  - `map-app-live` starts `map-page-live`
+  - `map-page-live` restores persisted signals
+  - `map-app-live` continues once restoration is done
+- it keeps the clean-slate path focused on modules and direct signal ownership, not internal
+  bootstrap choreography
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-live.js`
+  - `node --check site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-page-state.test.mjs site/assets/map/map-page-signals.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/`
+  - `/map/map-app-live.js`
+  - `/map/map-page-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - no `map-page-live-entry.js` script remains in the page
+  - `Settings Ready`
+  - `Layers 7`
+
+Next:
+
+- keep reducing the remaining page-controller orchestration in `map-page-live.js`
+- then move onto the larger imperative live panel controllers, starting with the smallest
+  high-value seam
