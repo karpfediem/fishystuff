@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { renderBookmarkManager } from "./map-bookmark-panel.js";
 import {
   dispatchShellSignalPatch,
@@ -202,7 +201,6 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
   constructor() {
     super();
     this._shell = null;
-    this._signalPatchTarget = null;
     this._rafId = 0;
     this._state = {
       lastPlacementKey: "",
@@ -546,11 +544,6 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
       bookmarkCancel: this.querySelector("#fishymap-bookmark-cancel"),
       bookmarksList: this.querySelector("#fishymap-bookmarks-list"),
     };
-    this._signalPatchTarget =
-      globalThis.document && typeof globalThis.document.addEventListener === "function"
-        ? globalThis.document
-        : this._shell;
-    this._signalPatchTarget?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.addEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
@@ -574,7 +567,6 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
   }
 
   disconnectedCallback() {
-    this._signalPatchTarget?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
@@ -599,7 +591,6 @@ export class FishyMapBookmarkPanelElement extends HTMLElementBase {
     }
     this._rafId = 0;
     this._shell = null;
-    this._signalPatchTarget = null;
     this._elements = null;
   }
 

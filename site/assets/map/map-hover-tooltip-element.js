@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import {
   buildHoverTooltipRows,
   patchTouchesHoverTooltipSignals,
@@ -152,7 +151,6 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     super();
     this._shell = null;
     this._canvas = null;
-    this._signalPatchTarget = null;
     this._rafId = 0;
     this._zoneCatalog = [];
     this._elements = null;
@@ -197,14 +195,9 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     this._elements = {
       hoverLayers,
     };
-    this._signalPatchTarget =
-      globalThis.document && typeof globalThis.document.addEventListener === "function"
-        ? globalThis.document
-        : this._shell;
     this._canvas?.addEventListener?.("pointermove", this._handleCanvasPointerMove);
     this._canvas?.addEventListener?.("pointerleave", this._handleCanvasPointerLeave);
     this._shell?.addEventListener?.("fishymap:hover-changed", this._handleHoverChanged);
-    this._signalPatchTarget?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this.render();
@@ -214,7 +207,6 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     this._canvas?.removeEventListener?.("pointermove", this._handleCanvasPointerMove);
     this._canvas?.removeEventListener?.("pointerleave", this._handleCanvasPointerLeave);
     this._shell?.removeEventListener?.("fishymap:hover-changed", this._handleHoverChanged);
-    this._signalPatchTarget?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     if (this._rafId && typeof globalThis.cancelAnimationFrame === "function") {
@@ -223,7 +215,6 @@ export class FishyMapHoverTooltipElement extends HTMLElementBase {
     this._rafId = 0;
     this._shell = null;
     this._canvas = null;
-    this._signalPatchTarget = null;
     this._elements = null;
   }
 

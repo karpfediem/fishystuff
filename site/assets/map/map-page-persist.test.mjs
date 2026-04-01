@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { createMapPagePersistController } from "./map-page-persist.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
@@ -141,10 +140,9 @@ test("map-page persist controller can subscribe to shell-local applied patch eve
   assert.equal(scheduled, 1);
 });
 
-test("map-page persist controller subscribes to native and shell-local patch events", () => {
+test("map-page persist controller subscribes to shell-local patch events only", () => {
   let scheduled = 0;
   const shellListeners = new Map();
-  const documentListeners = new Map();
   createMapPagePersistController({
     shell: {
       addEventListener(type, listener) {
@@ -152,11 +150,6 @@ test("map-page persist controller subscribes to native and shell-local patch eve
       },
     },
     globalRef: {
-      document: {
-        addEventListener(type, listener) {
-          documentListeners.set(type, listener);
-        },
-      },
       setTimeout() {
         scheduled += 1;
         return scheduled;
@@ -170,16 +163,6 @@ test("map-page persist controller subscribes to native and shell-local patch eve
   });
 
   assert.equal(typeof shellListeners.get(FISHYMAP_SIGNAL_PATCHED_EVENT), "function");
-  assert.equal(typeof documentListeners.get(DATASTAR_SIGNAL_PATCH_EVENT), "function");
-  documentListeners.get(DATASTAR_SIGNAL_PATCH_EVENT)?.({
-    detail: {
-      _map_ui: {
-        search: { query: "eel" },
-      },
-    },
-  });
-
-  assert.equal(scheduled, 1);
   shellListeners.get(FISHYMAP_SIGNAL_PATCHED_EVENT)?.({
     detail: {
       _map_ui: {
@@ -188,5 +171,5 @@ test("map-page persist controller subscribes to native and shell-local patch eve
     },
   });
 
-  assert.equal(scheduled, 2);
+  assert.equal(scheduled, 1);
 });

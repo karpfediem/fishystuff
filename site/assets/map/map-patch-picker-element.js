@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import {
   buildPatchPickerDefaultSignalPatch,
   buildPatchPickerStateBundle,
@@ -235,7 +234,6 @@ export class FishyMapPatchPickerElement extends HTMLElementBase {
     super();
     this._instanceId = nextPatchPickerId++;
     this._shell = null;
-    this._signalPatchTarget = null;
     this._rafId = 0;
     this._elements = null;
     this._handleSignalPatched = (event) => {
@@ -289,11 +287,6 @@ export class FishyMapPatchPickerElement extends HTMLElementBase {
       toPicker: this.querySelector(`#${ids.toPickerId}`),
       toCatalog: this.querySelector(`#${ids.toPickerId} [data-role='selected-content-catalog']`),
     };
-    this._signalPatchTarget =
-      globalThis.document && typeof globalThis.document.addEventListener === "function"
-        ? globalThis.document
-        : this._shell;
-    this._signalPatchTarget?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
     this._elements.fromInput?.addEventListener?.("input", this._handleFromInput);
@@ -302,7 +295,6 @@ export class FishyMapPatchPickerElement extends HTMLElementBase {
   }
 
   disconnectedCallback() {
-    this._signalPatchTarget?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
     this._elements?.fromInput?.removeEventListener?.("input", this._handleFromInput);
@@ -312,7 +304,6 @@ export class FishyMapPatchPickerElement extends HTMLElementBase {
     }
     this._rafId = 0;
     this._shell = null;
-    this._signalPatchTarget = null;
     this._elements = null;
   }
 

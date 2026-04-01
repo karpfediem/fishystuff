@@ -13,7 +13,6 @@ import {
   resolveSelectedSemanticFieldIdsByLayer,
   resolveSelectedZoneRgbs,
 } from "./map-search-state.js";
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
@@ -154,7 +153,6 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
   constructor() {
     super();
     this._shell = null;
-    this._signalPatchTarget = null;
     this._rafId = 0;
     this._zoneCatalog = [];
     this._elements = null;
@@ -243,11 +241,6 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this.addEventListener("click", this._handleClick);
     this.addEventListener("keydown", this._handleKeyDown);
     this._elements.searchWindow?.addEventListener?.("focusout", this._handleSearchWindowFocusOut);
-    this._signalPatchTarget =
-      globalThis.document && typeof globalThis.document.addEventListener === "function"
-        ? globalThis.document
-        : this._shell;
-    this._signalPatchTarget?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.addEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
@@ -258,7 +251,6 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this.removeEventListener("click", this._handleClick);
     this.removeEventListener("keydown", this._handleKeyDown);
     this._elements?.searchWindow?.removeEventListener?.("focusout", this._handleSearchWindowFocusOut);
-    this._signalPatchTarget?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
@@ -266,7 +258,6 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       globalThis.cancelAnimationFrame(this._rafId);
     }
     this._rafId = 0;
-    this._signalPatchTarget = null;
   }
 
   signals() {

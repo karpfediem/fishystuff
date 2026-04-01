@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
@@ -306,7 +305,6 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
   constructor() {
     super();
     this._shell = null;
-    this._signalPatchTarget = null;
     this._rafId = 0;
     this._elements = null;
     this._state = {
@@ -359,12 +357,7 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
       tabs: this.querySelector("#fishymap-zone-info-tabs"),
       panel: this.querySelector("#fishymap-zone-info-panel"),
     };
-    this._signalPatchTarget =
-      globalThis.document && typeof globalThis.document.addEventListener === "function"
-        ? globalThis.document
-        : this._shell;
     this.addEventListener("click", this._handleClick);
-    this._signalPatchTarget?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.addEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
@@ -374,7 +367,6 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
 
   disconnectedCallback() {
     this.removeEventListener("click", this._handleClick);
-    this._signalPatchTarget?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.(FISHYMAP_LIVE_INIT_EVENT, this._handleLiveInit);
@@ -383,7 +375,6 @@ export class FishyMapInfoPanelElement extends HTMLElementBase {
     }
     this._rafId = 0;
     this._shell = null;
-    this._signalPatchTarget = null;
     this._elements = null;
   }
 

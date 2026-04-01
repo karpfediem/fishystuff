@@ -5,7 +5,6 @@ import {
   createPersistedState,
 } from "./map-page-state.js";
 import { patchMatchesMapPagePersistFilter } from "./map-page-signals.js";
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
 export function createMapPagePersistController({
@@ -108,10 +107,6 @@ export function createMapPagePersistController({
   }
 
   if (listenToSignalPatches) {
-    const documentRef = globalRef.document;
-    if (documentRef && typeof documentRef.addEventListener === "function") {
-      documentRef.addEventListener(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-    }
     if (shell && typeof shell.addEventListener === "function") {
       shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, handleSignalPatch);
     }

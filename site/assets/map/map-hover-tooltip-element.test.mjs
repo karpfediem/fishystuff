@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
@@ -235,7 +234,7 @@ test("FishyMapHoverTooltipElement hides the tooltip on pointerleave", async () =
   tooltip.render();
 });
 
-test("FishyMapHoverTooltipElement rerenders on native and shell-local patch events", async () => {
+test("FishyMapHoverTooltipElement rerenders on shell-local patch events", async () => {
   const { FishyMapHoverTooltipElement } = await loadModule();
   const { shell, canvas, tooltip } = createShellAndTooltip(FishyMapHoverTooltipElement);
   const signals = createSignals();
@@ -257,8 +256,8 @@ test("FishyMapHoverTooltipElement rerenders on native and shell-local patch even
   assert.doesNotMatch(layers.innerHTML, /\(R430\|Hakoven Islands\)/);
 
   signals._map_ui.layers.hoverFactsVisibleByLayer.regions.origin_region = true;
-  globalThis.document.dispatchEvent(
-    new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
+  shell.dispatchEvent(
+    new CustomEvent(FISHYMAP_SIGNAL_PATCHED_EVENT, {
       detail: {
         _map_ui: {
           layers: {

@@ -6699,3 +6699,51 @@ Validation:
   - `site/assets/map/map-search-panel-element.js`
   - `site/assets/map/map-search-state.js`
   - `site/assets/map/map-search-panel.js`
+
+## 2026-04-01: narrow live map custom-element listeners to the shell-local patch seam
+
+After the panel migrations, the live map custom elements still listened to two different patch streams:
+
+- the global `datastar-signal-patch` event
+- the shell-local `fishymap:signal-patched` event
+
+That was broader than necessary because the shell already rebroadcasts a filtered map-specific patch event from:
+
+- `#map-page-shell[data-on-signal-patch-filter=...]`
+
+What changed:
+
+- removed the document-level `datastar-signal-patch` listener path from:
+  - `site/assets/map/map-search-panel-element.js`
+  - `site/assets/map/map-info-panel-element.js`
+  - `site/assets/map/map-bookmark-panel-element.js`
+  - `site/assets/map/map-layer-panel-element.js`
+  - `site/assets/map/map-hover-tooltip-element.js`
+  - `site/assets/map/map-patch-picker-element.js`
+- removed the document-level listener from:
+  - `site/assets/map/map-page-persist.js`
+- updated the affected tests:
+  - `site/assets/map/map-hover-tooltip-element.test.mjs`
+  - `site/assets/map/map-page-persist.test.mjs`
+
+Why this is closer to Datastar:
+
+- the map subtree now reacts through one narrow shell-local patch seam instead of both a global and a local one
+- page persistence is now scoped to the map shell’s filtered patch stream instead of the whole document
+- the custom elements remain signal-driven, but with less framework-like event duplication
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-search-panel-element.js site/assets/map/map-info-panel-element.js site/assets/map/map-bookmark-panel-element.js site/assets/map/map-layer-panel-element.js site/assets/map/map-hover-tooltip-element.js site/assets/map/map-patch-picker-element.js site/assets/map/map-page-persist.js`
+  - `node --test site/assets/map/map-search-panel-element.test.mjs site/assets/map/map-info-panel-element.test.mjs site/assets/map/map-bookmark-panel-element.test.mjs site/assets/map/map-layer-panel-element.test.mjs site/assets/map/map-patch-picker-element.test.mjs site/assets/map/map-hover-tooltip-element.test.mjs site/assets/map/map-page-persist.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for:
+  - `/map/map-search-panel-element.js`
+  - `/map/map-hover-tooltip-element.js`
+  - `/map/map-page-persist.js`
+- live DevTools validation on `/map/` confirmed:
+  - all custom elements still defined and mounted after reload
+  - `Layers 7` and `Ready` still rendered correctly
+  - no new console errors appeared

@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import {
   buildLayerPanelStateBundle,
   patchTouchesLayerPanelSignals,
@@ -178,7 +177,6 @@ export class FishyMapLayerPanelElement extends HTMLElementBase {
   constructor() {
     super();
     this._shell = null;
-    this._signalPatchTarget = null;
     this._rafId = 0;
     this._zoneCatalog = [];
     this._state = {
@@ -501,11 +499,6 @@ export class FishyMapLayerPanelElement extends HTMLElementBase {
     this.addEventListener("dragend", this._handleDragEnd);
     this.addEventListener("dragleave", this._handleDragLeave);
     this._canvas?.addEventListener?.("pointerleave", this._handleCanvasPointerLeave);
-    this._signalPatchTarget =
-      globalThis.document && typeof globalThis.document.addEventListener === "function"
-        ? globalThis.document
-        : this._shell;
-    this._signalPatchTarget?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.addEventListener?.("fishymap:hover-changed", this._handleHoverChanged);
@@ -524,7 +517,6 @@ export class FishyMapLayerPanelElement extends HTMLElementBase {
     this.removeEventListener("dragend", this._handleDragEnd);
     this.removeEventListener("dragleave", this._handleDragLeave);
     this._canvas?.removeEventListener?.("pointerleave", this._handleCanvasPointerLeave);
-    this._signalPatchTarget?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
     this._shell?.removeEventListener?.("fishymap:hover-changed", this._handleHoverChanged);
