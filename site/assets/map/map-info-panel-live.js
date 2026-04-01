@@ -94,19 +94,44 @@ function factMarkup(fact) {
   `;
 }
 
-function normalizedGradeTone(value) {
-  const tone = trimString(value).toLowerCase();
-  return tone || "unknown";
+function itemGradeTone(grade, isPrize) {
+  const resolver = globalThis.window?.__fishystuffItemPresentation?.resolveGradeTone;
+  if (typeof resolver === "function") {
+    return resolver(grade, isPrize);
+  }
+  const normalized = trimString(grade).toLowerCase();
+  if (isPrize === true || normalized === "prize" || normalized === "red") {
+    return "red";
+  }
+  switch (normalized) {
+    case "rare":
+    case "yellow":
+      return "yellow";
+    case "highquality":
+    case "high_quality":
+    case "high-quality":
+    case "blue":
+      return "blue";
+    case "general":
+    case "green":
+      return "green";
+    case "trash":
+    case "white":
+      return "white";
+    default:
+      return "unknown";
+  }
 }
 
 function fishIdentityMarkup(entry) {
   const name = trimString(entry?.label) || "Unknown fish";
-  const gradeTone = normalizedGradeTone(entry?.iconGradeTone);
+  const gradeTone = itemGradeTone(entry?.iconGradeTone, entry?.isPrize === true);
+  const toneClass = `fishy-item-grade-${escapeHtml(gradeTone)}`;
   const iconUrl = trimString(entry?.iconUrl);
   const iconMarkup = iconUrl
-    ? `<span class="fishymap-item-icon-frame grade-${escapeHtml(gradeTone)} size-7"><img class="fishymap-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
-    : `<span class="fishymap-item-icon-frame grade-${escapeHtml(gradeTone)} size-7"><span class="fishymap-item-icon-fallback">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
-  return `<span class="inline-flex min-w-0 items-center gap-2">${iconMarkup}<span class="truncate font-semibold text-base-content">${escapeHtml(name)}</span></span>`;
+    ? `<span class="fishy-item-icon-frame is-sm ${toneClass}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
+    : `<span class="fishy-item-icon-frame is-sm ${toneClass}"><span class="fishy-item-icon-fallback ${toneClass}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
+  return `<span class="fishy-item-row fishy-item-row--surface ${toneClass}">${iconMarkup}<span class="fishy-item-label truncate">${escapeHtml(name)}</span></span>`;
 }
 
 function zoneLootMetricTone(entry) {
@@ -136,7 +161,7 @@ function zoneLootRowMarkup(entry) {
             : ""
         }
       </div>
-      <div class="min-w-0">${fishIdentityMarkup(entry)}</div>
+      <div class="fishymap-zone-loot-item">${fishIdentityMarkup(entry)}</div>
     </div>
   `;
 }

@@ -119,17 +119,24 @@ body {
     --fishy-item-grade-yellow: var(--color-warning, #f59e0b);
     --fishy-item-grade-blue: var(--color-info, #6b8afd);
     --fishy-item-grade-green: var(--color-success, #2f855a);
-    --fishy-item-grade-white: var(--color-base-content, #1f2937);
+    --fishy-item-grade-white: color-mix(in oklab, var(--color-base-content, #1f2937) 78%, var(--color-base-100, #fffdf4) 22%);
     --fishy-item-grade-unknown: var(--color-neutral, #64748b);
 }
 
 :where(
     .fishy-item-row,
     .fishy-item-icon-frame,
-    .fishy-item-label,
     .fishy-item-icon-fallback
 ) {
     --fishy-item-grade-color: var(--fishy-item-grade-unknown);
+}
+
+:where(
+    .fishy-item-row,
+    .fishy-item-icon-frame
+) {
+    --fishy-item-surface-fill: color-mix(in oklab, var(--color-base-100, #fffdf4) 90%, var(--fishy-item-grade-color) 10%);
+    --fishy-item-surface-stroke: color-mix(in oklab, var(--fishy-item-grade-color) 62%, var(--color-base-300, #d6d3d1) 38%);
 }
 
 :where(.fishy-item-grade-red) {
@@ -164,10 +171,10 @@ body {
 }
 
 :where(.fishy-item-row--surface) {
-    padding: 0.2rem 0.5rem 0.2rem 0.28rem;
-    border-radius: 9999px;
-    background: color-mix(in oklab, var(--color-base-100, #fffdf4) 88%, var(--color-base-200, #efe7d6) 12%);
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-base-content, #1f2937) 10%, var(--color-base-300, #d6d3d1) 90%);
+    padding: 0.24rem 0.56rem 0.24rem 0.32rem;
+    border: 1px solid var(--fishy-item-surface-stroke);
+    border-radius: calc(var(--radius-box, 1rem) * 0.8);
+    background: var(--fishy-item-surface-fill);
 }
 
 :where(.fishy-item-icon-frame) {
@@ -189,8 +196,7 @@ body {
         var(--color-base-100, #fffdf4) 18%
     );
     border-radius: 34%;
-    background: color-mix(in oklab, var(--color-base-100, #fffdf4) 90%, var(--fishy-item-grade-color) 10%);
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-base-100, #fffdf4) 72%, transparent);
+    background: var(--fishy-item-surface-fill);
 }
 
 :where(.fishy-item-icon-frame.is-xs) {
@@ -240,5 +246,5 @@ body {
 
 :where(.fishy-item-label) {
     min-width: 0;
-    color: color-mix(in oklab, var(--fishy-item-grade-color) 82%, var(--color-base-content, #1f2937) 18%);
+    color: var(--fishy-item-grade-color, var(--fishy-item-grade-unknown));
 }

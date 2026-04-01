@@ -60,7 +60,7 @@ function gradeRingColor(tone) {
         case "green":
             return "color-mix(in oklab, var(--color-success) 76%, var(--color-base-content) 24%)";
         case "white":
-            return "color-mix(in oklab, var(--color-base-content) 64%, var(--color-base-300) 36%)";
+            return "var(--color-base-content)";
         default:
             return "color-mix(in oklab, var(--color-neutral) 72%, var(--color-base-content) 28%)";
     }

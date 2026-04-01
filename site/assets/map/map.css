@@ -869,6 +869,15 @@ body:has(#map-page-shell) #content > .site-content-clip {
   min-width: 0;
 }
 
+.fishymap-zone-loot-item {
+  display: flex;
+  min-width: 0;
+}
+
+.fishymap-zone-loot-item > .fishy-item-row {
+  max-width: 100%;
+}
+
 .fishymap-zone-loot-metric {
   position: relative;
   display: flex;
