@@ -77,8 +77,6 @@ Multilingual {
     "map/map-info-state.js",
     "map/map-info-panel-live.js",
     "map/map-zone-loot-summary.js",
-    "map/map-zone-info-state.js",
-    "map/map-zone-info-panel-live.js",
     "map/map-zone-catalog.js",
     "map/map-search-contract.js",
     "map/map-search-projection.js",

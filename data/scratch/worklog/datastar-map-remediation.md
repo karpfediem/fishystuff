@@ -5558,3 +5558,56 @@ Next:
   - `map-page-live.js`
 - or, if we stay in panel land:
   - `map-info-panel-live.js`
+
+## 2026-04-01: delete the dead zone-info controller branch
+
+There was still a fully separate zone-info controller branch published in site assets:
+
+- `site/assets/map/map-zone-info-panel-live.js`
+- `site/assets/map/map-zone-info-state.js`
+
+But by this point the live shell already used:
+
+- `site/assets/map/map-info-panel-live.js`
+- `site/assets/map/map-info-state.js`
+
+The older zone-info branch had become dead weight:
+
+- not imported by the live app
+- not referenced by the shell
+- still published in `site/zine.ziggy`
+- still carrying an alternate controller/state path that no longer matched the real live map
+
+What changed:
+
+- removed:
+  - `site/assets/map/map-zone-info-panel-live.js`
+  - `site/assets/map/map-zone-info-state.js`
+  - `site/assets/map/map-zone-info-state.test.mjs`
+- removed their static asset publication entries from:
+  - `site/zine.ziggy`
+
+Why this matters:
+
+- it narrows the live map surface to the controller/state path that is actually in use
+- it reduces dead code that could otherwise confuse future remediation work
+- it keeps the next cleanup focused on the real remaining seam:
+  - `map-page-live.js`
+  - or the still-dirty live info panel work
+
+Validation:
+
+- confirmed no remaining references:
+  - `rg -n "map-zone-info-panel-live|map-zone-info-state|createMapZoneInfoPanelController|buildZoneInfoViewModel|patchTouchesZoneInfoSignals" site data/scratch/worklog`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- live DevTools reload on `/map/` still confirmed:
+  - `Search` window present
+  - `Info` window present
+  - `Layers 7`
+
+Next:
+
+- keep reducing the real remaining clean-slate drift
+- highest-value clean target remains:
+  - `map-page-live.js`
