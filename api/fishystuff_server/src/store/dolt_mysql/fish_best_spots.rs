@@ -10,6 +10,9 @@ use crate::store::{validate_dolt_ref, FishLang};
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::{DoltMySqlStore, SOURCE_KIND_RANKING};
 
+const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
+const MANUAL_COMMUNITY_GUESS_SOURCE_ID: &str = "manual_community_zone_fish_guess";
+
 #[derive(Debug, Clone, Copy)]
 struct CommunityPrizeGuessMeta {
     slot_idx: u8,
@@ -45,6 +48,13 @@ fn fish_group_rank(label: &str) -> u8 {
         "Trash" => 4,
         _ => u8::MAX,
     }
+}
+
+fn is_community_guess_source_id(source_id: &str) -> bool {
+    matches!(
+        source_id,
+        COMMUNITY_PRIZE_GUESS_SOURCE_ID | MANUAL_COMMUNITY_GUESS_SOURCE_ID
+    )
 }
 
 fn parse_community_prize_guess_notes(notes: &str) -> Option<CommunityPrizeGuessMeta> {
@@ -163,7 +173,7 @@ impl DoltMySqlStore {
             let Ok(zone_rgb_u32) = u32::try_from(zone_rgb_u32) else {
                 continue;
             };
-            if source_id != "community_prize_fish_guesses_workbook" {
+            if !is_community_guess_source_id(&source_id) {
                 continue;
             }
             let (zone_rgb, zone_name) = zone_meta(zone_rgb_u32);

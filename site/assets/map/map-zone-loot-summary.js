@@ -67,6 +67,9 @@ export function normalizeZoneLootSummary(raw) {
             dropRateText: trimString(row.dropRateText),
             dropRateSourceKind: trimString(row.dropRateSourceKind),
             dropRateTooltip: trimString(row.dropRateTooltip),
+            presenceText: trimString(row.presenceText),
+            presenceSourceKind: trimString(row.presenceSourceKind),
+            presenceTooltip: trimString(row.presenceTooltip),
           }))
       : [],
   };

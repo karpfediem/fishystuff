@@ -27,6 +27,10 @@ pub struct CalculatorZoneLootEvidence {
     pub normalized_rate: Option<f64>,
     pub status: Option<String>,
     pub claim_count: Option<u32>,
+    pub source_id: Option<String>,
+    pub slot_idx: Option<u8>,
+    pub item_main_group_key: Option<i64>,
+    pub subgroup_key: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default)]

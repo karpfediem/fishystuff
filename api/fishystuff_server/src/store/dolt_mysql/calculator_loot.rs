@@ -19,6 +19,7 @@ fn calculator_loot_item_icon_path(icon_id: i32) -> String {
 }
 
 const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
+const MANUAL_COMMUNITY_GUESS_SOURCE_ID: &str = "manual_community_zone_fish_guess";
 const GROUP_RATE_SCALE: f64 = 1_000_000.0;
 const COMBINED_GROUP_RATE_SCALE: f64 = GROUP_RATE_SCALE * GROUP_RATE_SCALE;
 
@@ -29,26 +30,122 @@ struct CommunityPrizeGuessMeta {
     subgroup_key: Option<i64>,
 }
 
-fn parse_community_prize_guess_notes(notes: &str) -> Option<CommunityPrizeGuessMeta> {
-    let mut slot_idx = None;
-    let mut guessed_rate = None;
-    let mut subgroup_key = None;
+#[derive(Debug, Clone, Copy, Default)]
+struct CommunitySupportMeta {
+    slot_idx: Option<u8>,
+    guessed_rate: Option<f64>,
+    item_main_group_key: Option<i64>,
+    subgroup_key: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+struct CommunityPresenceMeta {
+    source_id: String,
+    item_id: i32,
+    support_status: String,
+    claim_count: u32,
+    slot_idx: Option<u8>,
+    item_main_group_key: Option<i64>,
+    subgroup_key: Option<i64>,
+}
+
+fn parse_community_support_notes(notes: &str) -> CommunitySupportMeta {
+    let mut meta = CommunitySupportMeta::default();
     for part in notes.split(';') {
-        let (key, value) = part.split_once('=')?;
+        let Some((key, value)) = part.split_once('=') else {
+            continue;
+        };
         match key.trim() {
-            "slot_idx" => slot_idx = value.trim().parse::<u8>().ok(),
-            "guessed_rate" => guessed_rate = value.trim().parse::<f64>().ok(),
-            "subgroup_key" => subgroup_key = value.trim().parse::<i64>().ok(),
+            "slot_idx" => {
+                meta.slot_idx = value.trim().parse::<u8>().ok().filter(|value| *value > 0)
+            }
+            "guessed_rate" => {
+                meta.guessed_rate = value
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
+                    .filter(|value| *value > 0.0)
+            }
+            "item_main_group_key" | "main_group_key" => {
+                meta.item_main_group_key =
+                    value.trim().parse::<i64>().ok().filter(|value| *value > 0)
+            }
+            "item_sub_group_key" | "subgroup_key" => {
+                meta.subgroup_key = value.trim().parse::<i64>().ok().filter(|value| *value > 0)
+            }
             _ => {}
         }
     }
-    let slot_idx = slot_idx?;
-    let guessed_rate = guessed_rate?;
+    meta
+}
+
+fn parse_community_prize_guess_notes(notes: &str) -> Option<CommunityPrizeGuessMeta> {
+    let meta = parse_community_support_notes(notes);
+    let slot_idx = meta.slot_idx?;
+    let guessed_rate = meta.guessed_rate?;
     (guessed_rate > 0.0).then_some(CommunityPrizeGuessMeta {
         slot_idx,
         guessed_rate,
-        subgroup_key,
+        subgroup_key: meta.subgroup_key,
     })
+}
+
+fn is_community_guess_source_id(source_id: &str) -> bool {
+    matches!(
+        source_id,
+        COMMUNITY_PRIZE_GUESS_SOURCE_ID | MANUAL_COMMUNITY_GUESS_SOURCE_ID
+    )
+}
+
+fn community_presence_scope(meta: &CommunityPresenceMeta) -> &'static str {
+    if meta.subgroup_key.is_some() {
+        "subgroup"
+    } else if meta.item_main_group_key.is_some() || meta.slot_idx.is_some() {
+        "group"
+    } else {
+        "zone"
+    }
+}
+
+fn community_presence_specificity(meta: &CommunityPresenceMeta) -> u8 {
+    match community_presence_scope(meta) {
+        "subgroup" => 3,
+        "group" => 2,
+        _ => 1,
+    }
+}
+
+fn community_status_priority(status: &str) -> u8 {
+    match status.trim().to_ascii_lowercase().as_str() {
+        "confirmed" => 2,
+        "unconfirmed" => 1,
+        "data_incomplete" => 0,
+        _ => 0,
+    }
+}
+
+fn community_presence_matches_row(
+    meta: &CommunityPresenceMeta,
+    slot_idx: u8,
+    item_main_group_key: i64,
+    subgroup_keys: &[i64],
+) -> bool {
+    if let Some(expected_slot_idx) = meta.slot_idx {
+        if expected_slot_idx != slot_idx {
+            return false;
+        }
+    }
+    if let Some(expected_item_main_group_key) = meta.item_main_group_key {
+        if expected_item_main_group_key != item_main_group_key {
+            return false;
+        }
+    }
+    if let Some(expected_subgroup_key) = meta.subgroup_key {
+        if !subgroup_keys.contains(&expected_subgroup_key) {
+            return false;
+        }
+    }
+    true
 }
 
 fn apply_community_guess_weights(
@@ -194,6 +291,7 @@ impl DoltMySqlStore {
         if slot_rows.is_empty() {
             return Ok(Vec::new());
         }
+        let slot_main_group_by_idx = slot_rows.iter().copied().collect::<HashMap<u8, i64>>();
 
         let main_group_id_csv = slot_rows
             .iter()
@@ -306,6 +404,7 @@ impl DoltMySqlStore {
         }
 
         let mut aggregate_weights = HashMap::<(u8, i32), f64>::new();
+        let mut slot_item_subgroups = HashMap::<(u8, i32), Vec<i64>>::new();
         for (slot_idx, item_main_group_key) in &slot_rows {
             let Some(options) = subgroup_options.get(item_main_group_key) else {
                 continue;
@@ -317,6 +416,12 @@ impl DoltMySqlStore {
                 for (item_id, variant_rate) in variants {
                     let weight = (*select_rate as f64) * (*variant_rate as f64);
                     *aggregate_weights.entry((*slot_idx, *item_id)).or_default() += weight;
+                    let subgroup_keys = slot_item_subgroups
+                        .entry((*slot_idx, *item_id))
+                        .or_default();
+                    if !subgroup_keys.contains(subgroup_key) {
+                        subgroup_keys.push(*subgroup_key);
+                    }
                 }
             }
         }
@@ -332,8 +437,9 @@ impl DoltMySqlStore {
             }
         }
 
-        let mut community_presence_by_item = HashMap::<i32, (String, u32)>::new();
-        let mut community_guess_by_key = HashMap::<(u8, i32), CommunityPrizeGuessMeta>::new();
+        let mut community_presence_rows = Vec::<CommunityPresenceMeta>::new();
+        let mut community_guess_by_key =
+            HashMap::<(u8, i32), (String, CommunityPrizeGuessMeta)>::new();
         let community_query = format!(
             "SELECT source_id, CAST(item_id AS SIGNED), support_status, CAST(claim_count AS SIGNED), notes \
              FROM community_zone_fish_support{as_of} \
@@ -349,26 +455,40 @@ impl DoltMySqlStore {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
-            if source_id == COMMUNITY_PRIZE_GUESS_SOURCE_ID {
+            if is_community_guess_source_id(&source_id) {
                 let Some(notes) = normalize_optional_string(notes) else {
                     continue;
                 };
                 let Some(guess) = parse_community_prize_guess_notes(&notes) else {
                     continue;
                 };
-                community_guess_by_key.insert((guess.slot_idx, item_id), guess);
+                community_guess_by_key.insert((guess.slot_idx, item_id), (source_id, guess));
                 continue;
             }
+            let meta = notes
+                .as_deref()
+                .map(parse_community_support_notes)
+                .unwrap_or_default();
             let claim_count = u32::try_from(claim_count.max(0)).unwrap_or(u32::MAX);
-            community_presence_by_item.insert(
+            community_presence_rows.push(CommunityPresenceMeta {
+                source_id,
                 item_id,
-                (support_status.trim().to_ascii_lowercase(), claim_count),
-            );
+                support_status: support_status.trim().to_ascii_lowercase(),
+                claim_count,
+                slot_idx: meta.slot_idx,
+                item_main_group_key: meta.item_main_group_key,
+                subgroup_key: meta.subgroup_key,
+            });
         }
+
+        let community_guess_meta_by_key = community_guess_by_key
+            .iter()
+            .map(|(key, (_, guess))| (*key, *guess))
+            .collect::<HashMap<_, _>>();
 
         let effective_weights = apply_community_guess_weights(
             &aggregate_weights,
-            &community_guess_by_key,
+            &community_guess_meta_by_key,
             &slot_subgroup_select_rate,
             &slot_option_count,
         );
@@ -379,10 +499,6 @@ impl DoltMySqlStore {
         let mut slot_totals = HashMap::<u8, f64>::new();
         for ((slot_idx, _), weight) in &effective_weights {
             *slot_totals.entry(*slot_idx).or_default() += *weight;
-        }
-        let mut slot_membership_count = HashMap::<i32, usize>::new();
-        for (_, item_id) in effective_weights.keys() {
-            *slot_membership_count.entry(*item_id).or_default() += 1;
         }
 
         let item_id_csv = effective_weights
@@ -468,9 +584,14 @@ impl DoltMySqlStore {
                         normalized_rate: Some(db_weight / total_weight),
                         status: Some("best_effort".to_string()),
                         claim_count: None,
+                        slot_idx: Some(slot_idx),
+                        item_main_group_key: slot_main_group_by_idx.get(&slot_idx).copied(),
+                        ..CalculatorZoneLootEvidence::default()
                     });
                 }
-                if let Some(guess) = community_guess_by_key.get(&(slot_idx, item_id)) {
+                if let Some((guess_source_id, guess)) =
+                    community_guess_by_key.get(&(slot_idx, item_id))
+                {
                     let guess_weight = slot_subgroup_select_rate
                         .get(&(slot_idx, guess.subgroup_key.unwrap_or_default()))
                         .copied()
@@ -505,29 +626,57 @@ impl DoltMySqlStore {
                         normalized_rate: guess_weight.map(|weight| weight / total_weight),
                         status: Some("guessed".to_string()),
                         claim_count: None,
+                        source_id: Some(guess_source_id.clone()),
+                        slot_idx: Some(guess.slot_idx),
+                        item_main_group_key: slot_main_group_by_idx.get(&slot_idx).copied(),
+                        subgroup_key: guess.subgroup_key,
+                        ..CalculatorZoneLootEvidence::default()
                     });
                 }
-                if let Some((support_status, claim_count)) =
-                    community_presence_by_item.get(&item_id)
-                {
-                    let scope = if slot_membership_count
-                        .get(&item_id)
-                        .copied()
-                        .unwrap_or_default()
-                        <= 1
-                    {
-                        "group_inferred"
-                    } else {
-                        "zone"
-                    };
+                let item_main_group_key = slot_main_group_by_idx
+                    .get(&slot_idx)
+                    .copied()
+                    .unwrap_or_default();
+                let subgroup_keys = slot_item_subgroups
+                    .get(&(slot_idx, item_id))
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                let mut matching_presence = community_presence_rows
+                    .iter()
+                    .filter(|meta| {
+                        meta.item_id == item_id
+                            && community_presence_matches_row(
+                                meta,
+                                slot_idx,
+                                item_main_group_key,
+                                subgroup_keys,
+                            )
+                    })
+                    .collect::<Vec<_>>();
+                matching_presence.sort_by(|left, right| {
+                    community_presence_specificity(right)
+                        .cmp(&community_presence_specificity(left))
+                        .then_with(|| {
+                            community_status_priority(&right.support_status)
+                                .cmp(&community_status_priority(&left.support_status))
+                        })
+                        .then_with(|| right.claim_count.cmp(&left.claim_count))
+                        .then_with(|| left.source_id.cmp(&right.source_id))
+                });
+                for meta in matching_presence {
                     evidence.push(CalculatorZoneLootEvidence {
                         source_family: "community".to_string(),
                         claim_kind: "presence".to_string(),
-                        scope: scope.to_string(),
+                        scope: community_presence_scope(meta).to_string(),
                         rate: None,
                         normalized_rate: None,
-                        status: Some(support_status.clone()),
-                        claim_count: Some(*claim_count),
+                        status: Some(meta.support_status.clone()),
+                        claim_count: Some(meta.claim_count),
+                        source_id: Some(meta.source_id.clone()),
+                        slot_idx: meta.slot_idx,
+                        item_main_group_key: meta.item_main_group_key,
+                        subgroup_key: meta.subgroup_key,
+                        ..CalculatorZoneLootEvidence::default()
                     });
                 }
                 Some(CalculatorZoneLootEntry {
@@ -564,7 +713,10 @@ mod tests {
     use std::collections::HashMap;
 
     use super::{
-        apply_community_guess_weights, parse_community_prize_guess_notes, CommunityPrizeGuessMeta,
+        apply_community_guess_weights, community_presence_matches_row, community_presence_scope,
+        is_community_guess_source_id, parse_community_prize_guess_notes,
+        parse_community_support_notes, CommunityPresenceMeta, CommunityPrizeGuessMeta,
+        MANUAL_COMMUNITY_GUESS_SOURCE_ID,
     };
 
     #[test]
@@ -582,6 +734,82 @@ mod tests {
     fn parse_community_prize_guess_notes_rejects_missing_fields() {
         assert!(parse_community_prize_guess_notes("guessed_rate=0.02").is_none());
         assert!(parse_community_prize_guess_notes("slot_idx=1").is_none());
+    }
+
+    #[test]
+    fn manual_community_guess_source_id_is_recognized() {
+        assert!(is_community_guess_source_id(
+            MANUAL_COMMUNITY_GUESS_SOURCE_ID
+        ));
+    }
+
+    #[test]
+    fn parse_community_support_notes_reads_structural_keys() {
+        let meta =
+            parse_community_support_notes("slot_idx=1;item_main_group_key=9001;subgroup_key=11054");
+
+        assert_eq!(meta.slot_idx, Some(1));
+        assert_eq!(meta.item_main_group_key, Some(9001));
+        assert_eq!(meta.subgroup_key, Some(11054));
+    }
+
+    #[test]
+    fn community_presence_scope_prefers_explicit_group_lineage() {
+        let zone = CommunityPresenceMeta {
+            source_id: "community_sheet".to_string(),
+            item_id: 8201,
+            support_status: "confirmed".to_string(),
+            claim_count: 2,
+            slot_idx: None,
+            item_main_group_key: None,
+            subgroup_key: None,
+        };
+        let group = CommunityPresenceMeta {
+            item_main_group_key: Some(9001),
+            ..zone.clone()
+        };
+        let subgroup = CommunityPresenceMeta {
+            slot_idx: Some(1),
+            subgroup_key: Some(11054),
+            ..zone.clone()
+        };
+
+        assert_eq!(community_presence_scope(&zone), "zone");
+        assert_eq!(community_presence_scope(&group), "group");
+        assert_eq!(community_presence_scope(&subgroup), "subgroup");
+    }
+
+    #[test]
+    fn community_presence_match_requires_structural_overlap() {
+        let meta = CommunityPresenceMeta {
+            source_id: "community_sheet".to_string(),
+            item_id: 8201,
+            support_status: "confirmed".to_string(),
+            claim_count: 2,
+            slot_idx: Some(1),
+            item_main_group_key: Some(9001),
+            subgroup_key: Some(11054),
+        };
+
+        assert!(community_presence_matches_row(
+            &meta,
+            1,
+            9001,
+            &[11054, 11055]
+        ));
+        assert!(!community_presence_matches_row(
+            &meta,
+            2,
+            9001,
+            &[11054, 11055]
+        ));
+        assert!(!community_presence_matches_row(
+            &meta,
+            1,
+            9002,
+            &[11054, 11055]
+        ));
+        assert!(!community_presence_matches_row(&meta, 1, 9001, &[11055]));
     }
 
     #[test]

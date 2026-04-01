@@ -16,10 +16,12 @@ Current contents:
 - `tools/fishystuff_tilegen`
 - `tools/fishystuff_dolt_import`
   - imports raw fishing workbooks and temporary calculator effect workbooks into Dolt
+  - community zone fish presence/rate guess workflow is documented in
+    [`docs/community-zone-fish-workflow.md`](../docs/community-zone-fish-workflow.md)
   - temporary calculator workflow is documented in
-    [`docs/calculator-data-path.md`](/home/carp/code/fishystuff/docs/calculator-data-path.md)
+    [`docs/calculator-data-path.md`](../docs/calculator-data-path.md)
   - Dolt schema inspection and schema-history workflow are documented in
-    [`docs/dolt-schema-workflow.md`](/home/carp/code/fishystuff/docs/dolt-schema-workflow.md)
+    [`docs/dolt-schema-workflow.md`](../docs/dolt-schema-workflow.md)
 - `tools/pazifista`
 - `tools/scripts/build_map.sh`
 - `tools/scripts/dev_watch_builds.sh`

@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
@@ -145,6 +144,8 @@ function zoneLootMetricTone(entry) {
 function zoneLootRowMarkup(entry) {
   const metric = zoneLootMetricTone(entry);
   const tooltip = trimString(entry?.dropRateTooltip);
+  const presenceText = trimString(entry?.presenceText);
+  const presenceTooltip = trimString(entry?.presenceTooltip);
   const dropDotColor =
     trimString(entry?.dropRateSourceKind) === "database"
       ? "var(--color-success)"
@@ -161,7 +162,16 @@ function zoneLootRowMarkup(entry) {
             : ""
         }
       </div>
-      <div class="fishymap-zone-loot-item">${fishIdentityMarkup(entry)}</div>
+      <div class="fishymap-zone-loot-item">
+        ${fishIdentityMarkup(entry)}
+        ${
+          presenceText
+            ? `<div class="pl-9 text-[11px] text-base-content/60" ${
+                presenceTooltip ? `title="${escapeHtml(presenceTooltip)}"` : ""
+              }>${escapeHtml(presenceText)}</div>`
+            : ""
+        }
+      </div>
     </div>
   `;
 }
@@ -229,9 +239,7 @@ export function createMapInfoPanelController({
   shell,
   getSignals,
   dispatchPatch = dispatchShellSignalPatch,
-  documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
-  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapInfoPanelController requires a shell element");
@@ -316,11 +324,11 @@ export function createMapInfoPanelController({
     render();
   }
 
-  function handleSignalPatch(event) {
-    if (!patchTouchesInfoSignals(event?.detail)) {
+  function handleSignalPatch(patch) {
+    if (!patchTouchesInfoSignals(patch)) {
       return;
     }
-    if (event?.detail?._map_runtime?.selection != null) {
+    if (patch?._map_runtime?.selection != null) {
       void refreshZoneLootSummary();
     }
     scheduleRender();
@@ -394,11 +402,8 @@ export function createMapInfoPanelController({
     scheduleRender();
   });
 
-  if (listenToSignalPatches) {
-    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-  }
-
   return Object.freeze({
+    handleSignalPatch,
     render,
     scheduleRender,
     setZoneCatalog(nextZoneCatalog) {

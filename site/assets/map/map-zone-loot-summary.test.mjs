@@ -25,13 +25,28 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
     note: "Zone loot uses calculator defaults.",
     profileLabel: "Calculator defaults",
     groups: [{ slotIdx: 4, label: "General" }],
-    speciesRows: [{ slotIdx: 4, groupLabel: "General", label: "Sea Eel", dropRateText: "80%" }],
+    speciesRows: [
+      {
+        slotIdx: 4,
+        groupLabel: "General",
+        label: "Sea Eel",
+        dropRateText: "80%",
+        presenceText: "Community confirmed×2 · General subgroup",
+        presenceTooltip:
+          "Community confirmed×2 · General subgroup 11054 · source community_presence_sheet",
+      },
+    ],
   });
 
   assert.equal(summary.available, true);
   assert.equal(summary.groups[0].slotIdx, 4);
   assert.equal(summary.speciesRows[0].groupLabel, "General");
   assert.equal(summary.speciesRows[0].dropRateText, "80%");
+  assert.equal(
+    summary.speciesRows[0].presenceText,
+    "Community confirmed×2 · General subgroup",
+  );
+  assert.match(summary.speciesRows[0].presenceTooltip, /community_presence_sheet/);
 });
 
 test("loadZoneLootSummary posts rgb triplets to the zone loot summary endpoint", async () => {

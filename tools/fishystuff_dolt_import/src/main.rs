@@ -147,6 +147,10 @@ const MAIN_GROUP_SG_COLS: [usize; 4] = [7, 10, 13, 16];
 const SUB_GROUP_KEY_COL: usize = 0;
 const COMMUNITY_PRIZE_GUESS_SOURCE_ID: &str = "community_prize_fish_guesses_workbook";
 const COMMUNITY_PRIZE_GUESS_SOURCE_LABEL: &str = "Updated Fishing Setup guessed prize-fish rates";
+const MANUAL_COMMUNITY_PRESENCE_SOURCE_ID: &str = "manual_community_zone_fish_presence";
+const MANUAL_COMMUNITY_PRESENCE_SOURCE_LABEL: &str = "Manual community zone fish presence";
+const MANUAL_COMMUNITY_GUESS_SOURCE_ID: &str = "manual_community_zone_fish_guess";
+const MANUAL_COMMUNITY_GUESS_SOURCE_LABEL: &str = "Manual community zone fish rate guess";
 const FLOCKFISH_SOURCE_ID: &str = "flockfish_workbook";
 const FLOCKFISH_ZONE_GROUP_SOURCE_LABEL: &str = "Flockfish final combined zone group table";
 const SETUP_SPOT_NAME_COL: usize = 0;
@@ -251,6 +255,52 @@ enum Commands {
         #[arg(long)]
         commit_msg: Option<String>,
     },
+    UpsertCommunityZoneFishPresence {
+        #[arg(long)]
+        dolt_repo: Option<PathBuf>,
+        #[arg(long)]
+        zone_name: String,
+        #[arg(long)]
+        fish_name: Option<String>,
+        #[arg(long)]
+        item_id: Option<i64>,
+        #[arg(long, value_enum, default_value_t = ManualCommunityPresenceStatus::Confirmed)]
+        support_status: ManualCommunityPresenceStatus,
+        #[arg(long, default_value_t = 1)]
+        claim_count: u32,
+        #[arg(long)]
+        slot_idx: Option<u8>,
+        #[arg(long, value_enum)]
+        group: Option<CommunityFishGroup>,
+        #[arg(long)]
+        subgroup_key: Option<i64>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
+    UpsertCommunityZoneFishGuess {
+        #[arg(long)]
+        dolt_repo: Option<PathBuf>,
+        #[arg(long)]
+        zone_name: String,
+        #[arg(long)]
+        fish_name: Option<String>,
+        #[arg(long)]
+        item_id: Option<i64>,
+        #[arg(long)]
+        guessed_rate_pct: f64,
+        #[arg(long)]
+        slot_idx: Option<u8>,
+        #[arg(long, value_enum)]
+        group: Option<CommunityFishGroup>,
+        #[arg(long)]
+        subgroup_key: Option<i64>,
+        #[arg(long, default_value_t = false)]
+        commit: bool,
+        #[arg(long)]
+        commit_msg: Option<String>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
@@ -258,6 +308,46 @@ enum Commands {
 enum SubsetMode {
     FishingOnly,
     All,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
+#[clap(rename_all = "kebab-case")]
+enum ManualCommunityPresenceStatus {
+    Confirmed,
+    Unconfirmed,
+    DataIncomplete,
+}
+
+impl ManualCommunityPresenceStatus {
+    fn as_db_value(self) -> &'static str {
+        match self {
+            Self::Confirmed => "confirmed",
+            Self::Unconfirmed => "unconfirmed",
+            Self::DataIncomplete => "data_incomplete",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum, PartialEq, Eq)]
+#[clap(rename_all = "kebab-case")]
+enum CommunityFishGroup {
+    Prize,
+    Rare,
+    HighQuality,
+    General,
+    Trash,
+}
+
+impl CommunityFishGroup {
+    fn slot_idx(self) -> u8 {
+        match self {
+            Self::Prize => 1,
+            Self::Rare => 2,
+            Self::HighQuality => 3,
+            Self::General => 4,
+            Self::Trash => 5,
+        }
+    }
 }
 
 struct FishingImport {
@@ -346,6 +436,56 @@ struct CommunityPrizeImportCommand {
 
 struct CommunityPrizeOutputs {
     community_csv: PathBuf,
+}
+
+struct ManualCommunityPresenceCommand {
+    dolt_repo: Option<PathBuf>,
+    zone_name: String,
+    fish_name: Option<String>,
+    item_id: Option<i64>,
+    support_status: ManualCommunityPresenceStatus,
+    claim_count: u32,
+    slot_idx: Option<u8>,
+    group: Option<CommunityFishGroup>,
+    subgroup_key: Option<i64>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+struct ManualCommunityGuessCommand {
+    dolt_repo: Option<PathBuf>,
+    zone_name: String,
+    fish_name: Option<String>,
+    item_id: Option<i64>,
+    guessed_rate_pct: f64,
+    slot_idx: Option<u8>,
+    group: Option<CommunityFishGroup>,
+    subgroup_key: Option<i64>,
+    commit: bool,
+    commit_msg: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedZone {
+    zone_rgb: u32,
+    zone_r: u8,
+    zone_g: u8,
+    zone_b: u8,
+    region_name: String,
+    zone_name: String,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedFish {
+    item_id: i64,
+    fish_name: String,
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedZoneSlot {
+    slot_idx: u8,
+    item_main_group_key: i64,
+    subgroup_keys: Vec<i64>,
 }
 
 struct RawTableImport {
@@ -579,6 +719,54 @@ fn main() -> Result<()> {
             commit,
             commit_msg,
         }),
+        Commands::UpsertCommunityZoneFishPresence {
+            dolt_repo,
+            zone_name,
+            fish_name,
+            item_id,
+            support_status,
+            claim_count,
+            slot_idx,
+            group,
+            subgroup_key,
+            commit,
+            commit_msg,
+        } => run_manual_community_presence_upsert(ManualCommunityPresenceCommand {
+            dolt_repo,
+            zone_name,
+            fish_name,
+            item_id,
+            support_status,
+            claim_count,
+            slot_idx,
+            group,
+            subgroup_key,
+            commit,
+            commit_msg,
+        }),
+        Commands::UpsertCommunityZoneFishGuess {
+            dolt_repo,
+            zone_name,
+            fish_name,
+            item_id,
+            guessed_rate_pct,
+            slot_idx,
+            group,
+            subgroup_key,
+            commit,
+            commit_msg,
+        } => run_manual_community_guess_upsert(ManualCommunityGuessCommand {
+            dolt_repo,
+            zone_name,
+            fish_name,
+            item_id,
+            guessed_rate_pct,
+            slot_idx,
+            group,
+            subgroup_key,
+            commit,
+            commit_msg,
+        }),
     }
 }
 
@@ -799,6 +987,636 @@ fn build_community_prize_commit_message(prefix: &str, guessed_sha: Option<&str>)
         Some(guessed_sha) => format!("{prefix} (FishingSetupWorkbook={guessed_sha})"),
         None => prefix.to_string(),
     }
+}
+
+fn run_manual_community_presence_upsert(command: ManualCommunityPresenceCommand) -> Result<()> {
+    let ManualCommunityPresenceCommand {
+        dolt_repo,
+        zone_name,
+        fish_name,
+        item_id,
+        support_status,
+        claim_count,
+        slot_idx,
+        group,
+        subgroup_key,
+        commit,
+        commit_msg,
+    } = command;
+    let dolt_repo = resolve_dolt_repo_path(dolt_repo)?;
+
+    validate_manual_fish_reference(fish_name.as_deref(), item_id)?;
+    let resolved_zone = resolve_zone_by_name(&dolt_repo, &zone_name)?;
+    let resolved_fish = resolve_fish_reference(&dolt_repo, fish_name.as_deref(), item_id)?;
+    let resolved_slot_idx = resolve_requested_slot_idx(slot_idx, group, None)?;
+    let resolved_slot = match resolved_slot_idx {
+        Some(slot_idx) => Some(resolve_zone_slot(
+            &dolt_repo,
+            resolved_zone.zone_rgb,
+            slot_idx,
+        )?),
+        None => None,
+    };
+    if subgroup_key.is_some() && resolved_slot.is_none() {
+        bail!("--subgroup-key requires --slot-idx or --group so the zone slot lineage can be verified");
+    }
+    if let (Some(subgroup_key), Some(resolved_slot)) = (subgroup_key, resolved_slot.as_ref()) {
+        if !resolved_slot.subgroup_keys.contains(&subgroup_key) {
+            bail!(
+                "subgroup_key {} does not belong to zone '{}' slot {}",
+                subgroup_key,
+                resolved_zone.zone_name,
+                resolved_slot.slot_idx
+            );
+        }
+    }
+
+    ensure_community_zone_fish_support_table(&dolt_repo)?;
+
+    let notes = format_manual_community_notes(
+        resolved_slot.as_ref().map(|slot| slot.slot_idx),
+        None,
+        resolved_slot.as_ref().map(|slot| slot.item_main_group_key),
+        subgroup_key,
+    );
+    let query = build_community_zone_fish_support_upsert_query(
+        MANUAL_COMMUNITY_PRESENCE_SOURCE_ID,
+        MANUAL_COMMUNITY_PRESENCE_SOURCE_LABEL,
+        &resolved_zone,
+        &resolved_fish,
+        support_status.as_db_value(),
+        claim_count,
+        notes.as_deref(),
+    );
+    run_dolt_sql_query_or_remote(&dolt_repo, &query, "upsert manual community presence row")?;
+
+    if commit {
+        let message = commit_msg.unwrap_or_else(|| {
+            format!(
+                "Upsert manual community presence for {} in {}",
+                resolved_fish.fish_name, resolved_zone.zone_name
+            )
+        });
+        run_dolt_commit(&dolt_repo, &message)?;
+    }
+
+    println!(
+        "upserted presence row: zone='{}' item_id={} fish='{}' status={} claim_count={}",
+        resolved_zone.zone_name,
+        resolved_fish.item_id,
+        resolved_fish.fish_name,
+        support_status.as_db_value(),
+        claim_count
+    );
+
+    Ok(())
+}
+
+fn run_manual_community_guess_upsert(command: ManualCommunityGuessCommand) -> Result<()> {
+    let ManualCommunityGuessCommand {
+        dolt_repo,
+        zone_name,
+        fish_name,
+        item_id,
+        guessed_rate_pct,
+        slot_idx,
+        group,
+        subgroup_key,
+        commit,
+        commit_msg,
+    } = command;
+    let dolt_repo = resolve_dolt_repo_path(dolt_repo)?;
+
+    validate_manual_fish_reference(fish_name.as_deref(), item_id)?;
+    if !(guessed_rate_pct.is_finite() && guessed_rate_pct > 0.0) {
+        bail!("--guessed-rate-pct must be a positive finite number");
+    }
+
+    let resolved_zone = resolve_zone_by_name(&dolt_repo, &zone_name)?;
+    let resolved_fish = resolve_fish_reference(&dolt_repo, fish_name.as_deref(), item_id)?;
+    let resolved_slot_idx = resolve_requested_slot_idx(slot_idx, group, Some(1))?
+        .ok_or_else(|| anyhow::anyhow!("manual community guess requires a slot"))?;
+    let resolved_slot = resolve_zone_slot(&dolt_repo, resolved_zone.zone_rgb, resolved_slot_idx)?;
+    let resolved_subgroup_key = match subgroup_key {
+        Some(subgroup_key) => {
+            if !resolved_slot.subgroup_keys.contains(&subgroup_key) {
+                bail!(
+                    "subgroup_key {} does not belong to zone '{}' slot {}",
+                    subgroup_key,
+                    resolved_zone.zone_name,
+                    resolved_slot.slot_idx
+                );
+            }
+            Some(subgroup_key)
+        }
+        None if resolved_slot.subgroup_keys.len() == 1 => resolved_slot.subgroup_keys.first().copied(),
+        None if resolved_slot.subgroup_keys.is_empty() => None,
+        None => bail!(
+            "zone '{}' slot {} has multiple subgroup options ({}); pass --subgroup-key to disambiguate",
+            resolved_zone.zone_name,
+            resolved_slot.slot_idx,
+            resolved_slot
+                .subgroup_keys
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    };
+
+    ensure_community_zone_fish_support_table(&dolt_repo)?;
+
+    let guessed_rate = guessed_rate_pct / 100.0;
+    let notes = format_manual_community_notes(
+        Some(resolved_slot.slot_idx),
+        Some(guessed_rate),
+        Some(resolved_slot.item_main_group_key),
+        resolved_subgroup_key,
+    );
+    let query = build_community_zone_fish_support_upsert_query(
+        MANUAL_COMMUNITY_GUESS_SOURCE_ID,
+        MANUAL_COMMUNITY_GUESS_SOURCE_LABEL,
+        &resolved_zone,
+        &resolved_fish,
+        "guessed",
+        0,
+        notes.as_deref(),
+    );
+    run_dolt_sql_query_or_remote(&dolt_repo, &query, "upsert manual community guess row")?;
+
+    if commit {
+        let message = commit_msg.unwrap_or_else(|| {
+            format!(
+                "Upsert manual community guess for {} in {}",
+                resolved_fish.fish_name, resolved_zone.zone_name
+            )
+        });
+        run_dolt_commit(&dolt_repo, &message)?;
+    }
+
+    println!(
+        "upserted guess row: zone='{}' item_id={} fish='{}' guessed_rate_pct={} slot_idx={} subgroup_key={}",
+        resolved_zone.zone_name,
+        resolved_fish.item_id,
+        resolved_fish.fish_name,
+        format_float(guessed_rate_pct),
+        resolved_slot.slot_idx,
+        resolved_subgroup_key
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "none".to_string())
+    );
+
+    Ok(())
+}
+
+fn validate_manual_fish_reference(fish_name: Option<&str>, item_id: Option<i64>) -> Result<()> {
+    let has_fish_name = fish_name.is_some_and(|value| !value.trim().is_empty());
+    let has_item_id = item_id.is_some();
+    if has_fish_name || has_item_id {
+        return Ok(());
+    }
+    bail!("provide either --fish-name or --item-id");
+}
+
+fn validate_slot_idx(slot_idx: u8) -> Result<()> {
+    if (1..=5).contains(&slot_idx) {
+        Ok(())
+    } else {
+        bail!("slot_idx must be between 1 and 5")
+    }
+}
+
+fn resolve_requested_slot_idx(
+    slot_idx: Option<u8>,
+    group: Option<CommunityFishGroup>,
+    default_slot_idx: Option<u8>,
+) -> Result<Option<u8>> {
+    if let Some(slot_idx) = slot_idx {
+        validate_slot_idx(slot_idx)?;
+    }
+
+    let group_slot_idx = group.map(CommunityFishGroup::slot_idx);
+    match (slot_idx, group_slot_idx) {
+        (Some(slot_idx), Some(group_slot_idx)) if slot_idx != group_slot_idx => bail!(
+            "--slot-idx {} conflicts with --group slot {}",
+            slot_idx,
+            group_slot_idx
+        ),
+        (Some(slot_idx), _) => Ok(Some(slot_idx)),
+        (None, Some(group_slot_idx)) => Ok(Some(group_slot_idx)),
+        (None, None) => Ok(default_slot_idx),
+    }
+}
+
+fn resolve_dolt_repo_path(dolt_repo: Option<PathBuf>) -> Result<PathBuf> {
+    match dolt_repo {
+        Some(path) => find_dolt_repo_root(&path).ok_or_else(|| {
+            anyhow::anyhow!(
+                "could not find a Dolt repo at or above '{}'",
+                path.display()
+            )
+        }),
+        None => {
+            let cwd = std::env::current_dir().context("read current working directory")?;
+            find_dolt_repo_root(&cwd).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "could not find a Dolt repo from current directory '{}'; pass --dolt-repo",
+                    cwd.display()
+                )
+            })
+        }
+    }
+}
+
+fn find_dolt_repo_root(start: &Path) -> Option<PathBuf> {
+    let start = if start.is_file() {
+        start.parent()?
+    } else {
+        start
+    };
+    start
+        .ancestors()
+        .find(|path| path.join(".dolt").is_dir())
+        .map(Path::to_path_buf)
+}
+
+fn resolve_zone_by_name(repo_path: &Path, zone_name: &str) -> Result<ResolvedZone> {
+    let zone_name = zone_name.trim();
+    if zone_name.is_empty() {
+        bail!("zone name cannot be empty");
+    }
+
+    let fields = "name, CAST(R AS UNSIGNED) AS zone_r, CAST(G AS UNSIGNED) AS zone_g, CAST(B AS UNSIGNED) AS zone_b";
+    let exact_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT {fields} FROM zones_merged WHERE LOWER(name) = LOWER({}) ORDER BY name",
+            sql_value(zone_name)
+        ),
+        "resolve zone exact name",
+    )?;
+    if let Some(zone) = try_single_zone_match(zone_name, &exact_rows)? {
+        return Ok(zone);
+    }
+
+    let like_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT {fields} FROM zones_merged WHERE LOWER(name) LIKE LOWER({}) ORDER BY name",
+            sql_value(&format!("%{zone_name}%"))
+        ),
+        "resolve zone fuzzy name",
+    )?;
+    try_single_zone_match(zone_name, &like_rows)?.ok_or_else(|| {
+        anyhow::anyhow!("zone '{}' did not match any row in zones_merged", zone_name)
+    })
+}
+
+fn try_single_zone_match(
+    original_zone_name: &str,
+    rows: &[BTreeMap<String, String>],
+) -> Result<Option<ResolvedZone>> {
+    match rows {
+        [] => Ok(None),
+        [row] => Ok(Some(parse_zone_row(row)?)),
+        _ => bail!(
+            "zone '{}' is ambiguous; matches: {}",
+            original_zone_name,
+            rows.iter()
+                .filter_map(|row| row.get("name").cloned())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+fn parse_zone_row(row: &BTreeMap<String, String>) -> Result<ResolvedZone> {
+    let zone_name = csv_required(row, "name")?;
+    let zone_r = csv_required(row, "zone_r")?
+        .parse::<u8>()
+        .with_context(|| format!("parse zone_r for {zone_name}"))?;
+    let zone_g = csv_required(row, "zone_g")?
+        .parse::<u8>()
+        .with_context(|| format!("parse zone_g for {zone_name}"))?;
+    let zone_b = csv_required(row, "zone_b")?
+        .parse::<u8>()
+        .with_context(|| format!("parse zone_b for {zone_name}"))?;
+    Ok(ResolvedZone {
+        zone_rgb: (u32::from(zone_r) << 16) | (u32::from(zone_g) << 8) | u32::from(zone_b),
+        zone_r,
+        zone_g,
+        zone_b,
+        region_name: derive_region_name_from_zone_name(&zone_name),
+        zone_name,
+    })
+}
+
+fn resolve_fish_reference(
+    repo_path: &Path,
+    fish_name: Option<&str>,
+    item_id: Option<i64>,
+) -> Result<ResolvedFish> {
+    match (
+        fish_name.map(str::trim).filter(|value| !value.is_empty()),
+        item_id,
+    ) {
+        (Some(fish_name), Some(item_id)) => {
+            let by_id = resolve_fish_by_item_id(repo_path, item_id)?;
+            let by_name = resolve_fish_by_name(repo_path, fish_name)?;
+            if by_id.item_id != by_name.item_id {
+                bail!(
+                    "fish reference mismatch: item_id {} resolves to '{}' but fish name '{}' resolves to item_id {}",
+                    by_id.item_id,
+                    by_id.fish_name,
+                    fish_name,
+                    by_name.item_id
+                );
+            }
+            Ok(by_id)
+        }
+        (Some(fish_name), None) => resolve_fish_by_name(repo_path, fish_name),
+        (None, Some(item_id)) => resolve_fish_by_item_id(repo_path, item_id),
+        (None, None) => bail!("provide either --fish-name or --item-id"),
+    }
+}
+
+fn resolve_fish_by_name(repo_path: &Path, fish_name: &str) -> Result<ResolvedFish> {
+    let fish_name = fish_name.trim();
+    let exact_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT CAST(item_key AS SIGNED) AS item_id, name AS fish_name \
+             FROM fish_table WHERE LOWER(name) = LOWER({}) ORDER BY name",
+            sql_value(fish_name)
+        ),
+        "resolve fish exact name",
+    )?;
+    if let Some(fish) = try_single_fish_match(fish_name, &exact_rows)? {
+        return Ok(fish);
+    }
+
+    let like_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT CAST(item_key AS SIGNED) AS item_id, name AS fish_name \
+             FROM fish_table WHERE LOWER(name) LIKE LOWER({}) ORDER BY name",
+            sql_value(&format!("%{fish_name}%"))
+        ),
+        "resolve fish fuzzy name",
+    )?;
+    if let Some(fish) = try_single_fish_match(fish_name, &like_rows)? {
+        return Ok(fish);
+    }
+
+    let item_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT CAST(`Index` AS SIGNED) AS item_id, `ItemName` AS fish_name \
+             FROM item_table WHERE LOWER(`ItemName`) = LOWER({}) \
+                OR LOWER(`ItemName`) LIKE LOWER({}) ORDER BY `ItemName`",
+            sql_value(fish_name),
+            sql_value(&format!("%{fish_name}%"))
+        ),
+        "resolve fish via item_table name",
+    )?;
+    try_single_fish_match(fish_name, &item_rows)?.ok_or_else(|| {
+        anyhow::anyhow!(
+            "fish '{}' did not match any row in fish_table or item_table",
+            fish_name
+        )
+    })
+}
+
+fn try_single_fish_match(
+    original_fish_name: &str,
+    rows: &[BTreeMap<String, String>],
+) -> Result<Option<ResolvedFish>> {
+    match rows {
+        [] => Ok(None),
+        [row] => Ok(Some(parse_fish_row(row)?)),
+        _ => bail!(
+            "fish '{}' is ambiguous; matches: {}",
+            original_fish_name,
+            rows.iter()
+                .filter_map(|row| row.get("fish_name").cloned())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+fn resolve_fish_by_item_id(repo_path: &Path, item_id: i64) -> Result<ResolvedFish> {
+    if item_id <= 0 {
+        bail!("item_id must be positive");
+    }
+
+    let fish_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT CAST(item_key AS SIGNED) AS item_id, name AS fish_name \
+             FROM fish_table WHERE item_key = {item_id}"
+        ),
+        "resolve fish by item_id from fish_table",
+    )?;
+    if let Some(fish) = fish_rows.first() {
+        return parse_fish_row(fish);
+    }
+
+    let item_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT CAST(`Index` AS SIGNED) AS item_id, `ItemName` AS fish_name \
+             FROM item_table WHERE `Index` = {item_id}"
+        ),
+        "resolve fish by item_id from item_table",
+    )?;
+    if let Some(fish) = item_rows.first() {
+        return parse_fish_row(fish);
+    }
+
+    bail!(
+        "item_id {} did not match any row in fish_table or item_table",
+        item_id
+    )
+}
+
+fn parse_fish_row(row: &BTreeMap<String, String>) -> Result<ResolvedFish> {
+    let item_id = csv_required(row, "item_id")?
+        .parse::<i64>()
+        .context("parse item_id")?;
+    let fish_name = csv_required(row, "fish_name")?;
+    Ok(ResolvedFish { item_id, fish_name })
+}
+
+fn resolve_zone_slot(repo_path: &Path, zone_rgb: u32, slot_idx: u8) -> Result<ResolvedZoneSlot> {
+    validate_slot_idx(slot_idx)?;
+
+    let slot_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT CAST(item_main_group_key AS SIGNED) AS item_main_group_key \
+             FROM flockfish_zone_group_slots \
+             WHERE zone_rgb = {zone_rgb} \
+               AND slot_idx = {slot_idx} \
+               AND resolution_status = 'numeric'"
+        ),
+        "resolve zone slot main group",
+    )?;
+    let slot_row = slot_rows
+        .first()
+        .ok_or_else(|| anyhow::anyhow!("zone_rgb {} has no numeric slot {}", zone_rgb, slot_idx))?;
+    let item_main_group_key = csv_required(slot_row, "item_main_group_key")?
+        .parse::<i64>()
+        .context("parse item_main_group_key")?;
+    if item_main_group_key <= 0 {
+        bail!(
+            "zone_rgb {} slot {} does not have a positive item_main_group_key",
+            zone_rgb,
+            slot_idx
+        );
+    }
+
+    let main_group_rows = run_dolt_select_named_rows(
+        repo_path,
+        &format!(
+            "SELECT \
+                CAST(ItemSubGroupKey0 AS SIGNED) AS subgroup0, \
+                CAST(ItemSubGroupKey1 AS SIGNED) AS subgroup1, \
+                CAST(ItemSubGroupKey2 AS SIGNED) AS subgroup2, \
+                CAST(ItemSubGroupKey3 AS SIGNED) AS subgroup3 \
+             FROM item_main_group_table \
+             WHERE ItemMainGroupKey = {item_main_group_key}"
+        ),
+        "resolve main group subgroup options",
+    )?;
+    let subgroup_keys = main_group_rows
+        .first()
+        .map(|row| {
+            ["subgroup0", "subgroup1", "subgroup2", "subgroup3"]
+                .into_iter()
+                .filter_map(|key| row.get(key))
+                .map(String::as_str)
+                .filter_map(|value| value.parse::<i64>().ok())
+                .filter(|value| *value > 0)
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    Ok(ResolvedZoneSlot {
+        slot_idx,
+        item_main_group_key,
+        subgroup_keys,
+    })
+}
+
+fn format_manual_community_notes(
+    slot_idx: Option<u8>,
+    guessed_rate: Option<f64>,
+    item_main_group_key: Option<i64>,
+    subgroup_key: Option<i64>,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(slot_idx) = slot_idx {
+        parts.push(format!("slot_idx={slot_idx}"));
+    }
+    if let Some(guessed_rate) = guessed_rate {
+        parts.push(format!("guessed_rate={}", format_float(guessed_rate)));
+    }
+    if let Some(item_main_group_key) = item_main_group_key {
+        parts.push(format!("item_main_group_key={item_main_group_key}"));
+    }
+    if let Some(subgroup_key) = subgroup_key {
+        parts.push(format!("subgroup_key={subgroup_key}"));
+    }
+    (!parts.is_empty()).then_some(parts.join(";"))
+}
+
+fn build_community_zone_fish_support_upsert_query(
+    source_id: &str,
+    source_label: &str,
+    zone: &ResolvedZone,
+    fish: &ResolvedFish,
+    support_status: &str,
+    claim_count: u32,
+    notes: Option<&str>,
+) -> String {
+    let values = [
+        sql_value(source_id),
+        sql_value(source_label),
+        "NULL".to_string(),
+        zone.zone_rgb.to_string(),
+        zone.zone_r.to_string(),
+        zone.zone_g.to_string(),
+        zone.zone_b.to_string(),
+        sql_value(&zone.region_name),
+        sql_value(&zone.zone_name),
+        fish.item_id.to_string(),
+        sql_value(&fish.fish_name),
+        sql_value(support_status),
+        claim_count.to_string(),
+        notes.map(sql_value).unwrap_or_else(|| "NULL".to_string()),
+    ]
+    .join(", ");
+
+    format!(
+        "INSERT INTO `community_zone_fish_support` \
+            (`source_id`, `source_label`, `source_sha256`, `zone_rgb`, `zone_r`, `zone_g`, `zone_b`, `region_name`, `zone_name`, `item_id`, `fish_name`, `support_status`, `claim_count`, `notes`) \
+         VALUES ({values}) \
+         ON DUPLICATE KEY UPDATE \
+            `source_label` = VALUES(`source_label`), \
+            `source_sha256` = VALUES(`source_sha256`), \
+            `zone_r` = VALUES(`zone_r`), \
+            `zone_g` = VALUES(`zone_g`), \
+            `zone_b` = VALUES(`zone_b`), \
+            `region_name` = VALUES(`region_name`), \
+            `zone_name` = VALUES(`zone_name`), \
+            `fish_name` = VALUES(`fish_name`), \
+            `support_status` = VALUES(`support_status`), \
+            `claim_count` = VALUES(`claim_count`), \
+            `notes` = VALUES(`notes`);"
+    )
+}
+
+fn ensure_community_zone_fish_support_table(repo_path: &Path) -> Result<()> {
+    run_dolt_sql_query_or_remote(
+        repo_path,
+        "CREATE TABLE IF NOT EXISTS `community_zone_fish_support` (\
+            `source_id` varchar(64) NOT NULL,\
+            `source_label` varchar(128) NOT NULL,\
+            `source_sha256` char(64),\
+            `zone_rgb` int unsigned NOT NULL,\
+            `zone_r` tinyint unsigned NOT NULL,\
+            `zone_g` tinyint unsigned NOT NULL,\
+            `zone_b` tinyint unsigned NOT NULL,\
+            `region_name` text,\
+            `zone_name` text,\
+            `item_id` bigint NOT NULL,\
+            `fish_name` text,\
+            `support_status` varchar(32) NOT NULL,\
+            `claim_count` int NOT NULL DEFAULT '1',\
+            `notes` text,\
+            PRIMARY KEY (`source_id`,`zone_rgb`,`item_id`),\
+            KEY `idx_community_zone_fish_support_item` (`item_id`),\
+            KEY `idx_community_zone_fish_support_rgb` (`zone_rgb`),\
+            KEY `idx_community_zone_fish_support_status` (`support_status`)\
+         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+        "ensure community_zone_fish_support table",
+    )
+}
+
+fn csv_required(row: &BTreeMap<String, String>, key: &str) -> Result<String> {
+    let value = row
+        .get(key)
+        .map(String::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if value.is_empty() {
+        bail!("missing expected CSV field '{}'", key);
+    }
+    Ok(value)
 }
 
 fn run_calculator_effects_import(command: CalculatorEffectsImportCommand) -> Result<()> {
@@ -2676,6 +3494,58 @@ fn run_dolt_remote_insert_batch(
     run_dolt_remote_sql_query(&query, &format!("insert batch into {table} on sql-server"))
 }
 
+fn run_dolt_select_named_rows(
+    repo_path: &Path,
+    query: &str,
+    label: &str,
+) -> Result<Vec<BTreeMap<String, String>>> {
+    let output = Command::new("dolt")
+        .current_dir(repo_path)
+        .args(["sql", "-r", "csv", "-q", query])
+        .output()
+        .with_context(|| format!("run dolt sql select for {label}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("dolt sql select failed during {label}: {stderr}");
+    }
+
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(true)
+        .from_reader(output.stdout.as_slice());
+    let headers = reader
+        .headers()
+        .with_context(|| format!("read CSV headers for {label}"))?
+        .iter()
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>();
+    let mut rows = Vec::new();
+    for record in reader.records() {
+        let record = record.with_context(|| format!("read CSV row for {label}"))?;
+        let row = headers
+            .iter()
+            .cloned()
+            .zip(record.iter().map(|value| value.to_string()))
+            .collect::<BTreeMap<_, _>>();
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
+fn run_dolt_sql_query_or_remote(repo_path: &Path, query: &str, label: &str) -> Result<()> {
+    match run_dolt_sql_query(repo_path, query, label) {
+        Ok(()) => Ok(()),
+        Err(err) => {
+            let err_text = err.to_string();
+            if !err_text.contains("database is read only") {
+                return Err(err);
+            }
+            eprintln!("local dolt sql for {label} is read-only; falling back to sql-server");
+            let remote_query = format!("USE {};\n{query}", sql_ident(&remote_dolt_database_name()));
+            run_dolt_remote_sql_query(&remote_query, &format!("{label} on sql-server"))
+        }
+    }
+}
+
 fn run_dolt_sql_query(repo_path: &Path, query: &str, label: &str) -> Result<()> {
     let mut child = Command::new("dolt")
         .current_dir(repo_path)
@@ -3134,5 +4004,84 @@ mod tests {
             "".to_string(),
         ];
         assert!(!is_removed_flockfish_subgroup_outlier(&keep));
+    }
+
+    #[test]
+    fn format_manual_community_notes_keeps_structural_provenance() {
+        assert_eq!(
+            format_manual_community_notes(Some(1), Some(0.01), Some(11057), Some(11057)).as_deref(),
+            Some("slot_idx=1;guessed_rate=0.01;item_main_group_key=11057;subgroup_key=11057")
+        );
+        assert_eq!(
+            format_manual_community_notes(Some(4), None, Some(11021), None).as_deref(),
+            Some("slot_idx=4;item_main_group_key=11021")
+        );
+        assert_eq!(format_manual_community_notes(None, None, None, None), None);
+    }
+
+    #[test]
+    fn manual_presence_status_uses_expected_db_values() {
+        assert_eq!(
+            ManualCommunityPresenceStatus::Confirmed.as_db_value(),
+            "confirmed"
+        );
+        assert_eq!(
+            ManualCommunityPresenceStatus::Unconfirmed.as_db_value(),
+            "unconfirmed"
+        );
+        assert_eq!(
+            ManualCommunityPresenceStatus::DataIncomplete.as_db_value(),
+            "data_incomplete"
+        );
+    }
+
+    #[test]
+    fn community_fish_group_uses_expected_slot_idx() {
+        assert_eq!(CommunityFishGroup::Prize.slot_idx(), 1);
+        assert_eq!(CommunityFishGroup::Rare.slot_idx(), 2);
+        assert_eq!(CommunityFishGroup::HighQuality.slot_idx(), 3);
+        assert_eq!(CommunityFishGroup::General.slot_idx(), 4);
+        assert_eq!(CommunityFishGroup::Trash.slot_idx(), 5);
+    }
+
+    #[test]
+    fn resolve_requested_slot_idx_uses_group_and_default() {
+        assert_eq!(
+            resolve_requested_slot_idx(None, Some(CommunityFishGroup::General), None).unwrap(),
+            Some(4)
+        );
+        assert_eq!(
+            resolve_requested_slot_idx(None, None, Some(1)).unwrap(),
+            Some(1)
+        );
+        assert_eq!(resolve_requested_slot_idx(None, None, None).unwrap(), None);
+    }
+
+    #[test]
+    fn resolve_requested_slot_idx_rejects_conflicting_inputs() {
+        let err = resolve_requested_slot_idx(Some(1), Some(CommunityFishGroup::General), None)
+            .unwrap_err();
+        assert!(err.to_string().contains("conflicts with"));
+    }
+
+    #[test]
+    fn find_dolt_repo_root_walks_up_to_repo_root() {
+        let unique = format!(
+            "fishystuff-dolt-import-test-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time before unix epoch")
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(unique);
+        let nested = root.join("a/b/c");
+        fs::create_dir_all(root.join(".dolt")).expect("create .dolt");
+        fs::create_dir_all(&nested).expect("create nested path");
+
+        let resolved = find_dolt_repo_root(&nested).expect("resolve repo root");
+        assert_eq!(resolved, root);
+
+        fs::remove_dir_all(&root).expect("remove temp repo");
     }
 }

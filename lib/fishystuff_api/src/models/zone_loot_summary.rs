@@ -43,4 +43,7 @@ pub struct ZoneLootSummarySpeciesRow {
     pub drop_rate_text: String,
     pub drop_rate_source_kind: String,
     pub drop_rate_tooltip: String,
+    pub presence_text: Option<String>,
+    pub presence_source_kind: String,
+    pub presence_tooltip: String,
 }

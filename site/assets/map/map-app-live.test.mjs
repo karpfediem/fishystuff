@@ -217,9 +217,10 @@ test("routeLiveControllerPatch schedules only the relevant live controllers", ()
     layerPanel: controller("layer", "scheduleRender"),
     searchPanel: controller("search", "scheduleRender"),
     bookmarkPanel: controller("bookmark", "scheduleRender"),
+    infoPanel: controller("info", "handleSignalPatch"),
   });
 
-  assert.deepEqual(calls, ["window", "hover", "layer", "search", "bookmark"]);
+  assert.deepEqual(calls, ["window", "hover", "layer", "search", "bookmark", "info"]);
 });
 
 test("map-app-live exports explicit start hooks", () => {

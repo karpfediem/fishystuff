@@ -224,6 +224,7 @@ export function routeLiveControllerPatch({
   layerPanel = null,
   searchPanel = null,
   bookmarkPanel = null,
+  infoPanel = null,
 } = {}) {
   if (windowManager && patchTouchesWindowUi(patch)) {
     windowManager.scheduleApplyFromSignals();
@@ -243,6 +244,9 @@ export function routeLiveControllerPatch({
   if (bookmarkPanel && patchTouchesBookmarkSignals(patch)) {
     bookmarkPanel.scheduleRender();
   }
+  if (infoPanel && typeof infoPanel.handleSignalPatch === "function") {
+    infoPanel.handleSignalPatch(patch);
+  }
 }
 
 export async function start() {
@@ -261,6 +265,7 @@ export async function start() {
   let bookmarkPanel = null;
   let layerPanel = null;
   let searchPanel = null;
+  let zoneInfoPanel = null;
 
   function dispatchSignalPatch(patch) {
     if (!patch || typeof patch !== "object") {
@@ -275,6 +280,7 @@ export async function start() {
       layerPanel,
       searchPanel,
       bookmarkPanel,
+      infoPanel: zoneInfoPanel,
     });
   }
 
@@ -303,7 +309,7 @@ export async function start() {
     shell,
     getSignals: signals,
   });
-  const zoneInfoPanel = createMapInfoPanelController({
+  zoneInfoPanel = createMapInfoPanelController({
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
@@ -420,6 +426,7 @@ export async function start() {
       layerPanel,
       searchPanel,
       bookmarkPanel,
+      infoPanel: zoneInfoPanel,
     });
     if (searchProjectionPatch) {
       applyInternalSignalPatch(searchProjectionPatch);
