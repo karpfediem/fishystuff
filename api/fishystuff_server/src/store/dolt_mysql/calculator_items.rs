@@ -73,6 +73,7 @@ pub(super) fn build_source_item(
         fish_multiplier,
         exp_fish: override_values.exp_fish,
         exp_life: override_values.exp_life,
+        grade: None,
         item_id: Some(item_id),
         icon_id,
         icon: icon_id.map(calculator_item_icon_path),
@@ -148,6 +149,7 @@ pub(super) fn build_source_lightstone_item(
         fish_multiplier,
         exp_fish: override_values.exp_fish,
         exp_life: override_values.exp_life,
+        grade: None,
         item_id: None,
         icon_id,
         icon: icon_id.map(calculator_item_icon_path),
@@ -227,6 +229,11 @@ impl DoltMySqlStore {
                 fish_multiplier,
                 exp_fish,
                 exp_life,
+                grade: item_id.and_then(|item_id| {
+                    item_source_metadata
+                        .get(&item_id)
+                        .and_then(|metadata| metadata.grade.clone())
+                }),
                 item_id,
                 icon_id,
                 icon,
@@ -239,6 +246,7 @@ impl DoltMySqlStore {
     fn build_source_backed_items(
         lang: FishLang,
         source_backed_rows: &[CalculatorSourceBackedItemRow],
+        item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
     ) -> AppResult<Vec<CalculatorItemEntry>> {
         let mut items = Vec::new();
         for row in source_backed_rows {
@@ -266,6 +274,10 @@ impl DoltMySqlStore {
                     item.buff_category_key = row.buff_category_key.clone();
                     item.buff_category_id = row.buff_category_id;
                     item.buff_category_level = row.buff_category_level;
+                    item.grade = item
+                        .item_id
+                        .and_then(|item_id| item_source_metadata.get(&item_id))
+                        .and_then(|metadata| metadata.grade.clone());
                     items.push(item);
                 }
                 "lightstone_set" => {
@@ -324,13 +336,16 @@ impl DoltMySqlStore {
         } = self.query_calculator_catalog_source_data(ref_id)?;
         let legacy_items =
             self.build_legacy_calculator_items(lang, legacy_rows, &item_source_metadata);
-        let sourced_items = Self::build_source_backed_items(lang, &source_backed_rows)?;
+        let sourced_items =
+            Self::build_source_backed_items(lang, &source_backed_rows, &item_source_metadata)?;
         Ok(self.merge_calculator_items(legacy_items, sourced_items))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::store::FishLang;
 
     use super::super::calculator_effects::CalculatorItemEffectValues;
@@ -397,6 +412,7 @@ mod tests {
                 exp_fish: None,
                 exp_life: None,
             }],
+            &HashMap::new(),
         )
         .expect("source-backed rows should build");
 
@@ -438,6 +454,7 @@ mod tests {
                 exp_fish: Some(0.10),
                 exp_life: None,
             }],
+            &HashMap::new(),
         )
         .expect("source-backed rows should build");
 
@@ -473,6 +490,7 @@ mod tests {
                 exp_fish: None,
                 exp_life: None,
             }],
+            &HashMap::new(),
         )
         .expect("source-backed rows should build");
 
@@ -671,6 +689,7 @@ mod tests {
                     exp_life: None,
                 },
             ],
+            &HashMap::new(),
         )
         .expect("source-backed rows should build");
 

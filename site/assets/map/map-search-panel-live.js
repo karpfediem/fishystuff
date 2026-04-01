@@ -51,6 +51,35 @@ function spriteIcon(name, sizeClass = "size-5") {
   return `<svg class="fishy-icon ${sizeClass}" viewBox="0 0 24 24" aria-hidden="true"><use width="100%" height="100%" href="${ICON_SPRITE_URL}#fishy-${name}"></use></svg>`;
 }
 
+function itemGradeTone(grade, isPrize) {
+  const resolver = globalThis.window?.__fishystuffItemPresentation?.resolveGradeTone;
+  if (typeof resolver === "function") {
+    return resolver(grade, isPrize);
+  }
+  const normalized = String(grade ?? "").trim().toLowerCase();
+  if (isPrize === true || normalized === "prize" || normalized === "red") {
+    return "red";
+  }
+  switch (normalized) {
+    case "rare":
+    case "yellow":
+      return "yellow";
+    case "highquality":
+    case "high_quality":
+    case "high-quality":
+    case "blue":
+      return "blue";
+    case "general":
+    case "green":
+      return "green";
+    case "trash":
+    case "white":
+      return "white";
+    default:
+      return "unknown";
+  }
+}
+
 function fishFilterTermIconMarkup(term, sizeClass = "size-4") {
   const metadata = fishFilterTermMetadata(term);
   return spriteIcon(
@@ -62,14 +91,15 @@ function fishFilterTermIconMarkup(term, sizeClass = "size-4") {
 function fishIdentityMarkup(fish) {
   const fishId = Number.parseInt(fish?.fishId, 10);
   const name = String(fish?.name || `Fish ${fishId || "?"}`).trim();
+  const gradeTone = itemGradeTone(fish?.grade, fish?.isPrize === true || fish?.is_prize === true);
   const iconUrl =
     globalThis.window?.__fishystuffResolveFishItemIconUrl?.(fish?.itemId) ||
     globalThis.window?.__fishystuffResolveFishEncyclopediaIconUrl?.(fish?.encyclopediaId) ||
     "";
   const iconMarkup = iconUrl
-    ? `<span class="inline-flex size-5 shrink-0 overflow-hidden rounded-full bg-base-200 ring-1 ring-base-300/80"><img class="h-full w-full object-cover" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
-    : `<span class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-base-300 text-[11px] font-semibold text-base-content/70">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span>`;
-  return `<span class="inline-flex min-w-0 items-center gap-2"><span class="truncate max-w-40">${iconMarkup}</span><span class="truncate max-w-40">${escapeHtml(name)}</span></span>`;
+    ? `<span class="fishy-item-icon-frame is-xs fishy-item-grade-${escapeHtml(gradeTone)}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
+    : `<span class="fishy-item-icon-frame is-xs fishy-item-grade-${escapeHtml(gradeTone)}"><span class="fishy-item-icon-fallback fishy-item-grade-${escapeHtml(gradeTone)}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
+  return `<span class="fishy-item-row fishy-item-grade-${escapeHtml(gradeTone)}">${iconMarkup}<span class="fishy-item-label truncate max-w-40">${escapeHtml(name)}</span></span>`;
 }
 
 function zoneIdentityMarkup(zone) {

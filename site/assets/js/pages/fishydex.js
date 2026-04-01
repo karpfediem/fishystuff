@@ -489,6 +489,13 @@
   }
 
   function filterGradeForEntry(entry) {
+    const resolver = window.__fishystuffItemPresentation
+      && typeof window.__fishystuffItemPresentation.resolveGradeTone === "function"
+      ? window.__fishystuffItemPresentation.resolveGradeTone
+      : null;
+    if (resolver) {
+      return resolver(entry && entry.grade, entry && entry.is_prize === true);
+    }
     if (!entry) {
       return "unknown";
     }
@@ -778,6 +785,7 @@
   function renderFishCard(fish, caughtSet, favouriteSet, snapshot, animationIndex, animateCards) {
     const itemId = fishItemId(fish);
     const fishName = fish.name || `Fish ${itemId}`;
+    const gradeTone = filterGradeForEntry(fish);
     const isCaught = caughtSet.has(itemId);
     const isFavourite = favouriteSet.has(itemId);
     const card = createElement("article", "fishydex-card card card-border bg-base-100");
@@ -828,15 +836,24 @@
     top.appendChild(actions);
 
     const main = createElement("div", "fishydex-card-main");
-    const iconWrap = createElement("div", `fishydex-icon-wrap grade-${filterGradeForEntry(fish)}`);
-    const icon = createElement("img", "fishydex-icon");
+    const iconWrap = createElement(
+      "div",
+      `fishydex-icon-wrap fishy-item-icon-frame is-lg fishy-item-grade-${gradeTone}`
+    );
+    const icon = createElement("img", "fishydex-icon fishy-item-icon");
     icon.loading = "lazy";
-    const placeholder = createElement("div", "fishydex-placeholder", "?");
+    const placeholder = createElement(
+      "div",
+      `fishydex-placeholder fishy-item-icon-fallback fishy-item-grade-${gradeTone}`,
+      "?"
+    );
     setImageWithPlaceholder(icon, placeholder, fishItemIconUrl(itemId), `${fishName} icon`);
     iconWrap.append(icon, placeholder);
 
     main.appendChild(iconWrap);
-    main.appendChild(createElement("div", "fishydex-name", fishName));
+    main.appendChild(
+      createElement("div", `fishydex-name fishy-item-label fishy-item-grade-${gradeTone}`, fishName)
+    );
     main.appendChild(createVendorPriceElement("div", "fishydex-price fishydex-card-price", entryVendorPrice(fish)));
 
     content.append(top, main);
@@ -1196,6 +1213,9 @@
     const guidePlaceholder = document.getElementById("fishydex-details-guide-placeholder");
 
     setElementText(title, meta.name);
+    if (title instanceof HTMLElement) {
+      title.className = `fishydex-details-title fishy-item-label fishy-item-grade-${meta.grade}`;
+    }
 
     if (favouriteToggle instanceof HTMLButtonElement) {
       favouriteToggle.dataset.favouriteState = meta.favourite ? "active" : "inactive";
@@ -1248,9 +1268,11 @@
     renderBestSpots(spotsNote, spotsList, meta);
 
     if (iconFrame instanceof HTMLElement) {
-      iconFrame.className = `fishydex-details-icon-wrap grade-${meta.grade}`;
+      iconFrame.className = `fishydex-details-icon-wrap fishy-item-icon-frame is-xl fishy-item-grade-${meta.grade}`;
     }
     if (icon instanceof HTMLImageElement && iconPlaceholder instanceof HTMLElement) {
+      icon.className = "fishydex-details-icon fishy-item-icon";
+      iconPlaceholder.className = `fishydex-placeholder fishy-item-icon-fallback fishy-item-grade-${meta.grade}`;
       setImageWithPlaceholder(icon, iconPlaceholder, fishItemIconUrl(meta.itemId), `${meta.name} icon`);
     }
     if (guideImage instanceof HTMLImageElement && guidePlaceholder instanceof HTMLElement) {

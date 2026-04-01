@@ -18,6 +18,7 @@ pub struct CalculatorItemEntry {
     pub fish_multiplier: Option<f32>,
     pub exp_fish: Option<f32>,
     pub exp_life: Option<f32>,
+    pub grade: Option<String>,
     pub item_id: Option<i32>,
     pub icon_id: Option<i32>,
     pub icon: Option<String>,

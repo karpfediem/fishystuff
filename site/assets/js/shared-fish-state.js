@@ -95,6 +95,31 @@
     };
   }
 
+  function resolveItemGradeTone(grade, isPrize) {
+    const normalized = String(grade ?? "").trim().toLowerCase();
+    if (isPrize === true || normalized === "prize" || normalized === "red") {
+      return "red";
+    }
+    switch (normalized) {
+      case "rare":
+      case "yellow":
+        return "yellow";
+      case "highquality":
+      case "high_quality":
+      case "high-quality":
+      case "blue":
+        return "blue";
+      case "general":
+      case "green":
+        return "green";
+      case "trash":
+      case "white":
+        return "white";
+      default:
+        return "unknown";
+    }
+  }
+
   window.__fishystuffSharedFishState = Object.freeze({
     DEFAULT_STORAGE_KEYS: DEFAULT_STORAGE_KEYS,
     normalizeIds: normalizeFishIds,
@@ -102,5 +127,8 @@
     loadRecord: loadRecord,
     persistRecord: persistRecord,
     loadState: loadState,
+  });
+  window.__fishystuffItemPresentation = Object.freeze({
+    resolveGradeTone: resolveItemGradeTone,
   });
 })();

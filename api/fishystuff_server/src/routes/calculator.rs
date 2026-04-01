@@ -273,6 +273,7 @@ struct SelectOption<'a> {
     value: &'a str,
     label: &'a str,
     icon: Option<&'a str>,
+    grade_tone: &'a str,
     item: Option<&'a CalculatorItemEntry>,
     lifeskill_level: Option<&'a CalculatorLifeskillLevelEntry>,
 }
@@ -303,6 +304,7 @@ const NONE_SELECT_OPTION: SelectOption<'static> = SelectOption {
     value: "",
     label: "None",
     icon: None,
+    grade_tone: "unknown",
     item: None,
     lifeskill_level: None,
 };
@@ -2255,14 +2257,14 @@ fn fish_grade_rank(grade: &str) -> Option<u8> {
     }
 }
 
-fn loot_icon_grade_tone(grade: Option<&str>) -> &'static str {
+fn item_grade_tone(grade: Option<&str>) -> &'static str {
     match grade {
-        Some("Prize") => "prize",
+        Some("Prize") => "red",
         Some("Rare") => "yellow",
         Some("HighQuality") => "blue",
         Some("General") => "green",
         Some("Trash") => "white",
-        _ => "neutral",
+        _ => "unknown",
     }
 }
 
@@ -2526,7 +2528,7 @@ fn derive_loot_chart(
                 .icon
                 .as_deref()
                 .map(|icon| absolute_public_asset_url(data.cdn_base_url.as_str(), icon)),
-            icon_grade_tone: loot_icon_grade_tone(entry.grade.as_deref()).to_string(),
+            icon_grade_tone: item_grade_tone(entry.grade.as_deref()).to_string(),
             fill_color: group_row.fill_color,
             stroke_color: group_row.stroke_color,
             text_color: group_row.text_color,
@@ -3595,6 +3597,7 @@ fn select_options_from_catalog(options: &[CalculatorOptionEntry]) -> Vec<SelectO
             value: option.key.as_str(),
             label: option.label.as_str(),
             icon: None,
+            grade_tone: "unknown",
             item: None,
             lifeskill_level: None,
         })
@@ -4316,11 +4319,19 @@ fn render_searchable_dropdown_option_content_html(
     cdn_base_url: &str,
     option: SelectOption<'_>,
 ) -> String {
+    let grade_tone = escape_html(option.grade_tone);
+    let tone_class = format!("fishy-item-grade-{grade_tone}");
     let mut html = String::new();
+    write!(
+        html,
+        "<span class=\"fishy-item-row min-w-0 flex-1 {}\">",
+        tone_class
+    )
+    .unwrap();
     if let Some(icon) = option.icon {
         write!(
             html,
-            "<img aria-hidden=\"true\" src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
+            "<span class=\"fishy-item-icon-frame is-md {tone_class}\"><img aria-hidden=\"true\" src=\"{}\" class=\"fishy-item-icon item-icon\" alt=\"{} icon\"/></span>",
             escape_html(&absolute_public_asset_url(cdn_base_url, icon)),
             escape_html(option.label)
         )
@@ -4346,11 +4357,12 @@ fn render_searchable_dropdown_option_content_html(
         .unwrap_or_default();
     write!(
         html,
-        "<span class=\"min-w-0 flex-1\"><span class=\"block truncate font-medium\">{}</span>{}</span>",
+        "<span class=\"min-w-0 flex-1\"><span class=\"fishy-item-label block truncate font-medium {tone_class}\">{}</span>{}</span>",
         escape_html(option.label),
         badges,
     )
     .unwrap();
+    html.push_str("</span>");
     html
 }
 
@@ -5019,6 +5031,7 @@ fn sorted_lifeskill_options(levels: &[CalculatorLifeskillLevelEntry]) -> Vec<Sel
             value: level.key.as_str(),
             label: level.name.as_str(),
             icon: None,
+            grade_tone: "unknown",
             item: None,
             lifeskill_level: Some(level),
         })
@@ -5036,6 +5049,7 @@ fn item_options_by_type<'a>(
             value: item.key.as_str(),
             label: item.name.as_str(),
             icon: item.icon.as_deref(),
+            grade_tone: item_grade_tone(item.grade.as_deref()),
             item: Some(item),
             lifeskill_level: None,
         })
@@ -5055,6 +5069,7 @@ fn target_fish_options<'a>(data: &'a CalculatorData) -> Vec<SelectOption<'a>> {
             value: entry.name.as_str(),
             label: entry.name.as_str(),
             icon: entry.icon.as_deref(),
+            grade_tone: item_grade_tone(entry.grade.as_deref()),
             item: None,
             lifeskill_level: None,
         })
@@ -5117,22 +5132,30 @@ fn render_checkbox_group(
             category_key_attr,
         )
         .unwrap();
-        if let Some(icon) = option.icon {
-            write!(
-                html,
-                "<img aria-hidden=\"true\" src=\"{}\" class=\"item-icon\" alt=\"{} icon\"/>",
-                escape_html(&absolute_public_asset_url(cdn_base_url, icon)),
-                escape_html(option.label)
-            )
-            .unwrap();
-        }
+        let grade_tone = escape_html(option.grade_tone);
+        let tone_class = format!("fishy-item-grade-{grade_tone}");
         let badges = option
             .item
             .map(render_item_effect_badges)
             .unwrap_or_default();
         write!(
             html,
-            "<span class=\"min-w-0 flex-1\"><span class=\"block font-medium\">{}</span>{}</span></label>",
+            "<span class=\"fishy-item-row min-w-0 flex-1 {}\">",
+            tone_class,
+        )
+        .unwrap();
+        if let Some(icon) = option.icon {
+            write!(
+                html,
+                "<span class=\"fishy-item-icon-frame is-md {tone_class}\"><img aria-hidden=\"true\" src=\"{}\" class=\"fishy-item-icon item-icon\" alt=\"{} icon\"/></span>",
+                escape_html(&absolute_public_asset_url(cdn_base_url, icon)),
+                escape_html(option.label)
+            )
+            .unwrap();
+        }
+        write!(
+            html,
+            "<span class=\"min-w-0 flex-1\"><span class=\"fishy-item-label block font-medium {tone_class}\">{}</span>{}</span></span></label>",
             escape_html(option.label),
             badges,
         )

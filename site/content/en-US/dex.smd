@@ -774,58 +774,16 @@
   }
 
   .fishydex-icon-wrap {
-    display: grid;
-    place-items: center;
     width: 4.75rem;
     height: 4.75rem;
-    border-radius: 34%;
-    border: 1px solid color-mix(in oklab, var(--color-base-content, #1f2937) 18%, var(--dex-line) 82%);
-    background: var(--dex-surface-strong);
-  }
-
-  .fishydex-icon-wrap.grade-red,
-  .fishydex-details-icon-wrap.grade-red {
-    border-color: color-mix(in oklab, var(--dex-grade-red) 28%, var(--dex-line) 72%);
-  }
-
-  .fishydex-icon-wrap.grade-yellow,
-  .fishydex-details-icon-wrap.grade-yellow {
-    border-color: color-mix(in oklab, var(--dex-grade-yellow) 28%, var(--dex-line) 72%);
-  }
-
-  .fishydex-icon-wrap.grade-blue,
-  .fishydex-details-icon-wrap.grade-blue {
-    border-color: color-mix(in oklab, var(--dex-grade-blue) 28%, var(--dex-line) 72%);
-  }
-
-  .fishydex-icon-wrap.grade-green,
-  .fishydex-details-icon-wrap.grade-green {
-    border-color: color-mix(in oklab, var(--dex-grade-green) 28%, var(--dex-line) 72%);
-  }
-
-  .fishydex-icon-wrap.grade-white,
-  .fishydex-details-icon-wrap.grade-white {
-    border-color: color-mix(in oklab, var(--dex-grade-white) 22%, var(--dex-line) 78%);
-  }
-
-  .fishydex-icon-wrap.grade-unknown,
-  .fishydex-details-icon-wrap.grade-unknown {
-    border-color: color-mix(in oklab, var(--dex-grade-unknown) 18%, var(--dex-line) 82%);
   }
 
   .fishydex-icon {
-    display: block;
-    width: auto;
-    height: auto;
-    max-width: 100%;
-    max-height: 100%;
-    margin: 0;
     object-fit: contain;
     image-rendering: auto;
   }
 
   .fishydex-placeholder {
-    color: var(--dex-text-muted);
     font-size: 2rem;
   }
 
@@ -1002,21 +960,11 @@
   }
 
   .fishydex-details-icon-wrap {
-    display: grid;
-    place-items: center;
     width: 5.5rem;
     height: 5.5rem;
-    border-radius: 34%;
-    border: 1px solid color-mix(in oklab, var(--color-base-content, #1f2937) 18%, var(--dex-line) 82%);
-    background: var(--dex-surface-strong);
   }
 
   .fishydex-details-icon {
-    display: block;
-    width: auto;
-    height: auto;
-    max-width: 100%;
-    max-height: 100%;
     object-fit: contain;
   }
 

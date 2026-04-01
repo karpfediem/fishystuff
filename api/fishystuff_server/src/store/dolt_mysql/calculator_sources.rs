@@ -9,6 +9,7 @@ use crate::store::validate_dolt_ref;
 use super::calculator_effects::{
     normalized_effect_lines, parse_unique_calculator_effect_text, CalculatorItemEffectValues,
 };
+use super::catalog::fish_grade_from_db;
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
@@ -34,6 +35,7 @@ pub(super) struct CalculatorItemSourceMetadata {
     pub(super) normalized_name_ko: Option<String>,
     pub(super) item_type: Option<String>,
     pub(super) durability: Option<i32>,
+    pub(super) grade: Option<String>,
     pub(super) icon_id: Option<i32>,
 }
 
@@ -1481,6 +1483,7 @@ impl DoltMySqlStore {
                 ) AS item_name_en, \
                 it.`EquipType`, \
                 it.`IconImageFile`, \
+                it.`GradeType`, \
                 CASE \
                     WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
                     THEN CAST(it.`EnduranceLimit` AS SIGNED) \
@@ -1494,6 +1497,7 @@ impl DoltMySqlStore {
                       it.`ItemName`, \
                       it.`EquipType`, \
                       it.`IconImageFile`, \
+                      it.`GradeType`, \
                       CASE \
                           WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
                           THEN CAST(it.`EnduranceLimit` AS SIGNED) \
@@ -1508,6 +1512,7 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<String>,
             Option<i64>,
         )> = match conn.query(raw_item_table_query) {
             Ok(rows) => rows,
@@ -1515,10 +1520,11 @@ impl DoltMySqlStore {
             Err(err) => return Err(db_unavailable(err)),
         };
         let mut out = HashMap::new();
-        for (item_id, name_ko, name_en, equip_type, icon_file, durability) in rows {
+        for (item_id, name_ko, name_en, equip_type, icon_file, grade_type, durability) in rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
+            let (grade, _, _) = fish_grade_from_db(grade_type);
             out.insert(
                 item_id,
                 CalculatorItemSourceMetadata {
@@ -1529,6 +1535,7 @@ impl DoltMySqlStore {
                     item_type: calculator_item_type_from_equip_type(equip_type.as_deref())
                         .map(str::to_string),
                     durability: durability.and_then(|value| i32::try_from(value).ok()),
+                    grade,
                     icon_id: normalize_optional_string(icon_file).and_then(|value| {
                         fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
                     }),
@@ -1591,6 +1598,7 @@ impl DoltMySqlStore {
                 ) AS item_name_en, \
                 it.`EquipType`, \
                 it.`IconImageFile`, \
+                it.`GradeType`, \
                 CASE \
                     WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
                     THEN CAST(it.`EnduranceLimit` AS SIGNED) \
@@ -1604,6 +1612,7 @@ impl DoltMySqlStore {
                       it.`ItemName`, \
                       it.`EquipType`, \
                       it.`IconImageFile`, \
+                      it.`GradeType`, \
                       CASE \
                           WHEN TRIM(COALESCE(it.`EnduranceLimit`, '')) REGEXP '^[0-9]+$' \
                           THEN CAST(it.`EnduranceLimit` AS SIGNED) \
@@ -1618,6 +1627,7 @@ impl DoltMySqlStore {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<String>,
             Option<i64>,
         )> = match conn.query(query) {
             Ok(rows) => rows,
@@ -1626,10 +1636,11 @@ impl DoltMySqlStore {
         };
 
         let mut out = HashMap::new();
-        for (item_id, name_ko, name_en, equip_type, icon_file, durability) in rows {
+        for (item_id, name_ko, name_en, equip_type, icon_file, grade_type, durability) in rows {
             let Ok(item_id) = i32::try_from(item_id) else {
                 continue;
             };
+            let (grade, _, _) = fish_grade_from_db(grade_type);
             out.insert(
                 item_id,
                 CalculatorItemSourceMetadata {
@@ -1640,6 +1651,7 @@ impl DoltMySqlStore {
                     item_type: calculator_item_type_from_equip_type(equip_type.as_deref())
                         .map(str::to_string),
                     durability: durability.and_then(|value| i32::try_from(value).ok()),
+                    grade,
                     icon_id: normalize_optional_string(icon_file).and_then(|value| {
                         fishystuff_core::fish_icons::parse_fish_icon_asset_id(&value)
                     }),

@@ -34,8 +34,10 @@
     }
 
     .item-icon {
-        width: 30px;
-        height: 30px;
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
     }
 
     #fishing-timeline {
