@@ -22,7 +22,6 @@ import {
 } from "./map-layer-panel-live.js";
 import {
   createMapPatchPickerController,
-  patchTouchesPatchPickerSignals,
 } from "./map-patch-picker-live.js";
 import {
   createMapSearchPanelController,
@@ -37,7 +36,6 @@ import {
 import { createMapWindowManager } from "./map-window-manager.js";
 import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
-import { patchTouchesHoverTooltipSignals } from "./map-hover-facts.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -224,21 +222,12 @@ export function createDeferredBridgeStateRefresher({
 export function routeLiveControllerPatch({
   patch,
   windowManager = null,
-  patchPicker = null,
-  hoverTooltip = null,
   layerPanel = null,
   searchPanel = null,
   bookmarkPanel = null,
-  infoPanel = null,
 } = {}) {
   if (windowManager && patchTouchesWindowUi(patch)) {
     windowManager.scheduleApplyFromSignals();
-  }
-  if (patchPicker && patchTouchesPatchPickerSignals(patch)) {
-    patchPicker.scheduleRender();
-  }
-  if (hoverTooltip && patchTouchesHoverTooltipSignals(patch)) {
-    hoverTooltip.scheduleRender();
   }
   if (layerPanel && patchTouchesLayerPanelSignals(patch)) {
     layerPanel.scheduleRender();
@@ -248,9 +237,6 @@ export function routeLiveControllerPatch({
   }
   if (bookmarkPanel && patchTouchesBookmarkSignals(patch)) {
     bookmarkPanel.scheduleRender();
-  }
-  if (infoPanel && typeof infoPanel.handleSignalPatch === "function") {
-    infoPanel.handleSignalPatch(patch);
   }
 }
 
@@ -419,12 +405,9 @@ export async function start() {
     routeLiveControllerPatch({
       patch: effectivePatch,
       windowManager,
-      patchPicker,
-      hoverTooltip,
       layerPanel,
       searchPanel,
       bookmarkPanel,
-      infoPanel: zoneInfoPanel,
     });
     if (searchProjectionPatch) {
       applyInternalSignalPatch(searchProjectionPatch);

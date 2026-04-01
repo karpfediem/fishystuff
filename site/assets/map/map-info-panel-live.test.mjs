@@ -188,11 +188,15 @@ test("createMapInfoPanelController refreshes zone loot on selection patches thro
     },
   ]);
 
-  controller.handleSignalPatch({
-    _map_runtime: {
-      selection: signals._map_runtime.selection,
-    },
-  });
+  shell.dispatchEvent(
+    new CustomEvent("fishymap:signal-patched", {
+      detail: {
+        _map_runtime: {
+          selection: signals._map_runtime.selection,
+        },
+      },
+    }),
+  );
   await flushAsyncWork();
 
   assert.equal(fetchCalls.length, 1);

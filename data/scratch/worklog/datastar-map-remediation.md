@@ -5957,3 +5957,61 @@ Next:
 - keep shrinking `map-app-live.js`
 - likely target:
   - the remaining centralized controller rerender fan-out
+
+## 2026-04-01: move more live controllers onto shell-local patched events
+
+After the previous slice, `map-app-live.js` still carried explicit rerender knowledge for several
+controllers through `routeLiveControllerPatch(...)`.
+
+The next low-risk win was to move the simpler controllers back onto the shell-local applied patch
+event, now that that event is scoped to `#map-page-shell` instead of the global Datastar bus.
+
+What changed:
+
+- `site/assets/map/map-patch-picker-live.js`
+  - now listens to `fishymap:signal-patched`
+  - rerenders itself when patch-picker-relevant branches change
+- `site/assets/map/map-hover-tooltip-live.js`
+  - now listens to `fishymap:signal-patched`
+  - rerenders itself when hover-fact visibility inputs change
+- `site/assets/map/map-info-panel-live.js`
+  - now listens to `fishymap:signal-patched`
+  - routes those shell-local patches into `handleSignalPatch(...)`
+- `site/assets/map/map-app-live.js`
+  - no longer imports or routes hover/picker/info patch-touch logic
+  - `routeLiveControllerPatch(...)` is smaller again
+- added/updated coverage in:
+  - `site/assets/map/map-hover-tooltip-live.test.mjs`
+  - `site/assets/map/map-info-panel-live.test.mjs`
+  - `site/assets/map/map-app-live.test.mjs`
+
+Why this matters:
+
+- it removes more controller-specific rerender knowledge from `map-app-live.js`
+- those controllers now own their own shell-local reactive seam instead of depending on central
+  patch fan-out
+- this keeps the live map closer to element/component-owned reactive behavior instead of app-owned
+  switchboard logic
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js site/assets/map/map-patch-picker-live.js site/assets/map/map-hover-tooltip-live.js site/assets/map/map-info-panel-live.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-patch-picker-live.test.mjs site/assets/map/map-hover-tooltip-live.test.mjs site/assets/map/map-info-panel-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+  - `/map/map-hover-tooltip-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Layers 7`
+  - no new console errors
+
+Next:
+
+- keep removing the remaining centralized rerender fan-out in `map-app-live.js`
+- remaining likely targets:
+  - layer panel
+  - search panel
+  - bookmark panel
+  - window manager

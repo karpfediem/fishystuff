@@ -1,4 +1,7 @@
-import { dispatchShellSignalPatch } from "./map-signal-patch.js";
+import {
+  dispatchShellSignalPatch,
+  FISHYMAP_SIGNAL_PATCHED_EVENT,
+} from "./map-signal-patch.js";
 
 function cloneNodeList(nodes) {
   return Array.from(nodes, (node) => node.cloneNode(true));
@@ -317,6 +320,13 @@ export function createMapPatchPickerController({
     }
     render();
   }
+
+  shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
+    if (!patchTouchesPatchPickerSignals(event?.detail)) {
+      return;
+    }
+    scheduleRender();
+  });
 
   return Object.freeze({
     render,

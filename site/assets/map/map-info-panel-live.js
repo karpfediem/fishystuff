@@ -1,4 +1,7 @@
-import { dispatchShellSignalPatch } from "./map-signal-patch.js";
+import {
+  dispatchShellSignalPatch,
+  FISHYMAP_SIGNAL_PATCHED_EVENT,
+} from "./map-signal-patch.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
 
@@ -400,6 +403,9 @@ export function createMapInfoPanelController({
       },
     });
     scheduleRender();
+  });
+  shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
+    handleSignalPatch(event?.detail || null);
   });
 
   return Object.freeze({

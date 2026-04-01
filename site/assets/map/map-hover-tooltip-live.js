@@ -1,6 +1,8 @@
 import {
   buildHoverTooltipRows,
+  patchTouchesHoverTooltipSignals,
 } from "./map-hover-facts.js";
+import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
 const ICON_SPRITE_URL = "/img/icons.svg";
 
@@ -198,6 +200,12 @@ export function createMapHoverTooltipController({
 
   shell.addEventListener("fishymap:hover-changed", (event) => {
     state.hover = normalizeHoverEventDetail(event?.detail);
+    scheduleRender();
+  });
+  shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
+    if (!patchTouchesHoverTooltipSignals(event?.detail)) {
+      return;
+    }
     scheduleRender();
   });
 

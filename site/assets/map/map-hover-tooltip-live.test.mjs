@@ -186,6 +186,40 @@ test("createMapHoverTooltipController hides the tooltip on pointerleave", () => 
   controller.render();
 });
 
+test("createMapHoverTooltipController rerenders on shell-local applied patch events", () => {
+  const { shell, canvas, layers } = createShell();
+  const signals = createSignals();
+  createMapHoverTooltipController({
+    shell,
+    getSignals: () => signals,
+    canvas,
+    requestAnimationFrameImpl: null,
+  }).setZoneCatalog([{ zoneRgb: 0x39e58d, name: "Valencia Sea - Depth 5" }]);
+
+  canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 10, clientY: 20 }));
+  shell.dispatchEvent(new CustomEvent("fishymap:hover-changed", { detail: hoverPayload() }));
+  assert.doesNotMatch(layers.innerHTML, /\(R430\|Hakoven Islands\)/);
+
+  signals._map_ui.layers.hoverFactsVisibleByLayer.regions.origin_region = true;
+  shell.dispatchEvent(
+    new CustomEvent("fishymap:signal-patched", {
+      detail: {
+        _map_ui: {
+          layers: {
+            hoverFactsVisibleByLayer: {
+              regions: {
+                origin_region: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  );
+
+  assert.match(layers.innerHTML, /\(R430\|Hakoven Islands\)/);
+});
+
 process.on("exit", () => {
   globalThis.HTMLElement = originalHTMLElement;
 });
