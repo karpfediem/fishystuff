@@ -139,7 +139,10 @@ function defaultSignals() {
       },
       search: { open: false, query: "", selectedTerms: [] },
       bookmarks: { placing: false, selectedIds: [] },
-      layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {} },
+      layers: {
+        expandedLayerIds: [],
+        hoverFactsVisibleByLayer: {},
+      },
     },
     _map_bookmarks: {
       entries: [],

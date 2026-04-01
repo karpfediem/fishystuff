@@ -3,6 +3,7 @@ import {
   FISHYMAP_POINT_ICON_SCALE_MIN,
 } from "./map-host.js";
 import { buildLayerPanelHoverFactPreview } from "./map-hover-facts.js";
+import { layerSearchTermKindLabels } from "./map-layer-search-effects.js";
 import {
   clampLayerOpacity,
   clampPointIconScale,
@@ -245,6 +246,7 @@ export function renderLayerStack(container, stateBundle, options = {}) {
         `);
       }
       const hoverFactRows = hoverFactPreviewByLayer.get(layer.layerId) || [];
+      const searchTermKinds = layerSearchTermKindLabels(layer.layerId);
       return `
         <article
           class="fishymap-layer-card card card-border bg-base-200"
@@ -317,6 +319,23 @@ export function renderLayerStack(container, stateBundle, options = {}) {
                             <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Waypoints</span>
                             <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                               ${waypointControls.join("")}
+                            </div>
+                          </fieldset>
+                        `
+                        : ""
+                    }
+                    ${
+                      searchTermKinds.length
+                        ? `
+                          <fieldset class="fieldset">
+                            <span class="fieldset-legend m-0 px-0 text-[11px] uppercase tracking-[0.18em] text-base-content/45">Search filters</span>
+                            <div class="flex flex-wrap gap-1.5">
+                              ${searchTermKinds
+                                .map(
+                                  (termLabel) =>
+                                    `<span class="badge badge-soft badge-xs">${escapeHtml(termLabel)}</span>`,
+                                )
+                                .join("")}
                             </div>
                           </fieldset>
                         `

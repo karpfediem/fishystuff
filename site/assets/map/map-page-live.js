@@ -606,7 +606,10 @@
       ? stored
       : {
           windowUi: {},
-          layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {} },
+          layers: {
+            expandedLayerIds: [],
+            hoverFactsVisibleByLayer: {},
+          },
           search: { query: "", selectedTerms: [] },
           bridgedUi: {
             diagnosticsOpen: false,

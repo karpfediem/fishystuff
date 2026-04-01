@@ -18,12 +18,6 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
         windowUi: {
           search: { open: false },
         },
-        layers: {
-          searchClipsByLayer: {
-            fish_evidence: "zone-membership",
-            regions: "mask-sample",
-          },
-        },
         bookmarks: {
           selectedIds: ["bookmark-a", "missing"],
         },
@@ -96,7 +90,6 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
   assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
   assert.deepEqual(patch.filters.layerClipMasks, {
     minimap: "manual-mask",
-    regions: "zone_mask",
   });
   assert.deepEqual(patch.ui.bookmarkSelectedIds, ["bookmark-a"]);
   assert.deepEqual(patch.ui.bookmarks, [

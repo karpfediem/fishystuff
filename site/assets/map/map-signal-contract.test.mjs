@@ -69,6 +69,7 @@ test("normalizeMapBridgedSignalState keeps the bridge contract explicit and norm
   const state = normalizeMapBridgedSignalState({
     filters: {
       layerIdsVisible: ["fish_evidence"],
+      zoneMembershipLayerIds: [" fish_evidence ", "regions", "fish_evidence"],
     },
     ui: {
       viewMode: "3d",
@@ -79,6 +80,7 @@ test("normalizeMapBridgedSignalState keeps the bridge contract explicit and norm
 
   assert.equal(state.version, DEFAULT_MAP_BRIDGED_SIGNAL_STATE.version ?? 1);
   assert.deepEqual(state.filters.layerIdsVisible, ["fish_evidence"]);
+  assert.deepEqual(state.filters.zoneMembershipLayerIds, ["fish_evidence", "regions"]);
   assert.deepEqual(state.ui.bookmarkSelectedIds, ["a"]);
   assert.deepEqual(state.ui.bookmarks, [{ id: "a", label: "A", worldX: 12.3, worldZ: 45.6 }]);
   assert.equal(state.ui.viewMode, "3d");

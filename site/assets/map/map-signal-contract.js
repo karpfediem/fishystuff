@@ -37,7 +37,10 @@ export const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   windowUi: DEFAULT_WINDOW_UI_STATE,
   search: Object.freeze({ open: false, query: "", selectedTerms: [] }),
   bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
-  layers: Object.freeze({ expandedLayerIds: [], hoverFactsVisibleByLayer: {} }),
+  layers: Object.freeze({
+    expandedLayerIds: [],
+    hoverFactsVisibleByLayer: {},
+  }),
 });
 
 export const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
@@ -53,6 +56,7 @@ export const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
       "toPatchId",
       "layerIdsVisible",
       "layerIdsOrdered",
+      "zoneMembershipLayerIds",
       "layerOpacities",
       "layerClipMasks",
       "layerWaypointConnectionsVisible",
@@ -124,6 +128,7 @@ export const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
     toPatchId: null,
     layerIdsVisible: DEFAULT_ENABLED_LAYER_IDS,
     layerIdsOrdered: [],
+    zoneMembershipLayerIds: [],
     layerOpacities: {},
     layerClipMasks: {},
     layerWaypointConnectionsVisible: {},
@@ -306,18 +311,19 @@ export function normalizeWindowUiState(rawState) {
 }
 
 export function normalizeMapUiSignalState(raw) {
-  const normalizedBookmarks = raw?.bookmarks && typeof raw.bookmarks === "object"
-    ? raw.bookmarks
+  const current = mergeDefaults(DEFAULT_MAP_UI_SIGNAL_STATE, raw);
+  const normalizedBookmarks = current?.bookmarks && typeof current.bookmarks === "object"
+    ? current.bookmarks
     : {};
-  const normalizedLayers = raw?.layers && typeof raw.layers === "object"
-    ? raw.layers
+  const normalizedLayers = current?.layers && typeof current.layers === "object"
+    ? current.layers
     : {};
   return {
-    windowUi: normalizeWindowUiState(raw?.windowUi),
+    windowUi: normalizeWindowUiState(current?.windowUi),
     search: {
-      open: raw?.search?.open === true,
-      query: String(raw?.search?.query || ""),
-      selectedTerms: normalizeSelectedSearchTerms(raw?.search?.selectedTerms),
+      open: current?.search?.open === true,
+      query: String(current?.search?.query || ""),
+      selectedTerms: normalizeSelectedSearchTerms(current?.search?.selectedTerms),
     },
     bookmarks: {
       placing: normalizedBookmarks.placing === true,
@@ -369,8 +375,13 @@ export function normalizeMapBridgedSignalState(raw) {
       patchId: fromPatchId || toPatchId ? null : normalizeNullableString(current.filters?.patchId),
       fromPatchId,
       toPatchId,
-      layerIdsVisible: cloneJsonValue(current.filters?.layerIdsVisible || DEFAULT_ENABLED_LAYER_IDS),
-      layerIdsOrdered: cloneJsonValue(current.filters?.layerIdsOrdered || []),
+      layerIdsVisible: normalizeExpandedLayerIds(
+        current.filters?.layerIdsVisible || DEFAULT_ENABLED_LAYER_IDS,
+      ),
+      layerIdsOrdered: normalizeExpandedLayerIds(current.filters?.layerIdsOrdered || []),
+      zoneMembershipLayerIds: normalizeExpandedLayerIds(
+        current.filters?.zoneMembershipLayerIds || [],
+      ),
       layerOpacities: cloneJsonValue(current.filters?.layerOpacities || {}),
       layerClipMasks: cloneJsonValue(current.filters?.layerClipMasks || {}),
       layerWaypointConnectionsVisible: cloneJsonValue(
@@ -390,7 +401,7 @@ export function normalizeMapBridgedSignalState(raw) {
       pointIconScale: Number.isFinite(pointIconScale)
         ? pointIconScale
         : FISHYMAP_POINT_ICON_SCALE_MIN,
-      bookmarkSelectedIds: cloneJsonValue(current.ui?.bookmarkSelectedIds || []),
+      bookmarkSelectedIds: normalizeExpandedLayerIds(current.ui?.bookmarkSelectedIds || []),
       bookmarks: normalizeBridgeBookmarkEntries(current.ui?.bookmarks || []),
     },
   };

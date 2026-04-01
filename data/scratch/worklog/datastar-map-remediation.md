@@ -3698,3 +3698,56 @@ Next:
 - integrate the combined zone fish/group fact pane
 - continue the clean-slate search/filter/clipping work with runtime-owned semantic filtering and
   attachment-driven clipping
+
+
+## Slice 18 — Remove redundant search-clipping UI state
+
+One drift from the intended layer model was a second explicit `Search clipping` settings surface in
+the layer panel.
+
+That drift was wrong for two reasons:
+
+- the clipping relationship is already expressed structurally through the layer stack / attachment
+  model
+- it introduced extra page-owned UI state (`_map_ui.layers.searchClipsByLayer`) for behavior that
+  should not be user-toggled per layer from a separate menu
+
+What changed:
+
+- `site/assets/map/map-shell.html`
+  - removed `searchClipsByLayer` from the clean-slate shell signal bootstrap
+- `site/assets/map/map-signal-contract.js`
+  - removed `searchClipsByLayer` from `_map_ui.layers`
+  - removed its normalization path from `normalizeMapUiSignalState(...)`
+- `site/assets/map/map-page-live.js`
+  - stopped persisting/restoring `searchClipsByLayer`
+  - stopped treating it as an exact-patch canonical branch
+- `site/assets/map/map-layer-panel.js`
+  - removed the `Search clipping` settings table from the live layer panel
+- `site/assets/map/map-layer-panel-live.js`
+  - removed the event wiring that mutated `searchClipsByLayer`
+- `site/assets/map/map-runtime-adapter.js`
+  - keeps the current internal default clip behavior by projecting
+    `DEFAULT_LAYER_SEARCH_CLIPS` directly into `buildLayerSearchEffects(...)`
+  - so the clean-slate runtime behavior remains stable while the redundant page UI/state is gone
+
+Validation:
+
+- JS:
+  - `node --check site/assets/map/map-layer-panel.js`
+  - `node --check site/assets/map/map-layer-panel-live.js`
+  - `node --check site/assets/map/map-page-live.js`
+  - `node --test site/assets/map/map-signal-contract.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-page-live.test.mjs`
+- served-vs-output checks:
+  - rebuilt site output
+  - confirmed neither served `/map/` nor `site/.out/map/index.html` contains:
+    - `searchClipsByLayer`
+    - `Search clipping`
+    - `data-layer-search-clip`
+
+Next:
+
+- replace the misleading Zone-pane `Fish Presence` evidence list with a proper page-owned zone
+  facts data source
+- keep the Info window generic (`Zone`, `Territory`, `Trade`) while moving the zone fish view
+  toward the calculator-style droprate + species rows instead of evidence-share percentages
