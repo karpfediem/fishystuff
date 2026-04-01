@@ -80,7 +80,7 @@ pub(super) fn merge_fish_catalog_row(
     }
 }
 
-pub(super) fn fish_grade_from_db(
+pub(super) fn item_grade_from_db(
     value: Option<String>,
 ) -> (Option<String>, Option<u8>, Option<bool>) {
     let normalized = normalize_optional_string(value);

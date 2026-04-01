@@ -8,6 +8,7 @@ mod calculator_progression;
 mod calculator_sources;
 mod catalog;
 mod fish_best_spots;
+mod item_metadata;
 mod stats;
 mod util;
 mod zone_profile_v2;
@@ -52,8 +53,8 @@ use crate::store::queries;
 use crate::store::{validate_dolt_ref, CalculatorZoneLootEntry, FishLang, Store};
 use calculator_sources::CalculatorCatalogSourceData;
 use catalog::{
-    encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_grade_from_db,
-    fish_is_dried, merge_fish_catalog_row, parse_positive_i64,
+    encyclopedia_icon_id_from_db, fish_catch_methods_from_description, fish_is_dried,
+    item_grade_from_db, merge_fish_catalog_row, parse_positive_i64,
 };
 #[cfg(test)]
 use layers::{parse_layer_kind, parse_vector_source, resolve_layer_asset_url, VectorSourceFields};
@@ -647,7 +648,7 @@ impl DoltMySqlStore {
                 continue;
             };
             let item_name = normalize_optional_string(item_name);
-            let (grade, grade_rank, is_prize) = fish_grade_from_db(grade_type);
+            let (grade, grade_rank, is_prize) = item_grade_from_db(grade_type);
             let encyclopedia_id = encyclopedia_icon_id_from_db(encyclopedia_icon_file);
             let is_dried = fish_is_dried(Some(name.as_str()), item_name.as_deref());
             let catch_methods = fish_catch_methods_from_description(description);

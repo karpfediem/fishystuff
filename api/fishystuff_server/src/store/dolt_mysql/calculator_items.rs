@@ -8,9 +8,9 @@ use crate::store::FishLang;
 
 use super::calculator_effects::CalculatorItemEffectValues;
 use super::calculator_sources::{
-    CalculatorCatalogSourceData, CalculatorItemDbRow, CalculatorItemSourceMetadata,
-    CalculatorSourceBackedItemRow,
+    CalculatorCatalogSourceData, CalculatorItemDbRow, CalculatorSourceBackedItemRow,
 };
+use super::item_metadata::ItemSourceMetadata;
 use super::util::normalize_optional_string;
 use super::DoltMySqlStore;
 
@@ -161,7 +161,7 @@ impl DoltMySqlStore {
         &self,
         lang: FishLang,
         rows: Vec<CalculatorItemDbRow>,
-        item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
+        item_source_metadata: &HashMap<i32, ItemSourceMetadata>,
     ) -> Vec<CalculatorItemEntry> {
         let mut items = Vec::with_capacity(rows.len());
         for (
@@ -246,7 +246,7 @@ impl DoltMySqlStore {
     fn build_source_backed_items(
         lang: FishLang,
         source_backed_rows: &[CalculatorSourceBackedItemRow],
-        item_source_metadata: &HashMap<i32, CalculatorItemSourceMetadata>,
+        item_source_metadata: &HashMap<i32, ItemSourceMetadata>,
     ) -> AppResult<Vec<CalculatorItemEntry>> {
         let mut items = Vec::new();
         for row in source_backed_rows {
@@ -349,6 +349,7 @@ mod tests {
     use crate::store::FishLang;
 
     use super::super::calculator_effects::CalculatorItemEffectValues;
+    use super::super::item_metadata::ItemSourceMetadata;
     use super::{
         build_source_item, build_source_lightstone_item, source_backed_effect_values,
         CalculatorSourceBackedItemRow, DoltMySqlStore,
@@ -502,6 +503,46 @@ mod tests {
         );
         assert_eq!(sourced.buff_category_id, Some(1));
         assert_eq!(sourced.buff_category_level, Some(0));
+    }
+
+    #[test]
+    fn source_backed_items_apply_grade_from_item_metadata() {
+        let items = DoltMySqlStore::build_source_backed_items(
+            FishLang::En,
+            &[CalculatorSourceBackedItemRow {
+                source_key: "item:9307".to_string(),
+                source_kind: "item".to_string(),
+                item_id: Some(9307),
+                item_type: "buff".to_string(),
+                buff_category_key: None,
+                buff_category_id: None,
+                buff_category_level: None,
+                source_name_en: Some("Verdure Draught".to_string()),
+                source_name_ko: Some("신록의 영약".to_string()),
+                item_icon_file: Some("00009307.dds".to_string()),
+                icon_id: Some(9307),
+                durability: None,
+                fish_multiplier: None,
+                effect_description_ko: Some("자동 낚시 시간 감소 +5%".to_string()),
+                afr: None,
+                bonus_rare: None,
+                bonus_big: None,
+                item_drr: None,
+                exp_fish: None,
+                exp_life: None,
+            }],
+            &HashMap::from([(
+                9307,
+                ItemSourceMetadata {
+                    grade: Some("Rare".to_string()),
+                    ..ItemSourceMetadata::default()
+                },
+            )]),
+        )
+        .expect("source-backed rows should build");
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].grade.as_deref(), Some("Rare"));
     }
 
     #[test]

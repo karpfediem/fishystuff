@@ -10,7 +10,7 @@ use crate::store::{
     validate_dolt_ref, CalculatorZoneLootEntry, CalculatorZoneLootEvidence, FishLang,
 };
 
-use super::catalog::{fish_grade_from_db, parse_positive_i64};
+use super::catalog::{item_grade_from_db, parse_positive_i64};
 use super::util::{db_unavailable, is_missing_table, normalize_optional_string};
 use super::DoltMySqlStore;
 
@@ -435,7 +435,7 @@ impl DoltMySqlStore {
                 .and_then(|value| parse_fish_icon_asset_id(&value))
                 .map(calculator_loot_item_icon_path)
                 .or_else(|| Some(calculator_loot_item_icon_path(item_id)));
-            let (grade, _, _is_prize) = fish_grade_from_db(grade_type);
+            let (grade, _, _is_prize) = item_grade_from_db(grade_type);
             let vendor_price = parse_positive_i64(original_price);
             item_meta.insert(item_id, (name, icon, grade, vendor_price, is_fish > 0));
         }
