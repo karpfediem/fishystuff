@@ -11,9 +11,9 @@ import {
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import "./map-bookmark-panel-element.js";
-import { createMapLayerPanelController } from "./map-layer-panel-live.js";
 import "./map-hover-tooltip-element.js";
 import "./map-info-panel-element.js";
+import "./map-layer-panel-element.js";
 import "./map-patch-picker-element.js";
 import "./map-search-panel-element.js";
 import {
@@ -223,7 +223,6 @@ export async function start() {
   });
   pagePersistor.seed(page.signalObject?.() || null);
   let windowManager = null;
-  let layerPanel = null;
 
   function dispatchSignalPatch(patch) {
     if (!patch || typeof patch !== "object") {
@@ -245,10 +244,6 @@ export async function start() {
   const app = createMapApp();
   const bridge = FishyMapBridge;
   windowManager = createMapWindowManager({
-    shell,
-    getSignals: signals,
-  });
-  layerPanel = createMapLayerPanelController({
     shell,
     getSignals: signals,
   });

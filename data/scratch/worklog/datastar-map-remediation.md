@@ -6558,3 +6558,69 @@ Validation:
   - body controls were present and enabled/disabled correctly
   - a live bookmark patch rendered a bookmark card
   - bookmark fact rows still rendered, including `Resources` and `Origin`
+
+## 2026-04-01: move the live Layers panel onto a custom element
+
+With Search, Hover, Patch Picker, Info, and Bookmarks moved, the Layers panel was the largest remaining app-instantiated controller island.
+
+Why this was the right next step:
+
+- it still owned a large amount of panel-local interaction state
+- it already had strong pure helper seams:
+  - `site/assets/map/map-layer-panel.js`
+  - `site/assets/map/map-layer-state.js`
+  - `site/assets/map/map-layer-panel-live.js`
+- unlike the window manager, its imperative behavior is panel-local and fits cleanly inside a component
+
+What changed:
+
+- introduced a real layers-panel custom element:
+  - `site/assets/map/map-layer-panel-element.js`
+  - `site/assets/map/map-layer-panel-element.test.mjs`
+- moved the Layers window body in `site/assets/map/map-shell.html` to:
+  - `<fishymap-layer-panel id="fishymap-layer-panel" class="not-prose"></fishymap-layer-panel>`
+- `site/assets/map/map-app-live.js`
+  - no longer imports or instantiates the old layer controller
+  - now side-effect imports the custom element module
+- published the new asset in `site/zine.ziggy`
+
+Design notes:
+
+- the custom element now owns the panel-local interaction behavior:
+  - visibility toggles
+  - settings expand/collapse
+  - opacity and point-icon scale slider interactions
+  - waypoint toggle controls
+  - hover-fact toggle controls
+  - drag/drop reordering and attach-mode interactions
+- the shell still owns only the window chrome and title/count badge
+- the element reads the live shell signal graph directly and listens to:
+  - native `datastar-signal-patch`
+  - shell-local `fishymap:signal-patched`
+  - `fishymap:zone-catalog-ready`
+  - `fishymap:hover-changed`
+
+Why this is closer to Datastar:
+
+- `map-app-live.js` loses another imperative controller instantiation
+- durable layer state stays signal-owned under `_map_ui.layers` and `_map_bridged.filters`
+- local drag/hover behavior is encapsulated in the component instead of spread across the app bootstrap
+- the remaining live app is increasingly just shell/bridge orchestration instead of UI ownership
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-layer-panel-element.js`
+  - `node --check site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-layer-panel-element.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for:
+  - `/map/map-layer-panel-element.js`
+  - `/map/map-app-live.js`
+  - `/map/`
+- live DevTools validation on `/map/` confirmed:
+  - the custom element mounted after reload
+  - the Layers count still rendered as `7`
+  - expanding Fish Evidence settings worked
+  - toggling Fish Evidence visibility updated through the live signal path
