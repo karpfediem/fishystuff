@@ -7,10 +7,7 @@ import {
 import {
   DEFAULT_ENABLED_LAYER_IDS,
 } from "./map-signal-contract.js";
-import {
-  buildLayerSearchEffects,
-  DEFAULT_LAYER_SEARCH_CLIPS,
-} from "./map-layer-search-effects.js";
+import { buildLayerSearchEffects } from "./map-layer-search-effects.js";
 import { resolveSearchProjection } from "./map-search-projection.js";
 
 function cloneJson(value) {
@@ -161,10 +158,7 @@ export function normalizeMapActionState(raw) {
 export function buildBridgeInputPatchFromSignals(signals, options = {}) {
   const filters = normalizeBridgedFilters(signals);
   const ui = normalizeBridgedUi(signals);
-  const layerSearchEffects = buildLayerSearchEffects({
-    ...filters,
-    layerSearchClips: DEFAULT_LAYER_SEARCH_CLIPS,
-  });
+  const layerSearchEffects = buildLayerSearchEffects(filters);
   const bookmarks = normalizeBookmarkEntries(signals?._map_bookmarks?.entries);
   const bookmarkSelectedIds = normalizeBookmarkSelectedIds(
     bookmarks,

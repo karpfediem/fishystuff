@@ -1,13 +1,7 @@
-import { MAP_SEARCH_LAYER_SUPPORT } from "./map-search-contract.js";
-
-export const DEFAULT_LAYER_SEARCH_CLIPS = Object.freeze({
-  fish_evidence: "zone-membership",
-});
-
-const CLIP_MODE_LABELS = Object.freeze({
-  "zone-membership": "Clip to visible Zone Mask",
-  "mask-sample": "Mask to visible Zone Mask",
-});
+import {
+  layerSupportsAttachmentClipMode,
+  MAP_SEARCH_LAYER_SUPPORT,
+} from "./map-search-contract.js";
 
 const TERM_KIND_LABELS = Object.freeze({
   fish: "Fish",
@@ -58,17 +52,16 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-export function normalizeLayerSearchClips(value) {
+function normalizeLayerClipMasks(value) {
   const source = isPlainObject(value) ? value : {};
   const next = {};
-  for (const [layerIdRaw, clipModeRaw] of Object.entries(source)) {
+  for (const [layerIdRaw, maskLayerIdRaw] of Object.entries(source)) {
     const layerId = String(layerIdRaw ?? "").trim();
-    const clipMode = String(clipModeRaw ?? "").trim();
-    const supportedClipModes = MAP_SEARCH_LAYER_SUPPORT[layerId]?.clipModes || [];
-    if (!layerId || !clipMode || !supportedClipModes.includes(clipMode)) {
+    const maskLayerId = String(maskLayerIdRaw ?? "").trim();
+    if (!layerId || !maskLayerId || layerId === maskLayerId) {
       continue;
     }
-    next[layerId] = clipMode;
+    next[layerId] = maskLayerId;
   }
   return next;
 }
@@ -77,37 +70,6 @@ export function layerSearchTermKindLabels(layerId) {
   return (MAP_SEARCH_LAYER_SUPPORT[String(layerId ?? "").trim()]?.termKinds || []).map(
     (termKind) => TERM_KIND_LABELS[termKind] || termKind,
   );
-}
-
-export function layerSearchClipRows(layerId, layerSearchClips) {
-  const normalizedLayerId = String(layerId ?? "").trim();
-  const supportedClipModes = MAP_SEARCH_LAYER_SUPPORT[normalizedLayerId]?.clipModes || [];
-  const normalizedClips = normalizeLayerSearchClips(layerSearchClips);
-  return supportedClipModes.map((clipMode) => ({
-    layerId: normalizedLayerId,
-    clipMode,
-    label: CLIP_MODE_LABELS[clipMode] || clipMode,
-    enabled: normalizedClips[normalizedLayerId] === clipMode,
-  }));
-}
-
-export function buildLayerSearchClipsPatch(layerSearchClips, layerId, clipMode, enabled) {
-  const normalized = normalizeLayerSearchClips(layerSearchClips);
-  const normalizedLayerId = String(layerId ?? "").trim();
-  const normalizedClipMode = String(clipMode ?? "").trim();
-  if (!normalizedLayerId || !normalizedClipMode) {
-    return normalized;
-  }
-  if (enabled === false) {
-    delete normalized[normalizedLayerId];
-    return normalized;
-  }
-  const supportedClipModes = MAP_SEARCH_LAYER_SUPPORT[normalizedLayerId]?.clipModes || [];
-  if (!supportedClipModes.includes(normalizedClipMode)) {
-    return normalized;
-  }
-  normalized[normalizedLayerId] = normalizedClipMode;
-  return normalized;
 }
 
 export function hasActiveZoneSearchFilters(filters) {
@@ -125,37 +87,25 @@ export function hasActiveZoneSearchFilters(filters) {
 
 export function buildLayerSearchEffects(filters) {
   const source = isPlainObject(filters) ? filters : {};
-  const layerSearchClips = normalizeLayerSearchClips(source.layerSearchClips);
-  const manualLayerClipMasks = isPlainObject(source.layerClipMasks)
-    ? cloneJson(source.layerClipMasks)
-    : {};
   const activeZoneSearch = hasActiveZoneSearchFilters(source);
-  const effectiveLayerClipMasks = cloneJson(manualLayerClipMasks);
+  const effectiveLayerClipMasks = normalizeLayerClipMasks(source.layerClipMasks);
   const zoneMembershipLayerIds = [];
 
-  if (!activeZoneSearch) {
-    return {
-      activeZoneSearch,
-      layerSearchClips,
-      effectiveLayerClipMasks,
-      zoneMembershipLayerIds,
-    };
-  }
-
-  for (const [layerId, clipMode] of Object.entries(layerSearchClips)) {
-    if (clipMode === "zone-membership") {
+  if (activeZoneSearch) {
+    for (const [layerId, clipMaskLayerId] of Object.entries(effectiveLayerClipMasks)) {
+      if (clipMaskLayerId !== "zone_mask") {
+        continue;
+      }
+      if (!layerSupportsAttachmentClipMode(layerId, "zone-membership")) {
+        continue;
+      }
       zoneMembershipLayerIds.push(layerId);
-      continue;
-    }
-    if (clipMode === "mask-sample" && !String(effectiveLayerClipMasks[layerId] || "").trim()) {
-      effectiveLayerClipMasks[layerId] = "zone_mask";
     }
   }
 
   return {
     activeZoneSearch,
-    layerSearchClips,
-    effectiveLayerClipMasks,
+    effectiveLayerClipMasks: cloneJson(effectiveLayerClipMasks),
     zoneMembershipLayerIds,
   };
 }

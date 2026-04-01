@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   addSelectedSearchTerm,
   buildSearchSelectionStatePatch,
-  layerSupportsClipMode,
+  layerSupportsAttachmentClipMode,
   layerSupportsSearchTerm,
   normalizeFishFilterTerms,
   normalizeSelectedSearchTerms,
@@ -115,8 +115,8 @@ test("addSelectedSearchTerm keeps insertion order with deduped canonical keys", 
 test("search layer support documents direct term and clip capabilities", () => {
   assert.equal(layerSupportsSearchTerm("zone_mask", "fish"), true);
   assert.equal(layerSupportsSearchTerm("regions", "fish"), false);
-  assert.equal(layerSupportsClipMode("regions", "mask-sample"), true);
-  assert.equal(layerSupportsClipMode("bookmarks", "mask-sample"), false);
+  assert.equal(layerSupportsAttachmentClipMode("regions", "mask-sample"), true);
+  assert.equal(layerSupportsAttachmentClipMode("bookmarks", "mask-sample"), false);
 });
 
 test("normalizeFishFilterTerms preserves canonical term order", () => {

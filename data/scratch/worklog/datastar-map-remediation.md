@@ -4163,3 +4163,73 @@ Next:
   `region_groups`, because that blocks direct live visual validation of the semantic filter path
 - after that, validate attachment-driven clipping for raster/vector layers with the same directness
   as the Fish Evidence zone-membership proof
+
+## 2026-04-01: search-driven clipping now follows actual layer attachments
+
+Observed drift:
+
+- the clean-slate runtime adapter still carried a hidden `layerSearchClips` abstraction
+  with an implicit default:
+  - `fish_evidence -> zone-membership`
+- that no longer matched the intended user model
+  - users already express clipping by attaching layers in the Layers window
+  - there should not be a second hidden or separate "search clip" setting
+- the residual abstraction also made the runtime adapter harder to reason about:
+  - search filters were page-owned and canonical
+  - attachments were page-owned and canonical
+  - but clipping behavior still depended on an injected extra default
+
+What changed:
+
+- `site/assets/map/map-search-contract.js`
+  - renamed clip capability metadata to `attachmentClipModes`
+  - this makes it explicit that clipping support is about attachment semantics, not a separate UI
+    preference
+- `site/assets/map/map-layer-search-effects.js`
+  - removed `DEFAULT_LAYER_SEARCH_CLIPS`
+  - removed the unused `layerSearchClips` normalization/toggle helpers
+  - search-driven clipping is now derived only from:
+    - active search filters
+    - the actual `layerClipMasks` attachment graph
+    - per-layer attachment clip capability
+- `site/assets/map/map-runtime-adapter.js`
+  - stopped injecting any default search-clip state
+  - now forwards attachment-driven clipping only
+
+New rule:
+
+- active zone-search filters only produce `zoneMembershipLayerIds` for layers that are:
+  - attached to `zone_mask`
+  - and declare `attachmentClipModes` including `zone-membership`
+- raster/vector mask clipping still comes directly from `layerClipMasks`
+- no hidden search-clip preference layer remains
+
+Validation:
+
+- focused JS tests passed for:
+  - `map-search-contract`
+  - `map-layer-search-effects`
+  - `map-runtime-adapter`
+- served assets were checked against `site/.out` for:
+  - `/map/map-search-contract.js`
+  - `/map/map-layer-search-effects.js`
+  - `/map/map-runtime-adapter.js`
+- live DevTools validation after hard reload:
+  - attaching `fish_evidence -> zone_mask` with an active zone term produced:
+    - `layerClipMasks = { fish_evidence: "zone_mask" }`
+    - `zoneMembershipLayerIds = ["fish_evidence"]`
+  - clearing that attachment produced:
+    - `layerClipMasks = {}`
+    - `zoneMembershipLayerIds = []`
+
+Why this is aligned with the remediation:
+
+- attachment remains the only user-facing clipping model
+- search-driven clipping is now an effect of canonical state, not a second control path
+- this removes another piece of legacy loader-era glue logic from the clean-slate map path
+
+Next:
+
+- continue the generic search/filter work by expanding supported layer-term projections
+  without reintroducing hidden secondary state
+- keep the attachment graph as the only clipping source of truth on the page side

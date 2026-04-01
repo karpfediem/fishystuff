@@ -96,7 +96,7 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
   assert.equal(patch.filters.fromPatchId, "a");
   assert.equal(patch.filters.toPatchId, "b");
   assert.deepEqual(patch.filters.layerIdsVisible, ["bookmarks", "fish_evidence"]);
-  assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+  assert.deepEqual(patch.filters.zoneMembershipLayerIds, []);
   assert.deepEqual(patch.filters.layerClipMasks, {
     minimap: "manual-mask",
   });
@@ -152,7 +152,42 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
     zone_mask: [123456],
   });
   assert.deepEqual(patch.filters.fishIds, [912]);
+  assert.deepEqual(patch.filters.zoneMembershipLayerIds, []);
+});
+
+test("buildBridgeInputPatchFromSignals derives zone-membership clipping from attached layers", () => {
+  const patch = buildBridgeInputPatchFromSignals(
+    {
+      _map_ui: {
+        search: {
+          selectedTerms: [{ kind: "zone", zoneRgb: 123456 }],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+          layerClipMasks: {
+            fish_evidence: "zone_mask",
+            regions: "zone_mask",
+          },
+        },
+      },
+      _shared_fish: {
+        caughtIds: [],
+        favouriteIds: [],
+      },
+    },
+    { currentState: createEmptySnapshot() },
+  );
+
   assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+  assert.deepEqual(patch.filters.layerClipMasks, {
+    fish_evidence: "zone_mask",
+    regions: "zone_mask",
+  });
 });
 
 test("buildBridgeInputPatchFromSignals ignores transitional control filters", () => {

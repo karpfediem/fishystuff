@@ -3,31 +3,31 @@ export const FISH_FILTER_TERM_ORDER = Object.freeze(["favourite", "missing"]);
 export const MAP_SEARCH_LAYER_SUPPORT = Object.freeze({
   bookmarks: Object.freeze({
     termKinds: Object.freeze([]),
-    clipModes: Object.freeze([]),
+    attachmentClipModes: Object.freeze([]),
   }),
   fish_evidence: Object.freeze({
     termKinds: Object.freeze(["fish", "fish-filter", "zone"]),
-    clipModes: Object.freeze(["zone-membership"]),
+    attachmentClipModes: Object.freeze(["zone-membership"]),
   }),
   minimap: Object.freeze({
     termKinds: Object.freeze([]),
-    clipModes: Object.freeze(["mask-sample"]),
+    attachmentClipModes: Object.freeze(["mask-sample"]),
   }),
   node_waypoints: Object.freeze({
     termKinds: Object.freeze([]),
-    clipModes: Object.freeze([]),
+    attachmentClipModes: Object.freeze([]),
   }),
   region_groups: Object.freeze({
     termKinds: Object.freeze(["semantic"]),
-    clipModes: Object.freeze(["mask-sample"]),
+    attachmentClipModes: Object.freeze(["mask-sample"]),
   }),
   regions: Object.freeze({
     termKinds: Object.freeze(["semantic"]),
-    clipModes: Object.freeze(["mask-sample"]),
+    attachmentClipModes: Object.freeze(["mask-sample"]),
   }),
   zone_mask: Object.freeze({
     termKinds: Object.freeze(["fish", "fish-filter", "zone"]),
-    clipModes: Object.freeze([]),
+    attachmentClipModes: Object.freeze([]),
   }),
 });
 
@@ -304,9 +304,9 @@ export function layerSupportsSearchTerm(layerId, termKind) {
   return !!layerSupport?.termKinds?.includes(normalizedTermKind);
 }
 
-export function layerSupportsClipMode(layerId, clipMode) {
+export function layerSupportsAttachmentClipMode(layerId, clipMode) {
   const normalizedLayerId = String(layerId ?? "").trim();
   const normalizedClipMode = String(clipMode ?? "").trim();
   const layerSupport = MAP_SEARCH_LAYER_SUPPORT[normalizedLayerId];
-  return !!layerSupport?.clipModes?.includes(normalizedClipMode);
+  return !!layerSupport?.attachmentClipModes?.includes(normalizedClipMode);
 }
