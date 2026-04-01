@@ -130,7 +130,9 @@ export const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
     layerIdsOrdered: [],
     zoneMembershipLayerIds: [],
     layerOpacities: {},
-    layerClipMasks: {},
+    layerClipMasks: Object.freeze({
+      fish_evidence: "zone_mask",
+    }),
     layerWaypointConnectionsVisible: {},
     layerWaypointLabelsVisible: {},
     layerPointIconsVisible: {},
@@ -362,6 +364,7 @@ export function normalizeMapControlSignalState(raw) {
 
 export function normalizeMapBridgedSignalState(raw) {
   const current = mergeDefaults(DEFAULT_MAP_BRIDGED_SIGNAL_STATE, raw);
+  const rawFilters = isPlainObject(raw?.filters) ? raw.filters : null;
   const fromPatchId = normalizeNullableString(current.filters?.fromPatchId);
   const toPatchId = normalizeNullableString(current.filters?.toPatchId);
   const pointIconScale = Number(current.ui?.pointIconScale);
@@ -383,7 +386,10 @@ export function normalizeMapBridgedSignalState(raw) {
         current.filters?.zoneMembershipLayerIds || [],
       ),
       layerOpacities: cloneJsonValue(current.filters?.layerOpacities || {}),
-      layerClipMasks: cloneJsonValue(current.filters?.layerClipMasks || {}),
+      layerClipMasks:
+        rawFilters && hasOwnKey(rawFilters, "layerClipMasks")
+          ? cloneJsonValue(rawFilters.layerClipMasks || {})
+          : cloneJsonValue(current.filters?.layerClipMasks || {}),
       layerWaypointConnectionsVisible: cloneJsonValue(
         current.filters?.layerWaypointConnectionsVisible || {},
       ),

@@ -4296,3 +4296,79 @@ Next:
   useful
 - continue the generic search/filter work by extending live validation beyond the fish-evidence
   zone-membership path to raster/vector attachment clipping
+
+## 2026-04-01: fish evidence now defaults to the zone mask attachment
+
+Observed usability gap:
+
+- the clean-slate clipping/filtering path was now structurally correct:
+  - selected search terms projected into `_map_bridged.filters`
+  - attachment-driven clipping was derived only from `layerClipMasks`
+- but on a fresh map load, `layerClipMasks` still defaulted to `{}` on the live shell
+- that meant the most useful clipping path remained opt-in through a manual drag/drop attach:
+  - `fish_evidence -> zone_mask`
+- this undercut the intended default experience for zone-focused filtering:
+  - Fish Evidence points should already be bounded to the Zone Mask unless the user explicitly
+    detaches them
+
+Important constraint:
+
+- simply changing `DEFAULT_MAP_BRIDGED_SIGNAL_STATE.filters.layerClipMasks` would have been wrong on
+  its own
+- the current `normalizeMapBridgedSignalState(...)` path deep-merged nested objects
+- so an explicit persisted clear like:
+  - `{ layerClipMasks: {} }`
+  would have been rehydrated back into the new default attachment
+- that would make detach impossible to persist cleanly
+
+What changed:
+
+- `site/assets/map/map-signal-contract.js`
+  - `DEFAULT_MAP_BRIDGED_SIGNAL_STATE.filters.layerClipMasks` now defaults to:
+    - `{ fish_evidence: "zone_mask" }`
+  - `normalizeMapBridgedSignalState(...)` now preserves an explicit raw `layerClipMasks` object
+    when that field is present, instead of always inheriting the default nested object
+- `site/assets/map/map-shell.html`
+  - the live shell `data-signals` now starts with the same default attachment:
+    - `fish_evidence -> zone_mask`
+- `site/assets/map/map-page-live.test.mjs`
+  - updated the clean-slate default live signal fixture accordingly
+- `site/assets/map/map-signal-contract.test.mjs`
+  - added coverage that:
+    - fresh normalization includes the default attachment
+    - explicit `{ layerClipMasks: {} }` keeps the detached state instead of restoring the default
+
+Validation:
+
+- focused JS tests passed:
+  - `site/assets/map/map-signal-contract.test.mjs`
+  - `site/assets/map/map-page-live.test.mjs`
+  - `site/assets/map/map-app-live.test.mjs`
+  - `site/assets/map/map-runtime-adapter.test.mjs`
+- rebuilt the site and verified the served clean-slate assets reflect the new defaults:
+  - `/map/map-shell.html`
+  - `/map/map-signal-contract.js`
+- live DevTools validation on a fresh isolated `/map/` page confirmed:
+  - initial shell/runtime state:
+    - `_map_bridged.filters.layerClipMasks = { fish_evidence: "zone_mask" }`
+    - `FishyMapBridge.getCurrentInputState().filters.layerClipMasks = { fish_evidence: "zone_mask" }`
+  - after dispatching an explicit detached patch:
+    - `{ _map_bridged: { filters: { layerClipMasks: {} } } }`
+    - shell state became `{}` immediately
+    - persisted UI storage wrote `layerClipMasks: {}`
+    - reloading the page kept the detached `{}` state instead of re-injecting the default
+
+Why this is aligned with the remediation:
+
+- clipping still has exactly one user-facing model:
+  - layer attachment
+- there is still no second clipping settings surface
+- the default graph is now useful out of the box
+- explicit detach remains first-class and persistent
+
+Next:
+
+- continue the generic search/filter work by validating and extending live semantic layer filtering
+  and mask clipping beyond Fish Evidence
+- keep the attachment graph as the only clipping source of truth while making more of the default
+  layer graph intentionally useful

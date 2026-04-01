@@ -159,7 +159,7 @@ function defaultSignals() {
         layerIdsVisible: [...DEFAULT_ENABLED_LAYER_IDS],
         layerIdsOrdered: [],
         layerOpacities: {},
-        layerClipMasks: {},
+        layerClipMasks: { fish_evidence: "zone_mask" },
         layerWaypointConnectionsVisible: {},
         layerWaypointLabelsVisible: {},
         layerPointIconsVisible: {},

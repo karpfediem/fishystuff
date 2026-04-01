@@ -90,4 +90,15 @@ test("normalizeMapBridgedSignalState keeps the bridge contract explicit and norm
 test("normalizeMapBridgedSignalState falls back to default enabled layers", () => {
   const state = normalizeMapBridgedSignalState({});
   assert.deepEqual(state.filters.layerIdsVisible, DEFAULT_ENABLED_LAYER_IDS);
+  assert.deepEqual(state.filters.layerClipMasks, { fish_evidence: "zone_mask" });
+});
+
+test("normalizeMapBridgedSignalState keeps explicit clip-mask clears over defaults", () => {
+  const state = normalizeMapBridgedSignalState({
+    filters: {
+      layerClipMasks: {},
+    },
+  });
+
+  assert.deepEqual(state.filters.layerClipMasks, {});
 });
