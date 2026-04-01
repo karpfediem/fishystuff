@@ -147,6 +147,8 @@ struct LootChartRow {
     stroke_color: &'static str,
     text_color: &'static str,
     connector_color: &'static str,
+    drop_rate_source_kind: String,
+    drop_rate_tooltip: String,
     expected_count_raw: f64,
     expected_profit_raw: f64,
     expected_count_text: String,
@@ -2489,6 +2491,51 @@ fn zone_loot_group_values(
     )
 }
 
+fn fish_group_drop_rate_source_kind(row: &FishGroupChartRow) -> String {
+    if row.current_share_pct > 0.0 || row.weight_pct > 0.0 || row.base_share_pct > 0.0 {
+        "database".to_string()
+    } else {
+        String::new()
+    }
+}
+
+fn fish_group_drop_rate_tooltip(row: &FishGroupChartRow) -> String {
+    if row.current_share_pct <= 0.0 && row.weight_pct <= 0.0 && row.base_share_pct <= 0.0 {
+        return String::new();
+    }
+    let mut parts = vec![format!("Source-backed {} group share", row.label)];
+    if row.base_share_pct > 0.0 {
+        parts.push(format!("base {}", percent_value_text(row.base_share_pct)));
+    }
+    if !row.bonus_text.trim().is_empty() {
+        parts.push(row.bonus_text.clone());
+    }
+    if row.weight_pct > 0.0 {
+        parts.push(format!("weighted {}", percent_value_text(row.weight_pct)));
+    }
+    parts.push(format!(
+        "current share {}",
+        percent_value_text(row.current_share_pct)
+    ));
+    parts.join(" · ")
+}
+
+fn zone_loot_group_drop_rate_fields(
+    chart_row: Option<&FishGroupChartRow>,
+) -> (String, String, String) {
+    let Some(chart_row) = chart_row else {
+        return (String::new(), String::new(), String::new());
+    };
+    if chart_row.current_share_pct <= 0.0 {
+        return (String::new(), String::new(), String::new());
+    }
+    (
+        percent_value_text(chart_row.current_share_pct),
+        fish_group_drop_rate_source_kind(chart_row),
+        fish_group_drop_rate_tooltip(chart_row),
+    )
+}
+
 fn loot_species_presence_scope_text(
     evidence: &CalculatorZoneLootEvidence,
     include_structural_ids: bool,
@@ -2910,6 +2957,8 @@ fn derive_loot_chart(
                 stroke_color: row.stroke_color,
                 text_color: row.text_color,
                 connector_color: row.connector_color,
+                drop_rate_source_kind: fish_group_drop_rate_source_kind(row),
+                drop_rate_tooltip: fish_group_drop_rate_tooltip(row),
                 expected_count_raw,
                 expected_profit_raw,
                 expected_count_text: trim_float(expected_count_raw),
@@ -2986,6 +3035,9 @@ fn derive_zone_loot_summary_response(
                 fill_color: row.fill_color.to_string(),
                 stroke_color: row.stroke_color.to_string(),
                 text_color: row.text_color.to_string(),
+                drop_rate_text: row.count_share_text.clone(),
+                drop_rate_source_kind: row.drop_rate_source_kind.clone(),
+                drop_rate_tooltip: row.drop_rate_tooltip.clone(),
             }
         })
         .collect::<Vec<_>>();
@@ -3020,10 +3072,11 @@ fn derive_zone_loot_summary_response(
         .filter(|entry| entry.within_group_rate <= 0.0)
         .filter_map(|entry| {
             let presence_text = loot_species_presence_text(entry)?;
-            let (group_label, fill_color, stroke_color, text_color) = zone_loot_group_values(
-                entry.slot_idx,
-                group_row_by_slot.get(&entry.slot_idx).copied(),
-            );
+            let chart_row = group_row_by_slot.get(&entry.slot_idx).copied();
+            let (group_label, fill_color, stroke_color, text_color) =
+                zone_loot_group_values(entry.slot_idx, chart_row);
+            let (drop_rate_text, drop_rate_source_kind, drop_rate_tooltip) =
+                zone_loot_group_drop_rate_fields(chart_row);
             if seen_group_slots.insert(entry.slot_idx) {
                 summary_groups.push(ZoneLootSummaryGroupRow {
                     slot_idx: entry.slot_idx,
@@ -3031,6 +3084,9 @@ fn derive_zone_loot_summary_response(
                     fill_color: fill_color.clone(),
                     stroke_color: stroke_color.clone(),
                     text_color: text_color.clone(),
+                    drop_rate_text: drop_rate_text.clone(),
+                    drop_rate_source_kind: drop_rate_source_kind.clone(),
+                    drop_rate_tooltip: drop_rate_tooltip.clone(),
                 });
             }
             Some(ZoneLootSummarySpeciesRow {
@@ -7292,6 +7348,8 @@ mod tests {
         assert_eq!(summary.groups.len(), 1);
         assert_eq!(summary.groups[0].slot_idx, 0);
         assert_eq!(summary.groups[0].label, "Unassigned");
+        assert_eq!(summary.groups[0].drop_rate_text, "");
+        assert_eq!(summary.groups[0].drop_rate_source_kind, "");
         assert_eq!(summary.species_rows.len(), 1);
         assert_eq!(summary.species_rows[0].group_label, "Unassigned");
         assert_eq!(summary.species_rows[0].drop_rate_text, "");
@@ -7349,6 +7407,8 @@ mod tests {
         assert_eq!(summary.groups.len(), 1);
         assert_eq!(summary.groups[0].slot_idx, 4);
         assert_eq!(summary.groups[0].label, "General");
+        assert_eq!(summary.groups[0].drop_rate_text, "");
+        assert_eq!(summary.groups[0].drop_rate_source_kind, "");
         assert_eq!(summary.species_rows.len(), 1);
         assert_eq!(summary.species_rows[0].group_label, "General");
         assert_eq!(summary.species_rows[0].drop_rate_text, "");

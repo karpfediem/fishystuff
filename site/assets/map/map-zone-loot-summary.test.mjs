@@ -24,7 +24,15 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
     zoneName: "Valencia Sea - Depth 5",
     note: "Zone loot uses calculator defaults.",
     profileLabel: "Calculator defaults",
-    groups: [{ slotIdx: 4, label: "General" }],
+    groups: [
+      {
+        slotIdx: 4,
+        label: "General",
+        dropRateText: "80%",
+        dropRateSourceKind: "database",
+        dropRateTooltip: "Source-backed General group share",
+      },
+    ],
     speciesRows: [
       {
         slotIdx: 4,
@@ -40,6 +48,8 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
 
   assert.equal(summary.available, true);
   assert.equal(summary.groups[0].slotIdx, 4);
+  assert.equal(summary.groups[0].dropRateText, "80%");
+  assert.equal(summary.groups[0].dropRateSourceKind, "database");
   assert.equal(summary.speciesRows[0].groupLabel, "General");
   assert.equal(summary.speciesRows[0].dropRateText, "80%");
   assert.equal(

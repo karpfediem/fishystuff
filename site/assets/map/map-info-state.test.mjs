@@ -72,6 +72,9 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             fillColor: "#eef6ff",
             strokeColor: "#89a8d8",
             textColor: "#1f2937",
+            dropRateText: "80%",
+            dropRateSourceKind: "database",
+            dropRateTooltip: "Source-backed General group share",
           },
         ],
         speciesRows: [
@@ -107,6 +110,10 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
   assert.equal(
     viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.groups?.[0]?.rows?.[0]?.label,
     "Sea Eel",
+  );
+  assert.equal(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.groups?.[0]?.dropRateText,
+    "80%",
   );
   assert.deepEqual(
     viewModel.panes.find((pane) => pane.id === "territory")?.sections[0].facts,

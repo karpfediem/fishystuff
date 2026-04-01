@@ -50,6 +50,9 @@ export function normalizeZoneLootSummary(raw) {
             fillColor: trimString(group.fillColor),
             strokeColor: trimString(group.strokeColor),
             textColor: trimString(group.textColor),
+            dropRateText: trimString(group.dropRateText),
+            dropRateSourceKind: trimString(group.dropRateSourceKind),
+            dropRateTooltip: trimString(group.dropRateTooltip),
           }))
       : [],
     speciesRows: Array.isArray(source.speciesRows)

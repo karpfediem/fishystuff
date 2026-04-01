@@ -196,15 +196,29 @@ function zoneLootRowMarkup(entry) {
   `;
 }
 
+function zoneLootGroupHeaderMarkup(group) {
+  const metric = zoneLootMetricTone(group);
+  const provenanceRail = provenanceRailMarkup(group);
+  return `
+    <div class="fishymap-zone-loot-group-header">
+      <span class="badge badge-soft badge-sm">${escapeHtml(group.label)}</span>
+      <div class="fishymap-zone-loot-group-rate">
+        <div class="fishymap-zone-loot-metric fishymap-zone-loot-metric--group" style="--fishymap-zone-loot-fill:${escapeHtml(metric.fillColor)};--fishymap-zone-loot-stroke:${escapeHtml(metric.strokeColor)};--fishymap-zone-loot-text:${escapeHtml(metric.textColor)};">
+          <div class="fishymap-zone-loot-metric-primary">${escapeHtml(group.dropRateText || "—")}</div>
+        </div>
+        ${provenanceRail}
+      </div>
+    </div>
+  `;
+}
+
 function zoneLootSectionMarkup(section) {
   const groups = Array.isArray(section?.groups) ? section.groups : [];
   const groupMarkup = groups.length
     ? groups
         .map((group) => `
           <div class="fishymap-zone-loot-group rounded-box border border-base-300 bg-base-200/75 p-2">
-            <div class="fishymap-zone-loot-group-header">
-              <span class="badge badge-soft badge-sm">${escapeHtml(group.label)}</span>
-            </div>
+            ${zoneLootGroupHeaderMarkup(group)}
             <div class="fishymap-zone-loot-group-rows">
               ${group.rows.map((row) => zoneLootRowMarkup(row)).join("")}
             </div>

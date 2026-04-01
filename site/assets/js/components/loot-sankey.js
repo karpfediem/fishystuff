@@ -45,6 +45,7 @@ const MIN_INTERNAL_WIDTH =
 const PROVENANCE_RAIL_WIDTH = 7;
 const PROVENANCE_RAIL_INSET = 8;
 const PROVENANCE_RAIL_GAP = 1.5;
+const GROUP_PROVENANCE_RAIL_MAX_HEIGHT = 38;
 
 function gradeRingColor(tone) {
     switch (String(tone || "").trim().toLowerCase()) {
@@ -393,6 +394,25 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             );
             const mid = top + heightValue / 2;
             const valueLabel = `${row.count_share_text} · ${row.expected_count_text}`;
+            const provenanceSegments = buildProvenanceSegments({
+                rateSourceKind: String(row.drop_rate_source_kind ?? ""),
+                rateDetail: String(row.drop_rate_tooltip ?? ""),
+                rateValueText: String(row.count_share_text ?? ""),
+            });
+            const provenanceRailX =
+                LEFT_X + LEFT_WIDTH - PROVENANCE_RAIL_INSET - PROVENANCE_RAIL_WIDTH;
+            const availableRailHeight = Math.max(0, heightValue - 8);
+            const provenanceRailHeight = Math.min(
+                GROUP_PROVENANCE_RAIL_MAX_HEIGHT,
+                availableRailHeight,
+            );
+            const provenanceRailY = top + Math.max(0, (heightValue - provenanceRailHeight) / 2);
+            const provenanceSegmentHeight = provenanceSegments.length
+                ? Math.max(
+                    0,
+                    provenanceRailHeight - PROVENANCE_RAIL_GAP * (provenanceSegments.length - 1),
+                ) / provenanceSegments.length
+                : 0;
 
             leftNodes.append("rect")
                 .attr("x", LEFT_X)
@@ -422,6 +442,30 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("font-size", "11.5px")
                 .style("font-weight", "600")
                 .text(valueLabel);
+
+            if (provenanceSegmentHeight > 0.5) {
+                const provenanceRail = leftNodes.append("g")
+                    .attr("aria-label", "Fact provenance");
+                provenanceSegments.forEach((segment, segmentIndex) => {
+                    const segmentY = provenanceRailY
+                        + segmentIndex * (provenanceSegmentHeight + PROVENANCE_RAIL_GAP);
+                    provenanceRail.append("rect")
+                        .attr("x", provenanceRailX)
+                        .attr("y", segmentY)
+                        .attr("width", PROVENANCE_RAIL_WIDTH)
+                        .attr("height", provenanceSegmentHeight)
+                        .attr("rx", Math.min(PROVENANCE_RAIL_WIDTH / 2, 3))
+                        .attr("ry", Math.min(PROVENANCE_RAIL_WIDTH / 2, 3))
+                        .attr("tabindex", 0)
+                        .attr("aria-label", provenanceAriaLabel(segment))
+                        .attr("data-fishy-provenance-label", segment.label)
+                        .attr("data-fishy-provenance-source", segment.sourceLabel)
+                        .attr("data-fishy-provenance-detail", segment.detail)
+                        .attr("data-fishy-provenance-color", segment.color)
+                        .style("fill", segment.color)
+                        .style("opacity", segment.active ? 1 : 0.65);
+                });
+            }
         });
 
         const speciesConnectors = svg.append("g");

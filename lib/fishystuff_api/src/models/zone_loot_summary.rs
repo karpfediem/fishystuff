@@ -27,6 +27,9 @@ pub struct ZoneLootSummaryGroupRow {
     pub fill_color: String,
     pub stroke_color: String,
     pub text_color: String,
+    pub drop_rate_text: String,
+    pub drop_rate_source_kind: String,
+    pub drop_rate_tooltip: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

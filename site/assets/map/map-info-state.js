@@ -94,6 +94,9 @@ function buildZoneLootGroups(summary) {
       fillColor: trimString(group?.fillColor),
       strokeColor: trimString(group?.strokeColor),
       textColor: trimString(group?.textColor),
+      dropRateText: trimString(group?.dropRateText),
+      dropRateSourceKind: trimString(group?.dropRateSourceKind),
+      dropRateTooltip: trimString(group?.dropRateTooltip),
       rows: speciesRows.filter((row) => {
         const rowGroupLabel = trimString(row?.groupLabel);
         const groupLabel = trimString(group?.label);

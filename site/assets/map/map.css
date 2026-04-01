@@ -859,6 +859,19 @@ fishymap-search-panel {
   text-align: right;
 }
 
+.fishymap-zone-loot-group-rate {
+  display: inline-flex;
+  min-width: 0;
+  align-items: stretch;
+  gap: 0.45rem;
+  flex: 0 0 auto;
+}
+
+.fishymap-zone-loot-metric--group {
+  padding-block: 0.35rem;
+  padding-inline: 0.5rem;
+}
+
 .fishymap-zone-loot-group-rows {
   display: flex;
   min-width: 0;

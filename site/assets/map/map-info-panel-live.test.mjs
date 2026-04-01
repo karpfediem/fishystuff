@@ -151,6 +151,9 @@ test("createMapInfoPanelController refreshes zone loot on selection patches thro
               fillColor: "#eef6ff",
               strokeColor: "#89a8d8",
               textColor: "#1f2937",
+              dropRateText: "80%",
+              dropRateSourceKind: "database",
+              dropRateTooltip: "Source-backed General group share",
             },
           ],
           speciesRows: [
@@ -212,7 +215,9 @@ test("createMapInfoPanelController refreshes zone loot on selection patches thro
   assert.match(panel.innerHTML, /Catch Profile/);
   assert.match(panel.innerHTML, /Sea Eel/);
   assert.match(panel.innerHTML, /80%/);
+  assert.match(panel.innerHTML, /Source-backed General group share/);
   assert.match(panel.innerHTML, /fishy-provenance-rail/);
+  assert.match(panel.innerHTML, /fishymap-zone-loot-group-rate[\s\S]*fishy-provenance-rail/);
   assert.match(
     panel.innerHTML,
     /fishymap-zone-loot-item-surface[\s\S]*fishy-provenance-rail/,
