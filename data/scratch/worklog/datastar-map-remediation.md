@@ -3467,3 +3467,42 @@ Next tasks from here:
 - move the remaining live search/filter behavior onto this contract instead of the old direct
   bridged-filter assumptions
 - use the explicit support matrix to drive generic filter/clipping affordances per layer
+
+
+## Slice 14 — Bookmark cards stay semantic on the clean-slate path
+
+The bookmark manager was still carrying a legacy `World` coordinate row even after the title and
+overview facts had moved to the clean-slate Datastar model.
+
+What changed:
+
+- `site/assets/map/map-bookmark-state.js`
+  - `buildBookmarkOverviewRows(...)` now returns:
+    - folded bookmark title
+    - semantic overview facts (`Zone` only when it differs from the title, plus `Resources` and
+      `Origin`)
+  - the always-present `World` row was removed from bookmark cards
+- `site/assets/map/map-bookmark-state.test.mjs`
+  - added coverage proving bookmark rows now prefer semantic facts over raw coordinates
+
+Why:
+
+- the bookmark card is now aligned with the intended map fact model:
+  - title carries the primary zone label by default
+  - follow-up rows carry the meaningful summary facts
+  - raw world coordinates are no longer given equal prominence in the bookmark summary UI
+
+Validation:
+
+- `node --test site/assets/map/map-bookmark-state.test.mjs`
+- rebuilt site output
+- live DevTools reload confirmed bookmark cards now show:
+  - `Valencia Sea - Depth 5`
+  - `Resources`
+  - `Origin`
+  - with no `World` row
+
+Next:
+
+- restore the richer generic info pane content on the clean-slate path
+- wire the new generic layer search/filter/clipping contract into `_map_bridged`

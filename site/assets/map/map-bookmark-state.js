@@ -176,11 +176,6 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0, stateBund
       value: displayLabel,
       hideLabel: true,
     },
-    {
-      icon: "map-pin",
-      label: "World",
-      value: `${Number(bookmark?.worldX ?? 0).toLocaleString("en-US")}, ${Number(bookmark?.worldZ ?? 0).toLocaleString("en-US")}`,
-    },
   ];
   return rows.concat(overviewRows);
 }

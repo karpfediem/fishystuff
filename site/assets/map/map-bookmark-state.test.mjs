@@ -70,6 +70,67 @@ test("bookmark helpers expose display and ordering utilities", () => {
   assert.equal(renameBookmark(bookmarks, "b", "Renamed")[1].label, "Renamed");
 });
 
+test("buildBookmarkOverviewRows keeps semantic facts and drops legacy world coordinates", () => {
+  const rows = buildBookmarkOverviewRows(
+    {
+      id: "probe",
+      label: "",
+      worldX: 123,
+      worldZ: 456,
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          rgbU32: 0x39e58d,
+          rgb: [57, 229, 141],
+          detailSections: [
+            {
+              id: "zone",
+              kind: "facts",
+              title: "Zone",
+              facts: [{ key: "zone", label: "Zone", value: "Valencia Sea - Depth 5", icon: "hover-zone" }],
+              targets: [],
+            },
+          ],
+        },
+        {
+          layerId: "region_groups",
+          detailSections: [
+            {
+              id: "resource-group",
+              kind: "facts",
+              title: "Resources",
+              facts: [{ key: "resource_group", label: "Resources", value: "(RG212|Arehaza)", icon: "hover-resources" }],
+              targets: [],
+            },
+          ],
+        },
+        {
+          layerId: "regions",
+          detailSections: [
+            {
+              id: "origin-region",
+              kind: "facts",
+              title: "Origin",
+              facts: [{ key: "origin_region", label: "Origin", value: "(R430|Hakoven Islands)", icon: "trade-origin" }],
+              targets: [],
+            },
+          ],
+        },
+      ],
+    },
+    0,
+  );
+
+  assert.deepEqual(
+    rows.map((row) => [row.icon, row.label, row.value]),
+    [
+      ["bookmark", "Bookmark", "Valencia Sea - Depth 5"],
+      ["hover-resources", "Resources", "(RG212|Arehaza)"],
+      ["trade-origin", "Origin", "(R430|Hakoven Islands)"],
+    ],
+  );
+});
+
 test("buildBookmarkPanelStateBundle derives bookmark ui from canonical signals", () => {
   const bundle = buildBookmarkPanelStateBundle({
     _map_runtime: {
