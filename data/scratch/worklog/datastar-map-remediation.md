@@ -5251,3 +5251,60 @@ Next:
 - keep reducing the remaining page-controller orchestration in `map-page-live.js`
 - then move onto the larger imperative live panel controllers, starting with the smallest
   high-value seam
+
+## 2026-04-01: make the live window manager app-driven
+
+`site/assets/map/map-window-manager.js` is still an imperative module because dragging and pointer
+capture are inherently imperative, but it did not need to own its own Datastar subscription.
+
+Before this slice, the window manager still listened to `datastar-signal-patch` directly and
+reconciled `_map_ui.windowUi` on its own. That meant one more controller was independently wired
+to the global patch event when the live map app was already the natural orchestration point.
+
+What changed:
+
+- `site/assets/map/map-window-manager.js`
+  - no longer imports `DATASTAR_SIGNAL_PATCH_EVENT`
+  - no longer subscribes to document-level Datastar patch events
+  - is now a pure imperative helper with two responsibilities:
+    - handle drag/tap interactions
+    - apply current `_map_ui.windowUi` state to the DOM
+- `site/assets/map/map-app-live.js`
+  - now schedules `windowManager.applyFromSignals()` whenever:
+    - a direct controller patch writes `_map_ui.windowUi`
+    - a real Datastar signal patch touches `_map_ui.windowUi`
+  - also guards the early bootstrap path so query-driven patches do not reference the window manager
+    before it exists
+
+Why this matters:
+
+- it removes another controller-owned Datastar listener
+- the window manager is now closer to the correct role:
+  - DOM/pointer behavior only
+  - no independent reactive ownership
+- the live map app becomes the single place that decides when `_map_ui.windowUi` signal changes
+  should update the live window chrome
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js`
+  - `node --check site/assets/map/map-window-manager.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-window-manager.test.mjs site/assets/map/map-page-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+  - `/map/map-window-manager.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Settings Ready`
+  - `Layers 7`
+  - clicking the settings toolbar button immediately hid the window and flipped the toolbar button
+    label to `Show settings`
+
+Next:
+
+- keep moving controller-owned Datastar listeners upward only where the controller is truly
+  imperative
+- likely next target:
+  - the smallest remaining live panel controller that still owns a document-level patch listener

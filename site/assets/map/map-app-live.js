@@ -107,6 +107,10 @@ function patchTouchesLiveBridgeInputs(patch) {
   );
 }
 
+function patchTouchesWindowUi(patch) {
+  return Boolean(isPlainObject(patch) && isPlainObject(patch._map_ui) && isPlainObject(patch._map_ui.windowUi));
+}
+
 function buildResetUiPatch() {
   return {
     _map_ui: cloneJson(DEFAULT_MAP_UI_SIGNAL_STATE),
@@ -209,12 +213,16 @@ export async function start() {
   const page = createMapPageLive();
   page.start();
   await page.whenRestored();
+  let windowManager = null;
 
   function dispatchSignalPatch(patch) {
     if (!patch || typeof patch !== "object") {
       return;
     }
     page.patchSignals(patch);
+    if (windowManager && patchTouchesWindowUi(patch)) {
+      windowManager.scheduleApplyFromSignals();
+    }
   }
 
   const queryPatch = parseQuerySignalPatch(globalThis.location?.href);
@@ -228,7 +236,7 @@ export async function start() {
 
   const app = createMapApp();
   const bridge = FishyMapBridge;
-  const windowManager = createMapWindowManager({
+  windowManager = createMapWindowManager({
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
@@ -350,6 +358,9 @@ export async function start() {
     const effectivePatch = searchProjectionPatch
       ? combineSignalPatches(patch, searchProjectionPatch)
       : patch;
+    if (patchTouchesWindowUi(effectivePatch)) {
+      windowManager.scheduleApplyFromSignals();
+    }
     if (searchProjectionPatch) {
       applyInternalSignalPatch(searchProjectionPatch);
     }

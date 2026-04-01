@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { normalizeWindowUiState } from "./map-signal-contract.js";
 
@@ -79,7 +78,6 @@ export function createMapWindowManager({
   shell,
   getSignals,
   dispatchPatch = dispatchShellSignalPatch,
-  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelectorAll !== "function") {
     throw new Error("createMapWindowManager requires a shell element");
@@ -267,14 +265,6 @@ export function createMapWindowManager({
     });
   }
 
-  if (listenToSignalPatches) {
-    globalThis.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
-      if (!event?.detail?._map_ui?.windowUi) {
-        return;
-      }
-      scheduleApplyFromSignals();
-    });
-  }
   globalThis.addEventListener?.("pointermove", handlePointerMove);
   globalThis.addEventListener?.("pointerup", handlePointerUp);
   globalThis.addEventListener?.("pointercancel", handlePointerCancel);
