@@ -24,8 +24,6 @@ pub struct ZoneLootSummaryResponse {
 pub struct ZoneLootSummaryGroupRow {
     pub slot_idx: u8,
     pub label: String,
-    pub count_share_text: String,
-    pub expected_count_text: String,
     pub fill_color: String,
     pub stroke_color: String,
     pub text_color: String,
@@ -42,7 +40,6 @@ pub struct ZoneLootSummarySpeciesRow {
     pub fill_color: String,
     pub stroke_color: String,
     pub text_color: String,
-    pub expected_count_text: String,
     pub drop_rate_text: String,
     pub drop_rate_source_kind: String,
     pub drop_rate_tooltip: String,

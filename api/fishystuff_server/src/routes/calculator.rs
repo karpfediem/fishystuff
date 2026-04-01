@@ -2493,10 +2493,6 @@ fn loot_species_evidence_text(
     loot_species_drop_rate_tooltip(signals, entry)
 }
 
-fn percent_text(value: f64) -> String {
-    format!("{}%", format_evidence_percent(value))
-}
-
 fn percent_value_text(value_pct: f64) -> String {
     let max_decimals = if value_pct.abs() < 1.0 { 4 } else { 2 };
     let compact = trim_float_to(value_pct, max_decimals);
@@ -2743,7 +2739,7 @@ fn derive_zone_loot_summary_response(
         available,
         zone_name: zone.name.clone(),
         note: if available {
-            "Zone loot uses calculator default session settings. Group headers show current group share and expected catches; rows show in-group droprate and expected catches for each fish or item.".to_string()
+            "Zone catch profile uses calculator default session settings. Groups follow the current calculator ordering, and rows show each fish or item's in-group droprate.".to_string()
         } else {
             "Expected zone loot data is unavailable for this zone.".to_string()
         },
@@ -2753,8 +2749,6 @@ fn derive_zone_loot_summary_response(
             .map(|row| ZoneLootSummaryGroupRow {
                 slot_idx: group_slot_by_label.get(row.label).copied().unwrap_or(0),
                 label: row.label.to_string(),
-                count_share_text: row.count_share_text.clone(),
-                expected_count_text: row.expected_count_text.clone(),
                 fill_color: row.fill_color.to_string(),
                 stroke_color: row.stroke_color.to_string(),
                 text_color: row.text_color.to_string(),
@@ -2771,7 +2765,6 @@ fn derive_zone_loot_summary_response(
                 fill_color: row.fill_color.to_string(),
                 stroke_color: row.stroke_color.to_string(),
                 text_color: row.text_color.to_string(),
-                expected_count_text: row.expected_count_text.clone(),
                 drop_rate_text: row.drop_rate_text.clone(),
                 drop_rate_source_kind: row.drop_rate_source_kind.clone(),
                 drop_rate_tooltip: row.drop_rate_tooltip.clone(),

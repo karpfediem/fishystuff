@@ -69,8 +69,6 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
           {
             slotIdx: 4,
             label: "General",
-            countShareText: "91.17%",
-            expectedCountText: "50.49",
             fillColor: "#eef6ff",
             strokeColor: "#89a8d8",
             textColor: "#1f2937",
@@ -86,7 +84,6 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             fillColor: "#eef6ff",
             strokeColor: "#89a8d8",
             textColor: "#1f2937",
-            expectedCountText: "44.6",
             dropRateText: "80%",
             dropRateSourceKind: "database",
             dropRateTooltip: "DB-backed drop rate",

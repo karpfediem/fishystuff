@@ -47,8 +47,6 @@ export function normalizeZoneLootSummary(raw) {
           .map((group) => ({
             slotIdx: Number.parseInt(group.slotIdx, 10) || 0,
             label: trimString(group.label),
-            countShareText: trimString(group.countShareText),
-            expectedCountText: trimString(group.expectedCountText),
             fillColor: trimString(group.fillColor),
             strokeColor: trimString(group.strokeColor),
             textColor: trimString(group.textColor),
@@ -66,7 +64,6 @@ export function normalizeZoneLootSummary(raw) {
             fillColor: trimString(row.fillColor),
             strokeColor: trimString(row.strokeColor),
             textColor: trimString(row.textColor),
-            expectedCountText: trimString(row.expectedCountText),
             dropRateText: trimString(row.dropRateText),
             dropRateSourceKind: trimString(row.dropRateSourceKind),
             dropRateTooltip: trimString(row.dropRateTooltip),

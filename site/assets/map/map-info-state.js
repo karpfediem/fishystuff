@@ -91,8 +91,6 @@ function buildZoneLootGroups(summary) {
     .map((group, index) => ({
       slotIdx: Number.parseInt(group?.slotIdx, 10) || index + 1,
       label: trimString(group?.label),
-      countShareText: trimString(group?.countShareText),
-      expectedCountText: trimString(group?.expectedCountText),
       fillColor: trimString(group?.fillColor),
       strokeColor: trimString(group?.strokeColor),
       textColor: trimString(group?.textColor),

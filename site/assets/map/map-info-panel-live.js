@@ -130,7 +130,6 @@ function zoneLootRowMarkup(entry) {
     <div class="fishymap-zone-loot-row">
       <div class="fishymap-zone-loot-metric" style="--fishymap-zone-loot-fill:${escapeHtml(metric.fillColor)};--fishymap-zone-loot-stroke:${escapeHtml(metric.strokeColor)};--fishymap-zone-loot-text:${escapeHtml(metric.textColor)};">
         <div class="fishymap-zone-loot-metric-primary">${escapeHtml(entry.dropRateText || "—")}</div>
-        <div class="fishymap-zone-loot-metric-secondary">${escapeHtml(entry.expectedCountText || "—")}</div>
         ${
           tooltip
             ? `<span class="fishymap-zone-loot-dot" style="--fishymap-zone-loot-dot:${escapeHtml(dropDotColor)};" aria-hidden="true" title="${escapeHtml(tooltip)}"></span>`
@@ -150,7 +149,6 @@ function zoneLootSectionMarkup(section) {
           <div class="fishymap-zone-loot-group rounded-box border border-base-300 bg-base-200/75 p-2">
             <div class="fishymap-zone-loot-group-header">
               <span class="badge badge-soft badge-sm">${escapeHtml(group.label)}</span>
-              <span class="text-xs font-semibold text-base-content/65">${escapeHtml(group.countShareText)} · ${escapeHtml(group.expectedCountText)}</span>
             </div>
             <div class="fishymap-zone-loot-group-rows">
               ${group.rows.map((row) => zoneLootRowMarkup(row)).join("")}

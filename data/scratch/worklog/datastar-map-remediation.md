@@ -4007,3 +4007,45 @@ Why this is aligned with the remediation:
   Datastar page input
 - this keeps the bookmark UI functional while removing a large, high-churn feedback path from the
   clean-slate shell
+
+## 2026-04-01: simplify Zone pane catch profile down to rate + identity
+
+Observed drift:
+
+- the clean-slate `Info` window already had the correct pane structure:
+  - `Zone`
+  - `Territory`
+  - `Trade`
+- but the `Zone` pane catch profile still exposed calculator-style extra metrics:
+  - group share
+  - expected catches
+  - row-level expected count
+- that made the pane read like a mini calculator instead of a compact world-point summary
+
+What changed:
+
+- `lib/fishystuff_api/src/models/zone_loot_summary.rs`
+  - removed `countShareText` / `expectedCountText` from group rows
+  - removed `expectedCountText` from species rows
+- `api/fishystuff_server/src/routes/calculator.rs`
+  - zone loot summary note now describes the payload as grouped in-group droprates
+  - stopped serializing the removed calculator-only fields
+- `site/assets/map/map-zone-loot-summary.js`
+  - normalizer now keeps only group identity plus row droprate/identity data
+- `site/assets/map/map-info-panel-live.js`
+  - group headers now show just the group label
+  - row metric now shows only the droprate, alongside the fish/item icon + name
+
+Validation:
+
+- focused JS tests passed for:
+  - `map-info-state`
+  - `map-zone-loot-summary`
+- `cargo test --offline -p fishystuff_server routes::calculator::tests:: -- --skip ignored`
+  passed after removing the now-unused `percent_text()` helper
+
+Why this is aligned with the remediation:
+
+- the `Info` window remains a concise fact pane instead of inheriting calculator presentation
+- calculator-backed grouping and rates are still reused, but only the minimal world-map-relevant
+  subset crosses into the map UI

@@ -24,7 +24,7 @@ test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
     zoneName: "Valencia Sea - Depth 5",
     note: "Zone loot uses calculator defaults.",
     profileLabel: "Calculator defaults",
-    groups: [{ slotIdx: 4, label: "General", countShareText: "91.17%", expectedCountText: "50.49" }],
+    groups: [{ slotIdx: 4, label: "General" }],
     speciesRows: [{ slotIdx: 4, groupLabel: "General", label: "Sea Eel", dropRateText: "80%" }],
   });
 
