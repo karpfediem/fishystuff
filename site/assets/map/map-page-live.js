@@ -13,7 +13,7 @@
     favourites: "fishystuff.fishydex.favourites.v1",
   });
   const MAP_PERSIST_SIGNAL_FILTER =
-    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.query)|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
+    /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.(?:query|selectedTerms))|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
   const EXACT_PATCH_PATHS = Object.freeze([
     "_map_ui.layers.expandedLayerIds",
     "_map_ui.layers.hoverFactsVisibleByLayer",
@@ -203,6 +203,9 @@
         },
         search: {
           query: String(search?.query || ""),
+          selectedTerms: Array.isArray(search?.selectedTerms)
+            ? cloneJson(search.selectedTerms)
+            : [],
         },
       },
       _map_bridged: {
@@ -286,6 +289,9 @@
       },
       search: {
         query: String(stored?._map_ui?.search?.query || ""),
+        selectedTerms: Array.isArray(stored?._map_ui?.search?.selectedTerms)
+          ? cloneJson(stored._map_ui.search.selectedTerms)
+          : [],
       },
       bridgedUi: {
         diagnosticsOpen: bridgedUi.diagnosticsOpen === true,
@@ -377,7 +383,12 @@
 
     if (Object.keys(search).length) {
       patch._map_ui = patch._map_ui || {};
-      patch._map_ui.search = { query: String(search.query || "") };
+      patch._map_ui.search = {
+        query: String(search.query || ""),
+        ...(Array.isArray(search.selectedTerms)
+          ? { selectedTerms: cloneJson(search.selectedTerms) }
+          : {}),
+      };
     }
     if (bridgedUi) {
       patch._map_bridged = patch._map_bridged || {};
@@ -596,7 +607,7 @@
       : {
           windowUi: {},
           layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {} },
-          search: { query: "" },
+          search: { query: "", selectedTerms: [] },
           bridgedUi: {
             diagnosticsOpen: false,
             showPoints: true,

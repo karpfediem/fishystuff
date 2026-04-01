@@ -2,6 +2,7 @@ import {
   FISHYMAP_CONTRACT_VERSION,
   FISHYMAP_POINT_ICON_SCALE_MIN,
 } from "./map-host.js";
+import { normalizeSelectedSearchTerms } from "./map-search-contract.js";
 
 export const DEFAULT_ZONE_INFO_TAB = "";
 export const DEFAULT_AUTO_ADJUST_VIEW = true;
@@ -34,7 +35,7 @@ export const DEFAULT_WINDOW_UI_STATE = Object.freeze({
 
 export const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   windowUi: DEFAULT_WINDOW_UI_STATE,
-  search: Object.freeze({ open: false, query: "" }),
+  search: Object.freeze({ open: false, query: "", selectedTerms: [] }),
   bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
   layers: Object.freeze({ expandedLayerIds: [], hoverFactsVisibleByLayer: {} }),
 });
@@ -46,6 +47,7 @@ export const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
       "fishIds",
       "zoneRgbs",
       "semanticFieldIdsByLayer",
+      "fishFilterTerms",
       "patchId",
       "fromPatchId",
       "toPatchId",
@@ -116,6 +118,7 @@ export const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
     fishIds: [],
     zoneRgbs: [],
     semanticFieldIdsByLayer: {},
+    fishFilterTerms: [],
     patchId: null,
     fromPatchId: null,
     toPatchId: null,
@@ -314,6 +317,7 @@ export function normalizeMapUiSignalState(raw) {
     search: {
       open: raw?.search?.open === true,
       query: String(raw?.search?.query || ""),
+      selectedTerms: normalizeSelectedSearchTerms(raw?.search?.selectedTerms),
     },
     bookmarks: {
       placing: normalizedBookmarks.placing === true,
@@ -361,6 +365,7 @@ export function normalizeMapBridgedSignalState(raw) {
       fishIds: cloneJsonValue(current.filters?.fishIds || []),
       zoneRgbs: cloneJsonValue(current.filters?.zoneRgbs || []),
       semanticFieldIdsByLayer: cloneJsonValue(current.filters?.semanticFieldIdsByLayer || {}),
+      fishFilterTerms: cloneJsonValue(current.filters?.fishFilterTerms || []),
       patchId: fromPatchId || toPatchId ? null : normalizeNullableString(current.filters?.patchId),
       fromPatchId,
       toPatchId,

@@ -17,6 +17,7 @@ function baseSignals() {
       search: {
         query: "",
         open: true,
+        selectedTerms: [],
       },
     },
     _map_bridged: {
@@ -74,9 +75,14 @@ test("buildSearchPanelStateBundle keeps only search-relevant live signals", () =
       },
     },
     inputState: {
+      search: {
+        searchText: "",
+        selectedTerms: [],
+      },
       filters: {
         searchText: "",
         fishIds: [],
+        zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
       },
@@ -97,6 +103,7 @@ test("buildSearchMatches returns fish filters, fish, and semantic matches from l
       search: {
         query: "southern",
         open: true,
+        selectedTerms: [],
       },
     },
   });
@@ -118,6 +125,7 @@ test("buildSearchMatches returns matched zones instead of dropping zone-name que
       search: {
         query: "Depth 4",
         open: true,
+        selectedTerms: [],
       },
     },
   });
@@ -141,6 +149,13 @@ test("buildSearchMatches returns matched zones instead of dropping zone-name que
 test("buildDefaultFishFilterMatches omits already-selected filter terms", () => {
   const bundle = buildSearchPanelStateBundle({
     ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        selectedTerms: [{ kind: "fish-filter", term: "missing" }],
+      },
+    },
     _map_bridged: {
       filters: {
         fishFilterTerms: ["missing"],
@@ -159,6 +174,7 @@ test("buildSearchMatchSignalPatch updates bridged filters and closes the dropdow
   assert.deepEqual(buildSearchMatchSignalPatch(signals, { kind: "fish", fishId: 912 }), {
     _map_ui: {
       search: {
+        selectedTerms: [{ kind: "fish", fishId: 912 }],
         query: "",
         open: false,
       },
@@ -166,6 +182,9 @@ test("buildSearchMatchSignalPatch updates bridged filters and closes the dropdow
     _map_bridged: {
       filters: {
         fishIds: [912],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
       },
     },
   });
@@ -189,6 +208,20 @@ test("buildSearchSelectionRemovalSignalPatch removes selected search filters cle
         fishIds: [912, 77],
         semanticFieldIdsByLayer: { regions: [22], zone_mask: [123] },
         fishFilterTerms: ["favourite", "missing"],
+      },
+    },
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        selectedTerms: [
+          { kind: "fish-filter", term: "favourite" },
+          { kind: "fish-filter", term: "missing" },
+          { kind: "fish", fishId: 912 },
+          { kind: "fish", fishId: 77 },
+          { kind: "zone", zoneRgb: 123 },
+          { kind: "semantic", layerId: "regions", fieldId: 22 },
+        ],
       },
     },
   };

@@ -29,13 +29,18 @@ test("normalizeWindowUiState applies defaults and normalizes coordinates", () =>
 
 test("normalizeMapUiSignalState normalizes page-owned local UI state", () => {
   const state = normalizeMapUiSignalState({
-    search: { open: true, query: " cron " },
+    search: {
+      open: true,
+      query: " cron ",
+      selectedTerms: [{ kind: "fish-filter", term: "favorite" }],
+    },
     bookmarks: { placing: true, selectedIds: [" a ", "", "b", "a"] },
     layers: { expandedLayerIds: ["fish_evidence", "", "zone_mask", "fish_evidence"] },
   });
 
   assert.equal(state.search.open, true);
   assert.equal(state.search.query, " cron ");
+  assert.deepEqual(state.search.selectedTerms, [{ kind: "fish-filter", term: "favourite" }]);
   assert.equal(state.bookmarks.placing, true);
   assert.deepEqual(state.bookmarks.selectedIds, ["a", "b", "a"]);
   assert.deepEqual(state.layers.expandedLayerIds, ["fish_evidence", "zone_mask"]);

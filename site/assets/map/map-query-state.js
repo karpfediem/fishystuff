@@ -1,3 +1,5 @@
+import { buildSearchSelectionStatePatch } from "./map-search-contract.js";
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -129,6 +131,14 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
   /** @type {Record<string, unknown>} */
   const patch = {};
 
+  const selectedTerms = [];
+  if (fishId != null) {
+    selectedTerms.push({ kind: "fish", fishId });
+  }
+  for (const term of fishFilterTerms) {
+    selectedTerms.push({ kind: "fish-filter", term });
+  }
+
   if (searchQuery != null) {
     patch._map_ui = {
       search: {
@@ -138,19 +148,33 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
     };
   }
 
+  if (selectedTerms.length) {
+    const searchSelectionPatch = buildSearchSelectionStatePatch(selectedTerms);
+    patch._map_ui = {
+      ...(isPlainObject(patch._map_ui) ? patch._map_ui : {}),
+      ...(isPlainObject(searchSelectionPatch._map_ui) ? searchSelectionPatch._map_ui : {}),
+      search: {
+        ...(isPlainObject(searchSelectionPatch._map_ui?.search)
+          ? searchSelectionPatch._map_ui.search
+          : {}),
+        ...(isPlainObject(patch._map_ui?.search) ? patch._map_ui.search : {}),
+      },
+    };
+    patch._map_bridged = {
+      ...(isPlainObject(searchSelectionPatch._map_bridged)
+        ? searchSelectionPatch._map_bridged
+        : {}),
+    };
+  }
+
   if (
-    fishId != null ||
     patchId != null ||
     fromPatchId != null ||
     toPatchId != null ||
-    fishFilterTerms.length ||
     layers.length
   ) {
     patch._map_bridged = patch._map_bridged || {};
-    patch._map_bridged.filters = {};
-    if (fishId != null) {
-      patch._map_bridged.filters.fishIds = [fishId];
-    }
+    patch._map_bridged.filters = patch._map_bridged.filters || {};
     if (fromPatchId != null || toPatchId != null) {
       if (fromPatchId != null) {
         patch._map_bridged.filters.fromPatchId = fromPatchId || null;
@@ -160,9 +184,6 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
       }
     } else if (patchId != null) {
       patch._map_bridged.filters.patchId = patchId || null;
-    }
-    if (fishFilterTerms.length) {
-      patch._map_bridged.filters.fishFilterTerms = fishFilterTerms;
     }
     if (layers.length) {
       patch._map_bridged.filters.layerIdsVisible = layers;

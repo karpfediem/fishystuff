@@ -1,6 +1,16 @@
 import { findZoneMatches } from "./map-zone-catalog.js";
+import {
+  FISH_FILTER_TERM_ORDER,
+  addSelectedSearchTerm,
+  buildSearchSelectionStatePatch,
+  normalizeFishFilterTerm,
+  normalizeFishFilterTerms,
+  projectSelectedSearchTermsToBridgedFilters,
+  removeSelectedSearchTerm,
+  resolveSelectedSearchTerms,
+} from "./map-search-contract.js";
 
-const FISH_FILTER_TERM_ORDER = Object.freeze(["favourite", "missing"]);
+export { normalizeFishFilterTerm, normalizeFishFilterTerms } from "./map-search-contract.js";
 const FISH_FILTER_TERM_METADATA = Object.freeze({
   favourite: Object.freeze({
     label: "Favourite",
@@ -78,38 +88,6 @@ function normalizeSemanticFieldIdsByLayer(values) {
   return out;
 }
 
-export function normalizeFishFilterTerm(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  if (
-    normalized === "favourite" ||
-    normalized === "favourites" ||
-    normalized === "favorite" ||
-    normalized === "favorites"
-  ) {
-    return "favourite";
-  }
-  if (
-    normalized === "missing" ||
-    normalized === "uncaught" ||
-    normalized === "not caught" ||
-    normalized === "not yet caught"
-  ) {
-    return "missing";
-  }
-  return "";
-}
-
-export function normalizeFishFilterTerms(values) {
-  const selected = new Set();
-  for (const value of Array.isArray(values) ? values : []) {
-    const normalized = normalizeFishFilterTerm(value);
-    if (normalized) {
-      selected.add(normalized);
-    }
-  }
-  return FISH_FILTER_TERM_ORDER.filter((term) => selected.has(term));
-}
-
 function semanticTermLookupKey(layerId, fieldId) {
   return `${String(layerId || "").trim()}:${Number.parseInt(fieldId, 10)}`;
 }
@@ -138,6 +116,8 @@ export function buildSearchPanelStateBundle(signals) {
   const runtime = isPlainObject(signals?._map_runtime) ? signals._map_runtime : {};
   const bridgedFilters = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
+  const selectedTerms = resolveSelectedSearchTerms(search.selectedTerms, bridgedFilters);
+  const projectedFilters = projectSelectedSearchTermsToBridgedFilters(selectedTerms);
   return {
     state: {
       ready: runtime.ready === true,
@@ -149,25 +129,41 @@ export function buildSearchPanelStateBundle(signals) {
       },
     },
     inputState: {
+      search: {
+        searchText: String(search.query ?? ""),
+        selectedTerms,
+      },
       filters: {
         searchText: String(search.query ?? ""),
-        fishIds: normalizeIntegerList(bridgedFilters.fishIds),
-        semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(
-          bridgedFilters.semanticFieldIdsByLayer,
-        ),
-        fishFilterTerms: normalizeFishFilterTerms(bridgedFilters.fishFilterTerms),
+        fishIds: normalizeIntegerList(projectedFilters.fishIds),
+        zoneRgbs: normalizeIntegerList(projectedFilters.zoneRgbs),
+        semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(projectedFilters.semanticFieldIdsByLayer),
+        fishFilterTerms: normalizeFishFilterTerms(projectedFilters.fishFilterTerms),
       },
     },
     sharedFishState: normalizeSharedFishState(signals?._shared_fish),
   };
 }
 
+export function resolveSelectedSearchTermsFromBundle(stateBundle) {
+  const selectedTerms = resolveSelectedSearchTerms(stateBundle?.inputState?.search?.selectedTerms);
+  if (selectedTerms.length || Array.isArray(stateBundle?.inputState?.search?.selectedTerms)) {
+    return selectedTerms;
+  }
+  return resolveSelectedSearchTerms(undefined, stateBundle?.inputState?.filters);
+}
+
 export function resolveSelectedFishIds(stateBundle) {
-  return normalizeIntegerList(stateBundle?.inputState?.filters?.fishIds);
+  return normalizeIntegerList(
+    projectSelectedSearchTermsToBridgedFilters(resolveSelectedSearchTermsFromBundle(stateBundle)).fishIds,
+  );
 }
 
 export function resolveSelectedSemanticFieldIdsByLayer(stateBundle) {
-  return normalizeSemanticFieldIdsByLayer(stateBundle?.inputState?.filters?.semanticFieldIdsByLayer);
+  return normalizeSemanticFieldIdsByLayer(
+    projectSelectedSearchTermsToBridgedFilters(resolveSelectedSearchTermsFromBundle(stateBundle))
+      .semanticFieldIdsByLayer,
+  );
 }
 
 export function resolveSelectedZoneRgbs(stateBundle) {
@@ -176,56 +172,10 @@ export function resolveSelectedZoneRgbs(stateBundle) {
 }
 
 export function resolveSelectedFishFilterTerms(stateBundle) {
-  return normalizeFishFilterTerms(stateBundle?.inputState?.filters?.fishFilterTerms);
-}
-
-function addSelectedFishId(selectedFishIds, fishId) {
-  return selectedFishIds.includes(fishId) ? selectedFishIds : selectedFishIds.concat(fishId);
-}
-
-function removeSelectedFishId(selectedFishIds, fishId) {
-  return selectedFishIds.filter((value) => value !== fishId);
-}
-
-function addSelectedZoneRgb(selectedZoneRgbs, zoneRgb) {
-  return selectedZoneRgbs.includes(zoneRgb) ? selectedZoneRgbs : selectedZoneRgbs.concat(zoneRgb);
-}
-
-function removeSelectedZoneRgb(selectedZoneRgbs, zoneRgb) {
-  return selectedZoneRgbs.filter((value) => value !== zoneRgb);
-}
-
-function addSelectedSemanticFieldId(selectedFieldIds, fieldId) {
-  return selectedFieldIds.includes(fieldId) ? selectedFieldIds : selectedFieldIds.concat(fieldId);
-}
-
-function removeSelectedSemanticFieldId(selectedFieldIds, fieldId) {
-  return selectedFieldIds.filter((value) => value !== fieldId);
-}
-
-function updateSelectedSemanticFieldIdsByLayer(selectedByLayer, layerId, nextFieldIds) {
-  const next = {
-    ...normalizeSemanticFieldIdsByLayer(selectedByLayer),
-  };
-  const normalizedLayerId = String(layerId || "").trim();
-  if (!normalizedLayerId) {
-    return next;
-  }
-  if (!Array.isArray(nextFieldIds) || nextFieldIds.length === 0) {
-    delete next[normalizedLayerId];
-    return next;
-  }
-  next[normalizedLayerId] = normalizeIntegerList(nextFieldIds);
-  return normalizeSemanticFieldIdsByLayer(next);
-}
-
-function addSelectedFishFilterTerm(selectedTerms, term) {
-  return normalizeFishFilterTerms((selectedTerms || []).concat(term));
-}
-
-function removeSelectedFishFilterTerm(selectedTerms, term) {
-  const normalizedTerm = normalizeFishFilterTerm(term);
-  return normalizeFishFilterTerms((selectedTerms || []).filter((entry) => entry !== normalizedTerm));
+  return normalizeFishFilterTerms(
+    projectSelectedSearchTermsToBridgedFilters(resolveSelectedSearchTermsFromBundle(stateBundle))
+      .fishFilterTerms,
+  );
 }
 
 export function parseFishFilterDirectives(searchText) {
@@ -538,87 +488,43 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
 
 export function buildSearchMatchSignalPatch(signals, match) {
   const stateBundle = buildSearchPanelStateBundle(signals);
-  const selectedFishIds = resolveSelectedFishIds(stateBundle);
-  const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
-  const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
-  const patch = {
-    _map_ui: {
-      search: {
-        query: "",
-        open: false,
-      },
-    },
-    _map_bridged: {
-      filters: {},
-    },
-  };
-  if (match?.kind === "fish-filter") {
-    patch._map_bridged.filters.fishFilterTerms = addSelectedFishFilterTerm(
-      selectedFishFilterTerms,
-      match.term,
-    );
-  } else if (match?.kind === "fish") {
-    patch._map_bridged.filters.fishIds = addSelectedFishId(selectedFishIds, match.fishId);
-  } else if (match?.kind === "zone") {
-    patch._map_bridged.filters.semanticFieldIdsByLayer = updateSelectedSemanticFieldIdsByLayer(
-      selectedSemanticFieldIdsByLayer,
-      "zone_mask",
-      addSelectedZoneRgb(resolveSelectedZoneRgbs(stateBundle), match.zoneRgb),
-    );
-  } else if (match?.kind === "semantic") {
-    patch._map_bridged.filters.semanticFieldIdsByLayer = updateSelectedSemanticFieldIdsByLayer(
-      selectedSemanticFieldIdsByLayer,
-      match.layerId,
-      addSelectedSemanticFieldId(
-        selectedSemanticFieldIdsByLayer[match.layerId] || [],
-        match.fieldId,
-      ),
-    );
-  }
-  return patch;
+  const selectedTerms = resolveSelectedSearchTermsFromBundle(stateBundle);
+  return buildSearchSelectionStatePatch(addSelectedSearchTerm(selectedTerms, match), {
+    query: "",
+    open: false,
+  });
 }
 
 export function buildSearchSelectionRemovalSignalPatch(signals, target) {
   const stateBundle = buildSearchPanelStateBundle(signals);
-  const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
-  const patch = {
-    _map_bridged: {
-      filters: {},
-    },
-  };
+  const selectedTerms = resolveSelectedSearchTermsFromBundle(stateBundle);
   const fishFilterTerm = normalizeFishFilterTerm(target?.fishFilterTerm);
   if (fishFilterTerm) {
-    patch._map_bridged.filters.fishFilterTerms = removeSelectedFishFilterTerm(
-      resolveSelectedFishFilterTerms(stateBundle),
-      fishFilterTerm,
+    return buildSearchSelectionStatePatch(
+      removeSelectedSearchTerm(selectedTerms, { kind: "fish-filter", term: fishFilterTerm }),
     );
-    return patch;
   }
   const zoneRgb = Number.parseInt(target?.zoneRgb, 10);
   if (Number.isFinite(zoneRgb)) {
-    patch._map_bridged.filters.semanticFieldIdsByLayer = updateSelectedSemanticFieldIdsByLayer(
-      selectedSemanticFieldIdsByLayer,
-      "zone_mask",
-      removeSelectedZoneRgb(resolveSelectedZoneRgbs(stateBundle), zoneRgb),
+    return buildSearchSelectionStatePatch(
+      removeSelectedSearchTerm(selectedTerms, { kind: "zone", zoneRgb }),
     );
-    return patch;
   }
   const semanticLayerId = String(target?.semanticLayerId || "").trim();
   const semanticFieldId = Number.parseInt(target?.semanticFieldId, 10);
   if (semanticLayerId && Number.isFinite(semanticFieldId)) {
-    patch._map_bridged.filters.semanticFieldIdsByLayer = updateSelectedSemanticFieldIdsByLayer(
-      selectedSemanticFieldIdsByLayer,
-      semanticLayerId,
-      removeSelectedSemanticFieldId(
-        selectedSemanticFieldIdsByLayer[semanticLayerId] || [],
-        semanticFieldId,
-      ),
+    return buildSearchSelectionStatePatch(
+      removeSelectedSearchTerm(selectedTerms, {
+        kind: "semantic",
+        layerId: semanticLayerId,
+        fieldId: semanticFieldId,
+      }),
     );
-    return patch;
   }
   const fishId = Number.parseInt(target?.fishId, 10);
-  patch._map_bridged.filters.fishIds = removeSelectedFishId(resolveSelectedFishIds(stateBundle), fishId);
-  return patch;
+  return buildSearchSelectionStatePatch(
+    removeSelectedSearchTerm(selectedTerms, { kind: "fish", fishId }),
+  );
 }
 
 export function patchTouchesSearchPanelSignals(patch) {

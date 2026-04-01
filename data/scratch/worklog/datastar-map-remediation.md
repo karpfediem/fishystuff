@@ -3339,3 +3339,131 @@ Next tasks from here:
 - keep the bridge contract explicit:
   - page-only search UX and bookmark manager state stay out of `_map_bridged`
   - only layer-relevant filter/clipping outputs cross into Bevy
+
+### 2026-04-01: Slice 13 landed
+
+- Added a new clean-slate search contract module:
+  - `site/assets/map/map-search-contract.js`
+- Added:
+  - `site/assets/map/map-search-contract.test.mjs`
+
+This slice establishes a canonical owner for live map search selection:
+
+- `_map_ui.search.selectedTerms`
+
+Each selected search term is now normalized as one of:
+
+- `fish-filter`
+- `fish`
+- `zone`
+- `semantic`
+
+What the new contract owns:
+
+- search-term normalization and deduplication
+- legacy fallback derivation from older bridged filter state
+- projection from selected terms into the explicit Bevy-facing bridge inputs:
+  - `_map_bridged.filters.fishIds`
+  - `_map_bridged.filters.zoneRgbs`
+  - `_map_bridged.filters.semanticFieldIdsByLayer`
+  - `_map_bridged.filters.fishFilterTerms`
+- an explicit layer search/filter/clipping support matrix
+
+Current layer support matrix:
+
+- `zone_mask`
+  - term kinds:
+    - `fish`
+    - `fish-filter`
+    - `zone`
+  - clip modes:
+    - none
+- `fish_evidence`
+  - term kinds:
+    - `fish`
+    - `fish-filter`
+    - `zone`
+  - clip modes:
+    - `zone-membership`
+- `regions`
+  - term kinds:
+    - `semantic`
+  - clip modes:
+    - `mask-sample`
+- `region_groups`
+  - term kinds:
+    - `semantic`
+  - clip modes:
+    - `mask-sample`
+- `minimap`
+  - term kinds:
+    - none
+  - clip modes:
+    - `mask-sample`
+- `bookmarks`
+  - term kinds:
+    - none
+  - clip modes:
+    - none
+- `node_waypoints`
+  - term kinds:
+    - none
+  - clip modes:
+    - none
+
+Live/search integration changes:
+
+- `site/assets/map/map-search-state.js`
+  - live search state now resolves selected terms from `_map_ui.search.selectedTerms`
+  - result selection/removal mutates the selected-term array first
+  - bridged filter state is derived by projection instead of acting as the canonical owner
+- `site/assets/map/map-query-state.js`
+  - URL parsing now seeds `_map_ui.search.selectedTerms`
+  - older query shapes are normalized through the same contract
+- `site/assets/map/map-page-live.js`
+  - page persistence/restore now includes `_map_ui.search.selectedTerms`
+- `site/assets/map/map-signal-contract.js`
+  - defaults and shell bootstrap now include:
+    - `_map_ui.search.selectedTerms`
+    - `_map_bridged.filters.fishFilterTerms`
+
+Important transitional note:
+
+- `_map_bridged.filters.{fishIds,zoneRgbs,semanticFieldIdsByLayer,fishFilterTerms}` remain in
+  persisted page state for now
+- they are no longer the canonical owner
+- they are derived projections kept for cold-boot/runtime stability while the rest of the
+  clean-slate search/filter path is migrated
+
+Why this matters:
+
+- search-term ownership is now explicit and page-owned instead of spread across ad hoc bridged
+  filter branches
+- this gives the remaining filter/clipping remediation a stable source of truth
+- it also creates a clean place to define which layers support which term kinds and clip modes
+  without growing the legacy loader model again
+
+Validation:
+
+- `node --check site/assets/map/map-search-contract.js`
+- `node --check site/assets/map/map-search-state.js`
+- `node --check site/assets/map/map-query-state.js`
+- `node --check site/assets/map/map-page-live.js`
+- `node --test site/assets/map/map-search-contract.test.mjs site/assets/map/map-search-state.test.mjs site/assets/map/map-query-state.test.mjs site/assets/map/map-signal-contract.test.mjs site/assets/map/map-page-live.test.mjs`
+- rebuilt site output
+- restored tracked font artifacts after rebuild
+- verified served:
+  - `/map/map-search-contract.js`
+  - `/map/map-search-state.js`
+  match `site/.out`
+- live DevTools checks confirmed after hard reload:
+  - selecting `Add Missing` writes `_map_ui.search.selectedTerms = [{kind:"fish-filter",term:"missing"}]`
+  - the projected bridge state updates `_map_bridged.filters.fishFilterTerms = ["missing"]`
+  - removing that chip clears both the selected term and the projected bridged filter state
+
+Next tasks from here:
+
+- commit the canonical search-term slice
+- move the remaining live search/filter behavior onto this contract instead of the old direct
+  bridged-filter assumptions
+- use the explicit support matrix to drive generic filter/clipping affordances per layer

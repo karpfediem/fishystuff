@@ -137,7 +137,7 @@ function defaultSignals() {
         layers: { open: true, collapsed: false, x: null, y: null },
         bookmarks: { open: false, collapsed: false, x: null, y: null },
       },
-      search: { open: false, query: "" },
+      search: { open: false, query: "", selectedTerms: [] },
       bookmarks: { placing: false, selectedIds: [] },
       layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {} },
     },

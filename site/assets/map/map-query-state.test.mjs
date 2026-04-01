@@ -13,11 +13,18 @@ test("parseQuerySignalPatch maps page-owned and bridged query params into signal
       search: {
         query: "velia",
         open: true,
+        selectedTerms: [
+          { kind: "fish", fishId: 91 },
+          { kind: "fish-filter", term: "missing" },
+          { kind: "fish-filter", term: "favourite" },
+        ],
       },
     },
     _map_bridged: {
       filters: {
         fishIds: [91],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
         fishFilterTerms: ["missing", "favourite"],
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
@@ -37,9 +44,17 @@ test("parseQuerySignalPatch prefers focusFish and patch when present", () => {
   );
 
   assert.deepEqual(patch, {
+    _map_ui: {
+      search: {
+        selectedTerms: [{ kind: "fish", fishId: 820986 }],
+      },
+    },
     _map_bridged: {
       filters: {
         fishIds: [820986],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
         patchId: "2026-02-26",
       },
     },
