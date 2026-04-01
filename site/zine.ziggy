@@ -72,7 +72,7 @@ Multilingual {
     "map/map-patch-picker-element.js",
     "map/map-layer-panel.js",
     "map/map-layer-panel-element.js",
-    "map/map-layer-panel-live.js",
+    "map/map-layer-panel-state.js",
     "map/map-layer-search-effects.js",
     "map/map-patch-picker-live.js",
     "map/map-bookmark-state.js",

@@ -3,7 +3,7 @@ import {
   buildLayerPanelStateBundle,
   patchTouchesLayerPanelSignals,
   toggleExpandedLayerIds,
-} from "./map-layer-panel-live.js";
+} from "./map-layer-panel-state.js";
 import { nextHoverFactVisibilityByLayer } from "./map-hover-facts.js";
 import { renderLayerStack } from "./map-layer-panel.js";
 import {

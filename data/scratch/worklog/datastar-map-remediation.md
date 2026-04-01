@@ -6624,3 +6624,52 @@ Validation:
   - the Layers count still rendered as `7`
   - expanding Fish Evidence settings worked
   - toggling Fish Evidence visibility updated through the live signal path
+
+## 2026-04-01: remove the dead live Layers controller path
+
+After moving the Layers panel to a custom element, the browser was still loading `site/assets/map/map-layer-panel-live.js` only because the new element imported three helper exports from it.
+
+That was still legacy drift:
+
+- the module still contained the full dead controller implementation
+- the browser still downloaded it
+- the file name still implied it was the live path even though it no longer was
+
+What changed:
+
+- extracted the remaining pure helper exports into:
+  - `site/assets/map/map-layer-panel-state.js`
+  - `site/assets/map/map-layer-panel-state.test.mjs`
+- updated `site/assets/map/map-layer-panel-element.js` to import the pure state module instead
+- deleted the dead legacy files:
+  - `site/assets/map/map-layer-panel-live.js`
+  - `site/assets/map/map-layer-panel-live.test.mjs`
+- updated `site/zine.ziggy` so the live site now publishes:
+  - `map/map-layer-panel-state.js`
+  instead of the old live controller module
+
+Why this is closer to Datastar:
+
+- the live path is now clearer:
+  - shell markup
+  - custom element
+  - pure state/render helpers
+- the browser no longer downloads dead controller code
+- the remaining layer logic is now named for what it actually is: panel state, not a live controller
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-layer-panel-state.js`
+  - `node --test site/assets/map/map-layer-panel-state.test.mjs site/assets/map/map-layer-panel-element.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for:
+  - `/map/map-layer-panel-element.js`
+  - `/map/map-layer-panel-state.js`
+  - `/map/`
+- live DevTools validation on `/map/` confirmed:
+  - the layer element still defined and mounted after reload
+  - the Layers count still rendered as `7`
+  - expanded settings still stayed functional
+  - no new console errors appeared

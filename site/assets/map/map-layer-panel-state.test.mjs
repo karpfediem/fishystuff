@@ -5,7 +5,7 @@ import {
   buildLayerPanelStateBundle,
   patchTouchesLayerPanelSignals,
   toggleExpandedLayerIds,
-} from "./map-layer-panel-live.js";
+} from "./map-layer-panel-state.js";
 
 test("buildLayerPanelStateBundle keeps only runtime layer catalog and bridged filters", () => {
   assert.deepEqual(
