@@ -407,6 +407,7 @@ export async function start() {
 
   globalThis.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
     const patch = event?.detail || null;
+    page.handleSignalPatch?.(patch);
     const searchProjectionPatch = buildSearchProjectionPatchForSignalPatch(signals(), patch);
     const effectivePatch = searchProjectionPatch
       ? combineSignalPatches(patch, searchProjectionPatch)

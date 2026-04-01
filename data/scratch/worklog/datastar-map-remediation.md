@@ -5723,3 +5723,54 @@ Next:
 - keep reducing the remaining page bootstrap orchestration in `map-page-live.js`
 - especially:
   - document-level `datastar-signal-patch` persistence binding
+
+## 2026-04-01: route page persistence notifications through `map-app-live`
+
+Even after extracting the persistence controller, `map-page-live.js` still bound its own
+document-level `datastar-signal-patch` listener just to notify the persistor.
+
+That meant the live map still had two global consumers of the Datastar patch stream:
+
+- `map-app-live.js`
+- `map-page-live.js`
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - no longer exports or uses `DATASTAR_SIGNAL_PATCH_EVENT`
+  - no longer binds a document-level patch listener
+  - now exposes a narrow `handleSignalPatch(patch)` method that only forwards into the extracted
+    persistence controller
+- `site/assets/map/map-app-live.js`
+  - now forwards the real document-level patch stream into:
+    - `page.handleSignalPatch(patch)`
+
+Why this matters:
+
+- it removes one more global Datastar listener from the live map path
+- it keeps the page controller focused on:
+  - restore/init
+  - direct patch application
+  - persistence scheduling only when the app tells it a patch happened
+- it keeps `map-app-live.js` as the single owner of the live global patch stream
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-live.js site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-page-persist.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+  - `/map/map-page-live.js`
+- live DevTools reload on `/map/` still confirmed:
+  - `Search` window present
+  - `Info` window present
+  - `Layers 7`
+
+Next:
+
+- continue reducing the remaining framework-like behavior in `map-page-live.js`
+- after that, the main remaining imperative island is still:
+  - `map-info-panel-live.js`

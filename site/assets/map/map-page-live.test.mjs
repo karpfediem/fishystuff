@@ -265,6 +265,7 @@ test("map-page-live exposes only the live bootstrap surface", () => {
   assert.equal(typeof env.pageLive.whenRestored, "function");
   assert.equal(typeof env.pageLive.signalObject, "function");
   assert.equal(typeof env.pageLive.patchSignals, "function");
+  assert.equal(typeof env.pageLive.handleSignalPatch, "function");
   assert.equal("connect" in env.pageLive, false);
   assert.equal("persist" in env.pageLive, false);
   assert.equal("restore" in env.pageLive, false);

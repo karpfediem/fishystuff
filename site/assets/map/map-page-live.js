@@ -5,8 +5,6 @@ import {
   applyMapPageSignalsPatch,
 } from "./map-page-signals.js";
 import { createMapPagePersistController } from "./map-page-persist.js";
-
-export const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
 export const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 
 export function createMapPageLive({ globalRef = globalThis } = {}) {
@@ -14,7 +12,6 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     shell: null,
     liveSignals: null,
     uiStateRestored: false,
-    signalPatchListenerBound: false,
     initListenerBound: false,
     restoreResolved: false,
     restorePromise: null,
@@ -58,14 +55,6 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     readSnapshot: signalObject,
   });
 
-  function bindSignalPatchListener() {
-    if (state.signalPatchListenerBound) {
-      return;
-    }
-    globalRef.document?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, persistor.handleSignalPatch);
-    state.signalPatchListenerBound = true;
-  }
-
   function handleLiveInit(event) {
     if (event?.currentTarget && "__fishymapInitialSignals" in event.currentTarget) {
       delete event.currentTarget.__fishymapInitialSignals;
@@ -101,9 +90,12 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     applyPatch(state.liveSignals, patch);
   }
 
+  function handleSignalPatch(patch) {
+    persistor.handleSignalPatch(patch);
+  }
+
   function restore(signals) {
     connect(signals);
-    bindSignalPatchListener();
     const restoreState = loadRestoreState({
       localStorage: globalRef.localStorage,
       sessionStorage: globalRef.sessionStorage,
@@ -137,6 +129,7 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   }
 
   return Object.freeze({
+    handleSignalPatch,
     patchSignals,
     signalObject,
     start,
