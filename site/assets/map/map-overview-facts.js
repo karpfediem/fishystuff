@@ -4,6 +4,14 @@ import {
 } from "./map-zone-catalog.js";
 
 export const PRIMARY_OVERVIEW_ROW_KEYS = Object.freeze(["zone", "resources", "origin"]);
+const POINT_LABEL_PRIMARY_FACT_KEYS = Object.freeze([
+  "zone",
+  "resource_group",
+  "resource_region",
+  "origin_region",
+  "origin_node",
+  "resource_waypoint",
+]);
 
 const LAYER_FALLBACK_ORDER = Object.freeze({
   zone_mask: 10,
@@ -65,6 +73,17 @@ function detailFactByKeys(sample, factKeys) {
     return null;
   }
   return normalizeDetailFacts(sample).find((fact) => wanted.has(fact.key)) || null;
+}
+
+function preferredDetailFact(sample) {
+  const facts = normalizeDetailFacts(sample);
+  for (const key of POINT_LABEL_PRIMARY_FACT_KEYS) {
+    const match = facts.find((fact) => fact.key === key);
+    if (match) {
+      return match;
+    }
+  }
+  return facts.find((fact) => trimString(fact?.value)) || null;
 }
 
 function normalizeRgbTriplet(input) {
@@ -270,4 +289,50 @@ export function preferredOverviewRow(layerSamples, options = {}) {
     }
   }
   return rows[0] || null;
+}
+
+function pointLabelForSample(sample, { zoneCatalog = [] } = {}) {
+  const layerId = trimString(sample?.layerId);
+  if (!layerId) {
+    return "";
+  }
+  if (layerId === "zone_mask") {
+    const zoneFact = detailFactByKeys(sample, ["zone"]);
+    if (zoneFact?.value) {
+      return zoneFact.value;
+    }
+    const zoneRgb = zoneRgbFromSample(sample);
+    const zoneName =
+      zoneRgb != null ? trimString(zoneDisplayNameFromCatalog(zoneCatalog, zoneRgb)) : "";
+    if (zoneName) {
+      return zoneName;
+    }
+  }
+  const fact = preferredDetailFact(sample);
+  if (fact?.value) {
+    return fact.value;
+  }
+  if (Array.isArray(sample?.targets)) {
+    const targetLabel = sample.targets
+      .map((target) => trimString(target?.label))
+      .find(Boolean);
+    if (targetLabel) {
+      return targetLabel;
+    }
+  }
+  return "";
+}
+
+export function preferredPointLabelForLayerSamples(
+  layerSamples,
+  { zoneCatalog = [], runtimeLayers = [] } = {},
+) {
+  const orderedSamples = orderedLayerSamplesForOverview(layerSamples, runtimeLayers);
+  for (const sample of orderedSamples) {
+    const label = pointLabelForSample(sample, { zoneCatalog });
+    if (label) {
+      return label;
+    }
+  }
+  return "";
 }

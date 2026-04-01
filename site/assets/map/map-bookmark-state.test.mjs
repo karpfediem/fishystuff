@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  bookmarkCurrentPointLabel,
+  bookmarkCurrentPointSubtitle,
   bookmarkDisplayLabel,
   buildRuntimeBookmarkDetailsPatch,
   buildBookmarkOverviewRows,
@@ -56,7 +58,7 @@ test("createBookmarkFromSelection builds a bookmark from runtime selection", () 
   assert.equal(bookmark.zoneRgb, 65535);
 });
 
-test("createBookmarkFromSelection prefers the zone overview label over point label", () => {
+test("createBookmarkFromSelection uses the runtime point label for bookmark titles", () => {
   const bookmark = createBookmarkFromSelection(
     {
       worldX: 123.2,
@@ -81,15 +83,15 @@ test("createBookmarkFromSelection prefers the zone overview label over point lab
     [],
   );
 
-  assert.equal(bookmark.label, "Valencia Sea - Depth 5");
+  assert.equal(bookmark.label, "Margoria (RG218)");
 });
 
-test("createBookmarkFromSelection can resolve the zone name from zone catalog context", () => {
+test("createBookmarkFromSelection falls back to layer-derived point labels when pointLabel is missing", () => {
   const bookmark = createBookmarkFromSelection(
     {
       worldX: 123.2,
       worldZ: 456.7,
-      pointLabel: "Margoria (RG218)",
+      pointLabel: "",
       layerSamples: [
         {
           layerId: "zone_mask",
@@ -185,6 +187,49 @@ test("buildBookmarkOverviewRows keeps semantic facts and drops legacy world coor
       ["hover-resources", "Resources", "(RG212|Arehaza)"],
       ["trade-origin", "Origin", "(R430|Hakoven Islands)"],
     ],
+  );
+});
+
+test("bookmarkCurrentPointSubtitle exposes the current point label when a saved title differs", () => {
+  const bookmark = {
+    id: "probe",
+    label: "Margoria (RG218)",
+    worldX: 12,
+    worldZ: 34,
+    layerSamples: [
+      {
+        layerId: "zone_mask",
+        rgbU32: 0x3c963c,
+        rgb: [60, 150, 60],
+        detailSections: [],
+      },
+      {
+        layerId: "region_groups",
+        detailSections: [
+          {
+            id: "resources",
+            kind: "facts",
+            title: "Resources",
+            facts: [{ key: "resource_group", label: "Resources", value: "Margoria (RG218)" }],
+            targets: [],
+          },
+        ],
+      },
+    ],
+  };
+  const stateBundle = {
+    zoneCatalog: [{ zoneRgb: 0x3c963c, name: "Margoria South" }],
+    state: { catalog: { layers: [{ layerId: "zone_mask", displayOrder: 10 }] } },
+  };
+
+  assert.equal(bookmarkCurrentPointLabel(bookmark, stateBundle), "Margoria South");
+  assert.equal(
+    bookmarkCurrentPointSubtitle(bookmark, 0, stateBundle),
+    "Margoria South",
+  );
+  assert.deepEqual(
+    buildBookmarkOverviewRows(bookmark, 0, stateBundle).map((row) => [row.key, row.value]),
+    [[undefined, "Margoria (RG218)"], ["resources", "Margoria (RG218)"]],
   );
 });
 

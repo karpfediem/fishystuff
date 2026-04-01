@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   buildOverviewRowsForLayerSamples,
+  preferredPointLabelForLayerSamples,
   buildTradePaneFacts,
   buildTerritoryPaneFacts,
   buildZonePaneFacts,
@@ -139,4 +140,30 @@ test("preferredOverviewRow prefers zone over territory and trade facts", () => {
 
   assert.equal(preferred?.key, "zone");
   assert.equal(preferred?.value, "Valencia Sea - Depth 5");
+});
+
+test("preferredPointLabelForLayerSamples follows layer order and zone fallback names", () => {
+  const label = preferredPointLabelForLayerSamples(
+    [
+      {
+        layerId: "region_groups",
+        detailSections: [detailSectionFact("resource_group", "Resources", "(RG218|Margoria)", "hover-resources")],
+      },
+      {
+        layerId: "zone_mask",
+        rgbU32: 0x3c963c,
+        rgb: [60, 150, 60],
+        detailSections: [],
+      },
+    ],
+    {
+      zoneCatalog: [{ zoneRgb: 0x3c963c, name: "Margoria South" }],
+      runtimeLayers: [
+        { layerId: "zone_mask", displayOrder: 10 },
+        { layerId: "region_groups", displayOrder: 20 },
+      ],
+    },
+  );
+
+  assert.equal(label, "Margoria South");
 });

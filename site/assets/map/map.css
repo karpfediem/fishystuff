@@ -558,8 +558,27 @@ body:has(#map-page-shell) #content > .site-content-clip {
   min-width: 0;
 }
 
+.fishymap-bookmark-title-block {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
 .fishymap-bookmark-title .fishymap-overview-row {
   min-width: 0;
+}
+
+.fishymap-bookmark-subtitle {
+  min-width: 0;
+  padding-left: 1.8rem;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--color-base-content) 72%, transparent);
+  font-size: 0.74rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fishymap-bookmark-rename {

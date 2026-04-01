@@ -145,6 +145,7 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
         },
         crate::bridge::contract::FishyMapSelectionPointKind::Clicked,
         None,
+        Some(&context.bootstrap.zones),
     ) else {
         return;
     };

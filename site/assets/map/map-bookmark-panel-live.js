@@ -13,6 +13,7 @@ import {
   serializeBookmarksForExport,
 } from "./map-bookmark-io.js";
 import {
+  bookmarkCurrentPointSubtitle,
   bookmarkDisplayLabel,
   buildBookmarkOverviewRows,
   buildBookmarkPanelStateBundle,
@@ -256,6 +257,7 @@ export function createMapBookmarkPanelController({
         setMarkup,
         buildBookmarkOverviewRows,
         bookmarkDisplayLabel,
+        bookmarkCurrentPointSubtitle,
         overviewRowMarkup,
         escapeHtml,
         dragHandleIcon,

@@ -1,5 +1,6 @@
 import {
   buildOverviewRowsForLayerSamples,
+  preferredPointLabelForLayerSamples,
   preferredOverviewRow,
 } from "./map-overview-facts.js";
 
@@ -45,16 +46,16 @@ function zoneRgbFromLayerSamples(layerSamples) {
 
 function preferredSelectionLabel(selection, options = {}) {
   const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
-  const preferredOverviewLabel = preferredOverviewRow(layerSamples, {
-    zoneCatalog: Array.isArray(options.zoneCatalog) ? options.zoneCatalog : [],
-    runtimeLayers: Array.isArray(options.runtimeLayers) ? options.runtimeLayers : [],
-  })?.value;
-  if (preferredOverviewLabel) {
-    return preferredOverviewLabel;
-  }
   const pointLabel = trimString(selection?.pointLabel);
   if (pointLabel) {
     return pointLabel;
+  }
+  const currentPointLabel = preferredPointLabelForLayerSamples(layerSamples, {
+    zoneCatalog: Array.isArray(options.zoneCatalog) ? options.zoneCatalog : [],
+    runtimeLayers: Array.isArray(options.runtimeLayers) ? options.runtimeLayers : [],
+  });
+  if (currentPointLabel) {
+    return currentPointLabel;
   }
   const sampleLabel = layerSamples
     .map((sample) => trimString(sample?.label || sample?.name || sample?.fieldLabel))
@@ -63,6 +64,19 @@ function preferredSelectionLabel(selection, options = {}) {
     return sampleLabel;
   }
   return "";
+}
+
+function normalizedLabelKey(value) {
+  return trimString(value).toLocaleLowerCase();
+}
+
+export function bookmarkCurrentPointLabel(bookmark, stateBundle = null) {
+  return (
+    preferredPointLabelForLayerSamples(bookmark?.layerSamples, {
+      zoneCatalog: stateBundle?.zoneCatalog,
+      runtimeLayers: stateBundle?.state?.catalog?.layers,
+    }) || ""
+  );
 }
 
 function nextBookmarkId(existingBookmarks) {
@@ -154,18 +168,32 @@ export function bookmarkDisplayLabel(bookmark, fallbackIndex = 0, stateBundle = 
     return explicitLabel;
   }
   const fallbackLabel =
+    bookmarkCurrentPointLabel(bookmark, stateBundle) ||
     preferredOverviewRow(bookmark?.layerSamples, {
       zoneCatalog: stateBundle?.zoneCatalog,
       runtimeLayers: stateBundle?.state?.catalog?.layers,
-    })?.value || preferredSelectionLabel(bookmark);
+    })?.value ||
+    preferredSelectionLabel(bookmark);
   if (fallbackLabel) {
     return fallbackLabel;
   }
   return `Bookmark ${fallbackIndex + 1}`;
 }
 
+export function bookmarkCurrentPointSubtitle(bookmark, fallbackIndex = 0, stateBundle = null) {
+  const currentPointLabel = bookmarkCurrentPointLabel(bookmark, stateBundle);
+  if (!currentPointLabel) {
+    return "";
+  }
+  const displayLabel = bookmarkDisplayLabel(bookmark, fallbackIndex, stateBundle);
+  return normalizedLabelKey(currentPointLabel) === normalizedLabelKey(displayLabel)
+    ? ""
+    : currentPointLabel;
+}
+
 export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0, stateBundle = null) {
   const displayLabel = bookmarkDisplayLabel(bookmark, fallbackIndex, stateBundle);
+  const currentPointLabel = bookmarkCurrentPointSubtitle(bookmark, fallbackIndex, stateBundle);
   const overviewRows = buildOverviewRowsForLayerSamples(bookmark?.layerSamples, {
     zoneCatalog: stateBundle?.zoneCatalog,
     runtimeLayers: stateBundle?.state?.catalog?.layers,
@@ -173,7 +201,10 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0, stateBund
     (row) =>
       !(
         trimString(row?.key) === "zone" &&
-        trimString(row?.value).toLowerCase() === trimString(displayLabel).toLowerCase()
+        [displayLabel, currentPointLabel]
+          .map(normalizedLabelKey)
+          .filter(Boolean)
+          .includes(normalizedLabelKey(row?.value))
       ),
   );
   const rows = [

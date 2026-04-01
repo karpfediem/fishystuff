@@ -33,6 +33,10 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
       ? options.bookmarkDisplayLabel
       : (bookmark, fallbackIndex = 0) =>
           String(bookmark?.label || "").trim() || `Bookmark ${fallbackIndex + 1}`;
+  const bookmarkCurrentPointSubtitle =
+    typeof options.bookmarkCurrentPointSubtitle === "function"
+      ? options.bookmarkCurrentPointSubtitle
+      : () => "";
   const overviewRowMarkup =
     typeof options.overviewRowMarkup === "function" ? options.overviewRowMarkup : () => "";
   const escapeHtml = typeof options.escapeHtml === "function" ? options.escapeHtml : (value) => String(value || "");
@@ -87,6 +91,7 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
             const overviewRows = buildBookmarkOverviewRows(bookmark, index, stateBundle);
             const [titleRow, ...detailRows] = overviewRows;
             const displayLabel = bookmarkDisplayLabel(bookmark, index, stateBundle);
+            const subtitle = bookmarkCurrentPointSubtitle(bookmark, index, stateBundle);
             return `
               <div class="fishymap-bookmark-card rounded-box border border-base-300/70 bg-base-100" data-bookmark-id="${escapeHtml(bookmark.id)}">
                 <div class="fishymap-bookmark-rail">
@@ -112,8 +117,15 @@ export function renderBookmarkManager(elements, stateBundle, bookmarks, bookmark
                 </div>
                 <div class="fishymap-bookmark-main">
                   <div class="fishymap-bookmark-titlebar">
-                    <div class="fishymap-bookmark-title">
+                    <div class="fishymap-bookmark-title-block">
+                      <div class="fishymap-bookmark-title">
                       ${titleRow ? overviewRowMarkup(titleRow) : ""}
+                      </div>
+                      ${
+                        subtitle
+                          ? `<div class="fishymap-bookmark-subtitle">${escapeHtml(subtitle)}</div>`
+                          : ""
+                      }
                     </div>
                     <button
                       class="fishymap-bookmark-rename btn btn-soft btn-sm btn-square"

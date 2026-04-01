@@ -7,6 +7,47 @@ use crate::map::layer_query::{sample_semantic_layers_at_world_point, LayerQueryS
 use crate::map::layers::LayerRegistry;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{HoverInfo, SelectedInfo};
+use fishystuff_core::field_metadata::{detail_facts, preferred_detail_fact_value};
+use std::collections::HashMap;
+
+fn normalized_point_label(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn preferred_sample_point_label(
+    sample: &LayerQuerySample,
+    zone_names: Option<&HashMap<u32, Option<String>>>,
+) -> Option<String> {
+    if let Some(value) = preferred_detail_fact_value(detail_facts(&sample.detail_sections)) {
+        return normalized_point_label(Some(value));
+    }
+    if sample.layer_id == "zone_mask" {
+        if let Some(value) = zone_names
+            .and_then(|zones| zones.get(&sample.rgb_u32))
+            .and_then(|value| value.as_deref())
+        {
+            return normalized_point_label(Some(value));
+        }
+    }
+    sample
+        .targets
+        .iter()
+        .find_map(|target| normalized_point_label(Some(target.label.as_str())))
+}
+
+fn preferred_point_label_from_layer_samples(
+    layer_samples: &[LayerQuerySample],
+    fallback_point_label: Option<&str>,
+    zone_names: Option<&HashMap<u32, Option<String>>>,
+) -> Option<String> {
+    layer_samples
+        .iter()
+        .find_map(|sample| preferred_sample_point_label(sample, zone_names))
+        .or_else(|| normalized_point_label(fallback_point_label))
+}
 
 pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
     if hover.zone_rgb().is_none() && hover.layer_samples.is_empty() {
@@ -19,7 +60,7 @@ pub fn selected_info_from_hover(hover: &HoverInfo) -> Option<SelectedInfo> {
         world_z: hover.world_z,
         sampled_world_point: true,
         point_kind: Some(FishyMapSelectionPointKind::Clicked),
-        point_label: None,
+        point_label: preferred_point_label_from_layer_samples(&hover.layer_samples, None, None),
         layer_samples: hover.layer_samples.clone(),
     })
 }
@@ -29,6 +70,7 @@ pub fn selected_info_at_world_point(
     context: &WorldPointQueryContext<'_>,
     point_kind: FishyMapSelectionPointKind,
     point_label: Option<&str>,
+    zone_names: Option<&HashMap<u32, Option<String>>>,
 ) -> Option<SelectedInfo> {
     let map = context.map_to_world.world_to_map(world_point);
     let map_x = map.x as f32;
@@ -57,10 +99,11 @@ pub fn selected_info_at_world_point(
         world_z: world_point.z,
         sampled_world_point: true,
         point_kind: Some(point_kind),
-        point_label: point_label
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned),
+        point_label: preferred_point_label_from_layer_samples(
+            &layer_samples,
+            point_label,
+            zone_names,
+        ),
         layer_samples,
     })
 }
@@ -69,8 +112,9 @@ pub fn selected_info_for_zone_rgb(
     layer_registry: &LayerRegistry,
     field_metadata: &FieldMetadataCache,
     zone_rgb: u32,
+    zone_names: Option<&HashMap<u32, Option<String>>>,
 ) -> SelectedInfo {
-    let layer_samples =
+    let layer_samples: Vec<LayerQuerySample> =
         semantic_layer_sample_for_field_id(layer_registry, field_metadata, "zone_mask", zone_rgb)
             .into_iter()
             .collect();
@@ -81,7 +125,7 @@ pub fn selected_info_for_zone_rgb(
         world_z: f64::NAN,
         sampled_world_point: false,
         point_kind: None,
-        point_label: None,
+        point_label: preferred_point_label_from_layer_samples(&layer_samples, None, zone_names),
         layer_samples,
     }
 }
@@ -91,9 +135,11 @@ pub fn selected_info_for_semantic_field(
     field_metadata: &FieldMetadataCache,
     layer_key: &str,
     field_id: u32,
+    zone_names: Option<&HashMap<u32, Option<String>>>,
 ) -> Option<SelectedInfo> {
     let layer_sample =
         semantic_layer_sample_for_field_id(layer_registry, field_metadata, layer_key, field_id)?;
+    let layer_samples = vec![layer_sample];
     Some(SelectedInfo {
         map_px: 0,
         map_py: 0,
@@ -101,8 +147,8 @@ pub fn selected_info_for_semantic_field(
         world_z: f64::NAN,
         sampled_world_point: false,
         point_kind: None,
-        point_label: None,
-        layer_samples: vec![layer_sample],
+        point_label: preferred_point_label_from_layer_samples(&layer_samples, None, zone_names),
+        layer_samples,
     })
 }
 
@@ -413,11 +459,13 @@ mod tests {
             },
             FishyMapSelectionPointKind::Clicked,
             None,
+            None,
         )
         .expect("selected info");
 
         assert_eq!(selected.zone_rgb_u32(), Some(0x123456));
         assert_eq!(selected.layer_samples.len(), 2);
+        assert_eq!(selected.point_label.as_deref(), Some("Velia Bay"));
         assert!(selected
             .layer_samples
             .iter()
@@ -478,11 +526,11 @@ mod tests {
             },
         );
 
-        let selected = selected_info_for_zone_rgb(&registry, &field_metadata, 0x223344);
+        let selected = selected_info_for_zone_rgb(&registry, &field_metadata, 0x223344, None);
         assert_eq!(selected.zone_rgb_u32(), Some(0x223344));
         assert!(!selected.sampled_world_point);
         assert_eq!(selected.point_kind, None);
-        assert_eq!(selected.point_label, None);
+        assert_eq!(selected.point_label.as_deref(), Some("Cron Islands"));
         assert!(!selected.world_x.is_finite());
         assert!(!selected.world_z.is_finite());
         assert_eq!(selected.layer_samples.len(), 1);
@@ -545,15 +593,88 @@ mod tests {
             },
         );
 
-        let selected = selected_info_for_semantic_field(&registry, &field_metadata, "regions", 76)
-            .expect("selected info");
+        let selected =
+            selected_info_for_semantic_field(&registry, &field_metadata, "regions", 76, None)
+                .expect("selected info");
         assert_eq!(selected.zone_rgb_u32(), None);
         assert_eq!(selected.layer_samples.len(), 1);
         assert_eq!(selected.layer_samples[0].layer_id, "regions");
         assert_eq!(selected.layer_samples[0].field_id, Some(76));
+        assert_eq!(selected.point_label.as_deref(), Some("Grana"));
         assert_eq!(
             selected.layer_samples[0].detail_sections[0].facts[0].value,
             "Grana"
         );
+    }
+
+    #[test]
+    fn selected_info_at_world_point_prefers_lowest_layer_label_before_target_fallback() {
+        let registry = semantic_registry();
+        let zone_layer = registry.get_by_key("zone_mask").expect("zone layer");
+        let regions_layer = registry.get_by_key("regions").expect("regions layer");
+
+        let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(2, 2, &[0x123456; 4]).expect("zone field"),
+        );
+        exact_lookups.insert_ready(
+            regions_layer.id,
+            "/fields/regions.v1.bin".to_string(),
+            DiscreteFieldRows::from_u32_grid(2, 2, &[76; 4]).expect("region field"),
+        );
+
+        let mut field_metadata = FieldMetadataCache::default();
+        field_metadata.insert_ready(
+            zone_layer.id,
+            "/fields/zone_mask.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    0x123456,
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ZONE,
+                        "Zone",
+                        "Margoria South",
+                        "hover-zone",
+                    ),
+                )]),
+            },
+        );
+        field_metadata.insert_ready(
+            regions_layer.id,
+            "/fields/regions.v1.meta.json".to_string(),
+            FieldHoverMetadataAsset {
+                entries: std::collections::BTreeMap::from([(
+                    76,
+                    metadata_entry(
+                        FIELD_DETAIL_FACT_KEY_ORIGIN_REGION,
+                        "Region",
+                        "Margoria (RG218)",
+                        "hover-origin",
+                    ),
+                )]),
+            },
+        );
+
+        let map_to_world = MapToWorld::default();
+        let selected = selected_info_at_world_point(
+            map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),
+            &WorldPointQueryContext {
+                layer_registry: &registry,
+                layer_runtime: &LayerRuntime::default(),
+                exact_lookups: &exact_lookups,
+                field_metadata: &field_metadata,
+                tile_cache: &RasterTileCache::default(),
+                vector_runtime: &VectorLayerRuntime::default(),
+                map_to_world,
+            },
+            FishyMapSelectionPointKind::Clicked,
+            Some("Bookmark fallback"),
+            None,
+        )
+        .expect("selected info");
+
+        assert_eq!(selected.point_label.as_deref(), Some("Margoria South"));
     }
 }

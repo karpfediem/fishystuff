@@ -3559,3 +3559,78 @@ Next:
 - fold the zone-specific fish/group pane back into the generic Info window
 - remove redundant search-clipping settings in favor of attachment-driven clipping
 - continue the clean-slate search/filter/clipping contract without reintroducing loader-era state
+
+
+## Slice 16 — Runtime-owned point labels drive bookmark titles again
+
+The bookmark flow still had one conceptual split-brain:
+
+- Bevy selection snapshots did not deterministically choose a canonical `pointLabel`
+- bookmark creation worked around that in JS by preferring overview facts over `selection.pointLabel`
+- bookmark cards therefore could not cleanly distinguish:
+  - the saved bookmark title
+  - the current runtime-resolved label for that world point
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/map/selection_query.rs`
+  - added a deterministic point-label resolver that walks sampled layers in runtime order
+  - each sampled layer gets one chance to provide a label from:
+    - its preferred visible fact
+    - zone-name bootstrap fallback for `zone_mask`
+    - first target label fallback
+  - `selected_info_at_world_point(...)` now uses that resolver before falling back to the caller's
+    explicit `point_label`
+  - the same resolver now populates `point_label` for:
+    - hover-promoted selections
+    - `selected_info_for_zone_rgb(...)`
+    - `selected_info_for_semantic_field(...)`
+- `map/fishystuff_ui_bevy/src/bridge/host/input/commands/selection.rs`
+  - passes `bootstrap.zones` into the selection resolver so zone-mask samples can resolve zone
+    names even when metadata facts are sparse
+- `map/fishystuff_ui_bevy/src/plugins/mask.rs`
+  - updated the direct click-selection path to use the same bootstrap-backed point-label resolver
+
+- `site/assets/map/map-overview-facts.js`
+  - added `preferredPointLabelForLayerSamples(...)` so page-side bookmark subtitles can mirror the
+    runtime label policy from sampled facts without another query
+- `site/assets/map/map-bookmark-state.js`
+  - bookmark creation now uses `selection.pointLabel` first again
+  - added:
+    - `bookmarkCurrentPointLabel(...)`
+    - `bookmarkCurrentPointSubtitle(...)`
+  - bookmark detail rows now suppress the zone row when it matches either:
+    - the saved title
+    - the current runtime-resolved point label shown as subtitle
+- `site/assets/map/map-bookmark-panel.js`
+  - bookmark cards now render a subtitle below the title when the saved title differs from the
+    current runtime-resolved point label
+- `site/assets/map/map.css`
+  - added bookmark subtitle styling
+
+Validation:
+
+- Rust:
+  - `cargo test --offline -p fishystuff_ui_bevy map::selection_query::tests -- --nocapture`
+  - `cargo check -p fishystuff_ui_bevy`
+- JS:
+  - `node --test site/assets/map/map-overview-facts.test.mjs site/assets/map/map-bookmark-state.test.mjs site/assets/map/map-bookmark-panel.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs`
+- live DevTools checks on the served `/map/`:
+  - confirmed a live bookmark card can render:
+    - title: `Margoria (RG218)`
+    - subtitle: `Margoria South`
+    - detail rows: `Resources` only, with the duplicate zone row suppressed
+
+Caveat:
+
+- `bash tools/scripts/map-browser-smoke.sh` timed out in headless Chromium before
+  `FishyMapBridge.ready` because Chromium failed shared-image allocation (`Creation of
+  StagingBuffer's SharedImage failed`). That failure happened at startup before this bookmark slice
+  was exercised, and does not match the live DevTools behavior above.
+
+Next:
+
+- restore the generic Info window panes around the runtime-owned label model
+- fold the combined zone fish/group view into the Zone pane
+- continue the clean-slate search/filter/clipping work without reintroducing bookmark/title
+  heuristics on the JS side

@@ -26,7 +26,12 @@ pub(super) fn apply_zone_selection_command(
     pending: &mut PendingRequests,
     zone_rgb: u32,
 ) {
-    let selected_info = selected_info_for_zone_rgb(layer_registry, field_metadata, zone_rgb);
+    let selected_info = selected_info_for_zone_rgb(
+        layer_registry,
+        field_metadata,
+        zone_rgb,
+        Some(&bootstrap.zones),
+    );
     apply_selected_info(
         bootstrap,
         patch_filter,
@@ -52,8 +57,13 @@ pub(super) fn apply_semantic_field_selection_command(
     field_id: u32,
     target_key: Option<&str>,
 ) {
-    let selected_info =
-        selected_info_for_semantic_field(layer_registry, field_metadata, layer_key, field_id);
+    let selected_info = selected_info_for_semantic_field(
+        layer_registry,
+        field_metadata,
+        layer_key,
+        field_id,
+        Some(&bootstrap.zones),
+    );
     let preferred_target = selected_info
         .as_ref()
         .and_then(|info| preferred_selection_target(info, target_key));
@@ -74,6 +84,7 @@ pub(super) fn apply_semantic_field_selection_command(
                 },
                 FishyMapSelectionPointKind::Waypoint,
                 preferred_target.map(|target| target.label.as_str()),
+                Some(&bootstrap.zones),
             )
         })
         .or(selected_info);
@@ -110,6 +121,7 @@ pub(super) fn apply_world_point_selection_command(
         },
         point_kind.unwrap_or(FishyMapSelectionPointKind::Clicked),
         point_label,
+        Some(&bootstrap.zones),
     );
     apply_selected_info(bootstrap, patch_filter, selection, pending, selected_info);
 }
