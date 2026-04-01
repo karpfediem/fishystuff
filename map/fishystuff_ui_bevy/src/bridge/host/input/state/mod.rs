@@ -14,6 +14,7 @@ use crate::plugins::bookmarks::BookmarkState;
 use crate::plugins::camera::{Map2dCamera, Terrain3dCamera};
 use crate::plugins::local_layers::sync_display_layer_controls;
 use crate::prelude::*;
+use bevy::window::RequestRedraw;
 
 pub(in crate::bridge::host) fn apply_browser_input_state(
     bridge: Res<BrowserBridgeState>,
@@ -29,6 +30,7 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
     mut clear_color: ResMut<ClearColor>,
     mut map_camera_q: Query<&mut Camera, (With<Map2dCamera>, Without<Terrain3dCamera>)>,
     mut terrain_camera_q: Query<&mut Camera, (With<Terrain3dCamera>, Without<Map2dCamera>)>,
+    mut request_redraw: MessageWriter<RequestRedraw>,
 ) {
     crate::perf_scope!("bridge.state_apply");
     if !bridge.is_changed() && !layer_registry.is_changed() {
@@ -51,4 +53,7 @@ pub(in crate::bridge::host) fn apply_browser_input_state(
         &mut map_camera_q,
         &mut terrain_camera_q,
     );
+    if bridge.is_changed() {
+        request_redraw.write(RequestRedraw);
+    }
 }

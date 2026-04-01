@@ -4519,3 +4519,71 @@ Next:
 - once that readiness path is stable, validate the user-facing behavior for:
   - semantic filtering of `regions` / `region_groups`
   - attachment clipping of those vector layers against `zone_mask`
+
+## 2026-04-01: browser-applied filter and clip changes now invalidate a new frame
+
+Observed live bug:
+
+- the clean-slate shell and JS bridge input were already correct for attachment-driven clipping:
+  - `_map_bridged.filters.layerClipMasks`
+  - `FishyMapBridge.getCurrentInputState().filters.layerClipMasks`
+- but some live filter/clip changes still appeared to do nothing until a camera interaction caused a
+  new frame
+- direct DevTools inspection showed the pattern clearly:
+  - desired bridge input would update immediately
+  - `fishymap_get_current_state_json()` / exported runtime state could lag behind
+  - attached vector overlays like `region_groups -> zone_mask` only became visibly correct after an
+    unrelated redraw source fired
+
+Cause:
+
+- the Bevy web runtime is effectively on-demand here
+- `apply_browser_input_state(...)` was mutating runtime resources from browser patches, but it was
+  not explicitly requesting a redraw
+- if no other redraw source was active:
+  - the updated clip/filter state could sit latent
+  - the exported snapshot could remain stale
+  - vector/raster attachment changes looked broken until pan/zoom or some other redraw trigger
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/bridge/host/input/state/mod.rs`
+  - `apply_browser_input_state(...)` now writes `RequestRedraw` whenever `BrowserBridgeState`
+    changed
+  - this makes browser-applied input mutations authoritative on the next frame instead of waiting
+    for unrelated map activity
+
+Validation:
+
+- Rust validation passed:
+  - `cargo check -p fishystuff_ui_bevy`
+- rebuilt the runtime:
+  - `./tools/scripts/build_map.sh`
+- live DevTools validation on a fresh isolated `/map/` page confirmed the intended user-facing
+  effect without camera movement:
+  - with `region_groups` visible and detached from `zone_mask`:
+    - `vectorTriangleCount = 40351`
+  - after attaching `region_groups -> zone_mask` through the clean-slate shell:
+    - `state.filters.layerClipMasks = { fish_evidence: "zone_mask", region_groups: "zone_mask" }`
+    - `vectorTriangleCount = 183`
+  - with `regions` visible and detached from `zone_mask`:
+    - `vectorTriangleCount = 108595`
+  - after attaching `regions -> zone_mask`:
+    - `state.filters.layerClipMasks = { fish_evidence: "zone_mask", regions: "zone_mask" }`
+    - `vectorTriangleCount = 312`
+
+Why this matters:
+
+- the remaining clipping/filtering work can now be evaluated directly on the clean-slate page
+- attachment changes no longer depend on accidental redraws to appear functional
+- this keeps the remediation aligned with the Datastar/bridge goal:
+  - page signals express intent
+  - the bridge applies that intent coarsely
+  - the runtime visibly reacts on the next frame without imperative UI nudges
+
+Next:
+
+- continue the search/filtering remediation itself now that attachment-driven clipping is reliable
+  live again
+- validate the remaining intended cross-layer behaviors, especially fish-term and zone-term driven
+  visibility/clipping on the clean-slate page
