@@ -36,6 +36,7 @@ pub enum FieldMetadataStatus {
 #[derive(Resource, Default)]
 pub struct FieldMetadataCache {
     entries: HashMap<LayerId, FieldMetadataEntryState>,
+    revision: u64,
 }
 
 #[derive(Resource, Default)]
@@ -52,10 +53,13 @@ impl FieldMetadataCache {
                 state: FieldMetadataState::Ready(metadata),
             },
         );
+        self.revision = self.revision.wrapping_add(1);
     }
 
     pub fn remove_layer(&mut self, layer: LayerId) {
-        self.entries.remove(&layer);
+        if self.entries.remove(&layer).is_some() {
+            self.revision = self.revision.wrapping_add(1);
+        }
     }
 
     pub fn get(&self, layer: LayerId, url: &str) -> Option<&FieldHoverMetadataAsset> {
@@ -94,6 +98,10 @@ impl FieldMetadataCache {
 
     pub fn layer_ids(&self) -> Vec<LayerId> {
         self.entries.keys().copied().collect()
+    }
+
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 }
 
@@ -179,6 +187,7 @@ pub fn poll_field_metadata_requests(
                         state: FieldMetadataState::Ready(asset),
                     },
                 );
+                metadata.revision = metadata.revision.wrapping_add(1);
             }
             Err(err) => {
                 bevy::log::warn!("layer {:?} field metadata load failed: {}", layer_id, err);
@@ -191,5 +200,28 @@ pub fn poll_field_metadata_requests(
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FieldMetadataCache;
+    use crate::map::layers::LayerId;
+    use fishystuff_core::field_metadata::FieldHoverMetadataAsset;
+
+    #[test]
+    fn revision_advances_when_ready_metadata_changes() {
+        let mut cache = FieldMetadataCache::default();
+        assert_eq!(cache.revision(), 0);
+
+        cache.insert_ready(
+            LayerId::from_raw(1),
+            "/fields/test.meta.json".to_string(),
+            FieldHoverMetadataAsset::default(),
+        );
+        assert_eq!(cache.revision(), 1);
+
+        cache.remove_layer(LayerId::from_raw(1));
+        assert_eq!(cache.revision(), 2);
     }
 }

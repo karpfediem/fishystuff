@@ -3,6 +3,7 @@ mod state;
 mod view;
 
 use bevy::ecs::system::SystemParam;
+use std::cell::Cell;
 
 use self::filters::{
     bridge_capabilities, current_layer_summaries, current_semantic_term_summaries,
@@ -16,6 +17,10 @@ use crate::plugins::bookmarks::BookmarkState;
 pub(super) use self::filters::{current_layer_order, effective_filters};
 pub(super) use self::state::hover_layer_samples_snapshot;
 pub(super) use self::view::effective_view_snapshot;
+
+thread_local! {
+    static LAST_SEMANTIC_METADATA_REVISION: Cell<u64> = const { Cell::new(0) };
+}
 
 pub(super) fn initial_snapshot() -> FishyMapStateSnapshot {
     let mut snapshot = FishyMapStateSnapshot::default();
@@ -31,10 +36,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         || context.patch_filter.is_changed()
         || context.fish_filter.is_changed()
         || context.semantic_filter.is_changed()
-        || context.layer_registry.is_changed()
-        || context.layer_runtime.is_changed();
+        || context.layer_registry.is_changed();
     let ui_changed = context.bridge.is_changed()
-        || context.display_state.is_changed()
         || context.debug_layers.is_changed()
         || context.bookmarks.is_changed()
         || context.exact_lookups.is_changed()
@@ -48,8 +51,8 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         context.layer_registry.is_changed() || context.layer_runtime.is_changed();
     let patch_catalog_changed = context.patch_filter.is_changed();
     let fish_catalog_changed = context.fish.is_changed();
-    let semantic_catalog_changed =
-        context.layer_registry.is_changed() || context.field_metadata.is_changed();
+    let semantic_catalog_changed = context.layer_registry.is_changed()
+        || semantic_metadata_revision_changed(context.field_metadata.revision());
     let statuses_changed = context.bootstrap.is_changed()
         || context.points.is_changed()
         || context.fish.is_changed()
@@ -71,100 +74,156 @@ pub(super) fn sync_current_snapshot(context: SnapshotSyncContext<'_, '_>) {
         return;
     }
 
-    crate::perf_counter_add!("bridge.snapshot_sync.count", 1);
-
     CURRENT_SNAPSHOT.with(|snapshot| {
         let mut snapshot = snapshot.borrow_mut();
-        snapshot.ready =
-            context.bootstrap.meta.is_some() && !context.layer_registry.ordered().is_empty();
+        let mut snapshot_changed = false;
+
+        if ready_changed {
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.ready,
+                context.bootstrap.meta.is_some() && !context.layer_registry.ordered().is_empty(),
+            );
+        }
         if theme_changed {
-            snapshot.theme = context.bridge.input.theme.clone();
+            snapshot_changed |=
+                replace_if_changed(&mut snapshot.theme, context.bridge.input.theme.clone());
         }
         if filters_changed {
-            snapshot.filters = effective_filters(
-                &context.bridge.input,
-                &context.patch_filter,
-                &context.fish_filter,
-                &context.semantic_filter,
-                &context.layer_registry,
-                &context.layer_runtime,
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.filters,
+                effective_filters(
+                    &context.bridge.input,
+                    &context.patch_filter,
+                    &context.fish_filter,
+                    &context.semantic_filter,
+                    &context.layer_registry,
+                    &context.layer_runtime,
+                ),
             );
         }
         if ui_changed {
-            snapshot.ui = effective_ui_state(
-                &context.bridge.input,
-                &context.display_state,
-                context.debug_layers.enabled,
-                &context.bookmarks,
-                &context.layer_registry,
-                &context.layer_runtime,
-                &context.exact_lookups,
-                &context.field_metadata,
-                Some(&context.bootstrap.zones),
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.ui,
+                effective_ui_state(
+                    &context.bridge.input,
+                    &context.display_state,
+                    context.debug_layers.enabled,
+                    &context.bookmarks,
+                    &context.layer_registry,
+                    &context.layer_runtime,
+                    &context.exact_lookups,
+                    &context.field_metadata,
+                    Some(&context.bootstrap.zones),
+                ),
             );
         }
         if view_changed {
-            snapshot.view = effective_view_snapshot(
-                &context.view_mode,
-                &context.map_view,
-                &context.terrain_view,
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.view,
+                effective_view_snapshot(
+                    &context.view_mode,
+                    &context.map_view,
+                    &context.terrain_view,
+                ),
             );
         }
         if selection_changed {
-            snapshot.selection = effective_selection_snapshot(
-                context.selection.info.as_ref(),
-                context.selection.zone_stats.as_ref(),
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.selection,
+                effective_selection_snapshot(
+                    context.selection.info.as_ref(),
+                    context.selection.zone_stats.as_ref(),
+                ),
             );
         }
         if hover_changed {
-            snapshot.hover = effective_hover_snapshot(context.hover.info.as_ref());
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.hover,
+                effective_hover_snapshot(context.hover.info.as_ref()),
+            );
         }
         if layer_catalog_changed {
-            snapshot.catalog.layers =
-                current_layer_summaries(&context.layer_registry, &context.layer_runtime);
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.catalog.layers,
+                current_layer_summaries(&context.layer_registry, &context.layer_runtime),
+            );
         }
         if patch_catalog_changed {
-            snapshot.catalog.patches = context
-                .patch_filter
-                .patches
-                .iter()
-                .map(|patch| FishyMapPatchSummary {
-                    patch_id: patch.patch_id.0.clone(),
-                    patch_name: patch.patch_name.clone(),
-                    start_ts_utc: patch.start_ts_utc,
-                })
-                .collect();
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.catalog.patches,
+                context
+                    .patch_filter
+                    .patches
+                    .iter()
+                    .map(|patch| FishyMapPatchSummary {
+                        patch_id: patch.patch_id.0.clone(),
+                        patch_name: patch.patch_name.clone(),
+                        start_ts_utc: patch.start_ts_utc,
+                    })
+                    .collect(),
+            );
         }
         if fish_catalog_changed {
-            snapshot.catalog.fish = context
-                .fish
-                .entries
-                .iter()
-                .map(|entry| FishyMapFishSummary {
-                    fish_id: entry.id,
-                    item_id: entry.item_id,
-                    encyclopedia_key: entry.encyclopedia_key,
-                    encyclopedia_id: entry.encyclopedia_id,
-                    name: entry.name.clone(),
-                    grade: entry.grade.clone(),
-                    is_prize: entry.is_prize,
-                })
-                .collect();
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.catalog.fish,
+                context
+                    .fish
+                    .entries
+                    .iter()
+                    .map(|entry| FishyMapFishSummary {
+                        fish_id: entry.id,
+                        item_id: entry.item_id,
+                        encyclopedia_key: entry.encyclopedia_key,
+                        encyclopedia_id: entry.encyclopedia_id,
+                        name: entry.name.clone(),
+                        grade: entry.grade.clone(),
+                        is_prize: entry.is_prize,
+                    })
+                    .collect(),
+            );
         }
         if semantic_catalog_changed {
-            snapshot.catalog.semantic_terms =
-                current_semantic_term_summaries(&context.layer_registry, &context.field_metadata);
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.catalog.semantic_terms,
+                current_semantic_term_summaries(&context.layer_registry, &context.field_metadata),
+            );
+            note_semantic_metadata_revision(context.field_metadata.revision());
         }
         if statuses_changed {
-            snapshot.statuses = FishyMapStatusSnapshot {
-                meta_status: context.bootstrap.meta_status.clone(),
-                layers_status: context.bootstrap.layers_status.clone(),
-                zones_status: context.bootstrap.zones_status.clone(),
-                points_status: context.points.status.clone(),
-                fish_status: context.fish.status.clone(),
-                zone_stats_status: context.selection.zone_stats_status.clone(),
-            };
+            snapshot_changed |= replace_if_changed(
+                &mut snapshot.statuses,
+                FishyMapStatusSnapshot {
+                    meta_status: context.bootstrap.meta_status.clone(),
+                    layers_status: context.bootstrap.layers_status.clone(),
+                    zones_status: context.bootstrap.zones_status.clone(),
+                    points_status: context.points.status.clone(),
+                    fish_status: context.fish.status.clone(),
+                    zone_stats_status: context.selection.zone_stats_status.clone(),
+                },
+            );
         }
+
+        if snapshot_changed {
+            crate::perf_counter_add!("bridge.snapshot_sync.count", 1);
+        }
+    });
+}
+
+fn replace_if_changed<T: PartialEq>(slot: &mut T, next: T) -> bool {
+    if *slot == next {
+        return false;
+    }
+    *slot = next;
+    true
+}
+
+fn semantic_metadata_revision_changed(revision: u64) -> bool {
+    LAST_SEMANTIC_METADATA_REVISION.with(|last_revision| last_revision.get() != revision)
+}
+
+fn note_semantic_metadata_revision(revision: u64) {
+    LAST_SEMANTIC_METADATA_REVISION.with(|last_revision| {
+        last_revision.set(revision);
     });
 }
 

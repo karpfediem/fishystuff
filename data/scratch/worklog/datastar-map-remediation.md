@@ -3851,3 +3851,64 @@ Next:
 - continue the search/filter/clipping remediation using the explicit bridge whitelist, but keep
   attachment-driven clipping as the primary model instead of reintroducing redundant per-layer
   clip toggles
+
+## 2026-04-01: idle FPS regression root cause and fix
+
+Observed regression:
+
+- local fresh-map FPS had fallen from the expected ~200+ range down toward the ~30 range reported
+  by the user
+- this reproduced even after stashing the unrelated in-progress clipping/filter work
+- the cleanest measurable symptom was not raster or Bevy draw cost; it was bridge snapshot work
+
+Measured before fix on a fresh isolated `/map/` page:
+
+- `frame_time_ms.avg` was roughly `5.8ms` to `6.1ms`
+- `bridge.snapshot_sync` was costing about `2.0ms` to `2.3ms` every frame on an otherwise idle
+  page
+- the dominant sub-cause was `semantic_catalog` projection rebuilding every frame
+
+Root cause:
+
+- several runtime resources were being held as mutable in always-running systems even when they
+  were only read
+- bridge snapshot gating relied on raw Bevy `Res::is_changed()` for those resources
+- this is especially bad for the Datastar/bridge path because the bridge then reprojects large
+  payloads even when the exported snapshot is semantically unchanged
+- the most expensive case was `FieldMetadataCache`
+  - it is polled every frame
+  - `is_changed()` was therefore unsuitable as the trigger for rebuilding semantic search terms
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/bridge/host/snapshot/mod.rs`
+  - snapshot branches now compare the projected payload before rewriting the stored snapshot
+  - `filters_changed` no longer depends on `LayerRuntime::is_changed()`
+  - `ui_changed` no longer depends on `MapDisplayState::is_changed()`
+  - semantic term rebuilding now keys off an explicit metadata revision instead of raw
+    `FieldMetadataCache::is_changed()`
+- `map/fishystuff_ui_bevy/src/map/field_metadata.rs`
+  - added a monotonic `revision` that advances only when ready metadata actually changes
+- `map/fishystuff_ui_bevy/src/plugins/api/requests/poll.rs`
+  - downgraded `LayerRegistry` and `LayerRuntime` from `ResMut` to `Res` in the request poller
+    because that system only reads them
+
+Measured after fix on a fresh isolated `/map/` page:
+
+- idle `frame_time_ms.avg` dropped to about `3.56ms`
+- `bridge.snapshot_sync` dropped to about `0.044ms` average per frame
+- synthetic hover remained healthy at about `3.61ms` average frame time
+
+Why this matters for the remediation:
+
+- this was not a clipping/filter regression
+- it was a direct example of why the bridge must stay explicit and sparse
+- Datastar-facing projections should react to semantic state changes, not incidental mutable
+  resource access in Bevy systems
+
+Next:
+
+- keep the new snapshot path as the baseline
+- continue restoring remaining map behavior on top of this lower-churn bridge path
+- when touching bridge snapshot state in the future, prefer explicit revisions or output
+  comparison over raw `is_changed()` for resources that are polled every frame
