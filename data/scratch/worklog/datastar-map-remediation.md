@@ -5046,3 +5046,73 @@ Next:
 - continue reducing the remaining framework-like behavior in `map-page-live.js`
 - likely next target: move more of the persistence/orchestration contract into pure modules so the
   live bootstrap becomes almost entirely event wiring plus direct Datastar patching
+
+## 2026-04-01: move live map page bootstrap onto modules
+
+The helper extraction in the previous slice left one temporary compromise:
+
+- `map-page-state.js` still had to be exposed through a classic-script global so the live page
+  bootstrap could keep running as a deferred classic script
+
+This slice removed that compromise.
+
+What changed:
+
+- `site/assets/map/map-page-state.js`
+  - converted from a classic-script helper global into a real ESM module
+  - now exports:
+    - `MAP_UI_STORAGE_KEY`
+    - `MAP_BOOKMARKS_STORAGE_KEY`
+    - `MAP_SESSION_STORAGE_KEY`
+    - `loadRestoreState(...)`
+    - `createPersistedState(...)`
+- `site/assets/map/map-page-live.js`
+  - converted from a side-effect classic script into an ESM module
+  - now exports:
+    - `createMapPageLive(...)`
+    - the live bootstrap event constants
+  - no longer reads a helper global
+- added a new narrow entry module:
+  - `site/assets/map/map-page-live-entry.js`
+  - this is now the only page-bootstrap script loaded by the map shell for the page-state path
+- `site/layouts/map.shtml`
+  - now loads `map-page-live-entry.js` as a module
+  - no longer loads `map-page-state.js` or `map-page-live.js` as classic scripts
+- tests updated:
+  - `site/assets/map/map-page-state.test.mjs`
+  - `site/assets/map/map-page-live.test.mjs`
+
+Why this matters:
+
+- it removes another temporary global bridge from the live map
+- the page-state bootstrap is now a normal module graph instead of a classic-script stack
+- it moves the clean-slate map further toward the intended shape:
+  - thin entry modules
+  - imported pure helpers
+  - less custom runtime glue around Datastar
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-state.js`
+  - `node --check site/assets/map/map-page-live.js`
+  - `node --check site/assets/map/map-page-live-entry.js`
+  - `node --test site/assets/map/map-page-state.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/`
+  - `/map/map-page-live-entry.js`
+  - `/map/map-page-live.js`
+  - `/map/map-page-state.js`
+- live DevTools reload on `/map/` confirmed:
+  - no new console errors
+  - `Ready`
+  - `Layers 7`
+  - live patch picker defaults still worked
+
+Next:
+
+- keep reducing the remaining framework-like responsibility inside `map-page-live.js`
+- or shift focus to the live panel controllers, which are now the larger remaining imperative
+  islands on the clean-slate path

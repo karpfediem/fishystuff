@@ -1,9 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import vm from "node:vm";
 
-const MAP_PAGE_STATE_SOURCE = fs.readFileSync(new URL("./map-page-state.js", import.meta.url), "utf8");
+import { createPersistedState, loadRestoreState } from "./map-page-state.js";
 
 class MemoryStorage {
   constructor(initial = {}) {
@@ -23,28 +21,7 @@ class MemoryStorage {
   }
 }
 
-function loadPageState() {
-  const context = {
-    window: {},
-    URL,
-    JSON,
-    Object,
-    Array,
-    String,
-    Number,
-    Set,
-    Map,
-    console,
-    globalThis: null,
-  };
-  context.globalThis = context;
-  vm.runInNewContext(MAP_PAGE_STATE_SOURCE, context, { filename: "map-page-state.js" });
-  context.__fishystuffMapPageState = context.window.__fishystuffMapPageState;
-  return context.window.__fishystuffMapPageState;
-}
-
 test("map-page-state loadRestoreState strips query-owned fields", () => {
-  const pageState = loadPageState();
   const localStorage = new MemoryStorage({
     "fishystuff.map.window_ui.v1": JSON.stringify({
       search: { query: "eel" },
@@ -59,7 +36,7 @@ test("map-page-state loadRestoreState strips query-owned fields", () => {
     }),
   });
 
-  const restoreState = pageState.loadRestoreState({
+  const restoreState = loadRestoreState({
     localStorage,
     sessionStorage: new MemoryStorage(),
     locationHref:
@@ -75,9 +52,7 @@ test("map-page-state loadRestoreState strips query-owned fields", () => {
 });
 
 test("map-page-state createPersistedState captures durable map branches", () => {
-  const pageState = loadPageState();
-
-  const persisted = pageState.createPersistedState({
+  const persisted = createPersistedState({
     _map_ui: {
       windowUi: {
         search: { open: false, collapsed: true, x: 20, y: 30 },

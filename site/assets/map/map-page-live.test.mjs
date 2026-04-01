@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import vm from "node:vm";
 
-const MAP_PAGE_STATE_SOURCE = fs.readFileSync(new URL("./map-page-state.js", import.meta.url), "utf8");
-const MAP_PAGE_LIVE_SOURCE = fs.readFileSync(new URL("./map-page-live.js", import.meta.url), "utf8");
+import {
+  FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT,
+  FISHYMAP_LIVE_INIT_EVENT,
+  FISHYMAP_LIVE_READY_EVENT,
+  createMapPageLive,
+} from "./map-page-live.js";
+
 const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
   "bookmarks",
   "fish_evidence",
@@ -39,6 +42,15 @@ function createEventTarget() {
       }
       listeners.get(type).push(listener);
     },
+    removeEventListener(type, listener) {
+      if (!listeners.has(type)) {
+        return;
+      }
+      listeners.set(
+        type,
+        listeners.get(type).filter((candidate) => candidate !== listener),
+      );
+    },
     dispatchEvent(event) {
       for (const listener of listeners.get(event.type) || []) {
         listener(event);
@@ -64,7 +76,6 @@ function createContext(localStorageInitial = {}, options = {}) {
   const shell = createEventTarget();
   shell.id = "map-page-shell";
   const document = createDocumentStub(shell);
-  const window = {};
   const localStorage = new MemoryStorage(localStorageInitial);
   const sessionStorage = new MemoryStorage(options.sessionStorageInitial || {});
   const location = {
@@ -72,24 +83,12 @@ function createContext(localStorageInitial = {}, options = {}) {
   };
   const timers = new Map();
   let nextTimerId = 1;
-  const context = {
-    window,
+  const globalRef = {
     document,
     location,
     localStorage,
     sessionStorage,
-    JSON,
-    Object,
-    Array,
-    String,
-    URL,
-    URLSearchParams,
-    RegExp,
-    Error,
-    Map,
-    Set,
-    console,
-    globalThis: null,
+    window: { location, localStorage, sessionStorage },
     setTimeout(callback) {
       const id = nextTimerId;
       nextTimerId += 1;
@@ -107,19 +106,16 @@ function createContext(localStorageInitial = {}, options = {}) {
       }
     },
   };
-  context.globalThis = context;
-  window.location = location;
-  window.localStorage = localStorage;
-  window.sessionStorage = sessionStorage;
-  vm.runInNewContext(MAP_PAGE_STATE_SOURCE, context, { filename: "map-page-state.js" });
-  context.__fishystuffMapPageState = window.__fishystuffMapPageState;
-  vm.runInNewContext(MAP_PAGE_LIVE_SOURCE, context, { filename: "map-page-live.js" });
+
+  const pageLive = createMapPageLive({ globalRef });
+  pageLive.start();
+
   return {
-    window,
     document,
-    shell,
+    globalRef,
     localStorage,
     sessionStorage,
+    shell,
     flushTimers() {
       const pending = Array.from(timers.values());
       timers.clear();
@@ -194,7 +190,7 @@ function defaultSignals() {
 
 function dispatchLiveInit(env, detail) {
   env.shell.dispatchEvent({
-    type: "fishymap-live-init",
+    type: FISHYMAP_LIVE_INIT_EVENT,
     detail,
   });
 }
@@ -208,12 +204,12 @@ test("map-page-live restore loads persisted bookmark entries into Datastar signa
   });
   const signals = defaultSignals();
   let readyDetail = null;
-  env.shell.addEventListener("fishymap-live-ready", (event) => {
+  env.shell.addEventListener(FISHYMAP_LIVE_READY_EVENT, (event) => {
     readyDetail = event.detail;
   });
 
   dispatchLiveInit(env, signals);
-  env.shell.dispatchEvent({ type: "fishymap-live-bootstrap-request" });
+  env.shell.dispatchEvent({ type: FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT });
 
   assert.equal(typeof readyDetail?.patchSignals, "function");
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
@@ -238,12 +234,12 @@ test("map-page-live exposes direct signal patching on the shell api", () => {
   const env = createContext();
   const signals = defaultSignals();
   let readyDetail = null;
-  env.shell.addEventListener("fishymap-live-ready", (event) => {
+  env.shell.addEventListener(FISHYMAP_LIVE_READY_EVENT, (event) => {
     readyDetail = event.detail;
   });
 
   dispatchLiveInit(env, signals);
-  env.shell.dispatchEvent({ type: "fishymap-live-bootstrap-request" });
+  env.shell.dispatchEvent({ type: FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT });
 
   readyDetail.patchSignals({
     _map_ui: {
@@ -266,12 +262,12 @@ test("map-page-live persists durable map signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
   let readyDetail = null;
-  env.shell.addEventListener("fishymap-live-ready", (event) => {
+  env.shell.addEventListener(FISHYMAP_LIVE_READY_EVENT, (event) => {
     readyDetail = event.detail;
   });
 
   dispatchLiveInit(env, signals);
-  env.shell.dispatchEvent({ type: "fishymap-live-bootstrap-request" });
+  env.shell.dispatchEvent({ type: FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT });
 
   readyDetail.patchSignals({
     _map_ui: {
