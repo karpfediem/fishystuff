@@ -95,3 +95,45 @@ test("createMapApp exposes coarse runtime and session projections", () => {
     },
   );
 });
+
+test("createMapApp projects runtime bookmark enrichment without leaking full ui state", () => {
+  const app = createMapApp();
+
+  assert.deepEqual(
+    app.projectRuntimeBookmarkDetails(
+      {
+        ui: {
+          bookmarks: [
+            {
+              id: "bookmark-a",
+              label: "Imported",
+              worldX: 12,
+              worldZ: 34,
+              zoneRgb: 0x39e58d,
+              layerSamples: [{ layerId: "zone_mask" }],
+            },
+          ],
+        },
+      },
+      {
+        _map_bookmarks: {
+          entries: [{ id: "bookmark-a", label: "Imported", worldX: 12, worldZ: 34 }],
+        },
+      },
+    ),
+    {
+      _map_bookmarks: {
+        entries: [
+          {
+            id: "bookmark-a",
+            label: "Imported",
+            worldX: 12,
+            worldZ: 34,
+            zoneRgb: 0x39e58d,
+            layerSamples: [{ layerId: "zone_mask" }],
+          },
+        ],
+      },
+    },
+  );
+});

@@ -7,6 +7,8 @@ import {
 import {
   DEFAULT_ENABLED_LAYER_IDS,
 } from "./map-signal-contract.js";
+import { buildRuntimeBookmarkDetailsPatch } from "./map-bookmark-state.js";
+import { buildLayerSearchEffects } from "./map-layer-search-effects.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -155,6 +157,10 @@ export function normalizeMapActionState(raw) {
 export function buildBridgeInputPatchFromSignals(signals, options = {}) {
   const filters = normalizeBridgedFilters(signals);
   const ui = normalizeBridgedUi(signals);
+  const layerSearchEffects = buildLayerSearchEffects({
+    ...filters,
+    layerSearchClips: signals?._map_ui?.layers?.searchClipsByLayer,
+  });
   const bookmarks = normalizeBookmarkEntries(signals?._map_bookmarks?.entries);
   const bookmarkSelectedIds = normalizeBookmarkSelectedIds(
     bookmarks,
@@ -190,7 +196,8 @@ export function buildBridgeInputPatchFromSignals(signals, options = {}) {
       layerIdsVisible: cloneJson(filters.layerIdsVisible),
       layerIdsOrdered: cloneJson(filters.layerIdsOrdered),
       layerOpacities: cloneJson(filters.layerOpacities),
-      layerClipMasks: cloneJson(filters.layerClipMasks),
+      layerClipMasks: cloneJson(layerSearchEffects.effectiveLayerClipMasks),
+      zoneMembershipLayerIds: cloneJson(layerSearchEffects.zoneMembershipLayerIds),
       layerWaypointConnectionsVisible: cloneJson(filters.layerWaypointConnectionsVisible),
       layerWaypointLabelsVisible: cloneJson(filters.layerWaypointLabelsVisible),
       layerPointIconsVisible: cloneJson(filters.layerPointIconsVisible),
@@ -247,4 +254,9 @@ export function projectSessionSnapshotToSignals(snapshot) {
       selection: cloneJson(current.selection || {}),
     },
   };
+}
+
+export function projectRuntimeBookmarkDetailsToSignals(snapshot, bookmarks) {
+  const current = isPlainObject(snapshot) ? snapshot : createEmptySnapshot();
+  return buildRuntimeBookmarkDetailsPatch(bookmarks, current.ui?.bookmarks);
 }

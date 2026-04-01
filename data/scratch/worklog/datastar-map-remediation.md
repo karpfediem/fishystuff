@@ -3506,3 +3506,56 @@ Next:
 
 - restore the richer generic info pane content on the clean-slate path
 - wire the new generic layer search/filter/clipping contract into `_map_bridged`
+
+
+## Slice 15 — Bookmark labels and imported bookmark facts recover on the clean-slate path
+
+The live bookmark flow still had two regressions:
+
+- new bookmarks could inherit a semantic point label like `Margoria (RG218)` instead of using the
+  zone name
+- imported bookmarks stayed bare page-owned entries and never received the runtime-enriched
+  `layerSamples` needed to render `Zone` / `Resources` / `Origin`
+
+What changed:
+
+- `site/assets/map/map-bookmark-state.js`
+  - `preferredSelectionLabel(...)` now prefers the overview `Zone` fact before `selection.pointLabel`
+  - added `buildRuntimeBookmarkDetailsPatch(...)` to merge runtime-enriched bookmark details back
+    into canonical `_map_bookmarks.entries`
+- `site/assets/map/map-runtime-adapter.js`
+  - added `projectRuntimeBookmarkDetailsToSignals(...)`
+- `site/assets/map/map-app.js`
+  - clean-slate app now exposes `projectRuntimeBookmarkDetails(...)`
+- `site/assets/map/map-app-live.js`
+  - live bridge snapshot projection now applies:
+    - coarse runtime patch
+    - bookmark enrichment patch
+    - session patch
+  - `resolveBridgeSnapshot(...)` now merges `ui` across partial bridge events
+- tests:
+  - `site/assets/map/map-bookmark-state.test.mjs`
+  - `site/assets/map/map-runtime-adapter.test.mjs`
+  - `site/assets/map/map-app.test.mjs`
+  - `site/assets/map/map-app-live.test.mjs`
+
+Why:
+
+- bookmark naming must follow the semantic map fact model, not whichever lower-level layer label
+  happened to be selected first
+- imported bookmarks should become first-class semantic bookmarks after the runtime samples their
+  world point; that enrichment belongs on the clean-slate Datastar path, not in legacy loader code
+
+Validation:
+
+- `node --test site/assets/map/map-bookmark-state.test.mjs site/assets/map/map-runtime-adapter.test.mjs site/assets/map/map-app.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt site output
+- live DevTools reload confirmed:
+  - a bare injected bookmark under `_map_bookmarks.entries` came back with runtime `layerSamples`
+  - bookmark cards resumed showing semantic facts for imported bookmarks
+
+Next:
+
+- fold the zone-specific fish/group pane back into the generic Info window
+- remove redundant search-clipping settings in favor of attachment-driven clipping
+- continue the clean-slate search/filter/clipping contract without reintroducing loader-era state

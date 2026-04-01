@@ -44,11 +44,15 @@ function zoneRgbFromLayerSamples(layerSamples) {
 }
 
 function preferredSelectionLabel(selection) {
+  const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
+  const preferredOverviewLabel = preferredOverviewRow(layerSamples)?.value;
+  if (preferredOverviewLabel) {
+    return preferredOverviewLabel;
+  }
   const pointLabel = trimString(selection?.pointLabel);
   if (pointLabel) {
     return pointLabel;
   }
-  const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
   const sampleLabel = layerSamples
     .map((sample) => trimString(sample?.label || sample?.name || sample?.fieldLabel))
     .find(Boolean);
@@ -198,6 +202,53 @@ export function createBookmarkFromSelection(selection, existingBookmarks = []) {
       ? { zoneRgb: zoneRgbFromLayerSamples(layerSamples) }
       : {}),
     createdAt: new Date().toISOString(),
+  };
+}
+
+export function mergeRuntimeBookmarkDetails(bookmarks, runtimeBookmarks) {
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  const runtimeById = new Map(
+    normalizeBookmarks(runtimeBookmarks).map((bookmark) => [bookmark.id, bookmark]),
+  );
+  let changed = false;
+
+  const nextBookmarks = normalizedBookmarks.map((bookmark) => {
+    const runtimeBookmark = runtimeById.get(bookmark.id);
+    if (!runtimeBookmark) {
+      return bookmark;
+    }
+    const nextBookmark = { ...bookmark };
+    if (
+      (!Array.isArray(bookmark.layerSamples) || !bookmark.layerSamples.length) &&
+      Array.isArray(runtimeBookmark.layerSamples) &&
+      runtimeBookmark.layerSamples.length
+    ) {
+      nextBookmark.layerSamples = cloneJson(runtimeBookmark.layerSamples);
+      changed = true;
+    }
+    if (
+      !Number.isInteger(normalizeInteger(bookmark.zoneRgb)) &&
+      Number.isInteger(normalizeInteger(runtimeBookmark.zoneRgb))
+    ) {
+      nextBookmark.zoneRgb = normalizeInteger(runtimeBookmark.zoneRgb);
+      changed = true;
+    }
+    return nextBookmark;
+  });
+
+  return changed ? nextBookmarks : normalizedBookmarks;
+}
+
+export function buildRuntimeBookmarkDetailsPatch(bookmarks, runtimeBookmarks) {
+  const normalizedBookmarks = normalizeBookmarks(bookmarks);
+  const mergedBookmarks = mergeRuntimeBookmarkDetails(normalizedBookmarks, runtimeBookmarks);
+  if (JSON.stringify(mergedBookmarks) === JSON.stringify(normalizedBookmarks)) {
+    return null;
+  }
+  return {
+    _map_bookmarks: {
+      entries: mergedBookmarks,
+    },
   };
 }
 

@@ -59,6 +59,7 @@ export function resolveBridgeSnapshot(eventDetail, readCurrentState) {
     ...cloneJson(baseSnapshot),
     ...cloneJson(patchSnapshot),
     theme: mergeSnapshotBranch(baseSnapshot.theme, patchSnapshot.theme),
+    ui: mergeSnapshotBranch(baseSnapshot.ui, patchSnapshot.ui),
     view: mergeSnapshotBranch(baseSnapshot.view, patchSnapshot.view),
     selection: mergeSnapshotBranch(baseSnapshot.selection, patchSnapshot.selection),
     hover: mergeSnapshotBranch(baseSnapshot.hover, patchSnapshot.hover),
@@ -73,6 +74,7 @@ function patchTouchesLiveBridgeInputs(patch) {
   }
   return (
     "_map_bridged" in patch ||
+    patch?._map_ui?.layers?.searchClipsByLayer != null ||
     "_map_actions" in patch ||
     "_map_bookmarks" in patch ||
     "_shared_fish" in patch
@@ -274,12 +276,14 @@ export async function start() {
   }
 
   function patchSignalsFromBridge(snapshot) {
+    const currentSignals = signals();
     syncingFromBridge = true;
     try {
       dispatchShellSignalPatch(
         shell,
         combineSignalPatches(
           app.projectRuntimeSnapshot(snapshot),
+          app.projectRuntimeBookmarkDetails(snapshot, currentSignals),
           app.projectSessionSnapshot(snapshot),
         ),
       );

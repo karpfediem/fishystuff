@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   bookmarkDisplayLabel,
+  buildRuntimeBookmarkDetailsPatch,
   buildBookmarkOverviewRows,
   buildBookmarkPanelStateBundle,
   createBookmarkFromSelection,
@@ -53,6 +54,34 @@ test("createBookmarkFromSelection builds a bookmark from runtime selection", () 
   assert.equal(bookmark.worldX, 123);
   assert.equal(bookmark.worldZ, 457);
   assert.equal(bookmark.zoneRgb, 65535);
+});
+
+test("createBookmarkFromSelection prefers the zone overview label over point label", () => {
+  const bookmark = createBookmarkFromSelection(
+    {
+      worldX: 123.2,
+      worldZ: 456.7,
+      pointLabel: "Margoria (RG218)",
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          rgbU32: 0x39e58d,
+          detailSections: [
+            {
+              id: "zone",
+              kind: "facts",
+              title: "Zone",
+              facts: [{ key: "zone", label: "Zone", value: "Valencia Sea - Depth 5" }],
+              targets: [],
+            },
+          ],
+        },
+      ],
+    },
+    [],
+  );
+
+  assert.equal(bookmark.label, "Valencia Sea - Depth 5");
 });
 
 test("bookmark helpers expose display and ordering utilities", () => {
@@ -129,6 +158,63 @@ test("buildBookmarkOverviewRows keeps semantic facts and drops legacy world coor
       ["trade-origin", "Origin", "(R430|Hakoven Islands)"],
     ],
   );
+});
+
+test("buildRuntimeBookmarkDetailsPatch enriches imported bookmarks with runtime facts", () => {
+  const patch = buildRuntimeBookmarkDetailsPatch(
+    [{ id: "bookmark-a", label: "Imported", worldX: 12, worldZ: 34 }],
+    [
+      {
+        id: "bookmark-a",
+        label: "Imported",
+        worldX: 12,
+        worldZ: 34,
+        zoneRgb: 0x39e58d,
+        layerSamples: [
+          {
+            layerId: "zone_mask",
+            detailSections: [
+              {
+                id: "zone",
+                kind: "facts",
+                title: "Zone",
+                facts: [{ key: "zone", label: "Zone", value: "Valencia Sea - Depth 5" }],
+                targets: [],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  );
+
+  assert.deepEqual(patch, {
+    _map_bookmarks: {
+      entries: [
+        {
+          id: "bookmark-a",
+          label: "Imported",
+          worldX: 12,
+          worldZ: 34,
+          zoneRgb: 0x39e58d,
+          layerSamples: [
+            {
+              layerId: "zone_mask",
+              detailSections: [
+                {
+                  id: "zone",
+                  kind: "facts",
+                  title: "Zone",
+                  facts: [{ key: "zone", label: "Zone", value: "Valencia Sea - Depth 5" }],
+                  targets: [],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  });
 });
 
 test("buildBookmarkPanelStateBundle derives bookmark ui from canonical signals", () => {

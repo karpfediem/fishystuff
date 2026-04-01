@@ -13,6 +13,10 @@ test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge ev
   const currentSnapshot = {
     ready: true,
     theme: { name: "fishy" },
+    ui: {
+      bookmarks: [{ id: "bookmark-a", worldX: 1, worldZ: 2 }],
+      bookmarkSelectedIds: ["bookmark-a"],
+    },
     view: {
       viewMode: "2d",
       camera: { zoom: 2 },
@@ -42,6 +46,10 @@ test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge ev
 
   assert.equal(resolved.ready, true);
   assert.deepEqual(resolved.theme, { name: "fishy" });
+  assert.deepEqual(resolved.ui, {
+    bookmarks: [{ id: "bookmark-a", worldX: 1, worldZ: 2 }],
+    bookmarkSelectedIds: ["bookmark-a"],
+  });
   assert.deepEqual(resolved.catalog, {
     layers: [{ layerId: "fish_evidence" }],
     patches: [{ patchId: "p1" }],
@@ -58,6 +66,9 @@ test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge ev
 test("resolveBridgeSnapshot falls back to the current full snapshot when event state is missing", () => {
   const currentSnapshot = {
     ready: true,
+    ui: {
+      bookmarks: [{ id: "bookmark-a", worldX: 1, worldZ: 2 }],
+    },
     catalog: {
       layers: [{ layerId: "zone_mask" }],
     },

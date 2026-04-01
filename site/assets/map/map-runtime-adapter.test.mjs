@@ -5,6 +5,7 @@ import {
   buildBridgeCommandPatchFromSignals,
   buildBridgeInputPatchFromSignals,
   normalizeMapActionState,
+  projectRuntimeBookmarkDetailsToSignals,
   projectRuntimeSnapshotToSignals,
   projectSessionSnapshotToSignals,
 } from "./map-runtime-adapter.js";
@@ -16,6 +17,12 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
       _map_ui: {
         windowUi: {
           search: { open: false },
+        },
+        layers: {
+          searchClipsByLayer: {
+            fish_evidence: "zone-membership",
+            regions: "mask-sample",
+          },
         },
         bookmarks: {
           selectedIds: ["bookmark-a", "missing"],
@@ -42,7 +49,7 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
           layerIdsVisible: ["bookmarks", "fish_evidence"],
           layerIdsOrdered: ["fish_evidence", "bookmarks"],
           layerOpacities: { fish_evidence: 0.5 },
-          layerClipMasks: { fish_evidence: "zone_mask" },
+          layerClipMasks: { minimap: "manual-mask" },
           layerWaypointConnectionsVisible: { bookmarks: true },
           layerWaypointLabelsVisible: { bookmarks: false },
           layerPointIconsVisible: { fish_evidence: true },
@@ -79,6 +86,11 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
   assert.equal(patch.filters.fromPatchId, "a");
   assert.equal(patch.filters.toPatchId, "b");
   assert.deepEqual(patch.filters.layerIdsVisible, ["bookmarks", "fish_evidence"]);
+  assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+  assert.deepEqual(patch.filters.layerClipMasks, {
+    minimap: "manual-mask",
+    regions: "zone_mask",
+  });
   assert.deepEqual(patch.ui.bookmarkSelectedIds, ["bookmark-a"]);
   assert.deepEqual(patch.ui.bookmarks, [
     { id: "bookmark-a", label: "Cron", worldX: 12.5, worldZ: 34.5 },
@@ -213,6 +225,41 @@ test("projectSessionSnapshotToSignals keeps only restorable session fields", () 
     _map_session: {
       view: { viewMode: "2d", camera: { zoom: 2 } },
       selection: { pointKind: "bookmark" },
+    },
+  });
+});
+
+test("projectRuntimeBookmarkDetailsToSignals enriches canonical bookmarks from runtime ui state", () => {
+  const patch = projectRuntimeBookmarkDetailsToSignals(
+    {
+      ui: {
+        bookmarks: [
+          {
+            id: "bookmark-a",
+            label: "Imported",
+            worldX: 12,
+            worldZ: 34,
+            zoneRgb: 0x39e58d,
+            layerSamples: [{ layerId: "zone_mask" }],
+          },
+        ],
+      },
+    },
+    [{ id: "bookmark-a", label: "Imported", worldX: 12, worldZ: 34 }],
+  );
+
+  assert.deepEqual(patch, {
+    _map_bookmarks: {
+      entries: [
+        {
+          id: "bookmark-a",
+          label: "Imported",
+          worldX: 12,
+          worldZ: 34,
+          zoneRgb: 0x39e58d,
+          layerSamples: [{ layerId: "zone_mask" }],
+        },
+      ],
     },
   });
 });
