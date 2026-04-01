@@ -4449,15 +4449,20 @@ fn render_searchable_dropdown_option_content_html(
     cdn_base_url: &str,
     option: SelectOption<'_>,
 ) -> String {
+    let uses_item_presentation = option.icon.is_some();
     let grade_tone = escape_html(option.grade_tone);
     let tone_class = format!("fishy-item-grade-{grade_tone}");
     let mut html = String::new();
-    write!(
-        html,
-        "<span class=\"fishy-item-row min-w-0 flex-1 {}\">",
-        tone_class
-    )
-    .unwrap();
+    if uses_item_presentation {
+        write!(
+            html,
+            "<span class=\"fishy-item-row min-w-0 flex-1 {}\">",
+            tone_class
+        )
+        .unwrap();
+    } else {
+        html.push_str("<span class=\"min-w-0 flex-1\">");
+    }
     if let Some(icon) = option.icon {
         write!(
             html,
@@ -4485,13 +4490,23 @@ fn render_searchable_dropdown_option_content_html(
             })
         })
         .unwrap_or_default();
-    write!(
-        html,
-        "<span class=\"min-w-0 flex-1\"><span class=\"fishy-item-label block truncate font-medium {tone_class}\">{}</span>{}</span>",
-        escape_html(option.label),
-        badges,
-    )
-    .unwrap();
+    if uses_item_presentation {
+        write!(
+            html,
+            "<span class=\"min-w-0 flex-1\"><span class=\"fishy-item-label block truncate font-medium {tone_class}\">{}</span>{}</span>",
+            escape_html(option.label),
+            badges,
+        )
+        .unwrap();
+    } else {
+        write!(
+            html,
+            "<span class=\"min-w-0 flex-1\"><span class=\"block truncate font-medium text-base-content\">{}</span>{}</span>",
+            escape_html(option.label),
+            badges,
+        )
+        .unwrap();
+    }
     html.push_str("</span>");
     html
 }
@@ -5262,18 +5277,23 @@ fn render_checkbox_group(
             category_key_attr,
         )
         .unwrap();
+        let uses_item_presentation = option.icon.is_some();
         let grade_tone = escape_html(option.grade_tone);
         let tone_class = format!("fishy-item-grade-{grade_tone}");
         let badges = option
             .item
             .map(render_item_effect_badges)
             .unwrap_or_default();
-        write!(
-            html,
-            "<span class=\"fishy-item-row min-w-0 flex-1 {}\">",
-            tone_class,
-        )
-        .unwrap();
+        if uses_item_presentation {
+            write!(
+                html,
+                "<span class=\"fishy-item-row min-w-0 flex-1 {}\">",
+                tone_class,
+            )
+            .unwrap();
+        } else {
+            html.push_str("<span class=\"min-w-0 flex-1\">");
+        }
         if let Some(icon) = option.icon {
             write!(
                 html,
@@ -5283,13 +5303,23 @@ fn render_checkbox_group(
             )
             .unwrap();
         }
-        write!(
-            html,
-            "<span class=\"min-w-0 flex-1\"><span class=\"fishy-item-label block font-medium {tone_class}\">{}</span>{}</span></span></label>",
-            escape_html(option.label),
-            badges,
-        )
-        .unwrap();
+        if uses_item_presentation {
+            write!(
+                html,
+                "<span class=\"min-w-0 flex-1\"><span class=\"fishy-item-label block font-medium {tone_class}\">{}</span>{}</span></span></label>",
+                escape_html(option.label),
+                badges,
+            )
+            .unwrap();
+        } else {
+            write!(
+                html,
+                "<span class=\"min-w-0 flex-1\"><span class=\"block font-medium text-base-content\">{}</span>{}</span></span></label>",
+                escape_html(option.label),
+                badges,
+            )
+            .unwrap();
+        }
     }
     html.push_str("</div></fishy-checkbox-group></div>");
     html

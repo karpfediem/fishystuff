@@ -120,7 +120,7 @@ body {
     --fishy-item-grade-blue: var(--color-info, #6b8afd);
     --fishy-item-grade-green: var(--color-success, #2f855a);
     --fishy-item-grade-white: color-mix(in oklab, var(--color-base-content, #1f2937) 78%, var(--color-base-100, #fffdf4) 22%);
-    --fishy-item-grade-unknown: var(--color-neutral, #64748b);
+    --fishy-item-grade-unknown: color-mix(in oklab, var(--color-base-content, #1f2937) 68%, var(--color-base-200, #efe7d6) 32%);
 }
 
 :where(
