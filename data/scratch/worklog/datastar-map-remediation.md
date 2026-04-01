@@ -6189,3 +6189,49 @@ Next:
 
 - localize page persistence so `map-app-live.js` stops manually forwarding shell-applied patches
 - then reassess whether the biggest remaining drift is in persistence/bootstrap or in the still-imperative panel renderers
+
+## 2026-04-01: localize live map persistence onto the shell patch event
+
+After trimming controller fan-out, `map-app-live.js` still manually forwarded every shell-applied
+patch into the page persist controller. That meant persistence was still app-owned relay logic
+instead of another narrow shell-local reaction.
+
+What changed:
+
+- `site/assets/map/map-page-persist.js`
+  - now accepts `shell`
+  - now listens to `fishymap:signal-patched` directly when asked
+- `site/assets/map/map-app-live.js`
+  - now passes `shell` when creating the persist controller
+  - no longer calls `pagePersistor.handleSignalPatch(...)` from the app patch listener
+- `site/assets/map/map-page-persist.test.mjs`
+  - now covers the shell-local subscription path
+
+Why this matters:
+
+- `map-app-live.js` no longer acts as a persistence relay
+- persistence now uses the same shell-local applied patch seam as the other live reactive helpers
+- the app is narrower again:
+  - bridge/runtime projection
+  - restore/bootstrap sequencing
+  - action handling
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-persist.js site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-page-persist.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for spot-checked live assets:
+  - `/map/map-app-live.js`
+  - `/map/map-page-persist.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Layers 7`
+  - no new console errors
+
+Next:
+
+- reassess whether the next best cleanup is:
+  - trimming `map-page-live.js`/bootstrap further
+  - or starting to replace the larger imperative panel renderers with more signal-owned DOM

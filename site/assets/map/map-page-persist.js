@@ -5,9 +5,11 @@ import {
   createPersistedState,
 } from "./map-page-state.js";
 import { patchMatchesMapPagePersistFilter } from "./map-page-signals.js";
+import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
 export function createMapPagePersistController({
   globalRef = globalThis,
+  shell = null,
   readSnapshot = () => null,
   isReady = () => true,
   createPersistedStateImpl = createPersistedState,
@@ -16,6 +18,7 @@ export function createMapPagePersistController({
   uiStorageKey = MAP_UI_STORAGE_KEY,
   bookmarksStorageKey = MAP_BOOKMARKS_STORAGE_KEY,
   sessionStorageKey = MAP_SESSION_STORAGE_KEY,
+  listenToSignalPatches = true,
 } = {}) {
   const state = {
     timer: 0,
@@ -101,6 +104,10 @@ export function createMapPagePersistController({
     }
     schedulePersist();
     return true;
+  }
+
+  if (listenToSignalPatches && shell && typeof shell.addEventListener === "function") {
+    shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, handleSignalPatch);
   }
 
   return Object.freeze({

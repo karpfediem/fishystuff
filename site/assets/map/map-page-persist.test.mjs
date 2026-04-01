@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createMapPagePersistController } from "./map-page-persist.js";
+import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
 class MemoryStorage {
   constructor(initial = {}) {
@@ -102,5 +103,39 @@ test("map-page persist controller ignores patches until ready and when filters d
   ready = true;
   assert.equal(controller.handleSignalPatch({ _map_runtime: { ready: true } }), false);
   assert.equal(controller.handleSignalPatch({ _map_ui: { search: { query: "eel" } } }), true);
+  assert.equal(scheduled, 1);
+});
+
+test("map-page persist controller can subscribe to shell-local applied patch events", () => {
+  let scheduled = 0;
+  const listeners = new Map();
+  const controller = createMapPagePersistController({
+    shell: {
+      addEventListener(type, listener) {
+        listeners.set(type, listener);
+      },
+    },
+    globalRef: {
+      setTimeout() {
+        scheduled += 1;
+        return scheduled;
+      },
+      clearTimeout() {},
+    },
+    readSnapshot: () => ({}),
+    isReady: () => true,
+    createPersistedStateImpl: () => ({ uiJson: "{}", bookmarksJson: "[]", sessionJson: "{}" }),
+    shouldPersistPatch: (patch) => Boolean(patch?._map_ui),
+  });
+
+  assert.equal(typeof controller.handleSignalPatch, "function");
+  listeners.get(FISHYMAP_SIGNAL_PATCHED_EVENT)?.({
+    detail: {
+      _map_ui: {
+        search: { query: "eel" },
+      },
+    },
+  });
+
   assert.equal(scheduled, 1);
 });

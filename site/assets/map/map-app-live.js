@@ -217,6 +217,7 @@ export async function start() {
   await page.whenRestored();
   const pagePersistor = createMapPagePersistController({
     globalRef: globalThis,
+    shell,
     isReady: () => true,
     readSnapshot: () => page.signalObject?.() || null,
   });
@@ -362,7 +363,6 @@ export async function start() {
   });
   shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
     const patch = event?.detail || null;
-    pagePersistor.handleSignalPatch(patch);
     const searchProjectionPatch = buildSearchProjectionPatchForSignalPatch(signals(), patch);
     const effectivePatch = searchProjectionPatch
       ? combineSignalPatches(patch, searchProjectionPatch)
