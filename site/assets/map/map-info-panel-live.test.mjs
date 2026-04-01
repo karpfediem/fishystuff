@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createMapInfoPanelController } from "./map-info-panel-live.js";
+import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
 const originalHTMLElement = globalThis.HTMLElement;
 const originalFetch = globalThis.fetch;
@@ -179,14 +180,20 @@ test("createMapInfoPanelController refreshes zone loot on selection patches thro
     requestAnimationFrameImpl: null,
   });
 
-  controller.setZoneCatalog([
-    {
-      zoneRgb: 0x39e58d,
-      name: "Valencia Sea - Depth 5",
-      biteTimeMin: 5,
-      biteTimeMax: 7,
-    },
-  ]);
+  shell.dispatchEvent(
+    new CustomEvent(FISHYMAP_ZONE_CATALOG_READY_EVENT, {
+      detail: {
+        zoneCatalog: [
+          {
+            zoneRgb: 0x39e58d,
+            name: "Valencia Sea - Depth 5",
+            biteTimeMin: 5,
+            biteTimeMax: 7,
+          },
+        ],
+      },
+    }),
+  );
 
   shell.dispatchEvent(
     new CustomEvent("fishymap:signal-patched", {

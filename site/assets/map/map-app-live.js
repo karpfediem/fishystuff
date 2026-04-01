@@ -25,6 +25,7 @@ import {
 import { createMapWindowManager } from "./map-window-manager.js";
 import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
+import { dispatchShellZoneCatalogReadyEvent } from "./map-zone-catalog-live.js";
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
@@ -445,12 +446,7 @@ export async function start() {
   layerPanel.render();
   searchPanel.render();
   void loadZoneCatalog().then((zoneCatalog) => {
-    hoverTooltip.setZoneCatalog(zoneCatalog);
-    layerPanel.setZoneCatalog(zoneCatalog);
-    bookmarkPanel.setZoneCatalog(zoneCatalog);
-    zoneInfoPanel.setZoneCatalog(zoneCatalog);
-    void zoneInfoPanel.refreshZoneLootSummary();
-    searchPanel.setZoneCatalog(zoneCatalog);
+    dispatchShellZoneCatalogReadyEvent(shell, zoneCatalog);
   });
 }
 

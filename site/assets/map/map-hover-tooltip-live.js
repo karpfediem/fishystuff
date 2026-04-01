@@ -3,6 +3,7 @@ import {
   patchTouchesHoverTooltipSignals,
 } from "./map-hover-facts.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
+import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
 const ICON_SPRITE_URL = "/img/icons.svg";
 
@@ -208,13 +209,15 @@ export function createMapHoverTooltipController({
     }
     scheduleRender();
   });
+  shell.addEventListener(FISHYMAP_ZONE_CATALOG_READY_EVENT, (event) => {
+    currentZoneCatalog = Array.isArray(event?.detail?.zoneCatalog)
+      ? cloneJson(event.detail.zoneCatalog)
+      : [];
+    scheduleRender();
+  });
 
   return Object.freeze({
     render,
     scheduleRender,
-    setZoneCatalog(nextZoneCatalog) {
-      currentZoneCatalog = Array.isArray(nextZoneCatalog) ? cloneJson(nextZoneCatalog) : [];
-      scheduleRender();
-    },
   });
 }

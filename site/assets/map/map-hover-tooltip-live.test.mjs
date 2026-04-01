@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
+import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
 const originalHTMLElement = globalThis.HTMLElement;
 
@@ -145,7 +146,13 @@ test("createMapHoverTooltipController renders ordered visible hover facts only",
     requestAnimationFrameImpl: null,
     listenToSignalPatches: false,
   });
-  controller.setZoneCatalog([{ zoneRgb: 0x39e58d, name: "Valencia Sea - Depth 5" }]);
+  shell.dispatchEvent(
+    new CustomEvent(FISHYMAP_ZONE_CATALOG_READY_EVENT, {
+      detail: {
+        zoneCatalog: [{ zoneRgb: 0x39e58d, name: "Valencia Sea - Depth 5" }],
+      },
+    }),
+  );
 
   canvas.dispatchEvent(
     new FakePointerEvent("pointermove", {
@@ -194,7 +201,14 @@ test("createMapHoverTooltipController rerenders on shell-local applied patch eve
     getSignals: () => signals,
     canvas,
     requestAnimationFrameImpl: null,
-  }).setZoneCatalog([{ zoneRgb: 0x39e58d, name: "Valencia Sea - Depth 5" }]);
+  });
+  shell.dispatchEvent(
+    new CustomEvent(FISHYMAP_ZONE_CATALOG_READY_EVENT, {
+      detail: {
+        zoneCatalog: [{ zoneRgb: 0x39e58d, name: "Valencia Sea - Depth 5" }],
+      },
+    }),
+  );
 
   canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 10, clientY: 20 }));
   shell.dispatchEvent(new CustomEvent("fishymap:hover-changed", { detail: hoverPayload() }));

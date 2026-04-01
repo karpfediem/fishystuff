@@ -6079,3 +6079,57 @@ Next:
   - `map-info-panel-live.js`
   - `map-search-panel-live.js` rendering itself imperatively rather than from signal-owned DOM
   - `map-bookmark-panel-live.js` rendering/selection orchestration
+
+## 2026-04-01: move live zone-catalog fan-out onto a shell event
+
+After localizing the patch loop, `map-app-live.js` still manually pushed the same loaded zone
+catalog into five different controllers. That kept the app naming those controllers directly even
+though the catalog is just another page-local input.
+
+What changed:
+
+- added `site/assets/map/map-zone-catalog-live.js`
+  - defines `fishymap:zone-catalog-ready`
+  - exports `dispatchShellZoneCatalogReadyEvent(...)`
+- added coverage in:
+  - `site/assets/map/map-zone-catalog-live.test.mjs`
+- controllers now listen for the shell-local catalog event:
+  - `site/assets/map/map-hover-tooltip-live.js`
+  - `site/assets/map/map-layer-panel-live.js`
+  - `site/assets/map/map-search-panel-live.js`
+  - `site/assets/map/map-bookmark-panel-live.js`
+  - `site/assets/map/map-info-panel-live.js`
+- `site/assets/map/map-app-live.js`
+  - no longer calls five separate `setZoneCatalog(...)` methods
+  - now dispatches one shell-local catalog-ready event after `loadZoneCatalog()`
+- `site/zine.ziggy`
+  - now publishes `map/map-zone-catalog-live.js`
+
+Why this matters:
+
+- it removes another explicit controller fan-out from `map-app-live.js`
+- zone catalog delivery now follows the same pattern as live signal patch delivery:
+  - app/controller intent happens once
+  - shell-local event distributes it
+  - interested controllers subscribe narrowly
+- this keeps the app closer to bridge/bootstrap ownership instead of UI wiring ownership
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js site/assets/map/map-zone-catalog-live.js site/assets/map/map-hover-tooltip-live.js site/assets/map/map-info-panel-live.js site/assets/map/map-bookmark-panel-live.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-zone-catalog-live.test.mjs site/assets/map/map-hover-tooltip-live.test.mjs site/assets/map/map-info-panel-live.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for spot-checked live assets:
+  - `/map/map-app-live.js`
+  - `/map/map-zone-catalog-live.js`
+  - `/map/map-info-panel-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Layers 7`
+  - no new console errors
+
+Next:
+
+- remove the now-dead direct `setZoneCatalog(...)` controller surface
+- keep shrinking `map-app-live.js` toward bridge/bootstrap ownership only

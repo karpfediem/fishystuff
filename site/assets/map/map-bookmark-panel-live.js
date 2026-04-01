@@ -3,6 +3,7 @@ import {
   dispatchShellSignalPatch,
   FISHYMAP_SIGNAL_PATCHED_EVENT,
 } from "./map-signal-patch.js";
+import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import {
   buildBookmarkExportMessage,
   buildBookmarkImportMessage,
@@ -559,6 +560,12 @@ export function createMapBookmarkPanelController({
         scheduleRender();
       }
     });
+    shell.addEventListener(FISHYMAP_ZONE_CATALOG_READY_EVENT, (event) => {
+      state.zoneCatalog = Array.isArray(event?.detail?.zoneCatalog)
+        ? cloneJson(event.detail.zoneCatalog)
+        : [];
+      scheduleRender();
+    });
   }
 
   elements.bookmarksList.addEventListener("dragstart", (event) => {
@@ -649,9 +656,5 @@ export function createMapBookmarkPanelController({
   return Object.freeze({
     render,
     scheduleRender,
-    setZoneCatalog(nextZoneCatalog) {
-      state.zoneCatalog = Array.isArray(nextZoneCatalog) ? cloneJson(nextZoneCatalog) : [];
-      scheduleRender();
-    },
   });
 }

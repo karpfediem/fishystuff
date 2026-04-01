@@ -3,6 +3,7 @@ import {
   FISHYMAP_SIGNAL_PATCHED_EVENT,
 } from "./map-signal-patch.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
+import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
 
 const ICON_SPRITE_URL = "/img/icons.svg";
@@ -407,15 +408,18 @@ export function createMapInfoPanelController({
   shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
     handleSignalPatch(event?.detail || null);
   });
+  shell.addEventListener(FISHYMAP_ZONE_CATALOG_READY_EVENT, (event) => {
+    state.zoneCatalog = Array.isArray(event?.detail?.zoneCatalog)
+      ? cloneJson(event.detail.zoneCatalog)
+      : [];
+    scheduleRender();
+    void refreshZoneLootSummary();
+  });
 
   return Object.freeze({
     handleSignalPatch,
     render,
     scheduleRender,
-    setZoneCatalog(nextZoneCatalog) {
-      state.zoneCatalog = Array.isArray(nextZoneCatalog) ? cloneJson(nextZoneCatalog) : [];
-      scheduleRender();
-    },
     refreshZoneLootSummary,
   });
 }

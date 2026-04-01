@@ -16,6 +16,7 @@ import {
   resolveSelectedZoneRgbs,
 } from "./map-search-state.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
+import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
 export { patchTouchesSearchPanelSignals } from "./map-search-state.js";
 
@@ -302,6 +303,11 @@ export function createMapSearchPanelController({
         scheduleRender();
       }
     });
+    shell.addEventListener(FISHYMAP_ZONE_CATALOG_READY_EVENT, (event) => {
+      currentZoneCatalog = normalizeZoneCatalog(event?.detail?.zoneCatalog);
+      elements.zoneCatalog = currentZoneCatalog;
+      scheduleRender();
+    });
   }
 
   elements.searchWindow.addEventListener("focusout", () => {
@@ -323,10 +329,5 @@ export function createMapSearchPanelController({
   return Object.freeze({
     render,
     scheduleRender,
-    setZoneCatalog(nextZoneCatalog) {
-      currentZoneCatalog = normalizeZoneCatalog(nextZoneCatalog);
-      elements.zoneCatalog = currentZoneCatalog;
-      scheduleRender();
-    },
   });
 }
