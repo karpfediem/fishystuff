@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { FISHYMAP_POINT_ICON_SCALE_MAX, FISHYMAP_POINT_ICON_SCALE_MIN } from "./map-host.js";
 import { nextHoverFactVisibilityByLayer } from "./map-hover-facts.js";
 import { renderLayerStack } from "./map-layer-panel.js";
@@ -192,9 +191,7 @@ export function createMapLayerPanelController({
   shell,
   getSignals,
   dispatchPatch = dispatchShellSignalPatch,
-  documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
-  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapLayerPanelController requires a shell element");
@@ -350,13 +347,6 @@ export function createMapLayerPanelController({
       return;
     }
     render();
-  }
-
-  function handleSignalPatch(event) {
-    if (!patchTouchesLayerPanelSignals(event?.detail)) {
-      return;
-    }
-    scheduleRender();
   }
 
   function hasExpandedLayerSettings() {
@@ -653,10 +643,6 @@ export function createMapLayerPanelController({
     }
     clearDropState();
   });
-
-  if (listenToSignalPatches) {
-    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-  }
 
   return Object.freeze({
     render,

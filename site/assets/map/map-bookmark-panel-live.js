@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { renderBookmarkManager } from "./map-bookmark-panel.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 import {
@@ -21,7 +20,6 @@ import {
   moveBookmarkBefore,
   normalizeBookmarks,
   normalizeSelectedBookmarkIds,
-  patchTouchesBookmarkSignals,
   renameBookmark,
   selectionBookmarkKey,
 } from "./map-bookmark-state.js";
@@ -154,11 +152,9 @@ export function createMapBookmarkPanelController({
   shell,
   getSignals,
   dispatchPatch = dispatchShellSignalPatch,
-  documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
   promptImpl = globalThis.prompt?.bind(globalThis),
   confirmImpl = globalThis.confirm?.bind(globalThis),
-  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapBookmarkPanelController requires a shell element");
@@ -328,16 +324,6 @@ export function createMapBookmarkPanelController({
       bookmarkUi.placing = false;
       bookmarkUi.selectedIds = [result.bookmark.id];
     });
-  }
-
-  function handleSignalPatch(event) {
-    if (!patchTouchesBookmarkSignals(event?.detail)) {
-      return;
-    }
-    if (maybePlaceBookmarkFromSelection()) {
-      return;
-    }
-    scheduleRender();
   }
 
   elements.bookmarkPlace?.addEventListener("click", () => {
@@ -645,9 +631,6 @@ export function createMapBookmarkPanelController({
       });
   });
 
-  if (listenToSignalPatches) {
-    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-  }
   shell.addEventListener("fishymap:selection-changed", handleSelectionChanged);
 
   return Object.freeze({

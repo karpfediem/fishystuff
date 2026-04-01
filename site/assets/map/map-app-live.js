@@ -298,7 +298,6 @@ export async function start() {
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
-    listenToSignalPatches: false,
   });
   hoverTooltip = createMapHoverTooltipController({
     shell,
@@ -318,13 +317,11 @@ export async function start() {
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
-    listenToSignalPatches: false,
   });
   searchPanel = createMapSearchPanelController({
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
-    listenToSignalPatches: false,
   });
   let syncingFromBridge = false;
   let applyingInternalSignalPatch = false;

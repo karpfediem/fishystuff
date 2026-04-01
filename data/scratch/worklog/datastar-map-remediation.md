@@ -5498,3 +5498,63 @@ Next:
 - continue reducing the remaining imperative live controller islands
 - current highest-value target:
   - `map-info-panel-live.js`
+
+## 2026-04-01: delete dead Datastar listener plumbing from live layer, search, and bookmark controllers
+
+After routing live layer/search/bookmark rerenders through `map-app-live`, those controllers still
+carried dead compatibility plumbing:
+
+- `DATASTAR_SIGNAL_PATCH_EVENT` imports
+- `documentRef` options
+- `listenToSignalPatches` options
+- controller-local `handleSignalPatch(...)` listeners
+
+That code no longer ran on the live path and was only preserving the appearance of a more generic
+controller contract than the current clean-slate app actually uses.
+
+What changed:
+
+- `site/assets/map/map-layer-panel-live.js`
+  - removed the controller-local Datastar listener plumbing entirely
+- `site/assets/map/map-search-panel-live.js`
+  - removed the controller-local Datastar listener plumbing entirely
+- `site/assets/map/map-bookmark-panel-live.js`
+  - removed the controller-local Datastar listener plumbing entirely
+- `site/assets/map/map-app-live.js`
+  - no longer passes `listenToSignalPatches: false` because the controllers no longer expose that
+    option
+
+Why this matters:
+
+- the live path now reflects the actual clean-slate architecture directly, not just by convention
+- it reduces the surface area of each controller to:
+  - DOM rendering
+  - local interactions
+  - direct patch emission back into the live app
+- it makes the remaining imperative island clearer:
+  - `map-info-panel-live.js` and related info-pane work
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js site/assets/map/map-bookmark-panel-live.js site/assets/map/map-search-panel-live.js site/assets/map/map-layer-panel-live.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-app-live.js`
+  - `/map/map-layer-panel-live.js`
+  - `/map/map-bookmark-panel-live.js`
+  - `/map/map-search-panel-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Search` window present
+  - `Info` window present
+  - `Layers 7`
+
+Next:
+
+- continue reducing the remaining framework-like/global seams around the live map shell
+- likely next target:
+  - `map-page-live.js`
+- or, if we stay in panel land:
+  - `map-info-panel-live.js`

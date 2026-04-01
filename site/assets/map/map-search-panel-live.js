@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { normalizeZoneCatalog } from "./map-zone-catalog.js";
@@ -10,7 +9,6 @@ import {
   buildSearchSelectionRemovalSignalPatch,
   buildSemanticTermLookup,
   fishFilterTermMetadata,
-  patchTouchesSearchPanelSignals,
   resolveSelectedFishFilterTerms,
   resolveSelectedFishIds,
   resolveSelectedSemanticFieldIdsByLayer,
@@ -124,9 +122,7 @@ export function createMapSearchPanelController({
   getSignals,
   dispatchPatch = dispatchShellSignalPatch,
   zoneCatalog = [],
-  documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
-  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapSearchPanelController requires a shell element");
@@ -312,15 +308,6 @@ export function createMapSearchPanelController({
       });
     }, 0);
   });
-
-  if (listenToSignalPatches) {
-    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
-      if (!patchTouchesSearchPanelSignals(event?.detail)) {
-        return;
-      }
-      scheduleRender();
-    });
-  }
 
   return Object.freeze({
     render,
