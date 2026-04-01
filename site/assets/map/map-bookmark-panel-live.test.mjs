@@ -77,3 +77,32 @@ test("buildBookmarkPlacementSelectionResult ignores non-clicked focus selections
 
   assert.equal(result, null);
 });
+
+test("buildBookmarkPlacementSelectionResult prefers zone catalog names over region-group point labels", () => {
+  const result = buildBookmarkPlacementSelectionResult({
+    selection: clickedSelection({
+      pointLabel: "Margoria (RG218)",
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          rgbU32: 0x3c963c,
+          rgb: [60, 150, 60],
+        },
+      ],
+    }),
+    bookmarks: [],
+    placing: true,
+    allowSameSelection: true,
+    requireClickedPoint: true,
+    zoneCatalog: [
+      {
+        zoneRgb: 0x3c963c,
+        name: "Margoria South",
+      },
+    ],
+    runtimeLayers: [{ layerId: "zone_mask", name: "Zone Mask", displayOrder: 0 }],
+  });
+
+  assert.ok(result);
+  assert.equal(result.bookmark.label, "Margoria South");
+});

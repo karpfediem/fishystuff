@@ -43,9 +43,12 @@ function zoneRgbFromLayerSamples(layerSamples) {
   return zoneSample ? Number(zoneSample.rgbU32) : null;
 }
 
-function preferredSelectionLabel(selection) {
+function preferredSelectionLabel(selection, options = {}) {
   const layerSamples = Array.isArray(selection?.layerSamples) ? selection.layerSamples : [];
-  const preferredOverviewLabel = preferredOverviewRow(layerSamples)?.value;
+  const preferredOverviewLabel = preferredOverviewRow(layerSamples, {
+    zoneCatalog: Array.isArray(options.zoneCatalog) ? options.zoneCatalog : [],
+    runtimeLayers: Array.isArray(options.runtimeLayers) ? options.runtimeLayers : [],
+  })?.value;
   if (preferredOverviewLabel) {
     return preferredOverviewLabel;
   }
@@ -184,14 +187,14 @@ export function buildBookmarkOverviewRows(bookmark, fallbackIndex = 0, stateBund
   return rows.concat(overviewRows);
 }
 
-export function createBookmarkFromSelection(selection, existingBookmarks = []) {
+export function createBookmarkFromSelection(selection, existingBookmarks = [], options = {}) {
   const worldX = normalizeCoordinate(selection?.worldX);
   const worldZ = normalizeCoordinate(selection?.worldZ);
   if (worldX == null || worldZ == null) {
     return null;
   }
   const layerSamples = normalizeLayerSamples(selection?.layerSamples);
-  const label = preferredSelectionLabel(selection);
+  const label = preferredSelectionLabel(selection, options);
   return {
     id: nextBookmarkId(existingBookmarks),
     worldX,

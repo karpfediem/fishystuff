@@ -84,6 +84,34 @@ test("createBookmarkFromSelection prefers the zone overview label over point lab
   assert.equal(bookmark.label, "Valencia Sea - Depth 5");
 });
 
+test("createBookmarkFromSelection can resolve the zone name from zone catalog context", () => {
+  const bookmark = createBookmarkFromSelection(
+    {
+      worldX: 123.2,
+      worldZ: 456.7,
+      pointLabel: "Margoria (RG218)",
+      layerSamples: [
+        {
+          layerId: "zone_mask",
+          rgbU32: 0x3c963c,
+          rgb: [60, 150, 60],
+        },
+      ],
+    },
+    [],
+    {
+      zoneCatalog: [
+        {
+          zoneRgb: 0x3c963c,
+          name: "Margoria South",
+        },
+      ],
+    },
+  );
+
+  assert.equal(bookmark.label, "Margoria South");
+});
+
 test("bookmark helpers expose display and ordering utilities", () => {
   const bookmarks = [
     { id: "a", label: "Alpha", worldX: 1, worldZ: 2 },

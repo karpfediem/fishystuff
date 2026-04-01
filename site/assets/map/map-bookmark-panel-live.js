@@ -117,6 +117,8 @@ export function buildBookmarkPlacementSelectionResult({
   lastPlacementKey = "",
   allowSameSelection = false,
   requireClickedPoint = false,
+  zoneCatalog = [],
+  runtimeLayers = [],
 } = {}) {
   if (placing !== true) {
     return null;
@@ -132,7 +134,10 @@ export function buildBookmarkPlacementSelectionResult({
   if (!allowSameSelection && nextPlacementKey === String(lastPlacementKey || "")) {
     return null;
   }
-  const bookmark = createBookmarkFromSelection(selection, bookmarks);
+  const bookmark = createBookmarkFromSelection(selection, bookmarks, {
+    zoneCatalog,
+    runtimeLayers,
+  });
   if (!bookmark) {
     return null;
   }
@@ -283,6 +288,8 @@ export function createMapBookmarkPanelController({
       bookmarks: current.bookmarks,
       placing: current.bookmarkUi.placing,
       lastPlacementKey: state.lastPlacementKey,
+      zoneCatalog: current.zoneCatalog,
+      runtimeLayers: current.state.catalog.layers,
     });
     if (!result) {
       return false;
@@ -305,6 +312,8 @@ export function createMapBookmarkPanelController({
       lastPlacementKey: state.lastPlacementKey,
       allowSameSelection: true,
       requireClickedPoint: true,
+      zoneCatalog: current.zoneCatalog,
+      runtimeLayers: current.state.catalog.layers,
     });
     if (!result) {
       return;
