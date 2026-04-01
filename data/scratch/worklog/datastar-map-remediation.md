@@ -3751,3 +3751,103 @@ Next:
   facts data source
 - keep the Info window generic (`Zone`, `Territory`, `Trade`) while moving the zone fish view
   toward the calculator-style droprate + species rows instead of evidence-share percentages
+
+
+## Slice 19 — Replace Zone-pane evidence shares with page-owned loot summary
+
+The old clean-slate `Zone` pane was still wrong in one important way:
+
+- it reused `zone_stats` ranking evidence distribution and rendered that as if it were the zone’s
+  actual fish presence / catch composition
+
+That violated the drift-correction requirement. The `Zone` pane needs a combined catch-profile view
+closer to the calculator loot-flow, but limited to:
+
+- left droprate metric
+- item/species icon + name
+
+and explicitly not the silver-side columns.
+
+Design choice:
+
+- do **not** widen the Bevy bridge with calculator-derived group/species data
+- keep the map bridge focused on map/runtime state
+- fetch the zone catch profile page-side, directly from a dedicated API endpoint
+
+What changed:
+
+- `lib/fishystuff_api/src/models/zone_loot_summary.rs`
+  - added a dedicated request/response contract for the Zone-pane catch profile
+- `api/fishystuff_server/src/app.rs`
+  - added `POST /api/v1/zone_loot_summary`
+- `api/fishystuff_server/src/routes/meta.rs`
+  - documented the endpoint in the lightweight OpenAPI summary
+- `api/fishystuff_server/src/routes/calculator.rs`
+  - added `post_zone_loot_summary(...)`
+  - added `load_zone_loot_summary_data(...)`
+  - added `derive_zone_loot_summary_response(...)`
+  - derives group/species rows from existing calculator loot helpers, but filters them down to
+    the visible group/species rows needed for the map Zone pane
+  - preserves original group slot ids so missing groups do not collapse the grouping incorrectly
+- `site/assets/map/map-zone-loot-summary.js`
+  - added the page-side fetch/normalization helper for the new endpoint
+- `site/assets/map/map-info-state.js`
+  - removed the misleading ranking-evidence section
+  - replaced it with a `Catch Profile` section built from the fetched zone loot summary
+- `site/assets/map/map-info-panel-live.js`
+  - now loads the zone loot summary asynchronously when selection enters a zone
+  - dedupes same-zone in-flight requests so repeated runtime selection patches do not spam the API
+- `site/assets/map/map-app-live.js`
+  - clean-slate orchestration now triggers zone-loot refresh on runtime selection changes
+- `site/assets/map/map.css`
+  - added styling for grouped catch-profile rows
+- `site/zine.ziggy`
+  - publishes the new `map-zone-loot-summary.js` asset
+- `site/assets/map/map-info-state.test.mjs`
+  - updated from the old evidence expectations to the new `zone-loot` section
+- `site/assets/map/map-zone-loot-summary.test.mjs`
+  - covers selection rgb derivation, normalization, and request body formatting
+
+Validation:
+
+- JS:
+  - `node --check site/assets/map/map-zone-loot-summary.js`
+  - `node --check site/assets/map/map-info-state.js`
+  - `node --check site/assets/map/map-info-panel-live.js`
+  - `node --check site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-info-state.test.mjs site/assets/map/map-zone-loot-summary.test.mjs`
+- Rust:
+  - `cargo check -p fishystuff_server`
+- site:
+  - rebuilt `site/.out`
+  - confirmed served `/map/map-zone-loot-summary.js` matches the new module
+- live browser:
+  - local `just watch` API remained stale because it was a plain long-lived `cargo run`, not an
+    autoreload watcher
+  - validated end-to-end with a temporary fresh API on `127.0.0.1:8081`
+  - opening the `Zone` tab after inspecting a point/bookmark now shows:
+    - `Zone` facts
+    - `Catch Profile`
+    - grouped droprate + species rows
+  - no ranking-evidence share percentages remain in that pane
+  - when the default `127.0.0.1:8080` API is still on an older build and returns `404` for
+    `POST /api/v1/zone_loot_summary`, the page now performs exactly one request per selected zone
+    and surfaces a clear endpoint-unavailable message instead of retriggering the same failed load
+    on every repeated runtime selection patch
+
+Why this is aligned with the remediation goal:
+
+- the Info window stays generic:
+  - `Zone`
+  - `Territory`
+  - `Trade`
+- the catch profile is page-owned Datastar/UI state, not a new broad bridge mirror
+- the Bevy bridge remains focused on map/runtime selection and semantic facts
+
+Next:
+
+- restore the bookmark title/fact behavior around imported and newly created bookmarks where still
+  inconsistent with the live point label
+- continue the search/filter/clipping remediation using the explicit bridge whitelist, but keep
+  attachment-driven clipping as the primary model instead of reintroducing redundant per-layer
+  clip toggles

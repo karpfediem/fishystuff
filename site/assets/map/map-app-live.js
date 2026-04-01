@@ -74,7 +74,6 @@ function patchTouchesLiveBridgeInputs(patch) {
   }
   return (
     "_map_bridged" in patch ||
-    patch?._map_ui?.layers?.searchClipsByLayer != null ||
     "_map_actions" in patch ||
     "_map_bookmarks" in patch ||
     "_shared_fish" in patch
@@ -359,6 +358,9 @@ export async function start() {
       hoverTooltip.scheduleRender();
     }
     if (patchTouchesInfoSignals(patch)) {
+      if (patch._map_runtime?.selection != null) {
+        void zoneInfoPanel.refreshZoneLootSummary();
+      }
       zoneInfoPanel.scheduleRender();
     }
     if (patchTouchesLayerPanelSignals(patch)) {
@@ -457,6 +459,7 @@ export async function start() {
   bookmarkPanel.render();
   hoverTooltip.render();
   zoneInfoPanel.render();
+  void zoneInfoPanel.refreshZoneLootSummary();
   layerPanel.render();
   searchPanel.render();
   void loadZoneCatalog().then((zoneCatalog) => {
@@ -464,6 +467,7 @@ export async function start() {
     layerPanel.setZoneCatalog(zoneCatalog);
     bookmarkPanel.setZoneCatalog(zoneCatalog);
     zoneInfoPanel.setZoneCatalog(zoneCatalog);
+    void zoneInfoPanel.refreshZoneLootSummary();
     searchPanel.setZoneCatalog(zoneCatalog);
   });
 }

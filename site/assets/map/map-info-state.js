@@ -61,49 +61,6 @@ function pointKindIcon(pointKind) {
   }
 }
 
-function formatTimestampUtc(tsUtc) {
-  const tsMs = Number(tsUtc) * 1000;
-  if (!Number.isFinite(tsMs) || tsMs <= 0) {
-    return "";
-  }
-  const date = new Date(tsMs);
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function formatDecimal(value, digits = 2) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number.toFixed(digits) : "n/a";
-}
-
-function formatPercent(value, digits = 1) {
-  const number = Number(value);
-  return Number.isFinite(number) ? `${(number * 100).toFixed(digits)}%` : "n/a";
-}
-
-function formatZoneStatus(status) {
-  const raw = trimString(status);
-  if (!raw) {
-    return "Unknown";
-  }
-  return raw
-    .toLowerCase()
-    .split(/[_\s-]+/g)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function buildFishLookup(runtimeFish) {
-  return new Map(
-    (Array.isArray(runtimeFish) ? runtimeFish : [])
-      .filter((fish) => isPlainObject(fish))
-      .map((fish) => [Number.parseInt(fish.fishId, 10), fish]),
-  );
-}
-
 function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers) {
   const pointLabel = trimString(selection?.pointLabel);
   if (pointLabel) {
@@ -124,63 +81,58 @@ function titleFromSelection(selection, layerSamples, zoneCatalog, runtimeLayers)
   return "Info";
 }
 
-function buildZoneEvidenceSummary(zoneStats) {
-  if (!zoneStats) {
-    return "No fish presence evidence loaded.";
+function buildZoneLootGroups(summary) {
+  const groups = Array.isArray(summary?.groups) ? summary.groups : [];
+  const speciesRows = Array.isArray(summary?.speciesRows) ? summary.speciesRows : [];
+  if (!groups.length && !speciesRows.length) {
+    return [];
   }
-  const confidence = isPlainObject(zoneStats.confidence) ? zoneStats.confidence : {};
-  const parts = [];
-  const status = formatZoneStatus(confidence.status);
-  if (status) {
-    parts.push(status);
-  }
-  if (Number.isFinite(confidence.ess)) {
-    parts.push(`ESS ${formatDecimal(confidence.ess, 1)}`);
-  }
-  if (Number.isFinite(confidence.totalWeight)) {
-    parts.push(`weight ${formatDecimal(confidence.totalWeight, 2)}`);
-  }
-  const lastSeen = formatTimestampUtc(confidence.lastSeenTsUtc);
-  if (lastSeen) {
-    parts.push(`last seen ${lastSeen}`);
-  } else if (Number.isFinite(confidence.ageDaysLast)) {
-    parts.push(`last seen ${formatDecimal(confidence.ageDaysLast, 1)}d ago`);
-  }
-  if (Array.isArray(confidence.notes) && confidence.notes.length) {
-    parts.push(confidence.notes.join(" · "));
-  }
-  return parts.join(" · ") || "No confidence data.";
+  return groups
+    .map((group, index) => ({
+      slotIdx: Number.parseInt(group?.slotIdx, 10) || index + 1,
+      label: trimString(group?.label),
+      countShareText: trimString(group?.countShareText),
+      expectedCountText: trimString(group?.expectedCountText),
+      fillColor: trimString(group?.fillColor),
+      strokeColor: trimString(group?.strokeColor),
+      textColor: trimString(group?.textColor),
+      rows: speciesRows.filter((row) => {
+        const rowGroupLabel = trimString(row?.groupLabel);
+        const groupLabel = trimString(group?.label);
+        if (rowGroupLabel && groupLabel && rowGroupLabel === groupLabel) {
+          return true;
+        }
+        return (Number.parseInt(row?.slotIdx, 10) || 0) === (Number.parseInt(group?.slotIdx, 10) || index + 1);
+      }),
+    }))
+    .filter((group) => group.label && group.rows.length);
 }
 
-function buildFishPresenceSection(selection, signals) {
-  const zoneStats = isPlainObject(selection?.zoneStats) ? selection.zoneStats : null;
-  const zoneRgb = zoneStats?.zoneRgb ?? buildZonePaneFacts(selection?.layerSamples, {}).find((row) => row.key === "zone");
-  if (!zoneStats && !selection?.layerSamples?.length) {
+function buildZoneLootSection(summary, status) {
+  const normalizedStatus = trimString(status || "idle");
+  if (normalizedStatus === "idle" && !isPlainObject(summary)) {
     return null;
   }
-  const fishLookup = buildFishLookup(signals?._map_runtime?.catalog?.fish);
+  const groups = buildZoneLootGroups(summary);
+  const available = summary?.available === true && groups.length > 0;
+  const statusText =
+    normalizedStatus === "loaded"
+      ? "zone loot: loaded"
+      : normalizedStatus === "loading"
+        ? "zone loot: loading"
+        : normalizedStatus
+          ? `zone loot: ${normalizedStatus}`
+          : "zone loot: idle";
+
   return {
-    id: "fish-presence",
-    kind: "evidence",
-    title: "Fish Presence",
-    statusText: trimString(signals?._map_runtime?.statuses?.zoneStatsStatus) || "zone evidence: idle",
-    summary: buildZoneEvidenceSummary(zoneStats),
-    note: "Evidence shares summarize observed fish presence here. They are not direct catch rates.",
-    entries: (Array.isArray(zoneStats?.distribution) ? zoneStats.distribution : []).map((entry) => {
-      const fishId = Number.parseInt(entry?.fishId, 10);
-      const catalogFish = fishLookup.get(fishId) || null;
-      return {
-        fishId,
-        itemId: catalogFish?.itemId ?? entry?.itemId ?? null,
-        encyclopediaId: catalogFish?.encyclopediaId ?? entry?.encyclopediaId ?? null,
-        name:
-          trimString(catalogFish?.name) ||
-          trimString(entry?.fishName) ||
-          (Number.isFinite(fishId) ? `Fish ${fishId}` : "Unknown fish"),
-        shareText: formatPercent(entry?.pMean, 1),
-        detailText: `weight ${formatDecimal(entry?.evidenceWeight, 2)} · CI ${formatPercent(entry?.ciLow, 1)}-${formatPercent(entry?.ciHigh, 1)}`,
-      };
-    }),
+    id: "zone-loot",
+    kind: "zone-loot",
+    title: "Catch Profile",
+    statusText,
+    summary: trimString(summary?.profileLabel) || "Calculator defaults",
+    note: trimString(summary?.note),
+    groups,
+    available,
   };
 }
 
@@ -201,13 +153,11 @@ export function patchTouchesInfoSignals(patch) {
   return Boolean(
     patch._map_runtime?.selection != null ||
       patch._map_runtime?.catalog?.layers != null ||
-      patch._map_runtime?.catalog?.fish != null ||
-      patch._map_runtime?.statuses?.zoneStatsStatus != null ||
       patch._map_ui?.windowUi?.zoneInfo != null,
   );
 }
 
-export function buildInfoViewModel(signals, { zoneCatalog = [] } = {}) {
+export function buildInfoViewModel(signals, { zoneCatalog = [], zoneLootSummary = null, zoneLootStatus = "idle" } = {}) {
   const selection = isPlainObject(signals?._map_runtime?.selection)
     ? cloneJson(signals._map_runtime.selection)
     : {};
@@ -221,7 +171,7 @@ export function buildInfoViewModel(signals, { zoneCatalog = [] } = {}) {
   });
   const territoryFacts = buildTerritoryPaneFacts(layerSamples, { runtimeLayers });
   const tradeFacts = buildTradePaneFacts(layerSamples, { runtimeLayers });
-  const fishPresenceSection = buildFishPresenceSection(selection, signals);
+  const zoneLootSection = buildZoneLootSection(zoneLootSummary, zoneLootStatus);
   const panes = [
     paneDescriptor(
       "zone",
@@ -237,7 +187,7 @@ export function buildInfoViewModel(signals, { zoneCatalog = [] } = {}) {
               facts: zoneFacts,
             }
           : null,
-        fishPresenceSection,
+        zoneLootSection,
       ],
     ),
     paneDescriptor(

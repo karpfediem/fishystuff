@@ -48,24 +48,6 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
               detailSections: [detailSectionFact("origin_region", "Origin", "(R430|Hakoven Islands)", "trade-origin")],
             },
           ],
-          zoneStats: {
-            confidence: {
-              status: "FRESH",
-              ess: 42.5,
-              totalWeight: 71.3,
-              notes: ["recent ranking evidence"],
-            },
-            distribution: [
-              {
-                fishId: 41,
-                fishName: "Yellowfin Sole",
-                pMean: 0.24,
-                evidenceWeight: 15.6,
-                ciLow: 0.18,
-                ciHigh: 0.31,
-              },
-            ],
-          },
         },
         catalog: {
           layers: [
@@ -73,15 +55,44 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
             { layerId: "region_groups", displayOrder: 30 },
             { layerId: "regions", displayOrder: 40 },
           ],
-          fish: [{ fishId: 41, name: "Yellowfin Sole", itemId: 9041 }],
-        },
-        statuses: {
-          zoneStatsStatus: "zone stats: loaded",
         },
       },
     },
     {
       zoneCatalog: [{ zoneRgb: 0x39e58d, name: "Valencia Sea - Depth 5", biteTimeMin: 5, biteTimeMax: 7 }],
+      zoneLootStatus: "loaded",
+      zoneLootSummary: {
+        available: true,
+        profileLabel: "Calculator defaults",
+        note: "Zone loot uses calculator default session settings.",
+        groups: [
+          {
+            slotIdx: 4,
+            label: "General",
+            countShareText: "91.17%",
+            expectedCountText: "50.49",
+            fillColor: "#eef6ff",
+            strokeColor: "#89a8d8",
+            textColor: "#1f2937",
+          },
+        ],
+        speciesRows: [
+          {
+            slotIdx: 4,
+            groupLabel: "General",
+            label: "Sea Eel",
+            iconUrl: "/i/sea-eel.png",
+            iconGradeTone: "general",
+            fillColor: "#eef6ff",
+            strokeColor: "#89a8d8",
+            textColor: "#1f2937",
+            expectedCountText: "44.6",
+            dropRateText: "80%",
+            dropRateSourceKind: "database",
+            dropRateTooltip: "DB-backed drop rate",
+          },
+        ],
+      },
     },
   );
 
@@ -90,7 +101,15 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
   assert.equal(viewModel.activePaneId, "territory");
   assert.deepEqual(
     viewModel.panes.find((pane) => pane.id === "zone")?.sections.map((section) => section.kind),
-    ["facts", "evidence"],
+    ["facts", "zone-loot"],
+  );
+  assert.equal(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.title,
+    "Catch Profile",
+  );
+  assert.equal(
+    viewModel.panes.find((pane) => pane.id === "zone")?.sections[1]?.groups?.[0]?.rows?.[0]?.label,
+    "Sea Eel",
   );
   assert.deepEqual(
     viewModel.panes.find((pane) => pane.id === "territory")?.sections[0].facts,
@@ -116,7 +135,7 @@ test("buildInfoViewModel groups selection data into zone, territory, and trade p
   );
 });
 
-test("patchTouchesInfoSignals stays narrow to selection, pane tab, and zone-stats inputs", () => {
+test("patchTouchesInfoSignals stays narrow to selection, pane tab, and runtime layer inputs", () => {
   assert.equal(
     patchTouchesInfoSignals({
       _map_runtime: { selection: {} },
@@ -125,7 +144,7 @@ test("patchTouchesInfoSignals stays narrow to selection, pane tab, and zone-stat
   );
   assert.equal(
     patchTouchesInfoSignals({
-      _map_runtime: { statuses: { zoneStatsStatus: "loaded" } },
+      _map_runtime: { catalog: { layers: [] } },
     }),
     true,
   );

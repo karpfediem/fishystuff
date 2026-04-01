@@ -46,6 +46,10 @@ pub fn build_router(state: SharedState) -> Router {
             get(routes::calculator::get_calculator_datastar_option_search),
         )
         .route(
+            "/zone_loot_summary",
+            post(routes::calculator::post_zone_loot_summary),
+        )
+        .route(
             "/zone_profile_v2",
             post(routes::zone_profile_v2::zone_profile_v2),
         )

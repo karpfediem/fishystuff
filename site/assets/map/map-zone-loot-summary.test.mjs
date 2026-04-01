@@ -1,0 +1,82 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import {
+  loadZoneLootSummary,
+  normalizeZoneLootSummary,
+  zoneRgbFromSelection,
+} from "./map-zone-loot-summary.js";
+
+test("zoneRgbFromSelection prefers zone stats rgb and falls back to zone mask samples", () => {
+  assert.equal(zoneRgbFromSelection({ zoneStats: { zoneRgb: 0x39e58d } }), 0x39e58d);
+  assert.equal(
+    zoneRgbFromSelection({
+      layerSamples: [{ layerId: "zone_mask", rgbU32: 0x39e58d }],
+    }),
+    0x39e58d,
+  );
+  assert.equal(zoneRgbFromSelection({ layerSamples: [] }), null);
+});
+
+test("normalizeZoneLootSummary keeps grouped species rows intact", () => {
+  const summary = normalizeZoneLootSummary({
+    available: true,
+    zoneName: "Valencia Sea - Depth 5",
+    note: "Zone loot uses calculator defaults.",
+    profileLabel: "Calculator defaults",
+    groups: [{ slotIdx: 4, label: "General", countShareText: "91.17%", expectedCountText: "50.49" }],
+    speciesRows: [{ slotIdx: 4, groupLabel: "General", label: "Sea Eel", dropRateText: "80%" }],
+  });
+
+  assert.equal(summary.available, true);
+  assert.equal(summary.groups[0].slotIdx, 4);
+  assert.equal(summary.speciesRows[0].groupLabel, "General");
+  assert.equal(summary.speciesRows[0].dropRateText, "80%");
+});
+
+test("loadZoneLootSummary posts rgb triplets to the zone loot summary endpoint", async () => {
+  let request = null;
+  const result = await loadZoneLootSummary(0x39e58d, {
+    locationLike: {
+      origin: "http://127.0.0.1:1990",
+      protocol: "http:",
+      hostname: "127.0.0.1",
+    },
+    fetchImpl: async (url, init) => {
+      request = { url, init };
+      return {
+        ok: true,
+        async json() {
+          return {
+            available: true,
+            zoneName: "Valencia Sea - Depth 5",
+            groups: [],
+            speciesRows: [],
+          };
+        },
+      };
+    },
+  });
+
+  assert.equal(request.url, "http://127.0.0.1:8080/api/v1/zone_loot_summary");
+  assert.deepEqual(JSON.parse(request.init.body), { rgb: "57,229,141" });
+  assert.equal(result.zoneName, "Valencia Sea - Depth 5");
+});
+
+test("loadZoneLootSummary reports a clear message when the API build lacks the endpoint", async () => {
+  await assert.rejects(
+    () =>
+      loadZoneLootSummary(0x39e58d, {
+        locationLike: {
+          origin: "http://127.0.0.1:1990",
+          protocol: "http:",
+          hostname: "127.0.0.1",
+        },
+        fetchImpl: async () => ({
+          ok: false,
+          status: 404,
+        }),
+      }),
+    /Zone loot summary endpoint is unavailable on the current API build\./,
+  );
+});

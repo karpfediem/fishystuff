@@ -21,6 +21,10 @@ use fishystuff_api::models::calculator::{
     CalculatorPetSignals, CalculatorPriceOverrideSignals, CalculatorSessionPresetEntry,
     CalculatorSignals, CalculatorZoneGroupRateEntry,
 };
+use fishystuff_api::models::zone_loot_summary::{
+    ZoneLootSummaryGroupRow, ZoneLootSummaryRequest, ZoneLootSummaryResponse,
+    ZoneLootSummarySpeciesRow,
+};
 use fishystuff_api::models::zones::ZoneEntry;
 
 use crate::error::{with_timeout, AppError, AppResult};
@@ -380,6 +384,26 @@ pub async fn get_calculator_catalog(
     let mut headers = HeaderMap::new();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     Ok((headers, Json(data.catalog)))
+}
+
+pub async fn post_zone_loot_summary(
+    State(state): State<SharedState>,
+    query: Result<Query<CalculatorQuery>, QueryRejection>,
+    Extension(request_id): Extension<RequestId>,
+    payload: Result<Json<ZoneLootSummaryRequest>, axum::extract::rejection::JsonRejection>,
+) -> AppResult<Json<ZoneLootSummaryResponse>> {
+    let Query(query) = query.map_err(|err| {
+        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
+    })?;
+    let Json(payload) = payload.map_err(|err| {
+        AppError::invalid_argument(err.to_string()).with_request_id(request_id.0.clone())
+    })?;
+
+    let lang = FishLang::from_param(query.lang.as_deref());
+    let summary =
+        load_zone_loot_summary_data(&state, lang, query.r#ref.clone(), &request_id, payload)
+            .await?;
+    Ok(Json(summary))
 }
 
 pub async fn get_calculator_datastar_init(
@@ -998,6 +1022,44 @@ async fn load_calculator_runtime_data(
     normalize_zone_target_fish(&mut signals, &data);
     let derived = derive_signals(&signals, &data);
     Ok((data, signals, derived))
+}
+
+async fn load_zone_loot_summary_data(
+    state: &SharedState,
+    lang: FishLang,
+    ref_id: Option<String>,
+    request_id: &RequestId,
+    request: ZoneLootSummaryRequest,
+) -> AppResult<ZoneLootSummaryResponse> {
+    let mut data = load_calculator_data(state, lang, ref_id.clone(), request_id).await?;
+    let requested_zone_key = request.rgb.0.trim().to_string();
+    let zone = data
+        .zones
+        .iter()
+        .find(|zone| zone.rgb_key.0 == requested_zone_key)
+        .cloned()
+        .ok_or_else(|| {
+            AppError::invalid_argument(format!(
+                "unknown zone rgb key for zone loot summary: {}",
+                request.rgb.0
+            ))
+            .with_request_id(request_id.0.clone())
+        })?;
+
+    let mut signals = data.catalog.defaults.clone();
+    signals.zone = zone.rgb_key.0.clone();
+    signals.show_silver_amounts = false;
+    normalize_signals(&mut signals, &data);
+    data.zone_loot_entries = with_timeout(
+        state.config.request_timeout_secs,
+        state
+            .store
+            .calculator_zone_loot(lang, ref_id, signals.zone.clone()),
+    )
+    .await
+    .map_err(|err| map_request_id(err, request_id))?;
+
+    Ok(derive_zone_loot_summary_response(&signals, &data, &zone))
 }
 
 fn lang_param(lang: FishLang) -> &'static str {
@@ -2640,6 +2702,81 @@ fn derive_loot_chart(
         profit_per_catch_raw,
         rows,
         species_rows,
+    }
+}
+
+fn derive_zone_loot_summary_response(
+    signals: &CalculatorSignals,
+    data: &CalculatorData,
+    zone: &ZoneEntry,
+) -> ZoneLootSummaryResponse {
+    let items_by_key = data
+        .catalog
+        .items
+        .iter()
+        .map(|item| (item.key.as_str(), item))
+        .collect::<HashMap<_, _>>();
+    let fish_group_chart = derive_fish_group_chart(signals, data, &items_by_key);
+    let derived = derive_signals(signals, data);
+    let loot_chart = derive_loot_chart(
+        signals,
+        data,
+        &fish_group_chart,
+        derived.loot_total_catches_raw,
+        derived.fish_multiplier_raw,
+    );
+    let rows = filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
+    let group_slot_by_label = loot_chart
+        .species_rows
+        .iter()
+        .map(|row| (row.group_label, row.slot_idx))
+        .collect::<HashMap<_, _>>();
+    let visible_group_labels = rows.iter().map(|row| row.label).collect::<HashSet<_>>();
+    let visible_species_rows = loot_chart
+        .species_rows
+        .iter()
+        .filter(|row| visible_group_labels.contains(row.group_label))
+        .collect::<Vec<_>>();
+    let available = fish_group_chart.available && !visible_species_rows.is_empty();
+
+    ZoneLootSummaryResponse {
+        available,
+        zone_name: zone.name.clone(),
+        note: if available {
+            "Zone loot uses calculator default session settings. Group headers show current group share and expected catches; rows show in-group droprate and expected catches for each fish or item.".to_string()
+        } else {
+            "Expected zone loot data is unavailable for this zone.".to_string()
+        },
+        profile_label: "Calculator defaults".to_string(),
+        groups: rows
+            .iter()
+            .map(|row| ZoneLootSummaryGroupRow {
+                slot_idx: group_slot_by_label.get(row.label).copied().unwrap_or(0),
+                label: row.label.to_string(),
+                count_share_text: row.count_share_text.clone(),
+                expected_count_text: row.expected_count_text.clone(),
+                fill_color: row.fill_color.to_string(),
+                stroke_color: row.stroke_color.to_string(),
+                text_color: row.text_color.to_string(),
+            })
+            .collect(),
+        species_rows: visible_species_rows
+            .iter()
+            .map(|row| ZoneLootSummarySpeciesRow {
+                slot_idx: row.slot_idx,
+                group_label: row.group_label.to_string(),
+                label: row.label.clone(),
+                icon_url: row.icon_url.clone(),
+                icon_grade_tone: row.icon_grade_tone.clone(),
+                fill_color: row.fill_color.to_string(),
+                stroke_color: row.stroke_color.to_string(),
+                text_color: row.text_color.to_string(),
+                expected_count_text: row.expected_count_text.clone(),
+                drop_rate_text: row.drop_rate_text.clone(),
+                drop_rate_source_kind: row.drop_rate_source_kind.clone(),
+                drop_rate_tooltip: row.drop_rate_tooltip.clone(),
+            })
+            .collect(),
     }
 }
 

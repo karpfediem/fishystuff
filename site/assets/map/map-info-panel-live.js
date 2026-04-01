@@ -1,6 +1,7 @@
 import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
+import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
 
 const ICON_SPRITE_URL = "/img/icons.svg";
 
@@ -93,41 +94,76 @@ function factMarkup(fact) {
   `;
 }
 
-function fishIdentityMarkup(entry) {
-  const fishId = Number.parseInt(entry?.fishId, 10);
-  const name = trimString(entry?.name) || (Number.isFinite(fishId) ? `Fish ${fishId}` : "Unknown fish");
-  const iconUrl =
-    globalThis.window?.__fishystuffResolveFishItemIconUrl?.(entry?.itemId) ||
-    globalThis.window?.__fishystuffResolveFishEncyclopediaIconUrl?.(entry?.encyclopediaId) ||
-    "";
-  const iconMarkup = iconUrl
-    ? `<span class="inline-flex size-5 shrink-0 overflow-hidden rounded-full bg-base-200 ring-1 ring-base-300/80"><img class="h-full w-full object-cover" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
-    : `<span class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-base-300 text-[11px] font-semibold text-base-content/70">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span>`;
-  return `<span class="inline-flex min-w-0 items-center gap-2">${iconMarkup}<span class="truncate">${escapeHtml(name)}</span></span>`;
+function normalizedGradeTone(value) {
+  const tone = trimString(value).toLowerCase();
+  return tone || "unknown";
 }
 
-function evidenceSectionMarkup(section) {
-  const entries = Array.isArray(section?.entries) ? section.entries : [];
-  const listMarkup = entries.length
-    ? entries
-        .map(
-          (entry) => `
-            <div class="list-row rounded-box border border-transparent bg-base-100 px-2.5 py-2">
-              <div class="min-w-0">${fishIdentityMarkup(entry)}</div>
-              <div class="text-right">
-                <div class="font-semibold text-base-content">${escapeHtml(entry.shareText)}</div>
-                <div class="text-xs text-base-content/60">${escapeHtml(entry.detailText || "")}</div>
-              </div>
+function fishIdentityMarkup(entry) {
+  const name = trimString(entry?.label) || "Unknown fish";
+  const gradeTone = normalizedGradeTone(entry?.iconGradeTone);
+  const iconUrl = trimString(entry?.iconUrl);
+  const iconMarkup = iconUrl
+    ? `<span class="fishymap-item-icon-frame grade-${escapeHtml(gradeTone)} size-7"><img class="fishymap-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
+    : `<span class="fishymap-item-icon-frame grade-${escapeHtml(gradeTone)} size-7"><span class="fishymap-item-icon-fallback">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
+  return `<span class="inline-flex min-w-0 items-center gap-2">${iconMarkup}<span class="truncate font-semibold text-base-content">${escapeHtml(name)}</span></span>`;
+}
+
+function zoneLootMetricTone(entry) {
+  return {
+    fillColor: trimString(entry?.fillColor) || "var(--color-base-200)",
+    strokeColor: trimString(entry?.strokeColor) || "var(--color-base-300)",
+    textColor: trimString(entry?.textColor) || "var(--color-base-content)",
+  };
+}
+
+function zoneLootRowMarkup(entry) {
+  const metric = zoneLootMetricTone(entry);
+  const tooltip = trimString(entry?.dropRateTooltip);
+  const dropDotColor =
+    trimString(entry?.dropRateSourceKind) === "database"
+      ? "var(--color-success)"
+      : trimString(entry?.dropRateSourceKind) === "community"
+        ? "var(--color-warning)"
+        : "var(--color-info)";
+  return `
+    <div class="fishymap-zone-loot-row">
+      <div class="fishymap-zone-loot-metric" style="--fishymap-zone-loot-fill:${escapeHtml(metric.fillColor)};--fishymap-zone-loot-stroke:${escapeHtml(metric.strokeColor)};--fishymap-zone-loot-text:${escapeHtml(metric.textColor)};">
+        <div class="fishymap-zone-loot-metric-primary">${escapeHtml(entry.dropRateText || "—")}</div>
+        <div class="fishymap-zone-loot-metric-secondary">${escapeHtml(entry.expectedCountText || "—")}</div>
+        ${
+          tooltip
+            ? `<span class="fishymap-zone-loot-dot" style="--fishymap-zone-loot-dot:${escapeHtml(dropDotColor)};" aria-hidden="true" title="${escapeHtml(tooltip)}"></span>`
+            : ""
+        }
+      </div>
+      <div class="min-w-0">${fishIdentityMarkup(entry)}</div>
+    </div>
+  `;
+}
+
+function zoneLootSectionMarkup(section) {
+  const groups = Array.isArray(section?.groups) ? section.groups : [];
+  const groupMarkup = groups.length
+    ? groups
+        .map((group) => `
+          <div class="fishymap-zone-loot-group rounded-box border border-base-300 bg-base-200/75 p-2">
+            <div class="fishymap-zone-loot-group-header">
+              <span class="badge badge-soft badge-sm">${escapeHtml(group.label)}</span>
+              <span class="text-xs font-semibold text-base-content/65">${escapeHtml(group.countShareText)} · ${escapeHtml(group.expectedCountText)}</span>
             </div>
-          `,
-        )
+            <div class="fishymap-zone-loot-group-rows">
+              ${group.rows.map((row) => zoneLootRowMarkup(row)).join("")}
+            </div>
+          </div>
+        `)
         .join("")
-    : '<div class="px-2 py-3 text-xs text-base-content/60">No fish evidence in this window.</div>';
+    : '<div class="px-2 py-3 text-xs text-base-content/60">No fish rows are available for this zone yet.</div>';
   return `
     <section class="space-y-2">
       <div class="flex items-center justify-between gap-3">
-        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(section.title || "Fish Presence")}</p>
-        <span class="text-[11px] text-base-content/55">${escapeHtml(section.statusText || "zone evidence: idle")}</span>
+        <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-base-content/45">${escapeHtml(section.title || "Fish")}</p>
+        <span class="text-[11px] text-base-content/55">${escapeHtml(section.statusText || "zone loot: idle")}</span>
       </div>
       <p class="text-xs text-base-content/70">${escapeHtml(section.summary || "")}</p>
       ${
@@ -135,7 +171,7 @@ function evidenceSectionMarkup(section) {
           ? `<div class="rounded-box border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-base-content/80">${escapeHtml(section.note)}</div>`
           : ""
       }
-      <div class="list max-h-72 overflow-y-auto rounded-box border border-base-300 bg-base-200 p-1">${listMarkup}</div>
+      <div class="fishymap-zone-loot-groups">${groupMarkup}</div>
     </section>
   `;
 }
@@ -155,8 +191,8 @@ function sectionMarkup(section) {
             .join("")}</div>
         </section>
       `;
-    case "evidence":
-      return evidenceSectionMarkup(section);
+    case "zone-loot":
+      return zoneLootSectionMarkup(section);
     default:
       return "";
   }
@@ -196,6 +232,10 @@ export function createMapInfoPanelController({
   const state = {
     frameId: 0,
     zoneCatalog: [],
+    zoneLootStatus: "idle",
+    zoneLootSummary: null,
+    zoneLootRgb: null,
+    zoneLootRequestToken: 0,
   };
 
   function signals() {
@@ -204,7 +244,11 @@ export function createMapInfoPanelController({
 
   function render() {
     state.frameId = 0;
-    const viewModel = buildInfoViewModel(signals(), { zoneCatalog: state.zoneCatalog });
+    const viewModel = buildInfoViewModel(signals(), {
+      zoneCatalog: state.zoneCatalog,
+      zoneLootSummary: state.zoneLootSummary,
+      zoneLootStatus: state.zoneLootStatus,
+    });
     setTextContent(elements.title, viewModel.descriptor.title);
     setTextContent(elements.statusText, viewModel.descriptor.statusText);
     setMarkup(
@@ -253,6 +297,59 @@ export function createMapInfoPanelController({
     if (!patchTouchesInfoSignals(event?.detail)) {
       return;
     }
+    if (event?.detail?._map_runtime?.selection != null) {
+      void refreshZoneLootSummary();
+    }
+    scheduleRender();
+  }
+
+  async function refreshZoneLootSummary() {
+    const selection = signals()?._map_runtime?.selection || null;
+    const zoneRgb = zoneRgbFromSelection(selection);
+    if (!Number.isInteger(zoneRgb) || zoneRgb < 0) {
+      state.zoneLootRequestToken += 1;
+      state.zoneLootRgb = null;
+      state.zoneLootStatus = "idle";
+      state.zoneLootSummary = null;
+      scheduleRender();
+      return;
+    }
+    if (
+      state.zoneLootRgb === zoneRgb &&
+      (state.zoneLootStatus === "loading" ||
+        state.zoneLootStatus === "loaded" ||
+        state.zoneLootStatus === "error")
+    ) {
+      return;
+    }
+    state.zoneLootRgb = zoneRgb;
+    state.zoneLootStatus = "loading";
+    state.zoneLootSummary = null;
+    scheduleRender();
+
+    const requestToken = state.zoneLootRequestToken + 1;
+    state.zoneLootRequestToken = requestToken;
+    try {
+      const summary = await loadZoneLootSummary(zoneRgb);
+      if (state.zoneLootRequestToken !== requestToken || state.zoneLootRgb !== zoneRgb) {
+        return;
+      }
+      state.zoneLootSummary = summary;
+      state.zoneLootStatus = "loaded";
+    } catch (error) {
+      if (state.zoneLootRequestToken !== requestToken || state.zoneLootRgb !== zoneRgb) {
+        return;
+      }
+      state.zoneLootSummary = {
+        available: false,
+        zoneName: "",
+        profileLabel: "",
+        note: trimString(error?.message) || "Zone loot summary is unavailable.",
+        groups: [],
+        speciesRows: [],
+      };
+      state.zoneLootStatus = "error";
+    }
     scheduleRender();
   }
 
@@ -285,5 +382,6 @@ export function createMapInfoPanelController({
       state.zoneCatalog = Array.isArray(nextZoneCatalog) ? cloneJson(nextZoneCatalog) : [];
       scheduleRender();
     },
+    refreshZoneLootSummary,
   });
 }
