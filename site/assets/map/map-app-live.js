@@ -14,7 +14,10 @@ import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
 import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
 import { createMapInfoPanelController } from "./map-info-panel-live.js";
 import { createMapLayerPanelController } from "./map-layer-panel-live.js";
-import { createMapPatchPickerController } from "./map-patch-picker-live.js";
+import {
+  createMapPatchPickerController,
+  patchTouchesPatchPickerSignals,
+} from "./map-patch-picker-live.js";
 import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import { combineSignalPatches } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
@@ -214,6 +217,7 @@ export async function start() {
   page.start();
   await page.whenRestored();
   let windowManager = null;
+  let patchPicker = null;
 
   function dispatchSignalPatch(patch) {
     if (!patch || typeof patch !== "object") {
@@ -222,6 +226,9 @@ export async function start() {
     page.patchSignals(patch);
     if (windowManager && patchTouchesWindowUi(patch)) {
       windowManager.scheduleApplyFromSignals();
+    }
+    if (patchPicker && patchTouchesPatchPickerSignals(patch)) {
+      patchPicker.scheduleRender();
     }
   }
 
@@ -255,7 +262,7 @@ export async function start() {
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
   });
-  const patchPicker = createMapPatchPickerController({
+  patchPicker = createMapPatchPickerController({
     shell,
     dispatchPatch: (_shell, patch) => dispatchSignalPatch(patch),
     getSignals: signals,
@@ -360,6 +367,9 @@ export async function start() {
       : patch;
     if (patchTouchesWindowUi(effectivePatch)) {
       windowManager.scheduleApplyFromSignals();
+    }
+    if (patchPicker && patchTouchesPatchPickerSignals(effectivePatch)) {
+      patchPicker.scheduleRender();
     }
     if (searchProjectionPatch) {
       applyInternalSignalPatch(searchProjectionPatch);

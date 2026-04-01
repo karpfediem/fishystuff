@@ -1,4 +1,3 @@
-import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
 import { dispatchShellSignalPatch } from "./map-signal-patch.js";
 
 function cloneNodeList(nodes) {
@@ -227,7 +226,6 @@ export function createMapPatchPickerController({
   dispatchPatch = dispatchShellSignalPatch,
   documentRef = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
-  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapPatchPickerController requires a shell element");
@@ -320,21 +318,8 @@ export function createMapPatchPickerController({
     render();
   }
 
-  function handleSignalPatch(event) {
-    if (patchTouchesPatchPickerSignals(event?.detail || null)) {
-      scheduleRender();
-    }
-  }
-
-  if (listenToSignalPatches) {
-    documentRef?.addEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-  }
-
   return Object.freeze({
     render,
     scheduleRender,
-    disconnect() {
-      documentRef?.removeEventListener?.(DATASTAR_SIGNAL_PATCH_EVENT, handleSignalPatch);
-    },
   });
 }

@@ -5308,3 +5308,56 @@ Next:
   imperative
 - likely next target:
   - the smallest remaining live panel controller that still owns a document-level patch listener
+
+## 2026-04-01: make the live patch picker app-driven
+
+The patch picker was the next-smallest live controller still subscribing to
+`datastar-signal-patch` directly even though it does not own any imperative behavior beyond DOM
+rendering.
+
+What changed:
+
+- `site/assets/map/map-patch-picker-live.js`
+  - no longer imports `DATASTAR_SIGNAL_PATCH_EVENT`
+  - no longer attaches its own document-level Datastar listener
+  - now stays focused on:
+    - deriving picker state from signals
+    - rendering the two patch dropdowns
+    - emitting a default `fromPatchId` patch when the runtime patch catalog first becomes ready
+- `site/assets/map/map-app-live.js`
+  - now imports `patchTouchesPatchPickerSignals(...)`
+  - schedules `patchPicker.render()` whenever:
+    - a direct controller patch touches the patch-picker inputs
+    - a real Datastar signal patch touches the patch-picker inputs
+
+Why this matters:
+
+- it removes another unnecessary controller-owned Datastar subscription
+- the patch picker is now treated as what it really is:
+  - a small view/controller under the app orchestrator
+- this keeps narrowing the remaining imperative islands to modules that truly need their own local
+  event handling
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js`
+  - `node --check site/assets/map/map-patch-picker-live.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-patch-picker-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-patch-picker-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Settings Ready`
+  - `Layers 7`
+  - patch picker labels still resolve correctly, for example:
+    - `From`: `Node Connection`
+    - `Until`: `Now`
+
+Next:
+
+- continue through the remaining live panel controllers in order of smallest high-value cleanup
+- likely next candidates:
+  - `map-zone-info-panel-live.js`
+  - `map-info-panel-live.js`
