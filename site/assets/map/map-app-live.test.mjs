@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const {
+  buildSearchProjectionPatchForSignalPatch,
   createDeferredBridgeStateRefresher,
   deferAfterAnimationFrames,
   resolveBridgeSnapshot,
@@ -76,6 +77,46 @@ test("resolveBridgeSnapshot falls back to the current full snapshot when event s
   };
 
   assert.deepEqual(resolveBridgeSnapshot({}, () => currentSnapshot), currentSnapshot);
+});
+
+test("buildSearchProjectionPatchForSignalPatch projects selected search terms against the patched signal state", () => {
+  const patch = buildSearchProjectionPatchForSignalPatch(
+    {
+      _map_ui: {
+        search: {
+          selectedTerms: [],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+        },
+      },
+    },
+    {
+      _map_ui: {
+        search: {
+          selectedTerms: [{ kind: "zone", zoneRgb: 123456 }],
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(patch, {
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        zoneRgbs: [123456],
+        semanticFieldIdsByLayer: {
+          zone_mask: [123456],
+        },
+        fishFilterTerms: [],
+      },
+    },
+  });
 });
 
 test("waitForMapPageBootstrap waits for page bootstrap globals to appear", async () => {

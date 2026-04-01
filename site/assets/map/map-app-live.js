@@ -32,6 +32,35 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function mergeProjectionPatch(target, patch) {
+  if (!isPlainObject(target) || !isPlainObject(patch)) {
+    return target;
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    if (Array.isArray(value)) {
+      target[key] = cloneJson(value);
+      continue;
+    }
+    if (isPlainObject(value)) {
+      const nextTarget = isPlainObject(target[key]) ? target[key] : {};
+      target[key] = nextTarget;
+      mergeProjectionPatch(nextTarget, value);
+      continue;
+    }
+    target[key] = value;
+  }
+  return target;
+}
+
+export function buildSearchProjectionPatchForSignalPatch(signals, patch) {
+  if (patch?._map_ui?.search?.selectedTerms == null) {
+    return null;
+  }
+  const nextSignals = isPlainObject(signals) ? cloneJson(signals) : {};
+  mergeProjectionPatch(nextSignals, patch);
+  return buildSearchProjectionSignalPatch(nextSignals);
+}
+
 function mergeSnapshotBranch(baseValue, patchValue) {
   if (isPlainObject(baseValue) || isPlainObject(patchValue)) {
     return {
@@ -387,10 +416,7 @@ export async function start() {
 
   shell.addEventListener(FISHYMAP_DATASTAR_SIGNAL_PATCH_EVENT, (event) => {
     const patch = event?.detail || null;
-    const searchProjectionPatch =
-      patch?._map_ui?.search?.selectedTerms != null
-        ? buildSearchProjectionSignalPatch(signals())
-        : null;
+    const searchProjectionPatch = buildSearchProjectionPatchForSignalPatch(signals(), patch);
     const effectivePatch = searchProjectionPatch
       ? combineSignalPatches(patch, searchProjectionPatch)
       : patch;

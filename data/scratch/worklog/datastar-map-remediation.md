@@ -4233,3 +4233,66 @@ Next:
 - continue the generic search/filter work by expanding supported layer-term projections
   without reintroducing hidden secondary state
 - keep the attachment graph as the only clipping source of truth on the page side
+
+## 2026-04-01: selected search terms project again on the live clean-slate path
+
+Observed regression:
+
+- the canonical search state already lived under:
+  - `_map_ui.search.selectedTerms`
+- and the bridge adapter already knew how to derive the runtime-relevant subset from that state:
+  - `_map_bridged.filters.{fishIds,zoneRgbs,semanticFieldIdsByLayer,fishFilterTerms}`
+- but the live map app was attempting to build that projection against the current pre-patch signal
+  snapshot inside `site/assets/map/map-app-live.js`
+- when a shell patch carried new selected terms directly, the bridge side saw:
+  - no projected `_map_bridged.filters` update
+  - no `zoneMembershipLayerIds`
+  - no runtime clipping/filter change
+
+What changed:
+
+- `site/assets/map/map-app-live.js`
+  - added `buildSearchProjectionPatchForSignalPatch(signals, patch)`
+  - it clones the current live signal graph, applies the incoming shell patch to that clone, and
+    only then computes the projected `_map_bridged.filters` patch
+  - the live shell event handler now uses that post-patch projection instead of the stale
+    pre-patch signal snapshot
+- `site/assets/map/map-app-live.test.mjs`
+  - added coverage proving a `{ _map_ui.search.selectedTerms: [...] }` patch produces the expected
+    `_map_bridged.filters` projection even when the current live bridge-filter state is still
+    empty
+
+Validation:
+
+- focused JS tests passed:
+  - `site/assets/map/map-app-live.test.mjs`
+  - `site/assets/map/map-runtime-adapter.test.mjs`
+  - `site/assets/map/map-search-projection.test.mjs`
+- `node --check site/assets/map/map-app-live.js`
+- rebuilt the site and verified the served assets match `site/.out` for:
+  - `/map/map-app-live.js`
+  - `/map/map-search-projection.js`
+- live DevTools validation on the isolated `/map/` page confirmed:
+  - shell patch with `{ _map_ui.search.selectedTerms: [{ kind: "zone", zoneRgb: 333333 }] }`
+    now updates:
+    - `_map_bridged.filters.zoneRgbs = [333333]`
+    - `_map_bridged.filters.semanticFieldIdsByLayer.zone_mask = [333333]`
+    - `FishyMapBridge.getCurrentInputState().filters.zoneRgbs = [333333]`
+  - with `layerClipMasks = { fish_evidence: "zone_mask" }`, the same patch now also yields:
+    - `zoneMembershipLayerIds = ["fish_evidence"]`
+
+Why this matters:
+
+- the clean-slate shell contract is usable again for direct signal patches, not just for
+  search-panel UI clicks
+- attachment-driven clipping is now fed by the canonical selected-term state again
+- this restores the next phase of the clipping/filtering remediation without reintroducing
+  loader-era bridge assumptions
+
+Next:
+
+- validate whether the default layer graph should include an explicit visible attachment such as
+  `fish_evidence -> zone_mask`, instead of relying on manual attachment before clipping becomes
+  useful
+- continue the generic search/filter work by extending live validation beyond the fish-evidence
+  zone-membership path to raster/vector attachment clipping
