@@ -2416,6 +2416,79 @@ fn fish_group_label(slot_idx: u8) -> Option<&'static str> {
     }
 }
 
+fn fish_group_slot_idx(label: &str) -> Option<u8> {
+    match label.trim() {
+        "Prize" => Some(1),
+        "Rare" => Some(2),
+        "High-Quality" => Some(3),
+        "General" => Some(4),
+        "Trash" => Some(5),
+        _ => None,
+    }
+}
+
+fn zone_loot_slot_sort_key(slot_idx: u8) -> u8 {
+    if slot_idx == 0 {
+        u8::MAX
+    } else {
+        slot_idx
+    }
+}
+
+fn default_zone_loot_group_values(
+    slot_idx: u8,
+) -> Option<(&'static str, &'static str, &'static str, &'static str)> {
+    match slot_idx {
+        1 => Some(("Prize", "#fda4af", "#f87171", "#450a0a")),
+        2 => Some(("Rare", "#fde68a", "#facc15", "#422006")),
+        3 => Some(("High-Quality", "#93c5fd", "#60a5fa", "#172554")),
+        4 => Some(("General", "#86efac", "#4ade80", "#052e16")),
+        5 => Some((
+            "Trash",
+            "var(--color-base-100)",
+            "color-mix(in srgb, var(--color-base-content) 16%, transparent)",
+            "var(--color-base-content)",
+        )),
+        0 => Some((
+            "Unassigned",
+            "var(--color-base-200)",
+            "var(--color-base-300)",
+            "var(--color-base-content)",
+        )),
+        _ => None,
+    }
+}
+
+fn zone_loot_group_values(
+    slot_idx: u8,
+    chart_row: Option<&FishGroupChartRow>,
+) -> (String, String, String, String) {
+    if let Some(chart_row) = chart_row {
+        return (
+            chart_row.label.to_string(),
+            chart_row.fill_color.to_string(),
+            chart_row.stroke_color.to_string(),
+            chart_row.text_color.to_string(),
+        );
+    }
+    if let Some((label, fill_color, stroke_color, text_color)) =
+        default_zone_loot_group_values(slot_idx)
+    {
+        return (
+            label.to_string(),
+            fill_color.to_string(),
+            stroke_color.to_string(),
+            text_color.to_string(),
+        );
+    }
+    (
+        "Unassigned".to_string(),
+        "var(--color-base-200)".to_string(),
+        "var(--color-base-300)".to_string(),
+        "var(--color-base-content)".to_string(),
+    )
+}
+
 fn loot_species_presence_scope_text(
     evidence: &CalculatorZoneLootEvidence,
     include_structural_ids: bool,
@@ -2720,6 +2793,9 @@ fn derive_loot_chart(
     let mut group_profit_by_slot = HashMap::<u8, f64>::new();
     let mut species_rows = Vec::new();
     for entry in &data.zone_loot_entries {
+        if entry.within_group_rate <= 0.0 {
+            continue;
+        }
         let Some(group_row) = group_row_by_slot.get(&entry.slot_idx) else {
             continue;
         };
@@ -2892,58 +2968,125 @@ fn derive_zone_loot_summary_response(
         derived.loot_total_catches_raw,
         derived.fish_multiplier_raw,
     );
-    let rows = filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
-    let group_slot_by_label = loot_chart
-        .species_rows
+    let group_row_by_slot = fish_group_chart
+        .rows
         .iter()
-        .map(|row| (row.group_label, row.slot_idx))
+        .enumerate()
+        .map(|(index, row)| ((index + 1) as u8, row))
         .collect::<HashMap<_, _>>();
+    let rows = filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
     let visible_group_labels = rows.iter().map(|row| row.label).collect::<HashSet<_>>();
-    let visible_species_rows = loot_chart
+    let mut summary_groups = rows
+        .iter()
+        .map(|row| {
+            let slot_idx = fish_group_slot_idx(row.label).unwrap_or(0);
+            ZoneLootSummaryGroupRow {
+                slot_idx,
+                label: row.label.to_string(),
+                fill_color: row.fill_color.to_string(),
+                stroke_color: row.stroke_color.to_string(),
+                text_color: row.text_color.to_string(),
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut seen_group_slots = summary_groups
+        .iter()
+        .map(|row| row.slot_idx)
+        .collect::<HashSet<_>>();
+    let weighted_species_rows = loot_chart
         .species_rows
         .iter()
         .filter(|row| visible_group_labels.contains(row.group_label))
+        .map(|row| ZoneLootSummarySpeciesRow {
+            slot_idx: row.slot_idx,
+            group_label: row.group_label.to_string(),
+            label: row.label.clone(),
+            icon_url: row.icon_url.clone(),
+            icon_grade_tone: row.icon_grade_tone.clone(),
+            fill_color: row.fill_color.to_string(),
+            stroke_color: row.stroke_color.to_string(),
+            text_color: row.text_color.to_string(),
+            drop_rate_text: row.drop_rate_text.clone(),
+            drop_rate_source_kind: row.drop_rate_source_kind.clone(),
+            drop_rate_tooltip: row.drop_rate_tooltip.clone(),
+            presence_text: row.presence_text.clone(),
+            presence_source_kind: row.presence_source_kind.clone(),
+            presence_tooltip: row.presence_tooltip.clone().unwrap_or_default(),
+        })
         .collect::<Vec<_>>();
-    let available = fish_group_chart.available && !visible_species_rows.is_empty();
+    let mut presence_only_species_rows = data
+        .zone_loot_entries
+        .iter()
+        .filter(|entry| entry.within_group_rate <= 0.0)
+        .filter_map(|entry| {
+            let presence_text = loot_species_presence_text(entry)?;
+            let (group_label, fill_color, stroke_color, text_color) = zone_loot_group_values(
+                entry.slot_idx,
+                group_row_by_slot.get(&entry.slot_idx).copied(),
+            );
+            if seen_group_slots.insert(entry.slot_idx) {
+                summary_groups.push(ZoneLootSummaryGroupRow {
+                    slot_idx: entry.slot_idx,
+                    label: group_label.clone(),
+                    fill_color: fill_color.clone(),
+                    stroke_color: stroke_color.clone(),
+                    text_color: text_color.clone(),
+                });
+            }
+            Some(ZoneLootSummarySpeciesRow {
+                slot_idx: entry.slot_idx,
+                group_label,
+                label: entry.name.clone(),
+                icon_url: entry
+                    .icon
+                    .as_deref()
+                    .map(|icon| absolute_public_asset_url(data.cdn_base_url.as_str(), icon)),
+                icon_grade_tone: item_grade_tone(entry.grade.as_deref()).to_string(),
+                fill_color,
+                stroke_color,
+                text_color,
+                drop_rate_text: String::new(),
+                drop_rate_source_kind: String::new(),
+                drop_rate_tooltip: String::new(),
+                presence_text: Some(presence_text),
+                presence_source_kind: loot_species_presence_source_kind(entry),
+                presence_tooltip: loot_species_presence_tooltip(entry).unwrap_or_default(),
+            })
+        })
+        .collect::<Vec<_>>();
+    summary_groups.sort_by(|left, right| {
+        zone_loot_slot_sort_key(left.slot_idx)
+            .cmp(&zone_loot_slot_sort_key(right.slot_idx))
+            .then_with(|| left.label.cmp(&right.label))
+    });
+    presence_only_species_rows.sort_by(|left, right| {
+        zone_loot_slot_sort_key(left.slot_idx)
+            .cmp(&zone_loot_slot_sort_key(right.slot_idx))
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+    });
+    let has_weighted_rows = !weighted_species_rows.is_empty();
+    let has_presence_only_rows = !presence_only_species_rows.is_empty();
+    let available = has_weighted_rows || has_presence_only_rows;
+    let mut species_rows = weighted_species_rows;
+    species_rows.extend(presence_only_species_rows);
 
     ZoneLootSummaryResponse {
         available,
         zone_name: zone.name.clone(),
         note: if available {
-            "Zone catch profile uses calculator default session settings. Groups follow the current calculator ordering, and rows show each fish or item's in-group droprate.".to_string()
+            if has_presence_only_rows && !fish_group_chart.available {
+                "Presence support is available for this zone, but calculator group rates are unavailable. Rows without a resolved group or drop rate stay listed, using Unassigned when no slot is known.".to_string()
+            } else if has_presence_only_rows {
+                "Zone catch profile uses calculator default session settings. Rows with unresolved group share or drop-rate support stay visible in the list until their structure is filled in.".to_string()
+            } else {
+                "Zone catch profile uses calculator default session settings. Groups follow the current calculator ordering, and rows show each fish or item's in-group droprate.".to_string()
+            }
         } else {
             "Expected zone loot data is unavailable for this zone.".to_string()
         },
         profile_label: "Calculator defaults".to_string(),
-        groups: rows
-            .iter()
-            .map(|row| ZoneLootSummaryGroupRow {
-                slot_idx: group_slot_by_label.get(row.label).copied().unwrap_or(0),
-                label: row.label.to_string(),
-                fill_color: row.fill_color.to_string(),
-                stroke_color: row.stroke_color.to_string(),
-                text_color: row.text_color.to_string(),
-            })
-            .collect(),
-        species_rows: visible_species_rows
-            .iter()
-            .map(|row| ZoneLootSummarySpeciesRow {
-                slot_idx: row.slot_idx,
-                group_label: row.group_label.to_string(),
-                label: row.label.clone(),
-                icon_url: row.icon_url.clone(),
-                icon_grade_tone: row.icon_grade_tone.clone(),
-                fill_color: row.fill_color.to_string(),
-                stroke_color: row.stroke_color.to_string(),
-                text_color: row.text_color.to_string(),
-                drop_rate_text: row.drop_rate_text.clone(),
-                drop_rate_source_kind: row.drop_rate_source_kind.clone(),
-                drop_rate_tooltip: row.drop_rate_tooltip.clone(),
-                presence_text: row.presence_text.clone(),
-                presence_source_kind: row.presence_source_kind.clone(),
-                presence_tooltip: row.presence_tooltip.clone().unwrap_or_default(),
-            })
-            .collect(),
+        groups: summary_groups,
+        species_rows,
     }
 }
 
@@ -5660,16 +5803,16 @@ mod tests {
     use super::{
         base_price_for_species, buff_category_label, build_pet_value_aliases,
         default_reset_signals_patch_map, derive_fish_group_chart, derive_loot_chart,
-        derive_target_fish_summary, discard_grade_enabled, filtered_loot_flow_rows,
-        get_calculator_datastar_init, get_calculator_datastar_option_search,
-        get_calculator_datastar_zone_search, init_signals_patch_map, loot_species_evidence_text,
-        loot_species_presence_source_kind, loot_species_presence_text,
-        loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
-        normalize_named_array, normalize_signals, parse_calculator_signals_value,
-        pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
-        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
-        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
-        FishGroupChart, FishGroupChartRow,
+        derive_target_fish_summary, derive_zone_loot_summary_response, discard_grade_enabled,
+        filtered_loot_flow_rows, get_calculator_datastar_init,
+        get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
+        init_signals_patch_map, loot_species_evidence_text, loot_species_presence_source_kind,
+        loot_species_presence_text, loot_species_presence_tooltip, mastery_prize_rate_for_bracket,
+        normalize_lookup_value, normalize_named_array, normalize_signals,
+        parse_calculator_signals_value, pmf_bucket_contains_target, poisson_probability_at_least,
+        post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
+        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
+        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow,
     };
 
     struct MockStore;
@@ -7050,6 +7193,166 @@ mod tests {
         assert_eq!(loot_chart.species_rows[0].label, "Silver Beltfish");
         assert_eq!(loot_flow_rows.len(), 1);
         assert_eq!(loot_flow_rows[0].label, "Prize");
+    }
+
+    #[test]
+    fn derive_loot_chart_skips_presence_only_rows() {
+        let signals = CalculatorSignals::default();
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "0%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![FishGroupChartRow {
+                label: "General",
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 0.0,
+                weight_pct: 0.0,
+                current_share_pct: 100.0,
+            }],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![
+                CalculatorZoneLootEntry {
+                    slot_idx: 1,
+                    item_id: 820001,
+                    name: "Weighted Fish".to_string(),
+                    within_group_rate: 1.0,
+                    ..CalculatorZoneLootEntry::default()
+                },
+                CalculatorZoneLootEntry {
+                    slot_idx: 1,
+                    item_id: 820002,
+                    name: "Presence Only Fish".to_string(),
+                    within_group_rate: 0.0,
+                    evidence: vec![CalculatorZoneLootEvidence {
+                        source_family: "community".to_string(),
+                        claim_kind: "presence".to_string(),
+                        scope: "group".to_string(),
+                        status: Some("confirmed".to_string()),
+                        claim_count: Some(1),
+                        ..CalculatorZoneLootEvidence::default()
+                    }],
+                    ..CalculatorZoneLootEntry::default()
+                },
+            ],
+        };
+
+        let loot_chart = derive_loot_chart(&signals, &data, &fish_group_chart, 100.0, 1.0);
+
+        assert_eq!(loot_chart.species_rows.len(), 1);
+        assert_eq!(loot_chart.species_rows[0].label, "Weighted Fish");
+    }
+
+    #[test]
+    fn zone_loot_summary_keeps_unassigned_presence_only_rows_visible() {
+        let signals = CalculatorSignals {
+            zone: "lake_flondor".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 0,
+                item_id: 820986,
+                name: "Pink Dolphin".to_string(),
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "zone".to_string(),
+                    status: Some("confirmed".to_string()),
+                    claim_count: Some(1),
+                    source_id: Some("manual_community_zone_fish_presence".to_string()),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+        let zone = ZoneEntry {
+            name: Some("Lake Flondor".to_string()),
+            ..ZoneEntry::default()
+        };
+
+        let summary = derive_zone_loot_summary_response(&signals, &data, &zone);
+
+        assert!(summary.available);
+        assert_eq!(summary.groups.len(), 1);
+        assert_eq!(summary.groups[0].slot_idx, 0);
+        assert_eq!(summary.groups[0].label, "Unassigned");
+        assert_eq!(summary.species_rows.len(), 1);
+        assert_eq!(summary.species_rows[0].group_label, "Unassigned");
+        assert_eq!(summary.species_rows[0].drop_rate_text, "");
+        assert!(summary.species_rows[0].presence_text.is_some());
+        assert!(summary.note.contains("Unassigned"));
+    }
+
+    #[test]
+    fn zone_loot_summary_keeps_group_presence_only_rows_visible() {
+        let signals = CalculatorSignals {
+            zone: "edania_longing_lake".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::from([(
+                "edania_longing_lake".to_string(),
+                CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "0,0,0".to_string(),
+                    prize_main_group_key: None,
+                    rare_rate_raw: 0,
+                    high_quality_rate_raw: 0,
+                    general_rate_raw: 1_000_000,
+                    trash_rate_raw: 0,
+                },
+            )]),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 4,
+                item_id: 800123,
+                name: "Leaffish".to_string(),
+                evidence: vec![CalculatorZoneLootEvidence {
+                    source_family: "community".to_string(),
+                    claim_kind: "presence".to_string(),
+                    scope: "group".to_string(),
+                    status: Some("confirmed".to_string()),
+                    claim_count: Some(1),
+                    slot_idx: Some(4),
+                    item_main_group_key: Some(9001),
+                    ..CalculatorZoneLootEvidence::default()
+                }],
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+        let zone = ZoneEntry {
+            name: Some("Edania - Longing Lake".to_string()),
+            ..ZoneEntry::default()
+        };
+
+        let summary = derive_zone_loot_summary_response(&signals, &data, &zone);
+
+        assert!(summary.available);
+        assert_eq!(summary.groups.len(), 1);
+        assert_eq!(summary.groups[0].slot_idx, 4);
+        assert_eq!(summary.groups[0].label, "General");
+        assert_eq!(summary.species_rows.len(), 1);
+        assert_eq!(summary.species_rows[0].group_label, "General");
+        assert_eq!(summary.species_rows[0].drop_rate_text, "");
+        assert!(summary.note.contains("stay visible"));
     }
 
     #[test]

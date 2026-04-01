@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use fishystuff_api::ids::RgbKey;
 use fishystuff_core::fish_icons::parse_fish_icon_asset_id;
@@ -154,6 +154,90 @@ fn community_presence_matches_row(
     true
 }
 
+fn community_presence_slot_idx(
+    meta: &CommunityPresenceMeta,
+    slot_main_group_by_idx: &HashMap<u8, i64>,
+    slot_subgroup_select_rate: &HashMap<(u8, i64), i64>,
+) -> Option<u8> {
+    meta.slot_idx
+        .filter(|slot_idx| *slot_idx > 0)
+        .or_else(|| {
+            meta.item_main_group_key.and_then(|item_main_group_key| {
+                slot_main_group_by_idx
+                    .iter()
+                    .find_map(|(slot_idx, candidate)| {
+                        (*candidate == item_main_group_key).then_some(*slot_idx)
+                    })
+            })
+        })
+        .or_else(|| {
+            meta.subgroup_key.and_then(|subgroup_key| {
+                slot_subgroup_select_rate
+                    .keys()
+                    .find_map(|(slot_idx, candidate)| {
+                        (*candidate == subgroup_key).then_some(*slot_idx)
+                    })
+            })
+        })
+}
+
+fn build_community_presence_evidence(meta: &CommunityPresenceMeta) -> CalculatorZoneLootEvidence {
+    CalculatorZoneLootEvidence {
+        source_family: "community".to_string(),
+        claim_kind: "presence".to_string(),
+        scope: community_presence_scope(meta).to_string(),
+        rate: None,
+        normalized_rate: None,
+        status: Some(meta.support_status.clone()),
+        claim_count: Some(meta.claim_count),
+        source_id: Some(meta.source_id.clone()),
+        slot_idx: meta.slot_idx,
+        item_main_group_key: meta.item_main_group_key,
+        subgroup_key: meta.subgroup_key,
+    }
+}
+
+fn push_ranking_presence_evidence(
+    evidence: &mut Vec<CalculatorZoneLootEvidence>,
+    meta: RankingPresenceMeta,
+    layer_revision_id: &str,
+) {
+    if meta.full_count > 0 {
+        evidence.push(CalculatorZoneLootEvidence {
+            source_family: "ranking".to_string(),
+            claim_kind: "presence".to_string(),
+            scope: "ring_full".to_string(),
+            rate: None,
+            normalized_rate: None,
+            status: Some("observed".to_string()),
+            claim_count: Some(meta.full_count),
+            source_id: Some(format!("layer_revision:{layer_revision_id}")),
+            ..CalculatorZoneLootEvidence::default()
+        });
+    }
+    if meta.partial_count > 0 {
+        evidence.push(CalculatorZoneLootEvidence {
+            source_family: "ranking".to_string(),
+            claim_kind: "presence".to_string(),
+            scope: "ring_partial".to_string(),
+            rate: None,
+            normalized_rate: None,
+            status: Some("observed".to_string()),
+            claim_count: Some(meta.partial_count),
+            source_id: Some(format!("layer_revision:{layer_revision_id}")),
+            ..CalculatorZoneLootEvidence::default()
+        });
+    }
+}
+
+fn zone_loot_slot_sort_key(slot_idx: u8) -> u8 {
+    if slot_idx == 0 {
+        u8::MAX
+    } else {
+        slot_idx
+    }
+}
+
 fn apply_community_guess_weights(
     aggregate_weights: &HashMap<(u8, i32), f64>,
     community_guess_by_key: &HashMap<(u8, i32), CommunityPrizeGuessMeta>,
@@ -294,70 +378,69 @@ impl DoltMySqlStore {
                 (item_main_group_key > 0).then_some((slot_idx, item_main_group_key))
             })
             .collect::<Vec<_>>();
-        if slot_rows.is_empty() {
-            return Ok(Vec::new());
-        }
         let slot_main_group_by_idx = slot_rows.iter().copied().collect::<HashMap<u8, i64>>();
 
-        let main_group_id_csv = slot_rows
-            .iter()
-            .map(|(_, item_main_group_key)| item_main_group_key.to_string())
-            .collect::<Vec<_>>()
-            .join(",");
-        let main_group_query = format!(
-            "SELECT \
-                CAST(ItemMainGroupKey AS SIGNED), \
-                CAST(SelectRate0 AS SIGNED), CAST(ItemSubGroupKey0 AS SIGNED), \
-                CAST(SelectRate1 AS SIGNED), CAST(ItemSubGroupKey1 AS SIGNED), \
-                CAST(SelectRate2 AS SIGNED), CAST(ItemSubGroupKey2 AS SIGNED), \
-                CAST(SelectRate3 AS SIGNED), CAST(ItemSubGroupKey3 AS SIGNED) \
-             FROM item_main_group_table{as_of} \
-             WHERE ItemMainGroupKey IN ({main_group_id_csv})"
-        );
-        let main_group_rows: Vec<(
-            i64,
-            Option<i64>,
-            Option<i64>,
-            Option<i64>,
-            Option<i64>,
-            Option<i64>,
-            Option<i64>,
-            Option<i64>,
-            Option<i64>,
-        )> = conn.query(main_group_query).map_err(db_unavailable)?;
-
         let mut subgroup_options = HashMap::<i64, Vec<(i64, i64)>>::new();
-        for (
-            item_main_group_key,
-            select_rate0,
-            subgroup0,
-            select_rate1,
-            subgroup1,
-            select_rate2,
-            subgroup2,
-            select_rate3,
-            subgroup3,
-        ) in main_group_rows
-        {
-            for (select_rate, subgroup_key) in [
-                (select_rate0, subgroup0),
-                (select_rate1, subgroup1),
-                (select_rate2, subgroup2),
-                (select_rate3, subgroup3),
-            ] {
-                let Some(select_rate) = select_rate else {
-                    continue;
-                };
-                let Some(subgroup_key) = subgroup_key else {
-                    continue;
-                };
-                if select_rate <= 0 || subgroup_key <= 0 {
-                    continue;
+        if !slot_rows.is_empty() {
+            let main_group_id_csv = slot_rows
+                .iter()
+                .map(|(_, item_main_group_key)| item_main_group_key.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            let main_group_query = format!(
+                "SELECT \
+                    CAST(ItemMainGroupKey AS SIGNED), \
+                    CAST(SelectRate0 AS SIGNED), CAST(ItemSubGroupKey0 AS SIGNED), \
+                    CAST(SelectRate1 AS SIGNED), CAST(ItemSubGroupKey1 AS SIGNED), \
+                    CAST(SelectRate2 AS SIGNED), CAST(ItemSubGroupKey2 AS SIGNED), \
+                    CAST(SelectRate3 AS SIGNED), CAST(ItemSubGroupKey3 AS SIGNED) \
+                 FROM item_main_group_table{as_of} \
+                 WHERE ItemMainGroupKey IN ({main_group_id_csv})"
+            );
+            let main_group_rows: Vec<(
+                i64,
+                Option<i64>,
+                Option<i64>,
+                Option<i64>,
+                Option<i64>,
+                Option<i64>,
+                Option<i64>,
+                Option<i64>,
+                Option<i64>,
+            )> = conn.query(main_group_query).map_err(db_unavailable)?;
+
+            for (
+                item_main_group_key,
+                select_rate0,
+                subgroup0,
+                select_rate1,
+                subgroup1,
+                select_rate2,
+                subgroup2,
+                select_rate3,
+                subgroup3,
+            ) in main_group_rows
+            {
+                for (select_rate, subgroup_key) in [
+                    (select_rate0, subgroup0),
+                    (select_rate1, subgroup1),
+                    (select_rate2, subgroup2),
+                    (select_rate3, subgroup3),
+                ] {
+                    let Some(select_rate) = select_rate else {
+                        continue;
+                    };
+                    let Some(subgroup_key) = subgroup_key else {
+                        continue;
+                    };
+                    if select_rate <= 0 || subgroup_key <= 0 {
+                        continue;
+                    }
+                    subgroup_options
+                        .entry(item_main_group_key)
+                        .or_default()
+                        .push((select_rate, subgroup_key));
                 }
-                subgroup_options
-                    .entry(item_main_group_key)
-                    .or_default()
-                    .push((select_rate, subgroup_key));
             }
         }
 
@@ -365,47 +448,45 @@ impl DoltMySqlStore {
             .values()
             .flat_map(|options| options.iter().map(|(_, subgroup_key)| *subgroup_key))
             .collect::<Vec<_>>();
-        if subgroup_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let subgroup_id_csv = subgroup_ids
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(",");
-        let subgroup_query = format!(
-            "SELECT \
-                CAST(ItemSubGroupKey AS SIGNED), \
-                CAST(ItemKey AS SIGNED), \
-                CAST(SelectRate_0 AS SIGNED), \
-                CAST(SelectRate_1 AS SIGNED), \
-                CAST(SelectRate_2 AS SIGNED) \
-             FROM item_sub_group_table{as_of} \
-             WHERE ItemSubGroupKey IN ({subgroup_id_csv})"
-        );
-        let subgroup_rows: Vec<(i64, i64, Option<i64>, Option<i64>, Option<i64>)> =
-            conn.query(subgroup_query).map_err(db_unavailable)?;
-
         let mut subgroup_variants = HashMap::<i64, Vec<(i32, i64)>>::new();
-        for (item_sub_group_key, item_key, select_rate_0, select_rate_1, select_rate_2) in
-            subgroup_rows
-        {
-            let Ok(item_id) = i32::try_from(item_key) else {
-                continue;
-            };
-            if item_id <= 0 {
-                continue;
-            }
-            let select_rate = [select_rate_0, select_rate_1, select_rate_2]
-                .into_iter()
-                .flatten()
-                .find(|select_rate| *select_rate > 0);
-            if let Some(select_rate) = select_rate {
-                subgroup_variants
-                    .entry(item_sub_group_key)
-                    .or_default()
-                    .push((item_id, select_rate));
+        if !subgroup_ids.is_empty() {
+            let subgroup_id_csv = subgroup_ids
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            let subgroup_query = format!(
+                "SELECT \
+                    CAST(ItemSubGroupKey AS SIGNED), \
+                    CAST(ItemKey AS SIGNED), \
+                    CAST(SelectRate_0 AS SIGNED), \
+                    CAST(SelectRate_1 AS SIGNED), \
+                    CAST(SelectRate_2 AS SIGNED) \
+                 FROM item_sub_group_table{as_of} \
+                 WHERE ItemSubGroupKey IN ({subgroup_id_csv})"
+            );
+            let subgroup_rows: Vec<(i64, i64, Option<i64>, Option<i64>, Option<i64>)> =
+                conn.query(subgroup_query).map_err(db_unavailable)?;
+
+            for (item_sub_group_key, item_key, select_rate_0, select_rate_1, select_rate_2) in
+                subgroup_rows
+            {
+                let Ok(item_id) = i32::try_from(item_key) else {
+                    continue;
+                };
+                if item_id <= 0 {
+                    continue;
+                }
+                let select_rate = [select_rate_0, select_rate_1, select_rate_2]
+                    .into_iter()
+                    .flatten()
+                    .find(|select_rate| *select_rate > 0);
+                if let Some(select_rate) = select_rate {
+                    subgroup_variants
+                        .entry(item_sub_group_key)
+                        .or_default()
+                        .push((item_id, select_rate));
+                }
             }
         }
 
@@ -535,22 +616,33 @@ impl DoltMySqlStore {
             &slot_subgroup_select_rate,
             &slot_option_count,
         );
-        if effective_weights.is_empty() {
-            return Ok(Vec::new());
-        }
 
         let mut slot_totals = HashMap::<u8, f64>::new();
         for ((slot_idx, _), weight) in &effective_weights {
             *slot_totals.entry(*slot_idx).or_default() += *weight;
         }
 
-        let item_id_csv = effective_weights
+        let item_ids = effective_weights
             .keys()
             .map(|(_, item_id)| item_id.to_string())
-            .collect::<std::collections::HashSet<_>>()
+            .chain(
+                community_presence_rows
+                    .iter()
+                    .map(|meta| meta.item_id.to_string()),
+            )
+            .chain(
+                ranking_presence_by_item
+                    .keys()
+                    .copied()
+                    .map(|item_id| item_id.to_string()),
+            )
+            .collect::<HashSet<_>>()
             .into_iter()
-            .collect::<Vec<_>>()
-            .join(",");
+            .collect::<Vec<_>>();
+        if item_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let item_id_csv = item_ids.join(",");
         let item_name_expr = match lang {
             FishLang::En => {
                 "COALESCE(NULLIF(TRIM(en.`text`), ''), NULLIF(TRIM(it.`ItemName`), ''))"
@@ -599,6 +691,8 @@ impl DoltMySqlStore {
             item_meta.insert(item_id, (name, icon, grade, vendor_price, is_fish > 0));
         }
 
+        let mut matched_community_presence_indexes = HashSet::<usize>::new();
+        let mut matched_ranking_items = HashSet::<i32>::new();
         let mut entries = effective_weights
             .into_iter()
             .filter_map(|((slot_idx, item_id), weight)| {
@@ -686,10 +780,11 @@ impl DoltMySqlStore {
                     .unwrap_or(&[]);
                 let mut matching_presence = community_presence_rows
                     .iter()
+                    .enumerate()
                     .filter(|meta| {
-                        meta.item_id == item_id
+                        meta.1.item_id == item_id
                             && community_presence_matches_row(
-                                meta,
+                                meta.1,
                                 slot_idx,
                                 item_main_group_key,
                                 subgroup_keys,
@@ -697,58 +792,22 @@ impl DoltMySqlStore {
                     })
                     .collect::<Vec<_>>();
                 matching_presence.sort_by(|left, right| {
-                    community_presence_specificity(right)
-                        .cmp(&community_presence_specificity(left))
+                    community_presence_specificity(right.1)
+                        .cmp(&community_presence_specificity(left.1))
                         .then_with(|| {
-                            community_status_priority(&right.support_status)
-                                .cmp(&community_status_priority(&left.support_status))
+                            community_status_priority(&right.1.support_status)
+                                .cmp(&community_status_priority(&left.1.support_status))
                         })
-                        .then_with(|| right.claim_count.cmp(&left.claim_count))
-                        .then_with(|| left.source_id.cmp(&right.source_id))
+                        .then_with(|| right.1.claim_count.cmp(&left.1.claim_count))
+                        .then_with(|| left.1.source_id.cmp(&right.1.source_id))
                 });
-                for meta in matching_presence {
-                    evidence.push(CalculatorZoneLootEvidence {
-                        source_family: "community".to_string(),
-                        claim_kind: "presence".to_string(),
-                        scope: community_presence_scope(meta).to_string(),
-                        rate: None,
-                        normalized_rate: None,
-                        status: Some(meta.support_status.clone()),
-                        claim_count: Some(meta.claim_count),
-                        source_id: Some(meta.source_id.clone()),
-                        slot_idx: meta.slot_idx,
-                        item_main_group_key: meta.item_main_group_key,
-                        subgroup_key: meta.subgroup_key,
-                        ..CalculatorZoneLootEvidence::default()
-                    });
+                for (index, meta) in matching_presence {
+                    matched_community_presence_indexes.insert(index);
+                    evidence.push(build_community_presence_evidence(meta));
                 }
                 if let Some(meta) = ranking_presence_by_item.get(&item_id).copied() {
-                    if meta.full_count > 0 {
-                        evidence.push(CalculatorZoneLootEvidence {
-                            source_family: "ranking".to_string(),
-                            claim_kind: "presence".to_string(),
-                            scope: "ring_full".to_string(),
-                            rate: None,
-                            normalized_rate: None,
-                            status: Some("observed".to_string()),
-                            claim_count: Some(meta.full_count),
-                            source_id: Some(format!("layer_revision:{layer_revision_id}")),
-                            ..CalculatorZoneLootEvidence::default()
-                        });
-                    }
-                    if meta.partial_count > 0 {
-                        evidence.push(CalculatorZoneLootEvidence {
-                            source_family: "ranking".to_string(),
-                            claim_kind: "presence".to_string(),
-                            scope: "ring_partial".to_string(),
-                            rate: None,
-                            normalized_rate: None,
-                            status: Some("observed".to_string()),
-                            claim_count: Some(meta.partial_count),
-                            source_id: Some(format!("layer_revision:{layer_revision_id}")),
-                            ..CalculatorZoneLootEvidence::default()
-                        });
-                    }
+                    matched_ranking_items.insert(item_id);
+                    push_ranking_presence_evidence(&mut evidence, meta, &layer_revision_id);
                 }
                 Some(CalculatorZoneLootEntry {
                     slot_idx,
@@ -763,9 +822,74 @@ impl DoltMySqlStore {
                 })
             })
             .collect::<Vec<_>>();
+        let mut synthetic_evidence_by_key =
+            HashMap::<(u8, i32), Vec<CalculatorZoneLootEvidence>>::new();
+        let mut synthetic_keys_by_item = HashMap::<i32, Vec<(u8, i32)>>::new();
+        for (index, meta) in community_presence_rows.iter().enumerate() {
+            if matched_community_presence_indexes.contains(&index) {
+                continue;
+            }
+            let slot_idx = community_presence_slot_idx(
+                meta,
+                &slot_main_group_by_idx,
+                &slot_subgroup_select_rate,
+            )
+            .unwrap_or(0);
+            let key = (slot_idx, meta.item_id);
+            synthetic_evidence_by_key
+                .entry(key)
+                .or_default()
+                .push(build_community_presence_evidence(meta));
+            synthetic_keys_by_item
+                .entry(meta.item_id)
+                .or_default()
+                .push(key);
+        }
+        for keys in synthetic_keys_by_item.values_mut() {
+            keys.sort_unstable();
+            keys.dedup();
+        }
+        for (item_id, meta) in ranking_presence_by_item {
+            if matched_ranking_items.contains(&item_id) {
+                continue;
+            }
+            let key = synthetic_keys_by_item
+                .get(&item_id)
+                .filter(|keys| keys.len() == 1)
+                .and_then(|keys| keys.first().copied())
+                .unwrap_or((0, item_id));
+            push_ranking_presence_evidence(
+                synthetic_evidence_by_key.entry(key).or_default(),
+                meta,
+                &layer_revision_id,
+            );
+        }
+        for ((slot_idx, item_id), evidence) in synthetic_evidence_by_key {
+            let (name, icon, grade, vendor_price, is_fish) =
+                item_meta.get(&item_id).cloned().unwrap_or_else(|| {
+                    (
+                        item_id.to_string(),
+                        Some(calculator_loot_item_icon_path(item_id)),
+                        None,
+                        None,
+                        false,
+                    )
+                });
+            entries.push(CalculatorZoneLootEntry {
+                slot_idx,
+                item_id,
+                name,
+                icon,
+                vendor_price,
+                grade,
+                is_fish,
+                within_group_rate: 0.0,
+                evidence,
+            });
+        }
         entries.sort_by(|left, right| {
-            left.slot_idx
-                .cmp(&right.slot_idx)
+            zone_loot_slot_sort_key(left.slot_idx)
+                .cmp(&zone_loot_slot_sort_key(right.slot_idx))
                 .then_with(|| {
                     right
                         .within_group_rate
@@ -785,9 +909,9 @@ mod tests {
 
     use super::{
         apply_community_guess_weights, community_presence_matches_row, community_presence_scope,
-        is_community_guess_source_id, parse_community_prize_guess_notes,
-        parse_community_support_notes, CommunityPresenceMeta, CommunityPrizeGuessMeta,
-        MANUAL_COMMUNITY_GUESS_SOURCE_ID,
+        community_presence_slot_idx, is_community_guess_source_id,
+        parse_community_prize_guess_notes, parse_community_support_notes, CommunityPresenceMeta,
+        CommunityPrizeGuessMeta, MANUAL_COMMUNITY_GUESS_SOURCE_ID,
     };
 
     #[test]
@@ -881,6 +1005,39 @@ mod tests {
             &[11054, 11055]
         ));
         assert!(!community_presence_matches_row(&meta, 1, 9001, &[11055]));
+    }
+
+    #[test]
+    fn community_presence_slot_idx_derives_slot_from_lineage() {
+        let meta = CommunityPresenceMeta {
+            source_id: "community_sheet".to_string(),
+            item_id: 8201,
+            support_status: "confirmed".to_string(),
+            claim_count: 2,
+            slot_idx: None,
+            item_main_group_key: Some(9001),
+            subgroup_key: Some(11054),
+        };
+
+        assert_eq!(
+            community_presence_slot_idx(
+                &meta,
+                &HashMap::from([(4_u8, 9001_i64)]),
+                &HashMap::from([((1_u8, 11054_i64), 1_000_000_i64)]),
+            ),
+            Some(4)
+        );
+        assert_eq!(
+            community_presence_slot_idx(
+                &CommunityPresenceMeta {
+                    item_main_group_key: None,
+                    ..meta.clone()
+                },
+                &HashMap::new(),
+                &HashMap::from([((1_u8, 11054_i64), 1_000_000_i64)]),
+            ),
+            Some(1)
+        );
     }
 
     #[test]
