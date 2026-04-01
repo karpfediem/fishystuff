@@ -5116,3 +5116,70 @@ Next:
 - keep reducing the remaining framework-like responsibility inside `map-page-live.js`
 - or shift focus to the live panel controllers, which are now the larger remaining imperative
   islands on the clean-slate path
+
+## 2026-04-01: extract live map page signal helpers and harden module init ordering
+
+After the module-bootstrap slice, `map-page-live.js` still carried its own exact-patch and
+persist-filter logic. While extracting that into a pure module, a real init-order regression
+showed up:
+
+- `map-page-live` could start after Datastar had already fired the shell `data-init`
+- that left `page.whenRestored()` unresolved
+- `map-app-live` then hung before the bridge mount and the live page stayed stuck at:
+  - `Settings Loading`
+  - `Layers 0`
+
+What changed:
+
+- added a new pure signal helper module:
+  - `site/assets/map/map-page-signals.js`
+  - exports:
+    - `applyMapPageSignalsPatch(...)`
+    - `patchMatchesMapPagePersistFilter(...)`
+    - page-specific exact replacement and persist-filter constants
+- `site/assets/map/map-page-live.js`
+  - now imports the pure signal helpers instead of owning that logic inline
+- added direct tests:
+  - `site/assets/map/map-page-signals.test.mjs`
+- hardened the live shell init path:
+  - `site/assets/map/map-shell.html`
+    - the Datastar init payload is now stored on the shell as `__fishymapInitialSignals`
+      before the `fishymap-live-init` event fires
+  - `site/assets/map/map-page-live.js`
+    - now consumes that sticky init payload on startup if the event was missed
+  - `site/assets/map/map-shell.test.mjs`
+    - updated to cover the sticky init expression
+  - `site/assets/map/map-page-live.test.mjs`
+    - added a regression test for the missed-event path
+
+Why this matters:
+
+- it removes another chunk of signal semantics from `map-page-live.js`
+- it keeps the page bootstrap moving toward thin event wiring plus imported pure helpers
+- it fixes the real init-order race introduced by the module conversion, without reintroducing the
+  old shell-global bootstrap pattern
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-signals.js`
+  - `node --test site/assets/map/map-shell.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-page-signals.test.mjs site/assets/map/map-page-state.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/`
+  - `/map/map-page-live-entry.js`
+  - `/map/map-page-live.js`
+  - `/map/map-page-signals.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Settings Ready`
+  - `Layers 7`
+  - `FishyMapBridge.getCurrentState()` reported:
+    - `ready: true`
+    - `layerCount: 7`
+    - `patchCount: 36`
+
+Next:
+
+- keep collapsing `map-page-live.js` toward pure bootstrap/event wiring
+- then shift attention to the larger imperative islands still left in the live panel controllers

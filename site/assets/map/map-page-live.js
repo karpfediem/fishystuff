@@ -5,158 +5,15 @@ import {
   createPersistedState,
   loadRestoreState,
 } from "./map-page-state.js";
+import {
+  applyMapPageSignalsPatch,
+  patchMatchesMapPagePersistFilter,
+} from "./map-page-signals.js";
 
 export const DATASTAR_SIGNAL_PATCH_EVENT = "datastar-signal-patch";
 export const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 export const FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT = "fishymap-live-bootstrap-request";
 export const FISHYMAP_LIVE_READY_EVENT = "fishymap-live-ready";
-
-const MAP_PERSIST_SIGNAL_FILTER =
-  /^_(?:map_ui\.(?:windowUi|layers(?:\.|$)|search\.(?:query|selectedTerms))|map_bridged\.ui\.(?:diagnosticsOpen|showPoints|showPointIcons|viewMode|pointIconScale)|map_bridged\.filters\.(?:fishIds|zoneRgbs|semanticFieldIdsByLayer|fishFilterTerms|patchId|fromPatchId|toPatchId|layerIdsVisible|layerIdsOrdered|layerOpacities|layerClipMasks|layerWaypointConnectionsVisible|layerWaypointLabelsVisible|layerPointIconsVisible|layerPointIconScales)|map_bookmarks\.entries|map_session(?:\.|$))(?:\.|$)/;
-const EXACT_PATCH_PATHS = Object.freeze([
-  "_map_ui.layers.expandedLayerIds",
-  "_map_ui.layers.hoverFactsVisibleByLayer",
-  "_map_bridged.filters.semanticFieldIdsByLayer",
-  "_map_bridged.filters.layerOpacities",
-  "_map_bridged.filters.layerClipMasks",
-  "_map_bridged.filters.layerWaypointConnectionsVisible",
-  "_map_bridged.filters.layerWaypointLabelsVisible",
-  "_map_bridged.filters.layerPointIconsVisible",
-  "_map_bridged.filters.layerPointIconScales",
-  "_map_runtime.theme",
-  "_map_runtime.view",
-  "_map_runtime.selection",
-  "_map_runtime.catalog",
-  "_map_runtime.statuses",
-  "_map_session.view",
-  "_map_session.selection",
-]);
-
-function cloneJson(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function readObjectPath(root, path) {
-  return String(path ?? "")
-    .split(".")
-    .filter(Boolean)
-    .reduce((current, key) => {
-      if (current && typeof current === "object" && key in current) {
-        return current[key];
-      }
-      return undefined;
-    }, root);
-}
-
-function hasObjectPath(root, path) {
-  if (!root || typeof root !== "object") {
-    return false;
-  }
-  const parts = String(path ?? "").split(".").filter(Boolean);
-  if (!parts.length) {
-    return false;
-  }
-  let current = root;
-  for (const key of parts) {
-    if (!current || typeof current !== "object" || !(key in current)) {
-      return false;
-    }
-    current = current[key];
-  }
-  return true;
-}
-
-function setObjectPath(root, path, value) {
-  if (!root || typeof root !== "object") {
-    return root;
-  }
-  const parts = String(path ?? "").split(".").filter(Boolean);
-  if (!parts.length) {
-    return root;
-  }
-  let current = root;
-  for (const key of parts.slice(0, -1)) {
-    if (!isPlainObject(current[key])) {
-      current[key] = {};
-    }
-    current = current[key];
-  }
-  current[parts[parts.length - 1]] = value;
-  return root;
-}
-
-function mergeObjectPatch(target, patch) {
-  if (!isPlainObject(target) || !isPlainObject(patch)) {
-    return target;
-  }
-  for (const [key, value] of Object.entries(patch)) {
-    if (Array.isArray(value)) {
-      target[key] = cloneJson(value);
-      continue;
-    }
-    if (isPlainObject(value)) {
-      const nextTarget = isPlainObject(target[key]) ? target[key] : {};
-      target[key] = nextTarget;
-      mergeObjectPatch(nextTarget, value);
-      continue;
-    }
-    target[key] = value;
-  }
-  return target;
-}
-
-function applyExactPatchReplacements(signals, patch) {
-  if (!isPlainObject(signals) || !isPlainObject(patch)) {
-    return;
-  }
-  for (const path of EXACT_PATCH_PATHS) {
-    if (!hasObjectPath(patch, path)) {
-      continue;
-    }
-    setObjectPath(signals, path, cloneJson(readObjectPath(patch, path)));
-  }
-}
-
-function applySignalsPatch(signals, patch) {
-  if (!isPlainObject(signals) || !isPlainObject(patch)) {
-    return;
-  }
-  mergeObjectPatch(signals, cloneJson(patch));
-  applyExactPatchReplacements(signals, patch);
-}
-
-function patchMatchesSignalFilter(patch, filter, prefix = "") {
-  if (!isPlainObject(patch)) {
-    return false;
-  }
-  const include = filter?.include && typeof filter.include.test === "function"
-    ? filter.include
-    : null;
-  const exclude = filter?.exclude && typeof filter.exclude.test === "function"
-    ? filter.exclude
-    : null;
-  return Object.entries(patch).some(([key, value]) => {
-    const path = prefix ? `${prefix}.${key}` : key;
-    if (include) {
-      if (include.test(path)) {
-        return true;
-      }
-    } else if (exclude) {
-      if (!exclude.test(path)) {
-        return true;
-      }
-    }
-    return isPlainObject(value) && patchMatchesSignalFilter(value, filter, path);
-  });
-}
-
-function patchMatchesPersistFilter(patch) {
-  return patchMatchesSignalFilter(patch, { include: MAP_PERSIST_SIGNAL_FILTER });
-}
 
 export function createMapPageLive({ globalRef = globalThis } = {}) {
   const state = {
@@ -185,6 +42,15 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   function resolveShell() {
     const shell = globalRef.document?.getElementById?.("map-page-shell");
     return shell && typeof shell.dispatchEvent === "function" ? shell : null;
+  }
+
+  function consumeInitialSignals(shell) {
+    if (!shell || state.uiStateRestored !== false || !("__fishymapInitialSignals" in shell)) {
+      return null;
+    }
+    const signals = shell.__fishymapInitialSignals;
+    delete shell.__fishymapInitialSignals;
+    return signals && typeof signals === "object" ? signals : null;
   }
 
   function ensureShellApi() {
@@ -237,7 +103,7 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     if (!state.uiStateRestored) {
       return;
     }
-    if (!patchMatchesPersistFilter(event?.detail)) {
+    if (!patchMatchesMapPagePersistFilter(event?.detail)) {
       return;
     }
     schedulePersist();
@@ -252,6 +118,9 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   }
 
   function handleLiveInit(event) {
+    if (event?.currentTarget && "__fishymapInitialSignals" in event.currentTarget) {
+      delete event.currentTarget.__fishymapInitialSignals;
+    }
     const signals = event?.detail;
     if (!signals || typeof signals !== "object") {
       return;
@@ -288,9 +157,9 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     if (!liveSignals || !patch || typeof patch !== "object") {
       return;
     }
-    applySignalsPatch(liveSignals, patch);
+    applyMapPageSignalsPatch(liveSignals, patch);
     connect(liveSignals);
-    if (state.uiStateRestored && patchMatchesPersistFilter(patch)) {
+    if (state.uiStateRestored && patchMatchesMapPagePersistFilter(patch)) {
       schedulePersist();
     }
   }
@@ -356,6 +225,10 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     state.shell = resolveShell();
     bindInitListener();
     bindBootstrapRequestListener();
+    const initialSignals = consumeInitialSignals(state.shell);
+    if (initialSignals) {
+      restore(initialSignals);
+    }
   }
 
   return Object.freeze({

@@ -75,6 +75,9 @@ function createDocumentStub(shell = null) {
 function createContext(localStorageInitial = {}, options = {}) {
   const shell = createEventTarget();
   shell.id = "map-page-shell";
+  if (options.initialSignals) {
+    shell.__fishymapInitialSignals = options.initialSignals;
+  }
   const document = createDocumentStub(shell);
   const localStorage = new MemoryStorage(localStorageInitial);
   const sessionStorage = new MemoryStorage(options.sessionStorageInitial || {});
@@ -215,6 +218,22 @@ test("map-page-live restore loads persisted bookmark entries into Datastar signa
   assert.deepEqual(signals._map_bookmarks.entries, persistedBookmarks);
   assert.equal(typeof readyDetail?.signalObject, "function");
   assert.equal(readyDetail.signalObject(), signals);
+});
+
+test("map-page-live consumes shell-sticky initial signals when init event was missed", () => {
+  const signals = defaultSignals();
+  const env = createContext({}, { initialSignals: signals });
+  let readyDetail = null;
+  env.shell.addEventListener(FISHYMAP_LIVE_READY_EVENT, (event) => {
+    readyDetail = event.detail;
+  });
+
+  env.shell.dispatchEvent({ type: FISHYMAP_LIVE_BOOTSTRAP_REQUEST_EVENT });
+
+  assert.equal(typeof readyDetail?.patchSignals, "function");
+  assert.equal(readyDetail.signalObject(), signals);
+  assert.equal(signals._map_ui.windowUi.search.open, true);
+  assert.equal("__fishymapInitialSignals" in env.shell, false);
 });
 
 test("map-page-live restore loads shared fish state without the site-global helper", () => {
