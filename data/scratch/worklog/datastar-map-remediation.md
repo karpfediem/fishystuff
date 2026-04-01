@@ -6015,3 +6015,67 @@ Next:
   - search panel
   - bookmark panel
   - window manager
+
+## 2026-04-01: localize the remaining live panel/window rerender seams
+
+After the previous slices, `map-app-live.js` still knew exactly which UI controllers had to
+rerender after each applied signal patch. That was better than the old global Datastar listener
+model, but it still left the app acting as a repaint switchboard for ordinary shell UI.
+
+What changed:
+
+- `site/assets/map/map-layer-panel-live.js`
+  - now listens to `fishymap:signal-patched`
+  - rerenders itself when `patchTouchesLayerPanelSignals(...)` matches
+- `site/assets/map/map-search-panel-live.js`
+  - now listens to `fishymap:signal-patched`
+  - rerenders itself when `patchTouchesSearchPanelSignals(...)` matches
+- `site/assets/map/map-bookmark-panel-live.js`
+  - now listens to `fishymap:signal-patched`
+  - rerenders itself when `patchTouchesBookmarkSignals(...)` matches
+- `site/assets/map/map-window-manager.js`
+  - now listens to `fishymap:signal-patched`
+  - reapplies managed window positions only when `_map_ui.windowUi` changes
+  - added a small `patchTouchesWindowUi(...)` helper
+- `site/assets/map/map-app-live.js`
+  - no longer imports or routes the layer/search/bookmark/window patch-touch helpers
+  - no longer owns `routeLiveControllerPatch(...)`
+- `site/assets/map/map-app-live.test.mjs`
+  - removed the central fan-out test that no longer reflects the live architecture
+- `site/assets/map/map-window-manager.test.mjs`
+  - now covers `patchTouchesWindowUi(...)`
+
+Why this matters:
+
+- `map-app-live.js` is now closer to its intended role:
+  - bootstrap the page
+  - bridge Bevy runtime state and actions
+  - own persistence and coarse signal projection
+- ordinary shell UI repaint policy now sits with the controllers that own that UI
+- this is closer to the Datastar shape we want:
+  - page owns signals
+  - shell-local applied patch event is the narrow reactive seam
+  - app module does not micromanage every panel redraw
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js site/assets/map/map-layer-panel-live.js site/assets/map/map-search-panel-live.js site/assets/map/map-bookmark-panel-live.js site/assets/map/map-window-manager.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs site/assets/map/map-window-manager.test.mjs site/assets/map/map-page-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for spot-checked live assets:
+  - `/map/map-app-live.js`
+  - `/map/map-layer-panel-live.js`
+  - `/map/map-search-panel-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Layers 7`
+  - no new console errors
+
+Next:
+
+- keep shrinking the remaining framework-like ownership in `map-app-live.js`
+- the biggest remaining imperative islands are now:
+  - `map-info-panel-live.js`
+  - `map-search-panel-live.js` rendering itself imperatively rather than from signal-owned DOM
+  - `map-bookmark-panel-live.js` rendering/selection orchestration

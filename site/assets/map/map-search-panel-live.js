@@ -9,11 +9,13 @@ import {
   buildSearchSelectionRemovalSignalPatch,
   buildSemanticTermLookup,
   fishFilterTermMetadata,
+  patchTouchesSearchPanelSignals,
   resolveSelectedFishFilterTerms,
   resolveSelectedFishIds,
   resolveSelectedSemanticFieldIdsByLayer,
   resolveSelectedZoneRgbs,
 } from "./map-search-state.js";
+import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
 export { patchTouchesSearchPanelSignals } from "./map-search-state.js";
 
@@ -123,6 +125,7 @@ export function createMapSearchPanelController({
   dispatchPatch = dispatchShellSignalPatch,
   zoneCatalog = [],
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
+  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapSearchPanelController requires a shell element");
@@ -292,6 +295,14 @@ export function createMapSearchPanelController({
       }),
     );
   });
+
+  if (listenToSignalPatches) {
+    shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
+      if (patchTouchesSearchPanelSignals(event?.detail || null)) {
+        scheduleRender();
+      }
+    });
+  }
 
   elements.searchWindow.addEventListener("focusout", () => {
     globalThis.setTimeout?.(() => {

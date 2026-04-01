@@ -10,23 +10,12 @@ import {
   DEFAULT_MAP_UI_SIGNAL_STATE,
 } from "./map-signal-contract.js";
 import { parseQuerySignalPatch } from "./map-query-state.js";
-import {
-  createMapBookmarkPanelController,
-  patchTouchesBookmarkSignals,
-} from "./map-bookmark-panel-live.js";
+import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
 import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
 import { createMapInfoPanelController } from "./map-info-panel-live.js";
-import {
-  createMapLayerPanelController,
-  patchTouchesLayerPanelSignals,
-} from "./map-layer-panel-live.js";
-import {
-  createMapPatchPickerController,
-} from "./map-patch-picker-live.js";
-import {
-  createMapSearchPanelController,
-  patchTouchesSearchPanelSignals,
-} from "./map-search-panel-live.js";
+import { createMapLayerPanelController } from "./map-layer-panel-live.js";
+import { createMapPatchPickerController } from "./map-patch-picker-live.js";
+import { createMapSearchPanelController } from "./map-search-panel-live.js";
 import {
   dispatchShellPatchedSignalEvent,
   FISHYMAP_SIGNAL_PATCHED_EVENT,
@@ -123,10 +112,6 @@ function patchTouchesLiveBridgeInputs(patch) {
   );
 }
 
-function patchTouchesWindowUi(patch) {
-  return Boolean(isPlainObject(patch) && isPlainObject(patch._map_ui) && isPlainObject(patch._map_ui.windowUi));
-}
-
 function buildResetUiPatch() {
   return {
     _map_ui: cloneJson(DEFAULT_MAP_UI_SIGNAL_STATE),
@@ -217,27 +202,6 @@ export function createDeferredBridgeStateRefresher({
     },
     cancel,
   });
-}
-
-export function routeLiveControllerPatch({
-  patch,
-  windowManager = null,
-  layerPanel = null,
-  searchPanel = null,
-  bookmarkPanel = null,
-} = {}) {
-  if (windowManager && patchTouchesWindowUi(patch)) {
-    windowManager.scheduleApplyFromSignals();
-  }
-  if (layerPanel && patchTouchesLayerPanelSignals(patch)) {
-    layerPanel.scheduleRender();
-  }
-  if (searchPanel && patchTouchesSearchPanelSignals(patch)) {
-    searchPanel.scheduleRender();
-  }
-  if (bookmarkPanel && patchTouchesBookmarkSignals(patch)) {
-    bookmarkPanel.scheduleRender();
-  }
 }
 
 export async function start() {
@@ -402,13 +366,6 @@ export async function start() {
     const effectivePatch = searchProjectionPatch
       ? combineSignalPatches(patch, searchProjectionPatch)
       : patch;
-    routeLiveControllerPatch({
-      patch: effectivePatch,
-      windowManager,
-      layerPanel,
-      searchPanel,
-      bookmarkPanel,
-    });
     if (searchProjectionPatch) {
       applyInternalSignalPatch(searchProjectionPatch);
     }

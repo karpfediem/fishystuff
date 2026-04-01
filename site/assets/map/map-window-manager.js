@@ -1,4 +1,7 @@
-import { dispatchShellSignalPatch } from "./map-signal-patch.js";
+import {
+  dispatchShellSignalPatch,
+  FISHYMAP_SIGNAL_PATCHED_EVENT,
+} from "./map-signal-patch.js";
 import { normalizeWindowUiState } from "./map-signal-contract.js";
 
 const DRAG_THRESHOLD_PX = 4;
@@ -56,6 +59,17 @@ function currentManagedWindowPosition(shell, part, entry) {
   };
 }
 
+export function patchTouchesWindowUi(patch) {
+  return Boolean(
+    patch &&
+      typeof patch === "object" &&
+      patch._map_ui &&
+      typeof patch._map_ui === "object" &&
+      patch._map_ui.windowUi &&
+      typeof patch._map_ui.windowUi === "object",
+  );
+}
+
 function applyManagedWindowPosition(root, entry) {
   if (isFiniteCoordinate(entry?.x) && isFiniteCoordinate(entry?.y)) {
     root.style.left = `${entry.x}px`;
@@ -78,6 +92,7 @@ export function createMapWindowManager({
   shell,
   getSignals,
   dispatchPatch = dispatchShellSignalPatch,
+  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelectorAll !== "function") {
     throw new Error("createMapWindowManager requires a shell element");
@@ -269,6 +284,13 @@ export function createMapWindowManager({
   globalThis.addEventListener?.("pointerup", handlePointerUp);
   globalThis.addEventListener?.("pointercancel", handlePointerCancel);
   globalThis.addEventListener?.("resize", scheduleApplyFromSignals);
+  if (listenToSignalPatches) {
+    shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
+      if (patchTouchesWindowUi(event?.detail || null)) {
+        scheduleApplyFromSignals();
+      }
+    });
+  }
 
   applyFromSignals();
 

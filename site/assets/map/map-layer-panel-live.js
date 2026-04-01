@@ -1,7 +1,10 @@
 import { FISHYMAP_POINT_ICON_SCALE_MAX, FISHYMAP_POINT_ICON_SCALE_MIN } from "./map-host.js";
 import { nextHoverFactVisibilityByLayer } from "./map-hover-facts.js";
 import { renderLayerStack } from "./map-layer-panel.js";
-import { dispatchShellSignalPatch } from "./map-signal-patch.js";
+import {
+  dispatchShellSignalPatch,
+  FISHYMAP_SIGNAL_PATCHED_EVENT,
+} from "./map-signal-patch.js";
 import {
   buildLayerClipMaskPatch,
   buildLayerOpacityPatch,
@@ -192,6 +195,7 @@ export function createMapLayerPanelController({
   getSignals,
   dispatchPatch = dispatchShellSignalPatch,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
+  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapLayerPanelController requires a shell element");
@@ -370,6 +374,14 @@ export function createMapLayerPanelController({
       scheduleRender();
     }
   });
+
+  if (listenToSignalPatches) {
+    shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
+      if (patchTouchesLayerPanelSignals(event?.detail || null)) {
+        scheduleRender();
+      }
+    });
+  }
 
   container.addEventListener("click", (event) => {
     const settingsButton = event.target.closest("button[data-layer-settings-toggle]");

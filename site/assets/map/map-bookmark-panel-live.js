@@ -1,5 +1,8 @@
 import { renderBookmarkManager } from "./map-bookmark-panel.js";
-import { dispatchShellSignalPatch } from "./map-signal-patch.js";
+import {
+  dispatchShellSignalPatch,
+  FISHYMAP_SIGNAL_PATCHED_EVENT,
+} from "./map-signal-patch.js";
 import {
   buildBookmarkExportMessage,
   buildBookmarkImportMessage,
@@ -20,6 +23,7 @@ import {
   moveBookmarkBefore,
   normalizeBookmarks,
   normalizeSelectedBookmarkIds,
+  patchTouchesBookmarkSignals,
   renameBookmark,
   selectionBookmarkKey,
 } from "./map-bookmark-state.js";
@@ -155,6 +159,7 @@ export function createMapBookmarkPanelController({
   requestAnimationFrameImpl = globalThis.requestAnimationFrame?.bind(globalThis),
   promptImpl = globalThis.prompt?.bind(globalThis),
   confirmImpl = globalThis.confirm?.bind(globalThis),
+  listenToSignalPatches = true,
 } = {}) {
   if (!shell || typeof shell.querySelector !== "function") {
     throw new Error("createMapBookmarkPanelController requires a shell element");
@@ -547,6 +552,14 @@ export function createMapBookmarkPanelController({
       elements.bookmarkImportInput.value = "";
     }
   });
+
+  if (listenToSignalPatches) {
+    shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
+      if (patchTouchesBookmarkSignals(event?.detail || null)) {
+        scheduleRender();
+      }
+    });
+  }
 
   elements.bookmarksList.addEventListener("dragstart", (event) => {
     const handle = event.target.closest("button[data-bookmark-drag][draggable='true']");

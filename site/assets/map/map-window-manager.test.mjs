@@ -5,6 +5,7 @@ import {
   buildWindowUiEntryPatch,
   clampManagedWindowPosition,
   createMapWindowManager,
+  patchTouchesWindowUi,
 } from "./map-window-manager.js";
 
 test("clampManagedWindowPosition keeps windows within the shell bounds", () => {
@@ -56,6 +57,29 @@ test("buildWindowUiEntryPatch normalizes search collapse and coordinates", () =>
       },
     },
   });
+});
+
+test("patchTouchesWindowUi only reacts to window-ui patches", () => {
+  assert.equal(
+    patchTouchesWindowUi({
+      _map_ui: {
+        windowUi: {
+          settings: { open: false },
+        },
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    patchTouchesWindowUi({
+      _map_ui: {
+        search: {
+          open: true,
+        },
+      },
+    }),
+    false,
+  );
 });
 
 class FakeStyle {
