@@ -328,6 +328,8 @@ export function createMapPatchPickerController({
     scheduleRender();
   });
 
+  scheduleRender();
+
   return Object.freeze({
     render,
     scheduleRender,

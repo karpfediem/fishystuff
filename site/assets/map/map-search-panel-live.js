@@ -326,6 +326,8 @@ export function createMapSearchPanelController({
     }, 0);
   });
 
+  scheduleRender();
+
   return Object.freeze({
     render,
     scheduleRender,

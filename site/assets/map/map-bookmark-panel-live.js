@@ -653,6 +653,8 @@ export function createMapBookmarkPanelController({
 
   shell.addEventListener("fishymap:selection-changed", handleSelectionChanged);
 
+  scheduleRender();
+
   return Object.freeze({
     render,
     scheduleRender,

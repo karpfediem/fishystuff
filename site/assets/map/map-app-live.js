@@ -437,14 +437,6 @@ export async function start() {
     }),
   );
   patchSignalsFromBridge(currentBridgeState());
-  windowManager.applyFromSignals();
-  bookmarkPanel.render();
-  hoverTooltip.render();
-  zoneInfoPanel.render();
-  void zoneInfoPanel.refreshZoneLootSummary();
-  patchPicker.render();
-  layerPanel.render();
-  searchPanel.render();
   void loadZoneCatalog().then((zoneCatalog) => {
     dispatchShellZoneCatalogReadyEvent(shell, zoneCatalog);
   });

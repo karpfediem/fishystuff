@@ -416,6 +416,8 @@ export function createMapInfoPanelController({
     void refreshZoneLootSummary();
   });
 
+  scheduleRender();
+
   return Object.freeze({
     handleSignalPatch,
     render,

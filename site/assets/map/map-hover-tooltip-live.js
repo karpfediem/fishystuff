@@ -216,6 +216,8 @@ export function createMapHoverTooltipController({
     scheduleRender();
   });
 
+  render();
+
   return Object.freeze({
     render,
     scheduleRender,

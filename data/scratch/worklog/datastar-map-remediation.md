@@ -6133,3 +6133,59 @@ Next:
 
 - remove the now-dead direct `setZoneCatalog(...)` controller surface
 - keep shrinking `map-app-live.js` toward bridge/bootstrap ownership only
+
+## 2026-04-01: let live controllers self-apply their initial state
+
+Even after localizing patch and catalog fan-out, `map-app-live.js` still manually called each
+controller's initial `render()` after mount. That meant the app still knew too much about which
+controllers needed one-time startup repainting.
+
+What changed:
+
+- controllers now self-apply their current signal state when created:
+  - `site/assets/map/map-patch-picker-live.js`
+  - `site/assets/map/map-hover-tooltip-live.js`
+  - `site/assets/map/map-info-panel-live.js`
+  - `site/assets/map/map-layer-panel-live.js`
+  - `site/assets/map/map-search-panel-live.js`
+  - `site/assets/map/map-bookmark-panel-live.js`
+- `site/assets/map/map-app-live.js`
+  - no longer manually calls:
+    - `windowManager.applyFromSignals()`
+    - `bookmarkPanel.render()`
+    - `hoverTooltip.render()`
+    - `zoneInfoPanel.render()`
+    - `zoneInfoPanel.refreshZoneLootSummary()`
+    - `patchPicker.render()`
+    - `layerPanel.render()`
+    - `searchPanel.render()`
+
+Why this matters:
+
+- the app no longer owns startup repaint policy for those controllers
+- controllers now follow the same contract in both cases:
+  - initialize from current shell state
+  - rerender from shell-local events afterward
+- this further narrows `map-app-live.js` toward:
+  - page/bootstrap sequencing
+  - bridge state/actions
+  - persistence wiring
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-app-live.js site/assets/map/map-patch-picker-live.js site/assets/map/map-bookmark-panel-live.js site/assets/map/map-layer-panel-live.js site/assets/map/map-search-panel-live.js`
+  - `node --test site/assets/map/map-app-live.test.mjs site/assets/map/map-patch-picker-live.test.mjs site/assets/map/map-bookmark-panel-live.test.mjs site/assets/map/map-layer-panel-live.test.mjs site/assets/map/map-info-panel-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for spot-checked live assets:
+  - `/map/map-app-live.js`
+  - `/map/map-patch-picker-live.js`
+- live DevTools reload on `/map/` confirmed:
+  - `Layers 7`
+  - no new console errors
+
+Next:
+
+- localize page persistence so `map-app-live.js` stops manually forwarding shell-applied patches
+- then reassess whether the biggest remaining drift is in persistence/bootstrap or in the still-imperative panel renderers

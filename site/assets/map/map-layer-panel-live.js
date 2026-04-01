@@ -663,6 +663,8 @@ export function createMapLayerPanelController({
     clearDropState();
   });
 
+  scheduleRender();
+
   return Object.freeze({
     render,
     scheduleRender,
