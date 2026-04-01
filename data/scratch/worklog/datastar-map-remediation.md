@@ -6317,3 +6317,74 @@ Next:
 
 - continue replacing the remaining imperative panel islands with component/local-controller patterns
 - best next target remains the Info panel, because it is mostly presentational and state-driven
+
+## 2026-04-01: move the live hover tooltip onto a custom element
+
+The next safe panel after Search was Hover. Unlike the Info panel, it does not overlap with the
+current zone-profile work, but it was still an imperative controller island with:
+
+- canvas pointer listeners
+- shell-local hover event handling
+- shell-local patch rerendering
+- DOM rendering owned by an external controller
+
+What changed:
+
+- introduced a real hover-tooltip custom element:
+  - `site/assets/map/map-hover-tooltip-element.js`
+  - `site/assets/map/map-hover-tooltip-element.test.mjs`
+- the shell now mounts:
+  - `<fishymap-hover-tooltip id="fishymap-hover-tooltip" ...></fishymap-hover-tooltip>`
+  in `site/assets/map/map-shell.html`
+- `site/assets/map/map-app-live.js`
+  - no longer imports or instantiates the old hover controller
+  - now side-effect imports the custom element module instead
+- unpublished the old controller and removed the dead file:
+  - `site/assets/map/map-hover-tooltip-live.js`
+  - `site/assets/map/map-hover-tooltip-live.test.mjs`
+- updated `site/zine.ziggy` to publish only the new hover element asset
+
+Event/ownership model:
+
+- the hover element owns its own imperative seams:
+  - canvas `pointermove`
+  - canvas `pointerleave`
+  - shell `fishymap:hover-changed`
+- like Search, it listens to both patch seams:
+  - native `datastar-signal-patch`
+  - shell-local `fishymap:signal-patched`
+- this keeps it reactive to:
+  - direct Datastar-driven hover fact visibility changes
+  - app-driven runtime/catalog updates
+
+Why this is better:
+
+- the hover tooltip is now another shell-local component instead of app-managed controller glue
+- `map-app-live.js` gets narrower again
+- the cleanup removes dead legacy code instead of leaving another orphaned imperative module behind
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-hover-tooltip-element.js site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-hover-tooltip-element.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for spot-checked live assets:
+  - `/map/map-hover-tooltip-element.js`
+  - `/map/map-app-live.js`
+  - `/map/`
+- live DevTools on `/map/` confirmed:
+  - pointer position is written to the tooltip element
+  - zone catalog + hover payload render:
+    - Zone
+    - RGB
+    - Resources
+  - rows render in layer order
+  - the tooltip no longer depends on the old live controller path
+
+Next:
+
+- the next remaining high-value panel is still the Info panel
+- but that should be resumed only when it does not conflict with the active zone-profile work
+- another safe cleanup option is continuing to remove dead bootstrap/controller surfaces around the remaining live panels

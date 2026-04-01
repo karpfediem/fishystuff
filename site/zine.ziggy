@@ -68,7 +68,7 @@ Multilingual {
     "map/map-runtime-adapter.js",
     "map/map-layer-state.js",
     "map/map-hover-facts.js",
-    "map/map-hover-tooltip-live.js",
+    "map/map-hover-tooltip-element.js",
     "map/map-layer-panel.js",
     "map/map-layer-panel-live.js",
     "map/map-layer-search-effects.js",

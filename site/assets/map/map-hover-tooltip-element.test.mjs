@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createMapHoverTooltipController } from "./map-hover-tooltip-live.js";
+import { DATASTAR_SIGNAL_PATCH_EVENT } from "../js/datastar-signals.js";
+import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
 const originalHTMLElement = globalThis.HTMLElement;
+const originalDocument = globalThis.document;
 
 class FakeStyle {
   constructor() {
@@ -23,19 +25,36 @@ class FakeElement extends EventTarget {
     this.innerHTML = "";
     this.dataset = {};
     this.style = new FakeStyle();
+    this.id = "";
     this._queryMap = new Map();
+    this._closestMap = new Map();
   }
 
   setQuery(selector, element) {
     this._queryMap.set(selector, element);
   }
 
+  setClosest(selector, element) {
+    this._closestMap.set(selector, element);
+  }
+
   querySelector(selector) {
     return this._queryMap.get(selector) || null;
   }
-}
 
-globalThis.HTMLElement = FakeElement;
+  closest(selector) {
+    return this._closestMap.get(selector) || null;
+  }
+
+  replaceChildren(...children) {
+    this._queryMap.clear();
+    for (const child of children) {
+      if (child?.id) {
+        this._queryMap.set(`#${child.id}`, child);
+      }
+    }
+  }
+}
 
 class FakePointerEvent extends Event {
   constructor(type, init = {}) {
@@ -45,15 +64,11 @@ class FakePointerEvent extends Event {
   }
 }
 
-function createShell() {
-  const shell = new FakeElement();
-  const canvas = new FakeElement();
-  const tooltip = new FakeElement();
-  const layers = new FakeElement();
-  shell.setQuery("#bevy", canvas);
-  shell.setQuery("#fishymap-hover-tooltip", tooltip);
-  shell.setQuery("#fishymap-hover-layers", layers);
-  return { shell, canvas, tooltip, layers };
+function createDocumentStub() {
+  const document = new EventTarget();
+  document.createElement = () => new FakeElement();
+  document.getElementById = () => null;
+  return document;
 }
 
 function createSignals() {
@@ -136,16 +151,46 @@ function hoverPayload() {
   };
 }
 
-test("createMapHoverTooltipController renders ordered visible hover facts only", () => {
-  const { shell, canvas, tooltip, layers } = createShell();
-  const signals = createSignals();
-  const controller = createMapHoverTooltipController({
-    shell,
-    getSignals: () => signals,
-    canvas,
-    requestAnimationFrameImpl: null,
-    listenToSignalPatches: false,
-  });
+async function loadModule() {
+  globalThis.HTMLElement = FakeElement;
+  globalThis.document = createDocumentStub();
+  return import(`./map-hover-tooltip-element.js?test=${Date.now()}-${Math.random()}`);
+}
+
+function createShellAndTooltip(FishyMapHoverTooltipElement) {
+  const shell = new FakeElement();
+  const canvas = new FakeElement();
+  const tooltip = new FishyMapHoverTooltipElement();
+  tooltip.id = "fishymap-hover-tooltip";
+  tooltip.setClosest("#map-page-shell", shell);
+  shell.setQuery("#bevy", canvas);
+  return { shell, canvas, tooltip };
+}
+
+test("registerFishyMapHoverTooltipElement defines the custom element once", async () => {
+  const { registerFishyMapHoverTooltipElement } = await loadModule();
+  const registry = {
+    definitions: new Map(),
+    get(name) {
+      return this.definitions.get(name) || null;
+    },
+    define(name, constructor) {
+      this.definitions.set(name, constructor);
+    },
+  };
+
+  assert.equal(registerFishyMapHoverTooltipElement(registry), true);
+  assert.equal(registerFishyMapHoverTooltipElement(registry), true);
+  assert.equal(registry.definitions.size, 1);
+  assert.ok(registry.get("fishymap-hover-tooltip"));
+});
+
+test("FishyMapHoverTooltipElement renders ordered visible hover facts only", async () => {
+  const { FishyMapHoverTooltipElement } = await loadModule();
+  const { shell, canvas, tooltip } = createShellAndTooltip(FishyMapHoverTooltipElement);
+  shell.__fishymapLiveSignals = createSignals();
+
+  tooltip.connectedCallback();
   shell.dispatchEvent(
     new CustomEvent(FISHYMAP_ZONE_CATALOG_READY_EVENT, {
       detail: {
@@ -163,6 +208,7 @@ test("createMapHoverTooltipController renders ordered visible hover facts only",
   );
   shell.dispatchEvent(new CustomEvent("fishymap:hover-changed", { detail: hoverPayload() }));
 
+  const layers = tooltip.querySelector("#fishymap-hover-layers");
   assert.equal(tooltip.hidden, false);
   assert.equal(layers.hidden, false);
   assert.match(layers.innerHTML, /Valencia Sea - Depth 5/);
@@ -174,34 +220,28 @@ test("createMapHoverTooltipController renders ordered visible hover facts only",
   );
 });
 
-test("createMapHoverTooltipController hides the tooltip on pointerleave", () => {
-  const { shell, canvas, tooltip } = createShell();
-  const controller = createMapHoverTooltipController({
-    shell,
-    getSignals: () => createSignals(),
-    canvas,
-    requestAnimationFrameImpl: null,
-    listenToSignalPatches: false,
-  });
+test("FishyMapHoverTooltipElement hides the tooltip on pointerleave", async () => {
+  const { FishyMapHoverTooltipElement } = await loadModule();
+  const { shell, canvas, tooltip } = createShellAndTooltip(FishyMapHoverTooltipElement);
+  shell.__fishymapLiveSignals = createSignals();
 
+  tooltip.connectedCallback();
   canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 10, clientY: 20 }));
   shell.dispatchEvent(new CustomEvent("fishymap:hover-changed", { detail: hoverPayload() }));
   assert.equal(tooltip.hidden, false);
 
   canvas.dispatchEvent(new Event("pointerleave"));
   assert.equal(tooltip.hidden, true);
-  controller.render();
+  tooltip.render();
 });
 
-test("createMapHoverTooltipController rerenders on shell-local applied patch events", () => {
-  const { shell, canvas, layers } = createShell();
+test("FishyMapHoverTooltipElement rerenders on native and shell-local patch events", async () => {
+  const { FishyMapHoverTooltipElement } = await loadModule();
+  const { shell, canvas, tooltip } = createShellAndTooltip(FishyMapHoverTooltipElement);
   const signals = createSignals();
-  createMapHoverTooltipController({
-    shell,
-    getSignals: () => signals,
-    canvas,
-    requestAnimationFrameImpl: null,
-  });
+  shell.__fishymapLiveSignals = signals;
+
+  tooltip.connectedCallback();
   shell.dispatchEvent(
     new CustomEvent(FISHYMAP_ZONE_CATALOG_READY_EVENT, {
       detail: {
@@ -212,11 +252,13 @@ test("createMapHoverTooltipController rerenders on shell-local applied patch eve
 
   canvas.dispatchEvent(new FakePointerEvent("pointermove", { bubbles: true, clientX: 10, clientY: 20 }));
   shell.dispatchEvent(new CustomEvent("fishymap:hover-changed", { detail: hoverPayload() }));
+
+  const layers = tooltip.querySelector("#fishymap-hover-layers");
   assert.doesNotMatch(layers.innerHTML, /\(R430\|Hakoven Islands\)/);
 
   signals._map_ui.layers.hoverFactsVisibleByLayer.regions.origin_region = true;
-  shell.dispatchEvent(
-    new CustomEvent("fishymap:signal-patched", {
+  globalThis.document.dispatchEvent(
+    new CustomEvent(DATASTAR_SIGNAL_PATCH_EVENT, {
       detail: {
         _map_ui: {
           layers: {
@@ -232,8 +274,30 @@ test("createMapHoverTooltipController rerenders on shell-local applied patch eve
   );
 
   assert.match(layers.innerHTML, /\(R430\|Hakoven Islands\)/);
+
+  signals._map_runtime.catalog.layers = [
+    { layerId: "region_groups", displayOrder: 20 },
+    { layerId: "zone_mask", displayOrder: 30 },
+    { layerId: "regions", displayOrder: 40 },
+  ];
+  shell.dispatchEvent(
+    new CustomEvent(FISHYMAP_SIGNAL_PATCHED_EVENT, {
+      detail: {
+        _map_runtime: {
+          catalog: {
+            layers: signals._map_runtime.catalog.layers,
+          },
+        },
+      },
+    }),
+  );
+
+  assert.ok(
+    layers.innerHTML.indexOf("(RG212|Arehaza)") < layers.innerHTML.indexOf("Valencia Sea - Depth 5"),
+  );
 });
 
 process.on("exit", () => {
   globalThis.HTMLElement = originalHTMLElement;
+  globalThis.document = originalDocument;
 });
