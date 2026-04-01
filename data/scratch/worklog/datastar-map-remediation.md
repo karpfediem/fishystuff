@@ -4439,3 +4439,83 @@ Next:
   2D render path again
 - check whether build completion/ready latency for `regions` / `region_groups` needs a separate
   follow-up, or whether it simply reflects the expected chunked vector build budget
+
+## 2026-04-01: semantic vector filtering and attachment clipping moved forward again
+
+Observed blockers:
+
+- the clean-slate Datastar search projection was already correct:
+  - `_map_ui.search.selectedTerms`
+  - `_map_bridged.filters.semanticFieldIdsByLayer`
+  were updating as expected on the live shell
+- but `region_groups` semantic filtering still failed in practice because the local layer catalog
+  was using the wrong vector feature id property:
+  - `feature_id_property = "id"`
+  - the actual GeoJSON uses `rg`
+- after fixing that, vector builds could still reuse stale cached geometry when attachment-based
+  clip masks changed, because the vector cache revision ignored clip-mask state entirely
+- while adding direct vector-mask clipping coverage, another bug became clear:
+  vector clip masks treated “outside the mask geometry” as unknown instead of `false`, so outside
+  triangles would survive clipping
+
+What changed:
+
+- `map/fishystuff_ui_bevy/src/map/layers/catalog.rs`
+  - `region_groups` now uses `feature_id_property = Some("rg")`
+  - added a regression test proving the catalog emits the correct feature id property
+- `map/fishystuff_ui_bevy/src/plugins/vector_layers.rs`
+  - vector cache revisions now include a clip-mask state revision
+  - visible-cache keys now include the same clip-mask revision, so attachment changes and mask
+    readiness changes invalidate stale cached vector geometry
+  - added a direct regression test for revision suffixing:
+    - `...|clip:<revision>`
+  - added a direct regression test proving vector-mask clipping drops outside triangles
+- `map/fishystuff_ui_bevy/src/map/raster/cache/filters/clip_mask/sample.rs`
+  - vector-mask sampling now returns `Some(false)` when a sampled point lies outside the mask
+    geometry, instead of returning `None`
+- `map/fishystuff_ui_bevy/src/map/raster/cache/filters/*`
+  - widened the internal clip-mask helper visibility so vector-layer code can reuse the same
+    mask-sampling and clip-state-revision logic as the raster path
+
+Validation:
+
+- Rust validation passed:
+  - `cargo check -p fishystuff_ui_bevy`
+  - `cargo test --offline -p fishystuff_ui_bevy map::layers::catalog::tests::region_group_vector_layer_filters_by_region_group_id -- --exact`
+  - `cargo test --offline -p fishystuff_ui_bevy plugins::vector_layers::tests::pending_vector_builds_keep_a_small_progress_budget_when_globally_exhausted -- --exact`
+  - `cargo test --offline -p fishystuff_ui_bevy plugins::vector_layers::tests::effective_revision_changes_when_clip_mask_revision_changes -- --exact`
+  - `cargo test --offline -p fishystuff_ui_bevy plugins::vector_layers::tests::clip_vector_chunk_against_vector_mask_drops_outside_triangles -- --exact`
+- rebuilt the runtime:
+  - `./tools/scripts/build_map.sh`
+- browser validation also passed through the existing clean-slate harnesses:
+  - `bash tools/scripts/map-browser-smoke.sh /tmp/map-browser-smoke.current.json`
+  - `python3 tools/scripts/map_browser_profile.py vector_region_groups_dom_toggle --output-json /tmp/map-vector-region-groups-dom-toggle.current.json`
+- live DevTools checks on a fresh isolated `/map/` page confirmed:
+  - semantic terms still project correctly from the clean-slate shell into `_map_bridged`
+  - live bridge input includes attachment clip masks such as:
+    - `region_groups -> zone_mask`
+  - the fresh MCP page still needs a follow-up for vector `fetching/building` completion timing,
+    which appears separate from the search-projection and clip-revision bugs fixed here
+  - the heavier `vector_region_groups_enable` profiler scenario still hit Chromium shared-image /
+    startup-resource issues in this environment before `ready`, so that specific scenario remains
+    noisy as a live signal here
+
+Why this matters:
+
+- semantic filters now target the correct region-group ids
+- attachment clipping is no longer vulnerable to stale cached vector meshes
+- vector clip masks now have the correct boolean semantics:
+  - inside = `true`
+  - outside = `false`
+- this keeps the remediation aligned with the intended model:
+  - Datastar owns durable page state and attachment intent
+  - the runtime consumes a small bridged contract
+  - clipping behavior is determined by layer attachment, not by ad hoc frontend glue
+
+Next:
+
+- continue live validation on the fresh clean-slate page until `regions` / `region_groups`
+  reliably reach `ready` after semantic term and attachment changes
+- once that readiness path is stable, validate the user-facing behavior for:
+  - semantic filtering of `regions` / `region_groups`
+  - attachment clipping of those vector layers against `zone_mask`

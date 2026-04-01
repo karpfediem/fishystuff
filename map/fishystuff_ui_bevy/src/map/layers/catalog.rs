@@ -323,7 +323,7 @@ fn build_local_layer_spec(
             "rg-meta-v1",
             "/region_groups/{version}.geojson",
             "rg-v1",
-            Some("id"),
+            Some("rg"),
             Some("c"),
         ),
         AvailableLayerTemplate::Regions => build_vector_field_layer(
@@ -567,5 +567,30 @@ mod tests {
         assert_eq!(layers.len(), 1);
         assert_eq!(layers[0].kind, LayerKind::Waypoints);
         assert!(layers[0].waypoint_source.is_none());
+    }
+
+    #[test]
+    fn region_group_vector_layer_filters_by_region_group_id() {
+        let (_, layers) = build_local_layer_specs(
+            &[AvailableLayerDefinition {
+                layer_id: "region_groups".to_string(),
+                name: "Region Groups".to_string(),
+                template: AvailableLayerTemplate::RegionGroups,
+                visible_default: false,
+                opacity_default: 0.5,
+                z_base: 30.0,
+                display_order: 30,
+            }],
+            Some("v1"),
+        );
+
+        assert_eq!(layers.len(), 1);
+        assert_eq!(
+            layers[0]
+                .vector_source
+                .as_ref()
+                .and_then(|source| source.feature_id_property.as_deref()),
+            Some("rg")
+        );
     }
 }

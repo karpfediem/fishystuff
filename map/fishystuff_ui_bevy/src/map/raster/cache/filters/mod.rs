@@ -8,7 +8,7 @@ use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
-use self::clip_mask::clip_mask_state_revision;
+pub(crate) use self::clip_mask::{clip_mask_allows_world_point, clip_mask_state_revision};
 use self::compose::{
     compose_raster_visuals_in_place, restore_rgba_in_place, update_hover_highlight_in_place,
     RasterVisualComposeContext,

@@ -3,7 +3,7 @@ use crate::map::layers::{
 };
 use crate::plugins::points::EvidenceZoneFilter;
 
-pub(in crate::map::raster::cache::filters) fn clip_mask_state_revision(
+pub(crate) fn clip_mask_state_revision(
     layer_registry: &LayerRegistry,
     layer_runtime: &LayerRuntime,
     clip_mask_layer: Option<LayerId>,

@@ -18,6 +18,7 @@ mod filters;
 mod render;
 
 pub(crate) use filters::VisualFilterContext;
+pub(crate) use filters::{clip_mask_allows_world_point, clip_mask_state_revision};
 pub(crate) use render::loaded::{RasterLoadedAssets, RasterLoadedContext};
 pub(crate) use render::visibility::VisibilityUpdateContext;
 

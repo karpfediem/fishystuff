@@ -11,7 +11,7 @@ use crate::plugins::vector_layers::VectorLayerRuntime;
 
 use super::super::super::RasterTileCache;
 
-pub(in crate::map::raster::cache::filters) fn clip_mask_allows_world_point(
+pub(crate) fn clip_mask_allows_world_point(
     mask_layer_id: crate::map::layers::LayerId,
     world_point: WorldPoint,
     layer_registry: &crate::map::layers::LayerRegistry,
@@ -135,9 +135,11 @@ fn sample_vector_clip_mask(
     let source = layer.vector_source.as_ref()?;
     let revision = resolved_vector_revision_for_clip_mask(source, registry_map_version_id);
     let bundle = vector_runtime.finished.get_ref(&(layer.id, revision))?;
-    bundle
-        .sample_rgb(world_point.x as f32, world_point.z as f32)
-        .map(|rgba| rgba[3] > 0)
+    Some(
+        bundle
+            .sample_rgb(world_point.x as f32, world_point.z as f32)
+            .is_some_and(|rgba| rgba[3] > 0),
+    )
 }
 
 fn resolved_vector_revision_for_clip_mask(

@@ -4,23 +4,33 @@ use async_channel::TryRecvError;
 use bevy::ecs::system::SystemParam;
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
+use bevy::window::RequestRedraw;
 
 use crate::config::{
     VECTOR_FINISHED_CACHE_MAX, VECTOR_GLOBAL_BUILD_BUDGET_MS, VECTOR_MAX_BUILD_MS_PER_FRAME,
     VECTOR_MAX_CHUNK_TRIANGLES, VECTOR_MAX_CHUNK_VERTICES, VECTOR_MAX_FEATURES_PER_FRAME,
 };
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{
     LayerId, LayerRegistry, LayerRuntime, LayerRuntimeState, LayerVectorStatus, VectorSourceSpec,
 };
+use crate::map::raster::cache::{clip_mask_allows_world_point, clip_mask_state_revision};
+use crate::map::raster::RasterTileCache;
 use crate::map::spaces::world::MapToWorld;
+use crate::map::spaces::WorldPoint;
 use crate::map::vector::build::{
     advance_job, begin_fetch, finalize_job, parse_into_job, revision_matches, state_revision,
     state_stats, state_status, AdvanceResult, VectorBuildLimits, VectorBuildState,
 };
-use crate::map::vector::cache::{VectorFinishedCache, VectorLayerStats};
+use crate::map::vector::cache::{
+    BuiltVectorChunk, BuiltVectorGeometry, VectorFinishedCache, VectorLayerStats,
+};
 use crate::map::vector::render::{spawn_vector_meshes, VECTOR_3D_BASE_Y};
 use crate::plugins::api::SemanticFieldFilterState;
+use crate::plugins::points::EvidenceZoneFilter;
+
+const VECTOR_MIN_PROGRESS_BUDGET_MS: f64 = 0.25;
 
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct VectorBuildConfig {
@@ -87,6 +97,10 @@ impl Plugin for VectorLayersPlugin {
             .add_systems(
                 Update,
                 update_vector_layers.run_if(vector_layers_need_update),
+            )
+            .add_systems(
+                Update,
+                request_redraw_while_vector_pending.after(update_vector_layers),
             );
     }
 }
@@ -174,9 +188,11 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         .collect();
     let visible_cache_keys = collect_visible_cache_keys(
         registry,
+        layer_runtime,
         &active_by_layer,
         map_version_id,
         &update.semantic_filter,
+        &update.evidence_zone_filter,
     );
     for evicted in vector_runtime
         .finished
@@ -186,6 +202,13 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
     }
 
     for layer in registry.ordered() {
+        let clip_mask_layer_id = layer_runtime.clip_mask_layer(layer.id);
+        let clip_mask_revision = clip_mask_state_revision(
+            registry,
+            layer_runtime,
+            clip_mask_layer_id,
+            &update.evidence_zone_filter,
+        );
         let Some(runtime_state) = layer_runtime.get_mut(layer.id) else {
             continue;
         };
@@ -222,7 +245,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             .semantic_filter
             .field_ids_for_layer(layer.key.as_str())
             .to_vec();
-        let revision = effective_revision(&source, &selected_field_ids);
+        let revision = effective_revision(&source, &selected_field_ids, clip_mask_revision);
         invalidate_non_active_revisions(vector_runtime, layer.id, &revision, &mut commands);
 
         hide_non_active_finished(
@@ -331,10 +354,10 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
                 let global_remaining_ms = (build_config.global_build_budget_ms - spent_ms).max(0.0);
                 let limits = VectorBuildLimits {
                     max_features_per_frame: build_config.max_features_per_frame.max(1),
-                    max_build_ms_per_frame: build_config
-                        .max_build_ms_per_frame
-                        .min(global_remaining_ms)
-                        .max(0.0),
+                    max_build_ms_per_frame: effective_build_budget_ms(
+                        build_config.max_build_ms_per_frame,
+                        global_remaining_ms,
+                    ),
                     max_chunk_vertices: build_config.max_chunk_vertices.max(1),
                     max_chunk_triangles: build_config.max_chunk_triangles.max(1),
                 };
@@ -347,7 +370,15 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
                         Ok(AdvanceResult::InProgress) => VectorBuildState::Building { job },
                         Ok(AdvanceResult::Complete) => {
                             let revision = job.revision().to_string();
-                            let geometry = finalize_job(job, limits);
+                            let geometry = maybe_clip_built_geometry(
+                                finalize_job(job, limits),
+                                clip_mask_layer_id,
+                                registry,
+                                &update.exact_lookups,
+                                &update.raster_cache,
+                                vector_runtime,
+                                &update.evidence_zone_filter,
+                            );
                             let bundle = spawn_vector_meshes(
                                 &mut commands,
                                 meshes,
@@ -407,6 +438,27 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
     }
 }
 
+fn request_redraw_while_vector_pending(
+    vector_runtime: Res<'_, VectorLayerRuntime>,
+    mut request_redraw: MessageWriter<'_, RequestRedraw>,
+) {
+    if vector_runtime.has_pending_work() {
+        request_redraw.write(RequestRedraw);
+    }
+}
+
+fn effective_build_budget_ms(max_build_ms_per_frame: f64, global_remaining_ms: f64) -> f64 {
+    let capped_max = max_build_ms_per_frame.max(0.0);
+    if capped_max <= 0.0 {
+        return 0.0;
+    }
+    let remaining = global_remaining_ms.max(0.0);
+    if remaining > 0.0 {
+        return capped_max.min(remaining);
+    }
+    capped_max.min(VECTOR_MIN_PROGRESS_BUDGET_MS)
+}
+
 fn should_activate_vector_layer(
     _layer: &crate::map::layers::LayerSpec,
     layer_visible: bool,
@@ -432,6 +484,153 @@ fn should_render_vector_layer(
 ) -> bool {
     let _ = layer;
     layer_visible && matches!(view_mode, ViewMode::Map2D | ViewMode::Terrain3D)
+}
+
+fn maybe_clip_built_geometry(
+    geometry: BuiltVectorGeometry,
+    clip_mask_layer_id: Option<LayerId>,
+    layer_registry: &LayerRegistry,
+    exact_lookups: &ExactLookupCache,
+    raster_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    evidence_zone_filter: &EvidenceZoneFilter,
+) -> BuiltVectorGeometry {
+    let Some(mask_layer_id) = clip_mask_layer_id else {
+        return geometry;
+    };
+
+    let mut chunks = Vec::with_capacity(geometry.chunks.len());
+    for chunk in geometry.chunks {
+        let Some(clipped_chunk) = clip_vector_chunk_against_mask(
+            chunk,
+            mask_layer_id,
+            layer_registry,
+            exact_lookups,
+            raster_cache,
+            vector_runtime,
+            evidence_zone_filter,
+        ) else {
+            continue;
+        };
+        chunks.push(clipped_chunk);
+    }
+
+    let vertex_count = chunks
+        .iter()
+        .map(|chunk| chunk.positions.len() as u32)
+        .sum::<u32>();
+    let triangle_count = chunks
+        .iter()
+        .map(|chunk| (chunk.indices.len() / 3) as u32)
+        .sum::<u32>();
+    let mesh_count = chunks.len() as u32;
+    let chunked_bucket_count = if chunks.len() > 1 {
+        chunks.len() as u32
+    } else {
+        0
+    };
+
+    BuiltVectorGeometry {
+        chunks,
+        hover_features: geometry.hover_features,
+        stats: VectorLayerStats {
+            vertex_count,
+            triangle_count,
+            mesh_count,
+            chunked_bucket_count,
+            ..geometry.stats
+        },
+    }
+}
+
+fn clip_vector_chunk_against_mask(
+    chunk: BuiltVectorChunk,
+    mask_layer_id: LayerId,
+    layer_registry: &LayerRegistry,
+    exact_lookups: &ExactLookupCache,
+    raster_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    evidence_zone_filter: &EvidenceZoneFilter,
+) -> Option<BuiltVectorChunk> {
+    let mut positions = Vec::new();
+    let mut vertex_colors = Vec::new();
+    let mut indices = Vec::new();
+
+    for triangle in chunk.indices.chunks_exact(3) {
+        let Some(a) = chunk.positions.get(triangle[0] as usize).copied() else {
+            continue;
+        };
+        let Some(b) = chunk.positions.get(triangle[1] as usize).copied() else {
+            continue;
+        };
+        let Some(c) = chunk.positions.get(triangle[2] as usize).copied() else {
+            continue;
+        };
+        let centroid = WorldPoint::new(
+            (a[0] as f64 + b[0] as f64 + c[0] as f64) / 3.0,
+            (a[1] as f64 + b[1] as f64 + c[1] as f64) / 3.0,
+        );
+        let allowed = clip_mask_allows_world_point(
+            mask_layer_id,
+            centroid,
+            layer_registry,
+            exact_lookups,
+            raster_cache,
+            vector_runtime,
+            evidence_zone_filter,
+            layer_registry.map_version_id(),
+        );
+        if matches!(allowed, Some(false)) {
+            continue;
+        }
+
+        let base_index = positions.len() as u32;
+        positions.extend([a, b, c]);
+        vertex_colors.extend([
+            chunk
+                .vertex_colors
+                .get(triangle[0] as usize)
+                .copied()
+                .unwrap_or(chunk.color_rgba),
+            chunk
+                .vertex_colors
+                .get(triangle[1] as usize)
+                .copied()
+                .unwrap_or(chunk.color_rgba),
+            chunk
+                .vertex_colors
+                .get(triangle[2] as usize)
+                .copied()
+                .unwrap_or(chunk.color_rgba),
+        ]);
+        indices.extend([base_index, base_index + 1, base_index + 2]);
+    }
+
+    if positions.is_empty() {
+        return None;
+    }
+
+    let mut min_world_x = f32::INFINITY;
+    let mut max_world_x = f32::NEG_INFINITY;
+    let mut min_world_z = f32::INFINITY;
+    let mut max_world_z = f32::NEG_INFINITY;
+    for position in &positions {
+        min_world_x = min_world_x.min(position[0]);
+        max_world_x = max_world_x.max(position[0]);
+        min_world_z = min_world_z.min(position[1]);
+        max_world_z = max_world_z.max(position[1]);
+    }
+
+    Some(BuiltVectorChunk {
+        color_rgba: chunk.color_rgba,
+        vertex_colors,
+        positions,
+        indices,
+        min_world_x,
+        max_world_x,
+        min_world_z,
+        max_world_z,
+    })
 }
 
 fn prune_stale_runtime_data(
@@ -485,9 +684,11 @@ fn invalidate_non_active_revisions(
 
 fn collect_visible_cache_keys(
     registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
     visible_by_layer: &HashMap<LayerId, bool>,
     map_version_id: Option<&str>,
     semantic_filter: &SemanticFieldFilterState,
+    evidence_zone_filter: &EvidenceZoneFilter,
 ) -> HashSet<(LayerId, String)> {
     let mut out = HashSet::new();
     for layer in registry.ordered() {
@@ -504,7 +705,16 @@ fn collect_visible_cache_keys(
         let selected_field_ids = semantic_filter
             .field_ids_for_layer(layer.key.as_str())
             .to_vec();
-        out.insert((layer.id, effective_revision(&source, &selected_field_ids)));
+        let clip_mask_revision = clip_mask_state_revision(
+            registry,
+            layer_runtime,
+            layer_runtime.clip_mask_layer(layer.id),
+            evidence_zone_filter,
+        );
+        out.insert((
+            layer.id,
+            effective_revision(&source, &selected_field_ids, clip_mask_revision),
+        ));
     }
     out
 }
@@ -588,6 +798,9 @@ struct VectorLayerUpdate<'w, 's> {
     layer_runtime: ResMut<'w, LayerRuntime>,
     vector_runtime: ResMut<'w, VectorLayerRuntime>,
     semantic_filter: Res<'w, SemanticFieldFilterState>,
+    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
+    exact_lookups: Res<'w, ExactLookupCache>,
+    raster_cache: Res<'w, RasterTileCache>,
     build_config: Res<'w, VectorBuildConfig>,
     cache_config: Res<'w, VectorCacheConfig>,
     view_mode: Res<'w, ViewModeState>,
@@ -624,7 +837,11 @@ fn apply_stats(
     runtime_state.vector_last_frame_build_ms = stats.last_frame_build_ms;
 }
 
-fn effective_revision(source: &VectorSourceSpec, selected_feature_ids: &[u32]) -> String {
+fn effective_revision(
+    source: &VectorSourceSpec,
+    selected_feature_ids: &[u32],
+    clip_mask_revision: u64,
+) -> String {
     let revision = source.revision.trim();
     let base_revision = if revision.is_empty() {
         format!("url:{}", source.url)
@@ -632,14 +849,22 @@ fn effective_revision(source: &VectorSourceSpec, selected_feature_ids: &[u32]) -
         revision.to_string()
     };
     if selected_feature_ids.is_empty() {
-        return base_revision;
+        return if clip_mask_revision == 0 {
+            base_revision
+        } else {
+            format!("{base_revision}|clip:{clip_mask_revision}")
+        };
     }
     let selected_suffix = selected_feature_ids
         .iter()
         .map(u32::to_string)
         .collect::<Vec<_>>()
         .join(",");
-    format!("{base_revision}|field_ids:{selected_suffix}")
+    if clip_mask_revision == 0 {
+        format!("{base_revision}|field_ids:{selected_suffix}")
+    } else {
+        format!("{base_revision}|field_ids:{selected_suffix}|clip:{clip_mask_revision}")
+    }
 }
 
 fn vector_build_state_needs_frame_updates(state: &VectorBuildState) -> bool {
@@ -654,14 +879,19 @@ fn vector_build_state_needs_frame_updates(state: &VectorBuildState) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
+        clip_vector_chunk_against_mask, effective_build_budget_ms, effective_revision,
         should_activate_vector_layer, should_render_vector_layer,
         vector_build_state_needs_frame_updates, VectorBuildState, VectorLayerRuntime,
     };
     use crate::map::camera::mode::ViewMode;
+    use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::layers::{
-        build_local_layer_specs, AvailableLayerCatalog, GeometrySpace, LayerId, StyleMode,
-        VectorSourceSpec,
+        build_local_layer_specs, AvailableLayerCatalog, AvailableLayerDefinition,
+        AvailableLayerTemplate, GeometrySpace, LayerId, LayerRegistry, StyleMode, VectorSourceSpec,
     };
+    use crate::map::raster::RasterTileCache;
+    use crate::map::vector::cache::{BuiltVectorChunk, VectorMeshBundleSet};
+    use crate::plugins::points::EvidenceZoneFilter;
     use bevy::platform::time::Instant;
     use std::collections::HashMap;
 
@@ -735,5 +965,112 @@ mod tests {
             ViewMode::Map2D,
         ));
         assert!(should_render_vector_layer(&layer, true, ViewMode::Map2D));
+    }
+
+    #[test]
+    fn pending_vector_builds_keep_a_small_progress_budget_when_globally_exhausted() {
+        assert_eq!(effective_build_budget_ms(3.0, 2.0), 2.0);
+        assert_eq!(effective_build_budget_ms(3.0, 0.0), 0.25);
+        assert_eq!(effective_build_budget_ms(0.1, 0.0), 0.1);
+        assert_eq!(effective_build_budget_ms(0.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn effective_revision_changes_when_clip_mask_revision_changes() {
+        let source = VectorSourceSpec {
+            url: "/region_groups/v1.geojson".to_string(),
+            revision: "rg-v1".to_string(),
+            geometry_space: GeometrySpace::MapPixels,
+            style_mode: StyleMode::FeaturePropertyPalette,
+            feature_id_property: Some("rg".to_string()),
+            color_property: Some("c".to_string()),
+        };
+
+        assert_eq!(
+            effective_revision(&source, &[212], 0),
+            "rg-v1|field_ids:212"
+        );
+        assert_eq!(
+            effective_revision(&source, &[212], 77),
+            "rg-v1|field_ids:212|clip:77"
+        );
+    }
+
+    #[test]
+    fn clip_vector_chunk_against_vector_mask_drops_outside_triangles() {
+        let definition = AvailableLayerDefinition {
+            layer_id: "region_groups".to_string(),
+            name: "Region Groups".to_string(),
+            template: AvailableLayerTemplate::RegionGroups,
+            visible_default: true,
+            opacity_default: 0.5,
+            z_base: 30.0,
+            display_order: 30,
+        };
+        let (revision, layers) = build_local_layer_specs(&[definition], Some("v1"));
+        let mask_layer = layers[0].clone();
+        let mut registry = LayerRegistry::default();
+        registry.apply_layer_specs(revision, Some("v1".to_string()), layers);
+
+        let mask_chunk = BuiltVectorChunk {
+            color_rgba: [255, 0, 0, 255],
+            vertex_colors: vec![[255, 0, 0, 255]; 4],
+            positions: vec![
+                [0.0, 0.0, 0.0],
+                [10.0, 0.0, 0.0],
+                [10.0, 10.0, 0.0],
+                [0.0, 10.0, 0.0],
+            ],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            min_world_x: 0.0,
+            max_world_x: 10.0,
+            min_world_z: 0.0,
+            max_world_z: 10.0,
+        };
+        let test_chunk = BuiltVectorChunk {
+            color_rgba: [0, 255, 0, 255],
+            vertex_colors: vec![[0, 255, 0, 255]; 6],
+            positions: vec![
+                [1.0, 1.0, 0.0],
+                [3.0, 1.0, 0.0],
+                [2.0, 3.0, 0.0],
+                [20.0, 20.0, 0.0],
+                [22.0, 20.0, 0.0],
+                [21.0, 22.0, 0.0],
+            ],
+            indices: vec![0, 1, 2, 3, 4, 5],
+            min_world_x: 1.0,
+            max_world_x: 22.0,
+            min_world_z: 1.0,
+            max_world_z: 22.0,
+        };
+
+        let mut vector_runtime = VectorLayerRuntime::default();
+        vector_runtime.finished.insert(
+            (mask_layer.id, "rg-v1".to_string()),
+            VectorMeshBundleSet {
+                hover_chunks: vec![mask_chunk],
+                ..VectorMeshBundleSet::default()
+            },
+        );
+
+        let clipped = clip_vector_chunk_against_mask(
+            test_chunk,
+            mask_layer.id,
+            &registry,
+            &ExactLookupCache::default(),
+            &RasterTileCache::default(),
+            &vector_runtime,
+            &EvidenceZoneFilter::default(),
+        )
+        .expect("inside triangle should remain");
+
+        assert_eq!(clipped.indices, vec![0, 1, 2]);
+        assert_eq!(clipped.positions.len(), 3);
+        assert_eq!(clipped.vertex_colors.len(), 3);
+        assert_eq!(clipped.min_world_x, 1.0);
+        assert_eq!(clipped.max_world_x, 3.0);
+        assert_eq!(clipped.min_world_z, 1.0);
+        assert_eq!(clipped.max_world_z, 3.0);
     }
 }
