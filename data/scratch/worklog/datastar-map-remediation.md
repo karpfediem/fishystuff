@@ -6388,3 +6388,46 @@ Next:
 - the next remaining high-value panel is still the Info panel
 - but that should be resumed only when it does not conflict with the active zone-profile work
 - another safe cleanup option is continuing to remove dead bootstrap/controller surfaces around the remaining live panels
+
+## 2026-04-01: move the live patch picker onto a custom element
+
+The next best slice after Search/Hover was the patch picker.
+
+Why this was the right next step:
+
+- it was still a controller-only island
+- it does not overlap the zone-profile WIP in the Info panel
+- it fits the same Datastar-aligned pattern that already worked for:
+  - `fishymap-search-panel`
+  - `fishymap-hover-tooltip`
+
+What changed:
+
+- introduced a real patch-picker custom element:
+  - `site/assets/map/map-patch-picker-element.js`
+  - `site/assets/map/map-patch-picker-element.test.mjs`
+- moved the Settings patch window in `site/assets/map/map-shell.html` to:
+  - `<fishymap-patch-picker id="fishymap-patch-picker" class="not-prose"></fishymap-patch-picker>`
+- `site/assets/map/map-app-live.js`
+  - no longer imports or instantiates the old patch-picker controller
+  - now side-effect imports the custom element module
+- `site/assets/map/map-patch-picker-live.js`
+  - is reduced back to pure patch-picker state helpers
+  - the old controller export is removed
+
+Design notes:
+
+- the custom element owns the dropdown DOM and its local hidden-input transport
+- it dispatches `_map_bridged.filters.{fromPatchId,toPatchId}` upward through:
+  - `fishymap-signals-patch`
+- like Search/Hover, it listens to both patch seams:
+  - native `datastar-signal-patch`
+  - shell-local `fishymap:signal-patched`
+- default oldest-patch seeding still happens inside the component
+
+Why this is closer to Datastar:
+
+- `map-app-live.js` loses another imperative rerender/controller concern
+- durable state remains signal-owned
+- local behavior stays encapsulated in a custom element with props down / events up
+- no new app-wide orchestration seam was added

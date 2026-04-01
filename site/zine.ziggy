@@ -69,6 +69,7 @@ Multilingual {
     "map/map-layer-state.js",
     "map/map-hover-facts.js",
     "map/map-hover-tooltip-element.js",
+    "map/map-patch-picker-element.js",
     "map/map-layer-panel.js",
     "map/map-layer-panel-live.js",
     "map/map-layer-search-effects.js",

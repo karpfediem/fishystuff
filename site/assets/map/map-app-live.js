@@ -13,8 +13,8 @@ import { parseQuerySignalPatch } from "./map-query-state.js";
 import { createMapBookmarkPanelController } from "./map-bookmark-panel-live.js";
 import { createMapInfoPanelController } from "./map-info-panel-live.js";
 import { createMapLayerPanelController } from "./map-layer-panel-live.js";
-import { createMapPatchPickerController } from "./map-patch-picker-live.js";
 import "./map-hover-tooltip-element.js";
+import "./map-patch-picker-element.js";
 import "./map-search-panel-element.js";
 import {
   dispatchShellPatchedSignalEvent,
@@ -223,7 +223,6 @@ export async function start() {
   });
   pagePersistor.seed(page.signalObject?.() || null);
   let windowManager = null;
-  let patchPicker = null;
   let bookmarkPanel = null;
   let layerPanel = null;
   let zoneInfoPanel = null;
@@ -256,10 +255,6 @@ export async function start() {
     getSignals: signals,
   });
   zoneInfoPanel = createMapInfoPanelController({
-    shell,
-    getSignals: signals,
-  });
-  patchPicker = createMapPatchPickerController({
     shell,
     getSignals: signals,
   });
