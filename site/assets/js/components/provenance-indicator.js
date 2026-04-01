@@ -141,18 +141,18 @@ export function buildProvenanceSegments({
 } = {}) {
     return [
         buildSegment({
-            channel: "rate",
-            label: "Rate",
-            sourceKind: rateSourceKind,
-            detail: rateDetail,
-            valueText: rateValueText,
-        }),
-        buildSegment({
             channel: "presence",
             label: "Presence",
             sourceKind: presenceSourceKind,
             detail: presenceDetail,
             valueText: presenceValueText,
+        }),
+        buildSegment({
+            channel: "rate",
+            label: "Rate",
+            sourceKind: rateSourceKind,
+            detail: rateDetail,
+            valueText: rateValueText,
         }),
     ];
 }

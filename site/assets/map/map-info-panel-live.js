@@ -131,7 +131,7 @@ function itemGradeTone(grade, isPrize) {
   }
 }
 
-function fishIdentityMarkup(entry) {
+function fishIdentityMarkup(entry, accessoryMarkup = "") {
   const name = trimString(entry?.label) || "Unknown fish";
   const gradeTone = itemGradeTone(entry?.iconGradeTone, entry?.isPrize === true);
   const toneClass = `fishy-item-grade-${escapeHtml(gradeTone)}`;
@@ -139,7 +139,7 @@ function fishIdentityMarkup(entry) {
   const iconMarkup = iconUrl
     ? `<span class="fishy-item-icon-frame is-sm ${toneClass}"><img class="fishy-item-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(name)}" loading="lazy" decoding="async"></span>`
     : `<span class="fishy-item-icon-frame is-sm ${toneClass}"><span class="fishy-item-icon-fallback ${toneClass}">${escapeHtml(name.charAt(0).toUpperCase() || "?")}</span></span>`;
-  return `<span class="fishy-item-row fishy-item-row--surface ${toneClass}">${iconMarkup}<span class="fishy-item-label truncate">${escapeHtml(name)}</span></span>`;
+  return `<span class="fishy-item-row fishy-item-row--surface fishymap-zone-loot-item-surface ${toneClass}">${iconMarkup}<span class="fishy-item-label fishymap-zone-loot-item-label truncate">${escapeHtml(name)}</span>${accessoryMarkup}</span>`;
 }
 
 function zoneLootMetricTone(entry) {
@@ -183,21 +183,15 @@ function provenanceRailMarkup(entry) {
 
 function zoneLootRowMarkup(entry) {
   const metric = zoneLootMetricTone(entry);
-  const presenceText = trimString(entry?.presenceText);
+  const provenanceRail = provenanceRailMarkup(entry);
   return `
     <div class="fishymap-zone-loot-row">
       <div class="fishymap-zone-loot-metric" style="--fishymap-zone-loot-fill:${escapeHtml(metric.fillColor)};--fishymap-zone-loot-stroke:${escapeHtml(metric.strokeColor)};--fishymap-zone-loot-text:${escapeHtml(metric.textColor)};">
         <div class="fishymap-zone-loot-metric-primary">${escapeHtml(entry.dropRateText || "—")}</div>
       </div>
       <div class="fishymap-zone-loot-item">
-        ${fishIdentityMarkup(entry)}
-        ${
-          presenceText
-            ? `<div class="pl-9 text-[11px] text-base-content/60">${escapeHtml(presenceText)}</div>`
-            : ""
-        }
+        ${fishIdentityMarkup(entry, provenanceRail)}
       </div>
-      ${provenanceRailMarkup(entry)}
     </div>
   `;
 }

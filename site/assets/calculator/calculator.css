@@ -197,60 +197,61 @@
             line-height: 1.06;
         }
 
-        .fishy-provenance-tooltip {
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 42;
-            display: flex;
-            min-width: 12rem;
-            max-width: min(20rem, calc(100vw - 1.5rem));
-            flex-direction: column;
-            gap: 0.22rem;
-            padding: 0.6rem 0.72rem;
-            border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
-            border-radius: calc(var(--radius-box) * 0.9);
-            background: color-mix(in oklab, var(--color-base-100) 94%, var(--color-base-200) 6%);
-            box-shadow:
-                0 16px 42px color-mix(in srgb, black 16%, transparent),
-                0 2px 8px color-mix(in srgb, black 10%, transparent);
-            pointer-events: none;
-            transform: translate3d(0, 0, 0);
-        }
-
-        .fishy-provenance-tooltip[hidden] {
-            display: none !important;
-        }
-
-        .fishy-provenance-tooltip__eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.42rem;
-            font-size: 0.66rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: color-mix(in srgb, var(--color-base-content) 52%, transparent);
-        }
-
-        .fishy-provenance-tooltip__swatch {
-            width: 0.42rem;
-            height: 0.42rem;
-            border-radius: 999px;
-            background: var(--fishy-provenance-tooltip-color, var(--color-info));
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100) 70%, transparent);
-        }
-
-        .fishy-provenance-tooltip__source {
-            font-size: 0.83rem;
-            font-weight: 700;
-            line-height: 1.2;
-            color: color-mix(in srgb, var(--color-base-content) 88%, transparent);
-        }
-
-        .fishy-provenance-tooltip__detail {
-            font-size: 0.76rem;
-            line-height: 1.35;
-            color: color-mix(in srgb, var(--color-base-content) 74%, transparent);
-        }
     }
+
+.fishy-provenance-tooltip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 90;
+    display: flex;
+    min-width: 12rem;
+    max-width: min(20rem, calc(100vw - 1.5rem));
+    flex-direction: column;
+    gap: 0.22rem;
+    padding: 0.6rem 0.72rem;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
+    border-radius: calc(var(--radius-box) * 0.9);
+    background: color-mix(in oklab, var(--color-base-100) 94%, var(--color-base-200) 6%);
+    box-shadow:
+        0 16px 42px color-mix(in srgb, black 16%, transparent),
+        0 2px 8px color-mix(in srgb, black 10%, transparent);
+    pointer-events: none;
+    transform: translate3d(0, 0, 0);
+}
+
+.fishy-provenance-tooltip[hidden] {
+    display: none !important;
+}
+
+.fishy-provenance-tooltip__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-base-content) 52%, transparent);
+}
+
+.fishy-provenance-tooltip__swatch {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: var(--fishy-provenance-tooltip-color, var(--color-info));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100) 70%, transparent);
+}
+
+.fishy-provenance-tooltip__source {
+    font-size: 0.83rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: color-mix(in srgb, var(--color-base-content) 88%, transparent);
+}
+
+.fishy-provenance-tooltip__detail {
+    font-size: 0.76rem;
+    line-height: 1.35;
+    color: color-mix(in srgb, var(--color-base-content) 74%, transparent);
+}

@@ -8,7 +8,7 @@ import {
 } from "./provenance-indicator.js";
 
 test("buildProvenanceSegments distinguishes database, community presence, and community rate colors", () => {
-    const [rateSegment, presenceSegment] = buildProvenanceSegments({
+    const [presenceSegment, rateSegment] = buildProvenanceSegments({
         rateSourceKind: "community",
         rateDetail: "Community guess · Prize subgroup 11054",
         rateValueText: "1.00%",
@@ -21,12 +21,12 @@ test("buildProvenanceSegments distinguishes database, community presence, and co
     assert.equal(presenceSegment.sourceLabel, "Community");
     assert.equal(rateSegment.color, provenanceIndicatorColor("rate", "community"));
     assert.equal(presenceSegment.color, provenanceIndicatorColor("presence", "community"));
-    assert.match(provenanceAriaLabel(rateSegment), /Rate: Community guess/);
     assert.match(provenanceAriaLabel(presenceSegment), /Presence: Community/);
+    assert.match(provenanceAriaLabel(rateSegment), /Rate: Community guess/);
 });
 
 test("buildProvenanceSegments falls back to neutral inactive facts when provenance is missing", () => {
-    const [rateSegment, presenceSegment] = buildProvenanceSegments({});
+    const [presenceSegment, rateSegment] = buildProvenanceSegments({});
 
     assert.equal(rateSegment.active, false);
     assert.equal(presenceSegment.active, false);
@@ -35,7 +35,7 @@ test("buildProvenanceSegments falls back to neutral inactive facts when provenan
 });
 
 test("buildProvenanceSegments keeps database presence blue and preserves presence text fallback", () => {
-    const [, presenceSegment] = buildProvenanceSegments({
+    const [presenceSegment] = buildProvenanceSegments({
         presenceSourceKind: "database",
         presenceValueText: "Ranking presence",
     });
@@ -46,7 +46,7 @@ test("buildProvenanceSegments keeps database presence blue and preserves presenc
 });
 
 test("buildProvenanceSegments recognizes ranking presence provenance", () => {
-    const [, presenceSegment] = buildProvenanceSegments({
+    const [presenceSegment] = buildProvenanceSegments({
         presenceSourceKind: "ranking",
         presenceDetail: "Ranking ring fully inside zone ×8",
     });
@@ -57,7 +57,7 @@ test("buildProvenanceSegments recognizes ranking presence provenance", () => {
 });
 
 test("buildProvenanceSegments uses mixed presence provenance when multiple sources contribute", () => {
-    const [, presenceSegment] = buildProvenanceSegments({
+    const [presenceSegment] = buildProvenanceSegments({
         presenceSourceKind: "mixed",
         presenceDetail: "Ranking ring fully inside zone ×8 | Community confirmed ×2",
     });
@@ -67,4 +67,14 @@ test("buildProvenanceSegments uses mixed presence provenance when multiple sourc
         presenceSegment.color,
         /linear-gradient\(180deg,/,
     );
+});
+
+test("buildProvenanceSegments returns presence before rate", () => {
+    const [firstSegment, secondSegment] = buildProvenanceSegments({
+        presenceSourceKind: "community",
+        rateSourceKind: "database",
+    });
+
+    assert.equal(firstSegment.label, "Presence");
+    assert.equal(secondSegment.label, "Rate");
 });
