@@ -5611,3 +5611,58 @@ Next:
 - keep reducing the real remaining clean-slate drift
 - highest-value clean target remains:
   - `map-page-live.js`
+
+## 2026-04-01: trim dead public API from `map-page-live`
+
+`map-page-live` had already moved most of its behavior into helper modules, but it still exposed
+more public surface than the live app actually used:
+
+- `connect`
+- `persist`
+- `restore`
+- raw `state`
+
+On the real live path, `map-app-live` only needs:
+
+- `start()`
+- `whenRestored()`
+- `signalObject()`
+- `patchSignals()`
+
+What changed:
+
+- `site/assets/map/map-page-live.js`
+  - removed the dead public API members:
+    - `connect`
+    - `persist`
+    - `restore`
+    - `state`
+- `site/assets/map/map-page-live.test.mjs`
+  - added explicit coverage for the smaller live bootstrap surface
+
+Why this matters:
+
+- it makes the page bootstrap contract match the actual clean-slate live architecture
+- it reduces temptation to reach back into page-internal state from future map code
+- it clarifies the next remaining page-level drift:
+  - document-level Datastar persistence/orchestration in `map-page-live.js`
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-live.js`
+  - `node --test site/assets/map/map-page-live.test.mjs site/assets/map/map-app-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out`:
+  - `/map/map-page-live.js`
+- live DevTools reload on `/map/` still confirmed:
+  - `Search` window present
+  - `Info` window present
+  - `Layers 7`
+
+Next:
+
+- continue trimming the remaining framework-like page bootstrap behavior in `map-page-live.js`
+- especially:
+  - document-level persistence/orchestration

@@ -194,15 +194,11 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   }
 
   return Object.freeze({
-    connect,
     patchSignals,
-    persist,
-    restore,
     signalObject,
     start,
     whenRestored() {
       return state.restorePromise;
     },
-    state,
   });
 }

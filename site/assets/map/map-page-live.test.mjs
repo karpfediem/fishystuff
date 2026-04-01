@@ -258,6 +258,19 @@ test("map-page-live exposes direct signal patching on the page controller", () =
   ]);
 });
 
+test("map-page-live exposes only the live bootstrap surface", () => {
+  const env = createContext();
+
+  assert.equal(typeof env.pageLive.start, "function");
+  assert.equal(typeof env.pageLive.whenRestored, "function");
+  assert.equal(typeof env.pageLive.signalObject, "function");
+  assert.equal(typeof env.pageLive.patchSignals, "function");
+  assert.equal("connect" in env.pageLive, false);
+  assert.equal("persist" in env.pageLive, false);
+  assert.equal("restore" in env.pageLive, false);
+  assert.equal("state" in env.pageLive, false);
+});
+
 test("map-page-live persists durable map signal patches", () => {
   const env = createContext();
   const signals = defaultSignals();
