@@ -59,6 +59,40 @@ test("buildPatchPickerStateBundle keeps only runtime patch catalog and bridged p
   );
 });
 
+test("buildPatchPickerStateBundle preserves an open-ended until selection as null", () => {
+  assert.deepEqual(
+    buildPatchPickerStateBundle({
+      _map_runtime: {
+        ready: true,
+        catalog: {
+          patches: [{ patchId: "2026-03-12", patchName: "New Era", startTsUtc: 200 }],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fromPatchId: "2026-02-26",
+          toPatchId: null,
+        },
+      },
+    }),
+    {
+      state: {
+        ready: true,
+        catalog: {
+          patches: [{ patchId: "2026-03-12", label: "New Era", startTsUtc: 200 }],
+        },
+      },
+      inputState: {
+        filters: {
+          patchId: null,
+          fromPatchId: "2026-02-26",
+          toPatchId: null,
+        },
+      },
+    },
+  );
+});
+
 test("patchTouchesPatchPickerSignals only reacts to patch-relevant branches", () => {
   assert.equal(
     patchTouchesPatchPickerSignals({

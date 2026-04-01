@@ -60,6 +60,20 @@ function createPatchTemplate(documentRef, patch) {
   return template;
 }
 
+function createSimpleTemplate(documentRef, { value, label, searchText = "" }) {
+  const template = documentRef.createElement("template");
+  template.dataset.role = "selected-content";
+  template.dataset.value = String(value ?? "");
+  template.dataset.label = String(label ?? "").trim();
+  template.dataset.searchText = String(searchText || label || value || "").trim();
+  template.innerHTML = `
+    <span class="flex min-w-0 flex-1 items-center gap-3 text-sm">
+      <span class="truncate font-medium">${escapeHtml(label)}</span>
+    </span>
+  `;
+  return template;
+}
+
 function placeholderMarkup(label, { loading = false } = {}) {
   if (loading) {
     return `
@@ -117,11 +131,14 @@ function syncSelectedContent(dropdown, selectedTemplate, placeholderLabel, { loa
   container.innerHTML = placeholderMarkup(placeholderLabel, { loading });
 }
 
-function renderPickerCatalog(documentRef, catalog, patches) {
+function renderPickerCatalog(documentRef, catalog, patches, extraTemplates = []) {
   if (!(catalog instanceof HTMLElement)) {
     return [];
   }
-  const templates = patches.map((patch) => createPatchTemplate(documentRef, patch));
+  const templates = [
+    ...extraTemplates,
+    ...patches.map((patch) => createPatchTemplate(documentRef, patch)),
+  ];
   catalog.replaceChildren(...templates);
   return templates;
 }
@@ -220,9 +237,20 @@ export function createMapPatchPickerController({
   function renderPicker(bound, picker, bundle) {
     const patches = bundle.state.catalog.patches;
     const selectedId = selectedPatchId(bundle.inputState.filters, bound);
-    const templates = renderPickerCatalog(documentRef, picker.catalog, patches);
+    const extraTemplates =
+      bound === "to"
+        ? [
+            createSimpleTemplate(documentRef, {
+              value: "",
+              label: "Now",
+              searchText: "now latest current",
+            }),
+          ]
+        : [];
+    const templates = renderPickerCatalog(documentRef, picker.catalog, patches, extraTemplates);
     const selectedTemplate =
-      templates.find((template) => template.dataset.value === selectedId) || null;
+      templates.find((template) => template.dataset.value === selectedId)
+      || (bound === "to" && !selectedId ? extraTemplates[0] : null);
     const dropdown = picker.dropdown;
     const placeholderLabel = bundle.state.ready
       ? patches.length
