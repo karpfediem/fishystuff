@@ -4623,3 +4623,78 @@ Next:
 - continue validating the remaining intended search/filter combinations on the live clean-slate map
   page, especially fish-term driven zone membership and any remaining gaps between the support
   matrix and actual runtime behavior
+
+## 2026-04-01: live clipping and search/filter combinations are behaving again
+
+Follow-up validation after the redraw fix:
+
+- the previous runtime-side fixes were necessary but not sufficient
+- the real question was whether the intended clean-slate user model now works in the live page:
+  - zone search + attachment clipping
+  - semantic search + attachment clipping
+  - fish search + zone-membership-driven clipping
+
+What I validated live in DevTools on the served clean-slate `/map/` page:
+
+- zone term + attached vector overlay:
+  - `selectedTerms = [{ kind: "zone", zoneRgb: 50 }]`
+  - detached `region_groups`:
+    - `vectorFeatureCount = 240`
+    - `vectorTriangleCount = 40351`
+  - attached `region_groups -> zone_mask`:
+    - `vectorFeatureCount = 240`
+    - `vectorTriangleCount = 183`
+
+- zone term + attached `regions`:
+  - detached `regions`:
+    - `vectorFeatureCount = 1252`
+    - `vectorTriangleCount = 108595`
+  - attached `regions -> zone_mask`:
+    - `vectorFeatureCount = 1252`
+    - `vectorTriangleCount = 312`
+
+- semantic term + attached vector overlay:
+  - `selectedTerms = [{ kind: "semantic", layerId: "region_groups", fieldId: 1 }, { kind: "zone", zoneRgb: 50 }]`
+  - detached `region_groups`:
+    - `vectorFeatureCount = 1`
+    - `vectorTriangleCount = 102`
+  - attached `region_groups -> zone_mask`:
+    - `vectorFeatureCount = 1`
+    - `vectorTriangleCount = 0`
+  - this confirms the semantic filter and the clip mask are both affecting the same runtime build
+    path
+
+- fish term + zone-membership-driven clipping:
+  - `selectedTerms = [{ kind: "fish", fishId: 42 }]`
+  - runtime state reported:
+    - `filters.fishIds = [42]`
+    - `filters.zoneMembershipLayerIds = ["fish_evidence"]`
+    - `pointsStatus ... represented=90 rendered_points=90`
+  - with `regions` detached:
+    - `vectorTriangleCount = 108595`
+  - with `regions -> zone_mask` attached:
+    - `vectorTriangleCount = 3350`
+  - this confirms the fish-term path is again:
+    - filtering fish evidence
+    - deriving effective zone membership
+    - clipping attached overlays against the resulting zone mask
+
+Harness note:
+
+- the existing headless smoke/profile scripts remain noisy in this environment because some runs hit
+  Chromium shared-image / SwiftShader startup failures before `ready`
+- that is consistent with earlier observations and did not contradict the direct live page checks
+
+Why this matters:
+
+- the intended clean-slate clipping/filtering contract is working again:
+  - Datastar signals express selected search terms and layer attachments
+  - `_map_bridged` carries only the relevant shared filter/clip intent
+  - the runtime applies fish/zone/semantic filtering and attachment clipping without needing camera
+    movement or extra imperative glue
+
+Next:
+
+- continue from a restored clipping/filtering baseline rather than a broken one
+- use the support matrix and live contract as the source of truth for any remaining UX refinements
+  instead of reintroducing loader-era special cases
