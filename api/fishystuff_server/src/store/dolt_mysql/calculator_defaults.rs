@@ -29,7 +29,7 @@ pub(super) fn build_calculator_default_signals() -> CalculatorSignals {
     CalculatorSignals {
         level: 5,
         lifeskill_level: "100".to_string(),
-        mastery: 0.0,
+        mastery: 2500.0,
         trade_level: "73".to_string(),
         zone: "240,74,74".to_string(),
         resources: 0.0,

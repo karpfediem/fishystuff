@@ -5622,7 +5622,7 @@ mod tests {
                 defaults: CalculatorSignals {
                     level: 5,
                     lifeskill_level: "100".to_string(),
-                    mastery: 0.0,
+                    mastery: 2500.0,
                     trade_level: "73".to_string(),
                     zone: "240,74,74".to_string(),
                     resources: 0.0,
@@ -5788,6 +5788,7 @@ mod tests {
         assert!(text.contains("event:datastar-patch-signals"));
         assert!(text.contains("data:signals {"));
         assert!(text.contains("\"catchTimeActive\":17.5"));
+        assert!(text.contains("\"mastery\":2500.0"));
         assert!(text.contains("\"timespanAmount\":8.0"));
         assert!(text.contains("\"active\":false"));
         assert!(text.contains("\"_resources\":0.0"));

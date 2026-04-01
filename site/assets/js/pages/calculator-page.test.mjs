@@ -237,6 +237,35 @@ test("calculator restore canonicalizes stored signals", () => {
   assert.equal(env.window.__fishystuffCalculator.signalObject(), signals);
 });
 
+test("calculator restore leaves initial shell state intact when storage is empty", () => {
+  const env = createContext();
+  const signals = {
+    _loading: true,
+    _calculator_ui: {
+      distribution_tab: "groups",
+    },
+    _calculator_actions: {
+      copyUrlToken: 0,
+      copyShareToken: 0,
+      clearToken: 0,
+    },
+  };
+
+  env.window.__fishystuffCalculator.restore(signals);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(signals)), {
+    _loading: true,
+    _calculator_ui: {
+      distribution_tab: "groups",
+    },
+    _calculator_actions: {
+      copyUrlToken: 0,
+      copyShareToken: 0,
+      clearToken: 0,
+    },
+  });
+});
+
 test("calculator persist stores canonical page state and excludes transient branches", () => {
   const env = createContext();
   const signals = defaultSignals();

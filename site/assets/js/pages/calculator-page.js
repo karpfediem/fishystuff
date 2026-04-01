@@ -414,7 +414,10 @@
     signalStore.connect(signals);
     bindPersistListener();
     bindActionListener();
-    Object.assign(signals, canonicalizeStoredSignals(loadStoredSignals()));
+    const storedSignals = loadStoredSignals();
+    if (storedSignals && typeof storedSignals === "object") {
+      Object.assign(signals, canonicalizeStoredSignals(storedSignals));
+    }
     calculatorState.uiStateRestored = true;
   }
 
