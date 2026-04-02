@@ -1,4 +1,5 @@
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
+import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
 import { buildInfoViewModel, patchTouchesInfoSignals } from "./map-info-state.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import { loadZoneLootSummary, zoneRgbFromSelection } from "./map-zone-loot-summary.js";
@@ -9,7 +10,6 @@ import {
 } from "../js/components/provenance-indicator.js";
 
 const INFO_PANEL_TAG_NAME = "fishymap-info-panel";
-const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 const ICON_SPRITE_URL = "/img/icons.svg";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
@@ -29,18 +29,6 @@ function escapeHtml(value) {
         "'": "&#39;",
       })[char] || char,
   );
-}
-
-function readMapShellSignals(shell) {
-  if (!shell || typeof shell !== "object") {
-    return null;
-  }
-  const liveSignals = shell.__fishymapLiveSignals;
-  if (liveSignals && typeof liveSignals === "object") {
-    return liveSignals;
-  }
-  const initialSignals = shell.__fishymapInitialSignals;
-  return initialSignals && typeof initialSignals === "object" ? initialSignals : null;
 }
 
 export function readMapInfoPanelShellSignals(shell) {

@@ -4,7 +4,15 @@ import {
 import {
   applyMapPageSignalsPatch,
 } from "./map-page-signals.js";
-export const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
+import {
+  clearInitialMapShellSignals,
+  consumeInitialMapShellSignals,
+  FISHYMAP_LIVE_INIT_EVENT,
+  resolveMapPageShell,
+  writeMapShellLiveSignals,
+} from "./map-shell-signals.js";
+
+export { FISHYMAP_LIVE_INIT_EVENT } from "./map-shell-signals.js";
 
 export function createMapPageLive({ globalRef = globalThis } = {}) {
   const state = {
@@ -25,24 +33,21 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   }
 
   function resolveShell() {
-    const shell = globalRef.document?.getElementById?.("map-page-shell");
-    return shell && typeof shell.dispatchEvent === "function" ? shell : null;
+    return resolveMapPageShell(globalRef);
   }
 
   function consumeInitialSignals(shell) {
-    if (!shell || state.uiStateRestored !== false || !("__fishymapInitialSignals" in shell)) {
+    if (!shell || state.uiStateRestored !== false) {
       return null;
     }
-    const signals = shell.__fishymapInitialSignals;
-    delete shell.__fishymapInitialSignals;
-    return signals && typeof signals === "object" ? signals : null;
+    return consumeInitialMapShellSignals(shell);
   }
 
   function connect(signals) {
     state.liveSignals = signals && typeof signals === "object" ? signals : null;
     state.shell = resolveShell() || state.shell;
     if (state.shell && state.liveSignals) {
-      state.shell.__fishymapLiveSignals = state.liveSignals;
+      writeMapShellLiveSignals(state.shell, state.liveSignals);
     }
     return state.liveSignals;
   }
@@ -52,9 +57,7 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
   }
 
   function handleLiveInit(event) {
-    if (event?.currentTarget && "__fishymapInitialSignals" in event.currentTarget) {
-      delete event.currentTarget.__fishymapInitialSignals;
-    }
+    clearInitialMapShellSignals(event?.currentTarget);
     const signals = event?.detail;
     if (!signals || typeof signals !== "object") {
       return;

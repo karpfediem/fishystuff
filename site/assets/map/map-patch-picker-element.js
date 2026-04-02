@@ -3,10 +3,10 @@ import {
   buildPatchPickerStateBundle,
   patchTouchesPatchPickerSignals,
 } from "./map-patch-picker-live.js";
+import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
 const PATCH_PICKER_TAG_NAME = "fishymap-patch-picker";
-const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 let nextPatchPickerId = 1;
@@ -23,18 +23,6 @@ function escapeHtml(value) {
         "'": "&#39;",
       })[char] || char,
   );
-}
-
-function readMapShellSignals(shell) {
-  if (!shell || typeof shell !== "object") {
-    return null;
-  }
-  const liveSignals = shell.__fishymapLiveSignals;
-  if (liveSignals && typeof liveSignals === "object") {
-    return liveSignals;
-  }
-  const initialSignals = shell.__fishymapInitialSignals;
-  return initialSignals && typeof initialSignals === "object" ? initialSignals : null;
 }
 
 export function readMapPatchPickerShellSignals(shell) {

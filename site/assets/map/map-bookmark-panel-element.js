@@ -28,11 +28,11 @@ import {
   renameBookmark,
   selectionBookmarkKey,
 } from "./map-bookmark-state.js";
+import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
 
 export { patchTouchesBookmarkSignals } from "./map-bookmark-state.js";
 
 const BOOKMARK_PANEL_TAG_NAME = "fishymap-bookmark-panel";
-const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 const ICON_SPRITE_URL = "/img/icons.svg";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
@@ -54,18 +54,6 @@ function escapeHtml(value) {
         }[char] || char
       ),
   );
-}
-
-function readMapShellSignals(shell) {
-  if (!shell || typeof shell !== "object") {
-    return null;
-  }
-  const liveSignals = shell.__fishymapLiveSignals;
-  if (liveSignals && typeof liveSignals === "object") {
-    return liveSignals;
-  }
-  const initialSignals = shell.__fishymapInitialSignals;
-  return initialSignals && typeof initialSignals === "object" ? initialSignals : null;
 }
 
 export function readMapBookmarkPanelShellSignals(shell) {

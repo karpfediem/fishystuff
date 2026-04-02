@@ -6747,3 +6747,67 @@ Validation:
   - all custom elements still defined and mounted after reload
   - `Layers 7` and `Ready` still rendered correctly
   - no new console errors appeared
+
+## 2026-04-02: centralize the live shell signal bootstrap contract
+
+After the custom-element migrations, the live map still duplicated the same shell
+bootstrap contract in too many places:
+
+- `fishymap-live-init`
+- `__fishymapInitialSignals`
+- `__fishymapLiveSignals`
+- ad hoc `readMapShellSignals(...)` helpers in each element
+
+That was still unnecessary framework drift because the live shell contract should
+be defined once and reused everywhere.
+
+What changed:
+
+- added a shared shell-signal helper module:
+  - `site/assets/map/map-shell-signals.js`
+- moved the shared shell bootstrap primitives into that module:
+  - `FISHYMAP_LIVE_INIT_EVENT`
+  - `resolveMapPageShell(...)`
+  - `readMapShellSignals(...)`
+  - `clearInitialMapShellSignals(...)`
+  - `consumeInitialMapShellSignals(...)`
+  - `writeMapShellLiveSignals(...)`
+- updated the remaining live consumers to use the shared module:
+  - `site/assets/map/map-page-live.js`
+  - `site/assets/map/map-search-panel-element.js`
+  - `site/assets/map/map-info-panel-element.js`
+  - `site/assets/map/map-bookmark-panel-element.js`
+  - `site/assets/map/map-layer-panel-element.js`
+  - `site/assets/map/map-hover-tooltip-element.js`
+  - `site/assets/map/map-patch-picker-element.js`
+- published the new helper in:
+  - `site/zine.ziggy`
+- added direct unit coverage:
+  - `site/assets/map/map-shell-signals.test.mjs`
+
+Why this is closer to Datastar:
+
+- the shell bootstrap contract is now explicit and centralized instead of copied
+  into every component
+- custom elements now depend on one shared shell signal seam rather than each
+  carrying their own mini bootstrap helper
+- `map-page-live.js` is narrower and no longer hand-manages raw shell property
+  reads/writes directly
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-shell-signals.js site/assets/map/map-page-live.js site/assets/map/map-search-panel-element.js site/assets/map/map-info-panel-element.js`
+  - `node --test site/assets/map/map-shell-signals.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-search-panel-element.test.mjs site/assets/map/map-info-panel-element.test.mjs site/assets/map/map-bookmark-panel-element.test.mjs site/assets/map/map-layer-panel-element.test.mjs site/assets/map/map-patch-picker-element.test.mjs site/assets/map/map-hover-tooltip-element.test.mjs site/assets/map/map-page-persist.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-shell.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for:
+  - `/map/map-shell-signals.js`
+  - `/map/map-page-live.js`
+
+Note:
+
+- the full `bash tools/scripts/map-browser-smoke.sh` run hit the existing
+  Chromium shared-image/SwiftShader readiness failure mode during this slice, so
+  the validation here relies on JS tests plus served-asset checks rather than a
+  passing browser smoke.

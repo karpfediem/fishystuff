@@ -2,6 +2,7 @@ import {
   buildHoverTooltipRows,
   patchTouchesHoverTooltipSignals,
 } from "./map-hover-facts.js";
+import { readMapShellSignals } from "./map-shell-signals.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
@@ -112,18 +113,6 @@ function normalizeHoverEventDetail(detail) {
     return cloneJson(detail.hover);
   }
   return isPlainObject(detail) ? cloneJson(detail) : {};
-}
-
-function readMapShellSignals(shell) {
-  if (!shell || typeof shell !== "object") {
-    return null;
-  }
-  const liveSignals = shell.__fishymapLiveSignals;
-  if (liveSignals && typeof liveSignals === "object") {
-    return liveSignals;
-  }
-  const initialSignals = shell.__fishymapInitialSignals;
-  return initialSignals && typeof initialSignals === "object" ? initialSignals : null;
 }
 
 export function readMapHoverTooltipShellSignals(shell) {

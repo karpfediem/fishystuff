@@ -61,6 +61,7 @@ Multilingual {
     "map/map-page-signals.js",
     "map/map-query-state.js",
     "map/map-shell.html",
+    "map/map-shell-signals.js",
     "map/map-signal-patch.js",
     "map/map-window-manager.js",
     "map/map-bookmark-panel.js",

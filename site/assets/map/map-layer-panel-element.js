@@ -9,6 +9,7 @@ import {
   dispatchShellSignalPatch,
   FISHYMAP_SIGNAL_PATCHED_EVENT,
 } from "./map-signal-patch.js";
+import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 import {
   buildLayerClipMaskPatch,
@@ -29,7 +30,6 @@ import {
 } from "./map-layer-state.js";
 
 const LAYER_PANEL_TAG_NAME = "fishymap-layer-panel";
-const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 const FISHYMAP_POINT_ICON_SCALE_MAX = 3;
 const FISHYMAP_POINT_ICON_SCALE_MIN = 0.25;
 const ICON_SPRITE_URL = "/img/icons.svg";
@@ -83,18 +83,6 @@ function renderLoadingInlineMarkup(label, { size = "xs", toneClass = "text-base-
 
 function renderLoadingPanelMarkup(label) {
   return `<div class="rounded-box border border-base-300/70 bg-base-200 px-3 py-3"><div class="flex items-center gap-2 text-xs text-base-content/60">${renderLoadingInlineMarkup(label)}</div></div>`;
-}
-
-function readMapShellSignals(shell) {
-  if (!shell || typeof shell !== "object") {
-    return null;
-  }
-  const liveSignals = shell.__fishymapLiveSignals;
-  if (liveSignals && typeof liveSignals === "object") {
-    return liveSignals;
-  }
-  const initialSignals = shell.__fishymapInitialSignals;
-  return initialSignals && typeof initialSignals === "object" ? initialSignals : null;
 }
 
 export function readMapLayerPanelShellSignals(shell) {

@@ -13,12 +13,12 @@ import {
   resolveSelectedSemanticFieldIdsByLayer,
   resolveSelectedZoneRgbs,
 } from "./map-search-state.js";
+import { FISHYMAP_LIVE_INIT_EVENT, readMapShellSignals } from "./map-shell-signals.js";
 import { dispatchShellSignalPatch, FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 import { FISHYMAP_ZONE_CATALOG_READY_EVENT } from "./map-zone-catalog-live.js";
 
 const ICON_SPRITE_URL = "/img/icons.svg";
 const SEARCH_PANEL_TAG_NAME = "fishymap-search-panel";
-const FISHYMAP_LIVE_INIT_EVENT = "fishymap-live-init";
 const HTMLElementBase = globalThis.HTMLElement ?? class {};
 
 function escapeHtml(value) {
@@ -117,18 +117,6 @@ function semanticIdentityMarkup(text) {
 function formatZone(zoneRgb) {
   const numeric = Number(zoneRgb);
   return Number.isFinite(numeric) ? `#${numeric.toString(16).padStart(6, "0")}` : "none";
-}
-
-function readMapShellSignals(shell) {
-  if (!shell || typeof shell !== "object") {
-    return null;
-  }
-  const liveSignals = shell.__fishymapLiveSignals;
-  if (liveSignals && typeof liveSignals === "object") {
-    return liveSignals;
-  }
-  const initialSignals = shell.__fishymapInitialSignals;
-  return initialSignals && typeof initialSignals === "object" ? initialSignals : null;
 }
 
 export function readMapSearchPanelShellSignals(shell) {
