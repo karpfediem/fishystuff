@@ -16,13 +16,13 @@ import "./map-info-panel-element.js";
 import "./map-layer-panel-element.js";
 import "./map-patch-picker-element.js";
 import "./map-search-panel-element.js";
+import "./map-window-manager-element.js";
 import {
   dispatchShellPatchedSignalEvent,
   FISHYMAP_SIGNAL_PATCHED_EVENT,
   FISHYMAP_SIGNAL_PATCH_EVENT,
   combineSignalPatches,
 } from "./map-signal-patch.js";
-import { createMapWindowManager } from "./map-window-manager.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
 import { dispatchShellZoneCatalogReadyEvent } from "./map-zone-catalog-live.js";
 
@@ -192,7 +192,6 @@ export async function start() {
     readSnapshot: () => page.signalObject?.() || null,
   });
   pagePersistor.seed(page.signalObject?.() || null);
-  let windowManager = null;
 
   function dispatchSignalPatch(patch) {
     if (!patch || typeof patch !== "object") {
@@ -212,10 +211,6 @@ export async function start() {
 
   const app = createMapApp();
   const bridge = FishyMapBridge;
-  windowManager = createMapWindowManager({
-    shell,
-    getSignals: signals,
-  });
   let syncingFromBridge = false;
   let applyingInternalSignalPatch = false;
   let mounted = false;

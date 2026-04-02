@@ -6862,3 +6862,48 @@ Validation:
 - served output matched `site/.out` for:
   - `/map/map-page-derived.js`
   - `/map/map-app-live.js`
+
+## 2026-04-02: move the live window manager out of the bridge app
+
+After moving the panels and page-derived search/query logic, one page-local UI behavior still
+started from the bridge/bootstrap app:
+
+- `site/assets/map/map-app-live.js`
+  - instantiating `createMapWindowManager(...)`
+
+That was still the wrong ownership boundary. Window dragging/toggling is shell-local UI behavior,
+not bridge state orchestration.
+
+What changed:
+
+- added a dedicated shell-mounted custom element:
+  - `site/assets/map/map-window-manager-element.js`
+- the shell now mounts it directly:
+  - `site/assets/map/map-shell.html`
+- `site/assets/map/map-app-live.js`
+  - no longer instantiates the window manager directly
+  - now just loads the element module
+- added direct registration coverage:
+  - `site/assets/map/map-window-manager-element.test.mjs`
+- published the new element in:
+  - `site/zine.ziggy`
+
+Why this is closer to Datastar:
+
+- window behavior now lives alongside the rest of the shell-local UI components
+- the bridge app is narrower again and closer to:
+  - page/bootstrap sequencing
+  - bridge mount/sync
+  - runtime-specific orchestration only
+- drag/toggle behavior remains imperative where it needs to, but it is no longer app-owned
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-window-manager-element.js site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-window-manager-element.test.mjs site/assets/map/map-shell.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for:
+  - `/map/map-window-manager-element.js`
+  - `/map/map-app-live.js`

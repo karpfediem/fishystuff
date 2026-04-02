@@ -65,6 +65,7 @@ Multilingual {
     "map/map-shell-signals.js",
     "map/map-signal-patch.js",
     "map/map-window-manager.js",
+    "map/map-window-manager-element.js",
     "map/map-bookmark-panel.js",
     "map/map-bookmark-io.js",
     "map/map-runtime-adapter.js",
