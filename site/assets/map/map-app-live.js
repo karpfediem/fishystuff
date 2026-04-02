@@ -1,5 +1,6 @@
 import { createMapApp } from "./map-app.js";
 import FishyMapBridge, { createEmptySnapshot, snapshotToRestorePatch } from "./map-host.js";
+import { createMapPageDerivedController } from "./map-page-derived.js";
 import { createMapPageLive } from "./map-page-live.js";
 import { createMapPagePersistController } from "./map-page-persist.js";
 import {
@@ -9,7 +10,6 @@ import {
   DEFAULT_MAP_SESSION_SIGNAL_STATE,
   DEFAULT_MAP_UI_SIGNAL_STATE,
 } from "./map-signal-contract.js";
-import { parseQuerySignalPatch } from "./map-query-state.js";
 import "./map-bookmark-panel-element.js";
 import "./map-hover-tooltip-element.js";
 import "./map-info-panel-element.js";
@@ -23,7 +23,6 @@ import {
   combineSignalPatches,
 } from "./map-signal-patch.js";
 import { createMapWindowManager } from "./map-window-manager.js";
-import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
 import { loadZoneCatalog } from "./map-zone-catalog.js";
 import { dispatchShellZoneCatalogReadyEvent } from "./map-zone-catalog-live.js";
 
@@ -33,35 +32,6 @@ function cloneJson(value) {
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function mergeProjectionPatch(target, patch) {
-  if (!isPlainObject(target) || !isPlainObject(patch)) {
-    return target;
-  }
-  for (const [key, value] of Object.entries(patch)) {
-    if (Array.isArray(value)) {
-      target[key] = cloneJson(value);
-      continue;
-    }
-    if (isPlainObject(value)) {
-      const nextTarget = isPlainObject(target[key]) ? target[key] : {};
-      target[key] = nextTarget;
-      mergeProjectionPatch(nextTarget, value);
-      continue;
-    }
-    target[key] = value;
-  }
-  return target;
-}
-
-export function buildSearchProjectionPatchForSignalPatch(signals, patch) {
-  if (patch?._map_ui?.search?.selectedTerms == null) {
-    return null;
-  }
-  const nextSignals = isPlainObject(signals) ? cloneJson(signals) : {};
-  mergeProjectionPatch(nextSignals, patch);
-  return buildSearchProjectionSignalPatch(nextSignals);
 }
 
 function mergeSnapshotBranch(baseValue, patchValue) {
@@ -231,15 +201,14 @@ export async function start() {
     page.patchSignals(patch);
     dispatchShellPatchedSignalEvent(shell, patch);
   }
-
-  const queryPatch = parseQuerySignalPatch(globalThis.location?.href);
-  if (queryPatch) {
-    dispatchSignalPatch(queryPatch);
-  }
-  const initialSearchProjectionPatch = buildSearchProjectionSignalPatch(page.signalObject?.() || {});
-  if (initialSearchProjectionPatch) {
-    dispatchSignalPatch(initialSearchProjectionPatch);
-  }
+  const pageDerived = createMapPageDerivedController({
+    globalRef: globalThis,
+    shell,
+    readSignals: signals,
+    dispatchPatch: dispatchSignalPatch,
+  });
+  pageDerived.applyInitialPatches();
+  pageDerived.start(shell);
 
   const app = createMapApp();
   const bridge = FishyMapBridge;
@@ -333,17 +302,10 @@ export async function start() {
   });
   shell.addEventListener(FISHYMAP_SIGNAL_PATCHED_EVENT, (event) => {
     const patch = event?.detail || null;
-    const searchProjectionPatch = buildSearchProjectionPatchForSignalPatch(signals(), patch);
-    const effectivePatch = searchProjectionPatch
-      ? combineSignalPatches(patch, searchProjectionPatch)
-      : patch;
-    if (searchProjectionPatch) {
-      applyInternalSignalPatch(searchProjectionPatch);
-    }
     if (applyingInternalSignalPatch) {
       return;
     }
-    if (!patchTouchesLiveBridgeInputs(effectivePatch)) {
+    if (!patchTouchesLiveBridgeInputs(patch)) {
       return;
     }
 
@@ -355,7 +317,7 @@ export async function start() {
     }
 
     patchBridgeFromSignals();
-    if (!syncingFromBridge && effectivePatch?._map_bookmarks?.entries != null) {
+    if (!syncingFromBridge && patch?._map_bookmarks?.entries != null) {
       scheduleBookmarkDetailsRefresh();
     }
   });

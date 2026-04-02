@@ -6811,3 +6811,54 @@ Note:
   Chromium shared-image/SwiftShader readiness failure mode during this slice, so
   the validation here relies on JS tests plus served-asset checks rather than a
   passing browser smoke.
+
+## 2026-04-02: move page-derived search/query state out of the bridge app
+
+After the panel migrations and the shared shell-signal cleanup, one big piece of
+page-side Datastar state still lived in the wrong place:
+
+- `site/assets/map/map-app-live.js`
+
+That file still owned:
+
+- query-string signal seeding
+- initial search projection
+- live search-term-to-bridged-filter projection
+
+Those are page-owned signal semantics, not bridge/bootstrap responsibilities.
+
+What changed:
+
+- added a dedicated page-derived controller module:
+  - `site/assets/map/map-page-derived.js`
+- moved page-side query/search-derived logic there:
+  - `buildSearchProjectionPatchForSignalPatch(...)`
+  - `createMapPageDerivedController(...)`
+- updated `site/assets/map/map-app-live.js`:
+  - removed direct ownership of query parsing
+  - removed direct ownership of search projection derivation
+  - now starts the page-derived controller instead
+- added direct coverage:
+  - `site/assets/map/map-page-derived.test.mjs`
+- published the new helper in:
+  - `site/zine.ziggy`
+
+Why this is closer to Datastar:
+
+- the bridge app is narrower again and closer to its intended role:
+  - page restore/bootstrap sequencing
+  - Bevy bridge mount/sync
+  - shell-local patch fan-out only where runtime ownership actually requires it
+- search/query ownership is now explicitly page-side Datastar logic rather than
+  being mixed into bridge orchestration
+
+Validation:
+
+- JS validation passed:
+  - `node --check site/assets/map/map-page-derived.js site/assets/map/map-app-live.js`
+  - `node --test site/assets/map/map-page-derived.test.mjs site/assets/map/map-app-live.test.mjs site/assets/map/map-page-live.test.mjs site/assets/map/map-shell.test.mjs`
+- rebuilt the site:
+  - `devenv shell -- bash -lc 'cd site && just build-release-no-tailwind'`
+- served output matched `site/.out` for:
+  - `/map/map-page-derived.js`
+  - `/map/map-app-live.js`

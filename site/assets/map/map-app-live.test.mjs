@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 const {
-  buildSearchProjectionPatchForSignalPatch,
   createDeferredBridgeStateRefresher,
   deferAfterAnimationFrames,
   resolveBridgeSnapshot,
   startWhenDomReady,
   start,
 } = await import("./map-app-live.js");
+const { buildSearchProjectionPatchForSignalPatch } = await import("./map-page-derived.js");
 
 test("resolveBridgeSnapshot preserves coarse runtime fields on partial bridge events", () => {
   const currentSnapshot = {
