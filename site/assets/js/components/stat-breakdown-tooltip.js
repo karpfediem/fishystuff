@@ -378,9 +378,15 @@ function buildSection(documentRef, section, index = 0) {
 
     for (const group of rowGroups) {
         const groupElement = documentRef.createElement("div");
-        groupElement.className = "fishy-stat-breakdown-tooltip__group";
+        const showsGroupTitle = isInputSection && statBreakdownInputGroupShowsTitle(group);
+        groupElement.className = [
+            "fishy-stat-breakdown-tooltip__group",
+            isInputSection ? "fishy-stat-breakdown-tooltip__group--input" : "",
+            isResultSection ? "fishy-stat-breakdown-tooltip__group--result" : "",
+            showsGroupTitle ? "fishy-stat-breakdown-tooltip__group--titled" : "",
+        ].filter(Boolean).join(" ");
 
-        if (isInputSection && statBreakdownInputGroupShowsTitle(group)) {
+        if (showsGroupTitle) {
             const groupTitle = documentRef.createElement("div");
             groupTitle.className = "fishy-stat-breakdown-tooltip__group-title";
             groupTitle.textContent = group.label;
