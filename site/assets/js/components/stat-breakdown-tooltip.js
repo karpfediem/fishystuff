@@ -62,6 +62,13 @@ export function normalizeStatBreakdownPayload(payload = {}) {
     };
 }
 
+function statBreakdownMatchKey(value) {
+    return trimString(value)
+        .toLowerCase()
+        .replace(/[().,]/g, "")
+        .replace(/\s+/g, " ");
+}
+
 function statBreakdownSectionIsResult(section, index = 0) {
     const label = trimString(section?.label).toLowerCase();
     return label === "composition" || (index > 0 && label === "details");
@@ -124,6 +131,180 @@ function statBreakdownInputGroupShowsTitle(group = {}) {
     );
 }
 
+function statBreakdownSectionsByType(payload = {}) {
+    const inputs = [];
+    const other = [];
+    const results = [];
+    for (const [index, section] of (payload.sections || []).entries()) {
+        if (statBreakdownInputSection(section)) {
+            inputs.push(section);
+            continue;
+        }
+        if (statBreakdownSectionIsResult(section, index)) {
+            results.push(section);
+            continue;
+        }
+        other.push(section);
+    }
+    return { inputs, other, results };
+}
+
+function statBreakdownResultRow(payload = {}) {
+    const { results } = statBreakdownSectionsByType(payload);
+    const section = results.at(-1);
+    const rows = Array.isArray(section?.rows) ? section.rows : [];
+    return rows.at(-1) ?? null;
+}
+
+function statBreakdownLastResultSectionIndex(payload = {}) {
+    let lastResultIndex = -1;
+    for (const [index, section] of (payload.sections || []).entries()) {
+        if (statBreakdownSectionIsResult(section, index)) {
+            lastResultIndex = index;
+        }
+    }
+    return lastResultIndex;
+}
+
+function statBreakdownLabelAliases(label) {
+    const aliases = new Set();
+    const normalized = trimString(label);
+    if (!normalized) {
+        return [];
+    }
+    aliases.add(normalized);
+
+    const parenthetical = normalized.match(/^(.*)\s+\((.+)\)$/);
+    if (parenthetical) {
+        aliases.add(trimString(parenthetical[1]));
+        aliases.add(trimString(parenthetical[2]));
+    }
+
+    for (const prefix of ["Applied ", "Total ", "Uncapped "]) {
+        if (normalized.startsWith(prefix)) {
+            aliases.add(trimString(normalized.slice(prefix.length)));
+        }
+    }
+
+    return Array.from(aliases).filter(Boolean);
+}
+
+function statBreakdownResolvedGroupValue(group, summaryRows = []) {
+    const groupLabel = trimString(group?.label);
+    if (!groupLabel) {
+        return "";
+    }
+    const groupKey = statBreakdownMatchKey(groupLabel);
+    const summaryMatch = summaryRows.find((row) => statBreakdownLabelAliases(row.label).some(
+        (alias) => statBreakdownMatchKey(alias) === groupKey,
+    ));
+    if (summaryMatch?.valueText) {
+        return summaryMatch.valueText;
+    }
+
+    const rows = Array.isArray(group?.rows) ? group.rows : [];
+    if (rows.length === 1) {
+        return rows[0].valueText;
+    }
+    const appliedRow = rows.find((row) => /applied\b/i.test(trimString(row?.detailText)));
+    if (appliedRow?.valueText) {
+        return appliedRow.valueText;
+    }
+    return rows
+        .map((row) => trimString(row?.valueText))
+        .filter(Boolean)
+        .join(" + ");
+}
+
+function statBreakdownFormulaTermEntries(payload = {}) {
+    const { inputs, other, results } = statBreakdownSectionsByType(payload);
+    const entries = [];
+    const entriesByKey = new Map();
+    const register = (label, valueText = "") => {
+        for (const alias of statBreakdownLabelAliases(label)) {
+            const key = statBreakdownMatchKey(alias);
+            if (!key || entriesByKey.has(key)) {
+                continue;
+            }
+            const entry = { label: alias, valueText };
+            entriesByKey.set(key, entry);
+            entries.push(entry);
+        }
+    };
+
+    const summaryRows = [...other, ...results].flatMap((section) => section.rows || []);
+    const resultRow = statBreakdownResultRow(payload);
+    if (resultRow) {
+        register(resultRow.label, payload.valueText || resultRow.valueText);
+    }
+
+    for (const section of inputs) {
+        for (const group of statBreakdownSectionRowGroups(section)) {
+            if (group.label) {
+                register(group.label, statBreakdownResolvedGroupValue(group, summaryRows));
+                continue;
+            }
+            for (const row of group.rows || []) {
+                register(row.label, row.valueText);
+            }
+        }
+    }
+
+    for (const row of summaryRows) {
+        register(row.label, row.valueText);
+    }
+
+    return entries;
+}
+
+export function statBreakdownFormulaTokens(formulaText, payload = {}) {
+    const raw = trimString(formulaText).replace(/\.$/, "");
+    if (!raw) {
+        return [];
+    }
+    const entries = statBreakdownFormulaTermEntries(payload)
+        .map((entry) => ({ ...entry, matchText: entry.label }))
+        .sort((left, right) => right.matchText.length - left.matchText.length);
+    const tokens = [];
+    let cursor = 0;
+    let operatorBuffer = "";
+
+    const flushOperator = () => {
+        if (!operatorBuffer) {
+            return;
+        }
+        tokens.push({ kind: "operator", text: operatorBuffer });
+        operatorBuffer = "";
+    };
+
+    while (cursor < raw.length) {
+        const remaining = raw.slice(cursor);
+        const match = entries.find((entry) => {
+            if (!remaining.toLowerCase().startsWith(entry.matchText.toLowerCase())) {
+                return false;
+            }
+            const previous = raw[cursor - 1] || "";
+            const next = raw[cursor + entry.matchText.length] || "";
+            const bounded = (!/[a-z0-9%]/i.test(previous)) && (!/[a-z0-9%]/i.test(next));
+            return bounded || entry.matchText.includes(" ") || entry.matchText.length === 1;
+        });
+        if (match) {
+            flushOperator();
+            tokens.push({
+                kind: "term",
+                text: raw.slice(cursor, cursor + match.matchText.length),
+                valueText: match.valueText,
+            });
+            cursor += match.matchText.length;
+            continue;
+        }
+        operatorBuffer += raw[cursor];
+        cursor += 1;
+    }
+    flushOperator();
+    return tokens.filter((token) => trimString(token.text));
+}
+
 let tooltipElement = null;
 let tooltipRefs = null;
 const tooltipRoots = new WeakSet();
@@ -177,9 +358,9 @@ function ensureTooltipElement() {
     const formulaLabel = documentRef.createElement("div");
     formulaLabel.className = "fishy-stat-breakdown-tooltip__formula-label";
     formulaLabel.textContent = "Formula";
-    const formulaBody = documentRef.createElement("div");
-    formulaBody.className = "fishy-stat-breakdown-tooltip__formula-body";
-    formula.append(formulaLabel, formulaBody);
+    const formulaRows = documentRef.createElement("div");
+    formulaRows.className = "fishy-stat-breakdown-tooltip__formula-rows";
+    formula.append(formulaLabel, formulaRows);
 
     const sections = documentRef.createElement("div");
     sections.className = "fishy-stat-breakdown-tooltip__sections";
@@ -188,7 +369,7 @@ function ensureTooltipElement() {
     documentRef.body.appendChild(tooltip);
 
     tooltipElement = tooltip;
-    tooltipRefs = { eyebrowLabel, title, value, summary, formula, formulaBody, sections };
+    tooltipRefs = { eyebrowLabel, title, value, summary, formula, formulaRows, sections };
     return { tooltip, refs: tooltipRefs };
 }
 
@@ -298,6 +479,59 @@ function itemFallbackLabel(label) {
     return trimString(label).charAt(0).toUpperCase() || "?";
 }
 
+function buildFormulaToken(documentRef, token, variant = "symbolic") {
+    if (token.kind !== "term") {
+        const operator = documentRef.createElement("span");
+        operator.className = "fishy-stat-breakdown-tooltip__formula-operator";
+        operator.textContent = trimString(token.text);
+        return operator;
+    }
+
+    const term = documentRef.createElement("span");
+    term.className = [
+        "fishy-stat-breakdown-tooltip__formula-term",
+        variant === "resolved" ? "fishy-stat-breakdown-tooltip__formula-term--resolved" : "",
+    ].filter(Boolean).join(" ");
+
+    const label = documentRef.createElement("span");
+    label.className = "fishy-stat-breakdown-tooltip__formula-term-label";
+    label.textContent = token.text;
+    term.appendChild(label);
+
+    const resolvedValue = trimString(token.valueText);
+    if (variant === "resolved" && resolvedValue && statBreakdownMatchKey(resolvedValue) !== statBreakdownMatchKey(token.text)) {
+        const value = documentRef.createElement("span");
+        value.className = "fishy-stat-breakdown-tooltip__formula-term-value";
+        value.textContent = resolvedValue;
+        term.appendChild(value);
+    }
+
+    return term;
+}
+
+function buildFormulaRow(documentRef, labelText, tokens, variant = "symbolic") {
+    const row = documentRef.createElement("div");
+    row.className = "fishy-stat-breakdown-tooltip__formula-row";
+
+    const label = documentRef.createElement("div");
+    label.className = "fishy-stat-breakdown-tooltip__formula-row-label";
+    label.textContent = labelText;
+
+    const tokensElement = documentRef.createElement("div");
+    tokensElement.className = "fishy-stat-breakdown-tooltip__formula-tokens";
+    tokensElement.append(...tokens.map((token) => buildFormulaToken(documentRef, token, variant)));
+
+    row.append(label, tokensElement);
+    return row;
+}
+
+function buildSectionFormula(documentRef, labelText, tokens, variant = "resolved") {
+    const container = documentRef.createElement("div");
+    container.className = "fishy-stat-breakdown-tooltip__section-formula";
+    container.appendChild(buildFormulaRow(documentRef, labelText, tokens, variant));
+    return container;
+}
+
 function buildRowMain(documentRef, row, { showDetail = true } = {}) {
     const main = documentRef.createElement("div");
     main.className = "fishy-stat-breakdown-tooltip__row-main";
@@ -352,7 +586,7 @@ function buildRowMain(documentRef, row, { showDetail = true } = {}) {
     return main;
 }
 
-function buildSection(documentRef, section, index = 0) {
+function buildSection(documentRef, section, index = 0, { resolvedFormulaTokens = [] } = {}) {
     const displayLabel = statBreakdownSectionDisplayLabel(section, index);
     const isSecondarySection = index > 0;
     const isResultSection = statBreakdownSectionIsResult(section, index);
@@ -374,6 +608,12 @@ function buildSection(documentRef, section, index = 0) {
         title.className = "fishy-stat-breakdown-tooltip__section-title";
         title.textContent = displayLabel;
         sectionElement.appendChild(title);
+    }
+
+    if (isResultSection && resolvedFormulaTokens.length) {
+        sectionElement.appendChild(
+            buildSectionFormula(documentRef, "With values", resolvedFormulaTokens, "resolved"),
+        );
     }
 
     for (const group of rowGroups) {
@@ -477,12 +717,22 @@ function showTooltip(anchor, event) {
         refs.value.hidden = !payload.valueText;
         refs.summary.textContent = payload.summaryText;
         refs.summary.hidden = !payload.summaryText || payload.sections.length > 0;
-        refs.formulaBody.textContent = payload.formulaText;
-        refs.formula.hidden = !payload.formulaText;
-
         const documentRef = globalThis.document;
+        const formulaTokens = statBreakdownFormulaTokens(payload.formulaText, payload);
+        const resultSectionIndex = statBreakdownLastResultSectionIndex(payload);
+        const topFormulaRows = formulaTokens.length
+            ? [buildFormulaRow(documentRef, "General", formulaTokens, "symbolic")]
+            : [];
+        if (formulaTokens.length && resultSectionIndex < 0) {
+            topFormulaRows.push(buildFormulaRow(documentRef, "With values", formulaTokens, "resolved"));
+        }
+        refs.formulaRows.replaceChildren(...topFormulaRows);
+        refs.formula.hidden = topFormulaRows.length === 0;
+
         refs.sections.replaceChildren(
-            ...payload.sections.map((section, index) => buildSection(documentRef, section, index)),
+            ...payload.sections.map((section, index) => buildSection(documentRef, section, index, {
+                resolvedFormulaTokens: index === resultSectionIndex ? formulaTokens : [],
+            })),
         );
         refs.sections.hidden = payload.sections.length === 0;
 

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
     STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER,
     normalizeStatBreakdownPayload,
+    statBreakdownFormulaTokens,
     statBreakdownPayloadForAnchor,
     statBreakdownSectionDisplayLabel,
     statBreakdownSectionRowGroups,
@@ -171,6 +172,57 @@ test("statBreakdownSectionRowGroups sorts inputs by formula part order and group
             { label: "Brandstone factor", rows: ["Brandstone factor"] },
             { label: "Item DRR", rows: ["Pet 1", "Pet 2"] },
             { label: "Lifeskill DRR", rows: ["Guru 20"] },
+        ],
+    );
+});
+
+test("statBreakdownFormulaTokens keeps the symbolic formula order and attaches resolved values", () => {
+    const payload = normalizeStatBreakdownPayload({
+        value_text: "105.00",
+        formula_text: "Average total = Average bite time + Auto-Fishing Time + AFK catch time.",
+        sections: [
+            {
+                label: "Inputs",
+                rows: [
+                    {
+                        label: "Average bite time",
+                        value_text: "12.00",
+                        formula_part: "Average bite time",
+                        formula_part_order: 1,
+                    },
+                    {
+                        label: "Auto-Fishing Time",
+                        value_text: "90.00",
+                        formula_part: "Auto-Fishing Time",
+                        formula_part_order: 2,
+                    },
+                    {
+                        label: "AFK catch time",
+                        value_text: "3.00",
+                        formula_part: "AFK catch time",
+                        formula_part_order: 3,
+                    },
+                ],
+            },
+            {
+                label: "Composition",
+                rows: [{ label: "Average total", value_text: "105.00" }],
+            },
+        ],
+    });
+
+    const tokens = statBreakdownFormulaTokens(payload.formulaText, payload);
+
+    assert.deepEqual(
+        tokens.filter((token) => token.kind === "term").map((token) => ({
+            text: token.text,
+            valueText: token.valueText,
+        })),
+        [
+            { text: "Average total", valueText: "105.00" },
+            { text: "Average bite time", valueText: "12.00" },
+            { text: "Auto-Fishing Time", valueText: "90.00" },
+            { text: "AFK catch time", valueText: "3.00" },
         ],
     );
 });

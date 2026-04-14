@@ -287,9 +287,9 @@
 
 .fishy-stat-breakdown-tooltip__formula {
     display: grid;
-    gap: 0.18rem;
+    gap: 0.28rem;
     font-size: 0.73rem;
-    padding: 0.42rem 0.5rem;
+    padding: 0.5rem 0.56rem;
     border: 1px solid color-mix(in srgb, var(--fishy-stat-breakdown-color, var(--color-info)) 16%, transparent);
     border-radius: 0.6rem;
     background: color-mix(in oklab, var(--fishy-stat-breakdown-color, var(--color-info)) 6%, var(--color-base-100) 94%);
@@ -303,7 +303,33 @@
     color: color-mix(in srgb, var(--color-base-content) 56%, transparent);
 }
 
-.fishy-stat-breakdown-tooltip__formula-body {
+.fishy-stat-breakdown-tooltip__formula-rows {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.fishy-stat-breakdown-tooltip__formula-row {
+    display: grid;
+    gap: 0.16rem;
+}
+
+.fishy-stat-breakdown-tooltip__formula-row-label {
+    font-size: 0.58rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-base-content) 52%, transparent);
+}
+
+.fishy-stat-breakdown-tooltip__formula-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.22rem 0.28rem;
+    line-height: 1.25;
+}
+
+.fishy-stat-breakdown-tooltip__formula-operator {
     font-family: var(
         --default-mono-font-family,
         ui-monospace,
@@ -315,10 +341,57 @@
         "Courier New",
         monospace
     );
-    line-height: 1.42;
-    font-weight: 600;
-    color: color-mix(in srgb, var(--color-base-content) 84%, transparent);
-    overflow-wrap: anywhere;
+    font-size: 0.71rem;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--color-base-content) 78%, transparent);
+    white-space: pre-wrap;
+}
+
+.fishy-stat-breakdown-tooltip__formula-term {
+    display: inline-grid;
+    gap: 0.04rem;
+    padding: 0.16rem 0.42rem;
+    border: 1px solid color-mix(in srgb, var(--fishy-stat-breakdown-color, var(--color-info)) 15%, transparent);
+    border-radius: 999px;
+    background: var(--color-base-100);
+    font-family: var(
+        --default-mono-font-family,
+        ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        Monaco,
+        Consolas,
+        "Liberation Mono",
+        "Courier New",
+        monospace
+    );
+    line-height: 1.2;
+}
+
+.fishy-stat-breakdown-tooltip__formula-term-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: color-mix(in srgb, var(--color-base-content) 86%, transparent);
+}
+
+.fishy-stat-breakdown-tooltip__formula-term--resolved {
+    padding-top: 0.18rem;
+    padding-bottom: 0.18rem;
+    border-radius: 0.7rem;
+}
+
+.fishy-stat-breakdown-tooltip__formula-term--resolved .fishy-stat-breakdown-tooltip__formula-term-label {
+    font-size: 0.55rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-base-content) 56%, transparent);
+}
+
+.fishy-stat-breakdown-tooltip__formula-term-value {
+    font-size: 0.76rem;
+    font-weight: 800;
+    color: color-mix(in srgb, var(--color-base-content) 92%, transparent);
 }
 
 .fishy-stat-breakdown-tooltip__sections {
@@ -333,6 +406,15 @@
 
 .fishy-stat-breakdown-tooltip__section--result {
     gap: 0.34rem;
+}
+
+.fishy-stat-breakdown-tooltip__section-formula {
+    display: grid;
+    gap: 0.16rem;
+    padding: 0.42rem 0.5rem 0.46rem;
+    border: 1px solid color-mix(in srgb, var(--fishy-stat-breakdown-color, var(--color-info)) 14%, transparent);
+    border-radius: 0.82rem;
+    background: color-mix(in oklab, var(--fishy-stat-breakdown-color, var(--color-info)) 5%, var(--color-base-100) 95%);
 }
 
 .fishy-stat-breakdown-tooltip__group {
