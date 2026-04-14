@@ -1,12 +1,12 @@
 name: github pages
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main  # Set a branch to deploy
+    tags:
+      - "*"  # Deploy production site only from tagged commits.
 jobs:
   deploy:
+    if: startsWith(github.ref, 'refs/tags/')
     environment:
       name: github-pages
     permissions:
