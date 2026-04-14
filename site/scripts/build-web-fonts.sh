@@ -6,6 +6,7 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 CHARSET_FILE="$TMP_DIR/site-text.txt"
+OUTPUT_ROOT="${FISHYSTUFF_WEB_FONT_OUTPUT_ROOT:-$SITE_DIR/assets/css/fonts}"
 
 cd "$SITE_DIR"
 
@@ -19,7 +20,10 @@ cat \
 build_subset() {
   local source_file="$1"
   local subset_ttf="$2"
-  local output_woff2="$3"
+  local output_rel="$3"
+  local output_woff2="$OUTPUT_ROOT/$output_rel"
+
+  mkdir -p "$(dirname "$output_woff2")"
 
   pyftsubset "$source_file" \
     --text-file="$CHARSET_FILE" \
@@ -40,14 +44,14 @@ build_subset() {
 build_subset \
   "assets/css/fonts/Comfortaa/Comfortaa-VariableFont_wght.ttf" \
   "$TMP_DIR/Comfortaa-VariableFont_wght.site.ttf" \
-  "assets/css/fonts/Comfortaa/Comfortaa-VariableFont_wght.site.woff2"
+  "Comfortaa/Comfortaa-VariableFont_wght.site.woff2"
 
 build_subset \
   "assets/css/fonts/Itim/Itim-Regular.ttf" \
   "$TMP_DIR/Itim-Regular.site.ttf" \
-  "assets/css/fonts/Itim/Itim-Regular.site.woff2"
+  "Itim/Itim-Regular.site.woff2"
 
 build_subset \
   "assets/css/fonts/Pacifico/Pacifico-Regular.ttf" \
   "$TMP_DIR/Pacifico-Regular.site.ttf" \
-  "assets/css/fonts/Pacifico/Pacifico-Regular.site.woff2"
+  "Pacifico/Pacifico-Regular.site.woff2"

@@ -9,8 +9,8 @@ build-release-no-tailwind:
     bun run datastar:build; \
     bun run d3:build; \
     bun run images:build; \
-    bash ./scripts/build-web-fonts.sh; \
     zine release --output "$build_dir"; \
+    FISHYSTUFF_WEB_FONT_OUTPUT_ROOT="$build_dir/css/fonts" bash ./scripts/build-web-fonts.sh; \
     bun run ./scripts/write-runtime-config.mjs --out "$build_dir/runtime-config.js"; \
     ln -sfn "$build_dir" .out.next; \
     if [ -L .out ]; then \
