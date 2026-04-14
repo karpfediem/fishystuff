@@ -30,24 +30,25 @@
               let lower = pkgs.lib.toLower path; in
                 !(pkgs.lib.hasSuffix ".webp" lower);
           };
-          waypoints = pkgs.runCommandLocal "filtered-waypoints" { } ''
-            mkdir -p $out/bdo-fish-waypoints
-            cd ${filteredWaypointsSrc}
-            cp -r . $out/bdo-fish-waypoints/
-          '';
-
-          botSrc = pkgs.runCommandLocal "bot-combined-src" { } ''
-            mkdir -p $out
-            cp -r ${./bot}/* ${waypoints}/* $out
-          '';
-
           craneLib = crane.mkLib pkgs;
-          cargoSrc = craneLib.cleanCargoSource ./.;
-          bot = craneLib.buildPackage { src = botSrc; };
+          apiWorkspaceCargoToml = pkgs.callPackage ./nix/packages/api-workspace-cargo-toml.nix { };
+          apiWorkspaceSrc = pkgs.callPackage ./nix/packages/api-workspace-src.nix {
+            inherit apiWorkspaceCargoToml;
+            apiWorkspaceCargoLock = ./nix/locks/api/Cargo.lock;
+          };
+          apiCargoSrc = craneLib.cleanCargoSource apiWorkspaceSrc;
+          botWaypoints = pkgs.callPackage ./nix/packages/bot-waypoints.nix {
+            inherit filteredWaypointsSrc;
+          };
+          botSrc = pkgs.callPackage ./nix/packages/bot-src.nix {
+            inherit botWaypoints;
+          };
+          botCargoSrc = craneLib.cleanCargoSource botSrc;
+          bot = craneLib.buildPackage { src = botCargoSrc; };
           bot-container = pkgs.dockerTools.buildLayeredImage {
             name = "crio";
             tag = "latest";
-            contents = [ waypoints "${bot}/bin" ];
+            contents = [ botWaypoints "${bot}/bin" ];
             config.Entrypoint = [ "bot" ];
             config.Env = [ "PATH=${bot}/bin" ];
           };
@@ -55,23 +56,13 @@
           api = craneLib.buildPackage {
             pname = "fishystuff_server";
             version = "0.1.0";
-            src = cargoSrc;
+            src = apiCargoSrc;
             cargoExtraArgs = "-p fishystuff_server";
           };
 
-          apiConfig = pkgs.runCommandLocal "fishystuff-api-config" { } ''
-            mkdir -p $out/etc/fishystuff
-            cp ${./api/config.toml} $out/etc/fishystuff/config.toml
-          '';
-
-          apiEntrypoint = pkgs.writeShellApplication {
-            name = "fishystuff-api-entrypoint";
-            runtimeInputs = [
-              api
-              pkgs.coreutils
-              pkgs.dolt
-            ];
-            text = builtins.readFile ./api/entrypoint.sh;
+          apiConfig = pkgs.callPackage ./nix/packages/api-config.nix { };
+          apiEntrypoint = pkgs.callPackage ./nix/packages/api-entrypoint.nix {
+            inherit api;
           };
 
           api-container = pkgs.dockerTools.buildLayeredImage {
@@ -94,6 +85,14 @@
         {
           packages = { inherit api api-container bot bot-container; };
         };
-      flake = { };
+      flake = {
+        nixosModules = {
+          default = import ./nix/modules;
+          fishystuff-api = import ./nix/modules/fishystuff-api.nix;
+          fishystuff-dolt = import ./nix/modules/fishystuff-dolt.nix;
+          fishystuff-caddy-static = import ./nix/modules/fishystuff-caddy-static.nix;
+          fishystuff-caddy-proxy = import ./nix/modules/fishystuff-caddy-proxy.nix;
+        };
+      };
     });
 }
