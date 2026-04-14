@@ -634,7 +634,7 @@
                 "Effective average bite time after level and abundance modifiers.",
               ),
               calculatorBreakdownRow(
-                "Auto-fishing time",
+                "Auto-Fishing Time",
                 calculatorFmt2(autoFishTimeRaw),
                 "Passive waiting phase after AFR is applied.",
               ),
@@ -1037,7 +1037,7 @@
       loot_total_profit: calculatorFmtSilver(lootTotalProfitRaw),
       loot_profit_per_hour: calculatorFmtSilver(lootProfitPerHourRaw),
       timespan_text: currentTimespanText,
-      bite_time_title: `Bitetime: ${calculatorFmt2(biteTimeRaw)}s (${calculatorFmt2(percentBite)}%)`,
+      bite_time_title: `Bite Time: ${calculatorFmt2(biteTimeRaw)}s (${calculatorFmt2(percentBite)}%)`,
       auto_fish_time_title: `Auto-Fishing Time: ${calculatorFmt2(autoFishTimeRaw)}s (${calculatorFmt2(percentAF)}%)`,
       catch_time_title: `Catch Time: ${calculatorFmt2(catchTimeRaw)}s (${calculatorFmt2(percentCatch)}%)`,
       unoptimized_time_title: `Average Unoptimized Time: ${calculatorFmt2(unoptimizedTimeRaw)}s (${calculatorFmt2(percentImprovement)}%)`,

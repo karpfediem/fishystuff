@@ -2004,7 +2004,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         durability_loss_average: fmt2(durability_loss_average_raw),
         timespan_text: timespan_text.clone(),
         bite_time_title: format!(
-            "Bitetime: {}s ({}%)",
+            "Bite Time: {}s ({}%)",
             fmt2(bite_time_raw),
             fmt2(percent_bite)
         ),
@@ -4060,7 +4060,7 @@ fn derive_stat_breakdowns(
                         ));
                     } else {
                         rows.push(computed_stat_breakdown_row(
-                            "Auto-fishing time",
+                            "Auto-Fishing Time",
                             fmt2(auto_fish_time_raw),
                             "Passive waiting phase after AFR is applied.",
                         ));
@@ -4166,7 +4166,7 @@ fn derive_stat_breakdowns(
     let auto_fish_time_reduction_breakdown = computed_stat_breakdown(
         "Auto-Fishing Time Reduction",
         format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
-        "Auto-fishing reduction combines the strongest pet AFR special with additive item and buff AFR.",
+        "Auto-Fishing Time Reduction combines the strongest pet AFR special with additive item and buff AFR.",
         "Displayed AFR uses highest pet AFR + additive item AFR, capped at 66.67% for actual timing.",
         vec![
             computed_stat_breakdown_section("Inputs", afr_input_rows),
@@ -4181,8 +4181,8 @@ fn derive_stat_breakdowns(
                     computed_stat_breakdown_row(
                         "Timing cap",
                         "66.67%",
-                        "Auto-fishing time cannot be reduced by more than two thirds.",
-                    ),
+                        "Auto-Fishing Time cannot be reduced by more than two thirds.",
+                        ),
                     computed_stat_breakdown_row(
                         "Applied AFR",
                         format!("{}%", trim_float(afr_raw * 100.0)),
@@ -5242,7 +5242,7 @@ fn render_calculator_app(
                         <div class="stat-value text-2xl" data-text="$_live.item_drr_text"></div>
                     </div>
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.chance_to_consume_durability || ''" data-fishy-stat-color="var(--color-warning)">
-                        <div class="stat-title">Chance to consume Durability</div>
+                        <div class="stat-title">Chance to Consume Durability</div>
                         <div class="stat-value text-2xl" data-text="$_live.chance_to_consume_durability_text"></div>
                     </div>
                     <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.durability_loss_average || ''" data-fishy-stat-color="var(--color-warning)">

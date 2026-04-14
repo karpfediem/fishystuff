@@ -393,7 +393,7 @@ test("calculator liveCalc keeps stat breakdown payloads aligned with local deriv
 
   assert.equal(totalTime.value_text, live.total_time);
   assert.equal(totalTime.sections[0].rows[0].value_text, live.bite_time);
-  assert.equal(totalTime.sections[0].rows[1].label, "Auto-fishing time");
+  assert.equal(totalTime.sections[0].rows[1].label, "Auto-Fishing Time");
   assert.equal(castsAverage.title, "Average Casts (2 hours)");
   assert.equal(castsAverage.sections[0].rows[0].value_text, "2 hours");
   assert.equal(totalCatches.title, "Expected Catches (2 hours)");
