@@ -322,6 +322,37 @@
     gap: 0.08rem;
 }
 
+.fishy-stat-breakdown-tooltip__item-row {
+    min-width: 0;
+    max-width: 100%;
+    gap: 0.45rem;
+}
+
+.fishy-stat-breakdown-tooltip__item-icon-frame {
+    flex: 0 0 auto;
+}
+
+.fishy-stat-breakdown-tooltip__item-copy {
+    min-width: 0;
+    display: grid;
+    gap: 0.08rem;
+}
+
+.fishy-stat-breakdown-tooltip__item-label {
+    display: block;
+    min-width: 0;
+    font-size: 0.79rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.fishy-stat-breakdown-tooltip__item-detail {
+    padding-left: calc(1.35rem + 0.45rem);
+}
+
 .fishy-stat-breakdown-tooltip__row-label {
     font-size: 0.79rem;
     font-weight: 700;

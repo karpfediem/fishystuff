@@ -15,9 +15,11 @@ test("normalizeStatBreakdownPayload keeps titled sections and rows", () => {
                 label: "Inputs",
                 rows: [
                     {
-                        label: "Zone base rate",
-                        value_text: "10%",
-                        detail_text: "Base group rate from zone data",
+                        label: "Rare Float",
+                        value_text: "+10%",
+                        kind: "item",
+                        icon_url: "https://cdn.example.test/items/rare-float.webp",
+                        grade_tone: "yellow",
                     },
                 ],
             },
@@ -27,8 +29,11 @@ test("normalizeStatBreakdownPayload keeps titled sections and rows", () => {
     assert.equal(payload.eyebrow, "Computed stat");
     assert.equal(payload.title, "Rare group");
     assert.equal(payload.sections.length, 1);
-    assert.equal(payload.sections[0].rows[0].label, "Zone base rate");
-    assert.equal(payload.sections[0].rows[0].valueText, "10%");
+    assert.equal(payload.sections[0].rows[0].label, "Rare Float");
+    assert.equal(payload.sections[0].rows[0].valueText, "+10%");
+    assert.equal(payload.sections[0].rows[0].kind, "item");
+    assert.equal(payload.sections[0].rows[0].iconUrl, "https://cdn.example.test/items/rare-float.webp");
+    assert.equal(payload.sections[0].rows[0].gradeTone, "yellow");
 });
 
 test("normalizeStatBreakdownPayload drops empty sections and returns null for empty payloads", () => {

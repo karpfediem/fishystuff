@@ -123,6 +123,12 @@ struct ComputedStatBreakdownRow {
     label: String,
     value_text: String,
     detail_text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kind: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    icon_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    grade_tone: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2059,11 +2065,34 @@ fn computed_stat_breakdown_row(
         label: label.into(),
         value_text: value_text.into(),
         detail_text: detail_text.into(),
+        kind: None,
+        icon_url: None,
+        grade_tone: None,
+    }
+}
+
+fn computed_stat_breakdown_item_row(
+    item: &CalculatorItemEntry,
+    cdn_base_url: &str,
+    value_text: impl Into<String>,
+    detail_text: impl Into<String>,
+) -> ComputedStatBreakdownRow {
+    ComputedStatBreakdownRow {
+        label: item.name.clone(),
+        value_text: value_text.into(),
+        detail_text: detail_text.into(),
+        kind: Some("item"),
+        icon_url: item
+            .icon
+            .as_deref()
+            .map(|icon| absolute_public_asset_url(cdn_base_url, icon)),
+        grade_tone: Some(item_grade_tone(item.grade.as_deref()).to_string()),
     }
 }
 
 fn collect_item_property_breakdown_rows(
     items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+    cdn_base_url: &str,
     singles: &[&String],
     groups: &[&Vec<String>],
     value: impl Fn(&CalculatorItemEntry) -> Option<f64> + Copy,
@@ -2073,8 +2102,9 @@ fn collect_item_property_breakdown_rows(
     for key in singles {
         if let Some(item) = items_by_key.get(key.as_str()) {
             if let Some(amount) = value(item).filter(|amount| *amount > 0.0) {
-                rows.push(computed_stat_breakdown_row(
-                    item.name.clone(),
+                rows.push(computed_stat_breakdown_item_row(
+                    item,
+                    cdn_base_url,
                     format!("+{}%", trim_float(amount * 100.0)),
                     detail_text.to_string(),
                 ));
@@ -2085,8 +2115,9 @@ fn collect_item_property_breakdown_rows(
         for key in group.iter().filter(|key| !key.trim().is_empty()) {
             if let Some(item) = items_by_key.get(key.as_str()) {
                 if let Some(amount) = value(item).filter(|amount| *amount > 0.0) {
-                    rows.push(computed_stat_breakdown_row(
-                        item.name.clone(),
+                    rows.push(computed_stat_breakdown_item_row(
+                        item,
+                        cdn_base_url,
                         format!("+{}%", trim_float(amount * 100.0)),
                         detail_text.to_string(),
                     ));
@@ -2177,6 +2208,7 @@ fn derive_fish_group_chart(
     );
     let rare_bonus_inputs = collect_item_property_breakdown_rows(
         items_by_key,
+        data.cdn_base_url.as_str(),
         &[
             &signals.rod,
             &signals.float,
@@ -2186,7 +2218,7 @@ fn derive_fish_group_chart(
         ],
         &[&signals.outfit, &signals.food, &signals.buff],
         |item| item.bonus_rare.map(f64::from),
-        "Rare bonus source",
+        "",
     );
     let high_quality_bonus = sum_item_property(
         items_by_key,
@@ -2202,6 +2234,7 @@ fn derive_fish_group_chart(
     );
     let high_quality_bonus_inputs = collect_item_property_breakdown_rows(
         items_by_key,
+        data.cdn_base_url.as_str(),
         &[
             &signals.rod,
             &signals.float,
@@ -2211,7 +2244,7 @@ fn derive_fish_group_chart(
         ],
         &[&signals.outfit, &signals.food, &signals.buff],
         |item| item.bonus_big.map(f64::from),
-        "High-quality bonus source",
+        "",
     );
 
     let rare_base = f64::from(zone_group_rate.rare_rate_raw.max(0)) / 1_000_000.0;
@@ -8071,12 +8104,16 @@ mod tests {
                         key: "item:rare-float".to_string(),
                         name: "Rare Float".to_string(),
                         bonus_rare: Some(0.10),
+                        grade: Some("Rare".to_string()),
+                        icon: Some("/items/rare-float.webp".to_string()),
                         ..CalculatorItemEntry::default()
                     },
                     CalculatorItemEntry {
                         key: "item:hq-chair".to_string(),
                         name: "HQ Chair".to_string(),
                         bonus_big: Some(0.11),
+                        grade: Some("HighQuality".to_string()),
+                        icon: Some("/items/hq-chair.webp".to_string()),
                         ..CalculatorItemEntry::default()
                     },
                 ],
@@ -8144,6 +8181,17 @@ mod tests {
         assert_eq!(fish_group_chart.rows[1].rate_inputs[0].value_text, "10%");
         assert_eq!(fish_group_chart.rows[1].rate_inputs[1].label, "Rare Float");
         assert_eq!(fish_group_chart.rows[1].rate_inputs[1].value_text, "+10%");
+        assert_eq!(fish_group_chart.rows[1].rate_inputs[1].kind, Some("item"));
+        assert_eq!(
+            fish_group_chart.rows[1].rate_inputs[1].icon_url.as_deref(),
+            Some("http://127.0.0.1:4040/items/rare-float.webp")
+        );
+        assert_eq!(
+            fish_group_chart.rows[1].rate_inputs[1]
+                .grade_tone
+                .as_deref(),
+            Some("yellow")
+        );
 
         assert_eq!(fish_group_chart.rows[2].label, "High-Quality");
         assert_eq!(fish_group_chart.rows[2].bonus_text, "+11% HQ");
@@ -8157,6 +8205,17 @@ mod tests {
         assert_eq!(fish_group_chart.rows[2].rate_inputs[0].value_text, "20%");
         assert_eq!(fish_group_chart.rows[2].rate_inputs[1].label, "HQ Chair");
         assert_eq!(fish_group_chart.rows[2].rate_inputs[1].value_text, "+11%");
+        assert_eq!(fish_group_chart.rows[2].rate_inputs[1].kind, Some("item"));
+        assert_eq!(
+            fish_group_chart.rows[2].rate_inputs[1].icon_url.as_deref(),
+            Some("http://127.0.0.1:4040/items/hq-chair.webp")
+        );
+        assert_eq!(
+            fish_group_chart.rows[2].rate_inputs[1]
+                .grade_tone
+                .as_deref(),
+            Some("blue")
+        );
 
         assert_eq!(fish_group_chart.rows[3].label, "General");
         assert!((fish_group_chart.rows[3].weight_pct - 70.0).abs() < tolerance);

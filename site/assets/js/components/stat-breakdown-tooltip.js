@@ -7,6 +7,9 @@ function normalizeBreakdownRow(row = {}) {
     const label = trimString(row?.label);
     const valueText = trimString(row?.value_text ?? row?.valueText);
     const detailText = trimString(row?.detail_text ?? row?.detailText);
+    const kind = trimString(row?.kind).toLowerCase();
+    const iconUrl = trimString(row?.icon_url ?? row?.iconUrl);
+    const gradeTone = trimString(row?.grade_tone ?? row?.gradeTone).toLowerCase() || "unknown";
     if (!label && !valueText && !detailText) {
         return null;
     }
@@ -14,6 +17,9 @@ function normalizeBreakdownRow(row = {}) {
         label: label || "Value",
         valueText,
         detailText,
+        kind,
+        iconUrl,
+        gradeTone,
     };
 }
 
@@ -131,6 +137,69 @@ function payloadForAnchor(anchor) {
     return payload;
 }
 
+function itemToneClass(gradeTone) {
+    const normalized = trimString(gradeTone).toLowerCase() || "unknown";
+    return `fishy-item-grade-${normalized}`;
+}
+
+function itemFallbackLabel(label) {
+    return trimString(label).charAt(0).toUpperCase() || "?";
+}
+
+function buildRowMain(documentRef, row) {
+    const main = documentRef.createElement("div");
+    main.className = "fishy-stat-breakdown-tooltip__row-main";
+
+    if (row.kind === "item") {
+        const toneClass = itemToneClass(row.gradeTone);
+        const itemRow = documentRef.createElement("span");
+        itemRow.className = `fishy-stat-breakdown-tooltip__item-row fishy-item-row ${toneClass}`;
+
+        const iconFrame = documentRef.createElement("span");
+        iconFrame.className = `fishy-stat-breakdown-tooltip__item-icon-frame fishy-item-icon-frame is-xs ${toneClass}`;
+        if (row.iconUrl) {
+            const icon = documentRef.createElement("img");
+            icon.className = "fishy-stat-breakdown-tooltip__item-icon fishy-item-icon item-icon";
+            icon.src = row.iconUrl;
+            icon.alt = `${row.label} icon`;
+            icon.loading = "lazy";
+            icon.decoding = "async";
+            iconFrame.appendChild(icon);
+        } else {
+            const fallback = documentRef.createElement("span");
+            fallback.className = `fishy-item-icon-fallback ${toneClass}`;
+            fallback.textContent = itemFallbackLabel(row.label);
+            iconFrame.appendChild(fallback);
+        }
+
+        const copy = documentRef.createElement("span");
+        copy.className = "fishy-stat-breakdown-tooltip__item-copy";
+        const label = documentRef.createElement("span");
+        label.className = `fishy-stat-breakdown-tooltip__item-label fishy-item-label ${toneClass}`;
+        label.textContent = row.label;
+        copy.appendChild(label);
+
+        itemRow.append(iconFrame, copy);
+        main.appendChild(itemRow);
+    } else {
+        const label = documentRef.createElement("div");
+        label.className = "fishy-stat-breakdown-tooltip__row-label";
+        label.textContent = row.label;
+        main.appendChild(label);
+    }
+
+    if (row.detailText) {
+        const detail = documentRef.createElement("div");
+        detail.className = row.kind === "item"
+            ? "fishy-stat-breakdown-tooltip__item-detail fishy-stat-breakdown-tooltip__row-detail"
+            : "fishy-stat-breakdown-tooltip__row-detail";
+        detail.textContent = row.detailText;
+        main.appendChild(detail);
+    }
+
+    return main;
+}
+
 function buildSection(documentRef, section) {
     const sectionElement = documentRef.createElement("section");
     sectionElement.className = "fishy-stat-breakdown-tooltip__section";
@@ -144,20 +213,7 @@ function buildSection(documentRef, section) {
         const rowElement = documentRef.createElement("div");
         rowElement.className = "fishy-stat-breakdown-tooltip__row";
 
-        const main = documentRef.createElement("div");
-        main.className = "fishy-stat-breakdown-tooltip__row-main";
-
-        const label = documentRef.createElement("div");
-        label.className = "fishy-stat-breakdown-tooltip__row-label";
-        label.textContent = row.label;
-        main.appendChild(label);
-
-        if (row.detailText) {
-            const detail = documentRef.createElement("div");
-            detail.className = "fishy-stat-breakdown-tooltip__row-detail";
-            detail.textContent = row.detailText;
-            main.appendChild(detail);
-        }
+        const main = buildRowMain(documentRef, row);
 
         const value = documentRef.createElement("div");
         value.className = "fishy-stat-breakdown-tooltip__row-value";
