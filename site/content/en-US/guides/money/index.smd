@@ -25,10 +25,10 @@ There are some prerequisites you will want to fullfill before fishing.
 Ensure you have:
 
 - ✅ [Fishing level 5](#level)
-- ✅ [Maximum Auto-Fishing Reduction](#afr)
+- ✅ [Maximum Auto-Fishing Time Reduction (AFR)](#afr)
 
 If you are fishing with **Rods that cannot be repaired** like the Triple-Float/Grandpa Cron's/Cool Wind Fishing Rod, try
-to get the **maximum Durability reduction resistance (DRR)** which currently is 91%.
+to get the **maximum Durability Reduction Resistance (DRR)**, which is currently 91%.
 
 There is a special guide for [optimizing your DRR](/guides/drr).
 
@@ -56,7 +56,7 @@ Fortunately this is very easy to achieve nowadays.
 | [Alchemy Stone](https://bdolytics.com/en/NA/db/item/45514)/[Life Spirit Stone](https://bdolytics.com/en/NA/db/item/45302)                             | +2            |
 | [Pet Skill](https://bdolytics.com/en/NA/db/skill/49002)                                                                                               | +1 per pet    |
 
-### [Max Auto-fishing reduction (67%)]($section.id('afr'))
+### [Maximum Auto-Fishing Time Reduction (67% AFR)]($section.id('afr'))
 
 See the interactive [Fishing Calculator](/calculator) or
 my [Fishing Time Calculator Sheet](https://docs.google.com/spreadsheets/d/1s5eyc9tm5jLNXzPa1VMu0HSOzjDB4Ggcdk7g3iobsI8/edit#gid=0)
@@ -67,9 +67,9 @@ Different combinations are possible, but the easy mode TL;DR is
 - Manos Fishing Chair (10%)
 - Balacs Lunchbox (7%)
 
-This should bring you to 67% (or 72% with T4/5 pet) Auto-Fishing Time Reduction (AFR) which meets the cap of 67%.
+This setup gets you to 67% Auto-Fishing Time Reduction (AFR), or 72% AFR with a T4/T5 pet. Anything above 67% will not reduce Auto-Fishing Time any further.
 
-| Item                                                                       | 	Fishing time reduction |
+| Item                                                                       | 	Auto-Fishing Time Reduction (AFR) |
 |----------------------------------------------------------------------------|-------------------------|
 | Pet T1/T2	                                                                 | 20%                     |
 | Pet T3	                                                                    | 25%                     |
@@ -122,8 +122,8 @@ These rods are able to catch **1-4 fish** and have an average of **1.6 fish/cast
 
 This means for rods like the [Grandpa Cron](https://bdolytics.com/en/NA/db/item/767158) & [Cool Wind Fishing Rod](https://bdolytics.com/en/NA/db/item/767187) that they will effectively **increase your total income by 60%!**
 
-It is also possible to fish for long periods of time with a regular TFR ([optimizing your DRR](/guides/drr), [Calculator](/calculator)).
-However, the regular Triple-Float Rod, has a limited AFR.
+It is also possible to fish for long periods of time with a regular Triple-Float Rod (TFR) ([optimizing your DRR](/guides/drr), [Calculator](/calculator)).
+However, the regular Triple-Float Rod has limited Auto-Fishing Time Reduction (AFR).
 Currently - when using the [Blacksmith's Blessing](https://bdolytics.com/en/NA/db/lightstoneset/30) Lightstone Set - the maximum achievable AFR is 50%.
 
 Theoretically you could achieve 65% when using [Nibbles](https://bdolytics.com/en/NA/db/lightstoneset/160).
@@ -168,6 +168,6 @@ Beltfish and Plump Coelacanth.
 2. Archmap to Velia
 3. Go to Magnus at Bartali Farm and teleport to Seoul (Yukjo Street)
    > Optionally: Bukpo for extra distance
-4. Channel hop until you get decent prices on prizefish (120-130%) or you get bored
+4. Channel hop until you get decent prices on Prize Fish (120-130%) or you get bored
 5. Sell fish
 6. Teleport back using Archmap

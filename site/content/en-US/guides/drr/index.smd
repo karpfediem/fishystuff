@@ -1,5 +1,5 @@
 ---
-.title = "Optimizing Durability Reduction Resistance",
+.title = "Optimizing Durability Reduction Resistance (DRR)",
 .date = @date("2025-04-05T00:00:00"),
 .author = "Karpfen",
 .layout = "guide_page.shtml",
@@ -33,7 +33,7 @@ An [Item Brand Stone](https://bdolytics.com/en/NA/db/item/8930) will reduce your
 
 The current maximum obtainable DRR from items is **91%**.
 
-| Item                                                                         | 	Durability reduction resistance (DRR) |
+| Item                                                                         | 	Durability Reduction Resistance (DRR) |
 |------------------------------------------------------------------------------|----------------------------------------|
 | Pets (4x T4, 1x T5)	                                                         | 21.00%                                 |
 | 8-Piece Outfit Set Effect	                                                   | 10.00%                                 |
@@ -82,7 +82,7 @@ Each lifeskill level will provide 0.5% DRR until the **cap of 60%** DRR at **Gur
 
 ## [Putting it together]($section.id('examples'))
 
-### [Calculating Chance to consume Durability]($section.id('calc-chance'))
+### [Calculating Chance to Consume Durability]($section.id('calc-chance'))
 
 Let's say you have the following setup:
 
