@@ -496,6 +496,34 @@ function tooltipPointerSnapshot(event) {
     return { clientX, clientY };
 }
 
+export function statBreakdownTooltipPointerForAnchor(anchor, event, activePointer = null) {
+    const pointer = tooltipPointerSnapshot(event);
+    if (pointer) {
+        return { ...pointer, anchor };
+    }
+    if (activePointer?.anchor === anchor) {
+        return activePointer;
+    }
+    return null;
+}
+
+export function statBreakdownTooltipAnchorPoint(anchor, position = null, fallbackPosition = null) {
+    let clientX = Number(position?.clientX);
+    let clientY = Number(position?.clientY);
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+        clientX = Number(fallbackPosition?.clientX);
+        clientY = Number(fallbackPosition?.clientY);
+    }
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+        const rect = typeof anchor?.getBoundingClientRect === "function"
+            ? anchor.getBoundingClientRect()
+            : null;
+        clientX = Number(rect?.left ?? 0) + Number(rect?.width ?? 0) / 2;
+        clientY = Number(rect?.top ?? 0) + Number(rect?.height ?? 0) / 2;
+    }
+    return { clientX, clientY };
+}
+
 function disconnectActiveTooltipAnchorObserver() {
     activeTooltipAnchorObserver?.disconnect?.();
     activeTooltipAnchorObserver = null;
@@ -730,20 +758,14 @@ function buildSection(documentRef, section, index = 0, { payload = null, resolve
     return sectionElement;
 }
 
-function updateTooltipPosition(tooltip, anchor, event) {
+function updateTooltipPosition(tooltip, anchor, position = null, fallbackPosition = null) {
     const windowRef = globalThis.window;
     if (!tooltip || !windowRef) {
         return;
     }
-    let clientX = Number(event?.clientX);
-    let clientY = Number(event?.clientY);
-    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
-        const rect = typeof anchor?.getBoundingClientRect === "function"
-            ? anchor.getBoundingClientRect()
-            : null;
-        clientX = Number(rect?.left ?? 0) + Number(rect?.width ?? 0) / 2;
-        clientY = Number(rect?.top ?? 0) + Number(rect?.height ?? 0) / 2;
-    }
+    const anchorPoint = statBreakdownTooltipAnchorPoint(anchor, position, fallbackPosition);
+    const clientX = anchorPoint.clientX;
+    const clientY = anchorPoint.clientY;
     const offsetX = 14;
     const offsetY = 18;
     tooltip.style.left = "0";
@@ -778,7 +800,10 @@ function showTooltip(anchor, event) {
         return;
     }
     const { tooltip, refs } = tooltipData;
-    activeTooltipPointer = tooltipPointerSnapshot(event) ?? activeTooltipPointer;
+    const pointer = statBreakdownTooltipPointerForAnchor(anchor, event, activeTooltipPointer);
+    if (pointer) {
+        activeTooltipPointer = pointer;
+    }
     observeActiveTooltipAnchor(anchor);
     const refreshState = statBreakdownTooltipShouldRefresh(activeTooltipRenderState, tooltip, anchor);
     if (refreshState.shouldRefresh) {
@@ -826,7 +851,7 @@ function showTooltip(anchor, event) {
         };
     }
     tooltip.hidden = false;
-    updateTooltipPosition(tooltip, anchor, event);
+    updateTooltipPosition(tooltip, anchor, pointer, event);
 }
 
 function hideTooltip() {
@@ -835,7 +860,6 @@ function hideTooltip() {
     }
     tooltipElement.hidden = true;
     activeTooltipRenderState = null;
-    activeTooltipPointer = null;
     disconnectActiveTooltipAnchorObserver();
 }
 

@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
     STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER,
     statBreakdownFormulaTokenRows,
+    statBreakdownTooltipPointerForAnchor,
+    statBreakdownTooltipAnchorPoint,
     normalizeStatBreakdownPayload,
     statBreakdownFormulaTokens,
     statBreakdownPayloadForAnchor,
@@ -77,6 +79,54 @@ test("statBreakdownPayloadForAnchor reparses when the bound payload changes", ()
     assert.equal(second?.title, "Average Total Fishing Time");
     assert.equal(second?.valueText, "16.10");
     assert.equal(second?.sections[0]?.rows[0]?.valueText, "10.00");
+});
+
+test("statBreakdownTooltipAnchorPoint prefers pointer coordinates before falling back to the anchor center", () => {
+    const anchor = {
+        getBoundingClientRect() {
+            return {
+                left: 100,
+                top: 50,
+                width: 80,
+                height: 40,
+            };
+        },
+    };
+
+    assert.deepEqual(
+        statBreakdownTooltipAnchorPoint(anchor, null, { clientX: 320, clientY: 180 }),
+        { clientX: 320, clientY: 180 },
+    );
+    assert.deepEqual(
+        statBreakdownTooltipAnchorPoint(anchor),
+        { clientX: 140, clientY: 70 },
+    );
+});
+
+test("statBreakdownTooltipPointerForAnchor reuses the last pointer for the same anchor", () => {
+    const anchorA = { id: "a" };
+    const anchorB = { id: "b" };
+
+    assert.deepEqual(
+        statBreakdownTooltipPointerForAnchor(anchorA, { clientX: 25, clientY: 40 }),
+        { anchor: anchorA, clientX: 25, clientY: 40 },
+    );
+    assert.deepEqual(
+        statBreakdownTooltipPointerForAnchor(
+            anchorA,
+            null,
+            { anchor: anchorA, clientX: 25, clientY: 40 },
+        ),
+        { anchor: anchorA, clientX: 25, clientY: 40 },
+    );
+    assert.equal(
+        statBreakdownTooltipPointerForAnchor(
+            anchorB,
+            null,
+            { anchor: anchorA, clientX: 25, clientY: 40 },
+        ),
+        null,
+    );
 });
 
 test("statBreakdownTooltipShouldRefresh only refreshes content when tooltip payload or color changes", () => {
