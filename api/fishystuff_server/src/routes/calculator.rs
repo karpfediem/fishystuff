@@ -234,6 +234,10 @@ struct LootChartRow {
     current_share_pct: f64,
     count_share_text: String,
     silver_share_text: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    count_breakdown: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    silver_breakdown: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -279,6 +283,18 @@ struct LootSpeciesRow {
     presence_source_kind: String,
     presence_tooltip: Option<String>,
     evidence_text: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    count_breakdown: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    silver_breakdown: String,
+    #[serde(skip_serializing)]
+    within_group_rate_raw: f64,
+    #[serde(skip_serializing)]
+    base_price_raw: f64,
+    #[serde(skip_serializing)]
+    sale_multiplier_raw: f64,
+    #[serde(skip_serializing)]
+    discarded: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -3195,6 +3211,175 @@ fn loot_species_silver_breakdown_detail(row: &LootSpeciesRow) -> String {
     parts.join(" · ")
 }
 
+fn loot_species_count_breakdown(
+    row: &LootSpeciesRow,
+    total_catches_raw: f64,
+    group_share_pct: f64,
+) -> ComputedStatBreakdown {
+    let group_share_text = percent_value_text(group_share_pct);
+    let in_group_rate_text = percent_value_text(row.within_group_rate_raw * 100.0);
+
+    computed_stat_breakdown(
+        format!("{} expected catches", row.label),
+        row.expected_count_text.clone(),
+        if row.expected_count_raw > 0.0 {
+            "Expected catches for this loot row from the active session size, normalized group share, and in-group rate."
+        } else {
+            "This loot row currently contributes no expected catches under the active session settings."
+        },
+        "Expected catches = Group share × In-group rate × Session catches.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            format!("{} share", row.group_label),
+                            group_share_text.clone(),
+                            format!(
+                                "Normalized group share for {} before within-group loot weighting.",
+                                row.group_label,
+                            ),
+                        ),
+                        "Group share",
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "In-group rate",
+                            in_group_rate_text.clone(),
+                            row.drop_rate_tooltip.clone(),
+                        ),
+                        "In-group rate",
+                        2,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Session catches",
+                            trim_float(total_catches_raw),
+                            "Average catches over the current session duration.",
+                        ),
+                        "Session catches",
+                        3,
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Expected catches",
+                    row.expected_count_text.clone(),
+                    "Average catches for this loot row under the current settings.",
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Expected catches", row.expected_count_text.clone()),
+        computed_stat_formula_term("Group share", group_share_text),
+        computed_stat_formula_term("In-group rate", in_group_rate_text),
+        computed_stat_formula_term("Session catches", trim_float(total_catches_raw)),
+    ])
+}
+
+fn loot_species_silver_share_breakdown(
+    row: &LootSpeciesRow,
+    total_profit_raw: f64,
+) -> ComputedStatBreakdown {
+    let base_price_text = fmt_silver(row.base_price_raw);
+    let sale_multiplier_text = format!("×{}", trim_float(row.sale_multiplier_raw));
+    let expected_silver_detail = if row.discarded {
+        "Currently zeroed because this loot row is being discarded under the active filters."
+            .to_string()
+    } else if row.expected_profit_raw <= 0.0 {
+        "Currently zero because no priced output is available under the active settings."
+            .to_string()
+    } else {
+        "Expected catches multiplied by base price and the current trade sale multiplier."
+            .to_string()
+    };
+
+    computed_stat_breakdown(
+        format!("{} silver share", row.label),
+        row.silver_share_text.clone(),
+        if row.expected_profit_raw > 0.0 {
+            "Expected silver contribution from this loot row after current pricing and trade settings."
+        } else {
+            "This loot row currently contributes no expected silver after the active pricing, discard, and trade settings."
+        },
+        "Item expected silver = Expected catches × Base price × Trade sale multiplier.; Silver share = Item expected silver / All-item expected silver total.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Expected catches",
+                            row.expected_count_text.clone(),
+                            "Average catches for this loot row.",
+                        ),
+                        "Expected catches",
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Base price",
+                            base_price_text.clone(),
+                            "Current price source for this loot row before trade sale modifiers.",
+                        ),
+                        "Base price",
+                        2,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Trade sale multiplier",
+                            sale_multiplier_text.clone(),
+                            "Current sale multiplier after trade settings.",
+                        ),
+                        "Trade sale multiplier",
+                        3,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "All-item expected silver total",
+                            fmt_silver(total_profit_raw),
+                            "Denominator for the Loot Flow silver-share distribution.",
+                        ),
+                        "All-item expected silver total",
+                        4,
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Item expected silver",
+                        row.expected_profit_text.clone(),
+                        expected_silver_detail,
+                    ),
+                    computed_stat_breakdown_row(
+                        "Silver share",
+                        row.silver_share_text.clone(),
+                        "Calculated from item expected silver divided by total expected silver.",
+                    ),
+                ],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Item expected silver", row.expected_profit_text.clone()),
+        computed_stat_formula_term("Expected catches", row.expected_count_text.clone()),
+        computed_stat_formula_term("Base price", base_price_text),
+        computed_stat_formula_term("Trade sale multiplier", sale_multiplier_text),
+        computed_stat_formula_term("Silver share", row.silver_share_text.clone()),
+        computed_stat_formula_term(
+            "All-item expected silver total",
+            fmt_silver(total_profit_raw),
+        ),
+    ])
+}
+
 fn group_silver_distribution_breakdown(
     row: &LootChartRow,
     species_rows: &[LootSpeciesRow],
@@ -3598,6 +3783,11 @@ fn derive_loot_chart(
     } else {
         0.0
     };
+    let total_group_weight_pct = fish_group_chart
+        .rows
+        .iter()
+        .map(|row| row.weight_pct.max(0.0))
+        .sum::<f64>();
 
     let group_share_by_slot = fish_group_chart
         .rows
@@ -3673,6 +3863,12 @@ fn derive_loot_chart(
             presence_source_kind: loot_species_presence_source_kind(entry),
             presence_tooltip,
             evidence_text: loot_species_evidence_text(signals, entry),
+            count_breakdown: String::new(),
+            silver_breakdown: String::new(),
+            within_group_rate_raw: entry.within_group_rate,
+            base_price_raw,
+            sale_multiplier_raw,
+            discarded,
         });
     }
     species_rows.sort_by(|left, right| {
@@ -3696,6 +3892,20 @@ fn derive_loot_chart(
             0.0
         };
         species_row.silver_share_text = percent_value_text(silver_share);
+        let group_share_pct = group_share_by_slot
+            .get(&species_row.slot_idx)
+            .copied()
+            .unwrap_or_default()
+            * 100.0;
+        species_row.count_breakdown = stat_breakdown_json(loot_species_count_breakdown(
+            species_row,
+            total_catches_raw,
+            group_share_pct,
+        ));
+        species_row.silver_breakdown = stat_breakdown_json(loot_species_silver_share_breakdown(
+            species_row,
+            total_profit_raw,
+        ));
         if signals.show_silver_amounts {
             species_row.rate_text = percent_value_text(silver_share);
             species_row.rate_source_kind = "derived".to_string();
@@ -3710,7 +3920,7 @@ fn derive_loot_chart(
         }
     }
 
-    let rows = fish_group_chart
+    let mut rows = fish_group_chart
         .rows
         .iter()
         .enumerate()
@@ -3741,9 +3951,23 @@ fn derive_loot_chart(
                 current_share_pct: row.current_share_pct,
                 count_share_text: percent_value_text(row.current_share_pct),
                 silver_share_text: percent_value_text(silver_share_pct),
+                count_breakdown: stat_breakdown_json(fish_group_distribution_breakdown(
+                    row,
+                    total_catches_raw,
+                    total_group_weight_pct,
+                    true,
+                )),
+                silver_breakdown: String::new(),
             }
         })
         .collect::<Vec<_>>();
+    for row in &mut rows {
+        row.silver_breakdown = stat_breakdown_json(group_silver_distribution_breakdown(
+            row,
+            &species_rows,
+            total_profit_raw,
+        ));
+    }
     let profit_per_catch_raw = if total_catches_raw > 0.0 {
         total_profit_raw / total_catches_raw
     } else {
@@ -9662,6 +9886,8 @@ mod tests {
                 current_share_pct: 5.81,
                 count_share_text: "5.81%".to_string(),
                 silver_share_text: "24.00%".to_string(),
+                count_breakdown: String::new(),
+                silver_breakdown: String::new(),
             },
             LootChartRow {
                 label: "General",
@@ -9678,6 +9904,8 @@ mod tests {
                 current_share_pct: 94.19,
                 count_share_text: "94.19%".to_string(),
                 silver_share_text: "76.00%".to_string(),
+                count_breakdown: String::new(),
+                silver_breakdown: String::new(),
             },
         ];
         let species_rows = vec![
@@ -9706,6 +9934,12 @@ mod tests {
                 presence_source_kind: "database".to_string(),
                 presence_tooltip: None,
                 evidence_text: String::new(),
+                count_breakdown: String::new(),
+                silver_breakdown: String::new(),
+                within_group_rate_raw: 0.60,
+                base_price_raw: 50_000.0,
+                sale_multiplier_raw: 1.0,
+                discarded: false,
             },
             LootSpeciesRow {
                 slot_idx: 1,
@@ -9732,6 +9966,12 @@ mod tests {
                 presence_source_kind: "database".to_string(),
                 presence_tooltip: None,
                 evidence_text: String::new(),
+                count_breakdown: String::new(),
+                silver_breakdown: String::new(),
+                within_group_rate_raw: 0.40,
+                base_price_raw: 19_607.843137254902,
+                sale_multiplier_raw: 1.0,
+                discarded: false,
             },
             LootSpeciesRow {
                 slot_idx: 4,
@@ -9758,6 +9998,12 @@ mod tests {
                 presence_source_kind: "database".to_string(),
                 presence_tooltip: None,
                 evidence_text: String::new(),
+                count_breakdown: String::new(),
+                silver_breakdown: String::new(),
+                within_group_rate_raw: 1.0,
+                base_price_raw: 7_758.268681094324,
+                sale_multiplier_raw: 1.0,
+                discarded: false,
             },
         ];
 
@@ -9786,6 +10032,75 @@ mod tests {
         );
         assert_eq!(breakdown.sections[1].rows[2].value_text, "120,000");
         assert_eq!(breakdown.sections[1].rows[4].value_text, "24.00%");
+    }
+
+    #[test]
+    fn derive_loot_chart_exposes_loot_flow_breakdowns() {
+        let signals = CalculatorSignals::default();
+        let fish_group_chart = FishGroupChart {
+            available: true,
+            note: String::new(),
+            raw_prize_rate_text: "0%".to_string(),
+            mastery_text: "0".to_string(),
+            rows: vec![FishGroupChartRow {
+                label: "General",
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                bonus_text: String::new(),
+                base_share_pct: 100.0,
+                weight_pct: 100.0,
+                current_share_pct: 100.0,
+                rate_inputs: Vec::new(),
+            }],
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse::default(),
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::new(),
+            zone_loot_entries: vec![CalculatorZoneLootEntry {
+                slot_idx: 1,
+                item_id: 820001,
+                name: "Weighted Fish".to_string(),
+                vendor_price: Some(50_000),
+                within_group_rate: 0.25,
+                icon: Some("/items/weighted-fish.webp".to_string()),
+                ..CalculatorZoneLootEntry::default()
+            }],
+        };
+
+        let loot_chart = derive_loot_chart(&signals, &data, &fish_group_chart, 40.0, 1.0);
+        let flow_rows = filtered_loot_flow_rows(&loot_chart.rows, &loot_chart.species_rows);
+        let group_payload = serde_json::from_str::<Value>(&flow_rows[0].count_breakdown)
+            .expect("group breakdown should be valid json");
+        let group_silver_payload = serde_json::from_str::<Value>(&flow_rows[0].silver_breakdown)
+            .expect("group silver breakdown should be valid json");
+        let species_payload =
+            serde_json::from_str::<Value>(&loot_chart.species_rows[0].count_breakdown)
+                .expect("species count breakdown should be valid json");
+        let species_silver_payload =
+            serde_json::from_str::<Value>(&loot_chart.species_rows[0].silver_breakdown)
+                .expect("species silver breakdown should be valid json");
+
+        assert_eq!(group_payload["title"], "General group");
+        assert_eq!(group_silver_payload["title"], "General silver share");
+        assert_eq!(species_payload["title"], "Weighted Fish expected catches");
+        assert_eq!(species_payload["formula_terms"][1]["label"], "Group share");
+        assert_eq!(
+            species_silver_payload["title"],
+            "Weighted Fish silver share"
+        );
+        assert_eq!(
+            species_silver_payload["formula_terms"][0]["label"],
+            "Item expected silver"
+        );
+        assert_eq!(
+            species_silver_payload["formula_terms"][4]["label"],
+            "Silver share"
+        );
     }
 
     #[test]

@@ -164,6 +164,24 @@ function truncateText(value, maxChars) {
     return `${text.slice(0, maxChars - 1)}…`;
 }
 
+function applyStatBreakdownAttrs(selection, rawBreakdown, color) {
+    const breakdown = String(rawBreakdown ?? "").trim();
+    if (!breakdown) {
+        selection
+            .attr("data-fishy-stat-breakdown", null)
+            .attr("data-fishy-stat-color", null)
+            .attr("tabindex", null)
+            .style("cursor", null);
+        return selection;
+    }
+    selection
+        .attr("data-fishy-stat-breakdown", breakdown)
+        .attr("data-fishy-stat-color", color)
+        .attr("tabindex", 0)
+        .style("cursor", "help");
+    return selection;
+}
+
 function sankeyPath(x1, y1, x2, y2, h1, h2) {
     const c1 = x1 + 120;
     const c2 = x2 - 120;
@@ -414,7 +432,13 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 ) / provenanceSegments.length
                 : 0;
 
-            leftNodes.append("rect")
+            const groupNode = applyStatBreakdownAttrs(
+                leftNodes.append("g"),
+                row.count_breakdown,
+                "var(--color-info)",
+            );
+
+            groupNode.append("rect")
                 .attr("x", LEFT_X)
                 .attr("y", top)
                 .attr("width", LEFT_WIDTH)
@@ -425,7 +449,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("stroke", row.stroke_color)
                 .style("stroke-width", 1.5);
 
-            leftNodes.append("text")
+            groupNode.append("text")
                 .attr("x", LEFT_X + 10)
                 .attr("y", mid - 8)
                 .attr("dominant-baseline", "middle")
@@ -434,7 +458,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("font-weight", "700")
                 .text(row.label);
 
-            leftNodes.append("text")
+            groupNode.append("text")
                 .attr("x", LEFT_X + 10)
                 .attr("y", mid + 10)
                 .attr("dominant-baseline", "middle")
@@ -590,7 +614,13 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("fill", row.connector_color)
                 .style("opacity", 0.34);
 
-            rightNodes.append("rect")
+            const countMetric = applyStatBreakdownAttrs(
+                rightNodes.append("g"),
+                row.count_breakdown,
+                "var(--color-info)",
+            );
+
+            countMetric.append("rect")
                 .attr("x", leftBoxX)
                 .attr("y", labelTop)
                 .attr("width", SPECIES_METRIC_WIDTH)
@@ -601,7 +631,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("stroke", row.stroke_color)
                 .style("stroke-width", 1.5);
 
-            rightNodes.append("text")
+            countMetric.append("text")
                 .attr("x", leftBoxX + SPECIES_METRIC_WIDTH / 2)
                 .attr("y", leftBoxMid - 6)
                 .attr("text-anchor", "middle")
@@ -612,7 +642,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("font-variant-numeric", "tabular-nums")
                 .text(dropMetricText);
 
-            rightNodes.append("text")
+            countMetric.append("text")
                 .attr("x", leftBoxX + SPECIES_METRIC_WIDTH / 2)
                 .attr("y", leftBoxMid + 10)
                 .attr("text-anchor", "middle")
@@ -692,7 +722,13 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                     .style("opacity", segment.active ? 1 : 0.65);
             });
 
-            rightNodes.append("rect")
+            const silverMetric = applyStatBreakdownAttrs(
+                rightNodes.append("g"),
+                row.silver_breakdown,
+                "var(--color-success)",
+            );
+
+            silverMetric.append("rect")
                 .attr("x", rightBoxX)
                 .attr("y", labelTop)
                 .attr("width", SPECIES_METRIC_WIDTH)
@@ -703,7 +739,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("stroke", row.stroke_color)
                 .style("stroke-width", 1.5);
 
-            rightNodes.append("text")
+            silverMetric.append("text")
                 .attr("x", rightBoxX + SPECIES_METRIC_WIDTH / 2)
                 .attr("y", rightBoxMid - 6)
                 .attr("text-anchor", "middle")
@@ -714,7 +750,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("font-variant-numeric", "tabular-nums")
                 .text(silverMetricText);
 
-            rightNodes.append("text")
+            silverMetric.append("text")
                 .attr("x", rightBoxX + SPECIES_METRIC_WIDTH / 2)
                 .attr("y", rightBoxMid + 10)
                 .attr("text-anchor", "middle")
@@ -756,7 +792,13 @@ class FishyLootSankey extends FishyDatastarRenderElement {
             const mid = top + heightValue / 2;
             const valueLabel = `${row.silver_share_text} · ${compactSilverText(row.expected_profit_text)}`;
 
-            profitGroups.append("rect")
+            const groupNode = applyStatBreakdownAttrs(
+                profitGroups.append("g"),
+                row.silver_breakdown,
+                "var(--color-success)",
+            );
+
+            groupNode.append("rect")
                 .attr("x", silverGroupX)
                 .attr("y", top)
                 .attr("width", SILVER_GROUP_WIDTH)
@@ -767,7 +809,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("stroke", row.stroke_color)
                 .style("stroke-width", 1.5);
 
-            profitGroups.append("text")
+            groupNode.append("text")
                 .attr("x", silverGroupX + 10)
                 .attr("y", mid - 8)
                 .attr("dominant-baseline", "middle")
@@ -776,7 +818,7 @@ class FishyLootSankey extends FishyDatastarRenderElement {
                 .style("font-weight", "700")
                 .text(row.label);
 
-            profitGroups.append("text")
+            groupNode.append("text")
                 .attr("x", silverGroupX + 10)
                 .attr("y", mid + 10)
                 .attr("dominant-baseline", "middle")
