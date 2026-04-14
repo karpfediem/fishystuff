@@ -117,15 +117,16 @@ function statBreakdownTargetFromEvent(eventTarget) {
     return eventTarget.closest("[data-fishy-stat-breakdown]");
 }
 
-function payloadForAnchor(anchor) {
+export function statBreakdownPayloadForAnchor(anchor) {
     if (!anchor) {
         return null;
     }
-    if (payloadCache.has(anchor)) {
-        return payloadCache.get(anchor);
+    const raw = trimString(anchor.dataset?.fishyStatBreakdown);
+    const cached = payloadCache.get(anchor);
+    if (cached && cached.raw === raw) {
+        return cached.payload;
     }
     let payload = null;
-    const raw = trimString(anchor.dataset?.fishyStatBreakdown);
     if (raw) {
         try {
             payload = normalizeStatBreakdownPayload(JSON.parse(raw));
@@ -133,7 +134,7 @@ function payloadForAnchor(anchor) {
             payload = null;
         }
     }
-    payloadCache.set(anchor, payload);
+    payloadCache.set(anchor, { raw, payload });
     return payload;
 }
 
@@ -269,7 +270,7 @@ function showTooltip(anchor, event) {
     if (!tooltipData || !anchor?.dataset) {
         return;
     }
-    const payload = payloadForAnchor(anchor);
+    const payload = statBreakdownPayloadForAnchor(anchor);
     if (!payload) {
         return;
     }

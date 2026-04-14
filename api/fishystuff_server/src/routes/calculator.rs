@@ -115,7 +115,34 @@ struct CalculatorDerivedSignals {
     target_fish_per_day: String,
     target_fish_time_to_target: String,
     target_fish_status_text: String,
+    stat_breakdowns: CalculatorStatBreakdownSignals,
     debug_json: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct CalculatorStatBreakdownSignals {
+    total_time: String,
+    bite_time: String,
+    auto_fish_time: String,
+    auto_fish_time_reduction: String,
+    casts_average: String,
+    item_drr: String,
+    chance_to_consume_durability: String,
+    durability_loss_average: String,
+    zone_bite_min: String,
+    zone_bite_avg: String,
+    zone_bite_max: String,
+    effective_bite_min: String,
+    effective_bite_avg: String,
+    effective_bite_max: String,
+    loot_total_catches: String,
+    loot_fish_per_hour: String,
+    loot_total_profit: String,
+    loot_profit_per_hour: String,
+    raw_prize_rate: String,
+    target_expected_count: String,
+    target_time_to_target: String,
+    target_probability_at_least: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1856,6 +1883,43 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         loot_total_catches_raw,
         timespan_seconds,
     );
+    let stat_breakdowns = derive_stat_breakdowns(
+        signals,
+        data,
+        &items_by_key,
+        lifeskill_level,
+        &pets,
+        &pet_stats,
+        &fish_group_chart,
+        &loot_chart,
+        &target_fish_summary,
+        &zone_name,
+        zone_bite_min_raw,
+        zone_bite_max_raw,
+        zone_bite_avg_raw,
+        factor_level,
+        factor_resources,
+        effective_bite_min_raw,
+        effective_bite_max_raw,
+        bite_time_raw,
+        afr_uncapped_raw,
+        afr_raw,
+        auto_fish_time_raw,
+        item_drr_raw,
+        lifeskill_level_drr_raw,
+        brandstone_durability_factor,
+        chance_to_reduce_raw,
+        catch_time_active_raw,
+        catch_time_afk_raw,
+        total_time_raw,
+        timespan_seconds,
+        &timespan_text,
+        casts_average_raw,
+        durability_loss_average_raw,
+        fish_multiplier_raw,
+        loot_total_catches_raw,
+        loot_fish_per_hour_raw,
+    );
 
     let debug_json = serde_json::to_string_pretty(&json!({
         "inputs": signals,
@@ -1985,6 +2049,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         target_fish_per_day: target_fish_summary.per_day_text,
         target_fish_time_to_target: target_fish_summary.time_to_target_text,
         target_fish_status_text: target_fish_summary.status_text,
+        stat_breakdowns,
         debug_json,
     }
 }
@@ -2141,6 +2206,203 @@ fn collect_item_property_breakdown_rows(
         }
     }
     rows
+}
+
+fn computed_stat_breakdown_section(
+    label: impl Into<String>,
+    rows: Vec<ComputedStatBreakdownRow>,
+) -> ComputedStatBreakdownSection {
+    ComputedStatBreakdownSection {
+        label: label.into(),
+        rows,
+    }
+}
+
+fn computed_stat_breakdown(
+    title: impl Into<String>,
+    value_text: impl Into<String>,
+    summary_text: impl Into<String>,
+    formula_text: impl Into<String>,
+    sections: Vec<ComputedStatBreakdownSection>,
+) -> ComputedStatBreakdown {
+    ComputedStatBreakdown {
+        kind_label: "Computed stat".to_string(),
+        title: title.into(),
+        value_text: value_text.into(),
+        summary_text: summary_text.into(),
+        formula_text: formula_text.into(),
+        sections,
+    }
+}
+
+fn stat_breakdown_json(payload: ComputedStatBreakdown) -> String {
+    serde_json::to_string(&payload).unwrap_or_default()
+}
+
+fn option_label(options: &[CalculatorOptionEntry], key: &str) -> String {
+    let trimmed = key.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    options
+        .iter()
+        .find(|option| option.key == trimmed)
+        .map(|option| option.label.clone())
+        .unwrap_or_else(|| trimmed.to_string())
+}
+
+fn selected_items<'a>(
+    items_by_key: &HashMap<&str, &'a CalculatorItemEntry>,
+    singles: &[&String],
+    groups: &[&Vec<String>],
+) -> Vec<&'a CalculatorItemEntry> {
+    let mut rows = Vec::new();
+    for key in singles {
+        if let Some(item) = items_by_key.get(key.as_str()) {
+            rows.push(*item);
+        }
+    }
+    for group in groups {
+        for key in group.iter().filter(|key| !key.trim().is_empty()) {
+            if let Some(item) = items_by_key.get(key.as_str()) {
+                rows.push(*item);
+            }
+        }
+    }
+    rows
+}
+
+fn collect_selected_item_rows(
+    items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+    cdn_base_url: &str,
+    singles: &[&String],
+    groups: &[&Vec<String>],
+    build: impl Fn(&CalculatorItemEntry) -> Option<(String, String)>,
+) -> Vec<ComputedStatBreakdownRow> {
+    selected_items(items_by_key, singles, groups)
+        .into_iter()
+        .filter_map(|item| {
+            build(item).map(|(value_text, detail_text)| {
+                computed_stat_breakdown_item_row(item, cdn_base_url, value_text, detail_text)
+            })
+        })
+        .collect()
+}
+
+fn computed_stat_breakdown_zone_loot_item_row(
+    entry: &CalculatorZoneLootEntry,
+    cdn_base_url: &str,
+    value_text: impl Into<String>,
+    detail_text: impl Into<String>,
+) -> ComputedStatBreakdownRow {
+    ComputedStatBreakdownRow {
+        label: entry.name.clone(),
+        value_text: value_text.into(),
+        detail_text: detail_text.into(),
+        kind: Some("item"),
+        icon_url: entry
+            .icon
+            .as_deref()
+            .map(|icon| absolute_public_asset_url(cdn_base_url, icon)),
+        grade_tone: Some(item_grade_tone(entry.grade.as_deref()).to_string()),
+    }
+}
+
+fn pet_slot_name(slot_idx: usize) -> String {
+    format!("Pet {slot_idx}")
+}
+
+fn collect_pet_afr_breakdown_rows(
+    pets: &[&CalculatorPetSignals],
+    pet_stats: &[(f64, f64)],
+    catalog: &CalculatorPetCatalog,
+) -> Vec<ComputedStatBreakdownRow> {
+    pets.iter()
+        .enumerate()
+        .filter_map(|(index, pet)| {
+            let amount = pet_afr(pet, pet_stats);
+            if amount <= 0.0 {
+                return None;
+            }
+            let special_label = option_label(&catalog.specials, &pet.special);
+            let tier_label = option_label(&catalog.tiers, &pet.tier);
+            Some(computed_stat_breakdown_row(
+                pet_slot_name(index + 1),
+                format!("+{}%", trim_float(amount * 100.0)),
+                format!("{special_label} · {tier_label}"),
+            ))
+        })
+        .collect()
+}
+
+fn collect_pet_drr_breakdown_rows(
+    pets: &[&CalculatorPetSignals],
+    pet_stats: &[(f64, f64)],
+    catalog: &CalculatorPetCatalog,
+) -> Vec<ComputedStatBreakdownRow> {
+    pets.iter()
+        .enumerate()
+        .filter_map(|(index, pet)| {
+            let amount = pet_drr(pet, pet_stats);
+            if amount <= 0.0 {
+                return None;
+            }
+            let talent_label = option_label(&catalog.talents, &pet.talent);
+            let tier_label = option_label(&catalog.tiers, &pet.tier);
+            Some(computed_stat_breakdown_row(
+                pet_slot_name(index + 1),
+                format!("+{}%", trim_float(amount * 100.0)),
+                format!("{talent_label} · {tier_label}"),
+            ))
+        })
+        .collect()
+}
+
+fn collect_fish_multiplier_breakdown_rows(
+    items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+    cdn_base_url: &str,
+    signals: &CalculatorSignals,
+    applied_multiplier: f64,
+) -> Vec<ComputedStatBreakdownRow> {
+    collect_selected_item_rows(
+        items_by_key,
+        cdn_base_url,
+        &[
+            &signals.rod,
+            &signals.float,
+            &signals.chair,
+            &signals.lightstone_set,
+            &signals.backpack,
+        ],
+        &[&signals.outfit, &signals.food, &signals.buff],
+        |item| {
+            item.fish_multiplier
+                .map(f64::from)
+                .filter(|value| *value > 1.0)
+                .map(|value| {
+                    let detail = if (value - applied_multiplier).abs() < 0.0001 {
+                        "Applied highest fish multiplier.".to_string()
+                    } else {
+                        "Lower source; the highest selected fish multiplier applies.".to_string()
+                    };
+                    (format!("×{}", trim_float(value)), detail)
+                })
+        },
+    )
+}
+
+fn loot_group_profit_breakdown_rows(loot_rows: &[LootChartRow]) -> Vec<ComputedStatBreakdownRow> {
+    loot_rows
+        .iter()
+        .filter(|row| row.expected_profit_raw > 0.0)
+        .map(|row| {
+            computed_stat_breakdown_row(
+                row.label,
+                row.expected_profit_text.clone(),
+                format!("{} of expected silver", row.silver_share_text),
+            )
+        })
+        .collect()
 }
 
 fn effective_fish_multiplier(
@@ -3629,6 +3891,905 @@ fn derive_target_fish_summary(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn derive_stat_breakdowns(
+    signals: &CalculatorSignals,
+    data: &CalculatorData,
+    items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+    lifeskill_level: Option<&CalculatorLifeskillLevelEntry>,
+    pets: &[&CalculatorPetSignals],
+    pet_stats: &[(f64, f64)],
+    fish_group_chart: &FishGroupChart,
+    loot_chart: &LootChart,
+    target_fish_summary: &TargetFishSummary,
+    zone_name: &str,
+    zone_bite_min_raw: f64,
+    zone_bite_max_raw: f64,
+    zone_bite_avg_raw: f64,
+    factor_level: f64,
+    factor_resources: f64,
+    effective_bite_min_raw: f64,
+    effective_bite_max_raw: f64,
+    bite_time_raw: f64,
+    afr_uncapped_raw: f64,
+    afr_raw: f64,
+    auto_fish_time_raw: f64,
+    item_drr_raw: f64,
+    lifeskill_level_drr_raw: f64,
+    brandstone_durability_factor: f64,
+    chance_to_reduce_raw: f64,
+    catch_time_active_raw: f64,
+    catch_time_afk_raw: f64,
+    total_time_raw: f64,
+    timespan_seconds: f64,
+    timespan_text: &str,
+    casts_average_raw: f64,
+    durability_loss_average_raw: f64,
+    fish_multiplier_raw: f64,
+    loot_total_catches_raw: f64,
+    loot_fish_per_hour_raw: f64,
+) -> CalculatorStatBreakdownSignals {
+    let abundance_label = calc_abundance_label(signals.resources);
+    let afr_item_rows = collect_item_property_breakdown_rows(
+        items_by_key,
+        data.cdn_base_url.as_str(),
+        &[
+            &signals.rod,
+            &signals.chair,
+            &signals.lightstone_set,
+            &signals.float,
+        ],
+        &[&signals.buff, &signals.food],
+        |item| item.afr.map(f64::from),
+        "",
+    );
+    let pet_afr_rows = collect_pet_afr_breakdown_rows(pets, pet_stats, &data.catalog.pets);
+    let mut afr_input_rows = Vec::new();
+    afr_input_rows.extend(afr_item_rows);
+    afr_input_rows.extend(pet_afr_rows);
+    if afr_input_rows.is_empty() {
+        afr_input_rows.push(computed_stat_breakdown_row(
+            "AFR sources",
+            "0%",
+            "No active AFR items, buffs, or pet specials are selected.",
+        ));
+    }
+
+    let item_drr_item_rows = collect_item_property_breakdown_rows(
+        items_by_key,
+        data.cdn_base_url.as_str(),
+        &[
+            &signals.rod,
+            &signals.chair,
+            &signals.backpack,
+            &signals.lightstone_set,
+        ],
+        &[&signals.buff, &signals.outfit],
+        |item| item.item_drr.map(f64::from),
+        "",
+    );
+    let pet_drr_rows = collect_pet_drr_breakdown_rows(pets, pet_stats, &data.catalog.pets);
+    let mut item_drr_input_rows = Vec::new();
+    item_drr_input_rows.extend(item_drr_item_rows.clone());
+    item_drr_input_rows.extend(pet_drr_rows.clone());
+    if item_drr_input_rows.is_empty() {
+        item_drr_input_rows.push(computed_stat_breakdown_row(
+            "Item DRR sources",
+            "0%",
+            "No active Item DRR items or pet talents are selected.",
+        ));
+    }
+
+    let fish_multiplier_rows = collect_fish_multiplier_breakdown_rows(
+        items_by_key,
+        data.cdn_base_url.as_str(),
+        signals,
+        fish_multiplier_raw,
+    );
+    let fish_multiplier_input_rows = if fish_multiplier_rows.is_empty() {
+        vec![computed_stat_breakdown_row(
+            "Fish multiplier sources",
+            "×1",
+            "No selected item currently raises fish per cast above the base multiplier.",
+        )]
+    } else {
+        fish_multiplier_rows
+    };
+
+    let mastery_prize_rate =
+        mastery_prize_rate_for_bracket(&data.catalog.mastery_prize_curve, signals.mastery);
+    let raw_prize_breakdown = computed_stat_breakdown(
+        "Raw Prize Catch Rate",
+        fish_group_chart.raw_prize_rate_text.clone(),
+        "Prize catch rate is read from the mastery prize curve before any zone-group normalization.",
+        "Displayed rate uses the resolved mastery prize-curve entry directly.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![computed_stat_breakdown_row(
+                    "Fishing mastery",
+                    trim_float(signals.mastery),
+                    "Current mastery input used for the prize curve lookup.",
+                )],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Resolved curve rate",
+                        percent_value_text(mastery_prize_rate * 100.0),
+                        "Prize rate from the current mastery bracket.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Displayed raw rate",
+                        fish_group_chart.raw_prize_rate_text.clone(),
+                        "Shown before zone-group normalization.",
+                    ),
+                ],
+            ),
+        ],
+    );
+
+    let total_time_breakdown = computed_stat_breakdown(
+        "Average Total Fishing Time",
+        fmt2(total_time_raw),
+        if signals.active {
+            "Active mode uses bite time plus active catch time."
+        } else {
+            "AFK mode uses bite time, passive auto-fishing time, and AFK catch time."
+        },
+        if signals.active {
+            "Displayed time uses bite time + active catch time."
+        } else {
+            "Displayed time uses bite time + auto-fishing time + AFK catch time."
+        },
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                {
+                    let mut rows = vec![computed_stat_breakdown_row(
+                        "Average bite time",
+                        fmt2(bite_time_raw),
+                        "Effective average bite time after level and abundance modifiers.",
+                    )];
+                    if signals.active {
+                        rows.push(computed_stat_breakdown_row(
+                            "Active catch time",
+                            fmt2(catch_time_active_raw),
+                            "Manual catch-time input used in active mode.",
+                        ));
+                    } else {
+                        rows.push(computed_stat_breakdown_row(
+                            "Auto-fishing time",
+                            fmt2(auto_fish_time_raw),
+                            "Passive waiting phase after AFR is applied.",
+                        ));
+                        rows.push(computed_stat_breakdown_row(
+                            "AFK catch time",
+                            fmt2(catch_time_afk_raw),
+                            "Manual catch-time input used in AFK mode.",
+                        ));
+                    }
+                    rows
+                },
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed total",
+                    fmt2(total_time_raw),
+                    "Average fishing cycle duration used for downstream casts and loot calculations.",
+                )],
+            ),
+        ],
+    );
+
+    let bite_time_factor_rows = vec![
+        computed_stat_breakdown_row(
+            "Zone average bite time",
+            fmt2(zone_bite_avg_raw),
+            format!("Derived from {} zone bite-time metadata.", zone_name),
+        ),
+        computed_stat_breakdown_row(
+            "Level factor",
+            format!("×{}", trim_float(factor_level)),
+            format!(
+                "Fishing level {} reduces the base bite window.",
+                signals.level
+            ),
+        ),
+        computed_stat_breakdown_row(
+            "Abundance factor",
+            format!("×{}", trim_float(factor_resources)),
+            format!(
+                "Resources {}% ({}) scale the bite window.",
+                trim_float(signals.resources),
+                abundance_label
+            ),
+        ),
+    ];
+    let bite_time_breakdown = computed_stat_breakdown(
+        "Average Bite Time",
+        fmt2(bite_time_raw),
+        "Effective average bite time after level and resource abundance scaling.",
+        "Displayed bite time uses zone average bite time × level factor × abundance factor.",
+        vec![
+            computed_stat_breakdown_section("Inputs", bite_time_factor_rows.clone()),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed average",
+                    fmt2(bite_time_raw),
+                    "Used in the total fishing time calculation.",
+                )],
+            ),
+        ],
+    );
+
+    let auto_fish_time_breakdown = computed_stat_breakdown(
+        "Auto-Fishing Time",
+        fmt2(auto_fish_time_raw),
+        "Passive AFK phase after bite time and before the AFK catch interaction completes.",
+        "Displayed time uses max(180 × (1 - AFR), 60).",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Baseline auto-fishing time",
+                        "180",
+                        "Backend keeps the passive AFK baseline even when Active Fishing is enabled.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Applied AFR",
+                        format!("{}%", trim_float(afr_raw * 100.0)),
+                        "Capped AFR used by the passive auto-fishing timer.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Minimum auto-fishing time",
+                        "60",
+                        "The passive timer cannot go below 60 seconds.",
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed AFT",
+                    fmt2(auto_fish_time_raw),
+                    "Used only in AFK total fishing time calculations.",
+                )],
+            ),
+        ],
+    );
+
+    let auto_fish_time_reduction_breakdown = computed_stat_breakdown(
+        "Auto-Fishing Time Reduction",
+        format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
+        "Auto-fishing reduction combines the strongest pet AFR special with additive item and buff AFR.",
+        "Displayed AFR uses highest pet AFR + additive item AFR, capped at 66.67% for actual timing.",
+        vec![
+            computed_stat_breakdown_section("Inputs", afr_input_rows),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Uncapped AFR",
+                        format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
+                        "Shown on the stat card before the timing cap is applied.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Timing cap",
+                        "66.67%",
+                        "Auto-fishing time cannot be reduced by more than two thirds.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Applied AFR",
+                        format!("{}%", trim_float(afr_raw * 100.0)),
+                        "Value used to derive Auto-Fishing Time.",
+                    ),
+                ],
+            ),
+        ],
+    );
+
+    let casts_average_breakdown = computed_stat_breakdown(
+        format!("Average Casts ({timespan_text})"),
+        fmt2(casts_average_raw),
+        "Average number of fishing cycles completed inside the current session duration.",
+        "Displayed casts use session seconds divided by average total fishing time.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Session duration",
+                        human_duration_text(timespan_seconds),
+                        format!("{timespan_text} = {} seconds", trim_float(timespan_seconds)),
+                    ),
+                    computed_stat_breakdown_row(
+                        "Average total fishing time",
+                        fmt2(total_time_raw),
+                        "Average cycle duration used as the denominator.",
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed casts",
+                    fmt2(casts_average_raw),
+                    "Average completed casts for the selected session duration.",
+                )],
+            ),
+        ],
+    );
+
+    let item_drr_breakdown = computed_stat_breakdown(
+        "Item DRR",
+        format!("{}%", trim_float(item_drr_raw * 100.0)),
+        "Item DRR is the additive total from selected item, buff, outfit, backpack, and pet DRR sources.",
+        "Displayed Item DRR uses additive item and pet contributions.",
+        vec![
+            computed_stat_breakdown_section("Inputs", item_drr_input_rows),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed Item DRR",
+                    format!("{}%", trim_float(item_drr_raw * 100.0)),
+                    "Used as the durability-resistance term in the durability consumption formula.",
+                )],
+            ),
+        ],
+    );
+
+    let chance_to_consume_durability_breakdown = computed_stat_breakdown(
+        "Chance to Consume Durability",
+        format!("{:.2}%", chance_to_reduce_raw * 100.0),
+        "Durability consumption combines Brandstone, Item DRR, and lifeskill-level DRR into one remaining-consumption chance.",
+        "Displayed chance uses Brandstone factor × (1 - Item DRR) × (1 - lifeskill DRR).",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                {
+                    let mut rows = item_drr_item_rows;
+                    rows.extend(pet_drr_rows);
+                    rows.push(computed_stat_breakdown_row(
+                        "Brandstone factor",
+                        format!("×{}", trim_float(brandstone_durability_factor)),
+                        if signals.brand {
+                            "Brandstone halves durability consumption."
+                        } else {
+                            "No Brandstone reduction is active."
+                        },
+                    ));
+                    rows.push(computed_stat_breakdown_row(
+                        lifeskill_level
+                            .map(|level| level.name.clone())
+                            .unwrap_or_else(|| "Lifeskill DRR".to_string()),
+                        format!("+{}%", trim_float(lifeskill_level_drr_raw * 100.0)),
+                        "Fishing lifeskill level durability resistance.",
+                    ));
+                    rows
+                },
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Total Item DRR",
+                        format!("{}%", trim_float(item_drr_raw * 100.0)),
+                        "Combined additive item and pet durability resistance.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Displayed chance",
+                        format!("{:.2}%", chance_to_reduce_raw * 100.0),
+                        "Final per-cast chance to consume durability.",
+                    ),
+                ],
+            ),
+        ],
+    );
+
+    let durability_loss_average_breakdown = computed_stat_breakdown(
+        format!("Average Durability Loss ({timespan_text})"),
+        fmt2(durability_loss_average_raw),
+        "Average durability loss over the current session duration.",
+        "Displayed loss uses average casts × chance to consume durability.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Average casts",
+                        fmt2(casts_average_raw),
+                        format!("Average casts for {timespan_text}."),
+                    ),
+                    computed_stat_breakdown_row(
+                        "Chance to consume durability",
+                        format!("{:.2}%", chance_to_reduce_raw * 100.0),
+                        "Final per-cast consumption chance.",
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed loss",
+                    fmt2(durability_loss_average_raw),
+                    "Expected durability consumed over the current session duration.",
+                )],
+            ),
+        ],
+    );
+
+    let zone_bite_min_breakdown = computed_stat_breakdown(
+        "Zone Bite Min",
+        fmt2(zone_bite_min_raw),
+        "Minimum bite time read directly from the selected zone metadata.",
+        "Displayed value uses the selected zone's minimum bite-time entry directly.",
+        vec![computed_stat_breakdown_section(
+            "Inputs",
+            vec![computed_stat_breakdown_row(
+                "Selected zone",
+                fmt2(zone_bite_min_raw),
+                zone_name.to_string(),
+            )],
+        )],
+    );
+
+    let zone_bite_avg_breakdown = computed_stat_breakdown(
+        "Zone Bite Average",
+        fmt2(zone_bite_avg_raw),
+        "Zone average bite time before level or abundance modifiers.",
+        "Displayed average uses (zone min + zone max) / 2.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Zone min",
+                        fmt2(zone_bite_min_raw),
+                        zone_name.to_string(),
+                    ),
+                    computed_stat_breakdown_row(
+                        "Zone max",
+                        fmt2(zone_bite_max_raw),
+                        zone_name.to_string(),
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed average",
+                    fmt2(zone_bite_avg_raw),
+                    "Base zone average before level and abundance scaling.",
+                )],
+            ),
+        ],
+    );
+
+    let zone_bite_max_breakdown = computed_stat_breakdown(
+        "Zone Bite Max",
+        fmt2(zone_bite_max_raw),
+        "Maximum bite time read directly from the selected zone metadata.",
+        "Displayed value uses the selected zone's maximum bite-time entry directly.",
+        vec![computed_stat_breakdown_section(
+            "Inputs",
+            vec![computed_stat_breakdown_row(
+                "Selected zone",
+                fmt2(zone_bite_max_raw),
+                zone_name.to_string(),
+            )],
+        )],
+    );
+
+    let effective_bite_min_breakdown = computed_stat_breakdown(
+        "Effective Bite Min",
+        fmt2(effective_bite_min_raw),
+        "Zone minimum bite time after level and abundance scaling.",
+        "Displayed effective min uses zone min × level factor × abundance factor.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Zone min",
+                        fmt2(zone_bite_min_raw),
+                        zone_name.to_string(),
+                    ),
+                    computed_stat_breakdown_row(
+                        "Level factor",
+                        format!("×{}", trim_float(factor_level)),
+                        format!("Fishing level {} modifier.", signals.level),
+                    ),
+                    computed_stat_breakdown_row(
+                        "Abundance factor",
+                        format!("×{}", trim_float(factor_resources)),
+                        format!(
+                            "Resources {}% ({})",
+                            trim_float(signals.resources),
+                            abundance_label
+                        ),
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed effective min",
+                    fmt2(effective_bite_min_raw),
+                    "Lower end of the current effective bite window.",
+                )],
+            ),
+        ],
+    );
+
+    let effective_bite_avg_breakdown = computed_stat_breakdown(
+        "Effective Bite Average",
+        fmt2(bite_time_raw),
+        "Zone average bite time after level and abundance scaling.",
+        "Displayed effective average uses zone average × level factor × abundance factor.",
+        vec![
+            computed_stat_breakdown_section("Inputs", bite_time_factor_rows),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed effective average",
+                    fmt2(bite_time_raw),
+                    "Matches the Average Bite Time stat.",
+                )],
+            ),
+        ],
+    );
+
+    let effective_bite_max_breakdown = computed_stat_breakdown(
+        "Effective Bite Max",
+        fmt2(effective_bite_max_raw),
+        "Zone maximum bite time after level and abundance scaling.",
+        "Displayed effective max uses zone max × level factor × abundance factor.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Zone max",
+                        fmt2(zone_bite_max_raw),
+                        zone_name.to_string(),
+                    ),
+                    computed_stat_breakdown_row(
+                        "Level factor",
+                        format!("×{}", trim_float(factor_level)),
+                        format!("Fishing level {} modifier.", signals.level),
+                    ),
+                    computed_stat_breakdown_row(
+                        "Abundance factor",
+                        format!("×{}", trim_float(factor_resources)),
+                        format!(
+                            "Resources {}% ({})",
+                            trim_float(signals.resources),
+                            abundance_label
+                        ),
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed effective max",
+                    fmt2(effective_bite_max_raw),
+                    "Upper end of the current effective bite window.",
+                )],
+            ),
+        ],
+    );
+
+    let loot_total_catches_breakdown = computed_stat_breakdown(
+        format!("Expected Catches ({timespan_text})"),
+        fmt2(loot_total_catches_raw),
+        "Expected catches over the current session duration after the active fish-per-cast multiplier is applied.",
+        "Displayed catches use average casts × applied fish multiplier.",
+        vec![
+            computed_stat_breakdown_section("Inputs", fish_multiplier_input_rows),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Average casts",
+                        fmt2(casts_average_raw),
+                        format!("Average casts during {timespan_text}."),
+                    ),
+                    computed_stat_breakdown_row(
+                        "Applied fish multiplier",
+                        format!("×{}", trim_float(fish_multiplier_raw)),
+                        "Highest selected fish-per-cast multiplier.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Displayed catches",
+                        fmt2(loot_total_catches_raw),
+                        "Expected catches for the selected session duration.",
+                    ),
+                ],
+            ),
+        ],
+    );
+
+    let loot_fish_per_hour_breakdown = computed_stat_breakdown(
+        "Expected Catches / Hour",
+        fmt2(loot_fish_per_hour_raw),
+        "Hourly catch throughput after the active fish-per-cast multiplier is applied.",
+        "Displayed catches per hour use (3600 / average total time) × applied fish multiplier.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                collect_fish_multiplier_breakdown_rows(
+                    items_by_key,
+                    data.cdn_base_url.as_str(),
+                    signals,
+                    fish_multiplier_raw,
+                ),
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Average total fishing time",
+                        fmt2(total_time_raw),
+                        "Average seconds per full fishing cycle.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Applied fish multiplier",
+                        format!("×{}", trim_float(fish_multiplier_raw)),
+                        "Highest selected fish-per-cast multiplier.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Displayed catches / hour",
+                        fmt2(loot_fish_per_hour_raw),
+                        "Expected hourly catch throughput.",
+                    ),
+                ],
+            ),
+        ],
+    );
+
+    let loot_group_rows = loot_group_profit_breakdown_rows(&loot_chart.rows);
+    let loot_total_profit_breakdown = computed_stat_breakdown(
+        format!("Expected Profit ({timespan_text})"),
+        loot_chart.total_profit_text.clone(),
+        "Expected silver over the current session duration after prices and trade modifiers are applied.",
+        "Displayed profit sums the expected silver contribution from all fish groups.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                if loot_group_rows.is_empty() {
+                    vec![computed_stat_breakdown_row(
+                        "Group silver",
+                        "0",
+                        "No source-backed loot rows are currently contributing expected silver.",
+                    )]
+                } else {
+                    loot_group_rows
+                },
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Trade sale multiplier",
+                        loot_chart.trade_sale_multiplier_text.clone(),
+                        "Current sale multiplier after trade settings.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Displayed profit",
+                        loot_chart.total_profit_text.clone(),
+                        "Expected silver across the selected session duration.",
+                    ),
+                ],
+            ),
+        ],
+    );
+
+    let loot_profit_per_hour_breakdown = computed_stat_breakdown(
+        "Profit / Hour",
+        loot_chart.profit_per_hour_text.clone(),
+        "Hourly silver throughput after prices and trade modifiers are applied.",
+        "Displayed profit per hour uses expected session profit divided by session hours.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        format!("Expected profit ({timespan_text})"),
+                        loot_chart.total_profit_text.clone(),
+                        "Expected silver over the current session duration.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Session duration",
+                        human_duration_text(timespan_seconds),
+                        format!("{timespan_text} = {} seconds", trim_float(timespan_seconds)),
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed profit / hour",
+                    loot_chart.profit_per_hour_text.clone(),
+                    "Expected hourly silver throughput.",
+                )],
+            ),
+        ],
+    );
+
+    let target_group_share_by_slot = fish_group_chart
+        .rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| ((index + 1) as u8, row))
+        .collect::<HashMap<_, _>>();
+    let mut target_input_rows = data
+        .zone_loot_entries
+        .iter()
+        .filter(|entry| {
+            entry.name == target_fish_summary.selected_label && entry.within_group_rate > 0.0
+        })
+        .map(|entry| {
+            let group_row = target_group_share_by_slot.get(&entry.slot_idx).copied();
+            let group_label = group_row.map(|row| row.label).unwrap_or("Unassigned");
+            let group_share = group_row
+                .map(|row| row.current_share_pct / 100.0)
+                .unwrap_or_default();
+            let expected_count_raw = loot_total_catches_raw * group_share * entry.within_group_rate;
+            computed_stat_breakdown_zone_loot_item_row(
+                entry,
+                data.cdn_base_url.as_str(),
+                trim_float(expected_count_raw),
+                format!(
+                    "{} share {} · {} in-group rate",
+                    group_label,
+                    percent_value_text(group_share * 100.0),
+                    percent_value_text(entry.within_group_rate * 100.0)
+                ),
+            )
+        })
+        .collect::<Vec<_>>();
+    target_input_rows.sort_by(|left, right| {
+        right
+            .value_text
+            .partial_cmp(&left.value_text)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let target_expected_count_breakdown = computed_stat_breakdown(
+        format!("Expected ({timespan_text})"),
+        target_fish_summary.expected_count_text.clone(),
+        if target_fish_summary.selected_label.is_empty() {
+            "Select a target fish or loot item to see the expected count breakdown."
+        } else {
+            "Expected session count for the currently selected target."
+        },
+        "Displayed expected count sums total catches × group share × in-group rate across matching loot rows.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                if target_input_rows.is_empty() {
+                    vec![computed_stat_breakdown_row(
+                        "Target rows",
+                        "Unavailable",
+                        "No matching source-backed loot rows are currently contributing to this target.",
+                    )]
+                } else {
+                    target_input_rows
+                },
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        format!("Expected catches ({timespan_text})"),
+                        fmt2(loot_total_catches_raw),
+                        "Session catch volume used for the target calculation.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Displayed expected count",
+                        target_fish_summary.expected_count_text.clone(),
+                        "Combined expected count across all matching loot rows.",
+                    ),
+                ],
+            ),
+        ],
+    );
+
+    let target_time_to_target_breakdown = computed_stat_breakdown(
+        "Time to Target",
+        target_fish_summary.time_to_target_text.clone(),
+        "Estimated time to reach the selected target amount at the current setup.",
+        "Displayed time uses target amount divided by expected catches per day.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Target amount",
+                        target_fish_summary.target_amount_text.clone(),
+                        "Current target amount input.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Expected / day",
+                        target_fish_summary.per_day_text.clone(),
+                        "Expected daily count for the selected target.",
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed time",
+                    target_fish_summary.time_to_target_text.clone(),
+                    "Estimated time to reach the target amount.",
+                )],
+            ),
+        ],
+    );
+
+    let target_probability_breakdown = computed_stat_breakdown(
+        format!("Chance to Get at Least {}", target_fish_summary.target_amount_text),
+        target_fish_summary.probability_at_least_text.clone(),
+        "Probability of seeing at least the target amount within the current session duration.",
+        "Displayed probability uses the Poisson tail probability P(X ≥ target) with λ = expected session count.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Expected session count (λ)",
+                        target_fish_summary.expected_count_text.clone(),
+                        "Expected count for the current target in one session.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Target amount",
+                        target_fish_summary.target_amount_text.clone(),
+                        "Threshold used for the tail probability.",
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Displayed probability",
+                    target_fish_summary.probability_at_least_text.clone(),
+                    "Probability of meeting or exceeding the target during one session.",
+                )],
+            ),
+        ],
+    );
+
+    CalculatorStatBreakdownSignals {
+        total_time: stat_breakdown_json(total_time_breakdown),
+        bite_time: stat_breakdown_json(bite_time_breakdown),
+        auto_fish_time: stat_breakdown_json(auto_fish_time_breakdown),
+        auto_fish_time_reduction: stat_breakdown_json(auto_fish_time_reduction_breakdown),
+        casts_average: stat_breakdown_json(casts_average_breakdown),
+        item_drr: stat_breakdown_json(item_drr_breakdown),
+        chance_to_consume_durability: stat_breakdown_json(chance_to_consume_durability_breakdown),
+        durability_loss_average: stat_breakdown_json(durability_loss_average_breakdown),
+        zone_bite_min: stat_breakdown_json(zone_bite_min_breakdown),
+        zone_bite_avg: stat_breakdown_json(zone_bite_avg_breakdown),
+        zone_bite_max: stat_breakdown_json(zone_bite_max_breakdown),
+        effective_bite_min: stat_breakdown_json(effective_bite_min_breakdown),
+        effective_bite_avg: stat_breakdown_json(effective_bite_avg_breakdown),
+        effective_bite_max: stat_breakdown_json(effective_bite_max_breakdown),
+        loot_total_catches: stat_breakdown_json(loot_total_catches_breakdown),
+        loot_fish_per_hour: stat_breakdown_json(loot_fish_per_hour_breakdown),
+        loot_total_profit: stat_breakdown_json(loot_total_profit_breakdown),
+        loot_profit_per_hour: stat_breakdown_json(loot_profit_per_hour_breakdown),
+        raw_prize_rate: stat_breakdown_json(raw_prize_breakdown),
+        target_expected_count: stat_breakdown_json(target_expected_count_breakdown),
+        target_time_to_target: stat_breakdown_json(target_time_to_target_breakdown),
+        target_probability_at_least: stat_breakdown_json(target_probability_breakdown),
+    }
+}
+
 fn poisson_probability_at_least(lambda: f64, target_amount: u32) -> f64 {
     if target_amount == 0 {
         return 1.0;
@@ -4050,41 +5211,41 @@ fn render_calculator_app(
 
             <div class="grid gap-4">
                 <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
-                    <div class="stat">
+                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.total_time || ''" data-fishy-stat-color="var(--color-info)">
                         <div class="stat-title">Average Total Fishing Time</div>
                         <div class="stat-value text-2xl" data-text="$_live.total_time"></div>
                         <div class="stat-desc">seconds</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.bite_time || ''" data-fishy-stat-color="var(--color-info)">
                         <div class="stat-title">Average Bite Time</div>
                         <div class="stat-value text-2xl" data-text="$_live.bite_time"></div>
                         <div class="stat-desc">seconds</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.auto_fish_time || ''" data-fishy-stat-color="var(--color-info)">
                         <div class="stat-title">Auto-Fishing Time (AFT)</div>
                         <div class="stat-value text-2xl" data-text="$_live.auto_fish_time"></div>
                         <div class="stat-desc">seconds</div>
                     </div>
-                    <div class="stat">
+                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.auto_fish_time_reduction || ''" data-fishy-stat-color="var(--color-info)">
                         <div class="stat-title">Auto-Fishing Time Reduction (AFR)</div>
                         <div class="stat-value text-2xl" data-text="$_live.auto_fish_time_reduction_text"></div>
                     </div>
                 </div>
 
                 <div class="stats stats-vertical rounded-box border border-base-300 bg-base-100 xl:stats-horizontal">
-                    <div class="stat">
+                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.casts_average || ''" data-fishy-stat-color="var(--color-info)">
                         <div class="stat-title whitespace-normal leading-snug" data-text="$_live.casts_title"></div>
                         <div class="stat-value text-2xl" data-text="$_live.casts_average"></div>
                     </div>
-                    <div class="stat">
+                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.item_drr || ''" data-fishy-stat-color="var(--color-warning)">
                         <div class="stat-title">Item DRR</div>
                         <div class="stat-value text-2xl" data-text="$_live.item_drr_text"></div>
                     </div>
-                    <div class="stat">
+                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.chance_to_consume_durability || ''" data-fishy-stat-color="var(--color-warning)">
                         <div class="stat-title">Chance to consume Durability</div>
                         <div class="stat-value text-2xl" data-text="$_live.chance_to_consume_durability_text"></div>
                     </div>
-                    <div class="stat">
+                    <div class="stat fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.durability_loss_average || ''" data-fishy-stat-color="var(--color-warning)">
                         <div class="stat-title whitespace-normal leading-snug" data-text="$_live.durability_loss_title"></div>
                         <div class="stat-value text-2xl" data-text="$_live.durability_loss_average"></div>
                     </div>
@@ -4105,17 +5266,17 @@ fn render_calculator_app(
                     <input id="calculator-zone-value" type="hidden" data-bind="zone" value="__ZONE_VALUE__">
                     __ZONE_SEARCH_DROPDOWN__
                     <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
-                        <div class="stat px-4 py-3">
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_min || ''" data-fishy-stat-color="var(--color-secondary)">
                             <div class="stat-title">Min</div>
                             <div class="stat-value text-lg" data-text="$_live.zone_bite_min"></div>
                             <div class="stat-desc">seconds</div>
                         </div>
-                        <div class="stat px-4 py-3">
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_avg || ''" data-fishy-stat-color="var(--color-secondary)">
                             <div class="stat-title">Average</div>
                             <div class="stat-value text-lg" data-text="$_live.zone_bite_avg"></div>
                             <div class="stat-desc">seconds</div>
                         </div>
-                        <div class="stat px-4 py-3">
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.zone_bite_max || ''" data-fishy-stat-color="var(--color-secondary)">
                             <div class="stat-title">Max</div>
                             <div class="stat-value text-lg" data-text="$_live.zone_bite_max"></div>
                             <div class="stat-desc">seconds</div>
@@ -4139,17 +5300,17 @@ fn render_calculator_app(
                         <span class="label text-sm font-medium" data-text="$_resources + '% (' + ($_live.abundance_label || 'Exhausted') + ')'"></span>
                     </fieldset>
                     <div class="stats stats-horizontal rounded-box border border-base-300 bg-base-100 shadow-none">
-                        <div class="stat px-4 py-3">
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_min || ''" data-fishy-stat-color="var(--color-secondary)">
                             <div class="stat-title">Effective Min</div>
                             <div class="stat-value text-lg" data-text="$_live.effective_bite_min"></div>
                             <div class="stat-desc">seconds</div>
                         </div>
-                        <div class="stat px-4 py-3">
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_avg || ''" data-fishy-stat-color="var(--color-secondary)">
                             <div class="stat-title">Effective Average</div>
                             <div class="stat-value text-lg" data-text="$_live.effective_bite_avg"></div>
                             <div class="stat-desc">seconds</div>
                         </div>
-                        <div class="stat px-4 py-3">
+                        <div class="stat px-4 py-3 fishy-explainable-stat" tabindex="0" data-attr:data-fishy-stat-breakdown="$_live.stat_breakdowns.effective_bite_max || ''" data-fishy-stat-color="var(--color-secondary)">
                             <div class="stat-title">Effective Max</div>
                             <div class="stat-value text-lg" data-text="$_live.effective_bite_max"></div>
                             <div class="stat-desc">seconds</div>
@@ -4862,17 +6023,17 @@ fn render_target_fish_panel(
                 </fieldset>\
             </div>\
             <div class=\"grid gap-3 lg:grid-cols-3\">\
-                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3\">\
+                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_expected_count || ''\" data-fishy-stat-color=\"var(--color-info)\">\
                     <div class=\"text-sm font-medium whitespace-normal leading-snug\">Expected ({})</div>\
                     <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
                     <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
                 </div>\
-                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3\">\
+                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_time_to_target || ''\" data-fishy-stat-color=\"var(--color-info)\">\
                     <div class=\"text-sm font-medium\">Time to Target</div>\
                     <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
                     <div class=\"mt-1 text-xs text-base-content/70\">{}</div>\
                 </div>\
-                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3\">\
+                <div class=\"rounded-box border border-base-300 bg-base-200 px-4 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.target_probability_at_least || ''\" data-fishy-stat-color=\"var(--color-info)\">\
                     <div class=\"text-sm font-medium\">Chance to Get at Least {}</div>\
                     <div class=\"mt-2 text-2xl font-semibold\">{}</div>\
                     <div class=\"mt-1 text-xs text-base-content/70\">within the current session duration</div>\
@@ -4922,7 +6083,7 @@ fn render_fish_group_window(
                             <input type=\"number\" min=\"0\" step=\"50\" class=\"input input-sm w-full\" data-bind=\"mastery\" value=\"{}\">\
                             <span class=\"label text-xs\">Enter your consolidated fishing mastery directly.</span>\
                         </fieldset>\
-                        <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3\">\
+                        <div class=\"rounded-box border border-base-300 bg-base-100 px-3 py-3 fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.raw_prize_rate || ''\" data-fishy-stat-color=\"var(--color-warning)\">\
                             <div class=\"text-sm font-medium\">Raw Prize Catch Rate</div>\
                             <div class=\"mt-1 text-xs text-base-content/70\">Mastery <span data-text=\"$_calc.raw_prize_mastery_text\">{}</span> drives the direct prize-rate formula before normalization.</div>\
                             <div class=\"mt-3 text-2xl font-semibold\" data-text=\"$_calc.raw_prize_rate_text\">{}</div>\
@@ -4994,21 +6155,21 @@ fn render_loot_window(
                 {}\
                 <div class=\"grid gap-4\">\
                         <div class=\"stats stats-vertical rounded-box border border-base-300 bg-base-100 shadow-none\">\
-                            <div class=\"stat\">\
+                            <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_catches || ''\" data-fishy-stat-color=\"var(--color-success)\">\
                                 <div class=\"stat-title whitespace-normal leading-snug\">Expected Catches (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
                                 <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_catches\"></div>\
                                 <div class=\"stat-desc\">using <span data-text=\"$_live.loot_fish_multiplier_text\"></span> per cast</div>\
                             </div>\
-                            <div class=\"stat\">\
+                            <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_fish_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
                                 <div class=\"stat-title\">Expected Catches / Hour</div>\
                                 <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_fish_per_hour\"></div>\
                             </div>\
-                            <div class=\"stat\">\
+                            <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_profit || ''\" data-fishy-stat-color=\"var(--color-success)\">\
                                 <div class=\"stat-title whitespace-normal leading-snug\">Expected Profit (<span data-text=\"$_live.timespan_text || '8 hours'\"></span>)</div>\
                                 <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_total_profit\"></div>\
                                 <div class=\"stat-desc\">sale <span data-text=\"$_calc.trade_sale_multiplier_text\"></span></div>\
                             </div>\
-                            <div class=\"stat\">\
+                            <div class=\"stat fishy-explainable-stat\" tabindex=\"0\" data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_profit_per_hour || ''\" data-fishy-stat-color=\"var(--color-success)\">\
                                 <div class=\"stat-title\">Profit / Hour</div>\
                                 <div class=\"stat-value text-2xl\" data-text=\"$_live.loot_profit_per_hour\"></div>\
                             </div>\
@@ -6253,7 +7414,7 @@ mod tests {
     use fishystuff_api::models::zone_stats::{ZoneStatsRequest, ZoneStatsResponse};
     use fishystuff_api::models::zones::ZoneEntry;
     use hyper::body::to_bytes;
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     use crate::config::{AppConfig, ZoneStatusConfig};
     use crate::error::AppResult;
@@ -6266,13 +7427,14 @@ mod tests {
         derive_target_fish_summary, derive_zone_loot_summary_response, discard_grade_enabled,
         filtered_loot_flow_rows, get_calculator_datastar_init,
         get_calculator_datastar_option_search, get_calculator_datastar_zone_search,
-        init_signals_patch_map, loot_species_evidence_text, loot_species_presence_source_kind,
-        loot_species_presence_text, loot_species_presence_tooltip, mastery_prize_rate_for_bracket,
-        normalize_lookup_value, normalize_named_array, normalize_signals,
-        parse_calculator_signals_value, pmf_bucket_contains_target, poisson_probability_at_least,
-        post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
-        CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
+        init_signals_patch_map, load_calculator_runtime_data, loot_species_evidence_text,
+        loot_species_presence_source_kind, loot_species_presence_text,
+        loot_species_presence_tooltip, mastery_prize_rate_for_bracket, normalize_lookup_value,
+        normalize_named_array, normalize_signals, parse_calculator_signals_value,
+        pmf_bucket_contains_target, poisson_probability_at_least, post_calculator_datastar_eval,
+        trade_sale_multiplier_for_species, CalculatorData, CalculatorDatastarQuery,
+        CalculatorQuery, CalculatorSearchableOptionQuery, CalculatorZoneSearchQuery,
+        FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
     };
 
     struct MockStore;
@@ -6646,6 +7808,15 @@ mod tests {
         assert!(text.contains("Raw Prize Catch Rate"));
         assert!(text.contains("data-text=\"$_calc.raw_prize_mastery_text\""));
         assert!(text.contains("data-text=\"$_calc.raw_prize_rate_text\""));
+        assert!(text.contains(
+            "data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.total_time || ''\""
+        ));
+        assert!(text.contains(
+            "data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.raw_prize_rate || ''\""
+        ));
+        assert!(text.contains(
+            "data-attr:data-fishy-stat-breakdown=\"$_live.stat_breakdowns.loot_total_profit || ''\""
+        ));
         assert!(text.contains("Target Fish"));
         assert!(text.contains("Loot Flow"));
         assert!(text.contains("Expected Catches / Hour"));
@@ -6700,6 +7871,67 @@ mod tests {
         assert!(!text.contains("\"zone\":\"240,74,74\""));
         assert!(!text.contains("\"rod\":\"item:16162\""));
         assert!(!text.contains("\"_resources\":0.0"));
+    }
+
+    #[tokio::test]
+    async fn derived_signals_include_generic_stat_breakdown_payloads() {
+        let state = test_state();
+        let defaults = MockStore
+            .calculator_catalog(FishLang::En, None)
+            .await
+            .unwrap()
+            .defaults;
+        let (_, _, derived) = load_calculator_runtime_data(
+            &state,
+            FishLang::En,
+            None,
+            &RequestId("req-test".to_string()),
+            defaults,
+        )
+        .await
+        .unwrap();
+
+        let total_time =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.total_time).unwrap();
+        assert_eq!(total_time["title"], "Average Total Fishing Time");
+        assert!(!total_time["value_text"]
+            .as_str()
+            .unwrap_or_default()
+            .is_empty());
+        assert_eq!(
+            total_time["sections"][0]["rows"][0]["label"],
+            "Average bite time"
+        );
+
+        let item_drr = serde_json::from_str::<Value>(&derived.stat_breakdowns.item_drr).unwrap();
+        assert_eq!(item_drr["title"], "Item DRR");
+        assert_eq!(item_drr["sections"][0]["rows"][0]["kind"], "item");
+        assert!(item_drr["sections"][0]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["label"] == "Lil' Otter Fishing Carrier"));
+        assert!(item_drr["sections"][0]["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["label"] == "Pet 1"));
+
+        let raw_prize =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.raw_prize_rate).unwrap();
+        assert_eq!(raw_prize["title"], "Raw Prize Catch Rate");
+        assert_eq!(
+            raw_prize["sections"][1]["rows"][0]["label"],
+            "Resolved curve rate"
+        );
+
+        let target_expected =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.target_expected_count).unwrap();
+        assert_eq!(target_expected["title"], "Expected (8 hours)");
+        assert_eq!(
+            target_expected["sections"][0]["rows"][0]["value_text"],
+            "Unavailable"
+        );
     }
 
     #[tokio::test]

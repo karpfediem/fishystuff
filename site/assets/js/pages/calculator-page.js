@@ -295,6 +295,8 @@
   const calculatorFmtSilver = (value) =>
     Math.max(0, Math.round(calculatorNumber(value))).toLocaleString();
   const calculatorTrimFloat = (value) => calculatorFmt2(value).replace(/\.?0+$/, "");
+  const calculatorPercentText = (value) => `${calculatorTrimFloat(value)}%`;
+  const calculatorFactorText = (value) => `×${calculatorTrimFloat(value)}`;
   const calculatorPercentage = (value, total) => {
     const safeTotal = calculatorNumber(total);
     if (safeTotal <= 0) {
@@ -336,6 +338,94 @@
     }
     return "Abundant";
   };
+  const calculatorBreakdownRow = (label, valueText, detailText, extra = {}) => ({
+    ...extra,
+    label,
+    value_text: valueText,
+    detail_text: detailText,
+  });
+  const calculatorParseBreakdown = (value) => {
+    const raw = String(value ?? "").trim();
+    if (!raw) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const calculatorStringifyBreakdown = (payload, fallback = "") => {
+    try {
+      return JSON.stringify(payload);
+    } catch {
+      return fallback;
+    }
+  };
+  const calculatorUpdateBreakdown = (raw, options = {}) => {
+    const payload = calculatorParseBreakdown(raw);
+    if (!payload) {
+      return String(raw ?? "");
+    }
+    const nextPayload = {
+      ...payload,
+      sections: Array.isArray(payload.sections)
+        ? payload.sections.map((section) => ({
+            ...section,
+            rows: Array.isArray(section?.rows)
+              ? section.rows.map((row) => ({ ...row }))
+              : [],
+          }))
+        : [],
+    };
+    if ("title" in options) {
+      nextPayload.title = options.title;
+    }
+    if ("valueText" in options) {
+      nextPayload.value_text = options.valueText;
+    }
+    if ("summaryText" in options) {
+      nextPayload.summary_text = options.summaryText;
+    }
+    if ("formulaText" in options) {
+      nextPayload.formula_text = options.formulaText;
+    }
+    const replaceSections = options.replaceSections && typeof options.replaceSections === "object"
+      ? options.replaceSections
+      : null;
+    const rowUpdates = options.rowUpdates && typeof options.rowUpdates === "object"
+      ? options.rowUpdates
+      : null;
+    for (const section of nextPayload.sections) {
+      const sectionLabel = String(section?.label ?? "");
+      if (replaceSections && Array.isArray(replaceSections[sectionLabel])) {
+        section.rows = replaceSections[sectionLabel].map((row) => ({ ...row }));
+        continue;
+      }
+      if (!rowUpdates || !Array.isArray(section.rows)) {
+        continue;
+      }
+      for (const row of section.rows) {
+        const update = rowUpdates[String(row?.label ?? "")];
+        if (!update || typeof row !== "object") {
+          continue;
+        }
+        if ("valueText" in update) {
+          row.value_text = update.valueText;
+        }
+        if ("detailText" in update) {
+          row.detail_text = update.detailText;
+        }
+      }
+    }
+    return calculatorStringifyBreakdown(nextPayload, String(raw ?? ""));
+  };
+  const calculatorScaleSilverText = (valueText, ratio) => (
+    calculatorFmtSilver(calculatorNumber(String(valueText ?? "").replace(/,/g, "")) * ratio)
+  );
 
   function calculatorInitUrl() {
     return window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/init?lang=${calculatorLang}`);
@@ -436,96 +526,526 @@
     timespanUnit,
     calc,
   ) {
-      const current = calc ?? {};
-      const zoneBiteMinRaw = calculatorNumber(current.zone_bite_min);
-      const zoneBiteMaxRaw = calculatorNumber(current.zone_bite_max);
-      const currentTimespanText = calculatorTimespanText(timespanAmount, timespanUnit);
-      const zoneBiteAvgRaw = (zoneBiteMinRaw + zoneBiteMaxRaw) / 2;
-      const normalizedLevel = Math.max(0, Math.min(5, calculatorNumber(level)));
-      const normalizedResources = Math.max(0, Math.min(100, calculatorNumber(resources)));
-      if (!String(current.zone_bite_min ?? "").trim() && !String(current.zone_bite_max ?? "").trim()) {
-        return {
-          ...current,
-          abundance_label: calculatorAbundanceLabel(normalizedResources),
-          timespan_text: currentTimespanText,
-          casts_title: `Average Casts (${currentTimespanText})`,
-          durability_loss_title: `Average Durability Loss (${currentTimespanText})`,
-          show_auto_fishing: !active,
-          zone_bite_avg: current.zone_bite_avg ?? "0.00",
-          effective_bite_avg: current.effective_bite_avg ?? current.bite_time ?? "0.00",
-          percent_bite: current.percent_bite ?? "0.00",
-          percent_af: current.percent_af ?? "0.00",
-          percent_catch: current.percent_catch ?? "0.00",
-        };
-      }
-      const factorLevel = 1 - [0.15, 0.30, 0.35, 0.40, 0.45, 0.50][normalizedLevel];
-      const factorResources = 2 - (normalizedResources / 100);
-      const biteFactor = factorLevel * factorResources;
-      const effectiveBiteMinRaw = zoneBiteMinRaw * biteFactor;
-      const effectiveBiteMaxRaw = zoneBiteMaxRaw * biteFactor;
-      const biteTimeRaw = zoneBiteAvgRaw * biteFactor;
-      const activeCatchTimeRaw = Math.max(0, calculatorNumber(catchTimeActive));
-      const afkCatchTimeRaw = Math.max(0, calculatorNumber(catchTimeAfk));
-      const autoFishTimeRaw = active ? 0 : calculatorNumber(current.auto_fish_time);
-      const catchTimeRaw = active ? activeCatchTimeRaw : afkCatchTimeRaw;
-      const totalTimeRaw = active
-        ? biteTimeRaw + activeCatchTimeRaw
-        : biteTimeRaw + autoFishTimeRaw + afkCatchTimeRaw;
-      const unoptimizedTimeRaw = zoneBiteAvgRaw + (active ? activeCatchTimeRaw : afkCatchTimeRaw + 180);
-      const percentBite = calculatorPercentage(biteTimeRaw, unoptimizedTimeRaw);
-      const percentAF = calculatorPercentage(autoFishTimeRaw, unoptimizedTimeRaw);
-      const percentCatch = calculatorPercentage(catchTimeRaw, unoptimizedTimeRaw);
-      const percentImprovement = 100 - calculatorPercentage(totalTimeRaw, unoptimizedTimeRaw);
-      const castsAverageRaw = totalTimeRaw > 0
-        ? calculatorTimespanSeconds(timespanAmount, timespanUnit) / totalTimeRaw
-        : 0;
-      const chanceToReduceRaw = calculatorNumber(
-        String(current.chance_to_consume_durability_text ?? "").replace("%", ""),
-      ) / 100;
-      const durabilityLossAverageRaw = castsAverageRaw * chanceToReduceRaw;
-      const fishMultiplierRaw = Math.max(1, calculatorNumber(current.fish_multiplier_raw || 1));
-      const lootTotalCatchesRaw = castsAverageRaw * fishMultiplierRaw;
-      const lootFishPerHourRaw = totalTimeRaw > 0
-        ? (3600 / totalTimeRaw) * fishMultiplierRaw
-        : 0;
-      const lootProfitPerCatchRaw = Math.max(
-        0,
-        calculatorNumber(current.loot_profit_per_catch_raw || 0),
-      );
-      const lootTotalProfitRaw = lootTotalCatchesRaw * lootProfitPerCatchRaw;
-      const lootProfitPerHourRaw = lootFishPerHourRaw * lootProfitPerCatchRaw;
-
+    const current = calc ?? {};
+    const zoneBiteMinRaw = calculatorNumber(current.zone_bite_min);
+    const zoneBiteMaxRaw = calculatorNumber(current.zone_bite_max);
+    const currentTimespanText = calculatorTimespanText(timespanAmount, timespanUnit);
+    const zoneBiteAvgRaw = (zoneBiteMinRaw + zoneBiteMaxRaw) / 2;
+    const normalizedLevel = Math.max(0, Math.min(5, calculatorNumber(level)));
+    const normalizedResources = Math.max(0, Math.min(100, calculatorNumber(resources)));
+    if (!String(current.zone_bite_min ?? "").trim() && !String(current.zone_bite_max ?? "").trim()) {
       return {
         ...current,
         abundance_label: calculatorAbundanceLabel(normalizedResources),
-        zone_bite_min: calculatorFmt2(zoneBiteMinRaw),
-        zone_bite_max: calculatorFmt2(zoneBiteMaxRaw),
-        zone_bite_avg: calculatorFmt2(zoneBiteAvgRaw),
-        effective_bite_min: calculatorFmt2(effectiveBiteMinRaw),
-        effective_bite_max: calculatorFmt2(effectiveBiteMaxRaw),
-        effective_bite_avg: calculatorFmt2(biteTimeRaw),
-        total_time: calculatorFmt2(totalTimeRaw),
-        bite_time: calculatorFmt2(biteTimeRaw),
-        auto_fish_time: calculatorFmt2(autoFishTimeRaw),
-        casts_title: `Average Casts (${currentTimespanText})`,
-        casts_average: calculatorFmt2(castsAverageRaw),
-        durability_loss_title: `Average Durability Loss (${currentTimespanText})`,
-        durability_loss_average: calculatorFmt2(durabilityLossAverageRaw),
-        loot_total_catches: calculatorFmt2(lootTotalCatchesRaw),
-        loot_fish_per_hour: calculatorFmt2(lootFishPerHourRaw),
-        loot_fish_multiplier_text: `×${calculatorTrimFloat(fishMultiplierRaw)}`,
-        loot_total_profit: calculatorFmtSilver(lootTotalProfitRaw),
-        loot_profit_per_hour: calculatorFmtSilver(lootProfitPerHourRaw),
         timespan_text: currentTimespanText,
-        bite_time_title: `Bitetime: ${calculatorFmt2(biteTimeRaw)}s (${calculatorFmt2(percentBite)}%)`,
-        auto_fish_time_title: `Auto-Fishing Time: ${calculatorFmt2(autoFishTimeRaw)}s (${calculatorFmt2(percentAF)}%)`,
-        catch_time_title: `Catch Time: ${calculatorFmt2(catchTimeRaw)}s (${calculatorFmt2(percentCatch)}%)`,
-        unoptimized_time_title: `Average Unoptimized Time: ${calculatorFmt2(unoptimizedTimeRaw)}s (${calculatorFmt2(percentImprovement)}%)`,
+        casts_title: `Average Casts (${currentTimespanText})`,
+        durability_loss_title: `Average Durability Loss (${currentTimespanText})`,
         show_auto_fishing: !active,
-        percent_bite: calculatorFmt2(percentBite),
-        percent_af: calculatorFmt2(percentAF),
-        percent_catch: calculatorFmt2(percentCatch),
+        zone_bite_avg: current.zone_bite_avg ?? "0.00",
+        effective_bite_avg: current.effective_bite_avg ?? current.bite_time ?? "0.00",
+        percent_bite: current.percent_bite ?? "0.00",
+        percent_af: current.percent_af ?? "0.00",
+        percent_catch: current.percent_catch ?? "0.00",
       };
+    }
+    const factorLevel = 1 - [0.15, 0.30, 0.35, 0.40, 0.45, 0.50][normalizedLevel];
+    const factorResources = 2 - (normalizedResources / 100);
+    const biteFactor = factorLevel * factorResources;
+    const effectiveBiteMinRaw = zoneBiteMinRaw * biteFactor;
+    const effectiveBiteMaxRaw = zoneBiteMaxRaw * biteFactor;
+    const biteTimeRaw = zoneBiteAvgRaw * biteFactor;
+    const activeCatchTimeRaw = Math.max(0, calculatorNumber(catchTimeActive));
+    const afkCatchTimeRaw = Math.max(0, calculatorNumber(catchTimeAfk));
+    const autoFishTimeRaw = active ? 0 : calculatorNumber(current.auto_fish_time);
+    const catchTimeRaw = active ? activeCatchTimeRaw : afkCatchTimeRaw;
+    const totalTimeRaw = active
+      ? biteTimeRaw + activeCatchTimeRaw
+      : biteTimeRaw + autoFishTimeRaw + afkCatchTimeRaw;
+    const unoptimizedTimeRaw = zoneBiteAvgRaw + (active ? activeCatchTimeRaw : afkCatchTimeRaw + 180);
+    const percentBite = calculatorPercentage(biteTimeRaw, unoptimizedTimeRaw);
+    const percentAF = calculatorPercentage(autoFishTimeRaw, unoptimizedTimeRaw);
+    const percentCatch = calculatorPercentage(catchTimeRaw, unoptimizedTimeRaw);
+    const percentImprovement = 100 - calculatorPercentage(totalTimeRaw, unoptimizedTimeRaw);
+    const castsAverageRaw = totalTimeRaw > 0
+      ? calculatorTimespanSeconds(timespanAmount, timespanUnit) / totalTimeRaw
+      : 0;
+    const chanceToReduceRaw = calculatorNumber(
+      String(current.chance_to_consume_durability_text ?? "").replace("%", ""),
+    ) / 100;
+    const durabilityLossAverageRaw = castsAverageRaw * chanceToReduceRaw;
+    const fishMultiplierRaw = Math.max(1, calculatorNumber(current.fish_multiplier_raw || 1));
+    const lootTotalCatchesRaw = castsAverageRaw * fishMultiplierRaw;
+    const lootFishPerHourRaw = totalTimeRaw > 0
+      ? (3600 / totalTimeRaw) * fishMultiplierRaw
+      : 0;
+    const lootProfitPerCatchRaw = Math.max(
+      0,
+      calculatorNumber(current.loot_profit_per_catch_raw || 0),
+    );
+    const lootTotalProfitRaw = lootTotalCatchesRaw * lootProfitPerCatchRaw;
+    const lootProfitPerHourRaw = lootFishPerHourRaw * lootProfitPerCatchRaw;
+    const statBreakdowns = current.stat_breakdowns
+      && typeof current.stat_breakdowns === "object"
+      && !Array.isArray(current.stat_breakdowns)
+      ? { ...current.stat_breakdowns }
+      : {};
+    const abundanceLabel = calculatorAbundanceLabel(normalizedResources);
+    const sessionSeconds = calculatorTimespanSeconds(timespanAmount, timespanUnit);
+    const sessionDurationDetail = `${currentTimespanText} = ${calculatorTrimFloat(sessionSeconds)} seconds`;
+    const zoneName = String(current.zone_name ?? current.zone ?? "").trim();
+    const chanceToConsumeDurabilityText =
+      String(current.chance_to_consume_durability_text ?? "0.00%").trim() || "0.00%";
+    const autoFishTimeReductionText =
+      String(current.auto_fish_time_reduction_text ?? "0%").trim() || "0%";
+    const fishMultiplierText = `×${calculatorTrimFloat(fishMultiplierRaw)}`;
+    const previousTotalProfitRaw = calculatorNumber(
+      String(current.loot_total_profit ?? "").replace(/,/g, ""),
+    );
+    const profitScale = previousTotalProfitRaw > 0
+      ? lootTotalProfitRaw / previousTotalProfitRaw
+      : 0;
+
+    statBreakdowns.total_time = calculatorUpdateBreakdown(current.stat_breakdowns?.total_time, {
+      valueText: calculatorFmt2(totalTimeRaw),
+      summaryText: active
+        ? "Active mode uses bite time plus active catch time."
+        : "AFK mode uses bite time, passive auto-fishing time, and AFK catch time.",
+      formulaText: active
+        ? "Displayed time uses bite time + active catch time."
+        : "Displayed time uses bite time + auto-fishing time + AFK catch time.",
+      replaceSections: {
+        Inputs: active
+          ? [
+              calculatorBreakdownRow(
+                "Average bite time",
+                calculatorFmt2(biteTimeRaw),
+                "Effective average bite time after level and abundance modifiers.",
+              ),
+              calculatorBreakdownRow(
+                "Active catch time",
+                calculatorFmt2(activeCatchTimeRaw),
+                "Manual catch-time input used in active mode.",
+              ),
+            ]
+          : [
+              calculatorBreakdownRow(
+                "Average bite time",
+                calculatorFmt2(biteTimeRaw),
+                "Effective average bite time after level and abundance modifiers.",
+              ),
+              calculatorBreakdownRow(
+                "Auto-fishing time",
+                calculatorFmt2(autoFishTimeRaw),
+                "Passive waiting phase after AFR is applied.",
+              ),
+              calculatorBreakdownRow(
+                "AFK catch time",
+                calculatorFmt2(afkCatchTimeRaw),
+                "Manual catch-time input used in AFK mode.",
+              ),
+            ],
+        Composition: [
+          calculatorBreakdownRow(
+            "Displayed total",
+            calculatorFmt2(totalTimeRaw),
+            "Average fishing cycle duration used for downstream casts and loot calculations.",
+          ),
+        ],
+      },
+    });
+    statBreakdowns.bite_time = calculatorUpdateBreakdown(current.stat_breakdowns?.bite_time, {
+      valueText: calculatorFmt2(biteTimeRaw),
+      replaceSections: {
+        Inputs: [
+          calculatorBreakdownRow(
+            "Zone average bite time",
+            calculatorFmt2(zoneBiteAvgRaw),
+            `Derived from ${zoneName} zone bite-time metadata.`,
+          ),
+          calculatorBreakdownRow(
+            "Level factor",
+            calculatorFactorText(factorLevel),
+            `Fishing level ${normalizedLevel} reduces the base bite window.`,
+          ),
+          calculatorBreakdownRow(
+            "Abundance factor",
+            calculatorFactorText(factorResources),
+            `Resources ${calculatorTrimFloat(normalizedResources)}% (${abundanceLabel}) scale the bite window.`,
+          ),
+        ],
+        Composition: [
+          calculatorBreakdownRow(
+            "Displayed average",
+            calculatorFmt2(biteTimeRaw),
+            "Used in the total fishing time calculation.",
+          ),
+        ],
+      },
+    });
+    statBreakdowns.auto_fish_time = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.auto_fish_time,
+      {
+        valueText: calculatorFmt2(autoFishTimeRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow(
+              "Baseline auto-fishing time",
+              "180",
+              "Backend keeps the passive AFK baseline even when Active Fishing is enabled.",
+            ),
+            calculatorBreakdownRow(
+              "Applied AFR",
+              autoFishTimeReductionText,
+              "Capped AFR used by the passive auto-fishing timer.",
+            ),
+            calculatorBreakdownRow(
+              "Minimum auto-fishing time",
+              "60",
+              "The passive timer cannot go below 60 seconds.",
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Displayed AFT",
+              calculatorFmt2(autoFishTimeRaw),
+              "Used only in AFK total fishing time calculations.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.casts_average = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.casts_average,
+      {
+        title: `Average Casts (${currentTimespanText})`,
+        valueText: calculatorFmt2(castsAverageRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow(
+              "Session duration",
+              currentTimespanText,
+              sessionDurationDetail,
+            ),
+            calculatorBreakdownRow(
+              "Average total fishing time",
+              calculatorFmt2(totalTimeRaw),
+              "Average cycle duration used as the denominator.",
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Displayed casts",
+              calculatorFmt2(castsAverageRaw),
+              "Average completed casts for the selected session duration.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.durability_loss_average = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.durability_loss_average,
+      {
+        title: `Average Durability Loss (${currentTimespanText})`,
+        valueText: calculatorFmt2(durabilityLossAverageRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow(
+              "Average casts",
+              calculatorFmt2(castsAverageRaw),
+              `Average casts for ${currentTimespanText}.`,
+            ),
+            calculatorBreakdownRow(
+              "Chance to consume durability",
+              chanceToConsumeDurabilityText,
+              "Final per-cast consumption chance.",
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Displayed loss",
+              calculatorFmt2(durabilityLossAverageRaw),
+              "Expected durability consumed over the current session duration.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.zone_bite_min = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.zone_bite_min,
+      {
+        valueText: calculatorFmt2(zoneBiteMinRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow("Selected zone", calculatorFmt2(zoneBiteMinRaw), zoneName),
+          ],
+        },
+      },
+    );
+    statBreakdowns.zone_bite_avg = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.zone_bite_avg,
+      {
+        valueText: calculatorFmt2(zoneBiteAvgRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow("Zone min", calculatorFmt2(zoneBiteMinRaw), zoneName),
+            calculatorBreakdownRow("Zone max", calculatorFmt2(zoneBiteMaxRaw), zoneName),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Displayed average",
+              calculatorFmt2(zoneBiteAvgRaw),
+              "Base zone average before level and abundance scaling.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.zone_bite_max = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.zone_bite_max,
+      {
+        valueText: calculatorFmt2(zoneBiteMaxRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow("Selected zone", calculatorFmt2(zoneBiteMaxRaw), zoneName),
+          ],
+        },
+      },
+    );
+    statBreakdowns.effective_bite_min = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.effective_bite_min,
+      {
+        valueText: calculatorFmt2(effectiveBiteMinRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow("Zone min", calculatorFmt2(zoneBiteMinRaw), zoneName),
+            calculatorBreakdownRow(
+              "Level factor",
+              calculatorFactorText(factorLevel),
+              `Fishing level ${normalizedLevel} modifier.`,
+            ),
+            calculatorBreakdownRow(
+              "Abundance factor",
+              calculatorFactorText(factorResources),
+              `Resources ${calculatorTrimFloat(normalizedResources)}% (${abundanceLabel})`,
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Displayed effective min",
+              calculatorFmt2(effectiveBiteMinRaw),
+              "Lower end of the current effective bite window.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.effective_bite_avg = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.effective_bite_avg,
+      {
+        valueText: calculatorFmt2(biteTimeRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow(
+              "Zone average bite time",
+              calculatorFmt2(zoneBiteAvgRaw),
+              `Derived from ${zoneName} zone bite-time metadata.`,
+            ),
+            calculatorBreakdownRow(
+              "Level factor",
+              calculatorFactorText(factorLevel),
+              `Fishing level ${normalizedLevel} reduces the base bite window.`,
+            ),
+            calculatorBreakdownRow(
+              "Abundance factor",
+              calculatorFactorText(factorResources),
+              `Resources ${calculatorTrimFloat(normalizedResources)}% (${abundanceLabel}) scale the bite window.`,
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Displayed effective average",
+              calculatorFmt2(biteTimeRaw),
+              "Matches the Average Bite Time stat.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.effective_bite_max = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.effective_bite_max,
+      {
+        valueText: calculatorFmt2(effectiveBiteMaxRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow("Zone max", calculatorFmt2(zoneBiteMaxRaw), zoneName),
+            calculatorBreakdownRow(
+              "Level factor",
+              calculatorFactorText(factorLevel),
+              `Fishing level ${normalizedLevel} modifier.`,
+            ),
+            calculatorBreakdownRow(
+              "Abundance factor",
+              calculatorFactorText(factorResources),
+              `Resources ${calculatorTrimFloat(normalizedResources)}% (${abundanceLabel})`,
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Displayed effective max",
+              calculatorFmt2(effectiveBiteMaxRaw),
+              "Upper end of the current effective bite window.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.loot_total_catches = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.loot_total_catches,
+      {
+        title: `Expected Catches (${currentTimespanText})`,
+        valueText: calculatorFmt2(lootTotalCatchesRaw),
+        replaceSections: {
+          Composition: [
+            calculatorBreakdownRow(
+              "Average casts",
+              calculatorFmt2(castsAverageRaw),
+              `Average casts during ${currentTimespanText}.`,
+            ),
+            calculatorBreakdownRow(
+              "Applied fish multiplier",
+              fishMultiplierText,
+              "Highest selected fish-per-cast multiplier.",
+            ),
+            calculatorBreakdownRow(
+              "Displayed catches",
+              calculatorFmt2(lootTotalCatchesRaw),
+              "Expected catches for the selected session duration.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.loot_fish_per_hour = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.loot_fish_per_hour,
+      {
+        valueText: calculatorFmt2(lootFishPerHourRaw),
+        replaceSections: {
+          Composition: [
+            calculatorBreakdownRow(
+              "Average total fishing time",
+              calculatorFmt2(totalTimeRaw),
+              "Average seconds per full fishing cycle.",
+            ),
+            calculatorBreakdownRow(
+              "Applied fish multiplier",
+              fishMultiplierText,
+              "Highest selected fish-per-cast multiplier.",
+            ),
+            calculatorBreakdownRow(
+              "Displayed catches / hour",
+              calculatorFmt2(lootFishPerHourRaw),
+              "Expected hourly catch throughput.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.loot_total_profit = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.loot_total_profit,
+      {
+        title: `Expected Profit (${currentTimespanText})`,
+        valueText: calculatorFmtSilver(lootTotalProfitRaw),
+        rowUpdates: profitScale > 0
+          ? Object.fromEntries(
+              [calculatorParseBreakdown(current.stat_breakdowns?.loot_total_profit)]
+                .filter(Boolean)
+                .flatMap((payload) => Array.isArray(payload.sections) ? payload.sections : [])
+                .filter((section) => String(section?.label ?? "") === "Inputs")
+                .flatMap((section) => Array.isArray(section.rows) ? section.rows : [])
+                .map((row) => [
+                  String(row?.label ?? ""),
+                  {
+                    valueText: calculatorScaleSilverText(row?.value_text, profitScale),
+                  },
+                ]),
+            )
+          : null,
+        replaceSections: {
+          Composition: [
+            calculatorBreakdownRow(
+              "Trade sale multiplier",
+              String(current.trade_sale_multiplier_text ?? "").trim(),
+              "Current sale multiplier after trade settings.",
+            ),
+            calculatorBreakdownRow(
+              "Displayed profit",
+              calculatorFmtSilver(lootTotalProfitRaw),
+              "Expected silver across the selected session duration.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.loot_profit_per_hour = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.loot_profit_per_hour,
+      {
+        valueText: calculatorFmtSilver(lootProfitPerHourRaw),
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow(
+              `Expected profit (${currentTimespanText})`,
+              calculatorFmtSilver(lootTotalProfitRaw),
+              "Expected silver over the current session duration.",
+            ),
+            calculatorBreakdownRow(
+              "Session duration",
+              currentTimespanText,
+              sessionDurationDetail,
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Displayed profit / hour",
+              calculatorFmtSilver(lootProfitPerHourRaw),
+              "Expected hourly silver throughput.",
+            ),
+          ],
+        },
+      },
+    );
+
+    return {
+      ...current,
+      stat_breakdowns: statBreakdowns,
+      abundance_label: abundanceLabel,
+      zone_bite_min: calculatorFmt2(zoneBiteMinRaw),
+      zone_bite_max: calculatorFmt2(zoneBiteMaxRaw),
+      zone_bite_avg: calculatorFmt2(zoneBiteAvgRaw),
+      effective_bite_min: calculatorFmt2(effectiveBiteMinRaw),
+      effective_bite_max: calculatorFmt2(effectiveBiteMaxRaw),
+      effective_bite_avg: calculatorFmt2(biteTimeRaw),
+      total_time: calculatorFmt2(totalTimeRaw),
+      bite_time: calculatorFmt2(biteTimeRaw),
+      auto_fish_time: calculatorFmt2(autoFishTimeRaw),
+      casts_title: `Average Casts (${currentTimespanText})`,
+      casts_average: calculatorFmt2(castsAverageRaw),
+      durability_loss_title: `Average Durability Loss (${currentTimespanText})`,
+      durability_loss_average: calculatorFmt2(durabilityLossAverageRaw),
+      loot_total_catches: calculatorFmt2(lootTotalCatchesRaw),
+      loot_fish_per_hour: calculatorFmt2(lootFishPerHourRaw),
+      loot_fish_multiplier_text: fishMultiplierText,
+      loot_total_profit: calculatorFmtSilver(lootTotalProfitRaw),
+      loot_profit_per_hour: calculatorFmtSilver(lootProfitPerHourRaw),
+      timespan_text: currentTimespanText,
+      bite_time_title: `Bitetime: ${calculatorFmt2(biteTimeRaw)}s (${calculatorFmt2(percentBite)}%)`,
+      auto_fish_time_title: `Auto-Fishing Time: ${calculatorFmt2(autoFishTimeRaw)}s (${calculatorFmt2(percentAF)}%)`,
+      catch_time_title: `Catch Time: ${calculatorFmt2(catchTimeRaw)}s (${calculatorFmt2(percentCatch)}%)`,
+      unoptimized_time_title: `Average Unoptimized Time: ${calculatorFmt2(unoptimizedTimeRaw)}s (${calculatorFmt2(percentImprovement)}%)`,
+      show_auto_fishing: !active,
+      percent_bite: calculatorFmt2(percentBite),
+      percent_af: calculatorFmt2(percentAF),
+      percent_catch: calculatorFmt2(percentCatch),
+    };
   }
 
   window.__fishystuffCalculator = {

@@ -336,3 +336,69 @@ test("calculator action listener handles copy and clear tokens once", () => {
   assert.equal(env.localStorage.getItem("calculator"), null);
   assert.deepEqual(signals._calculator_ui, { distribution_tab: "groups" });
 });
+
+test("calculator liveCalc keeps stat breakdown payloads aligned with local derived values", () => {
+  const env = createContext();
+  const live = env.window.__fishystuffCalculator.liveCalc(
+    2,
+    50,
+    false,
+    2,
+    3,
+    2,
+    "hours",
+    {
+      zone_bite_min: "10",
+      zone_bite_max: "20",
+      zone_name: "Velia Beach",
+      auto_fish_time: "90",
+      auto_fish_time_reduction_text: "50%",
+      chance_to_consume_durability_text: "25.00%",
+      fish_multiplier_raw: 1.5,
+      loot_profit_per_catch_raw: 1000,
+      loot_total_profit: "1,000",
+      trade_sale_multiplier_text: "120.00%",
+      stat_breakdowns: {
+        total_time: JSON.stringify({
+          title: "Average Total Fishing Time",
+          value_text: "0.00",
+          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+        }),
+        casts_average: JSON.stringify({
+          title: "Average Casts (8 hours)",
+          value_text: "0.00",
+          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+        }),
+        loot_total_catches: JSON.stringify({
+          title: "Expected Catches (8 hours)",
+          value_text: "0.00",
+          sections: [
+            { label: "Inputs", rows: [] },
+            { label: "Composition", rows: [] },
+          ],
+        }),
+        loot_profit_per_hour: JSON.stringify({
+          title: "Profit / Hour",
+          value_text: "0",
+          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+        }),
+      },
+    },
+  );
+
+  const totalTime = JSON.parse(live.stat_breakdowns.total_time);
+  const castsAverage = JSON.parse(live.stat_breakdowns.casts_average);
+  const totalCatches = JSON.parse(live.stat_breakdowns.loot_total_catches);
+  const profitPerHour = JSON.parse(live.stat_breakdowns.loot_profit_per_hour);
+
+  assert.equal(totalTime.value_text, live.total_time);
+  assert.equal(totalTime.sections[0].rows[0].value_text, live.bite_time);
+  assert.equal(totalTime.sections[0].rows[1].label, "Auto-fishing time");
+  assert.equal(castsAverage.title, "Average Casts (2 hours)");
+  assert.equal(castsAverage.sections[0].rows[0].value_text, "2 hours");
+  assert.equal(totalCatches.title, "Expected Catches (2 hours)");
+  assert.equal(totalCatches.value_text, live.loot_total_catches);
+  assert.equal(totalCatches.sections[1].rows[0].value_text, live.casts_average);
+  assert.equal(profitPerHour.sections[0].rows[0].value_text, live.loot_total_profit);
+  assert.equal(profitPerHour.value_text, live.loot_profit_per_hour);
+});

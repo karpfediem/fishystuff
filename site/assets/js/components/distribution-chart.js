@@ -3,7 +3,6 @@ import {
     FishyDatastarRenderElement,
     readCalculatorSignal,
 } from "./datastar-render-element.js";
-import { attachStatBreakdownTooltip } from "./stat-breakdown-tooltip.js";
 
 const DEFAULT_VIEWBOX_WIDTH = 1351;
 const CHART_HEIGHT = 164;
@@ -68,7 +67,6 @@ class FishyDistributionChart extends FishyDatastarRenderElement {
     }
 
     renderFromSignals() {
-        attachStatBreakdownTooltip(this);
         const segments = chartSegments(this.getAttribute("signal-path"));
         if (!segments.length) {
             this.replaceRenderedChildren();

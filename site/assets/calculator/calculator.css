@@ -231,6 +231,15 @@
     transform: translate3d(0, 0, 0);
 }
 
+.fishy-explainable-stat {
+    cursor: help;
+}
+
+.fishy-explainable-stat:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-info) 55%, transparent);
+    outline-offset: 3px;
+}
+
 .fishy-stat-breakdown-tooltip[hidden] {
     display: none !important;
 }
