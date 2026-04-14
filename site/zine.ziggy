@@ -37,6 +37,7 @@ Multilingual {
     "js/components/checkbox-group.js",
     "js/components/datastar-render-element.js",
     "js/components/distribution-chart.js",
+    "js/components/stat-breakdown-tooltip.js",
     "js/components/loot-sankey.js",
     "js/components/pmf-chart.js",
     "js/components/provenance-indicator.js",

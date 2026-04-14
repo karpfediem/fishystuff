@@ -3,6 +3,7 @@ import {
     FishyDatastarRenderElement,
     readCalculatorSignal,
 } from "./datastar-render-element.js";
+import { attachStatBreakdownTooltip } from "./stat-breakdown-tooltip.js";
 
 const DEFAULT_VIEWBOX_WIDTH = 1351;
 const CHART_HEIGHT = 164;
@@ -17,6 +18,17 @@ const CALLOUT_GAP_PX = 10;
 function chartSegments(path) {
     const chart = readCalculatorSignal(path);
     return Array.isArray(chart?.segments) ? chart.segments : [];
+}
+
+function serializeBreakdownPayload(breakdown) {
+    if (!breakdown || typeof breakdown !== "object") {
+        return "";
+    }
+    try {
+        return JSON.stringify(breakdown);
+    } catch {
+        return "";
+    }
 }
 
 function estimateCalloutWidthPx(label, valueText, detailText) {
@@ -56,6 +68,7 @@ class FishyDistributionChart extends FishyDatastarRenderElement {
     }
 
     renderFromSignals() {
+        attachStatBreakdownTooltip(this);
         const segments = chartSegments(this.getAttribute("signal-path"));
         if (!segments.length) {
             this.replaceRenderedChildren();
@@ -233,6 +246,28 @@ class FishyDistributionChart extends FishyDatastarRenderElement {
                 .style("font-size", "11.5px")
                 .style("font-weight", "600")
                 .text(entry.segment.detail_text);
+
+            const breakdownPayload = serializeBreakdownPayload(entry.segment.breakdown);
+            if (breakdownPayload) {
+                callout.append("rect")
+                    .attr("x", calloutX)
+                    .attr("y", CALLOUT_TOP)
+                    .attr("width", calloutWidth)
+                    .attr("height", CALLOUT_HEIGHT)
+                    .attr("rx", CALLOUT_RADIUS)
+                    .attr("ry", CALLOUT_RADIUS)
+                    .attr("class", "distribution-chart__hotspot")
+                    .attr("tabindex", 0)
+                    .attr("focusable", true)
+                    .attr(
+                        "aria-label",
+                        `${String(entry.segment.label ?? "Segment")} ${String(entry.segment.value_text ?? "")}. Show composition.`,
+                    )
+                    .attr("data-fishy-stat-breakdown", breakdownPayload)
+                    .attr("data-fishy-stat-color", String(entry.segment.fill_color ?? ""))
+                    .style("fill", "rgba(255, 255, 255, 0)")
+                    .style("pointer-events", "all");
+            }
         });
 
         track.append("rect")

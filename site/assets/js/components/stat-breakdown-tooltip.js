@@ -1,0 +1,304 @@
+function trimString(value) {
+    const normalized = String(value ?? "").trim();
+    return normalized || "";
+}
+
+function normalizeBreakdownRow(row = {}) {
+    const label = trimString(row?.label);
+    const valueText = trimString(row?.value_text ?? row?.valueText);
+    const detailText = trimString(row?.detail_text ?? row?.detailText);
+    if (!label && !valueText && !detailText) {
+        return null;
+    }
+    return {
+        label: label || "Value",
+        valueText,
+        detailText,
+    };
+}
+
+function normalizeBreakdownSection(section = {}) {
+    const rows = Array.isArray(section?.rows)
+        ? section.rows.map(normalizeBreakdownRow).filter(Boolean)
+        : [];
+    if (!rows.length) {
+        return null;
+    }
+    return {
+        label: trimString(section?.label) || "Details",
+        rows,
+    };
+}
+
+export function normalizeStatBreakdownPayload(payload = {}) {
+    const sections = Array.isArray(payload?.sections)
+        ? payload.sections.map(normalizeBreakdownSection).filter(Boolean)
+        : [];
+    const title = trimString(payload?.title);
+    const valueText = trimString(payload?.value_text ?? payload?.valueText);
+    const summaryText = trimString(payload?.summary_text ?? payload?.summaryText);
+    const formulaText = trimString(payload?.formula_text ?? payload?.formulaText);
+    if (!title && !valueText && !summaryText && !sections.length) {
+        return null;
+    }
+    return {
+        eyebrow: trimString(payload?.kind_label ?? payload?.kindLabel) || "Computed stat",
+        title: title || "Breakdown",
+        valueText,
+        summaryText,
+        formulaText,
+        sections,
+    };
+}
+
+let tooltipElement = null;
+let tooltipRefs = null;
+const tooltipRoots = new WeakSet();
+const payloadCache = new WeakMap();
+
+function ensureTooltipElement() {
+    if (tooltipElement?.isConnected && tooltipRefs) {
+        return { tooltip: tooltipElement, refs: tooltipRefs };
+    }
+    const documentRef = globalThis.document;
+    if (!documentRef?.body || typeof documentRef.createElement !== "function") {
+        return null;
+    }
+
+    const tooltip = documentRef.createElement("div");
+    tooltip.className = "fishy-stat-breakdown-tooltip";
+    tooltip.hidden = true;
+    tooltip.setAttribute("role", "tooltip");
+
+    const eyebrow = documentRef.createElement("div");
+    eyebrow.className = "fishy-stat-breakdown-tooltip__eyebrow";
+    const swatch = documentRef.createElement("span");
+    swatch.className = "fishy-stat-breakdown-tooltip__swatch";
+    swatch.setAttribute("aria-hidden", "true");
+    const eyebrowLabel = documentRef.createElement("span");
+    eyebrowLabel.className = "fishy-stat-breakdown-tooltip__eyebrow-label";
+    eyebrow.append(swatch, eyebrowLabel);
+
+    const header = documentRef.createElement("div");
+    header.className = "fishy-stat-breakdown-tooltip__header";
+    const title = documentRef.createElement("div");
+    title.className = "fishy-stat-breakdown-tooltip__title";
+    const value = documentRef.createElement("div");
+    value.className = "fishy-stat-breakdown-tooltip__value";
+    header.append(title, value);
+
+    const summary = documentRef.createElement("div");
+    summary.className = "fishy-stat-breakdown-tooltip__summary";
+
+    const formula = documentRef.createElement("div");
+    formula.className = "fishy-stat-breakdown-tooltip__formula";
+
+    const sections = documentRef.createElement("div");
+    sections.className = "fishy-stat-breakdown-tooltip__sections";
+
+    tooltip.append(eyebrow, header, summary, formula, sections);
+    documentRef.body.appendChild(tooltip);
+
+    tooltipElement = tooltip;
+    tooltipRefs = { eyebrowLabel, title, value, summary, formula, sections };
+    return { tooltip, refs: tooltipRefs };
+}
+
+function statBreakdownTargetFromEvent(eventTarget) {
+    if (!eventTarget || typeof eventTarget.closest !== "function") {
+        return null;
+    }
+    return eventTarget.closest("[data-fishy-stat-breakdown]");
+}
+
+function payloadForAnchor(anchor) {
+    if (!anchor) {
+        return null;
+    }
+    if (payloadCache.has(anchor)) {
+        return payloadCache.get(anchor);
+    }
+    let payload = null;
+    const raw = trimString(anchor.dataset?.fishyStatBreakdown);
+    if (raw) {
+        try {
+            payload = normalizeStatBreakdownPayload(JSON.parse(raw));
+        } catch {
+            payload = null;
+        }
+    }
+    payloadCache.set(anchor, payload);
+    return payload;
+}
+
+function buildSection(documentRef, section) {
+    const sectionElement = documentRef.createElement("section");
+    sectionElement.className = "fishy-stat-breakdown-tooltip__section";
+
+    const title = documentRef.createElement("div");
+    title.className = "fishy-stat-breakdown-tooltip__section-title";
+    title.textContent = section.label;
+    sectionElement.appendChild(title);
+
+    for (const row of section.rows) {
+        const rowElement = documentRef.createElement("div");
+        rowElement.className = "fishy-stat-breakdown-tooltip__row";
+
+        const main = documentRef.createElement("div");
+        main.className = "fishy-stat-breakdown-tooltip__row-main";
+
+        const label = documentRef.createElement("div");
+        label.className = "fishy-stat-breakdown-tooltip__row-label";
+        label.textContent = row.label;
+        main.appendChild(label);
+
+        if (row.detailText) {
+            const detail = documentRef.createElement("div");
+            detail.className = "fishy-stat-breakdown-tooltip__row-detail";
+            detail.textContent = row.detailText;
+            main.appendChild(detail);
+        }
+
+        const value = documentRef.createElement("div");
+        value.className = "fishy-stat-breakdown-tooltip__row-value";
+        value.textContent = row.valueText;
+
+        rowElement.append(main, value);
+        sectionElement.appendChild(rowElement);
+    }
+
+    return sectionElement;
+}
+
+function updateTooltipPosition(tooltip, anchor, event) {
+    const windowRef = globalThis.window;
+    if (!tooltip || !windowRef) {
+        return;
+    }
+    let clientX = Number(event?.clientX);
+    let clientY = Number(event?.clientY);
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+        const rect = typeof anchor?.getBoundingClientRect === "function"
+            ? anchor.getBoundingClientRect()
+            : null;
+        clientX = Number(rect?.left ?? 0) + Number(rect?.width ?? 0) / 2;
+        clientY = Number(rect?.top ?? 0) + Number(rect?.height ?? 0) / 2;
+    }
+    const offsetX = 14;
+    const offsetY = 18;
+    tooltip.style.left = "0";
+    tooltip.style.top = "0";
+    tooltip.style.transform = `translate3d(${clientX + offsetX}px, ${clientY + offsetY}px, 0)`;
+    const tooltipRect = typeof tooltip.getBoundingClientRect === "function"
+        ? tooltip.getBoundingClientRect()
+        : null;
+    if (!tooltipRect) {
+        return;
+    }
+    const viewportWidth = Number(windowRef.innerWidth ?? 0);
+    const viewportHeight = Number(windowRef.innerHeight ?? 0);
+    let nextX = clientX + offsetX;
+    let nextY = clientY + offsetY;
+    if (viewportWidth > 0 && nextX + tooltipRect.width + 12 > viewportWidth) {
+        nextX = Math.max(12, clientX - tooltipRect.width - 12);
+    }
+    if (viewportHeight > 0 && nextY + tooltipRect.height + 12 > viewportHeight) {
+        nextY = Math.max(12, clientY - tooltipRect.height - 12);
+    }
+    tooltip.style.transform = `translate3d(${nextX}px, ${nextY}px, 0)`;
+}
+
+function showTooltip(anchor, event) {
+    const tooltipData = ensureTooltipElement();
+    if (!tooltipData || !anchor?.dataset) {
+        return;
+    }
+    const payload = payloadForAnchor(anchor);
+    if (!payload) {
+        return;
+    }
+    const { tooltip, refs } = tooltipData;
+    refs.eyebrowLabel.textContent = payload.eyebrow;
+    refs.title.textContent = payload.title;
+    refs.value.textContent = payload.valueText;
+    refs.value.hidden = !payload.valueText;
+    refs.summary.textContent = payload.summaryText;
+    refs.summary.hidden = !payload.summaryText;
+    refs.formula.textContent = payload.formulaText;
+    refs.formula.hidden = !payload.formulaText;
+
+    const documentRef = globalThis.document;
+    refs.sections.replaceChildren(
+        ...payload.sections.map((section) => buildSection(documentRef, section)),
+    );
+    refs.sections.hidden = payload.sections.length === 0;
+
+    tooltip.style.setProperty(
+        "--fishy-stat-breakdown-color",
+        trimString(anchor.dataset.fishyStatColor) || "var(--color-info)",
+    );
+    tooltip.hidden = false;
+    updateTooltipPosition(tooltip, anchor, event);
+}
+
+function hideTooltip() {
+    if (!tooltipElement) {
+        return;
+    }
+    tooltipElement.hidden = true;
+}
+
+export function attachStatBreakdownTooltip(root) {
+    if (!root || tooltipRoots.has(root) || typeof root.addEventListener !== "function") {
+        return;
+    }
+    tooltipRoots.add(root);
+
+    root.addEventListener("mouseover", (event) => {
+        const target = statBreakdownTargetFromEvent(event.target);
+        if (!target) {
+            return;
+        }
+        showTooltip(target, event);
+    });
+
+    root.addEventListener("mousemove", (event) => {
+        const target = statBreakdownTargetFromEvent(event.target);
+        if (!target) {
+            return;
+        }
+        showTooltip(target, event);
+    });
+
+    root.addEventListener("mouseout", (event) => {
+        const target = statBreakdownTargetFromEvent(event.target);
+        if (!target) {
+            return;
+        }
+        const nextTarget = statBreakdownTargetFromEvent(event.relatedTarget);
+        if (nextTarget === target) {
+            return;
+        }
+        hideTooltip();
+    });
+
+    root.addEventListener("focusin", (event) => {
+        const target = statBreakdownTargetFromEvent(event.target);
+        if (!target) {
+            return;
+        }
+        showTooltip(target);
+    });
+
+    root.addEventListener("focusout", (event) => {
+        const target = statBreakdownTargetFromEvent(event.target);
+        if (!target) {
+            return;
+        }
+        const nextTarget = statBreakdownTargetFromEvent(event.relatedTarget);
+        if (nextTarget === target) {
+            return;
+        }
+        hideTooltip();
+    });
+}

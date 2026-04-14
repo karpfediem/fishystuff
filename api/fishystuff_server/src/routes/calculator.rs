@@ -118,6 +118,29 @@ struct CalculatorDerivedSignals {
     debug_json: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+struct ComputedStatBreakdownRow {
+    label: String,
+    value_text: String,
+    detail_text: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct ComputedStatBreakdownSection {
+    label: String,
+    rows: Vec<ComputedStatBreakdownRow>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct ComputedStatBreakdown {
+    kind_label: String,
+    title: String,
+    value_text: String,
+    summary_text: String,
+    formula_text: String,
+    sections: Vec<ComputedStatBreakdownSection>,
+}
+
 #[derive(Debug, Clone)]
 struct FishGroupChartRow {
     label: &'static str,
@@ -129,6 +152,7 @@ struct FishGroupChartRow {
     base_share_pct: f64,
     weight_pct: f64,
     current_share_pct: f64,
+    rate_inputs: Vec<ComputedStatBreakdownRow>,
 }
 
 #[derive(Debug, Clone)]
@@ -213,6 +237,8 @@ struct DistributionChartSegment {
     stroke_color: &'static str,
     text_color: &'static str,
     connector_color: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    breakdown: Option<ComputedStatBreakdown>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2024,6 +2050,53 @@ fn sum_item_property(
     total
 }
 
+fn computed_stat_breakdown_row(
+    label: impl Into<String>,
+    value_text: impl Into<String>,
+    detail_text: impl Into<String>,
+) -> ComputedStatBreakdownRow {
+    ComputedStatBreakdownRow {
+        label: label.into(),
+        value_text: value_text.into(),
+        detail_text: detail_text.into(),
+    }
+}
+
+fn collect_item_property_breakdown_rows(
+    items_by_key: &HashMap<&str, &CalculatorItemEntry>,
+    singles: &[&String],
+    groups: &[&Vec<String>],
+    value: impl Fn(&CalculatorItemEntry) -> Option<f64> + Copy,
+    detail_text: &str,
+) -> Vec<ComputedStatBreakdownRow> {
+    let mut rows = Vec::new();
+    for key in singles {
+        if let Some(item) = items_by_key.get(key.as_str()) {
+            if let Some(amount) = value(item).filter(|amount| *amount > 0.0) {
+                rows.push(computed_stat_breakdown_row(
+                    item.name.clone(),
+                    format!("+{}%", trim_float(amount * 100.0)),
+                    detail_text.to_string(),
+                ));
+            }
+        }
+    }
+    for group in groups {
+        for key in group.iter().filter(|key| !key.trim().is_empty()) {
+            if let Some(item) = items_by_key.get(key.as_str()) {
+                if let Some(amount) = value(item).filter(|amount| *amount > 0.0) {
+                    rows.push(computed_stat_breakdown_row(
+                        item.name.clone(),
+                        format!("+{}%", trim_float(amount * 100.0)),
+                        detail_text.to_string(),
+                    ));
+                }
+            }
+        }
+    }
+    rows
+}
+
 fn effective_fish_multiplier(
     signals: &CalculatorSignals,
     items_by_key: &HashMap<&str, &CalculatorItemEntry>,
@@ -2102,6 +2175,19 @@ fn derive_fish_group_chart(
         &[&signals.outfit, &signals.food, &signals.buff],
         |item| item.bonus_rare.map(f64::from),
     );
+    let rare_bonus_inputs = collect_item_property_breakdown_rows(
+        items_by_key,
+        &[
+            &signals.rod,
+            &signals.float,
+            &signals.chair,
+            &signals.lightstone_set,
+            &signals.backpack,
+        ],
+        &[&signals.outfit, &signals.food, &signals.buff],
+        |item| item.bonus_rare.map(f64::from),
+        "Rare bonus source",
+    );
     let high_quality_bonus = sum_item_property(
         items_by_key,
         &[
@@ -2113,6 +2199,19 @@ fn derive_fish_group_chart(
         ],
         &[&signals.outfit, &signals.food, &signals.buff],
         |item| item.bonus_big.map(f64::from),
+    );
+    let high_quality_bonus_inputs = collect_item_property_breakdown_rows(
+        items_by_key,
+        &[
+            &signals.rod,
+            &signals.float,
+            &signals.chair,
+            &signals.lightstone_set,
+            &signals.backpack,
+        ],
+        &[&signals.outfit, &signals.food, &signals.buff],
+        |item| item.bonus_big.map(f64::from),
+        "High-quality bonus source",
     );
 
     let rare_base = f64::from(zone_group_rate.rare_rate_raw.max(0)) / 1_000_000.0;
@@ -2163,6 +2262,44 @@ fn derive_fish_group_chart(
         }
     };
 
+    let prize_inputs = vec![
+        computed_stat_breakdown_row(
+            "Mastery",
+            trim_float(signals.mastery),
+            "Current mastery input",
+        ),
+        computed_stat_breakdown_row(
+            "Prize curve result",
+            percent_value_text(prize_weight * 100.0),
+            "Direct prize weight before normalization",
+        ),
+    ];
+
+    let mut rare_inputs = vec![computed_stat_breakdown_row(
+        "Zone base rate",
+        percent_value_text(rare_base * 100.0),
+        "Base group rate from zone data",
+    )];
+    rare_inputs.extend(rare_bonus_inputs);
+
+    let mut high_quality_inputs = vec![computed_stat_breakdown_row(
+        "Zone base rate",
+        percent_value_text(high_quality_base * 100.0),
+        "Base group rate from zone data",
+    )];
+    high_quality_inputs.extend(high_quality_bonus_inputs);
+
+    let general_inputs = vec![computed_stat_breakdown_row(
+        "Zone base rate",
+        percent_value_text(general_base * 100.0),
+        "Base group rate from zone data",
+    )];
+    let trash_inputs = vec![computed_stat_breakdown_row(
+        "Zone base rate",
+        percent_value_text(trash_base * 100.0),
+        "Base group rate from zone data",
+    )];
+
     FishGroupChart {
         available: true,
         note: "Zone groups are renormalized to 100% after applying Rare and High-Quality bonuses plus prize weight from mastery.".to_string(),
@@ -2183,6 +2320,7 @@ fn derive_fish_group_chart(
                 base_share_pct: 0.0,
                 weight_pct: prize_weight * 100.0,
                 current_share_pct: current_share(prize_weight),
+                rate_inputs: prize_inputs,
             },
             FishGroupChartRow {
                 label: "Rare",
@@ -2198,6 +2336,7 @@ fn derive_fish_group_chart(
                 base_share_pct: rare_base * 100.0,
                 weight_pct: rare_weight * 100.0,
                 current_share_pct: current_share(rare_weight),
+                rate_inputs: rare_inputs,
             },
             FishGroupChartRow {
                 label: "High-Quality",
@@ -2213,6 +2352,7 @@ fn derive_fish_group_chart(
                 base_share_pct: high_quality_base * 100.0,
                 weight_pct: high_quality_weight * 100.0,
                 current_share_pct: current_share(high_quality_weight),
+                rate_inputs: high_quality_inputs,
             },
             FishGroupChartRow {
                 label: "General",
@@ -2224,6 +2364,7 @@ fn derive_fish_group_chart(
                 base_share_pct: general_base * 100.0,
                 weight_pct: general_weight * 100.0,
                 current_share_pct: current_share(general_weight),
+                rate_inputs: general_inputs,
             },
             FishGroupChartRow {
                 label: "Trash",
@@ -2235,6 +2376,7 @@ fn derive_fish_group_chart(
                 base_share_pct: trash_base * 100.0,
                 weight_pct: trash_weight * 100.0,
                 current_share_pct: current_share(trash_weight),
+                rate_inputs: trash_inputs,
             },
         ],
     }
@@ -2518,6 +2660,97 @@ fn fish_group_drop_rate_tooltip(row: &FishGroupChartRow) -> String {
         percent_value_text(row.current_share_pct)
     ));
     parts.join(" · ")
+}
+
+fn fish_group_distribution_breakdown(
+    row: &FishGroupChartRow,
+    total_catches_raw: f64,
+    total_weight_pct: f64,
+    show_normalized_rates: bool,
+) -> ComputedStatBreakdown {
+    let input_rows = if row.rate_inputs.is_empty() {
+        vec![computed_stat_breakdown_row(
+            "Inputs",
+            "Unavailable",
+            "No direct inputs were recorded for this value.",
+        )]
+    } else {
+        row.rate_inputs.clone()
+    };
+
+    let raw_weight_detail = if row.weight_pct <= 0.0 && row.base_share_pct > 0.0 {
+        "Zeroed out because no source-backed rows are currently mapped to this group.".to_string()
+    } else if row.label == "Prize" {
+        "Derived directly from the mastery prize curve.".to_string()
+    } else if row.weight_pct > row.base_share_pct {
+        "Zone base rate plus active bonus sources.".to_string()
+    } else {
+        "No extra bonus sources applied.".to_string()
+    };
+
+    let mut composition_rows = vec![
+        computed_stat_breakdown_row(
+            "Raw group weight",
+            percent_value_text(row.weight_pct),
+            raw_weight_detail,
+        ),
+        computed_stat_breakdown_row(
+            "All-group weight total",
+            percent_value_text(total_weight_pct),
+            "Other group bonuses change this denominator.",
+        ),
+    ];
+    if show_normalized_rates {
+        composition_rows.push(computed_stat_breakdown_row(
+            "Displayed share",
+            percent_value_text(row.current_share_pct),
+            "This normalized share is currently shown on the chart.",
+        ));
+    } else {
+        composition_rows.push(computed_stat_breakdown_row(
+            "Normalized share",
+            percent_value_text(row.current_share_pct),
+            "Used for expected catches and downstream loot weighting.",
+        ));
+    }
+    composition_rows.push(computed_stat_breakdown_row(
+        "Expected catches",
+        trim_float(total_catches_raw * (row.current_share_pct / 100.0)),
+        "Based on the current session-size assumptions.",
+    ));
+
+    ComputedStatBreakdown {
+        kind_label: "Computed stat".to_string(),
+        title: format!("{} group", row.label),
+        value_text: percent_value_text(if show_normalized_rates {
+            row.current_share_pct
+        } else {
+            row.weight_pct
+        }),
+        summary_text: if show_normalized_rates {
+            "Currently showing the normalized share after prize, rare, and high-quality weighting."
+                .to_string()
+        } else {
+            "Currently showing the raw group weight before normalization. Expected catches still use the normalized share."
+                .to_string()
+        },
+        formula_text: if show_normalized_rates {
+            "Displayed share uses raw group weight divided by the all-group weight total."
+                .to_string()
+        } else {
+            "Displayed value uses the raw group weight before normalization.".to_string()
+        },
+        sections: vec![
+            ComputedStatBreakdownSection {
+                label: "Inputs".to_string(),
+                rows: input_rows,
+            },
+            ComputedStatBreakdownSection {
+                label: "Composition".to_string(),
+                rows: composition_rows,
+            },
+        ],
+    }
 }
 
 fn zone_loot_group_drop_rate_fields(
@@ -4241,6 +4474,8 @@ fn groups_distribution_segments(
     total_catches_raw: f64,
     show_normalized_rates: bool,
 ) -> Vec<DistributionChartSegment> {
+    let total_weight_pct = rows.iter().map(|row| row.weight_pct.max(0.0)).sum::<f64>();
+
     rows.iter()
         .map(|row| DistributionChartSegment {
             label: row.label.to_string(),
@@ -4261,6 +4496,12 @@ fn groups_distribution_segments(
             stroke_color: row.stroke_color,
             text_color: row.text_color,
             connector_color: row.connector_color,
+            breakdown: Some(fish_group_distribution_breakdown(
+                row,
+                total_catches_raw,
+                total_weight_pct,
+                show_normalized_rates,
+            )),
         })
         .collect()
 }
@@ -4286,6 +4527,7 @@ fn group_silver_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<Distrib
             stroke_color: row.stroke_color,
             text_color: row.text_color,
             connector_color: row.connector_color,
+            breakdown: None,
         })
         .collect()
 }
@@ -7189,6 +7431,7 @@ mod tests {
                     base_share_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 10.0,
+                    rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
                     label: "Rare",
@@ -7200,6 +7443,7 @@ mod tests {
                     base_share_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 0.0,
+                    rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
                     label: "General",
@@ -7211,6 +7455,7 @@ mod tests {
                     base_share_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 90.0,
+                    rate_inputs: Vec::new(),
                 },
             ],
         };
@@ -7269,6 +7514,7 @@ mod tests {
                 base_share_pct: 0.0,
                 weight_pct: 0.0,
                 current_share_pct: 100.0,
+                rate_inputs: Vec::new(),
             }],
         };
         let data = CalculatorData {
@@ -7428,6 +7674,7 @@ mod tests {
                 base_share_pct: 0.0,
                 weight_pct: 6.25,
                 current_share_pct: 5.81,
+                rate_inputs: Vec::new(),
             },
             FishGroupChartRow {
                 label: "Trash",
@@ -7439,6 +7686,7 @@ mod tests {
                 base_share_pct: 6.25,
                 weight_pct: 6.25,
                 current_share_pct: 5.81,
+                rate_inputs: Vec::new(),
             },
         ];
 
@@ -7448,10 +7696,26 @@ mod tests {
         assert_eq!(normalized[0].value_text, "5.81%");
         assert_eq!(normalized[0].detail_text, "3.02");
         assert_eq!(normalized[0].width_pct, 5.81);
+        assert_eq!(
+            normalized[0]
+                .breakdown
+                .as_ref()
+                .expect("normalized group chart should expose a breakdown")
+                .sections[1]
+                .rows[0]
+                .label,
+            "Raw group weight"
+        );
 
         assert_eq!(raw[0].value_text, "6.25%");
         assert_eq!(raw[0].detail_text, "3.02");
         assert_eq!(raw[0].width_pct, 6.25);
+        assert!(raw[0]
+            .breakdown
+            .as_ref()
+            .expect("raw group chart should expose a breakdown")
+            .summary_text
+            .contains("raw group weight before normalization"));
         assert_eq!(raw[1].value_text, "6.25%");
         assert_eq!(raw[1].detail_text, "3.02");
     }
@@ -7480,6 +7744,7 @@ mod tests {
                     base_share_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 25.0,
+                    rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
                     label: "Rare",
@@ -7491,6 +7756,7 @@ mod tests {
                     base_share_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 0.0,
+                    rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
                     label: "High-Quality",
@@ -7502,6 +7768,7 @@ mod tests {
                     base_share_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 0.0,
+                    rate_inputs: Vec::new(),
                 },
                 FishGroupChartRow {
                     label: "General",
@@ -7513,6 +7780,7 @@ mod tests {
                     base_share_pct: 0.0,
                     weight_pct: 0.0,
                     current_share_pct: 75.0,
+                    rate_inputs: Vec::new(),
                 },
             ],
         };
@@ -7580,6 +7848,7 @@ mod tests {
                 base_share_pct: 0.0,
                 weight_pct: 0.0,
                 current_share_pct: 100.0,
+                rate_inputs: Vec::new(),
             }],
         };
         let data = CalculatorData {
@@ -7634,6 +7903,7 @@ mod tests {
                 base_share_pct: 0.0,
                 weight_pct: 0.0,
                 current_share_pct: 100.0,
+                rate_inputs: Vec::new(),
             }],
         };
         let data = CalculatorData {
@@ -7687,6 +7957,7 @@ mod tests {
                 base_share_pct: 0.0,
                 weight_pct: 0.0,
                 current_share_pct: 100.0,
+                rate_inputs: Vec::new(),
             }],
         };
         let data = CalculatorData {
@@ -7786,7 +8057,7 @@ mod tests {
     }
 
     #[test]
-    fn derive_fish_group_chart_adds_group_bonus_as_absolute_rate() {
+    fn derive_fish_group_chart_includes_bonus_sources_in_rate_inputs() {
         let signals = CalculatorSignals {
             zone: "bonus_zone".to_string(),
             float: "item:rare-float".to_string(),
@@ -7866,12 +8137,30 @@ mod tests {
         assert!(
             (fish_group_chart.rows[1].current_share_pct - 16.528925619834713).abs() < tolerance
         );
+        assert_eq!(
+            fish_group_chart.rows[1].rate_inputs[0].label,
+            "Zone base rate"
+        );
+        assert_eq!(fish_group_chart.rows[1].rate_inputs[0].value_text, "10%");
+        assert_eq!(fish_group_chart.rows[1].rate_inputs[1].label, "Rare Float");
+        assert_eq!(fish_group_chart.rows[1].rate_inputs[1].value_text, "+10%");
 
         assert_eq!(fish_group_chart.rows[2].label, "High-Quality");
         assert_eq!(fish_group_chart.rows[2].bonus_text, "+11% HQ");
         assert!((fish_group_chart.rows[2].base_share_pct - 20.0).abs() < tolerance);
         assert!((fish_group_chart.rows[2].weight_pct - 31.0).abs() < tolerance);
         assert!((fish_group_chart.rows[2].current_share_pct - 25.6198347107438).abs() < tolerance);
+        assert_eq!(
+            fish_group_chart.rows[2].rate_inputs[0].label,
+            "Zone base rate"
+        );
+        assert_eq!(fish_group_chart.rows[2].rate_inputs[0].value_text, "20%");
+        assert_eq!(fish_group_chart.rows[2].rate_inputs[1].label, "HQ Chair");
+        assert_eq!(fish_group_chart.rows[2].rate_inputs[1].value_text, "+11%");
+
+        assert_eq!(fish_group_chart.rows[3].label, "General");
+        assert!((fish_group_chart.rows[3].weight_pct - 70.0).abs() < tolerance);
+        assert!((fish_group_chart.rows[3].current_share_pct - 57.85123966942149).abs() < tolerance);
     }
 
     #[test]
