@@ -26,10 +26,10 @@ while [ "$#" -gt 0 ]; do
 done
 
 SITE_RUNTIME_CONFIG=""
-if [ -f "$ROOT_DIR/site/public/runtime-config.js" ]; then
-  SITE_RUNTIME_CONFIG="$ROOT_DIR/site/public/runtime-config.js"
-elif [ -f "$ROOT_DIR/site/.out/runtime-config.js" ]; then
+if [ -f "$ROOT_DIR/site/.out/runtime-config.js" ]; then
   SITE_RUNTIME_CONFIG="$ROOT_DIR/site/.out/runtime-config.js"
+elif [ -f "$ROOT_DIR/site/public/runtime-config.js" ]; then
+  SITE_RUNTIME_CONFIG="$ROOT_DIR/site/public/runtime-config.js"
 fi
 
 if git -C "$ROOT_DIR" rev-parse HEAD >/dev/null 2>&1; then

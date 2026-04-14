@@ -6,6 +6,13 @@ build-release-no-tailwind:
     mkdir -p .out-builds; \
     build_dir=$(mktemp -d .out-builds/build.XXXXXX); \
     trap 'rm -rf "$build_dir" .out.next' EXIT; \
+    if [ -z "${FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY:-}" ]; then \
+      if git -C .. rev-parse HEAD >/dev/null 2>&1; then \
+        export FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY="$("../tools/scripts/resolve_map_runtime_cache_key.sh")"; \
+      else \
+        export FISHYSTUFF_RUNTIME_MAP_ASSET_CACHE_KEY="$(date -u +%Y%m%dT%H%M%SZ)"; \
+      fi; \
+    fi; \
     bun run datastar:build; \
     bun run d3:build; \
     bun run images:build; \
