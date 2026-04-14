@@ -137,8 +137,15 @@ test("statBreakdownTooltipShouldReactToMutations only reacts to observed tooltip
     ]), true);
 });
 
-test("statBreakdownSectionDisplayLabel maps composition to a clearer total label", () => {
+test("statBreakdownSectionDisplayLabel uses row labels for single-row results and a generic fallback otherwise", () => {
     assert.equal(statBreakdownSectionDisplayLabel({ label: "Inputs" }, 0), "Inputs");
-    assert.equal(statBreakdownSectionDisplayLabel({ label: "Composition" }, 1), "Total");
-    assert.equal(statBreakdownSectionDisplayLabel({ label: "Details" }, 1), "Total");
+    assert.equal(statBreakdownSectionDisplayLabel({
+        label: "Composition",
+        rows: [{ label: "Average total" }],
+    }, 1), "Average total");
+    assert.equal(statBreakdownSectionDisplayLabel({
+        label: "Composition",
+        rows: [{ label: "Average casts" }, { label: "Expected catches" }],
+    }, 1), "Result");
+    assert.equal(statBreakdownSectionDisplayLabel({ label: "Details", rows: [] }, 1), "Result");
 });

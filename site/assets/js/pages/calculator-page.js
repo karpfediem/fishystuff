@@ -611,8 +611,8 @@
         ? "Active mode uses bite time plus active catch time."
         : "AFK mode uses bite time, passive auto-fishing time, and AFK catch time.",
       formulaText: active
-        ? "Time = bite time + active catch time."
-        : "Time = bite time + auto-fishing time + AFK catch time.",
+        ? "Average total = Average bite time + Active catch time."
+        : "Average total = Average bite time + Auto-Fishing Time + AFK catch time.",
       replaceSections: {
         Inputs: active
           ? [

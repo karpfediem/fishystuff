@@ -57,13 +57,19 @@ export function normalizeStatBreakdownPayload(payload = {}) {
     };
 }
 
+function statBreakdownSectionIsResult(section, index = 0) {
+    const label = trimString(section?.label).toLowerCase();
+    return label === "composition" || (index > 0 && label === "details");
+}
+
 export function statBreakdownSectionDisplayLabel(section, index = 0) {
     const label = trimString(section?.label) || "Details";
-    if (label.toLowerCase() === "composition") {
-        return "Total";
-    }
-    if (index > 0 && label.toLowerCase() === "details") {
-        return "Total";
+    if (statBreakdownSectionIsResult(section, index)) {
+        const resultLabel = trimString(section?.rows?.[0]?.label);
+        if (Array.isArray(section?.rows) && section.rows.length === 1 && resultLabel) {
+            return resultLabel;
+        }
+        return "Result";
     }
     return label;
 }
@@ -118,6 +124,12 @@ function ensureTooltipElement() {
 
     const formula = documentRef.createElement("div");
     formula.className = "fishy-stat-breakdown-tooltip__formula";
+    const formulaLabel = documentRef.createElement("div");
+    formulaLabel.className = "fishy-stat-breakdown-tooltip__formula-label";
+    formulaLabel.textContent = "Formula";
+    const formulaBody = documentRef.createElement("div");
+    formulaBody.className = "fishy-stat-breakdown-tooltip__formula-body";
+    formula.append(formulaLabel, formulaBody);
 
     const sections = documentRef.createElement("div");
     sections.className = "fishy-stat-breakdown-tooltip__sections";
@@ -126,7 +138,7 @@ function ensureTooltipElement() {
     documentRef.body.appendChild(tooltip);
 
     tooltipElement = tooltip;
-    tooltipRefs = { eyebrowLabel, title, value, summary, formula, sections };
+    tooltipRefs = { eyebrowLabel, title, value, summary, formula, formulaBody, sections };
     return { tooltip, refs: tooltipRefs };
 }
 
@@ -291,14 +303,13 @@ function buildRowMain(documentRef, row, { showDetail = true } = {}) {
 }
 
 function buildSection(documentRef, section, index = 0) {
-    const rawLabel = trimString(section?.label).toLowerCase();
     const displayLabel = statBreakdownSectionDisplayLabel(section, index);
     const isSecondarySection = index > 0;
-    const isTotalSection = rawLabel === "composition" || displayLabel.toLowerCase() === "total";
+    const isResultSection = statBreakdownSectionIsResult(section, index);
     const sectionElement = documentRef.createElement("section");
     sectionElement.className = [
         "fishy-stat-breakdown-tooltip__section",
-        isTotalSection ? "fishy-stat-breakdown-tooltip__section--total" : "",
+        isResultSection ? "fishy-stat-breakdown-tooltip__section--result" : "",
     ].filter(Boolean).join(" ");
 
     if (isSecondarySection) {
@@ -315,13 +326,13 @@ function buildSection(documentRef, section, index = 0) {
 
     for (const [rowIndex, row] of section.rows.entries()) {
         const rowElement = documentRef.createElement("div");
-        const isEmphasisRow = isTotalSection && rowIndex === section.rows.length - 1;
+        const isEmphasisRow = isResultSection && rowIndex === section.rows.length - 1;
         rowElement.className = [
             "fishy-stat-breakdown-tooltip__row",
             isEmphasisRow ? "fishy-stat-breakdown-tooltip__row--emphasis" : "",
         ].filter(Boolean).join(" ");
 
-        const main = buildRowMain(documentRef, row, { showDetail: !isTotalSection });
+        const main = buildRowMain(documentRef, row, { showDetail: !isResultSection });
 
         const value = documentRef.createElement("div");
         value.className = "fishy-stat-breakdown-tooltip__row-value";
@@ -392,8 +403,8 @@ function showTooltip(anchor, event) {
         refs.value.hidden = !payload.valueText;
         refs.summary.textContent = payload.summaryText;
         refs.summary.hidden = !payload.summaryText || payload.sections.length > 0;
-        refs.formula.textContent = payload.formulaText;
-        refs.formula.hidden = !payload.formulaText || payload.sections.length > 0;
+        refs.formulaBody.textContent = payload.formulaText;
+        refs.formula.hidden = !payload.formulaText;
 
         const documentRef = globalThis.document;
         refs.sections.replaceChildren(
