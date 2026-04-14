@@ -156,6 +156,10 @@ struct ComputedStatBreakdownRow {
     icon_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     grade_tone: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    formula_part: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    formula_part_order: Option<u8>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -2133,6 +2137,8 @@ fn computed_stat_breakdown_row(
         kind: None,
         icon_url: None,
         grade_tone: None,
+        formula_part: None,
+        formula_part_order: None,
     }
 }
 
@@ -2152,6 +2158,8 @@ fn computed_stat_breakdown_item_row(
             .as_deref()
             .map(|icon| absolute_public_asset_url(cdn_base_url, icon)),
         grade_tone: Some(item_grade_tone(item.grade.as_deref()).to_string()),
+        formula_part: None,
+        formula_part_order: None,
     }
 }
 
@@ -2167,7 +2175,36 @@ fn computed_stat_breakdown_loot_species_row(
         kind: Some("item"),
         icon_url: row.icon_url.clone(),
         grade_tone: Some(row.icon_grade_tone.clone()),
+        formula_part: None,
+        formula_part_order: None,
     }
+}
+
+fn computed_stat_breakdown_row_with_formula_part(
+    mut row: ComputedStatBreakdownRow,
+    formula_part: impl Into<String>,
+    formula_part_order: u8,
+) -> ComputedStatBreakdownRow {
+    row.formula_part = Some(formula_part.into());
+    row.formula_part_order = Some(formula_part_order);
+    row
+}
+
+fn computed_stat_breakdown_rows_with_formula_part(
+    rows: Vec<ComputedStatBreakdownRow>,
+    formula_part: impl Into<String>,
+    formula_part_order: u8,
+) -> Vec<ComputedStatBreakdownRow> {
+    let formula_part = formula_part.into();
+    rows.into_iter()
+        .map(|row| {
+            computed_stat_breakdown_row_with_formula_part(
+                row,
+                formula_part.clone(),
+                formula_part_order,
+            )
+        })
+        .collect()
 }
 
 fn collect_item_property_breakdown_rows(
@@ -2305,6 +2342,8 @@ fn computed_stat_breakdown_zone_loot_item_row(
             .as_deref()
             .map(|icon| absolute_public_asset_url(cdn_base_url, icon)),
         grade_tone: Some(item_grade_tone(entry.grade.as_deref()).to_string()),
+        formula_part: None,
+        formula_part_order: None,
     }
 }
 
@@ -3942,13 +3981,25 @@ fn derive_stat_breakdowns(
     );
     let pet_afr_rows = collect_pet_afr_breakdown_rows(pets, pet_stats, &data.catalog.pets);
     let mut afr_input_rows = Vec::new();
-    afr_input_rows.extend(afr_item_rows);
-    afr_input_rows.extend(pet_afr_rows);
+    afr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
+        afr_item_rows,
+        "AFR (uncapped)",
+        1,
+    ));
+    afr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
+        pet_afr_rows,
+        "AFR (uncapped)",
+        1,
+    ));
     if afr_input_rows.is_empty() {
-        afr_input_rows.push(computed_stat_breakdown_row(
-            "AFR sources",
-            "0%",
-            "No active AFR items, buffs, or pet specials are selected.",
+        afr_input_rows.push(computed_stat_breakdown_row_with_formula_part(
+            computed_stat_breakdown_row(
+                "AFR sources",
+                "0%",
+                "No active AFR items, buffs, or pet specials are selected.",
+            ),
+            "AFR (uncapped)",
+            1,
         ));
     }
 
@@ -3967,13 +4018,25 @@ fn derive_stat_breakdowns(
     );
     let pet_drr_rows = collect_pet_drr_breakdown_rows(pets, pet_stats, &data.catalog.pets);
     let mut item_drr_input_rows = Vec::new();
-    item_drr_input_rows.extend(item_drr_item_rows.clone());
-    item_drr_input_rows.extend(pet_drr_rows.clone());
+    item_drr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
+        item_drr_item_rows.clone(),
+        "Item DRR",
+        1,
+    ));
+    item_drr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
+        pet_drr_rows.clone(),
+        "Item DRR",
+        1,
+    ));
     if item_drr_input_rows.is_empty() {
-        item_drr_input_rows.push(computed_stat_breakdown_row(
-            "Item DRR sources",
-            "0%",
-            "No active Item DRR items or pet talents are selected.",
+        item_drr_input_rows.push(computed_stat_breakdown_row_with_formula_part(
+            computed_stat_breakdown_row(
+                "Item DRR sources",
+                "0%",
+                "No active Item DRR items or pet talents are selected.",
+            ),
+            "Item DRR",
+            1,
         ));
     }
 
@@ -4044,27 +4107,43 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 {
-                    let mut rows = vec![computed_stat_breakdown_row(
+                    let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Average bite time",
+                            fmt2(bite_time_raw),
+                            "Effective average bite time after level and abundance modifiers.",
+                        ),
                         "Average bite time",
-                        fmt2(bite_time_raw),
-                        "Effective average bite time after level and abundance modifiers.",
+                        1,
                     )];
                     if signals.active {
-                        rows.push(computed_stat_breakdown_row(
+                        rows.push(computed_stat_breakdown_row_with_formula_part(
+                            computed_stat_breakdown_row(
+                                "Active catch time",
+                                fmt2(catch_time_active_raw),
+                                "Manual catch-time input used in active mode.",
+                            ),
                             "Active catch time",
-                            fmt2(catch_time_active_raw),
-                            "Manual catch-time input used in active mode.",
+                            2,
                         ));
                     } else {
-                        rows.push(computed_stat_breakdown_row(
+                        rows.push(computed_stat_breakdown_row_with_formula_part(
+                            computed_stat_breakdown_row(
+                                "Auto-Fishing Time",
+                                fmt2(auto_fish_time_raw),
+                                "Passive waiting phase after AFR is applied.",
+                            ),
                             "Auto-Fishing Time",
-                            fmt2(auto_fish_time_raw),
-                            "Passive waiting phase after AFR is applied.",
+                            2,
                         ));
-                        rows.push(computed_stat_breakdown_row(
+                        rows.push(computed_stat_breakdown_row_with_formula_part(
+                            computed_stat_breakdown_row(
+                                "AFK catch time",
+                                fmt2(catch_time_afk_raw),
+                                "Manual catch-time input used in AFK mode.",
+                            ),
                             "AFK catch time",
-                            fmt2(catch_time_afk_raw),
-                            "Manual catch-time input used in AFK mode.",
+                            3,
                         ));
                     }
                     rows
@@ -4082,27 +4161,39 @@ fn derive_stat_breakdowns(
     );
 
     let bite_time_factor_rows = vec![
-        computed_stat_breakdown_row(
+        computed_stat_breakdown_row_with_formula_part(
+            computed_stat_breakdown_row(
+                "Zone average bite time",
+                fmt2(zone_bite_avg_raw),
+                format!("Derived from {} zone bite-time metadata.", zone_name),
+            ),
             "Zone average bite time",
-            fmt2(zone_bite_avg_raw),
-            format!("Derived from {} zone bite-time metadata.", zone_name),
+            1,
         ),
-        computed_stat_breakdown_row(
+        computed_stat_breakdown_row_with_formula_part(
+            computed_stat_breakdown_row(
+                "Level factor",
+                format!("×{}", trim_float(factor_level)),
+                format!(
+                    "Fishing level {} reduces the base bite window.",
+                    signals.level
+                ),
+            ),
             "Level factor",
-            format!("×{}", trim_float(factor_level)),
-            format!(
-                "Fishing level {} reduces the base bite window.",
-                signals.level
-            ),
+            2,
         ),
-        computed_stat_breakdown_row(
-            "Abundance factor",
-            format!("×{}", trim_float(factor_resources)),
-            format!(
-                "Resources {}% ({}) scale the bite window.",
-                trim_float(signals.resources),
-                abundance_label
+        computed_stat_breakdown_row_with_formula_part(
+            computed_stat_breakdown_row(
+                "Abundance factor",
+                format!("×{}", trim_float(factor_resources)),
+                format!(
+                    "Resources {}% ({}) scale the bite window.",
+                    trim_float(signals.resources),
+                    abundance_label
+                ),
             ),
+            "Abundance factor",
+            3,
         ),
     ];
     let bite_time_breakdown = computed_stat_breakdown(
@@ -4132,20 +4223,32 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 vec![
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Baseline auto-fishing time",
+                            "180",
+                            "Backend keeps the passive AFK baseline even when Active Fishing is enabled.",
+                        ),
                         "Baseline auto-fishing time",
-                        "180",
-                        "Backend keeps the passive AFK baseline even when Active Fishing is enabled.",
+                        1,
                     ),
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Applied AFR",
+                            format!("{}%", trim_float(afr_raw * 100.0)),
+                            "Capped AFR used by the passive auto-fishing timer.",
+                        ),
                         "Applied AFR",
-                        format!("{}%", trim_float(afr_raw * 100.0)),
-                        "Capped AFR used by the passive auto-fishing timer.",
+                        2,
                     ),
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Minimum auto-fishing time",
+                            "60",
+                            "The passive timer cannot go below 60 seconds.",
+                        ),
                         "Minimum auto-fishing time",
-                        "60",
-                        "The passive timer cannot go below 60 seconds.",
+                        3,
                     ),
                 ],
             ),
@@ -4199,15 +4302,23 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 vec![
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Session duration",
+                            human_duration_text(timespan_seconds),
+                            format!("{timespan_text} = {} seconds", trim_float(timespan_seconds)),
+                        ),
                         "Session duration",
-                        human_duration_text(timespan_seconds),
-                        format!("{timespan_text} = {} seconds", trim_float(timespan_seconds)),
+                        1,
                     ),
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Average total fishing time",
+                            fmt2(total_time_raw),
+                            "Average cycle duration used as the denominator.",
+                        ),
                         "Average total fishing time",
-                        fmt2(total_time_raw),
-                        "Average cycle duration used as the denominator.",
+                        2,
                     ),
                 ],
             ),
@@ -4249,23 +4360,39 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 {
-                    let mut rows = item_drr_item_rows;
-                    rows.extend(pet_drr_rows);
-                    rows.push(computed_stat_breakdown_row(
+                    let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Brandstone factor",
+                            format!("×{}", trim_float(brandstone_durability_factor)),
+                            if signals.brand {
+                                "Brandstone halves durability consumption."
+                            } else {
+                                "No Brandstone reduction is active."
+                            },
+                        ),
                         "Brandstone factor",
-                        format!("×{}", trim_float(brandstone_durability_factor)),
-                        if signals.brand {
-                            "Brandstone halves durability consumption."
-                        } else {
-                            "No Brandstone reduction is active."
-                        },
+                        1,
+                    )];
+                    rows.extend(computed_stat_breakdown_rows_with_formula_part(
+                        item_drr_item_rows,
+                        "Item DRR",
+                        2,
                     ));
-                    rows.push(computed_stat_breakdown_row(
-                        lifeskill_level
-                            .map(|level| level.name.clone())
-                            .unwrap_or_else(|| "Lifeskill DRR".to_string()),
-                        format!("+{}%", trim_float(lifeskill_level_drr_raw * 100.0)),
-                        "Fishing lifeskill level durability resistance.",
+                    rows.extend(computed_stat_breakdown_rows_with_formula_part(
+                        pet_drr_rows,
+                        "Item DRR",
+                        2,
+                    ));
+                    rows.push(computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            lifeskill_level
+                                .map(|level| level.name.clone())
+                                .unwrap_or_else(|| "Lifeskill DRR".to_string()),
+                            format!("+{}%", trim_float(lifeskill_level_drr_raw * 100.0)),
+                            "Fishing lifeskill level durability resistance.",
+                        ),
+                        "Lifeskill DRR",
+                        3,
                     ));
                     rows
                 },
@@ -4297,15 +4424,23 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 vec![
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Average casts",
+                            fmt2(casts_average_raw),
+                            format!("Average casts for {timespan_text}."),
+                        ),
                         "Average casts",
-                        fmt2(casts_average_raw),
-                        format!("Average casts for {timespan_text}."),
+                        1,
                     ),
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Chance to consume durability",
+                            format!("{:.2}%", chance_to_reduce_raw * 100.0),
+                            "Final per-cast consumption chance.",
+                        ),
                         "Chance to consume durability",
-                        format!("{:.2}%", chance_to_reduce_raw * 100.0),
-                        "Final per-cast consumption chance.",
+                        2,
                     ),
                 ],
             ),
@@ -4344,15 +4479,23 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 vec![
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Zone min",
+                            fmt2(zone_bite_min_raw),
+                            zone_name.to_string(),
+                        ),
                         "Zone min",
-                        fmt2(zone_bite_min_raw),
-                        zone_name.to_string(),
+                        1,
                     ),
-                    computed_stat_breakdown_row(
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Zone max",
+                            fmt2(zone_bite_max_raw),
+                            zone_name.to_string(),
+                        ),
                         "Zone max",
-                        fmt2(zone_bite_max_raw),
-                        zone_name.to_string(),
+                        2,
                     ),
                 ],
             ),
@@ -4391,24 +4534,36 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 vec![
-                    computed_stat_breakdown_row(
-                        "Zone min",
-                        fmt2(zone_bite_min_raw),
-                        zone_name.to_string(),
-                    ),
-                    computed_stat_breakdown_row(
-                        "Level factor",
-                        format!("×{}", trim_float(factor_level)),
-                        format!("Fishing level {} modifier.", signals.level),
-                    ),
-                    computed_stat_breakdown_row(
-                        "Abundance factor",
-                        format!("×{}", trim_float(factor_resources)),
-                        format!(
-                            "Resources {}% ({})",
-                            trim_float(signals.resources),
-                            abundance_label
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Zone min",
+                            fmt2(zone_bite_min_raw),
+                            zone_name.to_string(),
                         ),
+                        "Zone min",
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Level factor",
+                            format!("×{}", trim_float(factor_level)),
+                            format!("Fishing level {} modifier.", signals.level),
+                        ),
+                        "Level factor",
+                        2,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Abundance factor",
+                            format!("×{}", trim_float(factor_resources)),
+                            format!(
+                                "Resources {}% ({})",
+                                trim_float(signals.resources),
+                                abundance_label
+                            ),
+                        ),
+                        "Abundance factor",
+                        3,
                     ),
                 ],
             ),
@@ -4450,24 +4605,36 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 vec![
-                    computed_stat_breakdown_row(
-                        "Zone max",
-                        fmt2(zone_bite_max_raw),
-                        zone_name.to_string(),
-                    ),
-                    computed_stat_breakdown_row(
-                        "Level factor",
-                        format!("×{}", trim_float(factor_level)),
-                        format!("Fishing level {} modifier.", signals.level),
-                    ),
-                    computed_stat_breakdown_row(
-                        "Abundance factor",
-                        format!("×{}", trim_float(factor_resources)),
-                        format!(
-                            "Resources {}% ({})",
-                            trim_float(signals.resources),
-                            abundance_label
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Zone max",
+                            fmt2(zone_bite_max_raw),
+                            zone_name.to_string(),
                         ),
+                        "Zone max",
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Level factor",
+                            format!("×{}", trim_float(factor_level)),
+                            format!("Fishing level {} modifier.", signals.level),
+                        ),
+                        "Level factor",
+                        2,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Abundance factor",
+                            format!("×{}", trim_float(factor_resources)),
+                            format!(
+                                "Resources {}% ({})",
+                                trim_float(signals.resources),
+                                abundance_label
+                            ),
+                        ),
+                        "Abundance factor",
+                        3,
                     ),
                 ],
             ),
@@ -4488,26 +4655,33 @@ fn derive_stat_breakdowns(
         "Expected catches over the current session duration after the active fish-per-cast multiplier is applied.",
         "Expected catches = Average casts × Applied fish multiplier.",
         vec![
-            computed_stat_breakdown_section("Inputs", fish_multiplier_input_rows),
+            computed_stat_breakdown_section(
+                "Inputs",
+                {
+                    let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Average casts",
+                            fmt2(casts_average_raw),
+                            format!("Average casts during {timespan_text}."),
+                        ),
+                        "Average casts",
+                        1,
+                    )];
+                    rows.extend(computed_stat_breakdown_rows_with_formula_part(
+                        fish_multiplier_input_rows,
+                        "Applied fish multiplier",
+                        2,
+                    ));
+                    rows
+                },
+            ),
             computed_stat_breakdown_section(
                 "Composition",
-                vec![
-                    computed_stat_breakdown_row(
-                        "Average casts",
-                        fmt2(casts_average_raw),
-                        format!("Average casts during {timespan_text}."),
-                    ),
-                    computed_stat_breakdown_row(
-                        "Applied fish multiplier",
-                        format!("×{}", trim_float(fish_multiplier_raw)),
-                        "Highest selected fish-per-cast multiplier.",
-                    ),
-                    computed_stat_breakdown_row(
-                        "Expected catches",
-                        fmt2(loot_total_catches_raw),
-                        "Expected catches for the selected session duration.",
-                    ),
-                ],
+                vec![computed_stat_breakdown_row(
+                    "Expected catches",
+                    fmt2(loot_total_catches_raw),
+                    "Expected catches for the selected session duration.",
+                )],
             ),
         ],
     );
@@ -4518,34 +4692,35 @@ fn derive_stat_breakdowns(
         "Hourly catch throughput after the active fish-per-cast multiplier is applied.",
         "Catches / hour = (3600 / Average total fishing time) × Applied fish multiplier.",
         vec![
-            computed_stat_breakdown_section(
-                "Inputs",
-                collect_fish_multiplier_breakdown_rows(
-                    items_by_key,
-                    data.cdn_base_url.as_str(),
-                    signals,
-                    fish_multiplier_raw,
-                ),
-            ),
-            computed_stat_breakdown_section(
-                "Composition",
-                vec![
+            computed_stat_breakdown_section("Inputs", {
+                let mut rows = vec![computed_stat_breakdown_row_with_formula_part(
                     computed_stat_breakdown_row(
                         "Average total fishing time",
                         fmt2(total_time_raw),
                         "Average seconds per full fishing cycle.",
                     ),
-                    computed_stat_breakdown_row(
-                        "Applied fish multiplier",
-                        format!("×{}", trim_float(fish_multiplier_raw)),
-                        "Highest selected fish-per-cast multiplier.",
+                    "Average total fishing time",
+                    1,
+                )];
+                rows.extend(computed_stat_breakdown_rows_with_formula_part(
+                    collect_fish_multiplier_breakdown_rows(
+                        items_by_key,
+                        data.cdn_base_url.as_str(),
+                        signals,
+                        fish_multiplier_raw,
                     ),
-                    computed_stat_breakdown_row(
-                        "Catches / hour",
-                        fmt2(loot_fish_per_hour_raw),
-                        "Expected hourly catch throughput.",
-                    ),
-                ],
+                    "Applied fish multiplier",
+                    2,
+                ));
+                rows
+            }),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Catches / hour",
+                    fmt2(loot_fish_per_hour_raw),
+                    "Expected hourly catch throughput.",
+                )],
             ),
         ],
     );
@@ -4596,15 +4771,23 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Inputs",
                 vec![
-                    computed_stat_breakdown_row(
-                        format!("Expected profit ({timespan_text})"),
-                        loot_chart.total_profit_text.clone(),
-                        "Expected silver over the current session duration.",
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            format!("Expected profit ({timespan_text})"),
+                            loot_chart.total_profit_text.clone(),
+                            "Expected silver over the current session duration.",
+                        ),
+                        "Expected profit",
+                        1,
                     ),
-                    computed_stat_breakdown_row(
-                        "Session duration",
-                        human_duration_text(timespan_seconds),
-                        format!("{timespan_text} = {} seconds", trim_float(timespan_seconds)),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Session duration",
+                            human_duration_text(timespan_seconds),
+                            format!("{timespan_text} = {} seconds", trim_float(timespan_seconds)),
+                        ),
+                        "Session hours",
+                        2,
                     ),
                 ],
             ),

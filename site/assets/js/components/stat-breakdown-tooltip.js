@@ -10,6 +10,9 @@ function normalizeBreakdownRow(row = {}) {
     const kind = trimString(row?.kind).toLowerCase();
     const iconUrl = trimString(row?.icon_url ?? row?.iconUrl);
     const gradeTone = trimString(row?.grade_tone ?? row?.gradeTone).toLowerCase() || "unknown";
+    const formulaPart = trimString(row?.formula_part ?? row?.formulaPart);
+    const formulaPartOrderRaw = Number(row?.formula_part_order ?? row?.formulaPartOrder);
+    const formulaPartOrder = Number.isFinite(formulaPartOrderRaw) ? formulaPartOrderRaw : null;
     if (!label && !valueText && !detailText) {
         return null;
     }
@@ -20,6 +23,8 @@ function normalizeBreakdownRow(row = {}) {
         kind,
         iconUrl,
         gradeTone,
+        formulaPart,
+        formulaPartOrder,
     };
 }
 
@@ -72,6 +77,51 @@ export function statBreakdownSectionDisplayLabel(section, index = 0) {
         return "Result";
     }
     return label;
+}
+
+function statBreakdownInputSection(section) {
+    return trimString(section?.label).toLowerCase() === "inputs";
+}
+
+export function statBreakdownSectionRowGroups(section = {}) {
+    const rows = Array.isArray(section?.rows) ? section.rows : [];
+    const groups = [];
+    const groupsByKey = new Map();
+    rows.forEach((row, rowIndex) => {
+        const formulaPart = trimString(row?.formulaPart);
+        const order = Number.isFinite(row?.formulaPartOrder)
+            ? row.formulaPartOrder
+            : Number.MAX_SAFE_INTEGER;
+        const key = formulaPart
+            ? `part:${order}:${formulaPart}`
+            : `row:${rowIndex}`;
+        let group = groupsByKey.get(key);
+        if (!group) {
+            group = {
+                label: formulaPart,
+                order,
+                firstRowIndex: rowIndex,
+                rows: [],
+            };
+            groupsByKey.set(key, group);
+            groups.push(group);
+        }
+        group.rows.push(row);
+    });
+    groups.sort((left, right) => (
+        left.order - right.order
+        || left.firstRowIndex - right.firstRowIndex
+    ));
+    return groups;
+}
+
+function statBreakdownInputGroupShowsTitle(group = {}) {
+    const groupLabel = trimString(group?.label);
+    const firstRowLabel = trimString(group?.rows?.[0]?.label);
+    return Boolean(groupLabel) && (
+        (Array.isArray(group?.rows) && group.rows.length > 1)
+        || firstRowLabel.toLowerCase() !== groupLabel.toLowerCase()
+    );
 }
 
 let tooltipElement = null;
@@ -306,6 +356,8 @@ function buildSection(documentRef, section, index = 0) {
     const displayLabel = statBreakdownSectionDisplayLabel(section, index);
     const isSecondarySection = index > 0;
     const isResultSection = statBreakdownSectionIsResult(section, index);
+    const isInputSection = statBreakdownInputSection(section);
+    const rowGroups = statBreakdownSectionRowGroups(section);
     const sectionElement = documentRef.createElement("section");
     sectionElement.className = [
         "fishy-stat-breakdown-tooltip__section",
@@ -324,22 +376,38 @@ function buildSection(documentRef, section, index = 0) {
         sectionElement.appendChild(title);
     }
 
-    for (const [rowIndex, row] of section.rows.entries()) {
-        const rowElement = documentRef.createElement("div");
-        const isEmphasisRow = isResultSection && rowIndex === section.rows.length - 1;
-        rowElement.className = [
-            "fishy-stat-breakdown-tooltip__row",
-            isEmphasisRow ? "fishy-stat-breakdown-tooltip__row--emphasis" : "",
-        ].filter(Boolean).join(" ");
+    for (const group of rowGroups) {
+        const groupElement = documentRef.createElement("div");
+        groupElement.className = "fishy-stat-breakdown-tooltip__group";
 
-        const main = buildRowMain(documentRef, row, { showDetail: !isResultSection });
+        if (isInputSection && statBreakdownInputGroupShowsTitle(group)) {
+            const groupTitle = documentRef.createElement("div");
+            groupTitle.className = "fishy-stat-breakdown-tooltip__group-title";
+            groupTitle.textContent = group.label;
+            groupElement.appendChild(groupTitle);
+        }
 
-        const value = documentRef.createElement("div");
-        value.className = "fishy-stat-breakdown-tooltip__row-value";
-        value.textContent = row.valueText;
+        for (const [rowIndex, row] of group.rows.entries()) {
+            const rowElement = documentRef.createElement("div");
+            const isLastSectionRow = group === rowGroups[rowGroups.length - 1]
+                && rowIndex === group.rows.length - 1;
+            const isEmphasisRow = isResultSection && isLastSectionRow;
+            rowElement.className = [
+                "fishy-stat-breakdown-tooltip__row",
+                isEmphasisRow ? "fishy-stat-breakdown-tooltip__row--emphasis" : "",
+            ].filter(Boolean).join(" ");
 
-        rowElement.append(main, value);
-        sectionElement.appendChild(rowElement);
+            const main = buildRowMain(documentRef, row, { showDetail: !isResultSection });
+
+            const value = documentRef.createElement("div");
+            value.className = "fishy-stat-breakdown-tooltip__row-value";
+            value.textContent = row.valueText;
+
+            rowElement.append(main, value);
+            groupElement.appendChild(rowElement);
+        }
+
+        sectionElement.appendChild(groupElement);
     }
 
     return sectionElement;

@@ -344,6 +344,10 @@
     value_text: valueText,
     detail_text: detailText,
   });
+  const calculatorBreakdownFormulaPart = (formulaPart, formulaPartOrder) => ({
+    formula_part: formulaPart,
+    formula_part_order: formulaPartOrder,
+  });
   const calculatorParseBreakdown = (value) => {
     const raw = String(value ?? "").trim();
     if (!raw) {
@@ -357,6 +361,16 @@
     } catch {
       return null;
     }
+  };
+  const calculatorBreakdownSectionRows = (raw, sectionLabel) => {
+    const payload = calculatorParseBreakdown(raw);
+    if (!payload || !Array.isArray(payload.sections)) {
+      return [];
+    }
+    const section = payload.sections.find((candidate) => String(candidate?.label ?? "") === sectionLabel);
+    return Array.isArray(section?.rows)
+      ? section.rows.map((row) => ({ ...row }))
+      : [];
   };
   const calculatorStringifyBreakdown = (payload, fallback = "") => {
     try {
@@ -604,6 +618,14 @@
     const profitScale = previousTotalProfitRaw > 0
       ? lootTotalProfitRaw / previousTotalProfitRaw
       : 0;
+    const lootTotalCatchInputRows = calculatorBreakdownSectionRows(
+      current.stat_breakdowns?.loot_total_catches,
+      "Inputs",
+    ).filter((row) => String(row?.label ?? "") !== "Average casts");
+    const lootFishPerHourInputRows = calculatorBreakdownSectionRows(
+      current.stat_breakdowns?.loot_fish_per_hour,
+      "Inputs",
+    ).filter((row) => String(row?.label ?? "") !== "Average total fishing time");
 
     statBreakdowns.total_time = calculatorUpdateBreakdown(current.stat_breakdowns?.total_time, {
       valueText: calculatorFmt2(totalTimeRaw),
@@ -620,11 +642,13 @@
                 "Average bite time",
                 calculatorFmt2(biteTimeRaw),
                 "Effective average bite time after level and abundance modifiers.",
+                calculatorBreakdownFormulaPart("Average bite time", 1),
               ),
               calculatorBreakdownRow(
                 "Active catch time",
                 calculatorFmt2(activeCatchTimeRaw),
                 "Manual catch-time input used in active mode.",
+                calculatorBreakdownFormulaPart("Active catch time", 2),
               ),
             ]
           : [
@@ -632,16 +656,19 @@
                 "Average bite time",
                 calculatorFmt2(biteTimeRaw),
                 "Effective average bite time after level and abundance modifiers.",
+                calculatorBreakdownFormulaPart("Average bite time", 1),
               ),
               calculatorBreakdownRow(
                 "Auto-Fishing Time",
                 calculatorFmt2(autoFishTimeRaw),
                 "Passive waiting phase after AFR is applied.",
+                calculatorBreakdownFormulaPart("Auto-Fishing Time", 2),
               ),
               calculatorBreakdownRow(
                 "AFK catch time",
                 calculatorFmt2(afkCatchTimeRaw),
                 "Manual catch-time input used in AFK mode.",
+                calculatorBreakdownFormulaPart("AFK catch time", 3),
               ),
             ],
         Composition: [
@@ -661,16 +688,19 @@
             "Zone average bite time",
             calculatorFmt2(zoneBiteAvgRaw),
             `Derived from ${zoneName} zone bite-time metadata.`,
+            calculatorBreakdownFormulaPart("Zone average bite time", 1),
           ),
           calculatorBreakdownRow(
             "Level factor",
             calculatorFactorText(factorLevel),
             `Fishing level ${normalizedLevel} reduces the base bite window.`,
+            calculatorBreakdownFormulaPart("Level factor", 2),
           ),
           calculatorBreakdownRow(
             "Abundance factor",
             calculatorFactorText(factorResources),
             `Resources ${calculatorTrimFloat(normalizedResources)}% (${abundanceLabel}) scale the bite window.`,
+            calculatorBreakdownFormulaPart("Abundance factor", 3),
           ),
         ],
         Composition: [
@@ -692,16 +722,19 @@
               "Baseline auto-fishing time",
               "180",
               "Backend keeps the passive AFK baseline even when Active Fishing is enabled.",
+              calculatorBreakdownFormulaPart("Baseline auto-fishing time", 1),
             ),
             calculatorBreakdownRow(
               "Applied AFR",
               autoFishTimeReductionText,
               "Capped AFR used by the passive auto-fishing timer.",
+              calculatorBreakdownFormulaPart("Applied AFR", 2),
             ),
             calculatorBreakdownRow(
               "Minimum auto-fishing time",
               "60",
               "The passive timer cannot go below 60 seconds.",
+              calculatorBreakdownFormulaPart("Minimum auto-fishing time", 3),
             ),
           ],
           Composition: [
@@ -725,11 +758,13 @@
               "Session duration",
               currentTimespanText,
               sessionDurationDetail,
+              calculatorBreakdownFormulaPart("Session duration", 1),
             ),
             calculatorBreakdownRow(
               "Average total fishing time",
               calculatorFmt2(totalTimeRaw),
               "Average cycle duration used as the denominator.",
+              calculatorBreakdownFormulaPart("Average total fishing time", 2),
             ),
           ],
           Composition: [
@@ -753,11 +788,13 @@
               "Average casts",
               calculatorFmt2(castsAverageRaw),
               `Average casts for ${currentTimespanText}.`,
+              calculatorBreakdownFormulaPart("Average casts", 1),
             ),
             calculatorBreakdownRow(
               "Chance to consume durability",
               chanceToConsumeDurabilityText,
               "Final per-cast consumption chance.",
+              calculatorBreakdownFormulaPart("Chance to consume durability", 2),
             ),
           ],
           Composition: [
@@ -787,8 +824,18 @@
         valueText: calculatorFmt2(zoneBiteAvgRaw),
         replaceSections: {
           Inputs: [
-            calculatorBreakdownRow("Zone min", calculatorFmt2(zoneBiteMinRaw), zoneName),
-            calculatorBreakdownRow("Zone max", calculatorFmt2(zoneBiteMaxRaw), zoneName),
+            calculatorBreakdownRow(
+              "Zone min",
+              calculatorFmt2(zoneBiteMinRaw),
+              zoneName,
+              calculatorBreakdownFormulaPart("Zone min", 1),
+            ),
+            calculatorBreakdownRow(
+              "Zone max",
+              calculatorFmt2(zoneBiteMaxRaw),
+              zoneName,
+              calculatorBreakdownFormulaPart("Zone max", 2),
+            ),
           ],
           Composition: [
             calculatorBreakdownRow(
@@ -817,16 +864,23 @@
         valueText: calculatorFmt2(effectiveBiteMinRaw),
         replaceSections: {
           Inputs: [
-            calculatorBreakdownRow("Zone min", calculatorFmt2(zoneBiteMinRaw), zoneName),
+            calculatorBreakdownRow(
+              "Zone min",
+              calculatorFmt2(zoneBiteMinRaw),
+              zoneName,
+              calculatorBreakdownFormulaPart("Zone min", 1),
+            ),
             calculatorBreakdownRow(
               "Level factor",
               calculatorFactorText(factorLevel),
               `Fishing level ${normalizedLevel} modifier.`,
+              calculatorBreakdownFormulaPart("Level factor", 2),
             ),
             calculatorBreakdownRow(
               "Abundance factor",
               calculatorFactorText(factorResources),
               `Resources ${calculatorTrimFloat(normalizedResources)}% (${abundanceLabel})`,
+              calculatorBreakdownFormulaPart("Abundance factor", 3),
             ),
           ],
           Composition: [
@@ -849,16 +903,19 @@
               "Zone average bite time",
               calculatorFmt2(zoneBiteAvgRaw),
               `Derived from ${zoneName} zone bite-time metadata.`,
+              calculatorBreakdownFormulaPart("Zone average bite time", 1),
             ),
             calculatorBreakdownRow(
               "Level factor",
               calculatorFactorText(factorLevel),
               `Fishing level ${normalizedLevel} reduces the base bite window.`,
+              calculatorBreakdownFormulaPart("Level factor", 2),
             ),
             calculatorBreakdownRow(
               "Abundance factor",
               calculatorFactorText(factorResources),
               `Resources ${calculatorTrimFloat(normalizedResources)}% (${abundanceLabel}) scale the bite window.`,
+              calculatorBreakdownFormulaPart("Abundance factor", 3),
             ),
           ],
           Composition: [
@@ -877,16 +934,23 @@
         valueText: calculatorFmt2(effectiveBiteMaxRaw),
         replaceSections: {
           Inputs: [
-            calculatorBreakdownRow("Zone max", calculatorFmt2(zoneBiteMaxRaw), zoneName),
+            calculatorBreakdownRow(
+              "Zone max",
+              calculatorFmt2(zoneBiteMaxRaw),
+              zoneName,
+              calculatorBreakdownFormulaPart("Zone max", 1),
+            ),
             calculatorBreakdownRow(
               "Level factor",
               calculatorFactorText(factorLevel),
               `Fishing level ${normalizedLevel} modifier.`,
+              calculatorBreakdownFormulaPart("Level factor", 2),
             ),
             calculatorBreakdownRow(
               "Abundance factor",
               calculatorFactorText(factorResources),
               `Resources ${calculatorTrimFloat(normalizedResources)}% (${abundanceLabel})`,
+              calculatorBreakdownFormulaPart("Abundance factor", 3),
             ),
           ],
           Composition: [
@@ -905,17 +969,20 @@
         title: `Expected Catches (${currentTimespanText})`,
         valueText: calculatorFmt2(lootTotalCatchesRaw),
         replaceSections: {
-          Composition: [
+          Inputs: [
             calculatorBreakdownRow(
               "Average casts",
               calculatorFmt2(castsAverageRaw),
               `Average casts during ${currentTimespanText}.`,
+              calculatorBreakdownFormulaPart("Average casts", 1),
             ),
-            calculatorBreakdownRow(
-              "Applied fish multiplier",
-              fishMultiplierText,
-              "Highest selected fish-per-cast multiplier.",
-            ),
+            ...lootTotalCatchInputRows.map((row) => ({
+              ...row,
+              formula_part: "Applied fish multiplier",
+              formula_part_order: 2,
+            })),
+          ],
+          Composition: [
             calculatorBreakdownRow(
               "Expected catches",
               calculatorFmt2(lootTotalCatchesRaw),
@@ -930,17 +997,20 @@
       {
         valueText: calculatorFmt2(lootFishPerHourRaw),
         replaceSections: {
-          Composition: [
+          Inputs: [
             calculatorBreakdownRow(
               "Average total fishing time",
               calculatorFmt2(totalTimeRaw),
               "Average seconds per full fishing cycle.",
+              calculatorBreakdownFormulaPart("Average total fishing time", 1),
             ),
-            calculatorBreakdownRow(
-              "Applied fish multiplier",
-              fishMultiplierText,
-              "Highest selected fish-per-cast multiplier.",
-            ),
+            ...lootFishPerHourInputRows.map((row) => ({
+              ...row,
+              formula_part: "Applied fish multiplier",
+              formula_part_order: 2,
+            })),
+          ],
+          Composition: [
             calculatorBreakdownRow(
               "Catches / hour",
               calculatorFmt2(lootFishPerHourRaw),
@@ -996,11 +1066,13 @@
               `Expected profit (${currentTimespanText})`,
               calculatorFmtSilver(lootTotalProfitRaw),
               "Expected silver over the current session duration.",
+              calculatorBreakdownFormulaPart("Expected profit", 1),
             ),
             calculatorBreakdownRow(
               "Session duration",
               currentTimespanText,
               sessionDurationDetail,
+              calculatorBreakdownFormulaPart("Session hours", 2),
             ),
           ],
           Composition: [

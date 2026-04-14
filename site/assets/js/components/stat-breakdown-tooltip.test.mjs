@@ -6,6 +6,7 @@ import {
     normalizeStatBreakdownPayload,
     statBreakdownPayloadForAnchor,
     statBreakdownSectionDisplayLabel,
+    statBreakdownSectionRowGroups,
     statBreakdownTooltipRenderKey,
     statBreakdownTooltipShouldReactToMutations,
     statBreakdownTooltipShouldRefresh,
@@ -148,4 +149,28 @@ test("statBreakdownSectionDisplayLabel uses row labels for single-row results an
         rows: [{ label: "Average casts" }, { label: "Expected catches" }],
     }, 1), "Result");
     assert.equal(statBreakdownSectionDisplayLabel({ label: "Details", rows: [] }, 1), "Result");
+});
+
+test("statBreakdownSectionRowGroups sorts inputs by formula part order and groups shared terms", () => {
+    const groups = statBreakdownSectionRowGroups({
+        label: "Inputs",
+        rows: [
+            { label: "Pet 1", formulaPart: "Item DRR", formulaPartOrder: 2 },
+            { label: "Brandstone factor", formulaPart: "Brandstone factor", formulaPartOrder: 1 },
+            { label: "Pet 2", formulaPart: "Item DRR", formulaPartOrder: 2 },
+            { label: "Guru 20", formulaPart: "Lifeskill DRR", formulaPartOrder: 3 },
+        ],
+    });
+
+    assert.deepEqual(
+        groups.map((group) => ({
+            label: group.label,
+            rows: group.rows.map((row) => row.label),
+        })),
+        [
+            { label: "Brandstone factor", rows: ["Brandstone factor"] },
+            { label: "Item DRR", rows: ["Pet 1", "Pet 2"] },
+            { label: "Lifeskill DRR", rows: ["Guru 20"] },
+        ],
+    );
 });

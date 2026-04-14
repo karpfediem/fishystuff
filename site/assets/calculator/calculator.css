@@ -339,6 +339,18 @@
     gap: 0.34rem;
 }
 
+.fishy-stat-breakdown-tooltip__group {
+    display: grid;
+    gap: 0.18rem;
+}
+
+.fishy-stat-breakdown-tooltip__group-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: color-mix(in srgb, var(--color-base-content) 72%, transparent);
+}
+
 .fishy-stat-breakdown-tooltip__section-title {
     font-size: 0.68rem;
     font-weight: 700;
