@@ -55,6 +55,10 @@ cdn-serve:
 cdn-push:
   secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
 
+# Compute the exact CDN filenames required by the current deployment inputs.
+cdn-required-files out="data/cdn/required-files.json":
+  ./tools/scripts/compute_required_cdn_filenames.sh --out "{{out}}"
+
 # Refresh the staged tree and then push it to Bunny Storage
 cdn-sync:
   just cdn-stage
