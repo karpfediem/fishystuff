@@ -163,6 +163,14 @@ struct ComputedStatBreakdownRow {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+struct ComputedStatFormulaTerm {
+    label: String,
+    value_text: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    aliases: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 struct ComputedStatBreakdownSection {
     label: String,
     rows: Vec<ComputedStatBreakdownRow>,
@@ -175,7 +183,16 @@ struct ComputedStatBreakdown {
     value_text: String,
     summary_text: String,
     formula_text: String,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    formula_terms: Vec<ComputedStatFormulaTerm>,
     sections: Vec<ComputedStatBreakdownSection>,
+}
+
+impl ComputedStatBreakdown {
+    fn with_formula_terms(mut self, formula_terms: Vec<ComputedStatFormulaTerm>) -> Self {
+        self.formula_terms = formula_terms;
+        self
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -2255,6 +2272,50 @@ fn computed_stat_breakdown_section(
     }
 }
 
+fn computed_stat_formula_term(
+    label: impl Into<String>,
+    value_text: impl Into<String>,
+) -> ComputedStatFormulaTerm {
+    ComputedStatFormulaTerm {
+        label: label.into(),
+        value_text: value_text.into(),
+        aliases: Vec::new(),
+    }
+}
+
+fn computed_stat_formula_term_with_aliases<I, S>(
+    label: impl Into<String>,
+    value_text: impl Into<String>,
+    aliases: I,
+) -> ComputedStatFormulaTerm
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    ComputedStatFormulaTerm {
+        label: label.into(),
+        value_text: value_text.into(),
+        aliases: aliases.into_iter().map(Into::into).collect(),
+    }
+}
+
+fn join_formula_term_values<I, S>(values: I, separator: &str, fallback: &str) -> String
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    let parts = values
+        .into_iter()
+        .map(|value| value.as_ref().trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    if parts.is_empty() {
+        fallback.to_string()
+    } else {
+        parts.join(separator)
+    }
+}
+
 fn computed_stat_breakdown(
     title: impl Into<String>,
     value_text: impl Into<String>,
@@ -2268,6 +2329,7 @@ fn computed_stat_breakdown(
         value_text: value_text.into(),
         summary_text: summary_text.into(),
         formula_text: formula_text.into(),
+        formula_terms: Vec::new(),
         sections,
     }
 }
@@ -3097,6 +3159,25 @@ fn fish_group_distribution_breakdown(
                 rows: composition_rows,
             },
         ],
+        formula_terms: vec![
+            computed_stat_formula_term(
+                if show_normalized_rates {
+                    "Current share"
+                } else {
+                    "Current value"
+                },
+                percent_value_text(if show_normalized_rates {
+                    row.current_share_pct
+                } else {
+                    row.weight_pct
+                }),
+            ),
+            computed_stat_formula_term("Raw group weight", percent_value_text(row.weight_pct)),
+            computed_stat_formula_term(
+                "All-group weight total",
+                percent_value_text(total_weight_pct),
+            ),
+        ],
     }
 }
 
@@ -3202,6 +3283,14 @@ fn group_silver_distribution_breakdown(
                 label: "Composition".to_string(),
                 rows: composition_rows,
             },
+        ],
+        formula_terms: vec![
+            computed_stat_formula_term("Silver share", row.silver_share_text.clone()),
+            computed_stat_formula_term("Group expected silver", row.expected_profit_text.clone()),
+            computed_stat_formula_term(
+                "All-group expected silver total",
+                fmt_silver(total_profit_raw),
+            ),
         ],
     }
 }
@@ -3980,6 +4069,21 @@ fn derive_stat_breakdowns(
         "",
     );
     let pet_afr_rows = collect_pet_afr_breakdown_rows(pets, pet_stats, &data.catalog.pets);
+    let highest_pet_afr_raw = pets
+        .iter()
+        .map(|pet| pet_afr(pet, pet_stats))
+        .fold(0.0_f64, f64::max);
+    let additive_item_afr_raw = sum_item_property(
+        items_by_key,
+        &[
+            &signals.rod,
+            &signals.chair,
+            &signals.lightstone_set,
+            &signals.float,
+        ],
+        &[&signals.buff, &signals.food],
+        |item| item.afr.map(f64::from),
+    );
     let mut afr_input_rows = Vec::new();
     afr_input_rows.extend(computed_stat_breakdown_rows_with_formula_part(
         afr_item_rows,
@@ -4055,6 +4159,9 @@ fn derive_stat_breakdowns(
     } else {
         fish_multiplier_rows
     };
+    let session_seconds_text = trim_float(timespan_seconds);
+    let session_hours_text = trim_float(timespan_seconds / 3600.0);
+    let applied_fish_multiplier_text = format!("×{}", trim_float(fish_multiplier_raw));
 
     let mastery_prize_rate =
         mastery_prize_rate_for_bracket(&data.catalog.mastery_prize_curve, signals.mastery);
@@ -4088,7 +4195,14 @@ fn derive_stat_breakdowns(
                 ],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Raw rate", fish_group_chart.raw_prize_rate_text.clone()),
+        computed_stat_formula_term(
+            "resolved mastery prize-curve entry",
+            fish_group_chart.raw_prize_rate_text.clone(),
+        ),
+    ]);
 
     let total_time_breakdown = computed_stat_breakdown(
         "Average Total Fishing Time",
@@ -4158,7 +4272,21 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(if signals.active {
+        vec![
+            computed_stat_formula_term("Average total", fmt2(total_time_raw)),
+            computed_stat_formula_term("Average bite time", fmt2(bite_time_raw)),
+            computed_stat_formula_term("Active catch time", fmt2(catch_time_active_raw)),
+        ]
+    } else {
+        vec![
+            computed_stat_formula_term("Average total", fmt2(total_time_raw)),
+            computed_stat_formula_term("Average bite time", fmt2(bite_time_raw)),
+            computed_stat_formula_term("Auto-Fishing Time", fmt2(auto_fish_time_raw)),
+            computed_stat_formula_term("AFK catch time", fmt2(catch_time_afk_raw)),
+        ]
+    });
 
     let bite_time_factor_rows = vec![
         computed_stat_breakdown_row_with_formula_part(
@@ -4212,7 +4340,16 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Average bite time", fmt2(bite_time_raw)),
+        computed_stat_formula_term("Zone average bite time", fmt2(zone_bite_avg_raw)),
+        computed_stat_formula_term("Level factor", format!("×{}", trim_float(factor_level))),
+        computed_stat_formula_term(
+            "Abundance factor",
+            format!("×{}", trim_float(factor_resources)),
+        ),
+    ]);
 
     let auto_fish_time_breakdown = computed_stat_breakdown(
         "Auto-Fishing Time",
@@ -4261,7 +4398,13 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Auto-Fishing Time", fmt2(auto_fish_time_raw)),
+        computed_stat_formula_term("Baseline auto-fishing time", "180"),
+        computed_stat_formula_term("Applied AFR", format!("{}%", trim_float(afr_raw * 100.0))),
+        computed_stat_formula_term("Minimum auto-fishing time", "60"),
+    ]);
 
     let auto_fish_time_reduction_breakdown = computed_stat_breakdown(
         "Auto-Fishing Time Reduction",
@@ -4291,7 +4434,23 @@ fn derive_stat_breakdowns(
                 ],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term_with_aliases(
+            "AFR (uncapped)",
+            format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
+            ["AFR"],
+        ),
+        computed_stat_formula_term(
+            "highest pet AFR",
+            format!("{}%", trim_float(highest_pet_afr_raw * 100.0)),
+        ),
+        computed_stat_formula_term(
+            "additive item AFR",
+            format!("{}%", trim_float(additive_item_afr_raw * 100.0)),
+        ),
+        computed_stat_formula_term("Applied AFR", format!("{}%", trim_float(afr_raw * 100.0))),
+    ]);
 
     let casts_average_breakdown = computed_stat_breakdown(
         format!("Average Casts ({timespan_text})"),
@@ -4331,7 +4490,12 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Average casts", fmt2(casts_average_raw)),
+        computed_stat_formula_term("Session seconds", session_seconds_text.clone()),
+        computed_stat_formula_term("Average total fishing time", fmt2(total_time_raw)),
+    ]);
 
     let item_drr_breakdown = computed_stat_breakdown(
         "Item DRR",
@@ -4349,7 +4513,14 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Item DRR", format!("{}%", trim_float(item_drr_raw * 100.0))),
+        computed_stat_formula_term(
+            "sum of additive DRR sources",
+            format!("{}%", trim_float(item_drr_raw * 100.0)),
+        ),
+    ]);
 
     let chance_to_consume_durability_breakdown = computed_stat_breakdown(
         "Chance to Consume Durability",
@@ -4413,7 +4584,19 @@ fn derive_stat_breakdowns(
                 ],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Chance", format!("{:.2}%", chance_to_reduce_raw * 100.0)),
+        computed_stat_formula_term(
+            "Brandstone factor",
+            format!("×{}", trim_float(brandstone_durability_factor)),
+        ),
+        computed_stat_formula_term("Item DRR", format!("{}%", trim_float(item_drr_raw * 100.0))),
+        computed_stat_formula_term(
+            "Lifeskill DRR",
+            format!("+{}%", trim_float(lifeskill_level_drr_raw * 100.0)),
+        ),
+    ]);
 
     let durability_loss_average_breakdown = computed_stat_breakdown(
         format!("Average Durability Loss ({timespan_text})"),
@@ -4453,7 +4636,15 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Average loss", fmt2(durability_loss_average_raw)),
+        computed_stat_formula_term("Average casts", fmt2(casts_average_raw)),
+        computed_stat_formula_term(
+            "Chance to consume durability",
+            format!("{:.2}%", chance_to_reduce_raw * 100.0),
+        ),
+    ]);
 
     let zone_bite_min_breakdown = computed_stat_breakdown(
         "Zone Bite Min",
@@ -4468,7 +4659,14 @@ fn derive_stat_breakdowns(
                 zone_name.to_string(),
             )],
         )],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Zone Bite Min", fmt2(zone_bite_min_raw)),
+        computed_stat_formula_term(
+            "selected zone minimum bite-time entry",
+            fmt2(zone_bite_min_raw),
+        ),
+    ]);
 
     let zone_bite_avg_breakdown = computed_stat_breakdown(
         "Zone Bite Average",
@@ -4508,7 +4706,12 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Zone Bite Average", fmt2(zone_bite_avg_raw)),
+        computed_stat_formula_term("Zone Bite Min", fmt2(zone_bite_min_raw)),
+        computed_stat_formula_term("Zone Bite Max", fmt2(zone_bite_max_raw)),
+    ]);
 
     let zone_bite_max_breakdown = computed_stat_breakdown(
         "Zone Bite Max",
@@ -4523,7 +4726,14 @@ fn derive_stat_breakdowns(
                 zone_name.to_string(),
             )],
         )],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Zone Bite Max", fmt2(zone_bite_max_raw)),
+        computed_stat_formula_term(
+            "selected zone maximum bite-time entry",
+            fmt2(zone_bite_max_raw),
+        ),
+    ]);
 
     let effective_bite_min_breakdown = computed_stat_breakdown(
         "Effective Bite Min",
@@ -4576,7 +4786,16 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Effective Bite Min", fmt2(effective_bite_min_raw)),
+        computed_stat_formula_term("Zone Bite Min", fmt2(zone_bite_min_raw)),
+        computed_stat_formula_term("Level factor", format!("×{}", trim_float(factor_level))),
+        computed_stat_formula_term(
+            "Abundance factor",
+            format!("×{}", trim_float(factor_resources)),
+        ),
+    ]);
 
     let effective_bite_avg_breakdown = computed_stat_breakdown(
         "Effective Bite Average",
@@ -4594,7 +4813,16 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Effective Bite Average", fmt2(bite_time_raw)),
+        computed_stat_formula_term("Zone Bite Average", fmt2(zone_bite_avg_raw)),
+        computed_stat_formula_term("Level factor", format!("×{}", trim_float(factor_level))),
+        computed_stat_formula_term(
+            "Abundance factor",
+            format!("×{}", trim_float(factor_resources)),
+        ),
+    ]);
 
     let effective_bite_max_breakdown = computed_stat_breakdown(
         "Effective Bite Max",
@@ -4647,7 +4875,16 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Effective Bite Max", fmt2(effective_bite_max_raw)),
+        computed_stat_formula_term("Zone Bite Max", fmt2(zone_bite_max_raw)),
+        computed_stat_formula_term("Level factor", format!("×{}", trim_float(factor_level))),
+        computed_stat_formula_term(
+            "Abundance factor",
+            format!("×{}", trim_float(factor_resources)),
+        ),
+    ]);
 
     let loot_total_catches_breakdown = computed_stat_breakdown(
         format!("Expected Catches ({timespan_text})"),
@@ -4684,7 +4921,15 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Expected catches", fmt2(loot_total_catches_raw)),
+        computed_stat_formula_term("Average casts", fmt2(casts_average_raw)),
+        computed_stat_formula_term(
+            "Applied fish multiplier",
+            applied_fish_multiplier_text.clone(),
+        ),
+    ]);
 
     let loot_fish_per_hour_breakdown = computed_stat_breakdown(
         "Expected Catches / Hour",
@@ -4723,9 +4968,22 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Catches / hour", fmt2(loot_fish_per_hour_raw)),
+        computed_stat_formula_term("Average total fishing time", fmt2(total_time_raw)),
+        computed_stat_formula_term(
+            "Applied fish multiplier",
+            applied_fish_multiplier_text.clone(),
+        ),
+    ]);
 
     let loot_group_rows = loot_group_profit_breakdown_rows(&loot_chart.rows);
+    let loot_group_silver_terms = join_formula_term_values(
+        loot_group_rows.iter().map(|row| row.value_text.as_str()),
+        " + ",
+        "0",
+    );
     let loot_total_profit_breakdown = computed_stat_breakdown(
         format!("Expected Profit ({timespan_text})"),
         loot_chart.total_profit_text.clone(),
@@ -4760,7 +5018,11 @@ fn derive_stat_breakdowns(
                 ],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Expected profit", loot_chart.total_profit_text.clone()),
+        computed_stat_formula_term("Group expected silver", loot_group_silver_terms),
+    ]);
 
     let loot_profit_per_hour_breakdown = computed_stat_breakdown(
         "Profit / Hour",
@@ -4800,7 +5062,12 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Profit / hour", loot_chart.profit_per_hour_text.clone()),
+        computed_stat_formula_term("Expected profit", loot_chart.total_profit_text.clone()),
+        computed_stat_formula_term("Session hours", session_hours_text.clone()),
+    ]);
 
     let target_group_share_by_slot = fish_group_chart
         .rows
@@ -4808,12 +5075,34 @@ fn derive_stat_breakdowns(
         .enumerate()
         .map(|(index, row)| ((index + 1) as u8, row))
         .collect::<HashMap<_, _>>();
-    let mut target_input_rows = data
+    let target_matching_entries = data
         .zone_loot_entries
         .iter()
         .filter(|entry| {
             entry.name == target_fish_summary.selected_label && entry.within_group_rate > 0.0
         })
+        .collect::<Vec<_>>();
+    let target_group_share_terms = join_formula_term_values(
+        target_matching_entries.iter().map(|entry| {
+            percent_value_text(
+                target_group_share_by_slot
+                    .get(&entry.slot_idx)
+                    .map(|row| row.current_share_pct)
+                    .unwrap_or_default(),
+            )
+        }),
+        ", ",
+        "0%",
+    );
+    let target_in_group_rate_terms = join_formula_term_values(
+        target_matching_entries
+            .iter()
+            .map(|entry| percent_value_text(entry.within_group_rate * 100.0)),
+        ", ",
+        "0%",
+    );
+    let mut target_input_rows = target_matching_entries
+        .iter()
         .map(|entry| {
             let group_row = target_group_share_by_slot.get(&entry.slot_idx).copied();
             let group_label = group_row.map(|row| row.label).unwrap_or("Unassigned");
@@ -4878,7 +5167,13 @@ fn derive_stat_breakdowns(
                 ],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Expected count", target_fish_summary.expected_count_text.clone()),
+        computed_stat_formula_term("Expected catches", fmt2(loot_total_catches_raw)),
+        computed_stat_formula_term("Group share", target_group_share_terms),
+        computed_stat_formula_term("In-group rate", target_in_group_rate_terms),
+    ]);
 
     let target_time_to_target_breakdown = computed_stat_breakdown(
         "Time to Target",
@@ -4910,7 +5205,21 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            "Time to target",
+            target_fish_summary.time_to_target_text.clone(),
+        ),
+        computed_stat_formula_term(
+            "Target amount",
+            target_fish_summary.target_amount_text.clone(),
+        ),
+        computed_stat_formula_term(
+            "Expected catches per day",
+            target_fish_summary.per_day_text.clone(),
+        ),
+    ]);
 
     let target_probability_breakdown = computed_stat_breakdown(
         format!(
@@ -4945,7 +5254,25 @@ fn derive_stat_breakdowns(
                 )],
             ),
         ],
-    );
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term(
+            "Probability",
+            target_fish_summary.probability_at_least_text.clone(),
+        ),
+        computed_stat_formula_term(
+            "Target amount - 1",
+            target_fish_summary
+                .target_amount
+                .saturating_sub(1)
+                .to_string(),
+        ),
+        computed_stat_formula_term_with_aliases(
+            "Expected session count (λ)",
+            target_fish_summary.expected_count_text.clone(),
+            ["λ"],
+        ),
+    ]);
 
     CalculatorStatBreakdownSignals {
         total_time: stat_breakdown_json(total_time_breakdown),
@@ -8081,10 +8408,25 @@ mod tests {
             .as_str()
             .unwrap_or_default()
             .is_empty());
+        assert_eq!(total_time["formula_terms"][0]["label"], "Average total");
+        assert_eq!(total_time["formula_terms"][1]["label"], "Average bite time");
         assert_eq!(
             total_time["sections"][0]["rows"][0]["label"],
             "Average bite time"
         );
+
+        let auto_fish_reduction =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.auto_fish_time_reduction)
+                .unwrap();
+        assert_eq!(
+            auto_fish_reduction["formula_terms"][1]["label"],
+            "highest pet AFR"
+        );
+        assert_eq!(
+            auto_fish_reduction["formula_terms"][2]["label"],
+            "additive item AFR"
+        );
+        assert_eq!(auto_fish_reduction["formula_terms"][0]["aliases"][0], "AFR");
 
         let item_drr = serde_json::from_str::<Value>(&derived.stat_breakdowns.item_drr).unwrap();
         assert_eq!(item_drr["title"], "Item DRR");
@@ -8115,6 +8457,11 @@ mod tests {
             target_expected["sections"][0]["rows"][0]["value_text"],
             "Unavailable"
         );
+        assert_eq!(
+            target_expected["formula_terms"][1]["label"],
+            "Expected catches"
+        );
+        assert_eq!(target_expected["formula_terms"][2]["label"], "Group share");
     }
 
     #[tokio::test]

@@ -41,9 +41,28 @@ function normalizeBreakdownSection(section = {}) {
     };
 }
 
+function normalizeFormulaTerm(term = {}) {
+    const label = trimString(term?.label);
+    const valueText = trimString(term?.value_text ?? term?.valueText);
+    const aliases = Array.isArray(term?.aliases)
+        ? term.aliases.map((alias) => trimString(alias)).filter(Boolean)
+        : [];
+    if (!label && !valueText && !aliases.length) {
+        return null;
+    }
+    return {
+        label: label || aliases[0] || "Value",
+        valueText,
+        aliases,
+    };
+}
+
 export function normalizeStatBreakdownPayload(payload = {}) {
     const sections = Array.isArray(payload?.sections)
         ? payload.sections.map(normalizeBreakdownSection).filter(Boolean)
+        : [];
+    const formulaTerms = Array.isArray(payload?.formula_terms ?? payload?.formulaTerms)
+        ? (payload.formula_terms ?? payload.formulaTerms).map(normalizeFormulaTerm).filter(Boolean)
         : [];
     const title = trimString(payload?.title);
     const valueText = trimString(payload?.value_text ?? payload?.valueText);
@@ -58,6 +77,7 @@ export function normalizeStatBreakdownPayload(payload = {}) {
         valueText,
         summaryText,
         formulaText,
+        formulaTerms,
         sections,
     };
 }
@@ -261,11 +281,16 @@ function statBreakdownResolvedGroupValue(group, summaryRows = []) {
 }
 
 function statBreakdownFormulaTermEntries(payload = {}) {
+    const explicitFormulaTerms = Array.isArray(payload?.formulaTerms) ? payload.formulaTerms : [];
     const { inputs, other, results } = statBreakdownSectionsByType(payload);
     const entries = [];
     const entriesByKey = new Map();
-    const register = (label, valueText = "") => {
-        for (const alias of statBreakdownLabelAliases(label)) {
+    const register = (label, valueText = "", aliases = []) => {
+        const labels = [
+            ...statBreakdownLabelAliases(label),
+            ...aliases.flatMap((alias) => statBreakdownLabelAliases(alias)),
+        ];
+        for (const alias of labels) {
             const key = statBreakdownMatchKey(alias);
             if (!key || entriesByKey.has(key)) {
                 continue;
@@ -275,6 +300,18 @@ function statBreakdownFormulaTermEntries(payload = {}) {
             entries.push(entry);
         }
     };
+
+    for (const term of explicitFormulaTerms) {
+        register(term.label, term.valueText, term.aliases);
+    }
+
+    if (explicitFormulaTerms.length) {
+        const resultRow = statBreakdownResultRow(payload);
+        if (resultRow) {
+            register(resultRow.label, payload.valueText || resultRow.valueText);
+        }
+        return entries;
+    }
 
     const summaryRows = [...other, ...results].flatMap((section) => section.rows || []);
     const resultRow = statBreakdownResultRow(payload);

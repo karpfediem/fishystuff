@@ -348,6 +348,19 @@
     formula_part: formulaPart,
     formula_part_order: formulaPartOrder,
   });
+  const calculatorBreakdownFormulaTerm = (label, valueText, aliases = []) => ({
+    label,
+    value_text: valueText,
+    aliases,
+  });
+  const calculatorJoinFormulaTermValues = (values, separator = ", ", fallback = "0") => {
+    const parts = Array.isArray(values)
+      ? values
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+      : [];
+    return parts.length ? parts.join(separator) : fallback;
+  };
   const calculatorParseBreakdown = (value) => {
     const raw = String(value ?? "").trim();
     if (!raw) {
@@ -406,6 +419,14 @@
     }
     if ("formulaText" in options) {
       nextPayload.formula_text = options.formulaText;
+    }
+    if ("formulaTerms" in options) {
+      nextPayload.formula_terms = Array.isArray(options.formulaTerms)
+        ? options.formulaTerms.map((term) => ({
+            ...term,
+            aliases: Array.isArray(term?.aliases) ? [...term.aliases] : [],
+          }))
+        : [];
     }
     const replaceSections = options.replaceSections && typeof options.replaceSections === "object"
       ? options.replaceSections
@@ -605,6 +626,7 @@
       : {};
     const abundanceLabel = calculatorAbundanceLabel(normalizedResources);
     const sessionSeconds = calculatorTimespanSeconds(timespanAmount, timespanUnit);
+    const sessionHoursText = calculatorTrimFloat(sessionSeconds / 3600);
     const sessionDurationDetail = `${currentTimespanText} = ${calculatorTrimFloat(sessionSeconds)} seconds`;
     const zoneName = String(current.zone_name ?? current.zone ?? "").trim();
     const chanceToConsumeDurabilityText =
@@ -615,7 +637,8 @@
     const previousTotalProfitRaw = calculatorNumber(
       String(current.loot_total_profit ?? "").replace(/,/g, ""),
     );
-    const profitScale = previousTotalProfitRaw > 0
+    const canScaleProfitRows = previousTotalProfitRaw > 0;
+    const profitScale = canScaleProfitRows
       ? lootTotalProfitRaw / previousTotalProfitRaw
       : 0;
     const lootTotalCatchInputRows = calculatorBreakdownSectionRows(
@@ -626,6 +649,13 @@
       current.stat_breakdowns?.loot_fish_per_hour,
       "Inputs",
     ).filter((row) => String(row?.label ?? "") !== "Average total fishing time");
+    const lootGroupProfitRows = calculatorBreakdownSectionRows(
+      current.stat_breakdowns?.loot_total_profit,
+      "Inputs",
+    );
+    const scaledLootGroupProfitValues = canScaleProfitRows
+      ? lootGroupProfitRows.map((row) => calculatorScaleSilverText(row?.value_text, profitScale))
+      : lootGroupProfitRows.map((row) => String(row?.value_text ?? "").trim()).filter(Boolean);
 
     statBreakdowns.total_time = calculatorUpdateBreakdown(current.stat_breakdowns?.total_time, {
       valueText: calculatorFmt2(totalTimeRaw),
@@ -635,6 +665,18 @@
       formulaText: active
         ? "Average total = Average bite time + Active catch time."
         : "Average total = Average bite time + Auto-Fishing Time + AFK catch time.",
+      formulaTerms: active
+        ? [
+            calculatorBreakdownFormulaTerm("Average total", calculatorFmt2(totalTimeRaw)),
+            calculatorBreakdownFormulaTerm("Average bite time", calculatorFmt2(biteTimeRaw)),
+            calculatorBreakdownFormulaTerm("Active catch time", calculatorFmt2(activeCatchTimeRaw)),
+          ]
+        : [
+            calculatorBreakdownFormulaTerm("Average total", calculatorFmt2(totalTimeRaw)),
+            calculatorBreakdownFormulaTerm("Average bite time", calculatorFmt2(biteTimeRaw)),
+            calculatorBreakdownFormulaTerm("Auto-Fishing Time", calculatorFmt2(autoFishTimeRaw)),
+            calculatorBreakdownFormulaTerm("AFK catch time", calculatorFmt2(afkCatchTimeRaw)),
+          ],
       replaceSections: {
         Inputs: active
           ? [
@@ -682,6 +724,12 @@
     });
     statBreakdowns.bite_time = calculatorUpdateBreakdown(current.stat_breakdowns?.bite_time, {
       valueText: calculatorFmt2(biteTimeRaw),
+      formulaTerms: [
+        calculatorBreakdownFormulaTerm("Average bite time", calculatorFmt2(biteTimeRaw)),
+        calculatorBreakdownFormulaTerm("Zone average bite time", calculatorFmt2(zoneBiteAvgRaw)),
+        calculatorBreakdownFormulaTerm("Level factor", calculatorFactorText(factorLevel)),
+        calculatorBreakdownFormulaTerm("Abundance factor", calculatorFactorText(factorResources)),
+      ],
       replaceSections: {
         Inputs: [
           calculatorBreakdownRow(
@@ -716,6 +764,12 @@
       current.stat_breakdowns?.auto_fish_time,
       {
         valueText: calculatorFmt2(autoFishTimeRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Auto-Fishing Time", calculatorFmt2(autoFishTimeRaw)),
+          calculatorBreakdownFormulaTerm("Baseline auto-fishing time", "180"),
+          calculatorBreakdownFormulaTerm("Applied AFR", autoFishTimeReductionText),
+          calculatorBreakdownFormulaTerm("Minimum auto-fishing time", "60"),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -752,6 +806,11 @@
       {
         title: `Average Casts (${currentTimespanText})`,
         valueText: calculatorFmt2(castsAverageRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Average casts", calculatorFmt2(castsAverageRaw)),
+          calculatorBreakdownFormulaTerm("Session seconds", calculatorTrimFloat(sessionSeconds)),
+          calculatorBreakdownFormulaTerm("Average total fishing time", calculatorFmt2(totalTimeRaw)),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -782,6 +841,14 @@
       {
         title: `Average Durability Loss (${currentTimespanText})`,
         valueText: calculatorFmt2(durabilityLossAverageRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Average loss", calculatorFmt2(durabilityLossAverageRaw)),
+          calculatorBreakdownFormulaTerm("Average casts", calculatorFmt2(castsAverageRaw)),
+          calculatorBreakdownFormulaTerm(
+            "Chance to consume durability",
+            chanceToConsumeDurabilityText,
+          ),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -811,6 +878,13 @@
       current.stat_breakdowns?.zone_bite_min,
       {
         valueText: calculatorFmt2(zoneBiteMinRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Zone Bite Min", calculatorFmt2(zoneBiteMinRaw)),
+          calculatorBreakdownFormulaTerm(
+            "selected zone minimum bite-time entry",
+            calculatorFmt2(zoneBiteMinRaw),
+          ),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow("Selected zone", calculatorFmt2(zoneBiteMinRaw), zoneName),
@@ -822,6 +896,11 @@
       current.stat_breakdowns?.zone_bite_avg,
       {
         valueText: calculatorFmt2(zoneBiteAvgRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Zone Bite Average", calculatorFmt2(zoneBiteAvgRaw)),
+          calculatorBreakdownFormulaTerm("Zone Bite Min", calculatorFmt2(zoneBiteMinRaw)),
+          calculatorBreakdownFormulaTerm("Zone Bite Max", calculatorFmt2(zoneBiteMaxRaw)),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -851,6 +930,13 @@
       current.stat_breakdowns?.zone_bite_max,
       {
         valueText: calculatorFmt2(zoneBiteMaxRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Zone Bite Max", calculatorFmt2(zoneBiteMaxRaw)),
+          calculatorBreakdownFormulaTerm(
+            "selected zone maximum bite-time entry",
+            calculatorFmt2(zoneBiteMaxRaw),
+          ),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow("Selected zone", calculatorFmt2(zoneBiteMaxRaw), zoneName),
@@ -862,6 +948,12 @@
       current.stat_breakdowns?.effective_bite_min,
       {
         valueText: calculatorFmt2(effectiveBiteMinRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Effective Bite Min", calculatorFmt2(effectiveBiteMinRaw)),
+          calculatorBreakdownFormulaTerm("Zone Bite Min", calculatorFmt2(zoneBiteMinRaw)),
+          calculatorBreakdownFormulaTerm("Level factor", calculatorFactorText(factorLevel)),
+          calculatorBreakdownFormulaTerm("Abundance factor", calculatorFactorText(factorResources)),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -897,6 +989,12 @@
       current.stat_breakdowns?.effective_bite_avg,
       {
         valueText: calculatorFmt2(biteTimeRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Effective Bite Average", calculatorFmt2(biteTimeRaw)),
+          calculatorBreakdownFormulaTerm("Zone Bite Average", calculatorFmt2(zoneBiteAvgRaw)),
+          calculatorBreakdownFormulaTerm("Level factor", calculatorFactorText(factorLevel)),
+          calculatorBreakdownFormulaTerm("Abundance factor", calculatorFactorText(factorResources)),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -932,6 +1030,12 @@
       current.stat_breakdowns?.effective_bite_max,
       {
         valueText: calculatorFmt2(effectiveBiteMaxRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Effective Bite Max", calculatorFmt2(effectiveBiteMaxRaw)),
+          calculatorBreakdownFormulaTerm("Zone Bite Max", calculatorFmt2(zoneBiteMaxRaw)),
+          calculatorBreakdownFormulaTerm("Level factor", calculatorFactorText(factorLevel)),
+          calculatorBreakdownFormulaTerm("Abundance factor", calculatorFactorText(factorResources)),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -968,6 +1072,11 @@
       {
         title: `Expected Catches (${currentTimespanText})`,
         valueText: calculatorFmt2(lootTotalCatchesRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Expected catches", calculatorFmt2(lootTotalCatchesRaw)),
+          calculatorBreakdownFormulaTerm("Average casts", calculatorFmt2(castsAverageRaw)),
+          calculatorBreakdownFormulaTerm("Applied fish multiplier", fishMultiplierText),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -996,6 +1105,11 @@
       current.stat_breakdowns?.loot_fish_per_hour,
       {
         valueText: calculatorFmt2(lootFishPerHourRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Catches / hour", calculatorFmt2(lootFishPerHourRaw)),
+          calculatorBreakdownFormulaTerm("Average total fishing time", calculatorFmt2(totalTimeRaw)),
+          calculatorBreakdownFormulaTerm("Applied fish multiplier", fishMultiplierText),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(
@@ -1025,7 +1139,14 @@
       {
         title: `Expected Profit (${currentTimespanText})`,
         valueText: calculatorFmtSilver(lootTotalProfitRaw),
-        rowUpdates: profitScale > 0
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Expected profit", calculatorFmtSilver(lootTotalProfitRaw)),
+          calculatorBreakdownFormulaTerm(
+            "Group expected silver",
+            calculatorJoinFormulaTermValues(scaledLootGroupProfitValues, " + ", "0"),
+          ),
+        ],
+        rowUpdates: canScaleProfitRows
           ? Object.fromEntries(
               [calculatorParseBreakdown(current.stat_breakdowns?.loot_total_profit)]
                 .filter(Boolean)
@@ -1060,6 +1181,11 @@
       current.stat_breakdowns?.loot_profit_per_hour,
       {
         valueText: calculatorFmtSilver(lootProfitPerHourRaw),
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Profit / hour", calculatorFmtSilver(lootProfitPerHourRaw)),
+          calculatorBreakdownFormulaTerm("Expected profit", calculatorFmtSilver(lootTotalProfitRaw)),
+          calculatorBreakdownFormulaTerm("Session hours", sessionHoursText),
+        ],
         replaceSections: {
           Inputs: [
             calculatorBreakdownRow(

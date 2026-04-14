@@ -356,3 +356,62 @@ test("statBreakdownFormulaTokenRows splits semicolon-separated formulas into sep
         ],
     );
 });
+
+test("statBreakdownFormulaTokenRows prefers explicit formula terms over inferred row totals", () => {
+    const payload = normalizeStatBreakdownPayload({
+        value_text: "50.00%",
+        formula_text: "AFR (uncapped) = highest pet AFR + additive item AFR; Applied AFR = min(AFR, 66.67%).",
+        formula_terms: [
+            { label: "AFR (uncapped)", value_text: "50.00%", aliases: ["AFR"] },
+            { label: "highest pet AFR", value_text: "35.00%" },
+            { label: "additive item AFR", value_text: "15.00%" },
+            { label: "Applied AFR", value_text: "50.00%" },
+        ],
+        sections: [
+            {
+                label: "Inputs",
+                rows: [
+                    {
+                        label: "Pet 1",
+                        value_text: "+35.00%",
+                        formula_part: "AFR (uncapped)",
+                        formula_part_order: 1,
+                    },
+                    {
+                        label: "Food buff",
+                        value_text: "+15.00%",
+                        formula_part: "AFR (uncapped)",
+                        formula_part_order: 1,
+                    },
+                ],
+            },
+            {
+                label: "Composition",
+                rows: [
+                    { label: "Uncapped AFR", value_text: "50.00%" },
+                    { label: "Applied AFR", value_text: "50.00%" },
+                ],
+            },
+        ],
+    });
+
+    const tokenRows = statBreakdownFormulaTokenRows(payload.formulaText, payload);
+
+    assert.deepEqual(
+        tokenRows.map((row) => row.filter((token) => token.kind === "term").map((token) => ({
+            text: token.text,
+            valueText: token.valueText,
+        }))),
+        [
+            [
+                { text: "AFR (uncapped)", valueText: "50.00%" },
+                { text: "highest pet AFR", valueText: "35.00%" },
+                { text: "additive item AFR", valueText: "15.00%" },
+            ],
+            [
+                { text: "Applied AFR", valueText: "50.00%" },
+                { text: "AFR", valueText: "50.00%" },
+            ],
+        ],
+    );
+});
