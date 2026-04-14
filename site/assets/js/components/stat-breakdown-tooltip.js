@@ -57,6 +57,17 @@ export function normalizeStatBreakdownPayload(payload = {}) {
     };
 }
 
+export function statBreakdownSectionDisplayLabel(section, index = 0) {
+    const label = trimString(section?.label) || "Details";
+    if (label.toLowerCase() === "composition") {
+        return "Total";
+    }
+    if (index > 0 && label.toLowerCase() === "details") {
+        return "Total";
+    }
+    return label;
+}
+
 let tooltipElement = null;
 let tooltipRefs = null;
 const tooltipRoots = new WeakSet();
@@ -225,7 +236,7 @@ function itemFallbackLabel(label) {
     return trimString(label).charAt(0).toUpperCase() || "?";
 }
 
-function buildRowMain(documentRef, row) {
+function buildRowMain(documentRef, row, { showDetail = true } = {}) {
     const main = documentRef.createElement("div");
     main.className = "fishy-stat-breakdown-tooltip__row-main";
 
@@ -267,7 +278,7 @@ function buildRowMain(documentRef, row) {
         main.appendChild(label);
     }
 
-    if (row.detailText) {
+    if (showDetail && row.detailText) {
         const detail = documentRef.createElement("div");
         detail.className = row.kind === "item"
             ? "fishy-stat-breakdown-tooltip__item-detail fishy-stat-breakdown-tooltip__row-detail"
@@ -279,20 +290,38 @@ function buildRowMain(documentRef, row) {
     return main;
 }
 
-function buildSection(documentRef, section) {
+function buildSection(documentRef, section, index = 0) {
+    const rawLabel = trimString(section?.label).toLowerCase();
+    const displayLabel = statBreakdownSectionDisplayLabel(section, index);
+    const isSecondarySection = index > 0;
+    const isTotalSection = rawLabel === "composition" || displayLabel.toLowerCase() === "total";
     const sectionElement = documentRef.createElement("section");
-    sectionElement.className = "fishy-stat-breakdown-tooltip__section";
+    sectionElement.className = [
+        "fishy-stat-breakdown-tooltip__section",
+        isTotalSection ? "fishy-stat-breakdown-tooltip__section--total" : "",
+    ].filter(Boolean).join(" ");
 
-    const title = documentRef.createElement("div");
-    title.className = "fishy-stat-breakdown-tooltip__section-title";
-    title.textContent = section.label;
-    sectionElement.appendChild(title);
+    if (isSecondarySection) {
+        const divider = documentRef.createElement("div");
+        divider.className = "divider divider-neutral fishy-stat-breakdown-tooltip__section-divider";
+        divider.textContent = displayLabel;
+        sectionElement.appendChild(divider);
+    } else {
+        const title = documentRef.createElement("div");
+        title.className = "fishy-stat-breakdown-tooltip__section-title";
+        title.textContent = displayLabel;
+        sectionElement.appendChild(title);
+    }
 
-    for (const row of section.rows) {
+    for (const [rowIndex, row] of section.rows.entries()) {
         const rowElement = documentRef.createElement("div");
-        rowElement.className = "fishy-stat-breakdown-tooltip__row";
+        const isEmphasisRow = isTotalSection && rowIndex === section.rows.length - 1;
+        rowElement.className = [
+            "fishy-stat-breakdown-tooltip__row",
+            isEmphasisRow ? "fishy-stat-breakdown-tooltip__row--emphasis" : "",
+        ].filter(Boolean).join(" ");
 
-        const main = buildRowMain(documentRef, row);
+        const main = buildRowMain(documentRef, row, { showDetail: !isTotalSection });
 
         const value = documentRef.createElement("div");
         value.className = "fishy-stat-breakdown-tooltip__row-value";
@@ -362,13 +391,13 @@ function showTooltip(anchor, event) {
         refs.value.textContent = payload.valueText;
         refs.value.hidden = !payload.valueText;
         refs.summary.textContent = payload.summaryText;
-        refs.summary.hidden = !payload.summaryText;
+        refs.summary.hidden = !payload.summaryText || payload.sections.length > 0;
         refs.formula.textContent = payload.formulaText;
-        refs.formula.hidden = !payload.formulaText;
+        refs.formula.hidden = !payload.formulaText || payload.sections.length > 0;
 
         const documentRef = globalThis.document;
         refs.sections.replaceChildren(
-            ...payload.sections.map((section) => buildSection(documentRef, section)),
+            ...payload.sections.map((section, index) => buildSection(documentRef, section, index)),
         );
         refs.sections.hidden = payload.sections.length === 0;
 

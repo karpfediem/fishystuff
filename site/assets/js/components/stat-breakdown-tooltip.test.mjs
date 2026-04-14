@@ -5,6 +5,7 @@ import {
     STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER,
     normalizeStatBreakdownPayload,
     statBreakdownPayloadForAnchor,
+    statBreakdownSectionDisplayLabel,
     statBreakdownTooltipRenderKey,
     statBreakdownTooltipShouldReactToMutations,
     statBreakdownTooltipShouldRefresh,
@@ -134,4 +135,10 @@ test("statBreakdownTooltipShouldReactToMutations only reacts to observed tooltip
     assert.equal(statBreakdownTooltipShouldReactToMutations([
         { type: "attributes", attributeName: "data-fishy-stat-color" },
     ]), true);
+});
+
+test("statBreakdownSectionDisplayLabel maps composition to a clearer total label", () => {
+    assert.equal(statBreakdownSectionDisplayLabel({ label: "Inputs" }, 0), "Inputs");
+    assert.equal(statBreakdownSectionDisplayLabel({ label: "Composition" }, 1), "Total");
+    assert.equal(statBreakdownSectionDisplayLabel({ label: "Details" }, 1), "Total");
 });

@@ -3012,9 +3012,9 @@ fn fish_group_distribution_breakdown(
     ];
     if show_normalized_rates {
         composition_rows.push(computed_stat_breakdown_row(
-            "Displayed share",
+            "Current share",
             percent_value_text(row.current_share_pct),
-            "This normalized share is currently shown on the chart.",
+            "Normalized share after prize, rare, and high-quality weighting.",
         ));
     } else {
         composition_rows.push(computed_stat_breakdown_row(
@@ -3038,17 +3038,15 @@ fn fish_group_distribution_breakdown(
             row.weight_pct
         }),
         summary_text: if show_normalized_rates {
-            "Currently showing the normalized share after prize, rare, and high-quality weighting."
-                .to_string()
+            "Normalized share after prize, rare, and high-quality weighting.".to_string()
         } else {
-            "Currently showing the raw group weight before normalization. Expected catches still use the normalized share."
+            "Raw group weight before normalization. Expected catches still use the normalized share."
                 .to_string()
         },
         formula_text: if show_normalized_rates {
-            "Displayed share uses raw group weight divided by the all-group weight total."
-                .to_string()
+            "Share = raw group weight / all-group weight total.".to_string()
         } else {
-            "Displayed value uses the raw group weight before normalization.".to_string()
+            "Current value is the raw group weight before normalization.".to_string()
         },
         sections: vec![
             ComputedStatBreakdownSection {
@@ -3137,7 +3135,7 @@ fn group_silver_distribution_breakdown(
             "Denominator for the silver-share distribution.",
         ),
         computed_stat_breakdown_row(
-            "Displayed share",
+            "Silver share",
             row.silver_share_text.clone(),
             "Calculated from group expected silver divided by total expected silver.",
         ),
@@ -3154,9 +3152,8 @@ fn group_silver_distribution_breakdown(
             "This group currently contributes no expected silver after the active prices, discard choices, and trade settings."
                 .to_string()
         },
-        formula_text:
-            "Displayed share uses group expected silver divided by the all-group expected silver total."
-                .to_string(),
+        formula_text: "Silver share = group expected silver / all-group expected silver total."
+            .to_string(),
         sections: vec![
             ComputedStatBreakdownSection {
                 label: "Inputs".to_string(),
@@ -4002,7 +3999,7 @@ fn derive_stat_breakdowns(
         "Raw Prize Catch Rate",
         fish_group_chart.raw_prize_rate_text.clone(),
         "Prize catch rate is read from the mastery prize curve before any zone-group normalization.",
-        "Displayed rate uses the resolved mastery prize-curve entry directly.",
+        "Raw rate uses the resolved mastery prize-curve entry directly.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4021,7 +4018,7 @@ fn derive_stat_breakdowns(
                         "Prize rate from the current mastery bracket.",
                     ),
                     computed_stat_breakdown_row(
-                        "Displayed raw rate",
+                        "Raw rate",
                         fish_group_chart.raw_prize_rate_text.clone(),
                         "Shown before zone-group normalization.",
                     ),
@@ -4039,9 +4036,9 @@ fn derive_stat_breakdowns(
             "AFK mode uses bite time, passive auto-fishing time, and AFK catch time."
         },
         if signals.active {
-            "Displayed time uses bite time + active catch time."
+            "Time = bite time + active catch time."
         } else {
-            "Displayed time uses bite time + auto-fishing time + AFK catch time."
+            "Time = bite time + auto-fishing time + AFK catch time."
         },
         vec![
             computed_stat_breakdown_section(
@@ -4076,7 +4073,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed total",
+                    "Average total",
                     fmt2(total_time_raw),
                     "Average fishing cycle duration used for downstream casts and loot calculations.",
                 )],
@@ -4112,13 +4109,13 @@ fn derive_stat_breakdowns(
         "Average Bite Time",
         fmt2(bite_time_raw),
         "Effective average bite time after level and resource abundance scaling.",
-        "Displayed bite time uses zone average bite time × level factor × abundance factor.",
+        "Bite time = zone average bite time × level factor × abundance factor.",
         vec![
             computed_stat_breakdown_section("Inputs", bite_time_factor_rows.clone()),
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed average",
+                    "Average bite time",
                     fmt2(bite_time_raw),
                     "Used in the total fishing time calculation.",
                 )],
@@ -4130,7 +4127,7 @@ fn derive_stat_breakdowns(
         "Auto-Fishing Time",
         fmt2(auto_fish_time_raw),
         "Passive AFK phase after bite time and before the AFK catch interaction completes.",
-        "Displayed time uses max(180 × (1 - AFR), 60).",
+        "Time = max(180 × (1 - AFR), 60).",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4155,7 +4152,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed AFT",
+                    "Auto-Fishing Time",
                     fmt2(auto_fish_time_raw),
                     "Used only in AFK total fishing time calculations.",
                 )],
@@ -4167,7 +4164,7 @@ fn derive_stat_breakdowns(
         "Auto-Fishing Time Reduction",
         format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
         "Auto-Fishing Time Reduction combines the strongest pet AFR special with additive item and buff AFR.",
-        "Displayed AFR uses highest pet AFR + additive item AFR, capped at 66.67% for actual timing.",
+        "AFR = highest pet AFR + additive item AFR, capped at 66.67% for timing.",
         vec![
             computed_stat_breakdown_section("Inputs", afr_input_rows),
             computed_stat_breakdown_section(
@@ -4197,7 +4194,7 @@ fn derive_stat_breakdowns(
         format!("Average Casts ({timespan_text})"),
         fmt2(casts_average_raw),
         "Average number of fishing cycles completed inside the current session duration.",
-        "Displayed casts use session seconds divided by average total fishing time.",
+        "Casts = session seconds / average total fishing time.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4217,7 +4214,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed casts",
+                    "Average casts",
                     fmt2(casts_average_raw),
                     "Average completed casts for the selected session duration.",
                 )],
@@ -4229,13 +4226,13 @@ fn derive_stat_breakdowns(
         "Item DRR",
         format!("{}%", trim_float(item_drr_raw * 100.0)),
         "Item DRR is the additive total from selected item, buff, outfit, backpack, and pet DRR sources.",
-        "Displayed Item DRR uses additive item and pet contributions.",
+        "Item DRR = additive item and pet contributions.",
         vec![
             computed_stat_breakdown_section("Inputs", item_drr_input_rows),
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed Item DRR",
+                    "Item DRR",
                     format!("{}%", trim_float(item_drr_raw * 100.0)),
                     "Used as the durability-resistance term in the durability consumption formula.",
                 )],
@@ -4247,7 +4244,7 @@ fn derive_stat_breakdowns(
         "Chance to Consume Durability",
         format!("{:.2}%", chance_to_reduce_raw * 100.0),
         "Durability consumption combines Brandstone, Item DRR, and lifeskill-level DRR into one remaining-consumption chance.",
-        "Displayed chance uses Brandstone factor × (1 - Item DRR) × (1 - lifeskill DRR).",
+        "Chance = Brandstone factor × (1 - Item DRR) × (1 - lifeskill DRR).",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4282,7 +4279,7 @@ fn derive_stat_breakdowns(
                         "Combined additive item and pet durability resistance.",
                     ),
                     computed_stat_breakdown_row(
-                        "Displayed chance",
+                        "Chance",
                         format!("{:.2}%", chance_to_reduce_raw * 100.0),
                         "Final per-cast chance to consume durability.",
                     ),
@@ -4295,7 +4292,7 @@ fn derive_stat_breakdowns(
         format!("Average Durability Loss ({timespan_text})"),
         fmt2(durability_loss_average_raw),
         "Average durability loss over the current session duration.",
-        "Displayed loss uses average casts × chance to consume durability.",
+        "Loss = average casts × chance to consume durability.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4315,7 +4312,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed loss",
+                    "Average loss",
                     fmt2(durability_loss_average_raw),
                     "Expected durability consumed over the current session duration.",
                 )],
@@ -4327,7 +4324,7 @@ fn derive_stat_breakdowns(
         "Zone Bite Min",
         fmt2(zone_bite_min_raw),
         "Minimum bite time read directly from the selected zone metadata.",
-        "Displayed value uses the selected zone's minimum bite-time entry directly.",
+        "Value uses the selected zone's minimum bite-time entry directly.",
         vec![computed_stat_breakdown_section(
             "Inputs",
             vec![computed_stat_breakdown_row(
@@ -4342,7 +4339,7 @@ fn derive_stat_breakdowns(
         "Zone Bite Average",
         fmt2(zone_bite_avg_raw),
         "Zone average bite time before level or abundance modifiers.",
-        "Displayed average uses (zone min + zone max) / 2.",
+        "Average = (zone min + zone max) / 2.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4362,7 +4359,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed average",
+                    "Zone average",
                     fmt2(zone_bite_avg_raw),
                     "Base zone average before level and abundance scaling.",
                 )],
@@ -4374,7 +4371,7 @@ fn derive_stat_breakdowns(
         "Zone Bite Max",
         fmt2(zone_bite_max_raw),
         "Maximum bite time read directly from the selected zone metadata.",
-        "Displayed value uses the selected zone's maximum bite-time entry directly.",
+        "Value uses the selected zone's maximum bite-time entry directly.",
         vec![computed_stat_breakdown_section(
             "Inputs",
             vec![computed_stat_breakdown_row(
@@ -4389,7 +4386,7 @@ fn derive_stat_breakdowns(
         "Effective Bite Min",
         fmt2(effective_bite_min_raw),
         "Zone minimum bite time after level and abundance scaling.",
-        "Displayed effective min uses zone min × level factor × abundance factor.",
+        "Effective min = zone min × level factor × abundance factor.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4418,7 +4415,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed effective min",
+                    "Effective min",
                     fmt2(effective_bite_min_raw),
                     "Lower end of the current effective bite window.",
                 )],
@@ -4430,13 +4427,13 @@ fn derive_stat_breakdowns(
         "Effective Bite Average",
         fmt2(bite_time_raw),
         "Zone average bite time after level and abundance scaling.",
-        "Displayed effective average uses zone average × level factor × abundance factor.",
+        "Effective average = zone average × level factor × abundance factor.",
         vec![
             computed_stat_breakdown_section("Inputs", bite_time_factor_rows),
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed effective average",
+                    "Effective average",
                     fmt2(bite_time_raw),
                     "Matches the Average Bite Time stat.",
                 )],
@@ -4448,7 +4445,7 @@ fn derive_stat_breakdowns(
         "Effective Bite Max",
         fmt2(effective_bite_max_raw),
         "Zone maximum bite time after level and abundance scaling.",
-        "Displayed effective max uses zone max × level factor × abundance factor.",
+        "Effective max = zone max × level factor × abundance factor.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4477,7 +4474,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed effective max",
+                    "Effective max",
                     fmt2(effective_bite_max_raw),
                     "Upper end of the current effective bite window.",
                 )],
@@ -4489,7 +4486,7 @@ fn derive_stat_breakdowns(
         format!("Expected Catches ({timespan_text})"),
         fmt2(loot_total_catches_raw),
         "Expected catches over the current session duration after the active fish-per-cast multiplier is applied.",
-        "Displayed catches use average casts × applied fish multiplier.",
+        "Expected catches = average casts × applied fish multiplier.",
         vec![
             computed_stat_breakdown_section("Inputs", fish_multiplier_input_rows),
             computed_stat_breakdown_section(
@@ -4506,7 +4503,7 @@ fn derive_stat_breakdowns(
                         "Highest selected fish-per-cast multiplier.",
                     ),
                     computed_stat_breakdown_row(
-                        "Displayed catches",
+                        "Expected catches",
                         fmt2(loot_total_catches_raw),
                         "Expected catches for the selected session duration.",
                     ),
@@ -4519,7 +4516,7 @@ fn derive_stat_breakdowns(
         "Expected Catches / Hour",
         fmt2(loot_fish_per_hour_raw),
         "Hourly catch throughput after the active fish-per-cast multiplier is applied.",
-        "Displayed catches per hour use (3600 / average total time) × applied fish multiplier.",
+        "Catches per hour = (3600 / average total time) × applied fish multiplier.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4544,7 +4541,7 @@ fn derive_stat_breakdowns(
                         "Highest selected fish-per-cast multiplier.",
                     ),
                     computed_stat_breakdown_row(
-                        "Displayed catches / hour",
+                        "Catches / hour",
                         fmt2(loot_fish_per_hour_raw),
                         "Expected hourly catch throughput.",
                     ),
@@ -4558,7 +4555,7 @@ fn derive_stat_breakdowns(
         format!("Expected Profit ({timespan_text})"),
         loot_chart.total_profit_text.clone(),
         "Expected silver over the current session duration after prices and trade modifiers are applied.",
-        "Displayed profit sums the expected silver contribution from all fish groups.",
+        "Expected profit = sum of expected silver across all fish groups.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4581,7 +4578,7 @@ fn derive_stat_breakdowns(
                         "Current sale multiplier after trade settings.",
                     ),
                     computed_stat_breakdown_row(
-                        "Displayed profit",
+                        "Expected profit",
                         loot_chart.total_profit_text.clone(),
                         "Expected silver across the selected session duration.",
                     ),
@@ -4594,7 +4591,7 @@ fn derive_stat_breakdowns(
         "Profit / Hour",
         loot_chart.profit_per_hour_text.clone(),
         "Hourly silver throughput after prices and trade modifiers are applied.",
-        "Displayed profit per hour uses expected session profit divided by session hours.",
+        "Profit per hour = expected session profit / session hours.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4614,7 +4611,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed profit / hour",
+                    "Profit / hour",
                     loot_chart.profit_per_hour_text.clone(),
                     "Expected hourly silver throughput.",
                 )],
@@ -4668,7 +4665,7 @@ fn derive_stat_breakdowns(
         } else {
             "Expected session count for the currently selected target."
         },
-        "Displayed expected count sums total catches × group share × in-group rate across matching loot rows.",
+        "Expected count = total catches × group share × in-group rate across matching loot rows.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4691,7 +4688,7 @@ fn derive_stat_breakdowns(
                         "Session catch volume used for the target calculation.",
                     ),
                     computed_stat_breakdown_row(
-                        "Displayed expected count",
+                        "Expected count",
                         target_fish_summary.expected_count_text.clone(),
                         "Combined expected count across all matching loot rows.",
                     ),
@@ -4704,7 +4701,7 @@ fn derive_stat_breakdowns(
         "Time to Target",
         target_fish_summary.time_to_target_text.clone(),
         "Estimated time to reach the selected target amount at the current setup.",
-        "Displayed time uses target amount divided by expected catches per day.",
+        "Time = target amount / expected catches per day.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4724,7 +4721,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed time",
+                    "Time to target",
                     target_fish_summary.time_to_target_text.clone(),
                     "Estimated time to reach the target amount.",
                 )],
@@ -4733,10 +4730,13 @@ fn derive_stat_breakdowns(
     );
 
     let target_probability_breakdown = computed_stat_breakdown(
-        format!("Chance to Get at Least {}", target_fish_summary.target_amount_text),
+        format!(
+            "Chance to Get at Least {}",
+            target_fish_summary.target_amount_text
+        ),
         target_fish_summary.probability_at_least_text.clone(),
         "Probability of seeing at least the target amount within the current session duration.",
-        "Displayed probability uses the Poisson tail probability P(X ≥ target) with λ = expected session count.",
+        "Probability = P(X ≥ target) with λ = expected session count.",
         vec![
             computed_stat_breakdown_section(
                 "Inputs",
@@ -4756,7 +4756,7 @@ fn derive_stat_breakdowns(
             computed_stat_breakdown_section(
                 "Composition",
                 vec![computed_stat_breakdown_row(
-                    "Displayed probability",
+                    "Probability",
                     target_fish_summary.probability_at_least_text.clone(),
                     "Probability of meeting or exceeding the target during one session.",
                 )],
@@ -5801,7 +5801,7 @@ fn groups_distribution_segments(
                 row.weight_pct
             }),
             // Expected catches are based on the normalized group share.
-            // The toggle only changes how the rate itself is displayed.
+            // The toggle only changes how the rate itself is shown.
             detail_text: trim_float(total_catches_raw * (row.current_share_pct / 100.0)),
             width_pct: if show_normalized_rates {
                 row.current_share_pct
@@ -9109,7 +9109,7 @@ mod tests {
             .as_ref()
             .expect("raw group chart should expose a breakdown")
             .summary_text
-            .contains("raw group weight before normalization"));
+            .contains("Raw group weight before normalization"));
         assert_eq!(raw[1].value_text, "6.25%");
         assert_eq!(raw[1].detail_text, "3.02");
     }

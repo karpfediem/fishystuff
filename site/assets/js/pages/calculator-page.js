@@ -611,8 +611,8 @@
         ? "Active mode uses bite time plus active catch time."
         : "AFK mode uses bite time, passive auto-fishing time, and AFK catch time.",
       formulaText: active
-        ? "Displayed time uses bite time + active catch time."
-        : "Displayed time uses bite time + auto-fishing time + AFK catch time.",
+        ? "Time = bite time + active catch time."
+        : "Time = bite time + auto-fishing time + AFK catch time.",
       replaceSections: {
         Inputs: active
           ? [
@@ -646,7 +646,7 @@
             ],
         Composition: [
           calculatorBreakdownRow(
-            "Displayed total",
+            "Average total",
             calculatorFmt2(totalTimeRaw),
             "Average fishing cycle duration used for downstream casts and loot calculations.",
           ),
@@ -675,7 +675,7 @@
         ],
         Composition: [
           calculatorBreakdownRow(
-            "Displayed average",
+            "Average bite time",
             calculatorFmt2(biteTimeRaw),
             "Used in the total fishing time calculation.",
           ),
@@ -706,7 +706,7 @@
           ],
           Composition: [
             calculatorBreakdownRow(
-              "Displayed AFT",
+              "Auto-Fishing Time",
               calculatorFmt2(autoFishTimeRaw),
               "Used only in AFK total fishing time calculations.",
             ),
@@ -734,7 +734,7 @@
           ],
           Composition: [
             calculatorBreakdownRow(
-              "Displayed casts",
+              "Average casts",
               calculatorFmt2(castsAverageRaw),
               "Average completed casts for the selected session duration.",
             ),
@@ -762,7 +762,7 @@
           ],
           Composition: [
             calculatorBreakdownRow(
-              "Displayed loss",
+              "Average loss",
               calculatorFmt2(durabilityLossAverageRaw),
               "Expected durability consumed over the current session duration.",
             ),
@@ -792,7 +792,7 @@
           ],
           Composition: [
             calculatorBreakdownRow(
-              "Displayed average",
+              "Zone average",
               calculatorFmt2(zoneBiteAvgRaw),
               "Base zone average before level and abundance scaling.",
             ),
@@ -831,7 +831,7 @@
           ],
           Composition: [
             calculatorBreakdownRow(
-              "Displayed effective min",
+              "Effective min",
               calculatorFmt2(effectiveBiteMinRaw),
               "Lower end of the current effective bite window.",
             ),
@@ -863,7 +863,7 @@
           ],
           Composition: [
             calculatorBreakdownRow(
-              "Displayed effective average",
+              "Effective average",
               calculatorFmt2(biteTimeRaw),
               "Matches the Average Bite Time stat.",
             ),
@@ -891,7 +891,7 @@
           ],
           Composition: [
             calculatorBreakdownRow(
-              "Displayed effective max",
+              "Effective max",
               calculatorFmt2(effectiveBiteMaxRaw),
               "Upper end of the current effective bite window.",
             ),
@@ -917,7 +917,7 @@
               "Highest selected fish-per-cast multiplier.",
             ),
             calculatorBreakdownRow(
-              "Displayed catches",
+              "Expected catches",
               calculatorFmt2(lootTotalCatchesRaw),
               "Expected catches for the selected session duration.",
             ),
@@ -942,7 +942,7 @@
               "Highest selected fish-per-cast multiplier.",
             ),
             calculatorBreakdownRow(
-              "Displayed catches / hour",
+              "Catches / hour",
               calculatorFmt2(lootFishPerHourRaw),
               "Expected hourly catch throughput.",
             ),
@@ -978,7 +978,7 @@
               "Current sale multiplier after trade settings.",
             ),
             calculatorBreakdownRow(
-              "Displayed profit",
+              "Expected profit",
               calculatorFmtSilver(lootTotalProfitRaw),
               "Expected silver across the selected session duration.",
             ),
@@ -1005,7 +1005,7 @@
           ],
           Composition: [
             calculatorBreakdownRow(
-              "Displayed profit / hour",
+              "Profit / hour",
               calculatorFmtSilver(lootProfitPerHourRaw),
               "Expected hourly silver throughput.",
             ),
