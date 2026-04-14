@@ -1910,7 +1910,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         ),
     };
     let fish_group_silver_distribution_chart = DistributionChartSignal {
-        segments: group_silver_distribution_segments(&loot_chart.rows),
+        segments: group_silver_distribution_segments(&loot_chart.rows, &loot_chart.species_rows),
     };
     let target_fish_pmf_chart = target_fish_pmf_chart(&target_fish_summary);
     let loot_sankey_chart = LootSankeySignal {
@@ -2087,6 +2087,21 @@ fn computed_stat_breakdown_item_row(
             .as_deref()
             .map(|icon| absolute_public_asset_url(cdn_base_url, icon)),
         grade_tone: Some(item_grade_tone(item.grade.as_deref()).to_string()),
+    }
+}
+
+fn computed_stat_breakdown_loot_species_row(
+    row: &LootSpeciesRow,
+    value_text: impl Into<String>,
+    detail_text: impl Into<String>,
+) -> ComputedStatBreakdownRow {
+    ComputedStatBreakdownRow {
+        label: row.label.clone(),
+        value_text: value_text.into(),
+        detail_text: detail_text.into(),
+        kind: Some("item"),
+        icon_url: row.icon_url.clone(),
+        grade_tone: Some(row.icon_grade_tone.clone()),
     }
 }
 
@@ -2773,6 +2788,113 @@ fn fish_group_distribution_breakdown(
         } else {
             "Displayed value uses the raw group weight before normalization.".to_string()
         },
+        sections: vec![
+            ComputedStatBreakdownSection {
+                label: "Inputs".to_string(),
+                rows: input_rows,
+            },
+            ComputedStatBreakdownSection {
+                label: "Composition".to_string(),
+                rows: composition_rows,
+            },
+        ],
+    }
+}
+
+fn loot_species_silver_breakdown_detail(row: &LootSpeciesRow) -> String {
+    let mut parts = Vec::new();
+    if !row.drop_rate_text.is_empty() {
+        parts.push(format!("{} in-group rate", row.drop_rate_text));
+    }
+    if !row.expected_count_text.is_empty() {
+        parts.push(format!("{} expected catches", row.expected_count_text));
+    }
+    if row.expected_profit_raw <= 0.0 && row.expected_count_raw > 0.0 {
+        parts.push("0 silver after current pricing or discard settings".to_string());
+    }
+    parts.join(" · ")
+}
+
+fn group_silver_distribution_breakdown(
+    row: &LootChartRow,
+    species_rows: &[LootSpeciesRow],
+    total_profit_raw: f64,
+) -> ComputedStatBreakdown {
+    let mut contributing_rows = species_rows
+        .iter()
+        .filter(|species_row| {
+            species_row.group_label == row.label && species_row.expected_count_raw > 0.0
+        })
+        .collect::<Vec<_>>();
+    contributing_rows.sort_by(|left, right| {
+        right
+            .expected_profit_raw
+            .partial_cmp(&left.expected_profit_raw)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.label.to_lowercase().cmp(&right.label.to_lowercase()))
+    });
+
+    let input_rows = if contributing_rows.is_empty() {
+        vec![computed_stat_breakdown_row(
+            "Contributing loot",
+            "Unavailable",
+            "No source-backed loot rows are currently contributing silver to this group.",
+        )]
+    } else {
+        contributing_rows
+            .into_iter()
+            .map(|species_row| {
+                computed_stat_breakdown_loot_species_row(
+                    species_row,
+                    species_row.expected_profit_text.clone(),
+                    loot_species_silver_breakdown_detail(species_row),
+                )
+            })
+            .collect()
+    };
+
+    let composition_rows = vec![
+        computed_stat_breakdown_row(
+            "Normalized group share",
+            row.count_share_text.clone(),
+            "Determines how many catches land in this group before within-group loot weighting.",
+        ),
+        computed_stat_breakdown_row(
+            "Expected catches",
+            row.expected_count_text.clone(),
+            "Average catches landing in this group under the current session-size assumptions.",
+        ),
+        computed_stat_breakdown_row(
+            "Group expected silver",
+            row.expected_profit_text.clone(),
+            "Sum of the contributing loot rows after prices and trade modifiers.",
+        ),
+        computed_stat_breakdown_row(
+            "All-group silver total",
+            fmt_silver(total_profit_raw),
+            "Denominator for the silver-share distribution.",
+        ),
+        computed_stat_breakdown_row(
+            "Displayed share",
+            row.silver_share_text.clone(),
+            "Calculated from group expected silver divided by total expected silver.",
+        ),
+    ];
+
+    ComputedStatBreakdown {
+        kind_label: "Computed stat".to_string(),
+        title: format!("{} silver share", row.label),
+        value_text: row.silver_share_text.clone(),
+        summary_text: if row.expected_profit_raw > 0.0 {
+            "Expected silver share from the loot rows currently mapped to this group after prices and trade settings."
+                .to_string()
+        } else {
+            "This group currently contributes no expected silver after the active prices, discard choices, and trade settings."
+                .to_string()
+        },
+        formula_text:
+            "Displayed share uses group expected silver divided by the all-group expected silver total."
+                .to_string(),
         sections: vec![
             ComputedStatBreakdownSection {
                 label: "Inputs".to_string(),
@@ -4539,7 +4661,10 @@ fn groups_distribution_segments(
         .collect()
 }
 
-fn group_silver_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<DistributionChartSegment> {
+fn group_silver_distribution_segments(
+    loot_rows: &[LootChartRow],
+    species_rows: &[LootSpeciesRow],
+) -> Vec<DistributionChartSegment> {
     let total_profit_raw = loot_rows
         .iter()
         .map(|row| row.expected_profit_raw)
@@ -4560,7 +4685,11 @@ fn group_silver_distribution_segments(loot_rows: &[LootChartRow]) -> Vec<Distrib
             stroke_color: row.stroke_color,
             text_color: row.text_color,
             connector_color: row.connector_color,
-            breakdown: None,
+            breakdown: Some(group_silver_distribution_breakdown(
+                row,
+                species_rows,
+                total_profit_raw,
+            )),
         })
         .collect()
 }
@@ -6143,7 +6272,7 @@ mod tests {
         parse_calculator_signals_value, pmf_bucket_contains_target, poisson_probability_at_least,
         post_calculator_datastar_eval, trade_sale_multiplier_for_species, CalculatorData,
         CalculatorDatastarQuery, CalculatorQuery, CalculatorSearchableOptionQuery,
-        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow,
+        CalculatorZoneSearchQuery, FishGroupChart, FishGroupChartRow, LootChartRow, LootSpeciesRow,
     };
 
     struct MockStore;
@@ -7751,6 +7880,150 @@ mod tests {
             .contains("raw group weight before normalization"));
         assert_eq!(raw[1].value_text, "6.25%");
         assert_eq!(raw[1].detail_text, "3.02");
+    }
+
+    #[test]
+    fn group_silver_distribution_segments_expose_breakdowns() {
+        let rows = vec![
+            LootChartRow {
+                label: "Prize",
+                fill_color: "pink",
+                stroke_color: "red",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                drop_rate_source_kind: "derived".to_string(),
+                drop_rate_tooltip: "Derived from group share".to_string(),
+                expected_count_raw: 3.02,
+                expected_profit_raw: 120_000.0,
+                expected_count_text: "3.02".to_string(),
+                expected_profit_text: "120,000".to_string(),
+                current_share_pct: 5.81,
+                count_share_text: "5.81%".to_string(),
+                silver_share_text: "24.00%".to_string(),
+            },
+            LootChartRow {
+                label: "General",
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                drop_rate_source_kind: "derived".to_string(),
+                drop_rate_tooltip: "Derived from group share".to_string(),
+                expected_count_raw: 48.98,
+                expected_profit_raw: 380_000.0,
+                expected_count_text: "48.98".to_string(),
+                expected_profit_text: "380,000".to_string(),
+                current_share_pct: 94.19,
+                count_share_text: "94.19%".to_string(),
+                silver_share_text: "76.00%".to_string(),
+            },
+        ];
+        let species_rows = vec![
+            LootSpeciesRow {
+                slot_idx: 1,
+                group_label: "Prize",
+                label: "Golden Coelacanth".to_string(),
+                icon_url: Some("http://127.0.0.1:4040/items/golden-coelacanth.webp".to_string()),
+                icon_grade_tone: "yellow".to_string(),
+                fill_color: "pink",
+                stroke_color: "red",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                expected_count_raw: 2.0,
+                expected_profit_raw: 100_000.0,
+                expected_count_text: "2".to_string(),
+                expected_profit_text: "100,000".to_string(),
+                silver_share_text: "20.00%".to_string(),
+                rate_text: "60%".to_string(),
+                rate_source_kind: "database".to_string(),
+                rate_tooltip: "Database in-group rate".to_string(),
+                drop_rate_text: "60%".to_string(),
+                drop_rate_source_kind: "database".to_string(),
+                drop_rate_tooltip: "Database in-group rate".to_string(),
+                presence_text: None,
+                presence_source_kind: "database".to_string(),
+                presence_tooltip: None,
+                evidence_text: String::new(),
+            },
+            LootSpeciesRow {
+                slot_idx: 1,
+                group_label: "Prize",
+                label: "Silver Pomfret".to_string(),
+                icon_url: Some("http://127.0.0.1:4040/items/silver-pomfret.webp".to_string()),
+                icon_grade_tone: "blue".to_string(),
+                fill_color: "pink",
+                stroke_color: "red",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                expected_count_raw: 1.02,
+                expected_profit_raw: 20_000.0,
+                expected_count_text: "1.02".to_string(),
+                expected_profit_text: "20,000".to_string(),
+                silver_share_text: "4.00%".to_string(),
+                rate_text: "40%".to_string(),
+                rate_source_kind: "database".to_string(),
+                rate_tooltip: "Database in-group rate".to_string(),
+                drop_rate_text: "40%".to_string(),
+                drop_rate_source_kind: "database".to_string(),
+                drop_rate_tooltip: "Database in-group rate".to_string(),
+                presence_text: None,
+                presence_source_kind: "database".to_string(),
+                presence_tooltip: None,
+                evidence_text: String::new(),
+            },
+            LootSpeciesRow {
+                slot_idx: 4,
+                group_label: "General",
+                label: "Trout".to_string(),
+                icon_url: None,
+                icon_grade_tone: "green".to_string(),
+                fill_color: "green",
+                stroke_color: "lime",
+                text_color: "black",
+                connector_color: "rgba(0,0,0,0.2)",
+                expected_count_raw: 48.98,
+                expected_profit_raw: 380_000.0,
+                expected_count_text: "48.98".to_string(),
+                expected_profit_text: "380,000".to_string(),
+                silver_share_text: "76.00%".to_string(),
+                rate_text: "100%".to_string(),
+                rate_source_kind: "database".to_string(),
+                rate_tooltip: "Database in-group rate".to_string(),
+                drop_rate_text: "100%".to_string(),
+                drop_rate_source_kind: "database".to_string(),
+                drop_rate_tooltip: "Database in-group rate".to_string(),
+                presence_text: None,
+                presence_source_kind: "database".to_string(),
+                presence_tooltip: None,
+                evidence_text: String::new(),
+            },
+        ];
+
+        let segments = super::group_silver_distribution_segments(&rows, &species_rows);
+        let breakdown = segments[0]
+            .breakdown
+            .as_ref()
+            .expect("silver group chart should expose a breakdown");
+
+        assert_eq!(segments[0].label, "Prize");
+        assert_eq!(segments[0].value_text, "24.00%");
+        assert_eq!(segments[0].detail_text, "120K");
+        assert_eq!(breakdown.title, "Prize silver share");
+        assert!(breakdown.summary_text.contains("Expected silver share"));
+        assert_eq!(breakdown.sections[0].label, "Inputs");
+        assert_eq!(breakdown.sections[0].rows[0].label, "Golden Coelacanth");
+        assert_eq!(breakdown.sections[0].rows[0].value_text, "100,000");
+        assert_eq!(breakdown.sections[0].rows[0].kind, Some("item"));
+        assert_eq!(
+            breakdown.sections[0].rows[0].icon_url.as_deref(),
+            Some("http://127.0.0.1:4040/items/golden-coelacanth.webp")
+        );
+        assert_eq!(
+            breakdown.sections[1].rows[0].label,
+            "Normalized group share"
+        );
+        assert_eq!(breakdown.sections[1].rows[2].value_text, "120,000");
+        assert_eq!(breakdown.sections[1].rows[4].value_text, "24.00%");
     }
 
     #[test]
