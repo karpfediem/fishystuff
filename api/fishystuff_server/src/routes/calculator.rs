@@ -2128,12 +2128,12 @@ fn derive_fish_group_chart(
         .collect::<HashSet<_>>();
 
     let rare_weight = if available_slots.contains(&2) {
-        rare_base * (1.0 + rare_bonus.max(0.0))
+        rare_base + rare_bonus.max(0.0)
     } else {
         0.0
     };
     let high_quality_weight = if available_slots.contains(&3) {
-        high_quality_base * (1.0 + high_quality_bonus.max(0.0))
+        high_quality_base + high_quality_bonus.max(0.0)
     } else {
         0.0
     };
@@ -7783,6 +7783,95 @@ mod tests {
         assert_eq!(fish_group_chart.rows[3].current_share_pct, 100.0);
         assert_eq!(fish_group_chart.rows[4].label, "Trash");
         assert_eq!(fish_group_chart.rows[4].current_share_pct, 0.0);
+    }
+
+    #[test]
+    fn derive_fish_group_chart_adds_group_bonus_as_absolute_rate() {
+        let signals = CalculatorSignals {
+            zone: "bonus_zone".to_string(),
+            float: "item:rare-float".to_string(),
+            chair: "item:hq-chair".to_string(),
+            ..CalculatorSignals::default()
+        };
+        let data = CalculatorData {
+            catalog: CalculatorCatalogResponse {
+                items: vec![
+                    CalculatorItemEntry {
+                        key: "item:rare-float".to_string(),
+                        name: "Rare Float".to_string(),
+                        bonus_rare: Some(0.10),
+                        ..CalculatorItemEntry::default()
+                    },
+                    CalculatorItemEntry {
+                        key: "item:hq-chair".to_string(),
+                        name: "HQ Chair".to_string(),
+                        bonus_big: Some(0.11),
+                        ..CalculatorItemEntry::default()
+                    },
+                ],
+                ..CalculatorCatalogResponse::default()
+            },
+            cdn_base_url: "http://127.0.0.1:4040".to_string(),
+            lang: FishLang::En,
+            zones: Vec::new(),
+            zone_group_rates: HashMap::from([(
+                "bonus_zone".to_string(),
+                CalculatorZoneGroupRateEntry {
+                    zone_rgb_key: "bonus_zone".to_string(),
+                    prize_main_group_key: None,
+                    rare_rate_raw: 100_000,
+                    high_quality_rate_raw: 200_000,
+                    general_rate_raw: 700_000,
+                    trash_rate_raw: 0,
+                },
+            )]),
+            zone_loot_entries: vec![
+                CalculatorZoneLootEntry {
+                    slot_idx: 2,
+                    item_id: 820010,
+                    name: "Rare Fish".to_string(),
+                    within_group_rate: 1.0,
+                    ..CalculatorZoneLootEntry::default()
+                },
+                CalculatorZoneLootEntry {
+                    slot_idx: 3,
+                    item_id: 820020,
+                    name: "HQ Fish".to_string(),
+                    within_group_rate: 1.0,
+                    ..CalculatorZoneLootEntry::default()
+                },
+                CalculatorZoneLootEntry {
+                    slot_idx: 4,
+                    item_id: 820030,
+                    name: "General Fish".to_string(),
+                    within_group_rate: 1.0,
+                    ..CalculatorZoneLootEntry::default()
+                },
+            ],
+        };
+        let items_by_key = data
+            .catalog
+            .items
+            .iter()
+            .map(|item| (item.key.as_str(), item))
+            .collect::<HashMap<_, _>>();
+
+        let fish_group_chart = derive_fish_group_chart(&signals, &data, &items_by_key);
+        let tolerance = 1e-6;
+
+        assert_eq!(fish_group_chart.rows[1].label, "Rare");
+        assert_eq!(fish_group_chart.rows[1].bonus_text, "+10% Rare");
+        assert!((fish_group_chart.rows[1].base_share_pct - 10.0).abs() < tolerance);
+        assert!((fish_group_chart.rows[1].weight_pct - 20.0).abs() < tolerance);
+        assert!(
+            (fish_group_chart.rows[1].current_share_pct - 16.528925619834713).abs() < tolerance
+        );
+
+        assert_eq!(fish_group_chart.rows[2].label, "High-Quality");
+        assert_eq!(fish_group_chart.rows[2].bonus_text, "+11% HQ");
+        assert!((fish_group_chart.rows[2].base_share_pct - 20.0).abs() < tolerance);
+        assert!((fish_group_chart.rows[2].weight_pct - 31.0).abs() < tolerance);
+        assert!((fish_group_chart.rows[2].current_share_pct - 25.6198347107438).abs() < tolerance);
     }
 
     #[test]
