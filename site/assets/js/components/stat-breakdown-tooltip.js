@@ -74,9 +74,50 @@ function statBreakdownSectionIsResult(section, index = 0) {
     return label === "composition" || (index > 0 && label === "details");
 }
 
-export function statBreakdownSectionDisplayLabel(section, index = 0) {
+function statBreakdownFormulaLeftHandSide(formulaText) {
+    const raw = trimString(formulaText).replace(/\.$/, "");
+    if (!raw) {
+        return "";
+    }
+    const equalsIndex = raw.indexOf("=");
+    if (equalsIndex < 0) {
+        return "";
+    }
+    return trimString(raw.slice(0, equalsIndex));
+}
+
+export function statBreakdownResultKindLabel(payload = {}, section = {}) {
+    const formulaText = trimString(payload?.formulaText ?? payload?.formula_text);
+    const rows = Array.isArray(section?.rows) ? section.rows : [];
+    const resultLabel = trimString(rows.at(-1)?.label);
+    const leftHandSide = statBreakdownFormulaLeftHandSide(formulaText);
+    const title = trimString(payload?.title);
+    const semanticText = [leftHandSide, resultLabel, title]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+    const hasAdditiveFormula = formulaText.includes("+");
+    const hasAverageSemantics = /\baverage\b/.test(semanticText);
+    const hasTotalSemantics = /\btotal\b/.test(semanticText);
+
+    if (hasAdditiveFormula && hasTotalSemantics) {
+        return "Sum Total";
+    }
+    if (hasAverageSemantics) {
+        return "Average";
+    }
+    if (hasTotalSemantics) {
+        return "Total";
+    }
+    return "Result";
+}
+
+export function statBreakdownSectionDisplayLabel(section, index = 0, payload = null) {
     const label = trimString(section?.label) || "Details";
     if (statBreakdownSectionIsResult(section, index)) {
+        if (payload) {
+            return statBreakdownResultKindLabel(payload, section);
+        }
         const resultLabel = trimString(section?.rows?.[0]?.label);
         if (Array.isArray(section?.rows) && section.rows.length === 1 && resultLabel) {
             return resultLabel;
@@ -513,15 +554,18 @@ function buildFormulaRow(documentRef, labelText, tokens, variant = "symbolic") {
     const row = documentRef.createElement("div");
     row.className = "fishy-stat-breakdown-tooltip__formula-row";
 
-    const label = documentRef.createElement("div");
-    label.className = "fishy-stat-breakdown-tooltip__formula-row-label";
-    label.textContent = labelText;
-
     const tokensElement = documentRef.createElement("div");
     tokensElement.className = "fishy-stat-breakdown-tooltip__formula-tokens";
     tokensElement.append(...tokens.map((token) => buildFormulaToken(documentRef, token, variant)));
 
-    row.append(label, tokensElement);
+    if (trimString(labelText)) {
+        const label = documentRef.createElement("div");
+        label.className = "fishy-stat-breakdown-tooltip__formula-row-label";
+        label.textContent = labelText;
+        row.appendChild(label);
+    }
+
+    row.appendChild(tokensElement);
     return row;
 }
 
@@ -586,8 +630,8 @@ function buildRowMain(documentRef, row, { showDetail = true } = {}) {
     return main;
 }
 
-function buildSection(documentRef, section, index = 0, { resolvedFormulaTokens = [] } = {}) {
-    const displayLabel = statBreakdownSectionDisplayLabel(section, index);
+function buildSection(documentRef, section, index = 0, { payload = null, resolvedFormulaTokens = [] } = {}) {
+    const displayLabel = statBreakdownSectionDisplayLabel(section, index, payload);
     const isSecondarySection = index > 0;
     const isResultSection = statBreakdownSectionIsResult(section, index);
     const isInputSection = statBreakdownInputSection(section);
@@ -612,7 +656,7 @@ function buildSection(documentRef, section, index = 0, { resolvedFormulaTokens =
 
     if (isResultSection && resolvedFormulaTokens.length) {
         sectionElement.appendChild(
-            buildSectionFormula(documentRef, "With values", resolvedFormulaTokens, "resolved"),
+            buildSectionFormula(documentRef, "", resolvedFormulaTokens, "resolved"),
         );
     }
 
@@ -721,16 +765,17 @@ function showTooltip(anchor, event) {
         const formulaTokens = statBreakdownFormulaTokens(payload.formulaText, payload);
         const resultSectionIndex = statBreakdownLastResultSectionIndex(payload);
         const topFormulaRows = formulaTokens.length
-            ? [buildFormulaRow(documentRef, "General", formulaTokens, "symbolic")]
+            ? [buildFormulaRow(documentRef, "", formulaTokens, "symbolic")]
             : [];
         if (formulaTokens.length && resultSectionIndex < 0) {
-            topFormulaRows.push(buildFormulaRow(documentRef, "With values", formulaTokens, "resolved"));
+            topFormulaRows.push(buildFormulaRow(documentRef, "", formulaTokens, "resolved"));
         }
         refs.formulaRows.replaceChildren(...topFormulaRows);
         refs.formula.hidden = topFormulaRows.length === 0;
 
         refs.sections.replaceChildren(
             ...payload.sections.map((section, index) => buildSection(documentRef, section, index, {
+                payload,
                 resolvedFormulaTokens: index === resultSectionIndex ? formulaTokens : [],
             })),
         );

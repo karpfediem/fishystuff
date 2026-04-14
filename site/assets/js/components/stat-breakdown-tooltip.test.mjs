@@ -6,6 +6,7 @@ import {
     normalizeStatBreakdownPayload,
     statBreakdownFormulaTokens,
     statBreakdownPayloadForAnchor,
+    statBreakdownResultKindLabel,
     statBreakdownSectionDisplayLabel,
     statBreakdownSectionRowGroups,
     statBreakdownTooltipRenderKey,
@@ -150,6 +151,39 @@ test("statBreakdownSectionDisplayLabel uses row labels for single-row results an
         rows: [{ label: "Average casts" }, { label: "Expected catches" }],
     }, 1), "Result");
     assert.equal(statBreakdownSectionDisplayLabel({ label: "Details", rows: [] }, 1), "Result");
+});
+
+test("statBreakdownResultKindLabel derives divider titles from the result formula type", () => {
+    assert.equal(
+        statBreakdownResultKindLabel(
+            {
+                title: "Average Total Fishing Time",
+                formula_text: "Average total = Average bite time + Auto-Fishing Time + AFK catch time.",
+            },
+            { rows: [{ label: "Average total" }] },
+        ),
+        "Sum Total",
+    );
+    assert.equal(
+        statBreakdownResultKindLabel(
+            {
+                title: "Average Bite Time",
+                formula_text: "Average bite time = Zone average bite time × Level factor × Abundance factor.",
+            },
+            { rows: [{ label: "Average bite time" }] },
+        ),
+        "Average",
+    );
+    assert.equal(
+        statBreakdownResultKindLabel(
+            {
+                title: "Silver Share",
+                formula_text: "Silver share = Group expected silver / All-group expected silver total.",
+            },
+            { rows: [{ label: "Silver share" }] },
+        ),
+        "Result",
+    );
 });
 
 test("statBreakdownSectionRowGroups sorts inputs by formula part order and groups shared terms", () => {
