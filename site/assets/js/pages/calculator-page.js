@@ -461,6 +461,85 @@
   const calculatorScaleSilverText = (valueText, ratio) => (
     calculatorFmtSilver(calculatorNumber(String(valueText ?? "").replace(/,/g, "")) * ratio)
   );
+  const calculatorTimelineSegment = (
+    label,
+    valueSeconds,
+    widthPct,
+    fillColor,
+    strokeColor,
+    breakdown,
+  ) => ({
+    label,
+    value_text: `${calculatorFmt2(valueSeconds)}s`,
+    detail_text: `${calculatorFmt2(widthPct)}%`,
+    width_pct: Math.max(0, calculatorNumber(widthPct)),
+    fill_color: fillColor,
+    stroke_color: strokeColor,
+    breakdown,
+  });
+  const calculatorTimelineChart = ({
+    active,
+    biteTimeRaw,
+    autoFishTimeRaw,
+    catchTimeRaw,
+    totalTimeRaw,
+    zoneBiteAvgRaw,
+    biteBreakdown,
+    autoBreakdown,
+    catchBreakdown,
+    timeSavedBreakdown,
+  }) => {
+    const unoptimizedTimeRaw = zoneBiteAvgRaw + (active ? catchTimeRaw : catchTimeRaw + 180);
+    const percentBite = calculatorPercentage(biteTimeRaw, unoptimizedTimeRaw);
+    const percentAF = active ? 0 : calculatorPercentage(autoFishTimeRaw, unoptimizedTimeRaw);
+    const percentCatch = calculatorPercentage(catchTimeRaw, unoptimizedTimeRaw);
+    const percentSaved = Math.max(
+      0,
+      100 - calculatorPercentage(totalTimeRaw, unoptimizedTimeRaw),
+    );
+    const timeSavedRaw = Math.max(0, unoptimizedTimeRaw - totalTimeRaw);
+    const segments = [
+      calculatorTimelineSegment(
+        "Bite Time",
+        biteTimeRaw,
+        percentBite,
+        "#46d2a7",
+        "color-mix(in srgb, #46d2a7 72%, var(--color-base-content) 22%)",
+        biteBreakdown,
+      ),
+    ];
+    if (!active) {
+      segments.push(
+        calculatorTimelineSegment(
+          "Auto-Fishing Time",
+          autoFishTimeRaw,
+          percentAF,
+          "#4e7296",
+          "color-mix(in srgb, #4e7296 76%, var(--color-base-content) 24%)",
+          autoBreakdown,
+        ),
+      );
+    }
+    segments.push(
+      calculatorTimelineSegment(
+        "Catch Time",
+        catchTimeRaw,
+        percentCatch,
+        "#d27746",
+        "color-mix(in srgb, #d27746 74%, var(--color-base-content) 24%)",
+        catchBreakdown,
+      ),
+      calculatorTimelineSegment(
+        "Time Saved",
+        timeSavedRaw,
+        percentSaved,
+        "color-mix(in oklab, var(--color-base-100) 55%, var(--color-base-content) 10%)",
+        "color-mix(in oklab, var(--color-base-content) 16%, transparent)",
+        timeSavedBreakdown,
+      ),
+    );
+    return { segments };
+  };
 
   function calculatorInitUrl() {
     return window.__fishystuffResolveApiUrl(`/api/v1/calculator/datastar/init?lang=${calculatorLang}`);
@@ -581,6 +660,7 @@
         percent_bite: current.percent_bite ?? "0.00",
         percent_af: current.percent_af ?? "0.00",
         percent_catch: current.percent_catch ?? "0.00",
+        fishing_timeline_chart: current.fishing_timeline_chart ?? { segments: [] },
       };
     }
     const factorLevel = 1 - [0.15, 0.30, 0.35, 0.40, 0.45, 0.50][normalizedLevel];
@@ -796,6 +876,98 @@
               "Auto-Fishing Time",
               calculatorFmt2(autoFishTimeRaw),
               "Used only in AFK total fishing time calculations.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.catch_time = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.catch_time,
+      {
+        formulaText: active
+          ? "Catch time = Active catch time."
+          : "Catch time = AFK catch time.",
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm("Catch time", calculatorFmt2(catchTimeRaw)),
+          calculatorBreakdownFormulaTerm(
+            active ? "Active catch time" : "AFK catch time",
+            calculatorFmt2(catchTimeRaw),
+          ),
+        ],
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow(
+              active ? "Active catch time" : "AFK catch time",
+              calculatorFmt2(catchTimeRaw),
+              active
+                ? "Manual catch-time input used in active mode."
+                : "Manual catch-time input used after the passive auto-fishing timer finishes.",
+              calculatorBreakdownFormulaPart(
+                active ? "Active catch time" : "AFK catch time",
+                1,
+              ),
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Catch time",
+              calculatorFmt2(catchTimeRaw),
+              "Used in the total fishing time calculation.",
+            ),
+          ],
+        },
+      },
+    );
+    statBreakdowns.time_saved = calculatorUpdateBreakdown(
+      current.stat_breakdowns?.time_saved,
+      {
+        valueText: `${calculatorFmt2(percentImprovement)}%`,
+        summaryText: Math.max(0, unoptimizedTimeRaw - totalTimeRaw) > 0
+          ? "Share of the unoptimized baseline cycle removed by bite-time reduction and the current fishing mode timings."
+          : "No time is currently being saved versus the unoptimized baseline cycle.",
+        formulaText: "Time saved = Average unoptimized time - Average total fishing time.; Saved share = Time saved / Average unoptimized time.",
+        formulaTerms: [
+          calculatorBreakdownFormulaTerm(
+            "Time saved",
+            calculatorFmt2(Math.max(0, unoptimizedTimeRaw - totalTimeRaw)),
+          ),
+          calculatorBreakdownFormulaTerm(
+            "Average unoptimized time",
+            calculatorFmt2(unoptimizedTimeRaw),
+          ),
+          calculatorBreakdownFormulaTerm(
+            "Average total fishing time",
+            calculatorFmt2(totalTimeRaw),
+          ),
+          calculatorBreakdownFormulaTerm("Saved share", `${calculatorFmt2(percentImprovement)}%`),
+        ],
+        replaceSections: {
+          Inputs: [
+            calculatorBreakdownRow(
+              "Average unoptimized time",
+              calculatorFmt2(unoptimizedTimeRaw),
+              active
+                ? "Baseline active cycle using zone average bite time plus active catch time."
+                : "Baseline AFK cycle using zone average bite time, 180-second auto-fishing, and AFK catch time.",
+              calculatorBreakdownFormulaPart("Average unoptimized time", 1),
+            ),
+            calculatorBreakdownRow(
+              "Average total fishing time",
+              calculatorFmt2(totalTimeRaw),
+              "Current optimized cycle duration after level, abundance, and AFR effects.",
+              calculatorBreakdownFormulaPart("Average total fishing time", 2),
+            ),
+          ],
+          Composition: [
+            calculatorBreakdownRow(
+              "Time saved",
+              calculatorFmt2(Math.max(0, unoptimizedTimeRaw - totalTimeRaw)),
+              "Absolute seconds removed from the unoptimized baseline cycle.",
+            ),
+            calculatorBreakdownRow(
+              "Saved share",
+              `${calculatorFmt2(percentImprovement)}%`,
+              "Portion of the baseline cycle represented by the saved time segment.",
             ),
           ],
         },
@@ -1211,10 +1383,23 @@
         },
       },
     );
+    const fishingTimelineChart = calculatorTimelineChart({
+      active,
+      biteTimeRaw,
+      autoFishTimeRaw,
+      catchTimeRaw,
+      totalTimeRaw,
+      zoneBiteAvgRaw,
+      biteBreakdown: calculatorParseBreakdown(statBreakdowns.bite_time),
+      autoBreakdown: calculatorParseBreakdown(statBreakdowns.auto_fish_time),
+      catchBreakdown: calculatorParseBreakdown(statBreakdowns.catch_time),
+      timeSavedBreakdown: calculatorParseBreakdown(statBreakdowns.time_saved),
+    });
 
     return {
       ...current,
       stat_breakdowns: statBreakdowns,
+      fishing_timeline_chart: fishingTimelineChart,
       abundance_label: abundanceLabel,
       zone_bite_min: calculatorFmt2(zoneBiteMinRaw),
       zone_bite_max: calculatorFmt2(zoneBiteMaxRaw),

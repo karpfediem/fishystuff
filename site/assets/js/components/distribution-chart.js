@@ -13,10 +13,21 @@ const TRACK_TOP = 132;
 const TRACK_HEIGHT = 18;
 const TRACK_RADIUS = TRACK_HEIGHT / 2;
 const CALLOUT_GAP_PX = 10;
+const TIMELINE_CHART_HEIGHT = 34;
+const TIMELINE_TRACK_TOP = 8;
+const TIMELINE_TRACK_HEIGHT = 18;
+const TIMELINE_TRACK_RADIUS = TIMELINE_TRACK_HEIGHT / 2;
 
 function chartSegments(path) {
     const chart = readCalculatorSignal(path);
     return Array.isArray(chart?.segments) ? chart.segments : [];
+}
+
+function timelineSegments(path) {
+    const chart = readCalculatorSignal(path);
+    return Array.isArray(chart?.segments)
+        ? chart.segments.filter((segment) => (Number(segment?.width_pct) || 0) > 0)
+        : [];
 }
 
 function serializeBreakdownPayload(breakdown) {
@@ -305,6 +316,143 @@ class FishyDistributionChart extends FishyDatastarRenderElement {
     }
 }
 
+function timelineSegmentAriaLabel(segment = {}) {
+    const label = String(segment.label ?? "").trim() || "Timeline segment";
+    const valueText = String(segment.value_text ?? "").trim();
+    const detailText = String(segment.detail_text ?? "").trim();
+    return [label, valueText, detailText, "Show breakdown."]
+        .filter(Boolean)
+        .join(" ");
+}
+
+class FishyTimelineChart extends FishyDatastarRenderElement {
+    static get observedAttributes() {
+        return ["signal-path", "aria-label", "viewbox-width"];
+    }
+
+    observeChildren() {
+        return true;
+    }
+
+    renderFromSignals() {
+        const segments = timelineSegments(this.getAttribute("signal-path"));
+        if (!segments.length) {
+            this.replaceRenderedChildren();
+            return;
+        }
+
+        const requestedWidth = Number(this.getAttribute("viewbox-width"));
+        const width = Number.isFinite(requestedWidth) && requestedWidth > 0
+            ? requestedWidth
+            : DEFAULT_VIEWBOX_WIDTH;
+        const totalWidthPct = Math.max(
+            100,
+            segments.reduce((sum, segment) => sum + Math.max(0, Number(segment.width_pct) || 0), 0),
+        );
+        const x = d3.scaleLinear().domain([0, totalWidthPct]).range([0, width]);
+        const styles = getComputedStyle(this);
+        const trackBackground =
+            styles.getPropertyValue("--color-base-300").trim() || "#d6d3d1";
+        const trackBorder =
+            styles.getPropertyValue("--color-base-content").trim() || "#1f2937";
+        const clipId = `timeline-track-${crypto.randomUUID()}`;
+
+        const svg = d3
+            .create("svg")
+            .attr("viewBox", `0 0 ${width} ${TIMELINE_CHART_HEIGHT}`)
+            .attr("preserveAspectRatio", "xMidYMin meet")
+            .attr("role", "img")
+            .attr("aria-label", this.getAttribute("aria-label") || "Fishing timeline");
+
+        const defs = svg.append("defs");
+        defs.append("clipPath")
+            .attr("id", clipId)
+            .append("rect")
+            .attr("x", 0)
+            .attr("y", TIMELINE_TRACK_TOP)
+            .attr("width", width)
+            .attr("height", TIMELINE_TRACK_HEIGHT)
+            .attr("rx", TIMELINE_TRACK_RADIUS)
+            .attr("ry", TIMELINE_TRACK_RADIUS);
+
+        const track = svg.append("g");
+        track.append("rect")
+            .attr("x", 0)
+            .attr("y", TIMELINE_TRACK_TOP)
+            .attr("width", width)
+            .attr("height", TIMELINE_TRACK_HEIGHT)
+            .attr("rx", TIMELINE_TRACK_RADIUS)
+            .attr("ry", TIMELINE_TRACK_RADIUS)
+            .style("fill", trackBackground);
+
+        const segmentGroup = track.append("g").attr("clip-path", `url(#${clipId})`);
+        const hotspots = svg.append("g");
+
+        let startPct = 0;
+        segments.forEach((segment, index) => {
+            const widthPct = Math.max(0, Number(segment.width_pct) || 0);
+            const endPct = startPct + widthPct;
+            const startX = x(startPct);
+            const endX = x(endPct);
+            const fillColor = String(segment.fill_color ?? "").trim();
+            const strokeColor = String(segment.stroke_color ?? "").trim() || fillColor;
+
+            segmentGroup.append("rect")
+                .attr("x", startX)
+                .attr("y", TIMELINE_TRACK_TOP)
+                .attr("width", Math.max(0, endX - startX))
+                .attr("height", TIMELINE_TRACK_HEIGHT)
+                .style("fill", fillColor);
+
+            if (index > 0) {
+                segmentGroup.append("line")
+                    .attr("x1", startX)
+                    .attr("x2", startX)
+                    .attr("y1", TIMELINE_TRACK_TOP + 2)
+                    .attr("y2", TIMELINE_TRACK_TOP + TIMELINE_TRACK_HEIGHT - 2)
+                    .style("stroke", strokeColor)
+                    .style("stroke-opacity", 0.35)
+                    .style("stroke-width", 1);
+            }
+
+            const payload = serializeBreakdownPayload(segment.breakdown);
+            if (payload) {
+                hotspots.append("rect")
+                    .attr("x", startX)
+                    .attr("y", TIMELINE_TRACK_TOP)
+                    .attr("width", Math.max(0, endX - startX))
+                    .attr("height", TIMELINE_TRACK_HEIGHT)
+                    .attr("rx", Math.min(TIMELINE_TRACK_RADIUS, Math.max(0, endX - startX) / 2))
+                    .attr("ry", Math.min(TIMELINE_TRACK_RADIUS, Math.max(0, endX - startX) / 2))
+                    .attr("class", "timeline-chart__hotspot distribution-chart__hotspot")
+                    .attr("tabindex", 0)
+                    .attr("focusable", true)
+                    .attr("aria-label", timelineSegmentAriaLabel(segment))
+                    .attr("data-fishy-stat-breakdown", payload)
+                    .attr("data-fishy-stat-color", fillColor)
+                    .style("fill", "rgba(255, 255, 255, 0)")
+                    .style("pointer-events", "all");
+            }
+
+            startPct = endPct;
+        });
+
+        track.append("rect")
+            .attr("x", 0)
+            .attr("y", TIMELINE_TRACK_TOP)
+            .attr("width", width)
+            .attr("height", TIMELINE_TRACK_HEIGHT)
+            .attr("rx", TIMELINE_TRACK_RADIUS)
+            .attr("ry", TIMELINE_TRACK_RADIUS)
+            .style("fill", "none")
+            .style("stroke", trackBorder)
+            .style("stroke-opacity", 0.12)
+            .style("stroke-width", 1.2);
+
+        this.replaceRenderedChildren(svg.node());
+    }
+}
+
 export function registerDistributionChart() {
     if (window.customElements.get("fishy-distribution-chart")) {
         return;
@@ -313,4 +461,11 @@ export function registerDistributionChart() {
         "fishy-distribution-chart",
         FishyDistributionChart,
     );
+}
+
+export function registerTimelineChart() {
+    if (window.customElements.get("fishy-timeline-chart")) {
+        return;
+    }
+    window.customElements.define("fishy-timeline-chart", FishyTimelineChart);
 }

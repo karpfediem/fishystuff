@@ -11,36 +11,16 @@
         object-fit: contain;
     }
 
-    #fishing-timeline {
-        width: 100%;
-        display: flex;
-        position: relative;
-        margin: 0 auto;
-        height: 0.875rem;
-        overflow: hidden;
-        background-color: var(--color-base-300);
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 10%, transparent);
-        border-radius: 8px;
-
-        .slider {
-            border-radius: 8px;
-            height: 100%;
+    #calculator-fishing-timeline {
+        .timeline-chart {
+            display: block;
+            width: 100%;
         }
 
-        .slider-bitetime {
-            background-color: #46d2a7;
-        }
-
-        .slider-catchtime {
-            background-color: #d27746;
-        }
-
-        .slider-aftime {
-            background-color: #4e7296;
-        }
-
-        .slider-empty {
-            flex-grow: 1;
+        .timeline-chart > svg {
+            display: block;
+            width: 100%;
+            height: auto;
         }
     }
 

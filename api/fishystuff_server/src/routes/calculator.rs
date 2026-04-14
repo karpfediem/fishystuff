@@ -116,6 +116,7 @@ struct CalculatorDerivedSignals {
     target_fish_time_to_target: String,
     target_fish_status_text: String,
     stat_breakdowns: CalculatorStatBreakdownSignals,
+    fishing_timeline_chart: TimelineChartSignal,
     debug_json: String,
 }
 
@@ -124,6 +125,8 @@ struct CalculatorStatBreakdownSignals {
     total_time: String,
     bite_time: String,
     auto_fish_time: String,
+    catch_time: String,
+    time_saved: String,
     auto_fish_time_reduction: String,
     casts_average: String,
     item_drr: String,
@@ -186,6 +189,23 @@ struct ComputedStatBreakdown {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     formula_terms: Vec<ComputedStatFormulaTerm>,
     sections: Vec<ComputedStatBreakdownSection>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct TimelineChartSegment {
+    label: String,
+    value_text: String,
+    detail_text: String,
+    width_pct: f64,
+    fill_color: &'static str,
+    stroke_color: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    breakdown: Option<Value>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+struct TimelineChartSignal {
+    segments: Vec<TimelineChartSegment>,
 }
 
 impl ComputedStatBreakdown {
@@ -1957,6 +1977,19 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         loot_total_catches_raw,
         loot_fish_per_hour_raw,
     );
+    let fishing_timeline_chart = fishing_timeline_chart(
+        signals.active,
+        bite_time_raw,
+        auto_fish_time_raw,
+        catch_time_active_raw,
+        catch_time_afk_raw,
+        total_time_raw,
+        zone_bite_avg_raw,
+        stat_breakdown_from_json(&stat_breakdowns.bite_time),
+        stat_breakdown_from_json(&stat_breakdowns.auto_fish_time),
+        stat_breakdown_from_json(&stat_breakdowns.catch_time),
+        stat_breakdown_from_json(&stat_breakdowns.time_saved),
+    );
 
     let debug_json = serde_json::to_string_pretty(&json!({
         "inputs": signals,
@@ -2087,6 +2120,7 @@ fn derive_signals(signals: &CalculatorSignals, data: &CalculatorData) -> Calcula
         target_fish_time_to_target: target_fish_summary.time_to_target_text,
         target_fish_status_text: target_fish_summary.status_text,
         stat_breakdowns,
+        fishing_timeline_chart,
         debug_json,
     }
 }
@@ -2352,6 +2386,14 @@ fn computed_stat_breakdown(
 
 fn stat_breakdown_json(payload: ComputedStatBreakdown) -> String {
     serde_json::to_string(&payload).unwrap_or_default()
+}
+
+fn stat_breakdown_from_json(raw: &str) -> Option<Value> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    serde_json::from_str(trimmed).ok()
 }
 
 fn option_label(options: &[CalculatorOptionEntry], key: &str) -> String {
@@ -4630,6 +4672,129 @@ fn derive_stat_breakdowns(
         computed_stat_formula_term("Minimum auto-fishing time", "60"),
     ]);
 
+    let catch_time_raw = if signals.active {
+        catch_time_active_raw
+    } else {
+        catch_time_afk_raw
+    };
+    let catch_time_input_label = if signals.active {
+        "Active catch time"
+    } else {
+        "AFK catch time"
+    };
+    let catch_time_detail = if signals.active {
+        "Manual catch-time input used in active mode."
+    } else {
+        "Manual catch-time input used after the passive auto-fishing timer finishes."
+    };
+    let catch_time_breakdown = computed_stat_breakdown(
+        "Catch Time",
+        fmt2(catch_time_raw),
+        if signals.active {
+            "Manual catch-time input currently used in active fishing mode."
+        } else {
+            "Manual catch-time input currently used in AFK fishing mode."
+        },
+        format!("Catch time = {catch_time_input_label}."),
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![computed_stat_breakdown_row_with_formula_part(
+                    computed_stat_breakdown_row(
+                        catch_time_input_label,
+                        fmt2(catch_time_raw),
+                        catch_time_detail,
+                    ),
+                    catch_time_input_label,
+                    1,
+                )],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![computed_stat_breakdown_row(
+                    "Catch time",
+                    fmt2(catch_time_raw),
+                    "Used in the total fishing time calculation.",
+                )],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Catch time", fmt2(catch_time_raw)),
+        computed_stat_formula_term(catch_time_input_label, fmt2(catch_time_raw)),
+    ]);
+
+    let unoptimized_time_raw = zone_bite_avg_raw
+        + if signals.active {
+            catch_time_active_raw
+        } else {
+            catch_time_afk_raw + 180.0
+        };
+    let time_saved_raw = (unoptimized_time_raw - total_time_raw).max(0.0);
+    let time_saved_share_text = percent_value_text(
+        (100.0 - percentage_of_average_time(total_time_raw, unoptimized_time_raw)).max(0.0),
+    );
+    let time_saved_breakdown = computed_stat_breakdown(
+        "Time Saved",
+        time_saved_share_text.clone(),
+        if time_saved_raw > 0.0 {
+            "Share of the unoptimized baseline cycle removed by bite-time reduction and the current fishing mode timings."
+        } else {
+            "No time is currently being saved versus the unoptimized baseline cycle."
+        },
+        "Time saved = Average unoptimized time - Average total fishing time.; Saved share = Time saved / Average unoptimized time.",
+        vec![
+            computed_stat_breakdown_section(
+                "Inputs",
+                vec![
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Average unoptimized time",
+                            fmt2(unoptimized_time_raw),
+                            if signals.active {
+                                "Baseline active cycle using zone average bite time plus active catch time."
+                            } else {
+                                "Baseline AFK cycle using zone average bite time, 180-second auto-fishing, and AFK catch time."
+                            },
+                        ),
+                        "Average unoptimized time",
+                        1,
+                    ),
+                    computed_stat_breakdown_row_with_formula_part(
+                        computed_stat_breakdown_row(
+                            "Average total fishing time",
+                            fmt2(total_time_raw),
+                            "Current optimized cycle duration after level, abundance, and AFR effects.",
+                        ),
+                        "Average total fishing time",
+                        2,
+                    ),
+                ],
+            ),
+            computed_stat_breakdown_section(
+                "Composition",
+                vec![
+                    computed_stat_breakdown_row(
+                        "Time saved",
+                        fmt2(time_saved_raw),
+                        "Absolute seconds removed from the unoptimized baseline cycle.",
+                    ),
+                    computed_stat_breakdown_row(
+                        "Saved share",
+                        time_saved_share_text.clone(),
+                        "Portion of the baseline cycle represented by the saved time segment.",
+                    ),
+                ],
+            ),
+        ],
+    )
+    .with_formula_terms(vec![
+        computed_stat_formula_term("Time saved", fmt2(time_saved_raw)),
+        computed_stat_formula_term("Average unoptimized time", fmt2(unoptimized_time_raw)),
+        computed_stat_formula_term("Average total fishing time", fmt2(total_time_raw)),
+        computed_stat_formula_term("Saved share", time_saved_share_text.clone()),
+    ]);
+
     let auto_fish_time_reduction_breakdown = computed_stat_breakdown(
         "Auto-Fishing Time Reduction",
         format!("{}%", trim_float(afr_uncapped_raw * 100.0)),
@@ -5502,6 +5667,8 @@ fn derive_stat_breakdowns(
         total_time: stat_breakdown_json(total_time_breakdown),
         bite_time: stat_breakdown_json(bite_time_breakdown),
         auto_fish_time: stat_breakdown_json(auto_fish_time_breakdown),
+        catch_time: stat_breakdown_json(catch_time_breakdown),
+        time_saved: stat_breakdown_json(time_saved_breakdown),
         auto_fish_time_reduction: stat_breakdown_json(auto_fish_time_reduction_breakdown),
         casts_average: stat_breakdown_json(casts_average_breakdown),
         item_drr: stat_breakdown_json(item_drr_breakdown),
@@ -5928,19 +6095,12 @@ fn render_calculator_app(
                 </div>
             </div>
 
-            <div class="rounded-box border border-base-300 bg-base-200 p-4">
-                <div id="fishing-timeline">
-                    <div data-attr:title="$_live.bite_time_title"
-                         data-attr="{style: 'flex-basis:' + ($_live.percent_bite || '0.00') + '%;'}"
-                         class="slider slider-bitetime"></div>
-                    <div data-attr:title="$_live.auto_fish_time_title"
-                         data-attr="{style: 'flex-basis:' + ($_live.percent_af || '0.00') + '%;'}"
-                         class="slider slider-aftime"></div>
-                    <div data-attr:title="$_live.catch_time_title"
-                         data-attr="{style: 'flex-basis:' + ($_live.percent_catch || '0.00') + '%;'}"
-                         class="slider slider-catchtime"></div>
-                    <div data-attr:title="$_live.unoptimized_time_title" class="slider slider-empty"></div>
-                </div>
+            <div id="calculator-fishing-timeline" class="rounded-box border border-base-300 bg-base-200 p-4">
+                <fishy-timeline-chart
+                    id="fishing-timeline"
+                    class="timeline-chart"
+                    aria-label="Fishing cycle timeline"
+                    signal-path="_live.fishing_timeline_chart"></fishy-timeline-chart>
             </div>
 
             <div class="grid gap-4">
@@ -6587,6 +6747,98 @@ fn group_silver_distribution_segments(
             )),
         })
         .collect()
+}
+
+fn timeline_chart_segment(
+    label: &str,
+    value_seconds: f64,
+    width_pct: f64,
+    fill_color: &'static str,
+    stroke_color: &'static str,
+    breakdown: Option<Value>,
+) -> TimelineChartSegment {
+    TimelineChartSegment {
+        label: label.to_string(),
+        value_text: format!("{}s", fmt2(value_seconds)),
+        detail_text: percent_value_text(width_pct),
+        width_pct: width_pct.max(0.0),
+        fill_color,
+        stroke_color,
+        breakdown,
+    }
+}
+
+fn fishing_timeline_chart(
+    active: bool,
+    bite_time_raw: f64,
+    auto_fish_time_raw: f64,
+    catch_time_active_raw: f64,
+    catch_time_afk_raw: f64,
+    total_time_raw: f64,
+    zone_bite_avg_raw: f64,
+    bite_time_breakdown: Option<Value>,
+    auto_fish_time_breakdown: Option<Value>,
+    catch_time_breakdown: Option<Value>,
+    time_saved_breakdown: Option<Value>,
+) -> TimelineChartSignal {
+    let catch_time_raw = if active {
+        catch_time_active_raw
+    } else {
+        catch_time_afk_raw
+    };
+    let unoptimized_time_raw = zone_bite_avg_raw
+        + if active {
+            catch_time_active_raw
+        } else {
+            catch_time_afk_raw + 180.0
+        };
+    let percent_bite = percentage_of_average_time(bite_time_raw, unoptimized_time_raw);
+    let percent_af = if active {
+        0.0
+    } else {
+        percentage_of_average_time(auto_fish_time_raw, unoptimized_time_raw)
+    };
+    let percent_catch = percentage_of_average_time(catch_time_raw, unoptimized_time_raw);
+    let percent_saved =
+        (100.0 - percentage_of_average_time(total_time_raw, unoptimized_time_raw)).max(0.0);
+    let time_saved_raw = (unoptimized_time_raw - total_time_raw).max(0.0);
+
+    let mut segments = vec![timeline_chart_segment(
+        "Bite Time",
+        bite_time_raw,
+        percent_bite,
+        "#46d2a7",
+        "color-mix(in srgb, #46d2a7 72%, var(--color-base-content) 22%)",
+        bite_time_breakdown,
+    )];
+    if !active {
+        segments.push(timeline_chart_segment(
+            "Auto-Fishing Time",
+            auto_fish_time_raw,
+            percent_af,
+            "#4e7296",
+            "color-mix(in srgb, #4e7296 76%, var(--color-base-content) 24%)",
+            auto_fish_time_breakdown,
+        ));
+    }
+    segments.push(timeline_chart_segment(
+        "Catch Time",
+        catch_time_raw,
+        percent_catch,
+        "#d27746",
+        "color-mix(in srgb, #d27746 74%, var(--color-base-content) 24%)",
+        catch_time_breakdown,
+    ));
+    segments.push(timeline_chart_segment(
+        "Time Saved",
+        time_saved_raw,
+        percent_saved,
+        "color-mix(in oklab, var(--color-base-100) 55%, var(--color-base-content) 10%)",
+        "color-mix(in oklab, var(--color-base-content) 16%, transparent)",
+        time_saved_breakdown,
+    ));
+
+    TimelineChartSignal { segments }
 }
 
 fn target_fish_pmf_chart(summary: &TargetFishSummary) -> PmfChartSignal {
@@ -8673,6 +8925,33 @@ mod tests {
             raw_prize["sections"][1]["rows"][0]["label"],
             "Resolved curve rate"
         );
+
+        let catch_time =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.catch_time).unwrap();
+        assert_eq!(catch_time["title"], "Catch Time");
+        assert_eq!(catch_time["sections"][1]["rows"][0]["label"], "Catch time");
+
+        let time_saved =
+            serde_json::from_str::<Value>(&derived.stat_breakdowns.time_saved).unwrap();
+        assert_eq!(time_saved["title"], "Time Saved");
+        assert_eq!(time_saved["sections"][1]["rows"][1]["label"], "Saved share");
+
+        assert_eq!(derived.fishing_timeline_chart.segments.len(), 4);
+        assert_eq!(
+            derived.fishing_timeline_chart.segments[0].label,
+            "Bite Time"
+        );
+        assert_eq!(
+            derived.fishing_timeline_chart.segments[1].label,
+            "Auto-Fishing Time"
+        );
+        assert_eq!(
+            derived.fishing_timeline_chart.segments[3].label,
+            "Time Saved"
+        );
+        assert!(derived.fishing_timeline_chart.segments[0]
+            .breakdown
+            .is_some());
 
         let target_expected =
             serde_json::from_str::<Value>(&derived.stat_breakdowns.target_expected_count).unwrap();

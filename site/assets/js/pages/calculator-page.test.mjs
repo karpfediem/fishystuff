@@ -364,6 +364,26 @@ test("calculator liveCalc keeps stat breakdown payloads aligned with local deriv
           value_text: "0.00",
           sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
         }),
+        bite_time: JSON.stringify({
+          title: "Average Bite Time",
+          value_text: "0.00",
+          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+        }),
+        auto_fish_time: JSON.stringify({
+          title: "Auto-Fishing Time",
+          value_text: "0.00",
+          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+        }),
+        catch_time: JSON.stringify({
+          title: "Catch Time",
+          value_text: "0.00",
+          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+        }),
+        time_saved: JSON.stringify({
+          title: "Time Saved",
+          value_text: "0.00%",
+          sections: [{ label: "Inputs", rows: [] }, { label: "Composition", rows: [] }],
+        }),
         casts_average: JSON.stringify({
           title: "Average Casts (8 hours)",
           value_text: "0.00",
@@ -393,6 +413,8 @@ test("calculator liveCalc keeps stat breakdown payloads aligned with local deriv
 
   const totalTime = JSON.parse(live.stat_breakdowns.total_time);
   const castsAverage = JSON.parse(live.stat_breakdowns.casts_average);
+  const catchTime = JSON.parse(live.stat_breakdowns.catch_time);
+  const timeSaved = JSON.parse(live.stat_breakdowns.time_saved);
   const effectiveBiteAverage = JSON.parse(live.stat_breakdowns.effective_bite_avg);
   const totalCatches = JSON.parse(live.stat_breakdowns.loot_total_catches);
   const profitPerHour = JSON.parse(live.stat_breakdowns.loot_profit_per_hour);
@@ -405,6 +427,10 @@ test("calculator liveCalc keeps stat breakdown payloads aligned with local deriv
   assert.equal(castsAverage.sections[0].rows[0].value_text, "2 hours");
   assert.equal(castsAverage.formula_terms[1].label, "Session seconds");
   assert.equal(castsAverage.formula_terms[1].value_text, "7200");
+  assert.equal(catchTime.sections[0].rows[0].label, "AFK catch time");
+  assert.equal(catchTime.sections[1].rows[0].value_text, "3.00");
+  assert.equal(timeSaved.sections[1].rows[1].label, "Saved share");
+  assert.equal(timeSaved.value_text, "45.64%");
   assert.equal(effectiveBiteAverage.formula_terms[1].label, "Zone Bite Average");
   assert.equal(effectiveBiteAverage.formula_terms[1].value_text, "15.00");
   assert.equal(totalCatches.title, "Expected Catches (2 hours)");
@@ -414,4 +440,10 @@ test("calculator liveCalc keeps stat breakdown payloads aligned with local deriv
   assert.equal(totalCatches.sections[1].rows[0].label, "Expected catches");
   assert.equal(profitPerHour.sections[0].rows[0].value_text, live.loot_total_profit);
   assert.equal(profitPerHour.value_text, live.loot_profit_per_hour);
+  assert.equal(live.fishing_timeline_chart.segments.length, 4);
+  assert.equal(live.fishing_timeline_chart.segments[0].label, "Bite Time");
+  assert.equal(live.fishing_timeline_chart.segments[2].label, "Catch Time");
+  assert.equal(live.fishing_timeline_chart.segments[3].label, "Time Saved");
+  assert.equal(live.fishing_timeline_chart.segments[0].breakdown.title, "Average Bite Time");
+  assert.equal(live.fishing_timeline_chart.segments[3].breakdown.title, "Time Saved");
 });

@@ -1,5 +1,5 @@
 import { registerCheckboxGroup } from "./checkbox-group.js";
-import { registerDistributionChart } from "./distribution-chart.js";
+import { registerDistributionChart, registerTimelineChart } from "./distribution-chart.js";
 import { registerLootSankey } from "./loot-sankey.js";
 import { registerPmfChart } from "./pmf-chart.js";
 import { registerSearchableDropdown } from "./searchable-dropdown.js";
@@ -10,6 +10,7 @@ registerCheckboxGroup();
 registerDistributionChart();
 registerLootSankey();
 registerPmfChart();
+registerTimelineChart();
 registerSearchableDropdown();
 registerSearchableMultiselect();
 if (typeof document !== "undefined") {
