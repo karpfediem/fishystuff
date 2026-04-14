@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
     STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER,
+    statBreakdownFormulaTokenRows,
     normalizeStatBreakdownPayload,
     statBreakdownFormulaTokens,
     statBreakdownPayloadForAnchor,
@@ -257,6 +258,51 @@ test("statBreakdownFormulaTokens keeps the symbolic formula order and attaches r
             { text: "Average bite time", valueText: "12.00" },
             { text: "Auto-Fishing Time", valueText: "90.00" },
             { text: "AFK catch time", valueText: "3.00" },
+        ],
+    );
+});
+
+test("statBreakdownFormulaTokenRows splits semicolon-separated formulas into separate rows", () => {
+    const payload = normalizeStatBreakdownPayload({
+        value_text: "50.00%",
+        formula_text: "AFR (uncapped) = highest pet AFR + additive item AFR; Applied AFR = min(AFR, 66.67%).",
+        sections: [
+            {
+                label: "Inputs",
+                rows: [
+                    {
+                        label: "Pet AFR",
+                        value_text: "35.00%",
+                        formula_part: "highest pet AFR",
+                        formula_part_order: 1,
+                    },
+                    {
+                        label: "Food buff",
+                        value_text: "15.00%",
+                        formula_part: "additive item AFR",
+                        formula_part_order: 2,
+                    },
+                ],
+            },
+            {
+                label: "Composition",
+                rows: [
+                    { label: "Uncapped AFR", value_text: "50.00%" },
+                    { label: "Timing cap", value_text: "66.67%" },
+                    { label: "Applied AFR", value_text: "50.00%" },
+                ],
+            },
+        ],
+    });
+
+    const tokenRows = statBreakdownFormulaTokenRows(payload.formulaText, payload);
+
+    assert.equal(tokenRows.length, 2);
+    assert.deepEqual(
+        tokenRows.map((row) => row.filter((token) => token.kind === "term").map((token) => token.text)),
+        [
+            ["AFR (uncapped)", "highest pet AFR", "additive item AFR"],
+            ["Applied AFR", "AFR"],
         ],
     );
 });

@@ -75,7 +75,8 @@ function statBreakdownSectionIsResult(section, index = 0) {
 }
 
 function statBreakdownFormulaLeftHandSide(formulaText) {
-    const raw = trimString(formulaText).replace(/\.$/, "");
+    const segments = statBreakdownFormulaSegments(formulaText);
+    const raw = segments.at(-1) || "";
     if (!raw) {
         return "";
     }
@@ -223,7 +224,9 @@ function statBreakdownLabelAliases(label) {
 
     for (const prefix of ["Applied ", "Total ", "Uncapped "]) {
         if (normalized.startsWith(prefix)) {
-            aliases.add(trimString(normalized.slice(prefix.length)));
+            const base = trimString(normalized.slice(prefix.length));
+            aliases.add(base);
+            aliases.add(trimString(`${base} (${trimString(prefix).toLowerCase()})`));
         }
     }
 
@@ -298,14 +301,14 @@ function statBreakdownFormulaTermEntries(payload = {}) {
     return entries;
 }
 
-export function statBreakdownFormulaTokens(formulaText, payload = {}) {
-    const raw = trimString(formulaText).replace(/\.$/, "");
-    if (!raw) {
-        return [];
-    }
-    const entries = statBreakdownFormulaTermEntries(payload)
-        .map((entry) => ({ ...entry, matchText: entry.label }))
-        .sort((left, right) => right.matchText.length - left.matchText.length);
+function statBreakdownFormulaSegments(formulaText) {
+    return trimString(formulaText)
+        .split(/\s*;\s*/u)
+        .map((segment) => trimString(segment).replace(/\.$/, ""))
+        .filter(Boolean);
+}
+
+function statBreakdownTokenizeFormulaSegment(raw, entries = []) {
     const tokens = [];
     let cursor = 0;
     let operatorBuffer = "";
@@ -344,6 +347,23 @@ export function statBreakdownFormulaTokens(formulaText, payload = {}) {
     }
     flushOperator();
     return tokens.filter((token) => trimString(token.text));
+}
+
+export function statBreakdownFormulaTokenRows(formulaText, payload = {}) {
+    const segments = statBreakdownFormulaSegments(formulaText);
+    if (!segments.length) {
+        return [];
+    }
+    const entries = statBreakdownFormulaTermEntries(payload)
+        .map((entry) => ({ ...entry, matchText: entry.label }))
+        .sort((left, right) => right.matchText.length - left.matchText.length);
+    return segments
+        .map((segment) => statBreakdownTokenizeFormulaSegment(segment, entries))
+        .filter((tokens) => tokens.length);
+}
+
+export function statBreakdownFormulaTokens(formulaText, payload = {}) {
+    return statBreakdownFormulaTokenRows(formulaText, payload)[0] || [];
 }
 
 let tooltipElement = null;
@@ -569,10 +589,17 @@ function buildFormulaRow(documentRef, labelText, tokens, variant = "symbolic") {
     return row;
 }
 
-function buildSectionFormula(documentRef, labelText, tokens, variant = "resolved") {
+function buildSectionFormula(documentRef, labelText, tokenRows = [], variant = "resolved") {
     const container = documentRef.createElement("div");
     container.className = "fishy-stat-breakdown-tooltip__section-formula";
-    container.appendChild(buildFormulaRow(documentRef, labelText, tokens, variant));
+    container.append(
+        ...tokenRows.map((tokens, rowIndex) => buildFormulaRow(
+            documentRef,
+            rowIndex === 0 ? labelText : "",
+            tokens,
+            variant,
+        )),
+    );
     return container;
 }
 
@@ -630,7 +657,7 @@ function buildRowMain(documentRef, row, { showDetail = true } = {}) {
     return main;
 }
 
-function buildSection(documentRef, section, index = 0, { payload = null, resolvedFormulaTokens = [] } = {}) {
+function buildSection(documentRef, section, index = 0, { payload = null, resolvedFormulaRows = [] } = {}) {
     const displayLabel = statBreakdownSectionDisplayLabel(section, index, payload);
     const isSecondarySection = index > 0;
     const isResultSection = statBreakdownSectionIsResult(section, index);
@@ -654,9 +681,9 @@ function buildSection(documentRef, section, index = 0, { payload = null, resolve
         sectionElement.appendChild(title);
     }
 
-    if (isResultSection && resolvedFormulaTokens.length) {
+    if (isResultSection && resolvedFormulaRows.length) {
         sectionElement.appendChild(
-            buildSectionFormula(documentRef, "", resolvedFormulaTokens, "resolved"),
+            buildSectionFormula(documentRef, "", resolvedFormulaRows, "resolved"),
         );
     }
 
@@ -762,13 +789,21 @@ function showTooltip(anchor, event) {
         refs.summary.textContent = payload.summaryText;
         refs.summary.hidden = !payload.summaryText || payload.sections.length > 0;
         const documentRef = globalThis.document;
-        const formulaTokens = statBreakdownFormulaTokens(payload.formulaText, payload);
+        const formulaTokenRows = statBreakdownFormulaTokenRows(payload.formulaText, payload);
         const resultSectionIndex = statBreakdownLastResultSectionIndex(payload);
-        const topFormulaRows = formulaTokens.length
-            ? [buildFormulaRow(documentRef, "", formulaTokens, "symbolic")]
-            : [];
-        if (formulaTokens.length && resultSectionIndex < 0) {
-            topFormulaRows.push(buildFormulaRow(documentRef, "", formulaTokens, "resolved"));
+        const topFormulaRows = formulaTokenRows.map((tokens) => buildFormulaRow(
+            documentRef,
+            "",
+            tokens,
+            "symbolic",
+        ));
+        if (formulaTokenRows.length && resultSectionIndex < 0) {
+            topFormulaRows.push(...formulaTokenRows.map((tokens) => buildFormulaRow(
+                documentRef,
+                "",
+                tokens,
+                "resolved",
+            )));
         }
         refs.formulaRows.replaceChildren(...topFormulaRows);
         refs.formula.hidden = topFormulaRows.length === 0;
@@ -776,7 +811,7 @@ function showTooltip(anchor, event) {
         refs.sections.replaceChildren(
             ...payload.sections.map((section, index) => buildSection(documentRef, section, index, {
                 payload,
-                resolvedFormulaTokens: index === resultSectionIndex ? formulaTokens : [],
+                resolvedFormulaRows: index === resultSectionIndex ? formulaTokenRows : [],
             })),
         );
         refs.sections.hidden = payload.sections.length === 0;
