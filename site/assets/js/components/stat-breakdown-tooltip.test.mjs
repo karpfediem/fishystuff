@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+    STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER,
     normalizeStatBreakdownPayload,
     statBreakdownPayloadForAnchor,
     statBreakdownTooltipRenderKey,
+    statBreakdownTooltipShouldReactToMutations,
     statBreakdownTooltipShouldRefresh,
 } from "./stat-breakdown-tooltip.js";
 
@@ -115,4 +117,21 @@ test("statBreakdownTooltipShouldRefresh only refreshes content when tooltip payl
         anchor,
     );
     assert.equal(payloadChange.shouldRefresh, true);
+});
+
+test("statBreakdownTooltipShouldReactToMutations only reacts to observed tooltip attributes", () => {
+    assert.deepEqual(STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER, [
+        "data-fishy-stat-breakdown",
+        "data-fishy-stat-color",
+    ]);
+    assert.equal(statBreakdownTooltipShouldReactToMutations([
+        { type: "attributes", attributeName: "class" },
+        { type: "childList" },
+    ]), false);
+    assert.equal(statBreakdownTooltipShouldReactToMutations([
+        { type: "attributes", attributeName: "data-fishy-stat-breakdown" },
+    ]), true);
+    assert.equal(statBreakdownTooltipShouldReactToMutations([
+        { type: "attributes", attributeName: "data-fishy-stat-color" },
+    ]), true);
 });

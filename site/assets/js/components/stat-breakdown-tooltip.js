@@ -62,6 +62,14 @@ let tooltipRefs = null;
 const tooltipRoots = new WeakSet();
 const payloadCache = new WeakMap();
 let activeTooltipRenderState = null;
+let activeTooltipAnchor = null;
+let activeTooltipAnchorObserver = null;
+let activeTooltipPointer = null;
+
+export const STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER = [
+    "data-fishy-stat-breakdown",
+    "data-fishy-stat-color",
+];
 
 function ensureTooltipElement() {
     if (tooltipElement?.isConnected && tooltipRefs) {
@@ -155,6 +163,57 @@ export function statBreakdownTooltipShouldRefresh(renderState, tooltip, anchor) 
         shouldRefresh: Boolean(renderKey)
             && (renderState?.tooltip !== tooltip || renderState?.renderKey !== renderKey),
     };
+}
+
+export function statBreakdownTooltipShouldReactToMutations(mutations = []) {
+    return mutations.some((mutation) => (
+        mutation?.type === "attributes"
+            && STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER.includes(mutation.attributeName)
+    ));
+}
+
+function tooltipPointerSnapshot(event) {
+    const clientX = Number(event?.clientX);
+    const clientY = Number(event?.clientY);
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+        return null;
+    }
+    return { clientX, clientY };
+}
+
+function disconnectActiveTooltipAnchorObserver() {
+    activeTooltipAnchorObserver?.disconnect?.();
+    activeTooltipAnchorObserver = null;
+    activeTooltipAnchor = null;
+}
+
+function observeActiveTooltipAnchor(anchor) {
+    if (activeTooltipAnchor === anchor && activeTooltipAnchorObserver) {
+        return;
+    }
+    disconnectActiveTooltipAnchorObserver();
+    const Observer = globalThis.MutationObserver;
+    if (!anchor || typeof Observer !== "function") {
+        return;
+    }
+    activeTooltipAnchor = anchor;
+    activeTooltipAnchorObserver = new Observer((mutations) => {
+        if (anchor !== activeTooltipAnchor || !tooltipElement || tooltipElement.hidden) {
+            return;
+        }
+        if (!statBreakdownTooltipShouldReactToMutations(mutations)) {
+            return;
+        }
+        if (!statBreakdownPayloadForAnchor(anchor)) {
+            hideTooltip();
+            return;
+        }
+        showTooltip(anchor, activeTooltipPointer);
+    });
+    activeTooltipAnchorObserver.observe(anchor, {
+        attributes: true,
+        attributeFilter: STAT_BREAKDOWN_TOOLTIP_ATTRIBUTE_FILTER,
+    });
 }
 
 function itemToneClass(gradeTone) {
@@ -294,6 +353,8 @@ function showTooltip(anchor, event) {
         return;
     }
     const { tooltip, refs } = tooltipData;
+    activeTooltipPointer = tooltipPointerSnapshot(event) ?? activeTooltipPointer;
+    observeActiveTooltipAnchor(anchor);
     const refreshState = statBreakdownTooltipShouldRefresh(activeTooltipRenderState, tooltip, anchor);
     if (refreshState.shouldRefresh) {
         refs.eyebrowLabel.textContent = payload.eyebrow;
@@ -329,6 +390,9 @@ function hideTooltip() {
         return;
     }
     tooltipElement.hidden = true;
+    activeTooltipRenderState = null;
+    activeTooltipPointer = null;
+    disconnectActiveTooltipAnchorObserver();
 }
 
 export function attachStatBreakdownTooltip(root) {
