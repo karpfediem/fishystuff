@@ -4,6 +4,8 @@ import assert from "node:assert/strict";
 import {
     normalizeStatBreakdownPayload,
     statBreakdownPayloadForAnchor,
+    statBreakdownTooltipRenderKey,
+    statBreakdownTooltipShouldRefresh,
 } from "./stat-breakdown-tooltip.js";
 
 test("normalizeStatBreakdownPayload keeps titled sections and rows", () => {
@@ -68,4 +70,49 @@ test("statBreakdownPayloadForAnchor reparses when the bound payload changes", ()
     assert.equal(second?.title, "Average Total Fishing Time");
     assert.equal(second?.valueText, "16.10");
     assert.equal(second?.sections[0]?.rows[0]?.valueText, "10.00");
+});
+
+test("statBreakdownTooltipShouldRefresh only refreshes content when tooltip payload or color changes", () => {
+    const tooltip = { id: "tooltip-1" };
+    const anchor = {
+        dataset: {
+            fishyStatBreakdown: JSON.stringify({
+                title: "Average Total Fishing Time",
+                value_text: "18.45",
+            }),
+            fishyStatColor: "var(--color-info)",
+        },
+    };
+
+    const first = statBreakdownTooltipShouldRefresh(null, tooltip, anchor);
+    assert.equal(first.shouldRefresh, true);
+    assert.equal(first.renderKey, statBreakdownTooltipRenderKey(anchor));
+
+    const second = statBreakdownTooltipShouldRefresh(
+        { tooltip, renderKey: first.renderKey },
+        tooltip,
+        anchor,
+    );
+    assert.equal(second.shouldRefresh, false);
+    assert.equal(second.renderKey, first.renderKey);
+
+    anchor.dataset.fishyStatColor = "var(--color-warning)";
+    const colorChange = statBreakdownTooltipShouldRefresh(
+        { tooltip, renderKey: first.renderKey },
+        tooltip,
+        anchor,
+    );
+    assert.equal(colorChange.shouldRefresh, true);
+
+    anchor.dataset.fishyStatColor = "var(--color-info)";
+    anchor.dataset.fishyStatBreakdown = JSON.stringify({
+        title: "Average Total Fishing Time",
+        value_text: "16.10",
+    });
+    const payloadChange = statBreakdownTooltipShouldRefresh(
+        { tooltip, renderKey: first.renderKey },
+        tooltip,
+        anchor,
+    );
+    assert.equal(payloadChange.shouldRefresh, true);
 });

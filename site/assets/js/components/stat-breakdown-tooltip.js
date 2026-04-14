@@ -61,6 +61,7 @@ let tooltipElement = null;
 let tooltipRefs = null;
 const tooltipRoots = new WeakSet();
 const payloadCache = new WeakMap();
+let activeTooltipRenderState = null;
 
 function ensureTooltipElement() {
     if (tooltipElement?.isConnected && tooltipRefs) {
@@ -136,6 +137,24 @@ export function statBreakdownPayloadForAnchor(anchor) {
     }
     payloadCache.set(anchor, { raw, payload });
     return payload;
+}
+
+export function statBreakdownTooltipRenderKey(anchor) {
+    const raw = trimString(anchor?.dataset?.fishyStatBreakdown);
+    if (!raw) {
+        return "";
+    }
+    const color = trimString(anchor?.dataset?.fishyStatColor) || "var(--color-info)";
+    return `${raw}\u0000${color}`;
+}
+
+export function statBreakdownTooltipShouldRefresh(renderState, tooltip, anchor) {
+    const renderKey = statBreakdownTooltipRenderKey(anchor);
+    return {
+        renderKey,
+        shouldRefresh: Boolean(renderKey)
+            && (renderState?.tooltip !== tooltip || renderState?.renderKey !== renderKey),
+    };
 }
 
 function itemToneClass(gradeTone) {
@@ -275,25 +294,32 @@ function showTooltip(anchor, event) {
         return;
     }
     const { tooltip, refs } = tooltipData;
-    refs.eyebrowLabel.textContent = payload.eyebrow;
-    refs.title.textContent = payload.title;
-    refs.value.textContent = payload.valueText;
-    refs.value.hidden = !payload.valueText;
-    refs.summary.textContent = payload.summaryText;
-    refs.summary.hidden = !payload.summaryText;
-    refs.formula.textContent = payload.formulaText;
-    refs.formula.hidden = !payload.formulaText;
+    const refreshState = statBreakdownTooltipShouldRefresh(activeTooltipRenderState, tooltip, anchor);
+    if (refreshState.shouldRefresh) {
+        refs.eyebrowLabel.textContent = payload.eyebrow;
+        refs.title.textContent = payload.title;
+        refs.value.textContent = payload.valueText;
+        refs.value.hidden = !payload.valueText;
+        refs.summary.textContent = payload.summaryText;
+        refs.summary.hidden = !payload.summaryText;
+        refs.formula.textContent = payload.formulaText;
+        refs.formula.hidden = !payload.formulaText;
 
-    const documentRef = globalThis.document;
-    refs.sections.replaceChildren(
-        ...payload.sections.map((section) => buildSection(documentRef, section)),
-    );
-    refs.sections.hidden = payload.sections.length === 0;
+        const documentRef = globalThis.document;
+        refs.sections.replaceChildren(
+            ...payload.sections.map((section) => buildSection(documentRef, section)),
+        );
+        refs.sections.hidden = payload.sections.length === 0;
 
-    tooltip.style.setProperty(
-        "--fishy-stat-breakdown-color",
-        trimString(anchor.dataset.fishyStatColor) || "var(--color-info)",
-    );
+        tooltip.style.setProperty(
+            "--fishy-stat-breakdown-color",
+            trimString(anchor.dataset.fishyStatColor) || "var(--color-info)",
+        );
+        activeTooltipRenderState = {
+            tooltip,
+            renderKey: refreshState.renderKey,
+        };
+    }
     tooltip.hidden = false;
     updateTooltipPosition(tooltip, anchor, event);
 }
