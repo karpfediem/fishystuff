@@ -245,7 +245,7 @@ test("appendSearchExpressionTerm preserves existing groups and avoids duplicate 
   );
 });
 
-test("removeSearchExpressionNode removes leaf paths without flattening sibling groups", () => {
+test("removeSearchExpressionNode removes leaf paths and dissolves one-child groups", () => {
   assert.deepEqual(
     removeSearchExpressionNode(
       {
@@ -269,11 +269,7 @@ test("removeSearchExpressionNode removes leaf paths without flattening sibling g
       type: "group",
       operator: "or",
       children: [
-        {
-          type: "group",
-          operator: "and",
-          children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
-        },
+        { type: "term", term: { kind: "fish-filter", term: "favourite" } },
         { type: "term", term: { kind: "zone", zoneRgb: 123 } },
       ],
     },
@@ -288,9 +284,12 @@ test("setSearchExpressionGroupOperator only changes the targeted group", () => {
       {
         type: "group",
         operator: "and",
-        children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+        children: [
+          { type: "term", term: { kind: "fish", fishId: 912 } },
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+        ],
       },
-      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
     ],
   };
 
@@ -301,9 +300,12 @@ test("setSearchExpressionGroupOperator only changes the targeted group", () => {
       {
         type: "group",
         operator: "or",
-        children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+        children: [
+          { type: "term", term: { kind: "fish", fishId: 912 } },
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+        ],
       },
-      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
     ],
   });
 });
@@ -606,16 +608,8 @@ test("groupSearchExpressionNodes wraps a subgroup with a target subgroup handle"
           type: "group",
           operator: "and",
           children: [
-            {
-              type: "group",
-              operator: "or",
-              children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
-            },
-            {
-              type: "group",
-              operator: "and",
-              children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
-            },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
           ],
         },
       ],

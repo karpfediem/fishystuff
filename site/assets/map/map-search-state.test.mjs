@@ -447,11 +447,7 @@ test("buildSearchSelectionRemovalSignalPatch removes by expression path without 
             type: "group",
             operator: "or",
             children: [
-              {
-                type: "group",
-                operator: "and",
-                children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
-              },
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
               { type: "term", term: { kind: "zone", zoneRgb: 123 } },
             ],
           },
@@ -487,9 +483,12 @@ test("buildSearchExpressionOperatorSignalPatch toggles a targeted group operator
             {
               type: "group",
               operator: "and",
-              children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+              children: [
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+              ],
             },
-            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
           ],
         },
       },
@@ -511,14 +510,18 @@ test("buildSearchExpressionOperatorSignalPatch toggles a targeted group operator
               {
                 type: "group",
                 operator: "or",
-                children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+                children: [
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                ],
               },
-              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
             ],
           },
           selectedTerms: [
             { kind: "fish", fishId: 912 },
             { kind: "zone", zoneRgb: 123 },
+            { kind: "fish-filter", term: "favourite" },
           ],
         },
       },
@@ -527,7 +530,7 @@ test("buildSearchExpressionOperatorSignalPatch toggles a targeted group operator
           fishIds: [912],
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
-          fishFilterTerms: [],
+          fishFilterTerms: ["favourite"],
         },
       },
     },
@@ -914,16 +917,8 @@ test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a targ
                 type: "group",
                 operator: "and",
                 children: [
-                  {
-                    type: "group",
-                    operator: "or",
-                    children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
-                  },
-                  {
-                    type: "group",
-                    operator: "and",
-                    children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
-                  },
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
                 ],
               },
             ],

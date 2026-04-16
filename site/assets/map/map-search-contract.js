@@ -279,6 +279,9 @@ function compactSearchExpressionNode(node, { isRoot = false } = {}) {
   if (!isRoot && children.length === 0) {
     return null;
   }
+  if (!isRoot && children.length === 1) {
+    return cloneSearchExpressionNode(children[0]);
+  }
   return {
     type: "group",
     operator: normalizeSearchExpressionOperator(clonedNode.operator),
@@ -588,6 +591,19 @@ export function removeSearchExpressionNode(expression, path) {
   if (!normalizedPath || normalizedPath.indices.length === 0) {
     return normalizedExpression;
   }
+  const nextExpression = removeSearchExpressionNodeFromTree(
+    normalizedExpression,
+    normalizedPath.path,
+  );
+  return compactSearchExpressionNode(nextExpression, { isRoot: true }) || buildSearchExpressionFromSelectedTerms([]);
+}
+
+function removeSearchExpressionNodeFromTree(expression, path) {
+  const normalizedExpression = resolveSearchExpression(expression);
+  const normalizedPath = normalizeSearchExpressionPath(path);
+  if (!normalizedPath || normalizedPath.indices.length === 0) {
+    return normalizedExpression;
+  }
   const nextExpression = visitSearchExpression(
     normalizedExpression,
     normalizedPath.indices.slice(0, -1),
@@ -605,7 +621,7 @@ export function removeSearchExpressionNode(expression, path) {
       };
     },
   );
-  return compactSearchExpressionNode(nextExpression, { isRoot: true }) || buildSearchExpressionFromSelectedTerms([]);
+  return nextExpression;
 }
 
 export function moveSearchExpressionTermToGroup(expression, sourcePath, groupPath) {
@@ -658,7 +674,10 @@ export function moveSearchExpressionNodeToIndex(expression, sourcePath, groupPat
   ) {
     nextChildIndex -= 1;
   }
-  const withoutSource = removeSearchExpressionNode(normalizedExpression, normalizedSourcePath.path);
+  const withoutSource = removeSearchExpressionNodeFromTree(
+    normalizedExpression,
+    normalizedSourcePath.path,
+  );
   const adjustedGroupIndices = adjustPathIndicesAfterRemoval(
     normalizedGroupPath.indices,
     normalizedSourcePath.indices,
