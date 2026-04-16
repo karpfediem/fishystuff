@@ -19,6 +19,7 @@ use crate::bridge::contract::{
     FishyMapZoneStatsSnapshot, FishyMapZoneWindowSnapshot,
 };
 use crate::bridge::theme::parse_css_color;
+use crate::bridge::BrowserInputStateSet;
 use crate::map::camera::map2d::Map2dViewState;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::camera::terrain3d::Terrain3dViewState;
@@ -180,11 +181,12 @@ pub struct BrowserBridgePlugin;
 impl Plugin for BrowserBridgePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BrowserBridgeState>()
+            .configure_sets(PreUpdate, BrowserInputStateSet)
             .add_systems(
                 PreUpdate,
                 (
                     input::ingest_pending_browser_patches,
-                    input::apply_browser_input_state,
+                    input::apply_browser_input_state.in_set(BrowserInputStateSet),
                     input::apply_browser_commands,
                 )
                     .chain(),
@@ -245,7 +247,9 @@ mod tests {
     use crate::map::camera::map2d::Map2dViewState;
     use crate::map::camera::mode::ViewModeState;
     use crate::map::camera::terrain3d::Terrain3dViewState;
-    use crate::map::layers::{build_local_layer_specs, AvailableLayerCatalog};
+    use crate::map::layers::{
+        build_local_layer_specs, AvailableLayerCatalog, FISH_EVIDENCE_LAYER_KEY,
+    };
     use crate::map::{exact_lookup::ExactLookupCache, field_metadata::FieldMetadataCache};
     use crate::plugins::api::{
         ApiBootstrapState, FishCatalog, FishFilterState, HoverState, MapDisplayState,
@@ -253,7 +257,6 @@ mod tests {
     };
     use crate::plugins::bookmarks::BookmarkState;
     use crate::plugins::points::PointsState;
-    use bevy::prelude::*;
     use fishystuff_api::models::meta::MetaResponse;
 
     fn clear_pending_patches() {
@@ -372,6 +375,87 @@ mod tests {
 
         let display = app.world().resource::<MapDisplayState>();
         assert!(!display.show_points);
+    }
+
+    #[test]
+    fn browser_patch_propagates_zone_filter_into_bevy_snapshot_state() {
+        clear_pending_patches();
+        CURRENT_SNAPSHOT.with(|snapshot| {
+            *snapshot.borrow_mut() = snapshot::initial_snapshot();
+        });
+
+        let mut app = App::new();
+        app.insert_resource(BrowserBridgeState::default());
+        app.insert_resource(ApiBootstrapState::default());
+        app.insert_resource(PatchFilterState::default());
+        app.insert_resource(FishFilterState::default());
+        app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(ZoneMembershipLayerFilterState::default());
+        app.insert_resource(MapDisplayState::default());
+        app.insert_resource(FishCatalog::default());
+        app.insert_resource(PointsState::default());
+        app.insert_resource(BookmarkState::default());
+        app.insert_resource(SelectionState::default());
+        app.insert_resource(HoverState::default());
+        app.insert_resource(LayerDebugSettings::default());
+        app.insert_resource(ExactLookupCache::default());
+        app.insert_resource(FieldMetadataCache::default());
+        app.insert_resource(ViewModeState::default());
+        app.insert_resource(Map2dViewState::default());
+        app.insert_resource(Terrain3dViewState::default());
+        app.insert_resource(ClearColor(Color::BLACK));
+        seed_layer_resources(&mut app.world_mut());
+        app.add_systems(
+            Update,
+            (
+                input::ingest_pending_browser_patches,
+                input::apply_browser_input_state,
+            )
+                .chain(),
+        );
+        app.add_systems(PostUpdate, snapshot::sync_current_snapshot);
+
+        fishymap_apply_state_patch_json(
+            r#"{
+                "version": 1,
+                "filters": {
+                    "zoneRgbs": [15747658],
+                    "semanticFieldIdsByLayer": {
+                        "zone_mask": [15747658]
+                    }
+                }
+            }"#,
+        )
+        .expect("queue patch");
+
+        app.update();
+
+        let bridge = app.world().resource::<BrowserBridgeState>();
+        assert_eq!(bridge.input.filters.zone_rgbs, vec![15747658]);
+        assert_eq!(
+            bridge
+                .input
+                .filters
+                .semantic_field_ids_by_layer
+                .get("zone_mask")
+                .cloned(),
+            Some(vec![15747658])
+        );
+
+        let semantic = app.world().resource::<SemanticFieldFilterState>();
+        assert_eq!(semantic.selected_zone_rgbs(), &[15747658]);
+
+        CURRENT_SNAPSHOT.with(|snapshot| {
+            let snapshot = snapshot.borrow();
+            assert_eq!(snapshot.filters.zone_rgbs, vec![15747658]);
+            assert_eq!(
+                snapshot
+                    .filters
+                    .semantic_field_ids_by_layer
+                    .get("zone_mask"),
+                Some(&vec![15747658])
+            );
+        });
     }
 
     #[test]

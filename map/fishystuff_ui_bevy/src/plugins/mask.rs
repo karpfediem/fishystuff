@@ -19,6 +19,7 @@ use crate::plugins::api::{
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::input::PanState;
+use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::ui::UiPointerCapture;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
@@ -86,6 +87,7 @@ fn update_hover(mut context: HoverUpdateContext<'_, '_>) {
             field_metadata: &context.field_metadata,
             tile_cache: &context.tile_cache,
             vector_runtime: &context.vector_runtime,
+            evidence_zone_filter: &context.evidence_zone_filter,
             map_to_world: MapToWorld::default(),
         },
     ) else {
@@ -141,6 +143,7 @@ fn handle_click(mut context: MaskClickContext<'_, '_>) {
             field_metadata: &context.field_metadata,
             tile_cache: &context.tile_cache,
             vector_runtime: &context.vector_runtime,
+            evidence_zone_filter: &context.evidence_zone_filter,
             map_to_world: MapToWorld::default(),
         },
         crate::bridge::contract::FishyMapSelectionPointKind::Clicked,
@@ -247,6 +250,7 @@ struct HoverUpdateContext<'w, 's> {
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
+    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
     view_mode: Res<'w, ViewModeState>,
 }
 
@@ -264,6 +268,7 @@ struct MaskClickContext<'w, 's> {
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
     vector_runtime: Res<'w, VectorLayerRuntime>,
+    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
     pending: ResMut<'w, PendingRequests>,
     selection: ResMut<'w, SelectionState>,
     pan: Res<'w, PanState>,

@@ -185,6 +185,28 @@ test("shouldRefreshBridgeFromRuntimeEvent reruns bridge projection when runtime 
   );
 });
 
+test("shouldRefreshBridgeFromRuntimeEvent reruns bridge projection when runtime selection changes", () => {
+  assert.equal(
+    shouldRefreshBridgeFromRuntimeEvent(
+      {
+        _map_bridged: {
+          filters: {
+            fishFilterTerms: [],
+          },
+        },
+      },
+      {
+        state: {
+          selection: {
+            layerSamples: [{ layerId: "zone_mask", rgbU32: 0x39e58d }],
+          },
+        },
+      },
+    ),
+    true,
+  );
+});
+
 test("createDeferredBridgeStateRefresher refreshes once on the next frame", () => {
   const snapshots = [];
   const scheduled = [];

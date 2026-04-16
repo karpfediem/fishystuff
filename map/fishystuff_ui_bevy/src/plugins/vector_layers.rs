@@ -209,7 +209,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             clip_mask_layer_id,
             &update.evidence_zone_filter,
         );
-        let Some(runtime_state) = layer_runtime.get_mut(layer.id) else {
+        let Some(mut runtime_state) = layer_runtime.get(layer.id) else {
             continue;
         };
         let active = active_by_layer.get(&layer.id).copied().unwrap_or(false);
@@ -218,7 +218,10 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         let previous_status = runtime_state.vector_status;
 
         if !layer.is_vector() {
-            clear_vector_metrics(runtime_state, LayerVectorStatus::Inactive);
+            clear_vector_metrics(&mut runtime_state, LayerVectorStatus::Inactive);
+            if let Some(slot) = layer_runtime.get_mut(layer.id) {
+                *slot = runtime_state;
+            }
             continue;
         }
 
@@ -230,14 +233,20 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         runtime_state.inflight_count = 0;
 
         let Some(source_ref) = layer.vector_source.as_ref() else {
-            clear_vector_metrics(runtime_state, LayerVectorStatus::Failed);
+            clear_vector_metrics(&mut runtime_state, LayerVectorStatus::Failed);
+            if let Some(slot) = layer_runtime.get_mut(layer.id) {
+                *slot = runtime_state;
+            }
             continue;
         };
         if !active
             && !vector_runtime.states.contains_key(&layer.id)
             && vector_runtime.finished.layer_len(layer.id) == 0
         {
-            clear_vector_build_metrics(runtime_state, LayerVectorStatus::NotRequested);
+            clear_vector_build_metrics(&mut runtime_state, LayerVectorStatus::NotRequested);
+            if let Some(slot) = layer_runtime.get_mut(layer.id) {
+                *slot = runtime_state;
+            }
             continue;
         }
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
@@ -270,11 +279,14 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             bundle.set_depth(&mut commands, runtime_state.z_base, VECTOR_3D_BASE_Y);
             bundle.set_visibility(&mut commands, render_visible);
             bundle.set_opacity(materials_2d, materials_3d, runtime_state.opacity);
-            apply_stats(runtime_state, bundle.stats, LayerVectorStatus::Ready);
+            apply_stats(&mut runtime_state, bundle.stats, LayerVectorStatus::Ready);
             runtime_state.vector_cache_entries = vector_runtime.finished.layer_len(layer.id) as u32;
             vector_runtime
                 .states
                 .insert(layer.id, VectorBuildState::Ready { revision });
+            if let Some(slot) = layer_runtime.get_mut(layer.id) {
+                *slot = runtime_state;
+            }
             continue;
         }
 
@@ -290,7 +302,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
 
         if !active {
             if let Some(stats) = state_stats(&state) {
-                apply_stats(runtime_state, stats, state_status(&state));
+                apply_stats(&mut runtime_state, stats, state_status(&state));
             } else {
                 runtime_state.vector_status = LayerVectorStatus::NotRequested;
                 runtime_state.vector_progress = 0.0;
@@ -298,6 +310,9 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             }
             runtime_state.vector_cache_entries = vector_runtime.finished.layer_len(layer.id) as u32;
             vector_runtime.states.insert(layer.id, state);
+            if let Some(slot) = layer_runtime.get_mut(layer.id) {
+                *slot = runtime_state;
+            }
             continue;
         }
 
@@ -374,6 +389,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
                                 finalize_job(job, limits),
                                 clip_mask_layer_id,
                                 registry,
+                                layer_runtime,
                                 &update.exact_lookups,
                                 &update.raster_cache,
                                 vector_runtime,
@@ -391,7 +407,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
                             bundle.set_depth(&mut commands, runtime_state.z_base, VECTOR_3D_BASE_Y);
                             bundle.set_visibility(&mut commands, render_visible);
                             bundle.set_opacity(materials_2d, materials_3d, runtime_state.opacity);
-                            apply_stats(runtime_state, bundle.stats, LayerVectorStatus::Ready);
+                            apply_stats(&mut runtime_state, bundle.stats, LayerVectorStatus::Ready);
                             if let Some(replaced) = vector_runtime
                                 .finished
                                 .insert((layer.id, revision.clone()), bundle)
@@ -420,7 +436,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         };
 
         if let Some(stats) = state_stats(&state) {
-            apply_stats(runtime_state, stats, state_status(&state));
+            apply_stats(&mut runtime_state, stats, state_status(&state));
         } else {
             runtime_state.vector_status = state_status(&state);
             if runtime_state.vector_status == LayerVectorStatus::Ready {
@@ -435,6 +451,9 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
         runtime_state.vector_cache_entries = vector_runtime.finished.layer_len(layer.id) as u32;
 
         vector_runtime.states.insert(layer.id, state);
+        if let Some(slot) = layer_runtime.get_mut(layer.id) {
+            *slot = runtime_state;
+        }
     }
 }
 
@@ -490,6 +509,7 @@ fn maybe_clip_built_geometry(
     geometry: BuiltVectorGeometry,
     clip_mask_layer_id: Option<LayerId>,
     layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
     exact_lookups: &ExactLookupCache,
     raster_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
@@ -505,6 +525,7 @@ fn maybe_clip_built_geometry(
             chunk,
             mask_layer_id,
             layer_registry,
+            layer_runtime,
             exact_lookups,
             raster_cache,
             vector_runtime,
@@ -547,6 +568,7 @@ fn clip_vector_chunk_against_mask(
     chunk: BuiltVectorChunk,
     mask_layer_id: LayerId,
     layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
     exact_lookups: &ExactLookupCache,
     raster_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
@@ -566,21 +588,18 @@ fn clip_vector_chunk_against_mask(
         let Some(c) = chunk.positions.get(triangle[2] as usize).copied() else {
             continue;
         };
-        let centroid = WorldPoint::new(
-            (a[0] as f64 + b[0] as f64 + c[0] as f64) / 3.0,
-            (a[1] as f64 + b[1] as f64 + c[1] as f64) / 3.0,
-        );
-        let allowed = clip_mask_allows_world_point(
+        if !triangle_overlaps_visible_clip_mask(
             mask_layer_id,
-            centroid,
+            a,
+            b,
+            c,
             layer_registry,
+            layer_runtime,
             exact_lookups,
             raster_cache,
             vector_runtime,
             evidence_zone_filter,
-            layer_registry.map_version_id(),
-        );
-        if matches!(allowed, Some(false)) {
+        ) {
             continue;
         }
 
@@ -631,6 +650,55 @@ fn clip_vector_chunk_against_mask(
         min_world_z,
         max_world_z,
     })
+}
+
+fn triangle_overlaps_visible_clip_mask(
+    mask_layer_id: LayerId,
+    a: [f32; 3],
+    b: [f32; 3],
+    c: [f32; 3],
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    raster_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    evidence_zone_filter: &EvidenceZoneFilter,
+) -> bool {
+    let sample_points = [
+        WorldPoint::new(a[0] as f64, a[1] as f64),
+        WorldPoint::new(b[0] as f64, b[1] as f64),
+        WorldPoint::new(c[0] as f64, c[1] as f64),
+        WorldPoint::new(
+            (a[0] as f64 + b[0] as f64 + c[0] as f64) / 3.0,
+            (a[1] as f64 + b[1] as f64 + c[1] as f64) / 3.0,
+        ),
+        midpoint_world_point(a, b),
+        midpoint_world_point(b, c),
+        midpoint_world_point(c, a),
+    ];
+    sample_points.into_iter().any(|world_point| {
+        !matches!(
+            clip_mask_allows_world_point(
+                mask_layer_id,
+                world_point,
+                layer_registry,
+                layer_runtime,
+                exact_lookups,
+                raster_cache,
+                vector_runtime,
+                evidence_zone_filter,
+                layer_registry.map_version_id(),
+            ),
+            Some(false)
+        )
+    })
+}
+
+fn midpoint_world_point(a: [f32; 3], b: [f32; 3]) -> WorldPoint {
+    WorldPoint::new(
+        (a[0] as f64 + b[0] as f64) * 0.5,
+        (a[1] as f64 + b[1] as f64) * 0.5,
+    )
 }
 
 fn prune_stale_runtime_data(
@@ -887,7 +955,8 @@ mod tests {
     use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::layers::{
         build_local_layer_specs, AvailableLayerCatalog, AvailableLayerDefinition,
-        AvailableLayerTemplate, GeometrySpace, LayerId, LayerRegistry, StyleMode, VectorSourceSpec,
+        AvailableLayerTemplate, GeometrySpace, LayerId, LayerRegistry, LayerRuntime, StyleMode,
+        VectorSourceSpec,
     };
     use crate::map::raster::RasterTileCache;
     use crate::map::vector::cache::{BuiltVectorChunk, VectorMeshBundleSet};
@@ -1058,6 +1127,7 @@ mod tests {
             test_chunk,
             mask_layer.id,
             &registry,
+            &LayerRuntime::default(),
             &ExactLookupCache::default(),
             &RasterTileCache::default(),
             &vector_runtime,
@@ -1072,5 +1142,72 @@ mod tests {
         assert_eq!(clipped.max_world_x, 3.0);
         assert_eq!(clipped.min_world_z, 1.0);
         assert_eq!(clipped.max_world_z, 3.0);
+    }
+
+    #[test]
+    fn clip_vector_chunk_against_vector_mask_keeps_overlap_when_centroid_is_outside() {
+        let definition = AvailableLayerDefinition {
+            layer_id: "region_groups".to_string(),
+            name: "Region Groups".to_string(),
+            template: AvailableLayerTemplate::RegionGroups,
+            visible_default: true,
+            opacity_default: 0.5,
+            z_base: 30.0,
+            display_order: 30,
+        };
+        let (revision, layers) = build_local_layer_specs(&[definition], Some("v1"));
+        let mask_layer = layers[0].clone();
+        let mut registry = LayerRegistry::default();
+        registry.apply_layer_specs(revision, Some("v1".to_string()), layers);
+
+        let mask_chunk = BuiltVectorChunk {
+            color_rgba: [255, 0, 0, 255],
+            vertex_colors: vec![[255, 0, 0, 255]; 4],
+            positions: vec![
+                [0.0, 0.0, 0.0],
+                [10.0, 0.0, 0.0],
+                [10.0, 10.0, 0.0],
+                [0.0, 10.0, 0.0],
+            ],
+            indices: vec![0, 1, 2, 0, 2, 3],
+            min_world_x: 0.0,
+            max_world_x: 10.0,
+            min_world_z: 0.0,
+            max_world_z: 10.0,
+        };
+        let overlapping_chunk = BuiltVectorChunk {
+            color_rgba: [0, 255, 0, 255],
+            vertex_colors: vec![[0, 255, 0, 255]; 3],
+            positions: vec![[9.0, 9.0, 0.0], [13.0, 9.0, 0.0], [9.0, 13.0, 0.0]],
+            indices: vec![0, 1, 2],
+            min_world_x: 9.0,
+            max_world_x: 13.0,
+            min_world_z: 9.0,
+            max_world_z: 13.0,
+        };
+
+        let mut vector_runtime = VectorLayerRuntime::default();
+        vector_runtime.finished.insert(
+            (mask_layer.id, "rg-v1".to_string()),
+            VectorMeshBundleSet {
+                hover_chunks: vec![mask_chunk],
+                ..VectorMeshBundleSet::default()
+            },
+        );
+
+        let clipped = clip_vector_chunk_against_mask(
+            overlapping_chunk,
+            mask_layer.id,
+            &registry,
+            &LayerRuntime::default(),
+            &ExactLookupCache::default(),
+            &RasterTileCache::default(),
+            &vector_runtime,
+            &EvidenceZoneFilter::default(),
+        )
+        .expect("triangle overlap should remain");
+
+        assert_eq!(clipped.indices, vec![0, 1, 2]);
+        assert_eq!(clipped.positions.len(), 3);
     }
 }

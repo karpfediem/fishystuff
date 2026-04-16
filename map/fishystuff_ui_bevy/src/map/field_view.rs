@@ -147,7 +147,7 @@ impl FieldLayerView for LoadedFieldLayer<'_> {
         output_width: u16,
         output_height: u16,
     ) -> FieldRgbaChunk {
-        self.field.render_rgba_resampled_chunk(
+        self.render_rgba_chunk_with(
             source_origin_x,
             source_origin_y,
             source_width,
@@ -163,6 +163,36 @@ impl<'a> LoadedFieldLayer<'a> {
     #[cfg(test)]
     pub(crate) fn from_parts(field: &'a DiscreteFieldRows, color_mode: FieldColorMode) -> Self {
         Self { field, color_mode }
+    }
+
+    pub(crate) fn render_rgba_chunk_with(
+        &self,
+        source_origin_x: i32,
+        source_origin_y: i32,
+        source_width: u32,
+        source_height: u32,
+        output_width: u16,
+        output_height: u16,
+        color_for_id: impl FnMut(u32) -> [u8; 4],
+    ) -> FieldRgbaChunk {
+        if source_width == u32::from(output_width) && source_height == u32::from(output_height) {
+            return self.field.render_rgba_chunk(
+                source_origin_x,
+                source_origin_y,
+                output_width,
+                output_height,
+                color_for_id,
+            );
+        }
+        self.field.render_rgba_resampled_chunk(
+            source_origin_x,
+            source_origin_y,
+            source_width,
+            source_height,
+            output_width,
+            output_height,
+            color_for_id,
+        )
     }
 
     pub fn for_each_merged_rect_matching(

@@ -37,7 +37,10 @@ pub(crate) fn clip_mask_state_revision(
     revision = revision
         .wrapping_mul(131)
         .wrapping_add(layer_vector_status_code(mask_state.vector_status));
-    if mask_layer.pick_mode == PickMode::ExactTilePixel && filter.active {
+    if mask_layer.pick_mode == PickMode::ExactTilePixel
+        && mask_layer.key == "zone_mask"
+        && filter.active
+    {
         revision = revision.wrapping_mul(131).wrapping_add(filter.revision);
     }
     revision

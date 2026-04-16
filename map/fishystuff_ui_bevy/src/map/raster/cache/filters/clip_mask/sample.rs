@@ -1,4 +1,5 @@
 use fishystuff_core::masks::pack_rgb_u32;
+use std::collections::HashSet;
 
 use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_view::{loaded_field_layer, FieldLayerView};
@@ -12,30 +13,84 @@ use crate::plugins::vector_layers::VectorLayerRuntime;
 use super::super::super::RasterTileCache;
 
 pub(crate) fn clip_mask_allows_world_point(
-    mask_layer_id: crate::map::layers::LayerId,
+    layer_id: crate::map::layers::LayerId,
     world_point: WorldPoint,
     layer_registry: &crate::map::layers::LayerRegistry,
+    layer_runtime: &crate::map::layers::LayerRuntime,
     exact_lookups: &ExactLookupCache,
     tile_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
     filter: &EvidenceZoneFilter,
     map_version: Option<&str>,
 ) -> Option<bool> {
-    let mask_layer = layer_registry.get(mask_layer_id)?;
-    if let Some(field) = loaded_field_layer(mask_layer, exact_lookups) {
-        sample_field_clip_mask(mask_layer, field, world_point, filter)
-    } else if mask_layer.is_raster() {
-        sample_raster_clip_mask(mask_layer, world_point, tile_cache, filter, map_version)
-    } else if mask_layer.is_vector() {
+    clip_mask_allows_world_point_inner(
+        layer_id,
+        world_point,
+        layer_registry,
+        layer_runtime,
+        exact_lookups,
+        tile_cache,
+        vector_runtime,
+        filter,
+        map_version,
+        &mut HashSet::new(),
+    )
+}
+
+fn clip_mask_allows_world_point_inner(
+    layer_id: crate::map::layers::LayerId,
+    world_point: WorldPoint,
+    layer_registry: &crate::map::layers::LayerRegistry,
+    layer_runtime: &crate::map::layers::LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    tile_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    filter: &EvidenceZoneFilter,
+    map_version: Option<&str>,
+    visited: &mut HashSet<crate::map::layers::LayerId>,
+) -> Option<bool> {
+    if !visited.insert(layer_id) {
+        return Some(false);
+    }
+
+    let layer = layer_registry.get(layer_id)?;
+    let visible_here = if let Some(field) = loaded_field_layer(layer, exact_lookups) {
+        sample_field_clip_mask(layer, field, world_point, filter)
+    } else if layer.is_raster() {
+        sample_raster_clip_mask(layer, world_point, tile_cache, filter, map_version)
+    } else if layer.is_vector() {
         sample_vector_clip_mask(
-            mask_layer,
+            layer,
             world_point,
             vector_runtime,
             layer_registry.map_version_id(),
         )
     } else {
         Some(true)
+    }?;
+    if !visible_here {
+        return Some(false);
     }
+
+    let Some(mask_layer_id) = layer_runtime.clip_mask_layer(layer_id) else {
+        return Some(true);
+    };
+    clip_mask_allows_world_point_inner(
+        mask_layer_id,
+        world_point,
+        layer_registry,
+        layer_runtime,
+        exact_lookups,
+        tile_cache,
+        vector_runtime,
+        filter,
+        map_version,
+        visited,
+    )
+}
+
+fn zone_filter_applies(layer: &LayerSpec, filter: &EvidenceZoneFilter) -> bool {
+    filter.active && layer.pick_mode == PickMode::ExactTilePixel && layer.key == "zone_mask"
 }
 
 fn sample_field_clip_mask(
@@ -48,7 +103,7 @@ fn sample_field_clip_mask(
     if !field.contains_at_world_point(layer, map_to_world, world_point) {
         return Some(false);
     }
-    if layer.pick_mode == PickMode::ExactTilePixel && filter.active {
+    if zone_filter_applies(layer, filter) {
         let rgb = field.rgb_at_world_point(layer, map_to_world, world_point)?;
         return Some(filter.zone_rgbs.contains(&rgb.to_u32()));
     }
@@ -75,7 +130,7 @@ fn sample_raster_clip_mask(
     if a == 0 {
         return Some(false);
     }
-    if layer.pick_mode == PickMode::ExactTilePixel && filter.active {
+    if zone_filter_applies(layer, filter) {
         let rgb = pack_rgb_u32(r, g, b);
         return Some(filter.zone_rgbs.contains(&rgb));
     }
@@ -310,6 +365,7 @@ mod tests {
     #[test]
     fn field_clip_mask_uses_shared_field_view_contract() {
         let mut layer = test_layer(0);
+        layer.key = "zone_mask".to_string();
         layer.pick_mode = PickMode::ExactTilePixel;
         let filter = EvidenceZoneFilter {
             active: true,

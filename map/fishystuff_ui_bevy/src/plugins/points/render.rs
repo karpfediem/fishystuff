@@ -8,7 +8,9 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use fishystuff_api::models::events::MapBboxPx;
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerRegistry, LayerRuntime, FISH_EVIDENCE_LAYER_KEY};
+use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{MapPoint, WorldPoint};
 use crate::plugins::api::{
@@ -17,8 +19,12 @@ use crate::plugins::api::{
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
+use crate::plugins::vector_layers::VectorLayerRuntime;
 
-use super::query::{PointsState, RenderPoint};
+use super::{
+    query::{PointsState, RenderPoint},
+    EvidenceZoneFilter,
+};
 
 type PointRingQuery<'w, 's> = Query<
     'w,
@@ -148,6 +154,7 @@ where
 
 pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     crate::perf_scope!("events.point_entity_update");
+    let fish_evidence_layer_id = context.layer_registry.id_by_key(FISH_EVIDENCE_LAYER_KEY);
     let fish_evidence_visible = context
         .layer_registry
         .id_by_key(FISH_EVIDENCE_LAYER_KEY)
@@ -255,6 +262,18 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
     for (idx, point) in context.points.points.iter().enumerate() {
         let world = map_point_to_world(point);
         let pair = context.pool.markers[idx];
+        let point_visible_here = fish_evidence_layer_id.is_none_or(|layer_id| {
+            world_point_visible_in_layer_clip(
+                layer_id,
+                world,
+                &context.layer_registry,
+                &context.layer_runtime,
+                &context.exact_lookups,
+                &context.tile_cache,
+                &context.vector_runtime,
+                &context.evidence_zone_filter,
+            )
+        });
         let (ring_scale, ring_alpha) = ring_style_for_point(point);
         let ring_diameter_world = context.ring_assets.diameter_map_px * ring_scale;
         let icon_diameter_world = icon_size_world_units.max(ring_diameter_world);
@@ -264,7 +283,11 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
             transform.translation.z = ring_z;
             sprite.custom_size = Some(Vec2::splat(ring_diameter_world));
             sprite.color = Color::srgba(1.0, 1.0, 1.0, ring_alpha * point_opacity);
-            *visibility = Visibility::Visible;
+            *visibility = if point_visible_here {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
         }
 
         if let Ok((mut transform, mut visibility, mut sprite)) = context.icons.get_mut(pair.icon) {
@@ -272,7 +295,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
             transform.translation.y = world.z as f32;
             transform.translation.z = icon_z;
 
-            if context.points.icons_enabled {
+            if point_visible_here && context.points.icons_enabled {
                 if let Some(handle) = icon_handle_for_point(
                     point,
                     &mut context.icon_cache,
@@ -351,6 +374,10 @@ pub(super) struct PointMarkerSync<'w, 's> {
     view_mode: Res<'w, ViewModeState>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
+    exact_lookups: Res<'w, ExactLookupCache>,
+    tile_cache: Res<'w, RasterTileCache>,
+    vector_runtime: Res<'w, VectorLayerRuntime>,
+    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
     fish: Res<'w, FishCatalog>,
     points: ResMut<'w, PointsState>,
     ring_assets: Res<'w, PointRingAssets>,
@@ -500,6 +527,32 @@ fn map_point_to_world(point: &RenderPoint) -> WorldPoint {
         point.map_px_x as f64 + 0.5,
         point.map_px_y as f64 + 0.5,
     ))
+}
+
+fn world_point_visible_in_layer_clip(
+    layer_id: crate::map::layers::LayerId,
+    world_point: WorldPoint,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    tile_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    evidence_zone_filter: &EvidenceZoneFilter,
+) -> bool {
+    !matches!(
+        clip_mask_allows_world_point(
+            layer_id,
+            world_point,
+            layer_registry,
+            layer_runtime,
+            exact_lookups,
+            tile_cache,
+            vector_runtime,
+            evidence_zone_filter,
+            layer_registry.map_version_id(),
+        ),
+        Some(false)
+    )
 }
 
 pub(super) fn build_ring_texture() -> Image {

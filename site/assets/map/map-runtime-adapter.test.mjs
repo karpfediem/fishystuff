@@ -170,6 +170,73 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
   });
 });
 
+test("buildBridgeInputPatchFromSignals derives effective zone filters from the boolean search expression tree", () => {
+  const patch = buildBridgeInputPatchFromSignals(
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "and",
+            children: [
+              {
+                type: "group",
+                operator: "or",
+                children: [
+                  { type: "term", term: { kind: "zone", zoneRgb: 123456 } },
+                  { type: "term", term: { kind: "zone", zoneRgb: 654321 } },
+                ],
+              },
+              {
+                type: "group",
+                operator: "or",
+                negated: true,
+                children: [{ type: "term", term: { kind: "zone", zoneRgb: 654321 } }],
+              },
+              { type: "term", term: { kind: "fish-filter", term: "red" } },
+            ],
+          },
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: ["red"],
+          layerClipMasks: {
+            fish_evidence: "zone_mask",
+          },
+        },
+      },
+      _shared_fish: {
+        caughtIds: [],
+        favouriteIds: [],
+      },
+    },
+    {
+      currentState: {
+        ...createEmptySnapshot(),
+        catalog: {
+          fish: [{ fishId: 61, itemId: 6100, name: "Ancient Relic Crystal Shard", grade: "Prize", isPrize: true }],
+        },
+      },
+      zoneCatalog: [
+        { zoneRgb: 123456, name: "Alpha Sea" },
+        { zoneRgb: 654321, name: "Beta Sea" },
+        { zoneRgb: 777777, name: "Gamma Sea" },
+      ],
+    },
+  );
+
+  assert.deepEqual(patch.filters.fishIds, [61]);
+  assert.deepEqual(patch.filters.zoneRgbs, [123456]);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
+    zone_mask: [123456],
+  });
+  assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+});
+
 test("buildBridgeInputPatchFromSignals derives fish ids from the boolean search expression tree", () => {
   const patch = buildBridgeInputPatchFromSignals(
     {
@@ -259,6 +326,93 @@ test("buildBridgeInputPatchFromSignals derives zone-membership clipping from att
   assert.deepEqual(patch.ui.sharedFishState, {
     caughtIds: [],
     favouriteIds: [],
+  });
+});
+
+test("buildBridgeInputPatchFromSignals falls back to the current selection zone when no explicit zone filter exists", () => {
+  const patch = buildBridgeInputPatchFromSignals(
+    {
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: ["missing"],
+          layerClipMasks: {
+            fish_evidence: "zone_mask",
+          },
+        },
+      },
+      _map_runtime: {
+        selection: {
+          layerSamples: [
+            {
+              layerId: "zone_mask",
+              rgbU32: 0x39e58d,
+            },
+          ],
+        },
+      },
+      _shared_fish: {
+        caughtIds: [],
+        favouriteIds: [],
+      },
+    },
+    {
+      currentState: createEmptySnapshot(),
+    },
+  );
+
+  assert.deepEqual(patch.filters.zoneRgbs, [0x39e58d]);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
+    zone_mask: [0x39e58d],
+  });
+  assert.deepEqual(patch.filters.zoneMembershipLayerIds, ["fish_evidence"]);
+});
+
+test("buildBridgeInputPatchFromSignals keeps explicit zone expressions ahead of the current selection zone", () => {
+  const patch = buildBridgeInputPatchFromSignals(
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "zone", zoneRgb: 0x123456 } }],
+          },
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+        },
+      },
+      _map_runtime: {
+        selection: {
+          layerSamples: [
+            {
+              layerId: "zone_mask",
+              rgbU32: 0x39e58d,
+            },
+          ],
+        },
+      },
+      _shared_fish: {
+        caughtIds: [],
+        favouriteIds: [],
+      },
+    },
+    {
+      currentState: createEmptySnapshot(),
+    },
+  );
+
+  assert.deepEqual(patch.filters.zoneRgbs, [0x123456]);
+  assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {
+    zone_mask: [0x123456],
   });
 });
 

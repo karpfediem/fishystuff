@@ -1,10 +1,11 @@
 use crate::bridge::contract::FishyMapSelectionPointKind;
 use crate::map::field_metadata::FieldMetadataCache;
-use crate::map::field_semantics::semantic_sample_for_field_id;
+use crate::map::field_semantics::{ordered_semantic_layers, semantic_sample_for_field_id};
 use crate::map::field_view::sample_rgb_for_field_id;
 use crate::map::hover_query::WorldPointQueryContext;
-use crate::map::layer_query::{sample_semantic_layers_at_world_point, LayerQuerySample};
+use crate::map::layer_query::{sample_semantic_layer_at_world_point, LayerQuerySample};
 use crate::map::layers::LayerRegistry;
+use crate::map::raster::cache::clip_mask_allows_world_point;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{HoverInfo, SelectedInfo};
 use fishystuff_core::field_metadata::{detail_facts, preferred_detail_fact_value};
@@ -82,13 +83,34 @@ pub fn selected_info_at_world_point(
     {
         return None;
     }
-    let layer_samples = sample_semantic_layers_at_world_point(
-        context.layer_registry,
-        context.exact_lookups,
-        context.field_metadata,
-        world_point,
-        context.map_to_world,
-    );
+    let layer_samples = ordered_semantic_layers(context.layer_registry)
+        .into_iter()
+        .filter(|layer| {
+            !matches!(
+                clip_mask_allows_world_point(
+                    layer.id,
+                    world_point,
+                    context.layer_registry,
+                    context.layer_runtime,
+                    context.exact_lookups,
+                    context.tile_cache,
+                    context.vector_runtime,
+                    context.evidence_zone_filter,
+                    context.layer_registry.map_version_id(),
+                ),
+                Some(false)
+            )
+        })
+        .filter_map(|layer| {
+            sample_semantic_layer_at_world_point(
+                layer,
+                context.exact_lookups,
+                context.field_metadata,
+                world_point,
+                context.map_to_world,
+            )
+        })
+        .collect::<Vec<_>>();
     if layer_samples.is_empty() {
         return None;
     }
@@ -190,6 +212,7 @@ mod tests {
     use crate::map::spaces::world::MapToWorld;
     use crate::map::spaces::MapPoint;
     use crate::plugins::api::HoverInfo;
+    use crate::plugins::points::EvidenceZoneFilter;
     use crate::plugins::vector_layers::VectorLayerRuntime;
     use fishystuff_api::Rgb;
     use fishystuff_core::field::DiscreteFieldRows;
@@ -446,6 +469,7 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
+        let evidence_zone_filter = EvidenceZoneFilter::default();
         let selected = selected_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),
             &WorldPointQueryContext {
@@ -455,6 +479,7 @@ mod tests {
                 field_metadata: &field_metadata,
                 tile_cache: &RasterTileCache::default(),
                 vector_runtime: &VectorLayerRuntime::default(),
+                evidence_zone_filter: &evidence_zone_filter,
                 map_to_world,
             },
             FishyMapSelectionPointKind::Clicked,
@@ -658,6 +683,7 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
+        let evidence_zone_filter = EvidenceZoneFilter::default();
         let selected = selected_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),
             &WorldPointQueryContext {
@@ -667,6 +693,7 @@ mod tests {
                 field_metadata: &field_metadata,
                 tile_cache: &RasterTileCache::default(),
                 vector_runtime: &VectorLayerRuntime::default(),
+                evidence_zone_filter: &evidence_zone_filter,
                 map_to_world,
             },
             FishyMapSelectionPointKind::Clicked,

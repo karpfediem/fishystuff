@@ -4,6 +4,7 @@ mod render;
 
 use bevy::prelude::*;
 
+use crate::bridge::BrowserInputStateSet;
 use crate::map::events::EventsSnapshotState;
 
 pub use query::{EvidenceZoneFilter, PointsState, RenderPoint};
@@ -21,12 +22,15 @@ impl Plugin for PointsPlugin {
             .init_resource::<render::PointMarkerPool>()
             .init_resource::<render::PointIconCache>()
             .add_systems(
+                PreUpdate,
+                query::sync_evidence_zone_filter.after(BrowserInputStateSet),
+            )
+            .add_systems(
                 Update,
                 (
                     loading::ensure_point_ring_assets,
                     loading::ensure_events_snapshot_loaded,
                     loading::poll_events_snapshot_requests,
-                    query::sync_evidence_zone_filter,
                     query::refresh_points_from_local_snapshot,
                     render::mark_points_dirty_on_remote_image_update,
                     render::sync_point_markers,

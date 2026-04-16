@@ -2,7 +2,8 @@ use fishystuff_core::masks::pack_rgb_u32;
 use fishystuff_core::masks::ZoneLookupRows;
 
 use crate::map::exact_lookup::ExactLookupCache;
-use crate::map::layers::{LayerId, LayerRegistry, LayerSpec};
+use crate::map::field_view::{loaded_field_layer, FieldLayerView};
+use crate::map::layers::{LayerId, LayerRegistry, LayerRuntime, LayerSpec};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::LayerPoint;
 use crate::plugins::points::EvidenceZoneFilter;
@@ -22,6 +23,7 @@ pub(super) struct RasterVisualComposeContext<'a> {
     pub(super) hover_zone_rgb: Option<u32>,
     pub(super) clip_mask_layer: Option<LayerId>,
     pub(super) layer_registry: &'a LayerRegistry,
+    pub(super) layer_runtime: &'a LayerRuntime,
     pub(super) exact_lookups: &'a ExactLookupCache,
     pub(super) tile_cache: &'a RasterTileCache,
     pub(super) vector_runtime: &'a VectorLayerRuntime,
@@ -66,6 +68,7 @@ pub(super) fn compose_raster_visuals_in_place(
         hover_zone_rgb,
         clip_mask_layer,
         layer_registry,
+        layer_runtime,
         exact_lookups,
         tile_cache,
         vector_runtime,
@@ -98,13 +101,26 @@ pub(super) fn compose_raster_visuals_in_place(
             dst[2] = src[2];
             dst[3] = src[3];
 
-            let rgb = pack_rgb_u32(src[0], src[1], src[2]);
-            if *requires_pixel_filter && !filter.zone_rgbs.contains(&rgb) {
+            let source_rgb = pack_rgb_u32(src[0], src[1], src[2]);
+            let layer_point = LayerPoint::new(
+                f64::from(key.tx) * tile_px + (col_idx as f64 + 0.5) * px_scale_x,
+                f64::from(key.ty) * tile_px + (row_idx as f64 + 0.5) * px_scale_y,
+            );
+            let filter_rgb = sample_zone_filter_rgb_at_layer_point(
+                layer,
+                exact_lookups,
+                layer_point,
+                source_rgb,
+            );
+
+            if *requires_pixel_filter
+                && !filter_rgb.is_some_and(|rgb| filter.zone_rgbs.contains(&rgb))
+            {
                 dst[3] = 0;
                 continue;
             }
 
-            if *hover_zone_rgb == Some(rgb) {
+            if *hover_zone_rgb == filter_rgb {
                 dst[0] = HOVER_HIGHLIGHT_RGB[0];
                 dst[1] = HOVER_HIGHLIGHT_RGB[1];
                 dst[2] = HOVER_HIGHLIGHT_RGB[2];
@@ -113,15 +129,12 @@ pub(super) fn compose_raster_visuals_in_place(
             let Some(mask_layer_id) = *clip_mask_layer else {
                 continue;
             };
-            let layer_point = LayerPoint::new(
-                f64::from(key.tx) * tile_px + (col_idx as f64 + 0.5) * px_scale_x,
-                f64::from(key.ty) * tile_px + (row_idx as f64 + 0.5) * px_scale_y,
-            );
             let world_point = target_transform.layer_to_world(layer_point);
             let Some(allowed) = clip_mask_allows_world_point(
                 mask_layer_id,
                 world_point,
                 layer_registry,
+                layer_runtime,
                 exact_lookups,
                 tile_cache,
                 vector_runtime,
@@ -135,6 +148,23 @@ pub(super) fn compose_raster_visuals_in_place(
             }
         }
     }
+}
+
+fn sample_zone_filter_rgb_at_layer_point(
+    layer: &LayerSpec,
+    exact_lookups: &ExactLookupCache,
+    layer_point: LayerPoint,
+    source_rgb: u32,
+) -> Option<u32> {
+    if !layer.is_zone_mask_visual_layer() {
+        return Some(source_rgb);
+    }
+    let Some(field) = loaded_field_layer(layer, exact_lookups) else {
+        return Some(source_rgb);
+    };
+    field
+        .rgb_at_layer_point(layer_point)
+        .map(|rgb| rgb.to_u32())
 }
 
 fn restore_zone_rgb_spans(
@@ -168,10 +198,68 @@ fn apply_zone_rgb_highlight(image_data: &mut [u8], zone_rows: &ZoneLookupRows, t
 
 #[cfg(test)]
 mod tests {
-    use fishystuff_core::masks::pack_rgb_u32;
+    use std::collections::HashSet;
 
-    use super::{update_hover_highlight_in_place, HOVER_HIGHLIGHT_RGB};
+    use fishystuff_core::masks::pack_rgb_u32;
+    use fishystuff_core::masks::ZoneLookupRows;
+
+    use super::{
+        compose_raster_visuals_in_place, sample_zone_filter_rgb_at_layer_point,
+        update_hover_highlight_in_place, HOVER_HIGHLIGHT_RGB,
+    };
+    use crate::map::exact_lookup::ExactLookupCache;
+    use crate::map::layers::{
+        LayerId, LayerKind, LayerRegistry, LayerRuntime, LodPolicy, PickMode,
+    };
     use crate::map::raster::cache::TilePixelData;
+    use crate::map::raster::{RasterTileCache, TileKey};
+    use crate::map::spaces::layer_transform::LayerTransform;
+    use crate::map::spaces::LayerPoint;
+    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::plugins::vector_layers::VectorLayerRuntime;
+
+    fn zone_mask_layer() -> crate::map::layers::LayerSpec {
+        crate::map::layers::LayerSpec {
+            id: LayerId::from_raw(1),
+            key: "zone_mask".to_string(),
+            name: "Zone Mask".to_string(),
+            visible_default: true,
+            opacity_default: 1.0,
+            z_base: 0.0,
+            kind: LayerKind::TiledRaster,
+            tileset_url: "/images/tiles/zone_mask_visual/v1/tileset.json".to_string(),
+            tile_url_template: "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png".to_string(),
+            tileset_version: "v1".to_string(),
+            vector_source: None,
+            waypoint_source: None,
+            transform: LayerTransform::IdentityMapSpace,
+            tile_px: 1,
+            max_level: 0,
+            y_flip: false,
+            field_source: None,
+            field_metadata_source: None,
+            lod_policy: LodPolicy {
+                target_tiles: 64,
+                hysteresis_hi: 80.0,
+                hysteresis_lo: 40.0,
+                margin_tiles: 0,
+                enable_refine: true,
+                refine_debounce_ms: 0,
+                max_detail_tiles: 128,
+                max_resident_tiles: 256,
+                pinned_coarse_levels: 2,
+                coarse_pin_min_level: None,
+                warm_margin_tiles: 1,
+                protected_margin_tiles: 0,
+                detail_eviction_weight: 4.0,
+                max_detail_requests_while_camera_moving: 1,
+                motion_suppresses_refine: true,
+            },
+            request_weight: 1.0,
+            pick_mode: PickMode::ExactTilePixel,
+            display_order: 0,
+        }
+    }
 
     #[test]
     fn hover_highlight_delta_only_mutates_old_and_new_zone_spans() {
@@ -209,5 +297,78 @@ mod tests {
         assert_eq!(&image_data[8..16], &source.data[8..16]);
         assert_eq!(&image_data[0..3], &HOVER_HIGHLIGHT_RGB);
         assert_eq!(&image_data[4..7], &HOVER_HIGHLIGHT_RGB);
+    }
+
+    #[test]
+    fn zone_mask_filter_sampling_prefers_exact_lookup_rgb() {
+        let layer = zone_mask_layer();
+        let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            layer.id,
+            layer.exact_lookup_url().expect("exact lookup url"),
+            ZoneLookupRows::from_rgba(1, 1, &[10, 20, 30, 255]).expect("zone rows"),
+        );
+
+        let sampled = sample_zone_filter_rgb_at_layer_point(
+            &layer,
+            &exact_lookups,
+            LayerPoint::new(0.5, 0.5),
+            pack_rgb_u32(1, 2, 3),
+        );
+
+        assert_eq!(sampled, Some(pack_rgb_u32(10, 20, 30)));
+    }
+
+    #[test]
+    fn compose_filters_zone_mask_visuals_using_exact_lookup_rgb() {
+        let layer = zone_mask_layer();
+        let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            layer.id,
+            layer.exact_lookup_url().expect("exact lookup url"),
+            ZoneLookupRows::from_rgba(1, 1, &[10, 20, 30, 255]).expect("zone rows"),
+        );
+        let source = TilePixelData {
+            width: 1,
+            height: 1,
+            data: vec![1, 2, 3, 255],
+        };
+        let mut image_data = source.data.clone();
+        let filter = EvidenceZoneFilter {
+            active: true,
+            zone_rgbs: HashSet::from([pack_rgb_u32(10, 20, 30)]),
+            revision: 1,
+        };
+        let layer_registry = LayerRegistry::default();
+        let layer_runtime = LayerRuntime::default();
+        let tile_cache = RasterTileCache::default();
+        let vector_runtime = VectorLayerRuntime::default();
+
+        compose_raster_visuals_in_place(
+            &source,
+            &mut image_data,
+            &super::RasterVisualComposeContext {
+                key: TileKey {
+                    layer: layer.id,
+                    map_version: 0,
+                    z: 0,
+                    tx: 0,
+                    ty: 0,
+                },
+                layer: &layer,
+                filter: &filter,
+                requires_pixel_filter: true,
+                hover_zone_rgb: None,
+                clip_mask_layer: None,
+                layer_registry: &layer_registry,
+                layer_runtime: &layer_runtime,
+                exact_lookups: &exact_lookups,
+                tile_cache: &tile_cache,
+                vector_runtime: &vector_runtime,
+                map_version: None,
+            },
+        );
+
+        assert_eq!(image_data, source.data);
     }
 }

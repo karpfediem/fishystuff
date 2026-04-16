@@ -12,12 +12,17 @@ use bevy_flair::prelude::{ClassList, NodeStyleSheet};
 use crate::bridge::contract::{FishyMapBookmarkEntry, FishyMapThemeColors};
 use crate::bridge::theme::parse_css_color;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
+use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
+use crate::map::spaces::WorldPoint;
 use crate::plugins::api::{HoverInfo, HoverState};
 use crate::plugins::camera::Map2dCamera;
+use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
 use crate::plugins::ui::{UiFonts, UiRoot};
+use crate::plugins::vector_layers::VectorLayerRuntime;
 use fishystuff_core::field_metadata::{preferred_detail_fact_value, FieldDetailSection};
 
 #[cfg(target_arch = "wasm32")]
@@ -108,6 +113,10 @@ struct BookmarkMarkerPool {
 struct BookmarkRenderContext<'w, 's> {
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
+    exact_lookups: Res<'w, ExactLookupCache>,
+    tile_cache: Res<'w, RasterTileCache>,
+    vector_runtime: Res<'w, VectorLayerRuntime>,
+    evidence_zone_filter: Res<'w, EvidenceZoneFilter>,
     asset_server: Res<'w, AssetServer>,
     fonts: Res<'w, UiFonts>,
     render_assets: Res<'w, BookmarkRenderAssets>,
@@ -171,10 +180,10 @@ fn sync_bookmark_markers(
         ),
     >,
 ) {
-    let bookmark_layer_state = render_context
-        .layer_registry
-        .get_by_key("bookmarks")
-        .and_then(|layer| render_context.layer_runtime.get(layer.id));
+    let bookmark_layer = render_context.layer_registry.get_by_key("bookmarks");
+    let bookmark_layer_id = bookmark_layer.map(|layer| layer.id);
+    let bookmark_layer_state =
+        bookmark_layer.and_then(|layer| render_context.layer_runtime.get(layer.id));
     let bookmark_layer_visible = bookmark_layer_state
         .map(|state| state.visible)
         .unwrap_or(true);
@@ -333,18 +342,26 @@ fn sync_bookmark_markers(
         let visual = marker_pool.markers[index];
         let world_x = bookmark.world_x as f32;
         let world_z = bookmark.world_z as f32;
+        let world_point = WorldPoint::new(world_x as f64, world_z as f64);
+        let bookmark_visible_here = bookmark_layer_id.is_none_or(|layer_id| {
+            bookmark_visible_in_layer_clip(layer_id, world_point, &render_context)
+        });
 
         if let Ok((mut transform, mut visibility, mut sprite)) = markers.get_mut(visual.marker) {
             transform.translation = Vec3::new(world_x, world_z, bookmark_layer_z);
             sprite.image = marker_texture.clone();
             sprite.custom_size = Some(Vec2::splat(marker_size_world));
             sprite.color = Color::WHITE.with_alpha(bookmark_layer_opacity);
-            *visibility = Visibility::Visible;
+            *visibility = if bookmark_visible_here {
+                Visibility::Visible
+            } else {
+                Visibility::Hidden
+            };
         }
 
         let callout_visible =
             selected_ids.contains(bookmark.id.as_str()) || hovered_index == Some(index);
-        if !callout_visible {
+        if !callout_visible || !bookmark_visible_here {
             hide_bookmark_callout(visual, &mut callout_roots);
             continue;
         }
@@ -456,6 +473,27 @@ fn hide_bookmark_callout(
     if let Ok((_, mut visibility, _, _, _)) = callout_roots.get_mut(visual.callout_root) {
         *visibility = Visibility::Hidden;
     }
+}
+
+fn bookmark_visible_in_layer_clip(
+    layer_id: crate::map::layers::LayerId,
+    world_point: WorldPoint,
+    render_context: &BookmarkRenderContext<'_, '_>,
+) -> bool {
+    !matches!(
+        clip_mask_allows_world_point(
+            layer_id,
+            world_point,
+            &render_context.layer_registry,
+            &render_context.layer_runtime,
+            &render_context.exact_lookups,
+            &render_context.tile_cache,
+            &render_context.vector_runtime,
+            &render_context.evidence_zone_filter,
+            render_context.layer_registry.map_version_id(),
+        ),
+        Some(false)
+    )
 }
 
 fn world_to_viewport(

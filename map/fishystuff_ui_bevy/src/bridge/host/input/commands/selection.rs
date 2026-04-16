@@ -14,6 +14,7 @@ use crate::plugins::api::{
     build_zone_stats_request, spawn_zone_stats_request, ApiBootstrapState, PatchFilterState,
     PendingRequests, SelectedInfo, SelectionState,
 };
+use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use fishystuff_core::field_metadata::FieldHoverTarget;
 
@@ -51,6 +52,7 @@ pub(super) fn apply_semantic_field_selection_command(
     field_metadata: &FieldMetadataCache,
     tile_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
+    evidence_zone_filter: &EvidenceZoneFilter,
     selection: &mut SelectionState,
     pending: &mut PendingRequests,
     layer_key: &str,
@@ -80,6 +82,7 @@ pub(super) fn apply_semantic_field_selection_command(
                     field_metadata,
                     tile_cache,
                     vector_runtime,
+                    evidence_zone_filter,
                     map_to_world: MapToWorld::default(),
                 },
                 FishyMapSelectionPointKind::Waypoint,
@@ -101,6 +104,7 @@ pub(super) fn apply_world_point_selection_command(
     field_metadata: &FieldMetadataCache,
     tile_cache: &RasterTileCache,
     vector_runtime: &VectorLayerRuntime,
+    evidence_zone_filter: &EvidenceZoneFilter,
     selection: &mut SelectionState,
     pending: &mut PendingRequests,
     world_x: f64,
@@ -117,6 +121,7 @@ pub(super) fn apply_world_point_selection_command(
             field_metadata,
             tile_cache,
             vector_runtime,
+            evidence_zone_filter,
             map_to_world: MapToWorld::default(),
         },
         point_kind.unwrap_or(FishyMapSelectionPointKind::Clicked),

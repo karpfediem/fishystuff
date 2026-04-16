@@ -8,17 +8,21 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::map::camera::mode::{ViewMode, ViewModeState};
+use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{
     GeometrySpace, LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, WaypointSourceSpec,
 };
+use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
 use crate::map::spaces::world::MapToWorld;
-use crate::map::spaces::MapPoint;
+use crate::map::spaces::{MapPoint, WorldPoint};
 use crate::plugins::api::MapDisplayState;
 use crate::plugins::camera::CameraZoomBounds;
 use crate::plugins::camera::Map2dCamera;
+use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
 use crate::plugins::ui::{UiFonts, UiRoot};
+use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::runtime_io;
 
 const WAYPOINT_MARKER_SIZE_SCREEN_PX: f32 = 18.0;
@@ -240,7 +244,12 @@ fn sync_waypoint_entities(
     _display_state: Res<MapDisplayState>,
     view_mode: Res<ViewModeState>,
     zoom_bounds: Res<CameraZoomBounds>,
+    layer_registry: Res<LayerRegistry>,
     layer_runtime: Res<LayerRuntime>,
+    exact_lookups: Res<ExactLookupCache>,
+    tile_cache: Res<RasterTileCache>,
+    vector_runtime: Res<VectorLayerRuntime>,
+    evidence_zone_filter: Res<EvidenceZoneFilter>,
     camera_q: Query<(&Camera, &GlobalTransform, &Projection), With<Map2dCamera>>,
     mut markers: Query<
         (
@@ -314,7 +323,19 @@ fn sync_waypoint_entities(
             *visibility = Visibility::Hidden;
             continue;
         };
-        let layer_visible = ui_visible && state.visible && marker.default_visible;
+        let layer_visible = ui_visible
+            && state.visible
+            && marker.default_visible
+            && world_point_visible_in_layer_clip(
+                marker.layer_id,
+                WorldPoint::new(marker.world_x as f64, marker.world_z as f64),
+                &layer_registry,
+                &layer_runtime,
+                &exact_lookups,
+                &tile_cache,
+                &vector_runtime,
+                &evidence_zone_filter,
+            );
         transform.translation = Vec3::new(
             marker.world_x,
             marker.world_z,
@@ -337,7 +358,32 @@ fn sync_waypoint_entities(
         let layer_visible = ui_visible
             && state.visible
             && state.waypoint_connections_visible
-            && connection.default_visible;
+            && connection.default_visible
+            && connection_intersects_visible_clip_mask(
+                connection.layer_id,
+                WorldPoint::new(
+                    (connection.center_x
+                        - connection.length_world * 0.5 * connection.angle_radians.cos())
+                        as f64,
+                    (connection.center_z
+                        - connection.length_world * 0.5 * connection.angle_radians.sin())
+                        as f64,
+                ),
+                WorldPoint::new(
+                    (connection.center_x
+                        + connection.length_world * 0.5 * connection.angle_radians.cos())
+                        as f64,
+                    (connection.center_z
+                        + connection.length_world * 0.5 * connection.angle_radians.sin())
+                        as f64,
+                ),
+                &layer_registry,
+                &layer_runtime,
+                &exact_lookups,
+                &tile_cache,
+                &vector_runtime,
+                &evidence_zone_filter,
+            );
         transform.translation = Vec3::new(
             connection.center_x,
             connection.center_z,
@@ -362,7 +408,17 @@ fn sync_waypoint_entities(
             && state.visible
             && state.waypoint_labels_visible
             && labels_allowed_by_zoom
-            && label.default_visible;
+            && label.default_visible
+            && world_point_visible_in_layer_clip(
+                label.layer_id,
+                WorldPoint::new(label.world_x as f64, label.world_z as f64),
+                &layer_registry,
+                &layer_runtime,
+                &exact_lookups,
+                &tile_cache,
+                &vector_runtime,
+                &evidence_zone_filter,
+            );
         let Some(viewport_position) = world_to_viewport(
             camera,
             camera_transform,
@@ -397,6 +453,62 @@ fn sync_waypoint_entities(
         }
         *visibility = Visibility::Visible;
     }
+}
+
+fn world_point_visible_in_layer_clip(
+    layer_id: LayerId,
+    world_point: WorldPoint,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    tile_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    evidence_zone_filter: &EvidenceZoneFilter,
+) -> bool {
+    !matches!(
+        clip_mask_allows_world_point(
+            layer_id,
+            world_point,
+            layer_registry,
+            layer_runtime,
+            exact_lookups,
+            tile_cache,
+            vector_runtime,
+            evidence_zone_filter,
+            layer_registry.map_version_id(),
+        ),
+        Some(false)
+    )
+}
+
+fn connection_intersects_visible_clip_mask(
+    layer_id: LayerId,
+    start: WorldPoint,
+    end: WorldPoint,
+    layer_registry: &LayerRegistry,
+    layer_runtime: &LayerRuntime,
+    exact_lookups: &ExactLookupCache,
+    tile_cache: &RasterTileCache,
+    vector_runtime: &VectorLayerRuntime,
+    evidence_zone_filter: &EvidenceZoneFilter,
+) -> bool {
+    const SAMPLE_STEPS: [f64; 5] = [0.0, 0.25, 0.5, 0.75, 1.0];
+    SAMPLE_STEPS.into_iter().any(|t| {
+        let world_point = WorldPoint::new(
+            start.x + (end.x - start.x) * t,
+            start.z + (end.z - start.z) * t,
+        );
+        world_point_visible_in_layer_clip(
+            layer_id,
+            world_point,
+            layer_registry,
+            layer_runtime,
+            exact_lookups,
+            tile_cache,
+            vector_runtime,
+            evidence_zone_filter,
+        )
+    })
 }
 
 fn prune_stale_waypoint_layers(

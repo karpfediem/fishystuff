@@ -6,7 +6,7 @@ mod state;
 
 pub use state::{EvidenceZoneFilter, PointsState, RenderPoint};
 
-pub(super) use evidence::sync_evidence_zone_filter;
+pub(crate) use evidence::sync_evidence_zone_filter;
 pub(super) use refresh::refresh_points_from_local_snapshot;
 
 const VIEWPORT_SIG_STEP_PX: i32 = 32;
@@ -153,14 +153,14 @@ mod tests {
     }
 
     #[test]
-    fn merge_zone_terms_unions_explicit_and_fish_evidence_zones() {
+    fn merge_zone_terms_intersects_explicit_and_fish_evidence_zones() {
         let merged = evidence::merge_zone_terms(
-            &HashSet::from([0xaabbcc]),
+            &HashSet::from([0xaabbcc, 0x445566]),
             HashSet::from([0x112233, 0x445566]),
             true,
             2,
         );
 
-        assert_eq!(merged, HashSet::from([0x112233, 0x445566, 0xaabbcc]));
+        assert_eq!(merged, HashSet::from([0x445566]));
     }
 }

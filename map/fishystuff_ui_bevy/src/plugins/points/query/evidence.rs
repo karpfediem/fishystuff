@@ -26,12 +26,16 @@ pub(super) fn merge_zone_terms(
     has_zone_data: bool,
     matched_events: usize,
 ) -> HashSet<u32> {
+    if explicit_zones.is_empty() {
+        return evidence_zones;
+    }
     if !has_zone_data && matched_events > 0 {
         return explicit_zones.clone();
     }
-    let mut merged = evidence_zones;
-    merged.extend(explicit_zones.iter().copied());
-    merged
+    evidence_zones
+        .into_iter()
+        .filter(|zone_rgb| explicit_zones.contains(zone_rgb))
+        .collect()
 }
 
 pub(super) fn collect_evidence_zone_rgbs(
@@ -61,7 +65,7 @@ pub(super) fn collect_evidence_zone_rgbs(
     (zones, has_zone_data, matched_events)
 }
 
-pub(in crate::plugins::points) fn sync_evidence_zone_filter(
+pub(crate) fn sync_evidence_zone_filter(
     patch_filter: Res<PatchFilterState>,
     fish_filter: Res<FishFilterState>,
     semantic_filter: Res<SemanticFieldFilterState>,
@@ -106,4 +110,44 @@ pub(in crate::plugins::points) fn sync_evidence_zone_filter(
         matched_events,
     );
     apply_zone_filter_state(&mut filter, !next_zone_rgbs.is_empty(), next_zone_rgbs);
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::merge_zone_terms;
+
+    fn zone_set(values: &[u32]) -> HashSet<u32> {
+        values.iter().copied().collect()
+    }
+
+    #[test]
+    fn merge_zone_terms_intersects_explicit_and_evidence_zones() {
+        assert_eq!(
+            merge_zone_terms(
+                &zone_set(&[0x111111, 0x222222]),
+                zone_set(&[0x222222, 0x333333]),
+                true,
+                2
+            ),
+            zone_set(&[0x222222]),
+        );
+    }
+
+    #[test]
+    fn merge_zone_terms_keeps_explicit_zones_when_events_lack_zone_data() {
+        assert_eq!(
+            merge_zone_terms(&zone_set(&[0x111111, 0x222222]), HashSet::new(), false, 3),
+            zone_set(&[0x111111, 0x222222]),
+        );
+    }
+
+    #[test]
+    fn merge_zone_terms_returns_evidence_zones_when_no_explicit_zone_filter_exists() {
+        assert_eq!(
+            merge_zone_terms(&HashSet::new(), zone_set(&[0x222222, 0x333333]), true, 2),
+            zone_set(&[0x222222, 0x333333]),
+        );
+    }
 }

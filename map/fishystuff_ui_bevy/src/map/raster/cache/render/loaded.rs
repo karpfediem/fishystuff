@@ -89,7 +89,10 @@ impl RasterTileCache {
 
             if let Some(image) = images.get_mut(&entry.handle) {
                 image.sampler = ImageSampler::nearest();
-                if spec.pick_mode == PickMode::ExactTilePixel && view_mode == ViewMode::Map2D {
+                // Keep exact-pick tile pixels available in every view mode. The same
+                // textures are reused by terrain drapes, and filters may need to be
+                // applied after a mode switch without forcing a tile reload.
+                if spec.pick_mode == PickMode::ExactTilePixel {
                     if let Some(data) = image.data.clone() {
                         let size = image.texture_descriptor.size;
                         entry.zone_rgbs = collect_tile_zone_rgbs(&data);

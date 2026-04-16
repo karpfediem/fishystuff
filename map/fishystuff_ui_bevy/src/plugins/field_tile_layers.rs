@@ -18,14 +18,17 @@ use crate::map::field_metadata::{
 };
 use crate::map::field_view::{loaded_field_layer, FieldLayerView, LoadedFieldLayer};
 use crate::map::layers::{LayerId, LayerManifestStatus, LayerRegistry, LayerRuntime, LodPolicy};
-use crate::map::raster::TileKey;
+use crate::map::raster::cache::{clip_mask_allows_world_point, clip_mask_state_revision};
+use crate::map::raster::{RasterTileCache, TileKey};
 use crate::map::render::tile_z;
 use crate::map::spaces::layer_transform::{LayerTransform, TileSpace};
 use crate::map::spaces::world::MapToWorld;
-use crate::map::spaces::{MapPoint, MapRect, WorldPoint, WorldRect};
+use crate::map::spaces::{LayerPoint, MapPoint, MapRect, WorldPoint, WorldRect};
 use crate::plugins::api::HoverState;
 use crate::plugins::camera::Map2dCamera;
+use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
+use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
 
 const FIELD_LAYER_MAP_VERSION: u64 = 0;
@@ -49,6 +52,10 @@ impl Plugin for FieldTileLayersPlugin {
     }
 }
 
+fn should_render_field_layer_visual(layer: &crate::map::layers::LayerSpec) -> bool {
+    layer.field_url().is_some()
+}
+
 #[derive(Resource, Default)]
 struct FieldTileRuntime {
     layers: HashMap<LayerId, FieldTileLayerCache>,
@@ -65,6 +72,7 @@ struct FieldTileLayerCache {
 struct FieldTileEntry {
     base_entity: Entity,
     base_image: Handle<Image>,
+    visual_revision: u64,
     last_used: u64,
 }
 
@@ -89,6 +97,17 @@ struct FieldTileBounds {
 struct FieldLevelCandidate {
     z: i32,
     visible_count: usize,
+}
+
+struct FieldTileVisualContext<'a> {
+    filter: &'a EvidenceZoneFilter,
+    clip_mask_layer: Option<LayerId>,
+    layer_registry: &'a LayerRegistry,
+    layer_runtime: &'a LayerRuntime,
+    exact_lookups: &'a ExactLookupCache,
+    tile_cache: &'a RasterTileCache,
+    vector_runtime: &'a VectorLayerRuntime,
+    map_version: Option<&'a str>,
 }
 
 fn sync_exact_lookup_cache(
@@ -205,13 +224,16 @@ fn update_field_tile_layer_visuals(
     layer_registry: Res<LayerRegistry>,
     mut layer_runtime: ResMut<LayerRuntime>,
     exact_lookups: Res<ExactLookupCache>,
+    tile_cache: Res<RasterTileCache>,
+    vector_runtime: Res<VectorLayerRuntime>,
+    filter: Res<EvidenceZoneFilter>,
     hover: Res<HoverState>,
     mut field_runtime: ResMut<FieldTileRuntime>,
 ) {
     let active_exact_layers = layer_registry
         .ordered()
         .iter()
-        .filter(|layer| layer.field_url().is_some())
+        .filter(|layer| should_render_field_layer_visual(layer))
         .map(|layer| layer.id)
         .collect::<HashSet<_>>();
     cleanup_stale_field_layers(
@@ -244,31 +266,57 @@ fn update_field_tile_layer_visuals(
     let visible_map_rect = world_rect_to_clamped_map_rect(view_world, map_to_world);
 
     for layer in layer_registry.ordered() {
-        let Some(runtime_state) = layer_runtime.get_mut(layer.id) else {
+        let Some(runtime_state) = layer_runtime.get(layer.id) else {
             continue;
         };
+        let runtime_visible = runtime_state.visible;
+        let runtime_z_base = runtime_state.z_base;
+        let runtime_opacity = runtime_state.opacity.clamp(0.0, 1.0);
         let Some(url) = layer.field_url() else {
             hide_field_layer(&mut commands, field_runtime.layers.get(&layer.id));
             continue;
         };
+        if !should_render_field_layer_visual(layer) {
+            hide_field_layer(&mut commands, field_runtime.layers.get(&layer.id));
+            continue;
+        }
         let Some(field) = loaded_field_layer(layer, &exact_lookups) else {
             hide_field_layer(&mut commands, field_runtime.layers.get(&layer.id));
-            runtime_state.visible_tile_count = 0;
-            runtime_state.resident_tile_count = 0;
+            if let Some(runtime_state) = layer_runtime.get_mut(layer.id) {
+                runtime_state.visible_tile_count = 0;
+                runtime_state.resident_tile_count = 0;
+            }
             continue;
         };
+        let clip_mask_layer = layer_runtime.clip_mask_layer(layer.id);
+        let clip_mask_revision =
+            clip_mask_state_revision(&layer_registry, &layer_runtime, clip_mask_layer, &filter);
         if exact_lookups.get(layer.id, &url).is_none()
-            || !runtime_state.visible
+            || !runtime_visible
             || !matches!(layer.transform, LayerTransform::IdentityMapSpace)
         {
             hide_field_layer(&mut commands, field_runtime.layers.get(&layer.id));
-            runtime_state.visible_tile_count = 0;
+            if let Some(runtime_state) = layer_runtime.get_mut(layer.id) {
+                runtime_state.visible_tile_count = 0;
+            }
             continue;
         }
 
         let generated_max_level =
             generated_field_max_level(field.width(), field.height(), layer.tile_px.max(1));
         let layer_cache = field_runtime.layers.entry(layer.id).or_default();
+        let visual_revision =
+            field_tile_visual_revision(layer, &filter, clip_mask_layer, clip_mask_revision);
+        let visual_context = FieldTileVisualContext {
+            filter: &filter,
+            clip_mask_layer,
+            layer_registry: &layer_registry,
+            layer_runtime: &layer_runtime,
+            exact_lookups: &exact_lookups,
+            tile_cache: &tile_cache,
+            vector_runtime: &vector_runtime,
+            map_version: layer_registry.map_version_id(),
+        };
         let z = choose_field_tile_level(
             visible_map_rect,
             layer.tile_px.max(1),
@@ -286,7 +334,9 @@ fn update_field_tile_layer_visuals(
             FIELD_TILE_MARGIN,
         ) else {
             hide_field_layer(&mut commands, Some(layer_cache));
-            runtime_state.visible_tile_count = 0;
+            if let Some(runtime_state) = layer_runtime.get_mut(layer.id) {
+                runtime_state.visible_tile_count = 0;
+            }
             continue;
         };
         let hovered_field_id = hovered_field_id_for_layer(hover.info.as_ref(), layer.key.as_str());
@@ -312,6 +362,8 @@ fn update_field_tile_layer_visuals(
                     key,
                     layer,
                     field,
+                    visual_revision,
+                    &visual_context,
                 ) {
                     continue;
                 }
@@ -324,13 +376,13 @@ fn update_field_tile_layer_visuals(
                 else {
                     continue;
                 };
-                let depth = tile_z(runtime_state.z_base, max_level_u8, bounds.z);
+                let depth = tile_z(runtime_z_base, max_level_u8, bounds.z);
                 commands.entity(entry.base_entity).insert((
                     Visibility::Visible,
                     Sprite {
                         image: entry.base_image.clone(),
                         custom_size: Some(Vec2::new(w, h)),
-                        color: Color::srgba(1.0, 1.0, 1.0, runtime_state.opacity.clamp(0.0, 1.0)),
+                        color: Color::srgba(1.0, 1.0, 1.0, runtime_opacity),
                         ..default()
                     },
                     Transform::from_translation(Vec3::new(x0 + w * 0.5, y0 + h * 0.5, depth)),
@@ -347,8 +399,8 @@ fn update_field_tile_layer_visuals(
             field,
             map_to_world,
             hovered_field_id,
-            tile_z(runtime_state.z_base, max_level_u8, bounds.z) + FIELD_HIGHLIGHT_Z_BIAS,
-            runtime_state.opacity.clamp(0.0, 1.0),
+            tile_z(runtime_z_base, max_level_u8, bounds.z) + FIELD_HIGHLIGHT_Z_BIAS,
+            runtime_opacity,
         );
         hide_inactive_tiles(&mut commands, layer_cache, &active_keys);
         evict_excess_tiles(
@@ -358,13 +410,15 @@ fn update_field_tile_layer_visuals(
             &active_keys,
             layer.lod_policy.max_resident_tiles.max(active_keys.len()),
         );
-        runtime_state.current_base_lod = u8::try_from(bounds.z).ok();
-        runtime_state.current_detail_lod = None;
-        runtime_state.visible_tile_count = visible_count;
-        runtime_state.resident_tile_count = layer_cache.tiles.len() as u32;
-        runtime_state.pending_count = 0;
-        runtime_state.inflight_count = 0;
-        runtime_state.manifest_status = LayerManifestStatus::Ready;
+        if let Some(runtime_state) = layer_runtime.get_mut(layer.id) {
+            runtime_state.current_base_lod = u8::try_from(bounds.z).ok();
+            runtime_state.current_detail_lod = None;
+            runtime_state.visible_tile_count = visible_count;
+            runtime_state.resident_tile_count = layer_cache.tiles.len() as u32;
+            runtime_state.pending_count = 0;
+            runtime_state.inflight_count = 0;
+            runtime_state.manifest_status = LayerManifestStatus::Ready;
+        }
     }
 }
 
@@ -375,11 +429,25 @@ fn ensure_field_tile_entry(
     key: TileKey,
     layer: &crate::map::layers::LayerSpec,
     field: LoadedFieldLayer<'_>,
+    visual_revision: u64,
+    visual_context: &FieldTileVisualContext<'_>,
 ) -> bool {
-    if layer_cache.tiles.contains_key(&key) {
+    if let Some(entry) = layer_cache.tiles.get_mut(&key) {
+        if entry.visual_revision == visual_revision {
+            return true;
+        }
+        let Some(base_image) = render_field_tile_image(field, layer, key, visual_context) else {
+            return false;
+        };
+        if let Some(existing) = images.get_mut(&entry.base_image) {
+            *existing = base_image;
+        } else {
+            entry.base_image = images.add(base_image);
+        }
+        entry.visual_revision = visual_revision;
         return true;
     }
-    let Some(base_image) = render_field_tile_image(field, layer, key) else {
+    let Some(base_image) = render_field_tile_image(field, layer, key, visual_context) else {
         return false;
     };
     let base_handle = images.add(base_image);
@@ -400,6 +468,7 @@ fn ensure_field_tile_entry(
         FieldTileEntry {
             base_entity,
             base_image: base_handle,
+            visual_revision,
             last_used: 0,
         },
     );
@@ -638,6 +707,7 @@ fn render_field_tile_image(
     field: LoadedFieldLayer<'_>,
     layer: &crate::map::layers::LayerSpec,
     key: TileKey,
+    visual_context: &FieldTileVisualContext<'_>,
 ) -> Option<Image> {
     let (
         source_origin_x,
@@ -647,19 +717,145 @@ fn render_field_tile_image(
         output_width,
         output_height,
     ) = tile_render_dims(field, layer, key)?;
-    let chunk = field.render_rgba_chunk(
+    let chunk = if layer.is_zone_mask_visual_layer() && visual_context.clip_mask_layer.is_none() {
+        field.render_rgba_chunk_with(
+            source_origin_x,
+            source_origin_y,
+            source_width,
+            source_height,
+            output_width,
+            output_height,
+            |field_id| {
+                if field_id == 0 {
+                    return [0, 0, 0, 0];
+                }
+                if visual_context.filter.active
+                    && !visual_context.filter.zone_rgbs.contains(&field_id)
+                {
+                    return [0, 0, 0, 0];
+                }
+                [
+                    ((field_id >> 16) & 0xff) as u8,
+                    ((field_id >> 8) & 0xff) as u8,
+                    (field_id & 0xff) as u8,
+                    255,
+                ]
+            },
+        )
+    } else {
+        field.render_rgba_chunk(
+            source_origin_x,
+            source_origin_y,
+            source_width,
+            source_height,
+            output_width,
+            output_height,
+        )
+    };
+    let mut image = image_from_chunk(chunk.width(), chunk.height(), chunk.into_data());
+    apply_field_tile_visual_filters(
+        field,
+        layer,
+        &mut image,
         source_origin_x,
         source_origin_y,
         source_width,
         source_height,
-        output_width,
-        output_height,
+        visual_context,
     );
-    Some(image_from_chunk(
-        chunk.width(),
-        chunk.height(),
-        chunk.into_data(),
-    ))
+    Some(image)
+}
+
+fn field_tile_visual_revision(
+    layer: &crate::map::layers::LayerSpec,
+    filter: &EvidenceZoneFilter,
+    clip_mask_layer: Option<LayerId>,
+    clip_mask_revision: u64,
+) -> u64 {
+    if !layer.is_zone_mask_visual_layer() {
+        return 0;
+    }
+    let mut revision = clip_mask_revision
+        .wrapping_mul(2)
+        .wrapping_add(u64::from(clip_mask_layer.is_some()));
+    if filter.active {
+        revision = revision
+            .wrapping_mul(31)
+            .wrapping_add(filter.revision.wrapping_add(1));
+    }
+    revision
+}
+
+fn apply_field_tile_visual_filters(
+    field: LoadedFieldLayer<'_>,
+    layer: &crate::map::layers::LayerSpec,
+    image: &mut Image,
+    source_origin_x: i32,
+    source_origin_y: i32,
+    source_width: u32,
+    source_height: u32,
+    visual_context: &FieldTileVisualContext<'_>,
+) {
+    if !layer.is_zone_mask_visual_layer() {
+        return;
+    }
+    if visual_context.clip_mask_layer.is_none() {
+        return;
+    }
+    let Some(target_transform) = layer.world_transform(MapToWorld::default()) else {
+        return;
+    };
+    let Some(data) = image.data.as_mut() else {
+        return;
+    };
+    let output_width = image.texture_descriptor.size.width.max(1) as usize;
+    let output_height = image.texture_descriptor.size.height.max(1) as usize;
+    let px_scale_x = f64::from(source_width.max(1)) / output_width as f64;
+    let px_scale_y = f64::from(source_height.max(1)) / output_height as f64;
+
+    for row_idx in 0..output_height {
+        for col_idx in 0..output_width {
+            let pixel_offset = (row_idx * output_width + col_idx) * 4;
+            let layer_point = LayerPoint::new(
+                f64::from(source_origin_x) + (col_idx as f64 + 0.5) * px_scale_x,
+                f64::from(source_origin_y) + (row_idx as f64 + 0.5) * px_scale_y,
+            );
+            let field_id = field.field_id_at_layer_point(layer_point).unwrap_or(0);
+            if field_id == 0 {
+                data[pixel_offset + 3] = 0;
+                continue;
+            }
+            let zone_rgb = field
+                .rgb_at_layer_point(layer_point)
+                .map(|rgb| rgb.to_u32());
+            if visual_context.filter.active
+                && !zone_rgb.is_some_and(|rgb| visual_context.filter.zone_rgbs.contains(&rgb))
+            {
+                data[pixel_offset + 3] = 0;
+                continue;
+            }
+            let Some(mask_layer_id) = visual_context.clip_mask_layer else {
+                continue;
+            };
+            let world_point = target_transform.layer_to_world(layer_point);
+            let Some(allowed) = clip_mask_allows_world_point(
+                mask_layer_id,
+                world_point,
+                visual_context.layer_registry,
+                visual_context.layer_runtime,
+                visual_context.exact_lookups,
+                visual_context.tile_cache,
+                visual_context.vector_runtime,
+                visual_context.filter,
+                visual_context.map_version,
+            ) else {
+                continue;
+            };
+            if !allowed {
+                data[pixel_offset + 3] = 0;
+            }
+        }
+    }
 }
 
 fn tile_render_dims(
@@ -989,16 +1185,25 @@ fn view_rect(camera: &Camera, camera_transform: &Transform, window: &Window) -> 
 mod tests {
     use super::{
         build_field_highlight_mesh, choose_field_tile_level, generated_field_max_level,
-        visible_tile_bounds,
+        render_field_tile_image, should_render_field_layer_visual, visible_tile_bounds,
+        FieldTileVisualContext,
     };
+    use crate::map::exact_lookup::ExactLookupCache;
     use crate::map::field_view::LoadedFieldLayer;
-    use crate::map::layers::FieldColorMode;
-    use crate::map::layers::LodPolicy;
+    use crate::map::layers::{
+        FieldColorMode, FieldSourceSpec, LayerId, LayerKind, LayerRegistry, LayerRuntime,
+        LayerSpec, LodPolicy, PickMode,
+    };
+    use crate::map::raster::{RasterTileCache, TileKey};
+    use crate::map::spaces::layer_transform::LayerTransform;
     use crate::map::spaces::world::MapToWorld;
     use crate::map::spaces::{MapPoint, MapRect};
+    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::plugins::vector_layers::VectorLayerRuntime;
     use bevy::mesh::{Indices, VertexAttributeValues};
     use bevy::prelude::Mesh;
     use fishystuff_core::field::DiscreteFieldRows;
+    use std::collections::HashSet;
 
     fn test_policy() -> LodPolicy {
         LodPolicy {
@@ -1018,6 +1223,101 @@ mod tests {
             max_detail_requests_while_camera_moving: 1,
             motion_suppresses_refine: true,
         }
+    }
+
+    fn layer(kind: LayerKind, field_source: bool) -> LayerSpec {
+        LayerSpec {
+            id: LayerId::from_raw(1),
+            key: "test".to_string(),
+            name: "Test".to_string(),
+            visible_default: true,
+            opacity_default: 1.0,
+            z_base: 0.0,
+            kind,
+            tileset_url: String::new(),
+            tile_url_template: String::new(),
+            tileset_version: "v1".to_string(),
+            vector_source: None,
+            waypoint_source: None,
+            transform: LayerTransform::IdentityMapSpace,
+            tile_px: 256,
+            max_level: 0,
+            y_flip: false,
+            field_source: field_source.then(|| FieldSourceSpec {
+                url: "/fields/test.v1.bin".to_string(),
+                revision: "test".to_string(),
+                color_mode: FieldColorMode::DebugHash,
+            }),
+            field_metadata_source: None,
+            lod_policy: test_policy(),
+            request_weight: 1.0,
+            pick_mode: PickMode::None,
+            display_order: 0,
+        }
+    }
+
+    #[test]
+    fn zone_mask_raster_field_layers_still_render_field_visuals() {
+        assert!(should_render_field_layer_visual(&layer(
+            LayerKind::TiledRaster,
+            true
+        )));
+        assert!(should_render_field_layer_visual(&layer(
+            LayerKind::VectorGeoJson,
+            true
+        )));
+        assert!(!should_render_field_layer_visual(&layer(
+            LayerKind::VectorGeoJson,
+            false
+        )));
+    }
+
+    #[test]
+    fn zone_mask_field_tiles_hide_unselected_zone_rgbs() {
+        let field_rows =
+            DiscreteFieldRows::from_u32_grid(2, 1, &[0x123456, 0x654321]).expect("field");
+        let field = LoadedFieldLayer::from_parts(&field_rows, FieldColorMode::RgbU24);
+        let mut layer = layer(LayerKind::TiledRaster, true);
+        layer.key = "zone_mask".to_string();
+        layer.pick_mode = PickMode::ExactTilePixel;
+        layer.tile_px = 2;
+
+        let filter = EvidenceZoneFilter {
+            active: true,
+            zone_rgbs: HashSet::from([0x123456]),
+            revision: 7,
+        };
+        let layer_registry = LayerRegistry::default();
+        let layer_runtime = LayerRuntime::default();
+        let exact_lookups = ExactLookupCache::default();
+        let tile_cache = RasterTileCache::default();
+        let vector_runtime = VectorLayerRuntime::default();
+        let image = render_field_tile_image(
+            field,
+            &layer,
+            TileKey {
+                layer: layer.id,
+                map_version: 0,
+                z: 0,
+                tx: 0,
+                ty: 0,
+            },
+            &FieldTileVisualContext {
+                filter: &filter,
+                clip_mask_layer: None,
+                layer_registry: &layer_registry,
+                layer_runtime: &layer_runtime,
+                exact_lookups: &exact_lookups,
+                tile_cache: &tile_cache,
+                vector_runtime: &vector_runtime,
+                map_version: None,
+            },
+        )
+        .expect("image");
+        let data = image.data.expect("image data");
+
+        assert_eq!(data[3], 255);
+        assert_eq!(data[7], 0);
     }
 
     #[test]

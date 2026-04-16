@@ -450,6 +450,7 @@ const FISHYMAP_FISH_FILTER_TERMS = Object.freeze([
 ]);
 const FISHYMAP_GRADE_FISH_FILTER_TERMS = new Set(["red", "yellow", "blue", "green", "white"]);
 const FISHYMAP_FISH_SEARCH_TERM_KINDS = new Set(["fish", "fish-filter"]);
+const FISHYMAP_ZONE_SEARCH_TERM_KINDS = new Set(["zone"]);
 const FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID = -1;
 
 function normalizeFishFilterTerm(value) {
@@ -849,6 +850,78 @@ function projectSearchExpressionToFishTerms(expression) {
   return projectNode(normalizedExpression);
 }
 
+function buildZoneSearchExpressionNode(operator, children, negated = false) {
+  const normalizedNegated = negated === true;
+  const normalizedChildren = (Array.isArray(children) ? children : [])
+    .map((child) => cloneJson(child))
+    .filter(Boolean);
+  if (!normalizedChildren.length) {
+    return null;
+  }
+  if (normalizedChildren.length === 1) {
+    const singleChild = normalizedChildren[0];
+    const nextNegated = (singleChild?.negated === true) !== normalizedNegated;
+    if (nextNegated) {
+      singleChild.negated = true;
+    } else if (isPlainObject(singleChild)) {
+      delete singleChild.negated;
+    }
+    return singleChild;
+  }
+  const node = {
+    type: "group",
+    operator: String(operator || "").trim().toLowerCase() === "and" ? "and" : "or",
+    children: normalizedChildren,
+  };
+  if (normalizedNegated) {
+    node.negated = true;
+  }
+  return node;
+}
+
+function projectSearchExpressionToZoneTerms(expression) {
+  const normalizedExpression = resolveSearchExpression(expression);
+  const projectNode = (node) => {
+    if (!isPlainObject(node)) {
+      return { representable: true, expression: null, orthogonal: false };
+    }
+    if (node.type === "term") {
+      const kind = String(node.term?.kind || "").trim();
+      if (kind === "patch-bound" || kind === "fish" || kind === "fish-filter" || kind === "semantic") {
+        return { representable: true, expression: null, orthogonal: true };
+      }
+      const isRepresentableTerm = FISHYMAP_ZONE_SEARCH_TERM_KINDS.has(kind);
+      return {
+        representable: isRepresentableTerm || node.negated !== true,
+        expression: isRepresentableTerm ? cloneJson(node) : null,
+        orthogonal: false,
+      };
+    }
+    const operator = String(node.operator || "").trim().toLowerCase() === "and" ? "and" : "or";
+    const negated = node.negated === true;
+    const projectedChildren = (Array.isArray(node.children) ? node.children : []).map((child) =>
+      projectNode(child),
+    );
+    if (projectedChildren.some((child) => child.representable === false)) {
+      return { representable: false, expression: null, orthogonal: false };
+    }
+    const nonOrthogonalChildren = projectedChildren.filter((child) => child.orthogonal !== true);
+    const keptChildren = nonOrthogonalChildren.flatMap((child) => (child.expression ? [child.expression] : []));
+    if (negated && keptChildren.length !== nonOrthogonalChildren.length) {
+      return { representable: false, expression: null, orthogonal: false };
+    }
+    if (operator === "or" && keptChildren.length && keptChildren.length !== nonOrthogonalChildren.length) {
+      return { representable: false, expression: null, orthogonal: false };
+    }
+    return {
+      representable: true,
+      expression: buildZoneSearchExpressionNode(operator, keptChildren, negated),
+      orthogonal: false,
+    };
+  };
+  return projectNode(normalizedExpression);
+}
+
 function fishMatchesSearchTerm(fish, term, sharedFishState) {
   if (!isPlainObject(term)) {
     return false;
@@ -871,6 +944,55 @@ function fishMatchesSearchExpression(fish, expression, sharedFishState) {
     let result = false;
     if (node.type === "term") {
       result = fishMatchesSearchTerm(fish, node.term, sharedFishState);
+      return node.negated === true ? !result : result;
+    }
+    const childValues = (Array.isArray(node.children) ? node.children : []).map((child) => evaluateNode(child));
+    if (String(node.operator || "").trim().toLowerCase() === "and") {
+      result = childValues.every(Boolean);
+      return node.negated === true ? !result : result;
+    }
+    result = childValues.some(Boolean);
+    return node.negated === true ? !result : result;
+  };
+  return evaluateNode(normalizedExpression);
+}
+
+function normalizeZoneCatalogEntries(zoneCatalog) {
+  const entries = Array.isArray(zoneCatalog) ? zoneCatalog : [];
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of entries) {
+    const zoneRgb = Number.parseInt(entry?.zoneRgb, 10);
+    if (!Number.isInteger(zoneRgb) || zoneRgb <= 0 || seen.has(zoneRgb)) {
+      continue;
+    }
+    seen.add(zoneRgb);
+    normalized.push({
+      zoneRgb,
+    });
+  }
+  return normalized;
+}
+
+function zoneMatchesSearchTerm(zone, term) {
+  if (!isPlainObject(term)) {
+    return false;
+  }
+  if (term.kind === "zone") {
+    return zone.zoneRgb === Number.parseInt(term.zoneRgb, 10);
+  }
+  return false;
+}
+
+function zoneMatchesSearchExpression(zone, expression) {
+  const normalizedExpression = resolveSearchExpression(expression);
+  const evaluateNode = (node) => {
+    if (!isPlainObject(node)) {
+      return false;
+    }
+    let result = false;
+    if (node.type === "term") {
+      result = zoneMatchesSearchTerm(zone, node.term);
       return node.negated === true ? !result : result;
     }
     const childValues = (Array.isArray(node.children) ? node.children : []).map((child) => evaluateNode(child));
@@ -947,6 +1069,31 @@ export function resolveEffectiveFishIdsForWasm(inputState, currentState) {
   return effectiveFishIds.length
     ? effectiveFishIds
     : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
+}
+
+export function resolveEffectiveZoneRgbsForWasm(inputState, zoneCatalog = []) {
+  const selectedZoneRgbs = normalizeZoneRgbs(inputState?.filters?.zoneRgbs);
+  const zoneSearchExpression = projectSearchExpressionToZoneTerms(
+    inputState?.filters?.searchExpression,
+  );
+  const canUseSearchExpression =
+    zoneSearchExpression.representable === true && zoneSearchExpression.expression;
+  if (!canUseSearchExpression) {
+    return selectedZoneRgbs;
+  }
+
+  const catalogZones = normalizeZoneCatalogEntries(zoneCatalog);
+  if (!catalogZones.length) {
+    return selectedZoneRgbs;
+  }
+
+  const matchingZoneRgbs = [];
+  for (const zone of catalogZones) {
+    if (zoneMatchesSearchExpression(zone, zoneSearchExpression.expression)) {
+      matchingZoneRgbs.push(zone.zoneRgb);
+    }
+  }
+  return normalizeZoneRgbs(matchingZoneRgbs);
 }
 
 function buildEffectiveOutboundStatePatch(
@@ -1693,12 +1840,20 @@ export function applyStatePatch(inputState, patch) {
       const projectedFilters = projectSelectedSearchTermsToBridgedFilters(
         selectedSearchTermsFromExpression(nextSearchExpression),
       );
-      next.filters.fishIds = normalizeFishIds(projectedFilters.fishIds);
-      next.filters.zoneRgbs = normalizeZoneRgbs(projectedFilters.zoneRgbs);
-      next.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer(
-        projectedFilters.semanticFieldIdsByLayer,
-      );
-      next.filters.fishFilterTerms = normalizeFishFilterTerms(projectedFilters.fishFilterTerms);
+      if (!hasOwn(normalized.filters, "fishIds")) {
+        next.filters.fishIds = normalizeFishIds(projectedFilters.fishIds);
+      }
+      if (!hasOwn(normalized.filters, "zoneRgbs")) {
+        next.filters.zoneRgbs = normalizeZoneRgbs(projectedFilters.zoneRgbs);
+      }
+      if (!hasOwn(normalized.filters, "semanticFieldIdsByLayer")) {
+        next.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer(
+          projectedFilters.semanticFieldIdsByLayer,
+        );
+      }
+      if (!hasOwn(normalized.filters, "fishFilterTerms")) {
+        next.filters.fishFilterTerms = normalizeFishFilterTerms(projectedFilters.fishFilterTerms);
+      }
       next.filters.searchExpression = nextSearchExpression;
     } else if (searchFilterKeysChanged) {
       next.filters.searchExpression = resolveSearchExpression(undefined, undefined, next.filters);

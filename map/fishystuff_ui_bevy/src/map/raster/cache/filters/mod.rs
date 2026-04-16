@@ -26,6 +26,15 @@ pub(crate) struct VisualFilterContext<'a> {
     pub(crate) view_mode: ViewMode,
 }
 
+fn texture_pick_filter_enabled(spec: &crate::map::layers::LayerSpec, view_mode: ViewMode) -> bool {
+    spec.pick_mode == PickMode::ExactTilePixel && matches!(view_mode, ViewMode::Map2D)
+        || (view_mode == ViewMode::Terrain3D && spec.is_zone_mask_visual_layer())
+}
+
+fn entity_pick_filter_enabled(spec: &crate::map::layers::LayerSpec, view_mode: ViewMode) -> bool {
+    spec.pick_mode == PickMode::ExactTilePixel && view_mode == ViewMode::Map2D
+}
+
 impl RasterTileCache {
     pub(crate) fn sync_hover_highlights_only(
         &mut self,
@@ -141,15 +150,21 @@ impl RasterTileCache {
             };
             let zone_lookup_rows = read_entry.zone_lookup_rows.as_ref();
 
-            let apply_pick_filter =
-                spec.pick_mode == PickMode::ExactTilePixel && view_mode == ViewMode::Map2D;
-            let next_filter_active = apply_pick_filter && filter.active;
+            let apply_texture_pick_filter = texture_pick_filter_enabled(spec, view_mode);
+            let apply_entity_pick_filter = entity_pick_filter_enabled(spec, view_mode);
+            let next_filter_active = apply_texture_pick_filter && filter.active;
             let next_filter_revision = if next_filter_active {
                 filter.revision
             } else {
                 0
             };
-            let has_intersection = if next_filter_active {
+            // The zone mask visual should always recompose from exact zone membership when
+            // a zone filter is active, even if the raster tile's cached color list is stale.
+            let force_exact_zone_mask_filter =
+                next_filter_active && spec.is_zone_mask_visual_layer();
+            let has_intersection = if force_exact_zone_mask_filter {
+                true
+            } else if next_filter_active {
                 zone_rgbs
                     .iter()
                     .any(|zone_rgb| filter.zone_rgbs.contains(zone_rgb))
@@ -157,22 +172,28 @@ impl RasterTileCache {
                 true
             };
             let all_selected = next_filter_active
+                && !force_exact_zone_mask_filter
                 && !zone_rgbs.is_empty()
                 && zone_rgbs
                     .iter()
                     .all(|zone_rgb| filter.zone_rgbs.contains(zone_rgb));
-            let target_hover_zone = if apply_pick_filter {
-                hover_zone_rgb
-                    .filter(|hover_rgb| zone_rgbs.iter().any(|zone_rgb| zone_rgb == hover_rgb))
+            let target_hover_zone = if apply_texture_pick_filter {
+                if spec.is_zone_mask_visual_layer() {
+                    hover_zone_rgb
+                } else {
+                    hover_zone_rgb
+                        .filter(|hover_rgb| zone_rgbs.iter().any(|zone_rgb| zone_rgb == hover_rgb))
+                }
             } else {
                 None
             };
-            let requires_pixel_filter = has_intersection && next_filter_active && !all_selected;
+            let requires_pixel_filter = force_exact_zone_mask_filter
+                || (has_intersection && next_filter_active && !all_selected);
             let clip_mask_layer = layer_runtime.clip_mask_layer(key.layer);
             let clip_mask_revision =
                 clip_mask_state_revision(layer_registry, layer_runtime, clip_mask_layer, filter);
 
-            if apply_pick_filter {
+            if apply_entity_pick_filter {
                 if let Some(entity) = entity {
                     commands.entity(entity).insert(if has_intersection {
                         Visibility::Visible
@@ -196,7 +217,7 @@ impl RasterTileCache {
                 continue;
             }
 
-            if apply_pick_filter && !has_intersection {
+            if apply_entity_pick_filter && !has_intersection {
                 if let Some(entry) = self.entries.get_mut(&key) {
                     entry.filter_active = next_filter_active;
                     entry.filter_revision = next_filter_revision;
@@ -258,6 +279,7 @@ impl RasterTileCache {
                         hover_zone_rgb: target_hover_zone,
                         clip_mask_layer,
                         layer_registry,
+                        layer_runtime,
                         exact_lookups,
                         tile_cache: self,
                         vector_runtime,
@@ -277,5 +299,73 @@ impl RasterTileCache {
             }
         }
         self.applied_hover_zone_rgb = hover_zone_rgb;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{entity_pick_filter_enabled, texture_pick_filter_enabled};
+    use crate::map::camera::mode::ViewMode;
+    use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
+    use crate::map::spaces::layer_transform::LayerTransform;
+
+    fn layer(key: &str, pick_mode: PickMode) -> LayerSpec {
+        LayerSpec {
+            id: LayerId::from_raw(1),
+            key: key.to_string(),
+            name: "Test".to_string(),
+            visible_default: true,
+            opacity_default: 1.0,
+            z_base: 0.0,
+            kind: LayerKind::TiledRaster,
+            tileset_url: String::new(),
+            tile_url_template: String::new(),
+            tileset_version: "v1".to_string(),
+            vector_source: None,
+            waypoint_source: None,
+            transform: LayerTransform::IdentityMapSpace,
+            tile_px: 256,
+            max_level: 0,
+            y_flip: false,
+            field_source: None,
+            field_metadata_source: None,
+            lod_policy: LodPolicy {
+                target_tiles: 64,
+                hysteresis_hi: 80.0,
+                hysteresis_lo: 40.0,
+                margin_tiles: 0,
+                enable_refine: true,
+                refine_debounce_ms: 0,
+                max_detail_tiles: 128,
+                max_resident_tiles: 256,
+                pinned_coarse_levels: 2,
+                coarse_pin_min_level: None,
+                warm_margin_tiles: 1,
+                protected_margin_tiles: 0,
+                detail_eviction_weight: 4.0,
+                max_detail_requests_while_camera_moving: 1,
+                motion_suppresses_refine: true,
+            },
+            request_weight: 1.0,
+            pick_mode,
+            display_order: 0,
+        }
+    }
+
+    #[test]
+    fn terrain_3d_zone_mask_keeps_texture_filtering_without_2d_entity_filtering() {
+        let zone_mask = layer("zone_mask", PickMode::ExactTilePixel);
+
+        assert!(texture_pick_filter_enabled(&zone_mask, ViewMode::Terrain3D));
+        assert!(!entity_pick_filter_enabled(&zone_mask, ViewMode::Terrain3D));
+    }
+
+    #[test]
+    fn non_zone_exact_layers_only_filter_in_map_2d() {
+        let exact = layer("regions", PickMode::ExactTilePixel);
+
+        assert!(!texture_pick_filter_enabled(&exact, ViewMode::Terrain3D));
+        assert!(texture_pick_filter_enabled(&exact, ViewMode::Map2D));
+        assert!(entity_pick_filter_enabled(&exact, ViewMode::Map2D));
     }
 }

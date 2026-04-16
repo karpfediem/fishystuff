@@ -88,6 +88,9 @@ function hasActiveFishFilterTerms(signals) {
 }
 
 export function shouldRefreshBridgeFromRuntimeEvent(signals, eventDetail) {
+  if (isPlainObject(eventDetail?.state) && "selection" in eventDetail.state) {
+    return true;
+  }
   return hasActiveFishFilterTerms(signals)
     && isPlainObject(eventDetail?.state)
     && "catalog" in eventDetail.state;
@@ -226,6 +229,7 @@ export async function start() {
   let mounted = false;
   let lastBridgePatchJson = "";
   let actionState = app.readLastActionState();
+  let zoneCatalog = [];
   const bridgeStateRefresher = createDeferredBridgeStateRefresher({
     bridge,
     onSnapshot: patchSignalsFromBridge,
@@ -257,6 +261,7 @@ export async function start() {
     }
     const patch = app.nextBridgePatch(signals(), {
       currentState: isPlainObject(currentStateOverride) ? currentStateOverride : currentBridgeState(),
+      zoneCatalog,
     });
     const patchJson = JSON.stringify(patch);
     if (patchJson === lastBridgePatchJson) {
@@ -332,6 +337,7 @@ export async function start() {
 
   const initialPatch = app.nextBridgePatch(signals(), {
     currentState: createEmptySnapshot(),
+    zoneCatalog,
   });
   const initialRestorePatch = snapshotToRestorePatch(signals()?._map_session || {});
   await bridge.mount(shell, {
@@ -374,8 +380,10 @@ export async function start() {
   lastBridgePatchJson = JSON.stringify(initialPatch);
   patchSignalsFromBridge(currentBridgeState());
   patchBridgeFromSignals(currentBridgeState());
-  void loadZoneCatalog().then((zoneCatalog) => {
+  void loadZoneCatalog().then((loadedZoneCatalog) => {
+    zoneCatalog = Array.isArray(loadedZoneCatalog) ? cloneJson(loadedZoneCatalog) : [];
     dispatchShellZoneCatalogReadyEvent(shell, zoneCatalog);
+    patchBridgeFromSignals();
   });
 }
 

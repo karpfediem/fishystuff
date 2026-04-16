@@ -2,10 +2,12 @@ use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::layer_query::{sample_layers_at_world_point, LayerSamplingContext};
 use crate::map::layers::{LayerRegistry, LayerRuntime, LayerSpec};
+use crate::map::raster::cache::clip_mask_allows_world_point;
 use crate::map::raster::RasterTileCache;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
 use crate::plugins::api::HoverInfo;
+use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
 pub struct WorldPointQueryContext<'a> {
@@ -15,6 +17,7 @@ pub struct WorldPointQueryContext<'a> {
     pub field_metadata: &'a FieldMetadataCache,
     pub tile_cache: &'a RasterTileCache,
     pub vector_runtime: &'a VectorLayerRuntime,
+    pub evidence_zone_filter: &'a EvidenceZoneFilter,
     pub map_to_world: MapToWorld,
 }
 
@@ -37,7 +40,25 @@ pub fn hover_info_at_world_point(
     let map_py = map_y.floor() as i32;
     let hover_layers = current_hover_layers(context.layer_registry, context.layer_runtime);
     let layer_samples = sample_layers_at_world_point(
-        &hover_layers,
+        &hover_layers
+            .into_iter()
+            .filter(|layer| {
+                !matches!(
+                    clip_mask_allows_world_point(
+                        layer.id,
+                        world_point,
+                        context.layer_registry,
+                        context.layer_runtime,
+                        context.exact_lookups,
+                        context.tile_cache,
+                        context.vector_runtime,
+                        context.evidence_zone_filter,
+                        context.layer_registry.map_version_id(),
+                    ),
+                    Some(false)
+                )
+            })
+            .collect::<Vec<_>>(),
         &LayerSamplingContext {
             exact_lookups: context.exact_lookups,
             field_metadata: context.field_metadata,
@@ -97,6 +118,7 @@ mod tests {
     use crate::map::raster::RasterTileCache;
     use crate::map::spaces::world::MapToWorld;
     use crate::map::spaces::MapPoint;
+    use crate::plugins::points::EvidenceZoneFilter;
     use crate::plugins::vector_layers::VectorLayerRuntime;
     use fishystuff_api::models::layers::{
         LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo, LayersResponse,
@@ -266,6 +288,7 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
+        let evidence_zone_filter = EvidenceZoneFilter::default();
         let info = hover_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.0, 0.0)),
             &super::WorldPointQueryContext {
@@ -275,6 +298,7 @@ mod tests {
                 field_metadata: &field_metadata,
                 tile_cache: &RasterTileCache::default(),
                 vector_runtime: &VectorLayerRuntime::default(),
+                evidence_zone_filter: &evidence_zone_filter,
                 map_to_world,
             },
         )

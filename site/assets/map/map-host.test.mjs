@@ -15,6 +15,7 @@ import {
   resolveApiBaseUrl,
   resolveCdnBaseUrl,
   resolveEffectiveFishIdsForWasm,
+  resolveEffectiveZoneRgbsForWasm,
   resolveMapRuntimeManifestUrl,
 } from "./map-host.js";
 
@@ -866,6 +867,67 @@ test("resolveEffectiveFishIdsForWasm honors negated fish filter expressions", ()
     ),
     [77, 912],
   );
+});
+
+test("resolveEffectiveZoneRgbsForWasm honors negated zone expressions with orthogonal fish terms", () => {
+  assert.deepEqual(
+    resolveEffectiveZoneRgbsForWasm(
+      {
+        filters: {
+          zoneRgbs: [],
+          searchExpression: {
+            type: "group",
+            operator: "and",
+            children: [
+              {
+                type: "group",
+                operator: "or",
+                negated: true,
+                children: [{ type: "term", term: { kind: "zone", zoneRgb: 0x123456 } }],
+              },
+              { type: "term", term: { kind: "fish-filter", term: "red" } },
+            ],
+          },
+        },
+      },
+      [
+        { zoneRgb: 0x123456, name: "Alpha Sea" },
+        { zoneRgb: 0x654321, name: "Beta Sea" },
+        { zoneRgb: 0x777777, name: "Gamma Sea" },
+      ],
+    ),
+    [0x654321, 0x777777],
+  );
+});
+
+test("applyStatePatch preserves explicit zone filters when search expression is also present", () => {
+  const next = applyStatePatch(undefined, {
+    version: 1,
+    filters: {
+      zoneRgbs: [0x654321, 0x777777],
+      semanticFieldIdsByLayer: {
+        zone_mask: [0x654321, 0x777777],
+      },
+      searchExpression: {
+        type: "group",
+        operator: "and",
+        children: [
+          {
+            type: "group",
+            operator: "or",
+            negated: true,
+            children: [{ type: "term", term: { kind: "zone", zoneRgb: 0x123456 } }],
+          },
+          { type: "term", term: { kind: "fish-filter", term: "red" } },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(next.filters.zoneRgbs, [0x654321, 0x777777]);
+  assert.deepEqual(next.filters.semanticFieldIdsByLayer, {
+    zone_mask: [0x654321, 0x777777],
+  });
 });
 
 test("semantic field filter patches are normalized and keep zone ids in sync", () => {
