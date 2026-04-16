@@ -202,21 +202,21 @@ function renderTermNode(node, escapeHtml, buttonClass) {
         label,
         className: "join-item",
       })}
-      <span class="fishy-applied-term-main join-item">
+      <div class="fishy-applied-term-main join-item">
         ${
           node.kindLabel
             ? `<span class="badge badge-soft badge-xs fishy-applied-term-kind">${escapeHtml(node.kindLabel)}</span>`
             : ""
         }
-        <span class="fishy-applied-term-body">
+        <div class="fishy-applied-term-body">
           ${node.contentMarkup || `<span class="truncate">${escapeHtml(label)}</span>`}
-        </span>
+        </div>
         ${
           node.description
             ? `<span class="fishy-applied-term-description text-xs text-base-content/70" title="${escapeHtml(node.description)}">${escapeHtml(node.description)}</span>`
             : ""
         }
-      </span>
+      </div>
       <button
         class="${escapeHtml(buttonClass)} join-item"
         type="button"

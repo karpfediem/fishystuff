@@ -13,6 +13,7 @@ bevy_flair = "0.7"
 bevy_resvg = "2.3.3"
 bevy_image = { version = "0.18", default-features = false }
 bevy_render = { version = "0.18", default-features = false }
+chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 encase = "0.12"
 earcutr = "0.4"

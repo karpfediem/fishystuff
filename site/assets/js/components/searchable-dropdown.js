@@ -2,6 +2,7 @@ const CLOSE_DELAY_MS = 150;
 const LOCAL_RESULT_LIMIT = 24;
 const SEARCH_QUERY_PARAM = "q";
 const SELECTED_QUERY_PARAM = "selected";
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const URL_SCOPE_RESOLVERS = Object.freeze({
     api: "__fishystuffResolveApiUrl",
     site: "__fishystuffResolveSiteUrl",
@@ -55,6 +56,32 @@ export function normalizeSearchText(value) {
     return String(value ?? "").trim().toLowerCase();
 }
 
+export function normalizeIsoDateValue(value) {
+    const normalized = String(value ?? "").trim();
+    if (!ISO_DATE_PATTERN.test(normalized)) {
+        return "";
+    }
+    const [yearRaw, monthRaw, dayRaw] = normalized.split("-");
+    const year = Number.parseInt(yearRaw, 10);
+    const month = Number.parseInt(monthRaw, 10);
+    const day = Number.parseInt(dayRaw, 10);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+        return "";
+    }
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+    if (
+        date.getUTCFullYear() !== year
+        || date.getUTCMonth() !== month - 1
+        || date.getUTCDate() !== day
+    ) {
+        return "";
+    }
+    return normalized;
+}
+
 function parseHtmlFragment(html) {
     const template = document.createElement("template");
     template.innerHTML = String(html ?? "");
@@ -100,8 +127,14 @@ export class FishySearchableDropdown extends HTMLElement {
         this._closeTimer = 0;
         this._lastSearchKey = "";
         this._outsideListenerAttached = false;
+        this._viewportListenersAttached = false;
         this._isReflectingBoundInputValue = false;
         this._isWritingBoundInputValue = false;
+        this._panelAnchor = null;
+        this._panelDetached = false;
+        this._panelElement = null;
+        this._panelEventsAttached = false;
+        this._panelPositionFrame = 0;
         this._releaseBoundInput = null;
         this._searchController = null;
 
@@ -113,6 +146,7 @@ export class FishySearchableDropdown extends HTMLElement {
         this._handleInput = this._handleInput.bind(this);
         this._handleKeyDown = this._handleKeyDown.bind(this);
         this._handleMouseDown = this._handleMouseDown.bind(this);
+        this._handleViewportChange = this._handleViewportChange.bind(this);
 
         this.addEventListener("click", this._handleClick);
         this.addEventListener("focusin", this._handleFocusIn);
@@ -177,6 +211,8 @@ export class FishySearchableDropdown extends HTMLElement {
         upgradeProperty(this, "searchUrl");
         upgradeProperty(this, "searchUrlRoot");
         upgradeProperty(this, "value");
+        this._ensurePanelReference();
+        this._attachPanelEvents();
         this._bindBoundInput();
 
         queueMicrotask(() => {
@@ -190,10 +226,13 @@ export class FishySearchableDropdown extends HTMLElement {
     }
 
     disconnectedCallback() {
+        this.close();
+        this._detachPanelEvents();
         this._unbindBoundInput();
         this._cancelClose();
         this._abortSearch();
         this._detachOutsideListener();
+        this._detachViewportListeners();
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
@@ -220,10 +259,14 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         this._cancelClose();
+        const panelRect = this._measurePanelRect();
+        this._detachPanel();
         panel.hidden = false;
         this.style.zIndex = "60";
         this._setExpanded(true);
         this._attachOutsideListener();
+        this._attachViewportListeners();
+        this._positionPanel(panelRect.width);
         input.value = "";
         this._lastSearchKey = "";
 
@@ -231,6 +274,7 @@ export class FishySearchableDropdown extends HTMLElement {
             if (!this.isConnected || !this.isOpen()) {
                 return;
             }
+            this._positionPanel(panelRect.width);
             input.focus();
             this.search("");
         });
@@ -247,7 +291,9 @@ export class FishySearchableDropdown extends HTMLElement {
         this.style.zIndex = "";
         this._abortSearch();
         this._detachOutsideListener();
+        this._detachViewportListeners();
         this._setExpanded(false);
+        this._restorePanel();
     }
 
     refreshResults() {
@@ -362,15 +408,16 @@ export class FishySearchableDropdown extends HTMLElement {
     }
 
     panelElement() {
-        return this.querySelector('[data-role="panel"]');
+        this._ensurePanelReference();
+        return this._panelElement;
     }
 
     resultsElement() {
-        return this.querySelector('[data-role="results"]');
+        return this.panelElement()?.querySelector?.('[data-role="results"]') ?? null;
     }
 
     searchInputElement() {
-        return this.querySelector('[data-role="search-input"]');
+        return this.panelElement()?.querySelector?.('[data-role="search-input"]') ?? null;
     }
 
     selectedLabelElement() {
@@ -387,6 +434,82 @@ export class FishySearchableDropdown extends HTMLElement {
 
     triggerElement() {
         return this.querySelector('[data-role="trigger"]');
+    }
+
+    _buildCustomOption(rawQuery, selectedValue, templates) {
+        if (getStringAttribute(this, "custom-option-mode") !== "iso-date") {
+            return null;
+        }
+        const queryValue = normalizeIsoDateValue(rawQuery);
+        const selectedDateValue = normalizeIsoDateValue(selectedValue);
+        const customValue = queryValue || (!String(rawQuery ?? "").trim() ? selectedDateValue : "");
+        if (!customValue) {
+            return null;
+        }
+        const templateValues = new Set(
+            (Array.isArray(templates) ? templates : [])
+                .map((template) => String(template.getAttribute("data-value") ?? "").trim())
+                .filter(Boolean),
+        );
+        if (templateValues.has(customValue)) {
+            return null;
+        }
+
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `justify-between gap-3 text-left${customValue === selectedValue ? " menu-active" : ""}`;
+        button.dataset.searchableDropdownOption = "";
+        button.setAttribute("data-value", customValue);
+        button.setAttribute("data-label", customValue);
+
+        const optionContent = document.createElement("span");
+        optionContent.dataset.role = "option-content";
+        optionContent.className = "flex min-w-0 flex-1 items-center gap-3";
+
+        const label = document.createElement("span");
+        label.className = "truncate font-medium";
+        label.textContent = `Use date ${customValue}`;
+        optionContent.append(label);
+        button.append(optionContent);
+
+        const selectedTemplate = document.createElement("template");
+        selectedTemplate.dataset.role = "selected-content";
+        selectedTemplate.innerHTML = `<span class="truncate font-medium">${customValue}</span>`;
+        button.append(selectedTemplate);
+
+        if (customValue === selectedValue) {
+            const badge = document.createElement("span");
+            badge.className = "badge badge-soft badge-primary badge-xs";
+            badge.textContent = "Selected";
+            button.append(badge);
+        }
+
+        item.append(button);
+        return item;
+    }
+
+    _attachPanelEvents() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement) || this._panelEventsAttached) {
+            return;
+        }
+        panel.addEventListener("click", this._handleClick);
+        panel.addEventListener("focusin", this._handleFocusIn);
+        panel.addEventListener("focusout", this._handleFocusOut);
+        panel.addEventListener("input", this._handleInput);
+        panel.addEventListener("keydown", this._handleKeyDown);
+        panel.addEventListener("mousedown", this._handleMouseDown);
+        this._panelEventsAttached = true;
+    }
+
+    _attachViewportListeners() {
+        if (this._viewportListenersAttached) {
+            return;
+        }
+        window.addEventListener("resize", this._handleViewportChange);
+        window.addEventListener("scroll", this._handleViewportChange, true);
+        this._viewportListenersAttached = true;
     }
 
     _bindBoundInput() {
@@ -458,6 +581,20 @@ export class FishySearchableDropdown extends HTMLElement {
         this._outsideListenerAttached = true;
     }
 
+    _clearDetachedPanelStyles() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement)) {
+            return;
+        }
+        panel.style.position = "";
+        panel.style.left = "";
+        panel.style.top = "";
+        panel.style.width = "";
+        panel.style.maxWidth = "";
+        panel.style.zIndex = "";
+        panel.style.margin = "";
+    }
+
     _buildSearchUrl(query) {
         const resolved = resolveScopedUrl(this.searchUrl, this.searchUrlRoot);
         if (!resolved) {
@@ -507,6 +644,54 @@ export class FishySearchableDropdown extends HTMLElement {
         this._outsideListenerAttached = false;
     }
 
+    _detachPanel() {
+        const panel = this.panelElement();
+        const body = document.body || document.documentElement;
+        if (!(panel instanceof HTMLElement) || !(body instanceof HTMLElement) || this._panelDetached) {
+            return;
+        }
+        if (!(this._panelAnchor instanceof Node) && panel.parentNode) {
+            this._panelAnchor = document.createComment("fishy-searchable-dropdown-panel");
+            panel.parentNode.insertBefore(this._panelAnchor, panel);
+        }
+        body.appendChild(panel);
+        this._panelDetached = true;
+    }
+
+    _detachPanelEvents() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement) || !this._panelEventsAttached) {
+            return;
+        }
+        panel.removeEventListener("click", this._handleClick);
+        panel.removeEventListener("focusin", this._handleFocusIn);
+        panel.removeEventListener("focusout", this._handleFocusOut);
+        panel.removeEventListener("input", this._handleInput);
+        panel.removeEventListener("keydown", this._handleKeyDown);
+        panel.removeEventListener("mousedown", this._handleMouseDown);
+        this._panelEventsAttached = false;
+    }
+
+    _detachViewportListeners() {
+        if (!this._viewportListenersAttached) {
+            return;
+        }
+        window.removeEventListener("resize", this._handleViewportChange);
+        window.removeEventListener("scroll", this._handleViewportChange, true);
+        this._viewportListenersAttached = false;
+        if (this._panelPositionFrame) {
+            window.cancelAnimationFrame?.(this._panelPositionFrame);
+            this._panelPositionFrame = 0;
+        }
+    }
+
+    _ensurePanelReference() {
+        if (!(this._panelElement instanceof HTMLElement)) {
+            this._panelElement = this.querySelector('[data-role="panel"]');
+        }
+        return this._panelElement;
+    }
+
     _findCatalogTemplateByValue(value) {
         const catalog = this.selectedContentCatalogElement();
         if (!(catalog instanceof HTMLElement)) {
@@ -519,7 +704,7 @@ export class FishySearchableDropdown extends HTMLElement {
 
     _findOptionByValue(value) {
         return Array.from(
-            this.querySelectorAll("[data-searchable-dropdown-option]"),
+            this.panelElement()?.querySelectorAll?.("[data-searchable-dropdown-option]") ?? [],
         ).find((option) => option.getAttribute("data-value") === value) ?? null;
     }
 
@@ -541,14 +726,14 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         const trigger = event.target.closest('[data-role="trigger"]');
-        if (trigger && this.contains(trigger)) {
+        if (trigger && this._ownsNode(trigger)) {
             event.preventDefault();
             this.toggle();
             return;
         }
 
         const option = event.target.closest("[data-searchable-dropdown-option]");
-        if (!option || !this.contains(option)) {
+        if (!option || !this._ownsNode(option)) {
             return;
         }
 
@@ -560,14 +745,14 @@ export class FishySearchableDropdown extends HTMLElement {
     }
 
     _handleDocumentPointerDown(event) {
-        if (!(event.target instanceof Node) || this.contains(event.target)) {
+        if (!(event.target instanceof Node) || this._ownsNode(event.target)) {
             return;
         }
         this.close();
     }
 
     _handleFocusIn(event) {
-        if (this.contains(event.target)) {
+        if (event.target instanceof Node && this._ownsNode(event.target)) {
             this._cancelClose();
         }
     }
@@ -578,7 +763,7 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         const nextTarget = event.relatedTarget;
-        if (nextTarget instanceof Node && this.contains(nextTarget)) {
+        if (nextTarget instanceof Node && this._ownsNode(nextTarget)) {
             return;
         }
 
@@ -593,7 +778,7 @@ export class FishySearchableDropdown extends HTMLElement {
     }
 
     _handleKeyDown(event) {
-        if (event.key !== "Escape" || !this.contains(event.target)) {
+        if (!(event.target instanceof Node) || event.key !== "Escape" || !this._ownsNode(event.target)) {
             return;
         }
 
@@ -607,16 +792,26 @@ export class FishySearchableDropdown extends HTMLElement {
     }
 
     _handleMouseDown(event) {
-        if (!(event.target instanceof Element) || !this.contains(event.target)) {
+        if (!(event.target instanceof Element) || !this._ownsNode(event.target)) {
             return;
         }
 
         this._cancelClose();
 
         const option = event.target.closest("[data-searchable-dropdown-option]");
-        if (option && this.contains(option)) {
+        if (option && this._ownsNode(option)) {
             event.preventDefault();
         }
+    }
+
+    _handleViewportChange() {
+        if (!this.isOpen() || this._panelPositionFrame) {
+            return;
+        }
+        this._panelPositionFrame = window.requestAnimationFrame(() => {
+            this._panelPositionFrame = 0;
+            this._positionPanel();
+        }) || 0;
     }
 
     _scheduleClose() {
@@ -675,8 +870,9 @@ export class FishySearchableDropdown extends HTMLElement {
                 return leftSelected - rightSelected;
             })
             .slice(0, LOCAL_RESULT_LIMIT);
+        const customOption = this._buildCustomOption(rawQuery, selectedValue, templates);
 
-        if (!matches.length) {
+        if (!matches.length && !customOption) {
             const item = document.createElement("li");
             item.className = "menu-disabled";
             const label = document.createElement("span");
@@ -687,6 +883,7 @@ export class FishySearchableDropdown extends HTMLElement {
         }
 
         results.replaceChildren(
+            ...(customOption ? [customOption] : []),
             ...matches.map((template) => {
                 const value = String(template.getAttribute("data-value") ?? "");
                 const label = String(template.getAttribute("data-label") ?? value).trim();
@@ -717,6 +914,85 @@ export class FishySearchableDropdown extends HTMLElement {
         );
     }
 
+    _measurePanelRect() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement)) {
+            return { width: 0, height: 0 };
+        }
+        const previousHidden = panel.hidden;
+        const previousVisibility = panel.style.visibility;
+        panel.hidden = false;
+        panel.style.visibility = "hidden";
+        const rect = panel.getBoundingClientRect();
+        panel.hidden = previousHidden;
+        panel.style.visibility = previousVisibility;
+        return rect;
+    }
+
+    _ownsNode(node) {
+        if (!(node instanceof Node)) {
+            return false;
+        }
+        const panel = this.panelElement();
+        return this.contains(node) || (panel instanceof Node && panel.contains(node));
+    }
+
+    _positionPanel(measuredWidth = 0) {
+        const panel = this.panelElement();
+        const trigger = this.triggerElement();
+        if (!(panel instanceof HTMLElement) || !(trigger instanceof HTMLElement)) {
+            return;
+        }
+        const viewportWidth = Math.max(window.innerWidth || 0, 320);
+        const viewportHeight = Math.max(window.innerHeight || 0, 240);
+        const triggerRect = trigger.getBoundingClientRect();
+        const width = Math.max(
+            0,
+            Math.min(
+                Math.round(measuredWidth || panel.getBoundingClientRect().width || triggerRect.width),
+                viewportWidth - 24,
+            ),
+        );
+
+        panel.style.position = "fixed";
+        panel.style.margin = "0";
+        panel.style.zIndex = "70";
+        panel.style.width = width ? `${width}px` : "";
+        panel.style.maxWidth = `${Math.max(viewportWidth - 24, 160)}px`;
+        panel.style.left = "12px";
+        panel.style.top = "12px";
+
+        const panelRect = panel.getBoundingClientRect();
+        let left = Math.round(triggerRect.left);
+        if (left + panelRect.width > viewportWidth - 12) {
+            left = Math.max(12, Math.round(viewportWidth - panelRect.width - 12));
+        }
+
+        const belowTop = Math.round(triggerRect.bottom + 8);
+        const aboveTop = Math.round(triggerRect.top - panelRect.height - 8);
+        const top =
+            belowTop + panelRect.height <= viewportHeight - 12 || aboveTop < 12
+                ? belowTop
+                : aboveTop;
+
+        panel.style.left = `${left}px`;
+        panel.style.top = `${Math.max(12, top)}px`;
+    }
+
+    _restorePanel() {
+        const panel = this.panelElement();
+        if (!(panel instanceof HTMLElement) || !this._panelDetached) {
+            return;
+        }
+        this._clearDetachedPanelStyles();
+        if (this._panelAnchor?.parentNode) {
+            this._panelAnchor.parentNode.insertBefore(panel, this._panelAnchor.nextSibling);
+        } else {
+            this.appendChild(panel);
+        }
+        this._panelDetached = false;
+    }
+
     _syncFromBoundInputValue(rawValue) {
         const value = String(rawValue ?? "");
         this._isReflectingBoundInputValue = true;
@@ -744,6 +1020,19 @@ export class FishySearchableDropdown extends HTMLElement {
             const container = this.selectedContentElement();
             if (container instanceof HTMLElement) {
                 container.replaceChildren(...cloneChildNodes(template.content));
+            }
+            return;
+        }
+
+        const customIsoDate = normalizeIsoDateValue(value);
+        if (customIsoDate) {
+            this.label = customIsoDate;
+            const container = this.selectedContentElement();
+            if (container instanceof HTMLElement) {
+                const text = document.createElement("span");
+                text.className = "truncate font-medium";
+                text.textContent = customIsoDate;
+                container.replaceChildren(text);
             }
         }
     }

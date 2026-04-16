@@ -259,6 +259,48 @@ test("FishyMapSearchPanelElement rerenders search results from Datastar-driven a
   assert.equal(searchCount.textContent, "1 match");
 });
 
+test("resolveSearchPanelMatches exposes unresolved date prompts when the query is empty", () => {
+  const matches = resolveSearchPanelMatches(
+    {
+      state: {
+        ready: true,
+        catalog: {
+          fish: [],
+          semanticTerms: [],
+        },
+      },
+      inputState: {
+        filters: {
+          searchText: "",
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+        },
+      },
+      sharedFishState: {
+        caughtIds: [],
+        favouriteIds: [],
+        caughtSet: new Set(),
+        favouriteSet: new Set(),
+      },
+    },
+    {
+      open: true,
+      query: "",
+      selectedTerms: [],
+    },
+  );
+
+  assert.deepEqual(
+    matches.slice(0, 2).map((match) => [match.kind, match.bound]),
+    [
+      ["patch-bound", "from"],
+      ["patch-bound", "to"],
+    ],
+  );
+});
+
 test("FishyMapSearchPanelElement dispatches operator-toggle patches that preserve same-operator groups", async () => {
   const { FishyMapSearchPanelElement } = await loadModule();
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
@@ -489,6 +531,119 @@ test("FishyMapSearchPanelElement toggles an applied patch-bound term in place", 
             { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-02-26" } },
             { type: "term", term: { kind: "fish", fishId: 912 } },
           ],
+        },
+      },
+    },
+  });
+});
+
+test("FishyMapSearchPanelElement adds an unresolved date term from the search results", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  let dispatchedPatch = null;
+  panel.dispatchPatch = (patch) => {
+    dispatchedPatch = patch;
+  };
+
+  const row = new FakeElement();
+  row.setAttribute("data-patch-bound", "from");
+  row.setClosest(
+    "[data-fish-filter-term], [data-patch-bound], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+    row,
+  );
+
+  panel._handleClick({
+    target: row,
+    preventDefault() {},
+  });
+
+  assert.deepEqual(dispatchedPatch, {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "patch-bound", bound: "from" } }],
+        },
+        selectedTerms: [{ kind: "patch-bound", bound: "from" }],
+        query: "",
+        open: true,
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "patch-bound", bound: "from" } }],
+        },
+      },
+    },
+  });
+});
+
+test("FishyMapSearchPanelElement resolves an applied pending date term from the inline selector", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [{ type: "term", term: { kind: "patch-bound", bound: "from" } }],
+  };
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  let dispatchedPatch = null;
+  panel.dispatchPatch = (patch) => {
+    dispatchedPatch = patch;
+  };
+
+  const input = new FakeElement();
+  input.value = "2026-03-12";
+  input.setAttribute("data-expression-patch-select-path", "root.0");
+  input.setClosest("input[data-expression-patch-select-path]", input);
+  panel.setQuery("input[data-expression-patch-select-path]", input);
+
+  panel._handleInput({
+    target: input,
+  });
+
+  assert.deepEqual(dispatchedPatch, {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-03-12" } }],
+        },
+        selectedTerms: [{ kind: "patch-bound", bound: "from", patchId: "2026-03-12" }],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: "2026-03-12",
+        toPatchId: null,
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-03-12" } }],
         },
       },
     },

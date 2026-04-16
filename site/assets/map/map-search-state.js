@@ -75,6 +75,20 @@ const FISH_FILTER_TERM_METADATA = Object.freeze({
   }),
 });
 const FISH_GRADE_FILTER_TERMS = new Set(["red", "yellow", "blue", "green", "white"]);
+const PATCH_BOUND_PROMPT_MATCHES = Object.freeze([
+  Object.freeze({
+    bound: "from",
+    label: "After",
+    description: "Add an after term, then choose the patch on the term itself.",
+    searchText: "after from since patch date newer later",
+  }),
+  Object.freeze({
+    bound: "to",
+    label: "Before",
+    description: "Add a before term, then choose the patch on the term itself.",
+    searchText: "before to until through patch date older earlier",
+  }),
+]);
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -294,6 +308,14 @@ function resolveSelectedPatchBounds(stateBundle) {
     }
   }
   return { fromPatchId, toPatchId };
+}
+
+function resolveSelectedPatchBoundSet(stateBundle) {
+  return new Set(
+    resolveSelectedPatchTerms(stateBundle)
+      .map((term) => normalizePatchBound(term?.bound))
+      .filter(Boolean),
+  );
 }
 
 export function parseFishFilterDirectives(searchText) {
@@ -554,6 +576,23 @@ export function buildDefaultFishFilterMatches(stateBundle) {
   }));
 }
 
+function buildPatchBoundPromptMatches(stateBundle) {
+  const selectedBounds = resolveSelectedPatchBoundSet(stateBundle);
+  return PATCH_BOUND_PROMPT_MATCHES
+    .filter((match) => !selectedBounds.has(match.bound))
+    .map((match) => ({
+      kind: "patch-bound",
+      bound: match.bound,
+      label: match.label,
+      description: match.description,
+      _score: 0,
+    }));
+}
+
+export function buildDefaultSearchMatches(stateBundle) {
+  return buildPatchBoundPromptMatches(stateBundle).concat(buildDefaultFishFilterMatches(stateBundle));
+}
+
 function scoreSemanticMatch(term, queryTerms) {
   if (!queryTerms.length) {
     return 0;
@@ -624,71 +663,48 @@ function findSemanticMatches(semanticTerms, searchText) {
   return filtered;
 }
 
-function scorePatchMatch(patch, queryTerms) {
-  if (!queryTerms.length) {
-    return 0;
-  }
-  const patchId = String(patch.patchId || "").toLowerCase();
-  const label = String(patch.label || "").toLowerCase();
-  let score = 0;
-  for (const queryTerm of queryTerms) {
-    const best = Math.max(
-      patchId === queryTerm ? 220 : Number.NEGATIVE_INFINITY,
-      scoreTermMatch(patchId, queryTerm, 180),
-      scoreTermMatch(label, queryTerm, 160),
-    );
-    if (!Number.isFinite(best)) {
-      return Number.NEGATIVE_INFINITY;
-    }
-    score += best;
-  }
-  return score;
-}
-
-function findPatchMatches(patches, searchText, stateBundle) {
+function findPatchPromptMatches(searchText, stateBundle) {
   const query = String(searchText || "").trim().toLowerCase();
   const queryTerms = query ? query.split(/\s+/g).filter(Boolean) : [];
   if (!queryTerms.length) {
     return [];
   }
-  const selectedBounds = resolveSelectedPatchBounds(stateBundle);
+  const selectedBounds = resolveSelectedPatchBoundSet(stateBundle);
   const matches = [];
-  for (const patch of Array.isArray(patches) ? patches : []) {
-    const score = scorePatchMatch(patch, queryTerms);
-    if (!Number.isFinite(score)) {
+  for (const candidate of PATCH_BOUND_PROMPT_MATCHES) {
+    if (selectedBounds.has(candidate.bound)) {
       continue;
     }
-    if (selectedBounds.fromPatchId !== patch.patchId) {
-      matches.push({
-        kind: "patch-bound",
-        bound: "from",
-        patchId: patch.patchId,
-        label: patch.label,
-        startTsUtc: patch.startTsUtc,
-        description: `After ${patch.label}`,
-        _score: score,
-      });
+    let score = 0;
+    let matched = false;
+    const haystack = String(candidate.searchText || "").toLowerCase();
+    for (const queryTerm of queryTerms) {
+      const best = Math.max(
+        scoreTermMatch(haystack, queryTerm, 180),
+        scoreTermMatch(String(candidate.label || "").toLowerCase(), queryTerm, 220),
+      );
+      if (!Number.isFinite(best)) {
+        continue;
+      }
+      matched = true;
+      score += best;
     }
-    if (selectedBounds.toPatchId !== patch.patchId) {
-      matches.push({
-        kind: "patch-bound",
-        bound: "to",
-        patchId: patch.patchId,
-        label: patch.label,
-        startTsUtc: patch.startTsUtc,
-        description: `Before ${patch.label}`,
-        _score: score,
-      });
+    if (!matched) {
+      continue;
     }
+    matches.push({
+      kind: "patch-bound",
+      bound: candidate.bound,
+      label: candidate.label,
+      description: candidate.description,
+      _score: score,
+    });
   }
   matches.sort((left, right) => {
     if (right._score !== left._score) {
       return right._score - left._score;
     }
-    if (left.patchId !== right.patchId) {
-      return String(right.patchId || "").localeCompare(String(left.patchId || ""));
-    }
-    return String(left.bound || "").localeCompare(String(right.bound || ""));
+    return String(left.label || "").localeCompare(String(right.label || ""));
   });
   return matches;
 }
@@ -724,7 +740,7 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const filterDirectives = parseFishFilterDirectives(searchText);
   const effectiveFishFilterTerms = normalizeFishFilterTerms(filterDirectives.directTerms);
   const fishFilterMatches = findFishFilterMatches(searchText, selectedFishFilterTerms);
-  const patchMatches = findPatchMatches(catalogPatches, filterDirectives.remainingQuery, stateBundle);
+  const patchMatches = findPatchPromptMatches(filterDirectives.remainingQuery, stateBundle);
   const fishMatches = findFishMatches(catalogFish, filterDirectives.remainingQuery, {
     includeAllWhenEmpty: effectiveFishFilterTerms.length > 0,
     filterTerms: effectiveFishFilterTerms,
@@ -754,7 +770,7 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
 function replacePatchBoundTerm(expression, stateBundle, match) {
   const normalizedBound = normalizePatchBound(match?.bound);
   const patchId = normalizePatchId(match?.patchId);
-  if (!normalizedBound || !patchId) {
+  if (!normalizedBound) {
     return expression;
   }
   let nextExpression = expression;
@@ -768,11 +784,19 @@ function replacePatchBoundTerm(expression, stateBundle, match) {
       nextExpression = removeSearchExpressionNode(nextExpression, removalPath);
     }
   }
-  return appendSearchExpressionTerm(nextExpression, {
-    kind: "patch-bound",
-    bound: normalizedBound,
-    patchId,
-  });
+  return appendSearchExpressionTerm(
+    nextExpression,
+    patchId
+      ? {
+        kind: "patch-bound",
+        bound: normalizedBound,
+        patchId,
+      }
+      : {
+        kind: "patch-bound",
+        bound: normalizedBound,
+      },
+  );
 }
 
 export function buildSearchMatchSignalPatch(signals, match) {
@@ -788,7 +812,7 @@ export function buildSearchMatchSignalPatch(signals, match) {
       : appendSearchExpressionTerm(expression, match);
   return buildSearchExpressionStatePatch(nextExpression, {
     query: "",
-    open: false,
+    open: match?.kind === "patch-bound" && !normalizePatchId(match?.patchId) ? true : false,
   });
 }
 
@@ -903,7 +927,7 @@ export function buildSearchPatchBoundToggleSignalPatch(signals, target) {
   }
   const currentBound = normalizePatchBound(currentNode.term.bound);
   const patchId = normalizePatchId(currentNode.term.patchId);
-  if (!currentBound || !patchId) {
+  if (!currentBound) {
     return null;
   }
   const nextBound = currentBound === "to" ? "from" : "to";
@@ -923,9 +947,59 @@ export function buildSearchPatchBoundToggleSignalPatch(signals, target) {
     return null;
   }
   return buildSearchExpressionStatePatch(
+    replaceSearchExpressionTerm(
+      nextExpression,
+      currentPath,
+      patchId
+        ? {
+          kind: "patch-bound",
+          bound: nextBound,
+          patchId,
+        }
+        : {
+          kind: "patch-bound",
+          bound: nextBound,
+        },
+    ),
+  );
+}
+
+export function buildSearchPatchBoundSelectionSignalPatch(signals, target) {
+  const stateBundle = buildSearchPanelStateBundle(signals);
+  const expression = resolveSearchExpression(
+    stateBundle?.inputState?.search?.expression,
+    stateBundle?.inputState?.search?.selectedTerms,
+    stateBundle?.inputState?.filters,
+  );
+  const expressionPath = String(target?.expressionPath ?? target?.path ?? "").trim();
+  const patchId = normalizePatchId(target?.patchId);
+  const currentNode = resolveSearchExpressionNode(expression, expressionPath);
+  if (currentNode?.type !== "term" || currentNode.term?.kind !== "patch-bound" || !patchId) {
+    return null;
+  }
+  const bound = normalizePatchBound(currentNode.term.bound);
+  if (!bound) {
+    return null;
+  }
+  let nextExpression = expression;
+  const selectedTerms = resolveSelectedSearchTermsFromBundle(stateBundle);
+  for (const term of selectedTerms) {
+    if (term?.kind !== "patch-bound" || term.bound !== bound) {
+      continue;
+    }
+    const termPath = findSearchExpressionTermPath(nextExpression, term);
+    if (termPath && termPath !== expressionPath) {
+      nextExpression = removeSearchExpressionNode(nextExpression, termPath);
+    }
+  }
+  const currentPath = findSearchExpressionTermPath(nextExpression, currentNode.term);
+  if (!currentPath) {
+    return null;
+  }
+  return buildSearchExpressionStatePatch(
     replaceSearchExpressionTerm(nextExpression, currentPath, {
       kind: "patch-bound",
-      bound: nextBound,
+      bound,
       patchId,
     }),
   );

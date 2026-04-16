@@ -3081,6 +3081,7 @@ dependencies = [
  "bevy_image",
  "bevy_render",
  "bevy_resvg",
+ "chrono",
  "clap",
  "criterion",
  "earcutr",

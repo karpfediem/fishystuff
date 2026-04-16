@@ -2,11 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildDefaultSearchMatches,
   buildDefaultFishFilterMatches,
   buildSearchExpressionDragSignalPatch,
   buildSearchExpressionNegationSignalPatch,
   buildSearchExpressionOperatorSignalPatch,
   buildSearchMatchSignalPatch,
+  buildSearchPatchBoundSelectionSignalPatch,
   buildSearchPatchBoundToggleSignalPatch,
   buildSearchMatches,
   buildSearchPanelStateBundle,
@@ -147,7 +149,7 @@ test("buildSearchMatches treats multiple selected grade filters as an OR group",
   );
 });
 
-test("buildSearchMatches returns patch-bound matches and hides already-selected bounds", () => {
+test("buildSearchMatches returns unresolved date prompts and hides already-selected bounds", () => {
   const bundle = buildSearchPanelStateBundle({
     ...baseSignals(),
     _map_runtime: {
@@ -171,8 +173,8 @@ test("buildSearchMatches returns patch-bound matches and hides already-selected 
   });
 
   assert.deepEqual(
-    buildSearchMatches(bundle, "new").map((match) => [match.kind, match.bound, match.patchId]),
-    [["patch-bound", "to", "2026-03-12"]],
+    buildSearchMatches(bundle, "before").map((match) => [match.kind, match.bound, match.patchId ?? null]),
+    [["patch-bound", "to", null]],
   );
 });
 
@@ -308,6 +310,25 @@ test("buildDefaultFishFilterMatches omits already-selected filter terms", () => 
   );
 });
 
+test("buildDefaultSearchMatches includes unresolved date prompts ahead of frontend filters", () => {
+  const bundle = buildSearchPanelStateBundle(baseSignals());
+
+  assert.deepEqual(
+    buildDefaultSearchMatches(bundle).map((match) => [match.kind, match.bound ?? match.term]),
+    [
+      ["patch-bound", "from"],
+      ["patch-bound", "to"],
+      ["fish-filter", "favourite"],
+      ["fish-filter", "missing"],
+      ["fish-filter", "red"],
+      ["fish-filter", "yellow"],
+      ["fish-filter", "blue"],
+      ["fish-filter", "green"],
+      ["fish-filter", "white"],
+    ],
+  );
+});
+
 test("buildSearchMatchSignalPatch updates bridged filters and closes the dropdown", () => {
   const signals = baseSignals();
 
@@ -409,6 +430,47 @@ test("buildSearchMatchSignalPatch replaces an existing patch bound", () => {
   );
 });
 
+test("buildSearchMatchSignalPatch adds an unresolved patch bound and keeps search open", () => {
+  const signals = baseSignals();
+
+  assert.deepEqual(
+    buildSearchMatchSignalPatch(signals, {
+      kind: "patch-bound",
+      bound: "from",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "patch-bound", bound: "from" } }],
+          },
+          selectedTerms: [{ kind: "patch-bound", bound: "from" }],
+          query: "",
+          open: true,
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "patch-bound", bound: "from" } }],
+          },
+        },
+      },
+    },
+  );
+});
+
 test("buildSearchPatchBoundToggleSignalPatch flips a date term and replaces the opposite bound", () => {
   const signals = {
     ...baseSignals(),
@@ -462,6 +524,70 @@ test("buildSearchPatchBoundToggleSignalPatch flips a date term and replaces the 
             operator: "or",
             children: [
               { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-02-26" } },
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+            ],
+          },
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchPatchBoundSelectionSignalPatch resolves a pending date term in place", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "patch-bound", bound: "from" } },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchPatchBoundSelectionSignalPatch(signals, {
+      expressionPath: "root.0",
+      patchId: "2026-03-12",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-03-12" } },
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+            ],
+          },
+          selectedTerms: [
+            { kind: "patch-bound", bound: "from", patchId: "2026-03-12" },
+            { kind: "fish", fishId: 912 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+          patchId: null,
+          fromPatchId: "2026-03-12",
+          toPatchId: null,
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-03-12" } },
               { type: "term", term: { kind: "fish", fishId: 912 } },
             ],
           },

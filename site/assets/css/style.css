@@ -415,6 +415,7 @@ body {
 
 :where(.fishy-applied-term[data-grade="patch"]) {
     --fishy-applied-term-grade: var(--color-neutral, #64748b);
+    overflow: visible;
 }
 
 :where(.fishy-applied-term-main) {
@@ -438,6 +439,12 @@ body {
     align-items: center;
     gap: 0.45rem;
     font-size: 0.9rem;
+}
+
+:where(.fishy-applied-term[data-grade="patch"] .fishy-applied-term-main),
+:where(.fishy-applied-term[data-grade="patch"] .fishy-applied-term-body),
+:where(.fishy-applied-term[data-grade="patch"] fishy-searchable-dropdown) {
+    overflow: visible;
 }
 
 :where(.fishy-applied-term-description) {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { renderSearchSelection } from "./map-search-panel.js";
+import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
 
 function createRenderElements() {
   return {
@@ -22,6 +22,18 @@ function createRenderElements() {
     },
     searchSelectionShell: {
       hidden: false,
+    },
+    searchResultsShell: {
+      hidden: false,
+    },
+    searchResults: {
+      dataset: {},
+      hidden: false,
+      innerHTML: "",
+    },
+    searchCount: {
+      hidden: false,
+      textContent: "",
     },
     searchWindow: {
       dataset: {},
@@ -174,6 +186,7 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.1\.1"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-bound="to"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-id="2026-03-12"/);
+  assert.match(elements.searchSelection.innerHTML, /2026-03-12/);
   assert.match(elements.searchSelection.innerHTML, /data-zone-rgb="123456"/);
   assert.match(elements.searchSelection.innerHTML, /data-semantic-layer-id="regions"/);
   assert.match(elements.searchSelection.innerHTML, />Date</);
@@ -184,6 +197,97 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.match(elements.searchSelection.innerHTML, /Open-water region/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, />Filters</);
   assert.doesNotMatch(elements.searchSelection.innerHTML, />Zones</);
+});
+
+test("renderSearchSelection renders an unresolved date term with an inline patch selector", () => {
+  const elements = createRenderElements();
+
+  renderSearchSelection(
+    elements,
+    {
+      state: {
+        catalog: {
+          patches: [
+            {
+              patchId: "2026-03-12",
+              label: "New Era",
+              startTsUtc: 200,
+            },
+          ],
+          semanticTerms: [],
+        },
+      },
+      inputState: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "patch-bound", bound: "from" } }],
+          },
+        },
+        filters: {
+          fishIds: [],
+          fishFilterTerms: [],
+          semanticFieldIdsByLayer: {},
+        },
+      },
+    },
+    new Map(),
+    {
+      resolveSelectedFishIds: () => [],
+      resolveSelectedFishFilterTerms: () => [],
+      resolveSelectedSemanticFieldIdsByLayer: () => ({}),
+      resolveSelectedZoneRgbs: () => [],
+      buildSemanticTermLookup: () => new Map(),
+      escapeHtml,
+    },
+  );
+
+  assert.match(elements.searchSelection.innerHTML, /fishy-searchable-dropdown/);
+  assert.match(elements.searchSelection.innerHTML, /custom-option-mode="iso-date"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-patch-select-path="root\.0"/);
+  assert.match(elements.searchSelection.innerHTML, />Choose date</);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.0"/);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, /data-patch-id=""/);
+});
+
+test("renderSearchResults renders unresolved date prompt rows without a concrete patch id", () => {
+  const elements = createRenderElements();
+  const stateBundle = {
+    inputState: {
+      filters: {
+        searchText: "",
+      },
+    },
+  };
+
+  renderSearchResults(
+    elements,
+    [
+      {
+        kind: "patch-bound",
+        bound: "to",
+        label: "Before",
+        description: "Add a before term, then choose the patch on the term itself.",
+      },
+    ],
+    stateBundle,
+    {
+      setBooleanProperty: (element, property, value) => {
+        element[property] = Boolean(value);
+      },
+      setTextContent: (element, value) => {
+        element.textContent = String(value ?? "");
+      },
+      escapeHtml,
+    },
+  );
+
+  assert.equal(elements.searchResultsShell.hidden, false);
+  assert.match(elements.searchResults.innerHTML, /data-patch-bound="to"/);
+  assert.match(elements.searchResults.innerHTML, />Before:/);
+  assert.doesNotMatch(elements.searchResults.innerHTML, /data-patch-id=/);
+  assert.match(elements.searchResults.innerHTML, /choose the patch on the term itself/i);
 });
 
 test("renderSearchSelection hides the selection shell when no terms are applied", () => {

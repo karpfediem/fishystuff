@@ -49,6 +49,121 @@ function buildFallbackSelectedTerms(stateBundle, resolvers) {
   return selectedTerms;
 }
 
+function searchControlId(prefix, path) {
+  const normalized = String(path || "root")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${prefix}-${normalized || "root"}`;
+}
+
+function patchDropdownValueMarkup(patchId, patch, escapeHtml) {
+  const normalizedPatchId = String(patchId || "").trim();
+  if (!normalizedPatchId && !patch) {
+    return `<span class="truncate font-medium text-base-content/60">Choose date</span>`;
+  }
+  if (!patch) {
+    return `<span class="truncate font-medium">${escapeHtml(normalizedPatchId)}</span>`;
+  }
+  const label = String(patch.label || normalizedPatchId).trim() || normalizedPatchId;
+  if (!normalizedPatchId || label === normalizedPatchId) {
+    return `<span class="truncate font-medium">${escapeHtml(normalizedPatchId || label)}</span>`;
+  }
+  return `
+    <span class="inline-flex min-w-0 flex-1 items-center gap-1.5">
+      <span class="truncate font-medium">${escapeHtml(label)}</span>
+      <span class="shrink-0 text-xs text-base-content/60">${escapeHtml(normalizedPatchId)}</span>
+    </span>
+  `;
+}
+
+function patchDropdownCatalogMarkup(patches, escapeHtml) {
+  return (Array.isArray(patches) ? patches : [])
+    .map((patch) => {
+      const patchId = String(patch?.patchId || "").trim();
+      if (!patchId) {
+        return "";
+      }
+      const label = String(patch?.label || patchId).trim();
+      const searchText = [label, patchId].filter(Boolean).join(" ");
+      return `
+        <template
+          data-role="selected-content"
+          data-value="${escapeHtml(patchId)}"
+          data-label="${escapeHtml(label)}"
+          data-search-text="${escapeHtml(searchText)}"
+        >
+          ${patchDropdownValueMarkup(patchId, { patchId, label }, escapeHtml)}
+        </template>
+      `;
+    })
+    .join("");
+}
+
+function patchDropdownMarkup(term, context, path, boundLabel, patch) {
+  const inputId = searchControlId("fishymap-date-term", path);
+  const patchId = String(term?.patchId || "").trim();
+  const selectedLabel = patch?.label || patchId || boundLabel;
+  return `
+    <fishy-searchable-dropdown
+      class="relative inline-block max-w-full align-middle"
+      input-id="${context.escapeHtml(inputId)}"
+      label="${context.escapeHtml(selectedLabel)}"
+      value="${context.escapeHtml(patchId)}"
+      placeholder="Search patches or enter YYYY-MM-DD"
+      custom-option-mode="iso-date"
+    >
+      <input
+        id="${context.escapeHtml(inputId)}"
+        type="hidden"
+        value="${context.escapeHtml(patchId)}"
+        data-expression-patch-select-path="${context.escapeHtml(path)}"
+      >
+      <button
+        type="button"
+        data-role="trigger"
+        class="inline-flex h-7 max-w-56 items-center gap-2 rounded-full border border-base-300 px-2 text-left text-sm"
+        aria-haspopup="listbox"
+        aria-expanded="false"
+      >
+        <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-2">
+          ${patchDropdownValueMarkup(patchId, patch, context.escapeHtml)}
+        </span>
+        <svg class="fishy-icon size-3.5 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
+          <use width="100%" height="100%" href="/img/icons.svg#fishy-caret-down"></use>
+        </svg>
+      </button>
+      <div
+        data-role="panel"
+        class="absolute left-0 top-full z-50 mt-2 w-72 max-w-[min(22rem,calc(100vw-3rem))]"
+        hidden
+      >
+        <div class="rounded-box border border-base-300 bg-base-100 p-1">
+          <label class="flex items-center gap-2 px-2 py-2 text-sm">
+            <svg class="fishy-icon size-4 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
+              <use width="100%" height="100%" href="/img/icons.svg#fishy-search-field"></use>
+            </svg>
+            <input
+              data-role="search-input"
+              type="search"
+              class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
+              style="outline: none; box-shadow: none;"
+              placeholder="Search patches"
+              autocomplete="off"
+              spellcheck="false"
+            >
+          </label>
+          <ul data-role="results" tabindex="-1" class="menu menu-sm max-h-64 w-full gap-1 overflow-auto p-1"></ul>
+        </div>
+      </div>
+      <div data-role="selected-content-catalog" hidden>
+        ${patchDropdownCatalogMarkup(context.patchCatalog, context.escapeHtml)}
+      </div>
+    </fishy-searchable-dropdown>
+  `;
+}
+
 function buildAppliedSearchTermNode(term, context, path, options = {}) {
   if (!term || typeof term !== "object") {
     return null;
@@ -80,21 +195,19 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
   }
 
   if (term.kind === "patch-bound") {
-    const patch = context.patchLookup.get(term.patchId) || null;
-    const patchLabel = patch?.label || term.patchId;
+    const patchId = String(term.patchId || "").trim();
+    const patch = patchId ? context.patchLookup.get(patchId) || null : null;
+    const patchLabel = patch?.label || patchId;
     const boundLabel = patchBoundLabel(term.bound);
     return {
       type: "term",
-      key: `patch-bound:${term.bound}:${term.patchId}`,
+      key: `patch-bound:${term.bound}:${patchId || "__pending__"}`,
       path,
-      label: `${boundLabel} ${patchLabel}`,
+      label: patchLabel ? `${boundLabel} ${patchLabel}` : boundLabel,
       kindLabel: "Date",
       grade: "patch",
       negated,
-      description:
-        patch?.label && patch.label !== patch.patchId
-          ? patch.patchId
-          : "",
+      description: "",
       contentMarkup: `
         <span class="inline-flex min-w-0 items-center gap-2">
           <button
@@ -104,13 +217,13 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
             aria-label="${context.escapeHtml(`Change date bound to ${nextPatchBoundLabel(term.bound)}`)}"
             title="${context.escapeHtml(`Change date bound to ${nextPatchBoundLabel(term.bound)}`)}"
           >${context.escapeHtml(boundLabel)}</button>
-          <span class="font-medium truncate">${context.escapeHtml(patchLabel)}</span>
+          ${patchDropdownMarkup(term, context, path, boundLabel, patch)}
         </span>
       `,
-      removeLabel: `Remove ${boundLabel} ${patchLabel}`,
+      removeLabel: patchLabel ? `Remove ${boundLabel} ${patchLabel}` : `Remove ${boundLabel}`,
       removeAttributes: {
         "data-patch-bound": term.bound,
-        "data-patch-id": term.patchId,
+        ...(patchId ? { "data-patch-id": patchId } : {}),
       },
     };
   }
@@ -267,6 +380,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
   const patchLookup = new Map(
     (stateBundle?.state?.catalog?.patches || []).map((patch) => [String(patch.patchId || "").trim(), patch]),
   );
+  const patchCatalog = stateBundle?.state?.catalog?.patches || [];
   const semanticLookup = buildSemanticTermLookup(stateBundle);
   const fallbackSelectedTerms = Array.isArray(stateBundle?.inputState?.search?.selectedTerms)
     ? stateBundle.inputState.search.selectedTerms
@@ -287,6 +401,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
       fishIdentityMarkup,
       fishLookup,
       formatZone,
+      patchCatalog,
       patchLookup,
       resolveFishGrade,
       semanticIdentityMarkup,
@@ -435,25 +550,31 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
       }
       if (match.kind === "patch-bound") {
         const boundLabel = patchBoundLabel(match.bound);
-        const patchLabel = match.label || match.patchId;
+        const patchId = String(match.patchId || "").trim();
+        const promptOnly = !patchId;
+        const patchLabel = match.label || patchId || boundLabel;
         return `
           <li>
             <div
               class="flex cursor-pointer items-start gap-3 rounded-box px-3 py-2 text-sm"
               data-patch-bound="${escapeHtml(match.bound)}"
-              data-patch-id="${escapeHtml(match.patchId)}"
               role="button"
               tabindex="0"
-              aria-label="Add ${escapeHtml(boundLabel)} ${escapeHtml(patchLabel)}"
-              title="Add ${escapeHtml(boundLabel)} ${escapeHtml(patchLabel)}"
+              ${patchId ? `data-patch-id="${escapeHtml(patchId)}"` : ""}
+              aria-label="${escapeHtml(promptOnly ? `Add ${boundLabel}` : `Add ${boundLabel} ${patchLabel}`)}"
+              title="${escapeHtml(promptOnly ? `Add ${boundLabel}` : `Add ${boundLabel} ${patchLabel}`)}"
             >
               <span class="min-w-0 flex-1 text-left">
                 <span class="flex items-center gap-2">
-                  <span class="badge badge-ghost badge-xs">${escapeHtml(boundLabel)}</span>
+                  <span class="badge badge-ghost badge-xs">${escapeHtml(promptOnly ? `${boundLabel}:` : boundLabel)}</span>
                   <span class="font-semibold">${escapeHtml(patchLabel)}</span>
                 </span>
                 <span class="mt-1 block truncate text-xs text-base-content/60">
-                  <code>${escapeHtml(match.patchId)}</code>
+                  ${
+                    promptOnly
+                      ? escapeHtml(match.description || "Choose the patch on the term itself.")
+                      : `<code>${escapeHtml(patchId)}</code>`
+                  }
                 </span>
               </span>
             </div>

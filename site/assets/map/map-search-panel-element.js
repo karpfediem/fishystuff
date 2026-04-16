@@ -1,12 +1,13 @@
 import { FISH_FILTER_TERM_ORDER } from "./map-search-contract.js";
 import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
 import {
-  buildDefaultFishFilterMatches,
+  buildDefaultSearchMatches,
   buildSearchExpressionDragSignalPatch,
   buildSearchExpressionNegationSignalPatch,
   buildSearchExpressionOperatorSignalPatch,
   buildSearchMatches,
   buildSearchMatchSignalPatch,
+  buildSearchPatchBoundSelectionSignalPatch,
   buildSearchPatchBoundToggleSignalPatch,
   buildSearchPanelStateBundle,
   buildSearchSelectionRemovalSignalPatch,
@@ -28,6 +29,14 @@ const HTMLElementBase = globalThis.HTMLElement ?? class {};
 const EXPRESSION_DRAG_PROXY_SCALE = 0.78;
 const EXPRESSION_DRAG_PROXY_HOTSPOT = 8;
 let expressionDragProxyElement = null;
+
+if (globalThis.window?.customElements) {
+  import("../js/components/searchable-dropdown.js")
+    .then(({ registerSearchableDropdown }) => {
+      registerSearchableDropdown();
+    })
+    .catch(() => {});
+}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(
@@ -233,7 +242,7 @@ export function resolveSearchPanelMatches(stateBundle, searchState, zoneCatalog 
   }
   return query
     ? buildSearchMatches(stateBundle, query, zoneCatalog)
-    : buildDefaultFishFilterMatches(stateBundle);
+    : buildDefaultSearchMatches(stateBundle);
 }
 
 function ensureSearchPanelMarkup(host) {
@@ -416,6 +425,19 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this._handleDragEnd = () => {
       this.clearExpressionDragState();
     };
+    this._handleInput = (event) => {
+      const patchInput = event.target?.closest?.("input[data-expression-patch-select-path]");
+      if (!patchInput || !this.contains(patchInput)) {
+        return;
+      }
+      const patch = buildSearchPatchBoundSelectionSignalPatch(this.signals(), {
+        expressionPath: patchInput.getAttribute("data-expression-patch-select-path"),
+        patchId: patchInput.value,
+      });
+      if (patch) {
+        this.dispatchPatch(patch);
+      }
+    };
     this._handleClick = (event) => {
       const negateButton = event.target.closest(
         "button.fishy-applied-expression-negate-toggle[data-expression-negate-path]",
@@ -471,7 +493,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
         return;
       }
       const row = event.target.closest(
-        "[data-fish-filter-term], [data-patch-bound][data-patch-id], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+        "[data-fish-filter-term], [data-patch-bound], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
       );
       if (!row) {
         return;
@@ -484,7 +506,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
         return;
       }
       const row = event.target.closest(
-        "[data-fish-filter-term], [data-patch-bound][data-patch-id], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+        "[data-fish-filter-term], [data-patch-bound], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
       );
       if (!row) {
         return;
@@ -514,6 +536,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       zoneCatalog: this._zoneCatalog,
     };
     this.addEventListener("click", this._handleClick);
+    this.addEventListener("input", this._handleInput);
     this.addEventListener("keydown", this._handleKeyDown);
     this.addEventListener("dragstart", this._handleDragStart);
     this.addEventListener("dragover", this._handleDragOver);
@@ -528,6 +551,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
 
   disconnectedCallback() {
     this.removeEventListener("click", this._handleClick);
+    this.removeEventListener("input", this._handleInput);
     this.removeEventListener("keydown", this._handleKeyDown);
     this.removeEventListener("dragstart", this._handleDragStart);
     this.removeEventListener("dragover", this._handleDragOver);
@@ -610,11 +634,11 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     }
     const patchBound = String(row.getAttribute("data-patch-bound") || "").trim();
     const patchId = String(row.getAttribute("data-patch-id") || "").trim();
-    if (patchBound && patchId) {
+    if (patchBound) {
       this.dispatchPatch(buildSearchMatchSignalPatch(this.signals(), {
         kind: "patch-bound",
         bound: patchBound,
-        patchId,
+        ...(patchId ? { patchId } : {}),
       }));
       return;
     }
