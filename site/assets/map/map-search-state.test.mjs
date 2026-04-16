@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildDefaultFishFilterMatches,
   buildSearchExpressionDragSignalPatch,
+  buildSearchExpressionNegationSignalPatch,
   buildSearchExpressionOperatorSignalPatch,
   buildSearchMatchSignalPatch,
   buildSearchMatches,
@@ -427,6 +428,69 @@ test("buildSearchSelectionRemovalSignalPatch removes selected search filters cle
     buildSearchSelectionRemovalSignalPatch(signals, { zoneRgb: 123 })._map_bridged.filters.semanticFieldIdsByLayer,
     { regions: [22] },
   );
+});
+
+test("buildSearchExpressionNegationSignalPatch toggles node negation without changing selected terms", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(buildSearchExpressionNegationSignalPatch(signals, { expressionPath: "root.1" }), {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            {
+              type: "term",
+              term: { kind: "fish", fishId: 912 },
+              negated: true,
+            },
+          ],
+        },
+        selectedTerms: [
+          { kind: "fish-filter", term: "favourite" },
+          { kind: "fish", fishId: 912 },
+        ],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["favourite"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            {
+              type: "term",
+              term: { kind: "fish", fishId: 912 },
+              negated: true,
+            },
+          ],
+        },
+      },
+    },
+  });
 });
 
 test("buildSearchSelectionRemovalSignalPatch removes by expression path without flattening groups", () => {

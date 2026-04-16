@@ -346,6 +346,81 @@ test("FishyMapSearchPanelElement dispatches operator-toggle patches that preserv
   });
 });
 
+test("FishyMapSearchPanelElement dispatches negation-toggle patches from the applied expression view", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+      { type: "term", term: { kind: "fish", fishId: 912 } },
+    ],
+  };
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  let dispatchedPatch = null;
+  panel.dispatchPatch = (patch) => {
+    dispatchedPatch = patch;
+  };
+
+  const button = new FakeElement();
+  button.setAttribute("data-expression-negate-path", "root.1");
+  button.setClosest(
+    "button.fishy-applied-expression-negate-toggle[data-expression-negate-path]",
+    button,
+  );
+
+  panel._handleClick({
+    target: button,
+  });
+
+  assert.deepEqual(dispatchedPatch, {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            {
+              type: "term",
+              term: { kind: "fish", fishId: 912 },
+              negated: true,
+            },
+          ],
+        },
+        selectedTerms: [
+          { kind: "fish-filter", term: "favourite" },
+          { kind: "fish", fishId: 912 },
+        ],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["favourite"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            {
+              type: "term",
+              term: { kind: "fish", fishId: 912 },
+              negated: true,
+            },
+          ],
+        },
+      },
+    },
+  });
+});
+
 test("FishyMapSearchPanelElement dispatches drag grouping patches from the applied expression view", async () => {
   const { FishyMapSearchPanelElement } = await loadModule();
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);

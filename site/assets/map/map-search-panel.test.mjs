@@ -79,10 +79,12 @@ test("renderSearchSelection renders the applied search expression tree", () => {
             {
               type: "term",
               term: { kind: "fish-filter", term: "favourite" },
+              negated: true,
             },
             {
               type: "group",
               operator: "and",
+              negated: true,
               children: [
                 {
                   type: "term",
@@ -143,6 +145,9 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.doesNotMatch(elements.searchSelection.innerHTML, />Applied search</);
   assert.doesNotMatch(elements.searchSelection.innerHTML, />\s*4 terms\s*</);
   assert.match(elements.searchSelection.innerHTML, /data-expression-node-kind="group"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-negate-path="root"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.0"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.1"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-group-path="root"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.0"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.1"/);

@@ -14,6 +14,7 @@ import {
   setSearchExpressionBoundaryOperator,
   resolveSelectedSearchTerms,
   setSearchExpressionGroupOperator,
+  toggleSearchExpressionNodeNegated,
 } from "./map-search-contract.js";
 import { resolveSearchProjection } from "./map-search-projection.js";
 
@@ -693,6 +694,21 @@ export function buildSearchExpressionOperatorSignalPatch(signals, target) {
         target?.expressionPath ?? target?.groupPath,
         target?.operator ?? target?.nextOperator,
       ),
+  );
+}
+
+export function buildSearchExpressionNegationSignalPatch(signals, target) {
+  const stateBundle = buildSearchPanelStateBundle(signals);
+  const expression = resolveSearchExpression(
+    stateBundle?.inputState?.search?.expression,
+    stateBundle?.inputState?.search?.selectedTerms,
+    stateBundle?.inputState?.filters,
+  );
+  return buildSearchExpressionStatePatch(
+    toggleSearchExpressionNodeNegated(
+      expression,
+      target?.expressionPath ?? target?.negatePath ?? target?.path,
+    ),
   );
 }
 

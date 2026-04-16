@@ -775,7 +775,8 @@ function fishMatchesSharedFilterTerms(fish, filterTerms, sharedFishState) {
   return true;
 }
 
-function buildFishSearchExpressionNode(operator, children) {
+function buildFishSearchExpressionNode(operator, children, negated = false) {
+  const normalizedNegated = negated === true;
   const normalizedChildren = (Array.isArray(children) ? children : [])
     .map((child) => cloneJson(child))
     .filter(Boolean);
@@ -783,13 +784,24 @@ function buildFishSearchExpressionNode(operator, children) {
     return null;
   }
   if (normalizedChildren.length === 1) {
-    return normalizedChildren[0];
+    const singleChild = normalizedChildren[0];
+    const nextNegated = (singleChild?.negated === true) !== normalizedNegated;
+    if (nextNegated) {
+      singleChild.negated = true;
+    } else if (isPlainObject(singleChild)) {
+      delete singleChild.negated;
+    }
+    return singleChild;
   }
-  return {
+  const node = {
     type: "group",
     operator: String(operator || "").trim().toLowerCase() === "and" ? "and" : "or",
     children: normalizedChildren,
   };
+  if (normalizedNegated) {
+    node.negated = true;
+  }
+  return node;
 }
 
 function projectSearchExpressionToFishTerms(expression) {
@@ -799,14 +811,16 @@ function projectSearchExpressionToFishTerms(expression) {
       return { representable: true, expression: null };
     }
     if (node.type === "term") {
+      const isRepresentableTerm = FISHYMAP_FISH_SEARCH_TERM_KINDS.has(
+        String(node.term?.kind || "").trim(),
+      );
       return {
-        representable: true,
-        expression: FISHYMAP_FISH_SEARCH_TERM_KINDS.has(String(node.term?.kind || "").trim())
-          ? cloneJson(node)
-          : null,
+        representable: isRepresentableTerm || node.negated !== true,
+        expression: isRepresentableTerm ? cloneJson(node) : null,
       };
     }
     const operator = String(node.operator || "").trim().toLowerCase() === "and" ? "and" : "or";
+    const negated = node.negated === true;
     const projectedChildren = (Array.isArray(node.children) ? node.children : []).map((child) =>
       projectNode(child),
     );
@@ -814,12 +828,15 @@ function projectSearchExpressionToFishTerms(expression) {
       return { representable: false, expression: null };
     }
     const keptChildren = projectedChildren.flatMap((child) => (child.expression ? [child.expression] : []));
+    if (negated && keptChildren.length !== projectedChildren.length) {
+      return { representable: false, expression: null };
+    }
     if (operator === "or" && keptChildren.length && keptChildren.length !== projectedChildren.length) {
       return { representable: false, expression: null };
     }
     return {
       representable: true,
-      expression: buildFishSearchExpressionNode(operator, keptChildren),
+      expression: buildFishSearchExpressionNode(operator, keptChildren, negated),
     };
   };
   return projectNode(normalizedExpression);
@@ -844,14 +861,18 @@ function fishMatchesSearchExpression(fish, expression, sharedFishState) {
     if (!isPlainObject(node)) {
       return false;
     }
+    let result = false;
     if (node.type === "term") {
-      return fishMatchesSearchTerm(fish, node.term, sharedFishState);
+      result = fishMatchesSearchTerm(fish, node.term, sharedFishState);
+      return node.negated === true ? !result : result;
     }
     const childValues = (Array.isArray(node.children) ? node.children : []).map((child) => evaluateNode(child));
     if (String(node.operator || "").trim().toLowerCase() === "and") {
-      return childValues.every(Boolean);
+      result = childValues.every(Boolean);
+      return node.negated === true ? !result : result;
     }
-    return childValues.some(Boolean);
+    result = childValues.some(Boolean);
+    return node.negated === true ? !result : result;
   };
   return evaluateNode(normalizedExpression);
 }

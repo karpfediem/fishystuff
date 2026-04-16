@@ -23,6 +23,7 @@ import {
   selectedSearchTermsFromExpression,
   setSearchExpressionGroupOperator,
   resolveSelectedSearchTerms,
+  toggleSearchExpressionNodeNegated,
 } from "./map-search-contract.js";
 
 test("normalizeSelectedSearchTerms canonicalizes aliases and deduplicates term kinds", () => {
@@ -167,6 +168,177 @@ test("normalizeSearchExpression canonicalizes grouped terms and deduplicates lea
         {
           type: "term",
           term: { kind: "fish", fishId: 912 },
+        },
+      ],
+    },
+  );
+});
+
+test("normalizeSearchExpression canonicalizes negated nodes and preserves unary semantics", () => {
+  assert.deepEqual(
+    normalizeSearchExpression({
+      type: "group",
+      inverted: true,
+      children: [
+        {
+          kind: "fish-filter",
+          term: "favorite",
+          not: true,
+        },
+        {
+          type: "group",
+          operator: "and",
+          negated: true,
+          children: [{ kind: "fish", fishId: "912" }],
+        },
+      ],
+    }),
+    {
+      type: "group",
+      operator: "or",
+      negated: true,
+      children: [
+        {
+          type: "term",
+          term: { kind: "fish-filter", term: "favourite" },
+          negated: true,
+        },
+        {
+          type: "group",
+          operator: "and",
+          negated: true,
+          children: [
+            {
+              type: "term",
+              term: { kind: "fish", fishId: 912 },
+            },
+          ],
+        },
+      ],
+    },
+  );
+});
+
+test("toggleSearchExpressionNodeNegated toggles term and group negation in place", () => {
+  const expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      { type: "term", term: { kind: "fish", fishId: 912 } },
+      {
+        type: "group",
+        operator: "and",
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          { type: "term", term: { kind: "fish-filter", term: "missing" } },
+        ],
+      },
+    ],
+  };
+
+  assert.deepEqual(toggleSearchExpressionNodeNegated(expression, "root.0"), {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "term",
+        term: { kind: "fish", fishId: 912 },
+        negated: true,
+      },
+      {
+        type: "group",
+        operator: "and",
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          { type: "term", term: { kind: "fish-filter", term: "missing" } },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(toggleSearchExpressionNodeNegated(expression, "root.1"), {
+    type: "group",
+    operator: "or",
+    children: [
+      { type: "term", term: { kind: "fish", fishId: 912 } },
+      {
+        type: "group",
+        operator: "and",
+        negated: true,
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          { type: "term", term: { kind: "fish-filter", term: "missing" } },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    removeSearchExpressionNode(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          {
+            type: "group",
+            operator: "and",
+            negated: true,
+            children: [
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "fish-filter", term: "missing" } },
+            ],
+          },
+        ],
+      },
+      "root.0.1",
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "term",
+          term: { kind: "fish-filter", term: "favourite" },
+          negated: true,
+        },
+      ],
+    },
+  );
+});
+
+test("editing a nested group preserves negated ancestor groups", () => {
+  assert.deepEqual(
+    setSearchExpressionGroupOperator(
+      {
+        type: "group",
+        operator: "or",
+        negated: true,
+        children: [
+          {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "fish-filter", term: "missing" } },
+            ],
+          },
+        ],
+      },
+      "root.0",
+      "and",
+    ),
+    {
+      type: "group",
+      operator: "or",
+      negated: true,
+      children: [
+        {
+          type: "group",
+          operator: "and",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "fish-filter", term: "missing" } },
+          ],
         },
       ],
     },

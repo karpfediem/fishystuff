@@ -25,6 +25,7 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
           label: "Favourite",
           kindLabel: "Filter",
           grade: "favourite",
+          negated: true,
           contentMarkup: '<span class="font-medium">Favourite</span>',
           removeLabel: "Remove Favourite",
           removeAttributes: {
@@ -35,6 +36,7 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
           type: "group",
           path: "root.1",
           operator: "and",
+          negated: true,
           children: [
             {
               type: "term",
@@ -62,6 +64,11 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
   assert.match(view.html, /class="fishy-applied-expression max-w-full"/);
   assert.match(view.html, /data-expression-node-kind="group"/);
   assert.match(view.html, /data-expression-path="root"/);
+  assert.match(view.html, /data-expression-negate-path="root"/);
+  assert.match(view.html, /data-expression-negate-path="root\.0"/);
+  assert.match(view.html, /data-expression-negate-path="root\.1"/);
+  assert.match(view.html, /aria-pressed="true"/);
+  assert.match(view.html, /data-expression-negated="true"/);
   assert.doesNotMatch(view.html, />Applied search</);
   assert.doesNotMatch(view.html, />\s*2 terms\s*</);
   assert.match(view.html, /data-expression-group-path="root"/);
@@ -88,6 +95,7 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
   assert.match(view.html, /title="Drag group"/);
   assert.match(view.html, /fishy-applied-expression-group inline-flex max-w-full flex-wrap items-center gap-2/);
   assert.match(view.html, /join items-stretch max-w-full/);
+  assert.match(view.html, /fishy-applied-expression-negate-toggle/);
   assert.match(view.html, /data-expression-remove-path="root\.0"/);
   assert.match(view.html, /data-expression-remove-path="root\.1\.0"/);
   assert.match(view.html, /data-fish-filter-term="favourite"/);

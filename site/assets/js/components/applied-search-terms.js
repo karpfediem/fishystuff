@@ -33,6 +33,10 @@ function normalizeOperator(value) {
   return String(value ?? "").trim().toLowerCase() === "and" ? "and" : "or";
 }
 
+function normalizeNegated(value) {
+  return value === true;
+}
+
 function normalizeExpressionNode(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -49,6 +53,7 @@ function normalizeExpressionNode(value) {
       description: String(value.description || "").trim(),
       contentMarkup: String(value.contentMarkup || "").trim(),
       grade: String(value.grade || "").trim(),
+      negated: normalizeNegated(value.negated ?? value.not ?? value.inverted),
       removeLabel: String(value.removeLabel || "").trim(),
       removeAttributes: normalizeAttributes(value.removeAttributes),
     };
@@ -65,6 +70,7 @@ function normalizeExpressionNode(value) {
     label: String(value.label || "").trim(),
     description: String(value.description || "").trim(),
     operator: normalizeOperator(value.operator),
+    negated: normalizeNegated(value.negated ?? value.not ?? value.inverted),
     children: (Array.isArray(value.children) ? value.children : [])
       .map((child) => normalizeExpressionNode(child))
       .filter((child) => child && !(child.type === "group" && child.children.length === 0)),
@@ -95,6 +101,7 @@ function buildRenderKey(node) {
       node.description,
       node.contentMarkup,
       node.grade,
+      node.negated,
       node.removeLabel,
       Object.entries(node.removeAttributes),
     ];
@@ -106,6 +113,7 @@ function buildRenderKey(node) {
     node.label,
     node.description,
     node.operator,
+    node.negated,
     node.children.map((child) => buildRenderKey(child)),
   ];
 }
@@ -138,6 +146,41 @@ function renderOperatorBadge(operator, escapeHtml, options = {}) {
   `;
 }
 
+function renderNegationToggle(path, negated, escapeHtml, options = {}) {
+  const normalizedPath = String(path || "").trim();
+  if (!normalizedPath) {
+    return "";
+  }
+  const label = String(options.label || "condition").trim() || "condition";
+  const extraClass = String(options.className || "").trim();
+  const baseClass = [
+    "fishy-applied-expression-negate-toggle",
+    "badge",
+    negated ? "badge-neutral" : "badge-ghost",
+    "badge-xs",
+    "cursor-pointer",
+    "shrink-0",
+    "uppercase",
+    "tracking-[0.24em]",
+    extraClass,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const title = negated ? `Remove NOT from ${label}` : `Negate ${label}`;
+  return `
+    <button
+      class="${baseClass}"
+      type="button"
+      data-expression-negate-path="${escapeHtml(normalizedPath)}"
+      aria-pressed="${negated ? "true" : "false"}"
+      aria-label="${escapeHtml(title)}"
+      title="${escapeHtml(title)}"
+    >
+      ${escapeHtml("not")}
+    </button>
+  `;
+}
+
 function renderTermNode(node, escapeHtml, buttonClass) {
   const label = node.label || "Applied term";
   const removeLabel = node.removeLabel || `Remove ${label}`;
@@ -153,8 +196,12 @@ function renderTermNode(node, escapeHtml, buttonClass) {
       data-expression-drop-term-path="${escapeHtml(node.path)}"
       data-expression-key="${escapeHtml(node.key || label)}"${
         node.grade ? ` data-grade="${escapeHtml(node.grade)}"` : ""
-      }
+      }${node.negated ? ' data-expression-negated="true"' : ""}
     >
+      ${renderNegationToggle(node.path, node.negated, escapeHtml, {
+        label,
+        className: "join-item",
+      })}
       <span class="fishy-applied-term-main join-item">
         ${
           node.kindLabel
@@ -198,6 +245,9 @@ function renderGroupNode(node, escapeHtml, buttonClass, options = {}) {
   const isRoot = options.isRoot === true;
   const children = node.children.filter(Boolean);
   const operator = normalizeOperator(node.operator);
+  const negationMarkup = renderNegationToggle(node.path, node.negated, escapeHtml, {
+    label: isRoot ? "expression" : node.label || "group",
+  });
   const leadingMarkup = isRoot
     ? ""
     : `
@@ -237,7 +287,9 @@ function renderGroupNode(node, escapeHtml, buttonClass, options = {}) {
       data-expression-path="${escapeHtml(node.path)}"
       data-expression-drop-group-path="${escapeHtml(node.path)}"
       data-expression-operator="${escapeHtml(operator)}"
+      ${node.negated ? 'data-expression-negated="true"' : ""}
     >
+      ${negationMarkup}
       ${leadingMarkup}
       ${childMarkup}
       ${trailingMarkup}

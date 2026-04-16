@@ -3,6 +3,7 @@ import { renderSearchResults, renderSearchSelection } from "./map-search-panel.j
 import {
   buildDefaultFishFilterMatches,
   buildSearchExpressionDragSignalPatch,
+  buildSearchExpressionNegationSignalPatch,
   buildSearchExpressionOperatorSignalPatch,
   buildSearchMatches,
   buildSearchMatchSignalPatch,
@@ -415,6 +416,17 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       this.clearExpressionDragState();
     };
     this._handleClick = (event) => {
+      const negateButton = event.target.closest(
+        "button.fishy-applied-expression-negate-toggle[data-expression-negate-path]",
+      );
+      if (negateButton) {
+        this.dispatchPatch(
+          buildSearchExpressionNegationSignalPatch(this.signals(), {
+            expressionPath: negateButton.getAttribute("data-expression-negate-path"),
+          }),
+        );
+        return;
+      }
       const operatorButton = event.target.closest(
         "button.fishy-applied-expression-operator-toggle[data-expression-group-path][data-expression-boundary-index][data-expression-next-operator]",
       );

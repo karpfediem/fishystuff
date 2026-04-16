@@ -33,10 +33,11 @@ function buildFallbackSelectedTerms(stateBundle, resolvers) {
   return selectedTerms;
 }
 
-function buildAppliedSearchTermNode(term, context, path) {
+function buildAppliedSearchTermNode(term, context, path, options = {}) {
   if (!term || typeof term !== "object") {
     return null;
   }
+  const negated = options.negated === true;
 
   if (term.kind === "fish-filter") {
     const metadata = context.fishFilterTermMetadata[term.term];
@@ -48,6 +49,7 @@ function buildAppliedSearchTermNode(term, context, path) {
       label,
       kindLabel: "Filter",
       grade: term.term,
+      negated,
       contentMarkup: `
         <span class="inline-flex min-w-0 items-center gap-2">
           ${context.fishFilterTermIconMarkup(term.term)}
@@ -71,6 +73,7 @@ function buildAppliedSearchTermNode(term, context, path) {
       label: name,
       kindLabel: "Fish",
       grade: context.resolveFishGrade(fish),
+      negated,
       contentMarkup:
         context.fishIdentityMarkup({ ...(fish || {}), fishId: term.fishId, name }, { interactive: true })
         || `<span class="truncate max-w-36">${context.escapeHtml(name)}</span>`,
@@ -91,6 +94,7 @@ function buildAppliedSearchTermNode(term, context, path) {
       label: name,
       kindLabel: "Zone",
       grade: "zone",
+      negated,
       description: context.formatZone(term.zoneRgb),
       contentMarkup:
         context.zoneIdentityMarkup(
@@ -123,6 +127,7 @@ function buildAppliedSearchTermNode(term, context, path) {
       label: name,
       kindLabel: semanticTerm?.layerName || "Map",
       grade: "semantic",
+      negated,
       description: semanticTerm?.description || "",
       contentMarkup:
         context.semanticIdentityMarkup(name, { interactive: true })
@@ -144,7 +149,9 @@ function buildAppliedSearchExpressionNode(expression, context, path = "root") {
   }
 
   if (String(expression.type || "").trim().toLowerCase() === "term") {
-    return buildAppliedSearchTermNode(expression.term, context, path);
+    return buildAppliedSearchTermNode(expression.term, context, path, {
+      negated: expression.negated === true,
+    });
   }
 
   const children = (Array.isArray(expression.children) ? expression.children : [])
@@ -156,6 +163,7 @@ function buildAppliedSearchExpressionNode(expression, context, path = "root") {
     key: path,
     path,
     operator: normalizeExpressionOperator(expression.operator),
+    negated: expression.negated === true,
     children,
   };
 }
