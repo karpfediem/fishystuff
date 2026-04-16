@@ -561,9 +561,7 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const selectedZoneRgbs = new Set(resolveSelectedZoneRgbs(stateBundle));
   const sharedFishState = normalizeSharedFishState(stateBundle?.sharedFishState);
   const filterDirectives = parseFishFilterDirectives(searchText);
-  const effectiveFishFilterTerms = normalizeFishFilterTerms(
-    selectedFishFilterTerms.concat(filterDirectives.directTerms),
-  );
+  const effectiveFishFilterTerms = normalizeFishFilterTerms(filterDirectives.directTerms);
   const fishFilterMatches = findFishFilterMatches(searchText, selectedFishFilterTerms);
   const fishMatches = findFishMatches(catalogFish, filterDirectives.remainingQuery, {
     includeAllWhenEmpty: effectiveFishFilterTerms.length > 0,

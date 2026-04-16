@@ -797,6 +797,13 @@ export function resolveEffectiveFishIdsForWasm(inputState, currentState) {
       : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
   }
 
+  if (filterTerms.includes("favourite") || filterTerms.includes("missing")) {
+    const effectiveFishIds = normalizeFishIds(selectedFishIds.concat(matchingFishIds));
+    return effectiveFishIds.length
+      ? effectiveFishIds
+      : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
+  }
+
   const matchingSet = new Set(matchingFishIds);
   const effectiveFishIds = selectedFishIds.filter((fishId) => matchingSet.has(fishId));
   return effectiveFishIds.length

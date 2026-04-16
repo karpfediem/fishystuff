@@ -62,6 +62,32 @@ test("parseQuerySignalPatch prefers focusFish and patch when present", () => {
   });
 });
 
+test("parseQuerySignalPatch supports multiple fish selectors and defers fish-name resolution", () => {
+  const patch = parseQuerySignalPatch(
+    "https://fishystuff.fish/map/?fish=91,Pink%20Dolphin&fish=opah&fishTerms=favourite",
+  );
+
+  assert.deepEqual(patch, {
+    _map_ui: {
+      search: {
+        selectedTerms: [
+          { kind: "fish", fishId: 91 },
+          { kind: "fish-filter", term: "favourite" },
+        ],
+        pendingQueryFishSelectors: ["Pink Dolphin", "opah"],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [91],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["favourite"],
+      },
+    },
+  });
+});
+
 test("parseQuerySignalPatch returns null when there are no relevant params", () => {
   assert.equal(parseQuerySignalPatch("https://fishystuff.fish/map/"), null);
 });

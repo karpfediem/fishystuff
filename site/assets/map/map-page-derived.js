@@ -1,5 +1,10 @@
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
+import {
+  buildSearchSelectionStatePatch,
+  normalizeSelectedSearchTerms,
+  resolveSelectedSearchTerms,
+} from "./map-search-contract.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
 
 function cloneJson(value) {
@@ -34,6 +39,77 @@ function currentLocationHref(globalRef = globalThis) {
   return globalRef.location?.href || globalRef.window?.location?.href || "";
 }
 
+function normalizePendingQueryFishSelectors(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+  const next = [];
+  const seen = new Set();
+  for (const value of values) {
+    const normalized = String(value ?? "").trim();
+    if (!normalized) {
+      continue;
+    }
+    const lookupKey = normalized.toLowerCase();
+    if (seen.has(lookupKey)) {
+      continue;
+    }
+    seen.add(lookupKey);
+    next.push(normalized);
+  }
+  return next;
+}
+
+function normalizeFishLookupKey(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function slugifyFishLookupKey(value) {
+  const normalized = normalizeFishLookupKey(value);
+  const ascii =
+    typeof normalized.normalize === "function"
+      ? normalized.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+      : normalized;
+  return ascii
+    .replace(/['"]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function buildFishSelectorLookup(catalogFish) {
+  const lookup = new Map();
+  for (const fish of Array.isArray(catalogFish) ? catalogFish : []) {
+    const fishId = Number.parseInt(fish?.fishId, 10);
+    if (!Number.isInteger(fishId) || fishId <= 0) {
+      continue;
+    }
+    for (const key of [normalizeFishLookupKey(fish?.name), slugifyFishLookupKey(fish?.name)]) {
+      if (!key || lookup.has(key)) {
+        continue;
+      }
+      lookup.set(key, fishId);
+    }
+  }
+  return lookup;
+}
+
+function resolvePendingQueryFishIds(pendingQueryFishSelectors, catalogFish) {
+  const fishSelectorLookup = buildFishSelectorLookup(catalogFish);
+  const resolvedFishIds = [];
+  const seen = new Set();
+  for (const selector of normalizePendingQueryFishSelectors(pendingQueryFishSelectors)) {
+    const fishId =
+      fishSelectorLookup.get(normalizeFishLookupKey(selector))
+      ?? fishSelectorLookup.get(slugifyFishLookupKey(selector));
+    if (!Number.isInteger(fishId) || seen.has(fishId)) {
+      continue;
+    }
+    seen.add(fishId);
+    resolvedFishIds.push(fishId);
+  }
+  return resolvedFishIds;
+}
+
 export function buildSearchProjectionPatchForSignalPatch(signals, patch) {
   if (patch?._map_ui?.search?.selectedTerms == null) {
     return null;
@@ -41,6 +117,48 @@ export function buildSearchProjectionPatchForSignalPatch(signals, patch) {
   const nextSignals = isPlainObject(signals) ? cloneJson(signals) : {};
   mergeProjectionPatch(nextSignals, patch);
   return buildSearchProjectionSignalPatch(nextSignals);
+}
+
+export function buildQueryFishSelectionSignalPatch(signals) {
+  const pendingQueryFishSelectors = normalizePendingQueryFishSelectors(
+    signals?._map_ui?.search?.pendingQueryFishSelectors,
+  );
+  if (!pendingQueryFishSelectors.length) {
+    return null;
+  }
+  const catalogFish = Array.isArray(signals?._map_runtime?.catalog?.fish)
+    ? signals._map_runtime.catalog.fish
+    : [];
+  if (!catalogFish.length) {
+    return null;
+  }
+
+  const currentSelectedTerms = resolveSelectedSearchTerms(
+    signals?._map_ui?.search?.selectedTerms,
+    signals?._map_bridged?.filters,
+  );
+  const resolvedFishIds = resolvePendingQueryFishIds(pendingQueryFishSelectors, catalogFish);
+  const nextSelectedTerms = normalizeSelectedSearchTerms(
+    currentSelectedTerms.concat(
+      resolvedFishIds.map((fishId) => ({ kind: "fish", fishId })),
+    ),
+  );
+
+  const currentTermsJson = JSON.stringify(currentSelectedTerms);
+  const nextTermsJson = JSON.stringify(nextSelectedTerms);
+  if (currentTermsJson === nextTermsJson) {
+    return {
+      _map_ui: {
+        search: {
+          pendingQueryFishSelectors: [],
+        },
+      },
+    };
+  }
+
+  const patch = buildSearchSelectionStatePatch(nextSelectedTerms);
+  patch._map_ui.search.pendingQueryFishSelectors = [];
+  return patch;
 }
 
 export function createMapPageDerivedController({
@@ -53,9 +171,17 @@ export function createMapPageDerivedController({
 
   function handleSignalPatch(eventOrPatch) {
     const patch = eventOrPatch?.detail ?? eventOrPatch;
+    const queryFishSelectionPatch = buildQueryFishSelectionSignalPatch(readSignals());
+    if (queryFishSelectionPatch) {
+      dispatchPatch(queryFishSelectionPatch);
+      if (queryFishSelectionPatch?._map_ui?.search?.selectedTerms != null) {
+        return true;
+      }
+    }
+
     const projectionPatch = buildSearchProjectionPatchForSignalPatch(readSignals(), patch);
     if (!projectionPatch) {
-      return false;
+      return Boolean(queryFishSelectionPatch);
     }
     dispatchPatch(projectionPatch);
     return true;
@@ -66,12 +192,17 @@ export function createMapPageDerivedController({
     if (queryPatch) {
       dispatchPatch(queryPatch);
     }
+    const queryFishSelectionPatch = buildQueryFishSelectionSignalPatch(readSignals() || {});
+    if (queryFishSelectionPatch) {
+      dispatchPatch(queryFishSelectionPatch);
+    }
     const projectionPatch = buildSearchProjectionSignalPatch(readSignals() || {});
     if (projectionPatch) {
       dispatchPatch(projectionPatch);
     }
     return Object.freeze({
       queryPatch,
+      queryFishSelectionPatch,
       projectionPatch,
     });
   }

@@ -548,7 +548,7 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     assert.deepEqual(bridge.getCurrentInputState().filters.fishIds, [77, 912]);
     assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["favourite"]);
     assert.equal(wasm.calls.applied.length, 1);
-    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77]);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77, 912]);
 
     wasm.calls.applied.length = 0;
     bridge.setState({
@@ -560,6 +560,7 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
         },
       },
       filters: {
+        fishIds: [],
         fishFilterTerms: ["missing"],
       },
     });
@@ -572,6 +573,28 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     });
     assert.equal(wasm.calls.applied.length, 1);
     assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [912]);
+
+    wasm.calls.applied.length = 0;
+    bridge.setState({
+      version: 1,
+      ui: {
+        sharedFishState: {
+          caughtIds: [77],
+          favouriteIds: [912],
+        },
+      },
+      filters: {
+        fishIds: [77],
+        fishFilterTerms: ["missing"],
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishIds, [77]);
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["missing"]);
+    assert.equal(wasm.calls.applied.length, 1);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [77, 912]);
   } finally {
     bridge?.destroy();
     env.restore();

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildQueryFishSelectionSignalPatch,
   buildSearchProjectionPatchForSignalPatch,
   createMapPageDerivedController,
 } from "./map-page-derived.js";
@@ -68,6 +69,54 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
           zone_mask: [123456],
         },
         fishFilterTerms: [],
+      },
+    },
+  });
+});
+
+test("buildQueryFishSelectionSignalPatch resolves pending fish-name selectors from the runtime catalog", () => {
+  const patch = buildQueryFishSelectionSignalPatch({
+    _map_ui: {
+      search: {
+        selectedTerms: [{ kind: "fish-filter", term: "favourite" }],
+        pendingQueryFishSelectors: ["Pink Dolphin", "opah", "missing fish"],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["favourite"],
+      },
+    },
+    _map_runtime: {
+      catalog: {
+        fish: [
+          { fishId: 235, itemId: 820986, name: "Pink Dolphin" },
+          { fishId: 179, itemId: 821292, name: "Opah" },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(patch, {
+    _map_ui: {
+      search: {
+        selectedTerms: [
+          { kind: "fish-filter", term: "favourite" },
+          { kind: "fish", fishId: 235 },
+          { kind: "fish", fishId: 179 },
+        ],
+        pendingQueryFishSelectors: [],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [235, 179],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["favourite"],
       },
     },
   });
@@ -169,6 +218,93 @@ test("map-page-derived controller reacts to shell-local signal patch events", ()
         semanticFieldIdsByLayer: {
           zone_mask: [654321],
         },
+        fishFilterTerms: [],
+      },
+    },
+  });
+});
+
+test("map-page-derived controller resolves query fish selectors when the runtime catalog patch lands", () => {
+  const shell = createEventTarget();
+  const dispatched = [];
+  const signals = {
+    _map_ui: {
+      search: {
+        selectedTerms: [],
+        pendingQueryFishSelectors: ["Pink Dolphin", "opah"],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
+      },
+    },
+    _map_runtime: {
+      catalog: {
+        fish: [],
+      },
+    },
+  };
+  const controller = createMapPageDerivedController({
+    shell,
+    readSignals() {
+      return signals;
+    },
+    dispatchPatch(patch) {
+      dispatched.push(patch);
+      if (patch?._map_ui?.search) {
+        signals._map_ui.search = {
+          ...signals._map_ui.search,
+          ...patch._map_ui.search,
+        };
+      }
+      if (patch?._map_bridged?.filters) {
+        signals._map_bridged.filters = {
+          ...signals._map_bridged.filters,
+          ...patch._map_bridged.filters,
+        };
+      }
+      if (patch?._map_runtime?.catalog) {
+        signals._map_runtime.catalog = patch._map_runtime.catalog;
+      }
+    },
+  });
+
+  controller.start(shell);
+  signals._map_runtime.catalog = {
+    fish: [
+      { fishId: 235, itemId: 820986, name: "Pink Dolphin" },
+      { fishId: 179, itemId: 821292, name: "Opah" },
+    ],
+  };
+  shell.dispatchEvent({
+    type: "fishymap:signal-patched",
+    detail: {
+      _map_runtime: {
+        catalog: signals._map_runtime.catalog,
+      },
+    },
+  });
+
+  assert.equal(dispatched.length, 1);
+  assert.deepEqual(dispatched[0], {
+    _map_ui: {
+      search: {
+        selectedTerms: [
+          { kind: "fish", fishId: 235 },
+          { kind: "fish", fishId: 179 },
+        ],
+        pendingQueryFishSelectors: [],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [235, 179],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
       },
     },

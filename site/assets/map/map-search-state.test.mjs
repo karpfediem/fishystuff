@@ -133,12 +133,12 @@ test("buildSearchMatches treats multiple selected grade filters as an OR group",
   );
 });
 
-test("buildSearchMatches matches favourites through fish item ids", () => {
+test("buildSearchMatches does not constrain fish matches from selected favourite filters", () => {
   const bundle = buildSearchPanelStateBundle({
     ...baseSignals(),
     _map_ui: {
       search: {
-        query: "",
+        query: "serendia",
         open: true,
         selectedTerms: [{ kind: "fish-filter", term: "favourite" }],
       },
@@ -167,19 +167,19 @@ test("buildSearchMatches matches favourites through fish item ids", () => {
   });
 
   assert.deepEqual(
-    buildSearchMatches(bundle, "")
+    buildSearchMatches(bundle, "serendia")
       .filter((match) => match.kind === "fish")
       .map((match) => match.fishId),
-    [235],
+    [77],
   );
 });
 
-test("buildSearchMatches excludes caught fish through item ids for missing filters", () => {
+test("buildSearchMatches does not constrain fish matches from selected missing filters", () => {
   const bundle = buildSearchPanelStateBundle({
     ...baseSignals(),
     _map_ui: {
       search: {
-        query: "",
+        query: "pink",
         open: true,
         selectedTerms: [{ kind: "fish-filter", term: "missing" }],
       },
@@ -208,10 +208,10 @@ test("buildSearchMatches excludes caught fish through item ids for missing filte
   });
 
   assert.deepEqual(
-    buildSearchMatches(bundle, "")
+    buildSearchMatches(bundle, "pink")
       .filter((match) => match.kind === "fish")
       .map((match) => match.fishId),
-    [77],
+    [235],
   );
 });
 

@@ -46,16 +46,25 @@ function normalizeStringList(values) {
   return next;
 }
 
+function parseDelimitedParamValues(values, pattern = /,/g) {
+  if (!Array.isArray(values) || !values.length) {
+    return [];
+  }
+  return normalizeStringList(
+    values.flatMap((value) =>
+      String(value ?? "")
+        .split(pattern)
+        .map((term) => term.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
 function parseDelimitedTerms(value) {
   if (value == null) {
     return [];
   }
-  return normalizeStringList(
-    String(value)
-      .split(/[\s,]+/g)
-      .map((term) => term.trim().toLowerCase())
-      .filter(Boolean),
-  );
+  return parseDelimitedParamValues([value], /[\s,]+/g).map((term) => term.toLowerCase());
 }
 
 function parseFishFilterTermsParam(value) {
@@ -78,6 +87,16 @@ function parseViewMode(value) {
     return normalized;
   }
   return null;
+}
+
+function parseFishSelectors(params, keys) {
+  const values = Array.isArray(keys)
+    ? keys.flatMap((key) => params.getAll(key))
+    : [];
+  if (!values.length) {
+    return null;
+  }
+  return parseDelimitedParamValues(values, /,/g);
 }
 
 function stripEmptyBranches(patch) {
@@ -114,8 +133,10 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
     return null;
   }
 
-  const fishId =
-    parseIntegerParam(params.get("focusFish")) ?? parseIntegerParam(params.get("fish"));
+  const fishSelectors = parseFishSelectors(
+    params,
+    params.has("focusFish") ? ["focusFish"] : ["fish"],
+  ) || [];
   const patchId = params.get("patch");
   const fromPatchId = params.get("fromPatch") ?? params.get("patchFrom");
   const toPatchId =
@@ -134,8 +155,14 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
   const patch = {};
 
   const selectedTerms = [];
-  if (fishId != null) {
-    selectedTerms.push({ kind: "fish", fishId });
+  const pendingQueryFishSelectors = [];
+  for (const fishSelector of fishSelectors) {
+    const fishId = parseIntegerParam(fishSelector);
+    if (fishId != null) {
+      selectedTerms.push({ kind: "fish", fishId });
+      continue;
+    }
+    pendingQueryFishSelectors.push(fishSelector);
   }
   for (const term of fishFilterTerms) {
     selectedTerms.push({ kind: "fish-filter", term });
@@ -166,6 +193,14 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
       ...(isPlainObject(searchSelectionPatch._map_bridged)
         ? searchSelectionPatch._map_bridged
         : {}),
+    };
+  }
+
+  if (pendingQueryFishSelectors.length) {
+    patch._map_ui = patch._map_ui || {};
+    patch._map_ui.search = {
+      ...(isPlainObject(patch._map_ui.search) ? patch._map_ui.search : {}),
+      pendingQueryFishSelectors,
     };
   }
 
