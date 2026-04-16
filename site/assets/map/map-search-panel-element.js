@@ -7,6 +7,7 @@ import {
   buildSearchExpressionOperatorSignalPatch,
   buildSearchMatches,
   buildSearchMatchSignalPatch,
+  buildSearchPatchBoundToggleSignalPatch,
   buildSearchPanelStateBundle,
   buildSearchSelectionRemovalSignalPatch,
   buildSemanticTermLookup,
@@ -436,6 +437,17 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
             groupPath: operatorButton.getAttribute("data-expression-group-path"),
             boundaryIndex: operatorButton.getAttribute("data-expression-boundary-index"),
             nextOperator: operatorButton.getAttribute("data-expression-next-operator"),
+          }),
+        );
+        return;
+      }
+      const patchToggleButton = event.target.closest(
+        "button[data-expression-patch-toggle-path]",
+      );
+      if (patchToggleButton) {
+        this.dispatchPatch(
+          buildSearchPatchBoundToggleSignalPatch(this.signals(), {
+            expressionPath: patchToggleButton.getAttribute("data-expression-patch-toggle-path"),
           }),
         );
         return;

@@ -11,8 +11,10 @@ import {
   normalizeFishFilterTerms,
   normalizePatchBound,
   normalizePatchId,
+  replaceSearchExpressionTerm,
   removeSearchExpressionNode,
   resolveSearchExpression,
+  resolveSearchExpressionNode,
   setSearchExpressionBoundaryOperator,
   resolveSelectedSearchTerms,
   setSearchExpressionGroupOperator,
@@ -663,7 +665,7 @@ function findPatchMatches(patches, searchText, stateBundle) {
         patchId: patch.patchId,
         label: patch.label,
         startTsUtc: patch.startTsUtc,
-        description: `From ${patch.label}`,
+        description: `After ${patch.label}`,
         _score: score,
       });
     }
@@ -674,7 +676,7 @@ function findPatchMatches(patches, searchText, stateBundle) {
         patchId: patch.patchId,
         label: patch.label,
         startTsUtc: patch.startTsUtc,
-        description: `Until ${patch.label}`,
+        description: `Before ${patch.label}`,
         _score: score,
       });
     }
@@ -884,6 +886,48 @@ export function buildSearchExpressionNegationSignalPatch(signals, target) {
       expression,
       target?.expressionPath ?? target?.negatePath ?? target?.path,
     ),
+  );
+}
+
+export function buildSearchPatchBoundToggleSignalPatch(signals, target) {
+  const stateBundle = buildSearchPanelStateBundle(signals);
+  const expression = resolveSearchExpression(
+    stateBundle?.inputState?.search?.expression,
+    stateBundle?.inputState?.search?.selectedTerms,
+    stateBundle?.inputState?.filters,
+  );
+  const expressionPath = String(target?.expressionPath ?? target?.path ?? "").trim();
+  const currentNode = resolveSearchExpressionNode(expression, expressionPath);
+  if (currentNode?.type !== "term" || currentNode.term?.kind !== "patch-bound") {
+    return null;
+  }
+  const currentBound = normalizePatchBound(currentNode.term.bound);
+  const patchId = normalizePatchId(currentNode.term.patchId);
+  if (!currentBound || !patchId) {
+    return null;
+  }
+  const nextBound = currentBound === "to" ? "from" : "to";
+  let nextExpression = expression;
+  const selectedTerms = resolveSelectedSearchTermsFromBundle(stateBundle);
+  for (const term of selectedTerms) {
+    if (term?.kind !== "patch-bound" || term.bound !== nextBound) {
+      continue;
+    }
+    const removalPath = findSearchExpressionTermPath(nextExpression, term);
+    if (removalPath) {
+      nextExpression = removeSearchExpressionNode(nextExpression, removalPath);
+    }
+  }
+  const currentPath = findSearchExpressionTermPath(nextExpression, currentNode.term);
+  if (!currentPath) {
+    return null;
+  }
+  return buildSearchExpressionStatePatch(
+    replaceSearchExpressionTerm(nextExpression, currentPath, {
+      kind: "patch-bound",
+      bound: nextBound,
+      patchId,
+    }),
   );
 }
 

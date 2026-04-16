@@ -28,6 +28,7 @@ export {
   moveSearchExpressionNodeToGroup,
   moveSearchExpressionNodeToIndex,
   moveSearchExpressionTermToGroup,
+  replaceSearchExpressionTerm,
   removeSearchExpressionNode,
   setSearchExpressionBoundaryOperator,
   setSearchExpressionGroupOperator,

@@ -6,7 +6,11 @@ function normalizeExpressionOperator(value) {
 }
 
 function patchBoundLabel(bound) {
-  return String(bound || "").trim().toLowerCase() === "to" ? "Until" : "From";
+  return String(bound || "").trim().toLowerCase() === "to" ? "Before" : "After";
+}
+
+function nextPatchBoundLabel(bound) {
+  return String(bound || "").trim().toLowerCase() === "to" ? "After" : "Before";
 }
 
 function buildFallbackSelectedTerms(stateBundle, resolvers) {
@@ -93,7 +97,13 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
           : "",
       contentMarkup: `
         <span class="inline-flex min-w-0 items-center gap-2">
-          <span class="badge badge-ghost badge-xs">${context.escapeHtml(boundLabel)}</span>
+          <button
+            class="badge badge-ghost badge-xs cursor-pointer"
+            type="button"
+            data-expression-patch-toggle-path="${context.escapeHtml(path)}"
+            aria-label="${context.escapeHtml(`Change date bound to ${nextPatchBoundLabel(term.bound)}`)}"
+            title="${context.escapeHtml(`Change date bound to ${nextPatchBoundLabel(term.bound)}`)}"
+          >${context.escapeHtml(boundLabel)}</button>
           <span class="font-medium truncate">${context.escapeHtml(patchLabel)}</span>
         </span>
       `,

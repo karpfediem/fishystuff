@@ -427,6 +427,74 @@ test("FishyMapSearchPanelElement dispatches negation-toggle patches from the app
   });
 });
 
+test("FishyMapSearchPanelElement toggles an applied patch-bound term in place", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-02-26" } },
+      { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-03-12" } },
+      { type: "term", term: { kind: "fish", fishId: 912 } },
+    ],
+  };
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  let dispatchedPatch = null;
+  panel.dispatchPatch = (patch) => {
+    dispatchedPatch = patch;
+  };
+
+  const button = new FakeElement();
+  button.setAttribute("data-expression-patch-toggle-path", "root.0");
+  button.setClosest("button[data-expression-patch-toggle-path]", button);
+
+  panel._handleClick({
+    target: button,
+  });
+
+  assert.deepEqual(dispatchedPatch, {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-02-26" } },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+          ],
+        },
+        selectedTerms: [
+          { kind: "patch-bound", bound: "to", patchId: "2026-02-26" },
+          { kind: "fish", fishId: 912 },
+        ],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: "2026-02-26",
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-02-26" } },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+          ],
+        },
+      },
+    },
+  });
+});
+
 test("FishyMapSearchPanelElement dispatches drag grouping patches from the applied expression view", async () => {
   const { FishyMapSearchPanelElement } = await loadModule();
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);

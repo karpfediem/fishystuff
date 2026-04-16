@@ -171,11 +171,13 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.match(elements.searchSelection.innerHTML, /join items-stretch max-w-full/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-filter-term="favourite"/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-id="235"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.1\.1"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-bound="to"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-id="2026-03-12"/);
   assert.match(elements.searchSelection.innerHTML, /data-zone-rgb="123456"/);
   assert.match(elements.searchSelection.innerHTML, /data-semantic-layer-id="regions"/);
   assert.match(elements.searchSelection.innerHTML, />Date</);
+  assert.match(elements.searchSelection.innerHTML, />Before</);
   assert.match(elements.searchSelection.innerHTML, />Fish</);
   assert.match(elements.searchSelection.innerHTML, />Zone</);
   assert.match(elements.searchSelection.innerHTML, />Region</);

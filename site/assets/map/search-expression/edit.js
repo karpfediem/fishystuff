@@ -159,6 +159,30 @@ export function toggleSearchExpressionNodeNegated(expression, path) {
   return compactSearchExpressionNode(nextExpression, { isRoot: true }) || buildSearchExpressionFromSelectedTerms([]);
 }
 
+export function replaceSearchExpressionTerm(expression, path, term) {
+  const normalizedExpression = coerceSearchExpression(expression);
+  const normalizedPath = normalizeSearchExpressionPath(path);
+  const normalizedTerm = normalizeSearchTerm(term);
+  if (!normalizedPath || !normalizedTerm) {
+    return normalizedExpression;
+  }
+  const nextExpression = visitSearchExpression(
+    normalizedExpression,
+    normalizedPath.indices,
+    (node) => {
+      if (node?.type !== "term") {
+        return cloneSearchExpressionNode(node);
+      }
+      return {
+        type: "term",
+        term: normalizedTerm,
+        ...(normalizeSearchExpressionNegated(node.negated) ? { negated: true } : {}),
+      };
+    },
+  );
+  return compactSearchExpressionNode(nextExpression, { isRoot: true }) || buildSearchExpressionFromSelectedTerms([]);
+}
+
 export function removeSearchExpressionNode(expression, path) {
   const normalizedExpression = coerceSearchExpression(expression);
   const normalizedPath = normalizeSearchExpressionPath(path);

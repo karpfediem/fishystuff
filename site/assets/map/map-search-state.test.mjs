@@ -7,6 +7,7 @@ import {
   buildSearchExpressionNegationSignalPatch,
   buildSearchExpressionOperatorSignalPatch,
   buildSearchMatchSignalPatch,
+  buildSearchPatchBoundToggleSignalPatch,
   buildSearchMatches,
   buildSearchPanelStateBundle,
   buildSearchSelectionRemovalSignalPatch,
@@ -401,6 +402,68 @@ test("buildSearchMatchSignalPatch replaces an existing patch bound", () => {
             type: "group",
             operator: "or",
             children: [{ type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-03-12" } }],
+          },
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchPatchBoundToggleSignalPatch flips a date term and replaces the opposite bound", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-02-26" } },
+            { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-03-12" } },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchPatchBoundToggleSignalPatch(signals, { expressionPath: "root.0" }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-02-26" } },
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+            ],
+          },
+          selectedTerms: [
+            { kind: "patch-bound", bound: "to", patchId: "2026-02-26" },
+            { kind: "fish", fishId: 912 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: "2026-02-26",
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-02-26" } },
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+            ],
           },
         },
       },
