@@ -7,6 +7,8 @@ export {
 export {
   normalizeFishFilterTerm,
   normalizeFishFilterTerms,
+  normalizePatchBound,
+  normalizePatchId,
   normalizeSearchTerm,
   normalizeSelectedSearchTerms,
   searchTermKey,

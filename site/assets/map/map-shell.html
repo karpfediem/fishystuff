@@ -164,7 +164,7 @@
               id="fishymap-search"
               class="grow"
               type="search"
-              placeholder="Search fish, zone, or filter term"
+              placeholder="Search fish, zone, filter, or patch"
               autocomplete="off"
               data-bind="_map_ui.search.query"
               data-on:input="$_map_ui.search.open = true"
@@ -339,8 +339,6 @@
           style="display: none"
         >
           <div class="space-y-3">
-            <fishymap-patch-picker id="fishymap-patch-picker" class="not-prose"></fishymap-patch-picker>
-
             <div class="flex flex-col gap-2">
               <button
                 id="fishymap-reset-view"

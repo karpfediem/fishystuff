@@ -59,6 +59,13 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   const stateBundle = {
     state: {
       catalog: {
+        patches: [
+          {
+            patchId: "2026-03-12",
+            label: "New Era",
+            startTsUtc: 200,
+          },
+        ],
         semanticTerms: [
           {
             layerId: "regions",
@@ -92,6 +99,10 @@ test("renderSearchSelection renders the applied search expression tree", () => {
                 },
                 {
                   type: "term",
+                  term: { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
+                },
+                {
+                  type: "term",
                   term: { kind: "zone", zoneRgb: 123456 },
                 },
                 {
@@ -110,6 +121,9 @@ test("renderSearchSelection renders the applied search expression tree", () => {
           zone_mask: [123456],
           regions: [77],
         },
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: "2026-03-12",
       },
     },
   };
@@ -152,12 +166,16 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.0"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.1"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.2"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.3"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-operator="and"/);
   assert.match(elements.searchSelection.innerHTML, /join items-stretch max-w-full/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-filter-term="favourite"/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-id="235"/);
+  assert.match(elements.searchSelection.innerHTML, /data-patch-bound="to"/);
+  assert.match(elements.searchSelection.innerHTML, /data-patch-id="2026-03-12"/);
   assert.match(elements.searchSelection.innerHTML, /data-zone-rgb="123456"/);
   assert.match(elements.searchSelection.innerHTML, /data-semantic-layer-id="regions"/);
+  assert.match(elements.searchSelection.innerHTML, />Date</);
   assert.match(elements.searchSelection.innerHTML, />Fish</);
   assert.match(elements.searchSelection.innerHTML, />Zone</);
   assert.match(elements.searchSelection.innerHTML, />Region</);

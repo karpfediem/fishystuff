@@ -9,6 +9,8 @@ import {
   moveSearchExpressionNodeToGroup,
   normalizeFishFilterTerm,
   normalizeFishFilterTerms,
+  normalizePatchBound,
+  normalizePatchId,
   removeSearchExpressionNode,
   resolveSearchExpression,
   setSearchExpressionBoundaryOperator,
@@ -132,6 +134,37 @@ function normalizeSemanticFieldIdsByLayer(values) {
   return out;
 }
 
+function normalizePatchLabel(patchId, patchName) {
+  const normalizedName = String(patchName ?? "").trim();
+  return normalizedName || patchId;
+}
+
+function normalizePatchStartTs(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function normalizePatchCatalog(patches) {
+  return (Array.isArray(patches) ? patches : [])
+    .flatMap((patch) => {
+      const patchId = normalizePatchId(patch?.patchId ?? patch?.patch_id);
+      if (!patchId) {
+        return [];
+      }
+      return [{
+        patchId,
+        label: normalizePatchLabel(patchId, patch?.patchName ?? patch?.patch_name),
+        startTsUtc: normalizePatchStartTs(patch?.startTsUtc ?? patch?.start_ts_utc),
+      }];
+    })
+    .sort((left, right) => {
+      if (right.startTsUtc !== left.startTsUtc) {
+        return right.startTsUtc - left.startTsUtc;
+      }
+      return right.patchId.localeCompare(left.patchId);
+    });
+}
+
 function semanticTermLookupKey(layerId, fieldId) {
   return `${String(layerId || "").trim()}:${Number.parseInt(fieldId, 10)}`;
 }
@@ -175,6 +208,7 @@ export function buildSearchPanelStateBundle(signals) {
       ready: runtime.ready === true,
       catalog: {
         fish: Array.isArray(runtime.catalog?.fish) ? cloneJson(runtime.catalog.fish) : [],
+        patches: normalizePatchCatalog(runtime.catalog?.patches),
         semanticTerms: Array.isArray(runtime.catalog?.semanticTerms)
           ? cloneJson(runtime.catalog.semanticTerms)
           : [],
@@ -192,6 +226,9 @@ export function buildSearchPanelStateBundle(signals) {
         zoneRgbs: normalizeIntegerList(projectedFilters.zoneRgbs),
         semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(projectedFilters.semanticFieldIdsByLayer),
         fishFilterTerms: normalizeFishFilterTerms(projectedFilters.fishFilterTerms),
+        patchId: normalizePatchId(projectedFilters.patchId) || null,
+        fromPatchId: normalizePatchId(projectedFilters.fromPatchId) || null,
+        toPatchId: normalizePatchId(projectedFilters.toPatchId) || null,
       },
     },
     sharedFishState: normalizeSharedFishState(signals?._shared_fish),
@@ -230,6 +267,31 @@ export function resolveSelectedZoneRgbs(stateBundle) {
 
 export function resolveSelectedFishFilterTerms(stateBundle) {
   return normalizeFishFilterTerms(stateBundle?.inputState?.filters?.fishFilterTerms);
+}
+
+function resolveSelectedPatchTerms(stateBundle) {
+  const selectedTerms = resolveSelectedSearchTermsFromBundle(stateBundle);
+  return selectedTerms.filter((term) => term?.kind === "patch-bound");
+}
+
+function resolveSelectedPatchBounds(stateBundle) {
+  const patchTerms = resolveSelectedPatchTerms(stateBundle);
+  let fromPatchId = null;
+  let toPatchId = null;
+  for (const term of patchTerms) {
+    const patchId = normalizePatchId(term.patchId);
+    if (!patchId) {
+      continue;
+    }
+    if (term.bound === "from") {
+      fromPatchId = patchId;
+      continue;
+    }
+    if (term.bound === "to") {
+      toPatchId = patchId;
+    }
+  }
+  return { fromPatchId, toPatchId };
 }
 
 export function parseFishFilterDirectives(searchText) {
@@ -560,24 +622,97 @@ function findSemanticMatches(semanticTerms, searchText) {
   return filtered;
 }
 
+function scorePatchMatch(patch, queryTerms) {
+  if (!queryTerms.length) {
+    return 0;
+  }
+  const patchId = String(patch.patchId || "").toLowerCase();
+  const label = String(patch.label || "").toLowerCase();
+  let score = 0;
+  for (const queryTerm of queryTerms) {
+    const best = Math.max(
+      patchId === queryTerm ? 220 : Number.NEGATIVE_INFINITY,
+      scoreTermMatch(patchId, queryTerm, 180),
+      scoreTermMatch(label, queryTerm, 160),
+    );
+    if (!Number.isFinite(best)) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    score += best;
+  }
+  return score;
+}
+
+function findPatchMatches(patches, searchText, stateBundle) {
+  const query = String(searchText || "").trim().toLowerCase();
+  const queryTerms = query ? query.split(/\s+/g).filter(Boolean) : [];
+  if (!queryTerms.length) {
+    return [];
+  }
+  const selectedBounds = resolveSelectedPatchBounds(stateBundle);
+  const matches = [];
+  for (const patch of Array.isArray(patches) ? patches : []) {
+    const score = scorePatchMatch(patch, queryTerms);
+    if (!Number.isFinite(score)) {
+      continue;
+    }
+    if (selectedBounds.fromPatchId !== patch.patchId) {
+      matches.push({
+        kind: "patch-bound",
+        bound: "from",
+        patchId: patch.patchId,
+        label: patch.label,
+        startTsUtc: patch.startTsUtc,
+        description: `From ${patch.label}`,
+        _score: score,
+      });
+    }
+    if (selectedBounds.toPatchId !== patch.patchId) {
+      matches.push({
+        kind: "patch-bound",
+        bound: "to",
+        patchId: patch.patchId,
+        label: patch.label,
+        startTsUtc: patch.startTsUtc,
+        description: `Until ${patch.label}`,
+        _score: score,
+      });
+    }
+  }
+  matches.sort((left, right) => {
+    if (right._score !== left._score) {
+      return right._score - left._score;
+    }
+    if (left.patchId !== right.patchId) {
+      return String(right.patchId || "").localeCompare(String(left.patchId || ""));
+    }
+    return String(left.bound || "").localeCompare(String(right.bound || ""));
+  });
+  return matches;
+}
+
 function searchMatchPriority(match) {
   if (match?.kind === "fish-filter") {
     return -1;
   }
-  if (match?.kind === "fish") {
+  if (match?.kind === "patch-bound") {
     return 0;
   }
-  if (match?.kind === "zone") {
+  if (match?.kind === "fish") {
     return 1;
   }
-  if (match?.kind === "semantic") {
+  if (match?.kind === "zone") {
     return 2;
+  }
+  if (match?.kind === "semantic") {
+    return 3;
   }
   return 9;
 }
 
 export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const catalogFish = stateBundle?.state?.catalog?.fish || [];
+  const catalogPatches = stateBundle?.state?.catalog?.patches || [];
   const semanticTerms = stateBundle?.state?.catalog?.semanticTerms || [];
   const selectedFishIds = new Set(resolveSelectedFishIds(stateBundle));
   const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
@@ -587,6 +722,7 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const filterDirectives = parseFishFilterDirectives(searchText);
   const effectiveFishFilterTerms = normalizeFishFilterTerms(filterDirectives.directTerms);
   const fishFilterMatches = findFishFilterMatches(searchText, selectedFishFilterTerms);
+  const patchMatches = findPatchMatches(catalogPatches, filterDirectives.remainingQuery, stateBundle);
   const fishMatches = findFishMatches(catalogFish, filterDirectives.remainingQuery, {
     includeAllWhenEmpty: effectiveFishFilterTerms.length > 0,
     filterTerms: effectiveFishFilterTerms,
@@ -598,7 +734,7 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   const semanticMatches = findSemanticMatches(semanticTerms, filterDirectives.remainingQuery).filter(
     (term) => !(selectedSemanticFieldIdsByLayer[term.layerId] || []).includes(term.fieldId),
   );
-  return fishFilterMatches.concat(fishMatches, semanticMatches, zoneMatches).sort((left, right) => {
+  return fishFilterMatches.concat(patchMatches, fishMatches, semanticMatches, zoneMatches).sort((left, right) => {
     const leftPriority = searchMatchPriority(left);
     const rightPriority = searchMatchPriority(right);
     if (leftPriority !== rightPriority) {
@@ -613,6 +749,30 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
   });
 }
 
+function replacePatchBoundTerm(expression, stateBundle, match) {
+  const normalizedBound = normalizePatchBound(match?.bound);
+  const patchId = normalizePatchId(match?.patchId);
+  if (!normalizedBound || !patchId) {
+    return expression;
+  }
+  let nextExpression = expression;
+  const selectedTerms = resolveSelectedSearchTermsFromBundle(stateBundle);
+  for (const term of selectedTerms) {
+    if (term?.kind !== "patch-bound" || term.bound !== normalizedBound) {
+      continue;
+    }
+    const removalPath = findSearchExpressionTermPath(nextExpression, term);
+    if (removalPath) {
+      nextExpression = removeSearchExpressionNode(nextExpression, removalPath);
+    }
+  }
+  return appendSearchExpressionTerm(nextExpression, {
+    kind: "patch-bound",
+    bound: normalizedBound,
+    patchId,
+  });
+}
+
 export function buildSearchMatchSignalPatch(signals, match) {
   const stateBundle = buildSearchPanelStateBundle(signals);
   const expression = resolveSearchExpression(
@@ -620,7 +780,11 @@ export function buildSearchMatchSignalPatch(signals, match) {
     stateBundle?.inputState?.search?.selectedTerms,
     stateBundle?.inputState?.filters,
   );
-  return buildSearchExpressionStatePatch(appendSearchExpressionTerm(expression, match), {
+  const nextExpression =
+    match?.kind === "patch-bound"
+      ? replacePatchBoundTerm(expression, stateBundle, match)
+      : appendSearchExpressionTerm(expression, match);
+  return buildSearchExpressionStatePatch(nextExpression, {
     query: "",
     open: false,
   });
@@ -641,6 +805,17 @@ export function buildSearchSelectionRemovalSignalPatch(signals, target) {
       removalPath = findSearchExpressionTermPath(expression, {
         kind: "fish-filter",
         term: fishFilterTerm,
+      });
+    }
+  }
+  if (!removalPath) {
+    const patchBound = normalizePatchBound(target?.patchBound);
+    const patchId = normalizePatchId(target?.patchId);
+    if (patchBound && patchId) {
+      removalPath = findSearchExpressionTermPath(expression, {
+        kind: "patch-bound",
+        bound: patchBound,
+        patchId,
       });
     }
   }

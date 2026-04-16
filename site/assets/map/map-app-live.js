@@ -14,7 +14,6 @@ import "./map-bookmark-panel-element.js";
 import "./map-hover-tooltip-element.js";
 import "./map-info-panel-element.js";
 import "./map-layer-panel-element.js";
-import "./map-patch-picker-element.js";
 import "./map-search-panel-element.js";
 import "./map-window-manager-element.js";
 import {

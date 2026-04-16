@@ -53,11 +53,37 @@ export function normalizeFishFilterTerms(values) {
   return FISH_FILTER_TERM_ORDER.filter((term) => selected.has(term));
 }
 
+export function normalizePatchBound(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "from" || normalized === "start" || normalized === "since") {
+    return "from";
+  }
+  if (
+    normalized === "to" ||
+    normalized === "until" ||
+    normalized === "end" ||
+    normalized === "through"
+  ) {
+    return "to";
+  }
+  return "";
+}
+
+export function normalizePatchId(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized || "";
+}
+
 export function normalizeSearchTerm(raw) {
   if (!isPlainObject(raw)) {
     return null;
   }
   const kind = String(raw.kind ?? raw.type ?? "").trim().toLowerCase();
+  if (kind === "patch-bound" || kind === "patch") {
+    const bound = normalizePatchBound(raw.bound ?? raw.patchBound ?? raw.side);
+    const patchId = normalizePatchId(raw.patchId ?? raw.value ?? raw.id);
+    return bound && patchId ? { kind: "patch-bound", bound, patchId } : null;
+  }
   if (kind === "fish-filter") {
     const term = normalizeFishFilterTerm(raw.term ?? raw.fishFilterTerm);
     return term ? { kind: "fish-filter", term } : null;
@@ -87,6 +113,11 @@ export function normalizeSearchTerm(raw) {
 export function searchTermKey(term) {
   if (!term || typeof term !== "object") {
     return "";
+  }
+  if (term.kind === "patch-bound") {
+    const bound = normalizePatchBound(term.bound);
+    const patchId = normalizePatchId(term.patchId);
+    return bound && patchId ? `patch-bound:${bound}:${patchId}` : "";
   }
   if (term.kind === "fish-filter") {
     return `fish-filter:${normalizeFishFilterTerm(term.term)}`;

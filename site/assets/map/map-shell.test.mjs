@@ -19,7 +19,7 @@ test("map shell windows are Datastar-driven for open and collapsed state", () =>
   assert.match(shellHtml, /<fishymap-hover-tooltip id="fishymap-hover-tooltip" class="card card-border bg-base-100 not-prose" hidden><\/fishymap-hover-tooltip>/);
   assert.match(shellHtml, /<fishymap-info-panel id="fishymap-info-panel" class="space-y-3 not-prose"><\/fishymap-info-panel>/);
   assert.match(shellHtml, /<fishymap-layer-panel id="fishymap-layer-panel" class="not-prose"><\/fishymap-layer-panel>/);
-  assert.match(shellHtml, /<fishymap-patch-picker id="fishymap-patch-picker" class="not-prose"><\/fishymap-patch-picker>/);
+  assert.doesNotMatch(shellHtml, /<fishymap-patch-picker\b/);
   assert.match(shellHtml, /<fishymap-window-manager id="fishymap-window-manager" hidden><\/fishymap-window-manager>/);
   assert.match(shellHtml, /id="fishymap-search-body"[\s\S]*data-show="!\$_map_ui\.windowUi\.search\.collapsed"/);
   assert.match(shellHtml, /id="fishymap-bookmarks-body"[\s\S]*data-show="!\$_map_ui\.windowUi\.bookmarks\.collapsed"/);

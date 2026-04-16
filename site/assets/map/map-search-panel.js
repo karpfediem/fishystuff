@@ -5,13 +5,25 @@ function normalizeExpressionOperator(value) {
   return String(value ?? "").trim().toLowerCase() === "and" ? "and" : "or";
 }
 
+function patchBoundLabel(bound) {
+  return String(bound || "").trim().toLowerCase() === "to" ? "Until" : "From";
+}
+
 function buildFallbackSelectedTerms(stateBundle, resolvers) {
   const selectedFishIds = resolvers.resolveSelectedFishIds(stateBundle);
   const selectedFishFilterTerms = resolvers.resolveSelectedFishFilterTerms(stateBundle);
   const selectedSemanticFieldIdsByLayer = resolvers.resolveSelectedSemanticFieldIdsByLayer(stateBundle);
   const selectedZoneRgbs = resolvers.resolveSelectedZoneRgbs(stateBundle);
+  const fromPatchId = String(stateBundle?.inputState?.filters?.fromPatchId || "").trim();
+  const toPatchId = String(stateBundle?.inputState?.filters?.toPatchId || "").trim();
   const selectedTerms = [];
 
+  if (fromPatchId) {
+    selectedTerms.push({ kind: "patch-bound", bound: "from", patchId: fromPatchId });
+  }
+  if (toPatchId) {
+    selectedTerms.push({ kind: "patch-bound", bound: "to", patchId: toPatchId });
+  }
   for (const fishFilterTerm of selectedFishFilterTerms) {
     selectedTerms.push({ kind: "fish-filter", term: fishFilterTerm });
   }
@@ -59,6 +71,36 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
       removeLabel: `Remove ${label}`,
       removeAttributes: {
         "data-fish-filter-term": term.term,
+      },
+    };
+  }
+
+  if (term.kind === "patch-bound") {
+    const patch = context.patchLookup.get(term.patchId) || null;
+    const patchLabel = patch?.label || term.patchId;
+    const boundLabel = patchBoundLabel(term.bound);
+    return {
+      type: "term",
+      key: `patch-bound:${term.bound}:${term.patchId}`,
+      path,
+      label: `${boundLabel} ${patchLabel}`,
+      kindLabel: "Date",
+      grade: "patch",
+      negated,
+      description:
+        patch?.label && patch.label !== patch.patchId
+          ? patch.patchId
+          : "",
+      contentMarkup: `
+        <span class="inline-flex min-w-0 items-center gap-2">
+          <span class="badge badge-ghost badge-xs">${context.escapeHtml(boundLabel)}</span>
+          <span class="font-medium truncate">${context.escapeHtml(patchLabel)}</span>
+        </span>
+      `,
+      removeLabel: `Remove ${boundLabel} ${patchLabel}`,
+      removeAttributes: {
+        "data-patch-bound": term.bound,
+        "data-patch-id": term.patchId,
       },
     };
   }
@@ -212,6 +254,9 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
   const fishFilterTermMetadata = options.fishFilterTermMetadata || {};
 
   const zoneLookup = new Map((elements.zoneCatalog || []).map((zone) => [zone.zoneRgb, zone]));
+  const patchLookup = new Map(
+    (stateBundle?.state?.catalog?.patches || []).map((patch) => [String(patch.patchId || "").trim(), patch]),
+  );
   const semanticLookup = buildSemanticTermLookup(stateBundle);
   const fallbackSelectedTerms = Array.isArray(stateBundle?.inputState?.search?.selectedTerms)
     ? stateBundle.inputState.search.selectedTerms
@@ -232,6 +277,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
       fishIdentityMarkup,
       fishLookup,
       formatZone,
+      patchLookup,
       resolveFishGrade,
       semanticIdentityMarkup,
       semanticLookup,
@@ -309,6 +355,8 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
     results: activeMatches.map((match) =>
       match.kind === "fish-filter"
         ? ["fish-filter", match.term, match.label || "", match.description || ""]
+        : match.kind === "patch-bound"
+          ? ["patch-bound", match.bound, match.patchId, match.label || "", match.description || ""]
         : match.kind === "zone"
           ? ["zone", match.zoneRgb, match.name, match.rgbKey]
           : match.kind === "semantic"
@@ -369,6 +417,33 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
                 </span>
                 <span class="mt-1 block truncate text-xs text-base-content/60">
                   ${escapeHtml(match.description || "")}
+                </span>
+              </span>
+            </div>
+          </li>
+        `;
+      }
+      if (match.kind === "patch-bound") {
+        const boundLabel = patchBoundLabel(match.bound);
+        const patchLabel = match.label || match.patchId;
+        return `
+          <li>
+            <div
+              class="flex cursor-pointer items-start gap-3 rounded-box px-3 py-2 text-sm"
+              data-patch-bound="${escapeHtml(match.bound)}"
+              data-patch-id="${escapeHtml(match.patchId)}"
+              role="button"
+              tabindex="0"
+              aria-label="Add ${escapeHtml(boundLabel)} ${escapeHtml(patchLabel)}"
+              title="Add ${escapeHtml(boundLabel)} ${escapeHtml(patchLabel)}"
+            >
+              <span class="min-w-0 flex-1 text-left">
+                <span class="flex items-center gap-2">
+                  <span class="badge badge-ghost badge-xs">${escapeHtml(boundLabel)}</span>
+                  <span class="font-semibold">${escapeHtml(patchLabel)}</span>
+                </span>
+                <span class="mt-1 block truncate text-xs text-base-content/60">
+                  <code>${escapeHtml(match.patchId)}</code>
                 </span>
               </span>
             </div>

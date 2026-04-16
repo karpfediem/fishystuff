@@ -441,13 +441,15 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
         return;
       }
       const removeButton = event.target.closest(
-        "button.fishymap-selection-remove[data-expression-remove-path], button.fishymap-selection-remove[data-fish-filter-term], button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb], button.fishymap-selection-remove[data-semantic-layer-id][data-semantic-field-id]",
+        "button.fishymap-selection-remove[data-expression-remove-path], button.fishymap-selection-remove[data-fish-filter-term], button.fishymap-selection-remove[data-patch-bound][data-patch-id], button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb], button.fishymap-selection-remove[data-semantic-layer-id][data-semantic-field-id]",
       );
       if (removeButton) {
         this.dispatchPatch(
           buildSearchSelectionRemovalSignalPatch(this.signals(), {
             expressionPath: removeButton.getAttribute("data-expression-remove-path"),
             fishFilterTerm: removeButton.getAttribute("data-fish-filter-term"),
+            patchBound: removeButton.getAttribute("data-patch-bound"),
+            patchId: removeButton.getAttribute("data-patch-id"),
             fishId: removeButton.getAttribute("data-fish-id"),
             zoneRgb: removeButton.getAttribute("data-zone-rgb"),
             semanticLayerId: removeButton.getAttribute("data-semantic-layer-id"),
@@ -457,7 +459,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
         return;
       }
       const row = event.target.closest(
-        "[data-fish-filter-term], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+        "[data-fish-filter-term], [data-patch-bound][data-patch-id], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
       );
       if (!row) {
         return;
@@ -470,7 +472,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
         return;
       }
       const row = event.target.closest(
-        "[data-fish-filter-term], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
+        "[data-fish-filter-term], [data-patch-bound][data-patch-id], [data-fish-id], [data-zone-rgb], [data-semantic-layer-id][data-semantic-field-id]",
       );
       if (!row) {
         return;
@@ -592,6 +594,16 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     const fishFilterTerm = row.getAttribute("data-fish-filter-term");
     if (fishFilterTerm) {
       this.dispatchPatch(buildSearchMatchSignalPatch(this.signals(), { kind: "fish-filter", term: fishFilterTerm }));
+      return;
+    }
+    const patchBound = String(row.getAttribute("data-patch-bound") || "").trim();
+    const patchId = String(row.getAttribute("data-patch-id") || "").trim();
+    if (patchBound && patchId) {
+      this.dispatchPatch(buildSearchMatchSignalPatch(this.signals(), {
+        kind: "patch-bound",
+        bound: patchBound,
+        patchId,
+      }));
       return;
     }
     const fishId = Number.parseInt(row.getAttribute("data-fish-id"), 10);

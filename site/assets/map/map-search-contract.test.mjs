@@ -50,6 +50,8 @@ test("normalizeSelectedSearchTerms canonicalizes aliases and deduplicates term k
 test("resolveSelectedSearchTerms falls back to legacy bridged filters", () => {
   assert.deepEqual(
     resolveSelectedSearchTerms(undefined, {
+      fromPatchId: "2026-02-26",
+      toPatchId: "2026-03-12",
       fishIds: [912],
       zoneRgbs: [123],
       fishFilterTerms: ["missing"],
@@ -58,6 +60,8 @@ test("resolveSelectedSearchTerms falls back to legacy bridged filters", () => {
       },
     }),
     [
+      { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
+      { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
       { kind: "fish-filter", term: "missing" },
       { kind: "fish", fishId: 912 },
       { kind: "zone", zoneRgb: 123 },
@@ -69,6 +73,8 @@ test("resolveSelectedSearchTerms falls back to legacy bridged filters", () => {
 test("projectSelectedSearchTermsToBridgedFilters derives explicit runtime filters", () => {
   assert.deepEqual(
     projectSelectedSearchTermsToBridgedFilters([
+      { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
+      { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
       { kind: "fish-filter", term: "missing" },
       { kind: "fish", fishId: 912 },
       { kind: "zone", zoneRgb: 123 },
@@ -82,6 +88,9 @@ test("projectSelectedSearchTermsToBridgedFilters derives explicit runtime filter
         zone_mask: [123],
       },
       fishFilterTerms: ["missing"],
+      patchId: null,
+      fromPatchId: "2026-02-26",
+      toPatchId: "2026-03-12",
     },
   );
 });
@@ -126,6 +135,9 @@ test("buildSearchSelectionStatePatch keeps selected terms page-owned and project
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: [],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",

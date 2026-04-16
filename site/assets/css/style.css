@@ -413,6 +413,10 @@ body {
     --fishy-applied-term-grade: var(--color-secondary, #e07a5f);
 }
 
+:where(.fishy-applied-term[data-grade="patch"]) {
+    --fishy-applied-term-grade: var(--color-neutral, #64748b);
+}
+
 :where(.fishy-applied-term-main) {
     display: inline-flex;
     min-width: 0;

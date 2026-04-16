@@ -1,6 +1,7 @@
 import {
   buildSearchSelectionStatePatch,
   normalizeFishFilterTerms,
+  normalizePatchId,
 } from "./map-search-contract.js";
 
 function isPlainObject(value) {
@@ -167,6 +168,15 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
   for (const term of fishFilterTerms) {
     selectedTerms.push({ kind: "fish-filter", term });
   }
+  const exactPatchId = normalizePatchId(patchId);
+  const normalizedFromPatchId = normalizePatchId(fromPatchId) || exactPatchId;
+  const normalizedToPatchId = normalizePatchId(toPatchId) || exactPatchId;
+  if (normalizedFromPatchId) {
+    selectedTerms.push({ kind: "patch-bound", bound: "from", patchId: normalizedFromPatchId });
+  }
+  if (normalizedToPatchId) {
+    selectedTerms.push({ kind: "patch-bound", bound: "to", patchId: normalizedToPatchId });
+  }
 
   if (searchQuery != null) {
     patch._map_ui = {
@@ -205,23 +215,10 @@ export function parseQuerySignalPatch(locationHref = globalThis.location?.href) 
   }
 
   if (
-    patchId != null ||
-    fromPatchId != null ||
-    toPatchId != null ||
     layers.length
   ) {
     patch._map_bridged = patch._map_bridged || {};
     patch._map_bridged.filters = patch._map_bridged.filters || {};
-    if (fromPatchId != null || toPatchId != null) {
-      if (fromPatchId != null) {
-        patch._map_bridged.filters.fromPatchId = fromPatchId || null;
-      }
-      if (toPatchId != null) {
-        patch._map_bridged.filters.toPatchId = toPatchId || null;
-      }
-    } else if (patchId != null) {
-      patch._map_bridged.filters.patchId = patchId || null;
-    }
     if (layers.length) {
       patch._map_bridged.filters.layerIdsVisible = layers;
     }

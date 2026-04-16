@@ -808,15 +808,20 @@ function projectSearchExpressionToFishTerms(expression) {
   const normalizedExpression = resolveSearchExpression(expression);
   const projectNode = (node) => {
     if (!isPlainObject(node)) {
-      return { representable: true, expression: null };
+      return { representable: true, expression: null, orthogonal: false };
     }
     if (node.type === "term") {
+      const kind = String(node.term?.kind || "").trim();
+      if (kind === "patch-bound") {
+        return { representable: true, expression: null, orthogonal: true };
+      }
       const isRepresentableTerm = FISHYMAP_FISH_SEARCH_TERM_KINDS.has(
-        String(node.term?.kind || "").trim(),
+        kind,
       );
       return {
         representable: isRepresentableTerm || node.negated !== true,
         expression: isRepresentableTerm ? cloneJson(node) : null,
+        orthogonal: false,
       };
     }
     const operator = String(node.operator || "").trim().toLowerCase() === "and" ? "and" : "or";
@@ -825,18 +830,20 @@ function projectSearchExpressionToFishTerms(expression) {
       projectNode(child),
     );
     if (projectedChildren.some((child) => child.representable === false)) {
-      return { representable: false, expression: null };
+      return { representable: false, expression: null, orthogonal: false };
     }
-    const keptChildren = projectedChildren.flatMap((child) => (child.expression ? [child.expression] : []));
-    if (negated && keptChildren.length !== projectedChildren.length) {
-      return { representable: false, expression: null };
+    const nonOrthogonalChildren = projectedChildren.filter((child) => child.orthogonal !== true);
+    const keptChildren = nonOrthogonalChildren.flatMap((child) => (child.expression ? [child.expression] : []));
+    if (negated && keptChildren.length !== nonOrthogonalChildren.length) {
+      return { representable: false, expression: null, orthogonal: false };
     }
-    if (operator === "or" && keptChildren.length && keptChildren.length !== projectedChildren.length) {
-      return { representable: false, expression: null };
+    if (operator === "or" && keptChildren.length && keptChildren.length !== nonOrthogonalChildren.length) {
+      return { representable: false, expression: null, orthogonal: false };
     }
     return {
       representable: true,
       expression: buildFishSearchExpressionNode(operator, keptChildren, negated),
+      orthogonal: false,
     };
   };
   return projectNode(normalizedExpression);

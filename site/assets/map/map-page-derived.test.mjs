@@ -69,6 +69,9 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
           zone_mask: [123456],
         },
         fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -131,6 +134,9 @@ test("buildQueryFishSelectionSignalPatch resolves pending fish-name selectors fr
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -188,6 +194,9 @@ test("map-page-derived controller applies initial query and search projection pa
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -247,6 +256,9 @@ test("map-page-derived controller reacts to shell-local signal patch events", ()
           zone_mask: [654321],
         },
         fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -347,6 +359,9 @@ test("map-page-derived controller resolves query fish selectors when the runtime
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",

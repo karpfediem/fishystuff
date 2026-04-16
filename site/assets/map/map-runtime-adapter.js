@@ -99,9 +99,9 @@ function normalizeBridgedFilters(signals) {
     semanticFieldIdsByLayer: cloneJson(searchProjection.semanticFieldIdsByLayer),
     fishFilterTerms: cloneJson(searchProjection.fishFilterTerms),
     searchExpression: cloneJson(searchExpression),
-    patchId: bridged.patchId ?? null,
-    fromPatchId: bridged.fromPatchId ?? null,
-    toPatchId: bridged.toPatchId ?? null,
+    patchId: searchProjection.patchId,
+    fromPatchId: searchProjection.fromPatchId,
+    toPatchId: searchProjection.toPatchId,
     layerIdsVisible: normalizeStringList(bridged.layerIdsVisible).length
       ? normalizeStringList(bridged.layerIdsVisible)
       : cloneJson(DEFAULT_ENABLED_LAYER_IDS),

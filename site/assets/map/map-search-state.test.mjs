@@ -37,6 +37,7 @@ function baseSignals() {
           { fishId: 912, itemId: 912, name: "Cron Dart", grade: "Rare", isPrize: false },
           { fishId: 77, itemId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
         ],
+        patches: [],
         semanticTerms: [
           {
             layerId: "regions",
@@ -65,6 +66,7 @@ test("buildSearchPanelStateBundle keeps only search-relevant live signals", () =
           { fishId: 912, itemId: 912, name: "Cron Dart", grade: "Rare", isPrize: false },
           { fishId: 77, itemId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
         ],
+        patches: [],
         semanticTerms: [
           {
             layerId: "regions",
@@ -93,6 +95,9 @@ test("buildSearchPanelStateBundle keeps only search-relevant live signals", () =
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
       },
     },
     sharedFishState: {
@@ -138,6 +143,35 @@ test("buildSearchMatches treats multiple selected grade filters as an OR group",
   assert.deepEqual(
     matches.filter((match) => match.kind === "fish").map((match) => match.fishId),
     [912, 77],
+  );
+});
+
+test("buildSearchMatches returns patch-bound matches and hides already-selected bounds", () => {
+  const bundle = buildSearchPanelStateBundle({
+    ...baseSignals(),
+    _map_runtime: {
+      ready: true,
+      catalog: {
+        fish: [],
+        patches: [
+          { patchId: "2026-03-12", patchName: "New Era", startTsUtc: 200 },
+          { patchId: "2026-02-26", patchName: "Old Guard", startTsUtc: 100 },
+        ],
+        semanticTerms: [],
+      },
+    },
+    _map_ui: {
+      search: {
+        query: "new",
+        open: true,
+        selectedTerms: [{ kind: "patch-bound", bound: "from", patchId: "2026-03-12" }],
+      },
+    },
+  });
+
+  assert.deepEqual(
+    buildSearchMatches(bundle, "new").map((match) => [match.kind, match.bound, match.patchId]),
+    [["patch-bound", "to", "2026-03-12"]],
   );
 });
 
@@ -295,6 +329,9 @@ test("buildSearchMatchSignalPatch updates bridged filters and closes the dropdow
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -312,6 +349,62 @@ test("buildSearchMatchSignalPatch updates bridged filters and closes the dropdow
   assert.deepEqual(
     buildSearchMatchSignalPatch(signals, { kind: "semantic", layerId: "regions", fieldId: 22 })._map_bridged.filters.semanticFieldIdsByLayer,
     { regions: [22] },
+  );
+});
+
+test("buildSearchMatchSignalPatch replaces an existing patch bound", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "new",
+        open: true,
+        selectedTerms: [{ kind: "patch-bound", bound: "from", patchId: "2026-02-26" }],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fromPatchId: "2026-02-26",
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchMatchSignalPatch(signals, {
+      kind: "patch-bound",
+      bound: "from",
+      patchId: "2026-03-12",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-03-12" } }],
+          },
+          selectedTerms: [{ kind: "patch-bound", bound: "from", patchId: "2026-03-12" }],
+          query: "",
+          open: false,
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+          patchId: null,
+          fromPatchId: "2026-03-12",
+          toPatchId: null,
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-03-12" } }],
+          },
+        },
+      },
+    },
   );
 });
 
@@ -369,6 +462,9 @@ test("buildSearchMatchSignalPatch preserves nested expression groups when append
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -430,6 +526,49 @@ test("buildSearchSelectionRemovalSignalPatch removes selected search filters cle
   );
 });
 
+test("buildSearchSelectionRemovalSignalPatch removes patch bounds cleanly", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        selectedTerms: [
+          { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
+          { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
+        ],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fromPatchId: "2026-02-26",
+        toPatchId: "2026-03-12",
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchSelectionRemovalSignalPatch(signals, {
+      patchBound: "from",
+      patchId: "2026-02-26",
+    })._map_bridged.filters,
+    {
+      fishIds: [],
+      zoneRgbs: [],
+      semanticFieldIdsByLayer: {},
+      fishFilterTerms: [],
+      patchId: null,
+      fromPatchId: null,
+      toPatchId: "2026-03-12",
+      searchExpression: {
+        type: "group",
+        operator: "or",
+        children: [{ type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-03-12" } }],
+      },
+    },
+  );
+});
+
 test("buildSearchExpressionNegationSignalPatch toggles node negation without changing selected terms", () => {
   const signals = {
     ...baseSignals(),
@@ -476,6 +615,9 @@ test("buildSearchExpressionNegationSignalPatch toggles node negation without cha
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -544,6 +686,9 @@ test("buildSearchSelectionRemovalSignalPatch removes by expression path without 
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",
@@ -621,6 +766,9 @@ test("buildSearchExpressionOperatorSignalPatch preserves the subgroup when opera
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",
@@ -699,6 +847,9 @@ test("buildSearchExpressionOperatorSignalPatch rewrites only the clicked separat
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",
@@ -777,6 +928,9 @@ test("buildSearchExpressionDragSignalPatch moves a term into a target group", ()
           zoneRgbs: [],
           semanticFieldIdsByLayer: {},
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",
@@ -854,6 +1008,9 @@ test("buildSearchExpressionDragSignalPatch groups a dragged term with a target t
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",
@@ -947,6 +1104,9 @@ test("buildSearchExpressionDragSignalPatch moves a dragged subgroup into another
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",
@@ -1043,6 +1203,9 @@ test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a targ
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",
@@ -1121,6 +1284,9 @@ test("buildSearchExpressionDragSignalPatch reorders a dragged node by group slot
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",
@@ -1198,6 +1364,9 @@ test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a targ
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          patchId: null,
+          fromPatchId: null,
+          toPatchId: null,
           searchExpression: {
             type: "group",
             operator: "or",

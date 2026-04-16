@@ -114,6 +114,9 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
           zone_mask: [123456],
         },
         fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",

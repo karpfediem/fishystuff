@@ -327,6 +327,9 @@ test("FishyMapSearchPanelElement dispatches operator-toggle patches that preserv
         zoneRgbs: [123],
         semanticFieldIdsByLayer: { zone_mask: [123] },
         fishFilterTerms: [],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -404,6 +407,9 @@ test("FishyMapSearchPanelElement dispatches negation-toggle patches from the app
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -517,6 +523,9 @@ test("FishyMapSearchPanelElement dispatches drag grouping patches from the appli
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -642,6 +651,9 @@ test("FishyMapSearchPanelElement dispatches subgroup move patches from the appli
         zoneRgbs: [123],
         semanticFieldIdsByLayer: { zone_mask: [123] },
         fishFilterTerms: ["favourite"],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",
@@ -755,6 +767,9 @@ test("FishyMapSearchPanelElement dispatches slot insertion patches from the appl
         zoneRgbs: [123],
         semanticFieldIdsByLayer: { zone_mask: [123] },
         fishFilterTerms: ["favourite"],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",

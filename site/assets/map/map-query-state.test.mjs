@@ -21,6 +21,8 @@ test("parseQuerySignalPatch maps page-owned and bridged query params into signal
             { type: "term", term: { kind: "fish-filter", term: "missing" } },
             { type: "term", term: { kind: "fish-filter", term: "yellow" } },
             { type: "term", term: { kind: "fish-filter", term: "blue" } },
+            { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-02-26" } },
+            { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-03-12" } },
           ],
         },
         selectedTerms: [
@@ -28,6 +30,8 @@ test("parseQuerySignalPatch maps page-owned and bridged query params into signal
           { kind: "fish-filter", term: "missing" },
           { kind: "fish-filter", term: "yellow" },
           { kind: "fish-filter", term: "blue" },
+          { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
+          { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
         ],
       },
     },
@@ -45,8 +49,11 @@ test("parseQuerySignalPatch maps page-owned and bridged query params into signal
             { type: "term", term: { kind: "fish-filter", term: "missing" } },
             { type: "term", term: { kind: "fish-filter", term: "yellow" } },
             { type: "term", term: { kind: "fish-filter", term: "blue" } },
+            { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-02-26" } },
+            { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-03-12" } },
           ],
         },
+        patchId: null,
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
         layerIdsVisible: ["zones", "terrain"],
@@ -70,9 +77,17 @@ test("parseQuerySignalPatch prefers focusFish and patch when present", () => {
         expression: {
           type: "group",
           operator: "or",
-          children: [{ type: "term", term: { kind: "fish", fishId: 820986 } }],
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 820986 } },
+            { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-02-26" } },
+            { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-02-26" } },
+          ],
         },
-        selectedTerms: [{ kind: "fish", fishId: 820986 }],
+        selectedTerms: [
+          { kind: "fish", fishId: 820986 },
+          { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
+          { kind: "patch-bound", bound: "to", patchId: "2026-02-26" },
+        ],
       },
     },
     _map_bridged: {
@@ -84,9 +99,15 @@ test("parseQuerySignalPatch prefers focusFish and patch when present", () => {
         searchExpression: {
           type: "group",
           operator: "or",
-          children: [{ type: "term", term: { kind: "fish", fishId: 820986 } }],
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 820986 } },
+            { type: "term", term: { kind: "patch-bound", bound: "from", patchId: "2026-02-26" } },
+            { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-02-26" } },
+          ],
         },
         patchId: "2026-02-26",
+        fromPatchId: "2026-02-26",
+        toPatchId: "2026-02-26",
       },
     },
   });
@@ -121,6 +142,9 @@ test("parseQuerySignalPatch supports multiple fish selectors and defers fish-nam
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        patchId: null,
+        fromPatchId: null,
+        toPatchId: null,
         searchExpression: {
           type: "group",
           operator: "or",

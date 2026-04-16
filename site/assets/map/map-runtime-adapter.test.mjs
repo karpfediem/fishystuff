@@ -93,7 +93,7 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
     zone_mask: [123456],
   });
   assert.deepEqual(patch.filters.fishFilterTerms, []);
-  assert.equal(patch.filters.patchId, "p1");
+  assert.equal(patch.filters.patchId, null);
   assert.equal(patch.filters.fromPatchId, "a");
   assert.equal(patch.filters.toPatchId, "b");
   assert.deepEqual(patch.filters.layerIdsVisible, ["bookmarks", "fish_evidence"]);
@@ -125,6 +125,8 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
             { kind: "zone", zoneRgb: 123456 },
             { kind: "semantic", layerId: "regions", fieldId: 11 },
             { kind: "fish-filter", term: "favorite" },
+            { kind: "patch-bound", bound: "from", patchId: "2026-02-26" },
+            { kind: "patch-bound", bound: "to", patchId: "2026-03-12" },
           ],
         },
       },
@@ -158,6 +160,9 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
   });
   assert.deepEqual(patch.filters.fishIds, [912]);
   assert.deepEqual(patch.filters.fishFilterTerms, ["favourite"]);
+  assert.equal(patch.filters.patchId, null);
+  assert.equal(patch.filters.fromPatchId, "2026-02-26");
+  assert.equal(patch.filters.toPatchId, "2026-03-12");
   assert.deepEqual(patch.filters.zoneMembershipLayerIds, []);
   assert.deepEqual(patch.ui.sharedFishState, {
     caughtIds: [],
@@ -278,6 +283,8 @@ test("buildBridgeInputPatchFromSignals ignores transitional control filters", ()
   assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
   assert.deepEqual(patch.filters.fishFilterTerms, []);
   assert.equal(patch.filters.patchId, null);
+  assert.equal(patch.filters.fromPatchId, null);
+  assert.equal(patch.filters.toPatchId, null);
 });
 
 test("buildBridgeCommandPatchFromSignals only emits resetView on token increase", () => {

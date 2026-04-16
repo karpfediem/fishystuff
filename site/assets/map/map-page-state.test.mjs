@@ -49,6 +49,7 @@ test("map-page-state loadRestoreState strips query-owned fields", () => {
   assert.equal(restoreState.uiPatch._map_bridged?.ui?.diagnosticsOpen, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.filters?.fishIds, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.filters?.layerIdsVisible, undefined);
+  assert.equal(restoreState.uiPatch._map_bridged?.filters?.patchId, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.filters?.fromPatchId, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.filters?.toPatchId, undefined);
 });
@@ -118,7 +119,7 @@ test("map-page-state createPersistedState captures durable map branches", () => 
       pointIconScale: 1.5,
     },
     bridgedFilters: {
-      fishIds: [],
+      fishIds: [77],
       zoneRgbs: [],
       semanticFieldIdsByLayer: {},
       fishFilterTerms: [],

@@ -2,6 +2,7 @@ import { buildSearchExpressionFromSelectedTerms, coerceSearchExpression, normali
 import { isPlainObject, normalizeIntegerList } from "./shared.js";
 import {
   normalizeFishFilterTerms,
+  normalizePatchId,
   normalizeSearchTerm,
   normalizeSelectedSearchTerms,
   searchTermKey,
@@ -14,6 +15,15 @@ export function selectedSearchTermsFromLegacyFilters(filters) {
     return selectedSearchTermsFromExpression(searchExpression);
   }
   const terms = [];
+  const exactPatchId = normalizePatchId(source.patchId);
+  const fromPatchId = normalizePatchId(source.fromPatchId) || exactPatchId;
+  const toPatchId = normalizePatchId(source.toPatchId) || exactPatchId;
+  if (fromPatchId) {
+    terms.push({ kind: "patch-bound", bound: "from", patchId: fromPatchId });
+  }
+  if (toPatchId) {
+    terms.push({ kind: "patch-bound", bound: "to", patchId: toPatchId });
+  }
   for (const term of normalizeFishFilterTerms(source.fishFilterTerms)) {
     terms.push({ kind: "fish-filter", term });
   }
@@ -71,8 +81,24 @@ export function projectSelectedSearchTermsToBridgedFilters(terms) {
   const zoneRgbs = [];
   const fishFilterTerms = [];
   const semanticFieldIdsByLayer = {};
+  let fromPatchId = null;
+  let toPatchId = null;
 
   for (const term of selectedTerms) {
+    if (term.kind === "patch-bound") {
+      const patchId = normalizePatchId(term.patchId);
+      if (!patchId) {
+        continue;
+      }
+      if (term.bound === "from") {
+        fromPatchId = patchId;
+        continue;
+      }
+      if (term.bound === "to") {
+        toPatchId = patchId;
+      }
+      continue;
+    }
     if (term.kind === "fish") {
       fishIds.push(term.fishId);
       continue;
@@ -101,6 +127,9 @@ export function projectSelectedSearchTermsToBridgedFilters(terms) {
     zoneRgbs,
     semanticFieldIdsByLayer,
     fishFilterTerms,
+    patchId: fromPatchId && toPatchId && fromPatchId === toPatchId ? fromPatchId : null,
+    fromPatchId,
+    toPatchId,
   };
 }
 
@@ -145,6 +174,9 @@ export function buildSearchExpressionStatePatch(expression, searchPatch = null) 
         zoneRgbs: projection.zoneRgbs,
         semanticFieldIdsByLayer: projection.semanticFieldIdsByLayer,
         fishFilterTerms: projection.fishFilterTerms,
+        patchId: projection.patchId,
+        fromPatchId: projection.fromPatchId,
+        toPatchId: projection.toPatchId,
         searchExpression: normalizedExpression,
       },
     },

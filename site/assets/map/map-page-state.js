@@ -3,6 +3,7 @@ import {
   resolveSearchExpression,
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
+import { resolveSearchProjection } from "./map-search-projection.js";
 
 export const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
   "bookmarks",
@@ -90,7 +91,13 @@ function stripQueryOwnedRestoreFields(patch, locationHref) {
     (params.has("focusFish") ||
       params.has("fish") ||
       params.has("fishTerms") ||
-      params.has("fishFilterTerms"))
+      params.has("fishFilterTerms") ||
+      params.has("patch") ||
+      params.has("fromPatch") ||
+      params.has("patchFrom") ||
+      params.has("toPatch") ||
+      params.has("untilPatch") ||
+      params.has("patchTo"))
   ) {
     delete search.expression;
     delete search.selectedTerms;
@@ -106,7 +113,13 @@ function stripQueryOwnedRestoreFields(patch, locationHref) {
       params.has("focusFish") ||
       params.has("fish") ||
       params.has("fishTerms") ||
-      params.has("fishFilterTerms")
+      params.has("fishFilterTerms") ||
+      params.has("patch") ||
+      params.has("fromPatch") ||
+      params.has("patchFrom") ||
+      params.has("toPatch") ||
+      params.has("untilPatch") ||
+      params.has("patchTo")
     ) {
       delete bridgedFilters.searchExpression;
     }
@@ -123,6 +136,7 @@ function stripQueryOwnedRestoreFields(patch, locationHref) {
       params.has("untilPatch") ||
       params.has("patchTo"))
   ) {
+    delete bridgedFilters.patchId;
     delete bridgedFilters.fromPatchId;
     delete bridgedFilters.toPatchId;
   }
@@ -140,6 +154,7 @@ function storedUiSignals(signals) {
     search?.selectedTerms,
     bridgedFilters,
   );
+  const searchProjection = resolveSearchProjection(signals);
   const selectedTerms = resolveSelectedSearchTerms(
     search?.selectedTerms,
     bridgedFilters,
@@ -185,20 +200,14 @@ function storedUiSignals(signals) {
           : 1,
       },
       filters: {
-        fishIds: Array.isArray(bridgedFilters?.fishIds) ? cloneJson(bridgedFilters.fishIds) : [],
-        zoneRgbs: Array.isArray(bridgedFilters?.zoneRgbs)
-          ? cloneJson(bridgedFilters.zoneRgbs)
-          : [],
-        semanticFieldIdsByLayer: isPlainObject(bridgedFilters?.semanticFieldIdsByLayer)
-          ? cloneJson(bridgedFilters.semanticFieldIdsByLayer)
-          : {},
-        fishFilterTerms: Array.isArray(bridgedFilters?.fishFilterTerms)
-          ? cloneJson(bridgedFilters.fishFilterTerms)
-          : [],
+        fishIds: cloneJson(searchProjection.fishIds),
+        zoneRgbs: cloneJson(searchProjection.zoneRgbs),
+        semanticFieldIdsByLayer: cloneJson(searchProjection.semanticFieldIdsByLayer),
+        fishFilterTerms: cloneJson(searchProjection.fishFilterTerms),
         searchExpression: cloneJson(searchExpression),
-        patchId: bridgedFilters?.patchId ?? null,
-        fromPatchId: bridgedFilters?.fromPatchId ?? null,
-        toPatchId: bridgedFilters?.toPatchId ?? null,
+        patchId: searchProjection.patchId,
+        fromPatchId: searchProjection.fromPatchId,
+        toPatchId: searchProjection.toPatchId,
         layerIdsVisible: Array.isArray(bridgedFilters?.layerIdsVisible)
           ? cloneJson(bridgedFilters.layerIdsVisible)
           : cloneJson(DEFAULT_ENABLED_LAYER_IDS),
@@ -240,6 +249,7 @@ function uiStorageSnapshot(stored) {
     stored?._map_ui?.search?.selectedTerms,
     bridgedFilters,
   );
+  const searchProjection = resolveSearchProjection(stored);
   const selectedTerms = resolveSelectedSearchTerms(
     stored?._map_ui?.search?.selectedTerms,
     bridgedFilters,
@@ -270,22 +280,14 @@ function uiStorageSnapshot(stored) {
         : 1,
     },
     bridgedFilters: {
-      fishIds: Array.isArray(bridgedFilters.fishIds)
-        ? cloneJson(bridgedFilters.fishIds)
-        : [],
-      zoneRgbs: Array.isArray(bridgedFilters.zoneRgbs)
-        ? cloneJson(bridgedFilters.zoneRgbs)
-        : [],
-      semanticFieldIdsByLayer: isPlainObject(bridgedFilters.semanticFieldIdsByLayer)
-        ? cloneJson(bridgedFilters.semanticFieldIdsByLayer)
-        : {},
-      fishFilterTerms: Array.isArray(bridgedFilters.fishFilterTerms)
-        ? cloneJson(bridgedFilters.fishFilterTerms)
-        : [],
+      fishIds: cloneJson(searchProjection.fishIds),
+      zoneRgbs: cloneJson(searchProjection.zoneRgbs),
+      semanticFieldIdsByLayer: cloneJson(searchProjection.semanticFieldIdsByLayer),
+      fishFilterTerms: cloneJson(searchProjection.fishFilterTerms),
       searchExpression: cloneJson(searchExpression),
-      patchId: bridgedFilters.patchId == null ? null : String(bridgedFilters.patchId),
-      fromPatchId: bridgedFilters.fromPatchId == null ? null : String(bridgedFilters.fromPatchId),
-      toPatchId: bridgedFilters.toPatchId == null ? null : String(bridgedFilters.toPatchId),
+      patchId: searchProjection.patchId,
+      fromPatchId: searchProjection.fromPatchId,
+      toPatchId: searchProjection.toPatchId,
       layerIdsVisible: Array.isArray(bridgedFilters.layerIdsVisible)
         ? cloneJson(bridgedFilters.layerIdsVisible)
         : cloneJson(DEFAULT_ENABLED_LAYER_IDS),

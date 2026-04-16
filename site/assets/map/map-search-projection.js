@@ -1,5 +1,6 @@
 import {
   normalizeFishFilterTerms,
+  normalizePatchId,
   projectSelectedSearchTermsToBridgedFilters,
   resolveSearchExpression,
   resolveSelectedSearchTerms,
@@ -56,6 +57,9 @@ function normalizeProjectedFilters(value) {
     semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(source.semanticFieldIdsByLayer),
     fishFilterTerms: normalizeFishFilterTerms(source.fishFilterTerms),
     searchExpression: resolveSearchExpression(source.searchExpression),
+    patchId: normalizePatchId(source.patchId) || null,
+    fromPatchId: normalizePatchId(source.fromPatchId) || null,
+    toPatchId: normalizePatchId(source.toPatchId) || null,
   };
 }
 
@@ -73,6 +77,9 @@ function projectedFiltersJson(filters) {
     semanticFieldIdsByLayer,
     fishFilterTerms: normalized.fishFilterTerms,
     searchExpression: normalized.searchExpression,
+    patchId: normalized.patchId,
+    fromPatchId: normalized.fromPatchId,
+    toPatchId: normalized.toPatchId,
   });
 }
 
