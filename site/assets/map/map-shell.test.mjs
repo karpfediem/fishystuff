@@ -7,7 +7,10 @@ const shellHtml = readFileSync(new URL("./map-shell.html", import.meta.url), "ut
 test("map shell windows are Datastar-driven for open and collapsed state", () => {
   assert.match(shellHtml, /layers: \{ expandedLayerIds: \[\], hoverFactsVisibleByLayer: \{\} \}/);
   assert.match(shellHtml, /id="fishymap-search-window"[\s\S]*data-show="\$_map_ui\.windowUi\.search\.open"/);
-  assert.match(shellHtml, /<fishymap-search-panel id="fishymap-search-panel" class="not-prose"><\/fishymap-search-panel>/);
+  assert.match(
+    shellHtml,
+    /<fishymap-search-panel[\s\S]*id="fishymap-search-panel"[\s\S]*class="not-prose"[\s\S]*data-attr:data-search-state="JSON\.stringify\(\$_map_ui\.search\)"[\s\S]*><\/fishymap-search-panel>/,
+  );
   assert.match(shellHtml, /id="fishymap-bookmarks-window"[\s\S]*data-show="\$_map_ui\.windowUi\.bookmarks\.open"/);
   assert.match(shellHtml, /<fishymap-bookmark-panel id="fishymap-bookmark-panel" class="not-prose"><\/fishymap-bookmark-panel>/);
   assert.match(shellHtml, /id="fishymap-zone-info-window"[\s\S]*data-show="\$_map_ui\.windowUi\.zoneInfo\.open"/);

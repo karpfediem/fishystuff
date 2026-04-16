@@ -173,7 +173,11 @@
           data-show="!$_map_ui.windowUi.search.collapsed"
           style="display: none"
         >
-          <fishymap-search-panel id="fishymap-search-panel" class="not-prose"></fishymap-search-panel>
+          <fishymap-search-panel
+            id="fishymap-search-panel"
+            class="not-prose"
+            data-attr:data-search-state="JSON.stringify($_map_ui.search)"
+          ></fishymap-search-panel>
         </div>
       </aside>
       <aside

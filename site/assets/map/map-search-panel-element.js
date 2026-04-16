@@ -123,6 +123,16 @@ export function readMapSearchPanelShellSignals(shell) {
   return readMapShellSignals(shell);
 }
 
+export function resolveSearchPanelMatches(stateBundle, searchState, zoneCatalog = []) {
+  const query = String(stateBundle?.inputState?.filters?.searchText || "").trim();
+  if (searchState?.open !== true) {
+    return [];
+  }
+  return query
+    ? buildSearchMatches(stateBundle, query, zoneCatalog)
+    : buildDefaultFishFilterMatches(stateBundle);
+}
+
 function ensureSearchPanelMarkup(host) {
   if (host.querySelector("#fishymap-search-selection-shell")) {
     return;
@@ -138,6 +148,10 @@ function ensureSearchPanelMarkup(host) {
 }
 
 export class FishyMapSearchPanelElement extends HTMLElementBase {
+  static get observedAttributes() {
+    return ["data-search-state"];
+  }
+
   constructor() {
     super();
     this._shell = null;
@@ -214,6 +228,13 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     };
   }
 
+  attributeChangedCallback(name, oldValue, newValue) {
+    if (name !== "data-search-state" || oldValue === newValue) {
+      return;
+    }
+    this.scheduleRender();
+  }
+
   connectedCallback() {
     this._shell = this.closest?.("#map-page-shell") || null;
     ensureSearchPanelMarkup(this);
@@ -286,14 +307,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       return;
     }
     const bundle = buildSearchPanelStateBundle(signals);
-    const query = String(bundle.inputState?.filters?.searchText || "").trim();
-    const searchOpen = signals?._map_ui?.search?.open === true;
-    const matches =
-      bundle.state.ready === true && searchOpen
-        ? query
-          ? buildSearchMatches(bundle, query, this._zoneCatalog)
-          : buildDefaultFishFilterMatches(bundle)
-        : [];
+    const matches = resolveSearchPanelMatches(bundle, signals?._map_ui?.search, this._zoneCatalog);
 
     const fishLookup = new Map((bundle.state?.catalog?.fish || []).map((fish) => [fish.fishId, fish]));
 
