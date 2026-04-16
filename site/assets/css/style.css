@@ -123,6 +123,52 @@ body {
     --fishy-item-grade-unknown: color-mix(in oklab, var(--color-base-content, #1f2937) 68%, var(--color-base-200, #efe7d6) 32%);
 }
 
+:where(.badge) {
+    --fishy-badge-color: var(--badge-color, var(--color-base-content, #1f2937));
+    border-width: 1px;
+    border-radius: calc(infinity * 1px);
+    min-height: var(--size);
+    height: auto;
+    padding-inline: calc(var(--size) * 0.58);
+    padding-block: 0.18rem;
+    gap: 0.35rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    background-image: none;
+    box-shadow: none;
+}
+
+:where(.badge:not(.badge-outline):not(.badge-soft):not(.badge-ghost):not(.badge-dash)) {
+    border-color: color-mix(in oklab, var(--fishy-badge-color) 52%, var(--color-base-300, #d6d3d1) 48%);
+}
+
+:where(.badge.badge-outline) {
+    color: color-mix(in oklab, var(--fishy-badge-color) 74%, var(--color-base-content, #1f2937) 26%);
+    border-color: color-mix(in oklab, var(--fishy-badge-color) 18%, var(--color-base-300, #d6d3d1) 82%);
+    background-color: color-mix(in oklab, var(--fishy-badge-color) 9%, var(--color-base-100, #fffdf4) 91%);
+}
+
+:where(.badge.badge-soft) {
+    color: color-mix(in oklab, var(--fishy-badge-color) 78%, var(--color-base-content, #1f2937) 22%);
+    border-color: color-mix(in oklab, var(--fishy-badge-color) 16%, var(--color-base-300, #d6d3d1) 84%);
+    background-color: color-mix(in oklab, var(--fishy-badge-color) 12%, var(--color-base-100, #fffdf4) 88%);
+}
+
+:where(.badge.badge-ghost) {
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 72%, transparent);
+    border-color: color-mix(in oklab, var(--color-base-300, #d6d3d1) 74%, var(--color-base-100, #fffdf4) 26%);
+    background-color: color-mix(in oklab, var(--color-base-200, #efe7d6) 48%, var(--color-base-100, #fffdf4) 52%);
+}
+
+:where(.badge.badge-xs) {
+    padding-inline: calc(var(--size) * 0.56);
+}
+
+:where(.badge.badge-lg) {
+    padding-inline: calc(var(--size) * 0.54);
+}
+
 :where(
     .fishy-item-row,
     .fishy-item-icon-frame,
