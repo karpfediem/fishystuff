@@ -1,3 +1,5 @@
+import { buildAppliedSearchTermsView } from "../js/components/applied-search-terms.js";
+
 export function renderSearchSelection(elements, stateBundle, fishLookup, options = {}) {
   const resolveSelectedFishIds =
     typeof options.resolveSelectedFishIds === "function"
@@ -19,10 +21,6 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
     typeof options.buildSemanticTermLookup === "function"
       ? options.buildSemanticTermLookup
       : () => new Map();
-  const setBooleanProperty =
-    typeof options.setBooleanProperty === "function" ? options.setBooleanProperty : () => {};
-  const setTextContent =
-    typeof options.setTextContent === "function" ? options.setTextContent : () => {};
   const escapeHtml = typeof options.escapeHtml === "function" ? options.escapeHtml : (value) => String(value || "");
   const fishFilterTermIconMarkup =
     typeof options.fishFilterTermIconMarkup === "function"
@@ -36,6 +34,8 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
     typeof options.semanticIdentityMarkup === "function"
       ? options.semanticIdentityMarkup
       : () => "";
+  const resolveFishGrade =
+    typeof options.resolveFishGrade === "function" ? options.resolveFishGrade : () => "unknown";
   const formatZone = typeof options.formatZone === "function" ? options.formatZone : (value) => String(value || "");
   const fishFilterTermMetadata = options.fishFilterTermMetadata || {};
 
@@ -43,10 +43,6 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
   const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
   const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
   const selectedZoneRgbs = resolveSelectedZoneRgbs(stateBundle);
-  const hasSelection =
-    selectedFishIds.length > 0 ||
-    selectedFishFilterTerms.length > 0 ||
-    selectedZoneRgbs.length > 0;
   const zoneLookup = new Map((elements.zoneCatalog || []).map((zone) => [zone.zoneRgb, zone]));
   const semanticLookup = buildSemanticTermLookup(stateBundle);
   const selectedSemanticEntries = Object.entries(selectedSemanticFieldIdsByLayer)
@@ -58,35 +54,119 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
         term: semanticLookup.get(`${String(layerId || "").trim()}:${Number.parseInt(fieldId, 10)}`) || null,
       })),
     );
-  const hasSemanticSelection = selectedSemanticEntries.length > 0;
-  const hasAnySelection = hasSelection || hasSemanticSelection;
-  const renderKey = JSON.stringify({
-    selectedFishFilterTerms,
-    selectedFishIds,
-    selectedZoneRgbs,
-    selectedSemantic: selectedSemanticEntries.map(({ layerId, fieldId, term }) => [
-      layerId,
-      fieldId,
-      term?.label || "",
-      term?.description || "",
-      term?.layerName || "",
-    ]),
-    selectedFish: selectedFishIds.map((fishId) => {
-      const fish = fishLookup.get(fishId);
-      return [
-        fishId,
-        fish?.name || "",
-        fish?.itemId || null,
-        fish?.encyclopediaId || null,
-        fish?.grade || "",
-        fish?.isPrize === true ? 1 : 0,
-      ];
-    }),
-    selectedZones: selectedZoneRgbs.map((zoneRgb) => {
-      const zone = zoneLookup.get(zoneRgb);
-      return [zoneRgb, zone?.name || "", zone?.rgbKey || ""];
-    }),
+  const groups = [];
+
+  if (selectedFishFilterTerms.length > 0) {
+    groups.push({
+      key: "filters",
+      label: "Filters",
+      items: selectedFishFilterTerms.map((fishFilterTerm) => {
+        const metadata = fishFilterTermMetadata[fishFilterTerm];
+        const label = metadata?.label || fishFilterTerm;
+        return {
+          key: `fish-filter:${fishFilterTerm}`,
+          label,
+          grade: fishFilterTerm,
+          contentMarkup: `
+            <span class="inline-flex min-w-0 items-center gap-2">
+              ${fishFilterTermIconMarkup(fishFilterTerm)}
+              <span class="font-medium">${escapeHtml(label)}</span>
+            </span>
+          `,
+          removeLabel: `Remove ${label}`,
+          removeAttributes: {
+            "data-fish-filter-term": fishFilterTerm,
+          },
+        };
+      }),
+    });
+  }
+
+  if (selectedFishIds.length > 0) {
+    groups.push({
+      key: "fish",
+      label: "Fish",
+      items: selectedFishIds.map((fishId) => {
+        const fish = fishLookup.get(fishId);
+        const name = fish?.name || `Fish ${fishId}`;
+        return {
+          key: `fish:${fishId}`,
+          label: name,
+          grade: resolveFishGrade(fish),
+          contentMarkup:
+            fishIdentityMarkup({ ...(fish || {}), fishId, name }, { interactive: true }) ||
+            `<span class="truncate max-w-36">${escapeHtml(name)}</span>`,
+          removeLabel: `Remove ${name}`,
+          removeAttributes: {
+            "data-fish-id": fishId,
+          },
+        };
+      }),
+    });
+  }
+
+  if (selectedZoneRgbs.length > 0) {
+    groups.push({
+      key: "zones",
+      label: "Zones",
+      items: selectedZoneRgbs.map((zoneRgb) => {
+        const zone = zoneLookup.get(zoneRgb);
+        const name = zone?.name || `Zone ${formatZone(zoneRgb)}`;
+        return {
+          key: `zone:${zoneRgb}`,
+          label: name,
+          grade: "zone",
+          description: formatZone(zoneRgb),
+          contentMarkup:
+            zoneIdentityMarkup(
+              {
+                zoneRgb,
+                name,
+                r: zone?.r,
+                g: zone?.g,
+                b: zone?.b,
+              },
+              { interactive: true },
+            ) || `<span class="truncate max-w-40">${escapeHtml(name)}</span>`,
+          removeLabel: `Remove ${name}`,
+          removeAttributes: {
+            "data-zone-rgb": zoneRgb,
+          },
+        };
+      }),
+    });
+  }
+
+  if (selectedSemanticEntries.length > 0) {
+    groups.push({
+      key: "semantic",
+      label: "Map Terms",
+      items: selectedSemanticEntries.map(({ layerId, fieldId, term }) => {
+        const name = term?.label || `Field ${fieldId}`;
+        return {
+          key: `semantic:${layerId}:${fieldId}`,
+          label: name,
+          grade: "semantic",
+          kindLabel: term?.layerName || "",
+          description: term?.description || "",
+          contentMarkup:
+            semanticIdentityMarkup(name, { interactive: true }) ||
+            `<span class="truncate max-w-40">${escapeHtml(name)}</span>`,
+          removeLabel: `Remove ${name}`,
+          removeAttributes: {
+            "data-semantic-layer-id": layerId,
+            "data-semantic-field-id": fieldId,
+          },
+        };
+      }),
+    });
+  }
+
+  const { hasContent: hasAnySelection, html, renderKey } = buildAppliedSearchTermsView(groups, {
+    escapeHtml,
+    removeButtonClass: "fishymap-selection-remove",
   });
+
   if (elements.searchSelection.dataset.renderKey === renderKey) {
     elements.searchSelection.hidden = !hasAnySelection;
     if (elements.searchSelectionShell) {
@@ -119,110 +199,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
     elements.searchWindow.dataset.hasSelection = "true";
   }
 
-  elements.searchSelection.innerHTML = selectedFishFilterTerms
-    .map((fishFilterTerm) => {
-      const metadata = fishFilterTermMetadata[fishFilterTerm];
-      const label = metadata?.label || fishFilterTerm;
-      return `
-        <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
-          <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
-            ${fishFilterTermIconMarkup(fishFilterTerm)}
-            <span class="font-medium">${escapeHtml(label)}</span>
-          </span>
-          <button
-            class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
-            data-fish-filter-term="${escapeHtml(fishFilterTerm)}"
-            type="button"
-            aria-label="Remove ${escapeHtml(label)}"
-          >
-            ×
-          </button>
-        </div>
-      `;
-    })
-    .concat(
-      selectedFishIds.map((fishId) => {
-        const fish = fishLookup.get(fishId);
-        const name = fish?.name || `Fish ${fishId}`;
-        const fishMarkup =
-          fishIdentityMarkup({ ...fish, fishId, name }, { interactive: true }) ||
-          `<span class="truncate max-w-36">${escapeHtml(name)}</span>`;
-        return `
-        <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
-          <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">${fishMarkup}</span>
-          <button
-            class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
-            data-fish-id="${fishId}"
-            type="button"
-            aria-label="Remove ${escapeHtml(name)}"
-          >
-            ×
-          </button>
-        </div>
-      `;
-      }),
-    )
-    .concat(
-      selectedZoneRgbs.map((zoneRgb) => {
-        const zone = zoneLookup.get(zoneRgb);
-        const name = zone?.name || `Zone ${formatZone(zoneRgb)}`;
-        const zoneMarkup =
-          zoneIdentityMarkup(
-            {
-              zoneRgb,
-              name,
-              r: zone?.r,
-              g: zone?.g,
-              b: zone?.b,
-            },
-            { interactive: true },
-          ) || `<span class="truncate max-w-40">${escapeHtml(name)}</span>`;
-        return `
-          <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
-            <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">${zoneMarkup}</span>
-            <button
-              class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
-              data-zone-rgb="${zoneRgb}"
-              type="button"
-              aria-label="Remove ${escapeHtml(name)}"
-            >
-              ×
-            </button>
-          </div>
-        `;
-      }),
-    )
-    .concat(
-      selectedSemanticEntries.map(({ layerId, fieldId, term }) => {
-        const name = term?.label || `Field ${fieldId}`;
-        const description = term?.description || "";
-        const semanticMarkup =
-          semanticIdentityMarkup(name, { interactive: true }) ||
-          `<span class="truncate max-w-40">${escapeHtml(name)}</span>`;
-        return `
-          <div class="join items-center rounded-full border border-base-300 bg-base-100 p-1 text-base-content">
-            <span class="inline-flex min-w-0 items-center gap-2 px-2 text-sm">
-              <span class="min-w-0">${semanticMarkup}</span>
-              ${
-                description
-                  ? `<span class="truncate max-w-40 text-xs text-base-content/55">${escapeHtml(description)}</span>`
-                  : ""
-              }
-            </span>
-            <button
-              class="fishymap-selection-remove btn btn-ghost btn-xs btn-circle join-item h-7 min-h-0 w-7 border-0 text-base-content/70"
-              data-semantic-layer-id="${escapeHtml(layerId)}"
-              data-semantic-field-id="${fieldId}"
-              type="button"
-              aria-label="Remove ${escapeHtml(name)}"
-            >
-              ×
-            </button>
-          </div>
-        `;
-      }),
-    )
-    .join("");
+  elements.searchSelection.innerHTML = html;
 }
 
 export function renderSearchResults(elements, matches, stateBundle, options = {}) {

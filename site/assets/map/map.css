@@ -277,7 +277,10 @@ fishymap-search-panel {
 }
 
 #fishymap-search-selection-shell {
+  max-height: min(16rem, 36dvh);
+  overflow-y: auto;
   padding: 0;
+  scrollbar-width: thin;
 }
 
 #fishymap-search-results button {
@@ -296,18 +299,9 @@ fishymap-search-panel {
 }
 
 #fishymap-search-selection {
-  display: flex;
   min-height: 0;
   width: 100%;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  justify-content: flex-start;
-  align-content: flex-start;
-  overflow-x: hidden;
-  overflow-y: auto;
-  max-height: min(11rem, 26dvh);
   padding: 0;
-  scrollbar-width: thin;
 }
 
 #fishymap-search-count[hidden] {

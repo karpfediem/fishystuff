@@ -248,3 +248,147 @@ body {
     min-width: 0;
     color: var(--fishy-item-grade-color, var(--fishy-item-grade-unknown));
 }
+
+:where(.fishy-applied-terms) {
+    display: grid;
+    gap: 0.6rem;
+}
+
+:where(.fishy-applied-terms-group) {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0.75rem;
+    border: 1px solid color-mix(in oklab, var(--color-base-300, #d6d3d1) 76%, var(--color-base-content, #1f2937) 24%);
+    border-radius: calc(var(--radius-box, 1rem) * 0.95);
+    background:
+        linear-gradient(
+            180deg,
+            color-mix(in oklab, var(--color-base-100, #fffdf4) 94%, transparent),
+            color-mix(in oklab, var(--color-base-200, #efe7d6) 78%, transparent)
+        );
+    box-shadow: 0 18px 38px -32px color-mix(in oklab, var(--color-base-content, #1f2937) 38%, transparent);
+}
+
+:where(.fishy-applied-terms-group-header) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+:where(.fishy-applied-terms-group-title) {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 78%, transparent);
+}
+
+:where(.fishy-applied-terms-group-description) {
+    margin: -0.1rem 0 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 62%, transparent);
+}
+
+:where(.fishy-applied-terms-group-list) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+:where(.fishy-applied-term) {
+    --fishy-applied-term-grade: color-mix(in oklab, var(--color-base-content, #1f2937) 42%, var(--color-base-300, #d6d3d1) 58%);
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    align-items: stretch;
+    gap: 0.3rem;
+    padding: 0.2rem;
+    border: 1px solid color-mix(in oklab, var(--fishy-applied-term-grade) 48%, var(--color-base-300, #d6d3d1) 52%);
+    border-radius: calc(var(--radius-box, 1rem) * 0.88);
+    background:
+        linear-gradient(
+            180deg,
+            color-mix(in oklab, var(--color-base-100, #fffdf4) 82%, var(--fishy-applied-term-grade) 18%),
+            color-mix(in oklab, var(--color-base-100, #fffdf4) 72%, var(--fishy-applied-term-grade) 28%)
+        );
+    box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-base-100, #fffdf4) 72%, transparent);
+}
+
+:where(.fishy-applied-term[data-grade="favourite"]) {
+    --fishy-applied-term-grade: var(--color-error, #d64545);
+}
+
+:where(.fishy-applied-term[data-grade="missing"]) {
+    --fishy-applied-term-grade: var(--color-warning, #f59e0b);
+}
+
+:where(.fishy-applied-term[data-grade="red"]) {
+    --fishy-applied-term-grade: var(--fishy-item-grade-red);
+}
+
+:where(.fishy-applied-term[data-grade="yellow"]) {
+    --fishy-applied-term-grade: var(--fishy-item-grade-yellow);
+}
+
+:where(.fishy-applied-term[data-grade="blue"]) {
+    --fishy-applied-term-grade: var(--fishy-item-grade-blue);
+}
+
+:where(.fishy-applied-term[data-grade="green"]) {
+    --fishy-applied-term-grade: var(--fishy-item-grade-green);
+}
+
+:where(.fishy-applied-term[data-grade="white"]) {
+    --fishy-applied-term-grade: var(--fishy-item-grade-white);
+}
+
+:where(.fishy-applied-term[data-grade="zone"]) {
+    --fishy-applied-term-grade: var(--color-primary, #2563eb);
+}
+
+:where(.fishy-applied-term[data-grade="semantic"]) {
+    --fishy-applied-term-grade: var(--color-secondary, #e07a5f);
+}
+
+:where(.fishy-applied-term-main) {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.28rem 0.45rem 0.28rem 0.5rem;
+}
+
+:where(.fishy-applied-term-kind) {
+    flex: none;
+    margin-right: 0.1rem;
+}
+
+:where(.fishy-applied-term-body) {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.9rem;
+}
+
+:where(.fishy-applied-term-description) {
+    min-width: 0;
+    max-width: 15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.74rem;
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 62%, transparent);
+}
+
+:where(.fishy-applied-term-remove) {
+    align-self: center;
+}
