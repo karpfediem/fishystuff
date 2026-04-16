@@ -40,8 +40,117 @@ class HTMLElementStub extends ElementStub {}
 class HTMLImageElementStub extends HTMLElementStub {}
 class HTMLButtonElementStub extends HTMLElementStub {}
 
-function createDocumentStub() {
+class ClassListStub {
+  constructor(element) {
+    this.element = element;
+    this.tokens = new Set();
+  }
+
+  sync() {
+    this.element.className = Array.from(this.tokens).join(" ");
+  }
+
+  set(value) {
+    this.tokens = new Set(
+      String(value || "")
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    this.sync();
+  }
+
+  add(...tokens) {
+    for (const token of tokens) {
+      if (token) {
+        this.tokens.add(token);
+      }
+    }
+    this.sync();
+  }
+
+  remove(...tokens) {
+    for (const token of tokens) {
+      this.tokens.delete(token);
+    }
+    this.sync();
+  }
+
+  contains(token) {
+    return this.tokens.has(token);
+  }
+}
+
+class BasicHTMLElementStub extends HTMLElementStub {
+  constructor({ id = "", className = "", hidden = false } = {}) {
+    super();
+    this.id = id;
+    this.dataset = {};
+    this.hidden = hidden;
+    this.textContent = "";
+    this.children = [];
+    this.attributes = new Map();
+    this.listeners = new Map();
+    this.classList = new ClassListStub(this);
+    this.className = "";
+    this.classList.set(className);
+  }
+
+  addEventListener(type, listener) {
+    if (!this.listeners.has(type)) {
+      this.listeners.set(type, []);
+    }
+    this.listeners.get(type).push(listener);
+  }
+
+  removeEventListener(type, listener) {
+    const listeners = this.listeners.get(type);
+    if (!listeners) {
+      return;
+    }
+    this.listeners.set(
+      type,
+      listeners.filter((candidate) => candidate !== listener),
+    );
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
+
+  replaceChildren(...children) {
+    this.children = children;
+  }
+
+  appendChild(child) {
+    this.children.push(child);
+    return child;
+  }
+
+  append(...children) {
+    this.children.push(...children);
+  }
+
+  focus() {}
+}
+
+class DocumentFragmentStub {
+  constructor() {
+    this.children = [];
+  }
+
+  appendChild(child) {
+    this.children.push(child);
+    return child;
+  }
+}
+
+function createDocumentStub(options = {}) {
   const listeners = new Map();
+  const elementsById = new Map(Object.entries(options.elementsById || {}));
   return {
     addEventListener(type, listener) {
       if (!listeners.has(type)) {
@@ -54,8 +163,8 @@ function createDocumentStub() {
         listener(event);
       }
     },
-    getElementById() {
-      return null;
+    getElementById(id) {
+      return elementsById.get(id) || null;
     },
     querySelector() {
       return null;
@@ -63,11 +172,18 @@ function createDocumentStub() {
     querySelectorAll() {
       return [];
     },
-    createElement() {
-      return {
-        click() {},
-        remove() {},
-      };
+    createElement(tagName) {
+      const normalized = String(tagName || "").toLowerCase();
+      if (normalized === "img") {
+        return new HTMLImageElementStub();
+      }
+      if (normalized === "button") {
+        return new HTMLButtonElementStub();
+      }
+      return new BasicHTMLElementStub();
+    },
+    createDocumentFragment() {
+      return new DocumentFragmentStub();
     },
     body: {
       appendChild() {},
@@ -76,7 +192,7 @@ function createDocumentStub() {
 }
 
 function createContext(localStorageInitial = {}, options = {}) {
-  const document = createDocumentStub();
+  const document = createDocumentStub(options);
   const window = {};
   const localStorage = new MemoryStorage(localStorageInitial);
   const timers = new Map();
@@ -380,4 +496,75 @@ test("fishydex sync ignores reentrant derived signal patches", () => {
   assert.equal(signals.total_count, 1);
   assert.equal(signals.visible_count, 1);
   assert.equal(signals.red_total_count, 1);
+});
+
+test("fishydex closes the details modal after a close action token is consumed", () => {
+  const modal = new BasicHTMLElementStub({
+    id: "fishydex-details",
+    className: "fishydex-details-modal modal",
+    hidden: true,
+  });
+  const env = createContext(
+    {},
+    {
+      emitSignalPatchOnPatchSignals: true,
+      elementsById: {
+        "fishydex-details": modal,
+      },
+    },
+  );
+  const signals = defaultSignals();
+
+  env.window.Fishydex.restore(signals);
+  Object.assign(signals, {
+    _loading: false,
+    revision: "rev-1",
+    fish: [
+      {
+        item_id: 8473,
+        encyclopedia_id: 1,
+        name: "Yellow Corvina",
+        grade: "Prize",
+        is_prize: true,
+        catch_method: "rod",
+      },
+    ],
+    _selected_fish_id: 8473,
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      fish: signals.fish,
+      revision: "rev-1",
+      _loading: false,
+      _selected_fish_id: 8473,
+    },
+  });
+
+  assert.equal(modal.hidden, false);
+  assert.equal(modal.classList.contains("modal-open"), true);
+
+  Object.assign(signals, {
+    _fishydex_actions: {
+      exportCaughtToken: 0,
+      importCaughtToken: 0,
+      closeDetailsToken: 1,
+    },
+  });
+
+  env.document.dispatchEvent({
+    type: "datastar-signal-patch",
+    detail: {
+      _fishydex_actions: {
+        exportCaughtToken: 0,
+        importCaughtToken: 0,
+        closeDetailsToken: 1,
+      },
+    },
+  });
+
+  assert.equal(signals._selected_fish_id, 0);
+  assert.equal(modal.hidden, true);
+  assert.equal(modal.classList.contains("modal-open"), false);
 });

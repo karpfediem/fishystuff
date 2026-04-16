@@ -1349,9 +1349,7 @@
       bindGridClicks();
       bindDetailsControls();
 
-      if (consumeActionTokens(snapshot)) {
-        return;
-      }
+      consumeActionTokens(snapshot);
 
       const fish = Array.isArray(snapshot.fish) ? snapshot.fish : [];
       const sharedFish = sharedFishSnapshot(snapshot);
