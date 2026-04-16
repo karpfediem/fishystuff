@@ -213,6 +213,362 @@ test("FishyMapSearchPanelElement rerenders search results from Datastar-driven a
   assert.equal(searchCount.textContent, "1 match");
 });
 
+test("FishyMapSearchPanelElement dispatches operator-toggle patches from the applied expression view", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "group",
+        operator: "and",
+        children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+      },
+    ],
+  };
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  let dispatchedPatch = null;
+  panel.dispatchPatch = (patch) => {
+    dispatchedPatch = patch;
+  };
+
+  const button = new FakeElement();
+  button.setAttribute("data-expression-group-path", "root.0");
+  button.setAttribute("data-expression-next-operator", "or");
+  button.setClosest(
+    "button.fishy-applied-expression-operator-toggle[data-expression-group-path][data-expression-next-operator]",
+    button,
+  );
+
+  panel._handleClick({
+    target: button,
+  });
+
+  assert.deepEqual(dispatchedPatch, {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "or",
+              children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+            },
+          ],
+        },
+        selectedTerms: [{ kind: "fish", fishId: 912 }],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: [],
+      },
+    },
+  });
+});
+
+test("FishyMapSearchPanelElement dispatches drag grouping patches from the applied expression view", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+      { type: "term", term: { kind: "fish", fishId: 912 } },
+    ],
+  };
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  let dispatchedPatch = null;
+  panel.dispatchPatch = (patch) => {
+    dispatchedPatch = patch;
+  };
+
+  const source = new FakeElement();
+  source.setAttribute("data-expression-drag-path", "root.0");
+  source.setAttribute("draggable", "true");
+  source.setClosest("[data-expression-drag-path][draggable='true']", source);
+
+  panel._handleDragStart({
+    target: source,
+    dataTransfer: {
+      effectAllowed: "",
+      setData() {},
+    },
+  });
+
+  const targetTerm = new FakeElement();
+  targetTerm.setAttribute("data-expression-drop-node-path", "root.1");
+  targetTerm.setClosest("[data-expression-drop-node-path]", targetTerm);
+
+  let prevented = false;
+  panel._handleDragOver({
+    target: targetTerm,
+    preventDefault() {
+      prevented = true;
+    },
+    dataTransfer: {
+      dropEffect: "",
+    },
+  });
+
+  assert.equal(prevented, true);
+  assert.equal(targetTerm.dataset.expressionDropMode, "group");
+
+  panel._handleDrop({
+    preventDefault() {},
+  });
+
+  assert.deepEqual(dispatchedPatch, {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              ],
+            },
+          ],
+        },
+        selectedTerms: [
+          { kind: "fish", fishId: 912 },
+          { kind: "fish-filter", term: "favourite" },
+        ],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["favourite"],
+      },
+    },
+  });
+  assert.equal(source.dataset.dragging, undefined);
+  assert.equal(targetTerm.dataset.expressionDropMode, undefined);
+});
+
+test("FishyMapSearchPanelElement dispatches subgroup move patches from the applied expression view", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "group",
+        operator: "and",
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          { type: "term", term: { kind: "fish", fishId: 912 } },
+        ],
+      },
+      {
+        type: "group",
+        operator: "or",
+        children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
+      },
+    ],
+  };
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  let dispatchedPatch = null;
+  panel.dispatchPatch = (patch) => {
+    dispatchedPatch = patch;
+  };
+
+  const sourceGroup = new FakeElement();
+  sourceGroup.setAttribute("data-expression-drag-path", "root.0");
+  sourceGroup.setAttribute("draggable", "true");
+  sourceGroup.setClosest("[data-expression-drag-path][draggable='true']", sourceGroup);
+
+  panel._handleDragStart({
+    target: sourceGroup,
+    dataTransfer: {
+      effectAllowed: "",
+      setData() {},
+    },
+  });
+
+  const targetGroup = new FakeElement();
+  targetGroup.setAttribute("data-expression-drop-group-path", "root.1");
+  targetGroup.setClosest("[data-expression-drop-group-path]", targetGroup);
+
+  let prevented = false;
+  panel._handleDragOver({
+    target: targetGroup,
+    preventDefault() {
+      prevented = true;
+    },
+    dataTransfer: {
+      dropEffect: "",
+    },
+  });
+
+  assert.equal(prevented, true);
+  assert.equal(targetGroup.dataset.expressionDropMode, "move");
+
+  panel._handleDrop({
+    preventDefault() {},
+  });
+
+  assert.deepEqual(dispatchedPatch, {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "or",
+              children: [
+                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                {
+                  type: "group",
+                  operator: "and",
+                  children: [
+                    { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                    { type: "term", term: { kind: "fish", fishId: 912 } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        selectedTerms: [
+          { kind: "zone", zoneRgb: 123 },
+          { kind: "fish-filter", term: "favourite" },
+          { kind: "fish", fishId: 912 },
+        ],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [123],
+        semanticFieldIdsByLayer: { zone_mask: [123] },
+        fishFilterTerms: ["favourite"],
+      },
+    },
+  });
+  assert.equal(sourceGroup.dataset.dragging, undefined);
+  assert.equal(targetGroup.dataset.expressionDropMode, undefined);
+});
+
+test("FishyMapSearchPanelElement dispatches slot insertion patches from the applied expression view", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+      { type: "term", term: { kind: "fish", fishId: 912 } },
+      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+    ],
+  };
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  let dispatchedPatch = null;
+  panel.dispatchPatch = (patch) => {
+    dispatchedPatch = patch;
+  };
+
+  const source = new FakeElement();
+  source.setAttribute("data-expression-drag-path", "root.0");
+  source.setAttribute("draggable", "true");
+  source.setClosest("[data-expression-drag-path][draggable='true']", source);
+
+  panel._handleDragStart({
+    target: source,
+    dataTransfer: {
+      effectAllowed: "",
+      setData() {},
+    },
+  });
+
+  const slot = new FakeElement();
+  slot.setAttribute("data-expression-drop-slot-group-path", "root");
+  slot.setAttribute("data-expression-drop-slot-index", "2");
+  slot.setClosest(
+    "[data-expression-drop-slot-group-path][data-expression-drop-slot-index]",
+    slot,
+  );
+
+  let prevented = false;
+  panel._handleDragOver({
+    target: slot,
+    preventDefault() {
+      prevented = true;
+    },
+    dataTransfer: {
+      dropEffect: "",
+    },
+  });
+
+  assert.equal(prevented, true);
+  assert.equal(slot.dataset.expressionDropMode, "insert");
+
+  panel._handleDrop({
+    preventDefault() {},
+  });
+
+  assert.deepEqual(dispatchedPatch, {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          ],
+        },
+        selectedTerms: [
+          { kind: "fish", fishId: 912 },
+          { kind: "fish-filter", term: "favourite" },
+          { kind: "zone", zoneRgb: 123 },
+        ],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [123],
+        semanticFieldIdsByLayer: { zone_mask: [123] },
+        fishFilterTerms: ["favourite"],
+      },
+    },
+  });
+  assert.equal(source.dataset.dragging, undefined);
+  assert.equal(slot.dataset.expressionDropMode, undefined);
+});
+
 process.on("exit", () => {
   globalThis.HTMLElement = originalHTMLElement;
   globalThis.document = originalDocument;

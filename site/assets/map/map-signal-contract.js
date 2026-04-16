@@ -2,7 +2,11 @@ import {
   FISHYMAP_CONTRACT_VERSION,
   FISHYMAP_POINT_ICON_SCALE_MIN,
 } from "./map-host.js";
-import { normalizeSelectedSearchTerms } from "./map-search-contract.js";
+import {
+  EMPTY_SEARCH_EXPRESSION,
+  resolveSearchExpression,
+  resolveSelectedSearchTerms,
+} from "./map-search-contract.js";
 
 export const DEFAULT_ZONE_INFO_TAB = "";
 export const DEFAULT_AUTO_ADJUST_VIEW = true;
@@ -35,7 +39,12 @@ export const DEFAULT_WINDOW_UI_STATE = Object.freeze({
 
 export const DEFAULT_MAP_UI_SIGNAL_STATE = Object.freeze({
   windowUi: DEFAULT_WINDOW_UI_STATE,
-  search: Object.freeze({ open: false, query: "", selectedTerms: [] }),
+  search: Object.freeze({
+    open: false,
+    query: "",
+    expression: EMPTY_SEARCH_EXPRESSION,
+    selectedTerms: [],
+  }),
   bookmarks: Object.freeze({ placing: false, selectedIds: [] }),
   layers: Object.freeze({
     expandedLayerIds: [],
@@ -314,18 +323,28 @@ export function normalizeWindowUiState(rawState) {
 
 export function normalizeMapUiSignalState(raw) {
   const current = mergeDefaults(DEFAULT_MAP_UI_SIGNAL_STATE, raw);
+  const rawSearch = isPlainObject(raw?.search) ? raw.search : {};
   const normalizedBookmarks = current?.bookmarks && typeof current.bookmarks === "object"
     ? current.bookmarks
     : {};
   const normalizedLayers = current?.layers && typeof current.layers === "object"
     ? current.layers
     : {};
+  const searchExpression = resolveSearchExpression(
+    hasOwnKey(rawSearch, "expression") ? rawSearch.expression : undefined,
+    current?.search?.selectedTerms,
+  );
   return {
     windowUi: normalizeWindowUiState(current?.windowUi),
     search: {
       open: current?.search?.open === true,
       query: String(current?.search?.query || ""),
-      selectedTerms: normalizeSelectedSearchTerms(current?.search?.selectedTerms),
+      expression: searchExpression,
+      selectedTerms: resolveSelectedSearchTerms(
+        current?.search?.selectedTerms,
+        null,
+        searchExpression,
+      ),
     },
     bookmarks: {
       placing: normalizedBookmarks.placing === true,

@@ -1,12 +1,18 @@
 import { findZoneMatches } from "./map-zone-catalog.js";
 import {
   FISH_FILTER_TERM_ORDER,
-  addSelectedSearchTerm,
-  buildSearchSelectionStatePatch,
+  appendSearchExpressionTerm,
+  buildSearchExpressionStatePatch,
+  findSearchExpressionTermPath,
+  groupSearchExpressionNodes,
+  moveSearchExpressionNodeToIndex,
+  moveSearchExpressionNodeToGroup,
   normalizeFishFilterTerm,
   normalizeFishFilterTerms,
-  removeSelectedSearchTerm,
+  removeSearchExpressionNode,
+  resolveSearchExpression,
   resolveSelectedSearchTerms,
+  setSearchExpressionGroupOperator,
 } from "./map-search-contract.js";
 import { resolveSearchProjection } from "./map-search-projection.js";
 
@@ -151,9 +157,15 @@ function normalizeSharedFishState(value) {
 export function buildSearchPanelStateBundle(signals) {
   const runtime = isPlainObject(signals?._map_runtime) ? signals._map_runtime : {};
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
+  const expression = resolveSearchExpression(
+    search.expression,
+    search.selectedTerms,
+    signals?._map_bridged?.filters,
+  );
   const selectedTerms = resolveSelectedSearchTerms(
     search.selectedTerms,
     signals?._map_bridged?.filters,
+    expression,
   );
   const projectedFilters = resolveSearchProjection(signals);
   return {
@@ -169,6 +181,7 @@ export function buildSearchPanelStateBundle(signals) {
     inputState: {
       search: {
         searchText: String(search.query ?? ""),
+        expression,
         selectedTerms,
       },
       filters: {
@@ -184,8 +197,17 @@ export function buildSearchPanelStateBundle(signals) {
 }
 
 export function resolveSelectedSearchTermsFromBundle(stateBundle) {
-  const selectedTerms = resolveSelectedSearchTerms(stateBundle?.inputState?.search?.selectedTerms);
-  if (selectedTerms.length || Array.isArray(stateBundle?.inputState?.search?.selectedTerms)) {
+  const expression = resolveSearchExpression(stateBundle?.inputState?.search?.expression);
+  const selectedTerms = resolveSelectedSearchTerms(
+    stateBundle?.inputState?.search?.selectedTerms,
+    null,
+    expression,
+  );
+  if (
+    selectedTerms.length ||
+    Array.isArray(stateBundle?.inputState?.search?.selectedTerms) ||
+    stateBundle?.inputState?.search?.expression !== undefined
+  ) {
     return selectedTerms;
   }
   return resolveSelectedSearchTerms(undefined, stateBundle?.inputState?.filters);
@@ -591,8 +613,12 @@ export function buildSearchMatches(stateBundle, searchText, zoneCatalog = []) {
 
 export function buildSearchMatchSignalPatch(signals, match) {
   const stateBundle = buildSearchPanelStateBundle(signals);
-  const selectedTerms = resolveSelectedSearchTermsFromBundle(stateBundle);
-  return buildSearchSelectionStatePatch(addSelectedSearchTerm(selectedTerms, match), {
+  const expression = resolveSearchExpression(
+    stateBundle?.inputState?.search?.expression,
+    stateBundle?.inputState?.search?.selectedTerms,
+    stateBundle?.inputState?.filters,
+  );
+  return buildSearchExpressionStatePatch(appendSearchExpressionTerm(expression, match), {
     query: "",
     open: false,
   });
@@ -600,34 +626,95 @@ export function buildSearchMatchSignalPatch(signals, match) {
 
 export function buildSearchSelectionRemovalSignalPatch(signals, target) {
   const stateBundle = buildSearchPanelStateBundle(signals);
-  const selectedTerms = resolveSelectedSearchTermsFromBundle(stateBundle);
-  const fishFilterTerm = normalizeFishFilterTerm(target?.fishFilterTerm);
-  if (fishFilterTerm) {
-    return buildSearchSelectionStatePatch(
-      removeSelectedSearchTerm(selectedTerms, { kind: "fish-filter", term: fishFilterTerm }),
-    );
+  const expression = resolveSearchExpression(
+    stateBundle?.inputState?.search?.expression,
+    stateBundle?.inputState?.search?.selectedTerms,
+    stateBundle?.inputState?.filters,
+  );
+  const expressionPath = String(target?.expressionPath || "").trim();
+  let removalPath = expressionPath;
+  if (!removalPath) {
+    const fishFilterTerm = normalizeFishFilterTerm(target?.fishFilterTerm);
+    if (fishFilterTerm) {
+      removalPath = findSearchExpressionTermPath(expression, {
+        kind: "fish-filter",
+        term: fishFilterTerm,
+      });
+    }
   }
-  const zoneRgb = Number.parseInt(target?.zoneRgb, 10);
-  if (Number.isFinite(zoneRgb)) {
-    return buildSearchSelectionStatePatch(
-      removeSelectedSearchTerm(selectedTerms, { kind: "zone", zoneRgb }),
-    );
+  if (!removalPath) {
+    const zoneRgb = Number.parseInt(target?.zoneRgb, 10);
+    if (Number.isFinite(zoneRgb)) {
+      removalPath = findSearchExpressionTermPath(expression, { kind: "zone", zoneRgb });
+    }
   }
-  const semanticLayerId = String(target?.semanticLayerId || "").trim();
-  const semanticFieldId = Number.parseInt(target?.semanticFieldId, 10);
-  if (semanticLayerId && Number.isFinite(semanticFieldId)) {
-    return buildSearchSelectionStatePatch(
-      removeSelectedSearchTerm(selectedTerms, {
+  if (!removalPath) {
+    const semanticLayerId = String(target?.semanticLayerId || "").trim();
+    const semanticFieldId = Number.parseInt(target?.semanticFieldId, 10);
+    if (semanticLayerId && Number.isFinite(semanticFieldId)) {
+      removalPath = findSearchExpressionTermPath(expression, {
         kind: "semantic",
         layerId: semanticLayerId,
         fieldId: semanticFieldId,
-      }),
-    );
+      });
+    }
   }
-  const fishId = Number.parseInt(target?.fishId, 10);
-  return buildSearchSelectionStatePatch(
-    removeSelectedSearchTerm(selectedTerms, { kind: "fish", fishId }),
+  if (!removalPath) {
+    const fishId = Number.parseInt(target?.fishId, 10);
+    if (Number.isFinite(fishId)) {
+      removalPath = findSearchExpressionTermPath(expression, { kind: "fish", fishId });
+    }
+  }
+  return buildSearchExpressionStatePatch(removeSearchExpressionNode(expression, removalPath));
+}
+
+export function buildSearchExpressionOperatorSignalPatch(signals, target) {
+  const stateBundle = buildSearchPanelStateBundle(signals);
+  const expression = resolveSearchExpression(
+    stateBundle?.inputState?.search?.expression,
+    stateBundle?.inputState?.search?.selectedTerms,
+    stateBundle?.inputState?.filters,
   );
+  return buildSearchExpressionStatePatch(
+    setSearchExpressionGroupOperator(
+      expression,
+      target?.expressionPath ?? target?.groupPath,
+      target?.operator ?? target?.nextOperator,
+    ),
+  );
+}
+
+export function buildSearchExpressionDragSignalPatch(signals, target) {
+  const stateBundle = buildSearchPanelStateBundle(signals);
+  const expression = resolveSearchExpression(
+    stateBundle?.inputState?.search?.expression,
+    stateBundle?.inputState?.search?.selectedTerms,
+    stateBundle?.inputState?.filters,
+  );
+  const sourcePath = String(target?.sourcePath ?? target?.dragPath ?? "").trim();
+  const targetNodePath = String(
+    target?.targetNodePath ??
+      target?.nodePath ??
+      target?.targetTermPath ??
+      target?.termPath ??
+      "",
+  ).trim();
+  const targetGroupPath = String(target?.targetGroupPath ?? target?.groupPath ?? "").trim();
+  const targetGroupIndex = Number.parseInt(
+    target?.targetGroupIndex ?? target?.groupIndex ?? target?.slotIndex,
+    10,
+  );
+  const nextExpression = Number.isInteger(targetGroupIndex) && targetGroupPath
+    ? moveSearchExpressionNodeToIndex(expression, sourcePath, targetGroupPath, targetGroupIndex)
+    : targetNodePath
+      ? groupSearchExpressionNodes(expression, sourcePath, targetNodePath, {
+        operator: target?.groupOperator ?? target?.operator ?? "and",
+      })
+      : moveSearchExpressionNodeToGroup(expression, sourcePath, targetGroupPath);
+  if (JSON.stringify(nextExpression) === JSON.stringify(expression)) {
+    return null;
+  }
+  return buildSearchExpressionStatePatch(nextExpression);
 }
 
 export function patchTouchesSearchPanelSignals(patch) {

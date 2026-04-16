@@ -103,6 +103,15 @@ test("buildQueryFishSelectionSignalPatch resolves pending fish-name selectors fr
   assert.deepEqual(patch, {
     _map_ui: {
       search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "fish", fishId: 235 } },
+            { type: "term", term: { kind: "fish", fishId: 179 } },
+          ],
+        },
         selectedTerms: [
           { kind: "fish-filter", term: "favourite" },
           { kind: "fish", fishId: 235 },
@@ -293,6 +302,14 @@ test("map-page-derived controller resolves query fish selectors when the runtime
   assert.deepEqual(dispatched[0], {
     _map_ui: {
       search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 235 } },
+            { type: "term", term: { kind: "fish", fishId: 179 } },
+          ],
+        },
         selectedTerms: [
           { kind: "fish", fishId: 235 },
           { kind: "fish", fishId: 179 },

@@ -40,6 +40,16 @@ test("normalizeMapUiSignalState normalizes page-owned local UI state", () => {
 
   assert.equal(state.search.open, true);
   assert.equal(state.search.query, " cron ");
+  assert.deepEqual(state.search.expression, {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "term",
+        term: { kind: "fish-filter", term: "favourite" },
+      },
+    ],
+  });
   assert.deepEqual(state.search.selectedTerms, [{ kind: "fish-filter", term: "favourite" }]);
   assert.equal(state.bookmarks.placing, true);
   assert.deepEqual(state.bookmarks.selectedIds, ["a", "b", "a"]);

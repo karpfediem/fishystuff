@@ -2,6 +2,8 @@ import { FISH_FILTER_TERM_ORDER } from "./map-search-contract.js";
 import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
 import {
   buildDefaultFishFilterMatches,
+  buildSearchExpressionDragSignalPatch,
+  buildSearchExpressionOperatorSignalPatch,
   buildSearchMatches,
   buildSearchMatchSignalPatch,
   buildSearchPanelStateBundle,
@@ -48,6 +50,28 @@ function setTextContent(element, text) {
     return;
   }
   element.textContent = String(text ?? "");
+}
+
+function normalizeExpressionPath(path) {
+  const normalized = String(path || "").trim();
+  return normalized ? normalized.split(".").filter(Boolean) : [];
+}
+
+function expressionPathStartsWith(prefixPath, candidatePath) {
+  const prefix = normalizeExpressionPath(prefixPath);
+  const candidate = normalizeExpressionPath(candidatePath);
+  if (!prefix.length || prefix.length > candidate.length) {
+    return false;
+  }
+  return prefix.every((value, index) => candidate[index] === value);
+}
+
+function parentExpressionPath(path) {
+  const parts = normalizeExpressionPath(path);
+  if (parts.length <= 1) {
+    return "root";
+  }
+  return parts.slice(0, -1).join(".");
 }
 
 function spriteIcon(name, sizeClass = "size-5") {
@@ -163,6 +187,14 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this._rafId = 0;
     this._zoneCatalog = [];
     this._elements = null;
+    this._dragState = {
+      sourcePath: "",
+      sourceElement: null,
+      dropPath: "",
+      dropIndex: -1,
+      dropKind: "",
+      overElement: null,
+    };
     this._handleSignalPatched = (event) => {
       if (patchTouchesSearchPanelSignals(event?.detail || null)) {
         this.scheduleRender();
@@ -193,13 +225,134 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
         });
       }, 0);
     };
+    this._handleDragStart = (event) => {
+      if (event.target.closest("button")) {
+        return;
+      }
+      const draggableNode = event.target.closest("[data-expression-drag-path][draggable='true']");
+      if (!draggableNode) {
+        return;
+      }
+      const sourcePath = String(draggableNode.getAttribute("data-expression-drag-path") || "").trim();
+      if (!sourcePath) {
+        return;
+      }
+      this.clearExpressionDragState();
+      this._dragState.sourcePath = sourcePath;
+      this._dragState.sourceElement = draggableNode;
+      draggableNode.dataset.dragging = "true";
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", sourcePath);
+      }
+    };
+    this._handleDragOver = (event) => {
+      if (!this._dragState.sourcePath) {
+        return;
+      }
+      const sourcePath = this._dragState.sourcePath;
+      const slotTarget = event.target.closest("[data-expression-drop-slot-group-path][data-expression-drop-slot-index]");
+      if (slotTarget) {
+        const targetGroupPath = String(
+          slotTarget.getAttribute("data-expression-drop-slot-group-path") || "",
+        ).trim();
+        const targetGroupIndex = Number.parseInt(
+          slotTarget.getAttribute("data-expression-drop-slot-index"),
+          10,
+        );
+        if (
+          targetGroupPath &&
+          Number.isInteger(targetGroupIndex) &&
+          !expressionPathStartsWith(sourcePath, targetGroupPath)
+        ) {
+          event.preventDefault();
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "move";
+          }
+          this.applyExpressionDropState(slotTarget, "insert", targetGroupPath, targetGroupIndex);
+          return;
+        }
+      }
+      const nodeTarget = event.target.closest("[data-expression-drop-node-path]");
+      if (nodeTarget) {
+        const targetNodePath = String(nodeTarget.getAttribute("data-expression-drop-node-path") || "").trim();
+        if (
+          targetNodePath &&
+          targetNodePath !== sourcePath &&
+          !expressionPathStartsWith(sourcePath, targetNodePath) &&
+          !expressionPathStartsWith(targetNodePath, sourcePath)
+        ) {
+          event.preventDefault();
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "move";
+          }
+          this.applyExpressionDropState(nodeTarget, "group", targetNodePath);
+          return;
+        }
+      }
+      const groupTarget = event.target.closest("[data-expression-drop-group-path]");
+      if (groupTarget) {
+        const targetGroupPath = String(groupTarget.getAttribute("data-expression-drop-group-path") || "").trim();
+        if (
+          targetGroupPath &&
+          targetGroupPath !== sourcePath &&
+          targetGroupPath !== parentExpressionPath(sourcePath) &&
+          !expressionPathStartsWith(sourcePath, targetGroupPath)
+        ) {
+          event.preventDefault();
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "move";
+          }
+          this.applyExpressionDropState(groupTarget, "move", targetGroupPath);
+          return;
+        }
+      }
+      this.clearExpressionDropState();
+    };
+    this._handleDrop = (event) => {
+      if (!this._dragState.sourcePath || !this._dragState.dropPath || !this._dragState.dropKind) {
+        this.clearExpressionDragState();
+        return;
+      }
+      event.preventDefault();
+      const patch = buildSearchExpressionDragSignalPatch(this.signals(), {
+        sourcePath: this._dragState.sourcePath,
+        targetGroupIndex: this._dragState.dropKind === "insert" ? this._dragState.dropIndex : "",
+        targetNodePath: this._dragState.dropKind === "group" ? this._dragState.dropPath : "",
+        targetGroupPath:
+          this._dragState.dropKind === "insert" || this._dragState.dropKind === "move"
+            ? this._dragState.dropPath
+            : "",
+        groupOperator: "and",
+      });
+      if (patch) {
+        this.dispatchPatch(patch);
+      }
+      this.clearExpressionDragState();
+    };
+    this._handleDragEnd = () => {
+      this.clearExpressionDragState();
+    };
     this._handleClick = (event) => {
+      const operatorButton = event.target.closest(
+        "button.fishy-applied-expression-operator-toggle[data-expression-group-path][data-expression-next-operator]",
+      );
+      if (operatorButton) {
+        this.dispatchPatch(
+          buildSearchExpressionOperatorSignalPatch(this.signals(), {
+            groupPath: operatorButton.getAttribute("data-expression-group-path"),
+            nextOperator: operatorButton.getAttribute("data-expression-next-operator"),
+          }),
+        );
+        return;
+      }
       const removeButton = event.target.closest(
-        "button.fishymap-selection-remove[data-fish-filter-term], button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb], button.fishymap-selection-remove[data-semantic-layer-id][data-semantic-field-id]",
+        "button.fishymap-selection-remove[data-expression-remove-path], button.fishymap-selection-remove[data-fish-filter-term], button.fishymap-selection-remove[data-fish-id], button.fishymap-selection-remove[data-zone-rgb], button.fishymap-selection-remove[data-semantic-layer-id][data-semantic-field-id]",
       );
       if (removeButton) {
         this.dispatchPatch(
           buildSearchSelectionRemovalSignalPatch(this.signals(), {
+            expressionPath: removeButton.getAttribute("data-expression-remove-path"),
             fishFilterTerm: removeButton.getAttribute("data-fish-filter-term"),
             fishId: removeButton.getAttribute("data-fish-id"),
             zoneRgb: removeButton.getAttribute("data-zone-rgb"),
@@ -254,6 +407,10 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     };
     this.addEventListener("click", this._handleClick);
     this.addEventListener("keydown", this._handleKeyDown);
+    this.addEventListener("dragstart", this._handleDragStart);
+    this.addEventListener("dragover", this._handleDragOver);
+    this.addEventListener("drop", this._handleDrop);
+    this.addEventListener("dragend", this._handleDragEnd);
     this._elements.searchWindow?.addEventListener?.("focusout", this._handleSearchWindowFocusOut);
     this._shell?.addEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.addEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
@@ -264,6 +421,10 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
   disconnectedCallback() {
     this.removeEventListener("click", this._handleClick);
     this.removeEventListener("keydown", this._handleKeyDown);
+    this.removeEventListener("dragstart", this._handleDragStart);
+    this.removeEventListener("dragover", this._handleDragOver);
+    this.removeEventListener("drop", this._handleDrop);
+    this.removeEventListener("dragend", this._handleDragEnd);
     this._elements?.searchWindow?.removeEventListener?.("focusout", this._handleSearchWindowFocusOut);
     this._shell?.removeEventListener?.(FISHYMAP_SIGNAL_PATCHED_EVENT, this._handleSignalPatched);
     this._shell?.removeEventListener?.(FISHYMAP_ZONE_CATALOG_READY_EVENT, this._handleZoneCatalogReady);
@@ -272,6 +433,44 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       globalThis.cancelAnimationFrame(this._rafId);
     }
     this._rafId = 0;
+  }
+
+  clearExpressionDropState() {
+    if (this._dragState.overElement?.dataset) {
+      delete this._dragState.overElement.dataset.expressionDropMode;
+    }
+    this._dragState.overElement = null;
+    this._dragState.dropKind = "";
+    this._dragState.dropPath = "";
+    this._dragState.dropIndex = -1;
+  }
+
+  clearExpressionDragState() {
+    this.clearExpressionDropState();
+    if (this._dragState.sourceElement?.dataset) {
+      delete this._dragState.sourceElement.dataset.dragging;
+    }
+    this._dragState.sourceElement = null;
+    this._dragState.sourcePath = "";
+  }
+
+  applyExpressionDropState(element, kind, path, index = -1) {
+    if (
+      this._dragState.overElement === element &&
+      this._dragState.dropKind === kind &&
+      this._dragState.dropPath === path &&
+      this._dragState.dropIndex === index
+    ) {
+      return;
+    }
+    this.clearExpressionDropState();
+    this._dragState.overElement = element;
+    this._dragState.dropKind = String(kind || "");
+    this._dragState.dropPath = String(path || "");
+    this._dragState.dropIndex = Number.isInteger(index) ? index : -1;
+    if (element?.dataset) {
+      element.dataset.expressionDropMode = this._dragState.dropKind;
+    }
   }
 
   signals() {

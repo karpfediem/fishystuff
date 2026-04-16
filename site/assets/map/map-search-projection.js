@@ -1,6 +1,7 @@
 import {
   normalizeFishFilterTerms,
   projectSelectedSearchTermsToBridgedFilters,
+  resolveSearchExpression,
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
 
@@ -76,7 +77,8 @@ function projectedFiltersJson(filters) {
 export function resolveSearchProjection(signals) {
   const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
   const filters = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
-  const selectedTerms = resolveSelectedSearchTerms(search.selectedTerms, filters);
+  const expression = resolveSearchExpression(search.expression, search.selectedTerms, filters);
+  const selectedTerms = resolveSelectedSearchTerms(search.selectedTerms, filters, expression);
   return normalizeProjectedFilters(projectSelectedSearchTermsToBridgedFilters(selectedTerms));
 }
 

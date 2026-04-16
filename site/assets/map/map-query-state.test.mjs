@@ -13,6 +13,16 @@ test("parseQuerySignalPatch maps page-owned and bridged query params into signal
       search: {
         query: "velia",
         open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 91 } },
+            { type: "term", term: { kind: "fish-filter", term: "missing" } },
+            { type: "term", term: { kind: "fish-filter", term: "yellow" } },
+            { type: "term", term: { kind: "fish-filter", term: "blue" } },
+          ],
+        },
         selectedTerms: [
           { kind: "fish", fishId: 91 },
           { kind: "fish-filter", term: "missing" },
@@ -47,6 +57,11 @@ test("parseQuerySignalPatch prefers focusFish and patch when present", () => {
   assert.deepEqual(patch, {
     _map_ui: {
       search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "fish", fishId: 820986 } }],
+        },
         selectedTerms: [{ kind: "fish", fishId: 820986 }],
       },
     },
@@ -70,6 +85,14 @@ test("parseQuerySignalPatch supports multiple fish selectors and defers fish-nam
   assert.deepEqual(patch, {
     _map_ui: {
       search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 91 } },
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          ],
+        },
         selectedTerms: [
           { kind: "fish", fishId: 91 },
           { kind: "fish-filter", term: "favourite" },

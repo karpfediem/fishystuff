@@ -10,7 +10,12 @@
                layers: { open: true, collapsed: false, x: null, y: null },
                bookmarks: { open: false, collapsed: false, x: null, y: null }
              },
-             search: { open: false, query: '', selectedTerms: [] },
+             search: {
+               open: false,
+               query: '',
+               expression: { type: 'group', operator: 'or', children: [] },
+               selectedTerms: []
+             },
              bookmarks: { placing: false, selectedIds: [] },
              layers: { expandedLayerIds: [], hoverFactsVisibleByLayer: {} }
            },

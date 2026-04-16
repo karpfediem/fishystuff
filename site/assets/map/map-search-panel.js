@@ -1,6 +1,170 @@
 import { buildAppliedSearchTermsView } from "../js/components/applied-search-terms.js";
+import { buildSearchExpressionFromSelectedTerms } from "./map-search-contract.js";
+
+function normalizeExpressionOperator(value) {
+  return String(value ?? "").trim().toLowerCase() === "and" ? "and" : "or";
+}
+
+function buildFallbackSelectedTerms(stateBundle, resolvers) {
+  const selectedFishIds = resolvers.resolveSelectedFishIds(stateBundle);
+  const selectedFishFilterTerms = resolvers.resolveSelectedFishFilterTerms(stateBundle);
+  const selectedSemanticFieldIdsByLayer = resolvers.resolveSelectedSemanticFieldIdsByLayer(stateBundle);
+  const selectedZoneRgbs = resolvers.resolveSelectedZoneRgbs(stateBundle);
+  const selectedTerms = [];
+
+  for (const fishFilterTerm of selectedFishFilterTerms) {
+    selectedTerms.push({ kind: "fish-filter", term: fishFilterTerm });
+  }
+  for (const fishId of selectedFishIds) {
+    selectedTerms.push({ kind: "fish", fishId });
+  }
+  for (const zoneRgb of selectedZoneRgbs) {
+    selectedTerms.push({ kind: "zone", zoneRgb });
+  }
+  for (const [layerId, fieldIds] of Object.entries(selectedSemanticFieldIdsByLayer)) {
+    if (layerId === "zone_mask") {
+      continue;
+    }
+    for (const fieldId of Array.isArray(fieldIds) ? fieldIds : []) {
+      selectedTerms.push({ kind: "semantic", layerId, fieldId });
+    }
+  }
+
+  return selectedTerms;
+}
+
+function buildAppliedSearchTermNode(term, context, path) {
+  if (!term || typeof term !== "object") {
+    return null;
+  }
+
+  if (term.kind === "fish-filter") {
+    const metadata = context.fishFilterTermMetadata[term.term];
+    const label = metadata?.label || term.term;
+    return {
+      type: "term",
+      key: `fish-filter:${term.term}`,
+      path,
+      label,
+      kindLabel: "Filter",
+      grade: term.term,
+      contentMarkup: `
+        <span class="inline-flex min-w-0 items-center gap-2">
+          ${context.fishFilterTermIconMarkup(term.term)}
+          <span class="font-medium">${context.escapeHtml(label)}</span>
+        </span>
+      `,
+      removeLabel: `Remove ${label}`,
+      removeAttributes: {
+        "data-fish-filter-term": term.term,
+      },
+    };
+  }
+
+  if (term.kind === "fish") {
+    const fish = context.fishLookup.get(term.fishId);
+    const name = fish?.name || `Fish ${term.fishId}`;
+    return {
+      type: "term",
+      key: `fish:${term.fishId}`,
+      path,
+      label: name,
+      kindLabel: "Fish",
+      grade: context.resolveFishGrade(fish),
+      contentMarkup:
+        context.fishIdentityMarkup({ ...(fish || {}), fishId: term.fishId, name }, { interactive: true })
+        || `<span class="truncate max-w-36">${context.escapeHtml(name)}</span>`,
+      removeLabel: `Remove ${name}`,
+      removeAttributes: {
+        "data-fish-id": term.fishId,
+      },
+    };
+  }
+
+  if (term.kind === "zone") {
+    const zone = context.zoneLookup.get(term.zoneRgb);
+    const name = zone?.name || `Zone ${context.formatZone(term.zoneRgb)}`;
+    return {
+      type: "term",
+      key: `zone:${term.zoneRgb}`,
+      path,
+      label: name,
+      kindLabel: "Zone",
+      grade: "zone",
+      description: context.formatZone(term.zoneRgb),
+      contentMarkup:
+        context.zoneIdentityMarkup(
+          {
+            zoneRgb: term.zoneRgb,
+            name,
+            r: zone?.r,
+            g: zone?.g,
+            b: zone?.b,
+          },
+          { interactive: true },
+        ) || `<span class="truncate max-w-40">${context.escapeHtml(name)}</span>`,
+      removeLabel: `Remove ${name}`,
+      removeAttributes: {
+        "data-zone-rgb": term.zoneRgb,
+      },
+    };
+  }
+
+  if (term.kind === "semantic") {
+    const semanticTerm =
+      context.semanticLookup.get(
+        `${String(term.layerId || "").trim()}:${Number.parseInt(term.fieldId, 10)}`,
+      ) || null;
+    const name = semanticTerm?.label || `Field ${term.fieldId}`;
+    return {
+      type: "term",
+      key: `semantic:${term.layerId}:${term.fieldId}`,
+      path,
+      label: name,
+      kindLabel: semanticTerm?.layerName || "Map",
+      grade: "semantic",
+      description: semanticTerm?.description || "",
+      contentMarkup:
+        context.semanticIdentityMarkup(name, { interactive: true })
+        || `<span class="truncate max-w-40">${context.escapeHtml(name)}</span>`,
+      removeLabel: `Remove ${name}`,
+      removeAttributes: {
+        "data-semantic-layer-id": term.layerId,
+        "data-semantic-field-id": term.fieldId,
+      },
+    };
+  }
+
+  return null;
+}
+
+function buildAppliedSearchExpressionNode(expression, context, path = "root") {
+  if (!expression || typeof expression !== "object") {
+    return null;
+  }
+
+  if (String(expression.type || "").trim().toLowerCase() === "term") {
+    return buildAppliedSearchTermNode(expression.term, context, path);
+  }
+
+  const children = (Array.isArray(expression.children) ? expression.children : [])
+    .map((child, index) => buildAppliedSearchExpressionNode(child, context, `${path}.${index}`))
+    .filter(Boolean);
+
+  return {
+    type: "group",
+    key: path,
+    path,
+    operator: normalizeExpressionOperator(expression.operator),
+    children,
+  };
+}
 
 export function renderSearchSelection(elements, stateBundle, fishLookup, options = {}) {
+  const resolveSearchExpression =
+    typeof options.resolveSearchExpression === "function"
+      ? options.resolveSearchExpression
+      : (bundle) => bundle?.inputState?.search?.expression ?? null;
   const resolveSelectedFishIds =
     typeof options.resolveSelectedFishIds === "function"
       ? options.resolveSelectedFishIds
@@ -39,130 +203,37 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
   const formatZone = typeof options.formatZone === "function" ? options.formatZone : (value) => String(value || "");
   const fishFilterTermMetadata = options.fishFilterTermMetadata || {};
 
-  const selectedFishIds = resolveSelectedFishIds(stateBundle);
-  const selectedFishFilterTerms = resolveSelectedFishFilterTerms(stateBundle);
-  const selectedSemanticFieldIdsByLayer = resolveSelectedSemanticFieldIdsByLayer(stateBundle);
-  const selectedZoneRgbs = resolveSelectedZoneRgbs(stateBundle);
   const zoneLookup = new Map((elements.zoneCatalog || []).map((zone) => [zone.zoneRgb, zone]));
   const semanticLookup = buildSemanticTermLookup(stateBundle);
-  const selectedSemanticEntries = Object.entries(selectedSemanticFieldIdsByLayer)
-    .filter(([layerId]) => layerId !== "zone_mask")
-    .flatMap(([layerId, fieldIds]) =>
-      fieldIds.map((fieldId) => ({
-        layerId,
-        fieldId,
-        term: semanticLookup.get(`${String(layerId || "").trim()}:${Number.parseInt(fieldId, 10)}`) || null,
-      })),
-    );
-  const groups = [];
+  const fallbackSelectedTerms = Array.isArray(stateBundle?.inputState?.search?.selectedTerms)
+    ? stateBundle.inputState.search.selectedTerms
+    : buildFallbackSelectedTerms(stateBundle, {
+        resolveSelectedFishIds,
+        resolveSelectedFishFilterTerms,
+        resolveSelectedSemanticFieldIdsByLayer,
+        resolveSelectedZoneRgbs,
+      });
+  const expression =
+    resolveSearchExpression(stateBundle) || buildSearchExpressionFromSelectedTerms(fallbackSelectedTerms);
+  const expressionView = buildAppliedSearchExpressionNode(
+    expression,
+    {
+      escapeHtml,
+      fishFilterTermIconMarkup,
+      fishFilterTermMetadata,
+      fishIdentityMarkup,
+      fishLookup,
+      formatZone,
+      resolveFishGrade,
+      semanticIdentityMarkup,
+      semanticLookup,
+      zoneIdentityMarkup,
+      zoneLookup,
+    },
+    "root",
+  );
 
-  if (selectedFishFilterTerms.length > 0) {
-    groups.push({
-      key: "filters",
-      label: "Filters",
-      items: selectedFishFilterTerms.map((fishFilterTerm) => {
-        const metadata = fishFilterTermMetadata[fishFilterTerm];
-        const label = metadata?.label || fishFilterTerm;
-        return {
-          key: `fish-filter:${fishFilterTerm}`,
-          label,
-          grade: fishFilterTerm,
-          contentMarkup: `
-            <span class="inline-flex min-w-0 items-center gap-2">
-              ${fishFilterTermIconMarkup(fishFilterTerm)}
-              <span class="font-medium">${escapeHtml(label)}</span>
-            </span>
-          `,
-          removeLabel: `Remove ${label}`,
-          removeAttributes: {
-            "data-fish-filter-term": fishFilterTerm,
-          },
-        };
-      }),
-    });
-  }
-
-  if (selectedFishIds.length > 0) {
-    groups.push({
-      key: "fish",
-      label: "Fish",
-      items: selectedFishIds.map((fishId) => {
-        const fish = fishLookup.get(fishId);
-        const name = fish?.name || `Fish ${fishId}`;
-        return {
-          key: `fish:${fishId}`,
-          label: name,
-          grade: resolveFishGrade(fish),
-          contentMarkup:
-            fishIdentityMarkup({ ...(fish || {}), fishId, name }, { interactive: true }) ||
-            `<span class="truncate max-w-36">${escapeHtml(name)}</span>`,
-          removeLabel: `Remove ${name}`,
-          removeAttributes: {
-            "data-fish-id": fishId,
-          },
-        };
-      }),
-    });
-  }
-
-  if (selectedZoneRgbs.length > 0) {
-    groups.push({
-      key: "zones",
-      label: "Zones",
-      items: selectedZoneRgbs.map((zoneRgb) => {
-        const zone = zoneLookup.get(zoneRgb);
-        const name = zone?.name || `Zone ${formatZone(zoneRgb)}`;
-        return {
-          key: `zone:${zoneRgb}`,
-          label: name,
-          grade: "zone",
-          description: formatZone(zoneRgb),
-          contentMarkup:
-            zoneIdentityMarkup(
-              {
-                zoneRgb,
-                name,
-                r: zone?.r,
-                g: zone?.g,
-                b: zone?.b,
-              },
-              { interactive: true },
-            ) || `<span class="truncate max-w-40">${escapeHtml(name)}</span>`,
-          removeLabel: `Remove ${name}`,
-          removeAttributes: {
-            "data-zone-rgb": zoneRgb,
-          },
-        };
-      }),
-    });
-  }
-
-  if (selectedSemanticEntries.length > 0) {
-    groups.push({
-      key: "semantic",
-      label: "Map Terms",
-      items: selectedSemanticEntries.map(({ layerId, fieldId, term }) => {
-        const name = term?.label || `Field ${fieldId}`;
-        return {
-          key: `semantic:${layerId}:${fieldId}`,
-          label: name,
-          grade: "semantic",
-          kindLabel: term?.layerName || "",
-          description: term?.description || "",
-          contentMarkup:
-            semanticIdentityMarkup(name, { interactive: true }) ||
-            `<span class="truncate max-w-40">${escapeHtml(name)}</span>`,
-          removeLabel: `Remove ${name}`,
-          removeAttributes: {
-            "data-semantic-layer-id": layerId,
-            "data-semantic-field-id": fieldId,
-          },
-        };
-      }),
-    });
-  }
-
-  const { hasContent: hasAnySelection, html, renderKey } = buildAppliedSearchTermsView(groups, {
+  const { hasContent: hasAnySelection, html, renderKey } = buildAppliedSearchTermsView(expressionView, {
     escapeHtml,
     removeButtonClass: "fishymap-selection-remove",
   });

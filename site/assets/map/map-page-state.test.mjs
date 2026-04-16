@@ -44,6 +44,8 @@ test("map-page-state loadRestoreState strips query-owned fields", () => {
   });
 
   assert.equal(restoreState.uiPatch._map_ui?.search?.query, undefined);
+  assert.equal(restoreState.uiPatch._map_ui?.search?.expression, undefined);
+  assert.equal(restoreState.uiPatch._map_ui?.search?.selectedTerms, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.ui?.diagnosticsOpen, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.filters?.fishIds, undefined);
   assert.equal(restoreState.uiPatch._map_bridged?.filters?.layerIdsVisible, undefined);
@@ -101,7 +103,12 @@ test("map-page-state createPersistedState captures durable map branches", () => 
     },
     search: {
       query: "eel",
-      selectedTerms: [{ type: "fish", fishId: 77 }],
+      expression: {
+        type: "group",
+        operator: "or",
+        children: [{ type: "term", term: { kind: "fish", fishId: 77 } }],
+      },
+      selectedTerms: [{ kind: "fish", fishId: 77 }],
     },
     bridgedUi: {
       diagnosticsOpen: true,

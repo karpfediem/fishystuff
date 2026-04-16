@@ -1,8 +1,9 @@
 import { parseQuerySignalPatch } from "./map-query-state.js";
 import { buildSearchProjectionSignalPatch } from "./map-search-projection.js";
 import {
-  buildSearchSelectionStatePatch,
-  normalizeSelectedSearchTerms,
+  appendSearchExpressionTerm,
+  buildSearchExpressionStatePatch,
+  resolveSearchExpression,
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
 import { FISHYMAP_SIGNAL_PATCHED_EVENT } from "./map-signal-patch.js";
@@ -15,11 +16,16 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function mergeProjectionPatch(target, patch) {
+function mergeProjectionPatch(target, patch, prefix = "") {
   if (!isPlainObject(target) || !isPlainObject(patch)) {
     return target;
   }
   for (const [key, value] of Object.entries(patch)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (path === "_map_ui.search.expression") {
+      target[key] = cloneJson(value);
+      continue;
+    }
     if (Array.isArray(value)) {
       target[key] = cloneJson(value);
       continue;
@@ -27,7 +33,7 @@ function mergeProjectionPatch(target, patch) {
     if (isPlainObject(value)) {
       const nextTarget = isPlainObject(target[key]) ? target[key] : {};
       target[key] = nextTarget;
-      mergeProjectionPatch(nextTarget, value);
+      mergeProjectionPatch(nextTarget, value, path);
       continue;
     }
     target[key] = value;
@@ -111,7 +117,10 @@ function resolvePendingQueryFishIds(pendingQueryFishSelectors, catalogFish) {
 }
 
 export function buildSearchProjectionPatchForSignalPatch(signals, patch) {
-  if (patch?._map_ui?.search?.selectedTerms == null) {
+  if (
+    patch?._map_ui?.search?.selectedTerms == null &&
+    patch?._map_ui?.search?.expression == null
+  ) {
     return null;
   }
   const nextSignals = isPlainObject(signals) ? cloneJson(signals) : {};
@@ -133,19 +142,23 @@ export function buildQueryFishSelectionSignalPatch(signals) {
     return null;
   }
 
-  const currentSelectedTerms = resolveSelectedSearchTerms(
+  const currentExpression = resolveSearchExpression(
+    signals?._map_ui?.search?.expression,
     signals?._map_ui?.search?.selectedTerms,
     signals?._map_bridged?.filters,
   );
   const resolvedFishIds = resolvePendingQueryFishIds(pendingQueryFishSelectors, catalogFish);
-  const nextSelectedTerms = normalizeSelectedSearchTerms(
-    currentSelectedTerms.concat(
-      resolvedFishIds.map((fishId) => ({ kind: "fish", fishId })),
-    ),
-  );
+  let nextExpression = currentExpression;
+  for (const fishId of resolvedFishIds) {
+    nextExpression = appendSearchExpressionTerm(nextExpression, { kind: "fish", fishId });
+  }
 
-  const currentTermsJson = JSON.stringify(currentSelectedTerms);
-  const nextTermsJson = JSON.stringify(nextSelectedTerms);
+  const currentTermsJson = JSON.stringify(
+    resolveSelectedSearchTerms(undefined, null, currentExpression),
+  );
+  const nextTermsJson = JSON.stringify(
+    resolveSelectedSearchTerms(undefined, null, nextExpression),
+  );
   if (currentTermsJson === nextTermsJson) {
     return {
       _map_ui: {
@@ -156,7 +169,7 @@ export function buildQueryFishSelectionSignalPatch(signals) {
     };
   }
 
-  const patch = buildSearchSelectionStatePatch(nextSelectedTerms);
+  const patch = buildSearchExpressionStatePatch(nextExpression);
   patch._map_ui.search.pendingQueryFishSelectors = [];
   return patch;
 }
@@ -174,7 +187,10 @@ export function createMapPageDerivedController({
     const queryFishSelectionPatch = buildQueryFishSelectionSignalPatch(readSignals());
     if (queryFishSelectionPatch) {
       dispatchPatch(queryFishSelectionPatch);
-      if (queryFishSelectionPatch?._map_ui?.search?.selectedTerms != null) {
+      if (
+        queryFishSelectionPatch?._map_ui?.search?.selectedTerms != null ||
+        queryFishSelectionPatch?._map_ui?.search?.expression != null
+      ) {
         return true;
       }
     }

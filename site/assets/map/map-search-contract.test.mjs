@@ -2,13 +2,26 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  appendSearchExpressionTerm,
   addSelectedSearchTerm,
+  buildSearchExpressionFromSelectedTerms,
   buildSearchSelectionStatePatch,
+  findSearchExpressionTermPath,
+  groupSearchExpressionNodes,
+  groupSearchExpressionTerms,
   layerSupportsAttachmentClipMode,
   layerSupportsSearchTerm,
+  moveSearchExpressionNodeToIndex,
+  moveSearchExpressionNodeToGroup,
+  moveSearchExpressionTermToGroup,
   normalizeFishFilterTerms,
+  normalizeSearchExpression,
   normalizeSelectedSearchTerms,
   projectSelectedSearchTermsToBridgedFilters,
+  removeSearchExpressionNode,
+  resolveSearchExpressionNode,
+  selectedSearchTermsFromExpression,
+  setSearchExpressionGroupOperator,
   resolveSelectedSearchTerms,
 } from "./map-search-contract.js";
 
@@ -84,6 +97,20 @@ test("buildSearchSelectionStatePatch keeps selected terms page-owned and project
     {
       _map_ui: {
         search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "term",
+                term: { kind: "fish", fishId: 912 },
+              },
+              {
+                type: "term",
+                term: { kind: "zone", zoneRgb: 123 },
+              },
+            ],
+          },
           selectedTerms: [
             { kind: "fish", fishId: 912 },
             { kind: "zone", zoneRgb: 123 },
@@ -101,6 +128,523 @@ test("buildSearchSelectionStatePatch keeps selected terms page-owned and project
         },
       },
     },
+  );
+});
+
+test("normalizeSearchExpression canonicalizes grouped terms and deduplicates leaves", () => {
+  assert.deepEqual(
+    normalizeSearchExpression({
+      type: "group",
+      operator: "and",
+      children: [
+        { kind: "fish-filter", term: "favorite" },
+        { type: "term", term: { kind: "fish", fishId: "912" } },
+        { kind: "fish-filter", term: "favourites" },
+      ],
+    }),
+    {
+      type: "group",
+      operator: "and",
+      children: [
+        {
+          type: "term",
+          term: { kind: "fish-filter", term: "favourite" },
+        },
+        {
+          type: "term",
+          term: { kind: "fish", fishId: 912 },
+        },
+      ],
+    },
+  );
+});
+
+test("selectedSearchTermsFromExpression preserves first-seen term order across nested groups", () => {
+  assert.deepEqual(
+    selectedSearchTermsFromExpression({
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "and",
+          children: [
+            { kind: "fish-filter", term: "missing" },
+            { kind: "fish", fishId: 912 },
+          ],
+        },
+        { kind: "fish-filter", term: "uncaught" },
+        { kind: "zone", zoneRgb: 123 },
+      ],
+    }),
+    [
+      { kind: "fish-filter", term: "missing" },
+      { kind: "fish", fishId: 912 },
+      { kind: "zone", zoneRgb: 123 },
+    ],
+  );
+});
+
+test("buildSearchExpressionFromSelectedTerms lifts flat selections into an or-group", () => {
+  assert.deepEqual(
+    buildSearchExpressionFromSelectedTerms([
+      { kind: "fish", fishId: 912 },
+      { kind: "fish-filter", term: "missing" },
+    ]),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "term",
+          term: { kind: "fish", fishId: 912 },
+        },
+        {
+          type: "term",
+          term: { kind: "fish-filter", term: "missing" },
+        },
+      ],
+    },
+  );
+});
+
+test("appendSearchExpressionTerm preserves existing groups and avoids duplicate terms", () => {
+  const expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "group",
+        operator: "and",
+        children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+      },
+    ],
+  };
+
+  assert.deepEqual(
+    appendSearchExpressionTerm(expression, { kind: "fish", fishId: 912 }),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "and",
+          children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+        },
+        {
+          type: "term",
+          term: { kind: "fish", fishId: 912 },
+        },
+      ],
+    },
+  );
+  assert.deepEqual(
+    appendSearchExpressionTerm(expression, { kind: "fish-filter", term: "favorite" }),
+    expression,
+  );
+});
+
+test("removeSearchExpressionNode removes leaf paths without flattening sibling groups", () => {
+  assert.deepEqual(
+    removeSearchExpressionNode(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          {
+            type: "group",
+            operator: "and",
+            children: [
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+            ],
+          },
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+        ],
+      },
+      "root.0.1",
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "and",
+          children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+        },
+        { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+      ],
+    },
+  );
+});
+
+test("setSearchExpressionGroupOperator only changes the targeted group", () => {
+  const expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "group",
+        operator: "and",
+        children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+      },
+      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+    ],
+  };
+
+  assert.deepEqual(setSearchExpressionGroupOperator(expression, "root.0", "or"), {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "group",
+        operator: "or",
+        children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+      },
+      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+    ],
+  });
+});
+
+test("moveSearchExpressionTermToGroup moves a leaf into another group without flattening the tree", () => {
+  assert.deepEqual(
+    moveSearchExpressionTermToGroup(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          {
+            type: "group",
+            operator: "and",
+            children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+          },
+        ],
+      },
+      "root.0",
+      "root.1",
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "and",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          ],
+        },
+      ],
+    },
+  );
+});
+
+test("groupSearchExpressionTerms wraps source and target terms into a new subgroup", () => {
+  assert.deepEqual(
+    groupSearchExpressionTerms(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          { type: "term", term: { kind: "fish", fishId: 912 } },
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+        ],
+      },
+      "root.0",
+      "root.1",
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "and",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          ],
+        },
+        { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+      ],
+    },
+  );
+});
+
+test("moveSearchExpressionNodeToGroup moves a nested subgroup into another group", () => {
+  assert.deepEqual(
+    moveSearchExpressionNodeToGroup(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          {
+            type: "group",
+            operator: "and",
+            children: [
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+            ],
+          },
+          {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
+          },
+        ],
+      },
+      "root.0",
+      "root.1",
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  );
+});
+
+test("moveSearchExpressionNodeToIndex reorders a node within the same parent group", () => {
+  assert.deepEqual(
+    moveSearchExpressionNodeToIndex(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          { type: "term", term: { kind: "fish", fishId: 912 } },
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+        ],
+      },
+      "root.0",
+      "root",
+      2,
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        { type: "term", term: { kind: "fish", fishId: 912 } },
+        { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+        { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+      ],
+    },
+  );
+});
+
+test("moveSearchExpressionNodeToIndex inserts a subgroup at the requested child index", () => {
+  assert.deepEqual(
+    moveSearchExpressionNodeToIndex(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          {
+            type: "group",
+            operator: "and",
+            children: [
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+            ],
+          },
+          {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+              { type: "term", term: { kind: "semantic", layerId: "regions", fieldId: 22 } },
+            ],
+          },
+        ],
+      },
+      "root.0",
+      "root.1",
+      1,
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
+            { type: "term", term: { kind: "semantic", layerId: "regions", fieldId: 22 } },
+          ],
+        },
+      ],
+    },
+  );
+});
+
+test("groupSearchExpressionNodes wraps a subgroup with another term into a new subgroup", () => {
+  assert.deepEqual(
+    groupSearchExpressionNodes(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          {
+            type: "group",
+            operator: "and",
+            children: [
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+            ],
+          },
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          { type: "term", term: { kind: "semantic", layerId: "regions", fieldId: 22 } },
+        ],
+      },
+      "root.0",
+      "root.1",
+      { operator: "or" },
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
+          ],
+        },
+        { type: "term", term: { kind: "semantic", layerId: "regions", fieldId: 22 } },
+      ],
+    },
+  );
+});
+
+test("groupSearchExpressionNodes rejects grouping a node with its own descendant", () => {
+  const expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "group",
+        operator: "and",
+        children: [
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          { type: "term", term: { kind: "fish", fishId: 912 } },
+        ],
+      },
+      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+    ],
+  };
+
+  assert.deepEqual(groupSearchExpressionNodes(expression, "root.0", "root.0.1"), expression);
+});
+
+test("groupSearchExpressionNodes wraps a subgroup with a target subgroup handle", () => {
+  assert.deepEqual(
+    groupSearchExpressionNodes(
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          {
+            type: "group",
+            operator: "and",
+            children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+          },
+          {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
+          },
+        ],
+      },
+      "root.0",
+      "root.1",
+      { operator: "and" },
+    ),
+    {
+      type: "group",
+      operator: "or",
+      children: [
+        {
+          type: "group",
+          operator: "and",
+          children: [
+            {
+              type: "group",
+              operator: "or",
+              children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
+            },
+            {
+              type: "group",
+              operator: "and",
+              children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+            },
+          ],
+        },
+      ],
+    },
+  );
+});
+
+test("resolveSearchExpressionNode and findSearchExpressionTermPath address nodes by root paths", () => {
+  const expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      {
+        type: "group",
+        operator: "and",
+        children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+      },
+      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+    ],
+  };
+
+  assert.deepEqual(resolveSearchExpressionNode(expression, "root.0"), {
+    type: "group",
+    operator: "and",
+    children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+  });
+  assert.equal(
+    findSearchExpressionTermPath(expression, { kind: "zone", zoneRgb: 123 }),
+    "root.1",
   );
 });
 

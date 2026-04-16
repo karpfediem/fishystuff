@@ -1,3 +1,9 @@
+import {
+  EMPTY_SEARCH_EXPRESSION,
+  resolveSearchExpression,
+  resolveSelectedSearchTerms,
+} from "./map-search-contract.js";
+
 export const DEFAULT_ENABLED_LAYER_IDS = Object.freeze([
   "bookmarks",
   "fish_evidence",
@@ -79,6 +85,16 @@ function stripQueryOwnedRestoreFields(patch, locationHref) {
   if (search && params.has("search")) {
     delete search.query;
   }
+  if (
+    search &&
+    (params.has("focusFish") ||
+      params.has("fish") ||
+      params.has("fishTerms") ||
+      params.has("fishFilterTerms"))
+  ) {
+    delete search.expression;
+    delete search.selectedTerms;
+  }
   if (bridgedFilters) {
     if (params.has("focusFish") || params.has("fish")) {
       delete bridgedFilters.fishIds;
@@ -111,6 +127,16 @@ function storedUiSignals(signals) {
   const search = signals?._map_ui?.search;
   const bridgedUi = signals?._map_bridged?.ui;
   const bridgedFilters = signals?._map_bridged?.filters;
+  const searchExpression = resolveSearchExpression(
+    search?.expression,
+    search?.selectedTerms,
+    bridgedFilters,
+  );
+  const selectedTerms = resolveSelectedSearchTerms(
+    search?.selectedTerms,
+    bridgedFilters,
+    searchExpression,
+  );
   const bookmarkEntries = Array.isArray(signals?._map_bookmarks?.entries)
     ? cloneJson(signals._map_bookmarks.entries)
     : [];
@@ -127,9 +153,8 @@ function storedUiSignals(signals) {
       },
       search: {
         query: String(search?.query || ""),
-        selectedTerms: Array.isArray(search?.selectedTerms)
-          ? cloneJson(search.selectedTerms)
-          : [],
+        expression: cloneJson(searchExpression),
+        selectedTerms: cloneJson(selectedTerms),
       },
     },
     _map_bookmarks: {
@@ -201,6 +226,16 @@ function uiStorageSnapshot(stored) {
   const bridgedFilters = isPlainObject(stored?._map_bridged?.filters)
     ? stored._map_bridged.filters
     : {};
+  const searchExpression = resolveSearchExpression(
+    stored?._map_ui?.search?.expression,
+    stored?._map_ui?.search?.selectedTerms,
+    bridgedFilters,
+  );
+  const selectedTerms = resolveSelectedSearchTerms(
+    stored?._map_ui?.search?.selectedTerms,
+    bridgedFilters,
+    searchExpression,
+  );
   return {
     windowUi: isPlainObject(stored?._map_ui?.windowUi) ? cloneJson(stored._map_ui.windowUi) : {},
     layers: {
@@ -213,9 +248,8 @@ function uiStorageSnapshot(stored) {
     },
     search: {
       query: String(stored?._map_ui?.search?.query || ""),
-      selectedTerms: Array.isArray(stored?._map_ui?.search?.selectedTerms)
-        ? cloneJson(stored._map_ui.search.selectedTerms)
-        : [],
+      expression: cloneJson(searchExpression),
+      selectedTerms: cloneJson(selectedTerms),
     },
     bridgedUi: {
       diagnosticsOpen: bridgedUi.diagnosticsOpen === true,
@@ -305,12 +339,25 @@ function restoreUiPatch(parsed) {
       ? parsed.inputFilters
       : null;
 
+  const hasStoredSearchSelection =
+    Object.prototype.hasOwnProperty.call(search, "expression") ||
+    Array.isArray(search.selectedTerms);
+  const searchExpression = hasStoredSearchSelection
+    ? resolveSearchExpression(search.expression, search.selectedTerms)
+    : null;
+  const selectedTerms = searchExpression
+    ? resolveSelectedSearchTerms(search.selectedTerms, null, searchExpression)
+    : [];
+
   if (Object.keys(search).length) {
     patch._map_ui = patch._map_ui || {};
     patch._map_ui.search = {
       query: String(search.query || ""),
-      ...(Array.isArray(search.selectedTerms)
-        ? { selectedTerms: cloneJson(search.selectedTerms) }
+      ...(searchExpression
+        ? {
+            expression: cloneJson(searchExpression),
+            selectedTerms: cloneJson(selectedTerms),
+          }
         : {}),
     };
   }
@@ -414,7 +461,7 @@ function ensureUiSnapshot(stored) {
           expandedLayerIds: [],
           hoverFactsVisibleByLayer: {},
         },
-        search: { query: "", selectedTerms: [] },
+        search: { query: "", expression: cloneJson(EMPTY_SEARCH_EXPRESSION), selectedTerms: [] },
         bridgedUi: {
           diagnosticsOpen: false,
           showPoints: true,

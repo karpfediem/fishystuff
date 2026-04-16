@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 import {
   buildDefaultFishFilterMatches,
+  buildSearchExpressionDragSignalPatch,
+  buildSearchExpressionOperatorSignalPatch,
   buildSearchMatchSignalPatch,
   buildSearchMatches,
   buildSearchPanelStateBundle,
@@ -77,6 +79,11 @@ test("buildSearchPanelStateBundle keeps only search-relevant live signals", () =
     inputState: {
       search: {
         searchText: "",
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [],
+        },
         selectedTerms: [],
       },
       filters: {
@@ -271,6 +278,11 @@ test("buildSearchMatchSignalPatch updates bridged filters and closes the dropdow
   assert.deepEqual(buildSearchMatchSignalPatch(signals, { kind: "fish", fishId: 912 }), {
     _map_ui: {
       search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+        },
         selectedTerms: [{ kind: "fish", fishId: 912 }],
         query: "",
         open: false,
@@ -295,6 +307,65 @@ test("buildSearchMatchSignalPatch updates bridged filters and closes the dropdow
     buildSearchMatchSignalPatch(signals, { kind: "semantic", layerId: "regions", fieldId: 22 })._map_bridged.filters.semanticFieldIdsByLayer,
     { regions: [22] },
   );
+});
+
+test("buildSearchMatchSignalPatch preserves nested expression groups when appending a new term", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+            },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(buildSearchMatchSignalPatch(signals, { kind: "fish", fishId: 912 }), {
+    _map_ui: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+            },
+            {
+              type: "term",
+              term: { kind: "fish", fishId: 912 },
+            },
+          ],
+        },
+        selectedTerms: [
+          { kind: "fish-filter", term: "favourite" },
+          { kind: "fish", fishId: 912 },
+        ],
+        query: "",
+        open: false,
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [912],
+        zoneRgbs: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["favourite"],
+      },
+    },
+  });
 });
 
 test("buildSearchSelectionRemovalSignalPatch removes selected search filters cleanly", () => {
@@ -338,6 +409,540 @@ test("buildSearchSelectionRemovalSignalPatch removes selected search filters cle
   assert.deepEqual(
     buildSearchSelectionRemovalSignalPatch(signals, { zoneRgb: 123 })._map_bridged.filters.semanticFieldIdsByLayer,
     { regions: [22] },
+  );
+});
+
+test("buildSearchSelectionRemovalSignalPatch removes by expression path without flattening groups", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchSelectionRemovalSignalPatch(signals, { expressionPath: "root.0.1" }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+              },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            ],
+          },
+          selectedTerms: [
+            { kind: "fish-filter", term: "favourite" },
+            { kind: "zone", zoneRgb: 123 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [123],
+          semanticFieldIdsByLayer: { zone_mask: [123] },
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchExpressionOperatorSignalPatch toggles a targeted group operator", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+            },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchExpressionOperatorSignalPatch(signals, {
+      groupPath: "root.0",
+      nextOperator: "or",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "or",
+                children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+              },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            ],
+          },
+          selectedTerms: [
+            { kind: "fish", fishId: 912 },
+            { kind: "zone", zoneRgb: 123 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [123],
+          semanticFieldIdsByLayer: { zone_mask: [123] },
+          fishFilterTerms: [],
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchExpressionDragSignalPatch moves a term into a target group", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            {
+              type: "group",
+              operator: "and",
+              children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+            },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchExpressionDragSignalPatch(signals, {
+      sourcePath: "root.0",
+      targetGroupPath: "root.1",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                ],
+              },
+            ],
+          },
+          selectedTerms: [
+            { kind: "fish", fishId: 912 },
+            { kind: "fish-filter", term: "favourite" },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchExpressionDragSignalPatch groups a dragged term with a target term", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchExpressionDragSignalPatch(signals, {
+      sourcePath: "root.0",
+      targetTermPath: "root.1",
+      groupOperator: "and",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                ],
+              },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            ],
+          },
+          selectedTerms: [
+            { kind: "fish", fishId: 912 },
+            { kind: "fish-filter", term: "favourite" },
+            { kind: "zone", zoneRgb: 123 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [123],
+          semanticFieldIdsByLayer: { zone_mask: [123] },
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchExpressionDragSignalPatch moves a dragged subgroup into another group", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
+            {
+              type: "group",
+              operator: "or",
+              children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
+            },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchExpressionDragSignalPatch(signals, {
+      sourcePath: "root.0",
+      targetGroupPath: "root.1",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "or",
+                children: [
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                  {
+                    type: "group",
+                    operator: "and",
+                    children: [
+                      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                      { type: "term", term: { kind: "fish", fishId: 912 } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          selectedTerms: [
+            { kind: "zone", zoneRgb: 123 },
+            { kind: "fish-filter", term: "favourite" },
+            { kind: "fish", fishId: 912 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [123],
+          semanticFieldIdsByLayer: { zone_mask: [123] },
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a target term", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchExpressionDragSignalPatch(signals, {
+      sourcePath: "root.0",
+      targetNodePath: "root.1",
+      groupOperator: "or",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "or",
+                children: [
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                  {
+                    type: "group",
+                    operator: "and",
+                    children: [
+                      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                      { type: "term", term: { kind: "fish", fishId: 912 } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          selectedTerms: [
+            { kind: "zone", zoneRgb: 123 },
+            { kind: "fish-filter", term: "favourite" },
+            { kind: "fish", fishId: 912 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [123],
+          semanticFieldIdsByLayer: { zone_mask: [123] },
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchExpressionDragSignalPatch reorders a dragged node by group slot index", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchExpressionDragSignalPatch(signals, {
+      sourcePath: "root.0",
+      targetGroupPath: "root",
+      targetGroupIndex: 2,
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            ],
+          },
+          selectedTerms: [
+            { kind: "fish", fishId: 912 },
+            { kind: "fish-filter", term: "favourite" },
+            { kind: "zone", zoneRgb: 123 },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [123],
+          semanticFieldIdsByLayer: { zone_mask: [123] },
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a target subgroup handle", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+            },
+            {
+              type: "group",
+              operator: "or",
+              children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
+            },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchExpressionDragSignalPatch(signals, {
+      sourcePath: "root.0",
+      targetNodePath: "root.1",
+      groupOperator: "and",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  {
+                    type: "group",
+                    operator: "or",
+                    children: [{ type: "term", term: { kind: "zone", zoneRgb: 123 } }],
+                  },
+                  {
+                    type: "group",
+                    operator: "and",
+                    children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+                  },
+                ],
+              },
+            ],
+          },
+          selectedTerms: [
+            { kind: "zone", zoneRgb: 123 },
+            { kind: "fish-filter", term: "favourite" },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [123],
+          semanticFieldIdsByLayer: { zone_mask: [123] },
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
   );
 });
 

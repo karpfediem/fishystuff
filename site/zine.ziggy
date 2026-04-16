@@ -35,6 +35,7 @@ Multilingual {
     "js/components/registry.js",
     "js/components/bound-select.js",
     "js/components/checkbox-group.js",
+    "js/components/applied-search-terms.js",
     "js/components/datastar-render-element.js",
     "js/components/distribution-chart.js",
     "js/components/stat-breakdown-tooltip.js",

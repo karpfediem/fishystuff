@@ -43,7 +43,7 @@ function escapeHtml(value) {
   );
 }
 
-test("renderSearchSelection groups selected search terms into applied-term sections", () => {
+test("renderSearchSelection renders the applied search expression tree", () => {
   const elements = createRenderElements();
   const fishLookup = new Map([
     [
@@ -71,9 +71,39 @@ test("renderSearchSelection groups selected search terms into applied-term secti
       },
     },
     inputState: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "term",
+              term: { kind: "fish-filter", term: "favourite" },
+            },
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                {
+                  type: "term",
+                  term: { kind: "fish", fishId: 235 },
+                },
+                {
+                  type: "term",
+                  term: { kind: "zone", zoneRgb: 123456 },
+                },
+                {
+                  type: "term",
+                  term: { kind: "semantic", layerId: "regions", fieldId: 77 },
+                },
+              ],
+            },
+          ],
+        },
+      },
       filters: {
         fishIds: [235],
-        fishFilterTerms: ["favourite", "red"],
+        fishFilterTerms: ["favourite"],
         semanticFieldIdsByLayer: {
           zone_mask: [123456],
           regions: [77],
@@ -110,15 +140,25 @@ test("renderSearchSelection groups selected search terms into applied-term secti
   assert.equal(elements.searchSelection.hidden, false);
   assert.equal(elements.searchSelectionShell.hidden, false);
   assert.equal(elements.searchWindow.dataset.hasSelection, "true");
-  assert.match(elements.searchSelection.innerHTML, />Filters</);
-  assert.match(elements.searchSelection.innerHTML, />Fish</);
-  assert.match(elements.searchSelection.innerHTML, />Zones</);
-  assert.match(elements.searchSelection.innerHTML, />Map Terms</);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, />Applied search</);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, />\s*4 terms\s*</);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-node-kind="group"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-group-path="root"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.0"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.1"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.2"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-operator="and"/);
+  assert.match(elements.searchSelection.innerHTML, /join items-stretch max-w-full/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-filter-term="favourite"/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-id="235"/);
   assert.match(elements.searchSelection.innerHTML, /data-zone-rgb="123456"/);
   assert.match(elements.searchSelection.innerHTML, /data-semantic-layer-id="regions"/);
+  assert.match(elements.searchSelection.innerHTML, />Fish</);
+  assert.match(elements.searchSelection.innerHTML, />Zone</);
+  assert.match(elements.searchSelection.innerHTML, />Region</);
   assert.match(elements.searchSelection.innerHTML, /Open-water region/);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, />Filters</);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, />Zones</);
 });
 
 test("renderSearchSelection hides the selection shell when no terms are applied", () => {
@@ -133,6 +173,13 @@ test("renderSearchSelection hides the selection shell when no terms are applied"
         },
       },
       inputState: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [],
+          },
+        },
         filters: {
           fishIds: [],
           fishFilterTerms: [],
