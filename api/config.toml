@@ -1,13 +1,10 @@
 # fishystuff API sample config
 
 [paths]
-db = "../data/fishystuff.db"
-fish_names = "../data/fish_names.tsv" # optional if dolt_sql is configured
-patches_csv = "../data/patches.csv"
-images_dir = "../data/cdn/public/images"
+terrain_manifest_url = "/images/terrain/v1/manifest.json"
+terrain_drape_manifest_url = "/images/terrain_drape/minimap/v1/manifest.json"
 # Canonical packed RGB24 height tiles derived directly from whole_fullres.png.
 terrain_height_tiles_url = "/images/terrain_height/v1"
-# terrain_drape_manifest_url = "/images/terrain_drape/minimap/v1/manifest.json"
 
 [dolt_sql]
 # url = "mysql://root@127.0.0.1:3306/fishystuff"
@@ -16,16 +13,6 @@ terrain_height_tiles_url = "/images/terrain_height/v1"
 # user = "root"
 # password = ""
 # database = "fishystuff"
-
-[watermap]
-path = "../data/imagery/watermap_projected_v1.png"
-
-[watermap.transform]
-# Canonical map-space projection (same map parameterization as zone mask).
-kind = "scale_to_fit"
-
-[zone_masks]
-v1 = "../data/cdn/public/images/zones_mask_v1.png"
 
 [defaults]
 map_version = "v1"

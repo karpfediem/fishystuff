@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -65,18 +65,9 @@ impl AppConfig {
         }
 
         let mut fs_config = FsConfig::default();
-        let mut config_dir = None;
         if let Some(path) = &config_path {
             fs_config = load_config(path)?;
-            config_dir = path.parent().map(PathBuf::from);
         }
-
-        let resolve = |value: &Option<String>| -> Option<PathBuf> {
-            value.as_ref().map(|raw| match &config_dir {
-                Some(dir) => dir.join(raw),
-                None => PathBuf::from(raw),
-            })
-        };
 
         let mut bind = "127.0.0.1:8080".to_string();
         let mut database_url = std::env::var("FISHYSTUFF_DATABASE_URL")
@@ -95,16 +86,6 @@ impl AppConfig {
             .trim()
             .trim_end_matches('/')
             .to_string();
-        let mut images_dir = resolve(&fs_config.paths.images_dir).unwrap_or_else(|| {
-            resolve_default_runtime_dir(
-                config_dir.as_deref(),
-                &[
-                    "../data/cdn/public/images",
-                    "data/cdn/public/images",
-                    "images",
-                ],
-            )
-        });
         let mut terrain_manifest_url =
             normalize_optional_url(fs_config.paths.terrain_manifest_url.as_deref());
         let mut terrain_drape_manifest_url =
@@ -172,13 +153,6 @@ impl AppConfig {
                         .get(i + 1)
                         .ok_or_else(|| anyhow!("--cors-allowed-origins requires value"))?;
                     cors_allowed_origins = parse_cors_allowed_origins(Some(value))?;
-                    i += 2;
-                }
-                "--images-dir" => {
-                    images_dir = PathBuf::from(
-                        args.get(i + 1)
-                            .ok_or_else(|| anyhow!("--images-dir requires value"))?,
-                    );
                     i += 2;
                 }
                 "--terrain-manifest-url" => {
@@ -289,34 +263,6 @@ impl AppConfig {
         let database_url = database_url.ok_or_else(|| {
             anyhow!("database URL is required; pass --database-url or set FISHYSTUFF_DATABASE_URL")
         })?;
-        if terrain_manifest_url.is_none() {
-            terrain_manifest_url = detect_local_manifest_url(
-                &images_dir,
-                "terrain/v1/manifest.json",
-                "/images/terrain/v1/manifest.json",
-            );
-        }
-        if terrain_drape_manifest_url.is_none() {
-            terrain_drape_manifest_url = detect_local_manifest_url(
-                &images_dir,
-                "terrain_drape/minimap/v1/manifest.json",
-                "/images/terrain_drape/minimap/v1/manifest.json",
-            );
-        }
-        if terrain_height_tiles_url.is_none() {
-            terrain_height_tiles_url = detect_local_directory_url(
-                &images_dir,
-                "terrain_height/v1",
-                "/images/terrain_height/v1",
-            );
-        }
-        if terrain_height_tiles_url.is_none() {
-            terrain_height_tiles_url = detect_local_directory_url(
-                &images_dir,
-                "terrain_fullres/v1",
-                "/images/terrain_fullres/v1",
-            );
-        }
 
         Ok(Self {
             bind,
@@ -334,37 +280,6 @@ impl AppConfig {
             request_timeout_secs,
         })
     }
-}
-
-fn resolve_default_runtime_dir(config_dir: Option<&Path>, candidates: &[&str]) -> PathBuf {
-    let bases = runtime_search_bases(config_dir);
-
-    for base in &bases {
-        for candidate in candidates {
-            let path = base.join(candidate);
-            if path.exists() {
-                return path;
-            }
-        }
-    }
-
-    if let Some(dir) = config_dir {
-        return dir.join(candidates[0]);
-    }
-    PathBuf::from(candidates[0])
-}
-
-fn runtime_search_bases(config_dir: Option<&Path>) -> Vec<PathBuf> {
-    let mut bases = Vec::new();
-    if let Some(dir) = config_dir {
-        bases.push(dir.to_path_buf());
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        if !bases.iter().any(|existing| existing == &cwd) {
-            bases.push(cwd);
-        }
-    }
-    bases
 }
 
 fn normalize_optional_url(value: Option<&str>) -> Option<String> {
@@ -409,32 +324,6 @@ fn normalize_origin(value: &str) -> Option<String> {
     Some(format!("{scheme}://{rest}"))
 }
 
-fn detect_local_manifest_url(
-    images_dir: &Path,
-    relative_manifest_path: &str,
-    public_manifest_url: &str,
-) -> Option<String> {
-    let path = images_dir.join(relative_manifest_path);
-    if path.is_file() {
-        Some(public_manifest_url.to_string())
-    } else {
-        None
-    }
-}
-
-fn detect_local_directory_url(
-    root_dir: &Path,
-    relative_dir_path: &str,
-    public_url: &str,
-) -> Option<String> {
-    let path = root_dir.join(relative_dir_path);
-    if path.is_dir() {
-        Some(public_url.to_string())
-    } else {
-        None
-    }
-}
-
 fn dolt_sql_to_database_url(cfg: &DoltSqlConfig) -> Option<String> {
     if let Some(url) = &cfg.url {
         return Some(url.clone());
@@ -459,51 +348,7 @@ fn dolt_sql_to_database_url(cfg: &DoltSqlConfig) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_cors_allowed_origins, resolve_default_runtime_dir};
-    use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    #[test]
-    fn default_runtime_dir_prefers_existing_candidate_under_config_dir() {
-        let stamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("time")
-            .as_nanos();
-        let root = std::env::temp_dir().join(format!("fishystuff-config-path-resolution-{stamp}"));
-        let config_dir = root.join("api");
-        let nested = root.join("data/cdn/public/images");
-        fs::create_dir_all(&nested).expect("create nested test dir");
-        fs::create_dir_all(&config_dir).expect("create config dir");
-
-        let resolved = resolve_default_runtime_dir(
-            Some(&config_dir),
-            &[
-                "../data/cdn/public/images",
-                "data/cdn/public/images",
-                "images",
-            ],
-        );
-        assert_eq!(
-            resolved.canonicalize().expect("canonical resolved path"),
-            nested.canonicalize().expect("canonical nested path")
-        );
-
-        fs::remove_dir_all(&root).expect("cleanup temp dir");
-    }
-
-    #[test]
-    fn default_runtime_dir_falls_back_to_first_candidate_when_nothing_exists() {
-        let resolved = resolve_default_runtime_dir(
-            None,
-            &[
-                "../data/cdn/public/images",
-                "data/cdn/public/images",
-                "images",
-            ],
-        );
-        assert_eq!(resolved, PathBuf::from("../data/cdn/public/images"));
-    }
+    use super::{normalize_optional_url, parse_cors_allowed_origins};
 
     #[test]
     fn parse_cors_allowed_origins_normalizes_and_deduplicates() {
@@ -523,5 +368,18 @@ mod tests {
     #[test]
     fn parse_cors_allowed_origins_rejects_paths() {
         assert!(parse_cors_allowed_origins(Some("https://fishystuff.fish/map")).is_err());
+    }
+
+    #[test]
+    fn normalize_optional_url_keeps_public_paths_without_filesystem_probe() {
+        assert_eq!(
+            normalize_optional_url(Some("/terrain/v1/manifest.json")),
+            Some("/images/terrain/v1/manifest.json".to_string())
+        );
+        assert_eq!(
+            normalize_optional_url(Some("https://cdn.example.com/images/terrain_height/v1")),
+            Some("/images/terrain_height/v1".to_string())
+        );
+        assert_eq!(normalize_optional_url(Some("   ")), None);
     }
 }

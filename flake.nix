@@ -64,6 +64,37 @@
           apiEntrypoint = pkgs.callPackage ./nix/packages/api-entrypoint.nix {
             inherit api;
           };
+          apiServiceBaseConfig = pkgs.callPackage ./nix/packages/api-service-base-config.nix { };
+          serviceModules = import ./nix/services {
+            inherit pkgs;
+            lib = pkgs.lib;
+          };
+          evalService = pkgs.callPackage ./nix/services/eval-service.nix { };
+          mkServiceBundle = pkgs.callPackage ./nix/services/mk-service-bundle.nix {
+            inherit evalService;
+          };
+          apiServiceBundle = mkServiceBundle {
+            name = "fishystuff-api";
+            serviceModule = serviceModules.api;
+            configuration.fishystuff.api = {
+              package = api;
+              baseConfigSource = apiServiceBaseConfig;
+            };
+          };
+          doltServiceBundle = mkServiceBundle {
+            name = "fishystuff-dolt";
+            serviceModule = serviceModules.dolt;
+          };
+          serviceBundleChecks = import ./nix/tests/service-bundle-checks.nix {
+            inherit
+              apiServiceBundle
+              doltServiceBundle
+              pkgs
+              ;
+          };
+          modularServiceRuntime = pkgs.callPackage ./nix/tests/modular-service-runtime.nix {
+            inherit serviceModules;
+          };
 
           api-container = pkgs.dockerTools.buildLayeredImage {
             name = "api-fishystuff-fish";
@@ -83,15 +114,30 @@
           };
         in
         {
-          packages = { inherit api api-container bot bot-container; };
+          packages = {
+            inherit api api-container bot bot-container;
+            api-service-base-config = apiServiceBaseConfig;
+            api-service-bundle = apiServiceBundle;
+            dolt-service-bundle = doltServiceBundle;
+          };
+          checks =
+            serviceBundleChecks
+            // {
+              modular-service-runtime = modularServiceRuntime;
+            };
         };
       flake = {
-        nixosModules = {
-          default = import ./nix/modules;
-          fishystuff-api = import ./nix/modules/fishystuff-api.nix;
-          fishystuff-dolt = import ./nix/modules/fishystuff-dolt.nix;
-          fishystuff-caddy-static = import ./nix/modules/fishystuff-caddy-static.nix;
-          fishystuff-caddy-proxy = import ./nix/modules/fishystuff-caddy-proxy.nix;
+        lib = {
+          services = { pkgs }: import ./nix/services {
+            inherit pkgs;
+            lib = pkgs.lib;
+          };
+          evalService = { pkgs }: pkgs.callPackage ./nix/services/eval-service.nix { };
+          mkServiceBundle =
+            { pkgs }:
+            pkgs.callPackage ./nix/services/mk-service-bundle.nix {
+              evalService = pkgs.callPackage ./nix/services/eval-service.nix { };
+            };
         };
       };
     });
