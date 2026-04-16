@@ -305,6 +305,7 @@ body {
 
 :where(.fishy-applied-term) {
     --fishy-applied-term-grade: color-mix(in oklab, var(--color-base-content, #1f2937) 42%, var(--color-base-300, #d6d3d1) 58%);
+    --fishy-applied-term-kind-left: 0.7rem;
     position: relative;
     min-width: 0;
     max-width: 100%;
@@ -313,6 +314,10 @@ body {
     border: 1px solid color-mix(in oklab, var(--fishy-applied-term-grade) 48%, var(--color-base-300, #d6d3d1) 52%);
     border-radius: var(--radius-box, 1rem);
     background: var(--color-base-100, #fffdf4);
+}
+
+:where(.fishy-applied-term[data-expression-has-negation="true"]) {
+    --fishy-applied-term-kind-left: 2.35rem;
 }
 
 :where(.fishy-applied-expression-group-handle) {
@@ -432,13 +437,50 @@ body {
 :where(.fishy-applied-term-kind) {
     position: absolute;
     top: 0.2rem;
-    left: 0.3rem;
+    left: var(--fishy-applied-term-kind-left);
     z-index: 1;
     flex: none;
     margin: 0;
     transform: translateY(-50%);
     pointer-events: none;
     user-select: none;
+}
+
+:where(.fishy-applied-expression-negate-toggle) {
+    --fishy-applied-expression-negate-color: var(--color-error, #d64545);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    inline-size: 1.4rem;
+    block-size: 1.4rem;
+    min-height: 1.4rem;
+    margin-inline: 0.15rem 0;
+    padding: 0;
+    border: 1px solid color-mix(in oklab, var(--fishy-applied-expression-negate-color) 16%, var(--color-base-300, #d6d3d1) 84%);
+    border-radius: calc(var(--radius-box, 1rem) * 0.42);
+    background: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 6%, var(--color-base-100, #fffdf4) 94%);
+    color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 56%, var(--color-base-content, #1f2937) 44%);
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+    transition:
+        color 120ms ease,
+        border-color 120ms ease,
+        background-color 120ms ease;
+}
+
+:where(.fishy-applied-expression-negate-toggle:hover, .fishy-applied-expression-negate-toggle:focus-visible) {
+    border-color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 24%, var(--color-base-300, #d6d3d1) 76%);
+    background: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 12%, var(--color-base-100, #fffdf4) 88%);
+    color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 84%, var(--color-base-content, #1f2937) 16%);
+    outline: none;
+}
+
+:where(.fishy-applied-expression-negate-toggle[aria-pressed="true"]) {
+    border-color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 28%, var(--color-base-300, #d6d3d1) 72%);
+    background: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 16%, var(--color-base-100, #fffdf4) 84%);
+    color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 92%, var(--color-base-content, #1f2937) 8%);
 }
 
 :where(.fishy-applied-term-body) {

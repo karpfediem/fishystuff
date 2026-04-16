@@ -69,8 +69,11 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
   assert.match(view.html, /data-expression-negate-path="root\.1"/);
   assert.match(view.html, /aria-pressed="true"/);
   assert.match(view.html, /data-expression-negated="true"/);
+  assert.match(view.html, /data-expression-has-negation="true"/);
   assert.doesNotMatch(view.html, />Applied search</);
   assert.doesNotMatch(view.html, />\s*2 terms\s*</);
+  assert.match(view.html, />\s*!\s*</);
+  assert.doesNotMatch(view.html, />\s*not\s*</);
   assert.match(view.html, /data-expression-group-path="root"/);
   assert.match(view.html, /data-expression-boundary-index="1"/);
   assert.match(

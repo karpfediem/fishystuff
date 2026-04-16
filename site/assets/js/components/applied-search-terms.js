@@ -161,13 +161,8 @@ function renderNegationToggle(path, negated, escapeHtml, options = {}) {
   const extraClass = String(options.className || "").trim();
   const baseClass = [
     "fishy-applied-expression-negate-toggle",
-    "badge",
-    negated ? "badge-neutral" : "badge-ghost",
-    "badge-xs",
     "cursor-pointer",
     "shrink-0",
-    "uppercase",
-    "tracking-[0.24em]",
     extraClass,
   ]
     .filter(Boolean)
@@ -182,7 +177,7 @@ function renderNegationToggle(path, negated, escapeHtml, options = {}) {
       aria-label="${escapeHtml(title)}"
       title="${escapeHtml(title)}"
     >
-      ${escapeHtml("not")}
+      ${escapeHtml("!")}
     </button>
   `;
 }
@@ -208,7 +203,9 @@ function renderTermNode(node, escapeHtml, buttonClass) {
       data-expression-drop-term-path="${escapeHtml(node.path)}"
       data-expression-key="${escapeHtml(node.key || label)}"${
         node.grade ? ` data-grade="${escapeHtml(node.grade)}"` : ""
-      }${node.negated && node.allowNegation ? ' data-expression-negated="true"' : ""}
+      }${node.negated && node.allowNegation ? ' data-expression-negated="true"' : ""}${
+        node.allowNegation ? ' data-expression-has-negation="true"' : ""
+      }
     >
       ${negateToggleMarkup}
       <div class="fishy-applied-term-main join-item">
