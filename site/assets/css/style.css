@@ -340,6 +340,10 @@ body {
     width: 0.14rem;
     height: 1rem;
     border-radius: 9999px;
+    background: transparent;
+}
+
+:where(#fishymap-search-selection[data-expression-dragging="true"] .fishy-applied-expression-slot)::before {
     background: color-mix(in oklab, var(--color-base-content, #1f2937) 18%, transparent);
 }
 

@@ -18,11 +18,14 @@ class FakeElement extends EventTarget {
     this.hidden = false;
     this.attributes = new Map();
     this.dataset = {};
+    this.style = {};
     this.textContent = "";
     this.id = "";
     this._innerHTML = "";
     this._queryMap = new Map();
     this._closestMap = new Map();
+    this._children = [];
+    this._parent = null;
   }
 
   get innerHTML() {
@@ -58,6 +61,10 @@ class FakeElement extends EventTarget {
     return this.attributes.has(name) ? this.attributes.get(name) : null;
   }
 
+  removeAttribute(name) {
+    this.attributes.delete(String(name));
+  }
+
   setClosest(selector, element) {
     this._closestMap.set(selector, element);
   }
@@ -73,11 +80,50 @@ class FakeElement extends EventTarget {
   contains(target) {
     return Array.from(this._queryMap.values()).includes(target);
   }
+
+  appendChild(child) {
+    if (!child) {
+      return child;
+    }
+    child._parent = this;
+    this._children.push(child);
+    return child;
+  }
+
+  remove() {
+    if (!this._parent) {
+      return;
+    }
+    this._parent._children = this._parent._children.filter((child) => child !== this);
+    this._parent = null;
+  }
+
+  cloneNode() {
+    const clone = new FakeElement();
+    clone.hidden = this.hidden;
+    clone.textContent = this.textContent;
+    clone.id = this.id;
+    clone._innerHTML = this._innerHTML;
+    clone.dataset = { ...this.dataset };
+    clone.style = { ...this.style };
+    clone.attributes = new Map(this.attributes);
+    return clone;
+  }
+
+  getBoundingClientRect() {
+    return {
+      width: 96,
+      height: 28,
+    };
+  }
 }
 
 function createDocumentStub() {
   const document = new EventTarget();
   document.activeElement = null;
+  document.body = new FakeElement();
+  document.documentElement = new FakeElement();
+  document.createElement = () => new FakeElement();
   return document;
 }
 
@@ -301,13 +347,25 @@ test("FishyMapSearchPanelElement dispatches drag grouping patches from the appli
   source.setAttribute("draggable", "true");
   source.setClosest("[data-expression-drag-path][draggable='true']", source);
 
+  let dragImageCall = null;
+
   panel._handleDragStart({
     target: source,
     dataTransfer: {
       effectAllowed: "",
       setData() {},
+      setDragImage(image, x, y) {
+        dragImageCall = { image, x, y };
+      },
     },
   });
+  assert.equal(panel.querySelector("#fishymap-search-selection")?.dataset.expressionDragging, "true");
+  assert.equal(dragImageCall?.x, 8);
+  assert.equal(dragImageCall?.y, 8);
+  assert.ok(dragImageCall?.image);
+  assert.notEqual(dragImageCall?.image, source);
+  assert.equal(dragImageCall?.image?.style?.opacity, undefined);
+  assert.equal(dragImageCall?.image?.style?.transform, "scale(0.78)");
 
   const targetTerm = new FakeElement();
   targetTerm.setAttribute("data-expression-drop-node-path", "root.1");
@@ -365,6 +423,7 @@ test("FishyMapSearchPanelElement dispatches drag grouping patches from the appli
   });
   assert.equal(source.dataset.dragging, undefined);
   assert.equal(targetTerm.dataset.expressionDropMode, undefined);
+  assert.equal(panel.querySelector("#fishymap-search-selection")?.dataset.expressionDragging, undefined);
 });
 
 test("FishyMapSearchPanelElement dispatches subgroup move patches from the applied expression view", async () => {
