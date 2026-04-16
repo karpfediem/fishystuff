@@ -350,7 +350,11 @@ body {
 }
 
 :where(#fishymap-search-selection[data-expression-dragging="true"] .fishy-applied-expression-slot)::before {
-    background: color-mix(in oklab, var(--color-base-content, #1f2937) 18%, transparent);
+    background: color-mix(in oklab, var(--color-base-content, #1f2937) 18%, var(--color-base-100, #fffdf4) 82%);
+}
+
+:where(#fishymap-search-selection[data-expression-dragging="true"] .fishy-applied-expression-slot) {
+    border-color: var(--color-base-300, #d6d3d1);
 }
 
 :where(.fishy-applied-term[data-dragging="true"], .fishy-applied-expression-group-handle[data-dragging="true"]) {
@@ -456,10 +460,10 @@ body {
     min-height: 1.4rem;
     margin-inline: 0.15rem 0;
     padding: 0;
-    border: 1px solid color-mix(in oklab, var(--fishy-applied-expression-negate-color) 16%, var(--color-base-300, #d6d3d1) 84%);
+    border: 1px solid transparent;
     border-radius: calc(var(--radius-box, 1rem) * 0.42);
-    background: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 6%, var(--color-base-100, #fffdf4) 94%);
-    color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 56%, var(--color-base-content, #1f2937) 44%);
+    background: transparent;
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 42%, transparent);
     font-size: 0.8rem;
     font-weight: 700;
     line-height: 1;
@@ -470,16 +474,16 @@ body {
 }
 
 :where(.fishy-applied-expression-negate-toggle:hover, .fishy-applied-expression-negate-toggle:focus-visible) {
-    border-color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 24%, var(--color-base-300, #d6d3d1) 76%);
-    background: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 12%, var(--color-base-100, #fffdf4) 88%);
-    color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 84%, var(--color-base-content, #1f2937) 16%);
+    border-color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 26%, transparent);
+    background: transparent;
+    color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 88%, var(--color-base-content, #1f2937) 12%);
     outline: none;
 }
 
 :where(.fishy-applied-expression-negate-toggle[aria-pressed="true"]) {
-    border-color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 28%, var(--color-base-300, #d6d3d1) 72%);
-    background: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 16%, var(--color-base-100, #fffdf4) 84%);
-    color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 92%, var(--color-base-content, #1f2937) 8%);
+    border-color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 54%, var(--color-base-300, #d6d3d1) 46%);
+    background: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 24%, var(--color-base-100, #fffdf4) 76%);
+    color: color-mix(in oklab, var(--fishy-applied-expression-negate-color) 96%, var(--color-base-content, #1f2937) 4%);
 }
 
 :where(.fishy-applied-term-body) {
