@@ -259,7 +259,7 @@ test("FishyMapSearchPanelElement rerenders search results from Datastar-driven a
   assert.equal(searchCount.textContent, "1 match");
 });
 
-test("FishyMapSearchPanelElement dispatches operator-toggle patches that merge same-operator wrappers", async () => {
+test("FishyMapSearchPanelElement dispatches operator-toggle patches that preserve same-operator groups", async () => {
   const { FishyMapSearchPanelElement } = await loadModule();
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
@@ -305,8 +305,14 @@ test("FishyMapSearchPanelElement dispatches operator-toggle patches that merge s
           type: "group",
           operator: "or",
           children: [
-            { type: "term", term: { kind: "fish", fishId: 912 } },
-            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            {
+              type: "group",
+              operator: "or",
+              children: [
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+              ],
+            },
           ],
         },
         selectedTerms: [
@@ -321,6 +327,20 @@ test("FishyMapSearchPanelElement dispatches operator-toggle patches that merge s
         zoneRgbs: [123],
         semanticFieldIdsByLayer: { zone_mask: [123] },
         fishFilterTerms: [],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "or",
+              children: [
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+              ],
+            },
+          ],
+        },
       },
     },
   });
@@ -422,6 +442,20 @@ test("FishyMapSearchPanelElement dispatches drag grouping patches from the appli
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              ],
+            },
+          ],
+        },
       },
     },
   });
@@ -503,13 +537,19 @@ test("FishyMapSearchPanelElement dispatches subgroup move patches from the appli
           type: "group",
           operator: "or",
           children: [
-            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
             {
               type: "group",
-              operator: "and",
+              operator: "or",
               children: [
-                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-                { type: "term", term: { kind: "fish", fishId: 912 } },
+                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                {
+                  type: "group",
+                  operator: "and",
+                  children: [
+                    { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                    { type: "term", term: { kind: "fish", fishId: 912 } },
+                  ],
+                },
               ],
             },
           ],
@@ -527,6 +567,27 @@ test("FishyMapSearchPanelElement dispatches subgroup move patches from the appli
         zoneRgbs: [123],
         semanticFieldIdsByLayer: { zone_mask: [123] },
         fishFilterTerms: ["favourite"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "or",
+              children: [
+                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                {
+                  type: "group",
+                  operator: "and",
+                  children: [
+                    { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                    { type: "term", term: { kind: "fish", fishId: 912 } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
       },
     },
   });
@@ -619,6 +680,15 @@ test("FishyMapSearchPanelElement dispatches slot insertion patches from the appl
         zoneRgbs: [123],
         semanticFieldIdsByLayer: { zone_mask: [123] },
         fishFilterTerms: ["favourite"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          ],
+        },
       },
     },
   });

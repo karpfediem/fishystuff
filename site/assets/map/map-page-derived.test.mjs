@@ -69,6 +69,11 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
           zone_mask: [123456],
         },
         fishFilterTerms: [],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "zone", zoneRgb: 123456 } }],
+        },
       },
     },
   });
@@ -126,6 +131,15 @@ test("buildQueryFishSelectionSignalPatch resolves pending fish-name selectors fr
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "fish", fishId: 235 } },
+            { type: "term", term: { kind: "fish", fishId: 179 } },
+          ],
+        },
       },
     },
   });
@@ -174,6 +188,11 @@ test("map-page-derived controller applies initial query and search projection pa
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "fish", fishId: 42 } }],
+        },
       },
     },
   });
@@ -228,6 +247,11 @@ test("map-page-derived controller reacts to shell-local signal patch events", ()
           zone_mask: [654321],
         },
         fishFilterTerms: [],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "zone", zoneRgb: 654321 } }],
+        },
       },
     },
   });
@@ -323,6 +347,14 @@ test("map-page-derived controller resolves query fish selectors when the runtime
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 235 } },
+            { type: "term", term: { kind: "fish", fishId: 179 } },
+          ],
+        },
       },
     },
   });

@@ -1,4 +1,8 @@
-import { resolveSearchExpression } from "./map-search-contract.js";
+import {
+  projectSelectedSearchTermsToBridgedFilters,
+  resolveSearchExpression,
+  selectedSearchTermsFromExpression,
+} from "./map-search-contract.js";
 
 const THEME_EVENT = "fishystuff:themechange";
 const THEME_PROBE_ID = "fishystuff-theme-probe";
@@ -59,6 +63,7 @@ export const FISHYMAP_STORAGE_KEYS = Object.freeze({
  *     zoneRgbs?: number[],
  *     semanticFieldIdsByLayer?: Record<string, number[]>,
  *     fishFilterTerms?: string[],
+ *     searchExpression?: object,
  *     patchId?: string | null,
  *     fromPatchId?: string | null,
  *     toPatchId?: string | null,
@@ -139,6 +144,7 @@ export function createEmptyInputState() {
       zoneRgbs: [],
       semanticFieldIdsByLayer: {},
       fishFilterTerms: [],
+      searchExpression: resolveSearchExpression(undefined),
       patchId: null,
       fromPatchId: null,
       toPatchId: null,
@@ -177,6 +183,7 @@ export function createEmptySnapshot() {
       zoneRgbs: [],
       semanticFieldIdsByLayer: {},
       fishFilterTerms: [],
+      searchExpression: resolveSearchExpression(undefined),
       patchId: null,
       fromPatchId: null,
       toPatchId: null,
@@ -925,16 +932,33 @@ function buildEffectiveOutboundStatePatch(
     return normalized;
   }
   const normalizedFilters = normalized.filters || null;
+  const outboundFilters = normalizedFilters
+    ? Object.fromEntries(
+        Object.entries(normalizedFilters).filter(([key]) => key !== "searchExpression"),
+      )
+    : null;
   const activeFishFilterTerms = normalizeFishFilterTerms(inputState?.filters?.fishFilterTerms);
+  const activeSearchExpression = resolveSearchExpression(
+    inputState?.filters?.searchExpression,
+    undefined,
+    inputState?.filters,
+  );
+  const hasActiveSearchExpression = Array.isArray(activeSearchExpression.children)
+    && activeSearchExpression.children.length > 0;
   const shouldOverrideFishIds =
-    activeFishFilterTerms.length > 0 || Boolean(normalizedFilters && hasOwn(normalizedFilters, "fishIds"));
+    activeFishFilterTerms.length > 0 ||
+    hasActiveSearchExpression ||
+    Boolean(
+      normalizedFilters &&
+        (hasOwn(normalizedFilters, "fishIds") || hasOwn(normalizedFilters, "searchExpression")),
+    );
   if (!shouldOverrideFishIds) {
-    return normalized;
+    return outboundFilters ? { ...normalized, filters: outboundFilters } : normalized;
   }
   return {
     ...normalized,
     filters: {
-      ...(normalizedFilters || {}),
+      ...(outboundFilters || {}),
       fishIds: normalizeFishIds(
         resolveEffectiveFishIdsForWasm(inputState, currentState),
         {
@@ -1245,6 +1269,9 @@ export function normalizeStatePatch(patch = {}) {
     if (hasOwn(patch.filters, "fishFilterTerms")) {
       normalized.filters.fishFilterTerms = normalizeFishFilterTerms(patch.filters.fishFilterTerms);
     }
+    if (hasOwn(patch.filters, "searchExpression")) {
+      normalized.filters.searchExpression = resolveSearchExpression(patch.filters.searchExpression);
+    }
     const hasPatchId = hasOwn(patch.filters, "patchId");
     const hasFromPatchId = hasOwn(patch.filters, "fromPatchId");
     const hasToPatchId = hasOwn(patch.filters, "toPatchId");
@@ -1497,6 +1524,11 @@ export function applyStatePatch(inputState, patch) {
       current.filters?.semanticFieldIdsByLayer,
     ),
     fishFilterTerms: normalizeFishFilterTerms(current.filters?.fishFilterTerms),
+    searchExpression: resolveSearchExpression(
+      current.filters?.searchExpression,
+      undefined,
+      current.filters,
+    ),
     patchId: current.filters?.patchId ?? null,
     fromPatchId: current.filters?.fromPatchId ?? null,
     toPatchId: current.filters?.toPatchId ?? null,
@@ -1621,6 +1653,27 @@ export function applyStatePatch(inputState, patch) {
       next.filters.layerPointIconScales = normalizeLayerPointIconScaleMap(
         normalized.filters.layerPointIconScales,
       );
+    }
+    const searchFilterKeysChanged =
+      hasOwn(normalized.filters, "fishIds") ||
+      hasOwn(normalized.filters, "zoneRgbs") ||
+      hasOwn(normalized.filters, "semanticFieldIdsByLayer") ||
+      hasOwn(normalized.filters, "fishFilterTerms") ||
+      hasOwn(normalized.filters, "searchExpression");
+    if (hasOwn(normalized.filters, "searchExpression")) {
+      const nextSearchExpression = resolveSearchExpression(normalized.filters.searchExpression);
+      const projectedFilters = projectSelectedSearchTermsToBridgedFilters(
+        selectedSearchTermsFromExpression(nextSearchExpression),
+      );
+      next.filters.fishIds = normalizeFishIds(projectedFilters.fishIds);
+      next.filters.zoneRgbs = normalizeZoneRgbs(projectedFilters.zoneRgbs);
+      next.filters.semanticFieldIdsByLayer = normalizeSemanticFieldIdsByLayer(
+        projectedFilters.semanticFieldIdsByLayer,
+      );
+      next.filters.fishFilterTerms = normalizeFishFilterTerms(projectedFilters.fishFilterTerms);
+      next.filters.searchExpression = nextSearchExpression;
+    } else if (searchFilterKeysChanged) {
+      next.filters.searchExpression = resolveSearchExpression(undefined, undefined, next.filters);
     }
     if (
       hasOwn(normalized.filters, "patchId") ||
@@ -2716,12 +2769,21 @@ class FishyMapBridgeImpl {
 
       if (becameReady || fishFinishedLoading) {
         this.refreshCurrentStateFromWasm();
-        if (normalizeFishFilterTerms(this.inputState.filters?.fishFilterTerms).length) {
+        const searchExpression = resolveSearchExpression(
+          this.inputState.filters?.searchExpression,
+          undefined,
+          this.inputState.filters,
+        );
+        if (
+          normalizeFishFilterTerms(this.inputState.filters?.fishFilterTerms).length ||
+          (Array.isArray(searchExpression.children) && searchExpression.children.length > 0)
+        ) {
           this.pendingStatePatch = mergeStatePatch(this.pendingStatePatch, {
             version: FISHYMAP_CONTRACT_VERSION,
             filters: {
               fishIds: this.inputState.filters?.fishIds,
               fishFilterTerms: this.inputState.filters?.fishFilterTerms,
+              searchExpression,
             },
           });
           this.schedulePatchFlush();

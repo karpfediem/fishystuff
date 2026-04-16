@@ -125,6 +125,20 @@ test("buildSearchSelectionStatePatch keeps selected terms page-owned and project
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: [],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "term",
+                term: { kind: "fish", fishId: 912 },
+              },
+              {
+                type: "term",
+                term: { kind: "zone", zoneRgb: 123 },
+              },
+            ],
+          },
         },
       },
     },
@@ -276,7 +290,7 @@ test("removeSearchExpressionNode removes leaf paths and dissolves one-child grou
   );
 });
 
-test("setSearchExpressionGroupOperator merges a group into its parent when operators match", () => {
+test("setSearchExpressionGroupOperator preserves a subgroup when operators match its parent", () => {
   const expression = {
     type: "group",
     operator: "or",
@@ -297,8 +311,14 @@ test("setSearchExpressionGroupOperator merges a group into its parent when opera
     type: "group",
     operator: "or",
     children: [
-      { type: "term", term: { kind: "fish", fishId: 912 } },
-      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+      {
+        type: "group",
+        operator: "or",
+        children: [
+          { type: "term", term: { kind: "fish", fishId: 912 } },
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+        ],
+      },
       { type: "term", term: { kind: "fish-filter", term: "favourite" } },
     ],
   });
@@ -401,13 +421,19 @@ test("moveSearchExpressionNodeToGroup moves a nested subgroup into another group
       type: "group",
       operator: "or",
       children: [
-        { type: "term", term: { kind: "zone", zoneRgb: 123 } },
         {
           type: "group",
-          operator: "and",
+          operator: "or",
           children: [
-            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
           ],
         },
       ],
@@ -476,16 +502,22 @@ test("moveSearchExpressionNodeToIndex inserts a subgroup at the requested child 
       type: "group",
       operator: "or",
       children: [
-        { type: "term", term: { kind: "zone", zoneRgb: 123 } },
         {
           type: "group",
-          operator: "and",
+          operator: "or",
           children: [
-            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
+            { type: "term", term: { kind: "semantic", layerId: "regions", fieldId: 22 } },
           ],
         },
-        { type: "term", term: { kind: "semantic", layerId: "regions", fieldId: 22 } },
       ],
     },
   );
@@ -518,13 +550,19 @@ test("groupSearchExpressionNodes wraps a subgroup with another term into a new s
       type: "group",
       operator: "or",
       children: [
-        { type: "term", term: { kind: "zone", zoneRgb: 123 } },
         {
           type: "group",
-          operator: "and",
+          operator: "or",
           children: [
-            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            {
+              type: "group",
+              operator: "and",
+              children: [
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+              ],
+            },
           ],
         },
         { type: "term", term: { kind: "semantic", layerId: "regions", fieldId: 22 } },

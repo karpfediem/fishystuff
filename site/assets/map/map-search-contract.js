@@ -276,12 +276,7 @@ function compactSearchExpressionNode(node, { isRoot = false } = {}) {
   const operator = normalizeSearchExpressionOperator(clonedNode.operator);
   const children = clonedNode.children
     .map((child) => compactSearchExpressionNode(child))
-    .filter(Boolean)
-    .flatMap((child) =>
-      child?.type === "group" && normalizeSearchExpressionOperator(child.operator) === operator
-        ? child.children.map((grandchild) => cloneSearchExpressionNode(grandchild)).filter(Boolean)
-        : [child],
-    );
+    .filter(Boolean);
   if (!isRoot && children.length === 0) {
     return null;
   }
@@ -820,6 +815,10 @@ export function groupSearchExpressionNodes(expression, sourcePath, targetPath, o
 
 export function selectedSearchTermsFromLegacyFilters(filters) {
   const source = isPlainObject(filters) ? filters : {};
+  const searchExpression = normalizeSearchExpression(source.searchExpression);
+  if (searchExpression) {
+    return selectedSearchTermsFromExpression(searchExpression);
+  }
   const terms = [];
   for (const term of normalizeFishFilterTerms(source.fishFilterTerms)) {
     terms.push({ kind: "fish-filter", term });
@@ -851,6 +850,10 @@ export function selectedSearchTermsFromLegacyFilters(filters) {
 export function resolveSearchExpression(expression, selectedTerms = undefined, legacyFilters = null) {
   if (expression !== undefined) {
     return normalizeSearchExpression(expression) || buildSearchExpressionFromSelectedTerms([]);
+  }
+  const legacyExpression = normalizeSearchExpression(legacyFilters?.searchExpression);
+  if (legacyExpression) {
+    return legacyExpression;
   }
   return buildSearchExpressionFromSelectedTerms(
     resolveSelectedSearchTerms(selectedTerms, legacyFilters),
@@ -948,6 +951,7 @@ export function buildSearchExpressionStatePatch(expression, searchPatch = null) 
         zoneRgbs: projection.zoneRgbs,
         semanticFieldIdsByLayer: projection.semanticFieldIdsByLayer,
         fishFilterTerms: projection.fishFilterTerms,
+        searchExpression: normalizedExpression,
       },
     },
   };

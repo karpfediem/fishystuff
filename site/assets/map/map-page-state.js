@@ -102,6 +102,14 @@ function stripQueryOwnedRestoreFields(patch, locationHref) {
     if (params.has("fishTerms") || params.has("fishFilterTerms")) {
       delete bridgedFilters.fishFilterTerms;
     }
+    if (
+      params.has("focusFish") ||
+      params.has("fish") ||
+      params.has("fishTerms") ||
+      params.has("fishFilterTerms")
+    ) {
+      delete bridgedFilters.searchExpression;
+    }
     if (params.has("layers") || params.has("layerSet")) {
       delete bridgedFilters.layerIdsVisible;
     }
@@ -187,6 +195,7 @@ function storedUiSignals(signals) {
         fishFilterTerms: Array.isArray(bridgedFilters?.fishFilterTerms)
           ? cloneJson(bridgedFilters.fishFilterTerms)
           : [],
+        searchExpression: cloneJson(searchExpression),
         patchId: bridgedFilters?.patchId ?? null,
         fromPatchId: bridgedFilters?.fromPatchId ?? null,
         toPatchId: bridgedFilters?.toPatchId ?? null,
@@ -273,6 +282,7 @@ function uiStorageSnapshot(stored) {
       fishFilterTerms: Array.isArray(bridgedFilters.fishFilterTerms)
         ? cloneJson(bridgedFilters.fishFilterTerms)
         : [],
+      searchExpression: cloneJson(searchExpression),
       patchId: bridgedFilters.patchId == null ? null : String(bridgedFilters.patchId),
       fromPatchId: bridgedFilters.fromPatchId == null ? null : String(bridgedFilters.fromPatchId),
       toPatchId: bridgedFilters.toPatchId == null ? null : String(bridgedFilters.toPatchId),
@@ -374,6 +384,13 @@ function restoreUiPatch(parsed) {
     };
   }
   if (bridgedFilters) {
+    const bridgedSearchExpression = resolveSearchExpression(
+      Object.prototype.hasOwnProperty.call(bridgedFilters, "searchExpression")
+        ? bridgedFilters.searchExpression
+        : undefined,
+      undefined,
+      bridgedFilters,
+    );
     patch._map_bridged = patch._map_bridged || {};
     patch._map_bridged.filters = {
       fishIds: Array.isArray(bridgedFilters.fishIds) ? cloneJson(bridgedFilters.fishIds) : [],
@@ -384,6 +401,7 @@ function restoreUiPatch(parsed) {
       fishFilterTerms: Array.isArray(bridgedFilters.fishFilterTerms)
         ? cloneJson(bridgedFilters.fishFilterTerms)
         : [],
+      searchExpression: cloneJson(bridgedSearchExpression),
       patchId: bridgedFilters.patchId == null ? null : String(bridgedFilters.patchId),
       fromPatchId: bridgedFilters.fromPatchId == null ? null : String(bridgedFilters.fromPatchId),
       toPatchId: bridgedFilters.toPatchId == null ? null : String(bridgedFilters.toPatchId),
@@ -469,7 +487,9 @@ function ensureUiSnapshot(stored) {
           viewMode: "2d",
           pointIconScale: 1,
         },
-        bridgedFilters: {},
+        bridgedFilters: {
+          searchExpression: cloneJson(EMPTY_SEARCH_EXPRESSION),
+        },
       };
 }
 

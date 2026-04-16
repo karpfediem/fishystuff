@@ -55,6 +55,7 @@ function normalizeProjectedFilters(value) {
     zoneRgbs: normalizeIntegerList(source.zoneRgbs),
     semanticFieldIdsByLayer: normalizeSemanticFieldIdsByLayer(source.semanticFieldIdsByLayer),
     fishFilterTerms: normalizeFishFilterTerms(source.fishFilterTerms),
+    searchExpression: resolveSearchExpression(source.searchExpression),
   };
 }
 
@@ -71,6 +72,7 @@ function projectedFiltersJson(filters) {
     zoneRgbs: normalized.zoneRgbs,
     semanticFieldIdsByLayer,
     fishFilterTerms: normalized.fishFilterTerms,
+    searchExpression: normalized.searchExpression,
   });
 }
 
@@ -79,7 +81,10 @@ export function resolveSearchProjection(signals) {
   const filters = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
   const expression = resolveSearchExpression(search.expression, search.selectedTerms, filters);
   const selectedTerms = resolveSelectedSearchTerms(search.selectedTerms, filters, expression);
-  return normalizeProjectedFilters(projectSelectedSearchTermsToBridgedFilters(selectedTerms));
+  return normalizeProjectedFilters({
+    ...projectSelectedSearchTermsToBridgedFilters(selectedTerms),
+    searchExpression: expression,
+  });
 }
 
 export function buildSearchProjectionSignalPatch(signals) {

@@ -37,6 +37,16 @@ test("parseQuerySignalPatch maps page-owned and bridged query params into signal
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["missing", "yellow", "blue"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 91 } },
+            { type: "term", term: { kind: "fish-filter", term: "missing" } },
+            { type: "term", term: { kind: "fish-filter", term: "yellow" } },
+            { type: "term", term: { kind: "fish-filter", term: "blue" } },
+          ],
+        },
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
         layerIdsVisible: ["zones", "terrain"],
@@ -71,6 +81,11 @@ test("parseQuerySignalPatch prefers focusFish and patch when present", () => {
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "fish", fishId: 820986 } }],
+        },
         patchId: "2026-02-26",
       },
     },
@@ -106,6 +121,14 @@ test("parseQuerySignalPatch supports multiple fish selectors and defers fish-nam
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish", fishId: 91 } },
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+          ],
+        },
       },
     },
   });

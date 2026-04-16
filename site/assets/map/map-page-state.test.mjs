@@ -122,6 +122,11 @@ test("map-page-state createPersistedState captures durable map branches", () => 
       zoneRgbs: [],
       semanticFieldIdsByLayer: {},
       fishFilterTerms: [],
+      searchExpression: {
+        type: "group",
+        operator: "or",
+        children: [{ type: "term", term: { kind: "fish", fishId: 77 } }],
+      },
       patchId: null,
       fromPatchId: null,
       toPatchId: null,

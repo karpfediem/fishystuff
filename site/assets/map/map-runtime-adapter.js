@@ -198,6 +198,7 @@ export function buildBridgeInputPatchFromSignals(signals, options = {}) {
       zoneRgbs: cloneJson(filters.zoneRgbs),
       semanticFieldIdsByLayer: cloneJson(filters.semanticFieldIdsByLayer),
       fishFilterTerms: cloneJson(filters.fishFilterTerms),
+      searchExpression: cloneJson(filters.searchExpression),
       patchId: filters.patchId,
       fromPatchId: filters.fromPatchId,
       toPatchId: filters.toPatchId,

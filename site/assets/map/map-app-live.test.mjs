@@ -114,6 +114,11 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
           zone_mask: [123456],
         },
         fishFilterTerms: [],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "zone", zoneRgb: 123456 } }],
+        },
       },
     },
   });

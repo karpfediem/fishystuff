@@ -60,6 +60,7 @@ export const MAP_BRIDGE_SHARED_SIGNAL_WHITELIST = Object.freeze({
       "zoneRgbs",
       "semanticFieldIdsByLayer",
       "fishFilterTerms",
+      "searchExpression",
       "patchId",
       "fromPatchId",
       "toPatchId",
@@ -132,6 +133,7 @@ export const DEFAULT_MAP_BRIDGED_SIGNAL_STATE = Object.freeze({
     zoneRgbs: [],
     semanticFieldIdsByLayer: {},
     fishFilterTerms: [],
+    searchExpression: EMPTY_SEARCH_EXPRESSION,
     patchId: null,
     fromPatchId: null,
     toPatchId: null,
@@ -394,6 +396,13 @@ export function normalizeMapBridgedSignalState(raw) {
       zoneRgbs: cloneJsonValue(current.filters?.zoneRgbs || []),
       semanticFieldIdsByLayer: cloneJsonValue(current.filters?.semanticFieldIdsByLayer || {}),
       fishFilterTerms: cloneJsonValue(current.filters?.fishFilterTerms || []),
+      searchExpression: resolveSearchExpression(
+        rawFilters && hasOwnKey(rawFilters, "searchExpression")
+          ? rawFilters.searchExpression
+          : undefined,
+        undefined,
+        current.filters,
+      ),
       patchId: fromPatchId || toPatchId ? null : normalizeNullableString(current.filters?.patchId),
       fromPatchId,
       toPatchId,

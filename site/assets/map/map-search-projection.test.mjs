@@ -32,6 +32,15 @@ test("resolveSearchProjection derives bridged filters from selected terms", () =
         zone_mask: [123],
       },
       fishFilterTerms: ["favourite"],
+      searchExpression: {
+        type: "group",
+        operator: "or",
+        children: [
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          { type: "term", term: { kind: "semantic", layerId: "regions", fieldId: 430 } },
+          { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+        ],
+      },
     },
   );
 });
@@ -60,14 +69,19 @@ test("buildSearchProjectionSignalPatch clears stale bridged search filters", () 
           zoneRgbs: [],
           semanticFieldIdsByLayer: {},
           fishFilterTerms: [],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [],
+          },
         },
       },
     },
   );
 });
 
-test("buildSearchProjectionSignalPatch returns null when bridged filters already match", () => {
-  assert.equal(
+test("buildSearchProjectionSignalPatch fills in a missing bridged search expression", () => {
+  assert.deepEqual(
     buildSearchProjectionSignalPatch({
       _map_ui: {
         search: {
@@ -83,6 +97,20 @@ test("buildSearchProjectionSignalPatch returns null when bridged filters already
         },
       },
     }),
-    null,
+    {
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: [],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+          },
+        },
+      },
+    },
   );
 });

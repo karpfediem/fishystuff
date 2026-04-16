@@ -294,6 +294,11 @@ test("buildSearchMatchSignalPatch updates bridged filters and closes the dropdow
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: [],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+        },
       },
     },
   });
@@ -363,6 +368,18 @@ test("buildSearchMatchSignalPatch preserves nested expression groups when append
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
         fishFilterTerms: ["favourite"],
+        searchExpression: {
+          type: "group",
+          operator: "or",
+          children: [
+            {
+              type: "group",
+              operator: "and",
+              children: [{ type: "term", term: { kind: "fish-filter", term: "favourite" } }],
+            },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+          ],
+        },
       },
     },
   });
@@ -463,13 +480,21 @@ test("buildSearchSelectionRemovalSignalPatch removes by expression path without 
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            ],
+          },
         },
       },
     },
   );
 });
 
-test("buildSearchExpressionOperatorSignalPatch merges into the parent when separator rewrite matches it", () => {
+test("buildSearchExpressionOperatorSignalPatch preserves the subgroup when operators match", () => {
   const signals = {
     ...baseSignals(),
     _map_ui: {
@@ -508,8 +533,14 @@ test("buildSearchExpressionOperatorSignalPatch merges into the parent when separ
             type: "group",
             operator: "or",
             children: [
-              { type: "term", term: { kind: "fish", fishId: 912 } },
-              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+              {
+                type: "group",
+                operator: "or",
+                children: [
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                ],
+              },
               { type: "term", term: { kind: "fish-filter", term: "favourite" } },
             ],
           },
@@ -526,6 +557,21 @@ test("buildSearchExpressionOperatorSignalPatch merges into the parent when separ
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "or",
+                children: [
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                ],
+              },
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            ],
+          },
         },
       },
     },
@@ -589,6 +635,21 @@ test("buildSearchExpressionOperatorSignalPatch rewrites only the clicked separat
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                ],
+              },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            ],
+          },
         },
       },
     },
@@ -652,6 +713,20 @@ test("buildSearchExpressionDragSignalPatch moves a term into a target group", ()
           zoneRgbs: [],
           semanticFieldIdsByLayer: {},
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                ],
+              },
+            ],
+          },
         },
       },
     },
@@ -715,6 +790,21 @@ test("buildSearchExpressionDragSignalPatch groups a dragged term with a target t
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                ],
+              },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            ],
+          },
         },
       },
     },
@@ -763,13 +853,19 @@ test("buildSearchExpressionDragSignalPatch moves a dragged subgroup into another
             type: "group",
             operator: "or",
             children: [
-              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
               {
                 type: "group",
-                operator: "and",
+                operator: "or",
                 children: [
-                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                  {
+                    type: "group",
+                    operator: "and",
+                    children: [
+                      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                      { type: "term", term: { kind: "fish", fishId: 912 } },
+                    ],
+                  },
                 ],
               },
             ],
@@ -787,6 +883,27 @@ test("buildSearchExpressionDragSignalPatch moves a dragged subgroup into another
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "or",
+                children: [
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                  {
+                    type: "group",
+                    operator: "and",
+                    children: [
+                      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                      { type: "term", term: { kind: "fish", fishId: 912 } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
         },
       },
     },
@@ -832,13 +949,19 @@ test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a targ
             type: "group",
             operator: "or",
             children: [
-              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
               {
                 type: "group",
-                operator: "and",
+                operator: "or",
                 children: [
-                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-                  { type: "term", term: { kind: "fish", fishId: 912 } },
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                  {
+                    type: "group",
+                    operator: "and",
+                    children: [
+                      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                      { type: "term", term: { kind: "fish", fishId: 912 } },
+                    ],
+                  },
                 ],
               },
             ],
@@ -856,6 +979,27 @@ test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a targ
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "or",
+                children: [
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                  {
+                    type: "group",
+                    operator: "and",
+                    children: [
+                      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                      { type: "term", term: { kind: "fish", fishId: 912 } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
         },
       },
     },
@@ -913,6 +1057,15 @@ test("buildSearchExpressionDragSignalPatch reorders a dragged node by group slot
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+            ],
+          },
         },
       },
     },
@@ -981,6 +1134,20 @@ test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a targ
           zoneRgbs: [123],
           semanticFieldIdsByLayer: { zone_mask: [123] },
           fishFilterTerms: ["favourite"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                ],
+              },
+            ],
+          },
         },
       },
     },
