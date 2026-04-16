@@ -1,5 +1,7 @@
 import {
   loadRestoreState,
+  loadSharedFishRestoreState,
+  SHARED_FISH_STORAGE_KEYS,
 } from "./map-page-state.js";
 import {
   applyMapPageSignalsPatch,
@@ -23,6 +25,7 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     restoreResolved: false,
     restorePromise: null,
     resolveRestore: null,
+    sharedFishSyncBound: false,
   };
   state.restorePromise = new Promise((resolve) => {
     state.resolveRestore = resolve;
@@ -88,6 +91,48 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
     applyPatch(state.liveSignals, patch);
   }
 
+  function refreshSharedFishSignals() {
+    patchSignals(loadSharedFishRestoreState({ localStorage: globalRef.localStorage }));
+  }
+
+  function shouldRefreshSharedFishFromStorageEvent(event) {
+    if (!event || typeof event !== "object") {
+      return false;
+    }
+    if (event.storageArea && event.storageArea !== globalRef.localStorage) {
+      return false;
+    }
+    return (
+      event.key == null
+      || event.key === SHARED_FISH_STORAGE_KEYS.caught
+      || event.key === SHARED_FISH_STORAGE_KEYS.favourites
+    );
+  }
+
+  function bindSharedFishSync() {
+    if (state.liveSignals == null || state.sharedFishSyncBound === true) {
+      return;
+    }
+    const handleStorage = (event) => {
+      if (!shouldRefreshSharedFishFromStorageEvent(event)) {
+        return;
+      }
+      refreshSharedFishSignals();
+    };
+    const handleVisibility = () => {
+      const visibilityState = globalRef.document?.visibilityState;
+      if (visibilityState && visibilityState !== "visible") {
+        return;
+      }
+      refreshSharedFishSignals();
+    };
+    globalRef.addEventListener?.("storage", handleStorage);
+    globalRef.addEventListener?.("focus", handleVisibility);
+    globalRef.addEventListener?.("pageshow", handleVisibility);
+    globalRef.document?.addEventListener?.("visibilitychange", handleVisibility);
+    state.sharedFishSyncBound = true;
+  }
+
   function restore(signals) {
     connect(signals);
     const restoreState = loadRestoreState({
@@ -106,6 +151,7 @@ export function createMapPageLive({ globalRef = globalThis } = {}) {
       patchSignals(restoreState.sessionPatch);
     }
     state.uiStateRestored = true;
+    bindSharedFishSync();
     if (!state.restoreResolved) {
       state.restoreResolved = true;
       state.resolveRestore?.();

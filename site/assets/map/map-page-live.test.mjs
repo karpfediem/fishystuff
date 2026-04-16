@@ -61,6 +61,7 @@ function createEventTarget() {
 function createDocumentStub(shell = null) {
   return {
     ...createEventTarget(),
+    visibilityState: "visible",
     getElementById(id) {
       if (id === "map-page-shell") {
         return shell;
@@ -82,9 +83,11 @@ function createContext(localStorageInitial = {}, options = {}) {
   const location = {
     href: options.locationHref || "https://fishystuff.fish/map/",
   };
+  const globalEvents = createEventTarget();
   const timers = new Map();
   let nextTimerId = 1;
   const globalRef = {
+    ...globalEvents,
     document,
     location,
     localStorage,
@@ -234,6 +237,24 @@ test("map-page-live restore loads shared fish state without the site-global help
 
   assert.deepEqual(signals._shared_fish.caughtIds, [5, 912]);
   assert.deepEqual(signals._shared_fish.favouriteIds, [77]);
+});
+
+test("map-page-live refreshes shared fish state from storage events after restore", () => {
+  const env = createContext();
+  const signals = defaultSignals();
+
+  dispatchLiveInit(env, signals);
+
+  env.localStorage.setItem("fishystuff.fishydex.caught.v1", JSON.stringify([77, 912]));
+  env.localStorage.setItem("fishystuff.fishydex.favourites.v1", JSON.stringify([912]));
+  env.globalRef.dispatchEvent({
+    type: "storage",
+    key: "fishystuff.fishydex.caught.v1",
+    storageArea: env.localStorage,
+  });
+
+  assert.deepEqual(signals._shared_fish.caughtIds, [77, 912]);
+  assert.deepEqual(signals._shared_fish.favouriteIds, [912]);
 });
 
 test("map-page-live exposes direct signal patching on the page controller", () => {

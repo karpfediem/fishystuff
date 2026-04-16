@@ -638,7 +638,8 @@ function readPersistedLayerPointIconScales(filters) {
   return Object.keys(values).length ? values : undefined;
 }
 
-function normalizeFishIds(values) {
+function normalizeFishIds(values, options = {}) {
+  const allowNoMatchSentinel = options.allowNoMatchSentinel === true;
   let ids = [];
   if (Array.isArray(values)) {
     ids = values;
@@ -653,7 +654,12 @@ function normalizeFishIds(values) {
   const seen = new Set();
   for (const value of ids) {
     const number = Number.parseInt(value, 10);
-    if (!Number.isFinite(number) || number <= 0 || seen.has(number)) {
+    if (
+      !Number.isFinite(number) ||
+      seen.has(number) ||
+      (number <= 0 &&
+        !(allowNoMatchSentinel && number === FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID))
+    ) {
       continue;
     }
     seen.add(number);
@@ -713,9 +719,23 @@ function resolveFishGradeFilterTerm(fish) {
   return "";
 }
 
+function resolveFishIdentityIds(fish) {
+  const ids = [];
+  const seen = new Set();
+  for (const value of [fish?.fishId, fish?.itemId]) {
+    const id = Number.parseInt(value, 10);
+    if (!Number.isInteger(id) || id <= 0 || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
 function fishMatchesSharedFilterTerms(fish, filterTerms, sharedFishState) {
-  const fishId = Number.parseInt(fish?.fishId ?? fish?.itemId, 10);
-  if (!Number.isFinite(fishId) || fishId <= 0) {
+  const fishIdentityIds = resolveFishIdentityIds(fish);
+  if (!fishIdentityIds.length) {
     return false;
   }
   const selectedGradeTerms = filterTerms.filter((term) => FISHYMAP_GRADE_FISH_FILTER_TERMS.has(term));
@@ -729,10 +749,16 @@ function fishMatchesSharedFilterTerms(fish, filterTerms, sharedFishState) {
     if (FISHYMAP_GRADE_FISH_FILTER_TERMS.has(term)) {
       continue;
     }
-    if (term === "favourite" && !sharedFishState.favouriteSet.has(fishId)) {
+    if (
+      term === "favourite" &&
+      !fishIdentityIds.some((fishId) => sharedFishState.favouriteSet.has(fishId))
+    ) {
       return false;
     }
-    if (term === "missing" && sharedFishState.caughtSet.has(fishId)) {
+    if (
+      term === "missing" &&
+      fishIdentityIds.some((fishId) => sharedFishState.caughtSet.has(fishId))
+    ) {
       return false;
     }
   }
@@ -795,13 +821,18 @@ function buildEffectiveOutboundStatePatch(
   if (!shouldOverrideFishIds) {
     return normalized;
   }
-  return normalizeStatePatch({
+  return {
     ...normalized,
     filters: {
       ...(normalizedFilters || {}),
-      fishIds: resolveEffectiveFishIdsForWasm(inputState, currentState),
+      fishIds: normalizeFishIds(
+        resolveEffectiveFishIdsForWasm(inputState, currentState),
+        {
+          allowNoMatchSentinel: true,
+        },
+      ),
     },
-  });
+  };
 }
 
 function normalizeZoneRgbs(values) {
@@ -1942,12 +1973,16 @@ export function createSessionSnapshotFromState(stateInput) {
   const semanticSelection = semanticFieldSelectionFromLayerSamples(
     state.selection?.layerSamples,
   );
+  const selectedFishId = normalizeFishIds([
+    state.selection?.fishId,
+    state.filters?.fishIds?.[0],
+  ])[0] ?? null;
   return {
     version: FISHYMAP_CONTRACT_VERSION,
     savedAt: new Date().toISOString(),
     view: state.view,
     selection: {
-      fishId: state.selection?.fishId ?? state.filters?.fishIds?.[0] ?? null,
+      fishId: selectedFishId,
       zoneRgb: zoneRgbFromLayerSamples(state.selection?.layerSamples),
       semanticLayerId: semanticSelection?.layerId ?? null,
       semanticFieldId: semanticSelection?.fieldId ?? null,

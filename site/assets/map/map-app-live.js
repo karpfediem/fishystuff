@@ -83,6 +83,17 @@ function patchTouchesLiveBridgeInputs(patch) {
   );
 }
 
+function hasActiveFishFilterTerms(signals) {
+  return Array.isArray(signals?._map_bridged?.filters?.fishFilterTerms)
+    && signals._map_bridged.filters.fishFilterTerms.length > 0;
+}
+
+export function shouldRefreshBridgeFromRuntimeEvent(signals, eventDetail) {
+  return hasActiveFishFilterTerms(signals)
+    && isPlainObject(eventDetail?.state)
+    && "catalog" in eventDetail.state;
+}
+
 function buildResetUiPatch() {
   return {
     _map_ui: cloneJson(DEFAULT_MAP_UI_SIGNAL_STATE),
@@ -241,12 +252,12 @@ export async function start() {
     }
   }
 
-  function patchBridgeFromSignals() {
+  function patchBridgeFromSignals(currentStateOverride = null) {
     if (!mounted || syncingFromBridge) {
       return;
     }
     const patch = app.nextBridgePatch(signals(), {
-      currentState: currentBridgeState(),
+      currentState: isPlainObject(currentStateOverride) ? currentStateOverride : currentBridgeState(),
     });
     const patchJson = JSON.stringify(patch);
     if (patchJson === lastBridgePatchJson) {
@@ -285,6 +296,9 @@ export async function start() {
   function handleBridgeStateEvent(event) {
     const snapshot = resolveBridgeSnapshot(event?.detail, currentBridgeState);
     patchSignalsFromBridge(snapshot);
+    if (shouldRefreshBridgeFromRuntimeEvent(signals(), event?.detail)) {
+      patchBridgeFromSignals(snapshot);
+    }
   }
 
   shell.addEventListener("fishymap:ready", handleBridgeStateEvent);
@@ -358,12 +372,9 @@ export async function start() {
   });
   mounted = true;
   actionState = app.consumeSignals(signals());
-  lastBridgePatchJson = JSON.stringify(
-    app.nextBridgePatch(signals(), {
-      currentState: currentBridgeState(),
-    }),
-  );
+  lastBridgePatchJson = JSON.stringify(initialPatch);
   patchSignalsFromBridge(currentBridgeState());
+  patchBridgeFromSignals(currentBridgeState());
   void loadZoneCatalog().then((zoneCatalog) => {
     dispatchShellZoneCatalogReadyEvent(shell, zoneCatalog);
   });

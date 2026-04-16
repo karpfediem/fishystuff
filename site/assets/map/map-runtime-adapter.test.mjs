@@ -92,6 +92,7 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
     regions: [11],
     zone_mask: [123456],
   });
+  assert.deepEqual(patch.filters.fishFilterTerms, []);
   assert.equal(patch.filters.patchId, "p1");
   assert.equal(patch.filters.fromPatchId, "a");
   assert.equal(patch.filters.toPatchId, "b");
@@ -105,6 +106,10 @@ test("buildBridgeInputPatchFromSignals projects only bridge-relevant state", () 
     { id: "bookmark-a", label: "Cron", worldX: 12.5, worldZ: 34.5 },
     { id: "bookmark-b", worldX: 1, worldZ: 2 },
   ]);
+  assert.deepEqual(patch.ui.sharedFishState, {
+    caughtIds: [5],
+    favouriteIds: [77],
+  });
   assert.equal("searchText" in patch.filters, false);
   assert.equal("legendOpen" in patch.ui, false);
   assert.equal("leftPanelOpen" in patch.ui, false);
@@ -152,7 +157,12 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
     zone_mask: [123456],
   });
   assert.deepEqual(patch.filters.fishIds, [912]);
+  assert.deepEqual(patch.filters.fishFilterTerms, ["favourite"]);
   assert.deepEqual(patch.filters.zoneMembershipLayerIds, []);
+  assert.deepEqual(patch.ui.sharedFishState, {
+    caughtIds: [],
+    favouriteIds: [912],
+  });
 });
 
 test("buildBridgeInputPatchFromSignals derives zone-membership clipping from attached layers", () => {
@@ -188,6 +198,10 @@ test("buildBridgeInputPatchFromSignals derives zone-membership clipping from att
     fish_evidence: "zone_mask",
     regions: "zone_mask",
   });
+  assert.deepEqual(patch.ui.sharedFishState, {
+    caughtIds: [],
+    favouriteIds: [],
+  });
 });
 
 test("buildBridgeInputPatchFromSignals ignores transitional control filters", () => {
@@ -209,6 +223,7 @@ test("buildBridgeInputPatchFromSignals ignores transitional control filters", ()
   assert.deepEqual(patch.filters.fishIds, []);
   assert.deepEqual(patch.filters.zoneRgbs, []);
   assert.deepEqual(patch.filters.semanticFieldIdsByLayer, {});
+  assert.deepEqual(patch.filters.fishFilterTerms, []);
   assert.equal(patch.filters.patchId, null);
 });
 

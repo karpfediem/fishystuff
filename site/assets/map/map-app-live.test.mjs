@@ -5,6 +5,7 @@ const {
   createDeferredBridgeStateRefresher,
   deferAfterAnimationFrames,
   resolveBridgeSnapshot,
+  shouldRefreshBridgeFromRuntimeEvent,
   startWhenDomReady,
   start,
 } = await import("./map-app-live.js");
@@ -116,6 +117,64 @@ test("buildSearchProjectionPatchForSignalPatch projects selected search terms ag
       },
     },
   });
+});
+
+test("shouldRefreshBridgeFromRuntimeEvent reruns bridge projection when runtime catalog changes under fish filter terms", () => {
+  assert.equal(
+    shouldRefreshBridgeFromRuntimeEvent(
+      {
+        _map_bridged: {
+          filters: {
+            fishFilterTerms: ["missing"],
+          },
+        },
+      },
+      {
+        state: {
+          catalog: {
+            fish: [{ fishId: 77 }],
+          },
+        },
+      },
+    ),
+    true,
+  );
+  assert.equal(
+    shouldRefreshBridgeFromRuntimeEvent(
+      {
+        _map_bridged: {
+          filters: {
+            fishFilterTerms: [],
+          },
+        },
+      },
+      {
+        state: {
+          catalog: {
+            fish: [{ fishId: 77 }],
+          },
+        },
+      },
+    ),
+    false,
+  );
+  assert.equal(
+    shouldRefreshBridgeFromRuntimeEvent(
+      {
+        _map_bridged: {
+          filters: {
+            fishFilterTerms: [],
+          },
+        },
+      },
+      {
+        state: {
+          ready: true,
+        },
+      },
+    ),
+    false,
+  );
 });
 
 test("createDeferredBridgeStateRefresher refreshes once on the next frame", () => {

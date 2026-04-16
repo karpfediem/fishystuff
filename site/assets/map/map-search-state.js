@@ -326,12 +326,26 @@ function resolveFishGradeFilterTerm(fish) {
   return "";
 }
 
+function resolveFishIdentityIds(fish) {
+  const ids = [];
+  const seen = new Set();
+  for (const value of [fish?.fishId, fish?.itemId]) {
+    const id = Number.parseInt(value, 10);
+    if (!Number.isInteger(id) || id <= 0 || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
 function fishMatchesFilterTerms(fish, filterTerms, sharedFishState) {
   if (!filterTerms.length) {
     return true;
   }
-  const fishId = Number.parseInt(fish?.fishId ?? fish?.itemId, 10);
-  if (!Number.isInteger(fishId) || fishId <= 0) {
+  const fishIdentityIds = resolveFishIdentityIds(fish);
+  if (!fishIdentityIds.length) {
     return false;
   }
   const selectedGradeTerms = filterTerms.filter((term) => FISH_GRADE_FILTER_TERMS.has(term));
@@ -345,10 +359,16 @@ function fishMatchesFilterTerms(fish, filterTerms, sharedFishState) {
     if (FISH_GRADE_FILTER_TERMS.has(term)) {
       continue;
     }
-    if (term === "favourite" && !sharedFishState?.favouriteSet?.has(fishId)) {
+    if (
+      term === "favourite" &&
+      !fishIdentityIds.some((fishId) => sharedFishState?.favouriteSet?.has(fishId))
+    ) {
       return false;
     }
-    if (term === "missing" && sharedFishState?.caughtSet?.has(fishId)) {
+    if (
+      term === "missing" &&
+      fishIdentityIds.some((fishId) => sharedFishState?.caughtSet?.has(fishId))
+    ) {
       return false;
     }
   }

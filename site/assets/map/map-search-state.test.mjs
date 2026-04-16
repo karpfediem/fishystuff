@@ -133,6 +133,88 @@ test("buildSearchMatches treats multiple selected grade filters as an OR group",
   );
 });
 
+test("buildSearchMatches matches favourites through fish item ids", () => {
+  const bundle = buildSearchPanelStateBundle({
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        selectedTerms: [{ kind: "fish-filter", term: "favourite" }],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["favourite"],
+      },
+    },
+    _map_runtime: {
+      ready: true,
+      catalog: {
+        fish: [
+          { fishId: 235, itemId: 820986, name: "Pink Dolphin", grade: "Prize", isPrize: true },
+          { fishId: 77, itemId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
+        ],
+        semanticTerms: [],
+      },
+    },
+    _shared_fish: {
+      caughtIds: [],
+      favouriteIds: [820986],
+    },
+  });
+
+  assert.deepEqual(
+    buildSearchMatches(bundle, "")
+      .filter((match) => match.kind === "fish")
+      .map((match) => match.fishId),
+    [235],
+  );
+});
+
+test("buildSearchMatches excludes caught fish through item ids for missing filters", () => {
+  const bundle = buildSearchPanelStateBundle({
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        selectedTerms: [{ kind: "fish-filter", term: "missing" }],
+      },
+    },
+    _map_bridged: {
+      filters: {
+        fishIds: [],
+        semanticFieldIdsByLayer: {},
+        fishFilterTerms: ["missing"],
+      },
+    },
+    _map_runtime: {
+      ready: true,
+      catalog: {
+        fish: [
+          { fishId: 235, itemId: 820986, name: "Pink Dolphin", grade: "Prize", isPrize: true },
+          { fishId: 77, itemId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
+        ],
+        semanticTerms: [],
+      },
+    },
+    _shared_fish: {
+      caughtIds: [820986],
+      favouriteIds: [],
+    },
+  });
+
+  assert.deepEqual(
+    buildSearchMatches(bundle, "")
+      .filter((match) => match.kind === "fish")
+      .map((match) => match.fishId),
+    [77],
+  );
+});
+
 test("buildSearchMatches returns matched zones instead of dropping zone-name queries", () => {
   const bundle = buildSearchPanelStateBundle({
     ...baseSignals(),

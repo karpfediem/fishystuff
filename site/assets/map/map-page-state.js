@@ -488,6 +488,10 @@ function buildSharedFishRestorePatch(localStorage) {
   };
 }
 
+export function loadSharedFishRestoreState({ localStorage } = {}) {
+  return buildSharedFishRestorePatch(localStorage);
+}
+
 export function loadRestoreState({
   localStorage,
   sessionStorage,
@@ -534,7 +538,7 @@ export function loadRestoreState({
     sessionPatch = null;
   }
   return {
-    sharedFishPatch: buildSharedFishRestorePatch(localStorage),
+    sharedFishPatch: loadSharedFishRestoreState({ localStorage }),
     uiPatch,
     bookmarkPatch,
     sessionPatch,

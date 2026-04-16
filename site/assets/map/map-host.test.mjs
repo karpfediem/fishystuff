@@ -6,12 +6,14 @@ import {
   applyStatePatch,
   buildInitialRestorePatch,
   createFishyMapBridge,
+  createSessionSnapshotFromState,
   extractThemeSnapshot,
   mergeStatePatch,
   normalizeStatePatch,
   parseQueryState,
   resolveApiBaseUrl,
   resolveCdnBaseUrl,
+  resolveEffectiveFishIdsForWasm,
   resolveMapRuntimeManifestUrl,
 } from "./map-host.js";
 
@@ -570,6 +572,115 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     });
     assert.equal(wasm.calls.applied.length, 1);
     assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [912]);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
+test("shared fish filters match catalog fish through item ids", () => {
+  const currentState = {
+    catalog: {
+      fish: [
+        { fishId: 235, itemId: 820986, name: "Pink Dolphin", grade: "Prize", isPrize: true },
+        { fishId: 77, itemId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
+      ],
+    },
+  };
+
+  assert.deepEqual(
+    resolveEffectiveFishIdsForWasm(
+      {
+        filters: {
+          fishFilterTerms: ["favourite"],
+        },
+        ui: {
+          sharedFishState: {
+            caughtIds: [],
+            favouriteIds: [820986],
+          },
+        },
+      },
+      currentState,
+    ),
+    [235],
+  );
+
+  assert.deepEqual(
+    resolveEffectiveFishIdsForWasm(
+      {
+        filters: {
+          fishFilterTerms: ["missing"],
+        },
+        ui: {
+          sharedFishState: {
+            caughtIds: [820986],
+            favouriteIds: [],
+          },
+        },
+      },
+      currentState,
+    ),
+    [77],
+  );
+});
+
+test("outbound fish filter no-match sentinel survives host normalization", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: {
+          capabilities: [],
+          layers: [],
+          patches: [],
+          fish: [
+            { fishId: 235, itemId: 820986, name: "Pink Dolphin", grade: "Prize", isPrize: true },
+          ],
+        },
+        statuses: {},
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      debounceMs: 0,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+    wasm.calls.applied.length = 0;
+
+    bridge.setState({
+      version: 1,
+      ui: {
+        sharedFishState: {
+          caughtIds: [820986],
+          favouriteIds: [],
+        },
+      },
+      filters: {
+        fishFilterTerms: ["missing"],
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishIds, []);
+    assert.equal(wasm.calls.applied.length, 1);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [-1]);
   } finally {
     bridge?.destroy();
     env.restore();
@@ -1928,6 +2039,19 @@ test("buildInitialRestorePatch ignores session semantic selection state", () => 
 
   assert.deepEqual(patch.filters || {}, {});
   assert.equal("commands" in patch, false);
+});
+
+test("session snapshots do not persist the no-match fish sentinel as a selection", () => {
+  const snapshot = createSessionSnapshotFromState({
+    version: 1,
+    filters: {
+      fishIds: [-1],
+    },
+    selection: {},
+    view: { viewMode: "2d", camera: {} },
+  });
+
+  assert.equal(snapshot.selection.fishId, null);
 });
 
 test("state patch normalizes selectWorldPoint commands", () => {
