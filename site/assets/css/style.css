@@ -310,7 +310,6 @@ body {
     min-width: 0;
     max-width: 100%;
     overflow: visible;
-    padding-top: 0.2rem;
     border: 1px solid color-mix(in oklab, var(--fishy-applied-term-grade) 48%, var(--color-base-300, #d6d3d1) 52%);
     border-radius: var(--radius-box, 1rem);
     background: var(--color-base-100, #fffdf4);
