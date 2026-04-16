@@ -184,6 +184,7 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.match(elements.searchSelection.innerHTML, /data-fish-filter-term="favourite"/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-id="235"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.1\.1"/);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.1\.1"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-bound="to"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-id="2026-03-12"/);
   assert.match(elements.searchSelection.innerHTML, /2026-03-12/);
@@ -248,6 +249,7 @@ test("renderSearchSelection renders an unresolved date term with an inline patch
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-select-path="root\.0"/);
   assert.match(elements.searchSelection.innerHTML, />Choose date</);
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.0"/);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.0"/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-patch-id=""/);
 });
 

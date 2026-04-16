@@ -137,3 +137,33 @@ test("buildAppliedSearchTermsView ignores empty groups", () => {
   assert.doesNotMatch(view.html, /data-expression-group-path="root"/);
   assert.match(view.html, /data-zone-rgb="123"/);
 });
+
+test("buildAppliedSearchTermsView can suppress term negation controls", () => {
+  const view = buildAppliedSearchTermsView({
+    type: "group",
+    path: "root",
+    operator: "or",
+    children: [
+      {
+        type: "term",
+        path: "root.0",
+        key: "patch-bound:to:2026-03-12",
+        label: "Before 2026-03-12",
+        kindLabel: "Date",
+        grade: "patch",
+        allowNegation: false,
+        negated: true,
+        contentMarkup: '<span class="font-medium">Before 2026-03-12</span>',
+        removeAttributes: {
+          "data-patch-bound": "to",
+          "data-patch-id": "2026-03-12",
+        },
+      },
+    ],
+  });
+
+  assert.equal(view.hasContent, true);
+  assert.doesNotMatch(view.html, /data-expression-negate-path="root\.0"/);
+  assert.doesNotMatch(view.html, /data-expression-negated="true"/);
+  assert.match(view.html, /data-patch-bound="to"/);
+});

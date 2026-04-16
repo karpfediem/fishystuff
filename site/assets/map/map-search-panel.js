@@ -206,7 +206,8 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
       label: patchLabel ? `${boundLabel} ${patchLabel}` : boundLabel,
       kindLabel: "Date",
       grade: "patch",
-      negated,
+      allowNegation: false,
+      negated: false,
       description: "",
       contentMarkup: `
         <span class="inline-flex min-w-0 items-center gap-2">

@@ -824,6 +824,27 @@ test("buildSearchExpressionNegationSignalPatch toggles node negation without cha
   });
 });
 
+test("buildSearchExpressionNegationSignalPatch ignores patch-bound terms", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "patch-bound", bound: "to", patchId: "2026-03-12" } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.equal(buildSearchExpressionNegationSignalPatch(signals, { expressionPath: "root.0" }), null);
+});
+
 test("buildSearchSelectionRemovalSignalPatch removes by expression path without flattening groups", () => {
   const signals = {
     ...baseSignals(),

@@ -905,10 +905,15 @@ export function buildSearchExpressionNegationSignalPatch(signals, target) {
     stateBundle?.inputState?.search?.selectedTerms,
     stateBundle?.inputState?.filters,
   );
+  const expressionPath = String(target?.expressionPath ?? target?.negatePath ?? target?.path ?? "").trim();
+  const currentNode = resolveSearchExpressionNode(expression, expressionPath);
+  if (currentNode?.type === "term" && currentNode.term?.kind === "patch-bound") {
+    return null;
+  }
   return buildSearchExpressionStatePatch(
     toggleSearchExpressionNodeNegated(
       expression,
-      target?.expressionPath ?? target?.negatePath ?? target?.path,
+      expressionPath,
     ),
   );
 }

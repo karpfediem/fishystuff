@@ -37,6 +37,10 @@ function normalizeNegated(value) {
   return value === true;
 }
 
+function normalizeAllowNegation(value) {
+  return value !== false;
+}
+
 function normalizeExpressionNode(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
@@ -53,6 +57,7 @@ function normalizeExpressionNode(value) {
       description: String(value.description || "").trim(),
       contentMarkup: String(value.contentMarkup || "").trim(),
       grade: String(value.grade || "").trim(),
+      allowNegation: normalizeAllowNegation(value.allowNegation ?? value.showNegationToggle),
       negated: normalizeNegated(value.negated ?? value.not ?? value.inverted),
       removeLabel: String(value.removeLabel || "").trim(),
       removeAttributes: normalizeAttributes(value.removeAttributes),
@@ -101,6 +106,7 @@ function buildRenderKey(node) {
       node.description,
       node.contentMarkup,
       node.grade,
+      node.allowNegation,
       node.negated,
       node.removeLabel,
       Object.entries(node.removeAttributes),
@@ -184,6 +190,12 @@ function renderNegationToggle(path, negated, escapeHtml, options = {}) {
 function renderTermNode(node, escapeHtml, buttonClass) {
   const label = node.label || "Applied term";
   const removeLabel = node.removeLabel || `Remove ${label}`;
+  const negateToggleMarkup = node.allowNegation
+    ? renderNegationToggle(node.path, node.negated, escapeHtml, {
+      label,
+      className: "join-item",
+    })
+    : "";
   return `
     <div
       class="fishy-applied-term join items-stretch max-w-full cursor-grab"
@@ -196,12 +208,9 @@ function renderTermNode(node, escapeHtml, buttonClass) {
       data-expression-drop-term-path="${escapeHtml(node.path)}"
       data-expression-key="${escapeHtml(node.key || label)}"${
         node.grade ? ` data-grade="${escapeHtml(node.grade)}"` : ""
-      }${node.negated ? ' data-expression-negated="true"' : ""}
+      }${node.negated && node.allowNegation ? ' data-expression-negated="true"' : ""}
     >
-      ${renderNegationToggle(node.path, node.negated, escapeHtml, {
-        label,
-        className: "join-item",
-      })}
+      ${negateToggleMarkup}
       <div class="fishy-applied-term-main join-item">
         ${
           node.kindLabel
