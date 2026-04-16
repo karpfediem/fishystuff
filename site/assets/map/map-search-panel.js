@@ -211,6 +211,9 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
       description: "",
       contentMarkup: `
         <span class="inline-flex min-w-0 items-center gap-2">
+          <svg class="fishy-icon size-4 shrink-0 text-base-content/60" viewBox="0 0 24 24" aria-hidden="true">
+            <use width="100%" height="100%" href="/img/icons.svg#fishy-calendar-2-fill"></use>
+          </svg>
           <button
             class="badge badge-ghost badge-xs cursor-pointer"
             type="button"
