@@ -1855,19 +1855,49 @@ function normalizeMapRuntimeManifestCacheKey(cacheKey) {
   return normalized.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+function shouldUseStableMapRuntimeManifest(
+  locationLike = globalThis.location,
+  explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
+  cacheKey = runtimeConfigValue("mapAssetCacheKey"),
+) {
+  if (!normalizeMapRuntimeManifestCacheKey(cacheKey)) {
+    return false;
+  }
+  if (isLoopbackHost(locationLike?.hostname)) {
+    return true;
+  }
+  try {
+    return isLoopbackHost(new URL(resolveMapRuntimeBaseUrl(locationLike, explicitBaseUrl)).hostname);
+  } catch (_) {
+    return false;
+  }
+}
+
 export function resolveMapRuntimeManifestUrl(
   locationLike = globalThis.location,
   cacheKey = runtimeConfigValue("mapAssetCacheKey"),
   explicitBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
 ) {
   const normalizedCacheKey = normalizeMapRuntimeManifestCacheKey(cacheKey);
-  const manifestFileName = normalizedCacheKey
-    ? `runtime-manifest.${normalizedCacheKey}.json`
-    : "runtime-manifest.json";
+  const manifestFileName =
+    normalizedCacheKey && !shouldUseStableMapRuntimeManifest(locationLike, explicitBaseUrl, cacheKey)
+      ? `runtime-manifest.${normalizedCacheKey}.json`
+      : "runtime-manifest.json";
   return new URL(manifestFileName, resolveMapRuntimeBaseUrl(locationLike, explicitBaseUrl)).toString();
 }
 
-async function loadMapRuntimeManifest({
+function mapRuntimeManifestLoadError(manifestUrl, status, fallbackUrl = "", fallbackStatus = "") {
+  const normalizedFallbackUrl = String(fallbackUrl ?? "").trim();
+  const normalizedFallbackStatus = String(fallbackStatus ?? "").trim();
+  if (!normalizedFallbackUrl) {
+    return new Error(`failed to load map runtime manifest: ${manifestUrl} (${status || "unknown"})`);
+  }
+  return new Error(
+    `failed to load map runtime manifest: ${manifestUrl} (${status || "unknown"}); fallback ${normalizedFallbackUrl} (${normalizedFallbackStatus || "unknown"})`,
+  );
+}
+
+export async function loadMapRuntimeManifest({
   locationLike = globalThis.location,
   cdnBaseUrl = globalThis.window?.__fishystuffCdnBaseUrl,
   cacheKey = runtimeConfigValue("mapAssetCacheKey"),
@@ -1876,10 +1906,27 @@ async function loadMapRuntimeManifest({
   if (typeof fetchImpl !== "function") {
     throw new Error("FishyMapBridge requires fetch() to load the runtime manifest");
   }
-  const manifestUrl = resolveMapRuntimeManifestUrl(locationLike, cacheKey, cdnBaseUrl);
-  const response = await fetchImpl(manifestUrl, { cache: "no-store" });
+  let manifestUrl = resolveMapRuntimeManifestUrl(locationLike, cacheKey, cdnBaseUrl);
+  let response = await fetchImpl(manifestUrl, { cache: "no-store" });
   if (!response?.ok) {
-    throw new Error(`failed to load map runtime manifest: ${manifestUrl} (${response?.status || "unknown"})`);
+    const shouldRetry =
+      response?.status === 404
+      && shouldUseStableMapRuntimeManifest(locationLike, cdnBaseUrl, cacheKey);
+    if (!shouldRetry) {
+      throw mapRuntimeManifestLoadError(manifestUrl, response?.status);
+    }
+    const fallbackManifestUrl = resolveMapRuntimeManifestUrl(locationLike, "", cdnBaseUrl);
+    const fallbackResponse = await fetchImpl(fallbackManifestUrl, { cache: "no-store" });
+    if (!fallbackResponse?.ok) {
+      throw mapRuntimeManifestLoadError(
+        manifestUrl,
+        response?.status,
+        fallbackManifestUrl,
+        fallbackResponse?.status,
+      );
+    }
+    manifestUrl = fallbackManifestUrl;
+    response = fallbackResponse;
   }
   const manifest = await response.json();
   const modulePath = String(manifest?.module || "").trim();

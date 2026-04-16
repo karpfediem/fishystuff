@@ -8,6 +8,7 @@ import {
   createFishyMapBridge,
   createSessionSnapshotFromState,
   extractThemeSnapshot,
+  loadMapRuntimeManifest,
   mergeStatePatch,
   normalizeStatePatch,
   parseQueryState,
@@ -2431,7 +2432,7 @@ test("runtime manifest URL is cache-busted against the CDN base", () => {
       123,
       "http://127.0.0.1:4040",
     ),
-    "http://localhost:4040/map/runtime-manifest.123.json",
+    "http://localhost:4040/map/runtime-manifest.json",
   );
   assert.equal(
     resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, "deploy-456"),
@@ -2444,6 +2445,44 @@ test("runtime manifest URL is cache-busted against the CDN base", () => {
   assert.equal(
     resolveMapRuntimeManifestUrl({ hostname: "fishystuff.fish" }, ""),
     "https://cdn.fishystuff.fish/map/runtime-manifest.json",
+  );
+});
+
+test("loadMapRuntimeManifest uses the stable manifest directly on local loopback", async () => {
+  const requests = [];
+  const manifest = await loadMapRuntimeManifest({
+    locationLike: { hostname: "localhost", protocol: "http:", href: "http://localhost:1990/map/" },
+    cdnBaseUrl: "http://127.0.0.1:4040/",
+    cacheKey: "75b654131a20b0f2",
+    fetchImpl: async (input) => {
+      requests.push(String(input));
+      if (String(input).endsWith("/runtime-manifest.json")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ module: "./fishystuff_ui_bevy.4951a379ce3c9cb8.js" }),
+        };
+      }
+      throw new Error(`unexpected request: ${input}`);
+    },
+  });
+
+  assert.deepEqual(requests, ["http://localhost:4040/map/runtime-manifest.json"]);
+  assert.equal(manifest.manifestUrl, "http://localhost:4040/map/runtime-manifest.json");
+  assert.equal(
+    manifest.moduleUrl,
+    "http://localhost:4040/map/fishystuff_ui_bevy.4951a379ce3c9cb8.js",
+  );
+});
+
+test("loadMapRuntimeManifest does not fall back off loopback", async () => {
+  await assert.rejects(
+    loadMapRuntimeManifest({
+      locationLike: { hostname: "fishystuff.fish", protocol: "https:", href: "https://fishystuff.fish/map/" },
+      cacheKey: "deploy-456",
+      fetchImpl: async () => ({ ok: false, status: 404 }),
+    }),
+    /failed to load map runtime manifest: https:\/\/cdn\.fishystuff\.fish\/map\/runtime-manifest\.deploy-456\.json \(404\)/,
   );
 });
 
