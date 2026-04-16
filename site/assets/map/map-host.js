@@ -430,7 +430,16 @@ function normalizeStringList(values) {
   return out;
 }
 
-const FISHYMAP_FISH_FILTER_TERMS = Object.freeze(["favourite", "missing"]);
+const FISHYMAP_FISH_FILTER_TERMS = Object.freeze([
+  "favourite",
+  "missing",
+  "red",
+  "yellow",
+  "blue",
+  "green",
+  "white",
+]);
+const FISHYMAP_GRADE_FISH_FILTER_TERMS = new Set(["red", "yellow", "blue", "green", "white"]);
 const FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID = -1;
 
 function normalizeFishFilterTerm(value) {
@@ -441,8 +450,28 @@ function normalizeFishFilterTerm(value) {
   if (normalized === "favourite" || normalized === "favourites") {
     return "favourite";
   }
-  if (normalized === "missing") {
+  if (normalized === "missing" || normalized === "uncaught") {
     return "missing";
+  }
+  if (normalized === "red" || normalized === "prize") {
+    return "red";
+  }
+  if (normalized === "yellow" || normalized === "rare") {
+    return "yellow";
+  }
+  if (
+    normalized === "blue" ||
+    normalized === "highquality" ||
+    normalized === "high_quality" ||
+    normalized === "high-quality"
+  ) {
+    return "blue";
+  }
+  if (normalized === "green" || normalized === "general") {
+    return "green";
+  }
+  if (normalized === "white" || normalized === "trash") {
+    return "white";
   }
   return "";
 }
@@ -659,8 +688,47 @@ function resolveSharedFishFilterState(inputState) {
   };
 }
 
-function fishMatchesSharedFilterTerms(fishId, filterTerms, sharedFishState) {
+function resolveFishGradeFilterTerm(fish) {
+  const grade = String(fish?.grade ?? "").trim().toLowerCase();
+  if (fish?.isPrize === true || fish?.is_prize === true || grade === "prize" || grade === "red") {
+    return "red";
+  }
+  if (grade === "rare" || grade === "yellow") {
+    return "yellow";
+  }
+  if (
+    grade === "highquality" ||
+    grade === "high_quality" ||
+    grade === "high-quality" ||
+    grade === "blue"
+  ) {
+    return "blue";
+  }
+  if (grade === "general" || grade === "green") {
+    return "green";
+  }
+  if (grade === "trash" || grade === "white") {
+    return "white";
+  }
+  return "";
+}
+
+function fishMatchesSharedFilterTerms(fish, filterTerms, sharedFishState) {
+  const fishId = Number.parseInt(fish?.fishId ?? fish?.itemId, 10);
+  if (!Number.isFinite(fishId) || fishId <= 0) {
+    return false;
+  }
+  const selectedGradeTerms = filterTerms.filter((term) => FISHYMAP_GRADE_FISH_FILTER_TERMS.has(term));
+  if (selectedGradeTerms.length) {
+    const gradeTerm = resolveFishGradeFilterTerm(fish);
+    if (!selectedGradeTerms.includes(gradeTerm)) {
+      return false;
+    }
+  }
   for (const term of filterTerms) {
+    if (FISHYMAP_GRADE_FISH_FILTER_TERMS.has(term)) {
+      continue;
+    }
     if (term === "favourite" && !sharedFishState.favouriteSet.has(fishId)) {
       return false;
     }
@@ -692,7 +760,7 @@ export function resolveEffectiveFishIdsForWasm(inputState, currentState) {
       continue;
     }
     seen.add(fishId);
-    if (fishMatchesSharedFilterTerms(fishId, filterTerms, sharedFishState)) {
+    if (fishMatchesSharedFilterTerms(fish, filterTerms, sharedFishState)) {
       matchingFishIds.push(fishId);
     }
   }

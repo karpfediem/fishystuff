@@ -1,4 +1,7 @@
-import { buildSearchSelectionStatePatch } from "./map-search-contract.js";
+import {
+  buildSearchSelectionStatePatch,
+  normalizeFishFilterTerms,
+} from "./map-search-contract.js";
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -59,8 +62,7 @@ function parseFishFilterTermsParam(value) {
   if (value == null) {
     return null;
   }
-  const allowedTerms = new Set(["favourite", "missing"]);
-  return parseDelimitedTerms(value).filter((term) => allowedTerms.has(term));
+  return normalizeFishFilterTerms(parseDelimitedTerms(value));
 }
 
 function parseLayerSetParam(value) {

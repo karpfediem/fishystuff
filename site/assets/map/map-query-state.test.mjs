@@ -5,7 +5,7 @@ import { parseQuerySignalPatch } from "./map-query-state.js";
 
 test("parseQuerySignalPatch maps page-owned and bridged query params into signals", () => {
   const patch = parseQuerySignalPatch(
-    "https://fishystuff.fish/map/?fish=91&fishTerms=missing,favourite&search=velia&fromPatch=2026-02-26&toPatch=2026-03-12&layers=zones,terrain&diagnostics=true&view=3d",
+    "https://fishystuff.fish/map/?fish=91&fishTerms=missing,rare,blue&search=velia&fromPatch=2026-02-26&toPatch=2026-03-12&layers=zones,terrain&diagnostics=true&view=3d",
   );
 
   assert.deepEqual(patch, {
@@ -16,7 +16,8 @@ test("parseQuerySignalPatch maps page-owned and bridged query params into signal
         selectedTerms: [
           { kind: "fish", fishId: 91 },
           { kind: "fish-filter", term: "missing" },
-          { kind: "fish-filter", term: "favourite" },
+          { kind: "fish-filter", term: "yellow" },
+          { kind: "fish-filter", term: "blue" },
         ],
       },
     },
@@ -25,7 +26,7 @@ test("parseQuerySignalPatch maps page-owned and bridged query params into signal
         fishIds: [91],
         zoneRgbs: [],
         semanticFieldIdsByLayer: {},
-        fishFilterTerms: ["missing", "favourite"],
+        fishFilterTerms: ["missing", "yellow", "blue"],
         fromPatchId: "2026-02-26",
         toPatchId: "2026-03-12",
         layerIdsVisible: ["zones", "terrain"],

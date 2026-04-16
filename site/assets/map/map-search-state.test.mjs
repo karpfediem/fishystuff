@@ -116,6 +116,21 @@ test("buildSearchMatches returns fish filters, fish, and semantic matches from l
 
   const filterMatches = buildSearchMatches(bundle, "favorite");
   assert.equal(filterMatches.some((match) => match.kind === "fish-filter" && match.term === "favourite"), true);
+
+  const gradeMatches = buildSearchMatches(bundle, "rare");
+  assert.equal(gradeMatches.some((match) => match.kind === "fish-filter" && match.term === "yellow"), true);
+  assert.equal(gradeMatches.some((match) => match.kind === "fish" && match.fishId === 912), true);
+});
+
+test("buildSearchMatches treats multiple selected grade filters as an OR group", () => {
+  const bundle = buildSearchPanelStateBundle(baseSignals());
+
+  const matches = buildSearchMatches(bundle, "rare general");
+
+  assert.deepEqual(
+    matches.filter((match) => match.kind === "fish").map((match) => match.fishId),
+    [912, 77],
+  );
 });
 
 test("buildSearchMatches returns matched zones instead of dropping zone-name queries", () => {
@@ -164,7 +179,7 @@ test("buildDefaultFishFilterMatches omits already-selected filter terms", () => 
   });
   assert.deepEqual(
     buildDefaultFishFilterMatches(bundle).map((match) => match.term),
-    ["favourite"],
+    ["favourite", "red", "yellow", "blue", "green", "white"],
   );
 });
 
@@ -245,8 +260,10 @@ test("buildSearchSelectionRemovalSignalPatch removes selected search filters cle
 });
 
 test("normalizeFishFilterTerms normalizes aliases and order", () => {
-  assert.deepEqual(normalizeFishFilterTerms(["favorite", "uncaught"]), [
+  assert.deepEqual(normalizeFishFilterTerms(["favorite", "uncaught", "rare", "trash"]), [
     "favourite",
     "missing",
+    "yellow",
+    "white",
   ]);
 });

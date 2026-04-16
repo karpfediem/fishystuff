@@ -16,6 +16,7 @@ test("normalizeSelectedSearchTerms canonicalizes aliases and deduplicates term k
   assert.deepEqual(
     normalizeSelectedSearchTerms([
       { kind: "fish-filter", term: "favorite" },
+      { kind: "fish-filter", term: "rare" },
       { kind: "fish-filter", term: "favourites" },
       { kind: "fish", fishId: "912" },
       { kind: "semantic", layerId: "zone_mask", fieldId: 123 },
@@ -24,6 +25,7 @@ test("normalizeSelectedSearchTerms canonicalizes aliases and deduplicates term k
     ]),
     [
       { kind: "fish-filter", term: "favourite" },
+      { kind: "fish-filter", term: "yellow" },
       { kind: "fish", fishId: 912 },
       { kind: "zone", zoneRgb: 123 },
       { kind: "semantic", layerId: "regions", fieldId: 22 },
@@ -120,8 +122,10 @@ test("search layer support documents direct term and clip capabilities", () => {
 });
 
 test("normalizeFishFilterTerms preserves canonical term order", () => {
-  assert.deepEqual(normalizeFishFilterTerms(["favorite", "missing"]), [
+  assert.deepEqual(normalizeFishFilterTerms(["trash", "favorite", "rare", "blue"]), [
     "favourite",
-    "missing",
+    "yellow",
+    "blue",
+    "white",
   ]);
 });

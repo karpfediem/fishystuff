@@ -439,15 +439,15 @@ test("view mode input patches send setViewMode when runtime differs", async () =
   }
 });
 
-test("fish filter term patches normalize favourite and missing aliases", () => {
+test("fish filter term patches normalize aliases for favorites and grades", () => {
   const next = applyStatePatch(undefined, {
     version: 1,
     filters: {
-      fishFilterTerms: ["favorite", "missing", "favourites", ""],
+      fishFilterTerms: ["favorite", "rare", "trash", "favourites", ""],
     },
   });
 
-  assert.deepEqual(next.filters.fishFilterTerms, ["favourite", "missing"]);
+  assert.deepEqual(next.filters.fishFilterTerms, ["favourite", "yellow", "white"]);
 });
 
 test("shared fish state input patches are normalized in host input state", () => {
@@ -487,8 +487,8 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
           layers: [],
           patches: [],
           fish: [
-            { fishId: 912, name: "Cron Dart" },
-            { fishId: 77, name: "Serendia Carp" },
+            { fishId: 912, name: "Cron Dart", grade: "Rare", isPrize: false },
+            { fishId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
           ],
         },
         statuses: {},
@@ -570,6 +570,78 @@ test("fish filter terms derive outbound fishIds for the wasm point filter", asyn
     });
     assert.equal(wasm.calls.applied.length, 1);
     assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [912]);
+  } finally {
+    bridge?.destroy();
+    env.restore();
+  }
+});
+
+test("grade fish filter terms derive outbound fishIds with OR semantics", async () => {
+  const env = installDomGlobals();
+  let bridge;
+  try {
+    const canvas = new FakeCanvas();
+    const container = new FakeContainer(canvas);
+    const snapshotRef = {
+      current: {
+        version: 1,
+        ready: true,
+        filters: { fishIds: [], searchText: "", patchId: null, layerIdsVisible: [] },
+        ui: { diagnosticsOpen: false, legendOpen: false, leftPanelOpen: true },
+        view: { viewMode: "2d", camera: {} },
+        selection: {},
+        hover: {},
+        catalog: {
+          capabilities: [],
+          layers: [],
+          patches: [],
+          fish: [
+            { fishId: 912, name: "Cron Dart", grade: "Rare", isPrize: false },
+            { fishId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
+            { fishId: 61, name: "Ancient Relic Crystal Shard", grade: "Prize", isPrize: true },
+          ],
+        },
+        statuses: {},
+      },
+    };
+    const wasm = createFakeWasm(snapshotRef);
+    bridge = createFishyMapBridge();
+    await bridge.mount(container, {
+      canvas,
+      debounceMs: 0,
+      wasmModule: wasm,
+      locationHref: "https://fishystuff.fish/map/",
+      localStorage: env.localStorage,
+      sessionStorage: env.sessionStorage,
+    });
+    wasm.calls.applied.length = 0;
+
+    bridge.setState({
+      version: 1,
+      filters: {
+        fishFilterTerms: ["yellow", "green"],
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["yellow", "green"]);
+    assert.equal(wasm.calls.applied.length, 1);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [912, 77]);
+
+    wasm.calls.applied.length = 0;
+    bridge.setState({
+      version: 1,
+      filters: {
+        fishFilterTerms: ["red"],
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.deepEqual(bridge.getCurrentInputState().filters.fishFilterTerms, ["red"]);
+    assert.equal(wasm.calls.applied.length, 1);
+    assert.deepEqual(wasm.calls.applied[0].filters.fishIds, [61]);
   } finally {
     bridge?.destroy();
     env.restore();

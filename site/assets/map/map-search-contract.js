@@ -1,4 +1,12 @@
-export const FISH_FILTER_TERM_ORDER = Object.freeze(["favourite", "missing"]);
+export const FISH_FILTER_TERM_ORDER = Object.freeze([
+  "favourite",
+  "missing",
+  "red",
+  "yellow",
+  "blue",
+  "green",
+  "white",
+]);
 
 export const MAP_SEARCH_LAYER_SUPPORT = Object.freeze({
   bookmarks: Object.freeze({
@@ -86,6 +94,26 @@ export function normalizeFishFilterTerm(value) {
     normalized === "not yet caught"
   ) {
     return "missing";
+  }
+  if (normalized === "red" || normalized === "prize") {
+    return "red";
+  }
+  if (normalized === "yellow" || normalized === "rare") {
+    return "yellow";
+  }
+  if (
+    normalized === "blue" ||
+    normalized === "highquality" ||
+    normalized === "high_quality" ||
+    normalized === "high-quality"
+  ) {
+    return "blue";
+  }
+  if (normalized === "green" || normalized === "general") {
+    return "green";
+  }
+  if (normalized === "white" || normalized === "trash") {
+    return "white";
   }
   return "";
 }

@@ -1,3 +1,4 @@
+import { FISH_FILTER_TERM_ORDER } from "./map-search-contract.js";
 import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
 import {
   buildDefaultFishFilterMatches,
@@ -310,6 +311,9 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     const matches = resolveSearchPanelMatches(bundle, signals?._map_ui?.search, this._zoneCatalog);
 
     const fishLookup = new Map((bundle.state?.catalog?.fish || []).map((fish) => [fish.fishId, fish]));
+    const fishFilterMetadataByTerm = Object.fromEntries(
+      FISH_FILTER_TERM_ORDER.map((term) => [term, fishFilterTermMetadata(term)]),
+    );
 
     this._elements.zoneCatalog = this._zoneCatalog;
 
@@ -327,10 +331,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       zoneIdentityMarkup,
       semanticIdentityMarkup,
       formatZone,
-      fishFilterTermMetadata: {
-        favourite: fishFilterTermMetadata("favourite"),
-        missing: fishFilterTermMetadata("missing"),
-      },
+      fishFilterTermMetadata: fishFilterMetadataByTerm,
     });
     renderSearchResults(this._elements, matches, bundle, {
       setBooleanProperty,

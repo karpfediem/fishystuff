@@ -26,7 +26,43 @@ const FISH_FILTER_TERM_METADATA = Object.freeze({
     icon: "check-circle-dash-fill",
     iconClass: "text-warning",
   }),
+  red: Object.freeze({
+    label: "Red",
+    description: "Prize or red-grade fish and loot.",
+    searchText: "red prize red-grade fish loot item grade",
+    icon: "nav-dex",
+    iconClass: "text-error",
+  }),
+  yellow: Object.freeze({
+    label: "Yellow",
+    description: "Rare or yellow-grade fish and loot.",
+    searchText: "yellow rare yellow-grade fish loot item grade",
+    icon: "nav-dex",
+    iconClass: "text-warning",
+  }),
+  blue: Object.freeze({
+    label: "Blue",
+    description: "High-quality or blue-grade fish and loot.",
+    searchText: "blue highquality high-quality high quality blue-grade fish loot item grade",
+    icon: "nav-dex",
+    iconClass: "text-info",
+  }),
+  green: Object.freeze({
+    label: "Green",
+    description: "General or green-grade fish and loot.",
+    searchText: "green general green-grade fish loot item grade",
+    icon: "nav-dex",
+    iconClass: "text-success",
+  }),
+  white: Object.freeze({
+    label: "White",
+    description: "Trash or white-grade fish and loot.",
+    searchText: "white trash white-grade fish loot item grade",
+    icon: "nav-dex",
+    iconClass: "text-base-content/70",
+  }),
 });
+const FISH_GRADE_FILTER_TERMS = new Set(["red", "yellow", "blue", "green", "white"]);
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -193,6 +229,26 @@ export function parseFishFilterDirectives(searchText) {
       term: "favourite",
       patterns: [/\bfavou?rites?\b/g],
     },
+    {
+      term: "red",
+      patterns: [/\bred\b/g, /\bprize\b/g],
+    },
+    {
+      term: "yellow",
+      patterns: [/\byellow\b/g, /\brare\b/g],
+    },
+    {
+      term: "blue",
+      patterns: [/\bblue\b/g, /\bhigh[\s_-]*quality\b/g],
+    },
+    {
+      term: "green",
+      patterns: [/\bgreen\b/g, /\bgeneral\b/g],
+    },
+    {
+      term: "white",
+      patterns: [/\bwhite\b/g, /\btrash\b/g],
+    },
   ];
   for (const replacement of replacements) {
     for (const pattern of replacement.patterns) {
@@ -245,6 +301,31 @@ function scoreFishMatch(fish, queryTerms) {
   return score;
 }
 
+function resolveFishGradeFilterTerm(fish) {
+  const grade = String(fish?.grade ?? "").trim().toLowerCase();
+  if (fish?.isPrize === true || fish?.is_prize === true || grade === "prize" || grade === "red") {
+    return "red";
+  }
+  if (grade === "rare" || grade === "yellow") {
+    return "yellow";
+  }
+  if (
+    grade === "highquality" ||
+    grade === "high_quality" ||
+    grade === "high-quality" ||
+    grade === "blue"
+  ) {
+    return "blue";
+  }
+  if (grade === "general" || grade === "green") {
+    return "green";
+  }
+  if (grade === "trash" || grade === "white") {
+    return "white";
+  }
+  return "";
+}
+
 function fishMatchesFilterTerms(fish, filterTerms, sharedFishState) {
   if (!filterTerms.length) {
     return true;
@@ -253,7 +334,17 @@ function fishMatchesFilterTerms(fish, filterTerms, sharedFishState) {
   if (!Number.isInteger(fishId) || fishId <= 0) {
     return false;
   }
+  const selectedGradeTerms = filterTerms.filter((term) => FISH_GRADE_FILTER_TERMS.has(term));
+  if (selectedGradeTerms.length) {
+    const gradeTerm = resolveFishGradeFilterTerm(fish);
+    if (!selectedGradeTerms.includes(gradeTerm)) {
+      return false;
+    }
+  }
   for (const term of filterTerms) {
+    if (FISH_GRADE_FILTER_TERMS.has(term)) {
+      continue;
+    }
     if (term === "favourite" && !sharedFishState?.favouriteSet?.has(fishId)) {
       return false;
     }
