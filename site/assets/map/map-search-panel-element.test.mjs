@@ -270,7 +270,10 @@ test("FishyMapSearchPanelElement dispatches operator-toggle patches from the app
       {
         type: "group",
         operator: "and",
-        children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+        children: [
+          { type: "term", term: { kind: "fish", fishId: 912 } },
+          { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+        ],
       },
     ],
   };
@@ -304,18 +307,24 @@ test("FishyMapSearchPanelElement dispatches operator-toggle patches from the app
             {
               type: "group",
               operator: "or",
-              children: [{ type: "term", term: { kind: "fish", fishId: 912 } }],
+              children: [
+                { type: "term", term: { kind: "fish", fishId: 912 } },
+                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+              ],
             },
           ],
         },
-        selectedTerms: [{ kind: "fish", fishId: 912 }],
+        selectedTerms: [
+          { kind: "fish", fishId: 912 },
+          { kind: "zone", zoneRgb: 123 },
+        ],
       },
     },
     _map_bridged: {
       filters: {
         fishIds: [912],
-        zoneRgbs: [],
-        semanticFieldIdsByLayer: {},
+        zoneRgbs: [123],
+        semanticFieldIdsByLayer: { zone_mask: [123] },
         fishFilterTerms: [],
       },
     },

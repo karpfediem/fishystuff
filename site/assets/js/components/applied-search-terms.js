@@ -195,13 +195,9 @@ function renderGroupNode(node, escapeHtml, buttonClass, options = {}) {
   const isRoot = options.isRoot === true;
   const children = node.children.filter(Boolean);
   const operator = normalizeOperator(node.operator);
-  const prefixOperatorMarkup = children.length > 1
-    ? renderOperatorBadge(operator, escapeHtml, { compact: true, groupPath: node.path })
-    : "";
   const leadingMarkup = isRoot
-    ? prefixOperatorMarkup
+    ? ""
     : `
-      ${prefixOperatorMarkup}
       <span
         class="fishy-applied-expression-group-handle cursor-grab text-base-content/40"
         draggable="true"
@@ -222,7 +218,7 @@ function renderGroupNode(node, escapeHtml, buttonClass, options = {}) {
           : renderTermNode(child, escapeHtml, buttonClass);
       const leadingOperator = index === 0
         ? ""
-        : renderOperatorBadge(operator, escapeHtml, { compact: true });
+        : renderOperatorBadge(operator, escapeHtml, { compact: true, groupPath: node.path });
       return `${leadingOperator}${renderInsertionSlot(node.path, index, escapeHtml)}${renderedChild}`;
     })
     .join("") + renderInsertionSlot(node.path, children.length, escapeHtml);

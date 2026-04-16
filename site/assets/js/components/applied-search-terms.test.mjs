@@ -65,6 +65,7 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
   assert.doesNotMatch(view.html, />Applied search</);
   assert.doesNotMatch(view.html, />\s*2 terms\s*</);
   assert.match(view.html, /data-expression-group-path="root"/);
+  assert.doesNotMatch(view.html, /data-expression-group-path="root\.1"/);
   assert.match(view.html, /data-expression-next-operator="and"/);
   assert.doesNotMatch(view.html, /data-expression-next-operator="or"/);
   assert.match(view.html, /data-expression-drop-slot-group-path="root"/);
