@@ -216,6 +216,28 @@ body {
     gap: 0.55rem;
 }
 
+:where(.fishy-zone-row) {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+:where(.fishy-zone-rgb-indicator) {
+    display: inline-flex;
+    flex: none;
+    inline-size: 0.9rem;
+    block-size: 0.9rem;
+    border: 1px solid color-mix(in oklab, var(--color-base-content, #1f2937) 18%, transparent);
+    border-radius: 999px;
+    background: rgb(var(--fishy-zone-rgb, 127 127 127));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, white 22%, transparent);
+}
+
+:where(.fishy-zone-label) {
+    min-width: 0;
+}
+
 :where(.fishy-item-row--surface) {
     padding: 0.24rem 0.56rem 0.24rem 0.32rem;
     border: 1px solid var(--fishy-item-surface-stroke);

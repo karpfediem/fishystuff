@@ -259,6 +259,35 @@ test("FishyMapSearchPanelElement rerenders search results from Datastar-driven a
   assert.equal(searchCount.textContent, "1 match");
 });
 
+test("FishyMapSearchPanelElement renders zone terms with an RGB indicator", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [{ type: "term", term: { kind: "zone", zoneRgb: 123456 } }],
+  };
+  panel._zoneCatalog = [
+    {
+      zoneRgb: 123456,
+      name: "Velia Coast",
+      rgbKey: "velia_coast",
+      r: 1,
+      g: 2,
+      b: 3,
+    },
+  ];
+  shell.__fishymapLiveSignals = signals;
+
+  panel.connectedCallback();
+
+  const html = panel.querySelector("#fishymap-search-selection")?.innerHTML || "";
+  assert.match(html, /fishy-zone-rgb-indicator/);
+  assert.match(html, /--fishy-zone-rgb: 1 2 3/);
+  assert.match(html, /Velia Coast/);
+});
+
 test("resolveSearchPanelMatches exposes unresolved date prompts when the query is empty", () => {
   const matches = resolveSearchPanelMatches(
     {

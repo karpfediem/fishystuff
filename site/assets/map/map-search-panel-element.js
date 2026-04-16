@@ -219,10 +219,31 @@ function resolveFishGrade(fish) {
   return resolveItemGrade(fish?.grade, fish?.isPrize === true || fish?.is_prize === true);
 }
 
+function zoneRgbTriplet(zone) {
+  const explicitTriplet = [zone?.r, zone?.g, zone?.b].map((value) => Number.parseInt(value, 10));
+  if (explicitTriplet.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) {
+    return explicitTriplet;
+  }
+  const zoneRgb = Number.parseInt(zone?.zoneRgb, 10);
+  if (!Number.isInteger(zoneRgb) || zoneRgb < 0) {
+    return null;
+  }
+  return [(zoneRgb >> 16) & 0xff, (zoneRgb >> 8) & 0xff, zoneRgb & 0xff];
+}
+
 function zoneIdentityMarkup(zone) {
   const zoneRgb = Number.parseInt(zone?.zoneRgb, 10);
   const name = String(zone?.name || "").trim() || `Zone ${formatZone(zoneRgb)}`;
-  return `<span class="truncate max-w-40">${escapeHtml(name)}</span>`;
+  const rgbTriplet = zoneRgbTriplet(zone);
+  const indicatorMarkup = rgbTriplet
+    ? `<span class="fishy-zone-rgb-indicator" aria-hidden="true" style="--fishy-zone-rgb: ${escapeHtml(rgbTriplet.join(" "))};"></span>`
+    : "";
+  return `
+    <span class="fishy-zone-row">
+      ${indicatorMarkup}
+      <span class="fishy-zone-label truncate max-w-40">${escapeHtml(name)}</span>
+    </span>
+  `;
 }
 
 function semanticIdentityMarkup(text) {

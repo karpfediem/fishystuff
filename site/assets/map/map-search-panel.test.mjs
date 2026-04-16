@@ -190,6 +190,7 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.match(elements.searchSelection.innerHTML, /data-patch-id="2026-03-12"/);
   assert.match(elements.searchSelection.innerHTML, /2026-03-12/);
   assert.match(elements.searchSelection.innerHTML, /data-zone-rgb="123456"/);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, /#01e240/);
   assert.match(elements.searchSelection.innerHTML, /data-semantic-layer-id="regions"/);
   assert.match(elements.searchSelection.innerHTML, />Date</);
   assert.match(elements.searchSelection.innerHTML, />Before</);

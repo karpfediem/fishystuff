@@ -261,7 +261,7 @@ function buildAppliedSearchTermNode(term, context, path, options = {}) {
       kindLabel: "Zone",
       grade: "zone",
       negated,
-      description: context.formatZone(term.zoneRgb),
+      description: "",
       contentMarkup:
         context.zoneIdentityMarkup(
           {
