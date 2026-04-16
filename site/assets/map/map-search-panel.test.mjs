@@ -181,6 +181,7 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.match(elements.searchSelection.innerHTML, /data-expression-path="root\.1\.3"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-operator="and"/);
   assert.match(elements.searchSelection.innerHTML, /join items-stretch max-w-full/);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-drop-slot-group-path=/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-filter-term="favourite"/);
   assert.match(elements.searchSelection.innerHTML, /data-fish-id="235"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.1\.1"/);
@@ -251,6 +252,78 @@ test("renderSearchSelection renders an unresolved date term with an inline patch
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.0"/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.0"/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-patch-id=""/);
+});
+
+test("renderSearchSelection rerenders insertion targets when an expression drag becomes active", () => {
+  const elements = createRenderElements();
+  const fishLookup = new Map([
+    [
+      235,
+      {
+        fishId: 235,
+        name: "Pink Dolphin",
+        grade: "red",
+      },
+    ],
+  ]);
+  const stateBundle = {
+    state: {
+      catalog: {
+        patches: [],
+        semanticTerms: [],
+      },
+    },
+    inputState: {
+      search: {
+        expression: {
+          type: "group",
+          operator: "or",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "fish", fishId: 235 } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123456 } },
+          ],
+        },
+      },
+      filters: {
+        fishIds: [235],
+        fishFilterTerms: ["favourite"],
+        semanticFieldIdsByLayer: {
+          zone_mask: [123456],
+        },
+      },
+    },
+  };
+  const options = {
+    resolveSelectedFishIds: (bundle) => bundle.inputState.filters.fishIds,
+    resolveSelectedFishFilterTerms: (bundle) => bundle.inputState.filters.fishFilterTerms,
+    resolveSelectedSemanticFieldIdsByLayer: (bundle) => bundle.inputState.filters.semanticFieldIdsByLayer,
+    resolveSelectedZoneRgbs: (bundle) => bundle.inputState.filters.semanticFieldIdsByLayer.zone_mask,
+    buildSemanticTermLookup: () => new Map(),
+    escapeHtml,
+    fishFilterTermIconMarkup: (term) => `<span class="icon">${escapeHtml(term)}</span>`,
+    fishIdentityMarkup: (fish) => `<span class="fishy-item-row">${escapeHtml(fish.name)}</span>`,
+    zoneIdentityMarkup: (zone) => `<span>${escapeHtml(zone.name)}</span>`,
+    semanticIdentityMarkup: (label) => `<span>${escapeHtml(label)}</span>`,
+    resolveFishGrade: (fish) => String(fish?.grade || "unknown"),
+    formatZone: (zoneRgb) => `#${Number(zoneRgb).toString(16).padStart(6, "0")}`,
+    fishFilterTermMetadata: {
+      favourite: { label: "Favourite" },
+    },
+  };
+
+  renderSearchSelection(elements, stateBundle, fishLookup, options);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-drop-slot-group-path=/);
+
+  renderSearchSelection(elements, stateBundle, fishLookup, {
+    ...options,
+    activeDragPath: "root.0",
+  });
+
+  assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-drop-slot-index="0"/);
+  assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-drop-slot-index="1"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-drop-slot-group-path="root"[\s\S]*data-expression-drop-slot-index="2"/);
+  assert.match(elements.searchSelection.innerHTML, /data-expression-drop-slot-group-path="root"[\s\S]*data-expression-drop-slot-index="3"/);
 });
 
 test("renderSearchResults renders unresolved date prompt rows without a concrete patch id", () => {

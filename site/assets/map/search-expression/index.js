@@ -20,6 +20,7 @@ export {
   resolveSearchExpressionNode,
   searchExpressionNodeKey,
   selectedSearchTermsFromExpression,
+  wouldSearchExpressionMoveToIndexChangeTree,
 } from "./core.js";
 export {
   appendSearchExpressionTerm,

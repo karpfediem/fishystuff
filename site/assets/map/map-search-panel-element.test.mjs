@@ -1009,6 +1009,88 @@ test("FishyMapSearchPanelElement dispatches slot insertion patches from the appl
   assert.equal(slot.dataset.expressionDropMode, undefined);
 });
 
+test("FishyMapSearchPanelElement ignores no-op insertion targets for the dragged node", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  const signals = createSignals();
+  signals._map_ui.search.expression = {
+    type: "group",
+    operator: "or",
+    children: [
+      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+      { type: "term", term: { kind: "fish", fishId: 912 } },
+      { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+    ],
+  };
+  shell.__fishymapLiveSignals = signals;
+  panel.connectedCallback();
+
+  const source = new FakeElement();
+  source.setAttribute("data-expression-drag-path", "root.0");
+  source.setAttribute("draggable", "true");
+  source.setClosest("[data-expression-drag-path][draggable='true']", source);
+
+  panel._handleDragStart({
+    target: source,
+    dataTransfer: {
+      effectAllowed: "",
+      setData() {},
+    },
+  });
+
+  const slot = new FakeElement();
+  slot.setAttribute("data-expression-drop-slot-group-path", "root");
+  slot.setAttribute("data-expression-drop-slot-index", "1");
+  slot.setClosest(
+    "[data-expression-drop-slot-group-path][data-expression-drop-slot-index]",
+    slot,
+  );
+
+  let prevented = false;
+  panel._handleDragOver({
+    target: slot,
+    preventDefault() {
+      prevented = true;
+    },
+    dataTransfer: {
+      dropEffect: "",
+    },
+  });
+
+  assert.equal(prevented, false);
+  assert.equal(slot.dataset.expressionDropMode, undefined);
+  panel._handleDragEnd();
+});
+
+test("FishyMapSearchPanelElement rerenders when expression dragging starts and ends", async () => {
+  const { FishyMapSearchPanelElement } = await loadModule();
+  const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
+  shell.__fishymapLiveSignals = createSignals();
+  panel.connectedCallback();
+
+  let renderCount = 0;
+  panel.scheduleRender = () => {
+    renderCount += 1;
+  };
+
+  const source = new FakeElement();
+  source.setAttribute("data-expression-drag-path", "root.0");
+  source.setAttribute("draggable", "true");
+  source.setClosest("[data-expression-drag-path][draggable='true']", source);
+
+  panel._handleDragStart({
+    target: source,
+    dataTransfer: {
+      effectAllowed: "",
+      setData() {},
+    },
+  });
+  assert.equal(renderCount, 1);
+
+  panel._handleDragEnd();
+  assert.equal(renderCount, 2);
+});
+
 process.on("exit", () => {
   globalThis.HTMLElement = originalHTMLElement;
   globalThis.document = originalDocument;

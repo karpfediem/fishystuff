@@ -189,6 +189,33 @@ export function searchExpressionIndicesEqual(leftIndices, rightIndices) {
   return leftIndices.every((value, index) => rightIndices[index] === value);
 }
 
+export function wouldSearchExpressionMoveToIndexChangeTree(sourcePath, groupPath, childIndex) {
+  const normalizedSourcePath = normalizeSearchExpressionPath(sourcePath);
+  const normalizedGroupPath = normalizeSearchExpressionPath(groupPath);
+  const normalizedChildIndex = Number.parseInt(childIndex, 10);
+  if (
+    !normalizedSourcePath ||
+    !normalizedGroupPath ||
+    normalizedSourcePath.indices.length === 0 ||
+    !Number.isInteger(normalizedChildIndex) ||
+    normalizedChildIndex < 0
+  ) {
+    return false;
+  }
+  if (isSearchExpressionPathPrefix(normalizedSourcePath.indices, normalizedGroupPath.indices)) {
+    return false;
+  }
+  const sourceParentIndices = normalizedSourcePath.indices.slice(0, -1);
+  const sourceIndex = normalizedSourcePath.indices.at(-1);
+  if (
+    searchExpressionIndicesEqual(sourceParentIndices, normalizedGroupPath.indices) &&
+    Number.isInteger(sourceIndex)
+  ) {
+    return normalizedChildIndex !== sourceIndex && normalizedChildIndex !== sourceIndex + 1;
+  }
+  return true;
+}
+
 export function clampSearchExpressionChildIndex(value, fallback) {
   const normalized = Number.parseInt(value, 10);
   if (!Number.isInteger(normalized)) {

@@ -76,18 +76,12 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
   assert.doesNotMatch(view.html, />\s*not\s*</);
   assert.match(view.html, /data-expression-group-path="root"/);
   assert.match(view.html, /data-expression-boundary-index="1"/);
-  assert.match(
-    view.html,
-    /fishy-applied-expression-operator-toggle[\s\S]*data-expression-group-path="root"[\s\S]*data-expression-boundary-index="1"[\s\S]*data-expression-drop-slot-group-path="root"[\s\S]*data-expression-drop-slot-index="1"/,
-  );
+  assert.match(view.html, /fishy-applied-expression-operator-toggle/);
   assert.doesNotMatch(view.html, /data-expression-group-path="root\.1"/);
   assert.match(view.html, /data-expression-next-operator="and"/);
   assert.doesNotMatch(view.html, /data-expression-next-operator="or"/);
-  assert.match(view.html, /data-expression-drop-slot-group-path="root"/);
-  assert.match(view.html, /data-expression-drop-slot-group-path="root\.1"/);
-  assert.match(view.html, /data-expression-drop-slot-index="0"/);
-  assert.match(view.html, /data-expression-drop-slot-index="1"/);
-  assert.match(view.html, /data-expression-drop-slot-index="2"/);
+  assert.doesNotMatch(view.html, /data-expression-drop-slot-group-path=/);
+  assert.doesNotMatch(view.html, /data-expression-drop-slot-index=/);
   assert.doesNotMatch(
     view.html,
     /fishy-applied-expression-operator-toggle[^>]*data-expression-drop-group-path=/,
@@ -139,6 +133,76 @@ test("buildAppliedSearchTermsView ignores empty groups", () => {
   assert.doesNotMatch(view.html, /data-expression-path="root\.0"/);
   assert.doesNotMatch(view.html, /data-expression-group-path="root"/);
   assert.match(view.html, /data-zone-rgb="123"/);
+});
+
+test("buildAppliedSearchTermsView only renders insertion targets for moves that change the tree", () => {
+  const view = buildAppliedSearchTermsView(
+    {
+      type: "group",
+      path: "root",
+      operator: "or",
+      children: [
+        {
+          type: "term",
+          path: "root.0",
+          key: "fish-filter:favourite",
+          label: "Favourite",
+          kindLabel: "Filter",
+        },
+        {
+          type: "term",
+          path: "root.1",
+          key: "fish:235",
+          label: "Pink Dolphin",
+          kindLabel: "Fish",
+        },
+        {
+          type: "term",
+          path: "root.2",
+          key: "zone:123",
+          label: "Velia Coast",
+          kindLabel: "Zone",
+        },
+      ],
+    },
+    {
+      activeDragPath: "root.0",
+    },
+  );
+
+  assert.equal(view.hasContent, true);
+  assert.match(view.html, /data-dragging="true"/);
+  assert.doesNotMatch(view.html, /data-expression-drop-slot-index="0"/);
+  assert.doesNotMatch(view.html, /data-expression-drop-slot-index="1"/);
+  assert.match(view.html, /data-expression-drop-slot-group-path="root"[\s\S]*data-expression-drop-slot-index="2"/);
+  assert.match(view.html, /data-expression-drop-slot-group-path="root"[\s\S]*data-expression-drop-slot-index="3"/);
+});
+
+test("buildAppliedSearchTermsView suppresses insertion targets when dragging the only term", () => {
+  const view = buildAppliedSearchTermsView(
+    {
+      type: "group",
+      path: "root",
+      operator: "or",
+      children: [
+        {
+          type: "term",
+          path: "root.0",
+          key: "fish-filter:favourite",
+          label: "Favourite",
+          kindLabel: "Filter",
+        },
+      ],
+    },
+    {
+      activeDragPath: "root.0",
+    },
+  );
+
+  assert.equal(view.hasContent, true);
+  assert.match(view.html, /data-dragging="true"/);
+  assert.doesNotMatch(view.html, /data-expression-drop-slot-group-path=/);
+  assert.doesNotMatch(view.html, /data-expression-drop-slot-index=/);
 });
 
 test("buildAppliedSearchTermsView can suppress term negation controls", () => {

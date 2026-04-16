@@ -1,4 +1,7 @@
-import { FISH_FILTER_TERM_ORDER } from "./map-search-contract.js";
+import {
+  FISH_FILTER_TERM_ORDER,
+  wouldSearchExpressionMoveToIndexChangeTree,
+} from "./map-search-contract.js";
 import { renderSearchResults, renderSearchSelection } from "./map-search-panel.js";
 import {
   buildDefaultSearchMatches,
@@ -320,7 +323,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
       if (!sourcePath) {
         return;
       }
-      this.clearExpressionDragState();
+      this.clearExpressionDragState({ render: false });
       this._dragState.sourcePath = sourcePath;
       this._dragState.sourceElement = draggableNode;
       this.setExpressionDraggingState(true);
@@ -337,6 +340,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
           );
         }
       }
+      this.scheduleRender();
     };
     this._handleDragOver = (event) => {
       if (!this._dragState.sourcePath) {
@@ -352,11 +356,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
           slotTarget.getAttribute("data-expression-drop-slot-index"),
           10,
         );
-        if (
-          targetGroupPath &&
-          Number.isInteger(targetGroupIndex) &&
-          !expressionPathStartsWith(sourcePath, targetGroupPath)
-        ) {
+        if (wouldSearchExpressionMoveToIndexChangeTree(sourcePath, targetGroupPath, targetGroupIndex)) {
           event.preventDefault();
           if (event.dataTransfer) {
             event.dataTransfer.dropEffect = "move";
@@ -577,7 +577,9 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this._dragState.dropIndex = -1;
   }
 
-  clearExpressionDragState() {
+  clearExpressionDragState(options = {}) {
+    const shouldRender = options.render !== false;
+    const hadActiveDrag = Boolean(this._dragState.sourcePath);
     this.clearExpressionDropState();
     if (this._dragState.sourceElement?.dataset) {
       delete this._dragState.sourceElement.dataset.dragging;
@@ -586,6 +588,9 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this.setExpressionDraggingState(false);
     this._dragState.sourceElement = null;
     this._dragState.sourcePath = "";
+    if (shouldRender && hadActiveDrag) {
+      this.scheduleRender();
+    }
   }
 
   setExpressionDraggingState(active) {
@@ -676,6 +681,7 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     this._elements.zoneCatalog = this._zoneCatalog;
 
     renderSearchSelection(this._elements, bundle, fishLookup, {
+      activeDragPath: this._dragState.sourcePath,
       resolveSelectedFishIds,
       resolveSelectedFishFilterTerms,
       resolveSelectedSemanticFieldIdsByLayer,

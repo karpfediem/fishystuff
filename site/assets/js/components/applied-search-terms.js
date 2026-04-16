@@ -1,3 +1,5 @@
+import { wouldSearchExpressionMoveToIndexChangeTree } from "../../map/search-expression/index.js";
+
 function defaultEscapeHtml(value) {
   return String(value ?? "").replace(
     /[&<>"']/g,
@@ -130,19 +132,28 @@ function renderOperatorBadge(operator, escapeHtml, options = {}) {
   const sizeClass = compact ? "badge-xs" : "badge-sm";
   const groupPath = String(options.groupPath || "").trim();
   const boundaryIndex = Number.parseInt(options.boundaryIndex, 10);
+  const activeDragPath = String(options.activeDragPath || "").trim();
   const nextOperator = operator === "and" ? "or" : "and";
   const baseClass = `fishy-applied-expression-operator badge ${toneClass} ${sizeClass} uppercase tracking-[0.24em]`;
   if (!groupPath || !Number.isInteger(boundaryIndex)) {
     return `<span class="${baseClass}">${escapeHtml(operator)}</span>`;
   }
+  const dropTargetAttributes = wouldSearchExpressionMoveToIndexChangeTree(
+    activeDragPath,
+    groupPath,
+    boundaryIndex,
+  )
+    ? `
+      data-expression-drop-slot-group-path="${escapeHtml(groupPath)}"
+      data-expression-drop-slot-index="${escapeHtml(boundaryIndex)}"`
+    : "";
   return `
     <button
       class="${baseClass} fishy-applied-expression-operator-toggle cursor-pointer"
       type="button"
       data-expression-group-path="${escapeHtml(groupPath)}"
       data-expression-boundary-index="${escapeHtml(boundaryIndex)}"
-      data-expression-drop-slot-group-path="${escapeHtml(groupPath)}"
-      data-expression-drop-slot-index="${escapeHtml(boundaryIndex)}"
+      ${dropTargetAttributes}
       data-expression-next-operator="${escapeHtml(nextOperator)}"
       aria-label="${escapeHtml(`Change group operator to ${nextOperator.toUpperCase()}`)}"
       title="${escapeHtml(`Change group operator to ${nextOperator.toUpperCase()}`)}"
@@ -182,9 +193,11 @@ function renderNegationToggle(path, negated, escapeHtml, options = {}) {
   `;
 }
 
-function renderTermNode(node, escapeHtml, buttonClass) {
+function renderTermNode(node, escapeHtml, buttonClass, options = {}) {
   const label = node.label || "Applied term";
   const removeLabel = node.removeLabel || `Remove ${label}`;
+  const activeDragPath = String(options.activeDragPath || "").trim();
+  const draggingAttribute = activeDragPath && activeDragPath === node.path ? ' data-dragging="true"' : "";
   const negateToggleMarkup = node.allowNegation
     ? renderNegationToggle(node.path, node.negated, escapeHtml, {
       label,
@@ -206,7 +219,7 @@ function renderTermNode(node, escapeHtml, buttonClass) {
         data-expression-drop-term-path="${escapeHtml(node.path)}"
         data-expression-key="${escapeHtml(node.key || label)}"${
           node.grade ? ` data-grade="${escapeHtml(node.grade)}"` : ""
-        }${node.negated && node.allowNegation ? ' data-expression-negated="true"' : ""}
+        }${node.negated && node.allowNegation ? ' data-expression-negated="true"' : ""}${draggingAttribute}
       >
         <div class="fishy-applied-term-main join-item">
           ${
@@ -236,7 +249,11 @@ function renderTermNode(node, escapeHtml, buttonClass) {
   `;
 }
 
-function renderInsertionSlot(groupPath, childIndex, escapeHtml) {
+function renderInsertionSlot(groupPath, childIndex, escapeHtml, options = {}) {
+  const activeDragPath = String(options.activeDragPath || "").trim();
+  if (!wouldSearchExpressionMoveToIndexChangeTree(activeDragPath, groupPath, childIndex)) {
+    return "";
+  }
   return `
     <span
       class="fishy-applied-expression-slot"
@@ -250,8 +267,10 @@ function renderInsertionSlot(groupPath, childIndex, escapeHtml) {
 
 function renderGroupNode(node, escapeHtml, buttonClass, options = {}) {
   const isRoot = options.isRoot === true;
+  const activeDragPath = String(options.activeDragPath || "").trim();
   const children = node.children.filter(Boolean);
   const operator = normalizeOperator(node.operator);
+  const draggingAttribute = activeDragPath && activeDragPath === node.path ? ' data-dragging="true"' : "";
   const negationMarkup = renderNegationToggle(node.path, node.negated, escapeHtml, {
     label: isRoot ? "expression" : node.label || "group",
   });
@@ -265,6 +284,7 @@ function renderGroupNode(node, escapeHtml, buttonClass, options = {}) {
         data-expression-path="${escapeHtml(node.path)}"
         data-expression-drag-path="${escapeHtml(node.path)}"
         data-expression-drop-node-path="${escapeHtml(node.path)}"
+        ${draggingAttribute}
         title="${escapeHtml("Drag group")}"
       >(</span>
     `;
@@ -274,22 +294,23 @@ function renderGroupNode(node, escapeHtml, buttonClass, options = {}) {
     .map((child, index) => {
       const renderedChild =
         child.type === "group"
-          ? renderGroupNode(child, escapeHtml, buttonClass)
-          : renderTermNode(child, escapeHtml, buttonClass);
+          ? renderGroupNode(child, escapeHtml, buttonClass, { activeDragPath })
+          : renderTermNode(child, escapeHtml, buttonClass, { activeDragPath });
       if (index === 0) {
-        return `${renderInsertionSlot(node.path, 0, escapeHtml)}${renderedChild}`;
+        return `${renderInsertionSlot(node.path, 0, escapeHtml, { activeDragPath })}${renderedChild}`;
       }
       return `${renderOperatorBadge(operator, escapeHtml, {
         compact: true,
         groupPath: node.path,
         boundaryIndex: index,
+        activeDragPath,
       })}${renderedChild}`;
     })
-    .join("") + renderInsertionSlot(node.path, children.length, escapeHtml);
+    .join("") + renderInsertionSlot(node.path, children.length, escapeHtml, { activeDragPath });
 
   return `
     <div
-      class="fishy-applied-expression-group inline-flex max-w-full flex-wrap items-center gap-2"
+      class="fishy-applied-expression-group inline-flex max-w-full flex-wrap items-center gap-2${isRoot ? " fishy-applied-expression-group-root" : ""}"
       data-expression-node-kind="group"
       data-expression-path="${escapeHtml(node.path)}"
       data-expression-drop-group-path="${escapeHtml(node.path)}"
@@ -308,6 +329,7 @@ export function buildAppliedSearchTermsView(expression, options = {}) {
   const escapeHtml =
     typeof options.escapeHtml === "function" ? options.escapeHtml : defaultEscapeHtml;
   const removeButtonClass = String(options.removeButtonClass || "").trim();
+  const activeDragPath = String(options.activeDragPath || "").trim();
   const normalizedExpression = normalizeExpressionNode(expression);
   const rootNode =
     normalizedExpression?.type === "group"
@@ -324,7 +346,10 @@ export function buildAppliedSearchTermsView(expression, options = {}) {
           }
         : null;
   const leafCount = countLeafTerms(rootNode);
-  const renderKey = JSON.stringify(buildRenderKey(rootNode));
+  const renderTreeKey = buildRenderKey(rootNode);
+  const renderKey = activeDragPath
+    ? JSON.stringify([renderTreeKey, activeDragPath])
+    : JSON.stringify(renderTreeKey);
 
   if (!rootNode || !leafCount) {
     return {
@@ -357,7 +382,7 @@ export function buildAppliedSearchTermsView(expression, options = {}) {
       data-expression-path="${escapeHtml(rootNode.path || "root")}"
       data-expression-operator="${escapeHtml(rootNode.operator)}"
     >
-      ${renderGroupNode(rootNode, escapeHtml, buttonClass, { isRoot: true })}
+      ${renderGroupNode(rootNode, escapeHtml, buttonClass, { isRoot: true, activeDragPath })}
     </section>
   `;
 

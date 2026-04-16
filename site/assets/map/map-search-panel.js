@@ -376,6 +376,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
     typeof options.resolveFishGrade === "function" ? options.resolveFishGrade : () => "unknown";
   const formatZone = typeof options.formatZone === "function" ? options.formatZone : (value) => String(value || "");
   const fishFilterTermMetadata = options.fishFilterTermMetadata || {};
+  const activeDragPath = String(options.activeDragPath || "").trim();
 
   const zoneLookup = new Map((elements.zoneCatalog || []).map((zone) => [zone.zoneRgb, zone]));
   const patchLookup = new Map(
@@ -415,6 +416,7 @@ export function renderSearchSelection(elements, stateBundle, fishLookup, options
 
   const { hasContent: hasAnySelection, html, renderKey } = buildAppliedSearchTermsView(expressionView, {
     escapeHtml,
+    activeDragPath,
     removeButtonClass: "fishymap-selection-remove",
   });
 

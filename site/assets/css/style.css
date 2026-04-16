@@ -396,6 +396,10 @@ body {
     border-radius: var(--radius-box, 1rem);
 }
 
+:where(.fishy-applied-expression-group-root) {
+    padding-left: 0.55rem;
+}
+
 :where(.fishy-applied-term[data-grade="favourite"]) {
     --fishy-applied-term-grade: var(--color-error, #d64545);
 }
@@ -484,6 +488,10 @@ body {
         color 120ms ease,
         border-color 120ms ease,
         background-color 120ms ease;
+}
+
+:where(.fishy-applied-expression-group-root > .fishy-applied-expression-negate-toggle) {
+    transform: translate(-0.95rem, -50%);
 }
 
 :where(.fishy-applied-expression-negate-toggle:hover, .fishy-applied-expression-negate-toggle:focus-visible) {

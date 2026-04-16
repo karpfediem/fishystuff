@@ -16,6 +16,7 @@ import {
   searchExpressionIndicesEqual,
   searchExpressionPathFromIndices,
   visitSearchExpression,
+  wouldSearchExpressionMoveToIndexChangeTree,
 } from "./core.js";
 import {
   normalizeSearchTerm,
@@ -233,7 +234,7 @@ export function moveSearchExpressionNodeToIndex(expression, sourcePath, groupPat
   if (!sourceNode || targetGroup?.type !== "group") {
     return normalizedExpression;
   }
-  if (isSearchExpressionPathPrefix(normalizedSourcePath.indices, normalizedGroupPath.indices)) {
+  if (!wouldSearchExpressionMoveToIndexChangeTree(sourcePath, groupPath, childIndex)) {
     return normalizedExpression;
   }
   const sourceParentIndices = normalizedSourcePath.indices.slice(0, -1);
