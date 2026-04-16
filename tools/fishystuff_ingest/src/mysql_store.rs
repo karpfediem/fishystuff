@@ -110,10 +110,10 @@ impl MySqlIngestStore {
         ingest_run_id: u64,
         rows_seen: u64,
         rows_inserted: u64,
+        rows_deduped: u64,
         notes: Option<&str>,
     ) -> Result<()> {
         let mut conn = self.pool.get_conn().context("get mysql conn")?;
-        let rows_deduped = rows_seen.saturating_sub(rows_inserted);
         conn.exec_drop(
             "UPDATE ingest_runs \
              SET rows_seen = :rows_seen, rows_inserted = :rows_inserted, rows_deduped = :rows_deduped, notes = :notes, finished_at = UTC_TIMESTAMP(6) \

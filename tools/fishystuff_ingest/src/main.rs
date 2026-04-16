@@ -764,23 +764,32 @@ fn run_ingest_mysql(
         rows_inserted += store.insert_events(&batch).context("insert mysql events")?;
     }
 
+    let rows_deduped = ranking_rows_deduped(rows_seen, rows_inserted, rows_skipped);
     let run_notes = format!(
         "source=ranking_csv skipped={} input_sha256={}",
         rows_skipped, input_sha256
     );
     store
-        .finish_ingest_run(ingest_run_id, rows_seen, rows_inserted, Some(&run_notes))
+        .finish_ingest_run(
+            ingest_run_id,
+            rows_seen,
+            rows_inserted,
+            rows_deduped,
+            Some(&run_notes),
+        )
         .context("finish ingest run")?;
 
     println!(
         "import-ranking: seen={} inserted={} deduped={} skipped={} map_version={}",
-        rows_seen,
-        rows_inserted,
-        rows_seen.saturating_sub(rows_inserted),
-        rows_skipped,
-        map_version
+        rows_seen, rows_inserted, rows_deduped, rows_skipped, map_version
     );
     Ok(())
+}
+
+fn ranking_rows_deduped(rows_seen: u64, rows_inserted: u64, rows_skipped: u64) -> u64 {
+    rows_seen
+        .saturating_sub(rows_skipped)
+        .saturating_sub(rows_inserted)
 }
 
 fn ranking_row_to_event_row(row: &RankingRow) -> Result<RankingEventRow> {
@@ -829,6 +838,8 @@ fn ranking_event_uid(
     world_y: i32,
     world_z: i32,
 ) -> String {
+    // Normalize to second / millimeter / integer world-unit precision so reruns
+    // of equivalent ranking exports collapse to one canonical event id.
     let mut hasher = Sha256::new();
     hasher.update(ts_utc_epoch.to_le_bytes());
     hasher.update(fish_id.to_le_bytes());
@@ -2285,6 +2296,65 @@ mod tests {
         assert!(seen.insert(first.event_uid.clone()));
         assert!(!seen.insert(second.event_uid.clone()));
         assert_eq!(seen.len(), 1);
+    }
+
+    #[test]
+    fn ranking_dedupe_key_normalizes_equivalent_timestamp_formats() {
+        let dotted = RankingRow {
+            date: "12.04.2025 23:57".to_string(),
+            encyclopedia_key: 21,
+            length: 114.683,
+            x: -249_904.0,
+            y: -4_059.0,
+            z: -47_175.0,
+        };
+        let am_pm = RankingRow {
+            date: "2025-04-12 11:57:00 PM".to_string(),
+            encyclopedia_key: dotted.encyclopedia_key,
+            length: dotted.length,
+            x: dotted.x,
+            y: dotted.y,
+            z: dotted.z,
+        };
+
+        let dotted_event = ranking_row_to_event_row(&dotted).expect("dotted event");
+        let am_pm_event = ranking_row_to_event_row(&am_pm).expect("am/pm event");
+
+        assert_eq!(dotted_event.ts_utc, am_pm_event.ts_utc);
+        assert_eq!(dotted_event.event_uid, am_pm_event.event_uid);
+    }
+
+    #[test]
+    fn ranking_dedupe_key_normalizes_subunit_coordinate_noise() {
+        let precise = RankingRow {
+            date: "24.04.2025 13:44".to_string(),
+            encyclopedia_key: 60,
+            length: 32.022,
+            x: 369_908.38,
+            y: -8_245.382,
+            z: -23_714.15,
+        };
+        let rounded = RankingRow {
+            date: precise.date.clone(),
+            encyclopedia_key: precise.encyclopedia_key,
+            length: precise.length,
+            x: 369_908.0,
+            y: -8_245.0,
+            z: -23_714.0,
+        };
+
+        let precise_event = ranking_row_to_event_row(&precise).expect("precise event");
+        let rounded_event = ranking_row_to_event_row(&rounded).expect("rounded event");
+
+        assert_eq!(precise_event.world_x, rounded_event.world_x);
+        assert_eq!(precise_event.world_y, rounded_event.world_y);
+        assert_eq!(precise_event.world_z, rounded_event.world_z);
+        assert_eq!(precise_event.event_uid, rounded_event.event_uid);
+    }
+
+    #[test]
+    fn ranking_rows_deduped_excludes_skipped_rows() {
+        assert_eq!(ranking_rows_deduped(10, 3, 2), 5);
     }
 
     #[test]
