@@ -188,49 +188,50 @@ function renderTermNode(node, escapeHtml, buttonClass) {
   const negateToggleMarkup = node.allowNegation
     ? renderNegationToggle(node.path, node.negated, escapeHtml, {
       label,
-      className: "join-item",
     })
     : "";
   return `
     <div
-      class="fishy-applied-term join items-stretch max-w-full cursor-grab"
+      class="fishy-applied-term-shell max-w-full${node.allowNegation ? " fishy-applied-term-shell-has-negation" : ""}"
       role="listitem"
-      draggable="true"
-      data-expression-node-kind="term"
-      data-expression-path="${escapeHtml(node.path)}"
-      data-expression-drag-path="${escapeHtml(node.path)}"
-      data-expression-drop-node-path="${escapeHtml(node.path)}"
-      data-expression-drop-term-path="${escapeHtml(node.path)}"
-      data-expression-key="${escapeHtml(node.key || label)}"${
-        node.grade ? ` data-grade="${escapeHtml(node.grade)}"` : ""
-      }${node.negated && node.allowNegation ? ' data-expression-negated="true"' : ""}${
-        node.allowNegation ? ' data-expression-has-negation="true"' : ""
-      }
     >
       ${negateToggleMarkup}
-      <div class="fishy-applied-term-main join-item">
-        ${
-          node.kindLabel
-            ? `<span class="badge badge-soft badge-xs fishy-applied-term-kind">${escapeHtml(node.kindLabel)}</span>`
-            : ""
-        }
-        <div class="fishy-applied-term-body">
-          ${node.contentMarkup || `<span class="truncate">${escapeHtml(label)}</span>`}
-        </div>
-        ${
-          node.description
-            ? `<span class="fishy-applied-term-description text-xs text-base-content/70" title="${escapeHtml(node.description)}">${escapeHtml(node.description)}</span>`
-            : ""
-        }
-      </div>
-      <button
-        class="${escapeHtml(buttonClass)} join-item"
-        type="button"
-        aria-label="${escapeHtml(removeLabel)}"
-        data-expression-remove-path="${escapeHtml(node.path)}"${renderAttributes(node.removeAttributes, escapeHtml)}
+      <div
+        class="fishy-applied-term join items-stretch max-w-full cursor-grab"
+        draggable="true"
+        data-expression-node-kind="term"
+        data-expression-path="${escapeHtml(node.path)}"
+        data-expression-drag-path="${escapeHtml(node.path)}"
+        data-expression-drop-node-path="${escapeHtml(node.path)}"
+        data-expression-drop-term-path="${escapeHtml(node.path)}"
+        data-expression-key="${escapeHtml(node.key || label)}"${
+          node.grade ? ` data-grade="${escapeHtml(node.grade)}"` : ""
+        }${node.negated && node.allowNegation ? ' data-expression-negated="true"' : ""}
       >
-        ×
-      </button>
+        <div class="fishy-applied-term-main join-item">
+          ${
+            node.kindLabel
+              ? `<span class="badge badge-soft badge-xs fishy-applied-term-kind">${escapeHtml(node.kindLabel)}</span>`
+              : ""
+          }
+          <div class="fishy-applied-term-body">
+            ${node.contentMarkup || `<span class="truncate">${escapeHtml(label)}</span>`}
+          </div>
+          ${
+            node.description
+              ? `<span class="fishy-applied-term-description text-xs text-base-content/70" title="${escapeHtml(node.description)}">${escapeHtml(node.description)}</span>`
+              : ""
+          }
+        </div>
+        <button
+          class="${escapeHtml(buttonClass)} join-item"
+          type="button"
+          aria-label="${escapeHtml(removeLabel)}"
+          data-expression-remove-path="${escapeHtml(node.path)}"${renderAttributes(node.removeAttributes, escapeHtml)}
+        >
+          ×
+        </button>
+      </div>
     </div>
   `;
 }

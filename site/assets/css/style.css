@@ -303,9 +303,22 @@ body {
     margin: -0.1rem 0 0;
 }
 
+:where(.fishy-applied-term-shell) {
+    --fishy-applied-term-shell-offset: 0;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    padding-left: var(--fishy-applied-term-shell-offset);
+}
+
+:where(.fishy-applied-term-shell.fishy-applied-term-shell-has-negation) {
+    --fishy-applied-term-shell-offset: 0.8rem;
+}
+
 :where(.fishy-applied-term) {
     --fishy-applied-term-grade: color-mix(in oklab, var(--color-base-content, #1f2937) 42%, var(--color-base-300, #d6d3d1) 58%);
-    --fishy-applied-term-kind-left: 0.7rem;
     position: relative;
     min-width: 0;
     max-width: 100%;
@@ -313,10 +326,6 @@ body {
     border: 1px solid color-mix(in oklab, var(--fishy-applied-term-grade) 48%, var(--color-base-300, #d6d3d1) 52%);
     border-radius: var(--radius-box, 1rem);
     background: var(--color-base-100, #fffdf4);
-}
-
-:where(.fishy-applied-term[data-expression-has-negation="true"]) {
-    --fishy-applied-term-kind-left: 2.35rem;
 }
 
 :where(.fishy-applied-expression-group-handle) {
@@ -440,25 +449,28 @@ body {
 :where(.fishy-applied-term-kind) {
     position: absolute;
     top: 0.2rem;
-    left: var(--fishy-applied-term-kind-left);
+    left: 0.7rem;
     z-index: 1;
     flex: none;
     margin: 0;
-    transform: translateY(-50%);
+    transform: translateY(-100%);
     pointer-events: none;
     user-select: none;
 }
 
 :where(.fishy-applied-expression-negate-toggle) {
     --fishy-applied-expression-negate-color: var(--color-error, #d64545);
+    position: absolute;
+    top: 50%;
+    left: 0;
+    z-index: 2;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    align-self: center;
     inline-size: 1.4rem;
     block-size: 1.4rem;
     min-height: 1.4rem;
-    margin-inline: 0.15rem 0;
+    margin: 0;
     padding: 0;
     border: 1px solid transparent;
     border-radius: calc(var(--radius-box, 1rem) * 0.42);
@@ -467,6 +479,7 @@ body {
     font-size: 0.8rem;
     font-weight: 700;
     line-height: 1;
+    transform: translate(-0.6rem, -50%);
     transition:
         color 120ms ease,
         border-color 120ms ease,
