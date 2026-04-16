@@ -366,7 +366,12 @@ body {
     background: var(--color-primary, #2563eb);
 }
 
-:where(.fishy-applied-expression-group[data-expression-drop-mode="move"], .fishy-applied-expression-operator-toggle[data-expression-drop-mode="move"]) {
+:where(.fishy-applied-expression-operator-toggle[data-expression-drop-mode="insert"]) {
+    outline: 1px solid var(--color-primary, #2563eb);
+    outline-offset: 2px;
+}
+
+:where(.fishy-applied-expression-group[data-expression-drop-mode="move"]) {
     outline: 1px dashed var(--color-base-content, #1f2937);
     outline-offset: 2px;
     border-radius: var(--radius-box, 1rem);

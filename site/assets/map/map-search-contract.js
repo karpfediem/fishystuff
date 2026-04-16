@@ -273,9 +273,15 @@ function compactSearchExpressionNode(node, { isRoot = false } = {}) {
   if (clonedNode.type === "term") {
     return clonedNode.term ? clonedNode : null;
   }
+  const operator = normalizeSearchExpressionOperator(clonedNode.operator);
   const children = clonedNode.children
     .map((child) => compactSearchExpressionNode(child))
-    .filter(Boolean);
+    .filter(Boolean)
+    .flatMap((child) =>
+      child?.type === "group" && normalizeSearchExpressionOperator(child.operator) === operator
+        ? child.children.map((grandchild) => cloneSearchExpressionNode(grandchild)).filter(Boolean)
+        : [child],
+    );
   if (!isRoot && children.length === 0) {
     return null;
   }
@@ -284,7 +290,7 @@ function compactSearchExpressionNode(node, { isRoot = false } = {}) {
   }
   return {
     type: "group",
-    operator: normalizeSearchExpressionOperator(clonedNode.operator),
+    operator,
     children,
   };
 }
@@ -362,6 +368,23 @@ function clampSearchExpressionChildIndex(value, fallback) {
     return fallback;
   }
   return normalized < 0 ? 0 : normalized;
+}
+
+function buildSearchExpressionSliceNode(operator, children) {
+  const normalizedChildren = (Array.isArray(children) ? children : [])
+    .map((child) => cloneSearchExpressionNode(child))
+    .filter(Boolean);
+  if (normalizedChildren.length === 0) {
+    return null;
+  }
+  if (normalizedChildren.length === 1) {
+    return normalizedChildren[0];
+  }
+  return {
+    type: "group",
+    operator: normalizeSearchExpressionOperator(operator),
+    children: normalizedChildren,
+  };
 }
 
 export function buildSearchExpressionFromSelectedTerms(selectedTerms, options = {}) {
@@ -579,6 +602,46 @@ export function setSearchExpressionGroupOperator(expression, path, operator) {
         type: "group",
         operator: normalizedOperator,
         children: node.children.map((child) => cloneSearchExpressionNode(child)),
+      };
+    },
+  );
+  return compactSearchExpressionNode(nextExpression, { isRoot: true }) || buildSearchExpressionFromSelectedTerms([]);
+}
+
+export function setSearchExpressionBoundaryOperator(expression, path, boundaryIndex, operator) {
+  const normalizedExpression = resolveSearchExpression(expression);
+  const normalizedPath = normalizeSearchExpressionPath(path);
+  if (!normalizedPath) {
+    return normalizedExpression;
+  }
+  const normalizedOperator = normalizeSearchExpressionOperator(operator);
+  const targetNode = resolveSearchExpressionNode(normalizedExpression, normalizedPath.path);
+  const splitIndex = Number.parseInt(boundaryIndex, 10);
+  if (
+    targetNode?.type !== "group" ||
+    !Number.isInteger(splitIndex) ||
+    splitIndex <= 0 ||
+    splitIndex >= targetNode.children.length ||
+    normalizeSearchExpressionOperator(targetNode.operator) === normalizedOperator
+  ) {
+    return normalizedExpression;
+  }
+  const nextExpression = visitSearchExpression(
+    normalizedExpression,
+    normalizedPath.indices,
+    (node) => {
+      if (node?.type !== "group") {
+        return cloneSearchExpressionNode(node);
+      }
+      const leftNode = buildSearchExpressionSliceNode(node.operator, node.children.slice(0, splitIndex));
+      const rightNode = buildSearchExpressionSliceNode(node.operator, node.children.slice(splitIndex));
+      if (!leftNode || !rightNode) {
+        return cloneSearchExpressionNode(node);
+      }
+      return {
+        type: "group",
+        operator: normalizedOperator,
+        children: [leftNode, rightNode],
       };
     },
   );

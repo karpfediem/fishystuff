@@ -11,6 +11,7 @@ import {
   normalizeFishFilterTerms,
   removeSearchExpressionNode,
   resolveSearchExpression,
+  setSearchExpressionBoundaryOperator,
   resolveSelectedSearchTerms,
   setSearchExpressionGroupOperator,
 } from "./map-search-contract.js";
@@ -675,12 +676,23 @@ export function buildSearchExpressionOperatorSignalPatch(signals, target) {
     stateBundle?.inputState?.search?.selectedTerms,
     stateBundle?.inputState?.filters,
   );
+  const boundaryIndex = Number.parseInt(
+    target?.boundaryIndex ?? target?.expressionBoundaryIndex,
+    10,
+  );
   return buildSearchExpressionStatePatch(
-    setSearchExpressionGroupOperator(
-      expression,
-      target?.expressionPath ?? target?.groupPath,
-      target?.operator ?? target?.nextOperator,
-    ),
+    Number.isInteger(boundaryIndex)
+      ? setSearchExpressionBoundaryOperator(
+        expression,
+        target?.expressionPath ?? target?.groupPath,
+        boundaryIndex,
+        target?.operator ?? target?.nextOperator,
+      )
+      : setSearchExpressionGroupOperator(
+        expression,
+        target?.expressionPath ?? target?.groupPath,
+        target?.operator ?? target?.nextOperator,
+      ),
   );
 }
 

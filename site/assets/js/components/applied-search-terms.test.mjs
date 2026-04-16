@@ -65,6 +65,11 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
   assert.doesNotMatch(view.html, />Applied search</);
   assert.doesNotMatch(view.html, />\s*2 terms\s*</);
   assert.match(view.html, /data-expression-group-path="root"/);
+  assert.match(view.html, /data-expression-boundary-index="1"/);
+  assert.match(
+    view.html,
+    /fishy-applied-expression-operator-toggle[\s\S]*data-expression-group-path="root"[\s\S]*data-expression-boundary-index="1"[\s\S]*data-expression-drop-slot-group-path="root"[\s\S]*data-expression-drop-slot-index="1"/,
+  );
   assert.doesNotMatch(view.html, /data-expression-group-path="root\.1"/);
   assert.match(view.html, /data-expression-next-operator="and"/);
   assert.doesNotMatch(view.html, /data-expression-next-operator="or"/);
@@ -72,6 +77,11 @@ test("buildAppliedSearchTermsView renders boolean groups with operator badges an
   assert.match(view.html, /data-expression-drop-slot-group-path="root\.1"/);
   assert.match(view.html, /data-expression-drop-slot-index="0"/);
   assert.match(view.html, /data-expression-drop-slot-index="1"/);
+  assert.match(view.html, /data-expression-drop-slot-index="2"/);
+  assert.doesNotMatch(
+    view.html,
+    /fishy-applied-expression-operator-toggle[^>]*data-expression-drop-group-path=/,
+  );
   assert.match(view.html, /data-expression-drop-node-path="root\.0"/);
   assert.match(view.html, /data-expression-drop-node-path="root\.1"/);
   assert.match(view.html, /data-expression-drag-path="root\.1"/);

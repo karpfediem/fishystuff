@@ -469,7 +469,7 @@ test("buildSearchSelectionRemovalSignalPatch removes by expression path without 
   );
 });
 
-test("buildSearchExpressionOperatorSignalPatch toggles a targeted group operator", () => {
+test("buildSearchExpressionOperatorSignalPatch merges into the parent when separator rewrite matches it", () => {
   const signals = {
     ...baseSignals(),
     _map_ui: {
@@ -498,6 +498,64 @@ test("buildSearchExpressionOperatorSignalPatch toggles a targeted group operator
   assert.deepEqual(
     buildSearchExpressionOperatorSignalPatch(signals, {
       groupPath: "root.0",
+      boundaryIndex: 1,
+      nextOperator: "or",
+    }),
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              { type: "term", term: { kind: "fish", fishId: 912 } },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            ],
+          },
+          selectedTerms: [
+            { kind: "fish", fishId: 912 },
+            { kind: "zone", zoneRgb: 123 },
+            { kind: "fish-filter", term: "favourite" },
+          ],
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [912],
+          zoneRgbs: [123],
+          semanticFieldIdsByLayer: { zone_mask: [123] },
+          fishFilterTerms: ["favourite"],
+        },
+      },
+    },
+  );
+});
+
+test("buildSearchExpressionOperatorSignalPatch rewrites only the clicked separator boundary", () => {
+  const signals = {
+    ...baseSignals(),
+    _map_ui: {
+      search: {
+        query: "",
+        open: true,
+        expression: {
+          type: "group",
+          operator: "and",
+          children: [
+            { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
+          ],
+        },
+      },
+    },
+  };
+
+  assert.deepEqual(
+    buildSearchExpressionOperatorSignalPatch(signals, {
+      groupPath: "root",
+      boundaryIndex: 2,
       nextOperator: "or",
     }),
     {
@@ -509,19 +567,19 @@ test("buildSearchExpressionOperatorSignalPatch toggles a targeted group operator
             children: [
               {
                 type: "group",
-                operator: "or",
+                operator: "and",
                 children: [
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
                   { type: "term", term: { kind: "fish", fishId: 912 } },
-                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
                 ],
               },
-              { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
             ],
           },
           selectedTerms: [
+            { kind: "fish-filter", term: "favourite" },
             { kind: "fish", fishId: 912 },
             { kind: "zone", zoneRgb: 123 },
-            { kind: "fish-filter", term: "favourite" },
           ],
         },
       },
@@ -705,19 +763,13 @@ test("buildSearchExpressionDragSignalPatch moves a dragged subgroup into another
             type: "group",
             operator: "or",
             children: [
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
               {
                 type: "group",
-                operator: "or",
+                operator: "and",
                 children: [
-                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
-                  {
-                    type: "group",
-                    operator: "and",
-                    children: [
-                      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-                      { type: "term", term: { kind: "fish", fishId: 912 } },
-                    ],
-                  },
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
                 ],
               },
             ],
@@ -780,19 +832,13 @@ test("buildSearchExpressionDragSignalPatch groups a dragged subgroup with a targ
             type: "group",
             operator: "or",
             children: [
+              { type: "term", term: { kind: "zone", zoneRgb: 123 } },
               {
                 type: "group",
-                operator: "or",
+                operator: "and",
                 children: [
-                  { type: "term", term: { kind: "zone", zoneRgb: 123 } },
-                  {
-                    type: "group",
-                    operator: "and",
-                    children: [
-                      { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-                      { type: "term", term: { kind: "fish", fishId: 912 } },
-                    ],
-                  },
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                  { type: "term", term: { kind: "fish", fishId: 912 } },
                 ],
               },
             ],

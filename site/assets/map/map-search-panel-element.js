@@ -416,12 +416,13 @@ export class FishyMapSearchPanelElement extends HTMLElementBase {
     };
     this._handleClick = (event) => {
       const operatorButton = event.target.closest(
-        "button.fishy-applied-expression-operator-toggle[data-expression-group-path][data-expression-next-operator]",
+        "button.fishy-applied-expression-operator-toggle[data-expression-group-path][data-expression-boundary-index][data-expression-next-operator]",
       );
       if (operatorButton) {
         this.dispatchPatch(
           buildSearchExpressionOperatorSignalPatch(this.signals(), {
             groupPath: operatorButton.getAttribute("data-expression-group-path"),
+            boundaryIndex: operatorButton.getAttribute("data-expression-boundary-index"),
             nextOperator: operatorButton.getAttribute("data-expression-next-operator"),
           }),
         );

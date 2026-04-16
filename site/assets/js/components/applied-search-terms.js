@@ -115,9 +115,10 @@ function renderOperatorBadge(operator, escapeHtml, options = {}) {
   const toneClass = operator === "and" ? "badge-soft" : "badge-ghost";
   const sizeClass = compact ? "badge-xs" : "badge-sm";
   const groupPath = String(options.groupPath || "").trim();
+  const boundaryIndex = Number.parseInt(options.boundaryIndex, 10);
   const nextOperator = operator === "and" ? "or" : "and";
   const baseClass = `fishy-applied-expression-operator badge ${toneClass} ${sizeClass} uppercase tracking-[0.24em]`;
-  if (!groupPath) {
+  if (!groupPath || !Number.isInteger(boundaryIndex)) {
     return `<span class="${baseClass}">${escapeHtml(operator)}</span>`;
   }
   return `
@@ -125,7 +126,9 @@ function renderOperatorBadge(operator, escapeHtml, options = {}) {
       class="${baseClass} fishy-applied-expression-operator-toggle cursor-pointer"
       type="button"
       data-expression-group-path="${escapeHtml(groupPath)}"
-      data-expression-drop-group-path="${escapeHtml(groupPath)}"
+      data-expression-boundary-index="${escapeHtml(boundaryIndex)}"
+      data-expression-drop-slot-group-path="${escapeHtml(groupPath)}"
+      data-expression-drop-slot-index="${escapeHtml(boundaryIndex)}"
       data-expression-next-operator="${escapeHtml(nextOperator)}"
       aria-label="${escapeHtml(`Change group operator to ${nextOperator.toUpperCase()}`)}"
       title="${escapeHtml(`Change group operator to ${nextOperator.toUpperCase()}`)}"
@@ -216,10 +219,14 @@ function renderGroupNode(node, escapeHtml, buttonClass, options = {}) {
         child.type === "group"
           ? renderGroupNode(child, escapeHtml, buttonClass)
           : renderTermNode(child, escapeHtml, buttonClass);
-      const leadingOperator = index === 0
-        ? ""
-        : renderOperatorBadge(operator, escapeHtml, { compact: true, groupPath: node.path });
-      return `${leadingOperator}${renderInsertionSlot(node.path, index, escapeHtml)}${renderedChild}`;
+      if (index === 0) {
+        return `${renderInsertionSlot(node.path, 0, escapeHtml)}${renderedChild}`;
+      }
+      return `${renderOperatorBadge(operator, escapeHtml, {
+        compact: true,
+        groupPath: node.path,
+        boundaryIndex: index,
+      })}${renderedChild}`;
     })
     .join("") + renderInsertionSlot(node.path, children.length, escapeHtml);
 

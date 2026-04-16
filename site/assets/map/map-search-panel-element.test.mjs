@@ -259,7 +259,7 @@ test("FishyMapSearchPanelElement rerenders search results from Datastar-driven a
   assert.equal(searchCount.textContent, "1 match");
 });
 
-test("FishyMapSearchPanelElement dispatches operator-toggle patches from the applied expression view", async () => {
+test("FishyMapSearchPanelElement dispatches operator-toggle patches that merge same-operator wrappers", async () => {
   const { FishyMapSearchPanelElement } = await loadModule();
   const { shell, panel } = createShellAndPanel(FishyMapSearchPanelElement);
   const signals = createSignals();
@@ -287,9 +287,10 @@ test("FishyMapSearchPanelElement dispatches operator-toggle patches from the app
 
   const button = new FakeElement();
   button.setAttribute("data-expression-group-path", "root.0");
+  button.setAttribute("data-expression-boundary-index", "1");
   button.setAttribute("data-expression-next-operator", "or");
   button.setClosest(
-    "button.fishy-applied-expression-operator-toggle[data-expression-group-path][data-expression-next-operator]",
+    "button.fishy-applied-expression-operator-toggle[data-expression-group-path][data-expression-boundary-index][data-expression-next-operator]",
     button,
   );
 
@@ -304,14 +305,8 @@ test("FishyMapSearchPanelElement dispatches operator-toggle patches from the app
           type: "group",
           operator: "or",
           children: [
-            {
-              type: "group",
-              operator: "or",
-              children: [
-                { type: "term", term: { kind: "fish", fishId: 912 } },
-                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
-              ],
-            },
+            { type: "term", term: { kind: "fish", fishId: 912 } },
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
           ],
         },
         selectedTerms: [
@@ -508,19 +503,13 @@ test("FishyMapSearchPanelElement dispatches subgroup move patches from the appli
           type: "group",
           operator: "or",
           children: [
+            { type: "term", term: { kind: "zone", zoneRgb: 123 } },
             {
               type: "group",
-              operator: "or",
+              operator: "and",
               children: [
-                { type: "term", term: { kind: "zone", zoneRgb: 123 } },
-                {
-                  type: "group",
-                  operator: "and",
-                  children: [
-                    { type: "term", term: { kind: "fish-filter", term: "favourite" } },
-                    { type: "term", term: { kind: "fish", fishId: 912 } },
-                  ],
-                },
+                { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                { type: "term", term: { kind: "fish", fishId: 912 } },
               ],
             },
           ],
