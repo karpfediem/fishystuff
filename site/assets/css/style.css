@@ -305,9 +305,11 @@ body {
 
 :where(.fishy-applied-term) {
     --fishy-applied-term-grade: color-mix(in oklab, var(--color-base-content, #1f2937) 42%, var(--color-base-300, #d6d3d1) 58%);
+    position: relative;
     min-width: 0;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
+    padding-top: 0.2rem;
     border: 1px solid color-mix(in oklab, var(--fishy-applied-term-grade) 48%, var(--color-base-300, #d6d3d1) 52%);
     border-radius: var(--radius-box, 1rem);
     background: var(--color-base-100, #fffdf4);
@@ -428,8 +430,15 @@ body {
 }
 
 :where(.fishy-applied-term-kind) {
+    position: absolute;
+    top: 0.2rem;
+    left: 0.3rem;
+    z-index: 1;
     flex: none;
-    margin-right: 0.1rem;
+    margin: 0;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
 }
 
 :where(.fishy-applied-term-body) {

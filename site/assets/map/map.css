@@ -279,7 +279,7 @@ fishymap-search-panel {
 #fishymap-search-selection-shell {
   max-height: min(16rem, 36dvh);
   overflow-y: auto;
-  padding: 0;
+  padding: 0.4rem 0.15rem 0.15rem 0.2rem;
   scrollbar-width: thin;
 }
 
