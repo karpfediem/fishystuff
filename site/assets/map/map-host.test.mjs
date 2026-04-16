@@ -782,6 +782,50 @@ test("grade fish filter terms derive outbound fishIds with OR semantics", async 
   }
 });
 
+test("resolveEffectiveFishIdsForWasm honors boolean grouping for fish filter expressions", () => {
+  assert.deepEqual(
+    resolveEffectiveFishIdsForWasm(
+      {
+        filters: {
+          fishIds: [],
+          fishFilterTerms: ["favourite", "missing", "red"],
+          searchExpression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                  { type: "term", term: { kind: "fish-filter", term: "missing" } },
+                ],
+              },
+              { type: "term", term: { kind: "fish-filter", term: "red" } },
+            ],
+          },
+        },
+        ui: {
+          sharedFishState: {
+            caughtIds: [912],
+            favouriteIds: [77],
+          },
+        },
+      },
+      {
+        catalog: {
+          fish: [
+            { fishId: 61, itemId: 6100, name: "Ancient Relic Crystal Shard", grade: "Prize", isPrize: true },
+            { fishId: 77, itemId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
+            { fishId: 912, itemId: 912, name: "Cron Dart", grade: "Rare", isPrize: false },
+          ],
+        },
+      },
+    ),
+    [61, 77],
+  );
+});
+
 test("semantic field filter patches are normalized and keep zone ids in sync", () => {
   const next = applyStatePatch(undefined, {
     version: 1,

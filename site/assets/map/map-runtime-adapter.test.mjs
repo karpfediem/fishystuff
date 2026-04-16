@@ -165,6 +165,59 @@ test("buildBridgeInputPatchFromSignals derives search filters from selected term
   });
 });
 
+test("buildBridgeInputPatchFromSignals derives fish ids from the boolean search expression tree", () => {
+  const patch = buildBridgeInputPatchFromSignals(
+    {
+      _map_ui: {
+        search: {
+          expression: {
+            type: "group",
+            operator: "or",
+            children: [
+              {
+                type: "group",
+                operator: "and",
+                children: [
+                  { type: "term", term: { kind: "fish-filter", term: "favourite" } },
+                  { type: "term", term: { kind: "fish-filter", term: "missing" } },
+                ],
+              },
+              { type: "term", term: { kind: "fish-filter", term: "red" } },
+            ],
+          },
+        },
+      },
+      _map_bridged: {
+        filters: {
+          fishIds: [],
+          zoneRgbs: [],
+          semanticFieldIdsByLayer: {},
+          fishFilterTerms: ["favourite", "missing", "red"],
+        },
+      },
+      _shared_fish: {
+        caughtIds: [912],
+        favouriteIds: [77],
+      },
+    },
+    {
+      currentState: {
+        ...createEmptySnapshot(),
+        catalog: {
+          fish: [
+            { fishId: 61, itemId: 6100, name: "Ancient Relic Crystal Shard", grade: "Prize", isPrize: true },
+            { fishId: 77, itemId: 77, name: "Serendia Carp", grade: "General", isPrize: false },
+            { fishId: 912, itemId: 912, name: "Cron Dart", grade: "Rare", isPrize: false },
+          ],
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(patch.filters.fishIds, [61, 77]);
+  assert.deepEqual(patch.filters.fishFilterTerms, ["favourite", "missing", "red"]);
+});
+
 test("buildBridgeInputPatchFromSignals derives zone-membership clipping from attached layers", () => {
   const patch = buildBridgeInputPatchFromSignals(
     {

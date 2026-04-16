@@ -1,3 +1,5 @@
+import { resolveSearchExpression } from "./map-search-contract.js";
+
 const THEME_EVENT = "fishystuff:themechange";
 const THEME_PROBE_ID = "fishystuff-theme-probe";
 const DEFAULT_PATCH_DEBOUNCE_MS = 48;
@@ -440,6 +442,7 @@ const FISHYMAP_FISH_FILTER_TERMS = Object.freeze([
   "white",
 ]);
 const FISHYMAP_GRADE_FISH_FILTER_TERMS = new Set(["red", "yellow", "blue", "green", "white"]);
+const FISHYMAP_FISH_SEARCH_TERM_KINDS = new Set(["fish", "fish-filter"]);
 const FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID = -1;
 
 function normalizeFishFilterTerm(value) {
@@ -765,15 +768,106 @@ function fishMatchesSharedFilterTerms(fish, filterTerms, sharedFishState) {
   return true;
 }
 
+function buildFishSearchExpressionNode(operator, children) {
+  const normalizedChildren = (Array.isArray(children) ? children : [])
+    .map((child) => cloneJson(child))
+    .filter(Boolean);
+  if (!normalizedChildren.length) {
+    return null;
+  }
+  if (normalizedChildren.length === 1) {
+    return normalizedChildren[0];
+  }
+  return {
+    type: "group",
+    operator: String(operator || "").trim().toLowerCase() === "and" ? "and" : "or",
+    children: normalizedChildren,
+  };
+}
+
+function projectSearchExpressionToFishTerms(expression) {
+  const normalizedExpression = resolveSearchExpression(expression);
+  const projectNode = (node) => {
+    if (!isPlainObject(node)) {
+      return { representable: true, expression: null };
+    }
+    if (node.type === "term") {
+      return {
+        representable: true,
+        expression: FISHYMAP_FISH_SEARCH_TERM_KINDS.has(String(node.term?.kind || "").trim())
+          ? cloneJson(node)
+          : null,
+      };
+    }
+    const operator = String(node.operator || "").trim().toLowerCase() === "and" ? "and" : "or";
+    const projectedChildren = (Array.isArray(node.children) ? node.children : []).map((child) =>
+      projectNode(child),
+    );
+    if (projectedChildren.some((child) => child.representable === false)) {
+      return { representable: false, expression: null };
+    }
+    const keptChildren = projectedChildren.flatMap((child) => (child.expression ? [child.expression] : []));
+    if (operator === "or" && keptChildren.length && keptChildren.length !== projectedChildren.length) {
+      return { representable: false, expression: null };
+    }
+    return {
+      representable: true,
+      expression: buildFishSearchExpressionNode(operator, keptChildren),
+    };
+  };
+  return projectNode(normalizedExpression);
+}
+
+function fishMatchesSearchTerm(fish, term, sharedFishState) {
+  if (!isPlainObject(term)) {
+    return false;
+  }
+  if (term.kind === "fish") {
+    return resolveFishIdentityIds(fish).includes(Number.parseInt(term.fishId, 10));
+  }
+  if (term.kind === "fish-filter") {
+    return fishMatchesSharedFilterTerms(fish, [term.term], sharedFishState);
+  }
+  return false;
+}
+
+function fishMatchesSearchExpression(fish, expression, sharedFishState) {
+  const normalizedExpression = resolveSearchExpression(expression);
+  const evaluateNode = (node) => {
+    if (!isPlainObject(node)) {
+      return false;
+    }
+    if (node.type === "term") {
+      return fishMatchesSearchTerm(fish, node.term, sharedFishState);
+    }
+    const childValues = (Array.isArray(node.children) ? node.children : []).map((child) => evaluateNode(child));
+    if (String(node.operator || "").trim().toLowerCase() === "and") {
+      return childValues.every(Boolean);
+    }
+    return childValues.some(Boolean);
+  };
+  return evaluateNode(normalizedExpression);
+}
+
 export function resolveEffectiveFishIdsForWasm(inputState, currentState) {
   const selectedFishIds = normalizeFishIds(inputState?.filters?.fishIds);
   const filterTerms = normalizeFishFilterTerms(inputState?.filters?.fishFilterTerms);
+  const fishSearchExpression = projectSearchExpressionToFishTerms(
+    inputState?.filters?.searchExpression,
+  );
+  const canUseSearchExpression =
+    fishSearchExpression.representable === true && fishSearchExpression.expression;
   if (!filterTerms.length) {
-    return selectedFishIds;
+    if (!canUseSearchExpression) {
+      return selectedFishIds;
+    }
   }
 
   const catalogFish = Array.isArray(currentState?.catalog?.fish) ? currentState.catalog.fish : [];
   if (!catalogFish.length) {
+    if (canUseSearchExpression) {
+      return [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
+    }
     return selectedFishIds.length ? selectedFishIds : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
   }
 
@@ -786,9 +880,18 @@ export function resolveEffectiveFishIdsForWasm(inputState, currentState) {
       continue;
     }
     seen.add(fishId);
-    if (fishMatchesSharedFilterTerms(fish, filterTerms, sharedFishState)) {
+    const matches = canUseSearchExpression
+      ? fishMatchesSearchExpression(fish, fishSearchExpression.expression, sharedFishState)
+      : fishMatchesSharedFilterTerms(fish, filterTerms, sharedFishState);
+    if (matches) {
       matchingFishIds.push(fishId);
     }
+  }
+
+  if (canUseSearchExpression) {
+    return matchingFishIds.length
+      ? matchingFishIds
+      : [FISHYMAP_FISH_FILTER_NO_MATCH_SENTINEL_ID];
   }
 
   if (!selectedFishIds.length) {

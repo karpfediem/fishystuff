@@ -8,6 +8,7 @@ import {
   DEFAULT_ENABLED_LAYER_IDS,
 } from "./map-signal-contract.js";
 import { buildLayerSearchEffects } from "./map-layer-search-effects.js";
+import { resolveSearchExpression } from "./map-search-contract.js";
 import { resolveSearchProjection } from "./map-search-projection.js";
 
 function cloneJson(value) {
@@ -85,12 +86,19 @@ function normalizeRecordObject(value) {
 
 function normalizeBridgedFilters(signals) {
   const bridged = isPlainObject(signals?._map_bridged?.filters) ? signals._map_bridged.filters : {};
+  const search = isPlainObject(signals?._map_ui?.search) ? signals._map_ui.search : {};
   const searchProjection = resolveSearchProjection(signals);
+  const searchExpression = resolveSearchExpression(
+    search.expression,
+    search.selectedTerms,
+    bridged,
+  );
   return {
     fishIds: cloneJson(searchProjection.fishIds),
     zoneRgbs: cloneJson(searchProjection.zoneRgbs),
     semanticFieldIdsByLayer: cloneJson(searchProjection.semanticFieldIdsByLayer),
     fishFilterTerms: cloneJson(searchProjection.fishFilterTerms),
+    searchExpression: cloneJson(searchExpression),
     patchId: bridged.patchId ?? null,
     fromPatchId: bridged.fromPatchId ?? null,
     toPatchId: bridged.toPatchId ?? null,
@@ -174,6 +182,7 @@ export function buildBridgeInputPatchFromSignals(signals, options = {}) {
       filters: {
         fishIds: filters.fishIds,
         fishFilterTerms: filters.fishFilterTerms,
+        searchExpression: filters.searchExpression,
       },
       ui: {
         sharedFishState,
