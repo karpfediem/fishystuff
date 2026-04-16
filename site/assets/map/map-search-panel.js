@@ -569,13 +569,15 @@ export function renderSearchResults(elements, matches, stateBundle, options = {}
             >
               <span class="min-w-0 flex-1 text-left">
                 <span class="flex items-center gap-2">
-                  <span class="badge badge-ghost badge-xs">${escapeHtml(promptOnly ? `${boundLabel}:` : boundLabel)}</span>
+                  <svg class="fishy-icon size-4 shrink-0 text-base-content/60" viewBox="0 0 24 24" aria-hidden="true">
+                    <use width="100%" height="100%" href="/img/icons.svg#fishy-calendar-2-fill"></use>
+                  </svg>
                   <span class="font-semibold">${escapeHtml(patchLabel)}</span>
                 </span>
                 <span class="mt-1 block truncate text-xs text-base-content/60">
                   ${
                     promptOnly
-                      ? escapeHtml(match.description || "Choose the patch on the term itself.")
+                      ? escapeHtml(match.description || "Pick a patch or date to limit samples.")
                       : `<code>${escapeHtml(patchId)}</code>`
                   }
                 </span>

@@ -79,13 +79,13 @@ const PATCH_BOUND_PROMPT_MATCHES = Object.freeze([
   Object.freeze({
     bound: "from",
     label: "After",
-    description: "Add an after term, then choose the patch on the term itself.",
+    description: "Pick a patch or date to limit samples.",
     searchText: "after from since patch date newer later",
   }),
   Object.freeze({
     bound: "to",
     label: "Before",
-    description: "Add a before term, then choose the patch on the term itself.",
+    description: "Pick a patch or date to limit samples.",
     searchText: "before to until through patch date older earlier",
   }),
 ]);
@@ -590,7 +590,7 @@ function buildPatchBoundPromptMatches(stateBundle) {
 }
 
 export function buildDefaultSearchMatches(stateBundle) {
-  return buildPatchBoundPromptMatches(stateBundle).concat(buildDefaultFishFilterMatches(stateBundle));
+  return buildDefaultFishFilterMatches(stateBundle).concat(buildPatchBoundPromptMatches(stateBundle));
 }
 
 function scoreSemanticMatch(term, queryTerms) {

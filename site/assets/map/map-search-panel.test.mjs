@@ -344,7 +344,7 @@ test("renderSearchResults renders unresolved date prompt rows without a concrete
         kind: "patch-bound",
         bound: "to",
         label: "Before",
-        description: "Add a before term, then choose the patch on the term itself.",
+        description: "Pick a patch or date to limit samples.",
       },
     ],
     stateBundle,
@@ -361,9 +361,11 @@ test("renderSearchResults renders unresolved date prompt rows without a concrete
 
   assert.equal(elements.searchResultsShell.hidden, false);
   assert.match(elements.searchResults.innerHTML, /data-patch-bound="to"/);
-  assert.match(elements.searchResults.innerHTML, />Before:/);
+  assert.match(elements.searchResults.innerHTML, />Before</);
+  assert.match(elements.searchResults.innerHTML, /icons\.svg#fishy-calendar-2-fill/);
+  assert.doesNotMatch(elements.searchResults.innerHTML, /badge badge-ghost badge-xs/);
   assert.doesNotMatch(elements.searchResults.innerHTML, /data-patch-id=/);
-  assert.match(elements.searchResults.innerHTML, /choose the patch on the term itself/i);
+  assert.match(elements.searchResults.innerHTML, /Pick a patch or date to limit samples\./);
 });
 
 test("renderSearchSelection hides the selection shell when no terms are applied", () => {

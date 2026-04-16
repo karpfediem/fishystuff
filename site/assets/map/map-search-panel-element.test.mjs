@@ -288,7 +288,7 @@ test("FishyMapSearchPanelElement renders zone terms with an RGB indicator", asyn
   assert.match(html, /Velia Coast/);
 });
 
-test("resolveSearchPanelMatches exposes unresolved date prompts when the query is empty", () => {
+test("resolveSearchPanelMatches exposes unresolved date prompts after fish filters when the query is empty", () => {
   const matches = resolveSearchPanelMatches(
     {
       state: {
@@ -322,7 +322,7 @@ test("resolveSearchPanelMatches exposes unresolved date prompts when the query i
   );
 
   assert.deepEqual(
-    matches.slice(0, 2).map((match) => [match.kind, match.bound]),
+    matches.slice(-2).map((match) => [match.kind, match.bound]),
     [
       ["patch-bound", "from"],
       ["patch-bound", "to"],

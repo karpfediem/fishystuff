@@ -71,6 +71,7 @@ const iconSources = {
   "heart-line": { type: "mingcute", name: "heart-line" },
   "coin-stack": { type: "mingcute", name: "coin-2-fill" },
   "coin-2-fill": { type: "mingcute", name: "coin-2-fill" },
+  "calendar-2-fill": { type: "mingcute", name: "calendar-2-fill" },
   "arrow-up-fill": { type: "mingcute", name: "arrow-up-fill" },
   "arrow-down-fill": { type: "mingcute", name: "arrow-down-fill" },
   "az-sort-ascending-letters-fill": { type: "mingcute", name: "az-sort-ascending-letters-fill" },

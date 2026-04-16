@@ -310,14 +310,12 @@ test("buildDefaultFishFilterMatches omits already-selected filter terms", () => 
   );
 });
 
-test("buildDefaultSearchMatches includes unresolved date prompts ahead of frontend filters", () => {
+test("buildDefaultSearchMatches includes unresolved date prompts after frontend filters", () => {
   const bundle = buildSearchPanelStateBundle(baseSignals());
 
   assert.deepEqual(
     buildDefaultSearchMatches(bundle).map((match) => [match.kind, match.bound ?? match.term]),
     [
-      ["patch-bound", "from"],
-      ["patch-bound", "to"],
       ["fish-filter", "favourite"],
       ["fish-filter", "missing"],
       ["fish-filter", "red"],
@@ -325,6 +323,8 @@ test("buildDefaultSearchMatches includes unresolved date prompts ahead of fronte
       ["fish-filter", "blue"],
       ["fish-filter", "green"],
       ["fish-filter", "white"],
+      ["patch-bound", "from"],
+      ["patch-bound", "to"],
     ],
   );
 });
