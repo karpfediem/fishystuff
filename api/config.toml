@@ -1,11 +1,5 @@
 # fishystuff API sample config
 
-[paths]
-terrain_manifest_url = "/images/terrain/v1/manifest.json"
-terrain_drape_manifest_url = "/images/terrain_drape/minimap/v1/manifest.json"
-# Canonical packed RGB24 height tiles derived directly from whole_fullres.png.
-terrain_height_tiles_url = "/images/terrain_height/v1"
-
 [dolt_sql]
 # url = "mysql://root@127.0.0.1:3306/fishystuff"
 # host = "127.0.0.1"

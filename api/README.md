@@ -22,8 +22,6 @@ numbered SQL migration chain. For workflow details, see
 
 The API returns normalized relative asset paths and does not resolve CDN/public
 asset base URLs itself.
-Terrain URLs are configured explicitly and are not inferred by inspecting local
-CDN staging files or directories at runtime.
 Its CORS policy is an explicit origin allowlist, configured via
 `[server].cors_allowed_origins` or `FISHYSTUFF_CORS_ALLOWED_ORIGINS`, so dev and
 production use the same strict model instead of inferred site origins.

@@ -4,7 +4,8 @@ use fishystuff_api::models::zone_stats::ZoneStatsRequest;
 use fishystuff_api::Rgb;
 
 use super::super::state::{ApiBootstrapState, PatchFilterState};
-pub(crate) use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
+#[cfg(target_arch = "wasm32")]
+use crate::public_assets::normalize_public_base_url;
 
 #[cfg(target_arch = "wasm32")]
 const PROD_API_BASE_URL: &str = "https://api.fishystuff.fish";
@@ -121,7 +122,8 @@ fn browser_global_base_url(name: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{default_from_patch_id, default_from_ts, resolve_public_asset_url};
+    use super::{default_from_patch_id, default_from_ts};
+    use crate::public_assets::resolve_public_asset_url;
     use fishystuff_api::ids::PatchId;
     use fishystuff_api::models::meta::{MetaResponse, PatchInfo};
 

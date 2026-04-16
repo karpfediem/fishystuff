@@ -10,7 +10,10 @@ use crate::map::events::EventsSnapshotState;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::MapPoint;
-use crate::map::terrain::Terrain3dConfig;
+use crate::map::terrain::{
+    default_terrain_drape_manifest_url, default_terrain_height_tiles_url,
+    default_terrain_manifest_url, Terrain3dConfig,
+};
 use crate::plugins::api::{
     ApiBootstrapState, FishCatalog, FishEntry, MapDisplayState, PatchFilterState,
 };
@@ -133,7 +136,7 @@ fn terrain_config_fixture() -> Terrain3dConfig {
     let top_left = map_to_world.map_to_world(MapPoint::new(0.0, 0.0));
     Terrain3dConfig {
         enabled_default: true,
-        terrain_manifest_url: "images/terrain/v1/manifest.json".to_string(),
+        terrain_manifest_url: default_terrain_manifest_url(),
         map_width: 2048,
         map_height: 2048,
         bbox_y_min: -80.0,
@@ -144,8 +147,8 @@ fn terrain_config_fixture() -> Terrain3dConfig {
         terrain_pinned_coarse_levels: 1,
         terrain_target_chunks_radius: 4.0,
         use_chunk_aligned_drape: false,
-        drape_manifest_url: String::new(),
-        height_tile_root_url: "images/terrain_height/v1".to_string(),
+        drape_manifest_url: default_terrain_drape_manifest_url(),
+        height_tile_root_url: default_terrain_height_tiles_url(),
         height_tile_size: 1024,
         height_tile_source_width: 2048,
         height_tile_source_height: 2048,

@@ -1471,9 +1471,6 @@ impl Store for DoltMySqlStore {
             let canonical_map = CanonicalMapInfo::default();
             Ok(MetaResponse {
                 api_version: API_VERSION.to_string(),
-                terrain_manifest_url: None,
-                terrain_drape_manifest_url: None,
-                terrain_height_tiles_url: None,
                 canonical_map,
                 patches,
                 default_patch,

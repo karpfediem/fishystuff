@@ -23,10 +23,6 @@ pub struct Paths {
     pub data_dir: Option<String>,
     pub dolt_repo: Option<String>,
     pub patches_csv: Option<String>,
-    pub images_dir: Option<String>,
-    pub terrain_manifest_url: Option<String>,
-    pub terrain_drape_manifest_url: Option<String>,
-    pub terrain_height_tiles_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -168,10 +164,6 @@ fn assign_path(paths: &mut Paths, key: &str, value: &str) {
         "data_dir" => paths.data_dir = Some(value.to_string()),
         "dolt_repo" => paths.dolt_repo = Some(value.to_string()),
         "patches_csv" => paths.patches_csv = Some(value.to_string()),
-        "images_dir" => paths.images_dir = Some(value.to_string()),
-        "terrain_manifest_url" => paths.terrain_manifest_url = Some(value.to_string()),
-        "terrain_drape_manifest_url" => paths.terrain_drape_manifest_url = Some(value.to_string()),
-        "terrain_height_tiles_url" => paths.terrain_height_tiles_url = Some(value.to_string()),
         _ => {}
     }
 }

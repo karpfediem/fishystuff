@@ -16,6 +16,9 @@ import tomllib
 TERRAIN_HEIGHT_TILE_SIZE = 512
 TERRAIN_HEIGHT_SOURCE_WIDTH = 32000
 TERRAIN_HEIGHT_SOURCE_HEIGHT = 27904
+TERRAIN_MANIFEST_URL = "/images/terrain/v1/manifest.json"
+TERRAIN_DRAPE_MANIFEST_URL = "/images/terrain_drape/minimap/v1/manifest.json"
+TERRAIN_HEIGHT_TILES_URL = "/images/terrain_height/v1"
 
 
 def parse_args() -> argparse.Namespace:
@@ -343,33 +346,19 @@ def main() -> None:
     )
     report.add("region_nodes_layer", f"waypoints/region_nodes.{map_version}.geojson")
 
-    terrain_manifest_url = (
-        str(api_config.get("paths", {}).get("terrain_manifest_url") or "").strip()
+    add_manifest_tree(
+        report,
+        "terrain_manifest",
+        cdn_root,
+        normalize_rel_path(TERRAIN_MANIFEST_URL),
     )
-    if terrain_manifest_url:
-        add_manifest_tree(
-            report,
-            "terrain_manifest",
-            cdn_root,
-            normalize_rel_path(terrain_manifest_url),
-        )
-
-    terrain_drape_manifest_url = (
-        str(api_config.get("paths", {}).get("terrain_drape_manifest_url") or "").strip()
+    add_manifest_tree(
+        report,
+        "terrain_drape_manifest",
+        cdn_root,
+        normalize_rel_path(TERRAIN_DRAPE_MANIFEST_URL),
     )
-    if terrain_drape_manifest_url:
-        add_manifest_tree(
-            report,
-            "terrain_drape_manifest",
-            cdn_root,
-            normalize_rel_path(terrain_drape_manifest_url),
-        )
-
-    terrain_height_tiles_url = (
-        str(api_config.get("paths", {}).get("terrain_height_tiles_url") or "").strip()
-    )
-    if terrain_height_tiles_url:
-        add_terrain_height_tiles(report, terrain_height_tiles_url)
+    add_terrain_height_tiles(report, TERRAIN_HEIGHT_TILES_URL)
 
     add_icon_rows(
         report,

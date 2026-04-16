@@ -26,18 +26,9 @@ pub async fn get_meta(
     State(state): State<SharedState>,
     Extension(request_id): Extension<RequestId>,
 ) -> AppResult<Json<MetaResponse>> {
-    let mut meta = with_timeout(state.config.request_timeout_secs, state.store.get_meta())
+    let meta = with_timeout(state.config.request_timeout_secs, state.store.get_meta())
         .await
         .map_err(|err| err.with_request_id(request_id.0))?;
-    if let Some(url) = state.config.terrain_manifest_url.as_ref() {
-        meta.terrain_manifest_url = Some(url.clone());
-    }
-    if let Some(url) = state.config.terrain_drape_manifest_url.as_ref() {
-        meta.terrain_drape_manifest_url = Some(url.clone());
-    }
-    if let Some(url) = state.config.terrain_height_tiles_url.as_ref() {
-        meta.terrain_height_tiles_url = Some(url.clone());
-    }
     Ok(Json(meta))
 }
 

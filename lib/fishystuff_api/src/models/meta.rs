@@ -7,12 +7,6 @@ pub struct MetaResponse {
     #[serde(default)]
     pub api_version: String,
     #[serde(default)]
-    pub terrain_manifest_url: Option<String>,
-    #[serde(default)]
-    pub terrain_drape_manifest_url: Option<String>,
-    #[serde(default)]
-    pub terrain_height_tiles_url: Option<String>,
-    #[serde(default)]
     pub canonical_map: CanonicalMapInfo,
     #[serde(default)]
     pub patches: Vec<PatchInfo>,

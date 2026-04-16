@@ -5,7 +5,6 @@ use anyhow::{anyhow, bail, Context, Result};
 use fishystuff_api::ids::MapVersionId;
 use fishystuff_api::models::meta::MetaDefaults;
 use fishystuff_config::{load_config, Config as FsConfig, DoltSqlConfig};
-use fishystuff_core::asset_urls::normalize_public_asset_reference;
 
 #[derive(Debug, Clone)]
 pub struct ZoneStatusConfig {
@@ -36,9 +35,6 @@ pub struct AppConfig {
     pub database_url: String,
     pub cors_allowed_origins: Vec<String>,
     pub runtime_cdn_base_url: String,
-    pub terrain_manifest_url: Option<String>,
-    pub terrain_drape_manifest_url: Option<String>,
-    pub terrain_height_tiles_url: Option<String>,
     pub defaults: MetaDefaults,
     pub status_cfg: ZoneStatusConfig,
     pub cache_zone_stats_max: usize,
@@ -86,12 +82,6 @@ impl AppConfig {
             .trim()
             .trim_end_matches('/')
             .to_string();
-        let mut terrain_manifest_url =
-            normalize_optional_url(fs_config.paths.terrain_manifest_url.as_deref());
-        let mut terrain_drape_manifest_url =
-            normalize_optional_url(fs_config.paths.terrain_drape_manifest_url.as_deref());
-        let mut terrain_height_tiles_url =
-            normalize_optional_url(fs_config.paths.terrain_height_tiles_url.as_deref());
 
         let mut defaults = MetaDefaults {
             tile_px: fs_config.defaults.tile_px.unwrap_or(32),
@@ -153,30 +143,6 @@ impl AppConfig {
                         .get(i + 1)
                         .ok_or_else(|| anyhow!("--cors-allowed-origins requires value"))?;
                     cors_allowed_origins = parse_cors_allowed_origins(Some(value))?;
-                    i += 2;
-                }
-                "--terrain-manifest-url" => {
-                    terrain_manifest_url = normalize_optional_url(Some(
-                        args.get(i + 1)
-                            .ok_or_else(|| anyhow!("--terrain-manifest-url requires value"))?
-                            .as_str(),
-                    ));
-                    i += 2;
-                }
-                "--terrain-drape-manifest-url" => {
-                    terrain_drape_manifest_url = normalize_optional_url(Some(
-                        args.get(i + 1)
-                            .ok_or_else(|| anyhow!("--terrain-drape-manifest-url requires value"))?
-                            .as_str(),
-                    ));
-                    i += 2;
-                }
-                "--terrain-height-tiles-url" => {
-                    terrain_height_tiles_url = normalize_optional_url(Some(
-                        args.get(i + 1)
-                            .ok_or_else(|| anyhow!("--terrain-height-tiles-url requires value"))?
-                            .as_str(),
-                    ));
                     i += 2;
                 }
                 "--default-map-version" => {
@@ -269,9 +235,6 @@ impl AppConfig {
             database_url,
             cors_allowed_origins,
             runtime_cdn_base_url,
-            terrain_manifest_url,
-            terrain_drape_manifest_url,
-            terrain_height_tiles_url,
             defaults,
             status_cfg,
             cache_zone_stats_max,
@@ -280,14 +243,6 @@ impl AppConfig {
             request_timeout_secs,
         })
     }
-}
-
-fn normalize_optional_url(value: Option<&str>) -> Option<String> {
-    let raw = value?.trim();
-    if raw.is_empty() {
-        return None;
-    }
-    Some(normalize_public_asset_reference(raw))
 }
 
 fn parse_cors_allowed_origins(value: Option<&str>) -> Result<Vec<String>> {
@@ -348,7 +303,7 @@ fn dolt_sql_to_database_url(cfg: &DoltSqlConfig) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_optional_url, parse_cors_allowed_origins};
+    use super::parse_cors_allowed_origins;
 
     #[test]
     fn parse_cors_allowed_origins_normalizes_and_deduplicates() {
@@ -368,18 +323,5 @@ mod tests {
     #[test]
     fn parse_cors_allowed_origins_rejects_paths() {
         assert!(parse_cors_allowed_origins(Some("https://fishystuff.fish/map")).is_err());
-    }
-
-    #[test]
-    fn normalize_optional_url_keeps_public_paths_without_filesystem_probe() {
-        assert_eq!(
-            normalize_optional_url(Some("/terrain/v1/manifest.json")),
-            Some("/images/terrain/v1/manifest.json".to_string())
-        );
-        assert_eq!(
-            normalize_optional_url(Some("https://cdn.example.com/images/terrain_height/v1")),
-            Some("/images/terrain_height/v1".to_string())
-        );
-        assert_eq!(normalize_optional_url(Some("   ")), None);
     }
 }

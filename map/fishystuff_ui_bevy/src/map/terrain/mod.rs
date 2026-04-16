@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::public_assets::{normalize_public_base_url, resolve_public_asset_url};
 
 pub mod chunks;
 pub mod drape;
@@ -7,6 +8,27 @@ pub mod materials;
 pub mod mesh;
 pub mod mode;
 pub mod runtime;
+
+const DEFAULT_TERRAIN_MANIFEST_PATH: &str = "/images/terrain/v1/manifest.json";
+const DEFAULT_TERRAIN_DRAPE_MANIFEST_PATH: &str = "/images/terrain_drape/minimap/v1/manifest.json";
+const DEFAULT_TERRAIN_HEIGHT_TILES_PATH: &str = "/images/terrain_height/v1";
+
+fn default_public_asset_url(path: &str) -> String {
+    let public_base = normalize_public_base_url(None);
+    resolve_public_asset_url(Some(path), public_base.as_deref()).unwrap_or_else(|| path.to_string())
+}
+
+pub(crate) fn default_terrain_manifest_url() -> String {
+    default_public_asset_url(DEFAULT_TERRAIN_MANIFEST_PATH)
+}
+
+pub(crate) fn default_terrain_drape_manifest_url() -> String {
+    default_public_asset_url(DEFAULT_TERRAIN_DRAPE_MANIFEST_PATH)
+}
+
+pub(crate) fn default_terrain_height_tiles_url() -> String {
+    default_public_asset_url(DEFAULT_TERRAIN_HEIGHT_TILES_PATH)
+}
 
 #[derive(Resource, Debug, Clone, PartialEq)]
 pub struct Terrain3dConfig {
@@ -52,7 +74,7 @@ impl Default for Terrain3dConfig {
     fn default() -> Self {
         Self {
             enabled_default: false,
-            terrain_manifest_url: String::new(),
+            terrain_manifest_url: default_terrain_manifest_url(),
             map_width: 11_560,
             map_height: 10_540,
             bbox_y_min: -9_500.0,
@@ -63,8 +85,8 @@ impl Default for Terrain3dConfig {
             terrain_pinned_coarse_levels: 2,
             terrain_target_chunks_radius: 6.0,
             use_chunk_aligned_drape: false,
-            drape_manifest_url: String::new(),
-            height_tile_root_url: "/images/terrain_height/v1".to_string(),
+            drape_manifest_url: default_terrain_drape_manifest_url(),
+            height_tile_root_url: default_terrain_height_tiles_url(),
             height_tile_size: 512,
             height_tile_source_width: 32_000,
             height_tile_source_height: 27_904,
@@ -88,5 +110,40 @@ impl Default for Terrain3dConfig {
             drape_offset_base: 20.0,
             drape_offset_per_layer: 1.0,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        default_terrain_drape_manifest_url, default_terrain_height_tiles_url,
+        default_terrain_manifest_url, Terrain3dConfig,
+    };
+
+    #[test]
+    fn default_terrain_urls_resolve_without_api_metadata() {
+        assert_eq!(
+            default_terrain_manifest_url(),
+            "/images/terrain/v1/manifest.json"
+        );
+        assert_eq!(
+            default_terrain_drape_manifest_url(),
+            "/images/terrain_drape/minimap/v1/manifest.json"
+        );
+        assert_eq!(
+            default_terrain_height_tiles_url(),
+            "/images/terrain_height/v1"
+        );
+
+        let config = Terrain3dConfig::default();
+        assert_eq!(config.terrain_manifest_url, default_terrain_manifest_url());
+        assert_eq!(
+            config.drape_manifest_url,
+            default_terrain_drape_manifest_url()
+        );
+        assert_eq!(
+            config.height_tile_root_url,
+            default_terrain_height_tiles_url()
+        );
     }
 }
