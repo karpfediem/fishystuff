@@ -1,5 +1,7 @@
 use super::super::super::*;
+use crate::bridge::contract::FishyMapLayerFilterBindingSummary;
 use crate::map::layers::LayerManifestStatus;
+use crate::plugins::api::LayerFilterBindingOverrideState;
 
 fn is_fish_evidence_layer(layer: &crate::map::layers::LayerSpec) -> bool {
     layer.key == crate::map::layers::FISH_EVIDENCE_LAYER_KEY

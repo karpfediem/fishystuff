@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 use crate::bridge::contract::{
     normalize_fish_filter_terms, FishyMapSearchExpressionNode, FishyMapSearchExpressionOperator,
@@ -28,7 +28,7 @@ enum SearchExpressionProjectionMode {
     Zone,
 }
 
-pub(super) fn resolve_browser_search_filters(
+pub(in crate::bridge::host) fn resolve_browser_search_filters(
     bridge: Res<BrowserBridgeState>,
     fish_catalog: Res<FishCatalog>,
     field_metadata: Res<FieldMetadataCache>,

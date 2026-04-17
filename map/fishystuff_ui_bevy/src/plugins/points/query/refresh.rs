@@ -7,9 +7,12 @@ use crate::map::events::{
     cluster_view_events, suggested_cluster_bucket_px, EventsSnapshotState, LocalEventQuery,
     VisibleTileScope, VISIBLE_TILE_SCOPE_PX,
 };
+use crate::map::exact_lookup::ExactLookupCache;
+use crate::map::field_view::loaded_field_layer;
 use crate::map::layers::{LayerRegistry, LayerRuntime, FISH_EVIDENCE_LAYER_KEY};
 use crate::plugins::api::{
     FishFilterState, LayerEffectiveFilterState, MapDisplayState, PatchFilterState,
+    SemanticFieldFilterState,
 };
 use crate::plugins::camera::Map2dCamera;
 use crate::plugins::points::EvidenceZoneFilter;
@@ -17,7 +20,8 @@ use crate::plugins::points::EvidenceZoneFilter;
 use super::super::render::view_bbox_map_px;
 use super::state::PointsQuerySignature;
 use super::{
-    normalized_time_and_fish_filters, quantize_px, PointsState, RenderPoint, VIEWPORT_SIG_STEP_PX,
+    evidence::resolved_event_zone_rgb, normalized_time_and_fish_filters, quantize_px, PointsState,
+    RenderPoint, VIEWPORT_SIG_STEP_PX,
 };
 
 pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
@@ -89,6 +93,12 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         .layer_filters
         .zone_membership_filter(FISH_EVIDENCE_LAYER_KEY)
         .unwrap_or(&inactive_filter);
+    let zone_mask_layer = refresh
+        .layer_registry
+        .get_by_key(SemanticFieldFilterState::ZONE_MASK_LAYER_ID);
+    let zone_lookup_url = zone_mask_layer.and_then(|layer| layer.field_url());
+    let zone_mask_field =
+        zone_mask_layer.and_then(|layer| loaded_field_layer(layer, refresh.exact_lookups.as_ref()));
     let signature = PointsQuerySignature {
         revision: refresh.snapshot.revision.clone(),
         zone_filter_revision: if zone_filter.active {
@@ -96,6 +106,8 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         } else {
             0
         },
+        zone_lookup_url: zone_lookup_url.clone(),
+        zone_lookup_ready: zone_filter.active && zone_mask_field.is_some(),
         from_ts_utc,
         to_ts_utc,
         fish_ids: fish_ids.clone(),
@@ -120,13 +132,24 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         from_ts_utc,
         to_ts_utc,
         fish_ids: fish_ids.as_slice(),
-        zone_rgbs: zone_filter.active.then_some(&zone_filter.zone_rgbs),
+        zone_rgbs: (zone_filter.active && zone_mask_field.is_none())
+            .then_some(&zone_filter.zone_rgbs),
         tile_scope: Some(VisibleTileScope::from_bbox(
             &tile_scope,
             VISIBLE_TILE_SCOPE_PX,
         )),
     };
-    let selection = refresh.snapshot.select_for_view(&local_query);
+    let mut selection = refresh.snapshot.select_for_view(&local_query);
+    if zone_filter.active && zone_mask_field.is_some() {
+        selection.filtered_indices.retain(|idx| {
+            refresh
+                .snapshot
+                .events
+                .get(*idx)
+                .and_then(|event| resolved_event_zone_rgb(event, zone_mask_field))
+                .is_some_and(|zone_rgb| zone_filter.zone_rgbs.contains(&zone_rgb))
+        });
+    }
     let clustered = {
         crate::perf_scope!("events.clustering");
         cluster_view_events(
@@ -183,9 +206,118 @@ pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     view_mode: Res<'w, ViewModeState>,
     layer_registry: Res<'w, LayerRegistry>,
     layer_runtime: Res<'w, LayerRuntime>,
+    exact_lookups: Res<'w, ExactLookupCache>,
     snapshot: Res<'w, EventsSnapshotState>,
     windows: Query<'w, 's, &'static Window>,
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use fishystuff_api::models::events::EventPointCompact;
+    use fishystuff_core::field::DiscreteFieldRows;
+
+    use super::*;
+    use crate::map::exact_lookup::ExactLookupCache;
+    use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
+    use crate::map::spaces::layer_transform::LayerTransform;
+
+    fn test_zone_mask_layer() -> LayerSpec {
+        LayerSpec {
+            id: LayerId::from_raw(7),
+            key: "zone_mask".to_string(),
+            name: "Zone Mask".to_string(),
+            visible_default: true,
+            opacity_default: 1.0,
+            z_base: 0.0,
+            kind: LayerKind::TiledRaster,
+            tileset_url: "/images/tiles/zone_mask_visual/v1/tileset.json".to_string(),
+            tile_url_template: "/images/tiles/zone_mask_visual/v1/{z}/{x}_{y}.png".to_string(),
+            tileset_version: "v1".to_string(),
+            vector_source: None,
+            waypoint_source: None,
+            transform: LayerTransform::IdentityMapSpace,
+            tile_px: 2048,
+            max_level: 0,
+            y_flip: false,
+            field_source: None,
+            field_metadata_source: None,
+            filter_bindings: Vec::new(),
+            lod_policy: LodPolicy {
+                target_tiles: 64,
+                hysteresis_hi: 80.0,
+                hysteresis_lo: 40.0,
+                margin_tiles: 0,
+                enable_refine: false,
+                refine_debounce_ms: 0,
+                max_detail_tiles: 128,
+                max_resident_tiles: 256,
+                pinned_coarse_levels: 0,
+                coarse_pin_min_level: None,
+                warm_margin_tiles: 1,
+                protected_margin_tiles: 0,
+                detail_eviction_weight: 4.0,
+                max_detail_requests_while_camera_moving: 1,
+                motion_suppresses_refine: true,
+            },
+            request_weight: 1.0,
+            pick_mode: PickMode::ExactTilePixel,
+            display_order: 0,
+        }
+    }
+
+    #[test]
+    fn exact_lookup_zone_filter_keeps_events_with_matching_zone_mask_even_without_event_zone_ids() {
+        let layer = test_zone_mask_layer();
+        let mut exact_lookups = ExactLookupCache::default();
+        exact_lookups.insert_ready(
+            layer.id,
+            layer.field_url().expect("field url"),
+            DiscreteFieldRows::from_u32_grid(3, 1, &[0x111111, 0x222222, 0x333333]).expect("field"),
+        );
+        let zone_mask_field = loaded_field_layer(&layer, &exact_lookups);
+        let events = [
+            EventPointCompact {
+                event_id: 1,
+                fish_id: 10,
+                ts_utc: 100,
+                map_px_x: 1,
+                map_px_y: 0,
+                length_milli: 1,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: None,
+                source_kind: None,
+                source_id: None,
+            },
+            EventPointCompact {
+                event_id: 2,
+                fish_id: 10,
+                ts_utc: 100,
+                map_px_x: 2,
+                map_px_y: 0,
+                length_milli: 1,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: Some(0x222222),
+                source_kind: None,
+                source_id: None,
+            },
+        ];
+        let mut filtered_indices = vec![0, 1];
+        let zone_rgbs = HashSet::from([0x222222]);
+
+        filtered_indices.retain(|idx| {
+            events
+                .get(*idx)
+                .and_then(|event| resolved_event_zone_rgb(event, zone_mask_field))
+                .is_some_and(|zone_rgb| zone_rgbs.contains(&zone_rgb))
+        });
+
+        assert_eq!(filtered_indices, vec![0]);
+    }
 }
 
 fn clear_render_points(points: &mut PointsState) {

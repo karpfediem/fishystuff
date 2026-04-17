@@ -48,6 +48,8 @@ impl Default for PointsState {
 pub(in crate::plugins::points::query) struct PointsQuerySignature {
     pub(in crate::plugins::points::query) revision: Option<String>,
     pub(in crate::plugins::points::query) zone_filter_revision: u64,
+    pub(in crate::plugins::points::query) zone_lookup_url: Option<String>,
+    pub(in crate::plugins::points::query) zone_lookup_ready: bool,
     pub(in crate::plugins::points::query) from_ts_utc: i64,
     pub(in crate::plugins::points::query) to_ts_utc: i64,
     pub(in crate::plugins::points::query) fish_ids: Vec<i32>,
