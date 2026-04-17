@@ -7,8 +7,7 @@ use crate::map::layer_query::{sample_semantic_layer_at_world_point, LayerQuerySa
 use crate::map::layers::LayerRegistry;
 use crate::map::raster::cache::clip_mask_allows_world_point;
 use crate::map::spaces::WorldPoint;
-use crate::plugins::api::{HoverInfo, SelectedInfo};
-use crate::plugins::points::EvidenceZoneFilter;
+use crate::plugins::api::{HoverInfo, SelectedInfo, ZoneMembershipFilter};
 use fishystuff_core::field_metadata::{detail_facts, preferred_detail_fact_value};
 use std::collections::HashMap;
 
@@ -89,7 +88,7 @@ pub fn selected_info_at_world_point(
         .filter(|layer| {
             !matches!(
                 {
-                    let inactive_filter = EvidenceZoneFilter::default();
+                    let inactive_filter = ZoneMembershipFilter::default();
                     let zone_filter = context
                         .layer_filters
                         .zone_membership_filter(layer.key.as_str())
@@ -221,7 +220,7 @@ mod tests {
     use crate::map::spaces::MapPoint;
     use crate::plugins::api::HoverInfo;
     use crate::plugins::api::LayerEffectiveFilterState;
-    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::plugins::api::ZoneMembershipFilter;
     use crate::plugins::vector_layers::VectorLayerRuntime;
     use fishystuff_api::Rgb;
     use fishystuff_core::field::DiscreteFieldRows;
@@ -481,7 +480,7 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
-        let _evidence_zone_filter = EvidenceZoneFilter::default();
+        let _evidence_zone_filter = ZoneMembershipFilter::default();
         let layer_filters = LayerEffectiveFilterState::default();
         let selected = selected_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),
@@ -697,7 +696,7 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
-        let _evidence_zone_filter = EvidenceZoneFilter::default();
+        let _evidence_zone_filter = ZoneMembershipFilter::default();
         let layer_filters = LayerEffectiveFilterState::default();
         let selected = selected_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.5, 0.5)),

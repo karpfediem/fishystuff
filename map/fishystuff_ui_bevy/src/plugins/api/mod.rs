@@ -18,8 +18,9 @@ pub use requests::{
 pub use state::{
     ApiBootstrapState, CommunityFishZoneSupportIndex, FishCatalog, FishEntry, FishFilterState,
     HoverInfo, HoverState, LayerEffectiveFilterState, LayerFilterBindingOverrideState,
-    MapDisplayState, Patch, PatchFilterState, PendingRequests, SelectedInfo, SelectionState,
-    SemanticFieldFilterState, ZoneMembershipFilter, POINT_ICON_SCALE_MAX, POINT_ICON_SCALE_MIN,
+    MapDisplayState, Patch, PatchFilterState, PendingRequests, SearchExpressionState, SelectedInfo,
+    SelectionState, SemanticFieldFilterState, ZoneMembershipFilter, POINT_ICON_SCALE_MAX,
+    POINT_ICON_SCALE_MIN,
 };
 
 pub struct ApiPlugin;
@@ -30,6 +31,7 @@ impl Plugin for ApiPlugin {
             .init_resource::<PatchFilterState>()
             .init_resource::<FishFilterState>()
             .init_resource::<SemanticFieldFilterState>()
+            .init_resource::<SearchExpressionState>()
             .init_resource::<LayerFilterBindingOverrideState>()
             .init_resource::<MapDisplayState>()
             .init_resource::<AvailableLayerCatalog>()

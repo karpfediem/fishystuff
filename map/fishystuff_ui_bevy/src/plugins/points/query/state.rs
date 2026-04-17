@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 use fishystuff_api::models::events::EventsQueryMode;
 
-pub use crate::plugins::api::ZoneMembershipFilter as EvidenceZoneFilter;
-
 #[derive(Resource)]
 pub struct PointsState {
     pub status: String,
@@ -53,6 +51,7 @@ pub(in crate::plugins::points::query) struct PointsQuerySignature {
     pub(in crate::plugins::points::query) from_ts_utc: Option<i64>,
     pub(in crate::plugins::points::query) to_ts_utc: Option<i64>,
     pub(in crate::plugins::points::query) fish_ids: Vec<i32>,
+    pub(in crate::plugins::points::query) search_expression_key: String,
     pub(in crate::plugins::points::query) viewport_qmin_x: i32,
     pub(in crate::plugins::points::query) viewport_qmin_y: i32,
     pub(in crate::plugins::points::query) viewport_qmax_x: i32,

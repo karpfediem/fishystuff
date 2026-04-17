@@ -215,7 +215,7 @@ mod tests {
     use crate::map::raster::{RasterTileCache, TileKey};
     use crate::map::spaces::layer_transform::LayerTransform;
     use crate::map::spaces::LayerPoint;
-    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::plugins::api::ZoneMembershipFilter;
     use crate::plugins::vector_layers::VectorLayerRuntime;
 
     fn zone_mask_layer() -> crate::map::layers::LayerSpec {
@@ -335,7 +335,7 @@ mod tests {
             data: vec![1, 2, 3, 255],
         };
         let mut image_data = source.data.clone();
-        let filter = EvidenceZoneFilter {
+        let filter = ZoneMembershipFilter {
             active: true,
             zone_rgbs: HashSet::from([pack_rgb_u32(10, 20, 30)]),
             revision: 1,

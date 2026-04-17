@@ -1,16 +1,18 @@
-use crate::plugins::api::{FishFilterState, PatchFilterState};
-
 mod evidence;
 mod refresh;
 mod state;
 
-pub use state::{EvidenceZoneFilter, PointsState, RenderPoint};
+pub use state::{PointsState, RenderPoint};
 
-pub(crate) use evidence::{sync_evidence_zone_filter, sync_layer_effective_filters};
+pub(crate) use evidence::sync_layer_effective_filters;
 pub(super) use refresh::refresh_points_from_local_snapshot;
 
 const VIEWPORT_SIG_STEP_PX: i32 = 32;
 
+#[cfg(test)]
+use crate::plugins::api::{FishFilterState, PatchFilterState};
+
+#[cfg(test)]
 fn normalized_time_and_fish_filters(
     patch_filter: &PatchFilterState,
     fish_filter: &FishFilterState,
@@ -51,6 +53,7 @@ mod tests {
             from_ts_utc: Some(10),
             to_ts_utc: Some(20),
             fish_ids: vec![100],
+            search_expression_key: String::new(),
             viewport_qmin_x: quantize_px(100, VIEWPORT_SIG_STEP_PX),
             viewport_qmin_y: quantize_px(100, VIEWPORT_SIG_STEP_PX),
             viewport_qmax_x: quantize_px(500, VIEWPORT_SIG_STEP_PX),
@@ -69,6 +72,7 @@ mod tests {
             from_ts_utc: Some(10),
             to_ts_utc: Some(20),
             fish_ids: vec![100],
+            search_expression_key: String::new(),
             viewport_qmin_x: quantize_px(111, VIEWPORT_SIG_STEP_PX),
             viewport_qmin_y: quantize_px(119, VIEWPORT_SIG_STEP_PX),
             viewport_qmax_x: quantize_px(510, VIEWPORT_SIG_STEP_PX),

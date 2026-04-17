@@ -26,7 +26,6 @@ use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::{LayerPoint, MapPoint, MapRect, WorldPoint, WorldRect};
 use crate::plugins::api::{HoverState, LayerEffectiveFilterState, ZoneMembershipFilter};
 use crate::plugins::camera::Map2dCamera;
-use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::vector_layers::VectorLayerRuntime;
 use crate::prelude::*;
@@ -289,7 +288,7 @@ fn update_field_tile_layer_visuals(
             continue;
         };
         let clip_mask_layer = layer_runtime.clip_mask_layer(layer.id);
-        let inactive_filter = EvidenceZoneFilter::default();
+        let inactive_filter = ZoneMembershipFilter::default();
         let zone_filter = layer_filters
             .zone_membership_filter(layer.key.as_str())
             .unwrap_or(&inactive_filter);
@@ -1206,7 +1205,7 @@ mod tests {
     use crate::map::spaces::layer_transform::LayerTransform;
     use crate::map::spaces::world::MapToWorld;
     use crate::map::spaces::{MapPoint, MapRect};
-    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::plugins::api::ZoneMembershipFilter;
     use crate::plugins::vector_layers::VectorLayerRuntime;
     use bevy::mesh::{Indices, VertexAttributeValues};
     use bevy::prelude::Mesh;
@@ -1291,7 +1290,7 @@ mod tests {
         layer.pick_mode = PickMode::ExactTilePixel;
         layer.tile_px = 2;
 
-        let filter = EvidenceZoneFilter {
+        let filter = ZoneMembershipFilter {
             active: true,
             zone_rgbs: HashSet::from([0x123456]),
             revision: 7,

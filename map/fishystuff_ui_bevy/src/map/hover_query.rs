@@ -6,8 +6,7 @@ use crate::map::raster::cache::clip_mask_allows_world_point;
 use crate::map::raster::RasterTileCache;
 use crate::map::spaces::world::MapToWorld;
 use crate::map::spaces::WorldPoint;
-use crate::plugins::api::{HoverInfo, LayerEffectiveFilterState};
-use crate::plugins::points::EvidenceZoneFilter;
+use crate::plugins::api::{HoverInfo, LayerEffectiveFilterState, ZoneMembershipFilter};
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
 pub struct WorldPointQueryContext<'a> {
@@ -43,7 +42,7 @@ pub fn hover_info_at_world_point(
         &hover_layers
             .into_iter()
             .filter(|layer| {
-                let inactive_filter = EvidenceZoneFilter::default();
+                let inactive_filter = ZoneMembershipFilter::default();
                 let zone_filter = context
                     .layer_filters
                     .zone_membership_filter(layer.key.as_str())
@@ -123,8 +122,7 @@ mod tests {
     use crate::map::raster::RasterTileCache;
     use crate::map::spaces::world::MapToWorld;
     use crate::map::spaces::MapPoint;
-    use crate::plugins::api::LayerEffectiveFilterState;
-    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::plugins::api::{LayerEffectiveFilterState, ZoneMembershipFilter};
     use crate::plugins::vector_layers::VectorLayerRuntime;
     use fishystuff_api::models::layers::{
         LayerDescriptor, LayerKind as LayerKindDto, LayerTransformDto, LayerUiInfo, LayersResponse,
@@ -295,7 +293,7 @@ mod tests {
         );
 
         let map_to_world = MapToWorld::default();
-        let _evidence_zone_filter = EvidenceZoneFilter::default();
+        let _evidence_zone_filter = ZoneMembershipFilter::default();
         let layer_filters = LayerEffectiveFilterState::default();
         let info = hover_info_at_world_point(
             map_to_world.map_to_world(MapPoint::new(0.0, 0.0)),

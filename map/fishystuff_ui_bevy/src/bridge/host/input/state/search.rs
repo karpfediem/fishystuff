@@ -9,7 +9,8 @@ use crate::bridge::host::BrowserBridgeState;
 use crate::map::field_metadata::FieldMetadataCache;
 use crate::map::layers::LayerRegistry;
 use crate::plugins::api::{
-    FishCatalog, FishEntry, FishFilterState, PatchFilterState, SemanticFieldFilterState,
+    FishCatalog, FishEntry, FishFilterState, PatchFilterState, SearchExpressionState,
+    SemanticFieldFilterState,
 };
 use crate::prelude::*;
 
@@ -36,6 +37,7 @@ pub(in crate::bridge::host) fn resolve_browser_search_filters(
     mut fish_filter: ResMut<FishFilterState>,
     mut semantic_filter: ResMut<SemanticFieldFilterState>,
     mut patch_filter: ResMut<PatchFilterState>,
+    mut search_expression: ResMut<SearchExpressionState>,
 ) {
     if !bridge.is_changed()
         && !fish_catalog.is_changed()
@@ -50,6 +52,12 @@ pub(in crate::bridge::host) fn resolve_browser_search_filters(
     let expression_projection = (!bridge.input.filters.search_expression.is_empty()).then(|| {
         FishyMapSearchProjection::from_expression(&bridge.input.filters.search_expression)
     });
+    if search_expression.expression != bridge.input.filters.search_expression {
+        search_expression.expression = bridge.input.filters.search_expression.clone();
+    }
+    if search_expression.shared_fish_state != bridge.input.ui.shared_fish_state {
+        search_expression.shared_fish_state = bridge.input.ui.shared_fish_state.clone();
+    }
 
     let effective_fish_ids = resolve_effective_fish_ids(
         &raw_projection.fish_ids,

@@ -187,7 +187,7 @@ impl Plugin for BrowserBridgePlugin {
                 (
                     input::ingest_pending_browser_patches,
                     input::apply_browser_input_state.in_set(BrowserInputStateSet),
-                    input::resolve_browser_search_filters,
+                    input::resolve_browser_search_filters.in_set(BrowserInputStateSet),
                     input::apply_browser_commands,
                 )
                     .chain(),
@@ -254,8 +254,8 @@ mod tests {
     use crate::map::{exact_lookup::ExactLookupCache, field_metadata::FieldMetadataCache};
     use crate::plugins::api::{
         ApiBootstrapState, FishCatalog, FishFilterState, HoverState, LayerEffectiveFilterState,
-        LayerFilterBindingOverrideState, MapDisplayState, PatchFilterState, SelectionState,
-        SemanticFieldFilterState,
+        LayerFilterBindingOverrideState, MapDisplayState, PatchFilterState, SearchExpressionState,
+        SelectionState, SemanticFieldFilterState,
     };
     use crate::plugins::bookmarks::BookmarkState;
     use crate::plugins::points::PointsState;
@@ -296,6 +296,7 @@ mod tests {
         app.insert_resource(PatchFilterState::default());
         app.insert_resource(FishFilterState::default());
         app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(SearchExpressionState::default());
         app.insert_resource(LayerFilterBindingOverrideState::default());
         app.insert_resource(LayerEffectiveFilterState::default());
         app.insert_resource(MapDisplayState::default());
@@ -332,6 +333,7 @@ mod tests {
         app.insert_resource(PatchFilterState::default());
         app.insert_resource(FishFilterState::default());
         app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(SearchExpressionState::default());
         app.insert_resource(LayerFilterBindingOverrideState::default());
         app.insert_resource(LayerEffectiveFilterState::default());
         app.insert_resource(BookmarkState::default());
@@ -395,6 +397,7 @@ mod tests {
         app.insert_resource(PatchFilterState::default());
         app.insert_resource(FishFilterState::default());
         app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(SearchExpressionState::default());
         app.insert_resource(LayerFilterBindingOverrideState::default());
         app.insert_resource(LayerEffectiveFilterState::default());
         app.insert_resource(MapDisplayState::default());
@@ -494,6 +497,7 @@ mod tests {
         });
         app.insert_resource(FishFilterState::default());
         app.insert_resource(SemanticFieldFilterState::default());
+        app.insert_resource(SearchExpressionState::default());
         app.insert_resource(LayerFilterBindingOverrideState::default());
         app.insert_resource(LayerEffectiveFilterState::default());
         app.insert_resource(MapDisplayState::default());

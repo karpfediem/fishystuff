@@ -28,7 +28,6 @@ use crate::map::vector::cache::{
 };
 use crate::map::vector::render::{spawn_vector_meshes, VECTOR_3D_BASE_Y};
 use crate::plugins::api::{LayerEffectiveFilterState, ZoneMembershipFilter};
-use crate::plugins::points::EvidenceZoneFilter;
 
 const VECTOR_MIN_PROGRESS_BUDGET_MS: f64 = 0.25;
 
@@ -201,7 +200,7 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
     }
 
     for layer in registry.ordered() {
-        let inactive_filter = EvidenceZoneFilter::default();
+        let inactive_filter = ZoneMembershipFilter::default();
         let zone_filter = update
             .layer_filters
             .zone_membership_filter(layer.key.as_str())
@@ -250,11 +249,18 @@ fn update_vector_layers(mut commands: Commands, mut update: VectorLayerUpdate<'_
             continue;
         }
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
-        let selected_field_ids = update
+        let semantic_filter = update
             .layer_filters
-            .semantic_field_ids_for_layer(layer.key.as_str())
-            .to_vec();
-        let revision = effective_revision(&source, &selected_field_ids, clip_mask_revision);
+            .semantic_field_filter(layer.key.as_str());
+        let selected_field_ids = semantic_filter
+            .map(|filter| filter.field_ids.clone())
+            .unwrap_or_default();
+        let revision = effective_revision(
+            &source,
+            semantic_filter.is_some_and(|filter| filter.active),
+            &selected_field_ids,
+            clip_mask_revision,
+        );
         invalidate_non_active_revisions(vector_runtime, layer.id, &revision, &mut commands);
 
         hide_non_active_finished(
@@ -769,8 +775,11 @@ fn collect_visible_cache_keys(
             continue;
         };
         let source = resolve_vector_source_for_map_version(source_ref, map_version_id);
-        let selected_field_ids = layer_filters.semantic_field_ids_for_layer(layer.key.as_str());
-        let inactive_filter = EvidenceZoneFilter::default();
+        let semantic_filter = layer_filters.semantic_field_filter(layer.key.as_str());
+        let selected_field_ids = semantic_filter
+            .map(|filter| filter.field_ids.as_slice())
+            .unwrap_or(&[]);
+        let inactive_filter = ZoneMembershipFilter::default();
         let zone_filter = layer_filters
             .zone_membership_filter(layer.key.as_str())
             .unwrap_or(&inactive_filter);
@@ -782,7 +791,12 @@ fn collect_visible_cache_keys(
         );
         out.insert((
             layer.id,
-            effective_revision(&source, selected_field_ids, clip_mask_revision),
+            effective_revision(
+                &source,
+                semantic_filter.is_some_and(|filter| filter.active),
+                selected_field_ids,
+                clip_mask_revision,
+            ),
         ));
     }
     out
@@ -907,6 +921,7 @@ fn apply_stats(
 
 fn effective_revision(
     source: &VectorSourceSpec,
+    semantic_filter_active: bool,
     selected_feature_ids: &[u32],
     clip_mask_revision: u64,
 ) -> String {
@@ -916,11 +931,18 @@ fn effective_revision(
     } else {
         revision.to_string()
     };
-    if selected_feature_ids.is_empty() {
+    if !semantic_filter_active {
         return if clip_mask_revision == 0 {
             base_revision
         } else {
             format!("{base_revision}|clip:{clip_mask_revision}")
+        };
+    }
+    if selected_feature_ids.is_empty() {
+        return if clip_mask_revision == 0 {
+            format!("{base_revision}|field_ids:none")
+        } else {
+            format!("{base_revision}|field_ids:none|clip:{clip_mask_revision}")
         };
     }
     let selected_suffix = selected_feature_ids
@@ -960,7 +982,7 @@ mod tests {
     };
     use crate::map::raster::RasterTileCache;
     use crate::map::vector::cache::{BuiltVectorChunk, VectorMeshBundleSet};
-    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::plugins::api::ZoneMembershipFilter;
     use bevy::platform::time::Instant;
     use std::collections::HashMap;
 
@@ -1056,11 +1078,11 @@ mod tests {
         };
 
         assert_eq!(
-            effective_revision(&source, &[212], 0),
+            effective_revision(&source, true, &[212], 0),
             "rg-v1|field_ids:212"
         );
         assert_eq!(
-            effective_revision(&source, &[212], 77),
+            effective_revision(&source, true, &[212], 77),
             "rg-v1|field_ids:212|clip:77"
         );
     }
@@ -1131,7 +1153,7 @@ mod tests {
             &ExactLookupCache::default(),
             &RasterTileCache::default(),
             &vector_runtime,
-            &EvidenceZoneFilter::default(),
+            &ZoneMembershipFilter::default(),
         )
         .expect("inside triangle should remain");
 
@@ -1203,7 +1225,7 @@ mod tests {
             &ExactLookupCache::default(),
             &RasterTileCache::default(),
             &vector_runtime,
-            &EvidenceZoneFilter::default(),
+            &ZoneMembershipFilter::default(),
         )
         .expect("triangle overlap should remain");
 

@@ -16,9 +16,8 @@ use crate::map::exact_lookup::ExactLookupCache;
 use crate::map::layers::{LayerRegistry, LayerRuntime};
 use crate::map::raster::{cache::clip_mask_allows_world_point, RasterTileCache};
 use crate::map::spaces::WorldPoint;
-use crate::plugins::api::{HoverInfo, HoverState, LayerEffectiveFilterState};
+use crate::plugins::api::{HoverInfo, HoverState, LayerEffectiveFilterState, ZoneMembershipFilter};
 use crate::plugins::camera::Map2dCamera;
-use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
 use crate::plugins::ui::{UiFonts, UiRoot};
@@ -480,7 +479,7 @@ fn bookmark_visible_in_layer_clip(
     world_point: WorldPoint,
     render_context: &BookmarkRenderContext<'_, '_>,
 ) -> bool {
-    let inactive_filter = EvidenceZoneFilter::default();
+    let inactive_filter = ZoneMembershipFilter::default();
     let zone_filter = render_context
         .layer_registry
         .get(layer_id)

@@ -27,9 +27,6 @@ mod search;
 mod setup;
 mod toggles;
 
-#[cfg(target_arch = "wasm32")]
-pub(crate) use patches::patch_index_for_timestamp;
-
 const AUTOCOMPLETE_MAX: usize = 8;
 const ZONE_MENU_WIDTH: f32 = 360.0;
 const ZONE_MENU_HEIGHT: f32 = 680.0;

@@ -1,24 +1,30 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use fishystuff_api::models::events::EventPointCompact;
 use fishystuff_api::models::events::{EventsQueryMode, MapBboxPx};
 
+use crate::bridge::contract::FishyMapSearchExpressionNode;
 use crate::map::camera::mode::{ViewMode, ViewModeState};
 use crate::map::events::{
-    cluster_view_events, suggested_cluster_bucket_px, EventsSnapshotState, LocalEventQuery,
+    cluster_view_events, suggested_cluster_bucket_px, EventsSnapshotState, ViewSelection,
     VisibleTileScope, VISIBLE_TILE_SCOPE_PX,
 };
 use crate::map::layers::{LayerRegistry, LayerRuntime, FISH_EVIDENCE_LAYER_KEY};
+use crate::map::search_filters::{
+    effective_search_expression, project_expression_for_zone_membership, search_expression_key,
+    LayerSearchEvaluator,
+};
 use crate::plugins::api::{
-    FishFilterState, LayerEffectiveFilterState, MapDisplayState, PatchFilterState,
+    CommunityFishZoneSupportIndex, FishCatalog, FishFilterState, LayerEffectiveFilterState,
+    LayerFilterBindingOverrideState, MapDisplayState, PatchFilterState, SearchExpressionState,
+    SemanticFieldFilterState, ZoneMembershipFilter,
 };
 use crate::plugins::camera::Map2dCamera;
-use crate::plugins::points::EvidenceZoneFilter;
+use crate::plugins::points::query::evidence::zone_membership_binding_support;
 
 use super::super::render::view_bbox_map_px;
 use super::state::PointsQuerySignature;
-use super::{
-    normalized_time_and_fish_filters, quantize_px, PointsState, RenderPoint, VIEWPORT_SIG_STEP_PX,
-};
+use super::{quantize_px, PointsState, RenderPoint, VIEWPORT_SIG_STEP_PX};
 
 pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
     mut refresh: LocalSnapshotRefresh<'_, '_>,
@@ -67,15 +73,38 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         return;
     };
 
-    let Some((from_ts_utc, to_ts_utc, mut fish_ids)) =
-        normalized_time_and_fish_filters(&refresh.patch_filter, &refresh.fish_filter)
-    else {
+    let Some((from_ts_utc, to_ts_utc)) = normalized_time_bounds(&refresh.patch_filter) else {
         refresh.points.status = "points: missing range".to_string();
         clear_render_points(&mut refresh.points);
         return;
     };
-    fish_ids.sort_unstable();
-    fish_ids.dedup();
+    let expression = effective_search_expression(
+        &crate::bridge::contract::FishyMapInputState {
+            filters: crate::bridge::contract::FishyMapFiltersState {
+                search_expression: refresh.search_expression.expression.clone(),
+                ..Default::default()
+            },
+            ui: crate::bridge::contract::FishyMapUiState {
+                shared_fish_state: refresh.search_expression.shared_fish_state.clone(),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        &refresh.fish_filter.selected_fish_ids,
+        &refresh.semantic_filter.selected_field_ids_by_layer,
+    );
+    let fish_layer_expression = refresh
+        .layer_registry
+        .get_by_key(FISH_EVIDENCE_LAYER_KEY)
+        .and_then(|layer| {
+            project_expression_for_zone_membership(
+                &expression,
+                zone_membership_binding_support(layer, &refresh.binding_overrides),
+            )
+        });
+    let mut signature_fish_ids = refresh.fish_filter.selected_fish_ids.clone();
+    signature_fish_ids.sort_unstable();
+    signature_fish_ids.dedup();
 
     let tile_scope = MapBboxPx {
         min_x: viewport_bbox.min_x,
@@ -84,7 +113,7 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         max_y: viewport_bbox.max_y,
     };
     let cluster_bucket_px = suggested_cluster_bucket_px(&viewport_bbox);
-    let inactive_filter = EvidenceZoneFilter::default();
+    let inactive_filter = ZoneMembershipFilter::default();
     let zone_filter = refresh
         .layer_filters
         .zone_membership_filter(FISH_EVIDENCE_LAYER_KEY)
@@ -100,7 +129,11 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         zone_lookup_ready: false,
         from_ts_utc,
         to_ts_utc,
-        fish_ids: fish_ids.clone(),
+        fish_ids: signature_fish_ids,
+        search_expression_key: fish_layer_expression
+            .as_ref()
+            .map(search_expression_key)
+            .unwrap_or_default(),
         viewport_qmin_x: quantize_px(viewport_bbox.min_x, VIEWPORT_SIG_STEP_PX),
         viewport_qmin_y: quantize_px(viewport_bbox.min_y, VIEWPORT_SIG_STEP_PX),
         viewport_qmax_x: quantize_px(viewport_bbox.max_x, VIEWPORT_SIG_STEP_PX),
@@ -117,18 +150,17 @@ pub(in crate::plugins::points) fn refresh_points_from_local_snapshot(
         return;
     }
 
-    let local_query = LocalEventQuery {
-        bbox: &viewport_bbox,
+    let visible_scope = VisibleTileScope::from_bbox(&tile_scope, VISIBLE_TILE_SCOPE_PX);
+    let selection = select_snapshot_indices_for_point_layer(
+        &refresh.snapshot,
+        &viewport_bbox,
+        visible_scope,
         from_ts_utc,
         to_ts_utc,
-        fish_ids: fish_ids.as_slice(),
-        zone_rgbs: zone_filter.active.then_some(&zone_filter.zone_rgbs),
-        tile_scope: Some(VisibleTileScope::from_bbox(
-            &tile_scope,
-            VISIBLE_TILE_SCOPE_PX,
-        )),
-    };
-    let selection = refresh.snapshot.select_for_view(&local_query);
+        fish_layer_expression.as_ref(),
+        &refresh.fish_catalog,
+        &refresh.search_expression,
+    );
     let clustered = {
         crate::perf_scope!("events.clustering");
         cluster_view_events(
@@ -180,6 +212,10 @@ pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     points: ResMut<'w, PointsState>,
     patch_filter: Res<'w, PatchFilterState>,
     fish_filter: Res<'w, FishFilterState>,
+    semantic_filter: Res<'w, SemanticFieldFilterState>,
+    search_expression: Res<'w, SearchExpressionState>,
+    binding_overrides: Res<'w, LayerFilterBindingOverrideState>,
+    fish_catalog: Res<'w, FishCatalog>,
     layer_filters: Res<'w, LayerEffectiveFilterState>,
     display_state: Res<'w, MapDisplayState>,
     view_mode: Res<'w, ViewModeState>,
@@ -190,6 +226,85 @@ pub(in crate::plugins::points) struct LocalSnapshotRefresh<'w, 's> {
     camera_q: Query<'w, 's, (&'static Camera, &'static Transform), With<Map2dCamera>>,
 }
 
+fn normalized_time_bounds(patch_filter: &PatchFilterState) -> Option<(Option<i64>, Option<i64>)> {
+    if patch_filter
+        .from_ts
+        .zip(patch_filter.to_ts)
+        .is_some_and(|(from_ts_utc, to_ts_utc)| from_ts_utc >= to_ts_utc)
+    {
+        return None;
+    }
+    Some((patch_filter.from_ts, patch_filter.to_ts))
+}
+
+fn select_snapshot_indices_for_point_layer(
+    snapshot: &EventsSnapshotState,
+    viewport_bbox: &MapBboxPx,
+    visible_scope: VisibleTileScope,
+    from_ts_utc: Option<i64>,
+    to_ts_utc: Option<i64>,
+    expression: Option<&FishyMapSearchExpressionNode>,
+    fish_catalog: &FishCatalog,
+    search_expression: &SearchExpressionState,
+) -> ViewSelection {
+    let candidate_indices = {
+        crate::perf_scope!("events.spatial_index_query");
+        snapshot
+            .spatial_index
+            .query_bbox(viewport_bbox, &snapshot.events)
+    };
+    let empty_community = CommunityFishZoneSupportIndex::default();
+    let mut evaluator = LayerSearchEvaluator::new(
+        fish_catalog,
+        &empty_community,
+        snapshot,
+        from_ts_utc,
+        to_ts_utc,
+        &search_expression.shared_fish_state.caught_ids,
+        &search_expression.shared_fish_state.favourite_ids,
+    );
+    let mut filtered_indices = Vec::with_capacity(candidate_indices.len());
+    for idx in &candidate_indices {
+        let Some(event) = snapshot.events.get(*idx) else {
+            continue;
+        };
+        if !event_matches_point_layer_filters(
+            event,
+            visible_scope,
+            from_ts_utc,
+            to_ts_utc,
+            expression,
+            &mut evaluator,
+        ) {
+            continue;
+        }
+        filtered_indices.push(*idx);
+    }
+    ViewSelection {
+        candidate_count: candidate_indices.len(),
+        filtered_indices,
+    }
+}
+
+fn event_matches_point_layer_filters(
+    event: &EventPointCompact,
+    visible_scope: VisibleTileScope,
+    from_ts_utc: Option<i64>,
+    to_ts_utc: Option<i64>,
+    expression: Option<&FishyMapSearchExpressionNode>,
+    evaluator: &mut LayerSearchEvaluator<'_>,
+) -> bool {
+    if from_ts_utc.is_some_and(|from_ts_utc| event.ts_utc < from_ts_utc)
+        || to_ts_utc.is_some_and(|to_ts_utc| event.ts_utc >= to_ts_utc)
+    {
+        return false;
+    }
+    if !visible_scope.contains(event.map_px_x, event.map_px_y) {
+        return false;
+    }
+    expression.is_none_or(|expression| evaluator.event_matches_expression(event, expression))
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -197,6 +312,11 @@ mod tests {
     use fishystuff_api::models::events::EventPointCompact;
 
     use super::*;
+    use crate::bridge::contract::{
+        FishyMapSearchExpressionNode, FishyMapSearchExpressionOperator, FishyMapSearchTerm,
+    };
+    use crate::map::events::SpatialIndex;
+    use crate::plugins::api::{FishCatalog, FishEntry, SearchExpressionState};
 
     #[test]
     fn precomputed_zone_filter_keeps_events_with_matching_zone_support() {
@@ -246,6 +366,129 @@ mod tests {
         });
 
         assert_eq!(filtered_indices, vec![0, 1]);
+    }
+
+    #[test]
+    fn select_snapshot_indices_for_point_layer_keeps_mixed_fish_or_zone_matches() {
+        let events = vec![
+            EventPointCompact {
+                event_id: 1,
+                fish_id: 240,
+                ts_utc: 100,
+                map_px_x: 4,
+                map_px_y: 4,
+                length_milli: 1,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: Some(0x111111),
+                zone_rgbs: vec![0x111111],
+                full_zone_rgbs: vec![0x111111],
+                source_kind: None,
+                source_id: None,
+            },
+            EventPointCompact {
+                event_id: 2,
+                fish_id: 777,
+                ts_utc: 100,
+                map_px_x: 8,
+                map_px_y: 8,
+                length_milli: 1,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: Some(0xabcdef),
+                zone_rgbs: vec![0xabcdef],
+                full_zone_rgbs: vec![0xabcdef],
+                source_kind: None,
+                source_id: None,
+            },
+            EventPointCompact {
+                event_id: 3,
+                fish_id: 777,
+                ts_utc: 100,
+                map_px_x: 12,
+                map_px_y: 12,
+                length_milli: 1,
+                world_x: None,
+                world_z: None,
+                zone_rgb_u32: Some(0x222222),
+                zone_rgbs: vec![0x222222],
+                full_zone_rgbs: vec![0x222222],
+                source_kind: None,
+                source_id: None,
+            },
+        ];
+        let mut spatial_index = SpatialIndex::new(crate::map::events::SPATIAL_BUCKET_PX);
+        spatial_index.rebuild(&events);
+        let snapshot = EventsSnapshotState {
+            loaded: true,
+            events,
+            spatial_index,
+            ..EventsSnapshotState::default()
+        };
+        let mut fish_catalog = FishCatalog::default();
+        fish_catalog.replace(vec![
+            FishEntry {
+                id: 240,
+                item_id: 820240,
+                encyclopedia_key: Some(240),
+                encyclopedia_id: Some(9240),
+                name: "Blobfish".to_string(),
+                name_lower: "blobfish".to_string(),
+                grade: Some("Rare".to_string()),
+                is_prize: false,
+            },
+            FishEntry {
+                id: 777,
+                item_id: 820777,
+                encyclopedia_key: Some(777),
+                encyclopedia_id: Some(9777),
+                name: "Other".to_string(),
+                name_lower: "other".to_string(),
+                grade: Some("General".to_string()),
+                is_prize: false,
+            },
+        ]);
+        let expression = FishyMapSearchExpressionNode::Group {
+            operator: FishyMapSearchExpressionOperator::Or,
+            children: vec![
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::Fish { fish_id: 240 },
+                    negated: false,
+                },
+                FishyMapSearchExpressionNode::Term {
+                    term: FishyMapSearchTerm::Zone { zone_rgb: 0xabcdef },
+                    negated: false,
+                },
+            ],
+            negated: false,
+        };
+
+        let selection = select_snapshot_indices_for_point_layer(
+            &snapshot,
+            &MapBboxPx {
+                min_x: 0,
+                min_y: 0,
+                max_x: 16,
+                max_y: 16,
+            },
+            VisibleTileScope::from_bbox(
+                &MapBboxPx {
+                    min_x: 0,
+                    min_y: 0,
+                    max_x: 16,
+                    max_y: 16,
+                },
+                VISIBLE_TILE_SCOPE_PX,
+            ),
+            None,
+            None,
+            Some(&expression),
+            &fish_catalog,
+            &SearchExpressionState::default(),
+        );
+
+        assert_eq!(selection.candidate_count, 3);
+        assert_eq!(selection.filtered_indices, vec![0, 1]);
     }
 }
 

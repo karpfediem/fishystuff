@@ -224,7 +224,7 @@ mod tests {
     use crate::map::layers::{LayerId, LayerKind, LayerSpec, LodPolicy, PickMode};
     use crate::map::raster::cache::{RasterTileEntry, TilePixelData, TileState};
     use crate::map::spaces::layer_transform::LayerTransform;
-    use crate::plugins::points::EvidenceZoneFilter;
+    use crate::plugins::api::ZoneMembershipFilter;
     use crate::prelude::*;
 
     use super::*;
@@ -369,7 +369,7 @@ mod tests {
         let mut layer = test_layer(0);
         layer.key = "zone_mask".to_string();
         layer.pick_mode = PickMode::ExactTilePixel;
-        let filter = EvidenceZoneFilter {
+        let filter = ZoneMembershipFilter {
             active: true,
             zone_rgbs: std::collections::HashSet::from([0x123456]),
             revision: 1,

@@ -24,10 +24,7 @@ use crate::plugins::camera::Map2dCamera;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::vector_layers::VectorLayerRuntime;
 
-use super::{
-    query::{PointsState, RenderPoint},
-    EvidenceZoneFilter,
-};
+use super::query::{PointsState, RenderPoint};
 
 type PointRingQuery<'w, 's> = Query<
     'w,
@@ -266,7 +263,7 @@ pub(super) fn sync_point_markers(mut context: PointMarkerSync<'_, '_>) {
         .clamp(0.0, 1.0);
     let ring_z = context.display_state.point_z_base + RING_Z_OFFSET;
     let icon_z = context.display_state.point_z_base + ICON_Z_OFFSET;
-    let inactive_filter = EvidenceZoneFilter::default();
+    let inactive_filter = ZoneMembershipFilter::default();
     let fish_evidence_filter = context
         .layer_filters
         .zone_membership_filter(FISH_EVIDENCE_LAYER_KEY)

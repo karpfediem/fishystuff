@@ -1,6 +1,7 @@
 use fishystuff_api::models::meta::PatchInfo;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
+use crate::bridge::contract::{FishyMapSearchExpressionNode, FishyMapSharedFishState};
 use crate::map::layers::{LayerFilterBindingSpec, LayerSpec};
 
 use crate::prelude::*;
@@ -29,6 +30,12 @@ pub struct SemanticFieldFilterState {
 }
 
 #[derive(Resource, Default)]
+pub struct SearchExpressionState {
+    pub expression: FishyMapSearchExpressionNode,
+    pub shared_fish_state: FishyMapSharedFishState,
+}
+
+#[derive(Resource, Default)]
 pub struct LayerFilterBindingOverrideState {
     pub disabled_binding_ids_by_layer: BTreeMap<String, BTreeSet<String>>,
 }
@@ -40,10 +47,17 @@ pub struct ZoneMembershipFilter {
     pub revision: u64,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SemanticFieldSelectionFilter {
+    pub active: bool,
+    pub field_ids: Vec<u32>,
+    pub revision: u64,
+}
+
 #[derive(Resource, Default)]
 pub struct LayerEffectiveFilterState {
     zone_membership_by_layer: BTreeMap<String, ZoneMembershipFilter>,
-    semantic_field_ids_by_layer: BTreeMap<String, Vec<u32>>,
+    semantic_field_filters_by_layer: BTreeMap<String, SemanticFieldSelectionFilter>,
 }
 
 impl LayerFilterBindingOverrideState {
@@ -123,10 +137,14 @@ impl LayerEffectiveFilterState {
         self.zone_membership_by_layer.get(layer_id.trim())
     }
 
+    pub fn semantic_field_filter(&self, layer_id: &str) -> Option<&SemanticFieldSelectionFilter> {
+        self.semantic_field_filters_by_layer.get(layer_id.trim())
+    }
+
     pub fn semantic_field_ids_for_layer(&self, layer_id: &str) -> &[u32] {
-        self.semantic_field_ids_by_layer
+        self.semantic_field_filters_by_layer
             .get(layer_id.trim())
-            .map(Vec::as_slice)
+            .map(|filter| filter.field_ids.as_slice())
             .unwrap_or(&[])
     }
 
@@ -145,19 +163,24 @@ impl LayerEffectiveFilterState {
         }
     }
 
-    pub fn set_semantic_field_ids_for_layer(
+    pub fn sync_semantic_field_filter_for_layer(
         &mut self,
         layer_id: impl Into<String>,
+        next_active: bool,
         mut field_ids: Vec<u32>,
     ) {
         field_ids.sort_unstable();
         field_ids.dedup();
         let layer_id = layer_id.into();
-        if field_ids.is_empty() {
-            self.semantic_field_ids_by_layer.remove(&layer_id);
-            return;
+        let filter = self
+            .semantic_field_filters_by_layer
+            .entry(layer_id)
+            .or_default();
+        if filter.active != next_active || filter.field_ids != field_ids {
+            filter.active = next_active;
+            filter.field_ids = field_ids;
+            filter.revision = filter.revision.wrapping_add(1);
         }
-        self.semantic_field_ids_by_layer.insert(layer_id, field_ids);
     }
 
     pub fn sync_to_registry(&mut self, layer_registry: &crate::map::layers::LayerRegistry) {
@@ -168,7 +191,7 @@ impl LayerEffectiveFilterState {
             .collect::<BTreeSet<_>>();
         self.zone_membership_by_layer
             .retain(|layer_id, _| active_layer_ids.contains(layer_id));
-        self.semantic_field_ids_by_layer
+        self.semantic_field_filters_by_layer
             .retain(|layer_id, _| active_layer_ids.contains(layer_id));
         for layer in layer_registry.ordered() {
             if !self
@@ -180,12 +203,12 @@ impl LayerEffectiveFilterState {
                     .insert(layer.key.clone(), ZoneMembershipFilter::default());
             }
             if !self
-                .semantic_field_ids_by_layer
+                .semantic_field_filters_by_layer
                 .contains_key(layer.key.as_str())
                 && layer.semantic_selection_filter_bindings().next().is_some()
             {
-                self.semantic_field_ids_by_layer
-                    .insert(layer.key.clone(), Vec::new());
+                self.semantic_field_filters_by_layer
+                    .insert(layer.key.clone(), SemanticFieldSelectionFilter::default());
             }
         }
     }
@@ -238,17 +261,17 @@ impl LayerEffectiveFilterState {
         overrides: &LayerFilterBindingOverrideState,
         semantic_filter: &SemanticFieldFilterState,
     ) {
-        let next_field_ids = if layer
+        let active = layer
             .semantic_selection_filter_bindings()
-            .any(|binding| overrides.is_binding_enabled(layer, binding))
-        {
+            .any(|binding| overrides.is_binding_enabled(layer, binding));
+        let next_field_ids = if active {
             semantic_filter
                 .field_ids_for_layer(layer.key.as_str())
                 .to_vec()
         } else {
             Vec::new()
         };
-        self.set_semantic_field_ids_for_layer(layer.key.clone(), next_field_ids);
+        self.sync_semantic_field_filter_for_layer(layer.key.clone(), active, next_field_ids);
     }
 }
 

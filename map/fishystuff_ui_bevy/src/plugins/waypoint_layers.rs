@@ -18,7 +18,6 @@ use crate::map::spaces::{MapPoint, WorldPoint};
 use crate::plugins::api::{LayerEffectiveFilterState, MapDisplayState, ZoneMembershipFilter};
 use crate::plugins::camera::CameraZoomBounds;
 use crate::plugins::camera::Map2dCamera;
-use crate::plugins::points::EvidenceZoneFilter;
 use crate::plugins::render_domain::{world_2d_layers, World2dRenderEntity};
 use crate::plugins::svg_icons::{UiSvgIconAssets, UiSvgIconKind};
 use crate::plugins::ui::{UiFonts, UiRoot};
@@ -323,7 +322,7 @@ fn sync_waypoint_entities(
             *visibility = Visibility::Hidden;
             continue;
         };
-        let inactive_filter = EvidenceZoneFilter::default();
+        let inactive_filter = ZoneMembershipFilter::default();
         let zone_filter = layer_registry
             .get(marker.layer_id)
             .and_then(|layer| layer_filters.zone_membership_filter(layer.key.as_str()))
@@ -360,7 +359,7 @@ fn sync_waypoint_entities(
             *visibility = Visibility::Hidden;
             continue;
         };
-        let inactive_filter = EvidenceZoneFilter::default();
+        let inactive_filter = ZoneMembershipFilter::default();
         let zone_filter = layer_registry
             .get(connection.layer_id)
             .and_then(|layer| layer_filters.zone_membership_filter(layer.key.as_str()))
@@ -414,7 +413,7 @@ fn sync_waypoint_entities(
             *visibility = Visibility::Hidden;
             continue;
         };
-        let inactive_filter = EvidenceZoneFilter::default();
+        let inactive_filter = ZoneMembershipFilter::default();
         let zone_filter = layer_registry
             .get(label.layer_id)
             .and_then(|layer| layer_filters.zone_membership_filter(layer.key.as_str()))

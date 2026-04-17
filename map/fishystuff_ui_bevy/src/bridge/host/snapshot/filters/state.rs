@@ -7,7 +7,7 @@ use super::layers::{
 
 pub(in crate::bridge::host) fn effective_filters(
     bridge_input: &FishyMapInputState,
-    patch_filter: &PatchFilterState,
+    _patch_filter: &PatchFilterState,
     fish_filter: &FishFilterState,
     semantic_filter: &SemanticFieldFilterState,
     layer_registry: &LayerRegistry,
