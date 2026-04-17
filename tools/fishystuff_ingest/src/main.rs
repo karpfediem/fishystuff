@@ -13,7 +13,7 @@ use anyhow::{bail, Context, Result};
 use chrono::{TimeZone, Utc};
 use clap::{Parser, Subcommand};
 use csv::{ReaderBuilder, StringRecord};
-use fishystuff_config::DoltSqlConfig;
+use fishystuff_config::load_api_database_url_from_secretspec;
 use sha2::{Digest, Sha256};
 
 use crate::mysql_store::{
@@ -77,8 +77,6 @@ enum Commands {
         #[arg(long)]
         ranking_csv: PathBuf,
         #[arg(long)]
-        database_url: Option<String>,
-        #[arg(long)]
         map_version: Option<String>,
         #[arg(long)]
         watermap: Option<PathBuf>,
@@ -103,8 +101,6 @@ enum Commands {
         #[arg(long)]
         ranking_csv: PathBuf,
         #[arg(long)]
-        dsn: Option<String>,
-        #[arg(long)]
         map_version: Option<String>,
     },
     IndexWaterTiles {
@@ -128,8 +124,6 @@ enum Commands {
         watermap_oy: Option<f64>,
     },
     IndexWaterTilesMysql {
-        #[arg(long)]
-        database_url: Option<String>,
         #[arg(long)]
         map_version: Option<String>,
         #[arg(long)]
@@ -161,8 +155,6 @@ enum Commands {
     },
     IndexZoneMaskMysql {
         #[arg(long)]
-        database_url: Option<String>,
-        #[arg(long)]
         map_version: Option<String>,
         #[arg(long)]
         zone_mask: PathBuf,
@@ -170,8 +162,6 @@ enum Commands {
         overwrite: bool,
     },
     BuildEventZoneAssignment {
-        #[arg(long)]
-        dsn: Option<String>,
         #[arg(long)]
         layer_revision_id: String,
         #[arg(long, default_value = "zone_mask")]
@@ -182,8 +172,6 @@ enum Commands {
         batch_size: usize,
     },
     ImportRegionGroupsMysql {
-        #[arg(long)]
-        database_url: Option<String>,
         #[arg(long)]
         map_version: Option<String>,
         #[arg(long)]
@@ -394,15 +382,13 @@ fn main() -> Result<()> {
         ),
         Commands::IngestMysql {
             ranking_csv,
-            database_url,
             map_version,
             ..
-        } => run_ingest_mysql(ranking_csv, database_url, map_version, config.as_ref()),
+        } => run_ingest_mysql(ranking_csv, map_version, config.as_ref()),
         Commands::ImportRanking {
             ranking_csv,
-            dsn,
             map_version,
-        } => run_ingest_mysql(ranking_csv, dsn, map_version, config.as_ref()),
+        } => run_ingest_mysql(ranking_csv, map_version, config.as_ref()),
         Commands::IndexWaterTiles {
             watermap,
             ignore_watermap,
@@ -428,7 +414,6 @@ fn main() -> Result<()> {
             config.as_ref(),
         ),
         Commands::IndexWaterTilesMysql {
-            database_url,
             map_version,
             watermap,
             ignore_watermap,
@@ -439,7 +424,6 @@ fn main() -> Result<()> {
             watermap_ox,
             watermap_oy,
         } => run_index_water_tiles_mysql(
-            database_url,
             map_version,
             watermap,
             ignore_watermap,
@@ -460,34 +444,28 @@ fn main() -> Result<()> {
             overwrite,
         } => run_index_zone_mask(db, map_version, zone_mask, overwrite),
         Commands::IndexZoneMaskMysql {
-            database_url,
             map_version,
             zone_mask,
             ..
-        } => run_index_zone_mask_mysql(database_url, map_version, zone_mask, 4096, config.as_ref()),
+        } => run_index_zone_mask_mysql(map_version, zone_mask, 4096, config.as_ref()),
         Commands::BuildEventZoneAssignment {
-            dsn,
             layer_revision_id,
             layer_id,
             zone_mask_root,
             batch_size,
         } => run_build_event_zone_assignment_mysql(
-            dsn,
             layer_revision_id,
             layer_id,
             zone_mask_root,
             batch_size,
-            config.as_ref(),
         ),
         Commands::ImportRegionGroupsMysql {
-            database_url,
             map_version,
             geojson,
             regioninfo_bss,
             regiongroupinfo_bss,
             source,
         } => run_import_region_groups_mysql(
-            database_url,
             map_version,
             geojson,
             regioninfo_bss,
@@ -722,11 +700,10 @@ fn run_ingest(command: IngestCommand, config: Option<&fishystuff_config::Config>
 
 fn run_ingest_mysql(
     ranking_csv: PathBuf,
-    database_url: Option<String>,
     map_version: Option<String>,
     config: Option<&fishystuff_config::Config>,
 ) -> Result<()> {
-    let database_url = resolve_database_url(database_url, config)?;
+    let database_url = resolve_database_url()?;
     let map_version = resolve_map_version(map_version, config)?;
     let store = MySqlIngestStore::open(&database_url).context("open mysql store")?;
     let input_sha256 = sha256_file(&ranking_csv)?;
@@ -935,7 +912,6 @@ fn run_index_water_tiles(
 }
 
 fn run_index_water_tiles_mysql(
-    database_url: Option<String>,
     map_version: Option<String>,
     watermap: Option<PathBuf>,
     ignore_watermap: bool,
@@ -943,7 +919,7 @@ fn run_index_water_tiles_mysql(
     water_xform: WatermapTransformArgs,
     config: Option<&fishystuff_config::Config>,
 ) -> Result<()> {
-    let database_url = resolve_database_url(database_url, config)?;
+    let database_url = resolve_database_url()?;
     let map_version = resolve_map_version(map_version, config)?;
     let store = MySqlIngestStore::open(&database_url).context("open mysql store")?;
 
@@ -1016,7 +992,6 @@ fn run_index_zone_mask(
 }
 
 fn run_index_zone_mask_mysql(
-    database_url: Option<String>,
     map_version: Option<String>,
     zone_mask_root: PathBuf,
     batch_size: usize,
@@ -1024,22 +999,18 @@ fn run_index_zone_mask_mysql(
 ) -> Result<()> {
     let layer_revision_id = resolve_map_version(map_version, config)?;
     run_build_event_zone_assignment_mysql(
-        database_url,
         layer_revision_id,
         "zone_mask".to_string(),
         zone_mask_root,
         batch_size,
-        config,
     )
 }
 
 fn run_build_event_zone_assignment_mysql(
-    database_url: Option<String>,
     layer_revision_id: String,
     layer_id: String,
     zone_mask_root: PathBuf,
     batch_size: usize,
-    config: Option<&fishystuff_config::Config>,
 ) -> Result<()> {
     if batch_size == 0 {
         bail!("batch_size must be > 0");
@@ -1050,7 +1021,7 @@ fn run_build_event_zone_assignment_mysql(
     if layer_id.trim().is_empty() {
         bail!("layer_id must be non-empty");
     }
-    let database_url = resolve_database_url(database_url, config)?;
+    let database_url = resolve_database_url()?;
     let zone_mask = resolve_zone_mask_path(&zone_mask_root, &layer_revision_id)?;
     let mask = ZoneMask::load_png(&zone_mask).context("load zone mask")?;
     validate_zonemask_dims(&mask)?;
@@ -1183,7 +1154,6 @@ fn resolve_zone_mask_path(zone_mask_root: &Path, map_version: &str) -> Result<Pa
 }
 
 fn run_import_region_groups_mysql(
-    database_url: Option<String>,
     map_version: Option<String>,
     geojson: PathBuf,
     regioninfo_bss: PathBuf,
@@ -1191,7 +1161,7 @@ fn run_import_region_groups_mysql(
     source: String,
     config: Option<&fishystuff_config::Config>,
 ) -> Result<()> {
-    let database_url = resolve_database_url(database_url, config)?;
+    let database_url = resolve_database_url()?;
     let map_version = resolve_map_version(map_version, config)?;
     let store = MySqlIngestStore::open(&database_url).context("open mysql store")?;
 
@@ -1538,19 +1508,9 @@ fn build_transform(
     }
 }
 
-fn resolve_database_url(
-    database_url: Option<String>,
-    config: Option<&fishystuff_config::Config>,
-) -> Result<String> {
-    database_url
-        .or_else(|| std::env::var("FISHYSTUFF_DATABASE_URL").ok())
-        .or_else(|| std::env::var("DATABASE_URL").ok())
-        .or_else(|| config.and_then(|cfg| dolt_sql_to_database_url(&cfg.dolt_sql)))
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "database url is required (pass --database-url, set FISHYSTUFF_DATABASE_URL, or configure [dolt_sql])"
-            )
-        })
+fn resolve_database_url() -> Result<String> {
+    load_api_database_url_from_secretspec()
+        .context("resolve database URL from SecretSpec `api` profile")
 }
 
 fn resolve_map_version(
@@ -1564,26 +1524,6 @@ fn resolve_map_version(
                 "map_version is required (pass --map-version or set defaults.map_version in config)"
             )
         })
-}
-
-fn dolt_sql_to_database_url(cfg: &DoltSqlConfig) -> Option<String> {
-    if let Some(url) = &cfg.url {
-        return Some(url.clone());
-    }
-
-    let host = cfg.host.clone().unwrap_or_else(|| "127.0.0.1".to_string());
-    let port = cfg.port.unwrap_or(3306);
-    let user = cfg.user.clone().unwrap_or_else(|| "root".to_string());
-    let database = cfg.database.clone()?;
-
-    if let Some(password) = cfg.password.clone() {
-        Some(format!(
-            "mysql://{}:{}@{}:{}/{}",
-            user, password, host, port, database
-        ))
-    } else {
-        Some(format!("mysql://{}@{}:{}/{}", user, host, port, database))
-    }
 }
 
 fn run_debug_watermap_projection(

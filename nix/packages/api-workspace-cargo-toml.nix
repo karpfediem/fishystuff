@@ -23,6 +23,7 @@ writeText "fishystuff-api-workspace-Cargo.toml" ''
   mysql = { version = "24", default-features = false, features = ["default-rustls"] }
   rusqlite = { version = "0.31", features = ["bundled"] }
   serde = { version = "1", features = ["derive"] }
+  secretspec = { version = "0.8.2", default-features = false }
 
   [profile.profiling]
   inherits = "release"

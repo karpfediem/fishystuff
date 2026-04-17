@@ -108,6 +108,7 @@
             config.Entrypoint = [ "${apiEntrypoint}/bin/fishystuff-api-entrypoint" ];
             config.Env = [
               "API_CONFIG_PATH=${apiConfig}/etc/fishystuff/config.toml"
+              "FISHYSTUFF_SECRETSPEC_PATH=${apiConfig}/etc/fishystuff/secretspec.toml"
               "NIX_SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
               "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
             ];
@@ -116,6 +117,7 @@
         {
           packages = {
             inherit api api-container bot bot-container;
+            default = api;
             api-service-base-config = apiServiceBaseConfig;
             api-service-bundle = apiServiceBundle;
             dolt-service-bundle = doltServiceBundle;

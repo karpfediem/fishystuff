@@ -25,9 +25,9 @@ asset base URLs itself.
 Its CORS policy is an explicit origin allowlist, configured via
 `[server].cors_allowed_origins` or `FISHYSTUFF_CORS_ALLOWED_ORIGINS`, so dev and
 production use the same strict model instead of inferred site origins.
-The local API process is started through the SecretSpec `api` profile so
-`FISHYSTUFF_DATABASE_URL` comes from `/home/carp/code/fishystuff/secretspec.toml`
-instead of dotenv shell loading.
+The runtime resolves its local development database URL from the SecretSpec
+`api` profile declared in `/home/carp/code/fishystuff/secretspec.toml`, so the
+server no longer depends on a `secretspec run` wrapper just to reach Dolt.
 
 ## Fly deployment
 
@@ -48,6 +48,10 @@ volume-backed auth database cannot block the API's loopback user.
 The loopback API user is granted broad non-admin SQL privileges because Dolt's
 access model rejects some normal read traffic under a plain `SELECT` grant, but
 the runtime server itself stays read-only in production.
+Instead of pushing the Dolt DSN into the API process as a CLI flag or relying
+on a user/global SecretSpec config, the entrypoint writes a runtime dotenv
+provider file, exports a repo-owned provider URI, and points the SDK at the
+packaged `secretspec.toml` manifest.
 The boot path also writes a local Dolt repo identity before `pull`, so Fly
 machine restarts can fast-forward the on-volume clone without any interactive
 user config.

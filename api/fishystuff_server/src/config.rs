@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use fishystuff_api::ids::MapVersionId;
 use fishystuff_api::models::meta::MetaDefaults;
-use fishystuff_config::{load_config, Config as FsConfig, DoltSqlConfig};
+use fishystuff_config::{load_api_database_url_from_secretspec, load_config, Config as FsConfig};
 
 #[derive(Debug, Clone)]
 pub struct ZoneStatusConfig {
@@ -66,9 +66,6 @@ impl AppConfig {
         }
 
         let mut bind = "127.0.0.1:8080".to_string();
-        let mut database_url = std::env::var("FISHYSTUFF_DATABASE_URL")
-            .ok()
-            .or_else(|| dolt_sql_to_database_url(&fs_config.dolt_sql));
         let mut cors_allowed_origins = parse_cors_allowed_origins(
             std::env::var("FISHYSTUFF_CORS_ALLOWED_ORIGINS")
                 .ok()
@@ -128,14 +125,6 @@ impl AppConfig {
                         .get(i + 1)
                         .ok_or_else(|| anyhow!("--bind requires value"))?
                         .clone();
-                    i += 2;
-                }
-                "--database-url" => {
-                    database_url = Some(
-                        args.get(i + 1)
-                            .ok_or_else(|| anyhow!("--database-url requires value"))?
-                            .clone(),
-                    );
                     i += 2;
                 }
                 "--cors-allowed-origins" => {
@@ -226,9 +215,8 @@ impl AppConfig {
             }
         }
 
-        let database_url = database_url.ok_or_else(|| {
-            anyhow!("database URL is required; pass --database-url or set FISHYSTUFF_DATABASE_URL")
-        })?;
+        let database_url = load_api_database_url_from_secretspec()
+            .context("resolve database URL from SecretSpec `api` profile")?;
 
         Ok(Self {
             bind,
@@ -277,28 +265,6 @@ fn normalize_origin(value: &str) -> Option<String> {
         return None;
     }
     Some(format!("{scheme}://{rest}"))
-}
-
-fn dolt_sql_to_database_url(cfg: &DoltSqlConfig) -> Option<String> {
-    if let Some(url) = &cfg.url {
-        return Some(url.clone());
-    }
-
-    let host = cfg.host.clone().unwrap_or_else(|| "127.0.0.1".to_string());
-    let port = cfg.port.unwrap_or(3306);
-    let user = cfg.user.clone().unwrap_or_else(|| "root".to_string());
-    let database = cfg.database.clone()?;
-
-    let base = if let Some(password) = cfg.password.clone() {
-        format!(
-            "mysql://{}:{}@{}:{}/{}",
-            user, password, host, port, database
-        )
-    } else {
-        format!("mysql://{}@{}:{}/{}", user, host, port, database)
-    };
-
-    Some(base)
 }
 
 #[cfg(test)]

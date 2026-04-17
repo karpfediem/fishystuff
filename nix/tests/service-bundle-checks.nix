@@ -11,6 +11,7 @@ let
       serviceId,
       configDestination,
       runtimeEnvTarget,
+      requireSecretSpecPath ? false,
       workingDirectory ? null,
     }:
     pkgs.runCommand name
@@ -56,6 +57,14 @@ let
             jq -e '.supervision.workingDirectory == "${workingDirectory}"' "$bundle_json" >/dev/null
           ''}
 
+        ${if requireSecretSpecPath then
+          ''
+            jq -e '.supervision.environment.FISHYSTUFF_SECRETSPEC_PATH | endswith("/etc/fishystuff/secretspec.toml")' "$bundle_json" >/dev/null
+          ''
+        else
+          ""
+        }
+
         touch "$out"
       '';
 in
@@ -66,6 +75,7 @@ in
     serviceId = "fishystuff-api";
     configDestination = "config.toml";
     runtimeEnvTarget = "/run/fishystuff/api/env";
+    requireSecretSpecPath = true;
   };
 
   dolt-service-bundle = mkBundleCheck {

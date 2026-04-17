@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 anyhow = { workspace = true }
+secrecy = { version = "0.10.3", features = ["serde"] }
+secretspec = { workspace = true }

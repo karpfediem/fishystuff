@@ -25,30 +25,38 @@ Supported local profiles:
   - `TRAP_PURGE_WINDOW_S`
   - `TRAP_FALLBACK_TIMEOUTM`
 
-Typical setup:
+Local API/tooling setup:
 
 ```bash
 devenv shell
-secretspec config init
-just secrets-check api
-just secrets-check cdn
+cargo check
+cargo test
 ```
 
-The `just` helper also tolerates `profile=` if you type it out of habit:
+The API path uses repo-owned defaults:
+
+- `.cargo/config.toml` pins `FISHYSTUFF_SECRETSPEC_PATH` at the committed
+  `/home/carp/code/fishystuff/secretspec.toml`
+- cargo commands use a repo-local `XDG_CONFIG_HOME`, so they do not read a
+  developer's global SecretSpec config under `$HOME`
+- the `api` profile defaults `FISHYSTUFF_DATABASE_URL` to the local Dolt DSN
+
+If you are working on the `cdn` or `bot` profiles, validate those separately:
 
 ```bash
-just secrets-check profile=api
+just secrets-check cdn
+just secrets-check bot
 ```
 
 Typical runtime usage:
 
 ```bash
-secretspec run --profile api -- cargo run -p fishystuff_server -- --config api/config.toml
-secretspec run --profile api -- cargo run -p fishystuff_ingest -- --help
+cargo run -p fishystuff_server -- --config api/config.toml
+cargo run -p fishystuff_ingest -- --help
 secretspec run --profile cdn -- ./tools/scripts/push_bunnycdn.sh
 secretspec run --profile bot -- cargo run --manifest-path bot/Cargo.toml
 ```
 
-`devenv up` and `just dev-watch-api` pin SecretSpec to the repo's `api` profile
-for the local API process, so they do not depend on your personal SecretSpec
-default profile.
+The API server and `fishystuff_ingest` now resolve `FISHYSTUFF_DATABASE_URL`
+through the SecretSpec Rust SDK against the repo's `api` profile, so they do
+not need a `secretspec run` shell wrapper for the local Dolt connection.

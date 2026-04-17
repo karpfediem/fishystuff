@@ -12,6 +12,10 @@ let
   apiExe = lib.getExe' cfg.package "fishystuff_server";
   configName = cfg.configFileName;
   configSource = config.configData.${configName}.source;
+  secretSpecPath = "${cfg.secretSpecSource}/etc/fishystuff/secretspec.toml";
+  staticEnvironment = cfg.environment // {
+    FISHYSTUFF_SECRETSPEC_PATH = secretSpecPath;
+  };
   runtimeEnvFiles =
     optional (cfg.runtimeEnvFile != null) (toString cfg.runtimeEnvFile)
     ++ map toString cfg.environmentFiles;
@@ -30,6 +34,12 @@ in
       type = types.path;
       default = pkgs.callPackage ../packages/api-service-base-config.nix { };
       description = "Immutable base config for the API process.";
+    };
+
+    secretSpecSource = mkOption {
+      type = types.path;
+      default = pkgs.callPackage ../packages/api-config.nix { };
+      description = "Package containing the SecretSpec manifest for runtime secret resolution.";
     };
 
     configFileName = mkOption {
@@ -145,6 +155,7 @@ in
       roots.store = [
         cfg.package
         configSource
+        cfg.secretSpecSource
       ];
 
       artifacts = {
@@ -174,7 +185,7 @@ in
       };
 
       supervision = {
-        environment = helpers.stringifyEnvironment cfg.environment;
+        environment = helpers.stringifyEnvironment staticEnvironment;
         environmentFiles = runtimeEnvFiles;
         workingDirectory =
           if cfg.workingDirectory == null then null else toString cfg.workingDirectory;
@@ -226,7 +237,7 @@ in
   }
   // optionalAttrs (options ? systemd) {
     systemd.services."" = {
-      environment = helpers.stringifyEnvironment cfg.environment;
+      environment = helpers.stringifyEnvironment staticEnvironment;
       restartTriggers = [ configSource ];
       serviceConfig =
         {

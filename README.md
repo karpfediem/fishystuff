@@ -72,12 +72,17 @@ in [api/config.toml](/home/carp/code/fishystuff/api/config.toml), and `devenv`
 adds the local site origins through `FISHYSTUFF_CORS_ALLOWED_ORIGINS`, so the
 same CORS model is exercised in both dev and prod.
 
-Initialize your local SecretSpec provider and check the repo profiles you need:
+The API and other DB-backed Rust tooling use the repo's `secretspec.toml`
+through repo-owned defaults, so local builds and runs do not require
+`secretspec config init`, `FISHYSTUFF_DATABASE_URL`, or SecretSpec selector
+environment variables.
+
+Only the `cdn` and `bot` profiles still need an explicit provider setup when
+you work on those paths. Check them with:
 
 ```bash
-secretspec config init
-just secrets-check api
 just secrets-check cdn
+just secrets-check bot
 ```
 
 To update the pinned `devenv` inputs after intentional environment changes:

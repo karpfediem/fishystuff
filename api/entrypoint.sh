@@ -214,9 +214,30 @@ start_runtime_sql_server() {
   wait_for_sql "$DOLT_SQL_HOST" "$DOLT_SQL_PORT" "$DOLT_SQL_START_TIMEOUT_SECS"
 }
 
-start_api() {
-  export FISHYSTUFF_DATABASE_URL="mysql://${DOLT_API_SQL_USER}:${DOLT_API_SQL_PASSWORD}@${DOLT_SQL_HOST}:${DOLT_SQL_PORT}/${DOLT_DATABASE_NAME}"
+prepare_runtime_secretspec() {
+  local database_url="mysql://${DOLT_API_SQL_USER}:${DOLT_API_SQL_PASSWORD}@${DOLT_SQL_HOST}:${DOLT_SQL_PORT}/${DOLT_DATABASE_NAME}"
+  local provider_env_path="${FISHYSTUFF_SECRETSPEC_PROVIDER_ENV_PATH:-/tmp/fishystuff-api.secrets.env}"
+  local xdg_config_home="${XDG_CONFIG_HOME:-/tmp/fishystuff-xdg-config}"
 
+  require_env FISHYSTUFF_SECRETSPEC_PATH
+  if [ ! -f "$FISHYSTUFF_SECRETSPEC_PATH" ]; then
+    log "missing SecretSpec manifest: $FISHYSTUFF_SECRETSPEC_PATH"
+    exit 1
+  fi
+
+  mkdir -p "$xdg_config_home" "$(dirname "$provider_env_path")"
+  umask 077
+
+  cat >"$provider_env_path" <<EOF
+FISHYSTUFF_DATABASE_URL=$database_url
+EOF
+
+  chmod 600 "$provider_env_path"
+  export FISHYSTUFF_SECRETSPEC_PROVIDER="dotenv:${provider_env_path}"
+  export XDG_CONFIG_HOME="$xdg_config_home"
+}
+
+start_api() {
   log "starting fishystuff_server on ${FISHYSTUFF_BIND}"
   local api_cmd=(
     fishystuff_server
@@ -273,6 +294,7 @@ ensure_local_repo
 mkdir -p "$DOLT_CFG_DIR"
 bootstrap_sql_user "$BOOTSTRAP_SQL_CONFIG"
 start_runtime_sql_server "$RUNTIME_SQL_CONFIG"
+prepare_runtime_secretspec
 start_api
 
 set +e

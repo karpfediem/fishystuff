@@ -11,7 +11,6 @@ let
   siteHost = "127.0.0.1";
   sitePort = 1990;
   toString = builtins.toString;
-  databaseUrl = "mysql://${dbUser}@${dbHost}:${toString dbPort}/${dbName}";
   logTimestampRunner =
     "${pkgs.bash}/bin/bash ${config.devenv.root}/tools/scripts/with_log_timestamps.sh";
   rustHookToolchain = pkgs.symlinkJoin {
@@ -114,7 +113,6 @@ in {
   };
 
   env = {
-    FISHYSTUFF_DATABASE_URL = databaseUrl;
     FISHYSTUFF_DEV_DB_PORT = toString dbPort;
     FISHYSTUFF_DEV_API_PORT = toString apiPort;
     FISHYSTUFF_DEV_CDN_PORT = toString cdnPort;
@@ -220,10 +218,8 @@ in {
     cwd = config.devenv.root;
     exec = ''
       exec env LOG_TS_LABEL=api ${logTimestampRunner} \
-        secretspec run --profile api -- \
         cargo run --manifest-path ${config.devenv.root}/Cargo.toml -p fishystuff_server -- \
         --config ${config.devenv.root}/api/config.toml \
-        --database-url ${databaseUrl} \
         --bind ${apiHost}:${toString apiPort}
     '';
     after = [ "devenv:processes:db" ];

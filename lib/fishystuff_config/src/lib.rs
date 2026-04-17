@@ -1,7 +1,16 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use secrecy::ExposeSecret;
+use secretspec::Secrets;
+
+const API_SECRETSPEC_PROFILE: &str = "api";
+const API_DATABASE_SECRET_NAME: &str = "FISHYSTUFF_DATABASE_URL";
+const API_SECRETSPEC_PATH_ENV: &str = "FISHYSTUFF_SECRETSPEC_PATH";
+const API_SECRETSPEC_PROVIDER_ENV: &str = "FISHYSTUFF_SECRETSPEC_PROVIDER";
+const DEFAULT_API_SECRETSPEC_PROVIDER: &str = "env";
+const SECRETSPEC_MANIFEST_FILE: &str = "secretspec.toml";
 
 #[derive(Debug, Clone, Default)]
 pub struct Config {
@@ -94,6 +103,95 @@ pub fn load_config(path: impl AsRef<Path>) -> Result<Config> {
     parse_config(&content)
 }
 
+pub fn load_api_database_url_from_secretspec() -> Result<String> {
+    load_api_database_url_from_secretspec_with_overrides(None, None)
+}
+
+fn load_api_database_url_from_secretspec_with_overrides(
+    provider_override: Option<&str>,
+    manifest_path_override: Option<&Path>,
+) -> Result<String> {
+    let provider = provider_override
+        .map(str::to_string)
+        .or_else(|| non_empty_env(API_SECRETSPEC_PROVIDER_ENV))
+        .unwrap_or_else(|| DEFAULT_API_SECRETSPEC_PROVIDER.to_string());
+    let manifest_path = match manifest_path_override {
+        Some(path) => path.to_path_buf(),
+        None => resolve_secretspec_manifest_path()?,
+    };
+
+    let mut spec = Secrets::load_from(&manifest_path)
+        .with_context(|| format!("load SecretSpec manifest `{}`", manifest_path.display()))?;
+    spec.set_profile(API_SECRETSPEC_PROFILE);
+    spec.set_provider(provider.clone());
+
+    let validated = match spec.validate().with_context(|| {
+        format!(
+            "validate SecretSpec profile `{API_SECRETSPEC_PROFILE}` via provider `{provider}`"
+        )
+    })? {
+        Ok(validated) => validated,
+        Err(errors) => anyhow::bail!(
+            "SecretSpec missing required secrets for profile `{API_SECRETSPEC_PROFILE}` via provider `{provider}`: {}",
+            errors.missing_required.join(", ")
+        ),
+    };
+
+    let database_url = validated
+        .resolved
+        .secrets
+        .get(API_DATABASE_SECRET_NAME)
+        .with_context(|| {
+            format!("SecretSpec did not resolve required secret `{API_DATABASE_SECRET_NAME}`")
+        })?;
+
+    into_required_secret(
+        database_url.expose_secret().to_string(),
+        API_DATABASE_SECRET_NAME,
+    )
+}
+
+fn resolve_secretspec_manifest_path() -> Result<PathBuf> {
+    if let Some(path) = non_empty_env(API_SECRETSPEC_PATH_ENV) {
+        return Ok(PathBuf::from(path));
+    }
+
+    if let Ok(current_dir) = std::env::current_dir() {
+        if let Some(path) = find_manifest_from(&current_dir) {
+            return Ok(path);
+        }
+    }
+
+    let crate_manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../secretspec.toml");
+    if crate_manifest.exists() {
+        return Ok(crate_manifest);
+    }
+
+    anyhow::bail!(
+        "could not resolve `{SECRETSPEC_MANIFEST_FILE}`; set `{API_SECRETSPEC_PATH_ENV}` or run from a checkout that contains it"
+    );
+}
+
+fn find_manifest_from(start: &Path) -> Option<PathBuf> {
+    let mut current = start.to_path_buf();
+    loop {
+        let candidate = current.join(SECRETSPEC_MANIFEST_FILE);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+        if !current.pop() {
+            return None;
+        }
+    }
+}
+
+fn non_empty_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 fn parse_config(content: &str) -> Result<Config> {
     let mut config = Config::default();
     let mut section = String::new();
@@ -153,6 +251,35 @@ fn strip_quotes(value: &str) -> &str {
         &v[1..v.len() - 1]
     } else {
         v
+    }
+}
+
+fn into_required_secret<T>(value: T, secret_name: &str) -> Result<String>
+where
+    T: SecretValue,
+{
+    value.into_required_secret(secret_name)
+}
+
+trait SecretValue {
+    fn into_required_secret(self, secret_name: &str) -> Result<String>;
+}
+
+impl SecretValue for String {
+    fn into_required_secret(self, secret_name: &str) -> Result<String> {
+        if self.trim().is_empty() {
+            anyhow::bail!("SecretSpec resolved `{secret_name}` to an empty string");
+        }
+        Ok(self)
+    }
+}
+
+impl SecretValue for Option<String> {
+    fn into_required_secret(self, secret_name: &str) -> Result<String> {
+        match self {
+            Some(value) => value.into_required_secret(secret_name),
+            None => anyhow::bail!("SecretSpec did not resolve required secret `{secret_name}`"),
+        }
     }
 }
 
@@ -282,4 +409,28 @@ fn parse_usize(value: &str, key: &str) -> Result<usize> {
     value
         .parse::<usize>()
         .with_context(|| format!("parse {} as usize", key))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::load_api_database_url_from_secretspec_with_overrides;
+
+    #[test]
+    fn secretspec_api_profile_exposes_default_database_url() {
+        let previous = std::env::var("FISHYSTUFF_DATABASE_URL").ok();
+        std::env::remove_var("FISHYSTUFF_DATABASE_URL");
+
+        let manifest_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../secretspec.toml");
+        let loaded =
+            load_api_database_url_from_secretspec_with_overrides(Some("env"), Some(&manifest_path))
+                .expect("load db url");
+        assert_eq!(loaded, "mysql://root@localhost:3306/fishystuff");
+
+        match previous {
+            Some(value) => std::env::set_var("FISHYSTUFF_DATABASE_URL", value),
+            None => std::env::remove_var("FISHYSTUFF_DATABASE_URL"),
+        }
+    }
 }
