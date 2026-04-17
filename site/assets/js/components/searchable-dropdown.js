@@ -929,6 +929,21 @@ export class FishySearchableDropdown extends HTMLElement {
         return rect;
     }
 
+    _resolvePanelAnchorElement() {
+        const selector = getStringAttribute(this, "panel-anchor-closest");
+        if (selector) {
+            try {
+                const anchor = this.closest(selector);
+                if (anchor instanceof HTMLElement) {
+                    return anchor;
+                }
+            } catch (_) {
+                // Ignore invalid selectors and fall back to the trigger element.
+            }
+        }
+        return this.triggerElement();
+    }
+
     _ownsNode(node) {
         if (!(node instanceof Node)) {
             return false;
@@ -939,17 +954,17 @@ export class FishySearchableDropdown extends HTMLElement {
 
     _positionPanel(measuredWidth = 0) {
         const panel = this.panelElement();
-        const trigger = this.triggerElement();
-        if (!(panel instanceof HTMLElement) || !(trigger instanceof HTMLElement)) {
+        const anchor = this._resolvePanelAnchorElement();
+        if (!(panel instanceof HTMLElement) || !(anchor instanceof HTMLElement)) {
             return;
         }
         const viewportWidth = Math.max(window.innerWidth || 0, 320);
         const viewportHeight = Math.max(window.innerHeight || 0, 240);
-        const triggerRect = trigger.getBoundingClientRect();
+        const anchorRect = anchor.getBoundingClientRect();
         const width = Math.max(
             0,
             Math.min(
-                Math.round(measuredWidth || panel.getBoundingClientRect().width || triggerRect.width),
+                Math.round(anchorRect.width || measuredWidth || panel.getBoundingClientRect().width),
                 viewportWidth - 24,
             ),
         );
@@ -963,13 +978,13 @@ export class FishySearchableDropdown extends HTMLElement {
         panel.style.top = "12px";
 
         const panelRect = panel.getBoundingClientRect();
-        let left = Math.round(triggerRect.left);
+        let left = Math.round(anchorRect.left);
         if (left + panelRect.width > viewportWidth - 12) {
             left = Math.max(12, Math.round(viewportWidth - panelRect.width - 12));
         }
 
-        const belowTop = Math.round(triggerRect.bottom + 8);
-        const aboveTop = Math.round(triggerRect.top - panelRect.height - 8);
+        const belowTop = Math.round(anchorRect.bottom + 8);
+        const aboveTop = Math.round(anchorRect.top - panelRect.height - 8);
         const top =
             belowTop + panelRect.height <= viewportHeight - 12 || aboveTop < 12
                 ? belowTop

@@ -22,6 +22,7 @@ class FakeElement extends EventTarget {
         this.textContent = "";
         this._queryMap = new Map();
         this._queryAllMap = new Map();
+        this._closestMap = new Map();
         this._rect = {
             left: 0,
             top: 0,
@@ -50,8 +51,8 @@ class FakeElement extends EventTarget {
         return child;
     }
 
-    closest() {
-        return null;
+    closest(selector) {
+        return this._closestMap.get(selector) || null;
     }
 
     contains(node) {
@@ -117,6 +118,10 @@ class FakeElement extends EventTarget {
 
     setQueryAll(selector, elements) {
         this._queryAllMap.set(selector, Array.isArray(elements) ? elements : []);
+    }
+
+    setClosest(selector, element) {
+        this._closestMap.set(selector, element);
     }
 
     setRect({ left = 0, top = 0, width = 0, height = 0 }) {
@@ -259,4 +264,49 @@ test("searchable dropdown accepts valid ISO date custom options", async (t) => {
     assert.ok(customOption);
     assert.equal(button?.getAttribute?.("data-value"), "2026-04-16");
     assert.equal(button?.getAttribute?.("data-label"), "2026-04-16");
+});
+
+test("searchable dropdown can anchor its detached panel to a wider ancestor", async (t) => {
+    t.after(() => {
+        globalThis.HTMLElement = originalHTMLElement;
+        globalThis.Element = originalElement;
+        globalThis.Node = originalNode;
+        globalThis.document = originalDocument;
+        globalThis.window = originalWindow;
+        globalThis.customElements = originalCustomElements;
+        globalThis.HTMLInputElement = originalHTMLInputElement;
+        globalThis.HTMLTemplateElement = originalHTMLTemplateElement;
+    });
+
+    const { FishySearchableDropdown } = await loadModule();
+
+    const dropdown = new FishySearchableDropdown();
+    const anchor = new FakeElement();
+    const trigger = new FakeElement();
+    const panel = new FakeElement();
+    const searchInput = new FakeElement();
+    const results = new FakeElement();
+
+    dropdown.setAttribute("panel-anchor-closest", ".fishymap-date-term-content");
+    dropdown.setClosest(".fishymap-date-term-content", anchor);
+    anchor.setRect({ left: 180, top: 132, width: 420, height: 40 });
+    trigger.setRect({ left: 332, top: 136, width: 172, height: 32 });
+    panel.setRect({ left: 0, top: 0, width: 288, height: 220 });
+    dropdown.setQuery('[data-role="trigger"]', trigger);
+    dropdown.setQuery('[data-role="panel"]', panel);
+    panel.setQuery('[data-role="search-input"]', searchInput);
+    panel.setQuery('[data-role="results"]', results);
+    dropdown.append(trigger);
+    dropdown.append(panel);
+    panel.append(searchInput);
+    panel.append(results);
+
+    dropdown.connectedCallback();
+    await Promise.resolve();
+
+    dropdown.open();
+
+    assert.equal(panel.style.left, "180px");
+    assert.equal(panel.style.top, "180px");
+    assert.equal(panel.style.width, "420px");
 });

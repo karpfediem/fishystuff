@@ -544,6 +544,66 @@ body {
     overflow: visible;
 }
 
+:where(.fishy-applied-term[data-grade="patch"] .fishy-applied-term-main) {
+    flex: 1 1 auto;
+    width: 100%;
+}
+
+:where(.fishy-applied-term[data-grade="patch"] .fishy-applied-term-body) {
+    flex: 1 1 auto;
+    width: 100%;
+}
+
+:where(.fishymap-date-term-content) {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+}
+
+:where(.fishymap-date-term-dropdown) {
+    display: flex;
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    vertical-align: middle;
+}
+
+:where(.fishymap-date-term-trigger) {
+    width: 100%;
+    max-width: 100%;
+    min-height: 2rem;
+    padding-inline: 0.65rem;
+    gap: 0.55rem;
+}
+
+:where(.fishymap-date-term-value) {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    line-height: 1.1;
+}
+
+:where(.fishymap-date-term-label) {
+    display: block;
+    max-width: 100%;
+}
+
+:where(.fishymap-date-term-id) {
+    display: block;
+    max-width: 100%;
+    font-size: 0.7rem;
+    color: color-mix(in oklab, var(--color-base-content, #1f2937) 62%, transparent);
+}
+
+:where(.fishymap-date-term-panel) {
+    min-width: 0;
+}
+
 :where(.fishy-applied-term-description) {
     min-width: 0;
     max-width: 15rem;

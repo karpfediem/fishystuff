@@ -64,16 +64,16 @@ function patchDropdownValueMarkup(patchId, patch, escapeHtml) {
     return `<span class="truncate font-medium text-base-content/60">Choose date</span>`;
   }
   if (!patch) {
-    return `<span class="truncate font-medium">${escapeHtml(normalizedPatchId)}</span>`;
+    return `<span class="fishymap-date-term-label truncate font-medium">${escapeHtml(normalizedPatchId)}</span>`;
   }
   const label = String(patch.label || normalizedPatchId).trim() || normalizedPatchId;
   if (!normalizedPatchId || label === normalizedPatchId) {
-    return `<span class="truncate font-medium">${escapeHtml(normalizedPatchId || label)}</span>`;
+    return `<span class="fishymap-date-term-label truncate font-medium">${escapeHtml(normalizedPatchId || label)}</span>`;
   }
   return `
-    <span class="inline-flex min-w-0 flex-1 items-center gap-1.5">
-      <span class="truncate font-medium">${escapeHtml(label)}</span>
-      <span class="shrink-0 text-xs text-base-content/60">${escapeHtml(normalizedPatchId)}</span>
+    <span class="fishymap-date-term-value">
+      <span class="fishymap-date-term-label truncate font-medium">${escapeHtml(label)}</span>
+      <span class="fishymap-date-term-id">${escapeHtml(normalizedPatchId)}</span>
     </span>
   `;
 }
@@ -106,61 +106,64 @@ function patchDropdownMarkup(term, context, path, boundLabel, patch) {
   const patchId = String(term?.patchId || "").trim();
   const selectedLabel = patch?.label || patchId || boundLabel;
   return `
-    <fishy-searchable-dropdown
-      class="relative inline-block max-w-full align-middle"
-      input-id="${context.escapeHtml(inputId)}"
-      label="${context.escapeHtml(selectedLabel)}"
-      value="${context.escapeHtml(patchId)}"
-      placeholder="Search patches or enter YYYY-MM-DD"
-      custom-option-mode="iso-date"
-    >
-      <input
-        id="${context.escapeHtml(inputId)}"
-        type="hidden"
+    <span class="fishymap-date-term-content flex min-w-0 w-full items-center gap-2">
+      <fishy-searchable-dropdown
+        class="fishymap-date-term-dropdown relative max-w-full align-middle"
+        input-id="${context.escapeHtml(inputId)}"
+        label="${context.escapeHtml(selectedLabel)}"
         value="${context.escapeHtml(patchId)}"
-        data-expression-patch-select-path="${context.escapeHtml(path)}"
+        placeholder="Search patches or enter YYYY-MM-DD"
+        custom-option-mode="iso-date"
+        panel-anchor-closest=".fishy-applied-term"
       >
-      <button
-        type="button"
-        data-role="trigger"
-        class="inline-flex h-7 max-w-56 items-center gap-2 rounded-full border border-base-300 px-2 text-left text-sm"
-        aria-haspopup="listbox"
-        aria-expanded="false"
-      >
-        <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-2">
-          ${patchDropdownValueMarkup(patchId, patch, context.escapeHtml)}
-        </span>
-        <svg class="fishy-icon size-3.5 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
-          <use width="100%" height="100%" href="/img/icons.svg#fishy-caret-down"></use>
-        </svg>
-      </button>
-      <div
-        data-role="panel"
-        class="absolute left-0 top-full z-50 mt-2 w-72 max-w-[min(22rem,calc(100vw-3rem))]"
-        hidden
-      >
-        <div class="rounded-box border border-base-300 bg-base-100 p-1">
-          <label class="flex items-center gap-2 px-2 py-2 text-sm">
-            <svg class="fishy-icon size-4 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
-              <use width="100%" height="100%" href="/img/icons.svg#fishy-search-field"></use>
-            </svg>
-            <input
-              data-role="search-input"
-              type="search"
-              class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
-              style="outline: none; box-shadow: none;"
-              placeholder="Search patches"
-              autocomplete="off"
-              spellcheck="false"
-            >
-          </label>
-          <ul data-role="results" tabindex="-1" class="menu menu-sm max-h-64 w-full gap-1 overflow-auto p-1"></ul>
+        <input
+          id="${context.escapeHtml(inputId)}"
+          type="hidden"
+          value="${context.escapeHtml(patchId)}"
+          data-expression-patch-select-path="${context.escapeHtml(path)}"
+        >
+        <button
+          type="button"
+          data-role="trigger"
+          class="fishymap-date-term-trigger inline-flex h-7 max-w-56 items-center gap-2 rounded-full border border-base-300 px-2 text-left text-sm"
+          aria-haspopup="listbox"
+          aria-expanded="false"
+        >
+          <span data-role="selected-content" class="flex min-w-0 flex-1 items-center gap-2">
+            ${patchDropdownValueMarkup(patchId, patch, context.escapeHtml)}
+          </span>
+          <svg class="fishy-icon size-3.5 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
+            <use width="100%" height="100%" href="/img/icons.svg#fishy-caret-down"></use>
+          </svg>
+        </button>
+        <div
+          data-role="panel"
+          class="fishymap-date-term-panel absolute left-0 top-full z-50 mt-2 w-72 max-w-[min(22rem,calc(100vw-3rem))]"
+          hidden
+        >
+          <div class="rounded-box border border-base-300 bg-base-100 p-1">
+            <label class="flex items-center gap-2 px-2 py-2 text-sm">
+              <svg class="fishy-icon size-4 shrink-0 opacity-60" viewBox="0 0 24 24" aria-hidden="true">
+                <use width="100%" height="100%" href="/img/icons.svg#fishy-search-field"></use>
+              </svg>
+              <input
+                data-role="search-input"
+                type="search"
+                class="w-full border-0 bg-transparent p-0 shadow-none outline-none"
+                style="outline: none; box-shadow: none;"
+                placeholder="Search patches"
+                autocomplete="off"
+                spellcheck="false"
+              >
+            </label>
+            <ul data-role="results" tabindex="-1" class="menu menu-sm max-h-64 w-full gap-1 overflow-auto p-1"></ul>
+          </div>
         </div>
-      </div>
-      <div data-role="selected-content-catalog" hidden>
-        ${patchDropdownCatalogMarkup(context.patchCatalog, context.escapeHtml)}
-      </div>
-    </fishy-searchable-dropdown>
+        <div data-role="selected-content-catalog" hidden>
+          ${patchDropdownCatalogMarkup(context.patchCatalog, context.escapeHtml)}
+        </div>
+      </fishy-searchable-dropdown>
+    </span>
   `;
 }
 

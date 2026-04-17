@@ -189,6 +189,9 @@ test("renderSearchSelection renders the applied search expression tree", () => {
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.1\.1"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-bound="to"/);
   assert.match(elements.searchSelection.innerHTML, /data-patch-id="2026-03-12"/);
+  assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-value/);
+  assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-label[^"]*">New Era</);
+  assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-id">2026-03-12</);
   assert.match(elements.searchSelection.innerHTML, /2026-03-12/);
   assert.match(elements.searchSelection.innerHTML, /data-zone-rgb="123456"/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /#01e240/);
@@ -248,10 +251,14 @@ test("renderSearchSelection renders an unresolved date term with an inline patch
   );
 
   assert.match(elements.searchSelection.innerHTML, /fishy-searchable-dropdown/);
+  assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-dropdown/);
   assert.match(elements.searchSelection.innerHTML, /custom-option-mode="iso-date"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-select-path="root\.0"/);
   assert.match(elements.searchSelection.innerHTML, /icons\.svg#fishy-calendar-2-fill/);
   assert.match(elements.searchSelection.innerHTML, />Choose date</);
+  assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-trigger/);
+  assert.match(elements.searchSelection.innerHTML, /fishymap-date-term-panel/);
+  assert.match(elements.searchSelection.innerHTML, /panel-anchor-closest="\.fishy-applied-term"/);
   assert.match(elements.searchSelection.innerHTML, /data-expression-patch-toggle-path="root\.0"/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-expression-negate-path="root\.0"/);
   assert.doesNotMatch(elements.searchSelection.innerHTML, /data-patch-id=""/);
